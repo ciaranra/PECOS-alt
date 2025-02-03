@@ -506,6 +506,25 @@ wheels = [
 ]
 
 [[package]]
+name = "llvmlite"
+version = "0.41.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/99/46/cd194dacca2704fb13f6d156727ca233c911a6229c0bf1cd4f3af4f56c04/llvmlite-0.41.0.tar.gz", hash = "sha256:7d41db345d76d2dfa31871178ce0d8e9fd8aa015aa1b7d4dab84b5cb393901e0", size = 146448 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f8/86/6ccfede8416d5a32faef1b778767b0d49d8e8e8c63508b02d8ef87a81643/llvmlite-0.41.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:acc81c1279f858e5eab460844cc381e30d6666bc8eea04724b54d4eeb1fd1e54", size = 31032571 },
+    { url = "https://files.pythonhosted.org/packages/bc/f3/ff6a9242408d5f9055b80e0141db85b19f29e69ac2fe54f90b2afcf7ebca/llvmlite-0.41.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:013000a11df84a8b5e4f7fbf2513896ca48441c527d9ae8e375da92bc5575d08", size = 28753710 },
+    { url = "https://files.pythonhosted.org/packages/d7/50/811a6973cc78fc1ded64f05248a7bd25b0b4da03e7bfb045e9d533d5bdea/llvmlite-0.41.0-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:f1b5df30581eb8dbdee0e17a1217debb1d7dcd61a092a09726afff441dad5a67", size = 42623274 },
+    { url = "https://files.pythonhosted.org/packages/50/df/38c9fb5cc64f4fcc0577a14a0665c2a5de74f45a621ac7708320b1ac80c6/llvmlite-0.41.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:fe265129ecd18957d3653cfb17df1632fa2c57fd0bac1960bc20a8c3ca961197", size = 43623192 },
+    { url = "https://files.pythonhosted.org/packages/be/70/0d3ef841fbe1ec25d46b3781c16d55a53024af18ba3068d2ce74ada6ff81/llvmlite-0.41.0-cp310-cp310-win32.whl", hash = "sha256:6e477d23afbdddb3dde789d29a771e23bcfa1b12485156370dba9df05d529d94", size = 23414152 },
+    { url = "https://files.pythonhosted.org/packages/88/31/eabea2883e23472ba17e3ff6bc29e37863c47a2e2fbab8e2dc6ae7b51d68/llvmlite-0.41.0-cp310-cp310-win_amd64.whl", hash = "sha256:93ce07a0a6d98ff2fcc34e7d2d315d8d09f6a737539e089f1a8cbe4a3a0313bf", size = 28092541 },
+    { url = "https://files.pythonhosted.org/packages/de/48/ff1ef8b41397522f6651b85efb39339e8cd3ba2a9154731242a751e1f8c6/llvmlite-0.41.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:dabfb1a28d26b8c01228f59aec90a61324203dda6b1465c596d577d6380545e8", size = 31032578 },
+    { url = "https://files.pythonhosted.org/packages/d4/3d/3f4612c80c1ccfb248df6ff70da33216374b24fc8a17fc84ee0aeab2c900/llvmlite-0.41.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:741bb2ab7712c4763483189f0684163fb3ac44087c617698c50654c7d7ab6a24", size = 28753703 },
+    { url = "https://files.pythonhosted.org/packages/f6/51/2a8ab7d85ba40f4654a21cfcd2983c6db95b2408285de88acbcfbad7a1d0/llvmlite-0.41.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:f7b7022f1e2f652722ddd5697987f1aeaf0c9a64f2ee324e03f6e060b28a1bbd", size = 42623273 },
+    { url = "https://files.pythonhosted.org/packages/68/c2/b52ea465b79491f905aae8c6d7876d5d6171967d387d3a32c9723e9d45cb/llvmlite-0.41.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:70feadac822f8840f2db6cbb662f1b349fe5d375d8ceb9c907f3919e005dc705", size = 43623193 },
+    { url = "https://files.pythonhosted.org/packages/14/3b/f9665a46486f70a7cbb6237308e49e18ed42e4763f4e92e92cd37ea67ead/llvmlite-0.41.0-cp311-cp311-win_amd64.whl", hash = "sha256:21191c6a9fb4a86d71ec72debbaf39db49590a950c8a2a4ac792c41d16b0a61a", size = 28108104 },
+]
+
+[[package]]
 name = "markdown-it-py"
 version = "3.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1124,6 +1143,9 @@ projectq = [
 pyquest = [
     { name = "pyquest" },
 ]
+qir = [
+    { name = "llvmlite" },
+]
 qulacs = [
     { name = "qulacs" },
 ]
@@ -1151,6 +1173,7 @@ wasmtime = [
 
 [package.metadata]
 requires-dist = [
+    { name = "llvmlite", marker = "extra == 'qir'", specifier = "==0.41.0" },
     { name = "matplotlib", specifier = ">=2.2.0" },
     { name = "networkx", specifier = ">=2.1.0" },
     { name = "numpy", marker = "python_full_version < '3.13'", specifier = ">=1.15.0,<2.0" },

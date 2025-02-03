@@ -565,7 +565,7 @@ class QIRGenerator(Generator):
             case Measure():
                 creg_or_bit = gate.cout[0]
                 if isinstance(creg_or_bit, CReg):
-                    ll_creg = self._creg_dict[creg.sym][0]
+                    ll_creg = self._creg_dict[creg_or_bit.sym][0]
                     for i, q in enumerate(gate.qargs[0]):
                         self._measure_count += 1
                         qubit_ptr = self._qarg_to_qubit_ptr(q)
