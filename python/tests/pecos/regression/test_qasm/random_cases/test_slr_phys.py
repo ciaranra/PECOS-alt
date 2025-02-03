@@ -1,3 +1,5 @@
+import pytest
+
 from pecos import __version__
 from pecos.qeclib import qubit as p
 from pecos.qeclib.steane.steane_class import Steane
@@ -89,6 +91,7 @@ def test_bell():
     assert SlrConverter(prog).qasm() == qasm
 
 
+@pytest.mark.optional_dependency
 def test_bell_qir():
     """Test that a simple Bell prep and measure circuit can be created."""
     prog: Main = Main(
@@ -103,6 +106,7 @@ def test_bell_qir():
     assert "__quantum__qis__h__body" in qir
 
 
+@pytest.mark.optional_dependency
 def test_bell_qreg_qir():
     """Test that a simple Bell prep and measure circuit can be created."""
     prog: Main = Main(
@@ -194,6 +198,7 @@ def test_strange_program():
     assert SlrConverter(prog).qasm() == qasm
 
 
+@pytest.mark.optional_dependency
 def test_control_flow_qir():
     """Test a program with control flow into QIR."""
 
@@ -230,6 +235,7 @@ def test_control_flow_qir():
     assert "__quantum__qis__h__body" in qir
 
 
+@pytest.mark.optional_dependency
 def test_plus_qir():
     """Test a program with addition compiling into QIR."""
 
@@ -246,6 +252,7 @@ def test_plus_qir():
     assert "add" in qir
 
 
+@pytest.mark.optional_dependency
 def test_nested_xor_qir():
     """Test a program with addition compiling into QIR."""
 
@@ -264,6 +271,7 @@ def test_nested_xor_qir():
     assert "xor" in qir
 
 
+@pytest.mark.optional_dependency
 def test_minus_qir():
     """Test a program with addition compiling into QIR."""
 
@@ -280,6 +288,7 @@ def test_minus_qir():
     assert "sub" in qir
 
 
+@pytest.mark.optional_dependency
 def test_steane_qir():
     """Test the teleportation program using the Steane code."""
     print(SlrConverter(telep("X", "X")).qir())
