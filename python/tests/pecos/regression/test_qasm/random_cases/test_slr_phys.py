@@ -100,7 +100,6 @@ def test_bell_qir():
     )
 
     qir = SlrConverter(prog).qir()
-    assert qir == "intentionally wrong"
 
 
 def test_bell_qreg_qir():
@@ -113,8 +112,7 @@ def test_bell_qreg_qir():
         p.Measure(q) > m,
     )
 
-    qir = SlrConverter(prog).qir()
-    assert qir == "intentionally wrong"
+    qir = SlrConverter(prog).qir()    
 
 
 def test_if_bell():
@@ -226,8 +224,7 @@ def test_control_flow_qir():
         p.RX[0.3](q[0]),
         p.Measure(q) > m,
     )
-    qir = SlrConverter(prog).qir()
-    assert qir == "intentionally wrong"
+    qir = SlrConverter(prog).qir()    
 
 
 def test_plus_qir():
@@ -244,7 +241,6 @@ def test_plus_qir():
     )
     qir = SlrConverter(prog).qir()
     print(qir)
-    assert qir == "intentionally wrong"
 
 
 def test_nested_xor_qir():
@@ -262,8 +258,7 @@ def test_nested_xor_qir():
         p[0].set((m[0] ^ n[0]) ^ o[0]),
     )
     qir = SlrConverter(prog).qir()
-    print(qir)
-    assert qir == "intentionally wrong"
+    print(qir)    
 
 
 def test_minus_qir():
@@ -279,11 +274,9 @@ def test_minus_qir():
         o.set(m - n),
     )
     qir = SlrConverter(prog).qir()
-    print(qir)
-    assert qir == "intentionally wrong"
+    print(qir)    
 
 
 def test_steane_qir():
     """Test the teleportation program using the Steane code."""
-    print(SlrConverter(telep("X", "X")).qir())
-    raise AssertionError
+    print(SlrConverter(telep("X", "X")).qir())    
