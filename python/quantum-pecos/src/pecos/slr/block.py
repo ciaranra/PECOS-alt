@@ -60,4 +60,3 @@ class Block(Node):
 
     def iter(self):
         yield from self.__iter__()
-

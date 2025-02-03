@@ -1,9 +1,23 @@
 from pecos import __version__
 from pecos.qeclib import qubit as p
-from pecos.slr import Barrier, Bit, Block, Comment, CReg, If, Main, Permute, QReg, Qubit, Repeat, SlrConverter
 from pecos.qeclib.steane.steane_class import Steane
+from pecos.slr import (
+    Barrier,
+    Bit,
+    Block,
+    Comment,
+    CReg,
+    If,
+    Main,
+    Permute,
+    QReg,
+    Qubit,
+    Repeat,
+    SlrConverter,
+)
 
 # TODO: Remove reference to hqslib1.inc... better yet, don't have tests on qasm
+
 
 def telep(prep_basis: str, meas_basis: str) -> str:
     """A simple example of creating a logical teleportation circuit.
@@ -20,39 +34,30 @@ def telep(prep_basis: str, meas_basis: str) -> str:
     prog = Main(
         m_bell := CReg("m_bell", size=2),
         m_out := CReg("m_out", size=1),
-
         # Input state:
         sin := Steane("sin", default_rus_limit=2),
-
         smid := Steane("smid"),
         sout := Steane("sout"),
-
         # Create Bell state
         smid.pz(),  # prep logical qubit in |0>/|+Z> state with repeat-until-success initialization
         sout.pz(),
         Barrier(smid.d, sout.d),
         smid.h(),
         smid.cx(sout),  # CX with control on smid and target on sout
-
         smid.qec(),
         sout.qec(),
-
         # prepare input state in some Pauli basis state
         sin.p(prep_basis, rus_limit=3),
         sin.qec(),
-
         # entangle input with one of the logical qubits of the Bell pair
         sin.cx(smid),
         sin.h(),
-
         # Bell measurement
         sin.mz(m_bell[0]),
         smid.mz(m_bell[1]),
-
         # Corrections
         If(m_bell[1] == 0).Then(sout.x()),
         If(m_bell[0] == 0).Then(sout.z()),
-
         # Final output stored in `m_out[0]`
         sout.m(meas_basis, m_out[0]),
     )
@@ -96,6 +101,7 @@ def test_bell_qir():
 
     qir = SlrConverter(prog).qir()
     assert qir == "intentionally wrong"
+
 
 def test_bell_qreg_qir():
     """Test that a simple Bell prep and measure circuit can be created."""
@@ -223,6 +229,7 @@ def test_control_flow_qir():
     qir = SlrConverter(prog).qir()
     assert qir == "intentionally wrong"
 
+
 def test_plus_qir():
     """Test a program with addition compiling into QIR."""
 
@@ -233,11 +240,12 @@ def test_plus_qir():
         o := CReg("o", 2),
         m.set(2),
         n.set(2),
-        o.set(m + n)
+        o.set(m + n),
     )
     qir = SlrConverter(prog).qir()
     print(qir)
     assert qir == "intentionally wrong"
+
 
 def test_nested_xor_qir():
     """Test a program with addition compiling into QIR."""
@@ -251,11 +259,12 @@ def test_nested_xor_qir():
         m.set(2),
         n.set(2),
         o.set(2),
-        p[0].set((m[0] ^ n[0]) ^ o[0])
+        p[0].set((m[0] ^ n[0]) ^ o[0]),
     )
     qir = SlrConverter(prog).qir()
     print(qir)
     assert qir == "intentionally wrong"
+
 
 def test_minus_qir():
     """Test a program with addition compiling into QIR."""
@@ -267,11 +276,12 @@ def test_minus_qir():
         o := CReg("o", 2),
         m.set(2),
         n.set(2),
-        o.set(m - n)
+        o.set(m - n),
     )
     qir = SlrConverter(prog).qir()
     print(qir)
     assert qir == "intentionally wrong"
+
 
 def test_steane_qir():
     """Test the teleportation program using the Steane code."""

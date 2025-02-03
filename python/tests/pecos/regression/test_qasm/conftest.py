@@ -4,9 +4,6 @@ from pathlib import Path
 
 import pytest
 
-from pecos.slr import SlrConverter
-from pecos.slr.main import Main
-
 
 @pytest.fixture
 def compare_qasm():

@@ -16,7 +16,12 @@ from pecos.slr.gen_codes.generator import Generator
 
 
 class QASMGenerator(Generator):
-    def __init__(self, includes: list[str] | None = None, skip_headers=False, add_versions=True):
+    def __init__(
+        self,
+        includes: list[str] | None = None,
+        skip_headers=False,
+        add_versions=True,
+    ):
         self.output = []
         self.current_scope = None
         self.includes = includes

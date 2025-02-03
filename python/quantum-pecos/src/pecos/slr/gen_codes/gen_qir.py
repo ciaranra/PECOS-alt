@@ -21,32 +21,18 @@ from pecos import __version__
 from pecos.qeclib.qubit import qgate_base
 from pecos.qeclib.qubit.measures import Measure
 from pecos.slr import Block, If, Main, Repeat
-from pecos.slr.cops import (AND,
-                            BinOp,
-                            CompOp,
-                            DIV,
-                            EQUIV,
-                            GE,
-                            GT,
-                            LE,
-                            LSHIFT,
-                            LT,
-                            MUL,
-                            MINUS,
-                            NEQUIV,
-                            NEG,
-                            NOT,
-                            OR,
-                            PLUS,
-                            RSHIFT,
-                            SET,
-                            XOR,
-                            UnaryOp)
+from pecos.slr.cops import (
+    NEG,
+    NOT,
+    SET,
+    BinOp,
+    CompOp,
+    UnaryOp,
+)
 from pecos.slr.gen_codes.generator import Generator
 from pecos.slr.gen_codes.qir_gate_mapping import QIRGateMetadata
 from pecos.slr.misc import Barrier, Comment, Permute
 from pecos.slr.vars import Bit, CReg, QReg, Qubit, Reg, Vars
-
 
 
 class QIRTypes:
@@ -87,7 +73,12 @@ class QIRFunc:
             name=name,
         )
 
-    def create_call(self, builder: ir.IRBuilder, args: list[binding.ValueRef], name: str) -> binding.ValueRef:
+    def create_call(
+        self,
+        builder: ir.IRBuilder,
+        args: list[binding.ValueRef],
+        name: str,
+    ) -> binding.ValueRef:
         """A helper method to call a QIR Gate.
 
         Parameters:
@@ -223,8 +214,7 @@ class QIRGenerator(Generator):
         self._result_cregs: set[str] = set()
         self._gate_declaration_cache: dict[str, QIRGate] = {}
         self._barrier_cache: dict[int, QIRFunc] = {}
-        
-        
+
     def setup_module(self):
         """Helper function to help setup various types and functions needed
         in the QIR production."""
@@ -252,7 +242,7 @@ class QIRGenerator(Generator):
 
         def icmp_signed_closure(op: str):
             return lambda l, r: self._builder.icmp_signed(op, l, r)
-        
+
         self._op_map: dict = {
             "==": icmp_signed_closure("=="),
             "!=": icmp_signed_closure("!="),
@@ -269,7 +259,7 @@ class QIRGenerator(Generator):
             "-": self._builder.sub,
             ">>": self._builder.lshr,
             "<<": self._builder.shl,
-        } 
+        }
 
     def create_creg(self, creg: CReg):
         """Add a call to create_creg in the current block.
@@ -297,10 +287,12 @@ class QIRGenerator(Generator):
         Its qubits will map to unique numbered qubits in the QIR.
         """
 
-        self._qreg_dict[qreg.sym] = (self._qubit_count, self._qubit_count + qreg.size - 1)
+        self._qreg_dict[qreg.sym] = (
+            self._qubit_count,
+            self._qubit_count + qreg.size - 1,
+        )
         self._qubit_count += qreg.size
 
-        
     def _generate_results(self) -> None:
         """Generates the proper results calls at the end of the SLR program,
         according to all the classical registers that were defined."""
@@ -316,9 +308,19 @@ class QIRGenerator(Generator):
             reg_tag.linkage = "private"
 
             # convert creg to an integer and return that as a result
-            c_int = self._creg_funcs.creg_to_int_func.create_call(self._builder, [reg_inst], "")
-            reg_tag_gep = reg_tag.gep((ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)))
-            self._creg_funcs.int_result_func.create_call(self._builder, [c_int, reg_tag_gep], "")
+            c_int = self._creg_funcs.creg_to_int_func.create_call(
+                self._builder,
+                [reg_inst],
+                "",
+            )
+            reg_tag_gep = reg_tag.gep(
+                (ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)),
+            )
+            self._creg_funcs.int_result_func.create_call(
+                self._builder,
+                [c_int, reg_tag_gep],
+                "",
+            )
 
     def generate_block(self, block: Main) -> None:
         """Primary entry point for generation of QIR.
@@ -376,7 +378,7 @@ class QIRGenerator(Generator):
                                 with otherwise:
                                     self._handle_block(block_or_op.else_block)
                         else:
-                            with self._builder.if_then(pred):                                
+                            with self._builder.if_then(pred):
                                 self._handle_block(Block(*block_or_op.ops))
                     case Block():
                         self._handle_block(block_or_op)
@@ -385,26 +387,38 @@ class QIRGenerator(Generator):
 
     def _convert_cond_to_pred(self, cond: CompOp):
         """Converts an SLR expression into a QIR condition."""
-        
+
         if not isinstance(cond.left, (Reg, Bit)):
             raise ValueError("Left side of condition must be a register")
         if isinstance(cond.left, Reg):
             reg_fetch = self._creg_dict[cond.left.sym][0]
-            lhs = self._creg_funcs.creg_to_int_func.create_call(self._builder, [reg_fetch], "")
+            lhs = self._creg_funcs.creg_to_int_func.create_call(
+                self._builder,
+                [reg_fetch],
+                "",
+            )
         elif isinstance(cond.left, Bit):
             reg_fetch = self._creg_dict[cond.left.reg.sym][0]
             index = ir.Constant(self._types.intType, cond.left.index)
-            lhs = self._creg_funcs.get_creg_bit_func.create_call(self._builder, [reg_fetch, index], "")
+            lhs = self._creg_funcs.get_creg_bit_func.create_call(
+                self._builder,
+                [reg_fetch, index],
+                "",
+            )
         if isinstance(cond.right, int):
             rhs = ir.Constant(self._types.intType, cond.right)
         else:
             rhs_reg_fetch = self._creg_dict[cond.right.sym][0]
-            rhs = self._creg_funcs.creg_to_int_func.create_call(self._builder, [rhs_reg_fetch], "")
+            rhs = self._creg_funcs.creg_to_int_func.create_call(
+                self._builder,
+                [rhs_reg_fetch],
+                "",
+            )
         return self._builder.icmp_signed(cond.symbol, lhs, rhs)
 
     def _convert_set_op(self, op):
         """Converts an slr assignment operation to a QIR one"""
-        
+
         if isinstance(op.right, int):
             if isinstance(op.left, CReg):
                 rhs = ir.Constant(self._types.intType, op.right)
@@ -417,21 +431,37 @@ class QIRGenerator(Generator):
         elif isinstance(op.right, Bit):
             rhs_reg_fetch = self._creg_dict[op.right.reg.sym][0]
             r_index = ir.Constant(self._types.intType, op.right.index)
-            rhs = self._creg_funcs.get_creg_bit_func.create_call(self._builder, [rhs_reg_fetch, r_index], "")
+            rhs = self._creg_funcs.get_creg_bit_func.create_call(
+                self._builder,
+                [rhs_reg_fetch, r_index],
+                "",
+            )
         else:
             rhs_reg_fetch = self._creg_dict[op.right.sym][0]
-            rhs = self._creg_funcs.creg_to_int_func.create_call(self._builder, [rhs_reg_fetch], "")
+            rhs = self._creg_funcs.creg_to_int_func.create_call(
+                self._builder,
+                [rhs_reg_fetch],
+                "",
+            )
         if isinstance(op.left, CReg):
             lhs = self._creg_dict[op.left.sym][0]
-            return self._creg_funcs.set_creg_func.create_call(self._builder, [lhs, rhs], "")
+            return self._creg_funcs.set_creg_func.create_call(
+                self._builder,
+                [lhs, rhs],
+                "",
+            )
         elif isinstance(op.left, Bit):
             lhs = self._creg_dict[op.left.reg.sym][0]
             l_index = ir.Constant(self._types.intType, op.left.index)
-            return self._creg_funcs.set_creg_bit_func.create_call(self._builder, [lhs, l_index, rhs], "")
+            return self._creg_funcs.set_creg_bit_func.create_call(
+                self._builder,
+                [lhs, l_index, rhs],
+                "",
+            )
 
     def _convert_binary_op(self, op):
         """Converts an SLR binary operation to a QIR arithmetic instruction"""
-        
+
         lhs, rhs = None, None
         if isinstance(op.left, int):
             # hack
@@ -446,10 +476,18 @@ class QIRGenerator(Generator):
         elif isinstance(op.left, Bit):
             reg_fetch = self._creg_dict[op.left.reg.sym][0]
             l_index = ir.Constant(self._types.intType, op.left.index)
-            lhs = self._creg_funcs.get_creg_bit_func.create_call(self._builder, [reg_fetch, l_index], "")
+            lhs = self._creg_funcs.get_creg_bit_func.create_call(
+                self._builder,
+                [reg_fetch, l_index],
+                "",
+            )
         else:
             reg_fetch = self._creg_dict[op.left.sym][0]
-            lhs = self._creg_funcs.creg_to_int_func.create_call(self._builder, [reg_fetch], "")
+            lhs = self._creg_funcs.creg_to_int_func.create_call(
+                self._builder,
+                [reg_fetch],
+                "",
+            )
         if isinstance(op.right, int):
             # hack
             if isinstance(op.left, Bit):
@@ -463,10 +501,18 @@ class QIRGenerator(Generator):
         elif isinstance(op.right, Bit):
             rhs_reg_fetch = self._creg_dict[op.right.reg.sym][0]
             r_index = ir.Constant(self._types.intType, op.right.index)
-            rhs = self._creg_funcs.get_creg_bit_func.create_call(self._builder, [rhs_reg_fetch, r_index], "")
+            rhs = self._creg_funcs.get_creg_bit_func.create_call(
+                self._builder,
+                [rhs_reg_fetch, r_index],
+                "",
+            )
         else:
             rhs_reg_fetch = self._creg_dict[op.right.sym][0]
-            rhs = self._creg_funcs.creg_to_int_func.create_call(self._builder, [rhs_reg_fetch], "")
+            rhs = self._creg_funcs.creg_to_int_func.create_call(
+                self._builder,
+                [rhs_reg_fetch],
+                "",
+            )
         return self._op_map[op.symbol](lhs, rhs)
 
     def _convert_unary_op(self, op):
@@ -480,7 +526,11 @@ class QIRGenerator(Generator):
         elif isinstance(op.value, Bit):
             reg_fetch = self._creg_dict[op.value.reg.sym][0]
             index = ir.Constant(self._types.intType, op.value.index)
-            reg_val = self._creg_funcs.get_creg_bit_func.create_call(self._builder, [reg_fetch, index], "")
+            reg_val = self._creg_funcs.get_creg_bit_func.create_call(
+                self._builder,
+                [reg_fetch, index],
+                "",
+            )
             match op:
                 case NEG():
                     return self._builder.neg(reg_val)
@@ -488,7 +538,11 @@ class QIRGenerator(Generator):
                     return self._builder.not_(reg_val)
         else:
             reg_fetch = self._creg_dict[op.value.sym][0]
-            reg_val = self._creg_funcs.creg_to_int_func.create_call(self._builder, [reg_fetch], "")
+            reg_val = self._creg_funcs.creg_to_int_func.create_call(
+                self._builder,
+                [reg_fetch],
+                "",
+            )
             match op:
                 case NEG():
                     return self._builder.neg(reg_val)
@@ -504,14 +558,16 @@ class QIRGenerator(Generator):
             case Barrier():
                 self._handle_barrier(op)
             case Comment():
-                new_comment = op.txt.replace('\n', '')
-                self._builder.comment(new_comment)  # TODO: Handle 'space', 'newline' params
+                new_comment = op.txt.replace("\n", "")
+                self._builder.comment(
+                    new_comment,
+                )  # TODO: Handle 'space', 'newline' params
             case Permute():
                 # TODO: Ask Ciaran about what this actually does
                 raise NotImplementedError("Permute not implemented in QIR")
             case SET():
                 self._convert_set_op(op)
-            case BinOp():                
+            case BinOp():
                 self._convert_binary_op(op)
             case UnaryOp():
                 self._convert_unary_op(op)
@@ -537,7 +593,7 @@ class QIRGenerator(Generator):
                     length += item.size
                     for qubit in item.elems:
                         qubits.append(qubit)
-                case _: #assume tuple[QReg]
+                case _:  # assume tuple[QReg]
                     for qreg in item:
                         length += qreg.size
                         for qubit in qreg.elems:
@@ -552,9 +608,12 @@ class QIRGenerator(Generator):
                 f"__quantum__qis__barrier{length}__body",
             )
         barrier_func = self._barrier_cache[length]
-        barrier_func.create_call(self._builder, [self._qarg_to_qubit_ptr(index) for index in qubits], name="")
+        barrier_func.create_call(
+            self._builder,
+            [self._qarg_to_qubit_ptr(index) for index in qubits],
+            name="",
+        )
 
-        
     def _handle_quantum_gate(self, gate: qgate_base.QGate) -> None:
         """Process a quantum gate.
 
@@ -580,7 +639,11 @@ class QIRGenerator(Generator):
                     qubit_ptr = self._qarg_to_qubit_ptr(gate.qargs[0])
                     self._mz_to_bit.create_call(
                         self._builder,
-                        [qubit_ptr, ll_creg, ir.Constant(self._types.intType, creg_or_bit.index)],
+                        [
+                            qubit_ptr,
+                            ll_creg,
+                            ir.Constant(self._types.intType, creg_or_bit.index),
+                        ],
                         name="",
                     )
             case _:
@@ -597,32 +660,42 @@ class QIRGenerator(Generator):
         # necessary mappings of parameters and qargs to the decomposed gates from
         # the 'source' gate
         if qgate_meta.decomposer:
-            decomposed_gates = qgate_meta.decomposer(gate)            
+            decomposed_gates = qgate_meta.decomposer(gate)
             for decomposed_gate in decomposed_gates:
                 self._create_qgate_call(decomposed_gate)
             return
 
         if isinstance(gate.qargs[0], QReg):
             for qubit in gate.qargs[0].elems:
-                new_gate = gate.copy()                
+                new_gate = gate.copy()
                 new_gate.qargs = [qubit]
                 self._create_qgate_call(new_gate)
             return
-        elif isinstance(gate.qargs, tuple) and len(gate.qargs) != gate.qsize and all((isinstance(q, Qubit) for q in gate.qargs)):
+        elif (
+            isinstance(gate.qargs, tuple)
+            and len(gate.qargs) != gate.qsize
+            and all(isinstance(q, Qubit) for q in gate.qargs)
+        ):
             for qubit in gate.qargs:
-                new_gate = gate.copy()                
+                new_gate = gate.copy()
                 new_gate.qargs = [qubit]
                 self._create_qgate_call(new_gate)
             return
-        elif isinstance(gate.qargs, tuple) and len(gate.qargs) != gate.qsize and all((isinstance(e, tuple) for e in gate.qargs)):
+        elif (
+            isinstance(gate.qargs, tuple)
+            and len(gate.qargs) != gate.qsize
+            and all(isinstance(e, tuple) for e in gate.qargs)
+        ):
             for pair in gate.qargs:
-                new_gate = gate.copy()                
+                new_gate = gate.copy()
                 new_gate.qargs = pair
                 self._create_qgate_call(new_gate)
             return
-        qargs = gate.qargs        
+        qargs = gate.qargs
         if len(qargs) != gate.qsize:
-            raise ValueError(f"Gate {gate.sym} expects {gate.qsize} qubits, but {len(qargs)} were provided.")
+            raise ValueError(
+                f"Gate {gate.sym} expects {gate.qsize} qubits, but {len(qargs)} were provided.",
+            )
 
         if gate.sym not in self._gate_declaration_cache:
             declare_args = []
@@ -640,7 +713,9 @@ class QIRGenerator(Generator):
         gate_declaration = self._gate_declaration_cache[gate.sym]
         gate_args = []
         if gate.has_parameters:
-            gate_args = [ir.Constant(self._types.doubleType, param) for param in gate.params]
+            gate_args = [
+                ir.Constant(self._types.doubleType, param) for param in gate.params
+            ]
         gate_args.extend([self._qarg_to_qubit_ptr(qarg) for qarg in qargs])
 
         # Create the actual invocation on the builder using the args passed in
@@ -656,7 +731,9 @@ class QIRGenerator(Generator):
 
         index = qarg.index
         qubit_index = self._qreg_dict[qarg.reg.sym][0] + index
-        return ir.Constant(self._types.intType, qubit_index).inttoptr(self._types.qubitPtrType)
+        return ir.Constant(self._types.intType, qubit_index).inttoptr(
+            self._types.qubitPtrType,
+        )
 
     def _ll_with_attributes(self) -> str:
         """Patches attributes into the .ll for the program:
@@ -698,4 +775,3 @@ def _fix_internal_consts(llvm_ir: str) -> str:
     # substitute all instances of variable num with quotes, with just number (@"0" -> @0)
 
     return re.sub('([@%])"([^"]+)"', r"\1\2", llvm_ir)
-

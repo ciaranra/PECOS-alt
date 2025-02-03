@@ -28,8 +28,8 @@ __all__ = [
     "Main",
     "Permute",
     "QReg",
-    "SlrConverter",
     "Qubit",
     "Repeat",
+    "SlrConverter",
     "Vars",
 ]

@@ -11,8 +11,9 @@
 
 from dataclasses import dataclass
 from enum import Enum
-import numpy
 from typing import Callable
+
+import numpy
 
 from pecos.qeclib import qubit as q
 from pecos.qeclib.qubit.qgate_base import QGate
@@ -66,30 +67,30 @@ class QIRGateMetadata(Enum):
         lambda f: [
             q.SZdg(f.qargs[0]),
             q.H(f.qargs[0]),
-        ]
+        ],
     )
     Fdg = QG.decompose(
         lambda fdg: [
             q.H(fdg.qargs[0]),
             q.SZ(fdg.qargs[0]),
-        ]
+        ],
     )
     F4 = QG.decompose(
         lambda f4: [
             q.H(f4.qargs[0]),
             q.SZdg(f4.qargs[0]),
-        ]
+        ],
     )
     F4dg = QG.decompose(
         lambda f4dg: [
             q.SZ(f4dg.qargs[0]),
             q.H(f4dg.qargs[0]),
-        ]
+        ],
     )
     SYdg = QG.decompose(
         lambda sydg: [
-            q.RY[-numpy.pi/2](sydg.qargs[0])
-        ]
+            q.RY[-numpy.pi / 2](sydg.qargs[0]),
+        ],
     )
 
     # Remaining QIR gates seen:

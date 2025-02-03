@@ -24,7 +24,11 @@ class SlrConverter:
     def __init__(self, block):
         self._block = block
 
-    def generate(self, target: Language, skip_headers: bool = False) -> str:  # noqa: FBT001
+    def generate(
+        self,
+        target: Language,
+        skip_headers: bool = False,
+    ) -> str:
         generator: Generator = None
         if target == Language.QASM:
             generator = QASMGenerator(skip_headers=skip_headers)
