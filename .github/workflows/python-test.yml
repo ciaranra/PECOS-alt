@@ -59,12 +59,13 @@ jobs:
       uses: Swatinem/rust-cache@v2
       with:
           workspaces: python/pecos-rslib
-	
+
     - name: Install LLVM
       uses: KyleMayes/install-llvm-action@v2
       with:
         version: "14.0"
         env: True
+
     - name: Configure LLVM
       run: echo "LLVM_SYS_140_PREFIX=$LLVM_PATH" >>"$GITHUB_ENV" && "$LLVM_PATH/bin/llvm-config" --version
 
