@@ -27,6 +27,7 @@ class SlrConverter:
     def generate(
         self,
         target: Language,
+        *,
         skip_headers: bool = False,
     ) -> str:
         generator: Generator = None

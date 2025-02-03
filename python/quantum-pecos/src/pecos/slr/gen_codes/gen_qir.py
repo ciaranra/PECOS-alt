@@ -53,15 +53,15 @@ class QIRTypes:
         """
 
         # Create some useful types to use in compilation later
-        qubitTy = module.context.get_identified_type("Qubit")
-        resultTy = module.context.get_identified_type("Result")
-        self.voidType: VoidType = ir.VoidType()
-        self.boolType: IntType = ir.IntType(1)
-        self.intType: IntType = ir.IntType(64)
-        self.doubleType: DoubleType = ir.DoubleType()
-        self.qubitPtrType: PointerType = qubitTy.as_pointer()
-        self.resultPtrType: PointerType = resultTy.as_pointer()
-        self.tagType: PointerType = ir.IntType(8).as_pointer()
+        qubit_ty = module.context.get_identified_type("Qubit")
+        result_ty = module.context.get_identified_type("Result")
+        self.void_type: VoidType = ir.VoidType()
+        self.bool_type: IntType = ir.IntType(1)
+        self.int_type: IntType = ir.IntType(64)
+        self.double_type: DoubleType = ir.DoubleType()
+        self.qubit_ptr_type: PointerType = qubit_ty.as_pointer()
+        self.result_ptr_type: PointerType = result_ty.as_pointer()
+        self.tag_type: PointerType = ir.IntType(8).as_pointer()
 
 
 class QIRFunc:
@@ -145,43 +145,43 @@ class CRegFuncs:
 
         self.create_creg_func = QIRFunc(
             module,
-            types.boolType.as_pointer(),
-            [types.intType],
+            types.bool_type.as_pointer(),
+            [types.int_type],
             "create_creg",
         )
 
         self.creg_to_int_func = QIRFunc(
             module,
-            types.intType,
-            [types.boolType.as_pointer()],
+            types.int_type,
+            [types.bool_type.as_pointer()],
             "get_int_from_creg",
         )
 
         self.get_creg_bit_func = QIRFunc(
             module,
-            types.boolType,
-            [types.boolType.as_pointer(), types.intType],
+            types.bool_type,
+            [types.bool_type.as_pointer(), types.int_type],
             "get_creg_bit",
         )
 
         self.set_creg_bit_func = QIRFunc(
             module,
-            types.voidType,
-            [types.boolType.as_pointer(), types.intType, types.boolType],
+            types.void_type,
+            [types.bool_type.as_pointer(), types.int_type, types.bool_type],
             "set_creg_bit",
         )
 
         self.set_creg_func = QIRFunc(
             module,
-            types.voidType,
-            [types.boolType.as_pointer(), types.intType],
+            types.void_type,
+            [types.bool_type.as_pointer(), types.int_type],
             "set_creg_to_int",
         )
 
         self.int_result_func = QIRFunc(
             module,
-            types.voidType,
-            [types.intType, types.tagType],
+            types.void_type,
+            [types.int_type, types.tag_type],
             "__quantum__rt__int_record_output",
         )
 
@@ -200,8 +200,8 @@ class MzToBit(QIRFunc):
 
         super().__init__(
             module,
-            types.voidType,
-            [types.qubitPtrType, types.boolType.as_pointer(), types.intType],
+            types.void_type,
+            [types.qubit_ptr_type, types.bool_type.as_pointer(), types.int_type],
             "mz_to_creg_bit",
         )
 
@@ -239,7 +239,7 @@ class QIRGenerator(Generator):
         self._creg_funcs = CRegFuncs(self._module, self._types)
 
         # declare the main function
-        main_fnty = ir.FunctionType(self._types.voidType, [])
+        main_fnty = ir.FunctionType(self._types.void_type, [])
         self._main_func = ir.Function(self._module, main_fnty, name="main")
 
         # Now implement the function
@@ -249,7 +249,7 @@ class QIRGenerator(Generator):
         self._builder.comment(f"// Generated using: PECOS version {__version__}")
 
         def icmp_signed_closure(op: str):
-            return lambda l, r: self._builder.icmp_signed(op, l, r)
+            return lambda left, right: self._builder.icmp_signed(op, left, right)
 
         self._op_map: dict = {
             "==": icmp_signed_closure("=="),
@@ -398,7 +398,7 @@ class QIRGenerator(Generator):
 
         if not isinstance(cond.left, (Reg, Bit)):
             msg = "Left side of condition must be a register"
-            raise ValueError(msg)
+            raise TypeError(msg)
         if isinstance(cond.left, Reg):
             reg_fetch = self._creg_dict[cond.left.sym][0]
             lhs = self._creg_funcs.creg_to_int_func.create_call(
@@ -408,14 +408,14 @@ class QIRGenerator(Generator):
             )
         elif isinstance(cond.left, Bit):
             reg_fetch = self._creg_dict[cond.left.reg.sym][0]
-            index = ir.Constant(self._types.intType, cond.left.index)
+            index = ir.Constant(self._types.int_type, cond.left.index)
             lhs = self._creg_funcs.get_creg_bit_func.create_call(
                 self._builder,
                 [reg_fetch, index],
                 "",
             )
         if isinstance(cond.right, int):
-            rhs = ir.Constant(self._types.intType, cond.right)
+            rhs = ir.Constant(self._types.int_type, cond.right)
         else:
             rhs_reg_fetch = self._creg_dict[cond.right.sym][0]
             rhs = self._creg_funcs.creg_to_int_func.create_call(
@@ -430,16 +430,16 @@ class QIRGenerator(Generator):
 
         if isinstance(op.right, int):
             if isinstance(op.left, CReg):
-                rhs = ir.Constant(self._types.intType, op.right)
+                rhs = ir.Constant(self._types.int_type, op.right)
             else:
-                rhs = ir.Constant(self._types.boolType, op.right)
+                rhs = ir.Constant(self._types.bool_type, op.right)
         elif isinstance(op.right, BinOp):
             rhs = self._convert_binary_op(op.right)
         elif isinstance(op.right, UnaryOp):
             rhs = self._convert_unary_op(op.right)
         elif isinstance(op.right, Bit):
             rhs_reg_fetch = self._creg_dict[op.right.reg.sym][0]
-            r_index = ir.Constant(self._types.intType, op.right.index)
+            r_index = ir.Constant(self._types.int_type, op.right.index)
             rhs = self._creg_funcs.get_creg_bit_func.create_call(
                 self._builder,
                 [rhs_reg_fetch, r_index],
@@ -461,7 +461,7 @@ class QIRGenerator(Generator):
             )
         elif isinstance(op.left, Bit):
             lhs = self._creg_dict[op.left.reg.sym][0]
-            l_index = ir.Constant(self._types.intType, op.left.index)
+            l_index = ir.Constant(self._types.int_type, op.left.index)
             return self._creg_funcs.set_creg_bit_func.create_call(
                 self._builder,
                 [lhs, l_index, rhs],
@@ -475,16 +475,16 @@ class QIRGenerator(Generator):
         if isinstance(op.left, int):
             # hack
             if isinstance(op.right, Bit):
-                lhs = ir.Constant(self._types.boolType, op.left)
+                lhs = ir.Constant(self._types.bool_type, op.left)
             else:
-                lhs = ir.Constant(self._types.intType, op.left)
+                lhs = ir.Constant(self._types.int_type, op.left)
         elif isinstance(op.left, BinOp):
             lhs = self._convert_binary_op(op.left)
         elif isinstance(op.left, UnaryOp):
             lhs = self._convert_unary_op(op.left)
         elif isinstance(op.left, Bit):
             reg_fetch = self._creg_dict[op.left.reg.sym][0]
-            l_index = ir.Constant(self._types.intType, op.left.index)
+            l_index = ir.Constant(self._types.int_type, op.left.index)
             lhs = self._creg_funcs.get_creg_bit_func.create_call(
                 self._builder,
                 [reg_fetch, l_index],
@@ -500,16 +500,16 @@ class QIRGenerator(Generator):
         if isinstance(op.right, int):
             # hack
             if isinstance(op.left, Bit):
-                rhs = ir.Constant(self._types.boolType, op.right)
+                rhs = ir.Constant(self._types.bool_type, op.right)
             else:
-                rhs = ir.Constant(self._types.intType, op.right)
+                rhs = ir.Constant(self._types.int_type, op.right)
         elif isinstance(op.right, BinOp):
             rhs = self._convert_binary_op(op.right)
         elif isinstance(op.right, UnaryOp):
             rhs = self._convert_unary_op(op.right)
         elif isinstance(op.right, Bit):
             rhs_reg_fetch = self._creg_dict[op.right.reg.sym][0]
-            r_index = ir.Constant(self._types.intType, op.right.index)
+            r_index = ir.Constant(self._types.int_type, op.right.index)
             rhs = self._creg_funcs.get_creg_bit_func.create_call(
                 self._builder,
                 [rhs_reg_fetch, r_index],
@@ -529,12 +529,12 @@ class QIRGenerator(Generator):
         if isinstance(op.value, int):
             match op:
                 case NEG():
-                    return ir.Constant(self._types.intType, -op.value)
+                    return ir.Constant(self._types.int_type, -op.value)
                 case NOT():
-                    return ir.Constant(self._types.intType, ~op.value)
+                    return ir.Constant(self._types.int_type, ~op.value)
         elif isinstance(op.value, Bit):
             reg_fetch = self._creg_dict[op.value.reg.sym][0]
-            index = ir.Constant(self._types.intType, op.value.index)
+            index = ir.Constant(self._types.int_type, op.value.index)
             reg_val = self._creg_funcs.get_creg_bit_func.create_call(
                 self._builder,
                 [reg_fetch, index],
@@ -615,8 +615,8 @@ class QIRGenerator(Generator):
         if length not in self._barrier_cache:
             self._barrier_cache[length] = QIRFunc(
                 self._module,
-                self._types.voidType,
-                [self._types.qubitPtrType] * length,
+                self._types.void_type,
+                [self._types.qubit_ptr_type] * length,
                 f"__quantum__qis__barrier{length}__body",
             )
         barrier_func = self._barrier_cache[length]
@@ -642,7 +642,7 @@ class QIRGenerator(Generator):
                         qubit_ptr = self._qarg_to_qubit_ptr(q)
                         self._mz_to_bit.create_call(
                             self._builder,
-                            [qubit_ptr, ll_creg, ir.Constant(self._types.intType, i)],
+                            [qubit_ptr, ll_creg, ir.Constant(self._types.int_type, i)],
                             name="",
                         )
                 elif isinstance(creg_or_bit, Bit):
@@ -654,7 +654,7 @@ class QIRGenerator(Generator):
                         [
                             qubit_ptr,
                             ll_creg,
-                            ir.Constant(self._types.intType, creg_or_bit.index),
+                            ir.Constant(self._types.int_type, creg_or_bit.index),
                         ],
                         name="",
                     )
@@ -713,8 +713,8 @@ class QIRGenerator(Generator):
         if gate.sym not in self._gate_declaration_cache:
             declare_args = []
             if gate.has_parameters:
-                declare_args = [self._types.doubleType] * len(gate.params)
-            declare_args.extend([self._types.qubitPtrType] * gate.qsize)
+                declare_args = [self._types.double_type] * len(gate.params)
+            declare_args.extend([self._types.qubit_ptr_type] * gate.qsize)
 
             gate_declaration = QIRGate(
                 self._module,
@@ -727,7 +727,7 @@ class QIRGenerator(Generator):
         gate_args = []
         if gate.has_parameters:
             gate_args = [
-                ir.Constant(self._types.doubleType, param) for param in gate.params
+                ir.Constant(self._types.double_type, param) for param in gate.params
             ]
         gate_args.extend([self._qarg_to_qubit_ptr(qarg) for qarg in qargs])
 
@@ -744,15 +744,16 @@ class QIRGenerator(Generator):
 
         index = qarg.index
         qubit_index = self._qreg_dict[qarg.reg.sym][0] + index
-        return ir.Constant(self._types.intType, qubit_index).inttoptr(
-            self._types.qubitPtrType,
+        return ir.Constant(self._types.int_type, qubit_index).inttoptr(
+            self._types.qubit_ptr_type,
         )
 
     def _ll_with_attributes(self) -> str:
         """Patches attributes into the .ll for the program:
 
         Example attributes:
-        attributes #0 = { "entry_point" "output_labeling_schema" "qir_profiles"="custom" "required_num_qubits"="22" "required_num_results"="22" }
+        attributes #0 = { "entry_point" "output_labeling_schema"
+        "qir_profiles"="custom" "required_num_qubits"="22" "required_num_results"="22" }
         """
         ll_text: str = _fix_internal_consts(str(self._module))
         mod_w_attr = ll_text.replace("@main()", "@main() #0")

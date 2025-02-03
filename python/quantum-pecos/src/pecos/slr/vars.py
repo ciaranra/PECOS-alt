@@ -114,7 +114,7 @@ class Qubit(Elem):
 
 
 class CReg(Reg, PyCOp):
-    def __init__(self, sym: str, size: int, result: bool = True) -> None:
+    def __init__(self, sym: str, size: int, *, result: bool = True) -> None:
         """
         Representation for a collection of bits.
 

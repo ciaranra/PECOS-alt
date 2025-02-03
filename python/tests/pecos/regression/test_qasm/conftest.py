@@ -17,7 +17,7 @@ def compare_qasm():
             directory = Path(__file__).parent
 
         if filename is None:
-            filename = str(type(slr))[8:-2]
+            filename = str(type(block))[8:-2]
 
         if params:
             params = [str(p) for p in params]

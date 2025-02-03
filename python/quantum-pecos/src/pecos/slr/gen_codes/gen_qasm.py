@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 from pecos import __version__
+from pecos.slr import QReg
 from pecos.slr.gen_codes.generator import Generator
 
 
