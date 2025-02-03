@@ -1,102 +1,129 @@
-# A set of commands for development utilizing venv to develop, lint, test, document, and build the project.
-# The goal is to concretely capture the development/build process for reproducibility of the development workflow.
-
 .DEFAULT_GOAL := help
 
-.PHONY: requirements updatereqs metadeps install install-all docs lint tests tests-dep doctests tests-all clean venv dev-all build build-full help upgrade-pip dev-setup
-
 # Try to autodetect if python3 or python is the python executable used.
-BASEPYTHON := $(shell which python3 2>/dev/null || which python 2>/dev/null)
-VENV=.venv
+PYTHONPATH := $(shell which python 2>/dev/null || which python3 2>/dev/null)
 
-ifeq ($(OS),Windows_NT)
-	VENV_BIN=$(VENV)/Scripts
-else
-	VENV_BIN=$(VENV)/bin
-endif
+SHELL=bash
 
 # Requirements
 # ------------
 
-requirements: upgrade-pip  ## Install/refresh Python project requirements
-	$(VENV_BIN)/pip install --upgrade -r requirements.txt
-	$(VENV_BIN)/pip install --upgrade -r docs/requirements.txt
+.PHONY: updatereqs
+updatereqs:  ## Generate/update lockfiles for both packages
+	@echo "Ensuring uv is installed..."
+	uv self update
+	@echo "Generating lock files..."
+	uv lock
 
-updatereqs: upgrade-pip  ## Autogenerate requirements.txt
-	$(VENV_BIN)/pip install -U pip-tools
-	-@rm requirements.txt
-	$(VENV_BIN)/pip-compile --extra=tests --no-annotate --no-emit-index-url --output-file=requirements.txt --strip-extras pyproject.toml
+.PHONY: installreqs
+installreqs: ## Install Python project requirements to root .venv
+	@echo "Installing requirements..."
+	uv sync
 
-metadeps: upgrade-pip  ## Install extra dependencies used to develop/build this package
-	$(VENV_BIN)/pip install -U build pip-tools pre-commit wheel pytest hypothesis
+# Building development environments
+# ---------------------------------
+.PHONY: build
+build: installreqs ## Compile and install for development
+	cd python/pecos-rslib/ && uv run maturin develop --uv
+	cd python/quantum-pecos && uv pip install -e .[all]
 
-# Installation
-# ------------
+.PHONY: build-basic
+build-basic: installreqs ## Compile and install for development but do not include install extras
+	cd python/pecos-rslib/ && uv run maturin develop --uv
+	cd python/quantum-pecos && uv pip install -e .
 
-install: upgrade-pip  ## Install PECOS
-	$(VENV_BIN)/pip install .
+.PHONY: build-release
+build-release: installreqs ## Build a faster version of binaries
+	cd python/pecos-rslib/ && uv run maturin develop --uv --release
+	cd python/quantum-pecos && uv pip install -e .[all]
 
-install-all: upgrade-pip  ## Install PECOS with all optional dependencies
-	$(VENV_BIN)/pip install .[all]
+.PHONY: build-native
+build-native: installreqs ## Build a faster version of binaries with native CPU optimization
+	cd python/pecos-rslib/ && RUSTFLAGS='-C target-cpu=native' \
+	&& uv run maturin develop --uv --release
+	cd python/quantum-pecos && uv pip install -e .[all]
 
 # Documentation
 # -------------
 
-docs: install-all  ## Generate documentation
-	$(VENV_BIN)/pip install -r ./docs/requirements.txt
-	$(MAKE) -C docs SPHINXBUILD=../$(VENV_BIN)/sphinx-build clean html
+# .PHONY: docs
+# docs:  ## Generate documentation
+# 	#TODO: ...
 
 # Linting / formatting
 # --------------------
 
-lint: metadeps  ## Run all quality checks / linting / reformatting
-	$(VENV_BIN)/pre-commit run --all-files
+.PHONY: check
+check:  ## Run cargo check with all features
+	cargo check --workspace --all-targets --all-features
+
+.PHONY: clippy
+clippy:  ## Run cargo clippy with all features
+	cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+.PHONY: fmt
+fmt: ## Run autoformatting for cargo
+	cargo fmt --all -- --check
+
+.PHONY: lint  ## Run all quality checks / linting / reformatting
+lint: fmt clippy
+	uv run pre-commit run --all-files
 
 # Testing
 # -------
 
-tests: install metadeps  ## Run tests on the Python package (not including optional dependencies)
-	$(VENV_BIN)/pytest tests -m "not optional_dependency"
+.PHONY: rstest
+rstest:  ## Run Rust tests
+	cargo test
 
-tests-dep: install-all metadeps ## Run tests on the Python package only for optional dependencies
-	$(VENV_BIN)/pytest tests -m optional_dependency
+.PHONY: pytest
+pytest:  ## Run tests on the Python package (not including optional dependencies). ASSUMES: previous build command
+	uv run pytest ./python/tests/ -m "not optional_dependency"
 
-doctests:  ## Run doctests with pytest
-	$(VENV_BIN)/pytest ./docs --doctest-glob=*.rst --doctest-continue-on-failure
+.PHONY: pytest-dep
+pytest-dep: ## Run tests on the Python package only for optional dependencies. ASSUMES: previous build command
+	uv run pytest ./python/tests/ -m optional_dependency
 
-tests-all: tests tests-dep doctests ## Run all tests
+.PHONY: pytest-all
+pytest-all:  ## Run all tests on the Python package ASSUMES: previous build command
+	uv run pytest ./python/tests/
 
-# Building / Developing
-# ---------------------
+# .PHONY: pytest-doc
+# pydoctest:  ## Run doctests with pytest. ASSUMES: A build command was ran previously. ASSUMES: previous build command
+# 	# TODO: update and install docs requirements
+# 	uv run pytest docs --doctest-glob=*.rst --doctest-continue-on-failure
 
+.PHONY: test
+test: rstest pytest-all ## Run all tests. ASSUMES: previous build command
+
+# Utility
+# -------
+
+.PHONY: clean
 clean:  ## Clean up caches and build artifacts
-	-rm -rf *.egg-info dist build docs/_build .pytest_cache/ .ruff_cache/
+	@rm -rf *.egg-info
+	@rm -rf dist
+	@rm -rf **/build/
+	@rm -rf python/docs/_build
+	@rm -rf **/.pytest_cache/
+	@rm -rf **/.ipynb_checkpoints
+	@rm -rf .ruff_cache/
+	@rm -rf **/.hypothesis/
+	@rm -rf **/junit/
+	@cargo clean
 
-venv:  ## Build a new Python virtual environment from scratch
-	-rm -rf .venv/
-	$(BASEPYTHON) -m venv $(VENV)
-
-dev-all: dev-setup  ## Create a development environment from scratch with all optional dependencies and PECOS installed in editable mode
-	$(VENV_BIN)/pip install -e .[all]
-
-build: dev-setup  ## Clean, create new environment, and build PECOS for pypi
-	$(VENV_BIN)/python -m build --sdist --wheel -n
-
-build-full: dev-setup updatereqs install-all docs lint tests-all  ## Go through the full linting, testing, and building process
-	$(VENV_BIN)/python -m build --sdist --wheel -n
+.PHONY: pip-install-uv
+pip-install-uv:  ## Install uv using pip and create a venv. (Recommended to instead follow: https://docs.astral.sh/uv/getting-started/installation/
+	@echo "Installing uv..."
+	$(PYTHONPATH) -m pip install --upgrade uv
+	@echo "Creating venv and installing dependencies..."
+	uv sync
 
 # Help
 # ----
 
+.PHONY: help
 help:  ## Show the help menu
 	@echo "Available make commands:"
 	@echo ""
 	@grep -E '^[a-z.A-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
-
-# Utility targets
-# ---------------
-
-upgrade-pip:
-	$(VENV_BIN)/python -m pip install --upgrade pip
-
-dev-setup: clean venv requirements metadeps
