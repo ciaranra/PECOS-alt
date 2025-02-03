@@ -100,6 +100,7 @@ def test_bell_qir():
     )
 
     qir = SlrConverter(prog).qir()
+    assert "__quantum__qis__h__body" in qir
 
 
 def test_bell_qreg_qir():
@@ -112,7 +113,8 @@ def test_bell_qreg_qir():
         p.Measure(q) > m,
     )
 
-    qir = SlrConverter(prog).qir()    
+    qir = SlrConverter(prog).qir()
+    assert "__quantum__qis__h__body" in qir
 
 
 def test_if_bell():
@@ -224,7 +226,8 @@ def test_control_flow_qir():
         p.RX[0.3](q[0]),
         p.Measure(q) > m,
     )
-    qir = SlrConverter(prog).qir()    
+    qir = SlrConverter(prog).qir()
+    assert "__quantum__qis__h__body" in qir
 
 
 def test_plus_qir():
@@ -240,7 +243,7 @@ def test_plus_qir():
         o.set(m + n),
     )
     qir = SlrConverter(prog).qir()
-    print(qir)
+    assert "add" in qir
 
 
 def test_nested_xor_qir():
@@ -258,7 +261,7 @@ def test_nested_xor_qir():
         p[0].set((m[0] ^ n[0]) ^ o[0]),
     )
     qir = SlrConverter(prog).qir()
-    print(qir)    
+    assert "xor" in qir
 
 
 def test_minus_qir():
@@ -274,9 +277,9 @@ def test_minus_qir():
         o.set(m - n),
     )
     qir = SlrConverter(prog).qir()
-    print(qir)    
+    assert "sub" in qir
 
 
 def test_steane_qir():
     """Test the teleportation program using the Steane code."""
-    print(SlrConverter(telep("X", "X")).qir())    
+    print(SlrConverter(telep("X", "X")).qir())
