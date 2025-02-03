@@ -1,5 +1,4 @@
 import pytest
-
 from pecos import __version__
 from pecos.qeclib import qubit as p
 from pecos.qeclib.steane.steane_class import Steane

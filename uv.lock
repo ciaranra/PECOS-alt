@@ -1127,6 +1127,7 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
+    { name = "llvmlite" },
     { name = "plotly" },
     { name = "projectq" },
     { name = "pybind11" },
@@ -1186,6 +1187,7 @@ requires-dist = [
     { name = "pyquest", marker = "extra == 'pyquest'", specifier = ">=0.0.1" },
     { name = "quantum-pecos", extras = ["projectq"], marker = "extra == 'simulators'" },
     { name = "quantum-pecos", extras = ["pyquest"], marker = "python_full_version < '3.13' and extra == 'simulators'" },
+    { name = "quantum-pecos", extras = ["qir"], marker = "extra == 'all'" },
     { name = "quantum-pecos", extras = ["qulacs"], marker = "python_full_version < '3.13' and extra == 'simulators'" },
     { name = "quantum-pecos", extras = ["simulators"], marker = "extra == 'all'" },
     { name = "quantum-pecos", extras = ["visualization"], marker = "extra == 'all'" },
