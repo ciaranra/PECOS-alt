@@ -234,7 +234,7 @@ def test_plus_qir():
     """Test a program with addition compiling into QIR."""
 
     prog = Main(
-        q := QReg("q", 2),
+        _q := QReg("q", 2),
         m := CReg("m", 2),
         n := CReg("n", 2),
         o := CReg("o", 2),
@@ -251,7 +251,7 @@ def test_nested_xor_qir():
     """Test a program with addition compiling into QIR."""
 
     prog = Main(
-        q := QReg("q", 2),
+        _q := QReg("q", 2),
         m := CReg("m", 2),
         n := CReg("n", 2),
         o := CReg("o", 2),
@@ -270,7 +270,7 @@ def test_minus_qir():
     """Test a program with addition compiling into QIR."""
 
     prog = Main(
-        q := QReg("q", 2),
+        _q := QReg("q", 2),
         m := CReg("m", 2),
         n := CReg("n", 2),
         o := CReg("o", 2),
@@ -286,4 +286,4 @@ def test_minus_qir():
 def test_steane_qir():
     """Test the teleportation program using the Steane code."""
     print(SlrConverter(telep("X", "X")).qir())
-    assert False
+    raise AssertionError

@@ -13,26 +13,34 @@ from __future__ import annotations
 
 import re
 from collections import OrderedDict
+from typing import TYPE_CHECKING
 
-from llvmlite import binding, ir
-from llvmlite.ir import DoubleType, IntType, PointerType, Type, VoidType
+from llvmlite import ir
 
 from pecos import __version__
 from pecos.qeclib.qubit import qgate_base
 from pecos.qeclib.qubit.measures import Measure
-from pecos.slr import Block, If, Main, Repeat
+from pecos.slr import Block, If, Repeat
 from pecos.slr.cops import (
     NEG,
     NOT,
     SET,
     BinOp,
-    CompOp,
     UnaryOp,
 )
 from pecos.slr.gen_codes.generator import Generator
 from pecos.slr.gen_codes.qir_gate_mapping import QIRGateMetadata
 from pecos.slr.misc import Barrier, Comment, Permute
 from pecos.slr.vars import Bit, CReg, QReg, Qubit, Reg, Vars
+
+if TYPE_CHECKING:
+    from llvmlite import binding
+    from llvmlite.ir import DoubleType, IntType, PointerType, Type, VoidType
+
+    from pecos.slr import Main
+    from pecos.slr.cops import (
+        CompOp,
+    )
 
 
 class QIRTypes:
@@ -389,7 +397,8 @@ class QIRGenerator(Generator):
         """Converts an SLR expression into a QIR condition."""
 
         if not isinstance(cond.left, (Reg, Bit)):
-            raise ValueError("Left side of condition must be a register")
+            msg = "Left side of condition must be a register"
+            raise ValueError(msg)
         if isinstance(cond.left, Reg):
             reg_fetch = self._creg_dict[cond.left.sym][0]
             lhs = self._creg_funcs.creg_to_int_func.create_call(
@@ -564,7 +573,8 @@ class QIRGenerator(Generator):
                 )  # TODO: Handle 'space', 'newline' params
             case Permute():
                 # TODO: Ask Ciaran about what this actually does
-                raise NotImplementedError("Permute not implemented in QIR")
+                msg = "Permute not implemented in QIR"
+                raise NotImplementedError(msg)
             case SET():
                 self._convert_set_op(op)
             case BinOp():
@@ -572,9 +582,11 @@ class QIRGenerator(Generator):
             case UnaryOp():
                 self._convert_unary_op(op)
             case Vars():
-                raise NotImplementedError("Block Vars not implemented in QIR")
+                msg = "Block Vars not implemented in QIR"
+                raise NotImplementedError(msg)
             case CReg():
-                raise NotImplementedError("Block CReg not implemented in QIR")
+                msg = "Block CReg not implemented in QIR"
+                raise NotImplementedError(msg)
             case qgate_base.QGate():
                 self._handle_quantum_gate(op)
 
@@ -693,8 +705,9 @@ class QIRGenerator(Generator):
             return
         qargs = gate.qargs
         if len(qargs) != gate.qsize:
+            msg = f"Gate {gate.sym} expects {gate.qsize} qubits, but {len(qargs)} were provided."
             raise ValueError(
-                f"Gate {gate.sym} expects {gate.qsize} qubits, but {len(qargs)} were provided.",
+                msg,
             )
 
         if gate.sym not in self._gate_declaration_cache:

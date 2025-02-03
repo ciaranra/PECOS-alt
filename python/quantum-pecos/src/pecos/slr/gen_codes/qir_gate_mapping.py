@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Callable
 
-import numpy
+import numpy as np
 
 from pecos.qeclib import qubit as q
 from pecos.qeclib.qubit.qgate_base import QGate
@@ -89,7 +89,7 @@ class QIRGateMetadata(Enum):
     )
     SYdg = QG.decompose(
         lambda sydg: [
-            q.RY[-numpy.pi / 2](sydg.qargs[0]),
+            q.RY[-np.pi / 2](sydg.qargs[0]),
         ],
     )
 
