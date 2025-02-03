@@ -12,7 +12,6 @@
 from __future__ import annotations
 
 from pecos import __version__
-from pecos.slr import QReg
 from pecos.slr.gen_codes.generator import Generator
 
 
@@ -312,7 +311,7 @@ class QASMGenerator(Generator):
         str_list = []
 
         for q in op.qargs:
-            if isinstance(q, QReg):
+            if type(q).__name__ == "QReg":
                 lines = [f"{repr_str} {qubit};" for qubit in q]
                 str_list.extend(lines)
 
