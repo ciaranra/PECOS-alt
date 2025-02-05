@@ -20,6 +20,7 @@ from pecos.qeclib import qubit as q
 if TYPE_CHECKING:
     from pecos.qeclib.qubit.qgate_base import QGate
 
+
 @dataclass
 class QG:
     qir_name: str
