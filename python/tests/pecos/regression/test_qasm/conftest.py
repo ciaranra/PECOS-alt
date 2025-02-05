@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pecos.slr import SlrConverter
-
 import pytest
+from pecos.slr import SlrConverter
 
 
 @pytest.fixture
