@@ -29,6 +29,7 @@ class SlrConverter:
         target: Language,
         *,
         skip_headers: bool = False,
+        add_versions: bool = False
     ) -> str:
         generator: Generator = None
         if target == Language.QASM:
@@ -42,8 +43,8 @@ class SlrConverter:
         generator.generate_block(self._block)
         return generator.get_output()
 
-    def qasm(self, skip_headers: False = False):
-        return self.generate(Language.QASM, skip_headers)
+    def qasm(self, skip_headers: bool = False, add_versions: bool = False):
+        return self.generate(Language.QASM, skip_headers=skip_headers, add_versions=add_versions)
 
     def qir(self):
         return self.generate(Language.QIR)

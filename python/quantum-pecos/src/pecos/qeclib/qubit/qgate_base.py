@@ -69,11 +69,11 @@ class QGate(metaclass=ABCMeta):
 
         return g
 
-    def gen(self, target: object | str):
+    def gen(self, target: object | str, add_versions=False):
         # TODO: Get rid of this as much as possible...
         if isinstance(target, str):
             if target == "qasm":
-                target = QASMGenerator()
+                target = QASMGenerator(add_versions=add_versions)
             else:
                 msg = f"Code gen target '{target}' is not supported."
                 raise NotImplementedError(msg)
