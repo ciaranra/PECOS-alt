@@ -11,22 +11,23 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 
 from pecos.qeclib import qubit as q
-from pecos.qeclib.qubit.qgate_base import QGate
 
+if TYPE_CHECKING:
+    from pecos.qeclib.qubit.qgate_base import QGate
 
 @dataclass
 class QG:
     qir_name: str
     adjoint: bool = False
-    decomposer: Callable[[QGate], list[QGate]] = None
+    decomposer: Callable[["QGate"], list["QGate"]] = None
 
     @classmethod
-    def decompose(cls, decomposer: Callable[[QGate], list[QGate]]):
+    def decompose(cls, decomposer: Callable[["QGate"], list["QGate"]]):
         return cls("", False, decomposer)
 
 

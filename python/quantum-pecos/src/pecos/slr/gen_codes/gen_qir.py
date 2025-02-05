@@ -19,7 +19,6 @@ from llvmlite import ir
 
 from pecos import __version__
 from pecos.qeclib.qubit import qgate_base
-from pecos.qeclib.qubit.measures import Measure
 from pecos.slr import Block, If, Repeat
 from pecos.slr.cops import (
     NEG,
@@ -632,8 +631,8 @@ class QIRGenerator(Generator):
         gate (slr.qubit.qgate_base.QGate): An SLR quantum gate or measurement operation
         to transform into a QIR Gate"""
 
-        match gate:
-            case Measure():
+        match type(gate).__name__:
+            case "Measure":
                 creg_or_bit = gate.cout[0]
                 if isinstance(creg_or_bit, CReg):
                     ll_creg = self._creg_dict[creg_or_bit.sym][0]
