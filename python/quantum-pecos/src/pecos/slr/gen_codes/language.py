@@ -17,3 +17,4 @@ class Language(Enum):
 
     QASM = 0
     QIR = 1
+    QIRBC = 2

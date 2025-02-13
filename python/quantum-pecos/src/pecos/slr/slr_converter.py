@@ -34,13 +34,15 @@ class SlrConverter:
         generator: Generator = None
         if target == Language.QASM:
             generator = QASMGenerator(skip_headers=skip_headers)
-        elif target == Language.QIR:
+        elif target in [Language.QIR, Language.QIRBC]:
             generator = QIRGenerator()
         else:
             msg = f"Code gen target '{target}' is not supported."
             raise NotImplementedError(msg)
 
         generator.generate_block(self._block)
+        if target == Language.QIRBC:
+            return generator.get_bc()
         return generator.get_output()
 
     def qasm(self, *, skip_headers: bool = False, add_versions: bool = False):
@@ -52,3 +54,6 @@ class SlrConverter:
 
     def qir(self):
         return self.generate(Language.QIR)
+
+    def qir_bc(self):
+        return self.generate(Language.QIRBC)

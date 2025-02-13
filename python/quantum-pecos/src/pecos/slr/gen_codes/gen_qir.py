@@ -15,7 +15,7 @@ import re
 from collections import OrderedDict
 from typing import TYPE_CHECKING
 
-from llvmlite import ir
+from llvmlite import binding, ir
 
 from pecos import __version__
 from pecos.qeclib.qubit import qgate_base
@@ -33,7 +33,6 @@ from pecos.slr.misc import Barrier, Comment, Permute
 from pecos.slr.vars import Bit, CReg, QReg, Qubit, Reg, Vars
 
 if TYPE_CHECKING:
-    from llvmlite import binding
     from llvmlite.ir import DoubleType, IntType, PointerType, Type, VoidType
 
     from pecos.slr import Main
@@ -767,6 +766,10 @@ class QIRGenerator(Generator):
     def get_output(self) -> str:
         """Stringify the module as .ll text"""
         return self._ll_with_attributes()
+
+    def get_bc(self) -> bytes:
+        """Return LLVM bitcode for the text"""
+        return binding.parse_assembly(self.get_output()).as_bitcode()
 
 
 def _fix_internal_consts(llvm_ir: str) -> str:
