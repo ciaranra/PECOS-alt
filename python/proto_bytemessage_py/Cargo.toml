@@ -1,0 +1,17 @@
+# protoprpy/Cargo.toml
+[package]
+name = "proto_bytemessage_py"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "proto_bytemessage_py"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["extension-module", "abi3-py312", "experimental-inspect", "auto-initialize"] }
+bytemuck = { version = "1.14", features = ["derive"] }
+proto_bytemessage = { path = "../../crates/proto_bytemessage" }
+
+[build-dependencies]
+pyo3-build-config = "0.23"

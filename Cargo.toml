@@ -3,7 +3,10 @@ resolver = "2"
 members = [
     "python/pecos-rslib/rust",
     "crates/pecos*",
-    "crates/benchmarks", "crates/prototype",
+    "crates/benchmarks",
+    "crates/prototype",
+    "crates/proto_bytemessage",
+    "python/proto_bytemessage_py",
 ]
 
 [workspace.package]
