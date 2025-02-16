@@ -5,7 +5,7 @@ build-backend = "maturin"
 
 [project]
 name = "proto_bytemesage_py"
-version = "0.6.0.dev8 "
+version = "0.6.0.dev8"
 requires-python = ">=3.8,<3.13"
 readme = "README.md"
 dependencies = []
