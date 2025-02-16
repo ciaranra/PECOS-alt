@@ -1,5 +1,6 @@
-from typing import List, Tuple
-from ..proto_bytemessage_py import PyMessageBatch  # This comes from your Rust bindings
+from proto_bytemessage_py.proto_bytemessage_py import (
+    PyMessageBatch,
+)  # This comes from your Rust bindings
 
 
 class Processor:
@@ -7,18 +8,19 @@ class Processor:
 
     def process(self, input_batch: PyMessageBatch) -> PyMessageBatch:
         """Process a message batch and return a new message batch."""
-        raise NotImplementedError()
+        raise NotImplementedError
 
-    def process_message(self, msg_type: int, payload: bytes) -> List[Tuple[int, bytes]]:
+    def process_message(self, msg_type: int, payload: bytes) -> list[tuple[int, bytes]]:
         """Process a single message. Override this for simpler processors.
 
         Returns a list of (msg_type, payload) tuples for the output batch.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def process_messages(
-        self, messages: List[Tuple[int, bytes]]
-    ) -> List[Tuple[int, bytes]]:
+        self,
+        messages: list[tuple[int, bytes]],
+    ) -> list[tuple[int, bytes]]:
         """Process multiple messages. Override this for batch processing.
 
         Returns a list of (msg_type, payload) tuples for the output batch.

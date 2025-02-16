@@ -1,8 +1,16 @@
-# protoprpy/Cargo.toml
 [package]
 name = "proto_bytemessage_py"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "prototype for byte messages"
+readme = "README.md"
+publish = false
 
 [lib]
 name = "proto_bytemessage_py"
@@ -13,5 +21,5 @@ pyo3 = { version = "0.23", features = ["extension-module", "abi3-py312", "experi
 bytemuck = { version = "1.14", features = ["derive"] }
 proto_bytemessage = { path = "../../crates/proto_bytemessage" }
 
-[build-dependencies]
-pyo3-build-config = "0.23"
+[lints]
+workspace = true

@@ -1,8 +1,8 @@
-use std::sync::Arc;
 use crate::message_batch::PyMessageBatch;
 use proto_bytemessage::message::MessageBatch;
 use proto_bytemessage::process::CoProcessor;
 use pyo3::prelude::*;
+use std::sync::Arc;
 
 // Rust-side wrapper for Python processors
 pub struct PythonProcessor {
@@ -10,6 +10,19 @@ pub struct PythonProcessor {
 }
 
 impl PythonProcessor {
+    /// Creates a new instance of `PythonProcessor` by importing a Python module and instantiating a class.
+    ///
+    /// # Arguments
+    /// - `module_name`: The name of the Python module to import.
+    /// - `class_name`: The name of the Python class to instantiate.
+    ///
+    /// # Returns
+    /// A `PythonProcessor` instance wrapping the created Python object.
+    ///
+    /// # Errors
+    /// - Returns an error if the Python module cannot be imported.
+    /// - Returns an error if the specified class cannot be found in the module.
+    /// - Returns an error if the instantiation of the class fails.
     pub fn new(module_name: &str, class_name: &str) -> PyResult<Self> {
         Python::with_gil(|py| {
             let module = PyModule::import(py, module_name)?;
@@ -44,6 +57,6 @@ impl CoProcessor for PythonProcessor {
             // Extract MessageBatch back out
             Ok(result.batch.clone())
         })
-            .expect("Python processing failed")
+        .expect("Python processing failed")
     }
 }

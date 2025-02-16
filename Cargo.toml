@@ -51,6 +51,9 @@ pecos-qec = { version = "0.1.1", path = "crates/pecos-qec" }
 pecos = { version = "0.1.1", path = "crates/pecos" }
 pecos-cli = { version = "0.1.1", path = "crates/pecos-cli" }
 pecos-rslib = { version = "0.1.1", path = "python/pecos-rslib/rust"}
+prototype = { version = "0.1.1", path = "crates/prototype"}
+proto_bytemessage = { version = "0.1.1", path = "crates/proto_bytemessage"}
+protot_bytemessage_py = { version = "0.1.1", path = "python/proto_bytemessage_py" }
 
 [profile.release]
 codegen-units = 1

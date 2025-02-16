@@ -23,7 +23,8 @@ impl PyMessageBatch {
         }
     }
 
-    fn iter<'py>(&self, py: Python<'py>) -> PyResult<Py<PyList>> {
+    /// Convert the batch to a Python list of (type, bytes) tuples
+    fn to_list(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
         let messages: Vec<(u8, Py<PyBytes>)> = self
             .batch
             .iter()
@@ -39,22 +40,23 @@ impl PyMessageBatch {
 
     /// Convert to a MessageBatch clone
     #[pyo3(name = "into_message_batch")]
-    fn _into_message_batch(&self) -> PyResult<PyMessageBatch> {
-        Ok(Self {
+    fn _into_message_batch(&self) -> PyMessageBatch {
+        Self {
             batch: self.batch.clone(),
-        })
+        }
     }
 
     /// Create from a MessageBatch
+    #[allow(clippy::needless_pass_by_value)]
     #[classmethod]
-    fn from_message_batch(_cls: &Bound<'_, PyType>, py_batch: PyRef<'_, PyMessageBatch>) -> PyResult<Self> {
-        Ok(Self {
+    fn from_message_batch(_cls: &Bound<'_, PyType>, py_batch: PyRef<'_, PyMessageBatch>) -> Self {
+        Self {
             batch: py_batch.batch.clone(),
-        })
+        }
     }
 
     /// Get all messages as a list of (type, payload) tuples
-    pub fn get_messages<'py>(&self, _py: Python<'py>) -> PyResult<Vec<(u8, &[u8])>> {
-        Ok(self.batch.iter().map(|(h, p)| (h.msg_type, p)).collect())
+    pub fn get_messages(&self, _py: Python<'_>) -> Vec<(u8, &[u8])> {
+        self.batch.iter().map(|(h, p)| (h.msg_type, p)).collect()
     }
 }

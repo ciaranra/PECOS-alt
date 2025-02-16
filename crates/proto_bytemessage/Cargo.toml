@@ -9,6 +9,7 @@ repository.workspace = true
 license.workspace = true
 keywords.workspace = true
 categories.workspace = true
+description = "prototype for byte messages"
 
 [dependencies]
 bytemuck = {  version = "1", features = ["derive"] }

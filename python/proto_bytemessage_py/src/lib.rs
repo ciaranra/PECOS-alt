@@ -9,7 +9,7 @@ pub use python_processor::PythonProcessor;
 #[pyfunction]
 fn bytes_to_u32(_py: Python, bytes: &[u8]) -> PyResult<u32> {
     bytemuck::try_from_bytes(bytes)
-        .map(|n: &u32| *n)
+        .copied()
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))
 }
 
@@ -20,10 +20,9 @@ fn u32_to_bytes(py: Python, n: u32) -> Py<PyBytes> {
 
 /// Protopr Python bindings
 #[pymodule]
-fn proto_bytemessage_py(_py: Python<'_>, m: &'_ Bound<'_, PyModule>) -> PyResult<()> {
-    m.add("PyMessageBatch", _py.get_type::<PyMessageBatch>())?;
-    m.add("bytes_to_u32", wrap_pyfunction!(bytes_to_u32, _py)?)?;
-    m.add("u32_to_bytes", wrap_pyfunction!(u32_to_bytes, _py)?)?;
+fn proto_bytemessage_py(py: Python<'_>, m: &'_ Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("PyMessageBatch", py.get_type::<PyMessageBatch>())?;
+    m.add("bytes_to_u32", wrap_pyfunction!(bytes_to_u32, py)?)?;
+    m.add("u32_to_bytes", wrap_pyfunction!(u32_to_bytes, py)?)?;
     Ok(())
 }
-

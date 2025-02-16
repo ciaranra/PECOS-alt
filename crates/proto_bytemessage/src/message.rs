@@ -13,6 +13,7 @@ pub struct MessageBatchHeader {
 }
 
 impl MessageBatchHeader {
+    #[must_use]
     pub fn new(msg_count: u16, total_size: u32) -> Self {
         Self {
             magic: 0x50_45_43_53, // "PECS" in ASCII
@@ -74,6 +75,7 @@ pub struct MessageBatch {
 
 impl MessageBatch {
     #[allow(dead_code)]
+    #[must_use]
     pub fn get_header(&self) -> &MessageBatchHeader {
         let header_bytes = &self.data[0..size_of::<MessageBatchHeader>()];
         bytemuck::from_bytes(header_bytes)
@@ -118,7 +120,14 @@ pub struct BatchBuilder {
     msg_count: u16,
 }
 
+impl Default for BatchBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BatchBuilder {
+    #[must_use]
     pub fn new() -> BatchBuilder {
         Self {
             buffer: Vec::new(),
@@ -131,6 +140,23 @@ impl BatchBuilder {
         (4 - (size % 4)) % 4
     }
 
+    /// Adds a new message to the batch buffer.
+    ///
+    /// This function appends the message header and its associated data to the internal buffer,
+    /// ensuring 4-byte alignment for efficient memory access. It automatically calculates
+    /// padding for both the message header and the payload.
+    ///
+    /// # Parameters
+    /// * `msg_type` - The type of the message, represented as a `MessageType`.
+    /// * `data` - A byte slice (`&[u8]`) containing the message payload.
+    ///
+    /// # Returns
+    /// A mutable reference to `self`, allowing method chaining.
+    ///
+    /// # Panics
+    /// This function panics if the length of `data` exceeds the maximum value that can
+    /// be stored in a `u16` (65,535 bytes), as the message size is limited by the field
+    /// type of `MessageHeader`.
     pub fn add(&mut self, msg_type: MessageType, data: &[u8]) -> &mut Self {
         let data_len = data.len();
 
@@ -168,7 +194,16 @@ impl BatchBuilder {
         self.add(MessageType::Example, raw_data) // Reuse add()
     }
 
-    /// Builds the final `MessageBatch`
+    /// Constructs and returns the final `MessageBatch` with a prepended header.
+    ///
+    /// This method finalizes the batch by adding a `MessageBatchHeader` at the start
+    /// of the buffer and prepares the builder for reuse.
+    ///
+    /// # Returns
+    /// A `MessageBatch` containing the serialized header and all appended messages.
+    ///
+    /// # Panics
+    /// Panics if the total size of the batch exceeds `u32::MAX`.
     pub fn build(&mut self) -> MessageBatch {
         let total_size = u32::try_from(self.buffer.len() + size_of::<MessageBatchHeader>())
             .expect("Message size too large");
