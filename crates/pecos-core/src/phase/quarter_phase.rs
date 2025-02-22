@@ -39,7 +39,7 @@ impl Phase for QuarterPhase {
         let rhs = *other as u8;
 
         // XOR signs and adjust for imaginary overlap
-        let real = (lhs ^ rhs) & 0b01 ^ ((lhs & rhs) >> 1 & 0b01);
+        let real = (lhs ^ rhs) & 0b01 ^ (((lhs & rhs) >> 1) & 0b01);
 
         // XOR imaginary parts
         let imaginary = (lhs ^ rhs) & 0b10;

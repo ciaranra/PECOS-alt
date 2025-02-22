@@ -1,0 +1,14 @@
+[package]
+name = "core-derive"
+version.workspace = true
+edition.workspace = true
+description = "prototype for core macros"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2", features = ["full"] }
+quote = "1"
+proc-macro-crate = "3"
+proc-macro2 = "1"

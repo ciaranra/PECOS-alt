@@ -4,9 +4,19 @@ members = [
     "python/pecos-rslib/rust",
     "crates/pecos*",
     "crates/benchmarks",
+
     "crates/prototype",
     "crates/proto_bytemessage",
     "python/proto_bytemessage_py",
+
+    "crates/core-derive",
+    "crates/core",
+    "crates/processors",
+    "crates/plugin-system",
+    "crates/plugin-python-service",
+
+    "examples/plugin-demo",
+    "examples/rust-plugins/custom-processors",
 ]
 
 [workspace.package]
@@ -28,17 +38,17 @@ rand = "0.9"
 rand_chacha = "0.9"
 rand_xoshiro = "0.7"
 uuid = { version = "1", features = ["v4"] }
-pyo3 = "0.23"
+pyo3 = { version = "0.23", features = ["extension-module"] }
 rayon = "1"
 clap = { version = "4", features = ["derive"] }
 log = "0.4"
 env_logger = "0.11"
 memmap2 = "0.9"
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 os_pipe = "1"
 lazy_static = "1"
 parking_lot = "0.12"
-serde_json = "1"
 num-complex = "0.4"
 num-traits = "0.2"
 criterion = "0.5"
@@ -51,9 +61,16 @@ pecos-qec = { version = "0.1.1", path = "crates/pecos-qec" }
 pecos = { version = "0.1.1", path = "crates/pecos" }
 pecos-cli = { version = "0.1.1", path = "crates/pecos-cli" }
 pecos-rslib = { version = "0.1.1", path = "python/pecos-rslib/rust"}
+
 prototype = { version = "0.1.1", path = "crates/prototype"}
 proto_bytemessage = { version = "0.1.1", path = "crates/proto_bytemessage"}
 protot_bytemessage_py = { version = "0.1.1", path = "python/proto_bytemessage_py" }
+
+core = { path = "crates/core" }
+core-derive = { path = "crates/core-derive" }
+processors = { path = "crates/processors" }
+plugin-system = { path = "crates/plugin-system" }
+plugin-python-service = { path = "crates/plugin-python-service" }
 
 [profile.release]
 codegen-units = 1
@@ -67,7 +84,7 @@ perf = { level = "warn", priority = -1 }
 style = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 # restriction = "warn"
-cargo = { level = "warn", priority = -1 }
+# cargo = { level = "warn", priority = -1 }
 multiple-crate-versions = "allow" # TODO: remove when possible
 
 [workspace.metadata.commands]

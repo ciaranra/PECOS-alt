@@ -1,0 +1,12 @@
+# Pathes are relative to config file
+[system]
+load_standard_plugins = true
+python_interpreter = "../../.venv/bin/python"
+
+[[plugins]]
+type = "python"
+path = "../python-plugins"
+
+[[plugins]]
+type = "rust"
+path = "../rust-plugins"

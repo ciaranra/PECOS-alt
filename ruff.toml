@@ -118,6 +118,8 @@ ignore = [
 
 [lint.per-file-ignores]
 "python/**/__init__.py" = ["F401"]  # imported but unused (81)
+"crates/plugin-python-service/**/__init__.py" = ["F401"]
+"examples/**/__init__.py" = ["F401"]
 "python/tests/**/*.py"         = [
     "INP001",                       # File is part of an implicit namespace package. Add an `__init__.py` (6)
     "S101",                         # Use of `assert` detected (78)
