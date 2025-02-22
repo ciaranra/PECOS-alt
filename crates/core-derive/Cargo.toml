@@ -8,7 +8,7 @@ description = "prototype for core macros"
 proc-macro = true
 
 [dependencies]
-syn = { version = "2", features = ["full"] }
-quote = "1"
-proc-macro-crate = "3"
-proc-macro2 = "1"
+syn.workspace = true
+quote.workspace = true
+proc-macro-crate.workspace = true
+proc-macro2.workspace = true

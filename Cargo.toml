@@ -52,6 +52,15 @@ parking_lot = "0.12"
 num-complex = "0.4"
 num-traits = "0.2"
 criterion = "0.5"
+libloading = "0.8"
+toml = "0.8"
+memoffset = "0.9"
+bytemuck = {  version = "1", features = ["derive"] }
+bitflags = "2"
+syn = { version = "2", features = ["full"] }
+quote = "1"
+proc-macro-crate = "3"
+proc-macro2 = "1"
 
 pecos-core = { version = "0.1.1", path = "crates/pecos-core" }
 pecos-noise = { version = "0.1.1", path = "crates/pecos-noise" }

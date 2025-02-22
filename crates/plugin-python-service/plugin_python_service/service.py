@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import json
 import logging
 import os
 import sys
 from importlib.util import module_from_spec, spec_from_file_location
-from typing import Any, Optional
+from pathlib import Path
+from typing import Any
 
 from plugin_python_service import (
     CoProcessorBase,
@@ -43,7 +46,8 @@ class PluginRegistry:
 
             if not name or not description:
                 log.warning(
-                    f"Skipping plugin {cls.__name__}: missing name or description",
+                    "Skipping plugin %s: missing name or description",
+                    cls.__name__,
                 )
                 return
 
@@ -51,18 +55,18 @@ class PluginRegistry:
                 self.coprocessors[name] = cls
                 self.plugin_styles[name] = "coprocessor"
                 self.plugin_descriptions[name] = description
-                log.debug(f"Registered coprocessor: {name}")
+                log.debug("Registered coprocessor: %s", name)
 
             elif issubclass(cls, DrivingProcessorBase):
                 self.driving_processors[name] = cls
                 self.plugin_styles[name] = "driving_processor"
                 self.plugin_descriptions[name] = description
-                log.debug(f"Registered driving processor: {name}")
+                log.debug("Registered driving processor: %s", name)
 
         except Exception as e:
-            log.exception(f"Error registering plugin {cls.__name__}: {e}")
+            log.exception("Error registering plugin %s", cls.__name__)
             msg = f"Failed to register plugin {cls.__name__}: {e}"
-            raise PluginLoadError(msg)
+            raise PluginLoadError(msg) from e
 
     def get_plugin_info(self) -> list[tuple[str, str, str]]:
         """Get information about all registered plugins"""
@@ -75,9 +79,30 @@ class PluginRegistry:
             plugin_info.append((name, style, description))
         return plugin_info
 
-    def get_plugin(self, name: str) -> Optional[type[Any]]:
+    def get_plugin(self, name: str) -> type[Any] | None:
         """Get a plugin by name"""
         return self.coprocessors.get(name) or self.driving_processors.get(name)
+
+
+def _validate_spec(spec: Any, path: str) -> None:
+    """Validate the module spec"""
+    if spec is None or spec.loader is None:
+        msg = f"Could not load spec for {path}"
+        raise PluginLoadError(msg)
+
+
+def _validate_plugin_style(style: str) -> None:
+    """Validate the plugin style"""
+    if style not in ["coprocessor", "driving_processor"]:
+        msg = f"Invalid plugin style: {style}"
+        raise ValueError(msg)
+
+
+def _validate_command_type(command_type: str) -> None:
+    """Validate the command type"""
+    if command_type not in ["Execute", "ListPlugins", "Shutdown"]:
+        msg = f"Unknown command type: {command_type}"
+        raise ValueError(msg)
 
 
 class PluginService:
@@ -91,16 +116,14 @@ class PluginService:
         """Load plugins from a Python file"""
         try:
             # Create module name from filename
-            module_name = os.path.splitext(os.path.basename(path))[0]
+            module_name = Path(path).stem
 
             # Load module from file
             spec = spec_from_file_location(module_name, path)
-            if spec is None or spec.loader is None:
-                msg = f"Could not load spec for {path}"
-                raise PluginLoadError(msg)
+            _validate_spec(spec, path)
 
             module = module_from_spec(spec)
-            spec.loader.exec_module(module)
+            spec.loader.exec_module(module)  # type: ignore
 
             # Find and register plugin classes
             for item_name in dir(module):
@@ -116,24 +139,24 @@ class PluginService:
                     self.registry.register_plugin(item)
 
         except Exception as e:
-            log.exception(f"Error loading plugin file {path}: {e}")
+            log.exception("Error loading plugin file %s", path)
             msg = f"Failed to load plugin file {path}: {e}"
-            raise PluginLoadError(msg)
+            raise PluginLoadError(msg) from e
 
     def load_plugins_from_directory(self, directory: str) -> None:
         """Load all plugins from a directory"""
-        if not os.path.exists(directory):
-            log.warning(f"Plugin directory does not exist: {directory}")
+        if not Path(directory):
+            log.warning("Plugin directory does not exist: %s", directory)
             return
 
         for filename in sorted(os.listdir(directory)):
             if filename.endswith(".py"):
-                path = os.path.join(directory, filename)
+                path = Path(directory) / filename
                 try:
-                    log.debug(f"Loading plugins from: {filename}")
+                    log.debug("Loading plugins from: %s", filename)
                     self.load_plugin_file(path)
-                except PluginLoadError as e:
-                    log.exception(f"Failed to load {filename}: {e}")
+                except PluginLoadError:
+                    log.exception("Failed to load %s", filename)
 
     def get_or_create_instance(self, name: str) -> Any:
         """Get or create a plugin instance"""
@@ -150,6 +173,8 @@ class PluginService:
         command_type = command.get("type")
 
         try:
+            _validate_command_type(command_type)
+
             if command_type == "Execute":
                 payload = command["payload"]
                 operation = payload["operation"]
@@ -157,6 +182,8 @@ class PluginService:
                 args = payload.get("args", [])
 
                 instance = self.get_or_create_instance(operation)
+
+                _validate_plugin_style(style)
 
                 if style == "coprocessor":
                     result = instance.process({"numbers": args})
@@ -172,9 +199,6 @@ class PluginService:
                         first_num = value["numbers"][0] if value["numbers"] else 0
                         return {"type": "Result", "value": first_num}
 
-                msg = f"Invalid plugin style: {style}"
-                raise ValueError(msg)
-
             elif command_type == "ListPlugins":
                 plugins = self.registry.get_plugin_info()
                 return {
@@ -188,13 +212,11 @@ class PluginService:
             elif command_type == "Shutdown":
                 return {"type": "Result", "value": 0}
 
-            else:
-                msg = f"Unknown command type: {command_type}"
-                raise ValueError(msg)
-
         except Exception as e:
-            log.exception(f"Error processing command: {e}")
+            log.exception("Error processing command")
             return {"type": "Error", "message": str(e)}
+
+        return {"type": "Error", "message": "Invalid command processing path"}
 
 
 def main() -> None:
@@ -223,18 +245,18 @@ def main() -> None:
 
                 print(json.dumps(response), flush=True)
 
-            except json.JSONDecodeError as e:
-                log.exception(f"Invalid JSON input: {e}")
+            except json.JSONDecodeError:
+                log.exception("Invalid JSON input")
                 print(
                     json.dumps({"type": "Error", "message": "Invalid JSON"}),
                     flush=True,
                 )
             except Exception as e:
-                log.exception(f"Error processing input: {e}")
+                log.exception("Error processing input")
                 print(json.dumps({"type": "Error", "message": str(e)}), flush=True)
 
-    except Exception as e:
-        log.critical(f"Critical error in Python service: {e}")
+    except Exception:
+        log.exception("Critical error in Python service")
         sys.exit(1)
 
 

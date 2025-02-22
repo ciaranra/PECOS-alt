@@ -27,5 +27,5 @@ manifest-path = "rust/Cargo.toml"
 pecos-rslib = { workspace = true }
 
 [tool.ruff]
-extend-select = ["S", "B", "PT"]  # Enable bandit, pytest rules
-ignore = ["S101"]  # Ignore assert warnings in tests
+lint.extend-select = ["S", "B", "PT"]  # Enable bandit, pytest rules
+lint.ignore = ["S101"]  # Ignore assert warnings in tests

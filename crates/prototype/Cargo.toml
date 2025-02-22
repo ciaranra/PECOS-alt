@@ -12,8 +12,8 @@ categories.workspace = true
 description = "Used for prototyping new features. Not intended for use."
 
 [dependencies]
-pecos-qsim = { workspace = true }
-memoffset = "0.9.1"
+pecos-qsim.workspace = true
+memoffset.workspace = true
 
 [lints]
 workspace = true

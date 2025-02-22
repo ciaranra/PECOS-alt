@@ -12,9 +12,9 @@ categories.workspace = true
 description = "prototype for byte messages"
 
 [dependencies]
-bytemuck = {  version = "1", features = ["derive"] }
-bitflags = "2"
-serde_json = "1"
+bytemuck.workspace = true
+bitflags.workspace = true
+serde_json.workspace = true
 
 [lib]
 name = "proto_bytemessage"

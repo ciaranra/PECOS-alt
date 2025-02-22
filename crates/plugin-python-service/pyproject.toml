@@ -4,5 +4,5 @@ build-backend = "maturin"
 
 [project]
 name = "plugin_python_service"
-requires-python = ">=3.7"
+requires-python = ">=3.10"
 version = "0.1.0"

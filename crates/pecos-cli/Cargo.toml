@@ -17,11 +17,11 @@ name = "pecos"
 path = "src/main.rs"
 
 [dependencies]
-pecos = { workspace = true }
-clap = { workspace = true }
-log = {  workspace = true }
-env_logger = { workspace = true }
-serde_json = { workspace = true }
+pecos.workspace = true
+clap.workspace = true
+log.workspace = true
+env_logger.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

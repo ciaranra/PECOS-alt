@@ -1,4 +1,4 @@
-# Pathes are relative to config file
+# Paths are relative to config file
 [system]
 load_standard_plugins = true
 python_interpreter = "../../.venv/bin/python"

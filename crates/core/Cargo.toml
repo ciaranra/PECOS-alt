@@ -5,4 +5,4 @@ edition.workspace = true
 description = "prototype for core stuff"
 
 [dependencies]
-core-derive = { workspace = true }
+core-derive.workspace = true
