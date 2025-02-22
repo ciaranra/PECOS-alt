@@ -6,4 +6,4 @@ description = "prototype for processors"
 
 [dependencies]
 serde_json.workspace = true
-core.workspace = true
+pecos-core.workspace = true

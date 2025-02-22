@@ -8,9 +8,6 @@ members = [
     "crates/prototype",
     "crates/proto_bytemessage",
     "python/proto_bytemessage_py",
-
-    "crates/core-derive",
-    "crates/core",
     "crates/processors",
     "crates/plugin-system",
     "crates/plugin-python-service",
@@ -62,6 +59,7 @@ quote = "1"
 proc-macro-crate = "3"
 proc-macro2 = "1"
 
+pecos-derive = { version = "0.1.1", path = "crates/pecos-derive"}
 pecos-core = { version = "0.1.1", path = "crates/pecos-core" }
 pecos-noise = { version = "0.1.1", path = "crates/pecos-noise" }
 pecos-qsim = { version = "0.1.1", path = "crates/pecos-qsim" }
@@ -75,8 +73,6 @@ prototype = { version = "0.1.1", path = "crates/prototype"}
 proto_bytemessage = { version = "0.1.1", path = "crates/proto_bytemessage"}
 protot_bytemessage_py = { version = "0.1.1", path = "python/proto_bytemessage_py" }
 
-core = { path = "crates/core" }
-core-derive = { path = "crates/core-derive" }
 processors = { path = "crates/processors" }
 plugin-system = { path = "crates/plugin-system" }
 plugin-python-service = { path = "crates/plugin-python-service" }

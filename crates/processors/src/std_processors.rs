@@ -1,5 +1,5 @@
 use crate::process::{CoProcessor, DrivingProcessor, ProcessingStage};
-use core::StructMetadata;
+use pecos_core::StructMetadata;
 use serde_json::{Value, json};
 
 /// Doubles each number in a batch

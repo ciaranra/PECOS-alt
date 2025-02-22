@@ -18,6 +18,7 @@ pub mod phase;
 pub mod qubit_id;
 pub mod sets;
 pub mod sims_rngs;
+pub mod struct_metadata;
 pub mod types;
 
 pub use angle::{Angle, Angle8, Angle16, Angle32, Angle64, Angle128, LossyInto};
@@ -42,3 +43,6 @@ pub use pauli::pauli_sparse::PauliSparse;
 pub use pauli::pauli_string::PauliString;
 pub use pauli::{Pauli, PauliOperator};
 pub use phase::Phase;
+
+pub use pecos_derive::StructMetadata; // Macro
+pub use struct_metadata::StructMetadata; // Trait

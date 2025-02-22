@@ -1,4 +1,4 @@
-use core::StructMetadata;
+use pecos_core::StructMetadata;
 use serde_json::Value;
 use std::any::Any;
 use std::fmt::Debug;

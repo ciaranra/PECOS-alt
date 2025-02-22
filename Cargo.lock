@@ -205,23 +205,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b63caa9aa9397e2d9480a9b13673856c78d8ac123288526c37d7839f2a86990"
 
 [[package]]
-name = "core"
-version = "0.1.1"
-dependencies = [
- "core-derive",
-]
-
-[[package]]
-name = "core-derive"
-version = "0.1.1"
-dependencies = [
- "proc-macro-crate",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "criterion"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -292,7 +275,7 @@ checksum = "43da5946c66ffcc7745f48db692ffbb10a83bfe0afd96235c5c2a4fb23994929"
 name = "custom-processors"
 version = "0.1.0"
 dependencies = [
- "core",
+ "pecos-core",
  "plugin-system",
  "processors",
  "serde_json",
@@ -622,10 +605,21 @@ version = "0.1.1"
 dependencies = [
  "num-complex",
  "num-traits",
+ "pecos-derive",
  "rand",
  "rand_chacha",
  "rand_xoshiro",
  "serde",
+]
+
+[[package]]
+name = "pecos-derive"
+version = "0.1.1"
+dependencies = [
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -730,8 +724,8 @@ dependencies = [
 name = "plugin-system"
 version = "0.1.1"
 dependencies = [
- "core",
  "libloading",
+ "pecos-core",
  "processors",
  "serde",
  "serde_json",
@@ -775,7 +769,7 @@ dependencies = [
 name = "processors"
 version = "0.1.1"
 dependencies = [
- "core",
+ "pecos-core",
  "serde_json",
 ]
 

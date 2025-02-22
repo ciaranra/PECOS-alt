@@ -1,5 +1,5 @@
 [package]
-name = "core-derive"
+name = "pecos-derive"
 version.workspace = true
 edition.workspace = true
 description = "prototype for core macros"

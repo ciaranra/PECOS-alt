@@ -1,8 +1,0 @@
-[package]
-name = "core"
-version.workspace = true
-edition.workspace = true
-description = "prototype for core stuff"
-
-[dependencies]
-core-derive.workspace = true

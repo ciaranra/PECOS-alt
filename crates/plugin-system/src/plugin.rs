@@ -1,5 +1,5 @@
 use crate::PluginRegistry;
-use core::StructMetadata;
+use pecos_core::StructMetadata;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::fmt;

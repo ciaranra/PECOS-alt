@@ -1,5 +1,5 @@
 use crate::plugin::{PluginInfo, PluginStyle, PluginType};
-use core::StructMetadata;
+use pecos_core::StructMetadata;
 use processors::process::{CoProcessor, DrivingProcessor};
 use processors::std_processors::{ArrayProcessor, BatchSummer, NumberDoubler};
 use serde_json::Value;

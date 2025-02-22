@@ -6,5 +6,3 @@ pub trait StructMetadata {
     /// Get the description of the struct (typically from doc comments)
     fn description(&self) -> &str;
 }
-
-pub use core_derive::StructMetadata;

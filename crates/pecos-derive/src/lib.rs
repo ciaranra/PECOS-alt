@@ -26,7 +26,7 @@ pub fn derive_metadata(input: TokenStream) -> TokenStream {
         .unwrap_or_else(|| format!("A {} struct", name));
 
     let expanded = quote! {
-        impl core::StructMetadata for #name {
+        impl pecos_core::StructMetadata for #name {
             fn name(&self) -> &str {
                 stringify!(#name)
             }

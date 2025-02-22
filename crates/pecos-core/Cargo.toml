@@ -18,5 +18,7 @@ num-traits.workspace = true
 num-complex.workspace = true
 serde = { workspace = true, features = ["derive"] }
 
+pecos-derive.workspace = true
+
 [lints]
 workspace = true
