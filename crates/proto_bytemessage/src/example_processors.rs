@@ -1,6 +1,6 @@
 use proto_bytemessage::message::{BatchBuilder, MessageBatch, MessageType};
 use proto_bytemessage::process::{CoProcessor, DrivingProcessor, ProcessingStage};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Bottom level processor that just doubles numbers
 #[allow(dead_code)]

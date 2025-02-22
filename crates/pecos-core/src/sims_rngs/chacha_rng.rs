@@ -11,7 +11,7 @@
 // the License.
 
 use super::sim_rng::SimRng;
-pub use rand_chacha::{ChaCha12Rng, ChaCha20Rng, ChaCha8Rng};
+pub use rand_chacha::{ChaCha8Rng, ChaCha12Rng, ChaCha20Rng};
 
 impl SimRng for ChaCha8Rng {} // fastest but less cryptographically secure
 impl SimRng for ChaCha12Rng {}

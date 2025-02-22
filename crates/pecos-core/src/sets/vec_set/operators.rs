@@ -10,9 +10,9 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-use crate::build_set_bit_ops;
 use crate::Set;
 use crate::VecSet;
+use crate::build_set_bit_ops;
 use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Sub, SubAssign};
 
 use crate::Element;

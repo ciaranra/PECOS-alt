@@ -20,7 +20,7 @@ pub mod sets;
 pub mod sims_rngs;
 pub mod types;
 
-pub use angle::{Angle, Angle128, Angle16, Angle32, Angle64, Angle8, LossyInto};
+pub use angle::{Angle, Angle8, Angle16, Angle32, Angle64, Angle128, LossyInto};
 pub use element::{Element, IndexableElement};
 pub use phase::quarter_phase::QuarterPhase;
 pub use phase::sign::Sign;
@@ -28,7 +28,7 @@ pub use qubit_id::QubitId;
 pub use sets::set::Set;
 pub use sets::vec_set::VecSet;
 
-pub use crate::sims_rngs::chacha_rng::{ChaCha12Rng, ChaCha20Rng, ChaCha8Rng};
+pub use crate::sims_rngs::chacha_rng::{ChaCha8Rng, ChaCha12Rng, ChaCha20Rng};
 pub use crate::sims_rngs::choices::Choices;
 pub use crate::sims_rngs::cyclic_rng::{CyclicRng, CyclicSeed};
 pub use crate::sims_rngs::sim_rng::SimRng;

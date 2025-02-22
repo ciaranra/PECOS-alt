@@ -47,6 +47,7 @@ impl QuantumCommand {
     /// - Invalid numeric values for angles/ids
     /// - Unknown command type
     /// - Empty command string
+    #[allow(clippy::too_many_lines)]
     pub fn parse_from_str(cmd_str: &str) -> Result<Self, String> {
         let parts: Vec<&str> = cmd_str.split_whitespace().collect();
         match parts.first() {
@@ -60,9 +61,11 @@ impl QuantumCommand {
                             .parse()
                             .map_err(|e| format!("Invalid theta: {e}"))?,
                     },
-                    qubits: vec![parts[2]
-                        .parse()
-                        .map_err(|e| format!("Invalid qubit: {e}"))?],
+                    qubits: vec![
+                        parts[2]
+                            .parse()
+                            .map_err(|e| format!("Invalid qubit: {e}"))?,
+                    ],
                 })
             }
             Some(&"R1XY") => {
@@ -76,9 +79,11 @@ impl QuantumCommand {
                             .parse()
                             .map_err(|e| format!("Invalid theta: {e}"))?,
                     },
-                    qubits: vec![parts[3]
-                        .parse()
-                        .map_err(|e| format!("Invalid qubit: {e}"))?],
+                    qubits: vec![
+                        parts[3]
+                            .parse()
+                            .map_err(|e| format!("Invalid qubit: {e}"))?,
+                    ],
                 })
             }
             Some(&"SZZ") => {
@@ -103,9 +108,11 @@ impl QuantumCommand {
                 }
                 Ok(Self {
                     gate: GateType::H,
-                    qubits: vec![parts[1]
-                        .parse()
-                        .map_err(|e| format!("Invalid qubit: {e}"))?],
+                    qubits: vec![
+                        parts[1]
+                            .parse()
+                            .map_err(|e| format!("Invalid qubit: {e}"))?,
+                    ],
                 })
             }
             Some(&"CX") => {
@@ -134,9 +141,11 @@ impl QuantumCommand {
                             .parse()
                             .map_err(|e| format!("Invalid result_id: {e}"))?,
                     },
-                    qubits: vec![parts[1]
-                        .parse()
-                        .map_err(|e| format!("Invalid qubit: {e}"))?],
+                    qubits: vec![
+                        parts[1]
+                            .parse()
+                            .map_err(|e| format!("Invalid qubit: {e}"))?,
+                    ],
                 })
             }
             _ => Err(format!(

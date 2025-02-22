@@ -24,11 +24,13 @@ impl MessageDebug {
     // Split message dumping into smaller functions for better organization
     #[allow(clippy::cast_sign_loss)]
     unsafe fn dump_header(ptr: *const u8) -> MessageHeader {
-        let msg_type = std::mem::transmute::<u8, MessageType>(*ptr);
-        let payload_size = u16::from_le_bytes([*ptr.add(2), *ptr.add(3)]);
-        MessageHeader {
-            msg_type,
-            payload_size,
+        unsafe {
+            let msg_type = std::mem::transmute::<u8, MessageType>(*ptr);
+            let payload_size = u16::from_le_bytes([*ptr.add(2), *ptr.add(3)]);
+            MessageHeader {
+                msg_type,
+                payload_size,
+            }
         }
     }
 
@@ -83,73 +85,77 @@ impl MessageDebug {
         next_op_ptr: &mut *const u8,
         next_op_offset: &mut usize,
     ) {
-        Self::visualize_bytes(
-            data,
-            op_offset,
-            std::mem::size_of::<OperationData>(),
-            indent,
-            "Operation Header",
-        );
-
-        let op = &*op_ptr.cast_aligned::<OperationData>();
-        println!(
-            "{:indent$}Gate Type: {:?}",
-            "",
-            op.gate_type,
-            indent = indent
-        );
-        println!(
-            "{:indent$}Num Qubits: {}",
-            "",
-            op.num_qubits,
-            indent = indent
-        );
-
-        *next_op_ptr = op_ptr.add(std::mem::size_of::<OperationData>());
-        *next_op_offset = op_offset + std::mem::size_of::<OperationData>();
-
-        if op.num_qubits > 0 {
-            let qubit_size = op.num_qubits as usize * std::mem::size_of::<u32>();
-            Self::visualize_bytes(data, *next_op_offset, qubit_size, indent, "Qubit Indices");
-
-            let qubits = std::slice::from_raw_parts(
-                (*next_op_ptr).cast_aligned::<u32>(),
-                op.num_qubits as usize,
+        unsafe {
+            Self::visualize_bytes(
+                data,
+                op_offset,
+                std::mem::size_of::<OperationData>(),
+                indent,
+                "Operation Header",
             );
-            print!("{:indent$}Qubits: ", "", indent = indent);
-            for &qubit in qubits {
-                print!("{qubit} ");
-            }
-            println!();
 
-            *next_op_ptr = next_op_ptr.add(qubit_size);
-            *next_op_offset += qubit_size;
+            let op = &*op_ptr.cast_aligned::<OperationData>();
+            println!(
+                "{:indent$}Gate Type: {:?}",
+                "",
+                op.gate_type,
+                indent = indent
+            );
+            println!(
+                "{:indent$}Num Qubits: {}",
+                "",
+                op.num_qubits,
+                indent = indent
+            );
+
+            *next_op_ptr = op_ptr.add(std::mem::size_of::<OperationData>());
+            *next_op_offset = op_offset + std::mem::size_of::<OperationData>();
+
+            if op.num_qubits > 0 {
+                let qubit_size = op.num_qubits as usize * std::mem::size_of::<u32>();
+                Self::visualize_bytes(data, *next_op_offset, qubit_size, indent, "Qubit Indices");
+
+                let qubits = std::slice::from_raw_parts(
+                    (*next_op_ptr).cast_aligned::<u32>(),
+                    op.num_qubits as usize,
+                );
+                print!("{:indent$}Qubits: ", "", indent = indent);
+                for &qubit in qubits {
+                    print!("{qubit} ");
+                }
+                println!();
+
+                *next_op_ptr = next_op_ptr.add(qubit_size);
+                *next_op_offset += qubit_size;
+            }
         }
     }
 
     unsafe fn dump_program_data(data: &[u8], ptr: *const u8, indent: usize) {
-        let program = &*ptr.cast_aligned::<ProgramData>();
-        println!("{:indent$}Program:", "", indent = indent + 4);
-        println!(
-            "{:indent$}Operations: {}",
-            "",
-            program.num_operations,
-            indent = indent + 6
-        );
-
-        let mut op_ptr = ptr.add(std::mem::size_of::<ProgramData>());
-        let mut op_offset = std::mem::size_of::<ProgramData>();
-
-        for i in 0..program.num_operations {
-            println!("\n{:indent$}Operation {}:", "", i, indent = indent + 6);
-            Self::dump_operation(
-                data,
-                op_ptr,
-                op_offset,
-                indent + 8,
-                &mut op_ptr,
-                &mut op_offset,
+        unsafe {
+            let program = &*ptr.cast_aligned::<ProgramData>();
+            println!("{:indent$}Program:", "", indent = indent + 4);
+            println!(
+                "{:indent$}Operations: {}",
+                "",
+                program.num_operations,
+                indent = indent + 6
             );
+
+            let mut op_ptr = ptr.add(std::mem::size_of::<ProgramData>());
+            let mut op_offset = std::mem::size_of::<ProgramData>();
+
+            for i in 0..program.num_operations {
+                println!("\n{:indent$}Operation {}:", "", i, indent = indent + 6);
+                Self::dump_operation(
+                    data,
+                    op_ptr,
+                    op_offset,
+                    indent + 8,
+                    &mut op_ptr,
+                    &mut op_offset,
+                );
+            }
         }
     }
 
@@ -159,103 +165,105 @@ impl MessageDebug {
         remaining_size: usize,
         indent: usize,
     ) -> *const u8 {
-        if remaining_size < std::mem::size_of::<MessageHeader>() {
+        unsafe {
+            if remaining_size < std::mem::size_of::<MessageHeader>() {
+                println!(
+                    "{:indent$}WARNING: Not enough bytes for header",
+                    "",
+                    indent = indent
+                );
+                return current.add(remaining_size);
+            }
+
+            let data = std::slice::from_raw_parts(current, remaining_size);
             println!(
-                "{:indent$}WARNING: Not enough bytes for header",
+                "\n{:indent$}=== Message at offset 0x{:04x} ===",
                 "",
+                current as usize,
                 indent = indent
             );
-            return current.add(remaining_size);
-        }
 
-        let data = std::slice::from_raw_parts(current, remaining_size);
-        println!(
-            "\n{:indent$}=== Message at offset 0x{:04x} ===",
-            "",
-            current as usize,
-            indent = indent
-        );
-
-        // Visualize and parse header
-        Self::visualize_bytes(
-            data,
-            0,
-            std::mem::size_of::<MessageHeader>(),
-            indent,
-            "MessageHeader",
-        );
-        let header = Self::dump_header(current);
-
-        println!(
-            "{:indent$}Message Type: {:?} ({:02x})",
-            "",
-            header.msg_type,
-            data[0],
-            indent = indent + 2
-        );
-        println!(
-            "{:indent$}Payload Size: {} bytes ({:02x} {:02x})",
-            "",
-            header.payload_size,
-            data[2],
-            data[3],
-            indent = indent + 2
-        );
-
-        let mut next_ptr = current.add(std::mem::size_of::<MessageHeader>());
-        let mut payload_offset = std::mem::size_of::<MessageHeader>();
-
-        // Handle alignment
-        let align = match header.msg_type {
-            MessageType::Input => std::mem::align_of::<ProgramData>(),
-            MessageType::QuantumOp => std::mem::align_of::<QuantumOpData>(),
-            MessageType::MeasResult => std::mem::align_of::<MeasResultData>(),
-            _ => 1,
-        };
-
-        if align > 1 {
-            let align_padding = Self::align_offset(payload_offset, align);
-            if align_padding > 0 {
-                println!(
-                    "{:indent$}Alignment padding: {} bytes",
-                    "",
-                    align_padding,
-                    indent = indent + 2
-                );
-                next_ptr = next_ptr.add(align_padding);
-                payload_offset += align_padding;
-            }
-        }
-
-        // Process payload
-        if header.payload_size > 0 {
-            println!(
-                "{:indent$}Payload at offset 0x{:04x}:",
-                "",
-                payload_offset,
-                indent = indent + 2
-            );
+            // Visualize and parse header
             Self::visualize_bytes(
                 data,
-                payload_offset,
-                header.payload_size as usize,
-                indent + 2,
-                "Payload Data",
+                0,
+                std::mem::size_of::<MessageHeader>(),
+                indent,
+                "MessageHeader",
+            );
+            let header = Self::dump_header(current);
+
+            println!(
+                "{:indent$}Message Type: {:?} ({:02x})",
+                "",
+                header.msg_type,
+                data[0],
+                indent = indent + 2
+            );
+            println!(
+                "{:indent$}Payload Size: {} bytes ({:02x} {:02x})",
+                "",
+                header.payload_size,
+                data[2],
+                data[3],
+                indent = indent + 2
             );
 
-            if header.msg_type == MessageType::Input {
-                Self::dump_program_data(data, next_ptr, indent);
-            } else {
-                print!("{:indent$}Raw bytes: ", "", indent = indent + 4);
-                for i in 0..header.payload_size {
-                    print!("{:02x} ", *next_ptr.add(i as usize));
-                }
-                println!();
-            }
-        }
+            let mut next_ptr = current.add(std::mem::size_of::<MessageHeader>());
+            let mut payload_offset = std::mem::size_of::<MessageHeader>();
 
-        println!("{:indent$}=== End Message ===\n", "", indent = indent);
-        current.add(std::mem::size_of::<MessageHeader>() + header.payload_size as usize)
+            // Handle alignment
+            let align = match header.msg_type {
+                MessageType::Input => std::mem::align_of::<ProgramData>(),
+                MessageType::QuantumOp => std::mem::align_of::<QuantumOpData>(),
+                MessageType::MeasResult => std::mem::align_of::<MeasResultData>(),
+                _ => 1,
+            };
+
+            if align > 1 {
+                let align_padding = Self::align_offset(payload_offset, align);
+                if align_padding > 0 {
+                    println!(
+                        "{:indent$}Alignment padding: {} bytes",
+                        "",
+                        align_padding,
+                        indent = indent + 2
+                    );
+                    next_ptr = next_ptr.add(align_padding);
+                    payload_offset += align_padding;
+                }
+            }
+
+            // Process payload
+            if header.payload_size > 0 {
+                println!(
+                    "{:indent$}Payload at offset 0x{:04x}:",
+                    "",
+                    payload_offset,
+                    indent = indent + 2
+                );
+                Self::visualize_bytes(
+                    data,
+                    payload_offset,
+                    header.payload_size as usize,
+                    indent + 2,
+                    "Payload Data",
+                );
+
+                if header.msg_type == MessageType::Input {
+                    Self::dump_program_data(data, next_ptr, indent);
+                } else {
+                    print!("{:indent$}Raw bytes: ", "", indent = indent + 4);
+                    for i in 0..header.payload_size {
+                        print!("{:02x} ", *next_ptr.add(i as usize));
+                    }
+                    println!();
+                }
+            }
+
+            println!("{:indent$}=== End Message ===\n", "", indent = indent);
+            current.add(std::mem::size_of::<MessageHeader>() + header.payload_size as usize)
+        }
     }
 
     // Main entry point - dump entire message batch

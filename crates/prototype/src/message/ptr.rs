@@ -12,23 +12,25 @@ pub trait AlignedCast {
 
 impl AlignedCast for *const u8 {
     unsafe fn cast_aligned<T>(self) -> *const T {
-        // Calculate required alignment
-        let align = std::mem::align_of::<T>();
-        let offset = (self as usize) % align;
+        unsafe {
+            // Calculate required alignment
+            let align = std::mem::align_of::<T>();
+            let offset = (self as usize) % align;
 
-        if offset != 0 {
-            // If not aligned, calculate padding needed
-            let padding = align - offset;
-            self.add(padding).cast::<T>()
-        } else {
-            // Already aligned
-            self.cast::<T>()
+            if offset != 0 {
+                // If not aligned, calculate padding needed
+                let padding = align - offset;
+                self.add(padding).cast::<T>()
+            } else {
+                // Already aligned
+                self.cast::<T>()
+            }
         }
     }
 }
 
 impl AlignedCast for *mut u8 {
     unsafe fn cast_aligned<T>(self) -> *const T {
-        self.cast_const().cast_aligned::<T>()
+        unsafe { self.cast_const().cast_aligned::<T>() }
     }
 }

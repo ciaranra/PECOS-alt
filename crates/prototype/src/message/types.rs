@@ -98,54 +98,56 @@ impl QuantumOpData {
     /// - The gate type is invalid
     /// - The number of qubits is invalid
     pub unsafe fn validate_raw(ptr: *const u8, size: usize) -> Result<(), &'static str> {
-        // Check alignment
-        if (ptr as usize) % 32 != 0 {
-            return Err("QuantumOpData not properly aligned");
-        }
-
-        // Check size is sufficient
-        if size < std::mem::size_of::<QuantumOpData>() {
-            return Err("Buffer too small for QuantumOpData");
-        }
-
-        // Validate padding is zero
-        for i in 1..4 {
-            // Check first padding block
-            if *ptr.add(i) != 0 {
-                return Err("Padding bytes not zero");
+        unsafe {
+            // Check alignment
+            if (ptr as usize) % 32 != 0 {
+                return Err("QuantumOpData not properly aligned");
             }
-        }
-        for i in 8..32 {
-            // Check second padding block
-            if *ptr.add(i) != 0 {
-                return Err("Padding bytes not zero");
+
+            // Check size is sufficient
+            if size < std::mem::size_of::<QuantumOpData>() {
+                return Err("Buffer too small for QuantumOpData");
             }
-        }
 
-        // Read and validate gate type
-        let gate_type: GateType = std::mem::transmute(*ptr);
-        match gate_type {
-            GateType::H
-            | GateType::X
-            | GateType::Y
-            | GateType::Z
-            | GateType::S
-            | GateType::T
-            | GateType::CX
-            | GateType::CZ
-            | GateType::SWAP
-            | GateType::Measure => {}
-            _ => return Err("Invalid gate type"),
-        }
+            // Validate padding is zero
+            for i in 1..4 {
+                // Check first padding block
+                if *ptr.add(i) != 0 {
+                    return Err("Padding bytes not zero");
+                }
+            }
+            for i in 8..32 {
+                // Check second padding block
+                if *ptr.add(i) != 0 {
+                    return Err("Padding bytes not zero");
+                }
+            }
 
-        // Read and validate num_ops
-        let num_ops = *(ptr.add(4).cast_aligned::<u32>());
-        if num_ops > 2 {
-            // No gates use more than 2 qubits
-            return Err("Invalid number of qubits");
-        }
+            // Read and validate gate type
+            let gate_type: GateType = std::mem::transmute(*ptr);
+            match gate_type {
+                GateType::H
+                | GateType::X
+                | GateType::Y
+                | GateType::Z
+                | GateType::S
+                | GateType::T
+                | GateType::CX
+                | GateType::CZ
+                | GateType::SWAP
+                | GateType::Measure => {}
+                _ => return Err("Invalid gate type"),
+            }
 
-        Ok(())
+            // Read and validate num_ops
+            let num_ops = *(ptr.add(4).cast_aligned::<u32>());
+            if num_ops > 2 {
+                // No gates use more than 2 qubits
+                return Err("Invalid number of qubits");
+            }
+
+            Ok(())
+        }
     }
 }
 

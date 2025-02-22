@@ -1,7 +1,7 @@
 /// Derive macro for implementing Plugin traits
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput, Expr, Lit, Meta};
+use syn::{DeriveInput, Expr, Lit, Meta, parse_macro_input};
 
 #[proc_macro_derive(StructMetadata)]
 pub fn derive_metadata(input: TokenStream) -> TokenStream {

@@ -48,7 +48,7 @@ pub struct Qubit {
 /// # Safety
 ///
 /// The `qubit` pointer must be valid and not null. Behavior is undefined if this condition is not met.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn __quantum__qis__rz__body(theta: f64, qubit: *const Qubit) {
     let qubit_idx = usize::try_from(qubit as u64).expect("Invalid RZ qubit pointer");
 
@@ -79,7 +79,7 @@ pub extern "C" fn __quantum__qis__rz__body(theta: f64, qubit: *const Qubit) {
 /// # Safety
 ///
 /// The `qubit` pointer must be valid and not null. Behavior is undefined if this condition is not met.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn __quantum__qis__rxy__body(phi: f64, theta: f64, qubit: *const Qubit) {
     let qubit_idx = usize::try_from(qubit as u64).expect("Invalid R1XY qubit pointer");
 
@@ -109,7 +109,7 @@ pub extern "C" fn __quantum__qis__rxy__body(phi: f64, theta: f64, qubit: *const 
 /// # Safety
 ///
 /// Both `qubit1` and `qubit2` pointers must be valid and not null. Undefined behavior may occur if these conditions are not met.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn __quantum__qis__zz__body(qubit1: *const Qubit, qubit2: *const Qubit) {
     let qubit1_idx = usize::try_from(qubit1 as u64).expect("Invalid ZZ qubit1 pointer");
     let qubit2_idx = usize::try_from(qubit2 as u64).expect("Invalid ZZ qubit2 pointer");
@@ -139,7 +139,7 @@ pub extern "C" fn __quantum__qis__zz__body(qubit1: *const Qubit, qubit2: *const 
 /// # Safety
 ///
 /// The `qubit` pointer must be valid and not null. Behavior is undefined if this condition is not met.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn __quantum__qis__h__body(qubit: *const Qubit) {
     let qubit_idx = usize::try_from(qubit as u64).expect("Invalid H qubit pointer");
 
@@ -169,7 +169,7 @@ pub extern "C" fn __quantum__qis__h__body(qubit: *const Qubit) {
 /// # Safety
 ///
 /// Both `control` and `target` pointers must be valid and not null. Undefined behavior may occur if these conditions are not met.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn __quantum__qis__cx__body(control: *const Qubit, target: *const Qubit) {
     let control_idx = usize::try_from(control as u64).expect("Invalid CX control pointer");
     let target_idx = usize::try_from(target as u64).expect("Invalid CX target pointer");
@@ -200,7 +200,7 @@ pub extern "C" fn __quantum__qis__cx__body(control: *const Qubit, target: *const
 /// # Safety
 ///
 /// Both `qubit` and `result` pointers must be valid and not null. Undefined behavior may occur if these conditions are not met.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn __quantum__qis__m__body(qubit: *const Qubit, result: *const Result) {
     let qubit_idx = usize::try_from(qubit as u64).expect("Invalid Measurement qubit pointer");
     let result_idx = usize::try_from(result as u64).expect("Invalid Measurement result pointer");
@@ -256,7 +256,7 @@ pub extern "C" fn __quantum__qis__m__body(qubit: *const Qubit, result: *const Re
 ///
 /// The `result` pointer must be valid and not null. Undefined behavior may occur if this
 /// condition is not met.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn __quantum__rt__result_record_output(result: *const Result, _label: *const i8) {
     let result_idx = usize::try_from(result as u64).expect("Invalid result pointer");
 

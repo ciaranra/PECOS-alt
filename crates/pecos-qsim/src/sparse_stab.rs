@@ -337,15 +337,15 @@ where
             }
         }
 
-        for gen in anticom_stabs_col.iter() {
-            let gen_usize = gen.to_index(); // Convert `gen` to `usize`
+        for g in anticom_stabs_col.iter() {
+            let gen_usize = g.to_index(); // Convert `gen` to `usize`
             let num_minuses = removed_row_z
                 .intersection(&self.stabs.row_x[gen_usize])
                 .count();
 
             if num_minuses & 1 != 0 {
                 // num_minuses % 2 != 0 (is odd)
-                self.stabs.signs_minus ^= gen;
+                self.stabs.signs_minus ^= g;
             }
 
             self.stabs.row_x[gen_usize] ^= &removed_row_x;

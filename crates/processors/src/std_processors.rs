@@ -1,6 +1,6 @@
 use crate::process::{CoProcessor, DrivingProcessor, ProcessingStage};
 use core::StructMetadata;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Doubles each number in a batch
 #[derive(Debug, Clone, StructMetadata)]

@@ -249,7 +249,7 @@ impl PHIREngine {
             _ => {
                 return Err(QueueError::OperationError(format!(
                     "Unknown quantum operation: {qop}"
-                )))
+                )));
             }
         };
 

@@ -150,8 +150,8 @@ mod tests {
 
     #[test]
     fn test_phase_to_complex() {
-        use num_complex::Complex;
         use QuarterPhase::*;
+        use num_complex::Complex;
 
         assert_eq!(PlusOne.to_complex(), Complex::new(1.0, 0.0));
         assert_eq!(MinusOne.to_complex(), Complex::new(-1.0, 0.0));

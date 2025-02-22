@@ -249,7 +249,7 @@ fn convert_gate(py_cmd: &Bound<'_, PyAny>) -> Result<(GateType, Vec<usize>), PyE
         _ => {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
                 "Unsupported gate type: {name}"
-            )))
+            )));
         }
     };
 

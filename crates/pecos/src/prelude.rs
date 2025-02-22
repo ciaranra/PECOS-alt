@@ -19,9 +19,9 @@ pub use pecos_engines::{
     channels::stdio::StdioChannel,
     channels::{Message, MessageChannel},
     engines::{
-        phir_engine::PHIREngine,
-        quantum::{new_quantum_engine, new_quantum_engine_full, CliffordEngine, FullEngine},
         ClassicalEngine, HybridEngine,
+        phir_engine::PHIREngine,
+        quantum::{CliffordEngine, FullEngine, new_quantum_engine, new_quantum_engine_full},
     },
     errors::QueueError,
     qir::engine::QirClassicalEngine,

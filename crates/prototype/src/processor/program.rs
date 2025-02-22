@@ -165,8 +165,11 @@ impl Processor for ProgramProcessor {
                             match msg_header.msg_type {
                                 MessageType::MeasResult => {
                                     let result = &*cursor.cast_aligned::<MeasResultData>();
-                                    println!("ProgramProcessor: Received measurement result for qubit {}: {}",
-                                             result.qubit, if result.outcome { "|1⟩" } else { "|0⟩" });
+                                    println!(
+                                        "ProgramProcessor: Received measurement result for qubit {}: {}",
+                                        result.qubit,
+                                        if result.outcome { "|1⟩" } else { "|0⟩" }
+                                    );
                                     self.state.store_measurement(*result);
                                     cursor = cursor.add(std::mem::size_of::<MeasResultData>());
                                 }

@@ -10,7 +10,7 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-use criterion::{black_box, measurement::Measurement, BenchmarkGroup, Criterion};
+use criterion::{BenchmarkGroup, Criterion, black_box, measurement::Measurement};
 use pecos::prelude::*;
 
 pub fn benchmarks<M: Measurement>(c: &mut Criterion<M>) {
