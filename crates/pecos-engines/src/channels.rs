@@ -37,6 +37,3 @@ pub trait MessageChannel: Send + Sync {
 }
 
 pub mod stdio;
-
-#[cfg(unix)]
-pub mod shared_memory;
