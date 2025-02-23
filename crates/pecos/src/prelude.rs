@@ -20,14 +20,17 @@ pub use pecos_engines::{
     channels::{Message, MessageChannel},
     engines::{
         ClassicalEngine, HybridEngine,
+        classical::{ProgramType, detect_program_type, get_program_path, setup_engine},
         phir::PHIREngine,
-        quantum::{CliffordEngine, StateVectorEngine, new_quantum_engine, new_quantum_engine_full},
+        qir::engine::QirClassicalEngine,
+        quantum::{
+            ArbitraryQGateEngine, CliffordEngine, new_quantum_engine,
+            new_quantum_engine_arbitrary_qgate,
+        },
     },
     errors::QueueError,
 };
-// re-exporting pecos-engines
-pub use pecos_engines::engines::qir::engine::QirClassicalEngine;
-// re-exporting pecos-engines
+// re-exporting pecos-noise
 pub use pecos_noise::{DepolarizingNoise, NoiseModel};
 // re-exporting pecos-qsim
 pub use pecos_qsim::ArbitraryRotationGateable;

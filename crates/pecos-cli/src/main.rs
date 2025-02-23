@@ -1,10 +1,7 @@
 use clap::{Args, Parser, Subcommand};
 use env_logger::Env;
-use log::debug;
 use pecos::prelude::*;
 use std::error::Error;
-use std::fs;
-use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 #[command(
@@ -50,64 +47,6 @@ struct RunArgs {
     noise_probability: Option<f64>,
 }
 
-fn detect_program_type(path: &Path) -> Result<ProgramType, Box<dyn Error>> {
-    match path.extension().and_then(|ext| ext.to_str()) {
-        Some("json") => {
-            // Read JSON and verify format
-            let content = fs::read_to_string(path)?;
-            let json: serde_json::Value = serde_json::from_str(&content)?;
-
-            if let Some("PHIR/JSON") = json.get("format").and_then(|f| f.as_str()) {
-                Ok(ProgramType::PHIR)
-            } else {
-                Err("Invalid JSON format - expected PHIR/JSON".into())
-            }
-        }
-        Some("ll") => Ok(ProgramType::QIR),
-        _ => Err("Unsupported file format. Expected .ll or .json".into()),
-    }
-}
-
-#[allow(clippy::upper_case_acronyms)]
-enum ProgramType {
-    QIR,
-    PHIR,
-}
-
-fn setup_engine(program_path: &Path) -> Result<Box<dyn ClassicalEngine>, Box<dyn Error>> {
-    debug!("Program path: {}", program_path.display());
-    let build_dir = program_path.parent().unwrap().join("build");
-    debug!("Build directory: {}", build_dir.display());
-    std::fs::create_dir_all(&build_dir)?;
-
-    match detect_program_type(program_path)? {
-        ProgramType::QIR => Ok(Box::new(QirClassicalEngine::new(program_path, &build_dir))),
-        ProgramType::PHIR => Ok(Box::new(PHIREngine::new(program_path)?)),
-    }
-}
-
-fn get_program_path(program: &str) -> Result<PathBuf, Box<dyn Error>> {
-    debug!("Resolving program path");
-
-    // Get the current directory for relative path resolution
-    let current_dir = std::env::current_dir()?;
-    debug!("Current directory: {}", current_dir.display());
-
-    // Resolve the path
-    let path = if Path::new(program).is_absolute() {
-        PathBuf::from(program)
-    } else {
-        current_dir.join(program)
-    };
-
-    // Check if file exists
-    if !path.exists() {
-        return Err(format!("Program file not found: {}", path.display()).into());
-    }
-
-    Ok(path.canonicalize()?)
-}
-
 fn parse_noise_probability(arg: &str) -> Result<f64, String> {
     let prob: f64 = arg
         .parse()
@@ -118,6 +57,7 @@ fn parse_noise_probability(arg: &str) -> Result<f64, String> {
     Ok(prob)
 }
 
+// TODO: consider moving to hybrid.rs
 fn run_program(args: &RunArgs) -> Result<(), Box<dyn Error>> {
     let program_path = get_program_path(&args.program)?;
     let classical_engine = setup_engine(&program_path)?;
@@ -131,7 +71,7 @@ fn run_program(args: &RunArgs) -> Result<(), Box<dyn Error>> {
     let simulator = StateVec::new(2); // TODO: Get number of qubits from program analysis
 
     // Create the quantum engine using the factory function
-    let quantum_engine = new_quantum_engine_full(simulator); // Use full engine for StateVec
+    let quantum_engine = new_quantum_engine_arbitrary_qgate(simulator); // Use engine for StateVec
 
     let cmd_channel = StdioChannel::from_stdio()?;
 

@@ -1,4 +1,4 @@
-mod classical;
+pub mod classical;
 pub mod hybrid;
 pub mod phir;
 pub mod qir;

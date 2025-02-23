@@ -82,14 +82,14 @@ impl<S> QuantumEngine for CliffordEngine<S> where
 }
 
 // Engine for simulators that support arbitrary rotations using state vectors
-pub struct StateVectorEngine<S>
+pub struct ArbitraryQGateEngine<S>
 where
     S: QuantumSimulator + CliffordGateable<usize> + ArbitraryRotationGateable<usize> + Send + Sync,
 {
     simulator: S,
 }
 
-impl<S> StateVectorEngine<S>
+impl<S> ArbitraryQGateEngine<S>
 where
     S: QuantumSimulator + CliffordGateable<usize> + ArbitraryRotationGateable<usize> + Send + Sync,
 {
@@ -98,7 +98,7 @@ where
     }
 }
 
-impl<S> Engine for StateVectorEngine<S>
+impl<S> Engine for ArbitraryQGateEngine<S>
 where
     S: QuantumSimulator + CliffordGateable<usize> + ArbitraryRotationGateable<usize> + Send + Sync,
 {
@@ -159,7 +159,7 @@ where
     }
 }
 
-impl<S> QuantumEngine for StateVectorEngine<S> where
+impl<S> QuantumEngine for ArbitraryQGateEngine<S> where
     S: QuantumSimulator + CliffordGateable<usize> + ArbitraryRotationGateable<usize> + Send + Sync
 {
 }
@@ -172,7 +172,7 @@ where
     Box::new(CliffordEngine::new(simulator))
 }
 
-pub fn new_quantum_engine_full<S>(simulator: S) -> Box<dyn QuantumEngine>
+pub fn new_quantum_engine_arbitrary_qgate<S>(simulator: S) -> Box<dyn QuantumEngine>
 where
     S: QuantumSimulator
         + CliffordGateable<usize>
@@ -181,5 +181,5 @@ where
         + Sync
         + 'static,
 {
-    Box::new(StateVectorEngine::new(simulator))
+    Box::new(ArbitraryQGateEngine::new(simulator))
 }

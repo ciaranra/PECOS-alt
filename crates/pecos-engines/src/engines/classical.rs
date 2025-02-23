@@ -1,6 +1,12 @@
 use crate::channels::Message;
+use crate::engines::phir::PHIREngine;
+use crate::engines::qir::engine::QirClassicalEngine;
 use crate::errors::QueueError;
+use log::debug;
 use pecos_core::types::{CommandBatch, ShotResult};
+use std::error::Error;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 /// Classical engine that processes programs and handles measurements
 pub trait ClassicalEngine: Send + Sync {
@@ -60,4 +66,62 @@ pub trait ClassicalEngine: Send + Sync {
     /// - `Box<dyn std::error::Error>`: If there is a compilation error due to syntax issues,
     ///   unsupported features, or internal errors in the engine's implementation.
     fn compile(&self) -> Result<(), Box<dyn std::error::Error>>;
+}
+
+pub fn detect_program_type(path: &Path) -> Result<ProgramType, Box<dyn Error>> {
+    match path.extension().and_then(|ext| ext.to_str()) {
+        Some("json") => {
+            // Read JSON and verify format
+            let content = fs::read_to_string(path)?;
+            let json: serde_json::Value = serde_json::from_str(&content)?;
+
+            if let Some("PHIR/JSON") = json.get("format").and_then(|f| f.as_str()) {
+                Ok(ProgramType::PHIR)
+            } else {
+                Err("Invalid JSON format - expected PHIR/JSON".into())
+            }
+        }
+        Some("ll") => Ok(ProgramType::QIR),
+        _ => Err("Unsupported file format. Expected .ll or .json".into()),
+    }
+}
+
+#[allow(clippy::upper_case_acronyms)]
+pub enum ProgramType {
+    QIR,
+    PHIR,
+}
+
+pub fn setup_engine(program_path: &Path) -> Result<Box<dyn ClassicalEngine>, Box<dyn Error>> {
+    debug!("Program path: {}", program_path.display());
+    let build_dir = program_path.parent().unwrap().join("build");
+    debug!("Build directory: {}", build_dir.display());
+    std::fs::create_dir_all(&build_dir)?;
+
+    match detect_program_type(program_path)? {
+        ProgramType::QIR => Ok(Box::new(QirClassicalEngine::new(program_path, &build_dir))),
+        ProgramType::PHIR => Ok(Box::new(PHIREngine::new(program_path)?)),
+    }
+}
+
+pub fn get_program_path(program: &str) -> Result<PathBuf, Box<dyn Error>> {
+    debug!("Resolving program path");
+
+    // Get the current directory for relative path resolution
+    let current_dir = std::env::current_dir()?;
+    debug!("Current directory: {}", current_dir.display());
+
+    // Resolve the path
+    let path = if Path::new(program).is_absolute() {
+        PathBuf::from(program)
+    } else {
+        current_dir.join(program)
+    };
+
+    // Check if file exists
+    if !path.exists() {
+        return Err(format!("Program file not found: {}", path.display()).into());
+    }
+
+    Ok(path.canonicalize()?)
 }
