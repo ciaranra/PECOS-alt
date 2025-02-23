@@ -1,3 +1,4 @@
+// PECOS/crates/pecos-engines/src/channels.rs
 use crate::errors::QueueError;
 use pecos_core::types::CommandBatch;
 

@@ -1,3 +1,4 @@
+// PECOS/crates/pecos-engines/src/engines/hybrid.rs
 use log::{debug, info};
 use parking_lot::{Mutex, RwLock};
 use rayon::prelude::*;
@@ -8,9 +9,6 @@ use crate::channels::{CommandChannel, MessageChannel};
 use crate::errors::QueueError;
 use pecos_core::types::{GateType, ShotResult, ShotResults};
 use pecos_noise::NoiseModel;
-
-
-// TODO: Move a lot of the run_program code from pecos-cli to pecos-engine...
 
 // Base implementation of Hybrid Engine
 pub struct HybridEngine<C, M>
@@ -103,10 +101,6 @@ where
     /// - `QueueError::ExecutionError` if the quantum engine execution fails.
     /// - `QueueError::LockError` if there is a failure in acquiring or unwrapping a lock.
     pub fn run_parallel(&self, shots: usize, workers: usize) -> Result<ShotResults, QueueError> {
-        // TODO: Run parallel should be simple... the program should be taken ownership...
-        //  and copied per parallel instance...
-        //  the classical engine should be able to send multiple rounds of commands off
-
         info!(
             "Starting parallel execution with {} shots and {} workers",
             shots, workers
@@ -115,19 +109,12 @@ where
         let shot_results = Arc::new(Mutex::new(Vec::with_capacity(shots)));
 
         // Get commands just once from classical engine
-        // TODO: It should not be just once... and it should be inside the parallel loop...
         let base_commands = {
             let mut classical = self.classical.write();
             let cmds = classical.process_program()?;
             debug!("Generated base commands: {:?}", cmds);
             cmds
         };
-
-        // TODO: Engines should all be spun up independently per thread and reset/reuse assuming
-        //  threads are used to run multiple shots
-
-        // TODO: Consider having a "Monte Carlo engine" that orchestrates running many shots and
-        //  parallelizing them
 
         // Get noise model reference outside the loop
         let noise_model = self.noise_model.read();
@@ -154,10 +141,10 @@ where
                 {
                     let mut quantum = self.quantum.write();
                     // Reset quantum state before processing this shot
-                    quantum.reset()?;
+                    quantum.reset_state()?;
 
                     for cmd in &commands {
-                        if let Some(measurement) = quantum.process(cmd.clone())? {
+                        if let Some(measurement) = quantum.process_command(cmd)? {
                             let GateType::Measure { result_id: res_id } = cmd.gate else {
                                 continue;
                             };

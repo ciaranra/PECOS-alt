@@ -1,15 +1,38 @@
+// PECOS/crates/pecos-engines/src/engines/quantum.rs
 use crate::channels::Message;
-use crate::engines::Engine;
 use crate::errors::QueueError;
 use log::debug;
 use pecos_core::types::{GateType, QuantumCommand};
 use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, QuantumSimulator};
 
-/// Marker trait for engines that manage quantum state
-///
-/// This trait indicates that an engine specifically deals with
-/// quantum state evolution and measurements.
-pub trait QuantumEngine: Engine<Input = QuantumCommand, Output = Option<Message>> {}
+/// Quantum engine that processes commands and generates measurements
+pub trait QuantumEngine: Send + Sync {
+    /// Processes a single quantum command and optionally generates a measurement.
+    ///
+    /// # Parameters
+    ///
+    /// * `cmd` - The quantum command to be processed, containing the gate type and qubit indices.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Some(Message))` if a measurement is generated.
+    /// * `Ok(None)` if no measurement is generated.
+    /// * `Err(QueueError)` if an error occurs during processing.
+    ///
+    /// # Errors
+    ///
+    /// * [`QueueError::OperationError`] - If the operation is not supported by the simulator.
+    /// * [`QueueError::ExecutionError`] - If the simulator fails during command execution.
+    fn process_command(&mut self, cmd: &QuantumCommand) -> Result<Option<Message>, QueueError>;
+
+    /// Resets the internal state of the quantum engine to its initial state.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`QueueError`] if the underlying quantum simulator fails
+    /// to reset its state.
+    fn reset_state(&mut self) -> Result<(), QueueError>;
+}
 
 // Engine for simulators that only support Clifford gates
 pub struct CliffordEngine<S>
@@ -28,14 +51,11 @@ where
     }
 }
 
-impl<S> Engine for CliffordEngine<S>
+impl<S> QuantumEngine for CliffordEngine<S>
 where
     S: QuantumSimulator + CliffordGateable<usize> + Send + Sync,
 {
-    type Input = QuantumCommand;
-    type Output = Option<Message>;
-
-    fn process(&mut self, cmd: Self::Input) -> Result<Self::Output, QueueError> {
+    fn process_command(&mut self, cmd: &QuantumCommand) -> Result<Option<Message>, QueueError> {
         match &cmd.gate {
             GateType::H => {
                 debug!("Processing H gate on qubit {:?}", cmd.qubits[0]);
@@ -70,15 +90,10 @@ where
         }
     }
 
-    fn reset(&mut self) -> Result<(), QueueError> {
-        self.simulator.reset();
+    fn reset_state(&mut self) -> Result<(), QueueError> {
+        self.simulator.reset(); // Assuming this method exists in your simulator
         Ok(())
     }
-}
-
-impl<S> QuantumEngine for CliffordEngine<S> where
-    S: QuantumSimulator + CliffordGateable<usize> + Send + Sync
-{
 }
 
 // Engine for simulators that support arbitrary rotations
@@ -98,14 +113,11 @@ where
     }
 }
 
-impl<S> Engine for FullEngine<S>
+impl<S> QuantumEngine for FullEngine<S>
 where
     S: QuantumSimulator + CliffordGateable<usize> + ArbitraryRotationGateable<usize> + Send + Sync,
 {
-    type Input = QuantumCommand;
-    type Output = Option<Message>;
-
-    fn process(&mut self, cmd: Self::Input) -> Result<Self::Output, QueueError> {
+    fn process_command(&mut self, cmd: &QuantumCommand) -> Result<Option<Message>, QueueError> {
         match &cmd.gate {
             GateType::H => {
                 debug!("Processing H gate on qubit {:?}", cmd.qubits[0]);
@@ -153,15 +165,10 @@ where
         }
     }
 
-    fn reset(&mut self) -> Result<(), QueueError> {
-        self.simulator.reset();
+    fn reset_state(&mut self) -> Result<(), QueueError> {
+        self.simulator.reset(); // Assuming this method exists in your simulator
         Ok(())
     }
-}
-
-impl<S> QuantumEngine for FullEngine<S> where
-    S: QuantumSimulator + CliffordGateable<usize> + ArbitraryRotationGateable<usize> + Send + Sync
-{
 }
 
 // Factory function to create the appropriate engine based on simulator type
