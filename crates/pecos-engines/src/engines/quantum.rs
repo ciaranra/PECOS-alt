@@ -3,14 +3,18 @@ use crate::engines::Engine;
 use crate::errors::QueueError;
 use log::debug;
 use pecos_core::types::{GateType, QuantumCommand};
-use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, QuantumSimulator};
+use pecos_qsim::{
+    ArbitraryRotationGateable, CliffordGateable, MeasurementResult, QuantumSimulator,
+};
 
 /// Marker trait for engines that manage quantum state
 ///
 /// This trait indicates that an engine specifically deals with
 /// quantum state evolution and measurements.
-pub trait QuantumEngine: Engine<Input = QuantumCommand, Output = Option<Message>> {}
-
+pub trait QuantumEngine:
+    Engine<Input = QuantumCommand, Output = Option<Message>> + Send + Sync
+{
+}
 // Engine for simulators that only support Clifford gates
 pub struct CliffordEngine<S>
 where
@@ -96,6 +100,11 @@ where
     pub fn new(simulator: S) -> Self {
         Self { simulator }
     }
+
+    fn perform_measurement(&mut self, qubit: usize) -> MeasurementResult {
+        debug!("Performing measurement on qubit {}", qubit);
+        self.simulator.mz(qubit)
+    }
 }
 
 impl<S> Engine for ArbitraryQGateEngine<S>
@@ -106,55 +115,70 @@ where
     type Output = Option<Message>;
 
     fn process(&mut self, cmd: Self::Input) -> Result<Self::Output, QueueError> {
-        match &cmd.gate {
+        debug!("Quantum simulator about to process command: {:?}", cmd);
+        let result = match &cmd.gate {
             GateType::H => {
-                debug!("Processing H gate on qubit {:?}", cmd.qubits[0]);
+                debug!(
+                    "Quantum simulator executing H gate on qubit {}",
+                    cmd.qubits[0]
+                );
                 self.simulator.h(cmd.qubits[0]);
-                Ok(None)
+                None
             }
             GateType::CX => {
                 debug!(
-                    "Processing CX gate with control {:?} and target {:?}",
+                    "Quantum simulator executing CX gate from control {} to target {}",
                     cmd.qubits[0], cmd.qubits[1]
                 );
                 self.simulator.cx(cmd.qubits[0], cmd.qubits[1]);
-                Ok(None)
+                None
             }
             GateType::SZZ => {
-                debug!("Processing SZZ gate on qubits {:?}", cmd.qubits);
+                debug!(
+                    "Quantum simulator executing SZZ gate on qubits {} and {}",
+                    cmd.qubits[0], cmd.qubits[1]
+                );
                 self.simulator.szz(cmd.qubits[0], cmd.qubits[1]);
-                Ok(None)
+                None
             }
-            GateType::Measure { result_id: _ } => {
+            GateType::Measure { result_id } => {
+                debug!(
+                    "Quantum simulator starting measurement on qubit {} for result_id {}",
+                    cmd.qubits[0], result_id
+                );
                 let result = self.simulator.mz(cmd.qubits[0]);
                 let measurement = u32::from(result.outcome);
                 debug!(
-                    "Generated measurement {} for qubit {:?}",
-                    measurement, cmd.qubits[0]
+                    "Quantum simulator completed measurement, outcome: {} for qubit {} (result_id {})",
+                    measurement, cmd.qubits[0], result_id
                 );
-                Ok(Some(measurement))
+                Some(measurement)
             }
             GateType::RZ { theta } => {
                 debug!(
-                    "Processing RZ gate with theta={} on qubit {:?}",
+                    "Quantum simulator executing RZ(theta={}) on qubit {}",
                     theta, cmd.qubits[0]
                 );
                 self.simulator.rz(*theta, cmd.qubits[0]);
-                Ok(None)
+                None
             }
             GateType::R1XY { phi, theta } => {
                 debug!(
-                    "Processing R1XY gate with phi={}, theta={} on qubit {:?}",
+                    "Quantum simulator executing R1XY(phi={}, theta={}) on qubit {}",
                     phi, theta, cmd.qubits[0]
                 );
                 self.simulator.r1xy(*theta, *phi, cmd.qubits[0]);
-                Ok(None)
+                None
             }
-        }
+        };
+        debug!("Quantum simulator finished processing command");
+        Ok(result)
     }
 
     fn reset(&mut self) -> Result<(), QueueError> {
+        debug!("Quantum simulator resetting state");
         self.simulator.reset();
+        debug!("Quantum simulator reset complete");
         Ok(())
     }
 }

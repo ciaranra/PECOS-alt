@@ -1,25 +1,27 @@
-use log::{debug, info};
-use parking_lot::{Mutex, RwLock};
-use rayon::prelude::*;
-use std::sync::Arc;
+use log::debug;
+use pecos_core::types::{GateType, ShotResult};
+use pecos_noise::NoiseModel;
 
 use super::{ClassicalEngine, QuantumEngine};
 use crate::channels::{CommandChannel, MessageChannel};
 use crate::errors::QueueError;
-use pecos_core::types::{GateType, ShotResult, ShotResults};
-use pecos_noise::NoiseModel;
+use parking_lot::Mutex;
+use std::sync::Arc;
+use std::thread;
 
-// Base implementation of Hybrid Engine
+/// HybridEngine coordinates between classical and quantum components via message passing
 pub struct HybridEngine<C, M>
 where
     C: CommandChannel + Send + Sync + 'static,
     M: MessageChannel + Send + Sync + 'static,
 {
-    classical: Arc<RwLock<Box<dyn ClassicalEngine>>>,
-    quantum: Arc<RwLock<Box<dyn QuantumEngine>>>,
-    cmd_channel: Arc<RwLock<C>>,
-    meas_channel: Arc<RwLock<M>>,
-    noise_model: Arc<RwLock<Option<Box<dyn NoiseModel>>>>,
+    classical: Box<dyn ClassicalEngine>,
+    quantum: Arc<Mutex<Box<dyn QuantumEngine>>>,
+    cmd_writer: C,
+    cmd_reader: C,
+    meas_writer: M,
+    meas_reader: M,
+    noise_model: Option<Box<dyn NoiseModel>>,
 }
 
 impl<C, M> HybridEngine<C, M>
@@ -33,146 +35,83 @@ where
         cmd_channel: C,
         meas_channel: M,
     ) -> Self {
+        let cmd_writer = cmd_channel.clone();
+        let cmd_reader = cmd_channel;
+        let meas_writer = meas_channel.clone();
+        let meas_reader = meas_channel;
+
         Self {
-            classical: Arc::new(RwLock::new(classical)),
-            quantum: Arc::new(RwLock::new(quantum)),
-            cmd_channel: Arc::new(RwLock::new(cmd_channel)),
-            meas_channel: Arc::new(RwLock::new(meas_channel)),
-            noise_model: Arc::new(RwLock::new(None)),
+            classical,
+            quantum: Arc::new(Mutex::new(quantum)),
+            cmd_writer,
+            cmd_reader,
+            meas_writer,
+            meas_reader,
+            noise_model: None,
         }
     }
 
-    pub fn set_noise_model(&self, noise_model: Option<Box<dyn NoiseModel>>) {
-        *self.noise_model.write() = noise_model;
+    pub fn set_noise_model(&mut self, noise_model: Option<Box<dyn NoiseModel>>) {
+        self.noise_model = noise_model;
     }
 
     /// Executes a single quantum circuit shot and returns the result.
-    ///
-    /// This function performs the following steps:
-    /// 1. Retrieves quantum commands from the classical engine.
-    /// 2. Sends these commands to the quantum engine via the command channel.
-    /// 3. Processes measurement results received from the measurement channel.
-    /// 4. Retrieves and returns the final results from the classical engine.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `ShotResult` representing the results of the shot execution.
-    ///
-    /// # Errors
-    ///
-    /// This function may return the following errors:
-    /// - `QueueError::LockError`: If a lock cannot be acquired for a resource.
-    /// - `QueueError::OperationError`: If an operation is not supported or fails.
-    /// - `QueueError::ExecutionError`: If there is a problem executing quantum or classical parts.
-    /// - `QueueError::SerializationError`: If there is an issue with serializing or deserializing data.
-    pub fn run_shot(&self) -> Result<ShotResult, QueueError> {
+    pub fn run_shot(&mut self) -> Result<ShotResult, QueueError> {
+        // Reset quantum engine at start of shot
+        debug!("Resetting quantum engine");
+        self.quantum.lock().reset()?;
+
         // Get commands from classical engine
-        let commands = self.classical.write().process_program()?;
-        debug!("Generated {} commands", commands.len());
+        let commands = self.classical.process_program()?;
+        debug!("Classical engine generated {} commands", commands.len());
 
-        // Send commands through channel
-        self.cmd_channel.write().send_commands(commands)?;
-
-        // Process measurements
-        let measurement = self.meas_channel.write().receive_message()?;
-        self.classical.write().handle_measurement(measurement)?;
-
-        // Get final results
-        self.classical.read().get_results()
-    }
-
-    /// Runs a parallel execution of quantum circuits for a specified number of shots.
-    ///
-    /// # Parameters
-    ///
-    /// - `shots`: The total number of shots to execute in parallel.
-    /// - `workers`: The number of workers to use for parallel execution.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `ShotResults` object containing the processed results for all shots,
-    /// or a `QueueError` if an error occurs during execution.
-    ///
-    /// # Errors
-    ///
-    /// This function may return the following errors:
-    /// - `QueueError::OperationError` if an operation is not supported.
-    /// - `QueueError::ExecutionError` if the quantum engine execution fails.
-    /// - `QueueError::LockError` if there is a failure in acquiring or unwrapping a lock.
-    pub fn run_parallel(&self, shots: usize, workers: usize) -> Result<ShotResults, QueueError> {
-        // TODO: classical engine should be able to send multiple rounds of commands off
-
-        info!(
-            "Starting parallel execution with {} shots and {} workers",
-            shots, workers
-        );
-
-        let shot_results = Arc::new(Mutex::new(Vec::with_capacity(shots)));
-
-        // Get commands just once from classical engine
-        // TODO: It should not be just once... and it should be inside the parallel loop...
-        let base_commands = {
-            let mut classical = self.classical.write();
-            let cmds = classical.process_program()?;
-            debug!("Generated base commands: {:?}", cmds);
-            cmds
+        // Apply noise model if configured
+        let commands = if let Some(noise_model) = &self.noise_model {
+            debug!("Applying noise model to commands");
+            noise_model.clone_box().apply_noise(commands)
+        } else {
+            commands
         };
 
-        // Get noise model reference outside the loop
-        let noise_model = self.noise_model.read();
+        // Send commands through channel
+        debug!("Sending {} commands to quantum thread", commands.len());
+        for cmd in &commands {
+            self.cmd_writer.send_command(cmd)?;
+        }
+        debug!("Signaling end of commands");
+        self.cmd_writer.flush()?;
 
-        (0..shots)
-            .into_par_iter()
-            .try_for_each::<_, Result<(), QueueError>>(|shot_idx| {
-                debug!("Starting shot {}", shot_idx);
-                let mut shot_result = ShotResult::default();
+        // Process commands and collect measurements in quantum thread
+        let mut measurements = Vec::new();
+        {
+            debug!("Processing commands in quantum thread");
+            let mut quantum = self.quantum.lock();
 
-                // Clone the base commands for this shot
-                let mut commands = base_commands.clone();
-
-                // Apply noise model independently for this shot
-                if let Some(noise_model) = &*noise_model {
-                    commands = noise_model.apply_noise(commands);
-                    debug!(
-                        "Applied noise model for shot {}, commands: {:?}",
-                        shot_idx, commands
-                    );
+            while let Some(cmd) = self.cmd_reader.receive_command()? {
+                debug!("Processing quantum command: {:?}", cmd);
+                if let Some(measurement) = quantum.process(cmd)? {
+                    debug!("Generated measurement: {}", measurement);
+                    measurements.push(measurement);
                 }
+            }
+        }
 
-                // Process commands through quantum engine
-                {
-                    let mut quantum = self.quantum.write();
-                    // Reset quantum state before processing this shot
-                    quantum.reset()?;
+        // Send measurements back
+        debug!("Sending {} measurements", measurements.len());
+        for measurement in measurements {
+            self.meas_writer.send_measurement(measurement)?;
+            self.classical.handle_measurement(measurement)?;
+        }
+        debug!("Signaling end of measurements");
+        self.meas_writer.flush()?;
 
-                    for cmd in &commands {
-                        if let Some(measurement) = quantum.process(cmd.clone())? {
-                            let GateType::Measure { result_id: res_id } = cmd.gate else {
-                                continue;
-                            };
-                            shot_result
-                                .measurements
-                                .insert(format!("measurement_{res_id}"), measurement);
-                        }
-                    }
-                }
-
-                shot_results.lock().push(shot_result);
-                debug!("Completed shot {}", shot_idx);
-                Ok(())
-            })?;
-
-        let mutex = Arc::try_unwrap(shot_results)
-            .map_err(|_| QueueError::LockError("Could not unwrap results".into()))?;
-
-        let raw_results = mutex.into_inner();
-
-        // Convert to our new ShotResults type
-        let results = ShotResults::from_measurements(&raw_results);
-
-        // Print results
-        // results.print();
-
+        // Get final results
+        debug!("Getting final results");
+        let results = self.classical.get_results()?;
+        debug!(
+            "Shot complete with {} measurements",
+            results.measurements.len()
+        );
         Ok(results)
     }
 }

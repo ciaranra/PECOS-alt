@@ -3,11 +3,15 @@ use crate::engines::HybridEngine;
 use crate::engines::classical::{ProgramType, detect_program_type, setup_engine};
 use crate::engines::quantum::new_quantum_engine_arbitrary_qgate;
 use crate::errors::QueueError;
-use log::info;
-use pecos_core::types::ShotResults;
+use log::{debug, info};
+use parking_lot::{Mutex, RwLock};
+use pecos_core::types::{GateType, ShotResult, ShotResults};
 use pecos_noise::NoiseModel;
 use pecos_qsim::StateVec;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use rayon::prelude::*;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 // TODO: Program should be taken ownership and copied per parallel instance
 // TODO: Engines should all be spun up independently per thread and reset/reuse
@@ -78,32 +82,144 @@ impl MonteCarloEngine {
             num_shots, self.num_workers
         );
 
-        // Create base engines
-        let classical_engine = setup_engine(&self.program_path)?;
+        // Create storage for results
+        let shot_results = Arc::new(Mutex::new(Vec::with_capacity(num_shots)));
 
-        // For QIR, ensure it's compiled first
+        // Compile QIR program if needed
         if let ProgramType::QIR = detect_program_type(&self.program_path)? {
-            classical_engine.compile()?;
+            let engine = setup_engine(&self.program_path)?;
+            engine.compile()?;
         }
 
-        let simulator = StateVec::new(2); // TODO: Get qubit count from program analysis
-        let quantum_engine = new_quantum_engine_arbitrary_qgate(simulator);
-        let cmd_channel = StdioChannel::from_stdio()?;
+        // Run parallel shots
+        (0..num_shots)
+            .into_par_iter()
+            .with_max_len(1) // Process 1 item per thread to avoid contention
+            .try_for_each::<_, Result<(), QueueError>>(|shot_idx| {
+                debug!("Starting shot {}", shot_idx);
 
-        // Setup hybrid engine
-        let engine = HybridEngine::new(
-            classical_engine,
-            quantum_engine,
-            cmd_channel.clone(),
-            cmd_channel,
-        );
+                // Create fresh engines and channels for this shot
+                let classical_engine = setup_engine(&self.program_path)?;
+                let simulator = StateVec::new(2);
+                let quantum_engine = new_quantum_engine_arbitrary_qgate(simulator);
+                let channel = StdioChannel::create_for_shot()?;
 
-        // Set noise model if configured
-        if let Some(noise_model) = &self.noise_model {
-            engine.set_noise_model(Some(noise_model.clone_box()));
-        }
+                // Create hybrid engine for this shot
+                let mut engine =
+                    HybridEngine::new(classical_engine, quantum_engine, channel.clone(), channel);
 
-        // Run simulation using the existing parallel implementation
-        engine.run_parallel(num_shots, self.num_workers)
+                // Apply noise model if configured
+                if let Some(noise_model) = &self.noise_model {
+                    engine.set_noise_model(Some(noise_model.clone_box()));
+                }
+
+                // Run single shot and collect results
+                let result = engine.run_shot()?;
+                shot_results.lock().push(result);
+
+                debug!("Completed shot {}", shot_idx);
+                Ok(())
+            })?;
+
+        // Process and return results
+        let results = Arc::try_unwrap(shot_results)
+            .expect("Arc should be uniquely owned")
+            .into_inner();
+        Ok(ShotResults::from_measurements(&results))
     }
+
+    // /// Runs a parallel execution of quantum circuits for a specified number of shots.
+    // ///
+    // /// # Parameters
+    // ///
+    // /// - `shots`: The total number of shots to execute in parallel.
+    // /// - `workers`: The number of workers to use for parallel execution.
+    // ///
+    // /// # Returns
+    // ///
+    // /// Returns a `ShotResults` object containing the processed results for all shots,
+    // /// or a `QueueError` if an error occurs during execution.
+    // ///
+    // /// # Errors
+    // ///
+    // /// This function may return the following errors:
+    // /// - `QueueError::OperationError` if an operation is not supported.
+    // /// - `QueueError::ExecutionError` if the quantum engine execution fails.
+    // /// - `QueueError::LockError` if there is a failure in acquiring or unwrapping a lock.
+    // pub fn run_parallel(&self, shots: usize, workers: usize) -> Result<ShotResults, QueueError> {
+    //     // TODO: classical engine should be able to send multiple rounds of commands off
+    //
+    //     info!(
+    //         "Starting parallel execution with {} shots and {} workers",
+    //         shots, workers
+    //     );
+    //
+    //     let shot_results = Arc::new(Mutex::new(Vec::with_capacity(shots)));
+    //
+    //     // Get commands just once from classical engine
+    //     // TODO: It should not be just once... and it should be inside the parallel loop...
+    //     let base_commands = {
+    //         let mut classical = self.classical.write();
+    //         let cmds = classical.process_program()?;
+    //         debug!("Generated base commands: {:?}", cmds);
+    //         cmds
+    //     };
+    //
+    //     // Get noise model reference outside the loop
+    //     let noise_model = self.noise_model.read();
+    //
+    //     (0..shots)
+    //         .into_par_iter()
+    //         .try_for_each::<_, Result<(), QueueError>>(|shot_idx| {
+    //             debug!("Starting shot {}", shot_idx);
+    //             let mut shot_result = ShotResult::default();
+    //
+    //             // Clone the base commands for this shot
+    //             let mut commands = base_commands.clone();
+    //
+    //             // Apply noise model independently for this shot
+    //             if let Some(noise_model) = &*noise_model {
+    //                 commands = noise_model.apply_noise(commands);
+    //                 debug!(
+    //                     "Applied noise model for shot {}, commands: {:?}",
+    //                     shot_idx, commands
+    //                 );
+    //             }
+    //
+    //             // Process commands through quantum engine
+    //             {
+    //                 let mut quantum = self.quantum.write();
+    //                 // Reset quantum state before processing this shot
+    //                 quantum.reset()?;
+    //
+    //                 for cmd in &commands {
+    //                     if let Some(measurement) = quantum.process(cmd.clone())? {
+    //                         let GateType::Measure { result_id: res_id } = cmd.gate else {
+    //                             continue;
+    //                         };
+    //                         shot_result
+    //                             .measurements
+    //                             .insert(format!("measurement_{res_id}"), measurement);
+    //                     }
+    //                 }
+    //             }
+    //
+    //             shot_results.lock().push(shot_result);
+    //             debug!("Completed shot {}", shot_idx);
+    //             Ok(())
+    //         })?;
+    //
+    //     let mutex = Arc::try_unwrap(shot_results)
+    //         .map_err(|_| QueueError::LockError("Could not unwrap results".into()))?;
+    //
+    //     let raw_results = mutex.into_inner();
+    //
+    //     // Convert to our new ShotResults type
+    //     let results = ShotResults::from_measurements(&raw_results);
+    //
+    //     // Print results
+    //     // results.print();
+    //
+    //     Ok(results)
+    // }
 }

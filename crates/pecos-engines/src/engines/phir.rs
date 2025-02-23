@@ -1,11 +1,11 @@
-use serde::Deserialize;
-use std::collections::HashMap;
-use std::path::Path;
-
 use super::ClassicalEngine;
 use crate::channels::Message;
 use crate::errors::QueueError;
+use log::debug;
 use pecos_core::types::{CommandBatch, GateType, QuantumCommand, ShotResult};
+use serde::Deserialize;
+use std::collections::HashMap;
+use std::path::Path;
 
 #[derive(Debug, Deserialize)]
 struct PHIRProgram {
@@ -414,17 +414,46 @@ impl ClassicalEngine for PHIREngine {
     fn get_results(&self) -> Result<ShotResult, QueueError> {
         let mut results = ShotResult::default();
 
+        // Check if we have any measurements
+        if self.measurement_results.is_empty() {
+            log::debug!("No measurements recorded yet");
+            return Ok(results);
+        }
+
         // Sort keys to ensure consistent ordering
         let mut keys: Vec<_> = self.measurement_results.keys().collect();
         keys.sort();
+
+        // Collect all individual measurements and combine them
+        let mut combined_values = Vec::new();
 
         for key in keys {
             if let Some(measurements) = self.measurement_results.get(key) {
                 if let Some(&value) = measurements.first() {
                     results.measurements.insert(key.clone(), value);
+                    combined_values.push(value);
                 }
             }
         }
+
+        // Store the combined result as a string (special case for our format)
+        if !combined_values.is_empty() {
+            let result_string = combined_values
+                .iter()
+                .map(|&m| m.to_string())
+                .collect::<String>();
+
+            // Store the combined result under the "result" key
+            results
+                .measurements
+                .insert("result".to_string(), combined_values[0]);
+
+            // For multi-qubit results, make the first digit represent the entire measurement
+            if combined_values.len() > 1 {
+                log::debug!("Combined measurement result: {}", result_string);
+            }
+        }
+
         Ok(results)
     }
 
