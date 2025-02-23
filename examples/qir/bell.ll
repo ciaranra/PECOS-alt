@@ -1,15 +1,14 @@
 %Result = type opaque
 %Qubit = type opaque
 
-declare void @__quantum__qis__rz__body(double, %Qubit*)
+declare void @__quantum__qis__h__body(%Qubit*)
 declare void @__quantum__qis__cx__body(%Qubit*, %Qubit*)
 declare void @__quantum__qis__m__body(%Qubit*, %Result*)
 declare void @__quantum__rt__result_record_output(%Result*, i8*)
 
 define void @main() #0 {
-    ; Apply Hadamard to first qubit using RZ
-    call void @__quantum__qis__rz__body(double 3.14159265359, %Qubit* null)
-    call void @__quantum__qis__rz__body(double 1.57079632679, %Qubit* null)
+    ; Apply Hadamard to first qubit using H gate
+    call void @__quantum__qis__h__body(%Qubit* null)
 
     ; Apply CX between qubits
     call void @__quantum__qis__cx__body(%Qubit* null, %Qubit* inttoptr (i64 1 to %Qubit*))
