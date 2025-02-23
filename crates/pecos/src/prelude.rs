@@ -20,12 +20,13 @@ pub use pecos_engines::{
     channels::{Message, MessageChannel},
     engines::{
         ClassicalEngine, HybridEngine,
-        phir_engine::PHIREngine,
-        quantum::{CliffordEngine, FullEngine, new_quantum_engine, new_quantum_engine_full},
+        phir::PHIREngine,
+        quantum::{CliffordEngine, StateVectorEngine, new_quantum_engine, new_quantum_engine_full},
     },
     errors::QueueError,
-    qir::engine::QirClassicalEngine,
 };
+// re-exporting pecos-engines
+pub use pecos_engines::engines::qir::engine::QirClassicalEngine;
 // re-exporting pecos-engines
 pub use pecos_noise::{DepolarizingNoise, NoiseModel};
 // re-exporting pecos-qsim

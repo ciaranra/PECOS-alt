@@ -9,7 +9,6 @@ use crate::errors::QueueError;
 use pecos_core::types::{GateType, ShotResult, ShotResults};
 use pecos_noise::NoiseModel;
 
-
 // TODO: Move a lot of the run_program code from pecos-cli to pecos-engine...
 
 // Base implementation of Hybrid Engine

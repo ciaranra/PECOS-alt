@@ -64,7 +64,7 @@ impl QirClassicalEngine {
         if let Some(workspace_dir) = exe_dir.parent().and_then(|d| d.parent()) {
             for profile in ["debug", "release"] {
                 let lib = workspace_dir
-                    .join("target")
+                    .join("../../../../../target")
                     .join(profile)
                     .join("deps")
                     .join(lib_name);

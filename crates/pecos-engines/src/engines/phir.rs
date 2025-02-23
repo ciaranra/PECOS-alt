@@ -85,7 +85,7 @@ impl PHIREngine {
     ///
     /// # Examples
     /// ```rust
-    /// use pecos_engines::engines::phir_engine::PHIREngine;
+    /// use pecos_engines::engines::phir::PHIREngine;
     ///
     /// let engine = PHIREngine::new("path_to_program.json");
     /// match engine {
