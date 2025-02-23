@@ -15,12 +15,21 @@ pub trait Engine: Send + Sync {
     type Output;
 
     /// Process a single input
+    ///
+    /// # Errors
+    /// This function returns a `QueueError` if:
+    /// - There is an error during processing.
+    /// - The input cannot be processed due to a serialization or execution issue.
     fn process(&mut self, input: Self::Input) -> Result<Self::Output, QueueError>;
 
     /// Reset engine state for reuse
     ///
     /// This allows engines to be reused for multiple simulation runs
     /// by resetting any internal state to initial conditions.
+    ///
+    /// # Errors
+    /// This function returns a `QueueError` if:
+    /// - There is an error during resetting the engine state.
     fn reset(&mut self) -> Result<(), QueueError>;
 }
 
@@ -51,6 +60,12 @@ pub trait ControlEngine: Send + Sync {
     /// # Returns
     /// * `NeedsProcessing(input)` if more processing needed
     /// * `Complete(output)` if processing finished
+    ///
+    /// # Errors
+    /// This function returns a `QueueError` if:
+    /// - There is an error during the start of processing.
+    /// - The input cannot be serialized or deserialized.
+    /// - An operation fails during initialization.
     fn start(
         &mut self,
         input: Self::Input,
@@ -64,6 +79,12 @@ pub trait ControlEngine: Send + Sync {
     /// # Returns
     /// * `NeedsProcessing(input)` if more processing needed
     /// * `Complete(output)` if processing finished
+    ///
+    /// # Errors
+    /// This function returns a `QueueError` if:
+    /// - The result cannot be deserialized or processed.
+    /// - There is an error during the continuation of processing.
+    /// - Any operation fails while handling the result.
     fn continue_processing(
         &mut self,
         result: Self::EngineOutput,
@@ -73,6 +94,10 @@ pub trait ControlEngine: Send + Sync {
     ///
     /// This allows engines to be reused for multiple simulation runs
     /// by resetting any internal state to initial conditions.
+    ///
+    /// # Errors
+    /// This function returns a `QueueError` if:
+    /// - There is an error during resetting the engine state.
     fn reset(&mut self) -> Result<(), QueueError>;
 }
 
@@ -114,6 +139,23 @@ where
         Self { controller, engine }
     }
 
+    /// Process an input through the engine system.
+    ///
+    /// This method orchestrates processing by initiating the control engine,
+    /// performing processing work through the controlled engine, and
+    /// iteratively handling the results until the computation is complete.
+    ///
+    /// # Parameters
+    /// - `input`: The initial input to process.
+    ///
+    /// # Returns
+    /// - `Ok(output)`: The final output after successful processing.
+    ///
+    /// # Errors
+    /// This method returns a `QueueError` if:
+    /// - An error occurs during the start phase in the `controller`.
+    /// - An error occurs during processing in the controlled `engine`.
+    /// - An error occurs during the continuation phase in the `controller`.
     pub fn process(&mut self, input: Input) -> Result<Output, QueueError> {
         let mut stage = self.controller.start(input)?;
 
@@ -128,6 +170,15 @@ where
         }
     }
 
+    /// Reset the state of both the controller and the engine for reuse.
+    ///
+    /// This method resets the `controller` and `engine` to their initial states,
+    /// allowing the system to be reused for new processing tasks or simulations.
+    ///
+    /// # Errors
+    /// This function returns a `QueueError` if:
+    /// - There is an error during the reset of the controller.
+    /// - There is an error during the reset of the engine.
     pub fn reset(&mut self) -> Result<(), QueueError> {
         self.controller.reset()?;
         self.engine.reset()
