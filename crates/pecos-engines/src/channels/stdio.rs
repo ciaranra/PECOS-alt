@@ -1,6 +1,6 @@
 use super::{CommandChannel, Message, MessageChannel};
 use crate::errors::QueueError;
-use log::trace;
+use log::{debug, trace};
 use pecos_core::types::{CommandBatch, QuantumCommand};
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::sync::{Arc, Mutex};
@@ -152,12 +152,14 @@ impl MessageChannel for StdioChannel {
         let mut line = String::new();
         reader.read_line(&mut line)?;
 
+        debug!("Received raw measurement line: '{}'", line.trim());
+
         let measurement = line
             .trim()
             .parse()
             .map_err(|e| QueueError::OperationError(format!("Invalid measurement: {e}")))?;
 
-        trace!("Received measurement: {}", measurement);
+        debug!("Parsed measurement: {}", measurement);
         Ok(measurement)
     }
 }

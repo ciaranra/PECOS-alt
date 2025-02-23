@@ -21,6 +21,7 @@ pub use pecos_engines::{
     engines::{
         ClassicalEngine, HybridEngine,
         classical::{ProgramType, detect_program_type, get_program_path, setup_engine},
+        monte_carlo::MonteCarloEngine,
         phir::PHIREngine,
         qir::engine::QirClassicalEngine,
         quantum::{

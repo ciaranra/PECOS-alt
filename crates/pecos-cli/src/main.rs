@@ -57,40 +57,23 @@ fn parse_noise_probability(arg: &str) -> Result<f64, String> {
     Ok(prob)
 }
 
-// TODO: consider moving to hybrid.rs
 fn run_program(args: &RunArgs) -> Result<(), Box<dyn Error>> {
     let program_path = get_program_path(&args.program)?;
-    let classical_engine = setup_engine(&program_path)?;
 
-    // For QIR, ensure it's compiled first
-    if let ProgramType::QIR = detect_program_type(&program_path)? {
-        classical_engine.compile()?;
-    }
-
-    // Create state vector simulator with appropriate number of qubits
-    let simulator = StateVec::new(2); // TODO: Get number of qubits from program analysis
-
-    // Create the quantum engine using the factory function
-    let quantum_engine = new_quantum_engine_arbitrary_qgate(simulator); // Use engine for StateVec
-
-    let cmd_channel = StdioChannel::from_stdio()?;
-
-    // Setup hybrid engine with simulator-equipped quantum engine
-    let engine = HybridEngine::new(
-        classical_engine,
-        quantum_engine,
-        cmd_channel.clone(),
-        cmd_channel,
-    );
+    // Create Monte Carlo engine
+    let mut mc_engine = MonteCarloEngine::new(program_path, args.workers);
 
     // Set up noise model if requested
     if let Some(prob) = args.noise_probability {
         let noise_model = DepolarizingNoise::new(prob);
-        engine.set_noise_model(Some(Box::new(noise_model)));
+        mc_engine.set_noise_model(Some(Box::new(noise_model)));
     }
 
-    // Run simulation - results are printed inside run_parallel
-    engine.run_parallel(args.shots, args.workers)?;
+    // Run simulation
+    let results = mc_engine.run_program(args.shots)?;
+
+    // Print results
+    results.print();
 
     Ok(())
 }

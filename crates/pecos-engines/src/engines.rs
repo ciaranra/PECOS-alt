@@ -1,5 +1,6 @@
 pub mod classical;
 pub mod hybrid;
+pub mod monte_carlo;
 pub mod phir;
 pub mod qir;
 pub mod quantum;
@@ -7,6 +8,7 @@ pub mod quantum;
 use crate::errors::QueueError;
 pub use classical::ClassicalEngine;
 pub use hybrid::HybridEngine;
+pub use monte_carlo::MonteCarloEngine;
 pub use quantum::QuantumEngine;
 
 /// Core engine trait for processing inputs to outputs

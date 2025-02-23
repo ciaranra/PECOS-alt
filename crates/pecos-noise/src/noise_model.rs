@@ -4,4 +4,5 @@ use pecos_core::types::CommandBatch;
 pub trait NoiseModel: Send + Sync {
     /// Apply noise to a batch of quantum commands
     fn apply_noise(&self, commands: CommandBatch) -> CommandBatch;
+    fn clone_box(&self) -> Box<dyn NoiseModel>;
 }

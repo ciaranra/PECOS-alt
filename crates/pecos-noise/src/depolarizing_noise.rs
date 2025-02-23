@@ -121,4 +121,13 @@ impl NoiseModel for DepolarizingNoise {
 
         noisy_commands
     }
+
+    fn clone_box(&self) -> Box<dyn NoiseModel> {
+        Box::new(DepolarizingNoise {
+            probability: self.probability,
+            rng: Arc::new(Mutex::new(
+                StdRng::try_from_os_rng().expect("Failed to create RNG from OS entropy"),
+            )),
+        })
+    }
 }
