@@ -1,13 +1,14 @@
-use super::ClassicalEngine;
+use super::{ClassicalEngine, ControlEngine, EngineStage};
 use crate::channels::Message;
 use crate::errors::QueueError;
 use log::debug;
-use pecos_core::types::{CommandBatch, GateType, QuantumCommand, ShotResult};
+use pecos_core::types::CommandBatch;
+use pecos_core::types::{GateType, QuantumCommand, ShotResult};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 struct PHIRProgram {
     format: String,
     version: String,
@@ -15,7 +16,7 @@ struct PHIRProgram {
     ops: Vec<Operation>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(untagged)]
 enum Operation {
     VariableDefinition {
@@ -37,33 +38,13 @@ enum Operation {
     },
 }
 
-// Internal enum for processing operations without borrowing issues
-enum ProcessAction {
-    VarDef {
-        data: String,
-        data_type: String,
-        variable: String,
-        size: usize,
-    },
-    Quantum {
-        qop: String,
-        angles: Option<(Vec<f64>, String)>,
-        args: Vec<(String, usize)>,
-    },
-    Classical {
-        cop: String,
-        args: Vec<(String, usize)>,
-        returns: Vec<(String, usize)>,
-    },
-}
-
+#[derive(Debug)]
 pub struct PHIREngine {
     program: Option<PHIRProgram>,
     current_op: usize,
-    measurement_results: HashMap<String, Vec<u32>>,
-    pending_commands: Vec<QuantumCommand>,
+    measurement_results: HashMap<String, u32>,
     quantum_variables: HashMap<String, usize>,
-    classical_variables: HashMap<String, (String, usize)>, // (type, size)
+    classical_variables: HashMap<String, (String, usize)>,
 }
 
 impl PHIREngine {
@@ -74,7 +55,7 @@ impl PHIREngine {
     ///
     /// # Returns
     /// - `Ok(Self)`: If the PHIR program file is successfully loaded and validated.
-    /// - `Err(Box<dyn std::error::Error>)`: If any errors occur during file reading,
+    /// - `Err(Box<dyn impl PHIREngine {std::error::Error>)`: If any errors occur during file reading,
     ///   parsing, or if the format/version is not compatible.
     ///
     /// # Errors
@@ -97,7 +78,6 @@ impl PHIREngine {
         let content = std::fs::read_to_string(path)?;
         let program: PHIRProgram = serde_json::from_str(&content)?;
 
-        // Validate format and version compatibility
         if program.format != "PHIR/JSON" {
             return Err("Invalid format: expected PHIR/JSON".into());
         }
@@ -112,10 +92,22 @@ impl PHIREngine {
             program: Some(program),
             current_op: 0,
             measurement_results: HashMap::new(),
-            pending_commands: Vec::new(),
             quantum_variables: HashMap::new(),
             classical_variables: HashMap::new(),
         })
+    }
+
+    fn reset_internal_state(&mut self) {
+        debug!(
+            "INTERNAL RESET: PHIREngine reset before current_op={}",
+            self.current_op
+        );
+        self.current_op = 0;
+        debug!(
+            "INTERNAL RESET: PHIREngine reset after current_op={}",
+            self.current_op
+        );
+        self.measurement_results.clear();
     }
 
     // Create an empty engine without any program
@@ -124,7 +116,6 @@ impl PHIREngine {
             program: None,
             current_op: 0,
             measurement_results: HashMap::new(),
-            pending_commands: Vec::new(),
             quantum_variables: HashMap::new(),
             classical_variables: HashMap::new(),
         }
@@ -192,14 +183,14 @@ impl PHIREngine {
         qop: &str,
         angles: Option<&(Vec<f64>, String)>,
         args: &[(String, usize)],
-    ) -> Result<bool, QueueError> {
-        // Validate all qubit indices first
+    ) -> Result<QuantumCommand, QueueError> {
+        // First validate all variables
         for (var, idx) in args {
             self.validate_variable_access(var, *idx)?;
         }
 
-        // Create the command based on operation type
-        let cmd = match qop {
+        // Now create command based on gathered data
+        Ok(match qop {
             "RZ" => {
                 let theta = angles
                     .as_ref()
@@ -239,24 +230,19 @@ impl PHIREngine {
                     qubits: vec![args[0].1, args[1].1],
                 }
             }
-            "Measure" => QuantumCommand {
-                gate: GateType::Measure {
-                    result_id: self.measurement_results.len(),
-                },
-                qubits: vec![args[0].1],
-            },
+            "Measure" => {
+                let result_id = args[0].1;
+                QuantumCommand {
+                    gate: GateType::Measure { result_id },
+                    qubits: vec![args[0].1],
+                }
+            }
             _ => {
                 return Err(QueueError::OperationError(format!(
                     "Unknown quantum operation: {qop}"
                 )));
             }
-        };
-
-        // Add command to pending batch
-        self.pending_commands.push(cmd);
-
-        // Return true (indicating we should return commands) when we hit a Result operation
-        Ok(false)
+        })
     }
 
     #[allow(clippy::similar_names)]
@@ -314,144 +300,172 @@ impl Default for PHIREngine {
     }
 }
 
+impl ControlEngine for PHIREngine {
+    type Input = ();
+    type Output = ShotResult;
+    type EngineInput = CommandBatch;
+    type EngineOutput = Vec<Message>;
+
+    fn reset(&mut self) -> Result<(), QueueError> {
+        debug!("PHIREngine::reset() implementation for ControlEngine being called!");
+        self.reset_internal_state();
+        Ok(())
+    }
+
+    fn start(&mut self, _input: ()) -> Result<EngineStage<CommandBatch, ShotResult>, QueueError> {
+        debug!(
+            "PHIREngine start() called with current_op={}",
+            self.current_op
+        );
+        self.current_op = 0; // Force reset here too
+        self.measurement_results.clear();
+
+        let commands = self.process_program()?;
+        if commands.is_empty() {
+            Ok(EngineStage::Complete(self.get_results()?))
+        } else {
+            Ok(EngineStage::NeedsProcessing(commands))
+        }
+    }
+
+    fn continue_processing(
+        &mut self,
+        measurements: Vec<Message>,
+    ) -> Result<EngineStage<CommandBatch, ShotResult>, QueueError> {
+        // Handle received measurements
+        for measurement in measurements {
+            self.handle_measurement(measurement)?;
+        }
+
+        // Get next batch of commands if any
+        let commands = self.process_program()?;
+        if commands.is_empty() {
+            Ok(EngineStage::Complete(self.get_results()?))
+        } else {
+            Ok(EngineStage::NeedsProcessing(commands))
+        }
+    }
+}
+
 impl ClassicalEngine for PHIREngine {
+    fn reset(&mut self) -> Result<(), QueueError> {
+        debug!("PHIREngine::reset() implementation for ClassicalEngine being called!");
+        self.current_op = 0;
+        debug!("Reset current_op to {}", self.current_op);
+        self.measurement_results.clear();
+        Ok(())
+    }
+
     fn process_program(&mut self) -> Result<CommandBatch, QueueError> {
-        let mut measurement_count = 0;
+        debug!(
+            "Processing PHIR program - thread {:?}, current_op: {}",
+            std::thread::current().id(),
+            self.current_op
+        );
 
-        loop {
-            // First, check if we've reached the end of the program
-            let current_op = match &self.program {
-                Some(program) if self.current_op < program.ops.len() => {
-                    // Clone or copy the necessary data from the current operation
-                    match &program.ops[self.current_op] {
-                        Operation::VariableDefinition {
-                            data,
-                            data_type,
-                            variable,
-                            size,
-                        } => ProcessAction::VarDef {
-                            data: data.clone(),
-                            data_type: data_type.clone(),
-                            variable: variable.clone(),
-                            size: *size,
-                        },
-                        Operation::QuantumOp { qop, angles, args } => {
-                            if qop == "Measure" {
-                                let command = QuantumCommand {
-                                    gate: GateType::Measure {
-                                        result_id: measurement_count,
-                                    },
-                                    qubits: vec![args[0].1],
-                                };
-                                self.pending_commands.push(command);
-                                measurement_count += 1;
-                                ProcessAction::Quantum {
-                                    qop: qop.clone(),
-                                    angles: angles.clone(),
-                                    args: args.clone(),
-                                }
-                            } else {
-                                ProcessAction::Quantum {
-                                    qop: qop.clone(),
-                                    angles: angles.clone(),
-                                    args: args.clone(),
-                                }
-                            }
-                        }
-                        Operation::ClassicalOp { cop, args, returns } => ProcessAction::Classical {
-                            cop: cop.clone(),
-                            args: args.clone(),
-                            returns: returns.clone(),
-                        },
-                    }
-                }
-                _ => {
-                    // End of program, return any remaining commands
-                    return Ok(std::mem::take(&mut self.pending_commands));
-                }
-            };
+        // Get program reference and clone ops to avoid borrow issues
+        let prog = self
+            .program
+            .as_ref()
+            .ok_or_else(|| QueueError::OperationError("No program loaded".into()))?;
+        let ops = prog.ops.clone();
 
-            // Process the operation
-            let should_return = match current_op {
-                ProcessAction::VarDef {
+        // If we've processed all ops, return empty batch to signal completion
+        if self.current_op >= ops.len() {
+            debug!("End of program reached");
+            return Ok(CommandBatch::new());
+        }
+
+        let mut batch = CommandBatch::new();
+
+        while self.current_op < ops.len() {
+            match &ops[self.current_op] {
+                Operation::VariableDefinition {
                     data,
                     data_type,
                     variable,
                     size,
                 } => {
-                    self.handle_variable_definition(&data, &data_type, &variable, size);
-                    Ok(false)
+                    debug!(
+                        "Processing variable definition: {} {} {}",
+                        data, data_type, variable
+                    );
+                    self.handle_variable_definition(data, data_type, variable, *size);
                 }
-                ProcessAction::Quantum { qop, angles, args } => {
-                    if qop == "Measure" {
-                        Ok(false) // Already handled in the match above
-                    } else {
-                        self.handle_quantum_op(&qop, angles.as_ref(), &args)
+                Operation::QuantumOp { qop, angles, args } => {
+                    debug!("Processing quantum operation: {}", qop);
+                    let cmd = self.handle_quantum_op(qop, angles.as_ref(), args)?;
+                    debug!("Generated quantum command: {:?}", cmd);
+                    batch.add_command(cmd);
+                }
+                Operation::ClassicalOp { cop, args, returns } => {
+                    debug!("Processing classical operation: {}", cop);
+                    if self.handle_classical_op(cop, args, returns)? {
+                        debug!("Finishing batch due to classical operation completion");
+                        self.current_op += 1;
+                        return Ok(batch);
                     }
                 }
-                ProcessAction::Classical { cop, args, returns } => {
-                    self.handle_classical_op(&cop, &args, &returns)
-                }
-            }?;
-
-            // Increment the operation counter
-            self.current_op += 1;
-
-            // If we should return and we have pending commands, return them
-            if should_return && !self.pending_commands.is_empty() {
-                return Ok(std::mem::take(&mut self.pending_commands));
             }
+            self.current_op += 1;
         }
+
+        debug!("PHIR engine generated {} commands for shot", batch.len());
+        Ok(batch)
     }
 
     fn handle_measurement(&mut self, measurement: Message) -> Result<(), QueueError> {
-        let result_id = self.measurement_results.len();
+        let result_id = (measurement >> 16) as usize;
+        let outcome = measurement & 0xFFFF;
+
+        debug!(
+            "PHIR: Received measurement {} (encoded as {}), result_id={}",
+            outcome, measurement, result_id
+        );
+
         self.measurement_results
-            .insert(format!("measurement_{result_id}"), vec![measurement]);
+            .insert(format!("measurement_{result_id}"), outcome);
+
+        debug!(
+            "PHIR: Stored measurement {} at result_id {}",
+            outcome, result_id
+        );
+
         Ok(())
     }
 
     fn get_results(&self) -> Result<ShotResult, QueueError> {
         let mut results = ShotResult::default();
 
-        // Check if we have any measurements
-        if self.measurement_results.is_empty() {
-            log::debug!("No measurements recorded yet");
-            return Ok(results);
-        }
+        debug!(
+            "PHIR: Getting results from {} measurements",
+            self.measurement_results.len()
+        );
 
         // Sort keys to ensure consistent ordering
         let mut keys: Vec<_> = self.measurement_results.keys().collect();
         keys.sort();
 
-        // Collect all individual measurements and combine them
-        let mut combined_values = Vec::new();
-
-        for key in keys {
-            if let Some(measurements) = self.measurement_results.get(key) {
-                if let Some(&value) = measurements.first() {
-                    results.measurements.insert(key.clone(), value);
-                    combined_values.push(value);
-                }
+        // Build measurement string in order
+        let mut measurement_values = Vec::new();
+        for key in &keys {
+            if let Some(&value) = self.measurement_results.get(*key) {
+                results.measurements.insert((*key).to_string(), value);
+                measurement_values.push(value.to_string());
+                debug!("PHIR: Adding measurement {} from {}", value, key);
             }
         }
 
-        // Store the combined result as a string (special case for our format)
-        if !combined_values.is_empty() {
-            let result_string = combined_values
-                .iter()
-                .map(|&m| m.to_string())
-                .collect::<String>();
+        // Join all measurements
+        let result_string = measurement_values.join("");
+        debug!("PHIR: Combined measurement result: {}", result_string);
 
-            // Store the combined result under the "result" key
-            results
-                .measurements
-                .insert("result".to_string(), combined_values[0]);
-
-            // For multi-qubit results, make the first digit represent the entire measurement
-            if combined_values.len() > 1 {
-                log::debug!("Combined measurement result: {}", result_string);
-            }
+        // Store result string
+        if !result_string.is_empty() {
+            results.measurements.insert(
+                "result".to_string(),
+                u32::from_str_radix(&result_string, 10).unwrap_or(0),
+            );
         }
 
         Ok(results)

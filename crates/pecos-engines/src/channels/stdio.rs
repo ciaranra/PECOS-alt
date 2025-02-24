@@ -1,7 +1,8 @@
 use super::{CommandChannel, Message, MessageChannel};
+use crate::channels::CommandBatch;
 use crate::errors::QueueError;
-use log::{debug, trace};
-use pecos_core::types::{CommandBatch, QuantumCommand};
+use log::debug;
+use pecos_core::types::QuantumCommand;
 use std::any::Any;
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::sync::{Arc, Mutex};
@@ -92,69 +93,74 @@ impl StdioChannel {
 }
 
 impl CommandChannel for StdioChannel {
-    /// Sends a batch of commands through the channel.
-    ///
-    /// This function writes the commands to the writer, formatting them into a
-    /// specific protocol. The procedure includes:
-    /// - Writing "`FLUSH_BEGIN`" before the commands.
-    /// - Writing each command in the form "CMD <`formatted_command`>".
-    /// - Writing "`FLUSH_END`" after all commands.
-    ///
-    /// The function ensures that the data is flushed to the writer before returning.
-    ///
-    /// # Parameters
-    /// - `cmds`: A batch of quantum commands to be sent.
-    ///
-    /// # Errors
-    /// This function returns a `QueueError` if:
-    /// - The writer cannot be locked.
-    /// - There is an I/O error while writing the commands or flushing the writer.
-    fn send_command(&mut self, cmd: &QuantumCommand) -> Result<(), QueueError> {
+    fn send_batch(&mut self, batch: &CommandBatch) -> Result<(), QueueError> {
         let mut writer = self
             .writer
             .lock()
             .map_err(|e| QueueError::LockError(format!("Failed to lock writer: {e}")))?;
 
-        let cmd_str = format_command(cmd);
-        debug!("Sending command: {}", cmd_str);
-        writeln!(*writer, "CMD {cmd_str}")?;
+        debug!(
+            "Command channel beginning batch of {} commands",
+            batch.len()
+        );
+        writeln!(*writer, "FLUSH_BEGIN")?;
+
+        for cmd in batch.commands() {
+            let cmd_str = format_command(cmd);
+            debug!("Command channel writing: 'CMD {}'", cmd_str);
+            writeln!(*writer, "CMD {cmd_str}")?;
+        }
+
+        writeln!(*writer, "FLUSH_END")?;
         writer.flush()?;
         Ok(())
     }
 
-    fn receive_command(&mut self) -> Result<Option<QuantumCommand>, QueueError> {
+    fn receive_batch(&mut self) -> Result<Option<CommandBatch>, QueueError> {
         let mut reader = self
             .reader
             .lock()
             .map_err(|e| QueueError::LockError(format!("Failed to lock reader: {e}")))?;
 
+        let mut batch = CommandBatch::new();
         let mut line = String::new();
+
+        // Wait for batch start
+        while let Ok(len) = reader.read_line(&mut line) {
+            if len == 0 || line.trim() == "FLUSH_BEGIN" {
+                break;
+            }
+            line.clear();
+        }
+
+        // Read commands until batch end
         loop {
             line.clear();
-            let bytes_read = reader.read_line(&mut line)?;
-            if bytes_read == 0 {
-                debug!("End of commands (EOF)");
-                return Ok(None);
+            let len = reader.read_line(&mut line)?;
+            if len == 0 {
+                debug!("Command channel EOF");
+                return if batch.is_empty() {
+                    Ok(None)
+                } else {
+                    Ok(Some(batch))
+                };
             }
 
             let trimmed = line.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-
-            debug!("Received raw line: '{}'", trimmed);
-
-            if trimmed == "END_COMMANDS" {
-                debug!("End of commands (marker)");
-                return Ok(None);
-            }
-
-            if let Some(cmd_str) = trimmed.strip_prefix("CMD ") {
-                debug!("Parsing command: {}", cmd_str);
-                if let Ok(cmd) = QuantumCommand::parse_from_str(cmd_str) {
-                    debug!("Successfully parsed command: {:?}", cmd);
-                    return Ok(Some(cmd));
+            match trimmed {
+                "FLUSH_END" => {
+                    debug!(
+                        "Command channel batch complete with {} commands",
+                        batch.len()
+                    );
+                    return Ok(Some(batch));
                 }
+                cmd_str if cmd_str.starts_with("CMD ") => {
+                    if let Ok(cmd) = QuantumCommand::parse_from_str(&cmd_str[4..]) {
+                        batch.add_command(cmd);
+                    }
+                }
+                _ => debug!("Command channel skipping line: {}", trimmed),
             }
         }
     }
@@ -166,14 +172,15 @@ impl CommandChannel for StdioChannel {
     /// - There is an error locking the writer.
     /// - The flush operation fails for any reason.
     fn flush(&mut self) -> Result<(), QueueError> {
+        debug!("Command channel flushing");
         let mut writer = self
             .writer
             .lock()
             .map_err(|e| QueueError::LockError(format!("Failed to lock writer: {e}")))?;
 
-        debug!("Sending end of commands marker");
         writeln!(*writer, "END_COMMANDS")?;
         writer.flush()?;
+        debug!("Command channel flushed");
         Ok(())
     }
 
@@ -184,12 +191,18 @@ impl CommandChannel for StdioChannel {
 
 impl MessageChannel for StdioChannel {
     fn send_measurement(&mut self, measurement: Message) -> Result<(), QueueError> {
+        let result_id = measurement >> 16;
+        let outcome = measurement & 0xFFFF;
+
         let mut writer = self
             .writer
             .lock()
             .map_err(|e| QueueError::LockError(format!("Failed to lock writer: {e}")))?;
 
-        debug!("Sending measurement: {}", measurement);
+        debug!(
+            "Measurement channel writing measurement: encoded={}, result_id={}, outcome={}",
+            measurement, result_id, outcome
+        );
         writeln!(*writer, "MEAS {measurement}")?;
         writer.flush()?;
         Ok(())
@@ -206,18 +219,18 @@ impl MessageChannel for StdioChannel {
     /// - The operation fails to read a line from the reader.
     /// - The parsed measurement is invalid (not a valid `u32`).
     fn receive_message(&mut self) -> Result<Option<Message>, QueueError> {
+        debug!("Measurement channel reading");
         let mut reader = self
             .reader
             .lock()
             .map_err(|e| QueueError::LockError(format!("Failed to lock reader: {e}")))?;
 
         let mut line = String::new();
-
         loop {
             line.clear();
             let bytes_read = reader.read_line(&mut line)?;
             if bytes_read == 0 {
-                debug!("End of measurements (EOF)");
+                debug!("Measurement channel EOF");
                 return Ok(None);
             }
 
@@ -226,31 +239,40 @@ impl MessageChannel for StdioChannel {
                 continue;
             }
 
-            debug!("Received raw line: '{}'", trimmed);
-
-            if trimmed == "END_MEASUREMENTS" {
-                debug!("End of measurements (marker)");
-                return Ok(None);
-            }
-
             if let Some(meas_str) = trimmed.strip_prefix("MEAS ") {
-                if let Ok(measurement) = meas_str.parse() {
-                    debug!("Parsed measurement: {}", measurement);
-                    return Ok(Some(measurement));
+                debug!("Measurement channel parsing: '{}'", meas_str);
+                match meas_str.parse::<Message>() {
+                    Ok(measurement) => {
+                        let result_id = measurement >> 16;
+                        let outcome = measurement & 0xFFFF;
+                        debug!(
+                            "Measurement channel parsed: encoded={}, result_id={}, outcome={}",
+                            measurement, result_id, outcome
+                        );
+                        return Ok(Some(measurement));
+                    }
+                    Err(e) => {
+                        debug!("Measurement channel parse error: {} for '{}'", e, meas_str);
+                        return Err(QueueError::OperationError(format!(
+                            "Failed to parse measurement '{meas_str}': {e}"
+                        )));
+                    }
                 }
             }
+            debug!("Measurement channel skipping non-measurement line");
         }
     }
 
     fn flush(&mut self) -> Result<(), QueueError> {
+        debug!("Measurement channel flushing");
         let mut writer = self
             .writer
             .lock()
             .map_err(|e| QueueError::LockError(format!("Failed to lock writer: {e}")))?;
 
-        debug!("Sending end of measurements marker");
         writeln!(*writer, "END_MEASUREMENTS")?;
         writer.flush()?;
+        debug!("Measurement channel flushed");
         Ok(())
     }
 
@@ -259,6 +281,7 @@ impl MessageChannel for StdioChannel {
     }
 }
 
+#[must_use]
 pub fn format_command(cmd: &QuantumCommand) -> String {
     use pecos_core::types::GateType::{CX, H, Measure, R1XY, RZ, SZZ};
 

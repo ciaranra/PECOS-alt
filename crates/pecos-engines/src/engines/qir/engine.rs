@@ -1,5 +1,5 @@
 use crate::channels::Message;
-use crate::engines::ClassicalEngine;
+use crate::engines::{ClassicalEngine, ControlEngine, EngineStage};
 use crate::errors::QueueError;
 use log::{debug, info};
 use pecos_core::types::{CommandBatch, QuantumCommand, ShotResult};
@@ -36,6 +36,17 @@ impl QirClassicalEngine {
             current_results: ShotResult::default(),
             child_process: None,
         }
+    }
+
+    fn reset_internal_state(&mut self) -> Result<(), QueueError> {
+        // Clean up any existing process
+        if let Some(mut child) = self.child_process.take() {
+            debug!("Cleaning up process in reset");
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        self.current_results = ShotResult::default();
+        Ok(())
     }
 
     fn find_and_copy_library(&self) -> Result<PathBuf, Box<dyn std::error::Error>> {
@@ -266,7 +277,7 @@ impl ClassicalEngine for QirClassicalEngine {
         // Store process handles for later measurement handling
         self.child_process = Some(child);
 
-        Ok(commands)
+        Ok(commands.into())
     }
 
     fn handle_measurement(&mut self, measurement: Message) -> Result<(), QueueError> {
@@ -317,5 +328,45 @@ impl Drop for QirClassicalEngine {
             let _ = child.kill();
             let _ = child.wait(); // Wait for the process to finish
         }
+    }
+}
+
+impl ControlEngine for QirClassicalEngine {
+    type Input = ();
+    type Output = ShotResult;
+    type EngineInput = CommandBatch;
+    type EngineOutput = Vec<Message>;
+
+    fn start(&mut self, _input: ()) -> Result<EngineStage<CommandBatch, ShotResult>, QueueError> {
+        self.reset_internal_state()?;
+
+        let commands = self.process_program()?;
+        if commands.is_empty() {
+            Ok(EngineStage::Complete(self.get_results()?))
+        } else {
+            Ok(EngineStage::NeedsProcessing(commands))
+        }
+    }
+
+    fn continue_processing(
+        &mut self,
+        measurements: Vec<Message>,
+    ) -> Result<EngineStage<CommandBatch, ShotResult>, QueueError> {
+        // Handle measurements through child process
+        for measurement in measurements {
+            self.handle_measurement(measurement)?;
+        }
+
+        // Get next batch if any
+        let commands = self.process_program()?;
+        if commands.is_empty() {
+            Ok(EngineStage::Complete(self.get_results()?))
+        } else {
+            Ok(EngineStage::NeedsProcessing(commands))
+        }
+    }
+
+    fn reset(&mut self) -> Result<(), QueueError> {
+        self.reset_internal_state()
     }
 }

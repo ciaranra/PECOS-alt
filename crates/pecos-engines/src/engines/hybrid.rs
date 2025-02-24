@@ -1,26 +1,21 @@
 use log::debug;
-use pecos_core::types::{GateType, ShotResult};
+use pecos_core::types::ShotResult;
 use pecos_noise::NoiseModel;
 
-use super::{ClassicalEngine, QuantumEngine};
 use crate::channels::{CommandChannel, MessageChannel};
+use crate::engines::{ClassicalEngine, ControlEngine, EngineStage, QuantumEngine};
 use crate::errors::QueueError;
-use parking_lot::Mutex;
-use std::sync::Arc;
-use std::thread;
 
-/// HybridEngine coordinates between classical and quantum components via message passing
+/// `HybridEngine` coordinates between classical and quantum components via message passing
 pub struct HybridEngine<C, M>
 where
     C: CommandChannel + Send + Sync + 'static,
     M: MessageChannel + Send + Sync + 'static,
 {
     classical: Box<dyn ClassicalEngine>,
-    quantum: Arc<Mutex<Box<dyn QuantumEngine>>>,
-    cmd_writer: C,
-    cmd_reader: C,
-    meas_writer: M,
-    meas_reader: M,
+    quantum: Box<dyn QuantumEngine>,
+    cmd_channel: C,
+    meas_channel: M,
     noise_model: Option<Box<dyn NoiseModel>>,
 }
 
@@ -35,18 +30,11 @@ where
         cmd_channel: C,
         meas_channel: M,
     ) -> Self {
-        let cmd_writer = cmd_channel.clone();
-        let cmd_reader = cmd_channel;
-        let meas_writer = meas_channel.clone();
-        let meas_reader = meas_channel;
-
         Self {
             classical,
-            quantum: Arc::new(Mutex::new(quantum)),
-            cmd_writer,
-            cmd_reader,
-            meas_writer,
-            meas_reader,
+            quantum,
+            cmd_channel,
+            meas_channel,
             noise_model: None,
         }
     }
@@ -57,61 +45,41 @@ where
 
     /// Executes a single quantum circuit shot and returns the result.
     pub fn run_shot(&mut self) -> Result<ShotResult, QueueError> {
-        // Reset quantum engine at start of shot
-        debug!("Resetting quantum engine");
-        self.quantum.lock().reset()?;
-
-        // Get commands from classical engine
-        let commands = self.classical.process_program()?;
-        debug!("Classical engine generated {} commands", commands.len());
-
-        // Apply noise model if configured
-        let commands = if let Some(noise_model) = &self.noise_model {
-            debug!("Applying noise model to commands");
-            noise_model.clone_box().apply_noise(commands)
-        } else {
-            commands
-        };
-
-        // Send commands through channel
-        debug!("Sending {} commands to quantum thread", commands.len());
-        for cmd in &commands {
-            self.cmd_writer.send_command(cmd)?;
-        }
-        debug!("Signaling end of commands");
-        self.cmd_writer.flush()?;
-
-        // Process commands and collect measurements in quantum thread
-        let mut measurements = Vec::new();
-        {
-            debug!("Processing commands in quantum thread");
-            let mut quantum = self.quantum.lock();
-
-            while let Some(cmd) = self.cmd_reader.receive_command()? {
-                debug!("Processing quantum command: {:?}", cmd);
-                if let Some(measurement) = quantum.process(cmd)? {
-                    debug!("Generated measurement: {}", measurement);
-                    measurements.push(measurement);
-                }
-            }
-        }
-
-        // Send measurements back
-        debug!("Sending {} measurements", measurements.len());
-        for measurement in measurements {
-            self.meas_writer.send_measurement(measurement)?;
-            self.classical.handle_measurement(measurement)?;
-        }
-        debug!("Signaling end of measurements");
-        self.meas_writer.flush()?;
-
-        // Get final results
-        debug!("Getting final results");
-        let results = self.classical.get_results()?;
         debug!(
-            "Shot complete with {} measurements",
-            results.measurements.len()
+            "Starting new shot - thread {:?}",
+            std::thread::current().id()
         );
-        Ok(results)
+        self.quantum.reset()?;
+        self.classical.reset()?;
+
+        let mut stage = self.classical.start(())?;
+
+        while let EngineStage::NeedsProcessing(batch) = stage {
+            // Apply noise if configured
+            let batch = if let Some(noise_model) = &self.noise_model {
+                noise_model.apply_noise(batch)
+            } else {
+                batch
+            };
+
+            // Send batch through command channel
+            self.cmd_channel.send_batch(&batch)?;
+
+            // Process through quantum engine
+            let measurements = self.quantum.process(batch)?;
+
+            // Send measurements through measurement channel
+            for measurement in &measurements {
+                self.meas_channel.send_measurement(*measurement)?;
+            }
+
+            // Continue classical processing with measurements
+            stage = self.classical.continue_processing(measurements)?;
+        }
+
+        match stage {
+            EngineStage::Complete(results) => Ok(results),
+            EngineStage::NeedsProcessing(_) => unreachable!(),
+        }
     }
 }

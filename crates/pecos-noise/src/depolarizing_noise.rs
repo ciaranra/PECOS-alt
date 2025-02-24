@@ -119,7 +119,8 @@ impl NoiseModel for DepolarizingNoise {
             }
         }
 
-        noisy_commands
+        // Convert Vec back to CommandBatch
+        noisy_commands.into()
     }
 
     fn clone_box(&self) -> Box<dyn NoiseModel> {

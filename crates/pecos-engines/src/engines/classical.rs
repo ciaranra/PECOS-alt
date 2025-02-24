@@ -1,6 +1,7 @@
 use crate::channels::Message;
 use crate::engines::phir::PHIREngine;
 use crate::engines::qir::engine::QirClassicalEngine;
+use crate::engines::{ControlEngine, EngineStage};
 use crate::errors::QueueError;
 use log::debug;
 use pecos_core::types::{CommandBatch, ShotResult};
@@ -66,6 +67,11 @@ pub trait ClassicalEngine: Send + Sync {
     /// - `Box<dyn std::error::Error>`: If there is a compilation error due to syntax issues,
     ///   unsupported features, or internal errors in the engine's implementation.
     fn compile(&self) -> Result<(), Box<dyn std::error::Error>>;
+
+    fn reset(&mut self) -> Result<(), QueueError> {
+        debug!("DEFAULT ClassicalEngine::reset() being called!");
+        Ok(())
+    }
 }
 
 pub fn detect_program_type(path: &Path) -> Result<ProgramType, Box<dyn Error>> {
@@ -124,4 +130,45 @@ pub fn get_program_path(program: &str) -> Result<PathBuf, Box<dyn Error>> {
     }
 
     Ok(path.canonicalize()?)
+}
+
+impl ControlEngine for Box<dyn ClassicalEngine> {
+    type Input = (); // Or whatever triggers program processing
+    type Output = ShotResult;
+    type EngineInput = CommandBatch;
+    type EngineOutput = Vec<Message>;
+
+    fn start(&mut self, _input: ()) -> Result<EngineStage<CommandBatch, ShotResult>, QueueError> {
+        // Build up first batch of commands until measurement needed
+        let commands = self.process_program()?;
+        if commands.is_empty() {
+            Ok(EngineStage::Complete(self.get_results()?))
+        } else {
+            Ok(EngineStage::NeedsProcessing(commands))
+        }
+    }
+
+    fn continue_processing(
+        &mut self,
+        measurements: Vec<Message>,
+    ) -> Result<EngineStage<CommandBatch, ShotResult>, QueueError> {
+        // Handle measurements
+        for measurement in measurements {
+            self.handle_measurement(measurement)?;
+        }
+
+        // Get next batch of commands if any
+        let commands = self.process_program()?;
+        if commands.is_empty() {
+            Ok(EngineStage::Complete(self.get_results()?))
+        } else {
+            Ok(EngineStage::NeedsProcessing(commands))
+        }
+    }
+
+    fn reset(&mut self) -> Result<(), QueueError> {
+        debug!("Box<dyn ClassicalEngine> reset() delegating to inner ClassicalEngine");
+        // Delegate to the actual ClassicalEngine's reset
+        self.as_mut().reset()
+    }
 }

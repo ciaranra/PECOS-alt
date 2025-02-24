@@ -161,9 +161,6 @@ pub struct ShotResult {
     pub measurements: HashMap<String, u32>,
 }
 
-// For communication
-pub type CommandBatch = Vec<QuantumCommand>;
-
 #[derive(Debug, Clone)]
 pub struct ShotResults {
     pub shots: Vec<HashMap<String, String>>,
@@ -241,5 +238,113 @@ impl fmt::Display for ShotResults {
         }
 
         write!(f, "]")
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CommandBatch {
+    commands: Vec<QuantumCommand>,
+    measurement_count: usize,
+}
+
+impl Default for CommandBatch {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CommandBatch {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            commands: Vec::new(),
+            measurement_count: 0,
+        }
+    }
+
+    pub fn add_command(&mut self, cmd: QuantumCommand) {
+        if let GateType::Measure { .. } = cmd.gate {
+            self.measurement_count += 1;
+        }
+        self.commands.push(cmd);
+    }
+
+    #[must_use]
+    pub fn commands(&self) -> &[QuantumCommand] {
+        &self.commands
+    }
+
+    pub fn commands_mut(&mut self) -> &mut Vec<QuantumCommand> {
+        &mut self.commands
+    }
+
+    pub fn take_commands(&mut self) -> Vec<QuantumCommand> {
+        std::mem::take(&mut self.commands)
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.commands.is_empty()
+    }
+
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.commands.len()
+    }
+
+    pub fn clear(&mut self) {
+        self.commands.clear();
+        self.measurement_count = 0;
+    }
+
+    #[must_use]
+    pub fn expected_measurements(&self) -> usize {
+        self.measurement_count
+    }
+}
+
+impl From<Vec<QuantumCommand>> for CommandBatch {
+    fn from(commands: Vec<QuantumCommand>) -> Self {
+        let measurement_count = commands
+            .iter()
+            .filter(|cmd| matches!(cmd.gate, GateType::Measure { .. }))
+            .count();
+        Self {
+            commands,
+            measurement_count,
+        }
+    }
+}
+
+impl From<CommandBatch> for Vec<QuantumCommand> {
+    fn from(batch: CommandBatch) -> Self {
+        batch.commands
+    }
+}
+
+impl IntoIterator for CommandBatch {
+    type Item = QuantumCommand;
+    type IntoIter = std::vec::IntoIter<QuantumCommand>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.commands.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a CommandBatch {
+    type Item = &'a QuantumCommand;
+    type IntoIter = std::slice::Iter<'a, QuantumCommand>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.commands.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a mut CommandBatch {
+    type Item = &'a mut QuantumCommand;
+    type IntoIter = std::slice::IterMut<'a, QuantumCommand>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.commands.iter_mut()
     }
 }

@@ -1,36 +1,17 @@
 use crate::errors::QueueError;
-use pecos_core::types::QuantumCommand;
+use pecos_core::types::CommandBatch;
 use std::any::Any;
 
 pub trait CommandChannel: Send + Sync {
-    /// Sends a single quantum command through the channel.
-    ///
-    /// # Parameters
-    /// - `cmd`: The quantum command to send.
-    ///
-    /// # Errors
-    /// This function returns a `QueueError` if:
-    /// - There is an error locking the queue.
-    /// - The operation fails for any reason.
-    fn send_command(&mut self, cmd: &QuantumCommand) -> Result<(), QueueError>;
+    /// Sends a batch of quantum commands through the channel
+    fn send_batch(&mut self, batch: &CommandBatch) -> Result<(), QueueError>;
 
-    /// Receives a single command from the channel.
-    ///
-    /// # Returns
-    /// - `Ok(Some(QuantumCommand))`: The command received.
-    /// - `Ok(None)`: End of commands.
-    /// - `Err(QueueError)`: If there is an error receiving a command.
-    fn receive_command(&mut self) -> Result<Option<QuantumCommand>, QueueError>;
+    /// Receives a batch of commands from the channel
+    fn receive_batch(&mut self) -> Result<Option<CommandBatch>, QueueError>;
 
-    /// Flushes any remaining data in the channel and signals end of commands.
-    ///
-    /// # Errors
-    /// This function returns a `QueueError` if:
-    /// - There is an error locking the queue.
-    /// - The flush operation fails for any reason.
+    /// Flushes channel and signals end of commands
     fn flush(&mut self) -> Result<(), QueueError>;
 
-    // Allow downcasting to concrete implementation
     fn as_any(&self) -> &dyn Any;
 }
 
