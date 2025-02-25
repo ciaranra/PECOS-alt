@@ -22,6 +22,7 @@ pub use pecos_engines::{
         ClassicalEngine, ControlEngine, Engine, EngineStage, EngineSystem, HybridEngine,
         classical::{ProgramType, detect_program_type, get_program_path, setup_engine},
         monte_carlo::MonteCarloEngine,
+        noise::{DepolarizingNoise, NoiseModel},
         phir::PHIREngine,
         qir::engine::QirClassicalEngine,
         quantum::{
@@ -32,7 +33,6 @@ pub use pecos_engines::{
     errors::QueueError,
 };
 // re-exporting pecos-noise
-pub use pecos_noise::{DepolarizingNoise, NoiseModel};
 // re-exporting pecos-qsim
 pub use pecos_qsim::ArbitraryRotationGateable;
 pub use pecos_qsim::CliffordGateable;

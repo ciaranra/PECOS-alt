@@ -1,6 +1,6 @@
+use crate::engines::noise::NoiseModel;
 use log::debug;
 use pecos_core::types::ShotResult;
-use pecos_noise::NoiseModel;
 
 use crate::channels::{CommandChannel, MessageChannel};
 use crate::engines::{ClassicalEngine, ControlEngine, EngineStage, QuantumEngine};
@@ -43,6 +43,25 @@ where
         self.noise_model = noise_model;
     }
 
+    /// Resets the state of the hybrid engine, including classical, quantum, and noise model components.
+    ///
+    /// This function ensures all components are returned to their initial states,
+    /// allowing for reuse in subsequent operations.
+    ///
+    /// # Errors
+    /// Returns a `QueueError` if:
+    /// - Resetting the classical engine fails.
+    /// - Resetting the quantum engine fails.
+    /// - Resetting the noise model fails (if a noise model is present).
+    pub fn reset(&mut self) -> Result<(), QueueError> {
+        self.classical.reset()?;
+        self.quantum.reset()?;
+        if let Some(noise_model) = &mut self.noise_model {
+            noise_model.reset()?;
+        }
+        Ok(())
+    }
+
     /// Executes a single quantum circuit shot and returns the result.
     ///
     /// # Errors
@@ -57,8 +76,6 @@ where
             "Starting new shot - thread {:?}",
             std::thread::current().id()
         );
-        self.quantum.reset()?;
-        self.classical.reset()?;
 
         let mut stage = self.classical.start(())?;
 

@@ -1,12 +1,12 @@
 use crate::channels::stdio::StdioChannel;
 use crate::engines::HybridEngine;
 use crate::engines::classical::setup_engine;
+use crate::engines::noise::NoiseModel;
 use crate::engines::quantum::new_quantum_engine_arbitrary_qgate;
 use crate::errors::QueueError;
 use log::{debug, info};
 use parking_lot::Mutex;
 use pecos_core::types::ShotResults;
-use pecos_noise::NoiseModel;
 use pecos_qsim::StateVec;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::path::PathBuf;
@@ -25,6 +25,8 @@ pub struct MonteCarloEngine {
     num_workers: usize,
     program_path: PathBuf,
     noise_model: Option<Box<dyn NoiseModel>>,
+    // TODO: add classical engine and quantum engine
+    //  if None... choose for user
 }
 
 impl MonteCarloEngine {
@@ -104,11 +106,13 @@ impl MonteCarloEngine {
                     worker_idx, worker_shots
                 );
 
+                // TODO: Move engine setup per worker to function
                 // Each worker gets its own engines
                 let classical_engine = setup_engine(&self.program_path)?;
-                let simulator = StateVec::new(2);
+                let simulator = StateVec::new(2); // TODO: Determine number of qubits from the program. (Or make qsims dynamically size...)
                 let quantum_engine = new_quantum_engine_arbitrary_qgate(simulator);
 
+                // TODO: switch to FFI-friendly byte messages
                 // Create hybrid engine for this worker
                 let cmd_channel = StdioChannel::create_for_shot()?;
                 let meas_channel = StdioChannel::create_for_shot()?;
@@ -122,21 +126,10 @@ impl MonteCarloEngine {
                 }
 
                 // Process all shots assigned to this worker
-                for shot_num in 0..worker_shots {
-                    debug!(
-                        "Worker {} starting shot {}/{}",
-                        worker_idx,
-                        shot_num + 1,
-                        worker_shots
-                    );
+                for _shot_num in 0..worker_shots {
                     let result = engine.run_shot()?;
+                    engine.reset()?;
                     shot_results.lock().push(result);
-                    debug!(
-                        "Worker {} completed shot {}/{}",
-                        worker_idx,
-                        shot_num + 1,
-                        worker_shots
-                    );
                 }
 
                 debug!("Worker {} completed all shots", worker_idx);

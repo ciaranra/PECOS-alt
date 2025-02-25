@@ -564,7 +564,6 @@ version = "0.1.1"
 dependencies = [
  "pecos-core",
  "pecos-engines",
- "pecos-noise",
  "pecos-qsim",
 ]
 
@@ -608,21 +607,12 @@ dependencies = [
  "os_pipe",
  "parking_lot",
  "pecos-core",
- "pecos-noise",
  "pecos-qsim",
+ "rand",
  "rayon",
  "serde",
  "serde_json",
  "tempfile",
-]
-
-[[package]]
-name = "pecos-noise"
-version = "0.1.1"
-dependencies = [
- "parking_lot",
- "pecos-core",
- "rand",
 ]
 
 [[package]]

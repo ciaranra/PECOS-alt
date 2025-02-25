@@ -1,4 +1,5 @@
-use crate::noise_model::NoiseModel;
+use super::NoiseModel;
+use crate::errors::QueueError;
 use parking_lot::Mutex;
 use pecos_core::types::{CommandBatch, GateType, QuantumCommand};
 use rand::rngs::StdRng;
@@ -130,5 +131,9 @@ impl NoiseModel for DepolarizingNoise {
                 StdRng::try_from_os_rng().expect("Failed to create RNG from OS entropy"),
             )),
         })
+    }
+
+    fn reset(&mut self) -> Result<(), QueueError> {
+        Ok(())
     }
 }

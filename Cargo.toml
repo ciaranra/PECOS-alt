@@ -57,7 +57,6 @@ quote = "1"
 
 pecos-derive = { version = "0.1.1", path = "crates/pecos-derive"}
 pecos-core = { version = "0.1.1", path = "crates/pecos-core" }
-pecos-noise = { version = "0.1.1", path = "crates/pecos-noise" }
 pecos-qsim = { version = "0.1.1", path = "crates/pecos-qsim" }
 pecos-engines = { version = "0.1.1", path = "crates/pecos-engines" }
 pecos-qec = { version = "0.1.1", path = "crates/pecos-qec" }
