@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-serde_json = "1"
-pecos-core = { workspace = true }
-processors = { path = "../../../crates/processors" }
-plugin-system = { path = "../../../crates/plugin-system" }
+serde_json.workspace = true
+pecos-core.workspace = true
+processors.workspace = true
+plugin-system.workspace = true
