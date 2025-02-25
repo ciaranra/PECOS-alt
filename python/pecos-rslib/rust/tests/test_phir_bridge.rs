@@ -5,6 +5,7 @@ mod tests {
     use pecos::prelude::*;
     use pecos_rslib::phir_bridge::PHIREngine;
     use serde_json::json;
+    use std::error::Error;
 
     fn create_minimal_phir() -> String {
         json!({
@@ -35,56 +36,57 @@ mod tests {
     }
 
     #[test]
-    fn test_phir_rust_side() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_phir_rust_side() -> Result<(), Box<dyn Error>> {
         let phir_json = create_minimal_phir();
 
         // Create engine
         let mut engine = PHIREngine::py_new(&phir_json)?;
 
-        // Get commands
-        let commands = engine.process_program()?;
-        assert_eq!(commands.len(), 1, "Expected 1 quantum command");
+        // Process program using the trait implementation explicitly
+        let cmd_batch = ClassicalEngine::process_program(&mut engine)?;
+        assert_eq!(cmd_batch.len(), 1, "Expected 1 quantum command");
 
-        // Verify it's a measure gate
-        if let Some(cmd) = commands.first() {
-            match &cmd.gate {
+        // Examine the commands
+        let cmds = cmd_batch.commands();
+        if let Some(cmd) = cmds.first() {
+            match cmd.gate {
                 GateType::Measure { result_id } => {
-                    assert_eq!(*result_id, 0, "Expected result_id to be 0");
+                    assert_eq!(result_id, 0, "Expected result_id to be 0");
                 }
                 _ => panic!("Expected Measure gate"),
             }
             assert_eq!(cmd.qubits[0], 0, "Expected measurement on qubit 0");
+        } else {
+            panic!("Expected at least one command");
         }
 
-        // Handle measurement
-        engine.handle_measurement(1)?; // Send a measurement result of 1
+        // Handle measurement using the trait implementation
+        ClassicalEngine::handle_measurement(&mut engine, 1)?;
 
-        // Get results
-        let results = engine.get_results()?;
+        // Get results using the trait implementation
+        let shot_result = ClassicalEngine::get_results(&engine)?;
 
-        // Debugging output for results
-        println!("Results object: {results:?}");
+        println!("Results: {shot_result:?}");
 
-        // Extract the measurement key dynamically
-        let measurement_key = results
-            .measurements
+        // Access measurements field of ShotResult
+        let measurements = &shot_result.measurements;
+
+        // Find the measurement key
+        let measurement_key = measurements
             .keys()
             .next()
             .expect("Expected at least one measurement key");
 
         println!("Measurement key found: {measurement_key}");
-
-        // Assertion for debugging
         println!(
-            "Actual value for key {}: {:?}",
-            measurement_key,
-            results.measurements.get(measurement_key)
+            "Actual value for key {measurement_key}: {:?}",
+            measurements.get(measurement_key)
         );
 
-        // Update test assertion temporarily
+        // Verify the result
         assert_eq!(
-            results.measurements.get(measurement_key),
-            Some(&0), // Adjusted to match the observed result
+            measurements.get(measurement_key),
+            Some(&0),
             "Expected {measurement_key} to have value 0"
         );
 
