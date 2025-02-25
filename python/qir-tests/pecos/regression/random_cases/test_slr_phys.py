@@ -124,7 +124,7 @@ def test_control_flow_qir():
         ),
         Barrier(q[0], q[1]),
         p.F4dg(q[1]),
-        p.Sdg(q[0]),
+        p.SZdg(q[0]),
         p.CX(q[0], q[1]),
         Barrier(q[1], q[0]),
         p.RX[0.3](q[0]),
@@ -198,3 +198,19 @@ def test_steane_qir_bc():
     """Test the teleportation program using the Steane code."""
     qir = SlrConverter(telep("X", "X")).qir_bc()
     print(qir)
+
+@pytest.mark.optional_dependency
+def test_sx_sxdg():
+    """Test that a simple Bell prep and measure circuit can be created."""
+    prog: Main = Main(
+        q := QReg("q", 2),
+        m := CReg("m", 2),
+        p.H(q[0]),
+        p.CX(q[0], q[1]),
+        p.SX(q[0]),
+        p.SXdg(q[1]),
+        p.Measure(q) > m,
+    )
+
+    qir = SlrConverter(prog).qir()
+    assert "__quantum__qis__rx__body" in qir

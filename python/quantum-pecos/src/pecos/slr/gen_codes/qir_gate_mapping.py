@@ -89,6 +89,21 @@ class QIRGateMetadata(Enum):
             q.H(f4dg.qargs[0]),
         ],
     )
+    SX = QG.decompose(
+        lambda sx: [
+            q.RX[np.pi / 2](sx.qargs[0]),
+        ],
+    )
+    SXdg = QG.decompose(
+        lambda sxdg: [
+            q.RX[-np.pi / 2](sxdg.qargs[0]),
+        ],
+    )
+    SY = QG.decompose(
+        lambda sy: [
+            q.RY[np.pi / 2](sy.qargs[0]),
+        ],
+    )
     SYdg = QG.decompose(
         lambda sydg: [
             q.RY[-np.pi / 2](sydg.qargs[0]),
