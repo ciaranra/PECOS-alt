@@ -25,6 +25,16 @@ impl StdioChannel {
         }
     }
 
+    /// Sends a measurement message to the writer.
+    ///
+    /// The measurement is written in a specific format (`MEAS <measurement>`),
+    /// then the writer is flushed to ensure the message is sent.
+    ///
+    /// # Errors
+    /// This function returns a `QueueError` if:
+    /// - The writer cannot be locked, which may indicate a concurrency issue.
+    /// - Writing to the writer fails, such as due to an I/O error.
+    /// - Flushing the writer fails for any reason.
     pub fn send_measurement(&mut self, measurement: Message) -> Result<(), QueueError> {
         let mut writer = self
             .writer

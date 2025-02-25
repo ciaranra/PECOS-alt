@@ -19,7 +19,7 @@ pub use pecos_engines::{
     channels::stdio::StdioChannel,
     channels::{Message, MessageChannel},
     engines::{
-        ClassicalEngine, HybridEngine,
+        ClassicalEngine, ControlEngine, Engine, EngineStage, EngineSystem, HybridEngine,
         classical::{ProgramType, detect_program_type, get_program_path, setup_engine},
         monte_carlo::MonteCarloEngine,
         phir::PHIREngine,

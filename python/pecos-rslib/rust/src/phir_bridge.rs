@@ -59,84 +59,65 @@ impl PHIREngine {
 
     fn process_program(&mut self) -> PyResult<Vec<PyObject>> {
         Python::with_gil(|py| {
-            ClassicalEngine::process_program(self)
-                .map_err(|e| QueueErrorWrapper(e).into())
-                .and_then(|commands| {
-                    let mut py_commands = Vec::with_capacity(commands.len());
-                    for cmd in commands {
-                        let py_dict = PyDict::new(py);
+            // Call our implementation that returns CommandBatch
+            let batch = ClassicalEngine::process_program(self)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
-                        // Create a dict for parameters
-                        let params_dict = PyDict::new(py);
+            let mut py_commands = Vec::with_capacity(batch.len());
 
-                        // Convert gate type and parameters
-                        match cmd.gate {
-                            GateType::Measure { result_id } => {
-                                py_dict.set_item("gate_type", "Measure")?;
-                                params_dict.set_item("result_id", result_id)?;
-                            }
-                            GateType::RZ { theta } => {
-                                py_dict.set_item("gate_type", "RZ")?;
-                                params_dict.set_item("theta", theta)?;
-                            }
-                            GateType::R1XY { phi, theta } => {
-                                py_dict.set_item("gate_type", "R1XY")?;
-                                let angles = vec![phi, theta];
-                                params_dict.set_item("angles", angles)?;
-                            }
-                            GateType::SZZ => {
-                                py_dict.set_item("gate_type", "SZZ")?;
-                            }
-                            GateType::H => {
-                                py_dict.set_item("gate_type", "H")?;
-                            }
-                            GateType::CX => {
-                                py_dict.set_item("gate_type", "CX")?;
-                            }
-                        }
+            // Convert each command to a Python dict
+            for cmd in batch.commands() {
+                let py_dict = PyDict::new(py);
 
-                        py_dict.set_item("params", params_dict)?;
-                        py_dict.set_item("qubits", cmd.qubits)?;
+                // Create a dict for parameters
+                let params_dict = PyDict::new(py);
 
-                        // Convert to PyObject
-                        let py_obj: PyObject = py_dict.into_any().into();
-                        py_commands.push(py_obj);
+                // Convert gate type and parameters
+                match &cmd.gate {
+                    GateType::Measure { result_id } => {
+                        py_dict.set_item("gate_type", "Measure")?;
+                        params_dict.set_item("result_id", result_id)?;
                     }
-                    Ok(py_commands)
-                })
+                    GateType::RZ { theta } => {
+                        py_dict.set_item("gate_type", "RZ")?;
+                        params_dict.set_item("theta", theta)?;
+                    }
+                    GateType::R1XY { phi, theta } => {
+                        py_dict.set_item("gate_type", "R1XY")?;
+                        let angles = vec![phi, theta];
+                        params_dict.set_item("angles", angles)?;
+                    }
+                    GateType::SZZ => {
+                        py_dict.set_item("gate_type", "SZZ")?;
+                    }
+                    GateType::H => {
+                        py_dict.set_item("gate_type", "H")?;
+                    }
+                    GateType::CX => {
+                        py_dict.set_item("gate_type", "CX")?;
+                    }
+                }
+
+                py_dict.set_item("params", params_dict)?;
+                py_dict.set_item("qubits", &cmd.qubits)?;
+
+                // Convert to PyObject
+                let py_obj: PyObject = py_dict.into_any().into();
+                py_commands.push(py_obj);
+            }
+            Ok(py_commands)
         })
     }
 
     fn handle_measurement(&mut self, measurement: u32) -> PyResult<()> {
-        Python::with_gil(|py| {
-            let interpreter = self.interpreter.lock();
-            let dict = PyDict::new(py);
-            dict.set_item("measurement", measurement)?;
-            let results_guard = self.results.lock();
-            let dict_list: Vec<PyObject> = results_guard
-                .iter()
-                .map(|(key, value)| {
-                    let py_dict = PyDict::new(py);
-                    py_dict.set_item("key", key).expect("Failed to set key");
-                    py_dict
-                        .set_item("value", value)
-                        .expect("Failed to set value");
-                    py_dict.into_any().into()
-                })
-                .collect();
-
-            interpreter.call_method1(py, "receive_results", (dict_list,))?;
-            Ok(())
-        })
+        ClassicalEngine::handle_measurement(self, measurement)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 
     fn get_results(&self) -> PyResult<HashMap<String, u32>> {
-        match ClassicalEngine::get_results(self) {
-            Ok(results) => Ok(results.measurements),
-            Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                e.to_string(),
-            )),
-        }
+        ClassicalEngine::get_results(self)
+            .map(|shot_result| shot_result.measurements)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 }
 
@@ -144,32 +125,50 @@ impl ClassicalEngine for PHIREngine {
     fn process_program(&mut self) -> Result<CommandBatch, QueueError> {
         Python::with_gil(|py| {
             let interpreter = self.interpreter.lock();
-            let program = interpreter.getattr(py, "program")?;
-            let ops = program.getattr(py, "ops")?;
-            let result = interpreter.call_method1(py, "execute", (ops,))?;
+            let program = interpreter
+                .getattr(py, "program")
+                .map_err(|e| py_err_to_queue_error(&e))?;
+            let ops = program
+                .getattr(py, "ops")
+                .map_err(|e| py_err_to_queue_error(&e))?;
+            let result = interpreter
+                .call_method1(py, "execute", (ops,))
+                .map_err(|e| py_err_to_queue_error(&e))?;
 
             match result.call_method0(py, "__next__") {
-                Ok(commands) if commands.is_none(py) => Ok(vec![]),
+                Ok(commands) if commands.is_none(py) => Ok(CommandBatch::new()),
                 Ok(commands) => {
-                    let py_list = commands.downcast_bound::<PyList>(py)?;
-                    let mut batch = Vec::new();
+                    // Use closure to handle DowncastError properly
+                    let py_list = commands
+                        .downcast_bound::<PyList>(py)
+                        .map_err(to_queue_error)?;
+
+                    let mut batch = CommandBatch::new();
                     for py_cmd in py_list.iter() {
-                        let (gate, qubits) = convert_gate(&py_cmd)?;
-                        batch.push(QuantumCommand { gate, qubits });
+                        let (gate, qubits) = convert_gate(&py_cmd).map_err(to_queue_error)?;
+                        batch.add_command(QuantumCommand { gate, qubits });
                     }
                     Ok(batch)
                 }
-                Err(_) => Ok(vec![]),
+                Err(e) => {
+                    // Only convert StopIteration to empty batch, propagate other errors
+                    if e.is_instance_of::<pyo3::exceptions::PyStopIteration>(py) {
+                        Ok(CommandBatch::new())
+                    } else {
+                        Err(to_queue_error(e))
+                    }
+                }
             }
         })
-        .map_err(|e: PyErr| QueueError::ExecutionError(e.to_string()))
     }
 
     fn handle_measurement(&mut self, measurement: Message) -> Result<(), QueueError> {
         Python::with_gil(|py| {
             let interpreter = self.interpreter.lock();
             let dict = PyDict::new(py);
-            dict.set_item("measurement", measurement)?;
+            dict.set_item("measurement", measurement)
+                .map_err(to_queue_error)?;
+
             let results_guard = self.results.lock();
             let dict_list: Vec<_> = results_guard
                 .iter()
@@ -185,24 +184,29 @@ impl ClassicalEngine for PHIREngine {
                 })
                 .collect();
 
-            interpreter.call_method1(py, "receive_results", (dict_list,))?;
+            interpreter
+                .call_method1(py, "receive_results", (dict_list,))
+                .map_err(|e| py_err_to_queue_error(&e))?;
 
             Ok(())
         })
-        .map_err(|e: PyErr| QueueError::ExecutionError(e.to_string()))
     }
 
     fn get_results(&self) -> Result<ShotResult, QueueError> {
         Python::with_gil(|py| {
             let interpreter = self.interpreter.lock();
-            let py_results = interpreter.call_method0(py, "results")?;
-            let results: HashMap<String, u32> = py_results.extract(py)?;
+            let py_results = interpreter
+                .call_method0(py, "results")
+                .map_err(|e| py_err_to_queue_error(&e))?;
+
+            let results: HashMap<String, u32> = py_results.extract(py).map_err(to_queue_error)?;
+
             (*self.results.lock()).clone_from(&results);
+
             Ok(ShotResult {
                 measurements: results,
             })
         })
-        .map_err(|e: PyErr| QueueError::ExecutionError(e.to_string()))
     }
 
     fn compile(&self) -> Result<(), Box<dyn Error>> {
@@ -256,13 +260,72 @@ fn convert_gate(py_cmd: &Bound<'_, PyAny>) -> Result<(GateType, Vec<usize>), PyE
     Ok((gate, qubits))
 }
 
-// Newtype wrapper for QueueError
-#[derive(Debug)]
-struct QueueErrorWrapper(QueueError);
+// Generic error conversion function
+fn to_queue_error<E: std::fmt::Display>(err: E) -> QueueError {
+    QueueError::ExecutionError(err.to_string())
+}
 
-// Implement conversion from QueueErrorWrapper to PyErr
-impl From<QueueErrorWrapper> for PyErr {
-    fn from(err: QueueErrorWrapper) -> PyErr {
-        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(err.0.to_string())
+// PyErr specific conversion - take a reference instead of by value
+fn py_err_to_queue_error(err: &PyErr) -> QueueError {
+    QueueError::ExecutionError(err.to_string())
+}
+
+impl ControlEngine for PHIREngine {
+    type Input = ();
+    type Output = ShotResult;
+    type EngineInput = CommandBatch;
+    type EngineOutput = Vec<Message>;
+
+    fn reset(&mut self) -> Result<(), QueueError> {
+        Python::with_gil(|py| {
+            let interpreter = self.interpreter.lock();
+            interpreter
+                .call_method0(py, "reset")
+                .map_err(|e| py_err_to_queue_error(&e))?;
+            (*self.results.lock()).clear();
+            Ok(())
+        })
+    }
+
+    fn start(&mut self, _input: ()) -> Result<EngineStage<CommandBatch, ShotResult>, QueueError> {
+        // Reset state to ensure clean start
+        Python::with_gil(|py| {
+            let interpreter = self.interpreter.lock();
+            interpreter
+                .call_method0(py, "reset")
+                .map_err(|e| py_err_to_queue_error(&e))?;
+            (*self.results.lock()).clear();
+            Ok::<(), QueueError>(())
+        })?;
+
+        // Get commands to process using the ClassicalEngine implementation
+        let commands = ClassicalEngine::process_program(self)?;
+
+        if commands.is_empty() {
+            let results = ClassicalEngine::get_results(self)?;
+            Ok(EngineStage::Complete(results))
+        } else {
+            Ok(EngineStage::NeedsProcessing(commands))
+        }
+    }
+
+    fn continue_processing(
+        &mut self,
+        measurements: Vec<Message>,
+    ) -> Result<EngineStage<CommandBatch, ShotResult>, QueueError> {
+        // Handle received measurements
+        for measurement in measurements {
+            ClassicalEngine::handle_measurement(self, measurement)?;
+        }
+
+        // Get next batch of commands
+        let commands = ClassicalEngine::process_program(self)?;
+
+        if commands.is_empty() {
+            let results = ClassicalEngine::get_results(self)?;
+            Ok(EngineStage::Complete(results))
+        } else {
+            Ok(EngineStage::NeedsProcessing(commands))
+        }
     }
 }

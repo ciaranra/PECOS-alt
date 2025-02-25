@@ -38,7 +38,7 @@ impl QirClassicalEngine {
         }
     }
 
-    fn reset_internal_state(&mut self) -> Result<(), QueueError> {
+    fn reset_internal_state(&mut self) {
         // Clean up any existing process
         if let Some(mut child) = self.child_process.take() {
             debug!("Cleaning up process in reset");
@@ -46,7 +46,6 @@ impl QirClassicalEngine {
             let _ = child.wait();
         }
         self.current_results = ShotResult::default();
-        Ok(())
     }
 
     fn find_and_copy_library(&self) -> Result<PathBuf, Box<dyn std::error::Error>> {
@@ -338,7 +337,7 @@ impl ControlEngine for QirClassicalEngine {
     type EngineOutput = Vec<Message>;
 
     fn start(&mut self, _input: ()) -> Result<EngineStage<CommandBatch, ShotResult>, QueueError> {
-        self.reset_internal_state()?;
+        self.reset_internal_state();
 
         let commands = self.process_program()?;
         if commands.is_empty() {
@@ -367,6 +366,7 @@ impl ControlEngine for QirClassicalEngine {
     }
 
     fn reset(&mut self) -> Result<(), QueueError> {
-        self.reset_internal_state()
+        self.reset_internal_state();
+        Ok(())
     }
 }

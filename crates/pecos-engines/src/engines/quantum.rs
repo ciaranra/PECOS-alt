@@ -2,6 +2,7 @@ use crate::channels::Message;
 use crate::engines::Engine;
 use crate::errors::QueueError;
 use log::debug;
+use num_traits::cast::AsPrimitive;
 use pecos_core::types::CommandBatch;
 use pecos_core::types::GateType;
 use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, QuantumSimulator};
@@ -66,16 +67,20 @@ where
                 }
                 GateType::Measure { result_id } => {
                     debug!(
-        "QUANTUM SIM: Starting measurement of qubit {} (result_id={})",
-        cmd.qubits[0], result_id
-    );
+                        "QUANTUM SIM: Starting measurement of qubit {} (result_id={})",
+                        cmd.qubits[0], result_id
+                    );
                     let meas_result = self.simulator.mz(cmd.qubits[0]);
                     let raw_outcome = u32::from(meas_result.outcome);
-                    let encoded = ((*result_id as u32) << 16) | raw_outcome;  // Dereferenced result_id
+
+                    // Convert result_id to u32 safely
+                    let result_id_u32: u32 = (*result_id).as_();
+
+                    let encoded = (result_id_u32 << 16) | raw_outcome;
                     debug!(
-        "QUANTUM SIM: Got measurement {} for qubit {} with result_id={}",
-        raw_outcome, cmd.qubits[0], result_id
-    );
+                        "QUANTUM SIM: Got measurement {} for qubit {} with result_id={}",
+                        raw_outcome, cmd.qubits[0], result_id
+                    );
                     debug!("QUANTUM SIM: Encoded as {}", encoded);
                     measurements.push(encoded);
                 }
@@ -179,7 +184,11 @@ where
                     );
                     let meas_result = self.simulator.mz(cmd.qubits[0]);
                     let raw_outcome = u32::from(meas_result.outcome);
-                    let encoded = ((result_id as u32) << 16) | raw_outcome;
+
+                    // Convert result_id to u32 safely
+                    let result_id_u32: u32 = result_id.as_();
+
+                    let encoded = (result_id_u32 << 16) | raw_outcome;
                     debug!(
                         "Measurement complete: qubit={}, result_id={}, outcome={}, encoded={} m={}",
                         cmd.qubits[0], result_id, raw_outcome, encoded, meas_result.outcome

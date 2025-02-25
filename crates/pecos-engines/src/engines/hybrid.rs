@@ -44,6 +44,14 @@ where
     }
 
     /// Executes a single quantum circuit shot and returns the result.
+    ///
+    /// # Errors
+    /// This function returns a `QueueError` if:
+    /// - Resetting the quantum or classical engine fails.
+    /// - Sending a batch of commands through the command channel fails.
+    /// - Processing a batch through the quantum engine fails.
+    /// - Sending measurements through the measurement channel fails.
+    /// - Continuing classical processing encounters an issue.
     pub fn run_shot(&mut self) -> Result<ShotResult, QueueError> {
         debug!(
             "Starting new shot - thread {:?}",

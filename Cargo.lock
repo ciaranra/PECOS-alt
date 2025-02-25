@@ -629,6 +629,7 @@ dependencies = [
  "lazy_static",
  "log",
  "memmap2",
+ "num-traits",
  "os_pipe",
  "parking_lot",
  "pecos-core",

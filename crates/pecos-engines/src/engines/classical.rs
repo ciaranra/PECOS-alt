@@ -68,12 +68,47 @@ pub trait ClassicalEngine: Send + Sync {
     ///   unsupported features, or internal errors in the engine's implementation.
     fn compile(&self) -> Result<(), Box<dyn std::error::Error>>;
 
+    /// Resets the state of the classical engine to its initial configuration.
+    ///
+    /// This method provides a default implementation for resetting the engine,
+    /// which can be overridden by specific implementations if needed.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` if the reset operation completes successfully.
+    ///
+    /// # Errors
+    ///
+    /// This function may return the following errors:
+    /// - `QueueError::OperationError`: If the reset operation encounters unsupported actions or fails.
+    /// - `QueueError::LockError`: If a lock cannot be acquired during the reset process.
     fn reset(&mut self) -> Result<(), QueueError> {
         debug!("DEFAULT ClassicalEngine::reset() being called!");
         Ok(())
     }
 }
 
+/// Detects the type of program based on its file extension and content.
+///
+/// This function examines the file extension and content to determine if the file
+/// corresponds to a QIR or PHIR program type.
+///
+/// # Parameters
+///
+/// - `path`: A reference to the path of the file to be analyzed.
+///
+/// # Returns
+///
+/// Returns a `ProgramType` indicating the detected type if successful, or a boxed error
+/// if format detection fails.
+///
+/// # Errors
+///
+/// This function may return the following errors:
+/// - `std::io::Error`: If the file cannot be opened or read.
+/// - `serde_json::Error`: If the JSON content cannot be parsed when detecting a PHIR program.
+/// - `Box<dyn std::error::Error>`: If the file does not conform to a supported format
+///   (e.g., invalid JSON format for PHIR or unsupported file extension).
 pub fn detect_program_type(path: &Path) -> Result<ProgramType, Box<dyn Error>> {
     match path.extension().and_then(|ext| ext.to_str()) {
         Some("json") => {
@@ -98,6 +133,31 @@ pub enum ProgramType {
     PHIR,
 }
 
+/// Sets up a classical engine based on the type of the provided program file.
+///
+/// This function detects the type of the program (e.g., QIR or PHIR), creates the necessary
+/// build directory, and instantiates the corresponding classical engine.
+///
+/// # Parameters
+///
+/// - `program_path`: A reference to the path of the program file to be processed.
+///
+/// # Returns
+///
+/// Returns a `Box<dyn ClassicalEngine>` containing the constructed engine if successful,
+/// or a boxed error if setup fails.
+///
+/// # Errors
+///
+/// This function may return the following errors:
+/// - `std::io::Error`: If the build directory cannot be created.
+/// - `Box<dyn std::error::Error>`: If the program type cannot be detected, or if there
+///   is an error while initializing the engine (e.g., invalid file format or unsupported version).
+///
+/// # Panics
+///
+/// This function will panic if the `program_path` does not have a parent directory, as it
+/// assumes the existence of a parent directory for creating the build directory.
 pub fn setup_engine(program_path: &Path) -> Result<Box<dyn ClassicalEngine>, Box<dyn Error>> {
     debug!("Program path: {}", program_path.display());
     let build_dir = program_path.parent().unwrap().join("build");
@@ -110,6 +170,26 @@ pub fn setup_engine(program_path: &Path) -> Result<Box<dyn ClassicalEngine>, Box
     }
 }
 
+/// Resolves the absolute path of the provided program.
+///
+/// This function takes a program path (either absolute or relative),
+/// resolves it to an absolute path, and checks if the file exists.
+///
+/// # Parameters
+///
+/// - `program`: A string slice containing the path to the program file.
+///
+/// # Returns
+///
+/// Returns a `PathBuf` containing the canonicalized absolute path if successful,
+/// or an error if the file cannot be found or resolved.
+///
+/// # Errors
+///
+/// This function can return the following errors:
+/// - `std::io::Error`: If the current working directory cannot be obtained.
+/// - `Box<dyn std::error::Error>`: If the program file does not exist, or if the
+///   canonicalization of the file path fails.
 pub fn get_program_path(program: &str) -> Result<PathBuf, Box<dyn Error>> {
     debug!("Resolving program path");
 

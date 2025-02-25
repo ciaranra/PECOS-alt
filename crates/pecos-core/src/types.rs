@@ -301,6 +301,16 @@ impl CommandBatch {
     pub fn expected_measurements(&self) -> usize {
         self.measurement_count
     }
+
+    /// Returns an iterator over the commands in the batch.
+    pub fn iter(&self) -> std::slice::Iter<'_, QuantumCommand> {
+        self.commands.iter()
+    }
+
+    /// Returns a mutable iterator over the commands in the batch.
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, QuantumCommand> {
+        self.commands.iter_mut()
+    }
 }
 
 impl From<Vec<QuantumCommand>> for CommandBatch {
