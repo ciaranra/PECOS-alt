@@ -21,42 +21,9 @@ use std::sync::Arc;
 /// This engine manages the parallel execution of multiple shots of a quantum program,
 /// coordinating the classical and quantum components through a hybrid engine setup.
 /// It handles program loading, noise model application, and result aggregation.
-pub struct MonteCarloEngine {
-    num_workers: usize,
-    program_path: PathBuf,
-    noise_model: Option<Box<dyn NoiseModel>>,
-    // TODO: add classical engine and quantum engine
-    //  if None... choose for user
-}
+pub struct MonteCarloEngine;
 
 impl MonteCarloEngine {
-    // TODO: Optionally pass the in-memory programs
-    // TODO: Move num_shots and workers declaration together.
-    /// Creates a new Monte Carlo simulation engine.
-    ///
-    /// # Parameters
-    /// - `program_path`: Path to the quantum program file (QIR or PHIR format)
-    /// - `num_workers`: Number of parallel workers to use for simulation
-    ///
-    /// # Returns
-    /// A new `MonteCarloEngine` instance configured for parallel simulation.
-    #[must_use]
-    pub fn new(program_path: PathBuf, num_workers: usize) -> Self {
-        Self {
-            num_workers,
-            program_path,
-            noise_model: None,
-        }
-    }
-
-    /// Sets the noise model to be applied during simulation.
-    ///
-    /// # Parameters
-    /// - `noise_model`: Optional noise model to apply to quantum operations
-    pub fn set_noise_model(&mut self, noise_model: Option<Box<dyn NoiseModel>>) {
-        self.noise_model = noise_model;
-    }
-
     /// Runs the quantum program for the specified number of shots.
     ///
     /// This method:
@@ -77,21 +44,28 @@ impl MonteCarloEngine {
     /// - The program cannot be loaded or compiled
     /// - Engine initialization fails
     /// - Simulation execution fails
-    pub fn run_program(&self, num_shots: usize) -> Result<ShotResults, QueueError> {
+    pub fn run_program(
+        program_path: PathBuf,
+        num_shots: usize,
+        num_workers: usize,
+        noise_model: Option<Box<dyn NoiseModel>>,
+    ) -> Result<ShotResults, QueueError> {
         info!(
             "Starting Monte Carlo simulation with {} shots across {} workers",
-            num_shots, self.num_workers
+            num_shots, num_workers
         );
+
+        // TODO: Allow users to provide their classical engine and quantum engine.
 
         // Storage for results from all shots
         let shot_results = Arc::new(Mutex::new(Vec::with_capacity(num_shots)));
 
         // Calculate shots per worker
-        let base_shots_per_worker = num_shots / self.num_workers;
-        let extra_shots = num_shots % self.num_workers;
+        let base_shots_per_worker = num_shots / num_workers;
+        let extra_shots = num_shots % num_workers;
 
-        // Create worker pool
-        (0..self.num_workers)
+        // Create worker pool.
+        (0..num_workers)
             .into_par_iter()
             .try_for_each::<_, Result<(), QueueError>>(|worker_idx| {
                 // Calculate shots for this worker
@@ -108,7 +82,7 @@ impl MonteCarloEngine {
 
                 // TODO: Move engine setup per worker to function
                 // Each worker gets its own engines
-                let classical_engine = setup_engine(&self.program_path)?;
+                let classical_engine = setup_engine(&program_path)?;
                 let simulator = StateVec::new(2); // TODO: Determine number of qubits from the program. (Or make qsims dynamically size...)
                 let quantum_engine = new_quantum_engine_arbitrary_qgate(simulator);
 
@@ -121,7 +95,7 @@ impl MonteCarloEngine {
                     HybridEngine::new(classical_engine, quantum_engine, cmd_channel, meas_channel);
 
                 // Apply noise model if configured
-                if let Some(noise_model) = &self.noise_model {
+                if let Some(noise_model) = &noise_model {
                     engine.set_noise_model(Some(noise_model.clone_box()));
                 }
 

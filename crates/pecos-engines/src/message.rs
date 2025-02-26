@@ -1,5 +1,5 @@
-mod byte_new;
 mod batch;
+mod byte_new;
 pub mod debug;
 pub mod ptr;
 pub mod types;

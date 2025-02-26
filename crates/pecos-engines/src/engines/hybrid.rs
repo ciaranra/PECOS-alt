@@ -1,5 +1,4 @@
 use crate::engines::noise::{NoiseModel, PassThroughNoise};
-use log::debug;
 use pecos_core::types::{CommandBatch, ShotResult};
 
 use crate::Message;
@@ -108,11 +107,6 @@ where
     /// - Sending measurements through the measurement channel fails.
     /// - Continuing classical processing encounters an issue.
     pub fn run_shot(&mut self) -> Result<ShotResult, QueueError> {
-        debug!(
-            "Starting new shot - thread {:?}",
-            std::thread::current().id()
-        );
-
         let mut stage = self.classical.start(())?;
 
         while let EngineStage::NeedsProcessing(batch) = stage {
