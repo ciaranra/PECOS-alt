@@ -2,6 +2,8 @@ use crate::errors::QueueError;
 use pecos_core::types::CommandBatch;
 use std::any::Any;
 
+pub mod stdio;
+
 pub trait CommandChannel: Send + Sync {
     /// Sends a batch of quantum commands through the channel.
     ///
@@ -59,5 +61,3 @@ pub trait MessageChannel: Send + Sync {
     // Allow downcasting to concrete implementation
     fn as_any(&self) -> &dyn Any;
 }
-
-pub mod stdio;

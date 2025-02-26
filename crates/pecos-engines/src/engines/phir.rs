@@ -306,12 +306,6 @@ impl ControlEngine for PHIREngine {
     type EngineInput = CommandBatch;
     type EngineOutput = Vec<Message>;
 
-    fn reset(&mut self) -> Result<(), QueueError> {
-        debug!("PHIREngine::reset() implementation for ControlEngine being called!");
-        self.reset_internal_state();
-        Ok(())
-    }
-
     fn start(&mut self, _input: ()) -> Result<EngineStage<CommandBatch, ShotResult>, QueueError> {
         debug!(
             "PHIREngine start() called with current_op={}",
@@ -345,17 +339,15 @@ impl ControlEngine for PHIREngine {
             Ok(EngineStage::NeedsProcessing(commands))
         }
     }
+
+    fn reset(&mut self) -> Result<(), QueueError> {
+        debug!("PHIREngine::reset() implementation for ControlEngine being called!");
+        self.reset_internal_state();
+        Ok(())
+    }
 }
 
 impl ClassicalEngine for PHIREngine {
-    fn reset(&mut self) -> Result<(), QueueError> {
-        debug!("PHIREngine::reset() implementation for ClassicalEngine being called!");
-        self.current_op = 0;
-        debug!("Reset current_op to {}", self.current_op);
-        self.measurement_results.clear();
-        Ok(())
-    }
-
     fn process_program(&mut self) -> Result<CommandBatch, QueueError> {
         debug!(
             "Processing PHIR program - thread {:?}, current_op: {}",
@@ -473,6 +465,14 @@ impl ClassicalEngine for PHIREngine {
 
     fn compile(&self) -> Result<(), Box<dyn std::error::Error>> {
         // No compilation needed for PHIR/JSON
+        Ok(())
+    }
+
+    fn reset(&mut self) -> Result<(), QueueError> {
+        debug!("PHIREngine::reset() implementation for ClassicalEngine being called!");
+        self.current_op = 0;
+        debug!("Reset current_op to {}", self.current_op);
+        self.measurement_results.clear();
         Ok(())
     }
 }

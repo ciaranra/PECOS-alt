@@ -1,5 +1,8 @@
-pub mod depolarizing_noise;
-pub use depolarizing_noise::DepolarizingNoise;
+pub mod depolarizing;
+pub mod pass_through;
+
+pub use depolarizing::DepolarizingNoise;
+pub use pass_through::PassThroughNoise;
 
 use crate::Message;
 use crate::engines::{ControlEngine, EngineStage};
@@ -46,52 +49,5 @@ impl ControlEngine for Box<dyn NoiseModel> {
 
     fn reset(&mut self) -> Result<(), QueueError> {
         NoiseModel::reset(self.as_mut())
-    }
-}
-
-impl ControlEngine for &mut dyn NoiseModel {
-    type Input = CommandBatch;
-    type Output = Vec<Message>;
-    type EngineInput = CommandBatch;
-    type EngineOutput = Vec<Message>;
-
-    fn start(
-        &mut self,
-        input: CommandBatch,
-    ) -> Result<EngineStage<CommandBatch, Vec<Message>>, QueueError> {
-        // Apply noise transformation to the commands
-        let noisy_commands = self.apply_noise(input);
-
-        // Request processing of the noisy commands
-        Ok(EngineStage::NeedsProcessing(noisy_commands))
-    }
-
-    fn continue_processing(
-        &mut self,
-        results: Vec<Message>,
-    ) -> Result<EngineStage<CommandBatch, Vec<Message>>, QueueError> {
-        // Just pass through results from the quantum engine
-        Ok(EngineStage::Complete(results))
-    }
-
-    fn reset(&mut self) -> Result<(), QueueError> {
-        (*self).reset()
-    }
-}
-
-pub struct PassThroughNoise;
-
-impl NoiseModel for PassThroughNoise {
-    fn apply_noise(&self, commands: CommandBatch) -> CommandBatch {
-        // Just return the commands unchanged
-        commands
-    }
-
-    fn clone_box(&self) -> Box<dyn NoiseModel> {
-        Box::new(PassThroughNoise)
-    }
-
-    fn reset(&mut self) -> Result<(), QueueError> {
-        Ok(())
     }
 }
