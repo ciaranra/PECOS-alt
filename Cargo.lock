@@ -601,6 +601,8 @@ dependencies = [
 name = "pecos-engines"
 version = "0.1.1"
 dependencies = [
+ "bitflags",
+ "bytemuck",
  "lazy_static",
  "log",
  "num-traits",
