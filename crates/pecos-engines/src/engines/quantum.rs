@@ -21,6 +21,32 @@ impl Clone for Box<dyn QuantumEngine> {
     }
 }
 
+impl Engine for &mut dyn QuantumEngine {
+    type Input = CommandBatch;
+    type Output = Vec<Message>;
+
+    fn process(&mut self, input: Self::Input) -> Result<Self::Output, QueueError> {
+        (*self).process(input)
+    }
+
+    fn reset(&mut self) -> Result<(), QueueError> {
+        (*self).reset()
+    }
+}
+
+impl Engine for Box<dyn QuantumEngine> {
+    type Input = CommandBatch;
+    type Output = Vec<Message>;
+
+    fn process(&mut self, input: Self::Input) -> Result<Self::Output, QueueError> {
+        self.as_mut().process(input)
+    }
+
+    fn reset(&mut self) -> Result<(), QueueError> {
+        self.as_mut().reset()
+    }
+}
+
 // Engine for simulators that only support Clifford gates
 pub struct CliffordEngine<S>
 where

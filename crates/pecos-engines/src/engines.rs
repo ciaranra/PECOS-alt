@@ -183,7 +183,6 @@ where
     /// - There is an error during the reset of the controller.
     /// - There is an error during the reset of the engine.
     pub fn reset(&mut self) -> Result<(), QueueError> {
-        println!("DDDDD");
         self.controller.reset()?;
         self.engine.reset()
     }

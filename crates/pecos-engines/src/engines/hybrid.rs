@@ -1,9 +1,12 @@
-use crate::engines::noise::NoiseModel;
+use crate::engines::noise::{NoiseModel, PassThroughNoise};
 use log::debug;
-use pecos_core::types::ShotResult;
+use pecos_core::types::{CommandBatch, ShotResult};
 
+use crate::Message;
 use crate::channels::{CommandChannel, MessageChannel};
-use crate::engines::{ClassicalEngine, ControlEngine, EngineStage, QuantumEngine};
+use crate::engines::{
+    ClassicalEngine, ControlEngine, Engine, EngineStage, EngineSystem, QuantumEngine,
+};
 use crate::errors::QueueError;
 
 /// `HybridEngine` coordinates between classical and quantum components via message passing
@@ -13,10 +16,11 @@ where
     M: MessageChannel + Send + Sync + 'static,
 {
     classical: Box<dyn ClassicalEngine>,
-    quantum: Box<dyn QuantumEngine>,
+    engine: Box<dyn Engine<Input = CommandBatch, Output = Vec<Message>>>,
     cmd_channel: C,
     meas_channel: M,
-    noise_model: Option<Box<dyn NoiseModel>>,
+    // Store the quantum engine separately for potential reconstruction
+    quantum_engine: Box<dyn QuantumEngine>,
 }
 
 impl<C, M> HybridEngine<C, M>
@@ -30,17 +34,48 @@ where
         cmd_channel: C,
         meas_channel: M,
     ) -> Self {
-        Self {
+        // Use a pass-through noise model by default
+        Self::with_noise(
             classical,
             quantum,
+            Box::new(PassThroughNoise),
             cmd_channel,
             meas_channel,
-            noise_model: None,
+        )
+    }
+
+    pub fn with_noise(
+        classical: Box<dyn ClassicalEngine>,
+        quantum: Box<dyn QuantumEngine>,
+        noise_model: Box<dyn NoiseModel>,
+        cmd_channel: C,
+        meas_channel: M,
+    ) -> Self {
+        // Store a clone of the quantum engine
+        let quantum_clone = quantum.clone_box();
+
+        // Create an EngineSystem with the noise model
+        let engine = Box::new(EngineSystem::new(noise_model, quantum));
+
+        Self {
+            classical,
+            engine,
+            cmd_channel,
+            meas_channel,
+            quantum_engine: quantum_clone,
         }
     }
 
     pub fn set_noise_model(&mut self, noise_model: Option<Box<dyn NoiseModel>>) {
-        self.noise_model = noise_model;
+        // Create actual noise model or use pass-through
+        let actual_noise_model = noise_model.unwrap_or_else(|| Box::new(PassThroughNoise));
+
+        // Create a new engine system using the stored quantum engine
+        let engine = Box::new(EngineSystem::new(
+            actual_noise_model,
+            self.quantum_engine.clone_box(),
+        ));
+        self.engine = engine;
     }
 
     /// Resets the state of the hybrid engine, including classical, quantum, and noise model components.
@@ -51,14 +86,15 @@ where
     /// # Errors
     /// Returns a `QueueError` if:
     /// - Resetting the classical engine fails.
-    /// - Resetting the quantum engine fails.
-    /// - Resetting the noise model fails (if a noise model is present).
+    /// - Resetting the engine fails.
     pub fn reset(&mut self) -> Result<(), QueueError> {
+        // Reset the classical engine
         self.classical.reset()?;
-        self.quantum.reset()?;
-        if let Some(noise_model) = &mut self.noise_model {
-            noise_model.reset()?;
-        }
+
+        // Reset the engine (whether it's a QuantumEngine or an EngineSystem)
+        self.engine.reset()?;
+
+        // Return success
         Ok(())
     }
 
@@ -80,18 +116,11 @@ where
         let mut stage = self.classical.start(())?;
 
         while let EngineStage::NeedsProcessing(batch) = stage {
-            // Apply noise if configured
-            let batch = if let Some(noise_model) = &self.noise_model {
-                noise_model.apply_noise(batch)
-            } else {
-                batch
-            };
-
             // Send batch through command channel
             self.cmd_channel.send_batch(&batch)?;
 
-            // Process through quantum engine
-            let measurements = self.quantum.process(batch)?;
+            // Process through engine (could be QuantumEngine or EngineSystem)
+            let measurements = self.engine.process(batch)?;
 
             // Send measurements through measurement channel
             for measurement in &measurements {
