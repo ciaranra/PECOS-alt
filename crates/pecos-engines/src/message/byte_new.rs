@@ -13,6 +13,7 @@ pub struct MessageBatchHeader {
 }
 
 impl MessageBatchHeader {
+    #[allow(dead_code)]
     #[must_use]
     pub fn new(msg_count: u16, total_size: u32) -> Self {
         Self {
@@ -81,6 +82,7 @@ impl MessageBatch {
         bytemuck::from_bytes(header_bytes)
     }
 
+    #[allow(dead_code)]
     pub fn iter(&self) -> impl Iterator<Item = (&MessageHeader, &[u8])> {
         let mut offset = size_of::<MessageBatchHeader>(); // Skip batch header
         std::iter::from_fn(move || {
@@ -204,6 +206,7 @@ impl BatchBuilder {
     ///
     /// # Panics
     /// Panics if the total size of the batch exceeds `u32::MAX`.
+    #[allow(dead_code)]
     pub fn build(&mut self) -> MessageBatch {
         let total_size = u32::try_from(self.buffer.len() + size_of::<MessageBatchHeader>())
             .expect("Message size too large");

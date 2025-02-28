@@ -13,6 +13,24 @@ pub struct PHIREngine {
     results: Mutex<HashMap<String, u32>>,
 }
 
+impl Clone for PHIREngine {
+    fn clone(&self) -> Self {
+        // Clone the PyObject - PyObject is Clone so this is safe
+        let interp = Python::with_gil(|py| {
+            let interpreter_guard = self.interpreter.lock();
+            interpreter_guard.clone_ref(py)
+        });
+
+        // Clone the results hashmap
+        let results_clone = self.results.lock().clone();
+
+        Self {
+            interpreter: Mutex::new(interp),
+            results: Mutex::new(results_clone),
+        }
+    }
+}
+
 #[pymethods]
 impl PHIREngine {
     /// Creates a new `PHIREngine`.
@@ -211,6 +229,10 @@ impl ClassicalEngine for PHIREngine {
 
     fn compile(&self) -> Result<(), Box<dyn Error>> {
         Ok(())
+    }
+
+    fn clone_box(&self) -> Box<dyn ClassicalEngine> {
+        Box::new(self.clone())
     }
 }
 

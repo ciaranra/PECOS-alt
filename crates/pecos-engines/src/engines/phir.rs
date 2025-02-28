@@ -475,6 +475,26 @@ impl ClassicalEngine for PHIREngine {
         self.measurement_results.clear();
         Ok(())
     }
+
+    fn clone_box(&self) -> Box<dyn ClassicalEngine> {
+        Box::new(self.clone())
+    }
+}
+
+impl Clone for PHIREngine {
+    fn clone(&self) -> Self {
+        // Create a new instance with the same program
+        match &self.program {
+            Some(program) => Self {
+                program: Some(program.clone()),
+                current_op: 0, // Reset state in the clone
+                measurement_results: HashMap::new(),
+                quantum_variables: self.quantum_variables.clone(),
+                classical_variables: self.classical_variables.clone(),
+            },
+            None => Self::empty(),
+        }
+    }
 }
 
 #[cfg(test)]

@@ -86,6 +86,10 @@ pub trait ClassicalEngine: Send + Sync {
         debug!("DEFAULT ClassicalEngine::reset() being called!");
         Ok(())
     }
+
+    /// Create a boxed clone of this engine.
+    /// This allows engines to be cloned for concurrent execution.
+    fn clone_box(&self) -> Box<dyn ClassicalEngine>;
 }
 
 /// Detects the type of program based on its file extension and content.

@@ -61,15 +61,13 @@ fn run_program(args: &RunArgs) -> Result<(), Box<dyn Error>> {
     let program_path = get_program_path(&args.program)?;
 
     // Set up noise model if requested
-    let noise_model = if let Some(prob) = args.noise_probability {
-        Some(Box::new(DepolarizingNoise::new(prob)) as Box<dyn NoiseModel>)
-    } else {
-        None
-    };
+    let noise_model = args
+        .noise_probability
+        .map(|prob| Box::new(DepolarizingNoise::new(prob)) as Box<dyn NoiseModel>);
 
     // Run simulation
     let results =
-        MonteCarloEngine::run_program(program_path, args.shots, args.workers, noise_model)?;
+        MonteCarloEngine::run_program(&program_path, args.shots, args.workers, noise_model)?;
 
     // Print results
     results.print();
