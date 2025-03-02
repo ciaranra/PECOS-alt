@@ -1,4 +1,4 @@
-use super::NoiseModel;
+use super::{NoiseModel, PassThroughNoise};
 use crate::errors::QueueError;
 use parking_lot::Mutex;
 use pecos_core::types::{CommandBatch, GateType, QuantumCommand};
@@ -24,15 +24,23 @@ impl DepolarizingNoise {
     /// # Panics
     /// - Panics if `probability` is not within the range [0.0, 1.0].
     #[must_use]
-    pub fn new(probability: f64) -> Self {
+    pub fn builder() -> DepolarizingNoiseBuilder {
+        DepolarizingNoiseBuilder::new()
+    }
+
+    #[must_use]
+    pub fn new_with_options(probability: f64, seed: Option<u64>) -> Self {
         assert!(
             (0.0..=1.0).contains(&probability),
             "Probability must be between 0 and 1"
         );
-        Self {
-            probability,
-            rng: Arc::new(Mutex::new(StdRng::from_os_rng())),
-        }
+        // Create RNG with seed if provided
+        let rng = match seed {
+            Some(s) => Arc::new(Mutex::new(StdRng::seed_from_u64(s))),
+            None => Arc::new(Mutex::new(StdRng::from_os_rng())),
+        };
+
+        Self { probability, rng }
     }
 
     /// Helper to create sequence of gates for Pauli X
@@ -135,5 +143,49 @@ impl NoiseModel for DepolarizingNoise {
 
     fn reset(&mut self) -> Result<(), QueueError> {
         Ok(())
+    }
+}
+
+pub struct DepolarizingNoiseBuilder {
+    probability: f64,
+    seed: Option<u64>,
+}
+
+impl Default for DepolarizingNoiseBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl DepolarizingNoiseBuilder {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            probability: 0.0,
+            seed: None,
+        }
+    }
+
+    #[must_use]
+    pub fn with_probability(mut self, p: f64) -> Self {
+        self.probability = p;
+        self
+    }
+
+    #[must_use]
+    pub fn with_seed(mut self, seed: u64) -> Self {
+        self.seed = Some(seed);
+        self
+    }
+
+    #[must_use]
+    pub fn build(self) -> Box<dyn NoiseModel> {
+        let seed = self.seed;
+
+        if self.probability == 0.0 {
+            Box::new(PassThroughNoise)
+        } else {
+            Box::new(DepolarizingNoise::new_with_options(self.probability, seed))
+        }
     }
 }

@@ -59,19 +59,17 @@ fn parse_noise_probability(arg: &str) -> Result<f64, String> {
 
 fn run_program(args: &RunArgs) -> Result<(), Box<dyn Error>> {
     let program_path = get_program_path(&args.program)?;
+    let prob = args.noise_probability.unwrap_or(0.0);
+
+    // TODO: Get number of qubits from classical engine to pass to quantum_engine
 
     // Create engine instance
-    let mut engine = MonteCarloEngine::new();
-
-    // Add noise model only if probability is positive
-    if let Some(prob) = args.noise_probability {
-        if prob > 0.0 {
-            engine = engine.with_noise_model(Box::new(DepolarizingNoise::new(prob)));
-        }
-    }
-
-    // Run simulation
-    let results = engine.run(Some(&program_path), args.shots, args.workers)?;
+    let results = MonteCarloEngine::builder()
+        .with_classical_engine(setup_engine(&program_path)?)
+        .with_noise_model(DepolarizingNoise::builder().with_probability(prob).build())
+        .with_quantum_engine(new_quantum_engine_arbitrary_qgate(StateVec::new(2)))
+        .build()
+        .run(args.shots, args.workers)?;
 
     // Print results
     results.print();

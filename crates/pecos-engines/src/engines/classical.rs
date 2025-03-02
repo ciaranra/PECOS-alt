@@ -166,10 +166,14 @@ pub fn setup_engine(program_path: &Path) -> Result<Box<dyn ClassicalEngine>, Box
     debug!("Program path: {}", program_path.display());
     let build_dir = program_path.parent().unwrap().join("build");
     debug!("Build directory: {}", build_dir.display());
-    std::fs::create_dir_all(&build_dir)?;
+    fs::create_dir_all(&build_dir)?;
 
     match detect_program_type(program_path)? {
-        ProgramType::QIR => Ok(Box::new(QirClassicalEngine::new(program_path, &build_dir))),
+        ProgramType::QIR => {
+            let engine = Box::new(QirClassicalEngine::new(program_path, &build_dir));
+            engine.compile()?;
+            Ok(engine)
+        }
         ProgramType::PHIR => Ok(Box::new(PHIREngine::new(program_path)?)),
     }
 }

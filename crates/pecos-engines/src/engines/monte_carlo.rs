@@ -1,64 +1,34 @@
 use crate::channels::stdio::StdioChannel;
-use crate::engines::classical::setup_engine;
 use crate::engines::noise::NoiseModel;
-use crate::engines::quantum::new_quantum_engine_arbitrary_qgate;
 use crate::engines::{ClassicalEngine, HybridEngine, QuantumEngine};
 use crate::errors::QueueError;
 use log::{debug, info};
 use parking_lot::Mutex;
 use pecos_core::types::ShotResults;
-use pecos_qsim::StateVec;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use std::path::Path;
 use std::sync::Arc;
-
-// TODO: Program should be taken ownership and copied per parallel instance
-// TODO: Engines should all be spun up independently per thread and reset/reuse
-//       assuming threads are used to run multiple shots
 
 /// A high-level engine that orchestrates Monte Carlo simulations of quantum programs.
 ///
 /// This engine manages the parallel execution of multiple shots of a quantum program,
 /// coordinating the classical and quantum components through a hybrid engine setup.
 /// It handles program loading, noise model application, and result aggregation.
-#[derive(Default)]
 pub struct MonteCarloEngine {
     /// Classical engine used for simulation (optional - can be provided at runtime)
-    classical_engine: Option<Box<dyn ClassicalEngine>>,
-
-    /// Quantum engine template to clone for workers (optional - default `StateVec` will be used)
-    quantum_engine: Option<Box<dyn QuantumEngine>>,
+    classical_engine: Box<dyn ClassicalEngine>,
 
     /// Noise model template to clone for workers (optional - no noise by default)
-    noise_model: Option<Box<dyn NoiseModel>>,
+    noise_model: Box<dyn NoiseModel>,
+
+    /// Quantum engine template to clone for workers (optional - default `StateVec` will be used)
+    quantum_engine: Box<dyn QuantumEngine>,
 }
 
 impl MonteCarloEngine {
     /// Create a new Monte Carlo engine with default settings.
     #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Set the classical engine to use for simulation.
-    #[must_use]
-    pub fn with_classical_engine(mut self, engine: Box<dyn ClassicalEngine>) -> Self {
-        self.classical_engine = Some(engine);
-        self
-    }
-
-    /// Set the quantum engine to use as template for workers.
-    #[must_use]
-    pub fn with_quantum_engine(mut self, engine: Box<dyn QuantumEngine>) -> Self {
-        self.quantum_engine = Some(engine);
-        self
-    }
-
-    /// Set the noise model to use as template for workers.
-    #[must_use]
-    pub fn with_noise_model(mut self, model: Box<dyn NoiseModel>) -> Self {
-        self.noise_model = Some(model);
-        self
+    pub fn builder() -> MonteCarloBuilder {
+        MonteCarloBuilder::new()
     }
 
     /// Run a simulation with the configured engines.
@@ -81,19 +51,7 @@ impl MonteCarloEngine {
     /// - The program cannot be loaded or compiled
     /// - Engine initialization fails
     /// - Simulation execution fails
-    pub fn run(
-        &self,
-        program_path: Option<&Path>,
-        num_shots: usize,
-        num_workers: usize,
-    ) -> Result<ShotResults, QueueError> {
-        // Validate configuration
-        if self.classical_engine.is_none() && program_path.is_none() {
-            return Err(QueueError::OperationError(
-                "Either a classical engine or program path must be provided".into(),
-            ));
-        }
-
+    pub fn run(&self, num_shots: usize, num_workers: usize) -> Result<ShotResults, QueueError> {
         info!(
             "Starting Monte Carlo simulation with {} shots across {} workers",
             num_shots, num_workers
@@ -131,45 +89,21 @@ impl MonteCarloEngine {
                     worker_idx, worker_shots
                 );
 
-                // Get classical engine for this worker
-                let classical_engine = match (&self.classical_engine, program_path) {
-                    (Some(engine), _) => {
-                        // Clone the provided classical engine for this worker
-                        engine.clone_box()
-                    }
-                    (None, Some(path)) => {
-                        // Create a new engine from the program path
-                        setup_engine(path).map_err(|e| {
-                            QueueError::ExecutionError(format!(
-                                "Failed to setup classical engine: {e}"
-                            ))
-                        })?
-                    }
-                    _ => unreachable!(), // We validated above that at least one is provided
-                };
-
-                // Create quantum engine for this worker
-                let quantum_engine = if let Some(engine) = &self.quantum_engine {
-                    engine.clone_box()
-                } else {
-                    // Create default state vector simulator with 2 qubits
-                    // In a real implementation, you might want to detect qubit count from the program
-                    let simulator = StateVec::new(2);
-                    new_quantum_engine_arbitrary_qgate(simulator)
-                };
-
                 // Set up channels
                 let cmd_channel = StdioChannel::create_for_shot()?;
                 let meas_channel = StdioChannel::create_for_shot()?;
 
-                // Create hybrid engine for this worker
-                let mut engine =
-                    HybridEngine::new(classical_engine, quantum_engine, cmd_channel, meas_channel);
+                let quantum_engine = self.quantum_engine.clone_box();
+                let noise_model = self.noise_model.clone_box();
 
-                // Apply noise model if configured
-                if let Some(model) = self.noise_model.as_ref() {
-                    engine.set_noise_model(Some(model.clone_box()));
-                }
+                // Create hybrid engine for this worker
+                let mut engine = HybridEngine::with_noise(
+                    self.classical_engine.clone_box(),
+                    quantum_engine,
+                    noise_model,
+                    cmd_channel,
+                    meas_channel,
+                );
 
                 // Process all shots assigned to this worker
                 for _shot_num in 0..worker_shots {
@@ -191,6 +125,55 @@ impl MonteCarloEngine {
     }
 }
 
+#[derive(Default)]
+pub struct MonteCarloBuilder {
+    /// Classical engine used for simulation (optional - can be provided at runtime)
+    classical_engine: Option<Box<dyn ClassicalEngine>>,
+
+    /// Noise model template to clone for workers (optional - no noise by default)
+    noise_model: Option<Box<dyn NoiseModel>>,
+
+    /// Quantum engine template to clone for workers (optional - default `StateVec` will be used)
+    quantum_engine: Option<Box<dyn QuantumEngine>>,
+}
+
+impl MonteCarloBuilder {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the classical engine to use for simulation.
+    #[must_use]
+    pub fn with_classical_engine(mut self, engine: Box<dyn ClassicalEngine>) -> Self {
+        self.classical_engine = Some(engine);
+        self
+    }
+
+    /// Set the noise model to use as template for workers.
+    #[must_use]
+    pub fn with_noise_model(mut self, model: Box<dyn NoiseModel>) -> Self {
+        self.noise_model = Some(model);
+        self
+    }
+
+    /// Set the quantum engine to use as template for workers.
+    #[must_use]
+    pub fn with_quantum_engine(mut self, engine: Box<dyn QuantumEngine>) -> Self {
+        self.quantum_engine = Some(engine);
+        self
+    }
+
+    #[must_use]
+    pub fn build(self) -> MonteCarloEngine {
+        MonteCarloEngine {
+            classical_engine: self.classical_engine.expect("ClassicalEngine is None"),
+            noise_model: self.noise_model.expect("NoiseModel is None"),
+            quantum_engine: self.quantum_engine.expect("QuantumEngine is None"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,7 +181,7 @@ mod tests {
     use crate::engines::classical::ClassicalEngine;
     use crate::engines::noise::{DepolarizingNoise, PassThroughNoise};
     use crate::engines::phir::PHIREngine;
-    use crate::engines::quantum::CliffordEngine;
+    use crate::engines::quantum::{CliffordEngine, new_quantum_engine_arbitrary_qgate};
     use crate::engines::{ControlEngine, Engine, EngineStage};
     use pecos_core::types::{CommandBatch, GateType, QuantumCommand, ShotResult};
     use pecos_qsim::{StateVec, StdSparseStab};
@@ -206,7 +189,7 @@ mod tests {
     use std::error::Error;
     use std::fs::File;
     use std::io::Write;
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
     use tempfile::tempdir;
 
     // Helper to create a mock quantum engine for testing
@@ -278,23 +261,27 @@ mod tests {
     #[test]
     fn test_basic_construction() {
         // Test that we can create a MonteCarloEngine with default settings
-        let _engine = MonteCarloEngine::new();
+        let _engine = MonteCarloEngine::builder().build();
 
         // Test construction with a specific quantum engine
         let simulator = StateVec::new(2);
         let quantum_engine = new_quantum_engine_arbitrary_qgate(simulator);
-        let _engine = MonteCarloEngine::new().with_quantum_engine(quantum_engine);
+        let _engine = MonteCarloEngine::builder()
+            .with_quantum_engine(quantum_engine)
+            .build();
 
         // Test construction with a specific noise model
-        let noise_model = Box::new(DepolarizingNoise::new(0.01));
-        let _engine = MonteCarloEngine::new().with_noise_model(noise_model);
+        let noise_model = DepolarizingNoise::builder().with_probability(0.01).build();
+        let _engine = MonteCarloEngine::builder()
+            .with_noise_model(noise_model)
+            .build();
 
         // Test that we can chain method calls
-        let noise_model = Box::new(DepolarizingNoise::new(0.01));
+        let noise_model = DepolarizingNoise::builder().with_probability(0.01).build();
         let simulator = StateVec::new(2);
         let quantum_engine = new_quantum_engine_arbitrary_qgate(simulator);
 
-        let _engine = MonteCarloEngine::new()
+        let _engine = MonteCarloEngine::builder()
             .with_quantum_engine(quantum_engine)
             .with_noise_model(noise_model);
     }
@@ -304,8 +291,10 @@ mod tests {
         // Create a test program
         let (_dir, program_path) = create_test_program();
 
+        // TODO: add builder setup
+
         // Test running with just a program path
-        let result = MonteCarloEngine::new().run(Some(&program_path), 2, 1);
+        let result = MonteCarloEngine::builder().build().run(2, 1);
 
         assert!(result.is_ok(), "Basic run with program path should succeed");
 
@@ -327,10 +316,11 @@ mod tests {
         let quantum_engine = Box::new(CliffordEngine::new(stabilizer));
 
         // Test running with custom engines
-        let result = MonteCarloEngine::new()
+        let result = MonteCarloEngine::builder()
             .with_classical_engine(Box::new(classical_engine))
             .with_quantum_engine(quantum_engine)
-            .run(None, 2, 1);
+            .build()
+            .run(2, 1);
 
         assert!(result.is_ok(), "Run with custom engines should succeed");
     }
@@ -341,24 +331,28 @@ mod tests {
         let (_dir, program_path) = create_test_program();
 
         // Create depolarizing noise model
-        let noise_model = Box::new(DepolarizingNoise::new(0.05));
+        let noise_model = DepolarizingNoise::builder().with_probability(0.05).build();
+
+        // TODO: add classical engine builder setup
 
         // Test running with noise model
-        let result =
-            MonteCarloEngine::new()
-                .with_noise_model(noise_model)
-                .run(Some(&program_path), 10, 1);
+        let result = MonteCarloEngine::builder()
+            .with_noise_model(noise_model)
+            .build()
+            .run(10, 1);
 
         assert!(result.is_ok(), "Run with noise model should succeed");
 
         // Create pass-through noise model
         let noise_model = Box::new(PassThroughNoise);
 
+        // TODO: add classical engine builder setup
+
         // Test running with pass-through noise
-        let result =
-            MonteCarloEngine::new()
-                .with_noise_model(noise_model)
-                .run(Some(&program_path), 2, 1);
+        let result = MonteCarloEngine::builder()
+            .with_noise_model(noise_model)
+            .build()
+            .run(2, 1);
 
         assert!(result.is_ok(), "Run with pass-through noise should succeed");
     }
@@ -369,16 +363,21 @@ mod tests {
         let (_dir1, program_path1) = create_test_program();
         let (_dir2, program_path2) = create_test_program();
 
+        // TODO: add classical and quantum engine builder setup
+
         // Create a configured engine
-        let engine =
-            MonteCarloEngine::new().with_noise_model(Box::new(DepolarizingNoise::new(0.01)));
+        let engine = MonteCarloEngine::builder()
+            .with_noise_model(DepolarizingNoise::builder().with_probability(0.01).build())
+            .build();
 
         // Run with first program
-        let result1 = engine.run(Some(&program_path1), 2, 1);
+        let result1 = engine.run(2, 1);
         assert!(result1.is_ok(), "First run should succeed");
 
+        // TODO: add classical and quantum engine builder setup
+
         // Run with second program
-        let result2 = engine.run(Some(&program_path2), 2, 1);
+        let result2 = engine.run(2, 1);
         assert!(result2.is_ok(), "Second run should succeed");
     }
 
@@ -388,13 +387,15 @@ mod tests {
         let (_dir, program_path) = create_test_program();
 
         // Create a configured engine
-        let engine = MonteCarloEngine::new();
+        let engine = MonteCarloEngine::builder().build();
+
+        // TODO: add builder setup
 
         // Run with different shots and workers
-        let result1 = engine.run(Some(&program_path), 2, 1);
+        let result1 = engine.run(2, 1);
         assert!(result1.is_ok(), "Run with 2 shots, 1 worker should succeed");
 
-        let result2 = engine.run(Some(&program_path), 4, 2);
+        let result2 = engine.run(4, 2);
         assert!(
             result2.is_ok(),
             "Run with 4 shots, 2 workers should succeed"
@@ -416,10 +417,13 @@ mod tests {
         // Create a mock quantum engine
         let quantum_engine = Box::new(MockQuantumEngine) as Box<dyn QuantumEngine>;
 
+        // TODO: add builder setup
+
         // Run with mock engine
-        let result = MonteCarloEngine::new()
+        let result = MonteCarloEngine::builder()
             .with_quantum_engine(quantum_engine)
-            .run(Some(&program_path), 5, 1);
+            .build()
+            .run(5, 1);
 
         assert!(
             result.is_ok(),
@@ -429,9 +433,11 @@ mod tests {
 
     #[test]
     fn test_error_conditions() {
+        // TODO: add builder setup
+
         // Test with no classical engine and no program path
-        let engine = MonteCarloEngine::new();
-        let result = engine.run(None, 1, 1);
+        let engine = MonteCarloEngine::builder().build();
+        let result = engine.run(1, 1);
 
         assert!(
             result.is_err(),
@@ -439,13 +445,18 @@ mod tests {
         );
 
         // Test with invalid program path
-        let result = MonteCarloEngine::new().run(Some(Path::new("nonexistent_program.json")), 1, 1);
+        let result = MonteCarloEngine::builder().build().run(
+            // Some(Path::new("nonexistent_program.json")),
+            1, 1,
+        );
 
         assert!(result.is_err(), "Should fail with invalid program path");
 
+        // TODO: add builder setup
+
         // Test with invalid shots/workers
         let (_dir, program_path) = create_test_program();
-        let result = MonteCarloEngine::new().run(Some(&program_path), 0, 0);
+        let result = MonteCarloEngine::builder().build().run(0, 0);
 
         // This might not fail in the implementation, but if it does, check the error
         if result.is_err() {
@@ -463,12 +474,13 @@ mod tests {
         let quantum_engine = new_quantum_engine_arbitrary_qgate(simulator);
 
         // Create a MonteCarloEngine with the external engine
-        let engine = MonteCarloEngine::new()
+        let engine = MonteCarloEngine::builder()
             .with_classical_engine(external_engine)
-            .with_quantum_engine(quantum_engine);
+            .with_quantum_engine(quantum_engine)
+            .build();
 
         // Run the simulation
-        let result = engine.run(None, 10, 2);
+        let result = engine.run(10, 2);
 
         assert!(
             result.is_ok(),
