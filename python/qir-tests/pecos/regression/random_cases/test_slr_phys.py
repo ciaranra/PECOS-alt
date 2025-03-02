@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from pecos.qeclib import qubit as p
 from pecos.qeclib.steane.steane_class import Steane
@@ -105,7 +107,9 @@ def test_qir_creg_size_too_large():
 
     with pytest.raises(
         ValueError,
-        match="Classical registers are limited to storing 64 bits (requested: 75)",
+        match=re.escape(
+            "Classical registers are limited to storing 64 bits (requested: 75)",
+        ),
     ):
         SlrConverter(prog).qir()
 
