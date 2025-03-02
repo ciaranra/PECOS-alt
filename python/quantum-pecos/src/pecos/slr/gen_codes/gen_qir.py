@@ -276,6 +276,12 @@ class QIRGenerator(Generator):
         classical register in the QIR.
         """
 
+        if creg.size >= 64:
+            msg = f"Classical registers are limited to storing 64 bits (requested: {creg.size})"
+            raise ValueError(
+                msg,
+            )
+
         self._creg_dict[creg.sym] = (
             self._creg_funcs.create_creg_func.create_call(
                 self._builder,

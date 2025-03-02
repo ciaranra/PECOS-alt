@@ -1,19 +1,14 @@
 import pytest
-
-from pecos import __version__
 from pecos.qeclib import qubit as p
 from pecos.qeclib.steane.steane_class import Steane
 from pecos.slr import (
     Barrier,
-    Bit,
     Block,
     Comment,
     CReg,
     If,
     Main,
-    Permute,
     QReg,
-    Qubit,
     Repeat,
     SlrConverter,
 )
@@ -95,7 +90,25 @@ def test_bell_qreg_qir():
 
     qir = SlrConverter(prog).qir()
     assert "__quantum__qis__h__body" in qir
-    
+
+
+@pytest.mark.optional_dependency
+def test_qir_creg_size_too_large():
+    """Test that a simple Bell prep and measure circuit can be created."""
+    prog: Main = Main(
+        q := QReg("q", 2),
+        m := CReg("m", 75),
+        p.H(q[0]),
+        p.CX(q[0], q[1]),
+        p.Measure(q) > m,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Classical registers are limited to storing 64 bits (requested: 75)",
+    ):
+        SlrConverter(prog).qir()
+
 
 @pytest.mark.optional_dependency
 def test_control_flow_qir():
@@ -193,11 +206,13 @@ def test_steane_qir():
     qir = SlrConverter(telep("X", "X")).qir()
     assert "__quantum__qis__h__body" in qir
 
+
 @pytest.mark.optional_dependency
 def test_steane_qir_bc():
     """Test the teleportation program using the Steane code."""
     qir = SlrConverter(telep("X", "X")).qir_bc()
     print(qir)
+
 
 @pytest.mark.optional_dependency
 def test_sx_sxdg():
@@ -205,7 +220,6 @@ def test_sx_sxdg():
     prog: Main = Main(
         q := QReg("q", 2),
         m := CReg("m", 2),
-        p.H(q[0]),
         p.CX(q[0], q[1]),
         p.SX(q[0]),
         p.SXdg(q[1]),
