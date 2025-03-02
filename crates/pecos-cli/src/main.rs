@@ -60,14 +60,18 @@ fn parse_noise_probability(arg: &str) -> Result<f64, String> {
 fn run_program(args: &RunArgs) -> Result<(), Box<dyn Error>> {
     let program_path = get_program_path(&args.program)?;
 
-    // Set up noise model if requested
-    let noise_model = args
-        .noise_probability
-        .map(|prob| Box::new(DepolarizingNoise::new(prob)) as Box<dyn NoiseModel>);
+    // Create engine instance
+    let mut engine = MonteCarloEngine::new();
+
+    // Add noise model only if probability is positive
+    if let Some(prob) = args.noise_probability {
+        if prob > 0.0 {
+            engine = engine.with_noise_model(Box::new(DepolarizingNoise::new(prob)));
+        }
+    }
 
     // Run simulation
-    let results =
-        MonteCarloEngine::run_program(&program_path, args.shots, args.workers, noise_model)?;
+    let results = engine.run(Some(&program_path), args.shots, args.workers)?;
 
     // Print results
     results.print();
