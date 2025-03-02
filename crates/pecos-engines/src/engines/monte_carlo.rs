@@ -1,10 +1,12 @@
 use crate::channels::stdio::StdioChannel;
-use crate::engines::noise::NoiseModel;
+use crate::engines::noise::{DepolarizingNoise, NoiseModel};
+use crate::engines::quantum::new_quantum_engine_arbitrary_qgate;
 use crate::engines::{ClassicalEngine, HybridEngine, QuantumEngine};
 use crate::errors::QueueError;
 use log::{debug, info};
 use parking_lot::Mutex;
 use pecos_core::types::ShotResults;
+use pecos_qsim::StateVec;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::sync::Arc;
 
@@ -93,14 +95,11 @@ impl MonteCarloEngine {
                 let cmd_channel = StdioChannel::create_for_shot()?;
                 let meas_channel = StdioChannel::create_for_shot()?;
 
-                let quantum_engine = self.quantum_engine.clone_box();
-                let noise_model = self.noise_model.clone_box();
-
                 // Create hybrid engine for this worker
                 let mut engine = HybridEngine::with_noise(
                     self.classical_engine.clone_box(),
-                    quantum_engine,
-                    noise_model,
+                    self.quantum_engine.clone_box(),
+                    self.noise_model.clone_box(),
                     cmd_channel,
                     meas_channel,
                 );
@@ -122,6 +121,101 @@ impl MonteCarloEngine {
             .into_inner();
 
         Ok(ShotResults::from_measurements(&results))
+    }
+
+    /// Run a simulation using the provided engines directly.
+    ///
+    /// # Parameters
+    /// - `classical_engine`: The classical engine to use for the simulation.
+    /// - `noise_model`: The noise model to apply during the simulation.
+    /// - `quantum_engine`: The quantum engine to use for the simulation.
+    /// - `num_shots`: The number of shots to execute in the simulation.
+    /// - `num_workers`: The number of parallel workers to use.
+    ///
+    /// # Returns
+    /// - `Ok(ShotResults)`: The results from the simulation.
+    /// - `Err(QueueError)`: If an error occurs during the configuration or simulation.
+    ///
+    /// # Errors
+    /// This function will return a `QueueError` if:
+    /// - The engines fail to build properly.
+    /// - There is an error during the execution of the simulation.
+    pub fn run_with_engines(
+        classical_engine: Box<dyn ClassicalEngine>,
+        noise_model: Box<dyn NoiseModel>,
+        quantum_engine: Box<dyn QuantumEngine>,
+        num_shots: usize,
+        num_workers: usize,
+    ) -> Result<ShotResults, QueueError> {
+        MonteCarloEngine::builder()
+            .with_classical_engine(classical_engine)
+            .with_noise_model(noise_model)
+            .with_quantum_engine(quantum_engine)
+            .build()
+            .run(num_shots, num_workers)
+    }
+    // TODO: Format ShotResults into JSON
+
+    /// Run a Monte Carlo simulation using only a classical engine.
+    ///
+    /// This method automatically configures a depolarizing noise model and a quantum engine
+    /// based on the number of qubits in the provided classical engine.
+    ///
+    /// # Parameters
+    /// - `classical_engine`: The classical engine used for simulation.
+    /// - `p`: Probability for depolarizing noise (0.0 - 1.0).
+    /// - `num_shots`: Number of shots to execute.
+    /// - `num_workers`: Number of parallel workers to use.
+    ///
+    /// # Returns
+    /// - `Ok(ShotResults)`: Results of the simulation shots.
+    /// - `Err(QueueError)`: If an error occurs during the configuration or execution.
+    ///
+    /// # Errors
+    /// This function returns a `QueueError` if:
+    /// - The number of qubits is invalid.
+    /// - Noise or quantum engine initialization fails.
+    /// - Simulation execution fails.
+    pub fn run_with_classical_engine(
+        classical_engine: Box<dyn ClassicalEngine>,
+        p: f64,
+        num_shots: usize,
+        num_workers: usize,
+    ) -> Result<ShotResults, QueueError> {
+        let num_qubits = classical_engine.num_qubits();
+        let noise_model = DepolarizingNoise::builder().with_probability(p).build();
+        let quantum_engine = new_quantum_engine_arbitrary_qgate(StateVec::new(num_qubits));
+
+        MonteCarloEngine::builder()
+            .with_classical_engine(classical_engine)
+            .with_noise_model(noise_model)
+            .with_quantum_engine(quantum_engine)
+            .build()
+            .run(num_shots, num_workers)
+    }
+
+    /// Run a Monte Carlo simulation using configuration.
+    ///
+    /// # Parameters
+    /// - `config`: Configuration for the simulation.
+    /// - `num_shots`: Number of shots to execute.
+    /// - `num_workers`: Number of parallel workers to use.
+    ///
+    /// # Returns
+    /// - `Ok(ShotResults)`: The results of the simulation shots.
+    /// - `Err(QueueError)`: If an error occurs during the setup or execution.
+    ///
+    /// # Errors
+    /// This function will return a `QueueError` if:
+    /// - The configuration string is invalid or cannot be parsed.
+    /// - Simulation execution fails.
+    #[allow(unused_variables)]
+    pub fn run_with_config(
+        config: &str,
+        num_shots: usize,
+        num_workers: usize,
+    ) -> Result<ShotResults, QueueError> {
+        todo!()
     }
 }
 
@@ -164,6 +258,10 @@ impl MonteCarloBuilder {
         self
     }
 
+    /// Builds and returns a configured `MonteCarloEngine`.
+    ///
+    /// # Panics
+    /// Panics if `classical_engine`, `noise_model`, or `quantum_engine` are not set.
     #[must_use]
     pub fn build(self) -> MonteCarloEngine {
         MonteCarloEngine {
@@ -289,7 +387,7 @@ mod tests {
     #[test]
     fn test_run_with_program_path() {
         // Create a test program
-        let (_dir, program_path) = create_test_program();
+        let (_dir, _program_path) = create_test_program();
 
         // TODO: add builder setup
 
@@ -328,7 +426,7 @@ mod tests {
     #[test]
     fn test_run_with_noise_model() {
         // Create a test program
-        let (_dir, program_path) = create_test_program();
+        let (_dir, _program_path) = create_test_program();
 
         // Create depolarizing noise model
         let noise_model = DepolarizingNoise::builder().with_probability(0.05).build();
@@ -360,8 +458,8 @@ mod tests {
     #[test]
     fn test_reuse_engine_with_different_programs() {
         // Create two different test programs
-        let (_dir1, program_path1) = create_test_program();
-        let (_dir2, program_path2) = create_test_program();
+        let (_dir1, _program_path1) = create_test_program();
+        let (_dir2, _program_path2) = create_test_program();
 
         // TODO: add classical and quantum engine builder setup
 
@@ -384,7 +482,7 @@ mod tests {
     #[test]
     fn test_run_with_different_parameters() {
         // Create a test program
-        let (_dir, program_path) = create_test_program();
+        let (_dir, _program_path) = create_test_program();
 
         // Create a configured engine
         let engine = MonteCarloEngine::builder().build();
@@ -412,7 +510,7 @@ mod tests {
     #[test]
     fn test_mock_quantum_engine() {
         // Create a test program
-        let (_dir, program_path) = create_test_program();
+        let (_dir, _program_path) = create_test_program();
 
         // Create a mock quantum engine
         let quantum_engine = Box::new(MockQuantumEngine) as Box<dyn QuantumEngine>;
@@ -455,7 +553,7 @@ mod tests {
         // TODO: add builder setup
 
         // Test with invalid shots/workers
-        let (_dir, program_path) = create_test_program();
+        let (_dir, _program_path) = create_test_program();
         let result = MonteCarloEngine::builder().build().run(0, 0);
 
         // This might not fail in the implementation, but if it does, check the error
@@ -552,6 +650,26 @@ mod tests {
     }
 
     impl ClassicalEngine for ExternalClassicalEngine {
+        fn num_qubits(&self) -> usize {
+            // If we have no commands, return 0
+            if self.commands.is_empty() {
+                return 0;
+            }
+
+            // Find the highest qubit index used in any command
+            let mut max_qubit_index = 0;
+            for cmd in &self.commands {
+                for &qubit in &cmd.qubits {
+                    if qubit > max_qubit_index {
+                        max_qubit_index = qubit;
+                    }
+                }
+            }
+
+            // The number of qubits is max_qubit_index + 1 (since indices start at 0)
+            max_qubit_index + 1
+        }
+
         fn process_program(&mut self) -> Result<CommandBatch, QueueError> {
             // If we've processed all commands, return empty batch
             if self.command_index >= self.commands.len() {

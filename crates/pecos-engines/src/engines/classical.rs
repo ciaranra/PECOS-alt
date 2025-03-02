@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 
 /// Classical engine that processes programs and handles measurements
 pub trait ClassicalEngine: Send + Sync {
+    fn num_qubits(&self) -> usize;
     /// Processes the classical program and generates a batch of quantum commands
     /// to be sent for execution.
     ///

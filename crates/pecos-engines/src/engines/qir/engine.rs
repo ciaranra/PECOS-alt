@@ -206,6 +206,9 @@ impl QirClassicalEngine {
 }
 
 impl ClassicalEngine for QirClassicalEngine {
+    fn num_qubits(&self) -> usize {
+        todo!()
+    }
     fn process_program(&mut self) -> Result<CommandBatch, QueueError> {
         // Clear previous results at start of each shot
         self.current_results = ShotResult::default();

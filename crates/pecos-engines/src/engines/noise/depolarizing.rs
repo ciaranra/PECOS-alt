@@ -28,6 +28,14 @@ impl DepolarizingNoise {
         DepolarizingNoiseBuilder::new()
     }
 
+    /// Creates a new instance of `DepolarizingNoise` with the given noise probability and optional seed.
+    ///
+    /// # Parameters
+    /// - `probability`: The probability of applying noise, between 0.0 and 1.0 (inclusive).
+    /// - `seed`: An optional seed for the random number generator.
+    ///
+    /// # Panics
+    /// - Panics if `probability` is not in the range [0.0, 1.0].
     #[must_use]
     pub fn new_with_options(probability: f64, seed: Option<u64>) -> Self {
         assert!(

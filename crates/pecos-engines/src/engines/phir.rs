@@ -348,6 +348,35 @@ impl ControlEngine for PHIREngine {
 }
 
 impl ClassicalEngine for PHIREngine {
+    fn num_qubits(&self) -> usize {
+        // First check if quantum_variables is already populated
+        let sum: usize = self.quantum_variables.values().sum();
+        if sum > 0 {
+            return sum;
+        }
+
+        // If quantum_variables is empty, directly scan the program ops
+        if let Some(program) = &self.program {
+            let mut total = 0;
+            for op in &program.ops {
+                if let Operation::VariableDefinition {
+                    data,
+                    data_type,
+                    variable: _,
+                    size,
+                } = op
+                {
+                    if data == "qvar_define" && data_type == "qubits" {
+                        total += size;
+                    }
+                }
+            }
+            return total;
+        }
+
+        0 // If no program is loaded, return 0
+    }
+
     fn process_program(&mut self) -> Result<CommandBatch, QueueError> {
         debug!(
             "Processing PHIR program - thread {:?}, current_op: {}",

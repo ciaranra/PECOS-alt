@@ -140,6 +140,30 @@ impl PHIREngine {
 }
 
 impl ClassicalEngine for PHIREngine {
+    fn num_qubits(&self) -> usize {
+        Python::with_gil(|py| {
+            let interpreter = self.interpreter.lock();
+            match interpreter.call_method0(py, "num_qubits") {
+                Ok(result) => result.extract(py).unwrap_or(0),
+                Err(_) => {
+                    // Fallback if Python-side doesn't implement num_qubits
+                    // Try to get program and count quantum variables
+                    match interpreter.getattr(py, "program") {
+                        Ok(program) => {
+                            if let Ok(qvars) = program.getattr(py, "quantum_variables") {
+                                if let Ok(total) = qvars.call_method0(py, "total_qubits") {
+                                    return total.extract(py).unwrap_or(0);
+                                }
+                            }
+                            0 // Default if we can't get the information
+                        }
+                        Err(_) => 0,
+                    }
+                }
+            }
+        })
+    }
+
     fn process_program(&mut self) -> Result<CommandBatch, QueueError> {
         Python::with_gil(|py| {
             let interpreter = self.interpreter.lock();
