@@ -11,12 +11,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from pecos.slr.gen_codes.gen_qasm import QASMGenerator
+from pecos.slr.gen_codes.language import Language
 
-from pecos.slr.gen_codes import Language, QASMGenerator, QIRGenerator
-
-if TYPE_CHECKING:
-    from pecos.slr.gen_codes import Generator
+try:
+    from pecos.slr.gen_codes.gen_qir import QIRGenerator
+except ImportError:
+    QIRGenerator = None
 
 
 class SlrConverter:
@@ -31,10 +32,10 @@ class SlrConverter:
         skip_headers: bool = False,
         add_versions: bool = False,
     ) -> str:
-        generator: Generator = None
         if target == Language.QASM:
             generator = QASMGenerator(skip_headers=skip_headers)
         elif target in [Language.QIR, Language.QIRBC]:
+            self._check_qir_imported()
             generator = QIRGenerator()
         else:
             msg = f"Code gen target '{target}' is not supported."
@@ -42,8 +43,20 @@ class SlrConverter:
 
         generator.generate_block(self._block)
         if target == Language.QIRBC:
+
             return generator.get_bc()
         return generator.get_output()
+
+    @staticmethod
+    def _check_qir_imported():
+        if QIRGenerator is None:
+            msg = (
+                "Trying to compile QIR without the appropriate optional dependencies install. "
+                "Use optional dependency group `qir` or `all`"
+            )
+            raise Exception(
+                msg,
+            )
 
     def qasm(self, *, skip_headers: bool = False, add_versions: bool = False):
         return self.generate(
@@ -53,7 +66,9 @@ class SlrConverter:
         )
 
     def qir(self):
+        self._check_qir_imported()
         return self.generate(Language.QIR)
 
     def qir_bc(self):
+        self._check_qir_imported()
         return self.generate(Language.QIRBC)
