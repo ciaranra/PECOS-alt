@@ -77,6 +77,9 @@ class DepolarizingErrorModel(ParentErrorModel):
 
         return self.error_circuits
 
+    def reset(self):
+        return DepolarizingErrorModel()
+
     def generate_tick_errors(
         self,
         tick_circuit,
