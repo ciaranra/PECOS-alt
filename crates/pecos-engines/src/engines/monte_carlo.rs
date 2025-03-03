@@ -1,4 +1,4 @@
-use crate::channels::stdio::StdioChannel;
+use crate::channels::byte;
 use crate::engines::noise::{DepolarizingNoise, NoiseModel, PassThroughNoise};
 use crate::engines::quantum::new_quantum_engine_arbitrary_qgate;
 use crate::engines::{ClassicalEngine, HybridEngine, QuantumEngine};
@@ -86,8 +86,8 @@ impl MonteCarloEngine {
                 );
 
                 // Set up channels
-                let cmd_channel = StdioChannel::create_for_shot()?;
-                let meas_channel = StdioChannel::create_for_shot()?;
+                let cmd_channel = byte::ByteChannel::create_for_shot()?;
+                let meas_channel = byte::ByteChannel::create_for_shot()?;
 
                 // Create hybrid engine for this worker
                 let mut engine = HybridEngine::with_noise(

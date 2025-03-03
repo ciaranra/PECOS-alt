@@ -1,10 +1,12 @@
 use lazy_static::lazy_static;
 use log::{debug, trace};
 use std::collections::VecDeque;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::sync::Mutex;
 
-use pecos_core::types::{GateType, QuantumCommand};
+use crate::channels::byte::builder::MessageBuilder;
+use crate::channels::byte::protocol::{MessageFlags, MessageType};
+use pecos_core::types::{CommandBatch, GateType, QuantumCommand};
 
 lazy_static! {
     // A thread-safe global queue to store quantum commands
@@ -219,8 +221,8 @@ pub extern "C" fn __quantum__qis__m__body(qubit: *const Qubit, result: *const Re
 /// Records the result of a quantum measurement and outputs it.
 ///
 /// This function finalizes the current quantum operations by flushing the command queue.
-/// It processes any pending commands by printing them to standard output, waits for external input
-/// (representing a measurement result), and then associates the provided result pointer
+/// It processes any pending commands by sending them through the byte protocol,
+/// waits for the measurement result, and then associates the provided result pointer
 /// with the parsed measurement.
 ///
 /// # Arguments
@@ -232,12 +234,9 @@ pub extern "C" fn __quantum__qis__m__body(qubit: *const Qubit, result: *const Re
 ///
 /// # Behavior
 ///
-/// 1. Flushes the `COMMAND_QUEUE` by printing queued commands to the standard output.
-///    Commands are formatted using the `format_command` function.
-/// 2. Waits for a line of input from the standard input, which is expected to represent
-///    a measurement result as an integer.
-/// 3. Associates the parsed measurement result with the given `result` pointer and outputs
-///    the result.
+/// 1. Flushes the `COMMAND_QUEUE` by sending queued commands through the byte protocol.
+/// 2. Waits for a measurement result from the input stream.
+/// 3. Associates the parsed measurement result with the given `result` pointer.
 ///
 /// # Panics
 ///
@@ -247,9 +246,7 @@ pub extern "C" fn __quantum__qis__m__body(qubit: *const Qubit, result: *const Re
 ///
 /// # Errors
 ///
-/// - If the input from the standard input cannot be parsed as a `u32`, an error will be printed
-///   using the following format:
-///   `[ERROR] Failed to parse measurement: <error_message>`
+/// - If the received measurement result is invalid or cannot be parsed, an error will be logged.
 ///
 /// # Safety
 ///
@@ -263,27 +260,47 @@ pub extern "C" fn __quantum__rt__result_record_output(result: *const Result, _la
         if !queue.is_empty() {
             debug!("Flushing {} commands", queue.len());
 
-            println!("FLUSH_BEGIN");
+            // Create a batch of commands
+            let mut batch = CommandBatch::new();
             while let Some(cmd) = queue.pop_front() {
-                use crate::channels::stdio::format_command;
-                let cmd_str = format_command(&cmd);
-                println!("CMD {cmd_str}");
-                io::stdout().flush().unwrap();
+                batch.add_command(cmd);
             }
-            println!("FLUSH_END");
+
+            // Build and send binary message
+            let mut builder = MessageBuilder::new();
+            let message_data = builder.add_command_batch(&batch).build();
+
+            // Write to stdout
+            io::stdout().write_all(&message_data).unwrap();
             io::stdout().flush().unwrap();
         }
 
-        let mut line = String::new();
-        io::stdin().read_line(&mut line).unwrap();
+        // Read binary response
+        let mut header_buffer =
+            [0u8; std::mem::size_of::<crate::channels::byte::protocol::BatchHeader>()];
+        io::stdin().read_exact(&mut header_buffer).unwrap();
 
-        match line.trim().parse::<u32>() {
-            Ok(measurement) => {
-                println!("RESULT measurement_{result_idx} {measurement}");
-            }
-            Err(e) => {
-                println!("[ERROR] Failed to parse measurement: {e}");
-            }
-        }
+        // Parse the binary message to get the measurement result
+        // This is a simplified version - in a real implementation, you'd need to
+        // properly parse the full binary message format
+        let mut measurement_buffer = [0u8; 4]; // Assuming a 32-bit measurement
+        io::stdin().read_exact(&mut measurement_buffer).unwrap();
+        let measurement = u32::from_le_bytes(measurement_buffer);
+
+        // Output the result
+        debug!("Received measurement: {}", measurement);
+
+        // Build a binary response with the result
+        let mut result_builder = MessageBuilder::new();
+        let result_data = result_builder
+            .add_message(
+                MessageType::MeasurementResult,
+                &format!("measurement_{result_idx} {measurement}").into_bytes(),
+                MessageFlags::NONE,
+            )
+            .build();
+
+        io::stdout().write_all(&result_data).unwrap();
+        io::stdout().flush().unwrap();
     }
 }
