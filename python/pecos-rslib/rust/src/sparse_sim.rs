@@ -10,7 +10,7 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-// PECOS/python/pecos-rslib/rust/src/sparse_sim.rs
+#![allow(clippy::useless_conversion)]
 
 use pecos::prelude::*;
 use pyo3::prelude::*;
