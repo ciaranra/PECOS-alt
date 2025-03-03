@@ -53,62 +53,24 @@ impl DepolarizingNoise {
 
     /// Helper to create sequence of gates for Pauli X
     fn x_gates(qubit: usize) -> Vec<QuantumCommand> {
-        vec![
-            QuantumCommand {
-                gate: GateType::RZ {
-                    theta: std::f64::consts::PI,
-                },
-                qubits: vec![qubit],
-            },
-            QuantumCommand {
-                gate: GateType::H,
-                qubits: vec![qubit],
-            },
-            QuantumCommand {
-                gate: GateType::RZ {
-                    theta: std::f64::consts::PI,
-                },
-                qubits: vec![qubit],
-            },
-            QuantumCommand {
-                gate: GateType::H,
-                qubits: vec![qubit],
-            },
-        ]
+        vec![QuantumCommand {
+            gate: GateType::X {},
+            qubits: vec![qubit],
+        }]
     }
 
     /// Helper to create sequence of gates for Pauli Y
     fn y_gates(qubit: usize) -> Vec<QuantumCommand> {
-        vec![
-            QuantumCommand {
-                gate: GateType::RZ {
-                    theta: std::f64::consts::PI,
-                },
-                qubits: vec![qubit],
-            },
-            QuantumCommand {
-                gate: GateType::H,
-                qubits: vec![qubit],
-            },
-            QuantumCommand {
-                gate: GateType::RZ {
-                    theta: std::f64::consts::FRAC_PI_2,
-                },
-                qubits: vec![qubit],
-            },
-            QuantumCommand {
-                gate: GateType::H,
-                qubits: vec![qubit],
-            },
-        ]
+        vec![QuantumCommand {
+            gate: GateType::Y {},
+            qubits: vec![qubit],
+        }]
     }
 
     /// Helper to create Pauli Z gate
     fn z_gate(qubit: usize) -> QuantumCommand {
         QuantumCommand {
-            gate: GateType::RZ {
-                theta: std::f64::consts::PI,
-            },
+            gate: GateType::Z {},
             qubits: vec![qubit],
         }
     }

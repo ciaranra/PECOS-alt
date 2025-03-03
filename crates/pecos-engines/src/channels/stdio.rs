@@ -293,12 +293,15 @@ impl MessageChannel for StdioChannel {
 
 #[must_use]
 pub fn format_command(cmd: &QuantumCommand) -> String {
-    use pecos_core::types::GateType::{CX, H, Measure, R1XY, RZ, SZZ};
+    use pecos_core::types::GateType::{CX, H, Measure, R1XY, RZ, SZZ, X, Y, Z};
 
     match &cmd.gate {
         RZ { theta } => format!("RZ {} {}", theta, cmd.qubits[0]),
         R1XY { phi, theta } => format!("R1XY {} {} {}", phi, theta, cmd.qubits[0]),
         SZZ => format!("SZZ {} {}", cmd.qubits[0], cmd.qubits[1]),
+        X => format!("X {}", cmd.qubits[0]),
+        Y => format!("Y {}", cmd.qubits[0]),
+        Z => format!("Z {}", cmd.qubits[0]),
         H => format!("H {}", cmd.qubits[0]),
         CX => format!("CX {} {}", cmd.qubits[0], cmd.qubits[1]),
         Measure { result_id } => format!("M {} {}", cmd.qubits[0], result_id),

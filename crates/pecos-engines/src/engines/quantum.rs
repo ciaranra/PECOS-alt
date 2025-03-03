@@ -57,6 +57,18 @@ where
 
         for cmd in batch.commands() {
             match &cmd.gate {
+                GateType::X => {
+                    debug!("Processing H gate on qubit {:?}", cmd.qubits[0]);
+                    self.simulator.x(cmd.qubits[0]);
+                }
+                GateType::Y => {
+                    debug!("Processing H gate on qubit {:?}", cmd.qubits[0]);
+                    self.simulator.y(cmd.qubits[0]);
+                }
+                GateType::Z => {
+                    debug!("Processing Z gate on qubit {:?}", cmd.qubits[0]);
+                    self.simulator.z(cmd.qubits[0]);
+                }
                 GateType::H => {
                     debug!("Processing H gate on qubit {:?}", cmd.qubits[0]);
                     self.simulator.h(cmd.qubits[0]);
@@ -94,7 +106,7 @@ where
 
                 GateType::RZ { .. } | GateType::R1XY { .. } => {
                     return Err(QueueError::OperationError(
-                        "This simulator only supports Clifford operations".into(),
+                        "This simulator only supports Clifford operations.".into(),
                     ));
                 }
             }
@@ -166,6 +178,18 @@ where
         for cmd in batch {
             debug!("Quantum engine processing command: {:?}", cmd);
             match cmd.gate {
+                GateType::X => {
+                    debug!("Processing H gate on qubit {:?}", cmd.qubits[0]);
+                    self.simulator.x(cmd.qubits[0]);
+                }
+                GateType::Y => {
+                    debug!("Processing H gate on qubit {:?}", cmd.qubits[0]);
+                    self.simulator.y(cmd.qubits[0]);
+                }
+                GateType::Z => {
+                    debug!("Processing Z gate on qubit {:?}", cmd.qubits[0]);
+                    self.simulator.z(cmd.qubits[0]);
+                }
                 GateType::H => {
                     debug!("Executing H gate on qubit {}", cmd.qubits[0]);
                     self.simulator.h(cmd.qubits[0]);

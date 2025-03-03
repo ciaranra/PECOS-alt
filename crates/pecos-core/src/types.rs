@@ -5,6 +5,9 @@ use std::fmt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GateType {
+    X,
+    Y,
+    Z,
     RZ { theta: f64 },
     R1XY { phi: f64, theta: f64 },
     SZZ,
@@ -99,6 +102,45 @@ impl QuantumCommand {
                         parts[2]
                             .parse()
                             .map_err(|e| format!("Invalid qubit2: {e}"))?,
+                    ],
+                })
+            }
+            Some(&"X") => {
+                if parts.len() != 2 {
+                    return Err("Invalid X format".into());
+                }
+                Ok(Self {
+                    gate: GateType::X,
+                    qubits: vec![
+                        parts[1]
+                            .parse()
+                            .map_err(|e| format!("Invalid qubit: {e}"))?,
+                    ],
+                })
+            }
+            Some(&"Y") => {
+                if parts.len() != 2 {
+                    return Err("Invalid Y format".into());
+                }
+                Ok(Self {
+                    gate: GateType::Y,
+                    qubits: vec![
+                        parts[1]
+                            .parse()
+                            .map_err(|e| format!("Invalid qubit: {e}"))?,
+                    ],
+                })
+            }
+            Some(&"Z") => {
+                if parts.len() != 2 {
+                    return Err("Invalid Z format".into());
+                }
+                Ok(Self {
+                    gate: GateType::Z,
+                    qubits: vec![
+                        parts[1]
+                            .parse()
+                            .map_err(|e| format!("Invalid qubit: {e}"))?,
                     ],
                 })
             }

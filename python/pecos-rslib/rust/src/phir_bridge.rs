@@ -111,6 +111,15 @@ impl PHIREngine {
                     GateType::H => {
                         py_dict.set_item("gate_type", "H")?;
                     }
+                    GateType::X => {
+                        py_dict.set_item("gate_type", "X")?;
+                    }
+                    GateType::Y => {
+                        py_dict.set_item("gate_type", "Y")?;
+                    }
+                    GateType::Z => {
+                        py_dict.set_item("gate_type", "Z")?;
+                    }
                     GateType::CX => {
                         py_dict.set_item("gate_type", "CX")?;
                     }
