@@ -111,6 +111,8 @@ clean:  ## Clean up caches and build artifacts
 	@rm -rf .ruff_cache/
 	@find . -type d -name ".hypothesis" -exec rm -rf {} +
 	@find . -type d -name "junit" -exec rm -rf {} +
+	@find python -name "*.so" -delete
+	@find python -name "*.pyd" -delete
 	@cargo clean
 
 .PHONY: pip-install-uv
