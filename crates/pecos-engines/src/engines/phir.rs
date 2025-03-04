@@ -375,10 +375,9 @@ impl ClassicalEngine for PHIREngine {
         0 // If no program is loaded, return 0
     }
 
-    // Keep original process_program for backward compatibility
-    fn process_program(&mut self) -> Result<CommandBatch, QueueError> {
+    fn generate_commands(&mut self) -> Result<ByteMessage, QueueError> {
         debug!(
-            "Processing PHIR program - thread {:?}, current_op: {}",
+            "Generating commands - thread {:?}, current_op: {}",
             std::thread::current().id(),
             self.current_op
         );
@@ -392,8 +391,8 @@ impl ClassicalEngine for PHIREngine {
 
         // If we've processed all ops, return empty batch to signal completion
         if self.current_op >= ops.len() {
-            debug!("End of program reached");
-            return Ok(CommandBatch::new());
+            debug!("End of program reached, sending flush");
+            return ByteMessage::create_flush(true);
         }
 
         let mut batch = CommandBatch::new();
@@ -423,7 +422,10 @@ impl ClassicalEngine for PHIREngine {
                     if self.handle_classical_op(cop, args, returns)? {
                         debug!("Finishing batch due to classical operation completion");
                         self.current_op += 1;
-                        return Ok(batch);
+                        if batch.is_empty() {
+                            return ByteMessage::create_flush(true);
+                        }
+                        return ByteMessage::create_quantum_operations(&batch);
                     }
                 }
             }
@@ -431,12 +433,6 @@ impl ClassicalEngine for PHIREngine {
         }
 
         debug!("PHIR engine generated {} commands for shot", batch.len());
-        Ok(batch)
-    }
-
-    // New method for ByteMessage
-    fn generate_commands(&mut self) -> Result<ByteMessage, QueueError> {
-        let batch = self.process_program()?;
 
         if batch.is_empty() {
             ByteMessage::create_flush(true)
@@ -445,34 +441,27 @@ impl ClassicalEngine for PHIREngine {
         }
     }
 
-    fn handle_measurement(&mut self, measurement: u32) -> Result<(), QueueError> {
-        // Extract result_id and outcome as before
-        let result_id = (measurement >> 16) as usize;
-        let outcome = measurement & 0xFFFF;
-
-        debug!(
-            "PHIR: Received measurement {} (encoded as {}), result_id={}",
-            outcome, measurement, result_id
-        );
-
-        // Use the raw result_id from the measurement directly
-        self.measurement_results
-            .insert(format!("measurement_{result_id}"), outcome);
-
-        debug!(
-            "PHIR: Stored measurement {} at result_id {}",
-            outcome, result_id
-        );
-
-        Ok(())
-    }
-
-    // New method for ByteMessage
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError> {
         let measurements = message.parse_measurements()?;
 
         for measurement in measurements {
-            self.handle_measurement(measurement)?;
+            // Extract result_id and outcome directly
+            let result_id = (measurement >> 16) as usize;
+            let outcome = measurement & 0xFFFF;
+
+            debug!(
+                "PHIR: Received measurement {} (encoded as {}), result_id={}",
+                outcome, measurement, result_id
+            );
+
+            // Store the measurement
+            self.measurement_results
+                .insert(format!("measurement_{result_id}"), outcome);
+
+            debug!(
+                "PHIR: Stored measurement {} at result_id {}",
+                outcome, result_id
+            );
         }
 
         Ok(())
@@ -568,67 +557,63 @@ mod tests {
 
         // Create a test program
         let program = r#"{
-            "format": "PHIR/JSON",
-            "version": "0.1.0",
-            "metadata": {"test": "true"},
-            "ops": [
-                {
-                    "data": "qvar_define",
-                    "data_type": "qubits",
-                    "variable": "q",
-                    "size": 2
-                },
-                {
-                    "data": "cvar_define",
-                    "data_type": "i64",
-                    "variable": "m",
-                    "size": 2
-                },
-                {
-                    "data": "cvar_define",
-                    "data_type": "i64",
-                    "variable": "result",
-                    "size": 2
-                },
-                {
-                    "qop": "R1XY",
-                    "angles": [[0.1, 0.2], "rad"],
-                    "args": [["q", 0]]
-                },
-                {
-                    "qop": "Measure",
-                    "args": [["q", 0]],
-                    "returns": [["m", 0]]
-                },
-                {"cop": "Result", "args": [["m", 0]], "returns": [["result", 0]]}
-            ]
-        }"#;
+        "format": "PHIR/JSON",
+        "version": "0.1.0",
+        "metadata": {"test": "true"},
+        "ops": [
+            {
+                "data": "qvar_define",
+                "data_type": "qubits",
+                "variable": "q",
+                "size": 2
+            },
+            {
+                "data": "cvar_define",
+                "data_type": "i64",
+                "variable": "m",
+                "size": 2
+            },
+            {
+                "data": "cvar_define",
+                "data_type": "i64",
+                "variable": "result",
+                "size": 2
+            },
+            {
+                "qop": "R1XY",
+                "angles": [[0.1, 0.2], "rad"],
+                "args": [["q", 0]]
+            },
+            {
+                "qop": "Measure",
+                "args": [["q", 0]],
+                "returns": [["m", 0]]
+            },
+            {"cop": "Result", "args": [["m", 0]], "returns": [["result", 0]]}
+        ]
+    }"#;
 
         let mut file = File::create(&program_path)?;
         file.write_all(program.as_bytes())?;
 
         let mut engine = PHIREngine::new(&program_path)?;
 
-        // Process program and verify commands
-        let commands = engine.process_program()?;
-        assert_eq!(commands.len(), 2);
+        // Generate commands and verify they're correctly generated
+        let command_message = engine.generate_commands()?;
 
-        // Test measurement handling
-        engine.handle_measurement(1)?;
+        // Parse the message back to confirm it has the correct operations
+        let parsed_commands = command_message.parse_quantum_operations()?;
+        assert_eq!(parsed_commands.len(), 2);
+
+        // Create a measurement message and test handling
+        let measurement = 1u32; // result_id=0, outcome=1
+        let message = ByteMessage::create_measurements(&[measurement])?;
+        engine.handle_measurements(message)?;
 
         // Verify results
         let results = engine.get_results()?;
         assert_eq!(results.measurements.len(), 2);
         assert_eq!(results.measurements["measurement_0"], 1);
-
-        // Test ByteMessage methods
-        let command_message = engine.generate_commands()?;
-        assert!(!command_message.is_empty().unwrap_or(true));
-
-        // Create a measurement message and test handling
-        let measurement = (0u32 << 16) | 1u32; // result_id=0, outcome=1
-        let message = ByteMessage::create_measurements(&[measurement])?;
-        engine.handle_measurements(message)?;
 
         Ok(())
     }

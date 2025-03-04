@@ -34,6 +34,14 @@ impl Clone for PHIREngine {
 #[pymethods]
 impl PHIREngine {
     /// Creates a new `PHIREngine`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `PyErr` if:
+    /// - Python module "pecos.classical_interpreters" cannot be imported
+    /// - "PHIRClassicalInterpreter" class cannot be found
+    /// - Interpreter cannot be instantiated
+    /// - The interpreter's init method fails when given the JSON
     #[new]
     pub fn py_new(phir_json: &str) -> PyResult<Self> {
         Python::with_gil(|py| {
@@ -68,7 +76,7 @@ impl PHIREngine {
             let raw_commands = self.get_raw_commands_from_python(py)?;
 
             // Convert to Python objects we can return
-            let result = self.convert_to_py_commands(py, raw_commands)?;
+            let result = convert_to_py_commands(py, &raw_commands)?;
 
             Ok(result)
         })
@@ -118,102 +126,6 @@ impl PHIREngine {
         }
     }
 
-    // Helper to convert Python objects to Python command dicts
-    fn convert_to_py_commands(
-        &self,
-        py: Python<'_>,
-        commands: PyObject,
-    ) -> PyResult<Vec<PyObject>> {
-        if commands.is_none(py) {
-            return Ok(Vec::new());
-        }
-
-        let py_list = commands.downcast_bound::<PyList>(py)?;
-        let mut result = Vec::with_capacity(py_list.len());
-
-        for py_cmd in py_list.iter() {
-            let py_dict = PyDict::new(py);
-            let name: String = py_cmd.getattr("name")?.extract()?;
-
-            // Create a dict for parameters
-            let params_dict = PyDict::new(py);
-
-            // Get arguments (qubits)
-            let args = py_cmd.getattr("args")?;
-            let mut qubits = Vec::new();
-
-            for item in args.try_iter()? {
-                let item = item?;
-                let qubit_idx: usize = if item.is_instance_of::<PyList>() {
-                    let idx = item.get_item(1)?;
-                    idx.extract()?
-                } else {
-                    item.extract()?
-                };
-                qubits.push(qubit_idx);
-            }
-
-            // Handle different gate types
-            match name.as_str() {
-                "RZ" => {
-                    let angles: Vec<f64> = py_cmd.getattr("angles")?.extract()?;
-                    py_dict.set_item("gate_type", "RZ")?;
-                    params_dict.set_item("theta", angles[0])?;
-                }
-                "R1XY" => {
-                    let angles: Vec<f64> = py_cmd.getattr("angles")?.extract()?;
-                    py_dict.set_item("gate_type", "R1XY")?;
-                    params_dict.set_item("angles", angles)?;
-                }
-                "SZZ" => {
-                    py_dict.set_item("gate_type", "SZZ")?;
-                }
-                "H" => {
-                    py_dict.set_item("gate_type", "H")?;
-                }
-                "X" => {
-                    py_dict.set_item("gate_type", "X")?;
-                }
-                "Y" => {
-                    py_dict.set_item("gate_type", "Y")?;
-                }
-                "Z" => {
-                    py_dict.set_item("gate_type", "Z")?;
-                }
-                "CX" => {
-                    py_dict.set_item("gate_type", "CX")?;
-                }
-                "Measure" => {
-                    let returns = py_cmd.getattr("returns")?;
-                    let return_item = returns.get_item(0)?;
-                    let result_id: usize = return_item.get_item(1)?.extract()?;
-                    py_dict.set_item("gate_type", "Measure")?;
-                    params_dict.set_item("result_id", result_id)?;
-                }
-                _ => {
-                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                        "Unsupported gate type: {name}"
-                    )));
-                }
-            }
-
-            py_dict.set_item("params", params_dict)?;
-
-            // Create a separate PyList for qubits
-            let qubits_list = PyList::empty(py);
-            for &q in &qubits {
-                qubits_list.append(q)?;
-            }
-            py_dict.set_item("qubits", qubits_list)?;
-
-            // Convert to PyObject
-            let py_obj: PyObject = py_dict.into_any().into();
-            result.push(py_obj);
-        }
-
-        Ok(result)
-    }
-
     // Helper to handle a single measurement
     fn handle_measurement_internal(&mut self, py: Python<'_>, measurement: u32) -> PyResult<()> {
         let result_id = measurement >> 16;
@@ -244,15 +156,219 @@ impl PHIREngine {
         drop(results_guard);
         self.results
             .lock()
-            .insert(format!("measurement_{}", result_id), outcome);
+            .insert(format!("measurement_{result_id}"), outcome);
 
         Ok(())
     }
 }
 
+// Helper to convert Python objects to Python command dicts
+// Made into a standalone function to avoid the unused self warning
+fn convert_to_py_commands(py: Python<'_>, commands: &PyObject) -> PyResult<Vec<PyObject>> {
+    if commands.is_none(py) {
+        return Ok(Vec::new());
+    }
+
+    let py_list = commands.downcast_bound::<PyList>(py)?;
+    let mut result = Vec::with_capacity(py_list.len());
+
+    for py_cmd in py_list.iter() {
+        let py_dict = PyDict::new(py);
+        let name: String = py_cmd.getattr("name")?.extract()?;
+
+        // Create a dict for parameters
+        let params_dict = PyDict::new(py);
+
+        // Get arguments (qubits)
+        let args = py_cmd.getattr("args")?;
+        let mut qubits = Vec::new();
+
+        for item in args.try_iter()? {
+            let item = item?;
+            let qubit_idx: usize = if item.is_instance_of::<PyList>() {
+                let idx = item.get_item(1)?;
+                idx.extract()?
+            } else {
+                item.extract()?
+            };
+            qubits.push(qubit_idx);
+        }
+
+        // Handle different gate types
+        match name.as_str() {
+            "RZ" => {
+                let angles: Vec<f64> = py_cmd.getattr("angles")?.extract()?;
+                py_dict.set_item("gate_type", "RZ")?;
+                params_dict.set_item("theta", angles[0])?;
+            }
+            "R1XY" => {
+                let angles: Vec<f64> = py_cmd.getattr("angles")?.extract()?;
+                py_dict.set_item("gate_type", "R1XY")?;
+                params_dict.set_item("angles", angles)?;
+            }
+            "SZZ" => {
+                py_dict.set_item("gate_type", "SZZ")?;
+            }
+            "H" => {
+                py_dict.set_item("gate_type", "H")?;
+            }
+            "X" => {
+                py_dict.set_item("gate_type", "X")?;
+            }
+            "Y" => {
+                py_dict.set_item("gate_type", "Y")?;
+            }
+            "Z" => {
+                py_dict.set_item("gate_type", "Z")?;
+            }
+            "CX" => {
+                py_dict.set_item("gate_type", "CX")?;
+            }
+            "Measure" => {
+                let returns = py_cmd.getattr("returns")?;
+                let return_item = returns.get_item(0)?;
+                let result_id: usize = return_item.get_item(1)?.extract()?;
+                py_dict.set_item("gate_type", "Measure")?;
+                params_dict.set_item("result_id", result_id)?;
+            }
+            _ => {
+                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                    "Unsupported gate type: {name}"
+                )));
+            }
+        }
+
+        py_dict.set_item("params", params_dict)?;
+
+        // Create a separate PyList for qubits
+        let qubits_list = PyList::empty(py);
+        for &q in &qubits {
+            qubits_list.append(q)?;
+        }
+        py_dict.set_item("qubits", qubits_list)?;
+
+        // Convert to PyObject
+        let py_obj: PyObject = py_dict.into_any().into();
+        result.push(py_obj);
+    }
+
+    Ok(result)
+}
+
 // Helper function for error conversion
 fn to_queue_error<E: std::fmt::Display>(err: E) -> QueueError {
     QueueError::ExecutionError(err.to_string())
+}
+
+// Break out part of the generate_commands functionality to reduce function length
+fn process_py_command(py_cmd: &Bound<PyAny>) -> Result<(GateType, Vec<usize>), QueueError> {
+    // Get command name
+    let name = match py_cmd.getattr("name") {
+        Ok(n) => match n.extract::<String>() {
+            Ok(s) => s,
+            Err(e) => return Err(to_queue_error(e)),
+        },
+        Err(e) => return Err(to_queue_error(e)),
+    };
+
+    // Get qubits
+    let args = match py_cmd.getattr("args") {
+        Ok(a) => a,
+        Err(e) => return Err(to_queue_error(e)),
+    };
+
+    let iter = match args.try_iter() {
+        Ok(i) => i,
+        Err(e) => return Err(to_queue_error(e)),
+    };
+
+    let mut qubits = Vec::new();
+    for item_result in iter {
+        let item = match item_result {
+            Ok(i) => i,
+            Err(e) => return Err(to_queue_error(e)),
+        };
+
+        let qubit_idx = if item.is_instance_of::<PyList>() {
+            match item.get_item(1) {
+                Ok(idx) => match idx.extract::<usize>() {
+                    Ok(i) => i,
+                    Err(e) => return Err(to_queue_error(e)),
+                },
+                Err(e) => return Err(to_queue_error(e)),
+            }
+        } else {
+            match item.extract::<usize>() {
+                Ok(i) => i,
+                Err(e) => return Err(to_queue_error(e)),
+            }
+        };
+
+        qubits.push(qubit_idx);
+    }
+
+    // Create gate based on type
+    let gate = match name.as_str() {
+        "RZ" => {
+            let angles = match py_cmd.getattr("angles") {
+                Ok(a) => match a.extract::<Vec<f64>>() {
+                    Ok(v) => v,
+                    Err(e) => return Err(to_queue_error(e)),
+                },
+                Err(e) => return Err(to_queue_error(e)),
+            };
+
+            GateType::RZ { theta: angles[0] }
+        }
+        "R1XY" => {
+            let angles = match py_cmd.getattr("angles") {
+                Ok(a) => match a.extract::<Vec<f64>>() {
+                    Ok(v) => v,
+                    Err(e) => return Err(to_queue_error(e)),
+                },
+                Err(e) => return Err(to_queue_error(e)),
+            };
+
+            GateType::R1XY {
+                phi: angles[0],
+                theta: angles[1],
+            }
+        }
+        "SZZ" => GateType::SZZ,
+        "H" => GateType::H,
+        "X" => GateType::X,
+        "Y" => GateType::Y,
+        "Z" => GateType::Z,
+        "CX" => GateType::CX,
+        "Measure" => {
+            let returns = match py_cmd.getattr("returns") {
+                Ok(r) => r,
+                Err(e) => return Err(to_queue_error(e)),
+            };
+
+            let return_item = match returns.get_item(0) {
+                Ok(i) => i,
+                Err(e) => return Err(to_queue_error(e)),
+            };
+
+            let result_id = match return_item.get_item(1) {
+                Ok(id) => match id.extract::<usize>() {
+                    Ok(i) => i,
+                    Err(e) => return Err(to_queue_error(e)),
+                },
+                Err(e) => return Err(to_queue_error(e)),
+            };
+
+            GateType::Measure { result_id }
+        }
+        _ => {
+            return Err(QueueError::OperationError(format!(
+                "Unsupported gate type: {name}"
+            )));
+        }
+    };
+
+    Ok((gate, qubits))
 }
 
 impl ClassicalEngine for PHIREngine {
@@ -279,8 +395,7 @@ impl ClassicalEngine for PHIREngine {
         })
     }
 
-    // Generate a CommandBatch from Python commands
-    fn process_program(&mut self) -> Result<CommandBatch, QueueError> {
+    fn generate_commands(&mut self) -> Result<ByteMessage, QueueError> {
         // Create a CommandBatch
         let mut batch = CommandBatch::new();
 
@@ -305,111 +420,7 @@ impl ClassicalEngine for PHIREngine {
 
             // Process each command
             for py_cmd in py_list.iter() {
-                // Get command name
-                let name = match py_cmd.getattr("name") {
-                    Ok(n) => match n.extract::<String>() {
-                        Ok(s) => s,
-                        Err(e) => return Err(to_queue_error(e)),
-                    },
-                    Err(e) => return Err(to_queue_error(e)),
-                };
-
-                // Get qubits
-                let args = match py_cmd.getattr("args") {
-                    Ok(a) => a,
-                    Err(e) => return Err(to_queue_error(e)),
-                };
-
-                let iter = match args.try_iter() {
-                    Ok(i) => i,
-                    Err(e) => return Err(to_queue_error(e)),
-                };
-
-                let mut qubits = Vec::new();
-                for item_result in iter {
-                    let item = match item_result {
-                        Ok(i) => i,
-                        Err(e) => return Err(to_queue_error(e)),
-                    };
-
-                    let qubit_idx = if item.is_instance_of::<PyList>() {
-                        match item.get_item(1) {
-                            Ok(idx) => match idx.extract::<usize>() {
-                                Ok(i) => i,
-                                Err(e) => return Err(to_queue_error(e)),
-                            },
-                            Err(e) => return Err(to_queue_error(e)),
-                        }
-                    } else {
-                        match item.extract::<usize>() {
-                            Ok(i) => i,
-                            Err(e) => return Err(to_queue_error(e)),
-                        }
-                    };
-
-                    qubits.push(qubit_idx);
-                }
-
-                // Create gate based on type
-                let gate = match name.as_str() {
-                    "RZ" => {
-                        let angles = match py_cmd.getattr("angles") {
-                            Ok(a) => match a.extract::<Vec<f64>>() {
-                                Ok(v) => v,
-                                Err(e) => return Err(to_queue_error(e)),
-                            },
-                            Err(e) => return Err(to_queue_error(e)),
-                        };
-
-                        GateType::RZ { theta: angles[0] }
-                    }
-                    "R1XY" => {
-                        let angles = match py_cmd.getattr("angles") {
-                            Ok(a) => match a.extract::<Vec<f64>>() {
-                                Ok(v) => v,
-                                Err(e) => return Err(to_queue_error(e)),
-                            },
-                            Err(e) => return Err(to_queue_error(e)),
-                        };
-
-                        GateType::R1XY {
-                            phi: angles[0],
-                            theta: angles[1],
-                        }
-                    }
-                    "SZZ" => GateType::SZZ,
-                    "H" => GateType::H,
-                    "X" => GateType::X,
-                    "Y" => GateType::Y,
-                    "Z" => GateType::Z,
-                    "CX" => GateType::CX,
-                    "Measure" => {
-                        let returns = match py_cmd.getattr("returns") {
-                            Ok(r) => r,
-                            Err(e) => return Err(to_queue_error(e)),
-                        };
-
-                        let return_item = match returns.get_item(0) {
-                            Ok(i) => i,
-                            Err(e) => return Err(to_queue_error(e)),
-                        };
-
-                        let result_id = match return_item.get_item(1) {
-                            Ok(id) => match id.extract::<usize>() {
-                                Ok(i) => i,
-                                Err(e) => return Err(to_queue_error(e)),
-                            },
-                            Err(e) => return Err(to_queue_error(e)),
-                        };
-
-                        GateType::Measure { result_id }
-                    }
-                    _ => {
-                        return Err(QueueError::OperationError(format!(
-                            "Unsupported gate type: {name}"
-                        )));
-                    }
-                };
+                let (gate, qubits) = process_py_command(py_cmd.as_ref())?;
 
                 // Add command to batch
                 batch.add_command(QuantumCommand { gate, qubits });
@@ -418,47 +429,29 @@ impl ClassicalEngine for PHIREngine {
             Ok(())
         })?;
 
-        Ok(batch)
-    }
-
-    fn handle_measurement(&mut self, measurement: u32) -> Result<(), QueueError> {
-        Python::with_gil(
-            |py| match self.handle_measurement_internal(py, measurement) {
-                Ok(_) => Ok(()),
-                Err(e) => Err(to_queue_error(e)),
-            },
-        )
-    }
-
-    fn generate_commands(&mut self) -> Result<ByteMessage, QueueError> {
-        // Use ClassicalEngine::process_program instead of the Python method
-        // This uses the trait implementation which returns a CommandBatch
-        match ClassicalEngine::process_program(self) {
-            Ok(batch) => {
-                // Then convert to ByteMessage
-                if batch.is_empty() {
-                    ByteMessage::create_flush(true)
-                } else {
-                    ByteMessage::create_quantum_operations(&batch)
-                }
-            }
-            Err(e) => Err(e), // This is now QueueError -> QueueError
+        // Convert the batch to a ByteMessage
+        if batch.is_empty() {
+            ByteMessage::create_flush(true)
+        } else {
+            ByteMessage::create_quantum_operations(&batch)
         }
     }
 
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError> {
         // Parse measurements from the message
-        match message.parse_measurements() {
-            Ok(measurements) => {
-                // Process each measurement
-                for measurement in measurements {
-                    // Use ClassicalEngine::handle_measurement which returns Result<(), QueueError>
-                    ClassicalEngine::handle_measurement(self, measurement)?;
+        let measurements = message.parse_measurements()?;
+
+        // Process each measurement
+        for measurement in measurements {
+            Python::with_gil(|py| -> Result<(), QueueError> {
+                match self.handle_measurement_internal(py, measurement) {
+                    Ok(()) => Ok(()),
+                    Err(e) => Err(to_queue_error(e)),
                 }
-                Ok(())
-            }
-            Err(e) => Err(e),
+            })?;
         }
+
+        Ok(())
     }
 
     fn get_results(&self) -> Result<ShotResult, QueueError> {
@@ -517,21 +510,13 @@ impl ControlEngine for PHIREngine {
 
     fn start(&mut self, _input: ()) -> Result<EngineStage<ByteMessage, ShotResult>, QueueError> {
         // Reset state to ensure clean start
-        if let Err(e) = ClassicalEngine::reset(self) {
-            return Err(e);
-        }
+        ClassicalEngine::reset(self)?;
 
         // Get commands as ByteMessage
-        let commands = match self.generate_commands() {
-            Ok(c) => c,
-            Err(e) => return Err(e),
-        };
+        let commands = self.generate_commands()?;
 
         // Check if the message is empty (just a flush)
-        let is_empty = match commands.is_empty() {
-            Ok(empty) => empty,
-            Err(e) => return Err(e),
-        };
+        let is_empty = commands.is_empty()?;
 
         if is_empty {
             // Get the results directly
@@ -549,21 +534,13 @@ impl ControlEngine for PHIREngine {
         measurements: ByteMessage,
     ) -> Result<EngineStage<ByteMessage, ShotResult>, QueueError> {
         // Handle received measurements
-        if let Err(e) = self.handle_measurements(measurements) {
-            return Err(e);
-        }
+        self.handle_measurements(measurements)?;
 
         // Get next batch of commands
-        let commands = match self.generate_commands() {
-            Ok(c) => c,
-            Err(e) => return Err(e),
-        };
+        let commands = self.generate_commands()?;
 
         // Check if we have an empty message (no more commands)
-        let is_empty = match commands.is_empty() {
-            Ok(empty) => empty,
-            Err(e) => return Err(e),
-        };
+        let is_empty = commands.is_empty()?;
 
         if is_empty {
             // Get the results directly

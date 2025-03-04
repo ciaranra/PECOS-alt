@@ -35,6 +35,10 @@ impl ByteMessage {
     }
 
     /// Create a `ByteMessage` containing quantum operations
+    ///
+    /// # Errors
+    ///
+    /// Returns a `QueueError` if the message cannot be created due to serialization issues.
     pub fn create_quantum_operations(batch: &CommandBatch) -> Result<Self, QueueError> {
         let mut builder = MessageBuilder::new();
         builder.add_command_batch(batch);
@@ -448,7 +452,7 @@ mod tests {
         // Verify the batch was correctly parsed
         assert_eq!(parsed_batch.len(), 3);
 
-        let commands: Vec<_> = parsed_batch.commands().collect();
+        let commands: Vec<_> = parsed_batch.commands().iter().collect();
 
         // Check the Hadamard gate
         assert!(matches!(commands[0].gate, GateType::H));
@@ -471,8 +475,8 @@ mod tests {
     fn test_create_and_parse_measurements() {
         // Create measurements (encoded as u32 with result_id in high 16 bits and outcome in low 16 bits)
         let measurements = vec![
-            (0 << 16) | 1, // result_id=0, outcome=1
-            (1 << 16) | 0, // result_id=1, outcome=0
+            1,         // result_id=0, outcome=1
+            (1 << 16), // result_id=1, outcome=0
         ];
 
         // Create a ByteMessage from the measurements
@@ -483,8 +487,8 @@ mod tests {
 
         // Verify the measurements were correctly parsed
         assert_eq!(parsed_measurements.len(), 2);
-        assert_eq!(parsed_measurements[0], (0 << 16) | 1);
-        assert_eq!(parsed_measurements[1], (1 << 16) | 0);
+        assert_eq!(parsed_measurements[0], 1);
+        assert_eq!(parsed_measurements[1], (1 << 16));
     }
 
     #[test]
@@ -506,7 +510,7 @@ mod tests {
         assert_eq!(msg_type, MessageType::BeginBatch);
 
         // Create a measurement message
-        let measurements = vec![(0 << 16) | 1]; // result_id=0, outcome=1
+        let measurements = vec![1]; // result_id=0, outcome=1
         let message = ByteMessage::create_measurements(&measurements).unwrap();
 
         // Get the message type
@@ -526,7 +530,7 @@ mod tests {
         assert_eq!(msg_type, MessageType::Flush);
 
         // Verify the message flags
-        let batch_header = *from_bytes::<BatchHeader>(&message.bytes[0..size_of::<BatchHeader>()]);
+        let _batch_header = *from_bytes::<BatchHeader>(&message.bytes[0..size_of::<BatchHeader>()]);
         let msg_offset = size_of::<BatchHeader>();
         let msg_header = *from_bytes::<MessageHeader>(
             &message.bytes[msg_offset..msg_offset + size_of::<MessageHeader>()],

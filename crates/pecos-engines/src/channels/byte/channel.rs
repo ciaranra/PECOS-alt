@@ -143,7 +143,7 @@ impl ByteChannel {
     }
 
     /// Parse a quantum gate message payload
-    fn parse_quantum_gate(&self, payload: &[u8]) -> Result<QuantumCommand, QueueError> {
+    fn parse_quantum_gate(payload: &[u8]) -> Result<QuantumCommand, QueueError> {
         if payload.len() < size_of::<QuantumGateHeader>() {
             return Err(QueueError::OperationError(
                 "Quantum gate message payload too small".into(),
@@ -254,7 +254,7 @@ impl ByteChannel {
     }
 
     /// Parse a measurement message payload
-    fn parse_measurement(&self, payload: &[u8]) -> Result<QuantumCommand, QueueError> {
+    fn parse_measurement(payload: &[u8]) -> Result<QuantumCommand, QueueError> {
         if payload.len() < size_of::<MeasurementHeader>() {
             return Err(QueueError::OperationError(
                 "Measurement message payload too small".into(),
@@ -272,7 +272,7 @@ impl ByteChannel {
     }
 
     /// Parse a measurement result message payload
-    fn parse_measurement_result(&self, payload: &[u8]) -> Result<(u32, u32), QueueError> {
+    fn parse_measurement_result(payload: &[u8]) -> Result<(u32, u32), QueueError> {
         if payload.len() < size_of::<MeasurementResultHeader>() {
             return Err(QueueError::OperationError(
                 "Measurement result message payload too small".into(),
@@ -316,9 +316,7 @@ impl CommandChannel for ByteChannel {
         debug!("Command channel receiving batch");
 
         // Read batch header
-        let batch_header = if let Some(header) = self.read_batch_header()? {
-            header
-        } else {
+        let Some(batch_header) = self.read_batch_header()? else {
             debug!("No batch header available");
             return Ok(None);
         };
@@ -365,7 +363,7 @@ impl CommandChannel for ByteChannel {
                     let payload = self.read_payload(payload_size)?;
 
                     // Parse quantum gate
-                    let cmd = self.parse_quantum_gate(&payload)?;
+                    let cmd = Self::parse_quantum_gate(&payload)?;
                     trace!("Received quantum gate: {:?}", cmd);
 
                     batch.add_command(cmd);
@@ -375,7 +373,7 @@ impl CommandChannel for ByteChannel {
                     let payload = self.read_payload(payload_size)?;
 
                     // Parse measurement
-                    let cmd = self.parse_measurement(&payload)?;
+                    let cmd = Self::parse_measurement(&payload)?;
                     trace!("Received measurement: {:?}", cmd);
 
                     batch.add_command(cmd);
@@ -477,9 +475,7 @@ impl MessageChannel for ByteChannel {
         debug!("Measurement channel receiving message");
 
         // Read batch header
-        let batch_header = if let Some(header) = self.read_batch_header()? {
-            header
-        } else {
+        let Some(batch_header) = self.read_batch_header()? else {
             debug!("No batch header available");
             return Ok(None);
         };
@@ -502,7 +498,7 @@ impl MessageChannel for ByteChannel {
                 let payload = self.read_payload(payload_size)?;
 
                 // Parse measurement result
-                let (result_id, outcome) = self.parse_measurement_result(&payload)?;
+                let (result_id, outcome) = Self::parse_measurement_result(&payload)?;
 
                 // Encode as a Message (u32)
                 let message = ((result_id & 0xFFFF) << 16) | (outcome & 0xFFFF);
@@ -512,13 +508,13 @@ impl MessageChannel for ByteChannel {
                 );
 
                 return Ok(Some(message));
-            } else {
-                debug!("Skipping message type: {:?}", msg_type);
+            }
 
-                // Skip payload
-                if payload_size > 0 {
-                    self.read_payload(payload_size)?;
-                }
+            debug!("Skipping message type: {:?}", msg_type);
+
+            // Skip payload
+            if payload_size > 0 {
+                self.read_payload(payload_size)?;
             }
 
             // Ensure alignment for next message

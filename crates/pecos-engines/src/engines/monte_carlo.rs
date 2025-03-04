@@ -289,7 +289,7 @@ mod tests {
 
         fn process(&mut self, _input: Self::Input) -> Result<Self::Output, QueueError> {
             // Always return a fixed measurement result
-            let measurement = (0u32 << 16) | 1u32; // result_id=0, outcome=1
+            let measurement = 1u32; // result_id=0, outcome=1
             ByteMessage::create_measurements(&[measurement])
         }
 
@@ -639,11 +639,10 @@ mod tests {
             max_qubit_index + 1
         }
 
-        // The old process_program method still works for backward compatibility
-        fn process_program(&mut self) -> Result<CommandBatch, QueueError> {
-            // If we've processed all commands, return empty batch
+        fn generate_commands(&mut self) -> Result<ByteMessage, QueueError> {
+            // If we've processed all commands, return empty batch (flush message)
             if self.command_index >= self.commands.len() {
-                return Ok(CommandBatch::new());
+                return ByteMessage::create_flush(true);
             }
 
             // Create a batch with the next command
@@ -651,38 +650,23 @@ mod tests {
             batch.add_command(self.commands[self.command_index].clone());
             self.command_index += 1;
 
-            Ok(batch)
+            // Convert the batch to a ByteMessage
+            ByteMessage::create_quantum_operations(&batch)
         }
 
-        // New method for ByteMessage architecture
-        fn generate_commands(&mut self) -> Result<ByteMessage, QueueError> {
-            let batch = self.process_program()?;
-            if batch.is_empty() {
-                ByteMessage::create_flush(true)
-            } else {
-                ByteMessage::create_quantum_operations(&batch)
-            }
-        }
-
-        // The old handle_measurement method for backward compatibility
-        fn handle_measurement(&mut self, measurement: u32) -> Result<(), QueueError> {
-            // Extract result_id and outcome
-            let result_id = (measurement >> 16) as usize;
-            let outcome = measurement & 0xFFFF;
-
-            // Store the measurement
-            self.measurements
-                .insert(format!("measurement_{result_id}"), outcome);
-
-            Ok(())
-        }
-
-        // New method for ByteMessage architecture
         fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError> {
             let measurements = message.parse_measurements()?;
+
             for measurement in measurements {
-                self.handle_measurement(measurement)?;
+                // Extract result_id and outcome
+                let result_id = (measurement >> 16) as usize;
+                let outcome = measurement & 0xFFFF;
+
+                // Store the measurement
+                self.measurements
+                    .insert(format!("measurement_{result_id}"), outcome);
             }
+
             Ok(())
         }
 

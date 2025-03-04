@@ -65,7 +65,11 @@ impl MessageBuilder {
         self.add_padding(4);
 
         // Create and write message header
-        let header = MessageHeader::new(msg_type, payload.len() as u32, flags);
+        let header = MessageHeader::new(
+            msg_type,
+            u32::try_from(payload.len()).unwrap_or(u32::MAX),
+            flags,
+        );
         self.buffer.extend_from_slice(bytes_of(&header));
 
         // Write payload
@@ -109,8 +113,8 @@ impl MessageBuilder {
         // Create and write gate header
         let gate_header = QuantumGateHeader {
             gate_type,
-            num_qubits: cmd.qubits.len() as u8,
-            has_params: if has_params { 1 } else { 0 },
+            num_qubits: u8::try_from(cmd.qubits.len()).unwrap_or(u8::MAX),
+            has_params: u8::from(has_params),
             reserved: 0,
         };
         payload.extend_from_slice(bytes_of(&gate_header));
@@ -141,6 +145,12 @@ impl MessageBuilder {
     }
 
     /// Add a measurement command
+    ///
+    /// # Panics
+    ///
+    /// Panics if:
+    /// - Called with a non-measurement gate type
+    /// - The qubit index or `result_id` cannot be converted to u32
     pub fn add_measurement(&mut self, cmd: &QuantumCommand) -> &mut Self {
         if let GateType::Measure { result_id } = cmd.gate {
             let meas_header = MeasurementHeader {
@@ -199,8 +209,10 @@ impl MessageBuilder {
     pub fn build(&mut self) -> Vec<u8> {
         // Calculate total size and update batch header
         let total_size = self.buffer.len();
-        let header = BatchHeader::new(self.msg_count, total_size as u32);
-
+        let header = BatchHeader::new(
+            self.msg_count,
+            u32::try_from(total_size).unwrap_or(u32::MAX),
+        );
         // Write header to the start of the buffer
         self.buffer[0..size_of::<BatchHeader>()].copy_from_slice(bytes_of(&header));
 

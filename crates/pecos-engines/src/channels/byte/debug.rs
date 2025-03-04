@@ -16,6 +16,7 @@ use std::io::{Cursor, Write};
 use std::mem::size_of;
 
 /// Dump a binary message batch to a string for debugging
+#[allow(clippy::too_many_lines)]
 #[must_use]
 pub fn dump_batch(data: &[u8]) -> String {
     let mut output = String::new();
@@ -298,7 +299,7 @@ mod tests {
         // Verify
         assert_eq!(recovered_batch.len(), 2);
 
-        let commands: Vec<_> = recovered_batch.commands().into_iter().collect();
+        let commands: Vec<_> = recovered_batch.commands().iter().collect();
 
         assert!(matches!(commands[0].gate, GateType::H));
         assert_eq!(commands[0].qubits.len(), 1);

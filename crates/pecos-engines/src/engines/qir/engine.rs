@@ -210,10 +210,11 @@ impl ClassicalEngine for QirClassicalEngine {
         todo!()
     }
 
-    // Keep original process_program for backward compatibility
-    fn process_program(&mut self) -> Result<CommandBatch, QueueError> {
+    fn generate_commands(&mut self) -> Result<ByteMessage, QueueError> {
         // Clear previous results at start of each shot
-        self.current_results = ShotResult::default();
+        if self.current_results.measurements.is_empty() {
+            self.current_results = ShotResult::default();
+        }
 
         let exe_path = self.build_dir.join(&self.program_name);
         debug!("Running QIR program: {}", exe_path.display());
@@ -281,12 +282,7 @@ impl ClassicalEngine for QirClassicalEngine {
         // Store process handles for later measurement handling
         self.child_process = Some(child);
 
-        Ok(commands.into())
-    }
-
-    // New method for ByteMessage
-    fn generate_commands(&mut self) -> Result<ByteMessage, QueueError> {
-        let batch = self.process_program()?;
+        let batch = CommandBatch::from(commands);
 
         if batch.is_empty() {
             ByteMessage::create_flush(true)
@@ -295,45 +291,44 @@ impl ClassicalEngine for QirClassicalEngine {
         }
     }
 
-    // Keep original handle_measurement for backward compatibility
-    fn handle_measurement(&mut self, measurement: u32) -> Result<(), QueueError> {
-        debug!("Handling measurement: {}", measurement);
-
-        // Get current qubit index from measurements size
-        let qubit_idx = self.current_results.measurements.len();
-
-        // Store measurement with result_id that matches the QIR program
-        self.current_results
-            .measurements
-            .insert(format!("measurement_{qubit_idx}"), measurement);
-
-        // Try to send back to process if still alive
-        if let Some(child) = &mut self.child_process {
-            if let Some(mut stdin) = child.stdin.take() {
-                match writeln!(stdin, "{measurement}") {
-                    Ok(()) => {
-                        debug!(
-                            "Successfully sent measurement {} to classical process",
-                            measurement
-                        );
-                        child.stdin = Some(stdin);
-                    }
-                    Err(e) => {
-                        debug!("Failed to send measurement to classical process: {}", e);
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    // New method for ByteMessage
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError> {
         let measurements = message.parse_measurements()?;
 
         for measurement in measurements {
-            self.handle_measurement(measurement)?;
+            debug!("Handling measurement: {}", measurement);
+
+            // Extract result_id and outcome
+            let result_id = (measurement >> 16) as usize;
+            let outcome = measurement & 0xFFFF;
+
+            // Get current qubit index from measurements size
+            let qubit_idx = match result_id {
+                0 => self.current_results.measurements.len(),
+                _ => result_id,
+            };
+
+            // Store measurement with result_id that matches the QIR program
+            self.current_results
+                .measurements
+                .insert(format!("measurement_{qubit_idx}"), outcome);
+
+            // Try to send back to process if still alive
+            if let Some(child) = &mut self.child_process {
+                if let Some(mut stdin) = child.stdin.take() {
+                    match writeln!(stdin, "{outcome}") {
+                        Ok(()) => {
+                            debug!(
+                                "Successfully sent measurement {} to classical process",
+                                outcome
+                            );
+                            child.stdin = Some(stdin);
+                        }
+                        Err(e) => {
+                            debug!("Failed to send measurement to classical process: {}", e);
+                        }
+                    }
+                }
+            }
         }
 
         Ok(())

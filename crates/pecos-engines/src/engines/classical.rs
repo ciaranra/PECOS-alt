@@ -100,16 +100,6 @@ pub trait ClassicalEngine: Send + Sync {
             ByteMessage::create_quantum_operations(&batch)
         }
     }
-
-    /// DEPRECATED: Old method for generating quantum commands
-    /// Will be removed in a future version
-    #[deprecated(since = "0.2.0", note = "Use generate_commands instead")]
-    fn process_program(&mut self) -> Result<CommandBatch, QueueError>;
-
-    /// DEPRECATED: Old method for handling measurements
-    /// Will be removed in a future version
-    #[deprecated(since = "0.2.0", note = "Use handle_measurements instead")]
-    fn handle_measurement(&mut self, measurement: u32) -> Result<(), QueueError>;
 }
 
 impl ControlEngine for Box<dyn ClassicalEngine> {
