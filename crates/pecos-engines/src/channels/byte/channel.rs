@@ -447,8 +447,8 @@ impl MessageChannel for ByteChannel {
             .map_err(|e| QueueError::LockError(format!("Failed to lock writer: {e}")))?;
 
         // Extract result_id and outcome from the measurement
-        let result_id = (measurement >> 16);
-        let outcome = (measurement & 0xFFFF);
+        let result_id = measurement >> 16;
+        let outcome = measurement & 0xFFFF;
 
         debug!(
             "Measurement channel sending result: id={}, outcome={}",
