@@ -153,7 +153,6 @@ pub struct MeasurementHeader {
 pub struct MeasurementResultHeader {
     pub result_id: u32, // Result identifier
     pub outcome: u32,   // Measurement outcome (0 or 1, but u32 for alignment)
-                        // No additional data
 }
 
 /// Calculate padding needed for alignment

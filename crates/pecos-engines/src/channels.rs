@@ -9,9 +9,11 @@ use pecos_core::types::CommandBatch;
 use std::any::Any;
 
 pub mod byte;
+pub mod byte_message;
 
 // Re-export the byte channel for easy access
 pub use byte::ByteChannel;
+pub use byte_message::ByteMessage;
 
 /// A representation of a measurement result
 ///

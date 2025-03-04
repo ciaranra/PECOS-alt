@@ -112,7 +112,7 @@ pub fn dump_batch(data: &[u8]) -> String {
                             _ => "Unknown",
                         };
 
-                        output.push_str(&"  Quantum Gate:\n".to_string());
+                        output.push_str("  Quantum Gate:\n");
                         output.push_str(&format!(
                             "    Type: {} ({})\n",
                             gate_type, gate_header.gate_type
@@ -206,7 +206,7 @@ pub fn dump_batch(data: &[u8]) -> String {
                             &payload[0..size_of::<MeasurementHeader>()],
                         );
 
-                        output.push_str(&"  Measurement:\n".to_string());
+                        output.push_str("  Measurement:\n");
                         output.push_str(&format!("    Qubit: {}\n", meas_header.qubit));
                         output.push_str(&format!("    Result ID: {}\n", meas_header.result_id));
                     }
@@ -218,7 +218,7 @@ pub fn dump_batch(data: &[u8]) -> String {
                             &payload[0..size_of::<MeasurementResultHeader>()],
                         );
 
-                        output.push_str(&"  Measurement Result:\n".to_string());
+                        output.push_str("  Measurement Result:\n");
                         output.push_str(&format!("    Result ID: {}\n", result_header.result_id));
                         output.push_str(&format!("    Outcome: {}\n", result_header.outcome));
                     }
@@ -298,7 +298,7 @@ mod tests {
         // Verify
         assert_eq!(recovered_batch.len(), 2);
 
-        let commands: Vec<_> = recovered_batch.commands().collect();
+        let commands: Vec<_> = recovered_batch.commands().into_iter().collect();
 
         assert!(matches!(commands[0].gate, GateType::H));
         assert_eq!(commands[0].qubits.len(), 1);

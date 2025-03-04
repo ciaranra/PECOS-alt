@@ -1,54 +1,32 @@
 use crate::engines::noise::{NoiseModel, PassThroughNoise};
-use pecos_core::types::{CommandBatch, ShotResult};
+use pecos_core::types::ShotResult;
 
-use crate::Message;
-use crate::channels::{CommandChannel, MessageChannel};
+use crate::channels::byte_message::ByteMessage;
 use crate::engines::{
     ClassicalEngine, ControlEngine, Engine, EngineStage, EngineSystem, QuantumEngine,
 };
 use crate::errors::QueueError;
 
-/// `HybridEngine` coordinates between classical and quantum components via message passing
-pub struct HybridEngine<C, M>
-where
-    C: CommandChannel + Send + Sync + 'static,
-    M: MessageChannel + Send + Sync + 'static,
-{
+/// `HybridEngine` coordinates between classical and quantum components using direct byte messaging
+pub struct HybridEngine {
     classical: Box<dyn ClassicalEngine>,
-    engine: Box<dyn Engine<Input = CommandBatch, Output = Vec<Message>>>,
-    cmd_channel: C,
-    meas_channel: M,
+    engine: Box<dyn Engine<Input = ByteMessage, Output = ByteMessage>>,
     // Store the quantum engine separately for potential reconstruction
     quantum_engine: Box<dyn QuantumEngine>,
 }
 
-impl<C, M> HybridEngine<C, M>
-where
-    C: CommandChannel + Send + Sync + 'static + Clone,
-    M: MessageChannel + Send + Sync + 'static + Clone,
-{
-    pub fn new(
-        classical: Box<dyn ClassicalEngine>,
-        quantum: Box<dyn QuantumEngine>,
-        cmd_channel: C,
-        meas_channel: M,
-    ) -> Self {
+impl HybridEngine {
+    #[must_use]
+    pub fn new(classical: Box<dyn ClassicalEngine>, quantum: Box<dyn QuantumEngine>) -> Self {
         // Use a pass-through noise model by default
-        Self::with_noise(
-            classical,
-            quantum,
-            Box::new(PassThroughNoise),
-            cmd_channel,
-            meas_channel,
-        )
+        Self::with_noise(classical, quantum, Box::new(PassThroughNoise))
     }
 
+    #[must_use]
     pub fn with_noise(
         classical: Box<dyn ClassicalEngine>,
         quantum: Box<dyn QuantumEngine>,
         noise_model: Box<dyn NoiseModel>,
-        cmd_channel: C,
-        meas_channel: M,
     ) -> Self {
         // Store a clone of the quantum engine
         let quantum_clone = quantum.clone_box();
@@ -59,8 +37,6 @@ where
         Self {
             classical,
             engine,
-            cmd_channel,
-            meas_channel,
             quantum_engine: quantum_clone,
         }
     }
@@ -102,27 +78,18 @@ where
     /// # Errors
     /// This function returns a `QueueError` if:
     /// - Resetting the quantum or classical engine fails.
-    /// - Sending a batch of commands through the command channel fails.
-    /// - Processing a batch through the quantum engine fails.
-    /// - Sending measurements through the measurement channel fails.
-    /// - Continuing classical processing encounters an issue.
+    /// - Generating commands through the classical engine fails.
+    /// - Processing commands through the quantum engine fails.
+    /// - Handling measurements through the classical engine fails.
     pub fn run_shot(&mut self) -> Result<ShotResult, QueueError> {
         let mut stage = self.classical.start(())?;
 
-        while let EngineStage::NeedsProcessing(batch) = stage {
-            // Send batch through command channel
-            self.cmd_channel.send_batch(&batch)?;
-
+        while let EngineStage::NeedsProcessing(command_message) = stage {
             // Process through engine (could be QuantumEngine or EngineSystem)
-            let measurements = self.engine.process(batch)?;
-
-            // Send measurements through measurement channel
-            for measurement in &measurements {
-                self.meas_channel.send_measurement(*measurement)?;
-            }
+            let measurement_message = self.engine.process(command_message)?;
 
             // Continue classical processing with measurements
-            stage = self.classical.continue_processing(measurements)?;
+            stage = self.classical.continue_processing(measurement_message)?;
         }
 
         match stage {

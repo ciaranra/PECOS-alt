@@ -17,7 +17,7 @@ pub use pecos_core::types::{CommandBatch, GateType, QuantumCommand, ShotResult};
 // re-exporting pecos-engines
 pub use pecos_engines::{
     channels::byte::ByteChannel,
-    channels::{Message, MessageChannel},
+    channels::{ByteMessage, Message, MessageChannel},
     engines::{
         ClassicalEngine, ControlEngine, Engine, EngineStage, EngineSystem, HybridEngine,
         classical::{ProgramType, detect_program_type, get_program_path, setup_engine},

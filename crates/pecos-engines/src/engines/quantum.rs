@@ -1,9 +1,9 @@
-use crate::channels::Message;
+// src/engines/quantum.rs (fully updated interface)
+
+use crate::channels::byte_message::ByteMessage;
 use crate::engines::Engine;
 use crate::errors::QueueError;
 use log::debug;
-use num_traits::cast::AsPrimitive;
-use pecos_core::types::CommandBatch;
 use pecos_core::types::GateType;
 use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, QuantumSimulator};
 
@@ -11,13 +11,13 @@ use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, QuantumSimulator};
 ///
 /// This trait indicates that an engine specifically deals with
 /// quantum state evolution and measurements.
-pub trait QuantumEngine: Engine<Input = CommandBatch, Output = Vec<Message>> + Send + Sync {
+pub trait QuantumEngine: Engine<Input = ByteMessage, Output = ByteMessage> + Send + Sync {
     fn clone_box(&self) -> Box<dyn QuantumEngine>;
 }
 
 impl Engine for Box<dyn QuantumEngine> {
-    type Input = CommandBatch;
-    type Output = Vec<Message>;
+    type Input = ByteMessage;
+    type Output = ByteMessage;
 
     fn process(&mut self, input: Self::Input) -> Result<Self::Output, QueueError> {
         self.as_mut().process(input)
@@ -49,20 +49,22 @@ impl<S> Engine for CliffordEngine<S>
 where
     S: QuantumSimulator + CliffordGateable<usize> + Send + Sync + Clone + 'static,
 {
-    type Input = CommandBatch;
-    type Output = Vec<Message>;
+    type Input = ByteMessage;
+    type Output = ByteMessage;
 
-    fn process(&mut self, batch: Self::Input) -> Result<Self::Output, QueueError> {
+    fn process(&mut self, message: Self::Input) -> Result<Self::Output, QueueError> {
+        // Parse commands from the message
+        let batch = message.parse_quantum_operations()?;
         let mut measurements = Vec::new();
 
         for cmd in batch.commands() {
             match &cmd.gate {
                 GateType::X => {
-                    debug!("Processing H gate on qubit {:?}", cmd.qubits[0]);
+                    debug!("Processing X gate on qubit {:?}", cmd.qubits[0]);
                     self.simulator.x(cmd.qubits[0]);
                 }
                 GateType::Y => {
-                    debug!("Processing H gate on qubit {:?}", cmd.qubits[0]);
+                    debug!("Processing Y gate on qubit {:?}", cmd.qubits[0]);
                     self.simulator.y(cmd.qubits[0]);
                 }
                 GateType::Z => {
@@ -93,7 +95,7 @@ where
                     let raw_outcome = u32::from(meas_result.outcome);
 
                     // Convert result_id to u32 safely
-                    let result_id_u32: u32 = (*result_id).as_();
+                    let result_id_u32: u32 = (*result_id).try_into().unwrap_or(0);
 
                     let encoded = (result_id_u32 << 16) | raw_outcome;
                     debug!(
@@ -112,7 +114,8 @@ where
             }
         }
 
-        Ok(measurements)
+        // Create a measurement message
+        ByteMessage::create_measurements(&measurements)
     }
 
     fn reset(&mut self) -> Result<(), QueueError> {
@@ -169,21 +172,23 @@ where
         + Clone
         + 'static,
 {
-    type Input = CommandBatch;
-    type Output = Vec<Message>;
+    type Input = ByteMessage;
+    type Output = ByteMessage;
 
-    fn process(&mut self, batch: Self::Input) -> Result<Self::Output, QueueError> {
+    fn process(&mut self, message: Self::Input) -> Result<Self::Output, QueueError> {
+        // Parse commands from the message
+        let batch = message.parse_quantum_operations()?;
         let mut measurements = Vec::new();
 
         for cmd in batch {
             debug!("Quantum engine processing command: {:?}", cmd);
             match cmd.gate {
                 GateType::X => {
-                    debug!("Processing H gate on qubit {:?}", cmd.qubits[0]);
+                    debug!("Processing X gate on qubit {:?}", cmd.qubits[0]);
                     self.simulator.x(cmd.qubits[0]);
                 }
                 GateType::Y => {
-                    debug!("Processing H gate on qubit {:?}", cmd.qubits[0]);
+                    debug!("Processing Y gate on qubit {:?}", cmd.qubits[0]);
                     self.simulator.y(cmd.qubits[0]);
                 }
                 GateType::Z => {
@@ -197,9 +202,18 @@ where
                 GateType::CX => {
                     debug!(
                         "Executing CX gate with control {} and target {}",
-                        cmd.qubits[0], cmd.qubits[1]
+                        cmd.qubits[0],
+                        cmd.qubits.get(1).unwrap_or(&0)
                     );
-                    self.simulator.cx(cmd.qubits[0], cmd.qubits[1]);
+
+                    if cmd.qubits.len() == 2 {
+                        self.simulator.cx(cmd.qubits[0], cmd.qubits[1]);
+                    } else {
+                        panic!(
+                            "Got the wrong number of arguments for CX: {}",
+                            cmd.qubits.len()
+                        );
+                    }
                 }
                 GateType::SZZ => {
                     debug!(
@@ -216,13 +230,13 @@ where
                     let meas_result = self.simulator.mz(cmd.qubits[0]);
                     let raw_outcome = u32::from(meas_result.outcome);
 
-                    // Convert result_id to u32 safely
-                    let result_id_u32: u32 = result_id.as_();
+                    // Convert result_id to u32 safely (no need to dereference)
+                    let result_id_u32: u32 = result_id.try_into().unwrap_or(0);
 
                     let encoded = (result_id_u32 << 16) | raw_outcome;
                     debug!(
-                        "Measurement complete: qubit={}, result_id={}, outcome={}, encoded={} m={}",
-                        cmd.qubits[0], result_id, raw_outcome, encoded, meas_result.outcome
+                        "Measurement complete: qubit={}, result_id={}, outcome={}, encoded={}",
+                        cmd.qubits[0], result_id, raw_outcome, encoded
                     );
                     measurements.push(encoded);
                 }
@@ -240,7 +254,8 @@ where
             }
         }
 
-        Ok(measurements)
+        // Create a measurement message
+        ByteMessage::create_measurements(&measurements)
     }
 
     fn reset(&mut self) -> Result<(), QueueError> {

@@ -1,4 +1,3 @@
-use crate::channels::byte;
 use crate::engines::noise::{DepolarizingNoise, NoiseModel, PassThroughNoise};
 use crate::engines::quantum::new_quantum_engine_arbitrary_qgate;
 use crate::engines::{ClassicalEngine, HybridEngine, QuantumEngine};
@@ -85,17 +84,11 @@ impl MonteCarloEngine {
                     worker_idx, worker_shots
                 );
 
-                // Set up channels
-                let cmd_channel = byte::ByteChannel::create_for_shot()?;
-                let meas_channel = byte::ByteChannel::create_for_shot()?;
-
                 // Create hybrid engine for this worker
                 let mut engine = HybridEngine::with_noise(
                     self.classical_engine.clone_box(),
                     self.quantum_engine.clone_box(),
                     self.noise_model.clone_box(),
-                    cmd_channel,
-                    meas_channel,
                 );
 
                 // Process all shots assigned to this worker
@@ -272,7 +265,7 @@ impl MonteCarloEngineBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Message;
+    use crate::channels::ByteMessage;
     use crate::engines::classical::{ClassicalEngine, setup_engine};
     use crate::engines::noise::{DepolarizingNoise, PassThroughNoise};
     use crate::engines::phir::PHIREngine;
@@ -291,12 +284,13 @@ mod tests {
     struct MockQuantumEngine;
 
     impl Engine for MockQuantumEngine {
-        type Input = CommandBatch;
-        type Output = Vec<Message>;
+        type Input = ByteMessage;
+        type Output = ByteMessage;
 
         fn process(&mut self, _input: Self::Input) -> Result<Self::Output, QueueError> {
             // Always return a fixed measurement result
-            Ok(vec![1])
+            let measurement = (0u32 << 16) | 1u32; // result_id=0, outcome=1
+            ByteMessage::create_measurements(&[measurement])
         }
 
         fn reset(&mut self) -> Result<(), QueueError> {
@@ -456,35 +450,6 @@ mod tests {
         assert!(result.is_ok(), "Run with pass-through noise should succeed");
     }
 
-    // #[test]
-    // fn test_reuse_engine_with_different_programs() {
-    //     // Create two different test programs
-    //     let (_dir1, program_path1) = create_test_program();
-    //     let (_dir2, _program_path2) = create_test_program();
-    //
-    //     let classical_engine = PHIREngine::new(&program_path1).unwrap();
-    //
-    //     let stabilizer = StdSparseStab::new(2);
-    //     let quantum_engine = Box::new(CliffordEngine::new(stabilizer));
-    //
-    //     // Create a configured engine
-    //     let engine = MonteCarloEngine::builder()
-    //         .with_classical_engine(classical_engine.clone_box())
-    //         .with_noise_model(DepolarizingNoise::builder().with_probability(0.01).build())
-    //         .with_quantum_engine(quantum_engine.clone_box())
-    //         .build();
-    //
-    //     // Run with first program
-    //     let result1 = engine.run(2, 1);
-    //     assert!(result1.is_ok(), "First run should succeed");
-    //
-    //     // TODO: reuse engine template but with new program...
-    //
-    //     // Run with second program
-    //     let result2 = engine.run(2, 1);
-    //     assert!(result2.is_ok(), "Second run should succeed");
-    // }
-
     #[test]
     fn test_run_with_different_parameters() {
         // Create a test program
@@ -602,6 +567,7 @@ mod tests {
     }
 
     // Mock implementation of an external classical engine
+    // This implementation needs to be updated to work with ByteMessage
     #[derive(Debug)]
     struct ExternalClassicalEngine {
         commands: Vec<QuantumCommand>,
@@ -673,6 +639,7 @@ mod tests {
             max_qubit_index + 1
         }
 
+        // The old process_program method still works for backward compatibility
         fn process_program(&mut self) -> Result<CommandBatch, QueueError> {
             // If we've processed all commands, return empty batch
             if self.command_index >= self.commands.len() {
@@ -687,7 +654,18 @@ mod tests {
             Ok(batch)
         }
 
-        fn handle_measurement(&mut self, measurement: Message) -> Result<(), QueueError> {
+        // New method for ByteMessage architecture
+        fn generate_commands(&mut self) -> Result<ByteMessage, QueueError> {
+            let batch = self.process_program()?;
+            if batch.is_empty() {
+                ByteMessage::create_flush(true)
+            } else {
+                ByteMessage::create_quantum_operations(&batch)
+            }
+        }
+
+        // The old handle_measurement method for backward compatibility
+        fn handle_measurement(&mut self, measurement: u32) -> Result<(), QueueError> {
             // Extract result_id and outcome
             let result_id = (measurement >> 16) as usize;
             let outcome = measurement & 0xFFFF;
@@ -696,6 +674,15 @@ mod tests {
             self.measurements
                 .insert(format!("measurement_{result_id}"), outcome);
 
+            Ok(())
+        }
+
+        // New method for ByteMessage architecture
+        fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError> {
+            let measurements = message.parse_measurements()?;
+            for measurement in measurements {
+                self.handle_measurement(measurement)?;
+            }
             Ok(())
         }
 
@@ -746,18 +733,18 @@ mod tests {
     impl ControlEngine for ExternalClassicalEngine {
         type Input = ();
         type Output = ShotResult;
-        type EngineInput = CommandBatch;
-        type EngineOutput = Vec<Message>;
+        type EngineInput = ByteMessage;
+        type EngineOutput = ByteMessage;
 
         fn start(
             &mut self,
             _input: (),
-        ) -> Result<EngineStage<CommandBatch, ShotResult>, QueueError> {
+        ) -> Result<EngineStage<ByteMessage, ShotResult>, QueueError> {
             self.command_index = 0;
             self.measurements.clear();
 
-            let commands = self.process_program()?;
-            if commands.is_empty() {
+            let commands = self.generate_commands()?;
+            if commands.is_empty().unwrap_or(false) {
                 Ok(EngineStage::Complete(self.get_results()?))
             } else {
                 Ok(EngineStage::NeedsProcessing(commands))
@@ -766,16 +753,14 @@ mod tests {
 
         fn continue_processing(
             &mut self,
-            measurements: Vec<Message>,
-        ) -> Result<EngineStage<CommandBatch, ShotResult>, QueueError> {
+            measurements: ByteMessage,
+        ) -> Result<EngineStage<ByteMessage, ShotResult>, QueueError> {
             // Handle measurements
-            for measurement in measurements {
-                self.handle_measurement(measurement)?;
-            }
+            self.handle_measurements(measurements)?;
 
             // Get next batch of commands
-            let commands = self.process_program()?;
-            if commands.is_empty() {
+            let commands = self.generate_commands()?;
+            if commands.is_empty().unwrap_or(false) {
                 Ok(EngineStage::Complete(self.get_results()?))
             } else {
                 Ok(EngineStage::NeedsProcessing(commands))

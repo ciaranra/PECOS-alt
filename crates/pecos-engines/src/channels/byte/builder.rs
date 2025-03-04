@@ -116,8 +116,10 @@ impl MessageBuilder {
         payload.extend_from_slice(bytes_of(&gate_header));
 
         // Write qubit indices
-        for qubit in &cmd.qubits {
-            payload.extend_from_slice(&qubit.to_le_bytes());
+        for &qubit in &cmd.qubits {
+            // Explicitly convert usize to u32
+            let qubit_u32: u32 = qubit.try_into().unwrap_or(0);
+            payload.extend_from_slice(&qubit_u32.to_le_bytes());
         }
 
         // Write parameters if needed

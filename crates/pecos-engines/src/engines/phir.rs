@@ -1,5 +1,5 @@
 use super::{ClassicalEngine, ControlEngine, EngineStage};
-use crate::channels::Message;
+use crate::channels::byte_message::ByteMessage;
 use crate::errors::QueueError;
 use log::debug;
 use pecos_core::types::CommandBatch;
@@ -303,10 +303,10 @@ impl Default for PHIREngine {
 impl ControlEngine for PHIREngine {
     type Input = ();
     type Output = ShotResult;
-    type EngineInput = CommandBatch;
-    type EngineOutput = Vec<Message>;
+    type EngineInput = ByteMessage;
+    type EngineOutput = ByteMessage;
 
-    fn start(&mut self, _input: ()) -> Result<EngineStage<CommandBatch, ShotResult>, QueueError> {
+    fn start(&mut self, _input: ()) -> Result<EngineStage<ByteMessage, ShotResult>, QueueError> {
         debug!(
             "PHIREngine start() called with current_op={}",
             self.current_op
@@ -314,8 +314,8 @@ impl ControlEngine for PHIREngine {
         self.current_op = 0; // Force reset here too
         self.measurement_results.clear();
 
-        let commands = self.process_program()?;
-        if commands.is_empty() {
+        let commands = self.generate_commands()?;
+        if commands.is_empty().unwrap_or(false) {
             Ok(EngineStage::Complete(self.get_results()?))
         } else {
             Ok(EngineStage::NeedsProcessing(commands))
@@ -324,16 +324,14 @@ impl ControlEngine for PHIREngine {
 
     fn continue_processing(
         &mut self,
-        measurements: Vec<Message>,
-    ) -> Result<EngineStage<CommandBatch, ShotResult>, QueueError> {
+        measurements: ByteMessage,
+    ) -> Result<EngineStage<ByteMessage, ShotResult>, QueueError> {
         // Handle received measurements
-        for measurement in measurements {
-            self.handle_measurement(measurement)?;
-        }
+        self.handle_measurements(measurements)?;
 
         // Get next batch of commands if any
-        let commands = self.process_program()?;
-        if commands.is_empty() {
+        let commands = self.generate_commands()?;
+        if commands.is_empty().unwrap_or(false) {
             Ok(EngineStage::Complete(self.get_results()?))
         } else {
             Ok(EngineStage::NeedsProcessing(commands))
@@ -377,6 +375,7 @@ impl ClassicalEngine for PHIREngine {
         0 // If no program is loaded, return 0
     }
 
+    // Keep original process_program for backward compatibility
     fn process_program(&mut self) -> Result<CommandBatch, QueueError> {
         debug!(
             "Processing PHIR program - thread {:?}, current_op: {}",
@@ -435,7 +434,19 @@ impl ClassicalEngine for PHIREngine {
         Ok(batch)
     }
 
-    fn handle_measurement(&mut self, measurement: Message) -> Result<(), QueueError> {
+    // New method for ByteMessage
+    fn generate_commands(&mut self) -> Result<ByteMessage, QueueError> {
+        let batch = self.process_program()?;
+
+        if batch.is_empty() {
+            ByteMessage::create_flush(true)
+        } else {
+            ByteMessage::create_quantum_operations(&batch)
+        }
+    }
+
+    fn handle_measurement(&mut self, measurement: u32) -> Result<(), QueueError> {
+        // Extract result_id and outcome as before
         let result_id = (measurement >> 16) as usize;
         let outcome = measurement & 0xFFFF;
 
@@ -444,6 +455,7 @@ impl ClassicalEngine for PHIREngine {
             outcome, measurement, result_id
         );
 
+        // Use the raw result_id from the measurement directly
         self.measurement_results
             .insert(format!("measurement_{result_id}"), outcome);
 
@@ -451,6 +463,17 @@ impl ClassicalEngine for PHIREngine {
             "PHIR: Stored measurement {} at result_id {}",
             outcome, result_id
         );
+
+        Ok(())
+    }
+
+    // New method for ByteMessage
+    fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError> {
+        let measurements = message.parse_measurements()?;
+
+        for measurement in measurements {
+            self.handle_measurement(measurement)?;
+        }
 
         Ok(())
     }
@@ -463,30 +486,35 @@ impl ClassicalEngine for PHIREngine {
             self.measurement_results.len()
         );
 
-        // Sort keys to ensure consistent ordering
-        let mut keys: Vec<_> = self.measurement_results.keys().collect();
-        keys.sort();
-
-        // Build measurement string in order
-        let mut measurement_values = Vec::new();
-        for key in &keys {
-            if let Some(&value) = self.measurement_results.get(*key) {
-                results.measurements.insert((*key).to_string(), value);
-                measurement_values.push(value.to_string());
-                debug!("PHIR: Adding measurement {} from {}", value, key);
-            }
+        // First add all individual measurements to the results
+        for (key, &value) in &self.measurement_results {
+            results.measurements.insert(key.clone(), value);
         }
 
-        // Join all measurements
-        let result_string = measurement_values.join("");
-        debug!("PHIR: Combined measurement result: {}", result_string);
+        // Build a combined result string from measurement_0 and measurement_1
+        let mut result_digits = String::new();
 
-        // Store result string
-        if !result_string.is_empty() {
-            results.measurements.insert(
-                "result".to_string(),
-                result_string.parse::<u32>().unwrap_or(0),
-            );
+        // Look for measurement_0 and measurement_1 in order
+        if let Some(&m0) = self.measurement_results.get("measurement_0") {
+            result_digits.push_str(&m0.to_string());
+        }
+        if let Some(&m1) = self.measurement_results.get("measurement_1") {
+            result_digits.push_str(&m1.to_string());
+        }
+
+        debug!("PHIR: Combined measurement result: {}", result_digits);
+
+        // Store combined result string as u32 if possible
+        if !result_digits.is_empty() {
+            if let Ok(result_value) = result_digits.parse::<u32>() {
+                results
+                    .measurements
+                    .insert("result".to_string(), result_value);
+            } else {
+                // If parsing fails, store a default value and log warning
+                debug!("PHIR: Could not parse '{}' as u32", result_digits);
+                results.measurements.insert("result".to_string(), 0);
+            }
         }
 
         Ok(results)
@@ -590,9 +618,17 @@ mod tests {
 
         // Verify results
         let results = engine.get_results()?;
-        // TODO: Deal with result vs measurement...
         assert_eq!(results.measurements.len(), 2);
         assert_eq!(results.measurements["measurement_0"], 1);
+
+        // Test ByteMessage methods
+        let command_message = engine.generate_commands()?;
+        assert!(!command_message.is_empty().unwrap_or(true));
+
+        // Create a measurement message and test handling
+        let measurement = (0u32 << 16) | 1u32; // result_id=0, outcome=1
+        let message = ByteMessage::create_measurements(&[measurement])?;
+        engine.handle_measurements(message)?;
 
         Ok(())
     }

@@ -1,4 +1,4 @@
-use crate::channels::Message;
+use crate::channels::byte_message::ByteMessage;
 use crate::engines::{ClassicalEngine, ControlEngine, EngineStage};
 use crate::errors::QueueError;
 use log::{debug, info};
@@ -209,6 +209,8 @@ impl ClassicalEngine for QirClassicalEngine {
     fn num_qubits(&self) -> usize {
         todo!()
     }
+
+    // Keep original process_program for backward compatibility
     fn process_program(&mut self) -> Result<CommandBatch, QueueError> {
         // Clear previous results at start of each shot
         self.current_results = ShotResult::default();
@@ -282,7 +284,19 @@ impl ClassicalEngine for QirClassicalEngine {
         Ok(commands.into())
     }
 
-    fn handle_measurement(&mut self, measurement: Message) -> Result<(), QueueError> {
+    // New method for ByteMessage
+    fn generate_commands(&mut self) -> Result<ByteMessage, QueueError> {
+        let batch = self.process_program()?;
+
+        if batch.is_empty() {
+            ByteMessage::create_flush(true)
+        } else {
+            ByteMessage::create_quantum_operations(&batch)
+        }
+    }
+
+    // Keep original handle_measurement for backward compatibility
+    fn handle_measurement(&mut self, measurement: u32) -> Result<(), QueueError> {
         debug!("Handling measurement: {}", measurement);
 
         // Get current qubit index from measurements size
@@ -309,6 +323,17 @@ impl ClassicalEngine for QirClassicalEngine {
                     }
                 }
             }
+        }
+
+        Ok(())
+    }
+
+    // New method for ByteMessage
+    fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError> {
+        let measurements = message.parse_measurements()?;
+
+        for measurement in measurements {
+            self.handle_measurement(measurement)?;
         }
 
         Ok(())
@@ -347,14 +372,14 @@ impl Drop for QirClassicalEngine {
 impl ControlEngine for QirClassicalEngine {
     type Input = ();
     type Output = ShotResult;
-    type EngineInput = CommandBatch;
-    type EngineOutput = Vec<Message>;
+    type EngineInput = ByteMessage;
+    type EngineOutput = ByteMessage;
 
-    fn start(&mut self, _input: ()) -> Result<EngineStage<CommandBatch, ShotResult>, QueueError> {
+    fn start(&mut self, _input: ()) -> Result<EngineStage<ByteMessage, ShotResult>, QueueError> {
         self.reset_internal_state();
 
-        let commands = self.process_program()?;
-        if commands.is_empty() {
+        let commands = self.generate_commands()?;
+        if commands.is_empty().unwrap_or(false) {
             Ok(EngineStage::Complete(self.get_results()?))
         } else {
             Ok(EngineStage::NeedsProcessing(commands))
@@ -363,16 +388,14 @@ impl ControlEngine for QirClassicalEngine {
 
     fn continue_processing(
         &mut self,
-        measurements: Vec<Message>,
-    ) -> Result<EngineStage<CommandBatch, ShotResult>, QueueError> {
+        measurements: ByteMessage,
+    ) -> Result<EngineStage<ByteMessage, ShotResult>, QueueError> {
         // Handle measurements through child process
-        for measurement in measurements {
-            self.handle_measurement(measurement)?;
-        }
+        self.handle_measurements(measurements)?;
 
         // Get next batch if any
-        let commands = self.process_program()?;
-        if commands.is_empty() {
+        let commands = self.generate_commands()?;
+        if commands.is_empty().unwrap_or(false) {
             Ok(EngineStage::Complete(self.get_results()?))
         } else {
             Ok(EngineStage::NeedsProcessing(commands))

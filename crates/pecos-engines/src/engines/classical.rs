@@ -1,46 +1,44 @@
-use crate::channels::Message;
-use crate::engines::phir::PHIREngine;
-use crate::engines::qir::engine::QirClassicalEngine;
-use crate::engines::{ControlEngine, EngineStage};
+// src/engines/classical.rs (fully updated for ByteMessage)
+
+use crate::channels::byte_message::ByteMessage;
+use crate::engines::{ControlEngine, EngineStage, phir, qir};
 use crate::errors::QueueError;
 use log::debug;
 use pecos_core::types::{CommandBatch, ShotResult};
 use std::error::Error;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Classical engine that processes programs and handles measurements
 pub trait ClassicalEngine: Send + Sync {
     fn num_qubits(&self) -> usize;
-    /// Processes the classical program and generates a batch of quantum commands
-    /// to be sent for execution.
+
+    /// Generate a `ByteMessage` containing the next batch of quantum commands to execute
     ///
     /// # Returns
     ///
-    /// Returns a `CommandBatch` containing the quantum commands to execute if successful.
+    /// Returns a `ByteMessage` containing the quantum commands to execute if successful.
+    /// An empty message indicates no more commands are available.
     ///
     /// # Errors
     ///
     /// This function may return the following errors:
     /// - `QueueError::OperationError`: If the program processing fails or encounters unsupported operations.
     /// - `QueueError::LockError`: If a lock cannot be acquired during the execution process.
-    fn process_program(&mut self) -> Result<CommandBatch, QueueError>;
-    /// Handles a measurement received from the quantum engine.
-    ///
-    /// This function takes a `measurement` message and processes it to update
-    /// the state or results of the classical engine.
+    fn generate_commands(&mut self) -> Result<ByteMessage, QueueError>;
+
+    /// Handles a `ByteMessage` containing measurements from the quantum engine
     ///
     /// # Parameters
     ///
-    /// - `measurement`: A `Message` containing the measurement data to process.
+    /// - `message`: A `ByteMessage` containing the measurement data to process.
     ///
     /// # Errors
     ///
     /// This function may return the following errors:
-    /// - `QueueError::OperationError`: If the measurement processing fails or encounters
-    ///   unsupported operations.
+    /// - `QueueError::OperationError`: If the measurement processing fails.
     /// - `QueueError::LockError`: If a lock cannot be acquired during the measurement handling process.
-    fn handle_measurement(&mut self, measurement: Message) -> Result<(), QueueError>;
+    fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError>;
+
     /// Retrieves the results of the execution process after all measurements are handled.
     ///
     /// # Returns
@@ -54,6 +52,7 @@ pub trait ClassicalEngine: Send + Sync {
     /// - `QueueError::OperationError`: If result retrieval fails or is unsupported.
     /// - `QueueError::LockError`: If a lock cannot be acquired to access required resources.
     fn get_results(&self) -> Result<ShotResult, QueueError>;
+
     /// Compiles the classical program into an intermediate representation or directly
     /// into commands that can be executed by the engine.
     ///
@@ -71,9 +70,6 @@ pub trait ClassicalEngine: Send + Sync {
 
     /// Resets the state of the classical engine to its initial configuration.
     ///
-    /// This method provides a default implementation for resetting the engine,
-    /// which can be overridden by specific implementations if needed.
-    ///
     /// # Returns
     ///
     /// Returns `Ok(())` if the reset operation completes successfully.
@@ -84,13 +80,83 @@ pub trait ClassicalEngine: Send + Sync {
     /// - `QueueError::OperationError`: If the reset operation encounters unsupported actions or fails.
     /// - `QueueError::LockError`: If a lock cannot be acquired during the reset process.
     fn reset(&mut self) -> Result<(), QueueError> {
-        debug!("DEFAULT ClassicalEngine::reset() being called!");
         Ok(())
     }
 
     /// Create a boxed clone of this engine.
     /// This allows engines to be cloned for concurrent execution.
     fn clone_box(&self) -> Box<dyn ClassicalEngine>;
+
+    /// Compatibility method to convert a `CommandBatch` to a `ByteMessage`
+    ///
+    /// This is a helper for implementing the new interface while maintaining compatibility
+    /// with existing code that operates on `CommandBatch`.
+    fn command_batch_to_message(&self, batch: CommandBatch) -> Result<ByteMessage, QueueError> {
+        if batch.is_empty() {
+            // Create an empty message (just a flush)
+            ByteMessage::create_flush(true)
+        } else {
+            // Create a message with the commands
+            ByteMessage::create_quantum_operations(&batch)
+        }
+    }
+
+    /// DEPRECATED: Old method for generating quantum commands
+    /// Will be removed in a future version
+    #[deprecated(since = "0.2.0", note = "Use generate_commands instead")]
+    fn process_program(&mut self) -> Result<CommandBatch, QueueError>;
+
+    /// DEPRECATED: Old method for handling measurements
+    /// Will be removed in a future version
+    #[deprecated(since = "0.2.0", note = "Use handle_measurements instead")]
+    fn handle_measurement(&mut self, measurement: u32) -> Result<(), QueueError>;
+}
+
+impl ControlEngine for Box<dyn ClassicalEngine> {
+    type Input = ();
+    type Output = ShotResult;
+    type EngineInput = ByteMessage;
+    type EngineOutput = ByteMessage;
+
+    fn start(&mut self, _input: ()) -> Result<EngineStage<ByteMessage, ShotResult>, QueueError> {
+        // Build up first batch of commands until measurement needed
+        let commands = self.generate_commands()?;
+
+        // Check if we have an empty message (no more commands)
+        if let Ok(message_type) = commands.message_type() {
+            if message_type == crate::channels::byte::protocol::MessageType::Flush {
+                return Ok(EngineStage::Complete(self.get_results()?));
+            }
+        }
+
+        Ok(EngineStage::NeedsProcessing(commands))
+    }
+
+    fn continue_processing(
+        &mut self,
+        measurements: ByteMessage,
+    ) -> Result<EngineStage<ByteMessage, ShotResult>, QueueError> {
+        // Handle measurements
+        self.handle_measurements(measurements)?;
+
+        // Get next batch of commands if any
+        let commands = self.generate_commands()?;
+
+        // Check if we have an empty message (no more commands)
+        if let Ok(message_type) = commands.message_type() {
+            if message_type == crate::channels::byte::protocol::MessageType::Flush {
+                return Ok(EngineStage::Complete(self.get_results()?));
+            }
+        }
+
+        Ok(EngineStage::NeedsProcessing(commands))
+    }
+
+    fn reset(&mut self) -> Result<(), QueueError> {
+        debug!("Box<dyn ClassicalEngine> reset() delegating to inner ClassicalEngine");
+        // Delegate to the actual ClassicalEngine's reset
+        self.as_mut().reset()
+    }
 }
 
 /// Detects the type of program based on its file extension and content.
@@ -118,7 +184,7 @@ pub fn detect_program_type(path: &Path) -> Result<ProgramType, Box<dyn Error>> {
     match path.extension().and_then(|ext| ext.to_str()) {
         Some("json") => {
             // Read JSON and verify format
-            let content = fs::read_to_string(path)?;
+            let content = std::fs::read_to_string(path)?;
             let json: serde_json::Value = serde_json::from_str(&content)?;
 
             if let Some("PHIR/JSON") = json.get("format").and_then(|f| f.as_str()) {
@@ -167,15 +233,18 @@ pub fn setup_engine(program_path: &Path) -> Result<Box<dyn ClassicalEngine>, Box
     debug!("Program path: {}", program_path.display());
     let build_dir = program_path.parent().unwrap().join("build");
     debug!("Build directory: {}", build_dir.display());
-    fs::create_dir_all(&build_dir)?;
+    std::fs::create_dir_all(&build_dir)?;
 
     match detect_program_type(program_path)? {
         ProgramType::QIR => {
-            let engine = Box::new(QirClassicalEngine::new(program_path, &build_dir));
+            let engine = Box::new(qir::engine::QirClassicalEngine::new(
+                program_path,
+                &build_dir,
+            ));
             engine.compile()?;
             Ok(engine)
         }
-        ProgramType::PHIR => Ok(Box::new(PHIREngine::new(program_path)?)),
+        ProgramType::PHIR => Ok(Box::new(phir::PHIREngine::new(program_path)?)),
     }
 }
 
@@ -219,45 +288,4 @@ pub fn get_program_path(program: &str) -> Result<PathBuf, Box<dyn Error>> {
     }
 
     Ok(path.canonicalize()?)
-}
-
-impl ControlEngine for Box<dyn ClassicalEngine> {
-    type Input = (); // Or whatever triggers program processing
-    type Output = ShotResult;
-    type EngineInput = CommandBatch;
-    type EngineOutput = Vec<Message>;
-
-    fn start(&mut self, _input: ()) -> Result<EngineStage<CommandBatch, ShotResult>, QueueError> {
-        // Build up first batch of commands until measurement needed
-        let commands = self.process_program()?;
-        if commands.is_empty() {
-            Ok(EngineStage::Complete(self.get_results()?))
-        } else {
-            Ok(EngineStage::NeedsProcessing(commands))
-        }
-    }
-
-    fn continue_processing(
-        &mut self,
-        measurements: Vec<Message>,
-    ) -> Result<EngineStage<CommandBatch, ShotResult>, QueueError> {
-        // Handle measurements
-        for measurement in measurements {
-            self.handle_measurement(measurement)?;
-        }
-
-        // Get next batch of commands if any
-        let commands = self.process_program()?;
-        if commands.is_empty() {
-            Ok(EngineStage::Complete(self.get_results()?))
-        } else {
-            Ok(EngineStage::NeedsProcessing(commands))
-        }
-    }
-
-    fn reset(&mut self) -> Result<(), QueueError> {
-        debug!("Box<dyn ClassicalEngine> reset() delegating to inner ClassicalEngine");
-        // Delegate to the actual ClassicalEngine's reset
-        self.as_mut().reset()
-    }
 }
