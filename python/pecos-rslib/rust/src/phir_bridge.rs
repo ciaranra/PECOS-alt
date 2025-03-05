@@ -396,8 +396,8 @@ impl ClassicalEngine for PHIREngine {
     }
 
     fn generate_commands(&mut self) -> Result<ByteMessage, QueueError> {
-        // Create a CommandBatch
-        let mut batch = CommandBatch::new();
+        // Create a Vec<QuantumCommand>
+        let mut commands = Vec::new();
 
         // Fill it with commands from Python
         Python::with_gil(|py| -> Result<(), QueueError> {
@@ -409,7 +409,7 @@ impl ClassicalEngine for PHIREngine {
 
             // Check if empty
             if raw_commands.is_none(py) {
-                return Ok(()); // Empty batch
+                return Ok(());
             }
 
             // Convert to list
@@ -422,19 +422,15 @@ impl ClassicalEngine for PHIREngine {
             for py_cmd in py_list.iter() {
                 let (gate, qubits) = process_py_command(py_cmd.as_ref())?;
 
-                // Add command to batch
-                batch.add_command(QuantumCommand { gate, qubits });
+                // Add command to vector
+                commands.push(QuantumCommand { gate, qubits });
             }
 
             Ok(())
         })?;
 
-        // Convert the batch to a ByteMessage
-        if batch.is_empty() {
-            ByteMessage::create_flush(true)
-        } else {
-            ByteMessage::create_quantum_operations(&batch)
-        }
+        // Use the convenience function that already handles empty commands
+        ByteMessage::from_commands(commands)
     }
 
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError> {

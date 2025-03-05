@@ -2,11 +2,11 @@ use super::{ClassicalEngine, ControlEngine, EngineStage};
 use crate::channels::byte_message::ByteMessage;
 use crate::errors::QueueError;
 use log::debug;
-use pecos_core::types::CommandBatch;
 use pecos_core::types::{GateType, QuantumCommand, ShotResult};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
+use crate::channels::byte::builder::MessageBuilder;
 
 #[derive(Debug, Deserialize, Clone)]
 struct PHIRProgram {
@@ -392,10 +392,10 @@ impl ClassicalEngine for PHIREngine {
         // If we've processed all ops, return empty batch to signal completion
         if self.current_op >= ops.len() {
             debug!("End of program reached, sending flush");
-            return ByteMessage::create_flush(true);
+            return Ok(MessageBuilder::create_flush_message(true));
         }
 
-        let mut batch = CommandBatch::new();
+        let mut commands = Vec::new();
 
         while self.current_op < ops.len() {
             match &ops[self.current_op] {
@@ -415,33 +415,28 @@ impl ClassicalEngine for PHIREngine {
                     debug!("Processing quantum operation: {}", qop);
                     let cmd = self.handle_quantum_op(qop, angles.as_ref(), args)?;
                     debug!("Generated quantum command: {:?}", cmd);
-                    batch.add_command(cmd);
+                    commands.push(cmd);
                 }
                 Operation::ClassicalOp { cop, args, returns } => {
                     debug!("Processing classical operation: {}", cop);
                     if self.handle_classical_op(cop, args, returns)? {
                         debug!("Finishing batch due to classical operation completion");
                         self.current_op += 1;
-                        if batch.is_empty() {
-                            return ByteMessage::create_flush(true);
-                        }
-                        return ByteMessage::create_quantum_operations(&batch);
+
+                        return Ok(MessageBuilder::create_quantum_message(&commands));
                     }
                 }
             }
             self.current_op += 1;
         }
 
-        debug!("PHIR engine generated {} commands for shot", batch.len());
+        debug!("PHIR engine generated {} commands for shot", commands.len());
 
-        if batch.is_empty() {
-            ByteMessage::create_flush(true)
-        } else {
-            ByteMessage::create_quantum_operations(&batch)
-        }
+        Ok(MessageBuilder::create_quantum_message(&commands))
     }
 
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError> {
+        // Parse measurements using ByteMessage helper
         let measurements = message.parse_measurements()?;
 
         for measurement in measurements {

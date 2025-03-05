@@ -3,16 +3,12 @@
 //! This module provides functions for dumping and analyzing binary
 //! messages for debugging purposes.
 
-use super::builder::MessageBuilder;
-use super::channel::ByteChannel;
 use super::protocol::{
     BATCH_MAGIC, BatchHeader, MeasurementHeader, MeasurementResultHeader, MessageHeader,
     QuantumGateHeader, calc_padding,
 };
-use crate::channels::CommandChannel;
-use crate::errors::QueueError;
-use pecos_core::types::CommandBatch;
-use std::io::{Cursor, Write};
+use crate::channels::ByteMessage;
+use std::io::Write;
 use std::mem::size_of;
 
 /// Dump a binary message batch to a string for debugging
@@ -245,90 +241,72 @@ pub fn dump_batch(data: &[u8]) -> String {
     output
 }
 
-/// Convert a batch to a binary message for inspection
+/// Dump a ByteMessage to a string for debugging
 #[must_use]
-pub fn batch_to_binary(batch: &CommandBatch) -> Vec<u8> {
-    let mut builder = MessageBuilder::new();
-    builder.add_command_batch(batch).build()
+pub fn dump_message(message: &ByteMessage) -> String {
+    dump_batch(message.as_bytes())
 }
 
-/// Decode a binary message back to a command batch
-pub fn binary_to_batch(data: &[u8]) -> Result<CommandBatch, QueueError> {
-    let owned_data = data.to_vec();
-    let mut channel =
-        ByteChannel::new(Box::new(Cursor::new(owned_data)), Box::new(std::io::sink()));
-
-    match channel.receive_batch()? {
-        Some(batch) => Ok(batch),
-        None => Ok(CommandBatch::new()),
-    }
-}
-
-/// Utility function to write a byte dump to a file for debugging
-pub fn write_batch_to_file(batch: &CommandBatch, filename: &str) -> std::io::Result<()> {
-    let binary_data = batch_to_binary(batch);
+/// Utility function to write a ByteMessage to a file for debugging
+pub fn write_message_to_file(message: &ByteMessage, filename: &str) -> std::io::Result<()> {
     let mut file = std::fs::File::create(filename)?;
-    file.write_all(&binary_data)?;
+    file.write_all(message.as_bytes())?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::channels::byte_message::ByteMessage;
     use pecos_core::types::{GateType, QuantumCommand};
 
     #[test]
-    fn test_batch_to_binary_to_batch() {
-        // Create a command batch
-        let mut batch = CommandBatch::new();
-        batch.add_command(QuantumCommand {
-            gate: GateType::H,
-            qubits: vec![0],
-        });
-        batch.add_command(QuantumCommand {
-            gate: GateType::CX,
-            qubits: vec![0, 1],
-        });
+    fn test_bytemap_dump() {
+        // Create commands
+        let commands = vec![
+            QuantumCommand {
+                gate: GateType::H,
+                qubits: vec![0],
+            },
+            QuantumCommand {
+                gate: GateType::CX,
+                qubits: vec![0, 1],
+            },
+        ];
 
-        // Convert to binary
-        let binary_data = batch_to_binary(&batch);
+        // Create ByteMessage
+        let message = ByteMessage::create_quantum_operations(&commands).unwrap();
 
-        // Convert back to batch
-        let recovered_batch = binary_to_batch(&binary_data).unwrap();
+        // Dump message
+        let dump = dump_message(&message);
 
-        // Verify
-        assert_eq!(recovered_batch.len(), 2);
-
-        let commands: Vec<_> = recovered_batch.commands().iter().collect();
-
-        assert!(matches!(commands[0].gate, GateType::H));
-        assert_eq!(commands[0].qubits.len(), 1);
-        assert_eq!(commands[0].qubits[0], 0);
-
-        assert!(matches!(commands[1].gate, GateType::CX));
-        assert_eq!(commands[1].qubits.len(), 2);
-        assert_eq!(commands[1].qubits[0], 0);
-        assert_eq!(commands[1].qubits[1], 1);
+        // Verify dump contains expected information
+        assert!(dump.contains("Batch Header"));
+        assert!(dump.contains("Magic: 0x5045"));
+        assert!(dump.contains("Type: QuantumGate"));
+        assert!(dump.contains("Type: H"));
+        assert!(dump.contains("Type: CX"));
     }
 
     #[test]
     fn test_dump_batch() {
-        // Create a command batch with different gate types
-        let mut batch = CommandBatch::new();
-        batch.add_command(QuantumCommand {
-            gate: GateType::H,
-            qubits: vec![0],
-        });
-        batch.add_command(QuantumCommand {
-            gate: GateType::RZ { theta: 0.5 },
-            qubits: vec![1],
-        });
+        // Create a ByteMessage with different gate types
+        let commands = vec![
+            QuantumCommand {
+                gate: GateType::H,
+                qubits: vec![0],
+            },
+            QuantumCommand {
+                gate: GateType::RZ { theta: 0.5 },
+                qubits: vec![1],
+            },
+        ];
 
-        // Convert to binary
-        let binary_data = batch_to_binary(&batch);
+        // Create a ByteMessage
+        let message = ByteMessage::create_quantum_operations(&commands).unwrap();
 
         // Dump batch
-        let dump = dump_batch(&binary_data);
+        let dump = dump_batch(message.as_bytes());
 
         // Verify dump contains expected information
         assert!(dump.contains("Batch Header"));

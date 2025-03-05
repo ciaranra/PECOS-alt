@@ -6,7 +6,7 @@ use crate::channels::byte::protocol::{
 use crate::errors::QueueError;
 use bytemuck::from_bytes;
 use log::trace;
-use pecos_core::types::{CommandBatch, GateType, QuantumCommand};
+use pecos_core::types::{GateType, QuantumCommand};
 use std::mem::size_of;
 
 /// A message encoded using the PECOS byte protocol
@@ -39,9 +39,20 @@ impl ByteMessage {
     /// # Errors
     ///
     /// Returns a `QueueError` if the message cannot be created due to serialization issues.
-    pub fn create_quantum_operations(batch: &CommandBatch) -> Result<Self, QueueError> {
+    pub fn create_quantum_operations(commands: &[QuantumCommand]) -> Result<Self, QueueError> {
         let mut builder = MessageBuilder::new();
-        builder.add_command_batch(batch);
+
+        // Begin batch
+        builder.add_message(MessageType::BeginBatch, &[], MessageFlags::NONE);
+
+        // Add each command
+        for cmd in commands {
+            builder.add_quantum_gate(cmd);
+        }
+
+        // End batch
+        builder.add_message(MessageType::EndBatch, &[], MessageFlags::NONE);
+
         Ok(Self::new(builder.build()))
     }
 
@@ -76,7 +87,7 @@ impl ByteMessage {
         Ok(Self::new(builder.build()))
     }
 
-    /// Create an empty `CommandBatch` message (useful for signaling completion)
+    /// Create an empty batch message (useful for signaling completion)
     pub fn create_empty_batch() -> Result<Self, QueueError> {
         let mut builder = MessageBuilder::new();
         builder.add_message(MessageType::BeginBatch, &[], MessageFlags::NONE);
@@ -128,18 +139,15 @@ impl ByteMessage {
             MessageType::Flush => Ok(true),
             MessageType::BeginBatch => {
                 // Check if this is a batch with no operations
-                if let Ok(batch) = self.parse_quantum_operations() {
-                    Ok(batch.is_empty())
-                } else {
-                    Ok(false)
-                }
+                let commands = self.parse_quantum_operations()?;
+                Ok(commands.is_empty())
             }
             _ => Ok(false),
         }
     }
 
     /// Parse quantum operations from this message
-    pub fn parse_quantum_operations(&self) -> Result<CommandBatch, QueueError> {
+    pub fn parse_quantum_operations(&self) -> Result<Vec<QuantumCommand>, QueueError> {
         if self.bytes.len() < size_of::<BatchHeader>() {
             return Err(QueueError::OperationError(
                 "Message too small for batch header".into(),
@@ -152,7 +160,7 @@ impl ByteMessage {
             return Err(QueueError::OperationError("Invalid batch header".into()));
         }
 
-        let mut batch = CommandBatch::new();
+        let mut commands = Vec::new();
         let mut offset = size_of::<BatchHeader>();
         let mut in_command_batch = false;
 
@@ -190,19 +198,19 @@ impl ByteMessage {
                 }
                 MessageType::EndBatch => {
                     // End of batch reached
-                    return Ok(batch);
+                    return Ok(commands);
                 }
                 MessageType::QuantumGate if in_command_batch => {
                     // Process quantum gate
                     let payload = &self.bytes[offset..payload_end];
                     let cmd = Self::parse_quantum_gate(payload)?;
-                    batch.add_command(cmd);
+                    commands.push(cmd);
                 }
                 MessageType::Measurement if in_command_batch => {
                     // Process measurement
                     let payload = &self.bytes[offset..payload_end];
                     let cmd = Self::parse_measurement(payload)?;
-                    batch.add_command(cmd);
+                    commands.push(cmd);
                 }
                 _ => {
                     // Skip other message types
@@ -218,7 +226,7 @@ impl ByteMessage {
             }
         }
 
-        Ok(batch)
+        Ok(commands)
     }
 
     /// Parse measurements from this message
@@ -420,6 +428,19 @@ impl ByteMessage {
             qubits: vec![usize::try_from(header.qubit).unwrap()],
         })
     }
+
+    /// Helper to create from commands
+    pub fn from_commands(commands: Vec<QuantumCommand>) -> Result<Self, QueueError> {
+        if commands.is_empty() {
+            return Self::create_flush(true);
+        }
+        Self::create_quantum_operations(&commands)
+    }
+
+    /// Helper to create from a single command
+    pub fn from_command(command: QuantumCommand) -> Result<Self, QueueError> {
+        Self::from_commands(vec![command])
+    }
 }
 
 #[cfg(test)]
@@ -428,47 +449,46 @@ mod tests {
 
     #[test]
     fn test_create_and_parse_quantum_operations() {
-        // Create a batch of quantum operations
-        let mut batch = CommandBatch::new();
-        batch.add_command(QuantumCommand {
-            gate: GateType::H,
-            qubits: vec![0],
-        });
-        batch.add_command(QuantumCommand {
-            gate: GateType::CX,
-            qubits: vec![0, 1],
-        });
-        batch.add_command(QuantumCommand {
-            gate: GateType::Measure { result_id: 0 },
-            qubits: vec![0],
-        });
+        // Create commands directly
+        let commands = vec![
+            QuantumCommand {
+                gate: GateType::H,
+                qubits: vec![0],
+            },
+            QuantumCommand {
+                gate: GateType::CX,
+                qubits: vec![0, 1],
+            },
+            QuantumCommand {
+                gate: GateType::Measure { result_id: 0 },
+                qubits: vec![0],
+            },
+        ];
 
-        // Create a ByteMessage from the batch
-        let message = ByteMessage::create_quantum_operations(&batch).unwrap();
+        // Create a ByteMessage from the commands
+        let message = ByteMessage::create_quantum_operations(&commands).unwrap();
 
-        // Parse the ByteMessage back to a batch
-        let parsed_batch = message.parse_quantum_operations().unwrap();
+        // Parse the ByteMessage back to commands
+        let parsed_commands = message.parse_quantum_operations().unwrap();
 
-        // Verify the batch was correctly parsed
-        assert_eq!(parsed_batch.len(), 3);
-
-        let commands: Vec<_> = parsed_batch.commands().iter().collect();
+        // Verify the commands were correctly parsed
+        assert_eq!(parsed_commands.len(), 3);
 
         // Check the Hadamard gate
-        assert!(matches!(commands[0].gate, GateType::H));
-        assert_eq!(commands[0].qubits, vec![0]);
+        assert!(matches!(parsed_commands[0].gate, GateType::H));
+        assert_eq!(parsed_commands[0].qubits, vec![0]);
 
         // Check the CX gate
-        assert!(matches!(commands[1].gate, GateType::CX));
-        assert_eq!(commands[1].qubits, vec![0, 1]);
+        assert!(matches!(parsed_commands[1].gate, GateType::CX));
+        assert_eq!(parsed_commands[1].qubits, vec![0, 1]);
 
         // Check the Measure gate
-        if let GateType::Measure { result_id } = commands[2].gate {
+        if let GateType::Measure { result_id } = parsed_commands[2].gate {
             assert_eq!(result_id, 0);
         } else {
             panic!("Expected Measure gate");
         }
-        assert_eq!(commands[2].qubits, vec![0]);
+        assert_eq!(parsed_commands[2].qubits, vec![0]);
     }
 
     #[test]
@@ -493,15 +513,14 @@ mod tests {
 
     #[test]
     fn test_message_type() {
-        // Create a batch of quantum operations
-        let mut batch = CommandBatch::new();
-        batch.add_command(QuantumCommand {
+        // Create a message with a single command
+        let commands = vec![QuantumCommand {
             gate: GateType::H,
             qubits: vec![0],
-        });
+        }];
 
-        // Create a ByteMessage from the batch
-        let message = ByteMessage::create_quantum_operations(&batch).unwrap();
+        // Create a ByteMessage from the commands
+        let message = ByteMessage::create_quantum_operations(&commands).unwrap();
 
         // Get the message type
         let msg_type = message.message_type().unwrap();

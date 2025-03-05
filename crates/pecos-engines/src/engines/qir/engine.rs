@@ -2,7 +2,7 @@ use crate::channels::byte_message::ByteMessage;
 use crate::engines::{ClassicalEngine, ControlEngine, EngineStage};
 use crate::errors::QueueError;
 use log::{debug, info};
-use pecos_core::types::{CommandBatch, QuantumCommand, ShotResult};
+use pecos_core::types::{QuantumCommand, ShotResult};
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -282,13 +282,8 @@ impl ClassicalEngine for QirClassicalEngine {
         // Store process handles for later measurement handling
         self.child_process = Some(child);
 
-        let batch = CommandBatch::from(commands);
-
-        if batch.is_empty() {
-            ByteMessage::create_flush(true)
-        } else {
-            ByteMessage::create_quantum_operations(&batch)
-        }
+        // Use our new helper to create a ByteMessage directly from commands
+        ByteMessage::from_commands(commands)
     }
 
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError> {

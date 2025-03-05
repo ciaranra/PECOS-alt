@@ -4,9 +4,10 @@ use std::collections::VecDeque;
 use std::io::{self, Read, Write};
 use std::sync::Mutex;
 
+use crate::channels::ByteMessage;
 use crate::channels::byte::builder::MessageBuilder;
 use crate::channels::byte::protocol::{MessageFlags, MessageType};
-use pecos_core::types::{CommandBatch, GateType, QuantumCommand};
+use pecos_core::types::{GateType, QuantumCommand};
 
 lazy_static! {
     // A thread-safe global queue to store quantum commands
@@ -260,19 +261,20 @@ pub extern "C" fn __quantum__rt__result_record_output(result: *const Result, _la
         if !queue.is_empty() {
             debug!("Flushing {} commands", queue.len());
 
-            // Create a batch of commands
-            let mut batch = CommandBatch::new();
-            while let Some(cmd) = queue.pop_front() {
-                batch.add_command(cmd);
+            // Convert queue to Vec<QuantumCommand>
+            let commands: Vec<QuantumCommand> = queue.drain(..).collect();
+
+            // Create ByteMessage directly using our helper
+            if let Ok(message) = ByteMessage::from_commands(commands) {
+                // Get raw bytes
+                let message_data = message.as_bytes();
+
+                // Write to stdout
+                io::stdout().write_all(message_data).unwrap();
+                io::stdout().flush().unwrap();
+            } else {
+                debug!("Failed to create ByteMessage from commands");
             }
-
-            // Build and send binary message
-            let mut builder = MessageBuilder::new();
-            let message_data = builder.add_command_batch(&batch).build();
-
-            // Write to stdout
-            io::stdout().write_all(&message_data).unwrap();
-            io::stdout().flush().unwrap();
         }
 
         // Read binary response
@@ -290,17 +292,26 @@ pub extern "C" fn __quantum__rt__result_record_output(result: *const Result, _la
         // Output the result
         debug!("Received measurement: {}", measurement);
 
-        // Build a binary response with the result
-        let mut result_builder = MessageBuilder::new();
-        let result_data = result_builder
-            .add_message(
-                MessageType::MeasurementResult,
-                &format!("measurement_{result_idx} {measurement}").into_bytes(),
-                MessageFlags::NONE,
-            )
-            .build();
+        // Create a ByteMessage for the measurement result
+        // This is a bit trickier since we're dealing with a custom format
+        // Instead of using the MessageBuilder directly, we could use:
+        if let Ok(result_message) = ByteMessage::create_measurement(u32::try_from(result_idx).expect("Problem converting result id to u32"), measurement)
+        {
+            io::stdout().write_all(result_message.as_bytes()).unwrap();
+            io::stdout().flush().unwrap();
+        } else {
+            // Fallback to the original approach if the helper fails
+            let mut result_builder = MessageBuilder::new();
+            let result_data = result_builder
+                .add_message(
+                    MessageType::MeasurementResult,
+                    &format!("measurement_{result_idx} {measurement}").into_bytes(),
+                    MessageFlags::NONE,
+                )
+                .build();
 
-        io::stdout().write_all(&result_data).unwrap();
-        io::stdout().flush().unwrap();
+            io::stdout().write_all(&result_data).unwrap();
+            io::stdout().flush().unwrap();
+        }
     }
 }

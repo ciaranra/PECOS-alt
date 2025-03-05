@@ -7,8 +7,9 @@ use super::protocol::{
     BatchHeader, MeasurementHeader, MeasurementResultHeader, MessageFlags, MessageHeader,
     MessageType, QuantumGateHeader, calc_padding,
 };
+use crate::channels::ByteMessage;
 use bytemuck::bytes_of;
-use pecos_core::types::{CommandBatch, GateType, QuantumCommand};
+use pecos_core::types::{GateType, QuantumCommand};
 use std::mem::size_of;
 
 /// Helper for building binary messages
@@ -189,13 +190,13 @@ impl MessageBuilder {
         )
     }
 
-    /// Add a command batch
-    pub fn add_command_batch(&mut self, batch: &CommandBatch) -> &mut Self {
+    /// Add quantum commands from a slice
+    pub fn add_quantum_commands(&mut self, commands: &[QuantumCommand]) -> &mut Self {
         // Begin batch message
         self.add_message(MessageType::BeginBatch, &[], MessageFlags::NONE);
 
         // Add each command
-        for cmd in batch.commands() {
+        for cmd in commands {
             self.add_quantum_gate(cmd);
         }
 
@@ -218,5 +219,112 @@ impl MessageBuilder {
 
         // Return a clone of the buffer
         self.buffer.clone()
+    }
+
+    /// Build a ByteMessage from the constructed buffer
+    pub fn build_message(&mut self) -> ByteMessage {
+        ByteMessage::new(self.build())
+    }
+
+    /// Convert the builder directly into a ByteMessage
+    pub fn into_message(mut self) -> ByteMessage {
+        self.build_message()
+    }
+
+    /// Create a ByteMessage containing a batch of quantum commands
+    pub fn create_quantum_message(commands: &[QuantumCommand]) -> ByteMessage {
+        let mut builder = Self::new();
+        builder.add_quantum_commands(commands);
+        builder.build_message()
+    }
+
+    /// Create a ByteMessage containing a measurement result
+    pub fn create_measurement_message(result_id: u32, outcome: u32, is_last: bool) -> ByteMessage {
+        let mut builder = Self::new();
+        builder.add_measurement_result(result_id, outcome, is_last);
+        builder.build_message()
+    }
+
+    /// Create a ByteMessage with a flush command
+    pub fn create_flush_message(is_last: bool) -> ByteMessage {
+        let mut builder = Self::new();
+        let flags = if is_last {
+            MessageFlags::LAST_MESSAGE
+        } else {
+            MessageFlags::NONE
+        };
+        builder.add_message(MessageType::Flush, &[], flags);
+        builder.build_message()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_create_quantum_message() {
+        // Create a test command
+        let cmd = QuantumCommand {
+            gate: GateType::H,
+            qubits: vec![0],
+        };
+
+        // Create a ByteMessage using the new helper method
+        let message = MessageBuilder::create_quantum_message(&[cmd]);
+
+        // Parse the message back to commands
+        let parsed_commands = message.parse_quantum_operations().unwrap();
+
+        // Verify we got back the same command
+        assert_eq!(parsed_commands.len(), 1);
+        assert!(matches!(parsed_commands[0].gate, GateType::H));
+        assert_eq!(parsed_commands[0].qubits, vec![0]);
+    }
+
+    #[test]
+    fn test_create_measurement_message() {
+        // Create a measurement message
+        let message = MessageBuilder::create_measurement_message(42, 1, true);
+
+        // Parse the message
+        let measurements = message.parse_measurements().unwrap();
+
+        // Verify we got the right measurement
+        assert_eq!(measurements.len(), 1);
+        assert_eq!(measurements[0], ((42 & 0xFFFF) << 16) | (1 & 0xFFFF));
+    }
+
+    #[test]
+    fn test_builder_methods() {
+        // Test adding a quantum gate
+        let mut builder = MessageBuilder::new();
+        let cmd = QuantumCommand {
+            gate: GateType::CX,
+            qubits: vec![0, 1],
+        };
+
+        builder.add_quantum_gate(&cmd);
+        let message = builder.build_message();
+
+        // Parse the message
+        let commands = message.parse_quantum_operations().unwrap();
+
+        // Should be empty since we didn't add begin/end batch messages
+        assert!(commands.is_empty());
+
+        // Now test with proper batch structure
+        let mut builder = MessageBuilder::new();
+        builder.add_message(MessageType::BeginBatch, &[], MessageFlags::NONE);
+        builder.add_quantum_gate(&cmd);
+        builder.add_message(MessageType::EndBatch, &[], MessageFlags::NONE);
+
+        let message = builder.build_message();
+        let commands = message.parse_quantum_operations().unwrap();
+
+        // Now we should have our command
+        assert_eq!(commands.len(), 1);
+        assert!(matches!(commands[0].gate, GateType::CX));
+        assert_eq!(commands[0].qubits, vec![0, 1]);
     }
 }

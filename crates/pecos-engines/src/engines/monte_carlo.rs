@@ -15,13 +15,13 @@ use std::sync::Arc;
 /// coordinating the classical and quantum components through a hybrid engine setup.
 /// It handles program loading, noise model application, and result aggregation.
 pub struct MonteCarloEngine {
-    /// Classical engine used for simulation (optional - can be provided at runtime)
+    /// Classical engine used for simulation
     classical_engine: Box<dyn ClassicalEngine>,
 
-    /// Noise model template to clone for workers (optional - no noise by default)
+    /// Noise model template to clone for workers
     noise_model: Box<dyn NoiseModel>,
 
-    /// Quantum engine template to clone for workers (optional - default `StateVec` will be used)
+    /// Quantum engine template to clone for workers
     quantum_engine: Box<dyn QuantumEngine>,
 }
 
@@ -271,7 +271,7 @@ mod tests {
     use crate::engines::phir::PHIREngine;
     use crate::engines::quantum::{CliffordEngine, new_quantum_engine_arbitrary_qgate};
     use crate::engines::{ControlEngine, Engine, EngineStage};
-    use pecos_core::types::{CommandBatch, GateType, QuantumCommand, ShotResult};
+    use pecos_core::types::{GateType, QuantumCommand, ShotResult};
     use pecos_qsim::{StateVec, StdSparseStab};
     use std::collections::HashMap;
     use std::error::Error;
@@ -645,13 +645,16 @@ mod tests {
                 return ByteMessage::create_flush(true);
             }
 
-            // Create a batch with the next command
-            let mut batch = CommandBatch::new();
-            batch.add_command(self.commands[self.command_index].clone());
+            // Get the next command
+            let cmd = &self.commands[self.command_index];
             self.command_index += 1;
 
-            // Convert the batch to a ByteMessage
-            ByteMessage::create_quantum_operations(&batch)
+            // Create a ByteMessage directly from the command
+            // We can either create a helper method for this, or use create_quantum_operations
+            // with a small Vec of commands
+            let mut commands = Vec::with_capacity(1);
+            commands.push(cmd.clone());
+            ByteMessage::from_commands(commands)
         }
 
         fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError> {

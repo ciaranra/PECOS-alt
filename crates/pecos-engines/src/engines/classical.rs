@@ -1,5 +1,3 @@
-// src/engines/classical.rs (fully updated for ByteMessage)
-
 use crate::channels::byte_message::ByteMessage;
 use crate::engines::{ControlEngine, EngineStage, phir, qir};
 use crate::errors::QueueError;

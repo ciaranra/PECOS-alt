@@ -57,7 +57,7 @@ where
         let batch = message.parse_quantum_operations()?;
         let mut measurements = Vec::new();
 
-        for cmd in batch.commands() {
+        for cmd in &batch {
             match &cmd.gate {
                 GateType::X => {
                     debug!("Processing X gate on qubit {:?}", cmd.qubits[0]);
@@ -95,7 +95,7 @@ where
                     let raw_outcome = u32::from(meas_result.outcome);
 
                     // Convert result_id to u32 safely
-                    let result_id_u32: u32 = (*result_id).try_into().unwrap_or(0);
+                    let result_id_u32: u32 = *result_id as u32;
 
                     let encoded = (result_id_u32 << 16) | raw_outcome;
                     debug!(
@@ -231,7 +231,7 @@ where
                     let raw_outcome = u32::from(meas_result.outcome);
 
                     // Convert result_id to u32 safely
-                    let result_id_u32: u32 = result_id.try_into().unwrap_or(0);
+                    let result_id_u32: u32 = result_id as u32;
 
                     let encoded = (result_id_u32 << 16) | raw_outcome;
                     debug!(
