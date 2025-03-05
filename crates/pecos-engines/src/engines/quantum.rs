@@ -184,15 +184,15 @@ where
             debug!("Quantum engine processing command: {:?}", cmd);
             match cmd.gate {
                 GateType::X => {
-                    debug!("Processing X gate on qubit {:?}", cmd.qubits[0]);
+                    debug!("Executing X gate on qubit {}", cmd.qubits[0]);
                     self.simulator.x(cmd.qubits[0]);
                 }
                 GateType::Y => {
-                    debug!("Processing Y gate on qubit {:?}", cmd.qubits[0]);
+                    debug!("Executing Y gate on qubit {}", cmd.qubits[0]);
                     self.simulator.y(cmd.qubits[0]);
                 }
                 GateType::Z => {
-                    debug!("Processing Z gate on qubit {:?}", cmd.qubits[0]);
+                    debug!("Executing Z gate on qubit {}", cmd.qubits[0]);
                     self.simulator.z(cmd.qubits[0]);
                 }
                 GateType::H => {
@@ -209,10 +209,10 @@ where
                     if cmd.qubits.len() == 2 {
                         self.simulator.cx(cmd.qubits[0], cmd.qubits[1]);
                     } else {
-                        panic!(
+                        return Err(QueueError::OperationError(format!(
                             "Got the wrong number of arguments for CX: {}",
                             cmd.qubits.len()
-                        );
+                        )));
                     }
                 }
                 GateType::SZZ => {
@@ -230,7 +230,7 @@ where
                     let meas_result = self.simulator.mz(cmd.qubits[0]);
                     let raw_outcome = u32::from(meas_result.outcome);
 
-                    // Convert result_id to u32 safely (no need to dereference)
+                    // Convert result_id to u32 safely
                     let result_id_u32: u32 = result_id.try_into().unwrap_or(0);
 
                     let encoded = (result_id_u32 << 16) | raw_outcome;
@@ -254,7 +254,7 @@ where
             }
         }
 
-        // Create a measurement message
+        // Create a measurement message with all measurements
         ByteMessage::create_measurements(&measurements)
     }
 

@@ -6,6 +6,7 @@ pub mod phir;
 pub mod qir;
 pub mod quantum;
 
+use crate::channels::ByteMessage;
 use crate::errors::QueueError;
 pub use classical::ClassicalEngine;
 pub use hybrid::HybridEngine;
@@ -210,4 +211,16 @@ where
     fn reset(&mut self) -> Result<(), QueueError> {
         EngineSystem::reset(self)
     }
+}
+
+/// Control engine that works directly with `ByteMessages`
+pub trait ByteMessageControlEngine:
+    ControlEngine<EngineInput = ByteMessage, EngineOutput = ByteMessage>
+{
+}
+
+// Implement for any control engine that works with ByteMessages
+impl<T> ByteMessageControlEngine for T where
+    T: ControlEngine<EngineInput = ByteMessage, EngineOutput = ByteMessage>
+{
 }

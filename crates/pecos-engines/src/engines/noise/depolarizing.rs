@@ -1,4 +1,4 @@
-use super::{NoiseModel, PassThroughNoise};
+use super::{ByteMessage, NoiseModel, PassThroughNoise};
 use crate::errors::QueueError;
 use parking_lot::Mutex;
 use pecos_core::types::{CommandBatch, GateType, QuantumCommand};
@@ -74,10 +74,9 @@ impl DepolarizingNoise {
             qubits: vec![qubit],
         }
     }
-}
 
-impl NoiseModel for DepolarizingNoise {
-    fn apply_noise(&self, commands: CommandBatch) -> CommandBatch {
+    // Apply noise to a command batch (internal implementation)
+    fn apply_noise_to_batch(&self, commands: CommandBatch) -> CommandBatch {
         let mut noisy_commands = Vec::new();
         let mut rng = self.rng.lock();
 
@@ -101,13 +100,24 @@ impl NoiseModel for DepolarizingNoise {
         // Convert Vec back to CommandBatch
         noisy_commands.into()
     }
+}
+
+impl NoiseModel for DepolarizingNoise {
+    fn apply_noise(&self, message: ByteMessage) -> Result<ByteMessage, QueueError> {
+        // Parse commands from the message
+        let commands = message.parse_quantum_operations()?;
+
+        // Apply noise to the commands
+        let noisy_commands = self.apply_noise_to_batch(commands);
+
+        // Create a new message with the noisy commands
+        ByteMessage::create_quantum_operations(&noisy_commands)
+    }
 
     fn clone_box(&self) -> Box<dyn NoiseModel> {
         Box::new(DepolarizingNoise {
             probability: self.probability,
-            rng: Arc::new(Mutex::new(
-                StdRng::try_from_os_rng().expect("Failed to create RNG from OS entropy"),
-            )),
+            rng: Arc::new(Mutex::new(StdRng::from_os_rng())),
         })
     }
 

@@ -1,13 +1,12 @@
-use crate::engines::noise::NoiseModel;
+use super::{ByteMessage, NoiseModel};
 use crate::errors::QueueError;
-use pecos_core::types::CommandBatch;
 
 pub struct PassThroughNoise;
 
 impl NoiseModel for PassThroughNoise {
-    fn apply_noise(&self, commands: CommandBatch) -> CommandBatch {
-        // Just return the commands unchanged
-        commands
+    fn apply_noise(&self, message: ByteMessage) -> Result<ByteMessage, QueueError> {
+        // Just return the message unchanged
+        Ok(message)
     }
 
     fn clone_box(&self) -> Box<dyn NoiseModel> {

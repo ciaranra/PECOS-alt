@@ -4,7 +4,7 @@ use crate::channels::byte_message::ByteMessage;
 use crate::engines::{ControlEngine, EngineStage, phir, qir};
 use crate::errors::QueueError;
 use log::debug;
-use pecos_core::types::{CommandBatch, ShotResult};
+use pecos_core::types::ShotResult;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
@@ -86,20 +86,6 @@ pub trait ClassicalEngine: Send + Sync {
     /// Create a boxed clone of this engine.
     /// This allows engines to be cloned for concurrent execution.
     fn clone_box(&self) -> Box<dyn ClassicalEngine>;
-
-    /// Compatibility method to convert a `CommandBatch` to a `ByteMessage`
-    ///
-    /// This is a helper for implementing the new interface while maintaining compatibility
-    /// with existing code that operates on `CommandBatch`.
-    fn command_batch_to_message(&self, batch: CommandBatch) -> Result<ByteMessage, QueueError> {
-        if batch.is_empty() {
-            // Create an empty message (just a flush)
-            ByteMessage::create_flush(true)
-        } else {
-            // Create a message with the commands
-            ByteMessage::create_quantum_operations(&batch)
-        }
-    }
 }
 
 impl ControlEngine for Box<dyn ClassicalEngine> {
@@ -113,8 +99,8 @@ impl ControlEngine for Box<dyn ClassicalEngine> {
         let commands = self.generate_commands()?;
 
         // Check if we have an empty message (no more commands)
-        if let Ok(message_type) = commands.message_type() {
-            if message_type == crate::channels::byte::protocol::MessageType::Flush {
+        if let Ok(is_empty) = commands.is_empty() {
+            if is_empty {
                 return Ok(EngineStage::Complete(self.get_results()?));
             }
         }
@@ -133,8 +119,8 @@ impl ControlEngine for Box<dyn ClassicalEngine> {
         let commands = self.generate_commands()?;
 
         // Check if we have an empty message (no more commands)
-        if let Ok(message_type) = commands.message_type() {
-            if message_type == crate::channels::byte::protocol::MessageType::Flush {
+        if let Ok(is_empty) = commands.is_empty() {
+            if is_empty {
                 return Ok(EngineStage::Complete(self.get_results()?));
             }
         }
