@@ -86,6 +86,7 @@ pedantic = { level = "warn", priority = -1 }
 # restriction = "warn"
 # cargo = { level = "warn", priority = -1 }
 multiple-crate-versions = "allow" # TODO: remove when possible
+missing-errors-doc = "allow" # TODO: remove when finished development...
 
 [workspace.metadata.commands]
 test-py = ["./scripts/setup-env.sh", "cargo", "test", "-p", "pecos-python"]
