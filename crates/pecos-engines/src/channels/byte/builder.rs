@@ -12,10 +12,23 @@ use bytemuck::bytes_of;
 use pecos_core::types::{GateType, QuantumCommand};
 use std::mem::size_of;
 
+/// Enum to track what kind of message is being built
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum BuilderMode {
+    Empty,              // No operations added yet
+    QuantumOperations,  // Contains quantum operations
+    MeasurementResults, // Contains measurement results
+    ControlMessage,     // Contains control messages like Flush
+}
+
 /// Helper for building binary messages
+///
+/// The builder maintains internal state tracking what kind of message is being created
+/// and ensures that different message types are not mixed inappropriately.
 pub struct MessageBuilder {
     buffer: Vec<u8>,
     msg_count: u32,
+    mode: BuilderMode,
 }
 
 impl Default for MessageBuilder {
@@ -29,6 +42,7 @@ impl Clone for MessageBuilder {
         Self {
             buffer: self.buffer.clone(),
             msg_count: self.msg_count,
+            mode: self.mode,
         }
     }
 }
@@ -44,7 +58,24 @@ impl MessageBuilder {
         Self {
             buffer,
             msg_count: 0,
+            mode: BuilderMode::Empty,
         }
+    }
+
+    /// Create a builder pre-configured for quantum operations
+    /// Create a builder pre-configured for quantum operations
+    #[must_use]
+    pub fn for_quantum_operations(&mut self) -> &mut Self {
+        self.mode = BuilderMode::QuantumOperations;
+        self.add_message(MessageType::BeginBatch, &[], MessageFlags::NONE);
+        self
+    }
+
+    /// Create a builder pre-configured for measurement results
+    #[must_use]
+    pub fn for_measurement_results(&mut self) -> &mut Self {
+        self.mode = BuilderMode::MeasurementResults;
+        self
     }
 
     /// Add padding bytes to ensure alignment
@@ -62,6 +93,36 @@ impl MessageBuilder {
         payload: &[u8],
         flags: MessageFlags,
     ) -> &mut Self {
+        // Update mode based on message type
+        match msg_type {
+            MessageType::BeginBatch
+            | MessageType::EndBatch
+            | MessageType::QuantumGate
+            | MessageType::Measurement => {
+                assert!(
+                    !(self.mode == BuilderMode::MeasurementResults),
+                    "Cannot mix quantum operations and measurement results in the same message"
+                );
+                if self.mode == BuilderMode::Empty {
+                    self.mode = BuilderMode::QuantumOperations;
+                }
+            }
+            MessageType::MeasurementResult => {
+                assert!(
+                    !(self.mode == BuilderMode::QuantumOperations),
+                    "Cannot mix quantum operations and measurement results in the same message"
+                );
+                self.mode = BuilderMode::MeasurementResults;
+            }
+            MessageType::Flush | MessageType::Reset | MessageType::Error => {
+                assert!(
+                    !(self.mode != BuilderMode::Empty && self.mode != BuilderMode::ControlMessage),
+                    "Control messages should be sent separately from other message types"
+                );
+                self.mode = BuilderMode::ControlMessage;
+            }
+        }
+
         // Ensure 4-byte alignment for message header
         self.add_padding(4);
 
@@ -81,7 +142,12 @@ impl MessageBuilder {
     }
 
     /// Add a quantum gate command
-    pub fn add_quantum_gate(&mut self, cmd: &QuantumCommand) -> &mut Self {
+    fn add_quantum_gate(&mut self, cmd: &QuantumCommand) -> &mut Self {
+        // Handle measurement gates using the add_measurements method
+        if let GateType::Measure { result_id } = cmd.gate {
+            return self.add_measurements(&[cmd.qubits[0]], &[result_id]);
+        }
+
         // Calculate total payload size
         let header_size = size_of::<QuantumGateHeader>();
         let qubits_size = cmd.qubits.len() * size_of::<u32>();
@@ -105,10 +171,7 @@ impl MessageBuilder {
             GateType::RZ { .. } => (6, true),
             GateType::R1XY { .. } => (7, true),
             GateType::SZZ => (8, false),
-            GateType::Measure { .. } => {
-                // Use a separate message type for measurements
-                return self.add_measurement(cmd);
-            }
+            GateType::Measure { .. } => (0, false), // Handled above, dummy values
         };
 
         // Create and write gate header
@@ -145,49 +208,38 @@ impl MessageBuilder {
         self.add_message(MessageType::QuantumGate, &payload, MessageFlags::NONE)
     }
 
-    /// Add a measurement command
-    ///
-    /// # Panics
-    ///
-    /// Panics if:
-    /// - Called with a non-measurement gate type
-    /// - The qubit index or `result_id` cannot be converted to u32
-    pub fn add_measurement(&mut self, cmd: &QuantumCommand) -> &mut Self {
-        if let GateType::Measure { result_id } = cmd.gate {
-            let meas_header = MeasurementHeader {
-                qubit: u32::try_from(cmd.qubits[0]).unwrap(),
-                result_id: u32::try_from(result_id).unwrap(),
-            };
-            self.add_message(
-                MessageType::Measurement,
-                bytes_of(&meas_header),
-                MessageFlags::NONE,
-            )
-        } else {
-            panic!("add_measurement called with non-measurement gate");
-        }
-    }
-
-    /// Add a measurement result
-    pub fn add_measurement_result(
+    /// Add multiple measurement results at once
+    pub fn add_measurement_results(
         &mut self,
-        result_id: u32,
-        outcome: u32,
-        is_last: bool,
+        results: &[usize],
+        result_ids: &[usize],
     ) -> &mut Self {
-        let result_header = MeasurementResultHeader { result_id, outcome };
+        assert_eq!(
+            results.len(),
+            result_ids.len(),
+            "Outcomes and result_ids arrays must have the same length"
+        );
 
-        let flags = if is_last {
-            MessageFlags::LAST_MESSAGE
-        } else {
-            MessageFlags::NONE
-        };
+        for (i, (&result, &result_id)) in results.iter().zip(result_ids.iter()).enumerate() {
+            let is_last = i == results.len() - 1;
+            let flags = if is_last {
+                MessageFlags::LAST_MESSAGE
+            } else {
+                MessageFlags::NONE
+            };
 
-        self.add_message(
-            MessageType::MeasurementResult,
-            bytes_of(&result_header),
-            flags,
-        )
+            let result_header = MeasurementResultHeader {
+                result_id: result_id as u32,
+                outcome: result as u32,
+            };
+
+            self.add_message(
+                MessageType::MeasurementResult,
+                bytes_of(&result_header),
+                flags,
+            );
+        }
+        self
     }
 
     /// Add quantum commands from a slice
@@ -206,8 +258,168 @@ impl MessageBuilder {
         self
     }
 
-    /// Build the final message batch
-    pub fn build(&mut self) -> Vec<u8> {
+    /// Add Hadamard (H) gate(s) to the specified qubit(s)
+    pub fn add_h(&mut self, qubit_ids: &[usize]) -> &mut Self {
+        for &qubit in qubit_ids {
+            let cmd = QuantumCommand {
+                gate: GateType::H,
+                qubits: vec![qubit],
+            };
+            self.add_quantum_gate(&cmd);
+        }
+        self
+    }
+
+    /// Add Pauli-X gate(s) to the specified qubit(s)
+    pub fn add_x(&mut self, qubit_ids: &[usize]) -> &mut Self {
+        for &qubit in qubit_ids {
+            let cmd = QuantumCommand {
+                gate: GateType::X,
+                qubits: vec![qubit],
+            };
+            self.add_quantum_gate(&cmd);
+        }
+        self
+    }
+
+    /// Add Pauli-Y gate(s) to the specified qubit(s)
+    pub fn add_y(&mut self, qubit_ids: &[usize]) -> &mut Self {
+        for &qubit in qubit_ids {
+            let cmd = QuantumCommand {
+                gate: GateType::Y,
+                qubits: vec![qubit],
+            };
+            self.add_quantum_gate(&cmd);
+        }
+        self
+    }
+
+    /// Add Pauli-Z gate(s) to the specified qubit(s)
+    pub fn add_z(&mut self, qubit_ids: &[usize]) -> &mut Self {
+        for &qubit in qubit_ids {
+            let cmd = QuantumCommand {
+                gate: GateType::Z,
+                qubits: vec![qubit],
+            };
+            self.add_quantum_gate(&cmd);
+        }
+        self
+    }
+
+    /// Add RZ (Z-rotation) gate(s) with the same angle to the specified qubit(s)
+    pub fn add_rz(&mut self, theta: f64, qubit_ids: &[usize]) -> &mut Self {
+        for &qubit in qubit_ids {
+            let cmd = QuantumCommand {
+                gate: GateType::RZ { theta },
+                qubits: vec![qubit],
+            };
+            self.add_quantum_gate(&cmd);
+        }
+        self
+    }
+
+    /// Add R1XY (arbitrary single-qubit rotation) gate(s) to the specified qubit(s)
+    pub fn add_r1xy(&mut self, phi: f64, theta: f64, qubit_ids: &[usize]) -> &mut Self {
+        for &qubit in qubit_ids {
+            let cmd = QuantumCommand {
+                gate: GateType::R1XY { phi, theta },
+                qubits: vec![qubit],
+            };
+            self.add_quantum_gate(&cmd);
+        }
+        self
+    }
+
+    /// Add CNOT (Controlled-X) gate(s) from each control qubit to each target qubit
+    pub fn add_cx(&mut self, control_ids: &[usize], target_ids: &[usize]) -> &mut Self {
+        for &control in control_ids {
+            for &target in target_ids {
+                // Skip if control and target are the same qubit
+                if control != target {
+                    let cmd = QuantumCommand {
+                        gate: GateType::CX,
+                        qubits: vec![control, target],
+                    };
+                    self.add_quantum_gate(&cmd);
+                }
+            }
+        }
+        self
+    }
+
+    /// Add SZZ (quadratic phase) gate(s) between pairs of qubits
+    pub fn add_szz(&mut self, qubit1_ids: &[usize], qubit2_ids: &[usize]) -> &mut Self {
+        for &qubit1 in qubit1_ids {
+            for &qubit2 in qubit2_ids {
+                // Skip if qubits are the same
+                if qubit1 != qubit2 {
+                    let cmd = QuantumCommand {
+                        gate: GateType::SZZ,
+                        qubits: vec![qubit1, qubit2],
+                    };
+                    self.add_quantum_gate(&cmd);
+                }
+            }
+        }
+        self
+    }
+
+    /// Add measurement operations to the specified qubits
+    pub fn add_measurements(&mut self, qubit_ids: &[usize], result_ids: &[usize]) -> &mut Self {
+        assert!(
+            qubit_ids.len() <= result_ids.len(),
+            "Not enough result IDs provided for all qubits"
+        );
+
+        for (i, &qubit) in qubit_ids.iter().enumerate() {
+            let result_id = result_ids[i];
+
+            // Create measurement header directly
+            let meas_header = MeasurementHeader {
+                qubit: u32::try_from(qubit).unwrap(),
+                result_id: u32::try_from(result_id).unwrap(),
+            };
+
+            // Add measurement message
+            self.add_message(
+                MessageType::Measurement,
+                bytes_of(&meas_header),
+                MessageFlags::NONE,
+            );
+        }
+        self
+    }
+
+    /// Add a flush command
+    pub fn add_flush(&mut self, is_last: bool) -> &mut Self {
+        let flags = if is_last {
+            MessageFlags::LAST_MESSAGE
+        } else {
+            MessageFlags::NONE
+        };
+        self.add_message(MessageType::Flush, &[], flags)
+    }
+
+    /// Check how many messages have been added
+    #[must_use]
+    pub fn message_count(&self) -> u32 {
+        self.msg_count
+    }
+
+    /// Check what mode the builder is in
+    #[must_use]
+    pub fn mode(&self) -> BuilderMode {
+        self.mode
+    }
+
+    /// Clear the builder and start fresh
+    pub fn clear(&mut self) -> &mut Self {
+        *self = Self::new();
+        self
+    }
+
+    /// Build the final message batch without type checking
+    pub fn build_unchecked(&mut self) -> ByteMessage {
         // Calculate total size and update batch header
         let total_size = self.buffer.len();
         let header = BatchHeader::new(
@@ -217,44 +429,37 @@ impl MessageBuilder {
         // Write header to the start of the buffer
         self.buffer[0..size_of::<BatchHeader>()].copy_from_slice(bytes_of(&header));
 
-        // Return a clone of the buffer
-        self.buffer.clone()
+        // Return a ByteMessage with the buffer
+        ByteMessage::new(self.buffer.clone())
     }
 
-    /// Build a ByteMessage from the constructed buffer
-    pub fn build_message(&mut self) -> ByteMessage {
-        ByteMessage::new(self.build())
-    }
+    /// Build the message with type checking
+    pub fn build(&mut self) -> ByteMessage {
+        // Validate that a mode was explicitly set if operations were added
+        assert!(
+            !(self.msg_count > 0 && self.mode == BuilderMode::Empty),
+            "Builder mode not specified. Call for_quantum_operations() or for_measurement_results() before adding operations."
+        );
 
-    /// Convert the builder directly into a ByteMessage
-    pub fn into_message(mut self) -> ByteMessage {
-        self.build_message()
-    }
+        // Add validation based on the builder's current mode
+        match self.mode {
+            BuilderMode::Empty => {
+                // Create a minimal empty message if nothing was added
+                if self.msg_count == 0 {
+                    self.add_flush(true);
+                }
+            }
+            BuilderMode::QuantumOperations => {
+                // For quantum operations, ensure we have both BeginBatch and EndBatch
+                // Instead of scanning the buffer (which can cause alignment issues),
+                // just add EndBatch which is safe even if one already exists
+                self.add_message(MessageType::EndBatch, &[], MessageFlags::NONE);
+            }
+            // Other modes don't need special handling
+            _ => {}
+        }
 
-    /// Create a ByteMessage containing a batch of quantum commands
-    pub fn create_quantum_message(commands: &[QuantumCommand]) -> ByteMessage {
-        let mut builder = Self::new();
-        builder.add_quantum_commands(commands);
-        builder.build_message()
-    }
-
-    /// Create a ByteMessage containing a measurement result
-    pub fn create_measurement_message(result_id: u32, outcome: u32, is_last: bool) -> ByteMessage {
-        let mut builder = Self::new();
-        builder.add_measurement_result(result_id, outcome, is_last);
-        builder.build_message()
-    }
-
-    /// Create a ByteMessage with a flush command
-    pub fn create_flush_message(is_last: bool) -> ByteMessage {
-        let mut builder = Self::new();
-        let flags = if is_last {
-            MessageFlags::LAST_MESSAGE
-        } else {
-            MessageFlags::NONE
-        };
-        builder.add_message(MessageType::Flush, &[], flags);
-        builder.build_message()
+        self.build_unchecked()
     }
 }
 
@@ -263,68 +468,168 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_create_quantum_message() {
-        // Create a test command
-        let cmd = QuantumCommand {
-            gate: GateType::H,
-            qubits: vec![0],
-        };
+    fn test_builder_basic() {
+        let message = ByteMessage::builder()
+            .for_quantum_operations() // This properly initializes the builder
+            .add_h(&[0])
+            .add_cx(&[0], &[1])
+            .add_measurements(&[1], &[0])
+            .build();
 
-        // Create a ByteMessage using the new helper method
-        let message = MessageBuilder::create_quantum_message(&[cmd]);
-
-        // Parse the message back to commands
-        let parsed_commands = message.parse_quantum_operations().unwrap();
-
-        // Verify we got back the same command
-        assert_eq!(parsed_commands.len(), 1);
-        assert!(matches!(parsed_commands[0].gate, GateType::H));
-        assert_eq!(parsed_commands[0].qubits, vec![0]);
-    }
-
-    #[test]
-    fn test_create_measurement_message() {
-        // Create a measurement message
-        let message = MessageBuilder::create_measurement_message(42, 1, true);
-
-        // Parse the message
-        let measurements = message.parse_measurements().unwrap();
-
-        // Verify we got the right measurement
-        assert_eq!(measurements.len(), 1);
-        assert_eq!(measurements[0], ((42 & 0xFFFF) << 16) | (1 & 0xFFFF));
-    }
-
-    #[test]
-    fn test_builder_methods() {
-        // Test adding a quantum gate
-        let mut builder = MessageBuilder::new();
-        let cmd = QuantumCommand {
-            gate: GateType::CX,
-            qubits: vec![0, 1],
-        };
-
-        builder.add_quantum_gate(&cmd);
-        let message = builder.build_message();
-
-        // Parse the message
+        // Verify the message structure
         let commands = message.parse_quantum_operations().unwrap();
+        assert_eq!(commands.len(), 3);
 
-        // Should be empty since we didn't add begin/end batch messages
-        assert!(commands.is_empty());
+        // Check the H gate
+        assert!(matches!(commands[0].gate, GateType::H));
+        assert_eq!(commands[0].qubits, vec![0]);
 
-        // Now test with proper batch structure
+        // Check the CX gate
+        assert!(matches!(commands[1].gate, GateType::CX));
+        assert_eq!(commands[1].qubits, vec![0, 1]);
+
+        // Check the measurement
+        if let GateType::Measure { result_id } = commands[2].gate {
+            assert_eq!(result_id, 0);
+        } else {
+            panic!("Expected Measure gate");
+        }
+        assert_eq!(commands[2].qubits, vec![1]);
+    }
+
+    #[test]
+    fn test_builder_measurement_message() {
+        let message = MessageBuilder::new()
+            .add_measurement_results(&[0, 1], &[1, 2])
+            .build();
+
+        // Verify the measurements
+        let measurements = message.parse_measurements().unwrap();
+        assert_eq!(measurements.len(), 2);
+        assert_eq!(measurements[0], (1 << 16)); // result_id=1, outcome=0
+        assert_eq!(measurements[1], (2 << 16) | 1); // result_id=2, outcome=1
+    }
+
+    #[test]
+    fn test_builder_gates() {
+        // Test each specific gate builder method
+        let message = ByteMessage::builder()
+            .for_quantum_operations()
+            .add_h(&[0])
+            .add_x(&[1])
+            .add_y(&[2])
+            .add_z(&[3])
+            .add_cx(&[0], &[1])
+            .add_rz(0.5, &[2])
+            .add_r1xy(0.1, 0.2, &[3])
+            .add_szz(&[0], &[1])
+            .build();
+
+        // Verify the message structure
+        let commands = message.parse_quantum_operations().unwrap();
+        assert_eq!(commands.len(), 8);
+
+        // Check a few gates
+        assert!(matches!(commands[0].gate, GateType::H));
+        assert!(matches!(commands[1].gate, GateType::X));
+
+        // Check RZ gate
+        if let GateType::RZ { theta } = commands[5].gate {
+            assert_eq!(theta, 0.5);
+        } else {
+            panic!("Expected RZ gate");
+        }
+
+        // Check R1XY gate
+        if let GateType::R1XY { phi, theta } = commands[6].gate {
+            assert_eq!(phi, 0.1);
+            assert_eq!(theta, 0.2);
+        } else {
+            panic!("Expected R1XY gate");
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot mix quantum operations and measurement results")]
+    fn test_builder_type_checking() {
+        // This should panic because we're mixing message types
+        let _ = MessageBuilder::new()
+            .add_h(&[0]) // Quantum operation
+            .add_measurement_results(&[1], &[0]) // Measurement result
+            .build();
+    }
+
+    #[test]
+    fn test_builder_empty() {
+        // Building with no operations should create a flush message
+        let message = MessageBuilder::new().build();
+        let msg_type = message.message_type().unwrap();
+        assert_eq!(msg_type, MessageType::Flush);
+    }
+
+    #[test]
+    fn test_add_measure_collections() {
+        // Test with collections of qubits and results
+        let message = ByteMessage::builder()
+            .for_quantum_operations() // Change to quantum operations since we're using add_measurements
+            .add_measurements(&[0, 1, 2], &[10, 20, 30])
+            .build();
+
+        let commands = message.parse_quantum_operations().unwrap();
+        assert_eq!(commands.len(), 3);
+
+        // Check each measurement has the right qubit and result_id
+        let expected_pairs = [(0, 10), (1, 20), (2, 30)];
+        for (i, cmd) in commands.iter().enumerate() {
+            if let GateType::Measure { result_id } = cmd.gate {
+                assert_eq!(result_id, expected_pairs[i].1);
+            } else {
+                panic!("Expected Measure gate");
+            }
+            assert_eq!(cmd.qubits, vec![expected_pairs[i].0]);
+        }
+    }
+
+    #[test]
+    fn test_batch_structure() {
+        // Test that quantum operations are properly wrapped in BeginBatch/EndBatch
         let mut builder = MessageBuilder::new();
         builder.add_message(MessageType::BeginBatch, &[], MessageFlags::NONE);
-        builder.add_quantum_gate(&cmd);
-        builder.add_message(MessageType::EndBatch, &[], MessageFlags::NONE);
+        builder.add_h(&[0]);
 
-        let message = builder.build_message();
+        // Build should add EndBatch automatically
+        let message = builder.build();
+
         let commands = message.parse_quantum_operations().unwrap();
-
-        // Now we should have our command
         assert_eq!(commands.len(), 1);
-        assert!(matches!(commands[0].gate, GateType::CX));
-        assert_eq!(commands[0].qubits, vec![0, 1]);
+        assert!(matches!(commands[0].gate, GateType::H));
+    }
+
+    #[test]
+    fn test_for_quantum_operations() {
+        // Test the factory method for quantum operations
+        let message = ByteMessage::builder()
+            .for_quantum_operations()
+            .add_h(&[0])
+            .build();
+
+        // Should already have BeginBatch
+        let commands = message.parse_quantum_operations().unwrap();
+        assert_eq!(commands.len(), 1);
+        assert!(matches!(commands[0].gate, GateType::H));
+    }
+
+    #[test]
+    fn test_message_count_and_clear() {
+        // Test message counting and clearing
+        let mut builder = MessageBuilder::new();
+        let _ = builder.for_quantum_operations();
+        assert_eq!(builder.message_count(), 1); // 1 for BeginBatch
+
+        builder.add_h(&[0]).add_h(&[1]);
+        assert_eq!(builder.message_count(), 3); // BeginBatch + 2 H gates (EndBatch gets added in build())
+
+        builder.clear();
+        assert_eq!(builder.message_count(), 0);
     }
 }

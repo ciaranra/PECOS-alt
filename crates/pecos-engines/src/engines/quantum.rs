@@ -115,7 +115,22 @@ where
         }
 
         // Create a measurement message
-        ByteMessage::create_measurements(&measurements)
+        if measurements.is_empty() {
+            Ok(ByteMessage::builder().add_flush(true).build())
+        } else {
+            // Extract result_ids and outcomes from measurements
+            let mut result_ids: Vec<usize> = Vec::with_capacity(measurements.len());
+            let mut outcomes: Vec<usize> = Vec::with_capacity(measurements.len());
+
+            for &m in &measurements {
+                result_ids.push((m >> 16) as usize);
+                outcomes.push((m & 0xFFFF) as usize);
+            }
+
+            Ok(ByteMessage::builder()
+                .add_measurement_results(&outcomes, &result_ids)
+                .build())
+        }
     }
 
     fn reset(&mut self) -> Result<(), QueueError> {
@@ -178,7 +193,8 @@ where
     fn process(&mut self, message: Self::Input) -> Result<Self::Output, QueueError> {
         // Parse commands from the message
         let batch = message.parse_quantum_operations()?;
-        let mut measurements = Vec::new();
+        let mut result_ids = Vec::new();
+        let mut outcomes = Vec::new();
 
         for cmd in batch {
             debug!("Quantum engine processing command: {:?}", cmd);
@@ -238,7 +254,10 @@ where
                         "Measurement complete: qubit={}, result_id={}, outcome={}, encoded={}",
                         cmd.qubits[0], result_id, raw_outcome, encoded
                     );
-                    measurements.push(encoded);
+
+                    // Store outcomes and result_ids separately
+                    result_ids.push(result_id);
+                    outcomes.push(raw_outcome as usize);
                 }
                 GateType::RZ { theta } => {
                     debug!("Executing RZ(theta={}) on qubit {}", theta, cmd.qubits[0]);
@@ -254,8 +273,14 @@ where
             }
         }
 
-        // Create a measurement message with all measurements
-        ByteMessage::create_measurements(&measurements)
+        // Create a message with all measurements using the improved MessageBuilder API
+        if outcomes.is_empty() {
+            Ok(ByteMessage::builder().add_flush(true).build())
+        } else {
+            Ok(ByteMessage::builder()
+                .add_measurement_results(&outcomes, &result_ids)
+                .build())
+        }
     }
 
     fn reset(&mut self) -> Result<(), QueueError> {

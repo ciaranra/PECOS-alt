@@ -5,8 +5,6 @@ use std::io::{self, Read, Write};
 use std::sync::Mutex;
 
 use crate::channels::ByteMessage;
-use crate::channels::byte::builder::MessageBuilder;
-use crate::channels::byte::protocol::{MessageFlags, MessageType};
 use pecos_core::types::{GateType, QuantumCommand};
 
 lazy_static! {
@@ -264,17 +262,14 @@ pub extern "C" fn __quantum__rt__result_record_output(result: *const Result, _la
             // Convert queue to Vec<QuantumCommand>
             let commands: Vec<QuantumCommand> = queue.drain(..).collect();
 
-            // Create ByteMessage directly using our helper
-            if let Ok(message) = ByteMessage::from_commands(commands) {
-                // Get raw bytes
-                let message_data = message.as_bytes();
+            // Create ByteMessage using the builder pattern
+            let message = ByteMessage::builder()
+                .add_quantum_commands(&commands)
+                .build();
 
-                // Write to stdout
-                io::stdout().write_all(message_data).unwrap();
-                io::stdout().flush().unwrap();
-            } else {
-                debug!("Failed to create ByteMessage from commands");
-            }
+            // Write to stdout
+            io::stdout().write_all(message.as_bytes()).unwrap();
+            io::stdout().flush().unwrap();
         }
 
         // Read binary response
@@ -289,29 +284,16 @@ pub extern "C" fn __quantum__rt__result_record_output(result: *const Result, _la
         io::stdin().read_exact(&mut measurement_buffer).unwrap();
         let measurement = u32::from_le_bytes(measurement_buffer);
 
-        // Output the result
         debug!("Received measurement: {}", measurement);
 
-        // Create a ByteMessage for the measurement result
-        // This is a bit trickier since we're dealing with a custom format
-        // Instead of using the MessageBuilder directly, we could use:
-        if let Ok(result_message) = ByteMessage::create_measurement(u32::try_from(result_idx).expect("Problem converting result id to u32"), measurement)
-        {
-            io::stdout().write_all(result_message.as_bytes()).unwrap();
-            io::stdout().flush().unwrap();
-        } else {
-            // Fallback to the original approach if the helper fails
-            let mut result_builder = MessageBuilder::new();
-            let result_data = result_builder
-                .add_message(
-                    MessageType::MeasurementResult,
-                    &format!("measurement_{result_idx} {measurement}").into_bytes(),
-                    MessageFlags::NONE,
-                )
-                .build();
+        // Create a ByteMessage for the measurement result using the builder pattern
+        // UPDATED to use add_measurement_results instead of add_measurement_result
+        let result_id = u32::try_from(result_idx).expect("Problem converting result id to u32");
+        let result_message = ByteMessage::builder()
+            .add_measurement_results(&[measurement as usize], &[result_id as usize])
+            .build();
 
-            io::stdout().write_all(&result_data).unwrap();
-            io::stdout().flush().unwrap();
-        }
+        io::stdout().write_all(result_message.as_bytes()).unwrap();
+        io::stdout().flush().unwrap();
     }
 }

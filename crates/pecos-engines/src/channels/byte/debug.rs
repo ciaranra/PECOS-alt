@@ -241,13 +241,13 @@ pub fn dump_batch(data: &[u8]) -> String {
     output
 }
 
-/// Dump a ByteMessage to a string for debugging
+/// Dump a `ByteMessage` to a string for debugging
 #[must_use]
 pub fn dump_message(message: &ByteMessage) -> String {
     dump_batch(message.as_bytes())
 }
 
-/// Utility function to write a ByteMessage to a file for debugging
+/// Utility function to write a `ByteMessage` to a file for debugging
 pub fn write_message_to_file(message: &ByteMessage, filename: &str) -> std::io::Result<()> {
     let mut file = std::fs::File::create(filename)?;
     file.write_all(message.as_bytes())?;
@@ -274,8 +274,10 @@ mod tests {
             },
         ];
 
-        // Create ByteMessage
-        let message = ByteMessage::create_quantum_operations(&commands).unwrap();
+        // Create ByteMessage using the builder pattern
+        let message = ByteMessage::builder()
+            .add_quantum_commands(&commands)
+            .build();
 
         // Dump message
         let dump = dump_message(&message);
@@ -302,8 +304,10 @@ mod tests {
             },
         ];
 
-        // Create a ByteMessage
-        let message = ByteMessage::create_quantum_operations(&commands).unwrap();
+        // Create a ByteMessage using the builder
+        let message = ByteMessage::builder()
+            .add_quantum_commands(&commands)
+            .build();
 
         // Dump batch
         let dump = dump_batch(message.as_bytes());

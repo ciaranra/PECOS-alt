@@ -289,8 +289,11 @@ mod tests {
 
         fn process(&mut self, _input: Self::Input) -> Result<Self::Output, QueueError> {
             // Always return a fixed measurement result
-            let measurement = 1u32; // result_id=0, outcome=1
-            ByteMessage::create_measurements(&[measurement])
+            // result_id=0, outcome=1
+            Ok(ByteMessage::builder()
+                .for_measurement_results()
+                .add_measurement_results(&[1], &[0])
+                .build())
         }
 
         fn reset(&mut self) -> Result<(), QueueError> {
@@ -642,19 +645,20 @@ mod tests {
         fn generate_commands(&mut self) -> Result<ByteMessage, QueueError> {
             // If we've processed all commands, return empty batch (flush message)
             if self.command_index >= self.commands.len() {
-                return ByteMessage::create_flush(true);
+                return Ok(ByteMessage::builder().add_flush(true).build());
             }
 
             // Get the next command
             let cmd = &self.commands[self.command_index];
             self.command_index += 1;
 
-            // Create a ByteMessage directly from the command
-            // We can either create a helper method for this, or use create_quantum_operations
-            // with a small Vec of commands
-            let mut commands = Vec::with_capacity(1);
-            commands.push(cmd.clone());
-            ByteMessage::from_commands(commands)
+            // Create a ByteMessage using the builder
+            let message = ByteMessage::builder()
+                .for_quantum_operations() // Pre-configured for quantum operations
+                .add_quantum_commands(&[cmd.clone()])
+                .build();
+
+            Ok(message)
         }
 
         fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError> {

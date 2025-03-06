@@ -84,31 +84,3 @@ pub trait MessageChannel: Send + Sync {
     /// Returns this channel as a trait object for dynamic casting
     fn as_any(&self) -> &dyn Any;
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use pecos_core::types::{GateType, QuantumCommand};
-    use std::io::Cursor;
-
-    #[test]
-    fn test_byte_channel() {
-        // Create a simple batch
-        let mut batch = CommandBatch::new();
-        batch.add_command(QuantumCommand {
-            gate: GateType::H,
-            qubits: vec![0],
-        });
-
-        // Create binary data for a measurement result
-        let mut builder = byte::builder::MessageBuilder::new();
-        let msg_data = builder.add_measurement_result(42, 1, false).build();
-
-        // Test receiving measurement
-        let mut msg_channel =
-            byte::ByteChannel::new(Box::new(Cursor::new(msg_data)), Box::new(Vec::new()));
-
-        let msg = msg_channel.receive_message().unwrap();
-        assert_eq!(msg, Some(((42 & 0xFFFF) << 16) | (1 & 0xFFFF)));
-    }
-}

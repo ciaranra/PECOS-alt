@@ -1,7 +1,7 @@
 use crate::channels::byte::builder::MessageBuilder;
 use crate::channels::byte::protocol::{
-    BatchHeader, MeasurementHeader, MeasurementResultHeader, MessageFlags, MessageHeader,
-    MessageType, QuantumGateHeader, calc_padding,
+    BatchHeader, MeasurementHeader, MeasurementResultHeader, MessageHeader, MessageType,
+    QuantumGateHeader, calc_padding,
 };
 use crate::errors::QueueError;
 use bytemuck::from_bytes;
@@ -34,65 +34,10 @@ impl ByteMessage {
         self.bytes
     }
 
-    /// Create a `ByteMessage` containing quantum operations
-    ///
-    /// # Errors
-    ///
-    /// Returns a `QueueError` if the message cannot be created due to serialization issues.
-    pub fn create_quantum_operations(commands: &[QuantumCommand]) -> Result<Self, QueueError> {
-        let mut builder = MessageBuilder::new();
-
-        // Begin batch
-        builder.add_message(MessageType::BeginBatch, &[], MessageFlags::NONE);
-
-        // Add each command
-        for cmd in commands {
-            builder.add_quantum_gate(cmd);
-        }
-
-        // End batch
-        builder.add_message(MessageType::EndBatch, &[], MessageFlags::NONE);
-
-        Ok(Self::new(builder.build()))
-    }
-
-    /// Create a `ByteMessage` containing a single measurement result
-    pub fn create_measurement(result_id: u32, outcome: u32) -> Result<Self, QueueError> {
-        let mut builder = MessageBuilder::new();
-        builder.add_measurement_result(result_id, outcome, false);
-        Ok(Self::new(builder.build()))
-    }
-
-    /// Create a `ByteMessage` containing multiple measurement results
-    pub fn create_measurements(measurements: &[u32]) -> Result<Self, QueueError> {
-        let mut builder = MessageBuilder::new();
-        for (i, &measurement) in measurements.iter().enumerate() {
-            let result_id = measurement >> 16;
-            let outcome = measurement & 0xFFFF;
-            let is_last = i == measurements.len() - 1;
-            builder.add_measurement_result(result_id, outcome, is_last);
-        }
-        Ok(Self::new(builder.build()))
-    }
-
-    /// Create a flush message to signal end of commands or measurements
-    pub fn create_flush(is_last: bool) -> Result<Self, QueueError> {
-        let mut builder = MessageBuilder::new();
-        let flags = if is_last {
-            MessageFlags::LAST_MESSAGE
-        } else {
-            MessageFlags::NONE
-        };
-        builder.add_message(MessageType::Flush, &[], flags);
-        Ok(Self::new(builder.build()))
-    }
-
-    /// Create an empty batch message (useful for signaling completion)
-    pub fn create_empty_batch() -> Result<Self, QueueError> {
-        let mut builder = MessageBuilder::new();
-        builder.add_message(MessageType::BeginBatch, &[], MessageFlags::NONE);
-        builder.add_message(MessageType::EndBatch, &[], MessageFlags::NONE);
-        Ok(Self::new(builder.build()))
+    /// Create a new message builder
+    #[must_use]
+    pub fn builder() -> MessageBuilder {
+        MessageBuilder::new()
     }
 
     /// Determine the message type by parsing the header
@@ -428,28 +373,16 @@ impl ByteMessage {
             qubits: vec![usize::try_from(header.qubit).unwrap()],
         })
     }
-
-    /// Helper to create from commands
-    pub fn from_commands(commands: Vec<QuantumCommand>) -> Result<Self, QueueError> {
-        if commands.is_empty() {
-            return Self::create_flush(true);
-        }
-        Self::create_quantum_operations(&commands)
-    }
-
-    /// Helper to create from a single command
-    pub fn from_command(command: QuantumCommand) -> Result<Self, QueueError> {
-        Self::from_commands(vec![command])
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::channels::byte::protocol::MessageFlags;
 
     #[test]
-    fn test_create_and_parse_quantum_operations() {
-        // Create commands directly
+    fn test_bytemap_builder() {
+        // Create commands
         let commands = vec![
             QuantumCommand {
                 gate: GateType::H,
@@ -459,56 +392,18 @@ mod tests {
                 gate: GateType::CX,
                 qubits: vec![0, 1],
             },
-            QuantumCommand {
-                gate: GateType::Measure { result_id: 0 },
-                qubits: vec![0],
-            },
         ];
 
-        // Create a ByteMessage from the commands
-        let message = ByteMessage::create_quantum_operations(&commands).unwrap();
+        // Use the builder
+        let message = ByteMessage::builder()
+            .add_quantum_commands(&commands)
+            .build();
 
-        // Parse the ByteMessage back to commands
+        // Parse and verify
         let parsed_commands = message.parse_quantum_operations().unwrap();
-
-        // Verify the commands were correctly parsed
-        assert_eq!(parsed_commands.len(), 3);
-
-        // Check the Hadamard gate
+        assert_eq!(parsed_commands.len(), 2);
         assert!(matches!(parsed_commands[0].gate, GateType::H));
-        assert_eq!(parsed_commands[0].qubits, vec![0]);
-
-        // Check the CX gate
         assert!(matches!(parsed_commands[1].gate, GateType::CX));
-        assert_eq!(parsed_commands[1].qubits, vec![0, 1]);
-
-        // Check the Measure gate
-        if let GateType::Measure { result_id } = parsed_commands[2].gate {
-            assert_eq!(result_id, 0);
-        } else {
-            panic!("Expected Measure gate");
-        }
-        assert_eq!(parsed_commands[2].qubits, vec![0]);
-    }
-
-    #[test]
-    fn test_create_and_parse_measurements() {
-        // Create measurements (encoded as u32 with result_id in high 16 bits and outcome in low 16 bits)
-        let measurements = vec![
-            1,         // result_id=0, outcome=1
-            (1 << 16), // result_id=1, outcome=0
-        ];
-
-        // Create a ByteMessage from the measurements
-        let message = ByteMessage::create_measurements(&measurements).unwrap();
-
-        // Parse the ByteMessage back to measurements
-        let parsed_measurements = message.parse_measurements().unwrap();
-
-        // Verify the measurements were correctly parsed
-        assert_eq!(parsed_measurements.len(), 2);
-        assert_eq!(parsed_measurements[0], 1);
-        assert_eq!(parsed_measurements[1], (1 << 16));
     }
 
     #[test]
@@ -519,8 +414,10 @@ mod tests {
             qubits: vec![0],
         }];
 
-        // Create a ByteMessage from the commands
-        let message = ByteMessage::create_quantum_operations(&commands).unwrap();
+        // Create using the builder
+        let message = ByteMessage::builder()
+            .add_quantum_commands(&commands)
+            .build();
 
         // Get the message type
         let msg_type = message.message_type().unwrap();
@@ -529,8 +426,9 @@ mod tests {
         assert_eq!(msg_type, MessageType::BeginBatch);
 
         // Create a measurement message
-        let measurements = vec![1]; // result_id=0, outcome=1
-        let message = ByteMessage::create_measurements(&measurements).unwrap();
+        let message = ByteMessage::builder()
+            .add_measurement_results(&[1], &[0])
+            .build();
 
         // Get the message type
         let msg_type = message.message_type().unwrap();
@@ -540,34 +438,38 @@ mod tests {
     }
 
     #[test]
-    fn test_create_flush() {
-        // Create a flush message
-        let message = ByteMessage::create_flush(true).unwrap();
+    fn test_parse_measurements() {
+        // Create measurement results
+        let message = ByteMessage::builder()
+            .add_measurement_results(&[0, 1], &[1, 2])
+            .build();
 
-        // Verify the message type
-        let msg_type = message.message_type().unwrap();
-        assert_eq!(msg_type, MessageType::Flush);
-
-        // Verify the message flags
-        let _batch_header = *from_bytes::<BatchHeader>(&message.bytes[0..size_of::<BatchHeader>()]);
-        let msg_offset = size_of::<BatchHeader>();
-        let msg_header = *from_bytes::<MessageHeader>(
-            &message.bytes[msg_offset..msg_offset + size_of::<MessageHeader>()],
-        );
-
-        assert_eq!(msg_header.flags, MessageFlags::LAST_MESSAGE.bits());
+        // Parse and verify
+        let measurements = message.parse_measurements().unwrap();
+        assert_eq!(measurements.len(), 2);
+        assert_eq!(measurements[0], (1 << 16)); // result_id=1, outcome=0
+        assert_eq!(measurements[1], (2 << 16) | 1); // result_id=2, outcome=1
     }
 
     #[test]
-    fn test_empty_batch() {
-        // Create an empty batch
-        let message = ByteMessage::create_empty_batch().unwrap();
+    fn test_is_empty() {
+        // Create an empty flush message
+        let message = ByteMessage::builder()
+            .add_message(MessageType::Flush, &[], MessageFlags::NONE)
+            .build();
 
-        // Verify the empty batch
-        let parsed_batch = message.parse_quantum_operations().unwrap();
-        assert_eq!(parsed_batch.len(), 0);
-
-        // Verify the is_empty method
+        // Verify it's empty
         assert!(message.is_empty().unwrap());
+
+        // Create a non-empty message
+        let message = ByteMessage::builder()
+            .add_quantum_commands(&[QuantumCommand {
+                gate: GateType::H,
+                qubits: vec![0],
+            }])
+            .build();
+
+        // Verify it's not empty
+        assert!(!message.is_empty().unwrap());
     }
 }

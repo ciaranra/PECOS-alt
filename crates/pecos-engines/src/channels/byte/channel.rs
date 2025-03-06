@@ -4,9 +4,7 @@
 //! serializing and deserializing messages according to the byte protocol.
 
 use super::builder::MessageBuilder;
-use super::protocol::{
-    BatchHeader, MessageHeader, MessageType, calc_padding,
-};
+use super::protocol::{BatchHeader, MessageHeader, MessageType, calc_padding};
 use crate::channels::{ByteMessage, Message, MessageChannel};
 use crate::errors::QueueError;
 use log::debug;
@@ -204,10 +202,7 @@ impl ByteChannel {
 
 impl MessageChannel for ByteChannel {
     fn send_measurement(&mut self, measurement: Message) -> Result<(), QueueError> {
-        debug!(
-            "Measurement channel sending measurement: {}",
-            measurement
-        );
+        debug!("Measurement channel sending measurement: {}", measurement);
 
         let mut writer = self
             .writer
@@ -215,11 +210,13 @@ impl MessageChannel for ByteChannel {
             .map_err(|e| QueueError::LockError(format!("Failed to lock writer: {e}")))?;
 
         // Extract result_id and outcome from the measurement
-        let result_id = measurement >> 16;
-        let outcome = measurement & 0xFFFF;
+        let result_id = (measurement >> 16) as usize;
+        let outcome = (measurement & 0xFFFF) as usize;
 
-        // Build a ByteMessage using MessageBuilder helper
-        let message = MessageBuilder::create_measurement_message(result_id, outcome, false);
+        // Build a ByteMessage using MessageBuilder helper with the new signature
+        let message = ByteMessage::builder()
+            .add_measurement_results(&[outcome], &[result_id])
+            .build();
 
         // Send the message
         writer
@@ -261,15 +258,16 @@ impl MessageChannel for ByteChannel {
 
                 // Create a ByteMessage containing just this measurement result
                 let mut builder = MessageBuilder::new();
-                builder.add_message(MessageType::MeasurementResult, &payload, msg_header.get_flags());
-                let message = builder.build_message();
+                builder.add_message(
+                    MessageType::MeasurementResult,
+                    &payload,
+                    msg_header.get_flags(),
+                );
+                let message = builder.build();
 
                 // Parse the measurement using ByteMessage facilities
                 if let Some(&measurement) = message.parse_measurements()?.first() {
-                    debug!(
-                        "Received measurement: {}",
-                        measurement
-                    );
+                    debug!("Received measurement: {}", measurement);
                     return Ok(Some(measurement));
                 }
             }
@@ -299,7 +297,10 @@ impl MessageChannel for ByteChannel {
             .map_err(|e| QueueError::LockError(format!("Failed to lock writer: {e}")))?;
 
         // Create a flush message with LAST_MESSAGE flag
-        let message = MessageBuilder::create_flush_message(true);
+        let message = ByteMessage::builder()
+            .for_measurement_results()
+            .add_flush(true)
+            .build();
 
         writer.write_all(message.as_bytes()).map_err(|e| {
             QueueError::OperationError(format!("Failed to write flush message: {e}"))

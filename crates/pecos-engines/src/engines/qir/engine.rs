@@ -282,8 +282,9 @@ impl ClassicalEngine for QirClassicalEngine {
         // Store process handles for later measurement handling
         self.child_process = Some(child);
 
-        // Use our new helper to create a ByteMessage directly from commands
-        ByteMessage::from_commands(commands)
+        Ok(ByteMessage::builder()
+            .add_quantum_commands(&commands)
+            .build())
     }
 
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError> {

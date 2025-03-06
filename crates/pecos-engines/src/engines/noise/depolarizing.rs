@@ -98,8 +98,13 @@ impl NoiseModel for DepolarizingNoise {
         // Apply noise to the commands
         let noisy_commands = self.apply_noise_to_commands(commands_vec);
 
-        // Create a new message with the noisy commands
-        ByteMessage::from_commands(noisy_commands)
+        // REPLACE code like this:
+        // ByteMessage::from_commands(noisy_commands)
+
+        // WITH this builder pattern:
+        Ok(ByteMessage::builder()
+            .add_quantum_commands(&noisy_commands)
+            .build())
     }
 
     fn clone_box(&self) -> Box<dyn NoiseModel> {

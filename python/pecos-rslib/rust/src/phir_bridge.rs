@@ -429,8 +429,9 @@ impl ClassicalEngine for PHIREngine {
             Ok(())
         })?;
 
-        // Use the convenience function that already handles empty commands
-        ByteMessage::from_commands(commands)
+        Ok(ByteMessage::builder()
+            .add_quantum_commands(&commands)
+            .build())
     }
 
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError> {

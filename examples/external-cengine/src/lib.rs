@@ -54,7 +54,7 @@ impl Runner {
                 Ops::Reset(gvec) => 1,
                 Ops::R1XY(gvec) => 2,
                 Ops::RZZ(gvec) => 3,
-            }
+            };
         }
     }
 }

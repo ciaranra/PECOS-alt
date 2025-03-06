@@ -6,7 +6,6 @@ use pecos_core::types::{GateType, QuantumCommand, ShotResult};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
-use crate::channels::byte::builder::MessageBuilder;
 
 #[derive(Debug, Deserialize, Clone)]
 struct PHIRProgram {
@@ -392,7 +391,7 @@ impl ClassicalEngine for PHIREngine {
         // If we've processed all ops, return empty batch to signal completion
         if self.current_op >= ops.len() {
             debug!("End of program reached, sending flush");
-            return Ok(MessageBuilder::create_flush_message(true));
+            return Ok(ByteMessage::builder().add_flush(true).build());
         }
 
         let mut commands = Vec::new();
@@ -423,7 +422,10 @@ impl ClassicalEngine for PHIREngine {
                         debug!("Finishing batch due to classical operation completion");
                         self.current_op += 1;
 
-                        return Ok(MessageBuilder::create_quantum_message(&commands));
+                        // Use the builder pattern to create a message
+                        return Ok(ByteMessage::builder()
+                            .add_quantum_commands(&commands)
+                            .build());
                     }
                 }
             }
@@ -432,7 +434,10 @@ impl ClassicalEngine for PHIREngine {
 
         debug!("PHIR engine generated {} commands for shot", commands.len());
 
-        Ok(MessageBuilder::create_quantum_message(&commands))
+        // Use the builder pattern to create a message with all collected commands
+        Ok(ByteMessage::builder()
+            .add_quantum_commands(&commands)
+            .build())
     }
 
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError> {
@@ -552,41 +557,41 @@ mod tests {
 
         // Create a test program
         let program = r#"{
-        "format": "PHIR/JSON",
-        "version": "0.1.0",
-        "metadata": {"test": "true"},
-        "ops": [
-            {
-                "data": "qvar_define",
-                "data_type": "qubits",
-                "variable": "q",
-                "size": 2
-            },
-            {
-                "data": "cvar_define",
-                "data_type": "i64",
-                "variable": "m",
-                "size": 2
-            },
-            {
-                "data": "cvar_define",
-                "data_type": "i64",
-                "variable": "result",
-                "size": 2
-            },
-            {
-                "qop": "R1XY",
-                "angles": [[0.1, 0.2], "rad"],
-                "args": [["q", 0]]
-            },
-            {
-                "qop": "Measure",
-                "args": [["q", 0]],
-                "returns": [["m", 0]]
-            },
-            {"cop": "Result", "args": [["m", 0]], "returns": [["result", 0]]}
-        ]
-    }"#;
+    "format": "PHIR/JSON",
+    "version": "0.1.0",
+    "metadata": {"test": "true"},
+    "ops": [
+        {
+            "data": "qvar_define",
+            "data_type": "qubits",
+            "variable": "q",
+            "size": 2
+        },
+        {
+            "data": "cvar_define",
+            "data_type": "i64",
+            "variable": "m",
+            "size": 2
+        },
+        {
+            "data": "cvar_define",
+            "data_type": "i64",
+            "variable": "result",
+            "size": 2
+        },
+        {
+            "qop": "R1XY",
+            "angles": [[0.1, 0.2], "rad"],
+            "args": [["q", 0]]
+        },
+        {
+            "qop": "Measure",
+            "args": [["q", 0]],
+            "returns": [["m", 0]]
+        },
+        {"cop": "Result", "args": [["m", 0]], "returns": [["result", 0]]}
+    ]
+}"#;
 
         let mut file = File::create(&program_path)?;
         file.write_all(program.as_bytes())?;
@@ -601,8 +606,11 @@ mod tests {
         assert_eq!(parsed_commands.len(), 2);
 
         // Create a measurement message and test handling
-        let measurement = 1u32; // result_id=0, outcome=1
-        let message = ByteMessage::create_measurements(&[measurement])?;
+        // result_id=0, outcome=1
+        let message = ByteMessage::builder()
+            .add_measurement_results(&[1], &[0])
+            .build();
+
         engine.handle_measurements(message)?;
 
         // Verify results
