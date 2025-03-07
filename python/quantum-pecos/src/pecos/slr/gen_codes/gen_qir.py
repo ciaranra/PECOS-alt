@@ -225,7 +225,7 @@ class QIRGenerator(Generator):
         """Helper function to help setup various types and functions needed
         in the QIR production."""
 
-        self._module = ir.Module(name=__file__)
+        self._module = ir.Module(name=__file__, context=ir.Context())
 
         # store them in a read-only object
         self._types = QIRTypes(self._module)
