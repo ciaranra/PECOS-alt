@@ -1,6 +1,7 @@
+use crate::engines::HybridEngine;
 use crate::engines::noise::{DepolarizingNoise, NoiseModel, PassThroughNoise};
 use crate::engines::quantum::new_quantum_engine_arbitrary_qgate;
-use crate::engines::{ClassicalEngine, HybridEngine, QuantumEngine};
+use crate::engines::{ClassicalEngine, QuantumEngine};
 use crate::errors::QueueError;
 use dyn_clone;
 use log::{debug, info};
@@ -47,6 +48,10 @@ impl MonteCarloEngine {
     /// # Errors
     /// This function returns a `QueueError` if:
     /// - Engine initialization fails
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if `num_shots` is zero.
     pub fn run(&self, num_shots: usize, num_workers: usize) -> Result<ShotResults, QueueError> {
         info!(
             "Running Monte Carlo simulation with {} shots and {} workers",
@@ -278,13 +283,14 @@ impl MonteCarloEngineBuilder {
 mod tests {
     use super::*;
     use crate::channels::ByteMessage;
-    use crate::engines::classical::{ClassicalEngine, setup_engine};
-    use crate::engines::noise::{DepolarizingNoise, PassThroughNoise};
+    use crate::engines::ControlEngine;
+    use crate::engines::Engine;
+    use crate::engines::EngineStage;
+    use crate::engines::classical::setup_engine;
     use crate::engines::phir::PHIREngine;
-    use crate::engines::quantum::{CliffordEngine, new_quantum_engine_arbitrary_qgate};
-    use crate::engines::{ControlEngine, Engine, EngineStage};
-    use pecos_core::types::{GateType, QuantumCommand, ShotResult};
-    use pecos_qsim::{StateVec, StdSparseStab};
+    use crate::engines::quantum::StateVecEngine;
+    use pecos_core::types::{GateType, ShotResult};
+    use pecos_qsim::StdSparseStab;
     use std::collections::HashMap;
     use std::error::Error;
     use std::fs::File;
@@ -292,12 +298,7 @@ mod tests {
     use std::path::PathBuf;
     use tempfile::tempdir;
 
-    /// A mock implementation of `QuantumEngine` for testing purposes
-    ///
-    /// This simple implementation returns empty messages and is used
-    /// to test the `MonteCarloEngine` without requiring a full quantum
-    /// simulator implementation.
-    #[derive(Clone)]
+    #[derive(Debug, Clone)]
     struct MockQuantumEngine;
 
     impl Engine for MockQuantumEngine {
@@ -307,10 +308,7 @@ mod tests {
         fn process(&mut self, _input: Self::Input) -> Result<Self::Output, QueueError> {
             // Always return a fixed measurement result
             // result_id=0, outcome=1
-            Ok(ByteMessage::builder()
-                .for_measurement_results()
-                .add_measurement_results(&[1], &[0])
-                .build())
+            Ok(ByteMessage::record_measurement_results(&[(0, 1)]))
         }
 
         fn reset(&mut self) -> Result<(), QueueError> {
@@ -423,8 +421,8 @@ mod tests {
         let classical_engine = PHIREngine::new(&program_path).unwrap();
 
         // Create a quantum engine with a specific simulator
-        let stabilizer = StdSparseStab::new(2);
-        let quantum_engine = Box::new(CliffordEngine::new(stabilizer));
+        let _stabilizer = StdSparseStab::new(2);
+        let quantum_engine = Box::new(StateVecEngine::new(2));
 
         // Test running with custom engines
         let result = MonteCarloEngine::builder()
@@ -446,8 +444,8 @@ mod tests {
         // Create depolarizing noise model
         let noise_model = DepolarizingNoise::builder().with_probability(0.05).build();
 
-        let stabilizer = StdSparseStab::new(2);
-        let quantum_engine = Box::new(CliffordEngine::new(stabilizer));
+        let _stabilizer = StdSparseStab::new(2);
+        let quantum_engine = Box::new(StateVecEngine::new(2));
 
         // Test running with noise model
         let result = MonteCarloEngine::builder()
@@ -484,8 +482,8 @@ mod tests {
         // Create depolarizing noise model
         let noise_model = DepolarizingNoise::builder().with_probability(0.05).build();
 
-        let stabilizer = StdSparseStab::new(2);
-        let quantum_engine = Box::new(CliffordEngine::new(stabilizer));
+        let _stabilizer = StdSparseStab::new(2);
+        let quantum_engine = Box::new(StateVecEngine::new(2));
 
         let engine = MonteCarloEngine::builder()
             .with_classical_engine(dyn_clone::clone_box(&*classical_engine))
@@ -559,8 +557,8 @@ mod tests {
         let external_engine = Box::new(ExternalClassicalEngine::new());
 
         // Create a quantum engine
-        let simulator = StateVec::new(2);
-        let quantum_engine = new_quantum_engine_arbitrary_qgate(simulator);
+        let _stabilizer = StdSparseStab::new(2);
+        let quantum_engine = Box::new(StateVecEngine::new(2));
 
         // Create a MonteCarloEngine with the external engine
         let engine = MonteCarloEngine::builder()
@@ -592,7 +590,10 @@ mod tests {
     // Mock implementation of an external classical engine
     #[derive(Debug, Clone)]
     struct ExternalClassicalEngine {
-        commands: Vec<QuantumCommand>,
+        // Instead of storing QuantumCommand objects, store the circuit definition
+        // as gate types and qubit indices
+        gate_types: Vec<GateType>,
+        qubit_indices: Vec<Vec<usize>>,
         measurements: HashMap<String, u32>,
         command_index: usize,
         current_shot: usize,
@@ -601,45 +602,47 @@ mod tests {
     impl ExternalClassicalEngine {
         fn new() -> Self {
             // Create a simple Bell state preparation circuit
-            let commands = vec![
-                QuantumCommand {
-                    gate: GateType::H,
-                    qubits: vec![0],
-                },
-                QuantumCommand {
-                    gate: GateType::CX,
-                    qubits: vec![0, 1],
-                },
-                QuantumCommand {
-                    gate: GateType::Measure { result_id: 0 },
-                    qubits: vec![0],
-                },
-                QuantumCommand {
-                    gate: GateType::Measure { result_id: 1 },
-                    qubits: vec![1],
-                },
+            let gate_types = vec![
+                GateType::H,
+                GateType::CX,
+                GateType::Measure { result_id: 0 },
+                GateType::Measure { result_id: 1 },
+            ];
+
+            let qubit_indices = vec![
+                vec![0],    // H on qubit 0
+                vec![0, 1], // CX on qubits 0, 1
+                vec![0],    // Measure qubit 0
+                vec![1],    // Measure qubit 1
             ];
 
             Self {
-                commands,
+                gate_types,
+                qubit_indices,
                 measurements: HashMap::new(),
                 command_index: 0,
                 current_shot: 0,
             }
+        }
+
+        // Helper method to build a ByteMessage for a specific gate
+        fn build_message_for_gate(gate_type: &GateType, qubits: &[usize]) -> ByteMessage {
+            ByteMessage::create_with_gate(gate_type, qubits)
+                .expect("Failed to create message with gate")
         }
     }
 
     impl ClassicalEngine for ExternalClassicalEngine {
         fn num_qubits(&self) -> usize {
             // If we have no commands, return 0
-            if self.commands.is_empty() {
+            if self.gate_types.is_empty() {
                 return 0;
             }
 
             // Find the highest qubit index used in any command
             let mut max_qubit_index = 0;
-            for cmd in &self.commands {
-                for &qubit in &cmd.qubits {
+            for qubits in &self.qubit_indices {
+                for &qubit in qubits {
                     if qubit > max_qubit_index {
                         max_qubit_index = qubit;
                     }
@@ -652,31 +655,24 @@ mod tests {
 
         fn generate_commands(&mut self) -> Result<ByteMessage, QueueError> {
             // If we've processed all commands, return empty batch (flush message)
-            if self.command_index >= self.commands.len() {
-                return Ok(ByteMessage::builder().add_flush(true).build());
+            if self.command_index >= self.gate_types.len() {
+                return Ok(ByteMessage::create_flush());
             }
 
             // Get the next command
-            let cmd = &self.commands[self.command_index];
+            let gate_type = &self.gate_types[self.command_index];
+            let qubits = &self.qubit_indices[self.command_index];
             self.command_index += 1;
 
-            // Create a ByteMessage using the builder
-            let message = ByteMessage::builder()
-                .for_quantum_operations() // Pre-configured for quantum operations
-                .add_quantum_commands(&[cmd.clone()])
-                .build();
-
+            // Build the message based on the gate type
+            let message = Self::build_message_for_gate(gate_type, qubits);
             Ok(message)
         }
 
         fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError> {
             let measurements = message.parse_measurements()?;
 
-            for measurement in measurements {
-                // Extract result_id and outcome
-                let result_id = (measurement >> 16) as usize;
-                let outcome = measurement & 0xFFFF;
-
+            for (result_id, outcome) in measurements {
                 // Store the measurement
                 self.measurements
                     .insert(format!("measurement_{result_id}"), outcome);

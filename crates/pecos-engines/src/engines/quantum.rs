@@ -1,58 +1,37 @@
-use crate::channels::byte_message::ByteMessage;
+use crate::channels::ByteMessage;
+use crate::channels::byte::gate_type::GateTypeId;
 use crate::engines::Engine;
 use crate::errors::QueueError;
+use dyn_clone::DynClone;
 use log::debug;
-use pecos_core::types::GateType;
-use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, QuantumSimulator};
+use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, QuantumSimulator, StateVec};
+use std::fmt::Debug;
 
-/// Marker trait for engines that manage quantum state
-///
-/// This trait indicates that an engine specifically deals with
-/// quantum state evolution and measurements.
-pub trait QuantumEngine: Engine<Input = ByteMessage, Output = ByteMessage> + Send + Sync {}
+/// Trait for quantum engines that can process quantum operations
+pub trait QuantumEngine:
+    Engine<Input = ByteMessage, Output = ByteMessage> + DynClone + Debug
+{
+}
 
-// Register the QuantumEngine trait with dyn_clone
 dyn_clone::clone_trait_object!(QuantumEngine);
 
-impl Engine for Box<dyn QuantumEngine> {
-    type Input = ByteMessage;
-    type Output = ByteMessage;
-
-    fn process(&mut self, input: Self::Input) -> Result<Self::Output, QueueError> {
-        self.as_mut().process(input)
-    }
-
-    fn reset(&mut self) -> Result<(), QueueError> {
-        self.as_mut().reset()
-    }
+/// A quantum engine that uses a state vector simulator
+#[derive(Debug, Clone)]
+pub struct StateVecEngine {
+    simulator: StateVec,
 }
 
-/// Clifford gate quantum engine implementation
-///
-/// The simulator must implement `QuantumSimulator` and `CliffordGateable` traits
-/// to support Clifford gate operations, and must be Send + Sync + Clone for
-/// thread safety and cloning capabilities.
-#[derive(Clone)]
-pub struct CliffordEngine<S>
-where
-    S: QuantumSimulator + CliffordGateable<usize> + Send + Sync + Clone + 'static,
-{
-    simulator: S,
-}
-
-impl<S> CliffordEngine<S>
-where
-    S: QuantumSimulator + CliffordGateable<usize> + Send + Sync + Clone + 'static,
-{
-    pub fn new(simulator: S) -> Self {
-        Self { simulator }
+impl StateVecEngine {
+    /// Create a new state vector engine with the specified number of qubits
+    #[must_use]
+    pub fn new(num_qubits: usize) -> Self {
+        Self {
+            simulator: StateVec::new(num_qubits),
+        }
     }
 }
 
-impl<S> Engine for CliffordEngine<S>
-where
-    S: QuantumSimulator + CliffordGateable<usize> + Send + Sync + Clone + 'static,
-{
+impl Engine for StateVecEngine {
     type Input = ByteMessage;
     type Output = ByteMessage;
 
@@ -62,298 +41,94 @@ where
         let mut measurements = Vec::new();
 
         for cmd in &batch {
-            match &cmd.gate {
-                GateType::X => {
+            match cmd.gate_type {
+                GateTypeId::X => {
                     debug!("Processing X gate on qubit {:?}", cmd.qubits[0]);
                     self.simulator.x(cmd.qubits[0]);
                 }
-                GateType::Y => {
+                GateTypeId::Y => {
                     debug!("Processing Y gate on qubit {:?}", cmd.qubits[0]);
                     self.simulator.y(cmd.qubits[0]);
                 }
-                GateType::Z => {
+                GateTypeId::Z => {
                     debug!("Processing Z gate on qubit {:?}", cmd.qubits[0]);
                     self.simulator.z(cmd.qubits[0]);
                 }
-                GateType::H => {
+                GateTypeId::H => {
                     debug!("Processing H gate on qubit {:?}", cmd.qubits[0]);
                     self.simulator.h(cmd.qubits[0]);
                 }
-                GateType::CX => {
+                GateTypeId::CX => {
                     debug!(
                         "Processing CX gate with control {:?} and target {:?}",
                         cmd.qubits[0], cmd.qubits[1]
                     );
                     self.simulator.cx(cmd.qubits[0], cmd.qubits[1]);
                 }
-                GateType::SZZ => {
-                    debug!("Processing SZZ gate on qubits {:?}", cmd.qubits);
-                    self.simulator.szz(cmd.qubits[0], cmd.qubits[1]);
-                }
-                GateType::Measure { result_id } => {
+                GateTypeId::SZZ => {
                     debug!(
-                        "QUANTUM SIM: Starting measurement of qubit {} (result_id={})",
-                        cmd.qubits[0], result_id
-                    );
-                    let meas_result = self.simulator.mz(cmd.qubits[0]);
-                    let raw_outcome = u32::from(meas_result.outcome);
-
-                    // Convert result_id to u32 safely
-                    let result_id_u32: u32 = *result_id as u32;
-
-                    let encoded = (result_id_u32 << 16) | raw_outcome;
-                    debug!(
-                        "QUANTUM SIM: Got measurement {} for qubit {} with result_id={}",
-                        raw_outcome, cmd.qubits[0], result_id
-                    );
-                    debug!("QUANTUM SIM: Encoded as {}", encoded);
-                    measurements.push(encoded);
-                }
-
-                GateType::RZ { .. } | GateType::R1XY { .. } => {
-                    return Err(QueueError::OperationError(
-                        "This simulator only supports Clifford operations.".into(),
-                    ));
-                }
-            }
-        }
-
-        // Create a measurement message
-        if measurements.is_empty() {
-            Ok(ByteMessage::builder().add_flush(true).build())
-        } else {
-            // Extract result_ids and outcomes from measurements
-            let mut result_ids: Vec<usize> = Vec::with_capacity(measurements.len());
-            let mut outcomes: Vec<usize> = Vec::with_capacity(measurements.len());
-
-            for &m in &measurements {
-                result_ids.push((m >> 16) as usize);
-                outcomes.push((m & 0xFFFF) as usize);
-            }
-
-            Ok(ByteMessage::builder()
-                .add_measurement_results(&outcomes, &result_ids)
-                .build())
-        }
-    }
-
-    fn reset(&mut self) -> Result<(), QueueError> {
-        self.simulator.reset();
-        Ok(())
-    }
-}
-
-/// Implementation of the `QuantumEngine` trait for `CliffordEngine`
-///
-/// This allows `CliffordEngine` to be used wherever a `QuantumEngine` is required,
-/// providing Clifford gate operations on quantum states.
-impl<S> QuantumEngine for CliffordEngine<S> where
-    S: QuantumSimulator + CliffordGateable<usize> + Send + Sync + Clone + 'static
-{
-}
-
-/// Arbitrary rotation gate quantum engine implementation
-///
-/// The simulator must implement `QuantumSimulator`, `CliffordGateable`, and
-/// `ArbitraryRotationGateable` traits to support both Clifford gates and
-/// arbitrary rotation gates. It must also be Send + Sync + Clone for
-/// thread safety and cloning capabilities.
-#[derive(Clone)]
-pub struct ArbitraryQGateEngine<S>
-where
-    S: QuantumSimulator
-        + CliffordGateable<usize>
-        + ArbitraryRotationGateable<usize>
-        + Send
-        + Sync
-        + Clone
-        + 'static,
-{
-    simulator: S,
-}
-
-impl<S> ArbitraryQGateEngine<S>
-where
-    S: QuantumSimulator
-        + CliffordGateable<usize>
-        + ArbitraryRotationGateable<usize>
-        + Send
-        + Sync
-        + Clone
-        + 'static,
-{
-    pub fn new(simulator: S) -> Self {
-        Self { simulator }
-    }
-}
-
-impl<S> Engine for ArbitraryQGateEngine<S>
-where
-    S: QuantumSimulator
-        + CliffordGateable<usize>
-        + ArbitraryRotationGateable<usize>
-        + Send
-        + Sync
-        + Clone
-        + 'static,
-{
-    type Input = ByteMessage;
-    type Output = ByteMessage;
-
-    fn process(&mut self, message: Self::Input) -> Result<Self::Output, QueueError> {
-        // Parse commands from the message
-        let batch = message.parse_quantum_operations()?;
-        let mut result_ids = Vec::new();
-        let mut outcomes = Vec::new();
-
-        for cmd in batch {
-            debug!("Quantum engine processing command: {:?}", cmd);
-            match cmd.gate {
-                GateType::X => {
-                    debug!("Executing X gate on qubit {}", cmd.qubits[0]);
-                    self.simulator.x(cmd.qubits[0]);
-                }
-                GateType::Y => {
-                    debug!("Executing Y gate on qubit {}", cmd.qubits[0]);
-                    self.simulator.y(cmd.qubits[0]);
-                }
-                GateType::Z => {
-                    debug!("Executing Z gate on qubit {}", cmd.qubits[0]);
-                    self.simulator.z(cmd.qubits[0]);
-                }
-                GateType::H => {
-                    debug!("Executing H gate on qubit {}", cmd.qubits[0]);
-                    self.simulator.h(cmd.qubits[0]);
-                }
-                GateType::CX => {
-                    debug!(
-                        "Executing CX gate with control {} and target {}",
-                        cmd.qubits[0],
-                        cmd.qubits.get(1).unwrap_or(&0)
-                    );
-
-                    if cmd.qubits.len() == 2 {
-                        self.simulator.cx(cmd.qubits[0], cmd.qubits[1]);
-                    } else {
-                        return Err(QueueError::OperationError(format!(
-                            "Got the wrong number of arguments for CX: {}",
-                            cmd.qubits.len()
-                        )));
-                    }
-                }
-                GateType::SZZ => {
-                    debug!(
-                        "Executing SZZ gate on qubits {} and {}",
+                        "Processing SZZ gate on qubits {:?} and {:?}",
                         cmd.qubits[0], cmd.qubits[1]
                     );
                     self.simulator.szz(cmd.qubits[0], cmd.qubits[1]);
                 }
-                GateType::Measure { result_id } => {
-                    debug!(
-                        "Starting measurement of qubit {} (result_id={})",
-                        cmd.qubits[0], result_id
-                    );
-                    let meas_result = self.simulator.mz(cmd.qubits[0]);
-                    let raw_outcome = u32::from(meas_result.outcome);
-
-                    // Convert result_id to u32 safely
-                    let result_id_u32: u32 = result_id as u32;
-
-                    let encoded = (result_id_u32 << 16) | raw_outcome;
-                    debug!(
-                        "Measurement complete: qubit={}, result_id={}, outcome={}, encoded={}",
-                        cmd.qubits[0], result_id, raw_outcome, encoded
-                    );
-
-                    // Store outcomes and result_ids separately
-                    result_ids.push(result_id);
-                    outcomes.push(raw_outcome as usize);
+                GateTypeId::RZ => {
+                    if !cmd.params.is_empty() {
+                        debug!(
+                            "Processing RZ gate with angle {:?} on qubit {:?}",
+                            cmd.params[0], cmd.qubits[0]
+                        );
+                        self.simulator.rz(cmd.params[0], cmd.qubits[0]);
+                    }
                 }
-                GateType::RZ { theta } => {
-                    debug!("Executing RZ(theta={}) on qubit {}", theta, cmd.qubits[0]);
-                    self.simulator.rz(theta, cmd.qubits[0]);
+                GateTypeId::R1XY => {
+                    if cmd.params.len() >= 2 {
+                        debug!(
+                            "Processing R1XY gate with angles phi={:?}, theta={:?} on qubit {:?}",
+                            cmd.params[0], cmd.params[1], cmd.qubits[0]
+                        );
+                        self.simulator
+                            .r1xy(cmd.params[0], cmd.params[1], cmd.qubits[0]);
+                    }
                 }
-                GateType::R1XY { phi, theta } => {
-                    debug!(
-                        "Executing R1XY(phi={}, theta={}) on qubit {}",
-                        phi, theta, cmd.qubits[0]
-                    );
-                    self.simulator.r1xy(theta, phi, cmd.qubits[0]);
+                GateTypeId::Measure => {
+                    if let Some(result_id) = cmd.result_id {
+                        debug!(
+                            "Processing measurement on qubit {:?} with result_id {:?}",
+                            cmd.qubits[0], result_id
+                        );
+                        let meas_result = self.simulator.mz(cmd.qubits[0]);
+                        let outcome = u32::from(meas_result.outcome);
+                        measurements.push((result_id, outcome));
+                    }
                 }
             }
         }
 
-        // Create a message with all measurements using the improved MessageBuilder API
-        if outcomes.is_empty() {
-            Ok(ByteMessage::builder().add_flush(true).build())
-        } else {
-            Ok(ByteMessage::builder()
-                .add_measurement_results(&outcomes, &result_ids)
-                .build())
-        }
+        // Create a message with the measurement results
+        let result_message = ByteMessage::record_measurement_results(&measurements);
+        Ok(result_message)
     }
 
     fn reset(&mut self) -> Result<(), QueueError> {
-        debug!("Resetting quantum simulator state");
         self.simulator.reset();
-        debug!("Quantum simulator state reset complete");
         Ok(())
     }
 }
 
-/// Implementation of the `QuantumEngine` trait for `ArbitraryQGateEngine`
-///
-/// This allows `ArbitraryQGateEngine` to be used wherever a `QuantumEngine` is required,
-/// providing both Clifford gates and arbitrary rotation gates on quantum states.
-impl<S> QuantumEngine for ArbitraryQGateEngine<S> where
-    S: QuantumSimulator
-        + CliffordGateable<usize>
-        + ArbitraryRotationGateable<usize>
-        + Send
-        + Sync
-        + Clone
-        + 'static
-{
-}
-
-// Factory function to create the appropriate engine based on simulator type
-/// Creates a new quantum engine that supports Clifford gate operations
-///
-/// This factory function wraps the provided simulator in a `CliffordEngine` and
-/// returns it as a boxed `QuantumEngine` trait object, allowing for polymorphic usage.
-///
-/// # Parameters
-/// * `simulator` - A quantum simulator that implements the required traits
-///
-/// # Returns
-/// A boxed `QuantumEngine` trait object
-pub fn new_quantum_engine<S>(simulator: S) -> Box<dyn QuantumEngine>
-where
-    S: QuantumSimulator + CliffordGateable<usize> + Send + Sync + Clone + 'static,
-{
-    Box::new(CliffordEngine::new(simulator))
-}
+impl QuantumEngine for StateVecEngine {}
 
 /// Creates a new quantum engine that supports both Clifford gates and arbitrary rotation gates
 ///
-/// This factory function wraps the provided simulator in an `ArbitraryQGateEngine` and
-/// returns it as a boxed `QuantumEngine` trait object, allowing for polymorphic usage.
+/// This factory function creates a new `StateVecEngine` and returns it as a boxed `QuantumEngine`
+/// trait object, allowing for polymorphic usage.
 ///
 /// # Parameters
-/// * `simulator` - A quantum simulator that implements the required traits including
-///   support for arbitrary rotation gates
+/// * `simulator` - A state vector simulator
 ///
 /// # Returns
 /// A boxed `QuantumEngine` trait object
-pub fn new_quantum_engine_arbitrary_qgate<S>(simulator: S) -> Box<dyn QuantumEngine>
-where
-    S: QuantumSimulator
-        + CliffordGateable<usize>
-        + ArbitraryRotationGateable<usize>
-        + Send
-        + Sync
-        + Clone
-        + 'static,
-{
-    Box::new(ArbitraryQGateEngine::new(simulator))
+#[must_use]
+pub fn new_quantum_engine_arbitrary_qgate(simulator: StateVec) -> Box<dyn QuantumEngine> {
+    Box::new(StateVecEngine { simulator })
 }

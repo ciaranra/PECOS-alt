@@ -25,10 +25,7 @@ pub use pecos_engines::{
         noise::{DepolarizingNoise, NoiseModel},
         phir::PHIREngine,
         qir::engine::QirClassicalEngine,
-        quantum::{
-            ArbitraryQGateEngine, CliffordEngine, new_quantum_engine,
-            new_quantum_engine_arbitrary_qgate,
-        },
+        quantum::{QuantumEngine, StateVecEngine, new_quantum_engine_arbitrary_qgate},
     },
     errors::QueueError,
 };

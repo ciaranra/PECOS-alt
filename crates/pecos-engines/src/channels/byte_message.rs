@@ -1,4 +1,5 @@
 use crate::channels::byte::builder::MessageBuilder;
+use crate::channels::byte::gate_type::{GateTypeId, QuantumGate};
 use crate::channels::byte::protocol::{
     BatchHeader, MeasurementHeader, MeasurementResultHeader, MessageHeader, MessageType,
     QuantumGateHeader, calc_padding,
@@ -6,7 +7,7 @@ use crate::channels::byte::protocol::{
 use crate::errors::QueueError;
 use bytemuck::from_bytes;
 use log::trace;
-use pecos_core::types::{GateType, QuantumCommand};
+use pecos_core::types::GateType;
 use std::mem::size_of;
 
 /// A message encoded using the PECOS byte protocol
@@ -38,6 +39,325 @@ impl ByteMessage {
     #[must_use]
     pub fn builder() -> MessageBuilder {
         MessageBuilder::new()
+    }
+
+    /// Create a new message builder pre-configured for quantum operations
+    ///
+    /// This is a convenience method that creates a new builder and configures it
+    /// for quantum operations.
+    ///
+    /// # Returns
+    ///
+    /// A `MessageBuilder` configured for quantum operations.
+    #[must_use]
+    pub fn quantum_operations_builder() -> MessageBuilder {
+        let mut builder = Self::builder();
+        let _ = builder.for_quantum_operations();
+        builder
+    }
+
+    /// Create a new message builder pre-configured for measurement results
+    ///
+    /// This is a convenience method that creates a new builder and configures it
+    /// for measurement results.
+    ///
+    /// # Returns
+    ///
+    /// A `MessageBuilder` configured for measurement results.
+    #[must_use]
+    pub fn measurement_results_builder() -> MessageBuilder {
+        let mut builder = Self::builder();
+        let _ = builder.for_measurement_results();
+        builder
+    }
+
+    /// Create a new flush message
+    ///
+    /// This is a convenience method that creates a new message with a flush command.
+    /// Flush messages are used to signal the end of a batch of commands.
+    ///
+    /// # Returns
+    ///
+    /// A `ByteMessage` containing a flush command.
+    #[must_use]
+    pub fn create_flush() -> Self {
+        Self::builder().add_flush(true).build()
+    }
+
+    /// Create a new message with a circuit of gates
+    ///
+    /// This is a convenience method that creates a new message with multiple gates
+    /// representing a quantum circuit.
+    ///
+    /// # Arguments
+    ///
+    /// * `gates` - A slice of tuples containing gate types and qubit indices
+    ///
+    /// # Returns
+    ///
+    /// A Result containing a `ByteMessage` with the circuit if successful, or a `QueueError` if there was an error.
+    pub fn create_circuit(gates: &[(&GateType, &[usize])]) -> Result<Self, QueueError> {
+        let mut builder = Self::quantum_operations_builder();
+        for (gate_type, qubits) in gates {
+            Self::add_gate_to_builder(&mut builder, gate_type, qubits)?;
+        }
+        Ok(builder.build())
+    }
+
+    /// Create a new message from a sequence of command strings
+    ///
+    /// This is a convenience method that creates a new message from a sequence of command strings
+    /// in the format "`GATE_TYPE` [params...] qubit1 qubit2 ...".
+    ///
+    /// # Arguments
+    ///
+    /// * `commands` - A slice of command strings to parse
+    ///
+    /// # Returns
+    ///
+    /// A Result containing a `ByteMessage` with the commands if successful, or a `QueueError` if there was an error.
+    pub fn create_from_commands(commands: &[&str]) -> Result<Self, QueueError> {
+        let mut builder = Self::quantum_operations_builder();
+        for cmd in commands {
+            Self::parse_command_to_builder(&mut builder, cmd)?;
+        }
+        Ok(builder.build())
+    }
+
+    /// Record measurement results
+    ///
+    /// This is a convenience method that creates a new message with measurement results.
+    /// It's used to report measurement outcomes back to the classical controller.
+    ///
+    /// # Arguments
+    ///
+    /// * `result_pairs` - A slice of tuples containing (`result_id`, outcome)
+    ///   where `result_id` corresponds to the ID used when requesting the measurement
+    ///   and outcome is the measurement result (typically 0 or 1)
+    ///
+    /// # Returns
+    ///
+    /// A `ByteMessage` containing the measurement results.
+    #[must_use]
+    pub fn record_measurement_results(result_pairs: &[(usize, u32)]) -> Self {
+        let mut builder = Self::measurement_results_builder();
+
+        // Collect result_ids and outcomes into separate vectors
+        let mut result_ids = Vec::with_capacity(result_pairs.len());
+        let mut outcomes = Vec::with_capacity(result_pairs.len());
+
+        for (result_id, outcome) in result_pairs {
+            result_ids.push(*result_id);
+            outcomes.push(*outcome as usize); // Convert u32 to usize
+        }
+
+        builder.add_measurement_results(&outcomes, &result_ids);
+        builder.build()
+    }
+
+    /// Create a message with a single quantum gate
+    ///
+    /// This is a convenience method that creates a new message with a single quantum gate.
+    ///
+    /// # Arguments
+    ///
+    /// * `gate_type` - The type of gate to add
+    /// * `qubits` - The qubit indices for the gate
+    ///
+    /// # Returns
+    ///
+    /// A Result containing a `ByteMessage` with the gate if successful, or a `QueueError` if there was an error.
+    pub fn create_with_gate(gate_type: &GateType, qubits: &[usize]) -> Result<Self, QueueError> {
+        let mut builder = Self::quantum_operations_builder();
+        Self::add_gate_to_builder(&mut builder, gate_type, qubits)?;
+        Ok(builder.build())
+    }
+
+    /// Adds a quantum gate to a message builder based on the gate type and qubit indices
+    ///
+    /// This is a helper method that adds a quantum gate to a message builder
+    /// based on the gate type and qubit indices. It handles the different gate types
+    /// and their specific requirements.
+    ///
+    /// # Arguments
+    ///
+    /// * `builder` - A mutable reference to a `MessageBuilder`
+    /// * `gate_type` - The type of gate to add
+    /// * `qubits` - The qubit indices for the gate
+    ///
+    /// # Returns
+    ///
+    /// A Result containing () if successful, or a `QueueError` if there was an error.
+    pub fn add_gate_to_builder(
+        builder: &mut MessageBuilder,
+        gate_type: &GateType,
+        qubits: &[usize],
+    ) -> Result<(), QueueError> {
+        match gate_type {
+            GateType::X => {
+                builder.add_x(qubits);
+            }
+            GateType::Y => {
+                builder.add_y(qubits);
+            }
+            GateType::Z => {
+                builder.add_z(qubits);
+            }
+            GateType::H => {
+                builder.add_h(qubits);
+            }
+            GateType::CX => {
+                if qubits.len() < 2 {
+                    return Err(QueueError::OperationError(
+                        "CX gate requires at least 2 qubits".into(),
+                    ));
+                }
+                builder.add_cx(&[qubits[0]], &[qubits[1]]);
+            }
+            GateType::SZZ => {
+                if qubits.len() < 2 {
+                    return Err(QueueError::OperationError(
+                        "SZZ gate requires at least 2 qubits".into(),
+                    ));
+                }
+                builder.add_szz(&[qubits[0]], &[qubits[1]]);
+            }
+            GateType::RZ { theta } => {
+                builder.add_rz(*theta, qubits);
+            }
+            GateType::R1XY { phi, theta } => {
+                builder.add_r1xy(*phi, *theta, qubits);
+            }
+            GateType::Measure { result_id } => {
+                builder.add_measurements(qubits, &[*result_id]);
+            }
+        }
+        Ok(())
+    }
+
+    /// Parse a command string and add it to the `ByteMessage` builder
+    #[allow(clippy::too_many_lines)]
+    pub fn parse_command_to_builder(
+        builder: &mut MessageBuilder,
+        cmd: &str,
+    ) -> Result<(), QueueError> {
+        let parts: Vec<&str> = cmd.split_whitespace().collect();
+        if parts.is_empty() {
+            return Ok(());
+        }
+
+        match parts.first() {
+            Some(&"RZ") => {
+                if parts.len() >= 3 {
+                    let theta = parts[1].parse::<f64>().map_err(|_| {
+                        QueueError::OperationError(format!(
+                            "Invalid angle in RZ command: {}",
+                            parts[1]
+                        ))
+                    })?;
+                    let qubit = parts[2].parse::<usize>().map_err(|_| {
+                        QueueError::OperationError(format!(
+                            "Invalid qubit in RZ command: {}",
+                            parts[2]
+                        ))
+                    })?;
+                    builder.add_rz(theta, &[qubit]);
+                }
+            }
+            Some(&"R1XY") => {
+                if parts.len() >= 4 {
+                    let phi = parts[1].parse::<f64>().map_err(|_| {
+                        QueueError::OperationError(format!(
+                            "Invalid phi angle in R1XY command: {}",
+                            parts[1]
+                        ))
+                    })?;
+                    let theta = parts[2].parse::<f64>().map_err(|_| {
+                        QueueError::OperationError(format!(
+                            "Invalid theta angle in R1XY command: {}",
+                            parts[2]
+                        ))
+                    })?;
+                    let qubit = parts[3].parse::<usize>().map_err(|_| {
+                        QueueError::OperationError(format!(
+                            "Invalid qubit in R1XY command: {}",
+                            parts[3]
+                        ))
+                    })?;
+                    builder.add_r1xy(phi, theta, &[qubit]);
+                }
+            }
+            Some(&"SZZ") => {
+                if parts.len() >= 3 {
+                    let qubit1 = parts[1].parse::<usize>().map_err(|_| {
+                        QueueError::OperationError(format!(
+                            "Invalid qubit1 in SZZ command: {}",
+                            parts[1]
+                        ))
+                    })?;
+                    let qubit2 = parts[2].parse::<usize>().map_err(|_| {
+                        QueueError::OperationError(format!(
+                            "Invalid qubit2 in SZZ command: {}",
+                            parts[2]
+                        ))
+                    })?;
+                    builder.add_szz(&[qubit1], &[qubit2]);
+                }
+            }
+            Some(&"H") => {
+                if parts.len() >= 2 {
+                    let qubit = parts[1].parse::<usize>().map_err(|_| {
+                        QueueError::OperationError(format!(
+                            "Invalid qubit in H command: {}",
+                            parts[1]
+                        ))
+                    })?;
+                    builder.add_h(&[qubit]);
+                }
+            }
+            Some(&"CX") => {
+                if parts.len() >= 3 {
+                    let control = parts[1].parse::<usize>().map_err(|_| {
+                        QueueError::OperationError(format!(
+                            "Invalid control qubit in CX command: {}",
+                            parts[1]
+                        ))
+                    })?;
+                    let target = parts[2].parse::<usize>().map_err(|_| {
+                        QueueError::OperationError(format!(
+                            "Invalid target qubit in CX command: {}",
+                            parts[2]
+                        ))
+                    })?;
+                    builder.add_cx(&[control], &[target]);
+                }
+            }
+            Some(&"M") => {
+                if parts.len() >= 3 {
+                    let qubit = parts[1].parse::<usize>().map_err(|_| {
+                        QueueError::OperationError(format!(
+                            "Invalid qubit in M command: {}",
+                            parts[1]
+                        ))
+                    })?;
+                    let result_id = parts[2].parse::<usize>().map_err(|_| {
+                        QueueError::OperationError(format!(
+                            "Invalid result_id in M command: {}",
+                            parts[2]
+                        ))
+                    })?;
+                    builder.add_measurements(&[qubit], &[result_id]);
+                }
+            }
+            _ => {
+                return Err(QueueError::OperationError(format!(
+                    "Unknown command type: {}",
+                    parts[0]
+                )));
+            }
+        }
+
+        Ok(())
     }
 
     /// Determine the message type by parsing the header
@@ -92,7 +412,7 @@ impl ByteMessage {
     }
 
     /// Parse quantum operations from this message
-    pub fn parse_quantum_operations(&self) -> Result<Vec<QuantumCommand>, QueueError> {
+    pub fn parse_quantum_operations(&self) -> Result<Vec<QuantumGate>, QueueError> {
         if self.bytes.len() < size_of::<BatchHeader>() {
             return Err(QueueError::OperationError(
                 "Message too small for batch header".into(),
@@ -121,51 +441,56 @@ impl ByteMessage {
             );
             offset += size_of::<MessageHeader>();
 
-            let msg_type = msg_header
-                .get_type()
-                .map_err(|e| QueueError::OperationError(e.to_string()))?;
-
-            let payload_size = msg_header.payload_size as usize;
-            let payload_end = offset + payload_size;
-
-            if payload_end > self.bytes.len() {
-                return Err(QueueError::OperationError(format!(
-                    "Message payload extends beyond message bounds: offset={}, size={}, total_len={}",
-                    offset,
-                    payload_size,
-                    self.bytes.len()
-                )));
+            // Check if this is a quantum operations message
+            if msg_header.msg_type == MessageType::BeginBatch as u8 {
+                in_command_batch = true;
+            } else if msg_header.msg_type == MessageType::EndBatch as u8 {
+                // End of batch
+                break;
             }
 
-            match msg_type {
-                MessageType::BeginBatch => {
-                    in_command_batch = true;
+            // Skip to next message if not in a command batch
+            if !in_command_batch {
+                offset += msg_header.payload_size as usize;
+                let padding = calc_padding(msg_header.payload_size as usize, 4);
+                if padding > 0 {
+                    offset += padding;
                 }
-                MessageType::EndBatch => {
-                    // End of batch reached
-                    return Ok(commands);
-                }
-                MessageType::QuantumGate if in_command_batch => {
-                    // Process quantum gate
-                    let payload = &self.bytes[offset..payload_end];
-                    let cmd = Self::parse_quantum_gate(payload)?;
-                    commands.push(cmd);
-                }
-                MessageType::Measurement if in_command_batch => {
-                    // Process measurement
-                    let payload = &self.bytes[offset..payload_end];
-                    let cmd = Self::parse_measurement(payload)?;
-                    commands.push(cmd);
-                }
-                _ => {
-                    // Skip other message types
-                    trace!("Skipping message type: {:?}", msg_type);
-                }
+                continue;
             }
 
-            // Move offset to next message, accounting for padding
-            offset = payload_end;
-            let padding = calc_padding(payload_size, 4);
+            // Process payload based on message type
+            match msg_header.msg_type {
+                x if x == MessageType::QuantumGate as u8 => {
+                    if offset + msg_header.payload_size as usize <= self.bytes.len() {
+                        let payload =
+                            &self.bytes[offset..offset + msg_header.payload_size as usize];
+                        match Self::parse_quantum_gate(payload) {
+                            Ok(cmd) => commands.push(cmd),
+                            Err(e) => {
+                                trace!("Error parsing quantum gate: {}", e);
+                            }
+                        }
+                    }
+                }
+                x if x == MessageType::Measurement as u8 => {
+                    if offset + msg_header.payload_size as usize <= self.bytes.len() {
+                        let payload =
+                            &self.bytes[offset..offset + msg_header.payload_size as usize];
+                        match Self::parse_measurement(payload) {
+                            Ok(cmd) => commands.push(cmd),
+                            Err(e) => {
+                                trace!("Error parsing measurement: {}", e);
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+
+            // Move to next message
+            offset += msg_header.payload_size as usize;
+            let padding = calc_padding(msg_header.payload_size as usize, 4);
             if padding > 0 {
                 offset += padding;
             }
@@ -175,7 +500,7 @@ impl ByteMessage {
     }
 
     /// Parse measurements from this message
-    pub fn parse_measurements(&self) -> Result<Vec<u32>, QueueError> {
+    pub fn parse_measurements(&self) -> Result<Vec<(u32, u32)>, QueueError> {
         if self.bytes.len() < size_of::<BatchHeader>() {
             return Err(QueueError::OperationError(
                 "Message too small for batch header".into(),
@@ -227,10 +552,8 @@ impl ByteMessage {
                         &payload[0..size_of::<MeasurementResultHeader>()],
                     );
 
-                    // Encode as u32
-                    let message = ((result_header.result_id & 0xFFFF) << 16)
-                        | (result_header.outcome & 0xFFFF);
-                    measurements.push(message);
+                    // Return result_id and outcome as a tuple
+                    measurements.push((result_header.result_id, result_header.outcome));
                 }
             }
 
@@ -246,7 +569,7 @@ impl ByteMessage {
     }
 
     /// Parse a quantum gate message payload
-    fn parse_quantum_gate(payload: &[u8]) -> Result<QuantumCommand, QueueError> {
+    fn parse_quantum_gate(payload: &[u8]) -> Result<QuantumGate, QueueError> {
         if payload.len() < size_of::<QuantumGateHeader>() {
             return Err(QueueError::OperationError(
                 "Quantum gate message payload too small".into(),
@@ -267,97 +590,97 @@ impl ByteMessage {
             ));
         }
 
-        // Read qubit indices
+        // Parse qubit indices
         let mut qubits = Vec::with_capacity(num_qubits);
         let qubits_offset = size_of::<QuantumGateHeader>();
-
         for i in 0..num_qubits {
-            let offset = qubits_offset + i * size_of::<u32>();
+            let qubit_offset = qubits_offset + i * size_of::<u32>();
             let qubit = u32::from_le_bytes([
-                payload[offset],
-                payload[offset + 1],
-                payload[offset + 2],
-                payload[offset + 3],
-            ]);
-            qubits.push(usize::try_from(qubit).unwrap());
+                payload[qubit_offset],
+                payload[qubit_offset + 1],
+                payload[qubit_offset + 2],
+                payload[qubit_offset + 3],
+            ]) as usize;
+            qubits.push(qubit);
         }
 
-        // Determine gate type and parameters
-        let gate = match header.gate_type {
-            1 => GateType::X,
-            2 => GateType::Y,
-            3 => GateType::Z,
-            4 => GateType::H,
-            5 => GateType::CX,
-            6 => {
-                // RZ gate
-                if !has_params || payload.len() < minimum_size + size_of::<f64>() {
-                    return Err(QueueError::OperationError(
-                        "RZ gate requires parameter theta".into(),
-                    ));
+        // Parse parameters if present
+        let mut params = Vec::new();
+        let mut result_id = None;
+
+        let gate_type = GateTypeId::from(header.gate_type);
+
+        if has_params {
+            let params_offset = qubits_offset + qubits_size;
+            match gate_type {
+                GateTypeId::RZ => {
+                    if payload.len() >= params_offset + size_of::<f64>() {
+                        let theta_bytes = &payload[params_offset..params_offset + size_of::<f64>()];
+                        let theta = f64::from_le_bytes([
+                            theta_bytes[0],
+                            theta_bytes[1],
+                            theta_bytes[2],
+                            theta_bytes[3],
+                            theta_bytes[4],
+                            theta_bytes[5],
+                            theta_bytes[6],
+                            theta_bytes[7],
+                        ]);
+                        params.push(theta);
+                    }
                 }
+                GateTypeId::R1XY => {
+                    if payload.len() >= params_offset + 2 * size_of::<f64>() {
+                        let phi_bytes = &payload[params_offset..params_offset + size_of::<f64>()];
+                        let phi = f64::from_le_bytes([
+                            phi_bytes[0],
+                            phi_bytes[1],
+                            phi_bytes[2],
+                            phi_bytes[3],
+                            phi_bytes[4],
+                            phi_bytes[5],
+                            phi_bytes[6],
+                            phi_bytes[7],
+                        ]);
+                        params.push(phi);
 
-                let params_offset = qubits_offset + qubits_size;
-                let theta = f64::from_le_bytes([
-                    payload[params_offset],
-                    payload[params_offset + 1],
-                    payload[params_offset + 2],
-                    payload[params_offset + 3],
-                    payload[params_offset + 4],
-                    payload[params_offset + 5],
-                    payload[params_offset + 6],
-                    payload[params_offset + 7],
-                ]);
-
-                GateType::RZ { theta }
-            }
-            7 => {
-                // R1XY gate
-                if !has_params || payload.len() < minimum_size + 2 * size_of::<f64>() {
-                    return Err(QueueError::OperationError(
-                        "R1XY gate requires parameters phi and theta".into(),
-                    ));
+                        let theta_offset = params_offset + size_of::<f64>();
+                        let theta_bytes = &payload[theta_offset..theta_offset + size_of::<f64>()];
+                        let theta = f64::from_le_bytes([
+                            theta_bytes[0],
+                            theta_bytes[1],
+                            theta_bytes[2],
+                            theta_bytes[3],
+                            theta_bytes[4],
+                            theta_bytes[5],
+                            theta_bytes[6],
+                            theta_bytes[7],
+                        ]);
+                        params.push(theta);
+                    }
                 }
-
-                let params_offset = qubits_offset + qubits_size;
-                let phi = f64::from_le_bytes([
-                    payload[params_offset],
-                    payload[params_offset + 1],
-                    payload[params_offset + 2],
-                    payload[params_offset + 3],
-                    payload[params_offset + 4],
-                    payload[params_offset + 5],
-                    payload[params_offset + 6],
-                    payload[params_offset + 7],
-                ]);
-
-                let theta = f64::from_le_bytes([
-                    payload[params_offset + 8],
-                    payload[params_offset + 9],
-                    payload[params_offset + 10],
-                    payload[params_offset + 11],
-                    payload[params_offset + 12],
-                    payload[params_offset + 13],
-                    payload[params_offset + 14],
-                    payload[params_offset + 15],
-                ]);
-
-                GateType::R1XY { phi, theta }
+                GateTypeId::Measure => {
+                    if payload.len() >= params_offset + size_of::<u32>() {
+                        let result_id_bytes =
+                            &payload[params_offset..params_offset + size_of::<u32>()];
+                        let result_id_value = u32::from_le_bytes([
+                            result_id_bytes[0],
+                            result_id_bytes[1],
+                            result_id_bytes[2],
+                            result_id_bytes[3],
+                        ]) as usize;
+                        result_id = Some(result_id_value);
+                    }
+                }
+                _ => {}
             }
-            8 => GateType::SZZ,
-            _ => {
-                return Err(QueueError::OperationError(format!(
-                    "Unknown gate type: {}",
-                    header.gate_type
-                )));
-            }
-        };
+        }
 
-        Ok(QuantumCommand { gate, qubits })
+        Ok(QuantumGate::new(gate_type, qubits, params, result_id))
     }
 
     /// Parse a measurement message payload
-    fn parse_measurement(payload: &[u8]) -> Result<QuantumCommand, QueueError> {
+    fn parse_measurement(payload: &[u8]) -> Result<QuantumGate, QueueError> {
         if payload.len() < size_of::<MeasurementHeader>() {
             return Err(QueueError::OperationError(
                 "Measurement message payload too small".into(),
@@ -365,111 +688,87 @@ impl ByteMessage {
         }
 
         let header = *from_bytes::<MeasurementHeader>(&payload[0..size_of::<MeasurementHeader>()]);
+        let qubit = header.qubit as usize;
+        let result_id = header.result_id as usize;
 
-        Ok(QuantumCommand {
-            gate: GateType::Measure {
-                result_id: usize::try_from(header.result_id).unwrap(),
-            },
-            qubits: vec![usize::try_from(header.qubit).unwrap()],
-        })
+        Ok(QuantumGate::measure(qubit, result_id))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::channels::byte::protocol::MessageFlags;
 
     #[test]
     fn test_bytemap_builder() {
-        // Create commands
-        let commands = vec![
-            QuantumCommand {
-                gate: GateType::H,
-                qubits: vec![0],
-            },
-            QuantumCommand {
-                gate: GateType::CX,
-                qubits: vec![0, 1],
-            },
-        ];
+        // Create a message with H and CX gates
+        let mut builder = ByteMessage::quantum_operations_builder();
+        builder.add_h(&[0]);
+        builder.add_cx(&[0], &[1]);
+        let message = builder.build();
 
-        // Use the builder
-        let message = ByteMessage::builder()
-            .add_quantum_commands(&commands)
-            .build();
-
-        // Parse and verify
+        // Parse the message
         let parsed_commands = message.parse_quantum_operations().unwrap();
         assert_eq!(parsed_commands.len(), 2);
-        assert!(matches!(parsed_commands[0].gate, GateType::H));
-        assert!(matches!(parsed_commands[1].gate, GateType::CX));
+        assert_eq!(parsed_commands[0].gate_type, GateTypeId::H);
+        assert_eq!(parsed_commands[0].qubits, vec![0]);
+        assert_eq!(parsed_commands[1].gate_type, GateTypeId::CX);
+        assert_eq!(parsed_commands[1].qubits, vec![0, 1]);
     }
 
     #[test]
     fn test_message_type() {
-        // Create a message with a single command
-        let commands = vec![QuantumCommand {
-            gate: GateType::H,
-            qubits: vec![0],
-        }];
+        // Create a flush message
+        let flush_message = ByteMessage::create_flush();
+        assert_eq!(flush_message.message_type().unwrap(), MessageType::Flush);
 
-        // Create using the builder
-        let message = ByteMessage::builder()
-            .add_quantum_commands(&commands)
-            .build();
+        // Create a quantum operations message
+        let mut builder = ByteMessage::quantum_operations_builder();
+        builder.add_h(&[0]);
+        let quantum_message = builder.build();
+        assert_eq!(
+            quantum_message.message_type().unwrap(),
+            MessageType::BeginBatch
+        );
 
-        // Get the message type
-        let msg_type = message.message_type().unwrap();
-
-        // Verify it's a BeginBatch type (since that's how quantum operations are wrapped)
-        assert_eq!(msg_type, MessageType::BeginBatch);
-
-        // Create a measurement message
-        let message = ByteMessage::builder()
-            .add_measurement_results(&[1], &[0])
-            .build();
-
-        // Get the message type
-        let msg_type = message.message_type().unwrap();
-
-        // Verify it's a MeasurementResult type
-        assert_eq!(msg_type, MessageType::MeasurementResult);
+        // Create a measurement results message
+        let mut builder = ByteMessage::measurement_results_builder();
+        builder.add_measurement_results(&[0], &[1]);
+        let results_message = builder.build();
+        assert_eq!(
+            results_message.message_type().unwrap(),
+            MessageType::BeginBatch
+        );
     }
 
     #[test]
     fn test_parse_measurements() {
-        // Create measurement results
-        let message = ByteMessage::builder()
-            .add_measurement_results(&[0, 1], &[1, 2])
-            .build();
+        // Create a message with measurement results
+        let mut builder = ByteMessage::measurement_results_builder();
+        builder.add_measurement_results(&[0, 1], &[0, 1]);
+        let message = builder.build();
 
-        // Parse and verify
+        // Parse the measurements
         let measurements = message.parse_measurements().unwrap();
         assert_eq!(measurements.len(), 2);
-        assert_eq!(measurements[0], (1 << 16)); // result_id=1, outcome=0
-        assert_eq!(measurements[1], (2 << 16) | 1); // result_id=2, outcome=1
+
+        // The measurements are encoded as (result_id << 16) | outcome
+        // So for result_id=0, outcome=0, we get 0
+        // For result_id=1, outcome=1, we get 65537 (1 << 16 | 1)
+        assert_eq!(measurements[0], (0, 0));
+        assert_eq!(measurements[1], (1, 1));
     }
 
     #[test]
     fn test_is_empty() {
-        // Create an empty flush message
-        let message = ByteMessage::builder()
-            .add_message(MessageType::Flush, &[], MessageFlags::NONE)
-            .build();
-
-        // Verify it's empty
-        assert!(message.is_empty().unwrap());
+        // Create an empty message
+        let empty_message = ByteMessage::builder().build();
+        assert!(empty_message.is_empty().unwrap());
 
         // Create a non-empty message
-        let message = ByteMessage::builder()
-            .add_quantum_commands(&[QuantumCommand {
-                gate: GateType::H,
-                qubits: vec![0],
-            }])
+        let non_empty_message = ByteMessage::quantum_operations_builder()
+            .add_h(&[0])
             .build();
-
-        // Verify it's not empty
-        assert!(!message.is_empty().unwrap());
+        assert!(!non_empty_message.is_empty().unwrap());
     }
 }

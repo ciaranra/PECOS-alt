@@ -1,13 +1,13 @@
 use crate::channels::ByteMessage;
 use crate::engines::noise::{DepolarizingNoise, NoiseModel, PassThroughNoise};
-use crate::engines::quantum::new_quantum_engine_arbitrary_qgate;
-use crate::engines::{EngineSystem, QuantumEngine};
+use crate::engines::quantum::StateVecEngine;
+use crate::engines::{Engine, QuantumEngine};
+use crate::errors::QueueError;
 use dyn_clone;
-use pecos_qsim::StateVec;
 
 /// A system that combines a noise model with a quantum engine
 ///
-/// This system implements the `EngineSystem` trait to provide a standardized
+/// This system implements the `Engine` trait to provide a standardized
 /// way of applying noise models to quantum engines.
 pub struct QuantumSystem {
     noise_model: Box<dyn NoiseModel>,
@@ -42,28 +42,21 @@ impl QuantumSystem {
     }
 }
 
-impl EngineSystem for QuantumSystem {
-    type Controller = Box<dyn NoiseModel>;
-    type ControlledEngine = Box<dyn QuantumEngine>;
+impl Engine for QuantumSystem {
     type Input = ByteMessage;
     type Output = ByteMessage;
-    type EngineInput = ByteMessage;
-    type EngineOutput = ByteMessage;
 
-    fn controller(&self) -> &Self::Controller {
-        &self.noise_model
+    fn process(&mut self, input: Self::Input) -> Result<Self::Output, QueueError> {
+        // Apply noise to the input
+        let noisy_input = self.noise_model.apply_noise(input)?;
+
+        // Process the noisy input through the quantum engine
+        self.quantum_engine.process(noisy_input)
     }
 
-    fn controller_mut(&mut self) -> &mut Self::Controller {
-        &mut self.noise_model
-    }
-
-    fn engine(&self) -> &Self::ControlledEngine {
-        &self.quantum_engine
-    }
-
-    fn engine_mut(&mut self) -> &mut Self::ControlledEngine {
-        &mut self.quantum_engine
+    fn reset(&mut self) -> Result<(), QueueError> {
+        self.noise_model.reset()?;
+        self.quantum_engine.reset()
     }
 }
 
@@ -89,11 +82,8 @@ pub fn create_quantume_system_with_state_vec_and_depolarizing_noise(
     num_qubits: usize,
     probability: f64,
 ) -> QuantumSystem {
-    // Create a state vector simulator with the specified number of qubits
-    let state_vec = StateVec::new(num_qubits);
-
-    // Create a quantum engine using the state vector simulator
-    let quantum_engine = new_quantum_engine_arbitrary_qgate(state_vec);
+    // Create a quantum engine using a state vector simulator
+    let quantum_engine = Box::new(StateVecEngine::new(num_qubits));
 
     // Create a QuantumSystem with depolarizing noise
     QuantumSystem::new_with_depolarizing_noise(quantum_engine, probability)

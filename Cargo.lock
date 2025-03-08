@@ -646,7 +646,6 @@ dependencies = [
 name = "pecos-rslib"
 version = "0.1.1"
 dependencies = [
- "dyn-clone",
  "parking_lot",
  "pecos",
  "pyo3",

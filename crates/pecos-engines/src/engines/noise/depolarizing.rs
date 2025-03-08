@@ -1,121 +1,157 @@
-use super::{ByteMessage, NoiseModel, PassThroughNoise};
+use crate::channels::ByteMessage;
+use crate::channels::byte::builder::MessageBuilder;
+use crate::channels::byte::gate_type::{GateTypeId, QuantumGate};
+use crate::engines::noise::NoiseModel;
 use crate::errors::QueueError;
-use parking_lot::Mutex;
-use pecos_core::types::{GateType, QuantumCommand};
+use log::trace;
+use rand::Rng;
+use rand::SeedableRng;
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-/// Depolarizing noise model that applies random Pauli errors with a given probability
+/// Depolarizing noise model
+///
+/// This noise model applies random Pauli errors (X, Y, Z) to qubits
+/// with a specified probability.
 #[derive(Clone)]
 pub struct DepolarizingNoise {
-    /// Probability of applying a noise operation after each gate
+    /// Probability of applying a random Pauli error
     probability: f64,
     /// Shared random number generator
     rng: Arc<Mutex<StdRng>>,
 }
 
 impl DepolarizingNoise {
-    // Existing method implementations stay the same
+    /// Create a new depolarizing noise model with the given probability
+    /// of applying a random Pauli error.
+    #[must_use]
+    pub fn new(probability: f64) -> Self {
+        Self {
+            probability,
+            rng: Arc::new(Mutex::new(StdRng::from_os_rng())),
+        }
+    }
+
+    /// Create a new depolarizing noise model with custom options
+    ///
+    /// # Arguments
+    ///
+    /// * `probability` - Probability of applying a random Pauli error (between 0.0 and 1.0)
+    /// * `seed` - Optional seed for the random number generator
+    #[must_use]
+    pub fn new_with_options(probability: f64, seed: Option<u64>) -> Self {
+        let rng = match seed {
+            Some(seed) => StdRng::seed_from_u64(seed),
+            None => StdRng::from_os_rng(),
+        };
+
+        Self {
+            probability,
+            rng: Arc::new(Mutex::new(rng)),
+        }
+    }
+
+    /// Create a new builder for the depolarizing noise model
     #[must_use]
     pub fn builder() -> DepolarizingNoiseBuilder {
         DepolarizingNoiseBuilder::new()
     }
 
-    #[must_use]
-    pub fn new_with_options(probability: f64, seed: Option<u64>) -> Self {
-        assert!(
-            (0.0..=1.0).contains(&probability),
-            "Probability must be between 0 and 1"
-        );
-        // Create RNG with seed if provided
-        let rng = match seed {
-            Some(s) => Arc::new(Mutex::new(StdRng::seed_from_u64(s))),
-            None => Arc::new(Mutex::new(StdRng::from_os_rng())),
-        };
+    /// Apply noise to a list of quantum gates
+    fn apply_noise_to_gates(&self, gates: &[QuantumGate]) -> ByteMessage {
+        // Create a new message builder
+        let mut builder = MessageBuilder::new();
+        let _ = builder.for_quantum_operations();
 
-        Self { probability, rng }
-    }
+        // Process each gate
+        for gate in gates {
+            // First, add the original gate to the message
+            match gate.gate_type {
+                GateTypeId::X => {
+                    builder.add_x(&gate.qubits);
+                }
+                GateTypeId::Y => {
+                    builder.add_y(&gate.qubits);
+                }
+                GateTypeId::Z => {
+                    builder.add_z(&gate.qubits);
+                }
+                GateTypeId::H => {
+                    builder.add_h(&gate.qubits);
+                }
+                GateTypeId::CX => {
+                    if gate.qubits.len() >= 2 {
+                        builder.add_cx(&[gate.qubits[0]], &[gate.qubits[1]]);
+                    }
+                }
+                GateTypeId::SZZ => {
+                    if gate.qubits.len() >= 2 {
+                        builder.add_szz(&[gate.qubits[0]], &[gate.qubits[1]]);
+                    }
+                }
+                GateTypeId::RZ => {
+                    if !gate.params.is_empty() {
+                        builder.add_rz(gate.params[0], &gate.qubits);
+                    }
+                }
+                GateTypeId::R1XY => {
+                    if gate.params.len() >= 2 {
+                        builder.add_r1xy(gate.params[0], gate.params[1], &gate.qubits);
+                    }
+                }
+                GateTypeId::Measure => {
+                    if !gate.qubits.is_empty() && gate.result_id.is_some() {
+                        builder.add_measurements(&gate.qubits, &[gate.result_id.unwrap()]);
+                    }
+                }
+            }
 
-    /// Helper to create sequence of gates for Pauli X
-    fn x_gates(qubit: usize) -> Vec<QuantumCommand> {
-        vec![QuantumCommand {
-            gate: GateType::X {},
-            qubits: vec![qubit],
-        }]
-    }
-
-    /// Helper to create sequence of gates for Pauli Y
-    fn y_gates(qubit: usize) -> Vec<QuantumCommand> {
-        vec![QuantumCommand {
-            gate: GateType::Y {},
-            qubits: vec![qubit],
-        }]
-    }
-
-    /// Helper to create Pauli Z gate
-    fn z_gate(qubit: usize) -> QuantumCommand {
-        QuantumCommand {
-            gate: GateType::Z {},
-            qubits: vec![qubit],
-        }
-    }
-
-    // Apply noise to commands (internal implementation)
-    // Updated to work directly with Vec<QuantumCommand>
-    fn apply_noise_to_commands(&self, commands: Vec<QuantumCommand>) -> Vec<QuantumCommand> {
-        let mut noisy_commands = Vec::new();
-        let mut rng = self.rng.lock();
-
-        for cmd in commands {
-            // Add the original command
-            noisy_commands.push(cmd.clone());
-
-            // For each qubit in the command, maybe apply noise
-            for &qubit in &cmd.qubits {
+            // Apply random noise to each qubit with probability p
+            let mut rng = self.rng.lock().unwrap();
+            for &qubit in &gate.qubits {
                 if rng.random::<f64>() < self.probability {
-                    // Randomly choose X, Y, or Z error
-                    match rng.random::<f64>() * 3.0 {
-                        x if x < 1.0 => noisy_commands.extend(Self::x_gates(qubit)),
-                        x if x < 2.0 => noisy_commands.extend(Self::y_gates(qubit)),
-                        _ => noisy_commands.push(Self::z_gate(qubit)),
+                    // Choose a random Pauli error (X, Y, or Z)
+                    let error_type = rng.random_range(0..3);
+                    match error_type {
+                        0 => {
+                            trace!("Applying X noise to qubit {}", qubit);
+                            builder.add_x(&[qubit]);
+                        }
+                        1 => {
+                            trace!("Applying Y noise to qubit {}", qubit);
+                            builder.add_y(&[qubit]);
+                        }
+                        _ => {
+                            trace!("Applying Z noise to qubit {}", qubit);
+                            builder.add_z(&[qubit]);
+                        }
                     }
                 }
             }
         }
 
-        noisy_commands
+        builder.build()
     }
 }
 
 impl NoiseModel for DepolarizingNoise {
     fn apply_noise(&self, message: ByteMessage) -> Result<ByteMessage, QueueError> {
-        // Parse commands from the message
-        let commands = message.parse_quantum_operations()?;
-
-        // Extract commands as Vec
-        let commands_vec: Vec<QuantumCommand> = commands;
+        // Parse the commands from the message
+        let gates = message.parse_quantum_operations()?;
 
         // Apply noise to the commands
-        let noisy_commands = self.apply_noise_to_commands(commands_vec);
-
-        // REPLACE code like this:
-        // ByteMessage::from_commands(noisy_commands)
-
-        // WITH this builder pattern:
-        Ok(ByteMessage::builder()
-            .add_quantum_commands(&noisy_commands)
-            .build())
+        Ok(self.apply_noise_to_gates(&gates))
     }
 
     fn reset(&mut self) -> Result<(), QueueError> {
+        // No state to reset
         Ok(())
     }
 }
 
-// The rest of the code remains unchanged
+/// Builder for creating depolarizing noise models
 pub struct DepolarizingNoiseBuilder {
-    probability: f64,
+    probability: Option<f64>,
     seed: Option<u64>,
 }
 
@@ -126,34 +162,42 @@ impl Default for DepolarizingNoiseBuilder {
 }
 
 impl DepolarizingNoiseBuilder {
+    /// Create a new builder
     #[must_use]
     pub fn new() -> Self {
         Self {
-            probability: 0.0,
+            probability: None,
             seed: None,
         }
     }
 
+    /// Set the probability of applying a random Pauli error
     #[must_use]
-    pub fn with_probability(mut self, p: f64) -> Self {
-        self.probability = p;
+    pub fn with_probability(mut self, probability: f64) -> Self {
+        self.probability = Some(probability);
         self
     }
 
+    /// Set the seed for the random number generator
     #[must_use]
     pub fn with_seed(mut self, seed: u64) -> Self {
         self.seed = Some(seed);
         self
     }
 
+    /// Build the depolarizing noise model
+    ///
+    /// # Panics
+    ///
+    /// Panics if the probability is not set or is not between 0 and 1.
     #[must_use]
     pub fn build(self) -> Box<dyn NoiseModel> {
-        let seed = self.seed;
+        let probability = self.probability.expect("Probability must be set");
+        assert!(
+            (0.0..=1.0).contains(&probability),
+            "Probability must be between 0 and 1"
+        );
 
-        if self.probability == 0.0 {
-            Box::new(PassThroughNoise)
-        } else {
-            Box::new(DepolarizingNoise::new_with_options(self.probability, seed))
-        }
+        Box::new(DepolarizingNoise::new_with_options(probability, self.seed))
     }
 }

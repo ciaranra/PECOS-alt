@@ -1,8 +1,9 @@
 use super::{ClassicalEngine, ControlEngine, EngineStage};
+use crate::channels::byte::builder::MessageBuilder;
 use crate::channels::byte_message::ByteMessage;
 use crate::errors::QueueError;
 use log::debug;
-use pecos_core::types::{GateType, QuantumCommand, ShotResult};
+use pecos_core::types::ShotResult;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
@@ -177,74 +178,68 @@ impl PHIREngine {
         )))
     }
 
-    fn handle_quantum_op(
+    /// Add a quantum operation to the message builder based on the operation type and arguments
+    fn add_quantum_op_to_builder(
         &mut self,
+        builder: &mut MessageBuilder,
         qop: &str,
         angles: Option<&(Vec<f64>, String)>,
         args: &[(String, usize)],
-    ) -> Result<QuantumCommand, QueueError> {
+    ) -> Result<(), QueueError> {
         // First validate all variables
         for (var, idx) in args {
             self.validate_variable_access(var, *idx)?;
         }
 
-        // Now create command based on gathered data
-        Ok(match qop {
+        // Now add the appropriate operation to the builder
+        match qop {
             "RZ" => {
                 let theta = angles
                     .as_ref()
                     .map(|(angles, _)| angles[0])
                     .ok_or_else(|| QueueError::OperationError("Missing angle for RZ".into()))?;
-                QuantumCommand {
-                    gate: GateType::RZ { theta },
-                    qubits: vec![args[0].1],
-                }
+                builder.add_rz(theta, &[args[0].1]);
             }
             "R1XY" => {
                 let (phi, theta) = angles
                     .as_ref()
                     .map(|(angles, _)| (angles[0], angles[1]))
                     .ok_or_else(|| QueueError::OperationError("Missing angles for R1XY".into()))?;
-                QuantumCommand {
-                    gate: GateType::R1XY { phi, theta },
-                    qubits: vec![args[0].1],
-                }
+                builder.add_r1xy(phi, theta, &[args[0].1]);
             }
-            "SZZ" => QuantumCommand {
-                gate: GateType::SZZ,
-                qubits: vec![args[0].1, args[1].1],
-            },
-            "H" => QuantumCommand {
-                gate: GateType::H,
-                qubits: vec![args[0].1],
-            },
+            "SZZ" => {
+                if args.len() < 2 {
+                    return Err(QueueError::OperationError(
+                        "SZZ gate requires two qubits".into(),
+                    ));
+                }
+                builder.add_szz(&[args[0].1], &[args[1].1]);
+            }
+            "H" => {
+                builder.add_h(&[args[0].1]);
+            }
             "CX" => {
                 if args.len() != 2 {
                     return Err(QueueError::OperationError(
                         "CX gate requires control and target qubits".into(),
                     ));
                 }
-                QuantumCommand {
-                    gate: GateType::CX,
-                    qubits: vec![args[0].1, args[1].1],
-                }
+                builder.add_cx(&[args[0].1], &[args[1].1]);
             }
             "Measure" => {
                 let result_id = args[0].1;
-                QuantumCommand {
-                    gate: GateType::Measure { result_id },
-                    qubits: vec![args[0].1],
-                }
+                builder.add_measurements(&[args[0].1], &[result_id]);
             }
             _ => {
                 return Err(QueueError::OperationError(format!(
-                    "Unknown quantum operation: {qop}"
+                    "Unsupported quantum operation: {qop}"
                 )));
             }
-        })
+        }
+
+        Ok(())
     }
 
-    #[allow(clippy::similar_names)]
     fn handle_classical_op(
         &mut self,
         cop: &str,
@@ -275,7 +270,9 @@ impl PHIREngine {
             if let Some(prog) = &self.program {
                 let next_op = prog.ops.get(self.current_op + 1);
                 match next_op {
-                    Some(Operation::ClassicalOp { cop: next_cop, .. }) if next_cop == "Result" => {
+                    Some(Operation::ClassicalOp {
+                        cop: result_cop, ..
+                    }) if result_cop == "Result" => {
                         // More Result operations coming, keep accumulating
                         Ok(false)
                     }
@@ -391,10 +388,12 @@ impl ClassicalEngine for PHIREngine {
         // If we've processed all ops, return empty batch to signal completion
         if self.current_op >= ops.len() {
             debug!("End of program reached, sending flush");
-            return Ok(ByteMessage::builder().add_flush(true).build());
+            return Ok(ByteMessage::create_flush());
         }
 
-        let mut commands = Vec::new();
+        // Create a message builder for quantum operations
+        let mut builder = ByteMessage::quantum_operations_builder();
+        let mut operation_count = 0;
 
         while self.current_op < ops.len() {
             match &ops[self.current_op] {
@@ -412,9 +411,9 @@ impl ClassicalEngine for PHIREngine {
                 }
                 Operation::QuantumOp { qop, angles, args } => {
                     debug!("Processing quantum operation: {}", qop);
-                    let cmd = self.handle_quantum_op(qop, angles.as_ref(), args)?;
-                    debug!("Generated quantum command: {:?}", cmd);
-                    commands.push(cmd);
+                    self.add_quantum_op_to_builder(&mut builder, qop, angles.as_ref(), args)?;
+                    operation_count += 1;
+                    debug!("Added quantum operation to builder");
                 }
                 Operation::ClassicalOp { cop, args, returns } => {
                     debug!("Processing classical operation: {}", cop);
@@ -422,46 +421,41 @@ impl ClassicalEngine for PHIREngine {
                         debug!("Finishing batch due to classical operation completion");
                         self.current_op += 1;
 
-                        // Use the builder pattern to create a message
-                        return Ok(ByteMessage::builder()
-                            .add_quantum_commands(&commands)
-                            .build());
+                        // Build and return the message
+                        if operation_count > 0 {
+                            return Ok(builder.build());
+                        }
+
+                        // Create an empty message if no operations were added
+                        return Ok(ByteMessage::builder().build());
                     }
                 }
             }
             self.current_op += 1;
         }
 
-        debug!("PHIR engine generated {} commands for shot", commands.len());
+        debug!(
+            "PHIR engine generated {} operations for shot",
+            operation_count
+        );
 
-        // Use the builder pattern to create a message with all collected commands
-        Ok(ByteMessage::builder()
-            .add_quantum_commands(&commands)
-            .build())
+        // Build and return the message
+        Ok(builder.build())
     }
 
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError> {
         // Parse measurements using ByteMessage helper
         let measurements = message.parse_measurements()?;
 
-        for measurement in measurements {
-            // Extract result_id and outcome directly
-            let result_id = (measurement >> 16) as usize;
-            let outcome = measurement & 0xFFFF;
-
+        for (result_id, outcome) in measurements {
             debug!(
-                "PHIR: Received measurement {} (encoded as {}), result_id={}",
-                outcome, measurement, result_id
+                "PHIR: Received measurement {}, result_id={}",
+                outcome, result_id
             );
 
             // Store the measurement
             self.measurement_results
                 .insert(format!("measurement_{result_id}"), outcome);
-
-            debug!(
-                "PHIR: Stored measurement {} at result_id {}",
-                outcome, result_id
-            );
         }
 
         Ok(())

@@ -2,7 +2,7 @@ use crate::channels::byte_message::ByteMessage;
 use crate::engines::{ClassicalEngine, ControlEngine, EngineStage};
 use crate::errors::QueueError;
 use log::{debug, info};
-use pecos_core::types::{QuantumCommand, ShotResult};
+use pecos_core::types::ShotResult;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -203,10 +203,19 @@ impl QirClassicalEngine {
         info!("Compilation successful: {}", exe_path.display());
         Ok(())
     }
+
+    /// Parse a command string and add it to the `ByteMessage` builder
+    fn add_command_to_builder(
+        builder: &mut crate::channels::byte::builder::MessageBuilder,
+        cmd: &str,
+    ) -> Result<(), QueueError> {
+        ByteMessage::parse_command_to_builder(builder, cmd)
+    }
 }
 
 impl ClassicalEngine for QirClassicalEngine {
     fn num_qubits(&self) -> usize {
+        // QIR programs can use any number of qubits
         todo!()
     }
 
@@ -240,7 +249,7 @@ impl ClassicalEngine for QirClassicalEngine {
             .ok_or_else(|| QueueError::ExecutionError("Could not get stdout".into()))?;
 
         let mut reader = BufReader::new(stdout);
-        let mut commands = Vec::new();
+        let mut builder = ByteMessage::quantum_operations_builder();
         let mut line = String::new();
 
         // Read until we hit a FLUSH_BEGIN
@@ -266,9 +275,7 @@ impl ClassicalEngine for QirClassicalEngine {
 
                     if let Some(cmd) = trimmed.strip_prefix("CMD ") {
                         debug!("Received command: {}", cmd);
-                        if let Ok(quantum_cmd) = QuantumCommand::parse_from_str(cmd) {
-                            commands.push(quantum_cmd);
-                        }
+                        Self::add_command_to_builder(&mut builder, cmd)?;
                     }
                 }
                 break;
@@ -282,25 +289,22 @@ impl ClassicalEngine for QirClassicalEngine {
         // Store process handles for later measurement handling
         self.child_process = Some(child);
 
-        Ok(ByteMessage::builder()
-            .add_quantum_commands(&commands)
-            .build())
+        Ok(builder.build())
     }
 
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError> {
         let measurements = message.parse_measurements()?;
 
-        for measurement in measurements {
-            debug!("Handling measurement: {}", measurement);
-
-            // Extract result_id and outcome
-            let result_id = (measurement >> 16) as usize;
-            let outcome = measurement & 0xFFFF;
+        for (result_id, outcome) in measurements {
+            debug!(
+                "Handling measurement: result_id={}, outcome={}",
+                result_id, outcome
+            );
 
             // Get current qubit index from measurements size
             let qubit_idx = match result_id {
                 0 => self.current_results.measurements.len(),
-                _ => result_id,
+                _ => result_id as usize,
             };
 
             // Store measurement with result_id that matches the QIR program

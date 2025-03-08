@@ -8,11 +8,13 @@ use std::io::{self, Read, Write};
 // Re-export public components from submodules
 pub use self::channel::ByteChannel;
 pub use self::debug::dump_batch;
+pub use self::gate_type::{GateTypeId, QuantumGate};
 
 // Submodules
 pub mod builder;
 pub mod channel;
 pub mod debug;
+pub mod gate_type;
 pub mod protocol;
 
 /// Factory functions for creating byte channel instances

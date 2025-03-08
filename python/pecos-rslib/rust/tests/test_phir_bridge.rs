@@ -43,7 +43,7 @@ mod tests {
         let mut engine = PHIREngine::py_new(&phir_json)?;
 
         // Process program using the trait implementation explicitly
-        let cmd_batch = ClassicalEngine::process_program(&mut engine)?;
+        let cmd_batch = engine.process_program()?;
         assert_eq!(cmd_batch.len(), 1, "Expected 1 quantum command");
 
         // Examine the commands
@@ -61,10 +61,10 @@ mod tests {
         }
 
         // Handle measurement using the trait implementation
-        ClassicalEngine::handle_measurement(&mut engine, 1)?;
+        engine.handle_measurement(1)?;
 
         // Get results using the trait implementation
-        let shot_result = ClassicalEngine::get_results(&engine)?;
+        let shot_result = engine.get_results()?;
 
         println!("Results: {shot_result:?}");
 

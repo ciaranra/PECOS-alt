@@ -1,15 +1,14 @@
 use lazy_static::lazy_static;
 use log::{debug, trace};
-use std::collections::VecDeque;
 use std::io::{self, Read, Write};
 use std::sync::Mutex;
 
 use crate::channels::ByteMessage;
-use pecos_core::types::{GateType, QuantumCommand};
+use crate::channels::byte::builder::MessageBuilder;
 
 lazy_static! {
-    // A thread-safe global queue to store quantum commands
-    static ref COMMAND_QUEUE: Mutex<VecDeque<QuantumCommand>> = Mutex::new(VecDeque::new());
+    // A thread-safe global queue to store quantum operations as a ByteMessage builder
+    static ref MESSAGE_BUILDER: Mutex<Option<MessageBuilder>> = Mutex::new(None);
 }
 
 /// Represents a quantum measurement result.
@@ -32,6 +31,20 @@ pub struct Qubit {
     _private: [u8; 0],
 }
 
+// Helper function to get or create the message builder
+fn get_or_create_builder() -> std::sync::MutexGuard<'static, Option<MessageBuilder>> {
+    let mut builder_guard = MESSAGE_BUILDER
+        .lock()
+        .expect("Failed to lock message builder");
+    if builder_guard.is_none() {
+        // Create a new builder and configure it for quantum operations
+        let mut builder = ByteMessage::builder();
+        let _ = builder.for_quantum_operations();
+        *builder_guard = Some(builder);
+    }
+    builder_guard
+}
+
 /// Represents the RZ rotation gate on the specified qubit and queues it for execution.
 ///
 /// # Arguments
@@ -43,7 +56,7 @@ pub struct Qubit {
 ///
 /// This function will panic if:
 /// - The `qubit` pointer is invalid or cannot be converted to a valid index.
-/// - The global `COMMAND_QUEUE` mutex is poisoned.
+/// - The global `MESSAGE_BUILDER` mutex is poisoned.
 ///
 /// # Safety
 ///
@@ -52,13 +65,10 @@ pub struct Qubit {
 pub extern "C" fn __quantum__qis__rz__body(theta: f64, qubit: *const Qubit) {
     let qubit_idx = usize::try_from(qubit as u64).expect("Invalid RZ qubit pointer");
 
-    if let Ok(mut queue) = COMMAND_QUEUE.lock() {
-        let cmd = QuantumCommand {
-            gate: GateType::RZ { theta },
-            qubits: vec![qubit_idx],
-        };
-        trace!("Queueing RZ gate: {:?}", cmd);
-        queue.push_back(cmd);
+    let mut builder_guard = get_or_create_builder();
+    if let Some(builder) = builder_guard.as_mut() {
+        trace!("Queueing RZ gate on qubit {}", qubit_idx);
+        builder.add_rz(theta, &[qubit_idx]);
     }
 }
 
@@ -74,7 +84,7 @@ pub extern "C" fn __quantum__qis__rz__body(theta: f64, qubit: *const Qubit) {
 ///
 /// This function will panic if:
 /// - The `qubit` pointer is invalid or cannot be converted to a valid index.
-/// - The global `COMMAND_QUEUE` mutex is poisoned.
+/// - The global `MESSAGE_BUILDER` mutex is poisoned.
 ///
 /// # Safety
 ///
@@ -83,13 +93,10 @@ pub extern "C" fn __quantum__qis__rz__body(theta: f64, qubit: *const Qubit) {
 pub extern "C" fn __quantum__qis__rxy__body(phi: f64, theta: f64, qubit: *const Qubit) {
     let qubit_idx = usize::try_from(qubit as u64).expect("Invalid R1XY qubit pointer");
 
-    if let Ok(mut queue) = COMMAND_QUEUE.lock() {
-        let cmd = QuantumCommand {
-            gate: GateType::R1XY { phi, theta },
-            qubits: vec![qubit_idx],
-        };
-        trace!("Queueing R1XY gate: {:?}", cmd);
-        queue.push_back(cmd);
+    let mut builder_guard = get_or_create_builder();
+    if let Some(builder) = builder_guard.as_mut() {
+        trace!("Queueing R1XY gate on qubit {}", qubit_idx);
+        builder.add_r1xy(phi, theta, &[qubit_idx]);
     }
 }
 
@@ -104,7 +111,7 @@ pub extern "C" fn __quantum__qis__rxy__body(phi: f64, theta: f64, qubit: *const 
 ///
 /// This function will panic if:
 /// - The `qubit1` or `qubit2` pointer is invalid or cannot be converted to a valid index.
-/// - The global `COMMAND_QUEUE` mutex is poisoned.
+/// - The global `MESSAGE_BUILDER` mutex is poisoned.
 ///
 /// # Safety
 ///
@@ -114,13 +121,13 @@ pub extern "C" fn __quantum__qis__zz__body(qubit1: *const Qubit, qubit2: *const 
     let qubit1_idx = usize::try_from(qubit1 as u64).expect("Invalid ZZ qubit1 pointer");
     let qubit2_idx = usize::try_from(qubit2 as u64).expect("Invalid ZZ qubit2 pointer");
 
-    if let Ok(mut queue) = COMMAND_QUEUE.lock() {
-        let cmd = QuantumCommand {
-            gate: GateType::SZZ,
-            qubits: vec![qubit1_idx, qubit2_idx],
-        };
-        trace!("Queueing SZZ gate: {:?}", cmd);
-        queue.push_back(cmd);
+    let mut builder_guard = get_or_create_builder();
+    if let Some(builder) = builder_guard.as_mut() {
+        trace!(
+            "Queueing SZZ gate on qubits {} and {}",
+            qubit1_idx, qubit2_idx
+        );
+        builder.add_szz(&[qubit1_idx], &[qubit2_idx]);
     }
 }
 
@@ -134,7 +141,7 @@ pub extern "C" fn __quantum__qis__zz__body(qubit1: *const Qubit, qubit2: *const 
 ///
 /// This function will panic if:
 /// - The `qubit` pointer is invalid or cannot be converted to a valid index.
-/// - The global `COMMAND_QUEUE` mutex is poisoned.
+/// - The global `MESSAGE_BUILDER` mutex is poisoned.
 ///
 /// # Safety
 ///
@@ -143,13 +150,10 @@ pub extern "C" fn __quantum__qis__zz__body(qubit1: *const Qubit, qubit2: *const 
 pub extern "C" fn __quantum__qis__h__body(qubit: *const Qubit) {
     let qubit_idx = usize::try_from(qubit as u64).expect("Invalid H qubit pointer");
 
-    if let Ok(mut queue) = COMMAND_QUEUE.lock() {
-        let cmd = QuantumCommand {
-            gate: GateType::H,
-            qubits: vec![qubit_idx],
-        };
-        trace!("Queueing H gate: {:?}", cmd);
-        queue.push_back(cmd);
+    let mut builder_guard = get_or_create_builder();
+    if let Some(builder) = builder_guard.as_mut() {
+        trace!("Queueing H gate on qubit {}", qubit_idx);
+        builder.add_h(&[qubit_idx]);
     }
 }
 
@@ -164,7 +168,7 @@ pub extern "C" fn __quantum__qis__h__body(qubit: *const Qubit) {
 ///
 /// This function will panic if:
 /// - The `control` or `target` pointers are invalid or cannot be converted to valid indices.
-/// - The global `COMMAND_QUEUE` mutex is poisoned.
+/// - The global `MESSAGE_BUILDER` mutex is poisoned.
 ///
 /// # Safety
 ///
@@ -174,13 +178,13 @@ pub extern "C" fn __quantum__qis__cx__body(control: *const Qubit, target: *const
     let control_idx = usize::try_from(control as u64).expect("Invalid CX control pointer");
     let target_idx = usize::try_from(target as u64).expect("Invalid CX target pointer");
 
-    if let Ok(mut queue) = COMMAND_QUEUE.lock() {
-        let cmd = QuantumCommand {
-            gate: GateType::CX,
-            qubits: vec![control_idx, target_idx],
-        };
-        trace!("Queueing CX gate: {:?}", cmd);
-        queue.push_back(cmd);
+    let mut builder_guard = get_or_create_builder();
+    if let Some(builder) = builder_guard.as_mut() {
+        trace!(
+            "Queueing CX gate with control {} and target {}",
+            control_idx, target_idx
+        );
+        builder.add_cx(&[control_idx], &[target_idx]);
     }
 }
 
@@ -195,7 +199,7 @@ pub extern "C" fn __quantum__qis__cx__body(control: *const Qubit, target: *const
 ///
 /// This function will panic if:
 /// - The `qubit` or `result` pointers are invalid or cannot be converted to valid indices.
-/// - The global `COMMAND_QUEUE` mutex is poisoned.
+/// - The global `MESSAGE_BUILDER` mutex is poisoned.
 ///
 /// # Safety
 ///
@@ -205,15 +209,13 @@ pub extern "C" fn __quantum__qis__m__body(qubit: *const Qubit, result: *const Re
     let qubit_idx = usize::try_from(qubit as u64).expect("Invalid Measurement qubit pointer");
     let result_idx = usize::try_from(result as u64).expect("Invalid Measurement result pointer");
 
-    if let Ok(mut queue) = COMMAND_QUEUE.lock() {
-        let cmd = QuantumCommand {
-            gate: GateType::Measure {
-                result_id: result_idx,
-            },
-            qubits: vec![qubit_idx],
-        };
-        trace!("Queueing measurement: {:?}", cmd);
-        queue.push_back(cmd);
+    let mut builder_guard = get_or_create_builder();
+    if let Some(builder) = builder_guard.as_mut() {
+        trace!(
+            "Queueing measurement on qubit {} with result id {}",
+            qubit_idx, result_idx
+        );
+        builder.add_measurements(&[qubit_idx], &[result_idx]);
     }
 }
 
@@ -233,7 +235,7 @@ pub extern "C" fn __quantum__qis__m__body(qubit: *const Qubit, result: *const Re
 ///
 /// # Behavior
 ///
-/// 1. Flushes the `COMMAND_QUEUE` by sending queued commands through the byte protocol.
+/// 1. Builds the `ByteMessage` from the builder and sends it.
 /// 2. Waits for a measurement result from the input stream.
 /// 3. Associates the parsed measurement result with the given `result` pointer.
 ///
@@ -241,11 +243,7 @@ pub extern "C" fn __quantum__qis__m__body(qubit: *const Qubit, result: *const Re
 ///
 /// This function will panic if:
 /// - The `result` pointer is invalid or cannot be converted to a valid index.
-/// - The queue mutex (`COMMAND_QUEUE`) is poisoned.
-///
-/// # Errors
-///
-/// - If the received measurement result is invalid or cannot be parsed, an error will be logged.
+/// - The message builder mutex is poisoned.
 ///
 /// # Safety
 ///
@@ -255,18 +253,17 @@ pub extern "C" fn __quantum__qis__m__body(qubit: *const Qubit, result: *const Re
 pub extern "C" fn __quantum__rt__result_record_output(result: *const Result, _label: *const i8) {
     let result_idx = usize::try_from(result as u64).expect("Invalid result pointer");
 
-    if let Ok(mut queue) = COMMAND_QUEUE.lock() {
-        if !queue.is_empty() {
-            debug!("Flushing {} commands", queue.len());
+    let mut builder_guard = MESSAGE_BUILDER
+        .lock()
+        .expect("Failed to lock message builder");
+    if let Some(mut builder) = builder_guard.take() {
+        debug!("Building and sending quantum operations message");
 
-            // Convert queue to Vec<QuantumCommand>
-            let commands: Vec<QuantumCommand> = queue.drain(..).collect();
+        // Build the message
+        let message = builder.build();
 
-            // Create ByteMessage using the builder pattern
-            let message = ByteMessage::builder()
-                .add_quantum_commands(&commands)
-                .build();
-
+        // Only send if the message is not empty
+        if !message.is_empty().unwrap_or(false) {
             // Write to stdout
             io::stdout().write_all(message.as_bytes()).unwrap();
             io::stdout().flush().unwrap();
@@ -287,10 +284,8 @@ pub extern "C" fn __quantum__rt__result_record_output(result: *const Result, _la
         debug!("Received measurement: {}", measurement);
 
         // Create a ByteMessage for the measurement result using the builder pattern
-        // UPDATED to use add_measurement_results instead of add_measurement_result
-        let result_id = u32::try_from(result_idx).expect("Problem converting result id to u32");
         let result_message = ByteMessage::builder()
-            .add_measurement_results(&[measurement as usize], &[result_id as usize])
+            .add_measurement_results(&[measurement as usize], &[result_idx])
             .build();
 
         io::stdout().write_all(result_message.as_bytes()).unwrap();

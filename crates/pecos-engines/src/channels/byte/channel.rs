@@ -195,6 +195,11 @@ impl ByteChannel {
 
     // Helper method to access the reader
     #[allow(dead_code)]
+    /// Returns a guard to the reader.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the mutex is poisoned.
     pub fn as_reader(&self) -> std::sync::MutexGuard<Box<dyn Read + Send + Sync>> {
         self.reader.lock().unwrap()
     }
@@ -266,9 +271,14 @@ impl MessageChannel for ByteChannel {
                 let message = builder.build();
 
                 // Parse the measurement using ByteMessage facilities
-                if let Some(&measurement) = message.parse_measurements()?.first() {
-                    debug!("Received measurement: {}", measurement);
-                    return Ok(Some(measurement));
+                if let Some(&(result_id, outcome)) = message.parse_measurements()?.first() {
+                    debug!(
+                        "Received measurement: result_id={}, outcome={}",
+                        result_id, outcome
+                    );
+                    // Maintain backward compatibility by encoding as before
+                    let encoded_measurement = ((result_id & 0xFFFF) << 16) | (outcome & 0xFFFF);
+                    return Ok(Some(encoded_measurement));
                 }
             }
 

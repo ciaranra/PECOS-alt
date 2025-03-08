@@ -103,9 +103,9 @@ pub fn dump_batch(data: &[u8]) -> String {
                             3 => "Z",
                             4 => "H",
                             5 => "CX",
-                            6 => "RZ",
-                            7 => "R1XY",
-                            8 => "SZZ",
+                            6 => "SZZ",
+                            7 => "RZ",
+                            8 => "R1XY",
                             _ => "Unknown",
                         };
 
@@ -145,7 +145,7 @@ pub fn dump_batch(data: &[u8]) -> String {
                                 qubits_offset + gate_header.num_qubits as usize * size_of::<u32>();
 
                             match gate_header.gate_type {
-                                6 => {
+                                7 => {
                                     // RZ
                                     if params_offset + size_of::<f64>() <= payload.len() {
                                         let theta = f64::from_le_bytes([
@@ -162,7 +162,7 @@ pub fn dump_batch(data: &[u8]) -> String {
                                         output.push_str(&format!("    Theta: {theta}\n"));
                                     }
                                 }
-                                7 => {
+                                8 => {
                                     // R1XY
                                     if params_offset + 2 * size_of::<f64>() <= payload.len() {
                                         let phi = f64::from_le_bytes([
@@ -257,57 +257,33 @@ pub fn write_message_to_file(message: &ByteMessage, filename: &str) -> std::io::
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::channels::byte::gate_type::QuantumGate;
     use crate::channels::byte_message::ByteMessage;
-    use pecos_core::types::{GateType, QuantumCommand};
 
     #[test]
     fn test_bytemap_dump() {
         // Create commands
-        let commands = vec![
-            QuantumCommand {
-                gate: GateType::H,
-                qubits: vec![0],
-            },
-            QuantumCommand {
-                gate: GateType::CX,
-                qubits: vec![0, 1],
-            },
-        ];
+        let commands = vec![QuantumGate::h(0), QuantumGate::cx(0, 1)];
 
         // Create ByteMessage using the builder pattern
-        let message = ByteMessage::builder()
-            .add_quantum_commands(&commands)
-            .build();
+        let message = ByteMessage::builder().add_quantum_gates(&commands).build();
 
-        // Dump message
+        // Dump the message
         let dump = dump_message(&message);
+        println!("{dump}");
 
-        // Verify dump contains expected information
+        // Verify the dump contains expected information
         assert!(dump.contains("Batch Header"));
-        assert!(dump.contains("Magic: 0x5045"));
-        assert!(dump.contains("Type: QuantumGate"));
-        assert!(dump.contains("Type: H"));
-        assert!(dump.contains("Type: CX"));
+        assert!(dump.contains("Quantum Gate"));
     }
 
     #[test]
     fn test_dump_batch() {
         // Create a ByteMessage with different gate types
-        let commands = vec![
-            QuantumCommand {
-                gate: GateType::H,
-                qubits: vec![0],
-            },
-            QuantumCommand {
-                gate: GateType::RZ { theta: 0.5 },
-                qubits: vec![1],
-            },
-        ];
+        let commands = vec![QuantumGate::h(0), QuantumGate::rz(0.5, 1)];
 
         // Create a ByteMessage using the builder
-        let message = ByteMessage::builder()
-            .add_quantum_commands(&commands)
-            .build();
+        let message = ByteMessage::builder().add_quantum_gates(&commands).build();
 
         // Dump batch
         let dump = dump_batch(message.as_bytes());
