@@ -1,4 +1,3 @@
-// src/channels.rs
 //! Channel interfaces for communication between engine components
 //!
 //! This module provides the core communication interfaces and implementations

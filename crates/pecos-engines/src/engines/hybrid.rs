@@ -1,56 +1,78 @@
-use crate::engines::noise::{NoiseModel, PassThroughNoise};
-use pecos_core::types::ShotResult;
-
 use crate::channels::byte_message::ByteMessage;
+use crate::engines::noise::{NoiseModel, PassThroughNoise};
+use crate::engines::quantum_system::QuantumSystem;
 use crate::engines::{
     ClassicalEngine, ControlEngine, Engine, EngineStage, EngineSystem, QuantumEngine,
 };
 use crate::errors::QueueError;
+use dyn_clone;
+use log::debug;
+use pecos_core::types::ShotResult;
 
-/// `HybridEngine` coordinates between classical and quantum components using direct byte messaging
+/// `HybridEngine` coordinates between classical and quantum components
+///
+/// This engine implements the `EngineSystem` trait, using a `ClassicalEngine` as
+/// the controller and a `QuantumSystem` as the controlled engine.
 pub struct HybridEngine {
-    classical: Box<dyn ClassicalEngine>,
-    engine: Box<dyn Engine<Input = ByteMessage, Output = ByteMessage>>,
-    // Store the quantum engine separately for potential reconstruction
-    quantum_engine: Box<dyn QuantumEngine>,
+    classical_engine: Box<dyn ClassicalEngine>,
+    quantum_system: QuantumSystem,
 }
 
 impl HybridEngine {
+    /// Create a new `HybridEngine` with the given classical and quantum engines
+    ///
+    /// This uses a pass-through noise model by default.
     #[must_use]
-    pub fn new(classical: Box<dyn ClassicalEngine>, quantum: Box<dyn QuantumEngine>) -> Self {
+    pub fn new(
+        classical_engine: Box<dyn ClassicalEngine>,
+        quantum_engine: Box<dyn QuantumEngine>,
+    ) -> Self {
         // Use a pass-through noise model by default
-        Self::with_noise(classical, quantum, Box::new(PassThroughNoise))
+        Self::with_noise(classical_engine, quantum_engine, Box::new(PassThroughNoise))
     }
 
+    /// Create a new `HybridEngine` with the given classical engine, quantum engine, and noise model
     #[must_use]
     pub fn with_noise(
-        classical: Box<dyn ClassicalEngine>,
-        quantum: Box<dyn QuantumEngine>,
+        classical_engine: Box<dyn ClassicalEngine>,
+        quantum_engine: Box<dyn QuantumEngine>,
         noise_model: Box<dyn NoiseModel>,
     ) -> Self {
-        // Store a clone of the quantum engine
-        let quantum_clone = quantum.clone_box();
-
-        // Create an EngineSystem with the noise model
-        let engine = Box::new(EngineSystem::new(noise_model, quantum));
+        // Create a QuantumSystem with the provided components
+        let quantum_system = QuantumSystem::new(noise_model, quantum_engine);
 
         Self {
-            classical,
-            engine,
-            quantum_engine: quantum_clone,
+            classical_engine,
+            quantum_system,
         }
     }
 
-    pub fn set_noise_model(&mut self, noise_model: Option<Box<dyn NoiseModel>>) {
-        // Create actual noise model or use pass-through
-        let actual_noise_model = noise_model.unwrap_or_else(|| Box::new(PassThroughNoise));
+    /// Creates a new `HybridEngine` with the specified classical engine and quantum system
+    #[must_use]
+    pub fn new_with_quantum_system(
+        classical_engine: Box<dyn ClassicalEngine>,
+        quantum_system: QuantumSystem,
+    ) -> Self {
+        Self {
+            classical_engine,
+            quantum_system,
+        }
+    }
 
-        // Create a new engine system using the stored quantum engine
-        let engine = Box::new(EngineSystem::new(
-            actual_noise_model,
-            self.quantum_engine.clone_box(),
-        ));
-        self.engine = engine;
+    /// Create a new `HybridEngine` with the given classical engine and a quantum system with depolarizing noise
+    #[must_use]
+    pub fn with_depolarizing_noise(
+        classical_engine: Box<dyn ClassicalEngine>,
+        quantum_engine: Box<dyn QuantumEngine>,
+        probability: f64,
+    ) -> Self {
+        let quantum_system =
+            QuantumSystem::new_with_depolarizing_noise(quantum_engine, probability);
+
+        Self {
+            classical_engine,
+            quantum_system,
+        }
     }
 
     /// Resets the state of the hybrid engine, including classical, quantum, and noise model components.
@@ -63,14 +85,10 @@ impl HybridEngine {
     /// - Resetting the classical engine fails.
     /// - Resetting the engine fails.
     pub fn reset(&mut self) -> Result<(), QueueError> {
-        // Reset the classical engine
-        self.classical.reset()?;
-
-        // Reset the engine (whether it's a QuantumEngine or an EngineSystem)
-        self.engine.reset()?;
-
-        // Return success
-        Ok(())
+        debug!("HybridEngine::reset() being called!");
+        // Use as_mut() to get a mutable reference to the inner ClassicalEngine
+        (self.classical_engine.as_mut() as &mut dyn ClassicalEngine).reset()?;
+        self.quantum_system.reset()
     }
 
     /// Executes a single quantum circuit shot and returns the result.
@@ -82,19 +100,55 @@ impl HybridEngine {
     /// - Processing commands through the quantum engine fails.
     /// - Handling measurements through the classical engine fails.
     pub fn run_shot(&mut self) -> Result<ShotResult, QueueError> {
-        let mut stage = self.classical.start(())?;
+        let mut stage = self.classical_engine.start(())?;
 
         while let EngineStage::NeedsProcessing(command_message) = stage {
             // Process through engine (could be QuantumEngine or EngineSystem)
-            let measurement_message = self.engine.process(command_message)?;
+            let measurement_message = self.quantum_system.process(command_message)?;
 
             // Continue classical processing with measurements
-            stage = self.classical.continue_processing(measurement_message)?;
+            stage = self
+                .classical_engine
+                .continue_processing(measurement_message)?;
         }
 
         match stage {
             EngineStage::Complete(results) => Ok(results),
             EngineStage::NeedsProcessing(_) => unreachable!(),
+        }
+    }
+}
+
+impl EngineSystem for HybridEngine {
+    type Controller = Box<dyn ClassicalEngine>;
+    type ControlledEngine = QuantumSystem;
+    type Input = (); // Or whatever appropriate input type
+    type Output = ShotResult; // Or whatever appropriate output type
+    type EngineInput = ByteMessage;
+    type EngineOutput = ByteMessage;
+
+    fn controller(&self) -> &Self::Controller {
+        &self.classical_engine
+    }
+
+    fn controller_mut(&mut self) -> &mut Self::Controller {
+        &mut self.classical_engine
+    }
+
+    fn engine(&self) -> &Self::ControlledEngine {
+        &self.quantum_system
+    }
+
+    fn engine_mut(&mut self) -> &mut Self::ControlledEngine {
+        &mut self.quantum_system
+    }
+}
+
+impl Clone for HybridEngine {
+    fn clone(&self) -> Self {
+        HybridEngine {
+            classical_engine: dyn_clone::clone_box(&*self.classical_engine),
+            quantum_system: self.quantum_system.clone(),
         }
     }
 }

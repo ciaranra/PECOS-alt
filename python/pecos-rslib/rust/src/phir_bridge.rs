@@ -1,4 +1,3 @@
-// PECOS/python/pecos-rslib/rust/src/phir_bridge.rs
 use parking_lot::Mutex;
 use pecos::prelude::*;
 use pyo3::prelude::*;
@@ -475,10 +474,6 @@ impl ClassicalEngine for PHIREngine {
 
     fn compile(&self) -> Result<(), Box<dyn Error>> {
         Ok(())
-    }
-
-    fn clone_box(&self) -> Box<dyn ClassicalEngine> {
-        Box::new(self.clone())
     }
 
     fn reset(&mut self) -> Result<(), QueueError> {

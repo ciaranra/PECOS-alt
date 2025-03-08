@@ -5,11 +5,12 @@ pub use depolarizing::DepolarizingNoise;
 pub use pass_through::PassThroughNoise;
 
 use crate::channels::byte_message::ByteMessage;
-use crate::engines::{ControlEngine, EngineStage};
+use crate::engines::{ControlEngine, Engine, EngineStage};
 use crate::errors::QueueError;
+use dyn_clone::DynClone;
 
 /// Trait defining interface for quantum noise models
-pub trait NoiseModel: Send + Sync {
+pub trait NoiseModel: DynClone + Send + Sync {
     /// Apply noise to a `ByteMessage` containing quantum commands
     ///
     /// # Parameters
@@ -22,15 +23,15 @@ pub trait NoiseModel: Send + Sync {
     /// - Returns a `QueueError` if noise application fails
     fn apply_noise(&self, message: ByteMessage) -> Result<ByteMessage, QueueError>;
 
-    /// Create a cloned instance of this noise model
-    fn clone_box(&self) -> Box<dyn NoiseModel>;
-
     /// Resets the noise model to its initial state
     ///
     /// # Errors
     /// Returns a [`QueueError`] if the reset operation fails
     fn reset(&mut self) -> Result<(), QueueError>;
 }
+
+// Register the NoiseModel trait with dyn_clone
+dyn_clone::clone_trait_object!(NoiseModel);
 
 impl ControlEngine for Box<dyn NoiseModel> {
     type Input = ByteMessage;
@@ -53,11 +54,24 @@ impl ControlEngine for Box<dyn NoiseModel> {
         &mut self,
         results: ByteMessage,
     ) -> Result<EngineStage<ByteMessage, ByteMessage>, QueueError> {
-        // Just pass through results from the quantum engine
+        // For noise models, we typically just pass through the results
         Ok(EngineStage::Complete(results))
     }
 
     fn reset(&mut self) -> Result<(), QueueError> {
-        NoiseModel::reset(self.as_mut())
+        self.as_mut().reset()
+    }
+}
+
+impl Engine for Box<dyn NoiseModel> {
+    type Input = ByteMessage;
+    type Output = ByteMessage;
+
+    fn process(&mut self, input: Self::Input) -> Result<Self::Output, QueueError> {
+        self.apply_noise(input)
+    }
+
+    fn reset(&mut self) -> Result<(), QueueError> {
+        self.as_mut().reset()
     }
 }

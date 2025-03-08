@@ -21,6 +21,7 @@ pyo3 = { workspace=true, features = ["extension-module", "auto-initialize"] }
 pecos = { workspace = true }
 parking_lot = { workspace = true}
 serde_json = { workspace = true }
+dyn-clone = { workspace = true }
 
 [features]
 python-tests = []  # Empty feature just for enabling tests

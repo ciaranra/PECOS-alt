@@ -54,6 +54,7 @@ bytemuck = {  version = "1", features = ["derive"] }
 bitflags = "2"
 syn = { version = "2", features = ["full"] }
 quote = "1"
+dyn-clone = "1"
 
 pecos-derive = { version = "0.1.1", path = "crates/pecos-derive"}
 pecos-core = { version = "0.1.1", path = "crates/pecos-core" }

@@ -1,13 +1,14 @@
 use crate::channels::byte_message::ByteMessage;
-use crate::engines::{ControlEngine, EngineStage, phir, qir};
+use crate::engines::{ControlEngine, Engine, EngineStage, phir, qir};
 use crate::errors::QueueError;
+use dyn_clone::DynClone;
 use log::debug;
 use pecos_core::types::ShotResult;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
 /// Classical engine that processes programs and handles measurements
-pub trait ClassicalEngine: Send + Sync {
+pub trait ClassicalEngine: DynClone + Send + Sync {
     fn num_qubits(&self) -> usize;
 
     /// Generate a `ByteMessage` containing the next batch of quantum commands to execute
@@ -80,11 +81,10 @@ pub trait ClassicalEngine: Send + Sync {
     fn reset(&mut self) -> Result<(), QueueError> {
         Ok(())
     }
-
-    /// Create a boxed clone of this engine.
-    /// This allows engines to be cloned for concurrent execution.
-    fn clone_box(&self) -> Box<dyn ClassicalEngine>;
 }
+
+// Register the ClassicalEngine trait with dyn_clone
+dyn_clone::clone_trait_object!(ClassicalEngine);
 
 impl ControlEngine for Box<dyn ClassicalEngine> {
     type Input = ();
@@ -99,10 +99,13 @@ impl ControlEngine for Box<dyn ClassicalEngine> {
         // Check if we have an empty message (no more commands)
         if let Ok(is_empty) = commands.is_empty() {
             if is_empty {
-                return Ok(EngineStage::Complete(self.get_results()?));
+                // No more commands, return results
+                let results = self.get_results()?;
+                return Ok(EngineStage::Complete(results));
             }
         }
 
+        // Need to process these commands
         Ok(EngineStage::NeedsProcessing(commands))
     }
 
@@ -110,16 +113,18 @@ impl ControlEngine for Box<dyn ClassicalEngine> {
         &mut self,
         measurements: ByteMessage,
     ) -> Result<EngineStage<ByteMessage, ShotResult>, QueueError> {
-        // Handle measurements
+        // Handle measurements from quantum engine
         self.handle_measurements(measurements)?;
 
-        // Get next batch of commands if any
+        // Generate next batch of commands
         let commands = self.generate_commands()?;
 
         // Check if we have an empty message (no more commands)
         if let Ok(is_empty) = commands.is_empty() {
             if is_empty {
-                return Ok(EngineStage::Complete(self.get_results()?));
+                // No more commands, return results
+                let results = self.get_results()?;
+                return Ok(EngineStage::Complete(results));
             }
         }
 
@@ -127,8 +132,31 @@ impl ControlEngine for Box<dyn ClassicalEngine> {
     }
 
     fn reset(&mut self) -> Result<(), QueueError> {
-        debug!("Box<dyn ClassicalEngine> reset() delegating to inner ClassicalEngine");
-        // Delegate to the actual ClassicalEngine's reset
+        self.as_mut().reset()
+    }
+}
+
+impl Engine for Box<dyn ClassicalEngine> {
+    type Input = ();
+    type Output = ShotResult;
+
+    fn process(&mut self, input: Self::Input) -> Result<Self::Output, QueueError> {
+        let mut stage = self.start(input)?;
+
+        loop {
+            match stage {
+                EngineStage::NeedsProcessing(_engine_input) => {
+                    // In a real system, this would process through a quantum engine
+                    // For now, we'll just return an empty message
+                    let engine_output = ByteMessage::builder().build();
+                    stage = self.continue_processing(engine_output)?;
+                }
+                EngineStage::Complete(output) => return Ok(output),
+            }
+        }
+    }
+
+    fn reset(&mut self) -> Result<(), QueueError> {
         self.as_mut().reset()
     }
 }

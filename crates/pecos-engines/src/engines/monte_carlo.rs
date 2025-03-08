@@ -2,6 +2,7 @@ use crate::engines::noise::{DepolarizingNoise, NoiseModel, PassThroughNoise};
 use crate::engines::quantum::new_quantum_engine_arbitrary_qgate;
 use crate::engines::{ClassicalEngine, HybridEngine, QuantumEngine};
 use crate::errors::QueueError;
+use dyn_clone;
 use log::{debug, info};
 use parking_lot::Mutex;
 use pecos_core::types::ShotResults;
@@ -48,66 +49,67 @@ impl MonteCarloEngine {
     /// - Engine initialization fails
     pub fn run(&self, num_shots: usize, num_workers: usize) -> Result<ShotResults, QueueError> {
         info!(
-            "Starting Monte Carlo simulation with {} shots across {} workers",
+            "Running Monte Carlo simulation with {} shots and {} workers",
             num_shots, num_workers
         );
 
-        // Validate and adjust worker count
-        let effective_workers = if num_workers == 0 {
-            1 // Minimum of 1 worker
-        } else if num_workers > num_shots {
-            num_shots // Don't use more workers than shots
-        } else {
-            num_workers
-        };
+        assert!(num_shots != 0, "Number of shots must be greater than 0");
 
-        // Storage for results from all shots
-        let shot_results = Arc::new(Mutex::new(Vec::with_capacity(num_shots)));
+        // Determine how many shots to run per worker
+        let shots_per_worker = num_shots.div_ceil(num_workers);
+        debug!(
+            "Running {} shots per worker ({} workers)",
+            shots_per_worker, num_workers
+        );
 
-        // Calculate shots per worker
-        let base_shots_per_worker = num_shots / effective_workers;
-        let extra_shots = num_shots % effective_workers;
+        // Create a vector to store results from each worker
+        let results = Arc::new(Mutex::new(Vec::with_capacity(num_shots)));
 
-        // Create worker pool
-        (0..effective_workers)
+        // Create a vector of worker indices
+        let worker_indices: Vec<usize> = (0..num_workers).collect();
+
+        // Run workers in parallel
+        worker_indices
             .into_par_iter()
-            .try_for_each::<_, Result<(), QueueError>>(|worker_idx| {
-                // Calculate shots for this worker
-                let worker_shots = if worker_idx < extra_shots {
-                    base_shots_per_worker + 1
-                } else {
-                    base_shots_per_worker
-                };
+            .try_for_each(|worker_idx| -> Result<(), QueueError> {
+                // Calculate the range of shots for this worker
+                let start_shot = worker_idx * shots_per_worker;
+                let end_shot = std::cmp::min(start_shot + shots_per_worker, num_shots);
+                let worker_shots = end_shot - start_shot;
 
-                debug!(
-                    "Worker {} initializing for {} shots",
-                    worker_idx, worker_shots
-                );
+                if worker_shots > 0 {
+                    debug!(
+                        "Worker {} running shots {}-{}",
+                        worker_idx,
+                        start_shot,
+                        end_shot - 1
+                    );
 
-                // Create hybrid engine for this worker
-                let mut engine = HybridEngine::with_noise(
-                    self.classical_engine.clone_box(),
-                    self.quantum_engine.clone_box(),
-                    self.noise_model.clone_box(),
-                );
+                    // Create a hybrid engine for this worker
+                    let mut hybrid_engine = HybridEngine::with_noise(
+                        dyn_clone::clone_box(&*self.classical_engine),
+                        dyn_clone::clone_box(&*self.quantum_engine),
+                        dyn_clone::clone_box(&*self.noise_model),
+                    );
 
-                // Process all shots assigned to this worker
-                for _shot_num in 0..worker_shots {
-                    let result = engine.run_shot()?;
-                    engine.reset()?;
-                    shot_results.lock().push(result);
+                    // Process all shots assigned to this worker
+                    for _shot_num in start_shot..end_shot {
+                        let result = hybrid_engine.run_shot()?;
+                        hybrid_engine.reset()?;
+                        results.lock().push(result);
+                    }
+
+                    debug!("Worker {} completed all shots", worker_idx);
                 }
-
-                debug!("Worker {} completed all shots", worker_idx);
                 Ok(())
             })?;
 
         // Process all results
-        let results = Arc::try_unwrap(shot_results)
+        let results_vec = Arc::try_unwrap(results)
             .map_err(|_| QueueError::LockError("Failed to unwrap results Arc".into()))?
             .into_inner();
 
-        Ok(ShotResults::from_measurements(&results))
+        Ok(ShotResults::from_measurements(&results_vec))
     }
 
     /// Run a simulation using the provided engines directly.
@@ -206,6 +208,16 @@ impl MonteCarloEngine {
     }
 }
 
+impl Clone for MonteCarloEngine {
+    fn clone(&self) -> Self {
+        MonteCarloEngine {
+            classical_engine: dyn_clone::clone_box(&*self.classical_engine),
+            quantum_engine: dyn_clone::clone_box(&*self.quantum_engine),
+            noise_model: dyn_clone::clone_box(&*self.noise_model),
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct MonteCarloEngineBuilder {
     /// Classical engine used for simulation (optional - can be provided at runtime)
@@ -280,7 +292,12 @@ mod tests {
     use std::path::PathBuf;
     use tempfile::tempdir;
 
-    // Helper to create a mock quantum engine for testing
+    /// A mock implementation of `QuantumEngine` for testing purposes
+    ///
+    /// This simple implementation returns empty messages and is used
+    /// to test the `MonteCarloEngine` without requiring a full quantum
+    /// simulator implementation.
+    #[derive(Clone)]
     struct MockQuantumEngine;
 
     impl Engine for MockQuantumEngine {
@@ -301,13 +318,16 @@ mod tests {
         }
     }
 
-    impl QuantumEngine for MockQuantumEngine {
-        fn clone_box(&self) -> Box<dyn QuantumEngine> {
-            Box::new(MockQuantumEngine)
-        }
-    }
+    impl QuantumEngine for MockQuantumEngine {}
 
-    // Helper to create a simple test PHIR program file
+    /// Creates a temporary test program file for testing
+    ///
+    /// This helper function creates a temporary directory and writes a simple
+    /// PHIR program to a file within it. The program includes basic quantum
+    /// operations like Hadamard and CNOT gates.
+    ///
+    /// # Returns
+    /// A tuple containing the temporary directory (to keep it alive) and the path to the program file
     fn create_test_program() -> (tempfile::TempDir, PathBuf) {
         let dir = tempdir().unwrap();
         let program_path = dir.path().join("test_program.json");
@@ -361,16 +381,16 @@ mod tests {
         let simulator = StateVec::new(2);
         let quantum_engine = new_quantum_engine_arbitrary_qgate(simulator);
         let _engine = MonteCarloEngine::builder()
-            .with_classical_engine(classical_engine.clone_box())
-            .with_quantum_engine(quantum_engine.clone_box())
+            .with_classical_engine(dyn_clone::clone_box(&*classical_engine))
+            .with_quantum_engine(dyn_clone::clone_box(&*quantum_engine))
             .build();
 
         // Test construction with a specific noise model
         let noise_model = DepolarizingNoise::builder().with_probability(0.01).build();
         let _engine = MonteCarloEngine::builder()
-            .with_classical_engine(classical_engine.clone_box())
+            .with_classical_engine(dyn_clone::clone_box(&*classical_engine))
             .with_noise_model(noise_model)
-            .with_quantum_engine(quantum_engine.clone_box())
+            .with_quantum_engine(dyn_clone::clone_box(&*quantum_engine))
             .build();
     }
 
@@ -431,9 +451,9 @@ mod tests {
 
         // Test running with noise model
         let result = MonteCarloEngine::builder()
-            .with_classical_engine(classical_engine.clone_box())
+            .with_classical_engine(dyn_clone::clone_box(&*classical_engine))
             .with_noise_model(noise_model)
-            .with_quantum_engine(quantum_engine.clone_box())
+            .with_quantum_engine(dyn_clone::clone_box(&*quantum_engine))
             .build()
             .run(10, 1);
 
@@ -444,9 +464,9 @@ mod tests {
 
         // Test running with pass-through noise
         let result = MonteCarloEngine::builder()
-            .with_classical_engine(classical_engine)
+            .with_classical_engine(dyn_clone::clone_box(&*classical_engine))
             .with_noise_model(noise_model)
-            .with_quantum_engine(quantum_engine)
+            .with_quantum_engine(dyn_clone::clone_box(&*quantum_engine))
             .build()
             .run(2, 1);
 
@@ -468,9 +488,9 @@ mod tests {
         let quantum_engine = Box::new(CliffordEngine::new(stabilizer));
 
         let engine = MonteCarloEngine::builder()
-            .with_classical_engine(classical_engine)
+            .with_classical_engine(dyn_clone::clone_box(&*classical_engine))
             .with_noise_model(noise_model)
-            .with_quantum_engine(quantum_engine)
+            .with_quantum_engine(dyn_clone::clone_box(&*quantum_engine))
             .build();
 
         // Run with different shots and workers
@@ -504,8 +524,8 @@ mod tests {
 
         // Run with mock engine
         let result = MonteCarloEngine::builder()
-            .with_classical_engine(classical_engine)
-            .with_quantum_engine(quantum_engine)
+            .with_classical_engine(dyn_clone::clone_box(&*classical_engine))
+            .with_quantum_engine(dyn_clone::clone_box(&*quantum_engine))
             .build()
             .run(5, 1);
 
@@ -522,7 +542,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "attempt to divide by zero")]
+    #[should_panic(expected = "Number of shots must be greater than 0")]
     fn test_zero_shots_panics() {
         // Create a test program
         let (_dir, program_path) = create_test_program();
@@ -570,8 +590,7 @@ mod tests {
     }
 
     // Mock implementation of an external classical engine
-    // This implementation needs to be updated to work with ByteMessage
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     struct ExternalClassicalEngine {
         commands: Vec<QuantumCommand>,
         measurements: HashMap<String, u32>,
@@ -603,17 +622,6 @@ mod tests {
 
             Self {
                 commands,
-                measurements: HashMap::new(),
-                command_index: 0,
-                current_shot: 0,
-            }
-        }
-    }
-
-    impl Clone for ExternalClassicalEngine {
-        fn clone(&self) -> Self {
-            Self {
-                commands: self.commands.clone(),
                 measurements: HashMap::new(),
                 command_index: 0,
                 current_shot: 0,
@@ -705,7 +713,7 @@ mod tests {
         }
 
         fn compile(&self) -> Result<(), Box<dyn Error>> {
-            // No compilation needed for this mock engine
+            // No compilation needed for this mock
             Ok(())
         }
 
@@ -714,10 +722,6 @@ mod tests {
             self.measurements.clear();
             self.current_shot += 1;
             Ok(())
-        }
-
-        fn clone_box(&self) -> Box<dyn ClassicalEngine> {
-            Box::new(self.clone())
         }
     }
 

@@ -26,6 +26,7 @@ serde_json.workspace = true
 rand.workspace = true
 bytemuck.workspace = true
 bitflags.workspace = true
+dyn-clone.workspace = true
 
 pecos-core.workspace = true
 pecos-qsim.workspace = true

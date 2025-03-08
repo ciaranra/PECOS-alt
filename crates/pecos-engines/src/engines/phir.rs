@@ -96,7 +96,7 @@ impl PHIREngine {
         })
     }
 
-    fn reset_internal_state(&mut self) {
+    fn reset_state(&mut self) {
         debug!(
             "INTERNAL RESET: PHIREngine reset before current_op={}",
             self.current_op
@@ -339,7 +339,7 @@ impl ControlEngine for PHIREngine {
 
     fn reset(&mut self) -> Result<(), QueueError> {
         debug!("PHIREngine::reset() implementation for ControlEngine being called!");
-        self.reset_internal_state();
+        self.reset_state();
         Ok(())
     }
 }
@@ -516,14 +516,8 @@ impl ClassicalEngine for PHIREngine {
 
     fn reset(&mut self) -> Result<(), QueueError> {
         debug!("PHIREngine::reset() implementation for ClassicalEngine being called!");
-        self.current_op = 0;
-        debug!("Reset current_op to {}", self.current_op);
-        self.measurement_results.clear();
+        self.reset_state();
         Ok(())
-    }
-
-    fn clone_box(&self) -> Box<dyn ClassicalEngine> {
-        Box::new(self.clone())
     }
 }
 

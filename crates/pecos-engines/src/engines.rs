@@ -5,16 +5,17 @@ pub mod noise;
 pub mod phir;
 pub mod qir;
 pub mod quantum;
+pub mod quantum_system;
 
-use crate::channels::ByteMessage;
 use crate::errors::QueueError;
 pub use classical::ClassicalEngine;
+use dyn_clone::DynClone;
 pub use hybrid::HybridEngine;
 pub use monte_carlo::MonteCarloEngine;
 pub use quantum::QuantumEngine;
 
 /// Core engine trait for processing inputs to outputs
-pub trait Engine: Send + Sync {
+pub trait Engine: DynClone + Send + Sync {
     type Input;
     type Output;
 
@@ -119,108 +120,83 @@ pub enum EngineStage<I, O> {
     Complete(O),
 }
 
-pub struct EngineSystem<C, E, Input, Output, EngineInput, EngineOutput>
-where
-    C: ControlEngine<Input = Input, Output = Output>,
-    E: Engine<Input = EngineInput, Output = EngineOutput>,
-{
-    controller: C,
-    engine: E,
+/// A system that combines a controller and a controlled engine
+///
+/// This trait represents a complete engine system that consists of:
+/// 1. A controller component that manages the execution flow
+/// 2. A controlled engine component that performs the actual processing
+pub trait EngineSystem: Send + Sync + Clone {
+    /// The type of the controller component
+    type Controller: ControlEngine<
+            Input = Self::Input,
+            Output = Self::Output,
+            EngineInput = Self::EngineInput,
+            EngineOutput = Self::EngineOutput,
+        >;
+
+    /// The type of the controlled engine component
+    type ControlledEngine: Engine<Input = Self::EngineInput, Output = Self::EngineOutput>;
+
+    /// The input type for the system
+    type Input;
+
+    /// The output type from the system
+    type Output;
+
+    /// The input type for the controlled engine
+    type EngineInput;
+
+    /// The output type from the controlled engine
+    type EngineOutput;
+
+    /// Get a reference to the controller component
+    fn controller(&self) -> &Self::Controller;
+
+    /// Get a mutable reference to the controller component
+    fn controller_mut(&mut self) -> &mut Self::Controller;
+
+    /// Get a reference to the controlled engine component
+    fn engine(&self) -> &Self::ControlledEngine;
+
+    /// Get a mutable reference to the controlled engine component
+    fn engine_mut(&mut self) -> &mut Self::ControlledEngine;
 }
 
-impl<C, E, Input, Output, EngineInput, EngineOutput>
-    EngineSystem<C, E, Input, Output, EngineInput, EngineOutput>
+/// Default implementation of Engine for any `EngineSystem`
+impl<T> Engine for T
 where
-    C: ControlEngine<
-            Input = Input,
-            Output = Output,
-            EngineInput = EngineInput,
-            EngineOutput = EngineOutput,
-        >,
-    E: Engine<Input = EngineInput, Output = EngineOutput>,
+    T: EngineSystem + 'static,
 {
-    pub fn new(controller: C, engine: E) -> Self {
-        Self { controller, engine }
-    }
+    type Input = T::Input;
+    type Output = T::Output;
 
-    /// Process an input through the engine system.
+    /// Process the input through the engine system.
     ///
-    /// This method orchestrates processing by initiating the control engine,
-    /// performing processing work through the controlled engine, and
-    /// iteratively handling the results until the computation is complete.
+    /// This method orchestrates the processing of input through the controller and engine components.
+    /// It takes an input, starts the processing, and continues processing until completion.
     ///
     /// # Parameters
-    /// - `input`: The initial input to process.
-    ///
-    /// # Returns
-    /// - `Ok(output)`: The final output after successful processing.
-    ///
-    /// # Errors
-    /// This method returns a `QueueError` if:
-    /// - An error occurs during the start phase in the `controller`.
-    /// - An error occurs during processing in the controlled `engine`.
-    /// - An error occurs during the continuation phase in the `controller`.
-    pub fn process(&mut self, input: Input) -> Result<Output, QueueError> {
-        let mut stage = self.controller.start(input)?;
+    /// * `input` - The input to process
+    fn process(&mut self, input: Self::Input) -> Result<Self::Output, QueueError> {
+        let mut stage = self.controller_mut().start(input)?;
 
-        while let EngineStage::NeedsProcessing(batch) = stage {
-            let processed = self.engine.process(batch)?;
-            stage = self.controller.continue_processing(processed)?;
-        }
-
-        match stage {
-            EngineStage::Complete(output) => Ok(output),
-            EngineStage::NeedsProcessing(_) => unreachable!(),
+        loop {
+            match stage {
+                EngineStage::NeedsProcessing(engine_input) => {
+                    let engine_output = self.engine_mut().process(engine_input)?;
+                    stage = self.controller_mut().continue_processing(engine_output)?;
+                }
+                EngineStage::Complete(output) => return Ok(output),
+            }
         }
     }
 
     /// Reset the state of both the controller and the engine for reuse.
     ///
-    /// This method resets the `controller` and `engine` to their initial states,
+    /// This method resets the controller and engine to their initial states,
     /// allowing the system to be reused for new processing tasks or simulations.
-    ///
-    /// # Errors
-    /// This function returns a `QueueError` if:
-    /// - There is an error during the reset of the controller.
-    /// - There is an error during the reset of the engine.
-    pub fn reset(&mut self) -> Result<(), QueueError> {
-        self.controller.reset()?;
-        self.engine.reset()
-    }
-}
-
-/// An `EngineSystem` itself is an `Engine`.
-impl<C, E, Input, Output, EngineInput, EngineOutput> Engine
-    for EngineSystem<C, E, Input, Output, EngineInput, EngineOutput>
-where
-    C: ControlEngine<
-            Input = Input,
-            Output = Output,
-            EngineInput = EngineInput,
-            EngineOutput = EngineOutput,
-        >,
-    E: Engine<Input = EngineInput, Output = EngineOutput>,
-{
-    type Input = Input;
-    type Output = Output;
-
-    fn process(&mut self, input: Self::Input) -> Result<Self::Output, QueueError> {
-        EngineSystem::process(self, input)
-    }
-
     fn reset(&mut self) -> Result<(), QueueError> {
-        EngineSystem::reset(self)
+        self.controller_mut().reset()?;
+        self.engine_mut().reset()
     }
-}
-
-/// Control engine that works directly with `ByteMessages`
-pub trait ByteMessageControlEngine:
-    ControlEngine<EngineInput = ByteMessage, EngineOutput = ByteMessage>
-{
-}
-
-// Implement for any control engine that works with ByteMessages
-impl<T> ByteMessageControlEngine for T where
-    T: ControlEngine<EngineInput = ByteMessage, EngineOutput = ByteMessage>
-{
 }

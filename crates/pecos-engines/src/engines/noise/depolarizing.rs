@@ -6,7 +6,8 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::sync::Arc;
 
-/// Simple depolarizing noise model that applies random Pauli errors
+/// Depolarizing noise model that applies random Pauli errors with a given probability
+#[derive(Clone)]
 pub struct DepolarizingNoise {
     /// Probability of applying a noise operation after each gate
     probability: f64,
@@ -105,13 +106,6 @@ impl NoiseModel for DepolarizingNoise {
         Ok(ByteMessage::builder()
             .add_quantum_commands(&noisy_commands)
             .build())
-    }
-
-    fn clone_box(&self) -> Box<dyn NoiseModel> {
-        Box::new(DepolarizingNoise {
-            probability: self.probability,
-            rng: Arc::new(Mutex::new(StdRng::from_os_rng())),
-        })
     }
 
     fn reset(&mut self) -> Result<(), QueueError> {

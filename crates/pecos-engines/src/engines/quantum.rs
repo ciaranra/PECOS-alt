@@ -1,5 +1,3 @@
-// src/engines/quantum.rs (fully updated interface)
-
 use crate::channels::byte_message::ByteMessage;
 use crate::engines::Engine;
 use crate::errors::QueueError;
@@ -11,9 +9,10 @@ use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, QuantumSimulator};
 ///
 /// This trait indicates that an engine specifically deals with
 /// quantum state evolution and measurements.
-pub trait QuantumEngine: Engine<Input = ByteMessage, Output = ByteMessage> + Send + Sync {
-    fn clone_box(&self) -> Box<dyn QuantumEngine>;
-}
+pub trait QuantumEngine: Engine<Input = ByteMessage, Output = ByteMessage> + Send + Sync {}
+
+// Register the QuantumEngine trait with dyn_clone
+dyn_clone::clone_trait_object!(QuantumEngine);
 
 impl Engine for Box<dyn QuantumEngine> {
     type Input = ByteMessage;
@@ -28,7 +27,12 @@ impl Engine for Box<dyn QuantumEngine> {
     }
 }
 
-// Engine for simulators that only support Clifford gates
+/// Clifford gate quantum engine implementation
+///
+/// The simulator must implement `QuantumSimulator` and `CliffordGateable` traits
+/// to support Clifford gate operations, and must be Send + Sync + Clone for
+/// thread safety and cloning capabilities.
+#[derive(Clone)]
 pub struct CliffordEngine<S>
 where
     S: QuantumSimulator + CliffordGateable<usize> + Send + Sync + Clone + 'static,
@@ -139,16 +143,22 @@ where
     }
 }
 
-impl<S> QuantumEngine for CliffordEngine<S>
-where
-    S: QuantumSimulator + CliffordGateable<usize> + Send + Sync + Clone + 'static,
+/// Implementation of the `QuantumEngine` trait for `CliffordEngine`
+///
+/// This allows `CliffordEngine` to be used wherever a `QuantumEngine` is required,
+/// providing Clifford gate operations on quantum states.
+impl<S> QuantumEngine for CliffordEngine<S> where
+    S: QuantumSimulator + CliffordGateable<usize> + Send + Sync + Clone + 'static
 {
-    fn clone_box(&self) -> Box<dyn QuantumEngine> {
-        Box::new(CliffordEngine::new(self.simulator.clone()))
-    }
 }
 
-// Engine for simulators that support arbitrary rotations using state vectors
+/// Arbitrary rotation gate quantum engine implementation
+///
+/// The simulator must implement `QuantumSimulator`, `CliffordGateable`, and
+/// `ArbitraryRotationGateable` traits to support both Clifford gates and
+/// arbitrary rotation gates. It must also be Send + Sync + Clone for
+/// thread safety and cloning capabilities.
+#[derive(Clone)]
 pub struct ArbitraryQGateEngine<S>
 where
     S: QuantumSimulator
@@ -291,22 +301,32 @@ where
     }
 }
 
-impl<S> QuantumEngine for ArbitraryQGateEngine<S>
-where
+/// Implementation of the `QuantumEngine` trait for `ArbitraryQGateEngine`
+///
+/// This allows `ArbitraryQGateEngine` to be used wherever a `QuantumEngine` is required,
+/// providing both Clifford gates and arbitrary rotation gates on quantum states.
+impl<S> QuantumEngine for ArbitraryQGateEngine<S> where
     S: QuantumSimulator
         + CliffordGateable<usize>
         + ArbitraryRotationGateable<usize>
         + Send
         + Sync
         + Clone
-        + 'static,
+        + 'static
 {
-    fn clone_box(&self) -> Box<dyn QuantumEngine> {
-        Box::new(ArbitraryQGateEngine::new(self.simulator.clone()))
-    }
 }
 
 // Factory function to create the appropriate engine based on simulator type
+/// Creates a new quantum engine that supports Clifford gate operations
+///
+/// This factory function wraps the provided simulator in a `CliffordEngine` and
+/// returns it as a boxed `QuantumEngine` trait object, allowing for polymorphic usage.
+///
+/// # Parameters
+/// * `simulator` - A quantum simulator that implements the required traits
+///
+/// # Returns
+/// A boxed `QuantumEngine` trait object
 pub fn new_quantum_engine<S>(simulator: S) -> Box<dyn QuantumEngine>
 where
     S: QuantumSimulator + CliffordGateable<usize> + Send + Sync + Clone + 'static,
@@ -314,6 +334,17 @@ where
     Box::new(CliffordEngine::new(simulator))
 }
 
+/// Creates a new quantum engine that supports both Clifford gates and arbitrary rotation gates
+///
+/// This factory function wraps the provided simulator in an `ArbitraryQGateEngine` and
+/// returns it as a boxed `QuantumEngine` trait object, allowing for polymorphic usage.
+///
+/// # Parameters
+/// * `simulator` - A quantum simulator that implements the required traits including
+///   support for arbitrary rotation gates
+///
+/// # Returns
+/// A boxed `QuantumEngine` trait object
 pub fn new_quantum_engine_arbitrary_qgate<S>(simulator: S) -> Box<dyn QuantumEngine>
 where
     S: QuantumSimulator

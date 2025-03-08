@@ -337,10 +337,6 @@ impl ClassicalEngine for QirClassicalEngine {
     fn compile(&self) -> Result<(), Box<dyn std::error::Error>> {
         self.compile()
     }
-
-    fn clone_box(&self) -> Box<dyn ClassicalEngine> {
-        Box::new(self.clone())
-    }
 }
 
 impl Clone for QirClassicalEngine {
