@@ -579,6 +579,27 @@ impl ByteMessage {
         Ok(measurements)
     }
 
+    /// Get measurement results as a vector of (`result_id`: usize, measurement: u32) pairs
+    ///
+    /// This is a convenience method that parses the measurement results from the message
+    /// and returns them as a vector of tuples with the `result_id` converted to usize.
+    ///
+    /// # Returns
+    ///
+    /// A Result containing a vector of (`result_id`, measurement) pairs if successful,
+    /// or a `QueueError` if there was an error parsing the message.
+    pub fn measurement_results_as_vec(&self) -> Result<Vec<(usize, u32)>, QueueError> {
+        let measurements = self.parse_measurements()?;
+
+        // Convert result_ids from u32 to usize
+        let converted = measurements
+            .into_iter()
+            .map(|(result_id, outcome)| (result_id as usize, outcome))
+            .collect();
+
+        Ok(converted)
+    }
+
     /// Parse a quantum gate message payload
     fn parse_quantum_gate(payload: &[u8]) -> Result<QuantumGate, QueueError> {
         if payload.len() < size_of::<QuantumGateHeader>() {
@@ -709,6 +730,7 @@ impl ByteMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engines::{Engine, quantum::StateVecEngine};
 
     #[test]
     fn test_bytemap_builder() {
@@ -768,6 +790,79 @@ mod tests {
         // For result_id=1, outcome=1, we get 65537 (1 << 16 | 1)
         assert_eq!(measurements[0], (0, 0));
         assert_eq!(measurements[1], (1, 1));
+    }
+
+    #[test]
+    fn test_measurement_results_as_vec() {
+        // Create a message with measurement results
+        let result_pairs = [(5, 0), (10, 1), (15, 0)];
+        let message = ByteMessage::record_measurement_results(&result_pairs);
+
+        // Get the results as a vector
+        let results = message.measurement_results_as_vec().unwrap();
+
+        // Verify the results match the input
+        assert_eq!(results.len(), 3);
+        assert_eq!(results[0], (5, 0));
+        assert_eq!(results[1], (10, 1));
+        assert_eq!(results[2], (15, 0));
+
+        // Verify the types are correct (usize, u32) by checking if they can be assigned to variables of those types
+        let (result_id, outcome) = results[0];
+        let _: usize = result_id; // This will fail to compile if result_id is not usize
+        let _: u32 = outcome; // This will fail to compile if outcome is not u32
+    }
+
+    #[test]
+    fn test_bell_state_measurements() {
+        // Create a Bell state circuit: H on qubit 0, CX from 0 to 1, measure both qubits
+        let mut builder = ByteMessage::quantum_operations_builder();
+
+        // Apply H to qubit 0
+        builder.add_h(&[0]);
+
+        // Apply CX with control=0, target=1
+        builder.add_cx(&[0], &[1]);
+
+        // Measure qubit 0 with result_id 0
+        builder.add_measurements(&[0], &[0]);
+
+        // Measure qubit 1 with result_id 1
+        builder.add_measurements(&[1], &[1]);
+
+        let bell_circuit = builder.build();
+
+        // Run the circuit multiple times and check the results
+        let mut engine = StateVecEngine::new(2); // Create a simulator with 2 qubits
+
+        for _ in 0..10 {
+            // Reset the engine for each run
+            engine.reset().unwrap();
+
+            // Process the circuit
+            let result_message = engine.process(bell_circuit.clone()).unwrap();
+
+            // Get the measurement results as a vector
+            let results = result_message.measurement_results_as_vec().unwrap();
+
+            // Convert to booleans (0 -> false, 1 -> true)
+            let q0_result = results
+                .iter()
+                .find(|(id, _)| *id == 0)
+                .map(|(_, val)| *val != 0)
+                .unwrap();
+            let q1_result = results
+                .iter()
+                .find(|(id, _)| *id == 1)
+                .map(|(_, val)| *val != 0)
+                .unwrap();
+
+            // In a Bell state, the qubits should always have the same measurement outcome
+            assert_eq!(
+                q0_result, q1_result,
+                "Qubits in Bell state should have correlated measurements"
+            );
+        }
     }
 
     #[test]
