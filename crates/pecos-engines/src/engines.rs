@@ -125,7 +125,7 @@ pub enum EngineStage<I, O> {
 /// This trait represents a complete engine system that consists of:
 /// 1. A controller component that manages the execution flow
 /// 2. A controlled engine component that performs the actual processing
-pub trait EngineSystem: Send + Sync + Clone {
+pub trait EngineSystem: DynClone + Send + Sync {
     /// The type of the controller component
     type Controller: ControlEngine<
             Input = Self::Input,
@@ -161,6 +161,9 @@ pub trait EngineSystem: Send + Sync + Clone {
     /// Get a mutable reference to the controlled engine component
     fn engine_mut(&mut self) -> &mut Self::ControlledEngine;
 }
+
+// Register the EngineSystem trait with dyn_clone
+dyn_clone::clone_trait_object!(<C, CE, I, O, EI, EO> EngineSystem<Controller=C, ControlledEngine=CE, Input=I, Output=O, EngineInput=EI, EngineOutput=EO>);
 
 /// Default implementation of Engine for any `EngineSystem`
 impl<T> Engine for T

@@ -13,7 +13,8 @@ members = [
     "crates/plugin-python-service",
 
     "examples/plugin-demo",
-    "examples/rust-plugins/custom-processors", "examples/external-cengine",
+    "examples/rust-plugins/custom-processors",
+    "examples/external-cengine",
 ]
 
 [workspace.package]

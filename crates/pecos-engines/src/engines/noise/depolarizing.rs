@@ -7,6 +7,7 @@ use log::trace;
 use rand::Rng;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
+use std::any::Any;
 use std::sync::{Arc, Mutex};
 
 /// Depolarizing noise model
@@ -49,6 +50,29 @@ impl DepolarizingNoise {
             probability,
             rng: Arc::new(Mutex::new(rng)),
         }
+    }
+
+    /// Set the probability of applying a random Pauli error
+    ///
+    /// # Arguments
+    ///
+    /// * `probability` - New probability value (between 0.0 and 1.0)
+    ///
+    /// # Panics
+    ///
+    /// Panics if the probability is not between 0 and 1.
+    pub fn set_probability(&mut self, probability: f64) {
+        assert!(
+            (0.0..=1.0).contains(&probability),
+            "Probability must be between 0 and 1"
+        );
+        self.probability = probability;
+    }
+
+    /// Get the current probability of applying a random Pauli error
+    #[must_use]
+    pub fn probability(&self) -> f64 {
+        self.probability
     }
 
     /// Create a new builder for the depolarizing noise model
@@ -147,6 +171,14 @@ impl NoiseModel for DepolarizingNoise {
         // No state to reset
         Ok(())
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 /// Builder for creating depolarizing noise models
@@ -199,5 +231,92 @@ impl DepolarizingNoiseBuilder {
         );
 
         Box::new(DepolarizingNoise::new_with_options(probability, self.seed))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_probability_getter_and_setter() {
+        // Create a noise model with initial probability
+        let mut noise = DepolarizingNoise::new(0.01);
+
+        // Check initial probability
+        assert_eq!(noise.probability(), 0.01);
+
+        // Update probability and check it was updated
+        noise.set_probability(0.05);
+        assert_eq!(noise.probability(), 0.05);
+
+        // Update to boundary values
+        noise.set_probability(0.0);
+        assert_eq!(noise.probability(), 0.0);
+
+        noise.set_probability(1.0);
+        assert_eq!(noise.probability(), 1.0);
+    }
+
+    #[test]
+    #[should_panic(expected = "Probability must be between 0 and 1")]
+    fn test_invalid_probability_panics() {
+        let mut noise = DepolarizingNoise::new(0.5);
+        noise.set_probability(1.1); // Should panic
+    }
+
+    #[test]
+    fn test_builder_with_probability() {
+        // Create a noise model with the builder
+        let noise = DepolarizingNoise::builder().with_probability(0.3).build();
+
+        // Create a direct instance with the same probability
+        let direct_noise = DepolarizingNoise::new(0.3);
+
+        // Apply noise to a simple message and verify both produce similar results
+        // (We can't check exact equality due to randomness, but we can verify the builder works)
+        let mut builder = MessageBuilder::new();
+        let _ = builder.for_quantum_operations();
+        builder.add_x(&[0]);
+        let input = builder.build();
+
+        // Just verify that both can process the input without errors
+        let _result1 = noise
+            .apply_noise(input.clone())
+            .expect("Builder-created noise model failed");
+        let _result2 = direct_noise
+            .apply_noise(input)
+            .expect("Directly created noise model failed");
+    }
+
+    #[test]
+    fn test_as_any_methods() {
+        // Create a noise model
+        let mut noise = DepolarizingNoise::new(0.01);
+
+        // Test as_any for type checking
+        assert!(noise.as_any().is::<DepolarizingNoise>());
+
+        // Test as_any_mut for downcasting and modifying
+        let downcast_noise = noise
+            .as_any_mut()
+            .downcast_mut::<DepolarizingNoise>()
+            .unwrap();
+        downcast_noise.set_probability(0.05);
+        assert_eq!(noise.probability(), 0.05);
+
+        // Test with boxed trait object
+        let mut boxed_noise: Box<dyn NoiseModel> = Box::new(DepolarizingNoise::new(0.01));
+        assert!(boxed_noise.as_any().is::<DepolarizingNoise>());
+
+        // Downcast and modify through the boxed trait object
+        let downcast_boxed = boxed_noise
+            .as_any_mut()
+            .downcast_mut::<DepolarizingNoise>()
+            .unwrap();
+        downcast_boxed.set_probability(0.05);
+
+        // Verify that we can't downcast to a different type
+        assert!(boxed_noise.as_any_mut().downcast_mut::<String>().is_none());
     }
 }

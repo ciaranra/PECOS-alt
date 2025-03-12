@@ -1,5 +1,6 @@
 use super::{ByteMessage, NoiseModel};
 use crate::errors::QueueError;
+use std::any::Any;
 
 /// A noise model that passes messages through without modification
 #[derive(Clone)]
@@ -13,5 +14,13 @@ impl NoiseModel for PassThroughNoise {
 
     fn reset(&mut self) -> Result<(), QueueError> {
         Ok(())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }

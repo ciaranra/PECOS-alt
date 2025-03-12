@@ -8,9 +8,10 @@ use crate::channels::byte_message::ByteMessage;
 use crate::engines::{ControlEngine, Engine, EngineStage};
 use crate::errors::QueueError;
 use dyn_clone::DynClone;
+use std::any::Any;
 
 /// Trait defining interface for quantum noise models
-pub trait NoiseModel: DynClone + Send + Sync {
+pub trait NoiseModel: DynClone + Send + Sync + Any {
     /// Apply noise to a `ByteMessage` containing quantum commands
     ///
     /// # Parameters
@@ -28,6 +29,18 @@ pub trait NoiseModel: DynClone + Send + Sync {
     /// # Errors
     /// Returns a [`QueueError`] if the reset operation fails
     fn reset(&mut self) -> Result<(), QueueError>;
+
+    /// Returns a reference to self as Any
+    ///
+    /// This allows for type-checking and downcasting without requiring
+    /// experimental trait upcasting.
+    fn as_any(&self) -> &dyn Any;
+
+    /// Returns a mutable reference to self as Any
+    ///
+    /// This allows for type-checking and downcasting without requiring
+    /// experimental trait upcasting.
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 // Register the NoiseModel trait with dyn_clone

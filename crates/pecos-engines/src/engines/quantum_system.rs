@@ -13,6 +13,7 @@ pub struct QuantumSystem {
     noise_model: Box<dyn NoiseModel>,
     quantum_engine: Box<dyn QuantumEngine>,
 }
+
 impl QuantumSystem {
     /// Creates a new `QuantumSystem` with the specified noise model and quantum engine
     #[must_use]
@@ -39,6 +40,30 @@ impl QuantumSystem {
             Box::new(DepolarizingNoise::new_with_options(probability, None)),
             quantum_engine,
         )
+    }
+
+    /// Returns a reference to the noise model
+    #[must_use]
+    pub fn noise_model(&self) -> &dyn NoiseModel {
+        &*self.noise_model
+    }
+
+    /// Returns a mutable reference to the noise model
+    #[must_use]
+    pub fn noise_model_mut(&mut self) -> &mut dyn NoiseModel {
+        &mut *self.noise_model
+    }
+
+    /// Returns a reference to the quantum engine
+    #[must_use]
+    pub fn quantum_engine(&self) -> &dyn QuantumEngine {
+        &*self.quantum_engine
+    }
+
+    /// Returns a mutable reference to the quantum engine
+    #[must_use]
+    pub fn quantum_engine_mut(&mut self) -> &mut dyn QuantumEngine {
+        &mut *self.quantum_engine
     }
 }
 
@@ -87,4 +112,75 @@ pub fn create_quantume_system_with_state_vec_and_depolarizing_noise(
 
     // Create a QuantumSystem with depolarizing noise
     QuantumSystem::new_with_depolarizing_noise(quantum_engine, probability)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::channels::byte::builder::MessageBuilder;
+
+    /// Test that verifies the ability to update the probability of a depolarizing noise model
+    #[test]
+    fn test_access_and_update_noise_model() {
+        // Create a quantum system with 2 qubits and 1% depolarizing noise
+        let mut system = create_quantume_system_with_state_vec_and_depolarizing_noise(2, 0.01);
+
+        // Get a reference to the noise model and verify it's a DepolarizingNoise
+        let noise_model = system.noise_model();
+        assert!(noise_model.as_any().is::<DepolarizingNoise>());
+
+        // Create a simple quantum circuit with an X gate on qubit 0
+        let mut builder = MessageBuilder::new();
+        let _ = builder.for_quantum_operations();
+        builder.add_x(&[0]);
+        let input = builder.build();
+
+        // Process the input with 1% noise
+        let _result1 = system
+            .process(input.clone())
+            .expect("Failed to process input with initial noise");
+
+        // Get a mutable reference to the noise model and update the probability
+        if let Some(depolarizing_noise) = system
+            .noise_model_mut()
+            .as_any_mut()
+            .downcast_mut::<DepolarizingNoise>()
+        {
+            depolarizing_noise.set_probability(0.05);
+        } else {
+            panic!("Failed to downcast noise model to DepolarizingNoise");
+        }
+
+        // Process the same input with 5% noise
+        let _result2 = system
+            .process(input)
+            .expect("Failed to process input with updated noise");
+
+        // Verify that a system with PassThroughNoise cannot be downcast to DepolarizingNoise
+        let mut system_without_noise =
+            QuantumSystem::new_without_noise(Box::new(StateVecEngine::new(2)));
+
+        // Verify the noise model is not a DepolarizingNoise
+        assert!(
+            system_without_noise
+                .noise_model()
+                .as_any()
+                .is::<PassThroughNoise>()
+        );
+        assert!(
+            !system_without_noise
+                .noise_model()
+                .as_any()
+                .is::<DepolarizingNoise>()
+        );
+
+        // Attempt to downcast to DepolarizingNoise should fail
+        assert!(
+            system_without_noise
+                .noise_model_mut()
+                .as_any_mut()
+                .downcast_mut::<DepolarizingNoise>()
+                .is_none()
+        );
+    }
 }
