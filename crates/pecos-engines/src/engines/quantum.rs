@@ -65,6 +65,14 @@ impl Engine for StateVecEngine {
                     );
                     self.simulator.cx(cmd.qubits[0], cmd.qubits[1]);
                 }
+                GateTypeId::RZZ => {
+                    debug!(
+                        "Processing RZZ gate on qubits {:?} and {:?}",
+                        cmd.qubits[0], cmd.qubits[1]
+                    );
+                    self.simulator
+                        .rzz(cmd.params[0], cmd.qubits[1], cmd.qubits[2]);
+                }
                 GateTypeId::SZZ => {
                     debug!(
                         "Processing SZZ gate on qubits {:?} and {:?}",
@@ -84,7 +92,7 @@ impl Engine for StateVecEngine {
                 GateTypeId::R1XY => {
                     if cmd.params.len() >= 2 {
                         debug!(
-                            "Processing R1XY gate with angles phi={:?}, theta={:?} on qubit {:?}",
+                            "Processing R1XY gate with angles theta={:?}, phi={:?} on qubit {:?}",
                             cmd.params[0], cmd.params[1], cmd.qubits[0]
                         );
                         self.simulator
@@ -101,6 +109,10 @@ impl Engine for StateVecEngine {
                         let outcome = u32::from(meas_result.outcome);
                         measurements.push((result_id, outcome));
                     }
+                }
+                GateTypeId::Prep => {
+                    debug!("Processing Y gate on qubit {:?}", cmd.qubits[0]);
+                    self.simulator.pz(cmd.qubits[0]);
                 }
             }
         }

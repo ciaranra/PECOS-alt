@@ -9,11 +9,13 @@ pub enum GateType {
     Y,
     Z,
     RZ { theta: f64 },
-    R1XY { phi: f64, theta: f64 },
+    R1XY { theta: f64, phi: f64 },
     SZZ,
     H,
     CX,
     Measure { result_id: usize },
+    Prep,
+    RZZ { theta: f64 },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

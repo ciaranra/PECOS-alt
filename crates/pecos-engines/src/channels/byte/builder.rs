@@ -322,6 +322,23 @@ impl MessageBuilder {
         self
     }
 
+    /// Add RZZ gates between pairs of qubits
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the qubits1 and qubits2 arrays do not have the same length.
+    pub fn add_rzz(&mut self, theta: f64, qubits1: &[usize], qubits2: &[usize]) -> &mut Self {
+        assert_eq!(
+            qubits1.len(),
+            qubits2.len(),
+            "Qubit1 and qubit2 arrays must have the same length"
+        );
+        for (&qubit1, &qubit2) in qubits1.iter().zip(qubits2.iter()) {
+            self.add_quantum_gate(&QuantumGate::rzz(theta, qubit1, qubit2));
+        }
+        self
+    }
+
     /// Add SZZ gates between pairs of qubits
     ///
     /// # Panics
@@ -381,6 +398,14 @@ impl MessageBuilder {
                 bytes_of(&meas_header),
                 MessageFlags::NONE,
             );
+        }
+        self
+    }
+
+    /// Add a Prep gate
+    pub fn add_prep(&mut self, qubits: &[usize]) -> &mut Self {
+        for &qubit in qubits {
+            self.add_quantum_gate(&QuantumGate::prep(qubit));
         }
         self
     }

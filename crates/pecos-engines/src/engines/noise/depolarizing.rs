@@ -108,6 +108,11 @@ impl DepolarizingNoise {
                         builder.add_cx(&[gate.qubits[0]], &[gate.qubits[1]]);
                     }
                 }
+                GateTypeId::RZZ => {
+                    if gate.qubits.len() >= 2 {
+                        builder.add_rzz(gate.params[0], &[gate.qubits[1]], &[gate.qubits[2]]);
+                    }
+                }
                 GateTypeId::SZZ => {
                     if gate.qubits.len() >= 2 {
                         builder.add_szz(&[gate.qubits[0]], &[gate.qubits[1]]);
@@ -127,6 +132,9 @@ impl DepolarizingNoise {
                     if !gate.qubits.is_empty() && gate.result_id.is_some() {
                         builder.add_measurements(&gate.qubits, &[gate.result_id.unwrap()]);
                     }
+                }
+                GateTypeId::Prep => {
+                    builder.add_prep(&gate.qubits);
                 }
             }
 

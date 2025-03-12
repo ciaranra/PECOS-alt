@@ -214,6 +214,14 @@ impl ByteMessage {
                 }
                 builder.add_cx(&[qubits[0]], &[qubits[1]]);
             }
+            GateType::RZZ { theta } => {
+                if qubits.len() < 2 {
+                    return Err(QueueError::OperationError(
+                        "SZZ gate requires at least 2 qubits".into(),
+                    ));
+                }
+                builder.add_rzz(*theta, &[qubits[0]], &[qubits[1]]);
+            }
             GateType::SZZ => {
                 if qubits.len() < 2 {
                     return Err(QueueError::OperationError(
@@ -225,11 +233,14 @@ impl ByteMessage {
             GateType::RZ { theta } => {
                 builder.add_rz(*theta, qubits);
             }
-            GateType::R1XY { phi, theta } => {
-                builder.add_r1xy(*phi, *theta, qubits);
+            GateType::R1XY { theta, phi } => {
+                builder.add_r1xy(*theta, *phi, qubits);
             }
             GateType::Measure { result_id } => {
                 builder.add_measurements(qubits, &[*result_id]);
+            }
+            GateType::Prep => {
+                builder.add_prep(qubits);
             }
         }
         Ok(())
@@ -266,13 +277,13 @@ impl ByteMessage {
             }
             Some(&"R1XY") => {
                 if parts.len() >= 4 {
-                    let phi = parts[1].parse::<f64>().map_err(|_| {
+                    let theta = parts[1].parse::<f64>().map_err(|_| {
                         QueueError::OperationError(format!(
                             "Invalid phi angle in R1XY command: {}",
                             parts[1]
                         ))
                     })?;
-                    let theta = parts[2].parse::<f64>().map_err(|_| {
+                    let phi = parts[2].parse::<f64>().map_err(|_| {
                         QueueError::OperationError(format!(
                             "Invalid theta angle in R1XY command: {}",
                             parts[2]
@@ -284,7 +295,7 @@ impl ByteMessage {
                             parts[3]
                         ))
                     })?;
-                    builder.add_r1xy(phi, theta, &[qubit]);
+                    builder.add_r1xy(theta, phi, &[qubit]);
                 }
             }
             Some(&"SZZ") => {
@@ -631,21 +642,7 @@ impl ByteMessage {
                 }
                 GateTypeId::R1XY => {
                     if payload.len() >= params_offset + 2 * size_of::<f64>() {
-                        let phi_bytes = &payload[params_offset..params_offset + size_of::<f64>()];
-                        let phi = f64::from_le_bytes([
-                            phi_bytes[0],
-                            phi_bytes[1],
-                            phi_bytes[2],
-                            phi_bytes[3],
-                            phi_bytes[4],
-                            phi_bytes[5],
-                            phi_bytes[6],
-                            phi_bytes[7],
-                        ]);
-                        params.push(phi);
-
-                        let theta_offset = params_offset + size_of::<f64>();
-                        let theta_bytes = &payload[theta_offset..theta_offset + size_of::<f64>()];
+                        let theta_bytes = &payload[params_offset..params_offset + size_of::<f64>()];
                         let theta = f64::from_le_bytes([
                             theta_bytes[0],
                             theta_bytes[1],
@@ -657,6 +654,20 @@ impl ByteMessage {
                             theta_bytes[7],
                         ]);
                         params.push(theta);
+
+                        let phi_offset = params_offset + size_of::<f64>();
+                        let phi_bytes = &payload[phi_offset..phi_offset + size_of::<f64>()];
+                        let phi = f64::from_le_bytes([
+                            phi_bytes[0],
+                            phi_bytes[1],
+                            phi_bytes[2],
+                            phi_bytes[3],
+                            phi_bytes[4],
+                            phi_bytes[5],
+                            phi_bytes[6],
+                            phi_bytes[7],
+                        ]);
+                        params.push(phi);
                     }
                 }
                 GateTypeId::Measure => {

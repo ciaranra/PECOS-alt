@@ -18,6 +18,8 @@ pub enum GateTypeId {
     RZ = 7,
     R1XY = 8,
     Measure = 9,
+    Prep = 10,
+    RZZ = 11,
 }
 
 impl From<&CoreGateType> for GateTypeId {
@@ -32,6 +34,8 @@ impl From<&CoreGateType> for GateTypeId {
             CoreGateType::RZ { .. } => GateTypeId::RZ,
             CoreGateType::R1XY { .. } => GateTypeId::R1XY,
             CoreGateType::Measure { .. } => GateTypeId::Measure,
+            CoreGateType::Prep => GateTypeId::Prep,
+            CoreGateType::RZZ { .. } => GateTypeId::RZZ,
         }
     }
 }
@@ -48,6 +52,8 @@ impl From<u8> for GateTypeId {
             7 => GateTypeId::RZ,
             8 => GateTypeId::R1XY,
             9 => GateTypeId::Measure,
+            10 => GateTypeId::Prep,
+            11 => GateTypeId::RZZ,
             _ => panic!("Invalid gate type ID: {value}"),
         }
     }
@@ -71,6 +77,8 @@ impl fmt::Display for GateTypeId {
             GateTypeId::RZ => write!(f, "RZ"),
             GateTypeId::R1XY => write!(f, "R1XY"),
             GateTypeId::Measure => write!(f, "Measure"),
+            GateTypeId::Prep => write!(f, "Prep"),
+            GateTypeId::RZZ => write!(f, "RZZ"),
         }
     }
 }
@@ -145,6 +153,12 @@ impl QuantumGate {
         Self::new(GateTypeId::SZZ, vec![qubit1, qubit2], vec![], None)
     }
 
+    /// Create a new RZZ gate
+    #[must_use]
+    pub fn rzz(theta: f64, qubit1: usize, qubit2: usize) -> Self {
+        Self::new(GateTypeId::RZZ, vec![qubit1, qubit2], vec![theta], None)
+    }
+
     /// Create a new RZ gate
     #[must_use]
     pub fn rz(theta: f64, qubit: usize) -> Self {
@@ -153,14 +167,19 @@ impl QuantumGate {
 
     /// Create a new R1XY gate
     #[must_use]
-    pub fn r1xy(phi: f64, theta: f64, qubit: usize) -> Self {
-        Self::new(GateTypeId::R1XY, vec![qubit], vec![phi, theta], None)
+    pub fn r1xy(theta: f64, phi: f64, qubit: usize) -> Self {
+        Self::new(GateTypeId::R1XY, vec![qubit], vec![theta, phi], None)
     }
 
     /// Create a new Measure gate
     #[must_use]
     pub fn measure(qubit: usize, result_id: usize) -> Self {
         Self::new(GateTypeId::Measure, vec![qubit], vec![], Some(result_id))
+    }
+
+    #[must_use]
+    pub fn prep(qubit: usize) -> Self {
+        Self::new(GateTypeId::Prep, vec![qubit], vec![], None)
     }
 
     /// Convert from a core `GateType` and qubits
@@ -174,8 +193,10 @@ impl QuantumGate {
             CoreGateType::CX => Self::cx(qubits[0], qubits[1]),
             CoreGateType::SZZ => Self::szz(qubits[0], qubits[1]),
             CoreGateType::RZ { theta } => Self::rz(*theta, qubits[0]),
-            CoreGateType::R1XY { phi, theta } => Self::r1xy(*phi, *theta, qubits[0]),
+            CoreGateType::R1XY { theta, phi } => Self::r1xy(*theta, *phi, qubits[0]),
             CoreGateType::Measure { result_id } => Self::measure(qubits[0], *result_id),
+            CoreGateType::Prep => Self::prep(qubits[0]),
+            CoreGateType::RZZ { theta } => Self::rzz(*theta, qubits[0], qubits[1]),
         }
     }
 
@@ -199,121 +220,16 @@ impl QuantumGate {
                 theta: self.params[0],
             },
             GateTypeId::R1XY => CoreGateType::R1XY {
-                phi: self.params[0],
-                theta: self.params[1],
+                theta: self.params[0],
+                phi: self.params[1],
             },
             GateTypeId::Measure => CoreGateType::Measure {
                 result_id: self.result_id.unwrap(),
             },
-        }
-    }
-
-    /// Parse a quantum gate from a command string
-    #[allow(clippy::too_many_lines)]
-    pub fn parse_from_str(cmd_str: &str) -> Result<Self, String> {
-        let parts: Vec<&str> = cmd_str.split_whitespace().collect();
-        match parts.first() {
-            Some(&"RZ") => {
-                if parts.len() != 3 {
-                    return Err("Invalid RZ format".into());
-                }
-                let theta = parts[1]
-                    .parse()
-                    .map_err(|e| format!("Invalid theta: {e}"))?;
-                let qubit = parts[2]
-                    .parse()
-                    .map_err(|e| format!("Invalid qubit: {e}"))?;
-                Ok(Self::rz(theta, qubit))
-            }
-            Some(&"R1XY") => {
-                if parts.len() != 4 {
-                    return Err("Invalid R1XY format".into());
-                }
-                let phi = parts[1].parse().map_err(|e| format!("Invalid phi: {e}"))?;
-                let theta = parts[2]
-                    .parse()
-                    .map_err(|e| format!("Invalid theta: {e}"))?;
-                let qubit = parts[3]
-                    .parse()
-                    .map_err(|e| format!("Invalid qubit: {e}"))?;
-                Ok(Self::r1xy(phi, theta, qubit))
-            }
-            Some(&"SZZ") => {
-                if parts.len() != 3 {
-                    return Err("Invalid SZZ format".into());
-                }
-                let qubit1 = parts[1]
-                    .parse()
-                    .map_err(|e| format!("Invalid qubit1: {e}"))?;
-                let qubit2 = parts[2]
-                    .parse()
-                    .map_err(|e| format!("Invalid qubit2: {e}"))?;
-                Ok(Self::szz(qubit1, qubit2))
-            }
-            Some(&"X") => {
-                if parts.len() != 2 {
-                    return Err("Invalid X format".into());
-                }
-                let qubit = parts[1]
-                    .parse()
-                    .map_err(|e| format!("Invalid qubit: {e}"))?;
-                Ok(Self::x(qubit))
-            }
-            Some(&"Y") => {
-                if parts.len() != 2 {
-                    return Err("Invalid Y format".into());
-                }
-                let qubit = parts[1]
-                    .parse()
-                    .map_err(|e| format!("Invalid qubit: {e}"))?;
-                Ok(Self::y(qubit))
-            }
-            Some(&"Z") => {
-                if parts.len() != 2 {
-                    return Err("Invalid Z format".into());
-                }
-                let qubit = parts[1]
-                    .parse()
-                    .map_err(|e| format!("Invalid qubit: {e}"))?;
-                Ok(Self::z(qubit))
-            }
-            Some(&"H") => {
-                if parts.len() != 2 {
-                    return Err("Invalid H format".into());
-                }
-                let qubit = parts[1]
-                    .parse()
-                    .map_err(|e| format!("Invalid qubit: {e}"))?;
-                Ok(Self::h(qubit))
-            }
-            Some(&"CX") => {
-                if parts.len() != 3 {
-                    return Err("Invalid CX format".into());
-                }
-                let control = parts[1]
-                    .parse()
-                    .map_err(|e| format!("Invalid control qubit: {e}"))?;
-                let target = parts[2]
-                    .parse()
-                    .map_err(|e| format!("Invalid target qubit: {e}"))?;
-                Ok(Self::cx(control, target))
-            }
-            Some(&"M") => {
-                if parts.len() != 3 {
-                    return Err("Invalid M format".into());
-                }
-                let qubit = parts[1]
-                    .parse()
-                    .map_err(|e| format!("Invalid qubit: {e}"))?;
-                let result_id = parts[2]
-                    .parse()
-                    .map_err(|e| format!("Invalid result_id: {e}"))?;
-                Ok(Self::measure(qubit, result_id))
-            }
-            _ => Err(format!(
-                "Unknown command type: {}",
-                parts.first().unwrap_or(&"<empty>")
-            )),
+            GateTypeId::Prep => CoreGateType::Prep,
+            GateTypeId::RZZ => CoreGateType::RZZ {
+                theta: self.params[0],
+            },
         }
     }
 
@@ -369,28 +285,6 @@ mod tests {
         assert_eq!(measure_gate.gate_type, GateTypeId::Measure);
         assert_eq!(measure_gate.qubits, vec![2]);
         assert!(measure_gate.params.is_empty());
-        assert_eq!(measure_gate.result_id, Some(42));
-    }
-
-    #[test]
-    fn test_parse_from_str() {
-        let x_gate = QuantumGate::parse_from_str("X 0").unwrap();
-        assert_eq!(x_gate.gate_type, GateTypeId::X);
-        assert_eq!(x_gate.qubits, vec![0]);
-
-        let rz_gate = QuantumGate::parse_from_str("RZ 0.5 1").unwrap();
-        assert_eq!(rz_gate.gate_type, GateTypeId::RZ);
-        assert_eq!(rz_gate.qubits, vec![1]);
-        assert_eq!(rz_gate.params, vec![0.5]);
-
-        let r1xy_gate = QuantumGate::parse_from_str("R1XY 0.1 0.2 2").unwrap();
-        assert_eq!(r1xy_gate.gate_type, GateTypeId::R1XY);
-        assert_eq!(r1xy_gate.qubits, vec![2]);
-        assert_eq!(r1xy_gate.params, vec![0.1, 0.2]);
-
-        let measure_gate = QuantumGate::parse_from_str("M 3 42").unwrap();
-        assert_eq!(measure_gate.gate_type, GateTypeId::Measure);
-        assert_eq!(measure_gate.qubits, vec![3]);
         assert_eq!(measure_gate.result_id, Some(42));
     }
 
