@@ -1,5 +1,5 @@
 use super::{ClassicalEngine, ControlEngine, EngineStage};
-use crate::channels::byte::builder::MessageBuilder;
+use crate::channels::byte::builder::ByteMessageBuilder;
 use crate::channels::byte_message::ByteMessage;
 use crate::errors::QueueError;
 use log::debug;
@@ -181,7 +181,7 @@ impl PHIREngine {
     /// Add a quantum operation to the message builder based on the operation type and arguments
     fn add_quantum_op_to_builder(
         &mut self,
-        builder: &mut MessageBuilder,
+        builder: &mut ByteMessageBuilder,
         qop: &str,
         angles: Option<&(Vec<f64>, String)>,
         args: &[(String, usize)],

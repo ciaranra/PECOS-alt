@@ -121,8 +121,8 @@ impl Clone for QuantumSystem {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::channels::byte::builder::MessageBuilder;
-    use crate::engines::noise::{DepolarizingNoise, NoiseModel, PassThroughNoise};
+    use crate::channels::byte::builder::ByteMessageBuilder;
+    use crate::engines::noise::{DepolarizingNoise, PassThroughNoise};
     use crate::engines::quantum::StateVecEngine;
     /// Creates a new `QuantumSystem` with a state vector quantum engine and depolarizing noise
     ///
@@ -193,7 +193,7 @@ mod tests {
         assert!(noise_model.as_any().is::<DepolarizingNoise>());
 
         // Create a simple quantum circuit with an X gate on qubit 0
-        let mut builder = MessageBuilder::new();
+        let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_quantum_operations();
         builder.add_x(&[0]);
         let input = builder.build();
@@ -258,7 +258,7 @@ mod tests {
             create_quantume_system_with_state_vec_and_depolarizing_noise_with_seed(2, 0.5, seed);
 
         // Create a simple quantum circuit with a Hadamard gate and measurement
-        let mut builder = MessageBuilder::new();
+        let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_quantum_operations();
         builder.add_h(&[0]);
         builder.add_measurements(&[0], &[0]);

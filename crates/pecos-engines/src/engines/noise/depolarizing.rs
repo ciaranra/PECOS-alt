@@ -1,5 +1,5 @@
 use crate::channels::ByteMessage;
-use crate::channels::byte::builder::MessageBuilder;
+use crate::channels::byte::builder::ByteMessageBuilder;
 use crate::channels::byte::gate_type::{GateTypeId, QuantumGate};
 use crate::engines::noise::NoiseModel;
 use crate::errors::QueueError;
@@ -83,7 +83,7 @@ impl DepolarizingNoise {
     /// Apply noise to a list of quantum gates
     fn apply_noise_to_gates(&self, gates: &[QuantumGate]) -> ByteMessage {
         // Create a new message builder
-        let mut builder = MessageBuilder::new();
+        let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_quantum_operations();
 
         // Process each gate
@@ -323,7 +323,7 @@ mod tests {
 
         // Apply noise to a simple message and verify both produce similar results
         // (We can't check exact equality due to randomness, but we can verify the builder works)
-        let mut builder = MessageBuilder::new();
+        let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_quantum_operations();
         builder.add_x(&[0]);
         let input = builder.build();

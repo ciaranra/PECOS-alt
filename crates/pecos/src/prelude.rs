@@ -16,8 +16,7 @@ pub use pecos_core::{IndexableElement, Set, VecSet};
 pub use pecos_core::types::{CommandBatch, GateType, QuantumCommand, ShotResult};
 // re-exporting pecos-engines
 pub use pecos_engines::{
-    channels::byte::ByteChannel,
-    channels::{ByteMessage, Message, MessageChannel},
+    channels::{ByteMessage, ByteMessageBuilder},
     engines::{
         ClassicalEngine, ControlEngine, Engine, EngineStage, EngineSystem, HybridEngine,
         classical::{ProgramType, detect_program_type, get_program_path, setup_engine},

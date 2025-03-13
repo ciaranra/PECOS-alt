@@ -1,4 +1,4 @@
-use crate::channels::byte::builder::MessageBuilder;
+use crate::channels::byte::builder::ByteMessageBuilder;
 use crate::channels::byte::gate_type::{GateTypeId, QuantumGate};
 use crate::channels::byte::protocol::{
     BatchHeader, MeasurementHeader, MeasurementResultHeader, MessageHeader, MessageType,
@@ -37,8 +37,8 @@ impl ByteMessage {
 
     /// Create a new message builder
     #[must_use]
-    pub fn builder() -> MessageBuilder {
-        MessageBuilder::new()
+    pub fn builder() -> ByteMessageBuilder {
+        ByteMessageBuilder::new()
     }
 
     /// Create a new message builder pre-configured for quantum operations
@@ -50,7 +50,7 @@ impl ByteMessage {
     ///
     /// A `MessageBuilder` configured for quantum operations.
     #[must_use]
-    pub fn quantum_operations_builder() -> MessageBuilder {
+    pub fn quantum_operations_builder() -> ByteMessageBuilder {
         let mut builder = Self::builder();
         let _ = builder.for_quantum_operations();
         builder
@@ -65,7 +65,7 @@ impl ByteMessage {
     ///
     /// A `MessageBuilder` configured for measurement results.
     #[must_use]
-    pub fn measurement_results_builder() -> MessageBuilder {
+    pub fn measurement_results_builder() -> ByteMessageBuilder {
         let mut builder = Self::builder();
         let _ = builder.for_measurement_results();
         builder
@@ -189,7 +189,7 @@ impl ByteMessage {
     ///
     /// A Result containing () if successful, or a `QueueError` if there was an error.
     pub fn add_gate_to_builder(
-        builder: &mut MessageBuilder,
+        builder: &mut ByteMessageBuilder,
         gate_type: &GateType,
         qubits: &[usize],
     ) -> Result<(), QueueError> {
@@ -249,7 +249,7 @@ impl ByteMessage {
     /// Parse a command string and add it to the `ByteMessage` builder
     #[allow(clippy::too_many_lines)]
     pub fn parse_command_to_builder(
-        builder: &mut MessageBuilder,
+        builder: &mut ByteMessageBuilder,
         cmd: &str,
     ) -> Result<(), QueueError> {
         let parts: Vec<&str> = cmd.split_whitespace().collect();

@@ -4,11 +4,11 @@ use std::io::{self, Read, Write};
 use std::sync::Mutex;
 
 use crate::channels::ByteMessage;
-use crate::channels::byte::builder::MessageBuilder;
+use crate::channels::byte::builder::ByteMessageBuilder;
 
 lazy_static! {
     // A thread-safe global queue to store quantum operations as a ByteMessage builder
-    static ref MESSAGE_BUILDER: Mutex<Option<MessageBuilder>> = Mutex::new(None);
+    static ref MESSAGE_BUILDER: Mutex<Option<ByteMessageBuilder >> = Mutex::new(None);
 }
 
 /// Represents a quantum measurement result.
@@ -32,7 +32,7 @@ pub struct Qubit {
 }
 
 // Helper function to get or create the message builder
-fn get_or_create_builder() -> std::sync::MutexGuard<'static, Option<MessageBuilder>> {
+fn get_or_create_builder() -> std::sync::MutexGuard<'static, Option<ByteMessageBuilder>> {
     let mut builder_guard = MESSAGE_BUILDER
         .lock()
         .expect("Failed to lock message builder");

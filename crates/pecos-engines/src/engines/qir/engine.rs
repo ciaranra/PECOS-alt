@@ -206,7 +206,7 @@ impl QirClassicalEngine {
 
     /// Parse a command string and add it to the `ByteMessage` builder
     fn add_command_to_builder(
-        builder: &mut crate::channels::byte::builder::MessageBuilder,
+        builder: &mut crate::channels::byte::builder::ByteMessageBuilder,
         cmd: &str,
     ) -> Result<(), QueueError> {
         ByteMessage::parse_command_to_builder(builder, cmd)

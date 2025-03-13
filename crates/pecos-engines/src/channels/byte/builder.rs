@@ -26,19 +26,19 @@ pub enum BuilderMode {
 ///
 /// The builder maintains internal state tracking what kind of message is being created
 /// and ensures that different message types are not mixed inappropriately.
-pub struct MessageBuilder {
+pub struct ByteMessageBuilder {
     buffer: Vec<u8>,
     msg_count: u32,
     mode: BuilderMode,
 }
 
-impl Default for MessageBuilder {
+impl Default for ByteMessageBuilder {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Clone for MessageBuilder {
+impl Clone for ByteMessageBuilder {
     fn clone(&self) -> Self {
         Self {
             buffer: self.buffer.clone(),
@@ -48,7 +48,7 @@ impl Clone for MessageBuilder {
     }
 }
 
-impl MessageBuilder {
+impl ByteMessageBuilder {
     /// Create a new message builder
     #[must_use]
     pub fn new() -> Self {
@@ -507,7 +507,7 @@ mod tests {
     #[test]
     fn test_builder_basic() {
         // Create a builder
-        let mut builder = MessageBuilder::new();
+        let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_quantum_operations();
 
         // Add some gates
@@ -535,7 +535,7 @@ mod tests {
     #[test]
     fn test_builder_measurement_message() {
         // Create a builder for measurement results
-        let mut builder = MessageBuilder::new();
+        let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_measurement_results();
 
         // Add some measurement results
@@ -551,7 +551,7 @@ mod tests {
     #[test]
     fn test_builder_gates() {
         // Create a builder
-        let mut builder = MessageBuilder::new();
+        let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_quantum_operations();
 
         // Add various gates
@@ -589,7 +589,7 @@ mod tests {
     )]
     fn test_builder_type_checking() {
         // Create a builder for measurement results
-        let mut builder = MessageBuilder::new();
+        let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_measurement_results();
 
         // Try to add a gate (should panic)
@@ -599,7 +599,7 @@ mod tests {
     #[test]
     fn test_builder_empty() {
         // Create an empty builder
-        let mut builder = MessageBuilder::new();
+        let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_quantum_operations();
 
         // Build the message
@@ -612,7 +612,7 @@ mod tests {
     #[test]
     fn test_add_measure_collections() {
         // Create a builder
-        let mut builder = MessageBuilder::new();
+        let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_quantum_operations();
 
         // Add measurements for multiple qubits
@@ -638,7 +638,7 @@ mod tests {
     #[test]
     fn test_batch_structure() {
         // Create a builder
-        let mut builder = MessageBuilder::new();
+        let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_quantum_operations();
 
         // Add a gate
@@ -661,7 +661,7 @@ mod tests {
     #[test]
     fn test_for_quantum_operations() {
         // Create a builder
-        let mut builder = MessageBuilder::new();
+        let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_quantum_operations();
 
         // Add a gate
@@ -681,7 +681,7 @@ mod tests {
     #[test]
     fn test_message_count_and_clear() {
         // Create a builder
-        let mut builder = MessageBuilder::new();
+        let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_quantum_operations();
 
         // Add some gates
