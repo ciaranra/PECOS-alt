@@ -292,18 +292,18 @@ mod tests {
         let mut noise = DepolarizingNoise::new(0.01);
 
         // Check initial probability
-        assert_eq!(noise.probability(), 0.01);
+        assert!((noise.probability() - 0.01).abs() < f64::EPSILON);
 
         // Update probability and check it was updated
         noise.set_probability(0.05);
-        assert_eq!(noise.probability(), 0.05);
+        assert!((noise.probability() - 0.05).abs() < f64::EPSILON);
 
         // Update to boundary values
         noise.set_probability(0.0);
-        assert_eq!(noise.probability(), 0.0);
+        assert!((noise.probability() - 0.0).abs() < f64::EPSILON);
 
         noise.set_probability(1.0);
-        assert_eq!(noise.probability(), 1.0);
+        assert!((noise.probability() - 1.0).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -351,7 +351,7 @@ mod tests {
             .downcast_mut::<DepolarizingNoise>()
             .unwrap();
         downcast_noise.set_probability(0.05);
-        assert_eq!(noise.probability(), 0.05);
+        assert!((noise.probability() - 0.05).abs() < f64::EPSILON);
 
         // Test with boxed trait object
         let mut boxed_noise: Box<dyn NoiseModel> = Box::new(DepolarizingNoise::new(0.01));

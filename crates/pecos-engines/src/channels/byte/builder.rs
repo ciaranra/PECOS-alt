@@ -433,8 +433,61 @@ impl ByteMessageBuilder {
     }
 
     /// Clear the builder and start fresh
+    ///
+    /// This method completely replaces the builder with a new instance,
+    /// releasing any allocated memory. Use this when memory usage is a concern
+    /// or when you want absolute certainty of a fresh state.
+    ///
+    /// For performance-critical code or when creating many messages in sequence,
+    /// consider using `reset()` instead, which preserves memory allocation.
+    ///
+    /// After clearing, you'll need to configure the builder for the desired message type
+    /// by calling `for_quantum_operations()` or `for_measurement_results()`.
     pub fn clear(&mut self) -> &mut Self {
         *self = Self::new();
+        self
+    }
+
+    /// Reset the builder state while preserving allocated memory
+    ///
+    /// Unlike `clear()`, this method preserves the allocated memory buffer
+    /// for better performance when reusing the same builder multiple times.
+    /// This is the recommended method for performance-critical code,
+    /// especially when creating many messages in sequence.
+    ///
+    /// After resetting, you'll need to configure the builder for the desired message type
+    /// by calling `for_quantum_operations()` or `for_measurement_results()`:
+    ///
+    /// ```
+    /// # use pecos_engines::channels::byte::builder::ByteMessageBuilder;
+    /// let mut builder = ByteMessageBuilder::new();
+    ///
+    /// // Create first message
+    /// let _ = builder.for_quantum_operations();
+    /// builder.add_h(&[0]);
+    /// let message1 = builder.build();
+    ///
+    /// // Reset and configure for next message
+    /// builder.reset();
+    /// let _ = builder.for_quantum_operations();
+    /// builder.add_h(&[1]);
+    /// let message2 = builder.build();
+    /// ```
+    ///
+    /// If memory usage is a concern or you want to ensure a completely fresh state,
+    /// consider using `clear()` instead.
+    pub fn reset(&mut self) -> &mut Self {
+        // Truncate the buffer to just the batch header size
+        self.buffer.truncate(size_of::<BatchHeader>());
+
+        // Zero out the batch header area more efficiently
+        // Using slice fill is more efficient than a loop for small fixed-size areas
+        self.buffer.fill(0);
+
+        // Reset message count and mode
+        self.msg_count = 0;
+        self.mode = BuilderMode::Empty;
+
         self
     }
 
@@ -702,5 +755,125 @@ mod tests {
 
         // Check the message count again
         assert_eq!(builder.message_count(), 1);
+    }
+
+    #[test]
+    fn test_reset() {
+        // Create a builder
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_quantum_operations();
+
+        // Add some gates
+        builder.add_h(&[0]);
+        builder.add_cx(&[0], &[1]);
+
+        // Check the message count
+        assert_eq!(builder.message_count(), 3);
+
+        // Get the buffer capacity before reset
+        let capacity_before = builder.buffer.capacity();
+
+        // Reset the builder
+        builder.reset();
+
+        // Check the message count after reset
+        assert_eq!(builder.message_count(), 0);
+        assert_eq!(builder.mode(), BuilderMode::Empty);
+
+        // Verify the buffer capacity is preserved
+        assert_eq!(builder.buffer.capacity(), capacity_before);
+
+        // Configure for quantum operations again
+        let _ = builder.for_quantum_operations();
+
+        // Add a new gate
+        builder.add_h(&[0]);
+
+        // Check the message count again
+        assert_eq!(builder.message_count(), 2);
+
+        // Build the message and verify it's valid
+        let message = builder.build();
+        let commands = message.parse_quantum_operations().unwrap();
+        assert_eq!(commands.len(), 1);
+        assert_eq!(commands[0].gate_type, GateTypeId::H);
+    }
+
+    #[test]
+    fn compare_clear_vs_reset_performance() {
+        const ITERATIONS: usize = 5000;
+        const TRIALS: usize = 5;
+
+        let mut clear_durations = Vec::with_capacity(TRIALS);
+        let mut reset_durations = Vec::with_capacity(TRIALS);
+
+        for _ in 0..TRIALS {
+            // Test with clear()
+            let start_clear = std::time::Instant::now();
+            {
+                let mut builder = ByteMessageBuilder::new();
+
+                for i in 0..ITERATIONS {
+                    if i > 0 {
+                        builder.clear();
+                    }
+
+                    // Configure for quantum operations
+                    let _ = builder.for_quantum_operations();
+
+                    // Add a gate
+                    builder.add_h(&[0]);
+
+                    // Build the message
+                    let _message = builder.build();
+                }
+            }
+            clear_durations.push(start_clear.elapsed());
+
+            // Test with reset()
+            let start_reset = std::time::Instant::now();
+            {
+                let mut builder = ByteMessageBuilder::new();
+
+                for i in 0..ITERATIONS {
+                    if i > 0 {
+                        builder.reset();
+                    }
+
+                    // Configure for quantum operations
+                    let _ = builder.for_quantum_operations();
+
+                    // Add a gate
+                    builder.add_h(&[0]);
+
+                    // Build the message
+                    let _message = builder.build();
+                }
+            }
+            reset_durations.push(start_reset.elapsed());
+        }
+
+        // Calculate averages
+        #[allow(clippy::cast_precision_loss)]
+        let avg_clear = clear_durations
+            .iter()
+            .map(std::time::Duration::as_secs_f64)
+            .sum::<f64>()
+            / (TRIALS as f64);
+        #[allow(clippy::cast_precision_loss)]
+        let avg_reset = reset_durations
+            .iter()
+            .map(std::time::Duration::as_secs_f64)
+            .sum::<f64>()
+            / (TRIALS as f64);
+
+        // Print results
+        println!("Performance comparison ({TRIALS} trials of {ITERATIONS} iterations each):");
+        println!("  clear() + for_quantum_operations(): {avg_clear:.6}s (average)");
+        println!("  reset() + for_quantum_operations(): {avg_reset:.6}s (average)");
+        println!("  reset() approach is {:.2}x faster", avg_clear / avg_reset);
+
+        // We don't assert anything here as performance can vary by environment,
+        // but reset() should generally be faster
     }
 }

@@ -17,8 +17,8 @@ name = "proto_bytemessage_py"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-pyo3 = { version = "0.23", features = ["extension-module", "abi3-py312", "experimental-inspect", "auto-initialize"] }
-bytemuck = { version = "1.14", features = ["derive"] }
+pyo3 = { workspace = true, features = ["extension-module", "abi3-py312", "experimental-inspect", "auto-initialize"] }
+bytemuck = { workspace = true, features = ["derive"] }
 proto_bytemessage = { path = "../../crates/proto_bytemessage" }
 
 [lints]
