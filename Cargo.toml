@@ -14,7 +14,6 @@ members = [
 
     "examples/plugin-demo",
     "examples/rust-plugins/custom-processors",
-    "examples/external-cengine",
 ]
 
 [workspace.package]

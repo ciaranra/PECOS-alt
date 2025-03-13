@@ -13,8 +13,7 @@
 use crate::{CliffordGateable, Gens, MeasurementResult, QuantumSimulator};
 use core::fmt::Debug;
 use core::mem;
-use pecos_core::{IndexableElement, Set};
-use pecos_core::{SimRng, VecSet};
+use pecos_core::{IndexableElement, RngManageable, Set, SimRng, VecSet};
 use rand_chacha::ChaCha8Rng;
 // TODO: Look into seeing if a dense bool for signs_minus and signs_i is more efficient
 
@@ -124,6 +123,29 @@ where
     #[must_use]
     pub fn new(num_qubits: usize) -> Self {
         let rng = SimRng::from_entropy();
+        Self::with_rng(num_qubits, rng)
+    }
+
+    /// Create a new stabilizer simulator with a specific seed for the random number generator
+    ///
+    /// This method allows for deterministic behavior by setting a specific seed for the
+    /// random number generator, while still using the default RNG type (`ChaCha8Rng`).
+    ///
+    /// # Arguments
+    /// * `num_qubits` - Number of qubits in the system
+    /// * `seed` - Seed value for the random number generator
+    ///
+    /// # Examples
+    /// ```rust
+    /// use pecos_qsim::StdSparseStab;
+    ///
+    /// // Create a simulator with a specific seed
+    /// let state = StdSparseStab::with_seed(2, 42);
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn with_seed(num_qubits: usize, seed: u64) -> Self {
+        let rng = SimRng::from_seed(seed);
         Self::with_rng(num_qubits, rng)
     }
 
@@ -459,6 +481,35 @@ where
         }
         meas_outcome
     }
+
+    /// Replace the random number generator with a new one
+    ///
+    /// This method allows replacing the RNG without recreating the entire simulator,
+    /// preserving the current quantum state.
+    ///
+    /// # Arguments
+    /// * `rng` - A new random number generator implementing the `SimRng` trait
+    ///
+    /// # Returns
+    /// A reference to self for method chaining
+    ///
+    /// # Examples
+    /// ```rust
+    /// use pecos_qsim::StdSparseStab;
+    /// use pecos_qsim::CliffordGateable;
+    /// use pecos_core::{SimRng, RngManageable};
+    ///
+    /// let mut state = StdSparseStab::new(2);
+    /// // Prepare some state
+    /// state.h(0).cx(0, 1);
+    /// // Replace RNG with a seeded one
+    /// state.set_rng(SimRng::from_seed(42));
+    /// ```
+    #[inline]
+    pub fn set_rng(&mut self, rng: R) -> &mut Self {
+        self.rng = rng;
+        self
+    }
 }
 
 impl<T, E, R> QuantumSimulator for SparseStab<T, E, R>
@@ -708,6 +759,30 @@ where
             let result = self.rng.gen_bool(0.5);
             self.nondeterministic_meas(q, result)
         }
+    }
+}
+
+impl<T, E, R> RngManageable for SparseStab<T, E, R>
+where
+    T: for<'a> Set<'a, Element = E>,
+    E: IndexableElement,
+    R: SimRng,
+{
+    type Rng = R;
+
+    /// Replace the random number generator with a new one
+    ///
+    /// This method allows replacing the RNG without recreating the entire simulator,
+    /// preserving the current quantum state.
+    ///
+    /// # Arguments
+    /// * `rng` - A new random number generator implementing the `SimRng` trait
+    ///
+    /// # Returns
+    /// A reference to self for method chaining
+    #[inline]
+    fn set_rng(&mut self, rng: R) -> &mut Self {
+        self.set_rng(rng)
     }
 }
 
@@ -1979,7 +2054,6 @@ mod tests {
         let mut state = prep_state(&["XI"], &["ZI"]);
         state.syydg(0, 1);
         check_state(&state, &["iZW"], &["XW"]);
-
         // +ZI -> +XY
         let mut state = prep_state(&["ZI"], &["XI"]);
         state.syydg(0, 1);

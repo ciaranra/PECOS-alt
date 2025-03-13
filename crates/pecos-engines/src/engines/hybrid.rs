@@ -1,10 +1,10 @@
 use crate::channels::byte_message::ByteMessage;
-use crate::engines::noise::{NoiseModel, PassThroughNoise};
-use crate::engines::quantum_system::QuantumSystem;
+use crate::engines::noise::{DepolarizingNoise, NoiseModel, PassThroughNoise};
 use crate::engines::{
     ClassicalEngine, ControlEngine, Engine, EngineStage, EngineSystem, QuantumEngine,
 };
 use crate::errors::QueueError;
+use crate::quantum_system::QuantumSystem;
 use dyn_clone;
 use log::debug;
 use pecos_core::types::ShotResult;
@@ -66,8 +66,11 @@ impl HybridEngine {
         quantum_engine: Box<dyn QuantumEngine>,
         probability: f64,
     ) -> Self {
-        let quantum_system =
-            QuantumSystem::new_with_depolarizing_noise(quantum_engine, probability);
+        let quantum_system = // Create a QuantumSystem with depolarizing noise
+        QuantumSystem::new(
+            Box::new(DepolarizingNoise::new_with_options(probability)),
+            quantum_engine,
+        );
 
         Self {
             classical_engine,

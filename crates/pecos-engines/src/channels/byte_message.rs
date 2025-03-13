@@ -725,6 +725,18 @@ impl ByteMessage {
 
         Ok(QuantumGate::measure(qubit, result_id))
     }
+
+    /// Creates an empty `ByteMessage`
+    ///
+    /// This method creates a minimal valid `ByteMessage` with no content.
+    /// It's useful as a fallback when processing operations fails.
+    ///
+    /// # Returns
+    /// A new empty `ByteMessage`
+    #[must_use]
+    pub fn create_empty() -> Self {
+        Self { bytes: Vec::new() }
+    }
 }
 
 #[cfg(test)]

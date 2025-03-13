@@ -4,9 +4,11 @@ use crate::channels::byte::gate_type::{GateTypeId, QuantumGate};
 use crate::engines::noise::NoiseModel;
 use crate::errors::QueueError;
 use log::trace;
+use pecos_core::RngManageable;
+use pecos_core::SimRng;
 use rand::Rng;
 use rand::SeedableRng;
-use rand::rngs::StdRng;
+use rand_chacha::ChaCha8Rng;
 use std::any::Any;
 use std::sync::{Arc, Mutex};
 
@@ -19,7 +21,7 @@ pub struct DepolarizingNoise {
     /// Probability of applying a random Pauli error
     probability: f64,
     /// Shared random number generator
-    rng: Arc<Mutex<StdRng>>,
+    rng: Arc<Mutex<ChaCha8Rng>>,
 }
 
 impl DepolarizingNoise {
@@ -27,24 +29,21 @@ impl DepolarizingNoise {
     /// of applying a random Pauli error.
     #[must_use]
     pub fn new(probability: f64) -> Self {
-        Self {
-            probability,
-            rng: Arc::new(Mutex::new(StdRng::from_os_rng())),
-        }
+        Self::new_with_options(probability)
     }
 
-    /// Create a new depolarizing noise model with custom options
+    /// Create a new depolarizing noise model with the given probability.
     ///
     /// # Arguments
+    /// * `probability` - Probability of applying a random Pauli error
     ///
-    /// * `probability` - Probability of applying a random Pauli error (between 0.0 and 1.0)
-    /// * `seed` - Optional seed for the random number generator
+    /// # Note
+    /// To set a specific seed for deterministic behavior, use the `set_seed` method
+    /// after creating the noise model.
     #[must_use]
-    pub fn new_with_options(probability: f64, seed: Option<u64>) -> Self {
-        let rng = match seed {
-            Some(seed) => StdRng::seed_from_u64(seed),
-            None => StdRng::from_os_rng(),
-        };
+    pub fn new_with_options(probability: f64) -> Self {
+        // Create an RNG from entropy (for non-deterministic behavior by default)
+        let rng = ChaCha8Rng::from_entropy();
 
         Self {
             probability,
@@ -187,6 +186,47 @@ impl NoiseModel for DepolarizingNoise {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
+
+    /// Set a specific seed for the random number generator
+    ///
+    /// This method provides deterministic behavior by setting a specific seed
+    /// for the random number generator used by the depolarizing noise model.
+    ///
+    /// This implementation leverages the `RngManageable` trait's `set_rng` method
+    /// to create and set a new random number generator from the provided seed.
+    ///
+    /// # Arguments
+    /// * `seed` - Seed value for the random number generator
+    ///
+    /// # Returns
+    /// Result indicating success or failure
+    ///
+    /// # Errors
+    /// This implementation always returns `Ok(())` as seeding cannot fail
+    fn set_seed(&mut self, seed: u64) -> Result<(), QueueError> {
+        // Use the RngManageable trait's set_seed method
+        self.set_rng(ChaCha8Rng::seed_from_u64(seed));
+        Ok(())
+    }
+}
+
+impl RngManageable for DepolarizingNoise {
+    type Rng = ChaCha8Rng;
+
+    /// Replace the random number generator with a new one
+    ///
+    /// This method allows replacing the RNG without recreating the entire noise model,
+    /// preserving its current configuration.
+    ///
+    /// # Arguments
+    /// * `rng` - A new random number generator
+    ///
+    /// # Returns
+    /// A reference to self for method chaining
+    fn set_rng(&mut self, rng: ChaCha8Rng) -> &mut Self {
+        self.rng = Arc::new(Mutex::new(rng));
+        self
+    }
 }
 
 /// Builder for creating depolarizing noise models
@@ -238,7 +278,7 @@ impl DepolarizingNoiseBuilder {
             "Probability must be between 0 and 1"
         );
 
-        Box::new(DepolarizingNoise::new_with_options(probability, self.seed))
+        Box::new(DepolarizingNoise::new_with_options(probability))
     }
 }
 

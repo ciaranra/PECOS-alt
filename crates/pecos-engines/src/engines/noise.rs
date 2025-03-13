@@ -30,6 +30,32 @@ pub trait NoiseModel: DynClone + Send + Sync + Any {
     /// Returns a [`QueueError`] if the reset operation fails
     fn reset(&mut self) -> Result<(), QueueError>;
 
+    /// Set a specific seed for the random number generator
+    ///
+    /// This method allows for deterministic behavior by setting a specific seed
+    /// for the random number generator used by the noise model.
+    ///
+    /// This is the preferred method for users who need deterministic behavior from
+    /// noise models. It provides a consistent interface across all components that
+    /// manage randomness, regardless of their internal implementation details.
+    ///
+    /// # Arguments
+    /// * `seed` - Seed value for the random number generator
+    ///
+    /// # Returns
+    /// Result indicating success or failure
+    ///
+    /// # Errors
+    /// Returns a `QueueError` if setting the seed fails
+    ///
+    /// # Implementation Note
+    /// Noise models that implement the `RngManageable` trait can leverage its
+    /// default implementation. Noise models that don't use randomness can use
+    /// the default implementation provided here, which does nothing and returns Ok.
+    fn set_seed(&mut self, _seed: u64) -> Result<(), QueueError> {
+        Ok(())
+    }
+
     /// Returns a reference to self as Any
     ///
     /// This allows for type-checking and downcasting without requiring

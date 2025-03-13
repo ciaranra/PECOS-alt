@@ -28,11 +28,12 @@ pub use phase::sign::Sign;
 pub use qubit_id::QubitId;
 pub use sets::set::Set;
 pub use sets::vec_set::VecSet;
+pub use sims_rngs::RngManageable;
+pub use sims_rngs::SimRng;
 
 pub use crate::sims_rngs::chacha_rng::{ChaCha8Rng, ChaCha12Rng, ChaCha20Rng};
 pub use crate::sims_rngs::choices::Choices;
 pub use crate::sims_rngs::cyclic_rng::{CyclicRng, CyclicSeed};
-pub use crate::sims_rngs::sim_rng::SimRng;
 pub use crate::sims_rngs::xoshiro_rng::{
     Xoshiro128PlusPlus, Xoshiro128StarStar, Xoshiro256PlusPlus, Xoshiro256StarStar,
     Xoshiro512PlusPlus, Xoshiro512StarStar,

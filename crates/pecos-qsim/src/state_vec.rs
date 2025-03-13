@@ -13,7 +13,7 @@
 use super::arbitrary_rotation_gateable::ArbitraryRotationGateable;
 use super::clifford_gateable::{CliffordGateable, MeasurementResult};
 use super::quantum_simulator::QuantumSimulator;
-use pecos_core::SimRng;
+use pecos_core::{RngManageable, SimRng};
 use rand_chacha::ChaCha8Rng;
 
 use num_complex::Complex64;
@@ -66,6 +66,29 @@ impl StateVec {
     #[must_use]
     pub fn new(num_qubits: usize) -> StateVec<ChaCha8Rng> {
         let rng = ChaCha8Rng::from_entropy();
+        StateVec::with_rng(num_qubits, rng)
+    }
+
+    /// Create a new state vector simulator with a specific seed for the random number generator
+    ///
+    /// This method allows for deterministic behavior by setting a specific seed for the
+    /// random number generator, while still using the default RNG type (`ChaCha8Rng`).
+    ///
+    /// # Arguments
+    /// * `num_qubits` - Number of qubits in the system
+    /// * `seed` - Seed value for the random number generator
+    ///
+    /// # Examples
+    /// ```rust
+    /// use pecos_qsim::StateVec;
+    ///
+    /// // Create a simulator with a specific seed
+    /// let state = StateVec::with_seed(2, 42);
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn with_seed(num_qubits: usize, seed: u64) -> StateVec<ChaCha8Rng> {
+        let rng = SimRng::from_seed(seed);
         StateVec::with_rng(num_qubits, rng)
     }
 }
@@ -413,6 +436,35 @@ where
         }
 
         self.state = new_state;
+        self
+    }
+
+    /// Replace the random number generator with a new one
+    ///
+    /// This method allows replacing the RNG without recreating the entire simulator,
+    /// preserving the current quantum state.
+    ///
+    /// # Arguments
+    /// * `rng` - A new random number generator implementing the `SimRng` trait
+    ///
+    /// # Returns
+    /// A reference to self for method chaining
+    ///
+    /// # Examples
+    /// ```rust
+    /// use pecos_qsim::StateVec;
+    /// use pecos_qsim::CliffordGateable;
+    /// use pecos_core::{SimRng, RngManageable};
+    ///
+    /// let mut state = StateVec::new(2);
+    /// // Prepare some state
+    /// state.h(0).cx(0, 1);
+    /// // Replace RNG with a seeded one
+    /// state.set_rng(SimRng::from_seed(42));
+    /// ```
+    #[inline]
+    pub fn set_rng(&mut self, rng: R) -> &mut Self {
+        self.rng = rng;
         self
     }
 }
@@ -1165,6 +1217,29 @@ impl ArbitraryRotationGateable<usize> for StateVec {
 
             self.state[i] *= phase;
         }
+        self
+    }
+}
+
+impl<R> RngManageable for StateVec<R>
+where
+    R: SimRng,
+{
+    type Rng = R;
+
+    /// Replace the random number generator with a new one
+    ///
+    /// This method allows replacing the RNG without recreating the entire simulator,
+    /// preserving the current quantum state.
+    ///
+    /// # Arguments
+    /// * `rng` - A new random number generator implementing the `SimRng` trait
+    ///
+    /// # Returns
+    /// A reference to self for method chaining
+    #[inline]
+    fn set_rng(&mut self, rng: R) -> &mut Self {
+        self.rng = rng;
         self
     }
 }

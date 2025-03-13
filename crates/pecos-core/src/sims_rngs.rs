@@ -13,5 +13,12 @@
 pub mod chacha_rng;
 pub mod choices;
 pub mod cyclic_rng;
+pub mod rng_manageable;
 pub mod sim_rng;
 pub mod xoshiro_rng;
+
+pub use chacha_rng::ChaCha8Rng;
+pub use cyclic_rng::CyclicRng;
+pub use rng_manageable::RngManageable;
+pub use sim_rng::SimRng;
+pub use xoshiro_rng::Xoshiro256PlusPlus;

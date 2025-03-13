@@ -26,11 +26,9 @@ pub use pecos_engines::{
         phir::PHIREngine,
         qir::engine::QirClassicalEngine,
         quantum::{QuantumEngine, StateVecEngine, new_quantum_engine_arbitrary_qgate},
-        quantum_system::{
-            QuantumSystem, create_quantume_system_with_state_vec_and_depolarizing_noise,
-        },
     },
     errors::QueueError,
+    quantum_system::QuantumSystem,
 };
 // re-exporting pecos-noise
 // re-exporting pecos-qsim

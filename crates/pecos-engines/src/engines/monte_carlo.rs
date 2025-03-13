@@ -316,7 +316,12 @@ mod tests {
         }
     }
 
-    impl QuantumEngine for MockQuantumEngine {}
+    impl QuantumEngine for MockQuantumEngine {
+        fn set_seed(&mut self, _seed: u64) -> Result<(), QueueError> {
+            // Mock implementation - doesn't actually use the seed
+            Ok(())
+        }
+    }
 
     /// Creates a temporary test program file for testing
     ///

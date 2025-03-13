@@ -15,6 +15,8 @@ use core::fmt::Debug;
 use rand::distr::Bernoulli;
 use rand::prelude::*;
 
+// TODO: Update this to use the new standard rng interface
+
 /// Represents the minimal interface needed for simulations.
 /// This trait also allows the blanket implementation provided by Rng to be overridden in favor of
 /// potentially more efficient implementations.
@@ -52,5 +54,29 @@ pub trait SimRng: RngCore + SeedableRng + Debug {
     #[must_use]
     fn from_entropy() -> Self {
         Self::try_from_os_rng().expect("Failed to create RNG from OS entropy")
+    }
+
+    /// Create a new RNG instance from a 64-bit seed value
+    ///
+    /// This is a convenience method that wraps the `seed_from_u64` method from the `SeedableRng` trait.
+    /// It allows for deterministic random number generation by using a specific seed.
+    ///
+    /// # Arguments
+    /// * `seed` - A 64-bit seed value
+    ///
+    /// # Returns
+    /// A new instance of the RNG initialized with the given seed
+    ///
+    /// # Examples
+    /// ```rust
+    /// use pecos_core::SimRng;
+    /// use rand_chacha::ChaCha8Rng;
+    ///
+    /// let rng = ChaCha8Rng::from_seed(42);
+    /// ```
+    #[inline]
+    #[must_use]
+    fn from_seed(seed: u64) -> Self {
+        Self::seed_from_u64(seed)
     }
 }
