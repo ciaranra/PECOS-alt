@@ -1,9 +1,9 @@
 use crate::channels::byte_message::ByteMessage;
 use crate::engines::{ControlEngine, Engine, EngineStage, phir, qir};
 use crate::errors::QueueError;
+use crate::shot_results::ShotResult;
 use dyn_clone::DynClone;
 use log::debug;
-use pecos_core::types::ShotResult;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 

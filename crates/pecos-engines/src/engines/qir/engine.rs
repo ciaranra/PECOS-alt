@@ -1,8 +1,8 @@
 use crate::channels::byte_message::ByteMessage;
 use crate::engines::{ClassicalEngine, ControlEngine, EngineStage};
 use crate::errors::QueueError;
+use crate::shot_results::ShotResult;
 use log::{debug, info};
-use pecos_core::types::ShotResult;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};

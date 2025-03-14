@@ -13,7 +13,7 @@
 // re-exporting pecos-core
 pub use pecos_core::{IndexableElement, Set, VecSet};
 // re-exporting pecos-engines
-pub use pecos_core::types::ShotResult;
+pub use pecos_engines::shot_results::{ShotResult, ShotResults};
 // re-exporting pecos-engines
 pub use pecos_engines::{
     channels::{ByteMessage, ByteMessageBuilder},

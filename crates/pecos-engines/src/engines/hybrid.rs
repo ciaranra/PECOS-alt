@@ -5,9 +5,9 @@ use crate::engines::{
 };
 use crate::errors::QueueError;
 use crate::quantum_system::QuantumSystem;
+use crate::shot_results::ShotResult;
 use dyn_clone;
 use log::debug;
-use pecos_core::types::ShotResult;
 
 /// `HybridEngine` coordinates between classical and quantum components
 ///

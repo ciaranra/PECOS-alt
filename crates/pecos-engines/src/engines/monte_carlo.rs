@@ -3,10 +3,10 @@ use crate::engines::noise::{DepolarizingNoise, NoiseModel, PassThroughNoise};
 use crate::engines::quantum::new_quantum_engine_arbitrary_qgate;
 use crate::engines::{ClassicalEngine, QuantumEngine};
 use crate::errors::QueueError;
+use crate::shot_results::ShotResults;
 use dyn_clone;
 use log::{debug, info};
 use parking_lot::Mutex;
-use pecos_core::types::ShotResults;
 use pecos_qsim::StateVec;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::sync::Arc;
@@ -58,7 +58,7 @@ impl MonteCarloEngine {
             num_shots, num_workers
         );
 
-        assert!(num_shots != 0, "Number of shots must be greater than 0");
+        assert_ne!(num_shots, 0, "Number of shots must be greater than 0");
 
         // Determine how many shots to run per worker
         let shots_per_worker = num_shots.div_ceil(num_workers);
@@ -114,6 +114,9 @@ impl MonteCarloEngine {
             .map_err(|_| QueueError::LockError("Failed to unwrap results Arc".into()))?
             .into_inner();
 
+        // TODO: Consider refactoring to collect ByteMessage instances directly and use
+        // ShotResults::from_byte_messages for more efficient and context-aware processing.
+        // This would require storing a mapping from result_id to register name.
         Ok(ShotResults::from_measurements(&results_vec))
     }
 
@@ -268,7 +271,6 @@ impl MonteCarloEngineBuilder {
     /// Panics if `classical_engine`, `noise_model`, or `quantum_engine` are not set.
     #[must_use]
     pub fn build(self) -> MonteCarloEngine {
-        // TODO: Return an error...
         MonteCarloEngine {
             classical_engine: self.classical_engine.expect("ClassicalEngine is None"),
             noise_model: self
@@ -290,7 +292,7 @@ mod tests {
     use crate::engines::classical::setup_engine;
     use crate::engines::phir::PHIREngine;
     use crate::engines::quantum::StateVecEngine;
-    use pecos_core::types::ShotResult;
+    use crate::shot_results::ShotResult;
     use pecos_qsim::StdSparseStab;
     use std::collections::HashMap;
     use std::fs::File;
@@ -678,6 +680,10 @@ mod tests {
         }
 
         fn get_results(&self) -> Result<ShotResult, QueueError> {
+            // TODO: If the measurements are already available in a ByteMessage format,
+            // consider using ShotResult::from_byte_message for more efficient processing.
+            // This would require maintaining a mapping from result_id to register name.
+
             // Create a string representation of the combined result
             let mut result_string = String::new();
 
