@@ -283,16 +283,16 @@ impl MonteCarloEngineBuilder {
 mod tests {
     use super::*;
     use crate::channels::ByteMessage;
+    use crate::channels::byte::gate_type::{GateTypeId, QuantumGate};
     use crate::engines::ControlEngine;
     use crate::engines::Engine;
     use crate::engines::EngineStage;
     use crate::engines::classical::setup_engine;
     use crate::engines::phir::PHIREngine;
     use crate::engines::quantum::StateVecEngine;
-    use pecos_core::types::{GateType, ShotResult};
+    use pecos_core::types::ShotResult;
     use pecos_qsim::StdSparseStab;
     use std::collections::HashMap;
-    use std::error::Error;
     use std::fs::File;
     use std::io::Write;
     use std::path::PathBuf;
@@ -595,90 +595,81 @@ mod tests {
     // Mock implementation of an external classical engine
     #[derive(Debug, Clone)]
     struct ExternalClassicalEngine {
-        // Instead of storing QuantumCommand objects, store the circuit definition
-        // as gate types and qubit indices
-        gate_types: Vec<GateType>,
-        qubit_indices: Vec<Vec<usize>>,
-        measurements: HashMap<String, u32>,
+        // Store the circuit definition as quantum gates
+        gates: Vec<QuantumGate>,
         command_index: usize,
         current_shot: usize,
+        measurements: HashMap<String, u32>,
     }
 
     impl ExternalClassicalEngine {
         fn new() -> Self {
             // Create a simple Bell state preparation circuit
-            let gate_types = vec![
-                GateType::H,
-                GateType::CX,
-                GateType::Measure { result_id: 0 },
-                GateType::Measure { result_id: 1 },
-            ];
-
-            let qubit_indices = vec![
-                vec![0],    // H on qubit 0
-                vec![0, 1], // CX on qubits 0, 1
-                vec![0],    // Measure qubit 0
-                vec![1],    // Measure qubit 1
+            let gates = vec![
+                QuantumGate::h(0),
+                QuantumGate::cx(0, 1),
+                QuantumGate::measure(0, 0),
+                QuantumGate::measure(1, 1),
             ];
 
             Self {
-                gate_types,
-                qubit_indices,
-                measurements: HashMap::new(),
+                gates,
                 command_index: 0,
                 current_shot: 0,
+                measurements: HashMap::new(),
             }
         }
 
         // Helper method to build a ByteMessage for a specific gate
-        fn build_message_for_gate(gate_type: &GateType, qubits: &[usize]) -> ByteMessage {
-            ByteMessage::create_with_gate(gate_type, qubits)
-                .expect("Failed to create message with gate")
+        fn build_message_for_gate(gate: &QuantumGate) -> ByteMessage {
+            ByteMessage::create_with_quantum_gate(gate)
+        }
+
+        // Helper method to get the maximum qubit index
+        fn get_max_qubit_index(&self) -> usize {
+            let mut max_qubit = 0;
+            for gate in &self.gates {
+                for &qubit in &gate.qubits {
+                    if qubit > max_qubit {
+                        max_qubit = qubit;
+                    }
+                }
+            }
+            max_qubit
         }
     }
 
     impl ClassicalEngine for ExternalClassicalEngine {
         fn num_qubits(&self) -> usize {
             // If we have no commands, return 0
-            if self.gate_types.is_empty() {
+            if self.gates.is_empty() {
                 return 0;
             }
 
             // Find the highest qubit index used in any command
-            let mut max_qubit_index = 0;
-            for qubits in &self.qubit_indices {
-                for &qubit in qubits {
-                    if qubit > max_qubit_index {
-                        max_qubit_index = qubit;
-                    }
-                }
-            }
-
-            // The number of qubits is max_qubit_index + 1 (since indices start at 0)
-            max_qubit_index + 1
+            self.get_max_qubit_index() + 1
         }
 
         fn generate_commands(&mut self) -> Result<ByteMessage, QueueError> {
             // If we've processed all commands, return empty batch (flush message)
-            if self.command_index >= self.gate_types.len() {
+            if self.command_index >= self.gates.len() {
                 return Ok(ByteMessage::create_flush());
             }
 
             // Get the next command
-            let gate_type = &self.gate_types[self.command_index];
-            let qubits = &self.qubit_indices[self.command_index];
+            let gate = &self.gates[self.command_index];
             self.command_index += 1;
 
-            // Build the message based on the gate type
-            let message = Self::build_message_for_gate(gate_type, qubits);
+            // Build the message based on the gate
+            let message = Self::build_message_for_gate(gate);
             Ok(message)
         }
 
         fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError> {
             let measurements = message.parse_measurements()?;
 
+            // Store the measurements
             for (result_id, outcome) in measurements {
-                // Store the measurement
                 self.measurements
                     .insert(format!("measurement_{result_id}"), outcome);
             }
@@ -687,25 +678,39 @@ mod tests {
         }
 
         fn get_results(&self) -> Result<ShotResult, QueueError> {
-            // Process all measurements into a "result" string
+            // Create a string representation of the combined result
             let mut result_string = String::new();
 
-            // Sort keys to ensure consistent ordering
-            let mut keys: Vec<_> = self.measurements.keys().collect();
-            keys.sort();
+            // Sort gates by result_id for consistent ordering
+            let mut measurement_gates: Vec<_> = self
+                .gates
+                .iter()
+                .filter(|gate| gate.gate_type == GateTypeId::Measure)
+                .collect();
 
-            for key in keys {
-                if let Some(&value) = self.measurements.get(key) {
-                    result_string.push_str(&value.to_string());
+            measurement_gates.sort_by_key(|gate| gate.result_id);
+
+            // Add each measurement to the result string
+            for gate in measurement_gates {
+                if let Some(result_id) = gate.result_id {
+                    let key = format!("measurement_{result_id}");
+                    if let Some(outcome) = self.measurements.get(&key) {
+                        result_string.push_str(&outcome.to_string());
+                    }
                 }
             }
 
             // Create a ShotResult with both individual measurements and the combined result
-            let mut result_measurements = self.measurements.clone();
+            let mut result_measurements = HashMap::new();
             if !result_string.is_empty() {
                 if let Ok(value) = result_string.parse::<u32>() {
                     result_measurements.insert("result".to_string(), value);
                 }
+            }
+
+            // Add individual measurements
+            for (key, outcome) in &self.measurements {
+                result_measurements.insert(key.clone(), *outcome);
             }
 
             Ok(ShotResult {
@@ -713,7 +718,7 @@ mod tests {
             })
         }
 
-        fn compile(&self) -> Result<(), Box<dyn Error>> {
+        fn compile(&self) -> Result<(), Box<dyn std::error::Error>> {
             // No compilation needed for this mock
             Ok(())
         }
@@ -737,7 +742,6 @@ mod tests {
             _input: (),
         ) -> Result<EngineStage<ByteMessage, ShotResult>, QueueError> {
             self.command_index = 0;
-            self.measurements.clear();
 
             let commands = self.generate_commands()?;
             if commands.is_empty().unwrap_or(false) {

@@ -13,7 +13,7 @@
 // re-exporting pecos-core
 pub use pecos_core::{IndexableElement, Set, VecSet};
 // re-exporting pecos-engines
-pub use pecos_core::types::{CommandBatch, GateType, QuantumCommand, ShotResult};
+pub use pecos_core::types::ShotResult;
 // re-exporting pecos-engines
 pub use pecos_engines::{
     channels::{ByteMessage, ByteMessageBuilder},
@@ -29,7 +29,6 @@ pub use pecos_engines::{
     errors::QueueError,
     quantum_system::QuantumSystem,
 };
-// re-exporting pecos-noise
 // re-exporting pecos-qsim
 pub use pecos_qsim::ArbitraryRotationGateable;
 pub use pecos_qsim::CliffordGateable;

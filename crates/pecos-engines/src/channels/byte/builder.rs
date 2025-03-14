@@ -10,7 +10,6 @@ use super::protocol::{
 use crate::channels::ByteMessage;
 use crate::channels::byte::gate_type::{GateTypeId, QuantumGate};
 use bytemuck::bytes_of;
-use pecos_core::types::QuantumCommand;
 use std::mem::size_of;
 
 /// Enum to track what kind of message is being built
@@ -149,7 +148,22 @@ impl ByteMessageBuilder {
     }
 
     /// Add a quantum gate command
-    fn add_quantum_gate(&mut self, gate: &QuantumGate) -> &mut Self {
+    ///
+    /// This method adds a quantum gate to the message builder.
+    ///
+    /// # Arguments
+    ///
+    /// * `gate` - The quantum gate to add
+    ///
+    /// # Returns
+    ///
+    /// A mutable reference to self for method chaining
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the number of qubits in the gate exceeds 255,
+    /// as the protocol uses a u8 to represent the qubit count.
+    pub fn add_quantum_gate(&mut self, gate: &QuantumGate) -> &mut Self {
         // Handle measurement gates using the add_measurements method
         if gate.gate_type == GateTypeId::Measure {
             if let Some(result_id) = gate.result_id {
@@ -254,22 +268,6 @@ impl ByteMessageBuilder {
                 flags,
             );
         }
-        self
-    }
-
-    /// Add quantum commands from a slice
-    pub fn add_quantum_commands(&mut self, commands: &[QuantumCommand]) -> &mut Self {
-        // Begin batch message
-        self.add_message(MessageType::BeginBatch, &[], MessageFlags::NONE);
-
-        // Add each command
-        for cmd in commands {
-            self.add_quantum_gate(&QuantumGate::from_quantum_command(cmd));
-        }
-
-        // End batch message
-        self.add_message(MessageType::EndBatch, &[], MessageFlags::NONE);
-
         self
     }
 

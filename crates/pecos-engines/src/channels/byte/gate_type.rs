@@ -1,4 +1,3 @@
-use pecos_core::types::{GateType as CoreGateType, QuantumCommand};
 use std::fmt;
 
 /// FFI-friendly representation of quantum gate types
@@ -20,24 +19,6 @@ pub enum GateTypeId {
     Measure = 9,
     Prep = 10,
     RZZ = 11,
-}
-
-impl From<&CoreGateType> for GateTypeId {
-    fn from(gate: &CoreGateType) -> Self {
-        match gate {
-            CoreGateType::X => GateTypeId::X,
-            CoreGateType::Y => GateTypeId::Y,
-            CoreGateType::Z => GateTypeId::Z,
-            CoreGateType::H => GateTypeId::H,
-            CoreGateType::CX => GateTypeId::CX,
-            CoreGateType::SZZ => GateTypeId::SZZ,
-            CoreGateType::RZ { .. } => GateTypeId::RZ,
-            CoreGateType::R1XY { .. } => GateTypeId::R1XY,
-            CoreGateType::Measure { .. } => GateTypeId::Measure,
-            CoreGateType::Prep => GateTypeId::Prep,
-            CoreGateType::RZZ { .. } => GateTypeId::RZZ,
-        }
-    }
 }
 
 impl From<u8> for GateTypeId {
@@ -181,63 +162,6 @@ impl QuantumGate {
     pub fn prep(qubit: usize) -> Self {
         Self::new(GateTypeId::Prep, vec![qubit], vec![], None)
     }
-
-    /// Convert from a core `GateType` and qubits
-    #[must_use]
-    pub fn from_core_gate(gate: &CoreGateType, qubits: &[usize]) -> Self {
-        match gate {
-            CoreGateType::X => Self::x(qubits[0]),
-            CoreGateType::Y => Self::y(qubits[0]),
-            CoreGateType::Z => Self::z(qubits[0]),
-            CoreGateType::H => Self::h(qubits[0]),
-            CoreGateType::CX => Self::cx(qubits[0], qubits[1]),
-            CoreGateType::SZZ => Self::szz(qubits[0], qubits[1]),
-            CoreGateType::RZ { theta } => Self::rz(*theta, qubits[0]),
-            CoreGateType::R1XY { theta, phi } => Self::r1xy(*theta, *phi, qubits[0]),
-            CoreGateType::Measure { result_id } => Self::measure(qubits[0], *result_id),
-            CoreGateType::Prep => Self::prep(qubits[0]),
-            CoreGateType::RZZ { theta } => Self::rzz(*theta, qubits[0], qubits[1]),
-        }
-    }
-
-    /// Convert to a core `GateType`
-    ///
-    /// # Panics
-    ///
-    /// This function will panic if:
-    /// - Called on a Measure gate without a `result_id`
-    /// - Called on a parameterized gate (RZ, R1XY) without the required parameters
-    #[must_use]
-    pub fn to_core_gate(&self) -> CoreGateType {
-        match self.gate_type {
-            GateTypeId::X => CoreGateType::X,
-            GateTypeId::Y => CoreGateType::Y,
-            GateTypeId::Z => CoreGateType::Z,
-            GateTypeId::H => CoreGateType::H,
-            GateTypeId::CX => CoreGateType::CX,
-            GateTypeId::SZZ => CoreGateType::SZZ,
-            GateTypeId::RZ => CoreGateType::RZ {
-                theta: self.params[0],
-            },
-            GateTypeId::R1XY => CoreGateType::R1XY {
-                theta: self.params[0],
-                phi: self.params[1],
-            },
-            GateTypeId::Measure => CoreGateType::Measure {
-                result_id: self.result_id.unwrap(),
-            },
-            GateTypeId::Prep => CoreGateType::Prep,
-            GateTypeId::RZZ => CoreGateType::RZZ {
-                theta: self.params[0],
-            },
-        }
-    }
-
-    /// Convert from a `QuantumCommand`
-    #[must_use]
-    pub fn from_quantum_command(cmd: &QuantumCommand) -> Self {
-        Self::from_core_gate(&cmd.gate, &cmd.qubits)
-    }
 }
 
 #[cfg(test)]
@@ -286,28 +210,5 @@ mod tests {
         assert_eq!(measure_gate.qubits, vec![2]);
         assert!(measure_gate.params.is_empty());
         assert_eq!(measure_gate.result_id, Some(42));
-    }
-
-    #[test]
-    fn test_core_gate_conversion() {
-        let core_x = CoreGateType::X;
-        let gate_id = GateTypeId::from(&core_x);
-        assert_eq!(gate_id, GateTypeId::X);
-
-        let quantum_gate = QuantumGate::x(0);
-        let core_gate = quantum_gate.to_core_gate();
-        match core_gate {
-            CoreGateType::X => {}
-            _ => panic!("Expected X gate"),
-        }
-
-        let core_rz = CoreGateType::RZ { theta: 0.5 };
-        let gate_id = GateTypeId::from(&core_rz);
-        assert_eq!(gate_id, GateTypeId::RZ);
-
-        let quantum_gate = QuantumGate::from_core_gate(&core_rz, &[1]);
-        assert_eq!(quantum_gate.gate_type, GateTypeId::RZ);
-        assert_eq!(quantum_gate.qubits, vec![1]);
-        assert_eq!(quantum_gate.params, vec![0.5]);
     }
 }

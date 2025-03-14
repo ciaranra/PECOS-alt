@@ -348,7 +348,26 @@ fn convert_to_py_commands(py: Python<'_>, commands: &PyObject) -> PyResult<Vec<P
             "Measure" => {
                 let returns = py_cmd.getattr("returns")?;
                 let return_item = returns.get_item(0)?;
-                let result_id: usize = return_item.get_item(1)?.extract()?;
+                let result_id = match return_item.get_item(1) {
+                    Ok(id) => match id.extract::<usize>() {
+                        // We're storing a usize (result_id) as an f64 parameter. This is safe because:
+                        // 1. Result IDs are typically small integers (< 1000)
+                        // 2. f64 can exactly represent integers up to 2^53 (9 quadrillion)
+                        // 3. This value will be cast back to usize when used
+                        #[allow(clippy::cast_precision_loss)]
+                        Ok(i) => i as f64, // Store result_id as a parameter
+                        Err(e) => {
+                            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                                "Error extracting result_id: {e}"
+                            )));
+                        }
+                    },
+                    Err(e) => {
+                        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                            "Error getting result_id: {e}"
+                        )));
+                    }
+                };
                 py_dict.set_item("gate_type", "Measure")?;
                 params_dict.set_item("result_id", result_id)?;
             }
@@ -382,7 +401,7 @@ fn to_queue_error<E: std::fmt::Display>(err: E) -> QueueError {
 }
 
 // Break out part of the generate_commands functionality to reduce function length
-fn process_py_command(py_cmd: &Bound<PyAny>) -> Result<(GateType, Vec<usize>), QueueError> {
+fn process_py_command(py_cmd: &Bound<PyAny>) -> Result<(String, Vec<usize>, Vec<f64>), QueueError> {
     // Get command name
     let name = match py_cmd.getattr("name") {
         Ok(n) => match n.extract::<String>() {
@@ -428,68 +447,47 @@ fn process_py_command(py_cmd: &Bound<PyAny>) -> Result<(GateType, Vec<usize>), Q
         qubits.push(qubit_idx);
     }
 
-    // Create gate based on type
-    let gate = match name.as_str() {
-        "RZ" => {
-            let angles = match py_cmd.getattr("angles") {
-                Ok(a) => match a.extract::<Vec<f64>>() {
-                    Ok(v) => v,
-                    Err(e) => return Err(to_queue_error(e)),
-                },
+    // Extract parameters based on gate type
+    let mut params = Vec::new();
+
+    if name == "RZ" || name == "R1XY" {
+        let angles = match py_cmd.getattr("angles") {
+            Ok(a) => match a.extract::<Vec<f64>>() {
+                Ok(v) => v,
                 Err(e) => return Err(to_queue_error(e)),
-            };
+            },
+            Err(e) => return Err(to_queue_error(e)),
+        };
 
-            GateType::RZ { theta: angles[0] }
-        }
-        "R1XY" => {
-            let angles = match py_cmd.getattr("angles") {
-                Ok(a) => match a.extract::<Vec<f64>>() {
-                    Ok(v) => v,
-                    Err(e) => return Err(to_queue_error(e)),
-                },
+        params.extend_from_slice(&angles);
+    } else if name == "Measure" {
+        let returns = match py_cmd.getattr("returns") {
+            Ok(r) => r,
+            Err(e) => return Err(to_queue_error(e)),
+        };
+
+        let return_item = match returns.get_item(0) {
+            Ok(i) => i,
+            Err(e) => return Err(to_queue_error(e)),
+        };
+
+        let result_id = match return_item.get_item(1) {
+            Ok(id) => match id.extract::<usize>() {
+                // We're storing a usize (result_id) as an f64 parameter. This is safe because:
+                // 1. Result IDs are typically small integers (< 1000)
+                // 2. f64 can exactly represent integers up to 2^53 (9 quadrillion)
+                // 3. This value will be cast back to usize when used
+                #[allow(clippy::cast_precision_loss)]
+                Ok(i) => i as f64, // Store result_id as a parameter
                 Err(e) => return Err(to_queue_error(e)),
-            };
+            },
+            Err(e) => return Err(to_queue_error(e)),
+        };
 
-            GateType::R1XY {
-                phi: angles[0],
-                theta: angles[1],
-            }
-        }
-        "SZZ" => GateType::SZZ,
-        "H" => GateType::H,
-        "X" => GateType::X,
-        "Y" => GateType::Y,
-        "Z" => GateType::Z,
-        "CX" => GateType::CX,
-        "Measure" => {
-            let returns = match py_cmd.getattr("returns") {
-                Ok(r) => r,
-                Err(e) => return Err(to_queue_error(e)),
-            };
+        params.push(result_id);
+    }
 
-            let return_item = match returns.get_item(0) {
-                Ok(i) => i,
-                Err(e) => return Err(to_queue_error(e)),
-            };
-
-            let result_id = match return_item.get_item(1) {
-                Ok(id) => match id.extract::<usize>() {
-                    Ok(i) => i,
-                    Err(e) => return Err(to_queue_error(e)),
-                },
-                Err(e) => return Err(to_queue_error(e)),
-            };
-
-            GateType::Measure { result_id }
-        }
-        _ => {
-            return Err(QueueError::OperationError(format!(
-                "Unsupported gate type: {name}"
-            )));
-        }
-    };
-
-    Ok((gate, qubits))
+    Ok((name, qubits, params))
 }
 
 impl ClassicalEngine for PHIREngine {
@@ -517,8 +515,8 @@ impl ClassicalEngine for PHIREngine {
     }
 
     fn generate_commands(&mut self) -> Result<ByteMessage, QueueError> {
-        // Create a Vec<QuantumCommand>
-        let mut commands = Vec::new();
+        // Create a ByteMessageBuilder directly
+        let mut builder = ByteMessage::quantum_operations_builder();
 
         // Fill it with commands from Python
         Python::with_gil(|py| -> Result<(), QueueError> {
@@ -541,18 +539,74 @@ impl ClassicalEngine for PHIREngine {
 
             // Process each command
             for py_cmd in py_list.iter() {
-                let (gate, qubits) = process_py_command(py_cmd.as_ref())?;
+                let (gate_name, qubits, params) = process_py_command(py_cmd.as_ref())?;
 
-                // Add command to vector
-                commands.push(QuantumCommand { gate, qubits });
+                // Add command to builder based on gate type
+                match gate_name.as_str() {
+                    "H" => {
+                        builder.add_h(&qubits);
+                    }
+                    "X" => {
+                        builder.add_x(&qubits);
+                    }
+                    "Y" => {
+                        builder.add_y(&qubits);
+                    }
+                    "Z" => {
+                        builder.add_z(&qubits);
+                    }
+                    "CX" => {
+                        if qubits.len() >= 2 {
+                            builder.add_cx(&[qubits[0]], &[qubits[1]]);
+                        }
+                    }
+                    "RZ" => {
+                        if !params.is_empty() {
+                            builder.add_rz(params[0], &qubits);
+                        }
+                    }
+                    "R1XY" => {
+                        if params.len() >= 2 {
+                            builder.add_r1xy(params[0], params[1], &qubits);
+                        }
+                    }
+                    "SZZ" => {
+                        if qubits.len() >= 2 {
+                            builder.add_szz(&[qubits[0]], &[qubits[1]]);
+                        }
+                    }
+                    "Measure" => {
+                        if !params.is_empty() {
+                            // We're converting from f64 back to usize. This is safe because:
+                            // 1. The original value was a usize before being stored as f64
+                            // 2. Result IDs are always non-negative integers
+                            // 3. The value represents a measurement result ID which is typically small
+                            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                            let result_id = params[0] as usize;
+                            builder.add_measurements(&qubits, &[result_id]);
+                        }
+                    }
+                    "Prep" => {
+                        builder.add_prep(&qubits);
+                    }
+                    "RZZ" => {
+                        if qubits.len() >= 2 && !params.is_empty() {
+                            builder.add_rzz(params[0], &[qubits[0]], &[qubits[1]]);
+                        }
+                    }
+                    _ => {
+                        return Err(QueueError::OperationError(format!(
+                            "Unsupported gate type: {gate_name}"
+                        )));
+                    }
+                }
             }
 
             Ok(())
         })?;
 
-        Ok(ByteMessage::builder()
-            .add_quantum_commands(&commands)
-            .build())
+        // Build and return the message
+        Ok(builder.build())
     }
 
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError> {

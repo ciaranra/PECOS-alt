@@ -7,7 +7,6 @@ use crate::channels::byte::protocol::{
 use crate::errors::QueueError;
 use bytemuck::from_bytes;
 use log::trace;
-use pecos_core::types::GateType;
 use std::mem::size_of;
 
 /// A message encoded using the PECOS byte protocol
@@ -84,23 +83,42 @@ impl ByteMessage {
         Self::builder().add_flush(true).build()
     }
 
-    /// Create a new message with a circuit of gates
+    /// Create a new message with a circuit of quantum gates
     ///
-    /// This is a convenience method that creates a new message with multiple gates
+    /// This is a convenience method that creates a new message with multiple quantum gates
     /// representing a quantum circuit.
     ///
     /// # Arguments
     ///
-    /// * `gates` - A slice of tuples containing gate types and qubit indices
+    /// * `gates` - A slice of `QuantumGate` objects
     ///
     /// # Returns
     ///
     /// A Result containing a `ByteMessage` with the circuit if successful, or a `QueueError` if there was an error.
-    pub fn create_circuit(gates: &[(&GateType, &[usize])]) -> Result<Self, QueueError> {
+    ///
+    /// # Errors
+    ///
+    /// This function may return a `QueueError` if:
+    /// - There is an error adding the gates to the builder
+    /// - There is an error building the message
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use pecos_engines::channels::ByteMessage;
+    /// use pecos_engines::channels::byte::gate_type::QuantumGate;
+    ///
+    /// // Create a circuit with H and CX gates
+    /// let gates = vec![
+    ///     QuantumGate::h(0),
+    ///     QuantumGate::cx(0, 1),
+    /// ];
+    ///
+    /// let message = ByteMessage::create_circuit_from_quantum_gates(&gates).unwrap();
+    /// ```
+    pub fn create_circuit_from_quantum_gates(gates: &[QuantumGate]) -> Result<Self, QueueError> {
         let mut builder = Self::quantum_operations_builder();
-        for (gate_type, qubits) in gates {
-            Self::add_gate_to_builder(&mut builder, gate_type, qubits)?;
-        }
+        builder.add_quantum_gates(gates);
         Ok(builder.build())
     }
 
@@ -116,6 +134,14 @@ impl ByteMessage {
     /// # Returns
     ///
     /// A Result containing a `ByteMessage` with the commands if successful, or a `QueueError` if there was an error.
+    ///
+    /// # Errors
+    ///
+    /// This function may return a `QueueError` if:
+    /// - A command string has an invalid format
+    /// - A command string contains an unknown gate type
+    /// - A command string contains invalid parameters (e.g., non-numeric values for angles)
+    /// - A command string contains invalid qubit indices
     pub fn create_from_commands(commands: &[&str]) -> Result<Self, QueueError> {
         let mut builder = Self::quantum_operations_builder();
         for cmd in commands {
@@ -161,92 +187,51 @@ impl ByteMessage {
     ///
     /// # Arguments
     ///
-    /// * `gate_type` - The type of gate to add
-    /// * `qubits` - The qubit indices for the gate
+    /// * `gate` - The quantum gate to add
     ///
     /// # Returns
     ///
-    /// A Result containing a `ByteMessage` with the gate if successful, or a `QueueError` if there was an error.
-    pub fn create_with_gate(gate_type: &GateType, qubits: &[usize]) -> Result<Self, QueueError> {
+    /// A `ByteMessage` with the gate.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use pecos_engines::channels::ByteMessage;
+    /// use pecos_engines::channels::byte::gate_type::QuantumGate;
+    ///
+    /// // Create a message with an H gate on qubit 0
+    /// let gate = QuantumGate::h(0);
+    /// let message = ByteMessage::create_with_quantum_gate(&gate);
+    /// ```
+    #[must_use]
+    pub fn create_with_quantum_gate(gate: &QuantumGate) -> Self {
         let mut builder = Self::quantum_operations_builder();
-        Self::add_gate_to_builder(&mut builder, gate_type, qubits)?;
-        Ok(builder.build())
-    }
-
-    /// Adds a quantum gate to a message builder based on the gate type and qubit indices
-    ///
-    /// This is a helper method that adds a quantum gate to a message builder
-    /// based on the gate type and qubit indices. It handles the different gate types
-    /// and their specific requirements.
-    ///
-    /// # Arguments
-    ///
-    /// * `builder` - A mutable reference to a `MessageBuilder`
-    /// * `gate_type` - The type of gate to add
-    /// * `qubits` - The qubit indices for the gate
-    ///
-    /// # Returns
-    ///
-    /// A Result containing () if successful, or a `QueueError` if there was an error.
-    pub fn add_gate_to_builder(
-        builder: &mut ByteMessageBuilder,
-        gate_type: &GateType,
-        qubits: &[usize],
-    ) -> Result<(), QueueError> {
-        match gate_type {
-            GateType::X => {
-                builder.add_x(qubits);
-            }
-            GateType::Y => {
-                builder.add_y(qubits);
-            }
-            GateType::Z => {
-                builder.add_z(qubits);
-            }
-            GateType::H => {
-                builder.add_h(qubits);
-            }
-            GateType::CX => {
-                if qubits.len() < 2 {
-                    return Err(QueueError::OperationError(
-                        "CX gate requires at least 2 qubits".into(),
-                    ));
-                }
-                builder.add_cx(&[qubits[0]], &[qubits[1]]);
-            }
-            GateType::RZZ { theta } => {
-                if qubits.len() < 2 {
-                    return Err(QueueError::OperationError(
-                        "SZZ gate requires at least 2 qubits".into(),
-                    ));
-                }
-                builder.add_rzz(*theta, &[qubits[0]], &[qubits[1]]);
-            }
-            GateType::SZZ => {
-                if qubits.len() < 2 {
-                    return Err(QueueError::OperationError(
-                        "SZZ gate requires at least 2 qubits".into(),
-                    ));
-                }
-                builder.add_szz(&[qubits[0]], &[qubits[1]]);
-            }
-            GateType::RZ { theta } => {
-                builder.add_rz(*theta, qubits);
-            }
-            GateType::R1XY { theta, phi } => {
-                builder.add_r1xy(*theta, *phi, qubits);
-            }
-            GateType::Measure { result_id } => {
-                builder.add_measurements(qubits, &[*result_id]);
-            }
-            GateType::Prep => {
-                builder.add_prep(qubits);
-            }
-        }
-        Ok(())
+        builder.add_quantum_gate(gate);
+        builder.build()
     }
 
     /// Parse a command string and add it to the `ByteMessage` builder
+    ///
+    /// This function parses a command string in the format "`GATE_TYPE` [params...] qubit1 qubit2 ..."
+    /// and adds the corresponding quantum gate to the provided builder.
+    ///
+    /// # Arguments
+    ///
+    /// * `builder` - The `ByteMessageBuilder` to add the command to
+    /// * `cmd` - The command string to parse
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` if the command was successfully parsed and added to the builder,
+    /// or a `QueueError` if there was an error.
+    ///
+    /// # Errors
+    ///
+    /// This function may return a `QueueError::OperationError` if:
+    /// - The command string has an invalid format
+    /// - The command string contains an unknown gate type
+    /// - The command string contains invalid parameters (e.g., non-numeric values for angles)
+    /// - The command string contains invalid qubit indices
     #[allow(clippy::too_many_lines)]
     pub fn parse_command_to_builder(
         builder: &mut ByteMessageBuilder,
@@ -372,6 +357,21 @@ impl ByteMessage {
     }
 
     /// Determine the message type by parsing the header
+    ///
+    /// This function parses the message header to determine the type of the message.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing the `MessageType` if successful, or a `QueueError` if there was an error.
+    ///
+    /// # Errors
+    ///
+    /// This function may return a `QueueError::OperationError` if:
+    /// - The message is too small to contain a batch header
+    /// - The batch header is invalid
+    /// - The batch contains no messages
+    /// - The message is too small to contain a message header
+    /// - The message header contains an invalid message type
     pub fn message_type(&self) -> Result<MessageType, QueueError> {
         if self.bytes.len() < size_of::<BatchHeader>() {
             return Err(QueueError::OperationError(
@@ -410,6 +410,20 @@ impl ByteMessage {
     }
 
     /// Check if this message is empty (contains no operations)
+    ///
+    /// This function checks if the message is empty, meaning it either contains a flush command
+    /// or a batch with no operations.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing a boolean indicating whether the message is empty if successful,
+    /// or a `QueueError` if there was an error.
+    ///
+    /// # Errors
+    ///
+    /// This function may return a `QueueError` if:
+    /// - There is an error determining the message type
+    /// - There is an error parsing the quantum operations in the message
     pub fn is_empty(&self) -> Result<bool, QueueError> {
         match self.message_type()? {
             MessageType::Flush => Ok(true),
