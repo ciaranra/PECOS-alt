@@ -45,6 +45,7 @@ pub struct PHIREngine {
     measurement_results: HashMap<String, u32>,
     quantum_variables: HashMap<String, usize>,
     classical_variables: HashMap<String, (String, usize)>,
+    message_builder: ByteMessageBuilder,
 }
 
 impl PHIREngine {
@@ -94,6 +95,7 @@ impl PHIREngine {
             measurement_results: HashMap::new(),
             quantum_variables: HashMap::new(),
             classical_variables: HashMap::new(),
+            message_builder: ByteMessageBuilder::new(),
         })
     }
 
@@ -108,6 +110,8 @@ impl PHIREngine {
             self.current_op
         );
         self.measurement_results.clear();
+        // Reset the message builder to reuse allocated memory
+        self.message_builder.reset();
     }
 
     // Create an empty engine without any program
@@ -118,6 +122,7 @@ impl PHIREngine {
             measurement_results: HashMap::new(),
             quantum_variables: HashMap::new(),
             classical_variables: HashMap::new(),
+            message_builder: ByteMessageBuilder::new(),
         }
     }
 
@@ -178,68 +183,6 @@ impl PHIREngine {
         )))
     }
 
-    /// Add a quantum operation to the message builder based on the operation type and arguments
-    fn add_quantum_op_to_builder(
-        &mut self,
-        builder: &mut ByteMessageBuilder,
-        qop: &str,
-        angles: Option<&(Vec<f64>, String)>,
-        args: &[(String, usize)],
-    ) -> Result<(), QueueError> {
-        // First validate all variables
-        for (var, idx) in args {
-            self.validate_variable_access(var, *idx)?;
-        }
-
-        // Now add the appropriate operation to the builder
-        match qop {
-            "RZ" => {
-                let theta = angles
-                    .as_ref()
-                    .map(|(angles, _)| angles[0])
-                    .ok_or_else(|| QueueError::OperationError("Missing angle for RZ".into()))?;
-                builder.add_rz(theta, &[args[0].1]);
-            }
-            "R1XY" => {
-                let (phi, theta) = angles
-                    .as_ref()
-                    .map(|(angles, _)| (angles[0], angles[1]))
-                    .ok_or_else(|| QueueError::OperationError("Missing angles for R1XY".into()))?;
-                builder.add_r1xy(phi, theta, &[args[0].1]);
-            }
-            "SZZ" => {
-                if args.len() < 2 {
-                    return Err(QueueError::OperationError(
-                        "SZZ gate requires two qubits".into(),
-                    ));
-                }
-                builder.add_szz(&[args[0].1], &[args[1].1]);
-            }
-            "H" => {
-                builder.add_h(&[args[0].1]);
-            }
-            "CX" => {
-                if args.len() != 2 {
-                    return Err(QueueError::OperationError(
-                        "CX gate requires control and target qubits".into(),
-                    ));
-                }
-                builder.add_cx(&[args[0].1], &[args[1].1]);
-            }
-            "Measure" => {
-                let result_id = args[0].1;
-                builder.add_measurements(&[args[0].1], &[result_id]);
-            }
-            _ => {
-                return Err(QueueError::OperationError(format!(
-                    "Unsupported quantum operation: {qop}"
-                )));
-            }
-        }
-
-        Ok(())
-    }
-
     fn handle_classical_op(
         &mut self,
         cop: &str,
@@ -286,6 +229,221 @@ impl PHIREngine {
             }
         } else {
             Ok(false)
+        }
+    }
+
+    fn generate_commands(&mut self) -> Result<ByteMessage, QueueError> {
+        debug!(
+            "Generating commands - thread {:?}, current_op: {}",
+            std::thread::current().id(),
+            self.current_op
+        );
+
+        // Get program reference and clone ops to avoid borrow issues
+        let prog = self
+            .program
+            .as_ref()
+            .ok_or_else(|| QueueError::OperationError("No program loaded".into()))?;
+        let ops = prog.ops.clone();
+
+        // If we've processed all ops, return empty batch to signal completion
+        if self.current_op >= ops.len() {
+            debug!("End of program reached, sending flush");
+            return Ok(ByteMessage::create_flush());
+        }
+
+        // Reset and configure the reusable message builder for quantum operations
+        self.message_builder.reset();
+        let _ = self.message_builder.for_quantum_operations();
+        let mut operation_count = 0;
+        
+        // Define a maximum batch size for better performance
+        // This helps avoid creating excessively large messages
+        const MAX_BATCH_SIZE: usize = 100;
+
+        while self.current_op < ops.len() && operation_count < MAX_BATCH_SIZE {
+            match &ops[self.current_op] {
+                Operation::VariableDefinition {
+                    data,
+                    data_type,
+                    variable,
+                    size,
+                } => {
+                    debug!(
+                        "Processing variable definition: {} {} {}",
+                        data, data_type, variable
+                    );
+                    self.handle_variable_definition(data, data_type, variable, *size);
+                }
+                Operation::QuantumOp { qop, angles, args } => {
+                    debug!("Processing quantum operation: {}", qop);
+                    
+                    // Clone the operation parameters to avoid borrow issues
+                    let qop_str = qop.clone();
+                    let args_clone = args.clone();
+                    let angles_clone = angles.clone();
+                    
+                    // Process the quantum operation
+                    // This avoids borrowing self and self.message_builder at the same time
+                    match self.process_quantum_op(&qop_str, angles_clone.as_ref(), &args_clone) {
+                        Ok((gate_type, qubit_args, angle_args)) => {
+                            // Now add the gate to the builder based on the processed parameters
+                            match gate_type.as_str() {
+                                "RZ" => {
+                                    self.message_builder.add_rz(angle_args[0], &[qubit_args[0]]);
+                                }
+                                "R1XY" => {
+                                    self.message_builder.add_r1xy(angle_args[0], angle_args[1], &[qubit_args[0]]);
+                                }
+                                "SZZ" => {
+                                    self.message_builder.add_szz(&[qubit_args[0]], &[qubit_args[1]]);
+                                }
+                                "CX" => {
+                                    self.message_builder.add_cx(&[qubit_args[0]], &[qubit_args[1]]);
+                                }
+                                "H" => {
+                                    self.message_builder.add_h(&[qubit_args[0]]);
+                                }
+                                "X" => {
+                                    self.message_builder.add_x(&[qubit_args[0]]);
+                                }
+                                "Y" => {
+                                    self.message_builder.add_y(&[qubit_args[0]]);
+                                }
+                                "Z" => {
+                                    self.message_builder.add_z(&[qubit_args[0]]);
+                                }
+                                "Measure" => {
+                                    self.message_builder.add_measurements(&[qubit_args[0]], &[qubit_args[0]]);
+                                }
+                                _ => {
+                                    return Err(QueueError::OperationError(format!(
+                                        "Unsupported quantum operation: {gate_type}"
+                                    )));
+                                }
+                            }
+                            operation_count += 1;
+                            debug!("Added quantum operation to builder");
+                        }
+                        Err(e) => return Err(e),
+                    }
+                }
+                Operation::ClassicalOp { cop, args, returns } => {
+                    debug!("Processing classical operation: {}", cop);
+                    if self.handle_classical_op(cop, args, returns)? {
+                        debug!("Finishing batch due to classical operation completion");
+                        self.current_op += 1;
+
+                        // Build and return the message
+                        if operation_count > 0 {
+                            debug!("Returning batch with {} operations", operation_count);
+                            return Ok(self.message_builder.build());
+                        }
+
+                        // Create an empty message if no operations were added
+                        debug!("Returning empty batch after classical operation");
+                        return Ok(ByteMessage::builder().build());
+                    }
+                }
+            }
+            self.current_op += 1;
+            
+            // If we've reached the maximum batch size, break out of the loop
+            // This ensures we don't create excessively large messages
+            if operation_count >= MAX_BATCH_SIZE {
+                debug!("Reached maximum batch size ({}), returning current batch", MAX_BATCH_SIZE);
+                break;
+            }
+        }
+
+        debug!(
+            "PHIR engine generated {} operations for shot",
+            operation_count
+        );
+
+        // Build and return the message
+        Ok(self.message_builder.build())
+    }
+    
+    /// Process a quantum operation and return the gate type, qubit arguments, and angle arguments
+    fn process_quantum_op(
+        &self,
+        qop: &str,
+        angles: Option<&(Vec<f64>, String)>,
+        args: &[(String, usize)],
+    ) -> Result<(String, Vec<usize>, Vec<f64>), QueueError> {
+        // First validate all variables
+        for (var, idx) in args {
+            self.validate_variable_access(var, *idx)?;
+        }
+
+        // Validate that we have at least one qubit argument
+        if args.is_empty() {
+            return Err(QueueError::OperationError(format!(
+                "Operation {qop} requires at least one qubit argument"
+            )));
+        }
+        
+        // Extract qubit arguments
+        let mut qubit_args = Vec::new();
+        for (_, idx) in args {
+            qubit_args.push(*idx);
+        }
+        
+        // Process based on gate type
+        match qop {
+            // Single-qubit rotation gates
+            "RZ" => {
+                let theta = angles
+                    .as_ref()
+                    .map(|(angles, _)| angles[0])
+                    .ok_or_else(|| QueueError::OperationError(format!("Missing angle for {qop} gate")))?;
+                Ok((qop.to_string(), qubit_args, vec![theta]))
+            }
+            "R1XY" => {
+                if angles.as_ref().map_or(0, |(angles, _)| angles.len()) < 2 {
+                    return Err(QueueError::OperationError(format!(
+                        "{qop} gate requires two angles (phi, theta)"
+                    )));
+                }
+                let (phi, theta) = angles
+                    .as_ref()
+                    .map(|(angles, _)| (angles[0], angles[1]))
+                    .ok_or_else(|| QueueError::OperationError(format!("Missing angles for {qop} gate")))?;
+                Ok((qop.to_string(), qubit_args, vec![phi, theta]))
+            }
+            
+            // Two-qubit gates
+            "SZZ" | "ZZ" => {
+                if args.len() < 2 {
+                    return Err(QueueError::OperationError(format!(
+                        "{qop} gate requires two qubits"
+                    )));
+                }
+                Ok(("SZZ".to_string(), qubit_args, vec![]))
+            }
+            "CX" | "CNOT" => {
+                if args.len() < 2 {
+                    return Err(QueueError::OperationError(format!(
+                        "{qop} gate requires control and target qubits"
+                    )));
+                }
+                Ok(("CX".to_string(), qubit_args, vec![]))
+            }
+            
+            // Single-qubit Clifford gates
+            "H" => Ok((qop.to_string(), qubit_args, vec![])),
+            "X" => Ok((qop.to_string(), qubit_args, vec![])),
+            "Y" => Ok((qop.to_string(), qubit_args, vec![])),
+            "Z" => Ok((qop.to_string(), qubit_args, vec![])),
+            
+            // Measurement
+            "Measure" => Ok((qop.to_string(), qubit_args, vec![])),
+            
+            // Unsupported operation
+            _ => Err(QueueError::OperationError(format!(
+                "Unsupported quantum operation: {qop}"
+            ))),
         }
     }
 }
@@ -342,6 +500,139 @@ impl ControlEngine for PHIREngine {
 }
 
 impl ClassicalEngine for PHIREngine {
+    fn generate_commands(&mut self) -> Result<ByteMessage, QueueError> {
+        debug!(
+            "Generating commands - thread {:?}, current_op: {}",
+            std::thread::current().id(),
+            self.current_op
+        );
+
+        // Get program reference and clone ops to avoid borrow issues
+        let prog = self
+            .program
+            .as_ref()
+            .ok_or_else(|| QueueError::OperationError("No program loaded".into()))?;
+        let ops = prog.ops.clone();
+
+        // If we've processed all ops, return empty batch to signal completion
+        if self.current_op >= ops.len() {
+            debug!("End of program reached, sending flush");
+            return Ok(ByteMessage::create_flush());
+        }
+
+        // Reset and configure the reusable message builder for quantum operations
+        self.message_builder.reset();
+        let _ = self.message_builder.for_quantum_operations();
+        let mut operation_count = 0;
+        
+        // Define a maximum batch size for better performance
+        // This helps avoid creating excessively large messages
+        const MAX_BATCH_SIZE: usize = 100;
+
+        while self.current_op < ops.len() && operation_count < MAX_BATCH_SIZE {
+            match &ops[self.current_op] {
+                Operation::VariableDefinition {
+                    data,
+                    data_type,
+                    variable,
+                    size,
+                } => {
+                    debug!(
+                        "Processing variable definition: {} {} {}",
+                        data, data_type, variable
+                    );
+                    self.handle_variable_definition(data, data_type, variable, *size);
+                }
+                Operation::QuantumOp { qop, angles, args } => {
+                    debug!("Processing quantum operation: {}", qop);
+                    
+                    // Clone the operation parameters to avoid borrow issues
+                    let qop_str = qop.clone();
+                    let args_clone = args.clone();
+                    let angles_clone = angles.clone();
+                    
+                    // Process the quantum operation
+                    // This avoids borrowing self and self.message_builder at the same time
+                    match self.process_quantum_op(&qop_str, angles_clone.as_ref(), &args_clone) {
+                        Ok((gate_type, qubit_args, angle_args)) => {
+                            // Now add the gate to the builder based on the processed parameters
+                            match gate_type.as_str() {
+                                "RZ" => {
+                                    self.message_builder.add_rz(angle_args[0], &[qubit_args[0]]);
+                                }
+                                "R1XY" => {
+                                    self.message_builder.add_r1xy(angle_args[0], angle_args[1], &[qubit_args[0]]);
+                                }
+                                "SZZ" => {
+                                    self.message_builder.add_szz(&[qubit_args[0]], &[qubit_args[1]]);
+                                }
+                                "CX" => {
+                                    self.message_builder.add_cx(&[qubit_args[0]], &[qubit_args[1]]);
+                                }
+                                "H" => {
+                                    self.message_builder.add_h(&[qubit_args[0]]);
+                                }
+                                "X" => {
+                                    self.message_builder.add_x(&[qubit_args[0]]);
+                                }
+                                "Y" => {
+                                    self.message_builder.add_y(&[qubit_args[0]]);
+                                }
+                                "Z" => {
+                                    self.message_builder.add_z(&[qubit_args[0]]);
+                                }
+                                "Measure" => {
+                                    self.message_builder.add_measurements(&[qubit_args[0]], &[qubit_args[0]]);
+                                }
+                                _ => {
+                                    return Err(QueueError::OperationError(format!(
+                                        "Unsupported quantum operation: {gate_type}"
+                                    )));
+                                }
+                            }
+                            operation_count += 1;
+                            debug!("Added quantum operation to builder");
+                        }
+                        Err(e) => return Err(e),
+                    }
+                }
+                Operation::ClassicalOp { cop, args, returns } => {
+                    debug!("Processing classical operation: {}", cop);
+                    if self.handle_classical_op(cop, args, returns)? {
+                        debug!("Finishing batch due to classical operation completion");
+                        self.current_op += 1;
+
+                        // Build and return the message
+                        if operation_count > 0 {
+                            debug!("Returning batch with {} operations", operation_count);
+                            return Ok(self.message_builder.build());
+                        }
+
+                        // Create an empty message if no operations were added
+                        debug!("Returning empty batch after classical operation");
+                        return Ok(ByteMessage::builder().build());
+                    }
+                }
+            }
+            self.current_op += 1;
+            
+            // If we've reached the maximum batch size, break out of the loop
+            // This ensures we don't create excessively large messages
+            if operation_count >= MAX_BATCH_SIZE {
+                debug!("Reached maximum batch size ({}), returning current batch", MAX_BATCH_SIZE);
+                break;
+            }
+        }
+
+        debug!(
+            "PHIR engine generated {} operations for shot",
+            operation_count
+        );
+
+        // Build and return the message
+        Ok(self.message_builder.build())
+    }
+
     fn num_qubits(&self) -> usize {
         // First check if quantum_variables is already populated
         let sum: usize = self.quantum_variables.values().sum();
@@ -369,78 +660,6 @@ impl ClassicalEngine for PHIREngine {
         }
 
         0 // If no program is loaded, return 0
-    }
-
-    fn generate_commands(&mut self) -> Result<ByteMessage, QueueError> {
-        debug!(
-            "Generating commands - thread {:?}, current_op: {}",
-            std::thread::current().id(),
-            self.current_op
-        );
-
-        // Get program reference and clone ops to avoid borrow issues
-        let prog = self
-            .program
-            .as_ref()
-            .ok_or_else(|| QueueError::OperationError("No program loaded".into()))?;
-        let ops = prog.ops.clone();
-
-        // If we've processed all ops, return empty batch to signal completion
-        if self.current_op >= ops.len() {
-            debug!("End of program reached, sending flush");
-            return Ok(ByteMessage::create_flush());
-        }
-
-        // Create a message builder for quantum operations
-        let mut builder = ByteMessage::quantum_operations_builder();
-        let mut operation_count = 0;
-
-        while self.current_op < ops.len() {
-            match &ops[self.current_op] {
-                Operation::VariableDefinition {
-                    data,
-                    data_type,
-                    variable,
-                    size,
-                } => {
-                    debug!(
-                        "Processing variable definition: {} {} {}",
-                        data, data_type, variable
-                    );
-                    self.handle_variable_definition(data, data_type, variable, *size);
-                }
-                Operation::QuantumOp { qop, angles, args } => {
-                    debug!("Processing quantum operation: {}", qop);
-                    self.add_quantum_op_to_builder(&mut builder, qop, angles.as_ref(), args)?;
-                    operation_count += 1;
-                    debug!("Added quantum operation to builder");
-                }
-                Operation::ClassicalOp { cop, args, returns } => {
-                    debug!("Processing classical operation: {}", cop);
-                    if self.handle_classical_op(cop, args, returns)? {
-                        debug!("Finishing batch due to classical operation completion");
-                        self.current_op += 1;
-
-                        // Build and return the message
-                        if operation_count > 0 {
-                            return Ok(builder.build());
-                        }
-
-                        // Create an empty message if no operations were added
-                        return Ok(ByteMessage::builder().build());
-                    }
-                }
-            }
-            self.current_op += 1;
-        }
-
-        debug!(
-            "PHIR engine generated {} operations for shot",
-            operation_count
-        );
-
-        // Build and return the message
-        Ok(builder.build())
     }
 
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), QueueError> {
@@ -525,6 +744,7 @@ impl Clone for PHIREngine {
                 measurement_results: HashMap::new(),
                 quantum_variables: self.quantum_variables.clone(),
                 classical_variables: self.classical_variables.clone(),
+                message_builder: ByteMessageBuilder::new(),
             },
             None => Self::empty(),
         }

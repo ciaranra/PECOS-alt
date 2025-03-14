@@ -25,6 +25,7 @@ pub enum BuilderMode {
 ///
 /// The builder maintains internal state tracking what kind of message is being created
 /// and ensures that different message types are not mixed inappropriately.
+#[derive(Debug)]
 pub struct ByteMessageBuilder {
     buffer: Vec<u8>,
     msg_count: u32,
