@@ -11,6 +11,8 @@
 // the License.
 
 use crate::IndexableElement;
+use std::fmt;
+use std::ops::Deref;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct QubitId(pub usize);
@@ -38,5 +40,36 @@ impl From<usize> for QubitId {
 impl From<QubitId> for usize {
     fn from(qubit: QubitId) -> usize {
         qubit.0
+    }
+}
+
+// Add Deref implementation to match QubitIndex
+impl Deref for QubitId {
+    type Target = usize;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+// Add Display implementation to match QubitIndex
+impl fmt::Display for QubitId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+// Add convenience methods to match QubitIndex
+impl QubitId {
+    /// Create a new `QubitId`
+    #[must_use]
+    pub fn new(index: usize) -> Self {
+        Self(index)
+    }
+
+    /// Get the underlying index value
+    #[must_use]
+    pub fn index(&self) -> usize {
+        self.0
     }
 }

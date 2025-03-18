@@ -3,11 +3,11 @@
 //! This module provides functions for dumping and analyzing binary
 //! messages for debugging purposes.
 
-use super::protocol::{
+use crate::byte_message::message::ByteMessage;
+use crate::byte_message::protocol::{
     BATCH_MAGIC, BatchHeader, MeasurementHeader, MeasurementResultHeader, MessageHeader,
     QuantumGateHeader, calc_padding,
 };
-use crate::channels::ByteMessage;
 use std::io::Write;
 use std::mem::size_of;
 
@@ -257,8 +257,8 @@ pub fn write_message_to_file(message: &ByteMessage, filename: &str) -> std::io::
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::channels::byte::gate_type::QuantumGate;
-    use crate::channels::byte_message::ByteMessage;
+    use crate::byte_message::ByteMessage;
+    use crate::byte_message::QuantumGate;
 
     #[test]
     fn test_bytemap_dump() {

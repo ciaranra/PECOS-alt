@@ -19,19 +19,18 @@ crate-type = ["cdylib", "rlib"]
 rayon.workspace = true
 log.workspace = true
 serde.workspace = true
-os_pipe.workspace = true
-lazy_static.workspace = true
-parking_lot.workspace = true
 serde_json.workspace = true
 rand.workspace = true
 rand_chacha.workspace = true
 bytemuck.workspace = true
 bitflags.workspace = true
 dyn-clone.workspace = true
+libloading.workspace = true
+once_cell.workspace = true
+regex.workspace = true
 
 pecos-core.workspace = true
 pecos-qsim.workspace = true
-num-traits.workspace = true
 
 [dev-dependencies]
 tempfile = "3"

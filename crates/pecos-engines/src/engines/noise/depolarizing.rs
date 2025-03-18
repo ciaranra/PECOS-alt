@@ -1,6 +1,6 @@
-use crate::channels::ByteMessage;
-use crate::channels::byte::builder::ByteMessageBuilder;
-use crate::channels::byte::gate_type::{GateTypeId, QuantumGate};
+use crate::byte_message::ByteMessage;
+use crate::byte_message::ByteMessageBuilder;
+use crate::byte_message::{GateType, QuantumGate};
 use crate::engines::noise::NoiseModel;
 use crate::errors::QueueError;
 use log::trace;
@@ -90,49 +90,49 @@ impl DepolarizingNoise {
         for gate in gates {
             // First, add the original gate to the message
             match gate.gate_type {
-                GateTypeId::X => {
+                GateType::X => {
                     builder.add_x(&gate.qubits);
                 }
-                GateTypeId::Y => {
+                GateType::Y => {
                     builder.add_y(&gate.qubits);
                 }
-                GateTypeId::Z => {
+                GateType::Z => {
                     builder.add_z(&gate.qubits);
                 }
-                GateTypeId::H => {
+                GateType::H => {
                     builder.add_h(&gate.qubits);
                 }
-                GateTypeId::CX => {
+                GateType::CX => {
                     if gate.qubits.len() >= 2 {
                         builder.add_cx(&[gate.qubits[0]], &[gate.qubits[1]]);
                     }
                 }
-                GateTypeId::RZZ => {
+                GateType::RZZ => {
                     if gate.qubits.len() >= 2 {
                         builder.add_rzz(gate.params[0], &[gate.qubits[1]], &[gate.qubits[2]]);
                     }
                 }
-                GateTypeId::SZZ => {
+                GateType::SZZ => {
                     if gate.qubits.len() >= 2 {
                         builder.add_szz(&[gate.qubits[0]], &[gate.qubits[1]]);
                     }
                 }
-                GateTypeId::RZ => {
+                GateType::RZ => {
                     if !gate.params.is_empty() {
                         builder.add_rz(gate.params[0], &gate.qubits);
                     }
                 }
-                GateTypeId::R1XY => {
+                GateType::R1XY => {
                     if gate.params.len() >= 2 {
                         builder.add_r1xy(gate.params[0], gate.params[1], &gate.qubits);
                     }
                 }
-                GateTypeId::Measure => {
+                GateType::Measure => {
                     if !gate.qubits.is_empty() && gate.result_id.is_some() {
                         builder.add_measurements(&gate.qubits, &[gate.result_id.unwrap()]);
                     }
                 }
-                GateTypeId::Prep => {
+                GateType::Prep => {
                     builder.add_prep(&gate.qubits);
                 }
             }

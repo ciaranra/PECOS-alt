@@ -1,5 +1,5 @@
-use crate::channels::ByteMessage;
-use crate::channels::byte::gate_type::GateTypeId;
+use crate::byte_message::ByteMessage;
+use crate::byte_message::GateType;
 use crate::engines::Engine;
 use crate::errors::QueueError;
 use dyn_clone::DynClone;
@@ -79,30 +79,30 @@ impl Engine for StateVecEngine {
 
         for cmd in &batch {
             match cmd.gate_type {
-                GateTypeId::X => {
+                GateType::X => {
                     debug!("Processing X gate on qubit {:?}", cmd.qubits[0]);
                     self.simulator.x(cmd.qubits[0]);
                 }
-                GateTypeId::Y => {
+                GateType::Y => {
                     debug!("Processing Y gate on qubit {:?}", cmd.qubits[0]);
                     self.simulator.y(cmd.qubits[0]);
                 }
-                GateTypeId::Z => {
+                GateType::Z => {
                     debug!("Processing Z gate on qubit {:?}", cmd.qubits[0]);
                     self.simulator.z(cmd.qubits[0]);
                 }
-                GateTypeId::H => {
+                GateType::H => {
                     debug!("Processing H gate on qubit {:?}", cmd.qubits[0]);
                     self.simulator.h(cmd.qubits[0]);
                 }
-                GateTypeId::CX => {
+                GateType::CX => {
                     debug!(
                         "Processing CX gate with control {:?} and target {:?}",
                         cmd.qubits[0], cmd.qubits[1]
                     );
                     self.simulator.cx(cmd.qubits[0], cmd.qubits[1]);
                 }
-                GateTypeId::RZZ => {
+                GateType::RZZ => {
                     debug!(
                         "Processing RZZ gate on qubits {:?} and {:?}",
                         cmd.qubits[0], cmd.qubits[1]
@@ -110,14 +110,14 @@ impl Engine for StateVecEngine {
                     self.simulator
                         .rzz(cmd.params[0], cmd.qubits[1], cmd.qubits[2]);
                 }
-                GateTypeId::SZZ => {
+                GateType::SZZ => {
                     debug!(
                         "Processing SZZ gate on qubits {:?} and {:?}",
                         cmd.qubits[0], cmd.qubits[1]
                     );
                     self.simulator.szz(cmd.qubits[0], cmd.qubits[1]);
                 }
-                GateTypeId::RZ => {
+                GateType::RZ => {
                     if !cmd.params.is_empty() {
                         debug!(
                             "Processing RZ gate with angle {:?} on qubit {:?}",
@@ -126,7 +126,7 @@ impl Engine for StateVecEngine {
                         self.simulator.rz(cmd.params[0], cmd.qubits[0]);
                     }
                 }
-                GateTypeId::R1XY => {
+                GateType::R1XY => {
                     if cmd.params.len() >= 2 {
                         debug!(
                             "Processing R1XY gate with angles theta={:?}, phi={:?} on qubit {:?}",
@@ -136,7 +136,7 @@ impl Engine for StateVecEngine {
                             .r1xy(cmd.params[0], cmd.params[1], cmd.qubits[0]);
                     }
                 }
-                GateTypeId::Measure => {
+                GateType::Measure => {
                     if let Some(result_id) = cmd.result_id {
                         debug!(
                             "Processing measurement on qubit {:?} with result_id {:?}",
@@ -147,7 +147,7 @@ impl Engine for StateVecEngine {
                         measurements.push((result_id, outcome));
                     }
                 }
-                GateTypeId::Prep => {
+                GateType::Prep => {
                     debug!("Processing Y gate on qubit {:?}", cmd.qubits[0]);
                     self.simulator.pz(cmd.qubits[0]);
                 }
@@ -211,37 +211,37 @@ impl Engine for SparseStabEngine {
 
         for cmd in &batch {
             match cmd.gate_type {
-                GateTypeId::X => {
+                GateType::X => {
                     debug!("Processing X gate on qubit {:?}", cmd.qubits[0]);
                     self.simulator.x(cmd.qubits[0]);
                 }
-                GateTypeId::Y => {
+                GateType::Y => {
                     debug!("Processing Y gate on qubit {:?}", cmd.qubits[0]);
                     self.simulator.y(cmd.qubits[0]);
                 }
-                GateTypeId::Z => {
+                GateType::Z => {
                     debug!("Processing Z gate on qubit {:?}", cmd.qubits[0]);
                     self.simulator.z(cmd.qubits[0]);
                 }
-                GateTypeId::H => {
+                GateType::H => {
                     debug!("Processing H gate on qubit {:?}", cmd.qubits[0]);
                     self.simulator.h(cmd.qubits[0]);
                 }
-                GateTypeId::CX => {
+                GateType::CX => {
                     debug!(
                         "Processing CX gate with control {:?} and target {:?}",
                         cmd.qubits[0], cmd.qubits[1]
                     );
                     self.simulator.cx(cmd.qubits[0], cmd.qubits[1]);
                 }
-                GateTypeId::SZZ => {
+                GateType::SZZ => {
                     debug!(
                         "Processing SZZ gate on qubits {:?} and {:?}",
                         cmd.qubits[0], cmd.qubits[1]
                     );
                     self.simulator.szz(cmd.qubits[0], cmd.qubits[1]);
                 }
-                GateTypeId::Measure => {
+                GateType::Measure => {
                     if let Some(result_id) = cmd.result_id {
                         debug!(
                             "Processing measurement on qubit {:?} with result_id {:?}",
@@ -252,7 +252,7 @@ impl Engine for SparseStabEngine {
                         measurements.push((result_id, outcome));
                     }
                 }
-                GateTypeId::Prep => {
+                GateType::Prep => {
                     debug!("Processing Y gate on qubit {:?}", cmd.qubits[0]);
                     self.simulator.pz(cmd.qubits[0]);
                 }

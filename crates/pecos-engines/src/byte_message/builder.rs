@@ -3,12 +3,12 @@
 //! This module provides utilities for constructing binary messages
 //! according to the byte protocol.
 
-use super::protocol::{
+use crate::byte_message::gate_type::{GateType, QuantumGate};
+use crate::byte_message::message::ByteMessage;
+use crate::byte_message::protocol::{
     BatchHeader, MeasurementHeader, MeasurementResultHeader, MessageFlags, MessageHeader,
     MessageType, QuantumGateHeader, calc_padding,
 };
-use crate::channels::ByteMessage;
-use crate::channels::byte::gate_type::{GateTypeId, QuantumGate};
 use bytemuck::bytes_of;
 use std::mem::size_of;
 
@@ -102,8 +102,15 @@ impl ByteMessageBuilder {
     ) -> &mut Self {
         // Update mode based on message type
         match msg_type {
-            MessageType::BeginBatch | MessageType::EndBatch => {
+            MessageType::RecordData
+            | MessageType::InfoMessage
+            | MessageType::WarningMessage
+            | MessageType::ErrorMessage
+            | MessageType::DebugMessage
+            | MessageType::BeginBatch
+            | MessageType::EndBatch => {
                 // These can be used with any mode
+                // In the future, we might want to add dedicated modes for these
             }
             MessageType::QuantumGate | MessageType::Measurement => {
                 assert!(
@@ -166,7 +173,7 @@ impl ByteMessageBuilder {
     /// as the protocol uses a u8 to represent the qubit count.
     pub fn add_quantum_gate(&mut self, gate: &QuantumGate) -> &mut Self {
         // Handle measurement gates using the add_measurements method
-        if gate.gate_type == GateTypeId::Measure {
+        if gate.gate_type == GateType::Measure {
             if let Some(result_id) = gate.result_id {
                 return self.add_measurements(&gate.qubits, &[result_id]);
             }
@@ -177,8 +184,8 @@ impl ByteMessageBuilder {
         let header_size = size_of::<QuantumGateHeader>();
         let qubits_size = gate.qubits.len() * size_of::<u32>();
         let params_size = match gate.gate_type {
-            GateTypeId::RZ => size_of::<f64>(),
-            GateTypeId::R1XY => 2 * size_of::<f64>(),
+            GateType::RZ => size_of::<f64>(),
+            GateType::R1XY => 2 * size_of::<f64>(),
             _ => 0,
         };
         let total_size = header_size + qubits_size + params_size;
@@ -209,10 +216,10 @@ impl ByteMessageBuilder {
         // Add parameters to payload if needed
         if has_params {
             match gate.gate_type {
-                GateTypeId::RZ => {
+                GateType::RZ => {
                     payload.extend_from_slice(&gate.params[0].to_le_bytes());
                 }
-                GateTypeId::R1XY => {
+                GateType::R1XY => {
                     payload.extend_from_slice(&gate.params[0].to_le_bytes()); // phi
                     payload.extend_from_slice(&gate.params[1].to_le_bytes()); // theta
                 }
@@ -364,9 +371,9 @@ impl ByteMessageBuilder {
     }
 
     /// Add an R1XY gate
-    pub fn add_r1xy(&mut self, phi: f64, theta: f64, qubits: &[usize]) -> &mut Self {
+    pub fn add_r1xy(&mut self, theta: f64, phi: f64, qubits: &[usize]) -> &mut Self {
         for &qubit in qubits {
-            self.add_quantum_gate(&QuantumGate::r1xy(phi, theta, qubit));
+            self.add_quantum_gate(&QuantumGate::r1xy(theta, phi, qubit));
         }
         self
     }
@@ -419,6 +426,54 @@ impl ByteMessageBuilder {
         self.add_message(MessageType::Flush, &[], flags)
     }
 
+    /// Add a record data message with key-value pair
+    pub fn add_record_data(&mut self, key: &str, value: f64) -> &mut Self {
+        let payload = format!("{key} {value}").into_bytes();
+        self.add_message(MessageType::RecordData, &payload, MessageFlags::NONE)
+    }
+
+    /// Add a result record message
+    pub fn add_result_record(&mut self, result_id: usize, label: Option<&str>) -> &mut Self {
+        let payload = if let Some(label_str) = label {
+            format!("{result_id} {label_str}").into_bytes()
+        } else {
+            format!("{result_id}").into_bytes()
+        };
+        self.add_message(MessageType::RecordData, &payload, MessageFlags::NONE)
+    }
+
+    /// Add an info message
+    pub fn add_info_message(&mut self, msg: &str) -> &mut Self {
+        self.add_message(MessageType::InfoMessage, msg.as_bytes(), MessageFlags::NONE)
+    }
+
+    /// Add a warning message
+    pub fn add_warning_message(&mut self, msg: &str) -> &mut Self {
+        self.add_message(
+            MessageType::WarningMessage,
+            msg.as_bytes(),
+            MessageFlags::NONE,
+        )
+    }
+
+    /// Add an error message
+    pub fn add_error_message(&mut self, msg: &str) -> &mut Self {
+        self.add_message(
+            MessageType::ErrorMessage,
+            msg.as_bytes(),
+            MessageFlags::ERROR,
+        )
+    }
+
+    /// Add a debug message
+    pub fn add_debug_message(&mut self, msg: &str) -> &mut Self {
+        self.add_message(
+            MessageType::DebugMessage,
+            msg.as_bytes(),
+            MessageFlags::NONE,
+        )
+    }
+
     /// Check how many messages have been added
     #[must_use]
     pub fn message_count(&self) -> u32 {
@@ -458,7 +513,7 @@ impl ByteMessageBuilder {
     /// by calling `for_quantum_operations()` or `for_measurement_results()`:
     ///
     /// ```
-    /// # use pecos_engines::channels::byte::builder::ByteMessageBuilder;
+    /// # use pecos_engines::byte_message::ByteMessageBuilder;
     /// let mut builder = ByteMessageBuilder::new();
     ///
     /// // Create first message
@@ -553,8 +608,8 @@ impl ByteMessageBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::channels::byte::gate_type::GateTypeId;
-    use crate::channels::byte::protocol::{BATCH_MAGIC, PROTOCOL_VERSION};
+    use crate::byte_message::GateType;
+    use crate::byte_message::protocol::{BATCH_MAGIC, PROTOCOL_VERSION};
 
     #[test]
     fn test_builder_basic() {
@@ -575,11 +630,11 @@ mod tests {
 
         // Verify the commands
         assert_eq!(commands.len(), 3);
-        assert_eq!(commands[0].gate_type, GateTypeId::H);
+        assert_eq!(commands[0].gate_type, GateType::H);
         assert_eq!(commands[0].qubits, vec![0]);
-        assert_eq!(commands[1].gate_type, GateTypeId::CX);
+        assert_eq!(commands[1].gate_type, GateType::CX);
         assert_eq!(commands[1].qubits, vec![0, 1]);
-        assert_eq!(commands[2].gate_type, GateTypeId::Measure);
+        assert_eq!(commands[2].gate_type, GateType::Measure);
         assert_eq!(commands[2].qubits, vec![2]);
         assert_eq!(commands[2].result_id, Some(0));
     }
@@ -623,15 +678,15 @@ mod tests {
 
         // Verify the commands
         assert_eq!(commands.len(), 7);
-        assert_eq!(commands[0].gate_type, GateTypeId::H);
-        assert_eq!(commands[1].gate_type, GateTypeId::X);
-        assert_eq!(commands[2].gate_type, GateTypeId::Y);
-        assert_eq!(commands[3].gate_type, GateTypeId::Z);
-        assert_eq!(commands[4].gate_type, GateTypeId::RZ);
+        assert_eq!(commands[0].gate_type, GateType::H);
+        assert_eq!(commands[1].gate_type, GateType::X);
+        assert_eq!(commands[2].gate_type, GateType::Y);
+        assert_eq!(commands[3].gate_type, GateType::Z);
+        assert_eq!(commands[4].gate_type, GateType::RZ);
         assert_eq!(commands[4].params, vec![0.5]);
-        assert_eq!(commands[5].gate_type, GateTypeId::R1XY);
+        assert_eq!(commands[5].gate_type, GateType::R1XY);
         assert_eq!(commands[5].params, vec![0.1, 0.2]);
-        assert_eq!(commands[6].gate_type, GateTypeId::Measure);
+        assert_eq!(commands[6].gate_type, GateType::Measure);
         assert_eq!(commands[6].result_id, Some(0));
     }
 
@@ -681,7 +736,7 @@ mod tests {
         // Verify the commands
         assert_eq!(commands.len(), 3);
         for i in 0..3 {
-            assert_eq!(commands[i].gate_type, GateTypeId::Measure);
+            assert_eq!(commands[i].gate_type, GateType::Measure);
             assert_eq!(commands[i].qubits, vec![qubits[i]]);
             assert_eq!(commands[i].result_id, Some(result_ids[i]));
         }
@@ -727,7 +782,7 @@ mod tests {
 
         // Verify the commands
         assert_eq!(commands.len(), 1);
-        assert_eq!(commands[0].gate_type, GateTypeId::H);
+        assert_eq!(commands[0].gate_type, GateType::H);
     }
 
     #[test]
@@ -795,7 +850,7 @@ mod tests {
         let message = builder.build();
         let commands = message.parse_quantum_operations().unwrap();
         assert_eq!(commands.len(), 1);
-        assert_eq!(commands[0].gate_type, GateTypeId::H);
+        assert_eq!(commands[0].gate_type, GateType::H);
     }
 
     #[test]

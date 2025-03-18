@@ -61,7 +61,7 @@ fn run_program(args: &RunArgs) -> Result<(), Box<dyn Error>> {
     let program_path = get_program_path(&args.program)?;
     let prob = args.noise_probability.unwrap_or(0.0);
 
-    let classical_engine = setup_engine(&program_path)?;
+    let classical_engine = setup_engine(&program_path, Some(args.shots.div_ceil(args.workers)))?;
 
     let results = MonteCarloEngine::run_with_classical_engine(
         classical_engine,
@@ -86,7 +86,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let program_path = get_program_path(&args.program)?;
             match detect_program_type(&program_path)? {
                 ProgramType::QIR => {
-                    let engine = setup_engine(&program_path)?;
+                    let engine = setup_engine(&program_path, None)?;
                     engine.compile()?;
                 }
                 ProgramType::PHIR => {

@@ -4,7 +4,7 @@ pub mod pass_through;
 pub use depolarizing::DepolarizingNoise;
 pub use pass_through::PassThroughNoise;
 
-use crate::channels::byte_message::ByteMessage;
+use crate::byte_message::ByteMessage;
 use crate::engines::{ControlEngine, Engine, EngineStage};
 use crate::errors::QueueError;
 use dyn_clone::DynClone;

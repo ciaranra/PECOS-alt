@@ -16,14 +16,14 @@ pub use pecos_core::{IndexableElement, Set, VecSet};
 pub use pecos_engines::shot_results::{ShotResult, ShotResults};
 // re-exporting pecos-engines
 pub use pecos_engines::{
-    channels::{ByteMessage, ByteMessageBuilder},
+    byte_message::{ByteMessage, ByteMessageBuilder},
     engines::{
         ClassicalEngine, ControlEngine, Engine, EngineStage, EngineSystem, HybridEngine,
         classical::{ProgramType, detect_program_type, get_program_path, setup_engine},
         monte_carlo::MonteCarloEngine,
         noise::{DepolarizingNoise, NoiseModel},
         phir::PHIREngine,
-        qir::engine::QirClassicalEngine,
+        qir::QirEngine,
         quantum::{QuantumEngine, StateVecEngine, new_quantum_engine_arbitrary_qgate},
     },
     errors::QueueError,

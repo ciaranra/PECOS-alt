@@ -1,9 +1,10 @@
-use crate::channels::byte_message::ByteMessage;
+use crate::byte_message::ByteMessage;
 use crate::engines::{ControlEngine, Engine, EngineStage, phir, qir};
 use crate::errors::QueueError;
 use crate::shot_results::ShotResult;
 use dyn_clone::DynClone;
 use log::debug;
+use std::any::Any;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
@@ -81,6 +82,18 @@ pub trait ClassicalEngine: DynClone + Send + Sync {
     fn reset(&mut self) -> Result<(), QueueError> {
         Ok(())
     }
+
+    /// Returns a reference to self as Any
+    ///
+    /// This allows for type-checking and downcasting without requiring
+    /// experimental trait upcasting.
+    fn as_any(&self) -> &dyn Any;
+
+    /// Returns a mutable reference to self as Any
+    ///
+    /// This allows for type-checking and downcasting without requiring
+    /// experimental trait upcasting.
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 // Register the ClassicalEngine trait with dyn_clone
@@ -214,6 +227,7 @@ pub enum ProgramType {
 /// # Parameters
 ///
 /// - `program_path`: A reference to the path of the program file to be processed.
+/// - `shots`: Optional number of shots to set for the engine. Only used for QIR engines.
 ///
 /// # Returns
 ///
@@ -231,7 +245,10 @@ pub enum ProgramType {
 ///
 /// This function will panic if the `program_path` does not have a parent directory, as it
 /// assumes the existence of a parent directory for creating the build directory.
-pub fn setup_engine(program_path: &Path) -> Result<Box<dyn ClassicalEngine>, Box<dyn Error>> {
+pub fn setup_engine(
+    program_path: &Path,
+    shots: Option<usize>,
+) -> Result<Box<dyn ClassicalEngine>, Box<dyn Error>> {
     debug!("Program path: {}", program_path.display());
     let build_dir = program_path.parent().unwrap().join("build");
     debug!("Build directory: {}", build_dir.display());
@@ -239,12 +256,18 @@ pub fn setup_engine(program_path: &Path) -> Result<Box<dyn ClassicalEngine>, Box
 
     match detect_program_type(program_path)? {
         ProgramType::QIR => {
-            let engine = Box::new(qir::engine::QirClassicalEngine::new(
-                program_path,
-                &build_dir,
-            ));
-            engine.compile()?;
-            Ok(engine)
+            debug!("Setting up QIR engine and pre-compiling for efficient cloning");
+            let mut engine = qir::QirEngine::new(program_path.to_path_buf());
+
+            // Set the number of shots assigned to this engine if specified
+            if let Some(num_shots) = shots {
+                engine.set_assigned_shots(num_shots)?;
+            }
+
+            // Pre-compile the QIR library to prepare for efficient cloning
+            engine.pre_compile()?;
+
+            Ok(Box::new(engine))
         }
         ProgramType::PHIR => Ok(Box::new(phir::PHIREngine::new(program_path)?)),
     }

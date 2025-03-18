@@ -1,4 +1,4 @@
-use crate::channels::ByteMessage;
+use crate::byte_message::ByteMessage;
 use crate::engines::noise::{NoiseModel, PassThroughNoise};
 use crate::engines::{Engine, QuantumEngine};
 use crate::errors::QueueError;
@@ -121,7 +121,7 @@ impl Clone for QuantumSystem {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::channels::byte::builder::ByteMessageBuilder;
+    use crate::byte_message::ByteMessageBuilder;
     use crate::engines::noise::{DepolarizingNoise, PassThroughNoise};
     use crate::engines::quantum::StateVecEngine;
     /// Creates a new `QuantumSystem` with a state vector quantum engine and depolarizing noise

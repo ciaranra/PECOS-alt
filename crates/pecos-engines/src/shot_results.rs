@@ -1,4 +1,4 @@
-use crate::channels::byte_message::ByteMessage;
+use crate::byte_message::ByteMessage;
 use crate::errors::QueueError;
 use std::collections::HashMap;
 use std::fmt;
@@ -10,6 +10,7 @@ use std::fmt;
 #[derive(Debug, Clone, Default)]
 pub struct ShotResult {
     pub measurements: HashMap<String, u32>,
+    pub combined_result: Option<String>,
 }
 
 impl ShotResult {
@@ -110,7 +111,11 @@ impl ShotResults {
                 }
             }
 
-            if !measurement_values.is_empty() {
+            // If we have a combined result from the engine, use it
+            if let Some(combined) = &shot.combined_result {
+                processed_results.insert("result".to_string(), combined.clone());
+            } else if !measurement_values.is_empty() {
+                // Otherwise, use the concatenated measurement values
                 processed_results.insert("result".to_string(), measurement_values.concat());
             }
 
@@ -129,95 +134,22 @@ impl ShotResults {
     /// # Parameters
     ///
     /// * `message` - A `ByteMessage` containing measurement results
-    /// * `result_id_to_name` - A mapping from `result_id` to a human-readable name
-    ///
-    /// # Returns
-    ///
-    /// A new `ShotResults` instance containing the processed measurement results
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the `ByteMessage` cannot be parsed or doesn't contain valid measurement results
-    pub fn from_byte_message(
-        message: &ByteMessage,
-        result_id_to_name: &HashMap<usize, String>,
-    ) -> Result<Self, QueueError> {
-        use std::collections::HashMap;
-
+    pub fn from_byte_message(message: &ByteMessage) -> Result<Self, QueueError> {
         // Extract the measurement results from the ByteMessage
         let measurements = message.measurement_results_as_vec()?;
 
-        // Create a single shot result (since a ByteMessage represents one shot)
-        let mut processed_results: HashMap<String, String> = HashMap::new();
+        let mut result = Self::new();
 
         // Process each measurement
-        for (result_id, value) in &measurements {
+        for (result_id, value) in measurements {
             // Get the name for this result_id, or use a default if not found
-            let name = result_id_to_name
-                .get(result_id)
-                .cloned()
-                .unwrap_or_else(|| format!("result_{result_id}"));
+            let name = format!("result_{result_id}");
 
             // Add the measurement to the results
-            processed_results.insert(name, value.to_string());
+            result.shots[0].insert(name, value.to_string());
         }
 
-        // If we have measurements, also create a combined "result" entry
-        if !measurements.is_empty() {
-            // Sort by result_id for consistent ordering
-            let mut sorted_measurements: Vec<_> = measurements.iter().collect();
-            sorted_measurements.sort_by_key(|(id, _)| *id);
-
-            // Create the combined result string
-            let result_string: String = sorted_measurements
-                .iter()
-                .map(|(_, value)| value.to_string())
-                .collect();
-
-            processed_results.insert("result".to_string(), result_string);
-        }
-
-        // Create and return the ShotResults
-        Ok(Self {
-            shots: vec![processed_results],
-        })
-    }
-
-    /// Create a `ShotResults` instance from multiple `ByteMessage` instances, each representing a shot.
-    ///
-    /// This method is useful for multi-shot simulations where each shot produces a `ByteMessage`
-    /// with measurement results.
-    ///
-    /// # Parameters
-    ///
-    /// * `messages` - A slice of `ByteMessage` instances, each containing measurement results for one shot
-    /// * `result_id_to_name` - A mapping from `result_id` to a human-readable name
-    ///
-    /// # Returns
-    ///
-    /// A new `ShotResults` instance containing the processed measurement results from all shots
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if any `ByteMessage` cannot be parsed or doesn't contain valid measurement results
-    pub fn from_byte_messages(
-        messages: &[ByteMessage],
-        result_id_to_name: &HashMap<usize, String>,
-    ) -> Result<Self, QueueError> {
-        let mut shots = Vec::with_capacity(messages.len());
-
-        // Process each message (shot)
-        for message in messages {
-            // Extract and process the measurements for this shot
-            let shot_result = Self::from_byte_message(message, result_id_to_name)?;
-
-            // Add the processed results to our collection
-            if let Some(shot) = shot_result.shots.first() {
-                shots.push(shot.clone());
-            }
-        }
-
-        Ok(Self { shots })
+        Ok(result)
     }
 
     /// Prints the `ShotResults` to stdout.
@@ -231,17 +163,13 @@ impl fmt::Display for ShotResults {
         writeln!(f, "[")?;
 
         for (i, shot) in self.shots.iter().enumerate() {
-            // Get all keys and sort them for consistent output
-            let mut keys: Vec<_> = shot.keys().collect();
-            keys.sort();
-
             write!(f, "  {{")?;
-            for (j, key) in keys.iter().enumerate() {
-                write!(f, "\"{}\": \"{}\"", key, shot.get(*key).unwrap())?;
-                if j < keys.len() - 1 {
-                    write!(f, ", ")?;
-                }
+
+            // Only include the "result" key in the output
+            if let Some(result) = shot.get("result") {
+                write!(f, "\"result\": \"{result}\"")?;
             }
+
             if i < self.shots.len() - 1 {
                 writeln!(f, "}},")?;
             } else {

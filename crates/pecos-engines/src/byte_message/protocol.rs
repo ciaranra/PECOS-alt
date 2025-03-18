@@ -6,8 +6,8 @@
 use bitflags::bitflags;
 use bytemuck::{Pod, Zeroable};
 
-// Magic bytes to identify PECOS message batches - "PEQS"
-pub const BATCH_MAGIC: u32 = 0x5045_5153;
+// Magic bytes to identify PECOS message batches - "PECS"
+pub const BATCH_MAGIC: u32 = 0x50_45_43_53;
 // Current protocol version
 pub const PROTOCOL_VERSION: u8 = 1;
 
@@ -43,6 +43,15 @@ pub enum MessageType {
 
     // Result messages
     MeasurementResult = 20, // Measurement result
+
+    // Record messages
+    RecordData = 30, // Record data (key-value or result)
+
+    // Info messages
+    InfoMessage = 40,    // Informational message
+    WarningMessage = 41, // Warning message
+    ErrorMessage = 42,   // Error message
+    DebugMessage = 43,   // Debug message
 
     // Error messages
     Error = 100, // Error condition
@@ -113,6 +122,11 @@ impl MessageHeader {
             10 => Ok(MessageType::QuantumGate),
             11 => Ok(MessageType::Measurement),
             20 => Ok(MessageType::MeasurementResult),
+            30 => Ok(MessageType::RecordData),
+            40 => Ok(MessageType::InfoMessage),
+            41 => Ok(MessageType::WarningMessage),
+            42 => Ok(MessageType::ErrorMessage),
+            43 => Ok(MessageType::DebugMessage),
             100 => Ok(MessageType::Error),
             _ => Err("Unknown message type"),
         }

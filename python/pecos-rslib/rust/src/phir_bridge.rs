@@ -690,6 +690,7 @@ impl ClassicalEngine for PHIREngine {
 
             Ok(ShotResult {
                 measurements: results,
+                combined_result: None,
             })
         })
     }
@@ -709,6 +710,14 @@ impl ClassicalEngine for PHIREngine {
                 Err(e) => Err(to_queue_error(e)),
             }
         })
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 

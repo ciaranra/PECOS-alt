@@ -1,10 +1,11 @@
 use super::{ClassicalEngine, ControlEngine, EngineStage};
-use crate::channels::byte::builder::ByteMessageBuilder;
-use crate::channels::byte_message::ByteMessage;
+use crate::byte_message::ByteMessage;
+use crate::byte_message::ByteMessageBuilder;
 use crate::errors::QueueError;
 use crate::shot_results::ShotResult;
 use log::debug;
 use serde::Deserialize;
+use std::any::Any;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -232,7 +233,13 @@ impl PHIREngine {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::items_after_statements)]
     fn generate_commands(&mut self) -> Result<ByteMessage, QueueError> {
+        // Define a maximum batch size for better performance
+        // This helps avoid creating excessively large messages
+        const MAX_BATCH_SIZE: usize = 100;
+
         debug!(
             "Generating commands - thread {:?}, current_op: {}",
             std::thread::current().id(),
@@ -256,10 +263,6 @@ impl PHIREngine {
         self.message_builder.reset();
         let _ = self.message_builder.for_quantum_operations();
         let mut operation_count = 0;
-        
-        // Define a maximum batch size for better performance
-        // This helps avoid creating excessively large messages
-        const MAX_BATCH_SIZE: usize = 100;
 
         while self.current_op < ops.len() && operation_count < MAX_BATCH_SIZE {
             match &ops[self.current_op] {
@@ -277,12 +280,12 @@ impl PHIREngine {
                 }
                 Operation::QuantumOp { qop, angles, args } => {
                     debug!("Processing quantum operation: {}", qop);
-                    
+
                     // Clone the operation parameters to avoid borrow issues
                     let qop_str = qop.clone();
                     let args_clone = args.clone();
                     let angles_clone = angles.clone();
-                    
+
                     // Process the quantum operation
                     // This avoids borrowing self and self.message_builder at the same time
                     match self.process_quantum_op(&qop_str, angles_clone.as_ref(), &args_clone) {
@@ -293,13 +296,19 @@ impl PHIREngine {
                                     self.message_builder.add_rz(angle_args[0], &[qubit_args[0]]);
                                 }
                                 "R1XY" => {
-                                    self.message_builder.add_r1xy(angle_args[0], angle_args[1], &[qubit_args[0]]);
+                                    self.message_builder.add_r1xy(
+                                        angle_args[0],
+                                        angle_args[1],
+                                        &[qubit_args[0]],
+                                    );
                                 }
                                 "SZZ" => {
-                                    self.message_builder.add_szz(&[qubit_args[0]], &[qubit_args[1]]);
+                                    self.message_builder
+                                        .add_szz(&[qubit_args[0]], &[qubit_args[1]]);
                                 }
                                 "CX" => {
-                                    self.message_builder.add_cx(&[qubit_args[0]], &[qubit_args[1]]);
+                                    self.message_builder
+                                        .add_cx(&[qubit_args[0]], &[qubit_args[1]]);
                                 }
                                 "H" => {
                                     self.message_builder.add_h(&[qubit_args[0]]);
@@ -314,7 +323,8 @@ impl PHIREngine {
                                     self.message_builder.add_z(&[qubit_args[0]]);
                                 }
                                 "Measure" => {
-                                    self.message_builder.add_measurements(&[qubit_args[0]], &[qubit_args[0]]);
+                                    self.message_builder
+                                        .add_measurements(&[qubit_args[0]], &[qubit_args[0]]);
                                 }
                                 _ => {
                                     return Err(QueueError::OperationError(format!(
@@ -347,11 +357,14 @@ impl PHIREngine {
                 }
             }
             self.current_op += 1;
-            
+
             // If we've reached the maximum batch size, break out of the loop
             // This ensures we don't create excessively large messages
             if operation_count >= MAX_BATCH_SIZE {
-                debug!("Reached maximum batch size ({}), returning current batch", MAX_BATCH_SIZE);
+                debug!(
+                    "Reached maximum batch size ({}), returning current batch",
+                    MAX_BATCH_SIZE
+                );
                 break;
             }
         }
@@ -364,7 +377,7 @@ impl PHIREngine {
         // Build and return the message
         Ok(self.message_builder.build())
     }
-    
+
     /// Process a quantum operation and return the gate type, qubit arguments, and angle arguments
     fn process_quantum_op(
         &self,
@@ -383,13 +396,13 @@ impl PHIREngine {
                 "Operation {qop} requires at least one qubit argument"
             )));
         }
-        
+
         // Extract qubit arguments
         let mut qubit_args = Vec::new();
         for (_, idx) in args {
             qubit_args.push(*idx);
         }
-        
+
         // Process based on gate type
         match qop {
             // Single-qubit rotation gates
@@ -397,7 +410,9 @@ impl PHIREngine {
                 let theta = angles
                     .as_ref()
                     .map(|(angles, _)| angles[0])
-                    .ok_or_else(|| QueueError::OperationError(format!("Missing angle for {qop} gate")))?;
+                    .ok_or_else(|| {
+                        QueueError::OperationError(format!("Missing angle for {qop} gate"))
+                    })?;
                 Ok((qop.to_string(), qubit_args, vec![theta]))
             }
             "R1XY" => {
@@ -409,10 +424,12 @@ impl PHIREngine {
                 let (phi, theta) = angles
                     .as_ref()
                     .map(|(angles, _)| (angles[0], angles[1]))
-                    .ok_or_else(|| QueueError::OperationError(format!("Missing angles for {qop} gate")))?;
+                    .ok_or_else(|| {
+                        QueueError::OperationError(format!("Missing angles for {qop} gate"))
+                    })?;
                 Ok((qop.to_string(), qubit_args, vec![phi, theta]))
             }
-            
+
             // Two-qubit gates
             "SZZ" | "ZZ" => {
                 if args.len() < 2 {
@@ -430,17 +447,11 @@ impl PHIREngine {
                 }
                 Ok(("CX".to_string(), qubit_args, vec![]))
             }
-            
+
             // Single-qubit Clifford gates
-            "H" => Ok((qop.to_string(), qubit_args, vec![])),
-            "X" => Ok((qop.to_string(), qubit_args, vec![])),
-            "Y" => Ok((qop.to_string(), qubit_args, vec![])),
-            "Z" => Ok((qop.to_string(), qubit_args, vec![])),
-            
-            // Measurement
-            "Measure" => Ok((qop.to_string(), qubit_args, vec![])),
-            
-            // Unsupported operation
+            // Single-qubit Clifford gates and Measurement
+            "H" | "X" | "Y" | "Z" | "Measure" => Ok((qop.to_string(), qubit_args, vec![])),
+
             _ => Err(QueueError::OperationError(format!(
                 "Unsupported quantum operation: {qop}"
             ))),
@@ -462,7 +473,7 @@ impl ControlEngine for PHIREngine {
 
     fn start(&mut self, _input: ()) -> Result<EngineStage<ByteMessage, ShotResult>, QueueError> {
         debug!(
-            "PHIREngine start() called with current_op={}",
+            "PHIR: start() called with current_op={}, beginning new shot",
             self.current_op
         );
         self.current_op = 0; // Force reset here too
@@ -470,8 +481,10 @@ impl ControlEngine for PHIREngine {
 
         let commands = self.generate_commands()?;
         if commands.is_empty().unwrap_or(false) {
+            debug!("PHIR: start() - No commands to process, returning results immediately");
             Ok(EngineStage::Complete(self.get_results()?))
         } else {
+            debug!("PHIR: start() - Returning commands for processing");
             Ok(EngineStage::NeedsProcessing(commands))
         }
     }
@@ -500,7 +513,12 @@ impl ControlEngine for PHIREngine {
 }
 
 impl ClassicalEngine for PHIREngine {
+    #[allow(clippy::too_many_lines)]
     fn generate_commands(&mut self) -> Result<ByteMessage, QueueError> {
+        // Define a maximum batch size for better performance
+        // This helps avoid creating excessively large messages
+        const MAX_BATCH_SIZE: usize = 100;
+
         debug!(
             "Generating commands - thread {:?}, current_op: {}",
             std::thread::current().id(),
@@ -524,10 +542,6 @@ impl ClassicalEngine for PHIREngine {
         self.message_builder.reset();
         let _ = self.message_builder.for_quantum_operations();
         let mut operation_count = 0;
-        
-        // Define a maximum batch size for better performance
-        // This helps avoid creating excessively large messages
-        const MAX_BATCH_SIZE: usize = 100;
 
         while self.current_op < ops.len() && operation_count < MAX_BATCH_SIZE {
             match &ops[self.current_op] {
@@ -545,12 +559,12 @@ impl ClassicalEngine for PHIREngine {
                 }
                 Operation::QuantumOp { qop, angles, args } => {
                     debug!("Processing quantum operation: {}", qop);
-                    
+
                     // Clone the operation parameters to avoid borrow issues
                     let qop_str = qop.clone();
                     let args_clone = args.clone();
                     let angles_clone = angles.clone();
-                    
+
                     // Process the quantum operation
                     // This avoids borrowing self and self.message_builder at the same time
                     match self.process_quantum_op(&qop_str, angles_clone.as_ref(), &args_clone) {
@@ -561,13 +575,19 @@ impl ClassicalEngine for PHIREngine {
                                     self.message_builder.add_rz(angle_args[0], &[qubit_args[0]]);
                                 }
                                 "R1XY" => {
-                                    self.message_builder.add_r1xy(angle_args[0], angle_args[1], &[qubit_args[0]]);
+                                    self.message_builder.add_r1xy(
+                                        angle_args[0],
+                                        angle_args[1],
+                                        &[qubit_args[0]],
+                                    );
                                 }
                                 "SZZ" => {
-                                    self.message_builder.add_szz(&[qubit_args[0]], &[qubit_args[1]]);
+                                    self.message_builder
+                                        .add_szz(&[qubit_args[0]], &[qubit_args[1]]);
                                 }
                                 "CX" => {
-                                    self.message_builder.add_cx(&[qubit_args[0]], &[qubit_args[1]]);
+                                    self.message_builder
+                                        .add_cx(&[qubit_args[0]], &[qubit_args[1]]);
                                 }
                                 "H" => {
                                     self.message_builder.add_h(&[qubit_args[0]]);
@@ -582,7 +602,8 @@ impl ClassicalEngine for PHIREngine {
                                     self.message_builder.add_z(&[qubit_args[0]]);
                                 }
                                 "Measure" => {
-                                    self.message_builder.add_measurements(&[qubit_args[0]], &[qubit_args[0]]);
+                                    self.message_builder
+                                        .add_measurements(&[qubit_args[0]], &[qubit_args[0]]);
                                 }
                                 _ => {
                                     return Err(QueueError::OperationError(format!(
@@ -615,11 +636,14 @@ impl ClassicalEngine for PHIREngine {
                 }
             }
             self.current_op += 1;
-            
+
             // If we've reached the maximum batch size, break out of the loop
             // This ensures we don't create excessively large messages
             if operation_count >= MAX_BATCH_SIZE {
-                debug!("Reached maximum batch size ({}), returning current batch", MAX_BATCH_SIZE);
+                debug!(
+                    "Reached maximum batch size ({}), returning current batch",
+                    MAX_BATCH_SIZE
+                );
                 break;
             }
         }
@@ -731,6 +755,14 @@ impl ClassicalEngine for PHIREngine {
         debug!("PHIREngine::reset() implementation for ClassicalEngine being called!");
         self.reset_state();
         Ok(())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

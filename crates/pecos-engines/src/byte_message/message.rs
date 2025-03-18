@@ -1,6 +1,6 @@
-use crate::channels::byte::builder::ByteMessageBuilder;
-use crate::channels::byte::gate_type::{GateTypeId, QuantumGate};
-use crate::channels::byte::protocol::{
+use crate::byte_message::builder::ByteMessageBuilder;
+use crate::byte_message::gate_type::{GateType, QuantumGate};
+use crate::byte_message::protocol::{
     BatchHeader, MeasurementHeader, MeasurementResultHeader, MessageHeader, MessageType,
     QuantumGateHeader, calc_padding,
 };
@@ -80,7 +80,9 @@ impl ByteMessage {
     /// A `ByteMessage` containing a flush command.
     #[must_use]
     pub fn create_flush() -> Self {
-        Self::builder().add_flush(true).build()
+        let mut builder = ByteMessageBuilder::new();
+        builder.add_flush(true);
+        builder.build()
     }
 
     /// Create a new message with a circuit of quantum gates
@@ -105,8 +107,8 @@ impl ByteMessage {
     /// # Example
     ///
     /// ```
-    /// use pecos_engines::channels::ByteMessage;
-    /// use pecos_engines::channels::byte::gate_type::QuantumGate;
+    /// use pecos_engines::byte_message::ByteMessage;
+    /// use pecos_engines::byte_message::QuantumGate;
     ///
     /// // Create a circuit with H and CX gates
     /// let gates = vec![
@@ -196,8 +198,8 @@ impl ByteMessage {
     /// # Example
     ///
     /// ```
-    /// use pecos_engines::channels::ByteMessage;
-    /// use pecos_engines::channels::byte::gate_type::QuantumGate;
+    /// use pecos_engines::byte_message::ByteMessage;
+    /// use pecos_engines::byte_message::QuantumGate;
     ///
     /// // Create a message with an H gate on qubit 0
     /// let gate = QuantumGate::h(0);
@@ -264,13 +266,13 @@ impl ByteMessage {
                 if parts.len() >= 4 {
                     let theta = parts[1].parse::<f64>().map_err(|_| {
                         QueueError::OperationError(format!(
-                            "Invalid phi angle in R1XY command: {}",
+                            "Invalid theta angle in R1XY command: {}",
                             parts[1]
                         ))
                     })?;
                     let phi = parts[2].parse::<f64>().map_err(|_| {
                         QueueError::OperationError(format!(
-                            "Invalid theta angle in R1XY command: {}",
+                            "Invalid phi angle in R1XY command: {}",
                             parts[2]
                         ))
                     })?;
@@ -654,12 +656,12 @@ impl ByteMessage {
         let mut params = Vec::new();
         let mut result_id = None;
 
-        let gate_type = GateTypeId::from(header.gate_type);
+        let gate_type = GateType::from(header.gate_type);
 
         if has_params {
             let params_offset = qubits_offset + qubits_size;
             match gate_type {
-                GateTypeId::RZ => {
+                GateType::RZ => {
                     if payload.len() >= params_offset + size_of::<f64>() {
                         let theta_bytes = &payload[params_offset..params_offset + size_of::<f64>()];
                         let theta = f64::from_le_bytes([
@@ -675,7 +677,7 @@ impl ByteMessage {
                         params.push(theta);
                     }
                 }
-                GateTypeId::R1XY => {
+                GateType::R1XY => {
                     if payload.len() >= params_offset + 2 * size_of::<f64>() {
                         let theta_bytes = &payload[params_offset..params_offset + size_of::<f64>()];
                         let theta = f64::from_le_bytes([
@@ -705,7 +707,7 @@ impl ByteMessage {
                         params.push(phi);
                     }
                 }
-                GateTypeId::Measure => {
+                GateType::Measure => {
                     if payload.len() >= params_offset + size_of::<u32>() {
                         let result_id_bytes =
                             &payload[params_offset..params_offset + size_of::<u32>()];
@@ -751,6 +753,54 @@ impl ByteMessage {
     pub fn create_empty() -> Self {
         Self { bytes: Vec::new() }
     }
+
+    /// Create a record data message with key-value pair
+    #[must_use]
+    pub fn create_record_data(key: &str, value: f64) -> Self {
+        let mut builder = ByteMessageBuilder::new();
+        builder.add_record_data(key, value);
+        builder.build()
+    }
+
+    /// Create a result record message
+    #[must_use]
+    pub fn create_result_record(result_id: usize, label: Option<&str>) -> Self {
+        let mut builder = ByteMessageBuilder::new();
+        builder.add_result_record(result_id, label);
+        builder.build()
+    }
+
+    /// Create an info message
+    #[must_use]
+    pub fn create_info(message: &str) -> Self {
+        let mut builder = ByteMessageBuilder::new();
+        builder.add_info_message(message);
+        builder.build()
+    }
+
+    /// Create a warning message
+    #[must_use]
+    pub fn create_warning(message: &str) -> Self {
+        let mut builder = ByteMessageBuilder::new();
+        builder.add_warning_message(message);
+        builder.build()
+    }
+
+    /// Create an error message
+    #[must_use]
+    pub fn create_error(message: &str) -> Self {
+        let mut builder = ByteMessageBuilder::new();
+        builder.add_error_message(message);
+        builder.build()
+    }
+
+    /// Create a debug message
+    #[must_use]
+    pub fn create_debug(message: &str) -> Self {
+        let mut builder = ByteMessageBuilder::new();
+        builder.add_debug_message(message);
+        builder.build()
+    }
 }
 
 #[cfg(test)]
@@ -769,9 +819,9 @@ mod tests {
         // Parse the message
         let parsed_commands = message.parse_quantum_operations().unwrap();
         assert_eq!(parsed_commands.len(), 2);
-        assert_eq!(parsed_commands[0].gate_type, GateTypeId::H);
+        assert_eq!(parsed_commands[0].gate_type, GateType::H);
         assert_eq!(parsed_commands[0].qubits, vec![0]);
-        assert_eq!(parsed_commands[1].gate_type, GateTypeId::CX);
+        assert_eq!(parsed_commands[1].gate_type, GateType::CX);
         assert_eq!(parsed_commands[1].qubits, vec![0, 1]);
     }
 

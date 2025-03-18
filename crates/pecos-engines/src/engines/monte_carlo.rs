@@ -1,15 +1,13 @@
-use crate::engines::HybridEngine;
 use crate::engines::noise::{DepolarizingNoise, NoiseModel, PassThroughNoise};
-use crate::engines::quantum::new_quantum_engine_arbitrary_qgate;
-use crate::engines::{ClassicalEngine, QuantumEngine};
+use crate::engines::quantum::{QuantumEngine, new_quantum_engine_arbitrary_qgate};
+use crate::engines::{ClassicalEngine, HybridEngine};
 use crate::errors::QueueError;
 use crate::shot_results::ShotResults;
 use dyn_clone;
 use log::{debug, info};
-use parking_lot::Mutex;
 use pecos_qsim::StateVec;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// A high-level engine that orchestrates Monte Carlo simulations of quantum programs.
 ///
@@ -98,10 +96,24 @@ impl MonteCarloEngine {
                     );
 
                     // Process all shots assigned to this worker
-                    for _shot_num in start_shot..end_shot {
+                    for shot_num in start_shot..end_shot {
+                        debug!(
+                            "Worker {} running shot {} (internal shot count)",
+                            worker_idx, shot_num
+                        );
                         let result = hybrid_engine.run_shot()?;
+                        debug!(
+                            "Worker {} completed shot {} with result: {:?}",
+                            worker_idx, shot_num, result.combined_result
+                        );
                         hybrid_engine.reset()?;
-                        results.lock().push(result);
+
+                        // Add the result to the shared results vector
+                        if let Ok(mut guard) = results.lock() {
+                            guard.push(result);
+                        } else {
+                            return Err(QueueError::LockError("Failed to lock results".into()));
+                        }
                     }
 
                     debug!("Worker {} completed all shots", worker_idx);
@@ -110,9 +122,17 @@ impl MonteCarloEngine {
             })?;
 
         // Process all results
-        let results_vec = Arc::try_unwrap(results)
-            .map_err(|_| QueueError::LockError("Failed to unwrap results Arc".into()))?
-            .into_inner();
+        let results_vec = match Arc::try_unwrap(results) {
+            Ok(mutex) => match mutex.into_inner() {
+                Ok(vec) => vec,
+                Err(_) => {
+                    return Err(QueueError::LockError(
+                        "Failed to unwrap results mutex".into(),
+                    ));
+                }
+            },
+            Err(_) => return Err(QueueError::LockError("Failed to unwrap results Arc".into())),
+        };
 
         // TODO: Consider refactoring to collect ByteMessage instances directly and use
         // ShotResults::from_byte_messages for more efficient and context-aware processing.
@@ -284,8 +304,8 @@ impl MonteCarloEngineBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::channels::ByteMessage;
-    use crate::channels::byte::gate_type::{GateTypeId, QuantumGate};
+    use crate::byte_message::ByteMessage;
+    use crate::byte_message::{GateType, QuantumGate};
     use crate::engines::ControlEngine;
     use crate::engines::Engine;
     use crate::engines::EngineStage;
@@ -294,6 +314,7 @@ mod tests {
     use crate::engines::quantum::StateVecEngine;
     use crate::shot_results::ShotResult;
     use pecos_qsim::StdSparseStab;
+    use std::any::Any;
     use std::collections::HashMap;
     use std::fs::File;
     use std::io::Write;
@@ -376,11 +397,11 @@ mod tests {
     }
 
     #[test]
-    fn test_basic_construction() {
+    fn test_basic_execution() {
         // Create a test program
         let (_dir, program_path) = create_test_program();
 
-        let classical_engine = setup_engine(&program_path).expect("Could not setup engine");
+        let classical_engine = setup_engine(&program_path, None).expect("Could not setup engine");
 
         // Test construction with a specific quantum engine
         let simulator = StateVec::new(2);
@@ -404,7 +425,7 @@ mod tests {
         // Create a test program
         let (_dir, program_path) = create_test_program();
 
-        let classical_engine = setup_engine(&program_path).expect("Could not setup engine");
+        let classical_engine = setup_engine(&program_path, None).expect("Could not setup engine");
 
         // Test running with just a program path
         let results = MonteCarloEngine::run_with_classical_engine(classical_engine, 0.0, 2, 1);
@@ -446,7 +467,7 @@ mod tests {
         // Create a test program
         let (_dir, program_path) = create_test_program();
 
-        let classical_engine = setup_engine(&program_path).expect("Could not setup engine");
+        let classical_engine = setup_engine(&program_path, None).expect("Could not setup engine");
 
         // Create depolarizing noise model
         let noise_model = DepolarizingNoise::builder().with_probability(0.05).build();
@@ -484,7 +505,7 @@ mod tests {
         let (_dir, program_path) = create_test_program();
 
         // Create a configured engines
-        let classical_engine = setup_engine(&program_path).expect("Could not setup engine");
+        let classical_engine = setup_engine(&program_path, None).expect("Could not setup engine");
 
         // Create depolarizing noise model
         let noise_model = DepolarizingNoise::builder().with_probability(0.05).build();
@@ -522,7 +543,7 @@ mod tests {
         let (_dir, program_path) = create_test_program();
 
         // Create a configured engines
-        let classical_engine = setup_engine(&program_path).expect("Could not setup engine");
+        let classical_engine = setup_engine(&program_path, None).expect("Could not setup engine");
 
         // Create a mock quantum engine
         let quantum_engine = Box::new(MockQuantumEngine) as Box<dyn QuantumEngine>;
@@ -552,7 +573,7 @@ mod tests {
         // Create a test program
         let (_dir, program_path) = create_test_program();
 
-        let classical_engine = setup_engine(&program_path).expect("Could not setup engine");
+        let classical_engine = setup_engine(&program_path, None).expect("Could not setup engine");
 
         // Test running with just a program path
         let _results = MonteCarloEngine::run_with_classical_engine(classical_engine, 0.0, 0, 1);
@@ -691,7 +712,7 @@ mod tests {
             let mut measurement_gates: Vec<_> = self
                 .gates
                 .iter()
-                .filter(|gate| gate.gate_type == GateTypeId::Measure)
+                .filter(|gate| gate.gate_type == GateType::Measure)
                 .collect();
 
             measurement_gates.sort_by_key(|gate| gate.result_id);
@@ -721,6 +742,7 @@ mod tests {
 
             Ok(ShotResult {
                 measurements: result_measurements,
+                combined_result: None,
             })
         }
 
@@ -734,6 +756,14 @@ mod tests {
             self.measurements.clear();
             self.current_shot += 1;
             Ok(())
+        }
+
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
         }
     }
 

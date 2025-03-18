@@ -1,19 +1,21 @@
 use pecos_engines::engines::MonteCarloEngine;
-use pecos_engines::engines::classical::setup_engine;
+use pecos_engines::engines::qir::QirEngine;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[test]
-fn test_bell_state_noiseless() {
-    // Get the path to the Bell state example
+fn test_qir_bell_state_noiseless() {
+    // Get the path to the QIR Bell state example
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let workspace_dir = manifest_dir.parent().unwrap().parent().unwrap();
-    let bell_file = workspace_dir.join("examples/phir/bell.json");
+    let bell_file = workspace_dir.join("examples/qir/bell.ll");
+
+    // Create a QIR engine directly with the file path
+    let qir_engine = QirEngine::new(bell_file.clone());
 
     // Run the Bell state example with 100 shots and 2 workers
-    let classical_engine = setup_engine(&bell_file, None).unwrap();
     let results = MonteCarloEngine::run_with_classical_engine(
-        classical_engine,
+        Box::new(qir_engine),
         0.0, // No noise
         100,
         2,
@@ -34,7 +36,7 @@ fn test_bell_state_noiseless() {
     }
 
     // Print the counts for debugging
-    println!("Noiseless Bell state results:");
+    println!("Noiseless QIR Bell state results:");
     for (result, count) in &counts {
         println!("  {result}: {count}");
     }
@@ -42,16 +44,18 @@ fn test_bell_state_noiseless() {
 
 #[allow(clippy::cast_precision_loss)]
 #[test]
-fn test_bell_state_with_noise() {
-    // Get the path to the Bell state example
+fn test_qir_bell_state_with_noise() {
+    // Get the path to the QIR Bell state example
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let workspace_dir = manifest_dir.parent().unwrap().parent().unwrap();
-    let bell_file = workspace_dir.join("examples/phir/bell.json");
+    let bell_file = workspace_dir.join("examples/qir/bell.ll");
+
+    // Create a QIR engine directly with the file path
+    let qir_engine = QirEngine::new(bell_file.clone());
 
     // Run the Bell state example with 100 shots, 2 workers, and 0.2 noise probability
-    let classical_engine = setup_engine(&bell_file, None).unwrap();
     let results = MonteCarloEngine::run_with_classical_engine(
-        classical_engine,
+        Box::new(qir_engine),
         0.2,  // 20% noise
         1000, // More shots for better statistics
         2,
@@ -71,7 +75,7 @@ fn test_bell_state_with_noise() {
     }
 
     // Print the counts for debugging
-    println!("Noisy Bell state results (p=0.2):");
+    println!("Noisy QIR Bell state results (p=0.2):");
     for (result, count) in &counts {
         println!("  {result}: {count}");
     }

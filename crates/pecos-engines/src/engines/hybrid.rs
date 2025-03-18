@@ -1,4 +1,4 @@
-use crate::channels::byte_message::ByteMessage;
+use crate::byte_message::ByteMessage;
 use crate::engines::noise::{DepolarizingNoise, NoiseModel, PassThroughNoise};
 use crate::engines::{
     ClassicalEngine, ControlEngine, Engine, EngineStage, EngineSystem, QuantumEngine,
@@ -103,9 +103,21 @@ impl HybridEngine {
     /// - Processing commands through the quantum engine fails.
     /// - Handling measurements through the classical engine fails.
     pub fn run_shot(&mut self) -> Result<ShotResult, QueueError> {
+        debug!(
+            "HybridEngine::run_shot() starting - Thread {:?}",
+            std::thread::current().id()
+        );
         let mut stage = self.classical_engine.start(())?;
 
+        let mut iteration_count = 0;
         while let EngineStage::NeedsProcessing(command_message) = stage {
+            iteration_count += 1;
+            debug!(
+                "HybridEngine::run_shot() iteration {} - Thread {:?}",
+                iteration_count,
+                std::thread::current().id()
+            );
+
             // Process through engine (could be QuantumEngine or EngineSystem)
             let measurement_message = self.quantum_system.process(command_message)?;
 
@@ -116,7 +128,15 @@ impl HybridEngine {
         }
 
         match stage {
-            EngineStage::Complete(results) => Ok(results),
+            EngineStage::Complete(results) => {
+                debug!(
+                    "HybridEngine::run_shot() completed after {} iterations with result: {:?} - Thread {:?}",
+                    iteration_count,
+                    results.combined_result,
+                    std::thread::current().id()
+                );
+                Ok(results)
+            }
             EngineStage::NeedsProcessing(_) => unreachable!(),
         }
     }
