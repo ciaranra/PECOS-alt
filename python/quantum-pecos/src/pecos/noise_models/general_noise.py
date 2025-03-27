@@ -56,25 +56,22 @@ class GeneralNoiseModel(ErrorModel):
         self._eparams = None
 
         self.qubit_set = set()
-        self.leaked_qubits = set()
 
     def reset(self):
         """Reset error generator for another round of syndrome extraction."""
         return GeneralNoiseModel(error_params=self.error_params)
 
-    def init(self, num_qubits, machine=None, reset_leakage=True):
+    def init(self, num_qubits, machine):
         self.machine = machine
 
         self.qubit_set = set(range(num_qubits))
 
-        if reset_leakage:
-            self.leaked_qubits = set()
 
         if not self.error_params:
             msg = "Error params not set!"
             raise Exception(msg)
 
-        self._eparams = dict(self.error_params)
+        self._eparams: dict = dict(self.error_params)
         self._set_eparams_default()
         self._scale()
 
@@ -101,7 +98,10 @@ class GeneralNoiseModel(ErrorModel):
             if key not in self._eparams:
                 self._eparams[key] = 0.0
 
-        for key in ["coherent_dephasing"]:
+        for key in [
+            "coherent_dephasing",
+            "crosstalk_per_gate",
+        ]:
             if key not in self._eparams:
                 self._eparams[key] = False
 
@@ -183,6 +183,8 @@ class GeneralNoiseModel(ErrorModel):
             m2 *= self._eparams["meas_scale"] * scale
 
             self._eparams["p_meas"] = (m1, m2)
+            # TODO: REMOVE THIS!
+            self._eparams["p_meas"] = np.mean([m1, m2])
         else:
             self._eparams["p_meas"] *= self._eparams["meas_scale"] * scale
 
@@ -234,6 +236,9 @@ class GeneralNoiseModel(ErrorModel):
 
             match op.name:
 
+                case x if op.metadata.get("noiseless"):
+                    pass
+
                 case x if (
                     "noiseless_gates" in self._eparams
                     and x in self._eparams["noiseless_gates"]
@@ -258,6 +263,7 @@ class GeneralNoiseModel(ErrorModel):
                         noise_dict=self._eparams["p2_error_model"],
                         machine=self.machine,
                     )
+                    # TODO: angle dependent noise
 
                     if self._eparams.get("p2_mem"):
                         qops_mem = noise_tq_depolarizing_leakage(
@@ -268,6 +274,8 @@ class GeneralNoiseModel(ErrorModel):
                         )
                         if qops_after:
                             qops_after = qops_after.extend(qops_mem)
+                        else:
+                            qops_after = qops_mem
 
                 case "measure Z" | "Measure" | "Measure +Z":
                     erroneous_ops = noise_meas_bitflip_leakage(
@@ -275,17 +283,23 @@ class GeneralNoiseModel(ErrorModel):
                         p=self._eparams["p_meas"],
                         machine=self.machine,
                     )
+                    # TODO: Deal with biased measurement error rates (fix in scaling too)
+                    # TODO: Measurement crosstalk
 
-                case "Idle" | "Sleep":
-                    if self._eparams.get("idle_dephasing", True):
+                case "Idle" | "Sleep" | "Transport":
+                    if op.name == "Idle" and not self.error_params.get("idle_dephasing", True):
+                        erroneous_ops = []
+                    elif op.name == "Transport" and not self.error_params.get("transport_dephasing", True):
+                        erroneous_ops = []
+
+                    else:
                         erroneous_ops = self.faults_dephasing(
-                            op.args,
+                            op,
                             op.metadata["duration"],
                             rate=self._eparams["quadratic_dephasing_rate"],
                         )
-
-                    if erroneous_ops is None:
-                        erroneous_ops = [QOp(name="I", args=[])]
+                        if erroneous_ops is None:
+                            erroneous_ops = [QOp(name="I", args=[])]
 
                 case _:
                     msg = f"This error model doesn't handle gate: {op.name}!"
@@ -342,7 +356,7 @@ class GeneralNoiseModel(ErrorModel):
             rate: custom linear dephasing rate
         """
 
-        notleaked = set(op.args) - self.leaked_qubits
+        notleaked = set(op.args) - self.machine.leaked_qubits
 
         return [
             QOp(
@@ -375,7 +389,7 @@ class GeneralNoiseModel(ErrorModel):
             if not linear:
                 pdeph = np.power(np.sin(pdeph), 2)
 
-            notleaked = set(op.args) - self.leaked_qubits
+            notleaked = set(op.args) - self.machine.leaked_qubits
 
             # ---------------------------
             # dephasing noise
@@ -401,24 +415,23 @@ class GeneralNoiseModel(ErrorModel):
             flip: The symbol for what Pauli operator should be applied if an initialization fault occurs.
         """
 
-        # remove leaked qubits
-        self.leaked_qubits -= set(op.args)
+        self.machine.unleak(set(op.args))
 
-        rand_nums = np.random.random(len(op.args)) <= self.error_params["p_init"]
+        rand_nums = np.random.random(len(op.args)) <= self._eparams["p_init"]
 
         after = []
         toleak = set()
         for r, loc in zip(rand_nums, op.args, strict=False):
             if r:
 
-                if np.random.random() <= self.error_params["p_init_leak_ratio"]:
+                if np.random.random() <= self._eparams["p_init_leak_ratio"]:
                     toleak.add(loc)
                 else:
                     after.append(QOp(name=flip, args=[loc]))
 
         # Leakage noise
         # -------------
-        self.leak(toleak, p_leak=self.error_params["leakage_scale"], trigger="init")
+        self.leak(toleak, p_leak=self._eparams["leakage_scale"], trigger="init")
 
         # crosstalk
         # ---------
@@ -429,22 +442,13 @@ class GeneralNoiseModel(ErrorModel):
         return after
 
     def init_crosstalk(self, op) -> list[QOp]:
-        """
-        Probability of going down 0 or 1 branch == probability of meas 0 or 1.
-        If the qubit is in the 0 state, reset does nothing
-        If the qubit is in the 1 state, there are three possibilities all with equal probability of 1/3
-        stays in 1, goes to 0, goes to the leaked state
-
-        meas Z -> if 1, 1/3 apply X, 1/3 leak
-        """
 
         var = ("__pecos_scratch", 0)
-        p_cross = self.error_params["p_crosstalk_init"]
+        p_cross = self._eparams["p_crosstalk_init"]
 
-        # Apply crosstalk equally to all qubits not being measured
         qs = set()
         q_zone = {}
-        for gz in self.error_params["crosstalk_zones"]:
+        for gz in self._eparams.get("crosstalk_zones", []):
             qsz = op.metadata.get("z2qs", {}).get(gz, [])
             for q in qsz:
                 q_zone[q] = gz
@@ -452,21 +456,21 @@ class GeneralNoiseModel(ErrorModel):
             qs |= set(qsz)
 
         qs -= set(op.args)
-        ls = (qs & self.leaked_qubits) & self.qubit_set
-        qs -= self.leaked_qubits
+        ls = (qs & self.machine.leaked_qubits) & self.qubit_set
+        qs -= self.machine.leaked_qubits
         qs &= self.qubit_set
 
         rand_nums = np.random.random(len(qs))
 
-        num_cross = len(op.args) if self.error_params["crosstalk_per_gate"] else 1
+        num_cross = len(op.args) if self._eparams["crosstalk_per_gate"] else 1
 
         after = []
         for _ in range(num_cross):
             for r, q in zip(rand_nums, qs, strict=False):
 
-                if self.error_params.get("zones"):
+                if self._eparams.get("zones"):
                     gz = q_zone[q]
-                    p = self.error_params["zones"][gz]["p_crosstalk_init"]
+                    p = self._eparams["zones"][gz]["p_crosstalk_init"]
                 else:
                     p = p_cross
 
@@ -497,9 +501,9 @@ class GeneralNoiseModel(ErrorModel):
                         )
 
                     elif (
-                        np.random.random() <= 2 / 3 * self.error_params["leakage_scale"]
+                        np.random.random() <= 2 / 3 * self._eparams["leakage_scale"]
                     ):
-                        if self.error_params.get("leak2depolar"):
+                        if self._eparams.get("leak2depolar"):
                             if np.random.random() <= 0.75:
                                 err = np.random.choice(one_qubit_paulis)
                                 after.append(QOp(name=err, args=[q]))
@@ -516,16 +520,8 @@ class GeneralNoiseModel(ErrorModel):
                                 ),
                             )
 
-            if ls and self.error_params.get("seepage", True):
-                #  remain leaked w/ 1/3 prob. but will go to |1> 1/3 of the time and |0> 1/3 of the time.
-                #  other polarization, it would remain leaked 2/3 of the time, but go to |1> 1/3 of the time.
-
+            if ls and self._eparams.get("seepage", True):
                 rand_nums = np.random.random(len(ls))
-
-                # Leaked qubits
-                # 1/3 leaked, 1/3 |1>, 1/3 |0>
-                # 2/3 leaked, 1/3 |1>
-                # assume an unpolarized beam and average the two polarization results together.
                 for r, q in zip(rand_nums, ls, strict=False):
 
                     if r <= p_cross:
@@ -536,7 +532,6 @@ class GeneralNoiseModel(ErrorModel):
                                 noise = self.unleak(
                                     {q},
                                     pop0_prob=0.5,
-                                    trigger="init_crosstalk",
                                 )  # go to |0> or |1>
                                 after.extend(noise)
                         else:
@@ -545,7 +540,6 @@ class GeneralNoiseModel(ErrorModel):
                                 noise = self.unleak(
                                     {q},
                                     pop0_prob=0.0,
-                                    trigger="init_crosstalk",
                                 )  # go to |1>
                                 after.extend(noise)
 
@@ -562,7 +556,7 @@ class GeneralNoiseModel(ErrorModel):
         error_circ = []
         if locations:
 
-            if self.error_params.get(
+            if self._eparams.get(
                 "leak2depolar",
             ):  # Whether to replace leakage with depolarizing noise
                 for q in locations:
@@ -573,11 +567,7 @@ class GeneralNoiseModel(ErrorModel):
 
                 for loc in locations:
                     if np.random.random() <= p_leak:
-                        self.leaked_qubits.add(loc)
-                        meta["leak"] = True
-                        error_circ.append(
-                            QOp(name="init |1>", args=[loc], metadata=meta),
-                        )
+                        self.machine.leak({loc})
 
         return error_circ
 
@@ -585,7 +575,6 @@ class GeneralNoiseModel(ErrorModel):
         self,
         locations: set[int],
         pop0_prob: float = 0.5,
-        trigger=None,
     ) -> list[QOp]:
         """The method that returns leaked qubits to the computation space.
 
@@ -599,17 +588,8 @@ class GeneralNoiseModel(ErrorModel):
         error_circ = []
         if locations:
 
-            self.leaked_qubits -= locations
-
             if pop0_prob == 0.0:
-
-                error_circ.append(
-                    QOp(
-                        name="init |1>",
-                        args=list(locations),
-                        metadata={"unleak": True, "trigger": trigger},
-                    ),
-                )
+                error_circ.extend(self.machine.unleak_to_one(locations))
 
             else:
 
@@ -618,20 +598,9 @@ class GeneralNoiseModel(ErrorModel):
                 for r, loc in zip(rand_nums, locations, strict=False):
 
                     if r:
-                        error_circ.append(
-                            QOp(
-                                name="init |0>",
-                                args=[loc],
-                                metadata={"unleak": True, "trigger": trigger},
-                            ),
-                        )
+                        error_circ.extend(self.machine.unleak_to_zero({loc}))
 
                     else:
-                        error_circ.append(
-                            QOp(
-                                name="init |1>",
-                                args=[loc],
-                                metadata={"unleak": True, "trigger": trigger},
-                            ),
-                        )
+                        error_circ.extend(self.machine.unleak_to_one({loc}))
+
         return error_circ

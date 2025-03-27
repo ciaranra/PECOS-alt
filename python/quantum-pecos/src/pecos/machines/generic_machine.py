@@ -58,6 +58,18 @@ class GenericMachine(Machine):
         self.leaked_qubits -= qubits
         return []
 
+    def unleack_to_zero(self, qubits: set[int]) -> list[QOp]:
+        self.unleak(qubits)
+        return [
+            QOp(name="Init +Z", args=list(qubits)),
+        ]
+
+    def unleak_to_one(self, qubits: set[int]) -> list[QOp]:
+        self.unleak(qubits)
+        return [
+            QOp(name="Init -Z", args=list(qubits)),
+        ]
+
     def meas_leaked(self, qubits: set[int]) -> list[QOp]:
         self.leaked_qubits -= qubits
         return [
