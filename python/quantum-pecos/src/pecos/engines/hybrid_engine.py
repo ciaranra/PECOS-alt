@@ -59,6 +59,7 @@ class HybridEngine:
             self.cinterp = PHIRClassicalInterpreter()
 
         self._internal_cinterp = PHIRClassicalInterpreter()
+        self._internal_cinterp.phir_validate = self.cinterp.phir_validate
 
         self.qsim = qsim
         if self.qsim is None:

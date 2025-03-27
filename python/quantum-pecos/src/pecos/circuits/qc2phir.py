@@ -327,7 +327,7 @@ def to_phir_dict(qc: "pecos.QuantumCircuit") -> dict:
 
     if "qvar_spec" not in qc.metadata:
         op = {
-            "qop": "qvar_define",
+            "data": "qvar_define",
             "data_type": "qubits",
             "variable": "q",
             "size": num_qubits,

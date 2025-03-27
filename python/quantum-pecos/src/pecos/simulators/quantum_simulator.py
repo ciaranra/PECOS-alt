@@ -103,7 +103,7 @@ class QuantumSimulator:
 
                     meas.append(temp)
             else:
-                msg = f"Quantum simulators process type QOp but got type {type(op)}"
+                msg = f"Quantum simulators process type QOp but got type {type(op)} from op: {op}"
                 raise TypeError(msg)
 
         return meas
