@@ -38,6 +38,10 @@ class DepolarizingErrorModel(ParentErrorModel):
         self.circuit = None
 
     def scaling(self):
+
+        if "p2_mem" not in self.error_params:
+            self.error_params["p2_mem"] = None
+
         # conversion from average error to total error
         self.error_params["p1"] *= 3 / 2
         self.error_params["p2"] *= 5 / 4
