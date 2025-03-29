@@ -54,30 +54,30 @@ class HybridEngine:
     ) -> None:
         self.seed = None
 
-        self.cinterp = cinterp
+        self.cinterp: ClassicalInterpreter | None = cinterp
         if self.cinterp is None:
-            self.cinterp = PHIRClassicalInterpreter()
+            self.cinterp: ClassicalInterpreter = PHIRClassicalInterpreter()
 
-        self._internal_cinterp = PHIRClassicalInterpreter()
+        self._internal_cinterp: ClassicalInterpreter = PHIRClassicalInterpreter()
         self._internal_cinterp.phir_validate = self.cinterp.phir_validate
 
-        self.qsim = qsim
+        self.qsim: QuantumSimulator | None = qsim
         if self.qsim is None:
-            self.qsim = QuantumSimulator()
+            self.qsim: QuantumSimulator = QuantumSimulator()
         elif isinstance(self.qsim, str):
-            self.qsim = QuantumSimulator(self.qsim, **params)
+            self.qsim: QuantumSimulator = QuantumSimulator(self.qsim, **params)
 
-        self.machine = machine
+        self.machine: GenericMachine = machine
         if machine is None:
-            self.machine = GenericMachine()
+            self.machine: GenericMachine = GenericMachine()
 
-        self.error_model = error_model
+        self.error_model: ErrorModel | None = error_model
         if self.error_model is None:
-            self.error_model = NoErrorModel()
+            self.error_model: ErrorModel = NoErrorModel()
 
-        self.op_processor = op_processor
+        self.op_processor: OpProcessor | None = op_processor
         if self.op_processor is None:
-            self.op_processor = GenericOpProc()
+            self.op_processor: OpProcessor = GenericOpProc()
 
         if self.machine:
             self.op_processor.attach_machine(self.machine)
@@ -149,7 +149,7 @@ class HybridEngine:
     def run(
         self,
         program,
-        foreign_object: ForeignObject = None,
+        foreign_object: ForeignObject | None = None,
         *,
         shots: int = 1,
         seed: int | None = None,
@@ -171,7 +171,6 @@ class HybridEngine:
         -------
 
         """
-        # TODO: Qubit loss
 
         measurements = MeasData()
 
@@ -207,7 +206,7 @@ class HybridEngine:
     def run_multisim(
         self,
         program,
-        foreign_object: ForeignObject = None,
+        foreign_object: ForeignObject | None = None,
         shots: int = 1,
         seed: int | None = None,
         pool_size: int = 1,
