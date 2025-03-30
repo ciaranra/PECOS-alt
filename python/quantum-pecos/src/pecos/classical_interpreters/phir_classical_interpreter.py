@@ -178,7 +178,7 @@ class PHIRClassicalInterpreter(ClassicalInterpreter):
             if isinstance(op, pt.opt.QOp):
                 op_buffer.append(op)
 
-                if op.name == "Measure":
+                if op.name in ["measure Z", "Measure", "Measure +Z"]:
                     yield op_buffer
                     op_buffer.clear()
 

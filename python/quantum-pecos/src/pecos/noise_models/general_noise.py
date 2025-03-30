@@ -15,7 +15,8 @@ from pecos.error_models.noise_impl.noise_tq_depolarizing_leakage import (
     noise_tq_depolarizing_leakage,
 )
 from pecos.error_models.noise_impl_old.gate_groups import one_qubits, two_qubits
-from pecos.reps.pypmir.op_types import QOp
+from pecos.reps.pypmir.op_types import QOp, COp
+from pecos.reps.pypmir.block_types import IfBlock
 
 if TYPE_CHECKING:
     from pecos.reps.pypmir.block_types import SeqBlock
@@ -299,7 +300,10 @@ class GeneralNoiseModel(ErrorModel):
                             rate=self._eparams["quadratic_dephasing_rate"],
                         )
                         if erroneous_ops is None:
-                            erroneous_ops = [QOp(name="I", args=[])]
+                            erroneous_ops = []
+
+                case "Leak":
+                    erroneous_ops = self.machine.leak(set(op.args))
 
                 case _:
                     msg = f"This error model doesn't handle gate: {op.name}!"
@@ -481,22 +485,21 @@ class GeneralNoiseModel(ErrorModel):
                             name="measure Z",
                             args=[q],
                             metadata={
-                                "cond": op.metadata.get("cond"),
-                                "var": ("__pecos_scratch", 0),
+                                "var": var,
                             },
                         ),
                     )
 
                     if np.random.random() <= 1 / 3:
                         after.append(
-                            QOp(
-                                name="init |0>",
-                                args=[q],
-                                metadata={
-                                    "cond": op.metadata.get("cond"),
-                                    "cond2": {"a": var, "op": "==", "b": 1},
-                                    "init_crosstalk": True,
-                                },
+                            IfBlock(
+                                condition=COp(name="==", args=[var, 1]),
+                                true_branch=[
+                                    QOp(
+                                        name="init |0>",
+                                        args=[q],
+                                    )
+                                ]
                             ),
                         )
 
@@ -509,15 +512,15 @@ class GeneralNoiseModel(ErrorModel):
                                 after.append(QOp(name=err, args=[q]))
                         else:
                             after.append(
-                                QOp(
-                                    name="leak",
-                                    args=[q],
-                                    metadata={
-                                        "cond": op.metadata.get("cond"),
-                                        "cond2": {"a": var, "op": "==", "b": 1},
-                                        "trigger": "init_crosstalk",
-                                    },
-                                ),
+                                IfBlock(
+                                    condition=COp(name="==", args=[var, 1]),
+                                    true_branch=[
+                                        QOp(
+                                            name="Leak",
+                                            args=[q],
+                                        ),
+                                    ]
+                                )
                             )
 
             if ls and self._eparams.get("seepage", True):
@@ -582,7 +585,6 @@ class GeneralNoiseModel(ErrorModel):
             locations: Set of qubits the ideal gates act on.
             pop0_prob: The probability that a qubit returning to the computational space is re-prepared in |0> instead
                 of |1>.
-            trigger: What type of operation triggered the unleak.
         """
 
         error_circ = []

@@ -186,16 +186,12 @@ class HybridEngine:
                 # Process ops, e.g., use `machine` and `error_model` to generate noisy qops & cops
                 noisy_buffered_ops = self.op_processor.process(buffered_ops)
 
-                # TODO: Think about the safety of evolving the internal registers...
-                # TODO: Maybe make the error model explicitly declare internal registers...
-
                 # Process noisy operations
                 measurements.clear()
                 for noisy_qops in self._internal_cinterp.execute(noisy_buffered_ops):
                     temp_meas = self.qsim.run(noisy_qops)
                     self._internal_cinterp.receive_results(temp_meas)
                     measurements.extend(temp_meas)
-
                 transmit_meas = self._internal_cinterp.result_bits(measurements)
                 self.cinterp.receive_results([transmit_meas])
 
