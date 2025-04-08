@@ -19,6 +19,7 @@ pub mod prelude;
 pub mod quantum_simulator;
 pub mod sparse_stab;
 pub mod state_vec;
+mod extended_sparse_stab;
 
 pub use arbitrary_rotation_gateable::ArbitraryRotationGateable;
 pub use clifford_gateable::{CliffordGateable, MeasurementResult};

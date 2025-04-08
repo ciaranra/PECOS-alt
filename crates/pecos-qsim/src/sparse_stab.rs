@@ -13,6 +13,7 @@
 use crate::{CliffordGateable, Gens, MeasurementResult, QuantumSimulator};
 use core::fmt::Debug;
 use core::mem;
+use num_complex::Complex;
 use pecos_core::{IndexableElement, RngManageable, Set, SimRng, VecSet};
 use rand_chacha::ChaCha8Rng;
 // TODO: Look into seeing if a dense bool for signs_minus and signs_i is more efficient
@@ -266,6 +267,38 @@ where
     pub fn signs_minus(&self) -> &T {
         &self.stabs.signs_minus
     }
+
+    /// Computes the inner product between this stabilizer state and another
+    pub fn inner_product(&self, other: &Self) -> Complex<f64> {
+        // Implementation as described in our previous discussion
+        // This uses destabilizers to efficiently check compatibility and calculate dimension
+        // ...
+        todo!()
+    }
+
+    /// Checks if a Pauli operator is in the stabilizer group
+    pub fn is_in_stabilizer_group(
+        &self,
+        pauli_x: &T,
+        pauli_z: &T,
+        phase_minus: bool,
+        phase_i: bool
+    ) -> (bool, T) {
+        // Implementation using destabilizers to find representation
+        // ...
+        todo!()
+    }
+
+    /// Projects state onto a given Pauli eigenstate
+    pub fn project(&mut self, pauli_x: &T, pauli_z: &T, outcome: bool) -> &mut Self {
+        // Project the state onto the +1 or -1 eigenstate of the given Pauli operator
+        // This is essentially what your measurement functions do, but more general
+        // ...
+        // TODO: consider this being a forced version of fn m(paulis, qubits)
+        todo!()
+    }
+
+
 
     /// # Panics
     /// Will panic if qubit ids don't convert to usize.
