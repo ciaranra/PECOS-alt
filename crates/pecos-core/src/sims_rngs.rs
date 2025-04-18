@@ -17,9 +17,10 @@ pub mod rng_utils;
 
 // Re-export RNG types from external crates
 pub use cyclic_rng::CyclicRng;
-pub use rand_chacha::ChaCha8Rng;
-pub use rand_xoshiro::Xoshiro256PlusPlus;
 pub use rng_manageable::RngManageable;
 
 // Export the utility functions from rng_utils
 pub use rng_utils::{choose_weighted, coin_flip, gen_bools};
+
+// Export the new RandomUtils struct
+pub use rng_utils::RandomUtils;

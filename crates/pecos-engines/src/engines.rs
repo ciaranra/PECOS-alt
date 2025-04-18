@@ -11,7 +11,9 @@ pub use crate::quantum_system::QuantumSystem;
 pub use classical::ClassicalEngine;
 use dyn_clone::DynClone;
 pub use hybrid::HybridEngine;
+pub use hybrid::HybridEngineBuilder;
 pub use monte_carlo::MonteCarloEngine;
+pub use monte_carlo::MonteCarloEngineBuilder;
 pub use quantum::QuantumEngine;
 
 /// Core engine trait for processing inputs to outputs

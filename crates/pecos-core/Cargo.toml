@@ -13,10 +13,8 @@ description = "Provides core definitions and functions for PECOS simulations."
 [dependencies]
 rand.workspace = true
 rand_chacha.workspace = true
-rand_xoshiro.workspace = true
 num-traits.workspace = true
 num-complex.workspace = true
-serde = { workspace = true, features = ["derive"] }
 pecos-derive.workspace = true
 
 [lints]

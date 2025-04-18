@@ -1,9 +1,8 @@
 use crate::byte_message::ByteMessage;
 use crate::engines::noise::{NoiseModel, PassThroughNoise};
-use crate::engines::quantum::{QuantumEngine, SparseStabEngine, StateVecEngine};
+use crate::engines::quantum::QuantumEngine;
 use crate::engines::{Engine, EngineSystem};
 use crate::errors::QueueError;
-use log;
 use std::fmt::Debug;
 
 /// A system that combines a noise model with a quantum engine
@@ -82,37 +81,8 @@ impl QuantumSystem {
         // Set the seed for the noise model
         self.noise_model.set_seed(noise_seed)?;
 
-        // Try to set the seed for the quantum engine by checking known engine types
-        let engine_ref = self.quantum_engine.as_any();
-
-        // Check for StateVecEngine
-        if let Some(_state_vec_engine) = engine_ref.downcast_ref::<StateVecEngine>() {
-            // We can't modify through a shared reference, so we need to get a mutable reference
-            let engine_mut = self
-                .quantum_engine
-                .as_any_mut()
-                .downcast_mut::<StateVecEngine>()
-                .expect("Engine type changed between downcast_ref and downcast_mut");
-
-            <StateVecEngine as QuantumEngine>::set_seed(engine_mut, engine_seed)
-                .map_err(|e| QueueError::OperationError(format!("Failed to set seed: {e}")))?;
-        }
-        // Check for SparseStabEngine
-        else if let Some(_sparse_stab_engine) = engine_ref.downcast_ref::<SparseStabEngine>() {
-            // We can't modify through a shared reference, so we need to get a mutable reference
-            let engine_mut = self
-                .quantum_engine
-                .as_any_mut()
-                .downcast_mut::<SparseStabEngine>()
-                .expect("Engine type changed between downcast_ref and downcast_mut");
-
-            <SparseStabEngine as QuantumEngine>::set_seed(engine_mut, engine_seed)
-                .map_err(|e| QueueError::OperationError(format!("Failed to set seed: {e}")))?;
-        }
-        // Unknown engine type - log a warning
-        else {
-            log::warn!("Unknown quantum engine type, seed not set");
-        }
+        // Directly set the seed for the quantum engine using the trait method
+        self.quantum_engine.set_seed(engine_seed)?;
 
         Ok(())
     }

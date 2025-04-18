@@ -33,7 +33,6 @@ categories = ["science", "simulation"]
 [workspace.dependencies]
 rand = "0.9"
 rand_chacha = "0.9"
-rand_xoshiro = "0.7"
 pyo3 = { version = "0.24", features = ["extension-module"] }
 rayon = "1"
 clap = { version = "4", features = ["derive"] }
