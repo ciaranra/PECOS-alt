@@ -114,3 +114,35 @@ impl Engine for Box<dyn NoiseModel> {
         self.as_mut().reset()
     }
 }
+
+// Implement ControlEngine for all NoiseModel types
+// This allows us to use NoiseModel directly as controllers in EngineSystem
+impl<T: NoiseModel + 'static> ControlEngine for T {
+    type Input = ByteMessage;
+    type Output = ByteMessage;
+    type EngineInput = ByteMessage;
+    type EngineOutput = ByteMessage;
+
+    fn start(
+        &mut self,
+        input: Self::Input,
+    ) -> Result<EngineStage<Self::EngineInput, Self::Output>, QueueError> {
+        // Apply noise to the input
+        let noisy_input = self.apply_noise(input)?;
+        // Request processing of the noisy commands
+        Ok(EngineStage::NeedsProcessing(noisy_input))
+    }
+
+    fn continue_processing(
+        &mut self,
+        result: Self::EngineOutput,
+    ) -> Result<EngineStage<Self::EngineInput, Self::Output>, QueueError> {
+        // For noise models, we just pass through the results
+        Ok(EngineStage::Complete(result))
+    }
+
+    fn reset(&mut self) -> Result<(), QueueError> {
+        // Reset the noise model
+        NoiseModel::reset(self)
+    }
+}

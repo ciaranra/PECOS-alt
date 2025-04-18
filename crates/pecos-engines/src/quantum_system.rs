@@ -1,14 +1,18 @@
 use crate::byte_message::ByteMessage;
-use crate::engines::noise::{NoiseModel, PassThroughNoise};
-use crate::engines::{Engine, QuantumEngine};
+use crate::engines::noise::{self, NoiseModel};
+use crate::engines::{Engine, EngineSystem, QuantumEngine};
 use crate::errors::QueueError;
 use dyn_clone;
+use std::fmt::Debug;
 
 /// A system that combines a noise model with a quantum engine
 ///
-/// This system implements the `Engine` trait to provide a standardized
-/// way of applying noise models to quantum engines.
+/// This system implements the `EngineSystem` trait to leverage the default
+/// implementation of processing through a controller and engine. The implementation allows
+/// it to be used as a controlled engine in higher-level engine systems like
+/// `HybridEngine`.
 pub struct QuantumSystem {
+    // Core components
     noise_model: Box<dyn NoiseModel>,
     quantum_engine: Box<dyn QuantumEngine>,
 }
@@ -26,7 +30,7 @@ impl QuantumSystem {
     /// Creates a new `QuantumSystem` with a custom quantum engine and no noise
     #[must_use]
     pub fn new_without_noise(quantum_engine: Box<dyn QuantumEngine>) -> Self {
-        Self::new(Box::new(PassThroughNoise), quantum_engine)
+        Self::new(Box::new(noise::PassThroughNoise), quantum_engine)
     }
 
     /// Set a specific seed for both the quantum engine and noise model
@@ -36,10 +40,6 @@ impl QuantumSystem {
     /// from the base seed using a standard seed derivation protocol to ensure they don't
     /// produce correlated random sequences.
     ///
-    /// This is the preferred method for users who need deterministic behavior from
-    /// the entire quantum system. It handles the complexity of seeding multiple
-    /// components with different but related seeds to avoid correlation issues.
-    ///
     /// # Arguments
     /// * `seed` - Base seed value for the random number generators
     ///
@@ -48,11 +48,6 @@ impl QuantumSystem {
     ///
     /// # Errors
     /// Returns a `QueueError` if setting the seed fails for either component
-    ///
-    /// # Implementation Note
-    /// This method uses the `derive_seed` function to create a different seed for
-    /// the noise model, ensuring that the quantum engine and noise model have
-    /// uncorrelated random sequences even when using the same base seed.
     pub fn set_seed(&mut self, seed: u64) -> Result<(), QueueError> {
         // Derive a different seed for the noise model using the standard protocol
         let noise_seed = pecos_core::sims_rngs::rng_manageable::derive_seed(seed, "noise_model");
@@ -89,32 +84,73 @@ impl QuantumSystem {
     pub fn quantum_engine_mut(&mut self) -> &mut dyn QuantumEngine {
         &mut *self.quantum_engine
     }
+
+    /// Helper method for tests to check if the engine is a specific type
+    #[cfg(test)]
+    fn is_engine_type(&self) -> bool {
+        // Since QuantumEngine doesn't have as_any, we need to check the debug representation
+        format!("{:?}", self.quantum_engine).contains("StateVecEngine")
+    }
 }
 
+// Explicitly implement Engine for QuantumSystem
 impl Engine for QuantumSystem {
     type Input = ByteMessage;
     type Output = ByteMessage;
 
     fn process(&mut self, input: Self::Input) -> Result<Self::Output, QueueError> {
-        // Apply noise to the input
-        let noisy_input = self.noise_model.apply_noise(input)?;
-
-        // Process the noisy input through the quantum engine
-        self.quantum_engine.process(noisy_input)
+        // Delegate to process_as_system for the standard implementation
+        self.process_as_system(input)
     }
 
     fn reset(&mut self) -> Result<(), QueueError> {
-        self.noise_model.reset()?;
+        // Reset both components, disambiguating the method call
+        noise::NoiseModel::reset(&mut *self.noise_model)?;
         self.quantum_engine.reset()
+    }
+}
+
+// Implement EngineSystem for QuantumSystem using core components directly
+impl EngineSystem for QuantumSystem {
+    // Use the core components directly for the controller and controlled engine
+    type Controller = Box<dyn NoiseModel>;
+    type ControlledEngine = Box<dyn QuantumEngine>;
+    type EngineInput = ByteMessage;
+    type EngineOutput = ByteMessage;
+
+    fn controller(&self) -> &Self::Controller {
+        &self.noise_model
+    }
+
+    fn controller_mut(&mut self) -> &mut Self::Controller {
+        &mut self.noise_model
+    }
+
+    fn engine(&self) -> &Self::ControlledEngine {
+        &self.quantum_engine
+    }
+
+    fn engine_mut(&mut self) -> &mut Self::ControlledEngine {
+        &mut self.quantum_engine
     }
 }
 
 impl Clone for QuantumSystem {
     fn clone(&self) -> Self {
-        QuantumSystem {
+        Self {
             noise_model: dyn_clone::clone_box(&*self.noise_model),
             quantum_engine: dyn_clone::clone_box(&*self.quantum_engine),
         }
+    }
+}
+
+// Manual implementation of Debug for QuantumSystem
+impl Debug for QuantumSystem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("QuantumSystem")
+            .field("noise_model", &format!("{:p}", &self.noise_model))
+            .field("quantum_engine", &format!("{:p}", &self.quantum_engine))
+            .finish()
     }
 }
 
@@ -122,8 +158,14 @@ impl Clone for QuantumSystem {
 mod tests {
     use super::*;
     use crate::byte_message::ByteMessageBuilder;
+    use crate::engines::ControlEngine;
     use crate::engines::noise::{DepolarizingNoise, PassThroughNoise};
     use crate::engines::quantum::StateVecEngine;
+
+    // Note: QuantumSystem implements EngineSystem and uses the blanket implementation
+    // of Engine for EngineSystem. This allows it to be used as a controlled engine
+    // in higher-level engine systems like HybridEngine.
+
     /// Creates a new `QuantumSystem` with a state vector quantum engine and depolarizing noise
     ///
     /// # Parameters
@@ -213,6 +255,9 @@ mod tests {
         } else {
             panic!("Failed to downcast noise model to DepolarizingNoise");
         }
+
+        // With the simplified design, we no longer need to update components as the
+        // noise_model is used directly as the controller
 
         // Process the same input with 5% noise
         let _result2 = system
@@ -319,5 +364,71 @@ mod tests {
             meas1, meas3,
             "System1 with updated seed should match system3"
         );
+    }
+
+    /// Test that verifies our engine type checking functionality
+    #[test]
+    fn test_engine_type_checking() {
+        // Create a quantum system with 2 qubits and 5% depolarizing noise
+        let system = create_quantume_system_with_state_vec_and_depolarizing_noise(2, 0.05);
+
+        // Verify the engine is a StateVecEngine
+        assert!(system.is_engine_type());
+    }
+
+    /// Test that verifies the blanket implementation of process works correctly
+    #[test]
+    fn test_blanket_process_implementation() {
+        // Create a quantum system with 2 qubits and 5% depolarizing noise
+        let mut system = create_quantume_system_with_state_vec_and_depolarizing_noise(2, 0.05);
+
+        // Create a simple quantum circuit with an X gate on qubit 0 and measurement
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_quantum_operations();
+        builder.add_x(&[0]);
+        builder.add_measurements(&[0], &[0]);
+        let input = builder.build();
+
+        // Process the input using the blanket implementation of Engine for EngineSystem
+        let result = system
+            .process(input.clone())
+            .expect("Failed to process input");
+
+        // Verify the result contains measurements
+        assert!(result.parse_measurements().is_ok());
+    }
+
+    /// Test that the `EngineSystem` pattern works correctly with direct access to
+    /// controller and engine components
+    #[test]
+    fn test_engine_system_pattern() {
+        // Create a quantum system with 2 qubits and 5% depolarizing noise
+        let mut system = create_quantume_system_with_state_vec_and_depolarizing_noise(2, 0.05);
+
+        // Create a simple quantum circuit with an X gate on qubit 0 and measurement
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_quantum_operations();
+        builder.add_x(&[0]);
+        builder.add_measurements(&[0], &[0]);
+        let input = builder.build();
+
+        // Process the input through the system
+        let result = system
+            .process(input.clone())
+            .expect("Failed to process input");
+        assert!(result.parse_measurements().is_ok());
+
+        // Test that we can use controller and engine components directly
+        {
+            // Test controller_mut which gives a mutable reference to the controller
+            let stage_result = system.controller_mut().start(input.clone());
+            assert!(stage_result.is_ok());
+        }
+
+        {
+            // Test engine_mut which gives a mutable reference to the engine
+            let reset_result = system.engine_mut().reset();
+            assert!(reset_result.is_ok());
+        }
     }
 }

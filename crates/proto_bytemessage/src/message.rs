@@ -164,7 +164,7 @@ impl BatchBuilder {
         let offset = self.buffer.len() % 4;
         if offset != 0 {
             let padding_size = Self::padding(self.buffer.len());
-            self.buffer.extend(std::iter::repeat(0).take(padding_size));
+            self.buffer.extend(std::iter::repeat_n(0, padding_size));
         }
 
         let header = MessageHeader {
@@ -179,7 +179,7 @@ impl BatchBuilder {
 
         // Ensure next message also starts at a 4-byte boundary
         self.buffer
-            .extend(std::iter::repeat(0).take(Self::padding(data_len)));
+            .extend(std::iter::repeat_n(0, Self::padding(data_len)));
 
         self.msg_count += 1;
 

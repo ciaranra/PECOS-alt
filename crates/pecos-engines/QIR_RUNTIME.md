@@ -53,4 +53,4 @@ If you encounter issues with the QIR runtime library, you can:
    CARGO_LOG=debug cargo build -p pecos-engines
    ```
 
-If the QIR runtime library cannot be found or built, you'll see an error message indicating the issue. This typically means that the `build.rs` script failed to build the library. Check the build output for errors and ensure that all dependencies are installed correctly, including LLVM and Clang which are required for building the QIR runtime. 
+If the QIR runtime library cannot be found or built, you'll see an error message indicating the issue. This typically means that the `build.rs` script failed to build the library. Check the build output for errors and ensure that all dependencies are installed correctly, including LLVM and Clang which are required for building the QIR runtime.

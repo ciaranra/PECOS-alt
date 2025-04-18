@@ -1,6 +1,5 @@
 use crate::byte_message::QuantumCmd;
 use crate::result_id::ResultId;
-use once_cell::sync::Lazy;
 use pecos_core::QubitId;
 use std::collections::HashMap;
 use std::env;
@@ -47,11 +46,12 @@ static NEXT_QUBIT_ID: AtomicUsize = AtomicUsize::new(0);
 static NEXT_RESULT_ID: AtomicUsize = AtomicUsize::new(0);
 
 // Global storage for measurement results
-static MEASUREMENT_RESULTS: Lazy<Mutex<HashMap<String, u32>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
+static MEASUREMENT_RESULTS: std::sync::LazyLock<Mutex<HashMap<String, u32>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
 // Global storage for commands in structured format
-static COMMANDS: Lazy<Mutex<Vec<QuantumCmd>>> = Lazy::new(|| Mutex::new(Vec::new()));
+static COMMANDS: std::sync::LazyLock<Mutex<Vec<QuantumCmd>>> =
+    std::sync::LazyLock::new(|| Mutex::new(Vec::new()));
 
 /// Helper function to check if we should print commands
 ///

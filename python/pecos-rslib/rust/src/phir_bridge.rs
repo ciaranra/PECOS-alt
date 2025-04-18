@@ -82,7 +82,7 @@ impl PHIREngine {
 
     /// Processes the quantum program and returns commands as Python objects
     /// This is a Python-facing method used primarily for testing
-    fn process_program(&mut self) -> PyResult<Vec<PyObject>> {
+    pub fn process_program(&mut self) -> PyResult<Vec<PyObject>> {
         Python::with_gil(|py| {
             // Get the Python commands from interpreter
             let raw_commands = self.get_raw_commands_from_python(py)?;
@@ -96,7 +96,7 @@ impl PHIREngine {
 
     /// Handles a measurement and updates the Python interpreter
     /// This is a Python-facing method used primarily for testing
-    fn handle_measurement(&mut self, outcome: u32) -> PyResult<()> {
+    pub fn handle_measurement(&mut self, outcome: u32) -> PyResult<()> {
         // For the tests, we're always using result_id 0
         let result_id = 0;
 
@@ -157,7 +157,7 @@ impl PHIREngine {
 
     /// Gets the current results from the engine
     /// This is a Python-facing method used primarily for testing
-    fn get_results(&self) -> PyResult<HashMap<String, u32>> {
+    pub fn get_results(&self) -> PyResult<HashMap<String, u32>> {
         Python::with_gil(|py| {
             let interpreter = self.interpreter.lock();
             let py_results = interpreter.call_method0(py, "results")?;

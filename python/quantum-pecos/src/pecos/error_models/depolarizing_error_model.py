@@ -113,7 +113,7 @@ class DepolarizingErrorModel(ErrorModel):
             # INITS WITH X NOISE
             if op.metadata.get("noiseless"):
                 pass
-            
+
             elif op.name in ["init |0>", "Init", "Init +Z"]:
                 qops_after = noise_initz_bitflip(
                     op,

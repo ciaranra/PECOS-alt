@@ -87,7 +87,7 @@ fn is_valid_decimal(s: &str) -> bool {
 
     for (i, c) in chars {
         match c {
-            '-' if i == 0 => continue,
+            '-' if i == 0 => {}
             '.' => {
                 dot_count += 1;
                 if dot_count > 1 {

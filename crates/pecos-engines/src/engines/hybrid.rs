@@ -142,11 +142,25 @@ impl HybridEngine {
     }
 }
 
+impl Engine for HybridEngine {
+    type Input = ();
+    type Output = ShotResult;
+
+    fn process(&mut self, input: Self::Input) -> Result<Self::Output, QueueError> {
+        // Delegate to process_as_system for standard implementation
+        self.process_as_system(input)
+    }
+
+    fn reset(&mut self) -> Result<(), QueueError> {
+        // Reset both controller and engine components by using as_mut() to disambiguate
+        (self.classical_engine.as_mut() as &mut dyn ClassicalEngine).reset()?;
+        self.quantum_system.reset()
+    }
+}
+
 impl EngineSystem for HybridEngine {
     type Controller = Box<dyn ClassicalEngine>;
     type ControlledEngine = QuantumSystem;
-    type Input = (); // Or whatever appropriate input type
-    type Output = ShotResult; // Or whatever appropriate output type
     type EngineInput = ByteMessage;
     type EngineOutput = ByteMessage;
 

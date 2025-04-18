@@ -40,6 +40,23 @@ pub trait QuantumEngine:
 
 dyn_clone::clone_trait_object!(QuantumEngine);
 
+// Implement Engine for Box<dyn QuantumEngine> to allow using it directly
+// as a controlled engine in EngineSystem
+impl Engine for Box<dyn QuantumEngine> {
+    type Input = ByteMessage;
+    type Output = ByteMessage;
+
+    fn process(&mut self, input: Self::Input) -> Result<Self::Output, QueueError> {
+        // Delegate to the underlying QuantumEngine
+        (**self).process(input)
+    }
+
+    fn reset(&mut self) -> Result<(), QueueError> {
+        // Delegate to the underlying QuantumEngine
+        (**self).reset()
+    }
+}
+
 /// A quantum engine that uses a state vector simulator
 #[derive(Debug, Clone)]
 pub struct StateVecEngine {

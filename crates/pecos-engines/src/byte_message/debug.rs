@@ -8,7 +8,8 @@ use crate::byte_message::protocol::{
     BATCH_MAGIC, BatchHeader, MeasurementHeader, MeasurementResultHeader, MessageHeader,
     QuantumGateHeader, calc_padding,
 };
-use std::io::Write;
+use std::fmt::Write;
+use std::io::Write as IoWrite;
 use std::mem::size_of;
 
 /// Dump a binary message batch to a string for debugging
@@ -27,19 +28,21 @@ pub fn dump_batch(data: &[u8]) -> String {
     let header = *bytemuck::from_bytes::<BatchHeader>(&data[0..size_of::<BatchHeader>()]);
 
     if header.magic != BATCH_MAGIC {
-        output.push_str(&format!(
-            "ERROR: Invalid magic number: 0x{:08x} (expected 0x{:08x})\n",
+        writeln!(
+            output,
+            "ERROR: Invalid magic number: 0x{:08x} (expected 0x{:08x})",
             header.magic, BATCH_MAGIC
-        ));
+        )
+        .unwrap();
         return output;
     }
 
     output.push_str("Batch Header:\n");
-    output.push_str(&format!("  Magic: 0x{:08x}\n", header.magic));
-    output.push_str(&format!("  Version: {}\n", header.version));
-    output.push_str(&format!("  Flags: 0x{:02x}\n", header.flags));
-    output.push_str(&format!("  Message Count: {}\n", header.msg_count));
-    output.push_str(&format!("  Total Size: {} bytes\n", header.total_size));
+    writeln!(output, "  Magic: 0x{:08x}", header.magic).unwrap();
+    writeln!(output, "  Version: {}", header.version).unwrap();
+    writeln!(output, "  Flags: 0x{:02x}", header.flags).unwrap();
+    writeln!(output, "  Message Count: {}", header.msg_count).unwrap();
+    writeln!(output, "  Total Size: {} bytes", header.total_size).unwrap();
     output.push('\n');
 
     // Parse each message
@@ -47,7 +50,7 @@ pub fn dump_batch(data: &[u8]) -> String {
     for i in 0..header.msg_count {
         // Ensure we have enough data for a message header
         if offset + size_of::<MessageHeader>() > data.len() {
-            output.push_str(&format!("ERROR: Data too small for message {i} header\n"));
+            writeln!(output, "ERROR: Data too small for message {i} header").unwrap();
             break;
         }
 
@@ -71,19 +74,16 @@ pub fn dump_batch(data: &[u8]) -> String {
             _ => "Unknown",
         };
 
-        output.push_str(&format!("Message {i}:\n"));
-        output.push_str(&format!("  Type: {} ({})\n", msg_type, msg_header.msg_type));
-        output.push_str(&format!("  Flags: 0x{:02x}\n", msg_header.flags));
-        output.push_str(&format!(
-            "  Payload Size: {} bytes\n",
-            msg_header.payload_size
-        ));
+        writeln!(output, "Message {i}:").unwrap();
+        writeln!(output, "  Type: {} ({})", msg_type, msg_header.msg_type).unwrap();
+        writeln!(output, "  Flags: 0x{:02x}", msg_header.flags).unwrap();
+        writeln!(output, "  Payload Size: {} bytes", msg_header.payload_size).unwrap();
 
         // Parse payload based on message type
         if msg_header.payload_size > 0 {
             let payload_end = offset + msg_header.payload_size as usize;
             if payload_end > data.len() {
-                output.push_str(&format!("ERROR: Data too small for message {i} payload\n"));
+                writeln!(output, "ERROR: Data too small for message {i} payload").unwrap();
                 break;
             }
 
@@ -110,15 +110,19 @@ pub fn dump_batch(data: &[u8]) -> String {
                         };
 
                         output.push_str("  Quantum Gate:\n");
-                        output.push_str(&format!(
-                            "    Type: {} ({})\n",
+                        writeln!(
+                            output,
+                            "    Type: {} ({})",
                             gate_type, gate_header.gate_type
-                        ));
-                        output.push_str(&format!("    Qubits: {}\n", gate_header.num_qubits));
-                        output.push_str(&format!(
-                            "    Has Parameters: {}\n",
+                        )
+                        .unwrap();
+                        writeln!(output, "    Qubits: {}", gate_header.num_qubits).unwrap();
+                        writeln!(
+                            output,
+                            "    Has Parameters: {}",
                             gate_header.has_params != 0
-                        ));
+                        )
+                        .unwrap();
 
                         // Dump qubit indices
                         let qubits_offset = size_of::<QuantumGateHeader>();
@@ -137,7 +141,7 @@ pub fn dump_batch(data: &[u8]) -> String {
                             }
                         }
 
-                        output.push_str(&format!("    Qubit Indices: {qubits:?}\n"));
+                        writeln!(output, "    Qubit Indices: {qubits:?}").unwrap();
 
                         // Dump parameters if present
                         if gate_header.has_params != 0 {
@@ -159,7 +163,7 @@ pub fn dump_batch(data: &[u8]) -> String {
                                             payload[params_offset + 7],
                                         ]);
 
-                                        output.push_str(&format!("    Theta: {theta}\n"));
+                                        writeln!(output, "    Theta: {theta}").unwrap();
                                     }
                                 }
                                 8 => {
@@ -187,8 +191,8 @@ pub fn dump_batch(data: &[u8]) -> String {
                                             payload[params_offset + 15],
                                         ]);
 
-                                        output.push_str(&format!("    Phi: {phi}\n"));
-                                        output.push_str(&format!("    Theta: {theta}\n"));
+                                        writeln!(output, "    Phi: {phi}").unwrap();
+                                        writeln!(output, "    Theta: {theta}").unwrap();
                                     }
                                 }
                                 _ => {}
@@ -204,8 +208,8 @@ pub fn dump_batch(data: &[u8]) -> String {
                         );
 
                         output.push_str("  Measurement:\n");
-                        output.push_str(&format!("    Qubit: {}\n", meas_header.qubit));
-                        output.push_str(&format!("    Result ID: {}\n", meas_header.result_id));
+                        writeln!(output, "    Qubit: {}", meas_header.qubit).unwrap();
+                        writeln!(output, "    Result ID: {}", meas_header.result_id).unwrap();
                     }
                 }
                 20 => {
@@ -216,13 +220,13 @@ pub fn dump_batch(data: &[u8]) -> String {
                         );
 
                         output.push_str("  Measurement Result:\n");
-                        output.push_str(&format!("    Result ID: {}\n", result_header.result_id));
-                        output.push_str(&format!("    Outcome: {}\n", result_header.outcome));
+                        writeln!(output, "    Result ID: {}", result_header.result_id).unwrap();
+                        writeln!(output, "    Outcome: {}", result_header.outcome).unwrap();
                     }
                 }
                 _ => {
                     // Dump raw bytes for other message types
-                    output.push_str(&format!("  Payload: {payload:?}\n"));
+                    writeln!(output, "  Payload: {payload:?}").unwrap();
                 }
             }
 

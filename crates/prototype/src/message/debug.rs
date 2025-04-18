@@ -40,7 +40,7 @@ impl MessageDebug {
         print!("{:indent$}", "", indent = indent + 2);
         println!("Offset: 0x{start:04x}, Size: {size} bytes");
 
-        for row in 0..(size + 15) / 16 {
+        for row in 0..size.div_ceil(16) {
             print!(
                 "{:indent$}0x{:04x}:  ",
                 "",

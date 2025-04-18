@@ -666,7 +666,7 @@ impl ByteMessage {
                         let theta_bytes = &payload[params_offset..params_offset + size_of::<f64>()];
                         let theta = f64::from_le_bytes(theta_bytes[..8].try_into().unwrap());
                         params.push(theta);
-                    }else{
+                    } else {
                         return Err(QueueError::OperationError(
                             "Quantum gate message payload too small for RZ parameters".into(),
                         ));
@@ -682,7 +682,7 @@ impl ByteMessage {
                         let phi_bytes = &payload[phi_offset..phi_offset + size_of::<f64>()];
                         let phi = f64::from_le_bytes(phi_bytes[..8].try_into().unwrap());
                         params.push(phi);
-                    }else{
+                    } else {
                         return Err(QueueError::OperationError(
                             "Quantum gate message payload too small for R1XY parameters".into(),
                         ));
@@ -693,7 +693,7 @@ impl ByteMessage {
                         let theta_bytes = &payload[params_offset..params_offset + size_of::<f64>()];
                         let theta = f64::from_le_bytes(theta_bytes[..8].try_into().unwrap());
                         params.push(theta);
-                    }else{
+                    } else {
                         return Err(QueueError::OperationError(
                             "Quantum gate message payload too small for RZZ parameters".into(),
                         ));
@@ -710,7 +710,7 @@ impl ByteMessage {
                             result_id_bytes[3],
                         ]) as usize;
                         result_id = Some(result_id_value);
-                    }else{
+                    } else {
                         return Err(QueueError::OperationError(
                             "Quantum gate message payload too small for Measure parameters".into(),
                         ));

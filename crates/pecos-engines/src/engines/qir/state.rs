@@ -1,5 +1,4 @@
 use crate::engines::qir::common::{get_thread_id, should_print_commands};
-use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::sync::Mutex;
@@ -10,8 +9,8 @@ static NEXT_QUBIT_ID: AtomicUsize = AtomicUsize::new(0);
 static NEXT_RESULT_ID: AtomicUsize = AtomicUsize::new(0);
 
 // Global storage for measurement results
-static MEASUREMENT_RESULTS: Lazy<Mutex<HashMap<String, u32>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
+static MEASUREMENT_RESULTS: std::sync::LazyLock<Mutex<HashMap<String, u32>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Allocates a new qubit and returns its ID
 ///

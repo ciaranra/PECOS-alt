@@ -51,7 +51,7 @@ pub trait Engine: DynClone + Send + Sync {
 /// * `Output` - Type returned as final output
 /// * `EngineInput` - Type sent to the controlled engine
 /// * `EngineOutput` - Type received from the controlled engine
-pub trait ControlEngine: Send + Sync {
+pub trait ControlEngine: DynClone + Send + Sync {
     type Input;
     type Output;
     type EngineInput;
@@ -122,10 +122,13 @@ pub enum EngineStage<I, O> {
 
 /// A system that combines a controller and a controlled engine
 ///
-/// This trait represents a complete engine system that consists of:
+/// This trait extends Engine with additional capabilities, representing
+/// a complete engine system that consists of:
 /// 1. A controller component that manages the execution flow
 /// 2. A controlled engine component that performs the actual processing
-pub trait EngineSystem: DynClone + Send + Sync {
+///
+/// Any type implementing `EngineSystem` must also implement Engine.
+pub trait EngineSystem: Engine {
     /// The type of the controller component
     type Controller: ControlEngine<
             Input = Self::Input,
@@ -136,12 +139,6 @@ pub trait EngineSystem: DynClone + Send + Sync {
 
     /// The type of the controlled engine component
     type ControlledEngine: Engine<Input = Self::EngineInput, Output = Self::EngineOutput>;
-
-    /// The input type for the system
-    type Input;
-
-    /// The output type from the system
-    type Output;
 
     /// The input type for the controlled engine
     type EngineInput;
@@ -160,27 +157,23 @@ pub trait EngineSystem: DynClone + Send + Sync {
 
     /// Get a mutable reference to the controlled engine component
     fn engine_mut(&mut self) -> &mut Self::ControlledEngine;
-}
 
-// Register the EngineSystem trait with dyn_clone
-dyn_clone::clone_trait_object!(<C, CE, I, O, EI, EO> EngineSystem<Controller=C, ControlledEngine=CE, Input=I, Output=O, EngineInput=EI, EngineOutput=EO>);
-
-/// Default implementation of Engine for any `EngineSystem`
-impl<T> Engine for T
-where
-    T: EngineSystem + 'static,
-{
-    type Input = T::Input;
-    type Output = T::Output;
-
-    /// Process the input through the engine system.
+    /// Process input using the standard engine system pattern
     ///
-    /// This method orchestrates the processing of input through the controller and engine components.
-    /// It takes an input, starts the processing, and continues processing until completion.
+    /// This method provides a default implementation for processing input
+    /// through the controller and engine components. Implementations of
+    /// `EngineSystem` can delegate their `Engine::process` method to this.
     ///
     /// # Parameters
     /// * `input` - The input to process
-    fn process(&mut self, input: Self::Input) -> Result<Self::Output, QueueError> {
+    ///
+    /// # Returns
+    /// * The processed output if successful
+    ///
+    /// # Errors
+    /// This function returns a `QueueError` if:
+    /// - The controller or engine encounters an error during processing
+    fn process_as_system(&mut self, input: Self::Input) -> Result<Self::Output, QueueError> {
         let mut stage = self.controller_mut().start(input)?;
 
         loop {
@@ -193,13 +186,244 @@ where
             }
         }
     }
+}
 
-    /// Reset the state of both the controller and the engine for reuse.
-    ///
-    /// This method resets the controller and engine to their initial states,
-    /// allowing the system to be reused for new processing tasks or simulations.
+// Register the Engine trait with dyn_clone
+dyn_clone::clone_trait_object!(<I, O> Engine<Input=I, Output=O>);
+
+// Register the ControlEngine trait with dyn_clone
+dyn_clone::clone_trait_object!(<I, O, EI, EO> ControlEngine<Input=I, Output=O, EngineInput=EI, EngineOutput=EO>);
+
+// Implement Engine for Box<dyn Engine> to allow using it directly
+// in EngineSystem implementations
+impl<I, O> Engine for Box<dyn Engine<Input = I, Output = O>> {
+    type Input = I;
+    type Output = O;
+
+    fn process(&mut self, input: Self::Input) -> Result<Self::Output, QueueError> {
+        // Delegate to the underlying Engine
+        (**self).process(input)
+    }
+
     fn reset(&mut self) -> Result<(), QueueError> {
-        self.controller_mut().reset()?;
-        self.engine_mut().reset()
+        // Delegate to the underlying Engine
+        (**self).reset()
+    }
+}
+
+// Implement ControlEngine for Box<dyn ControlEngine> to allow using it directly
+// in EngineSystem implementations
+impl<I, O, EI, EO> ControlEngine
+    for Box<dyn ControlEngine<Input = I, Output = O, EngineInput = EI, EngineOutput = EO>>
+{
+    type Input = I;
+    type Output = O;
+    type EngineInput = EI;
+    type EngineOutput = EO;
+
+    fn start(
+        &mut self,
+        input: Self::Input,
+    ) -> Result<EngineStage<Self::EngineInput, Self::Output>, QueueError> {
+        // Delegate to the underlying ControlEngine
+        (**self).start(input)
+    }
+
+    fn continue_processing(
+        &mut self,
+        result: Self::EngineOutput,
+    ) -> Result<EngineStage<Self::EngineInput, Self::Output>, QueueError> {
+        // Delegate to the underlying ControlEngine
+        (**self).continue_processing(result)
+    }
+
+    fn reset(&mut self) -> Result<(), QueueError> {
+        // Delegate to the underlying ControlEngine
+        (**self).reset()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    // A simple test engine that just returns its input
+    #[derive(Clone)]
+    struct EchoEngine {
+        calls: Arc<AtomicUsize>,
+    }
+
+    impl EchoEngine {
+        fn new() -> Self {
+            Self {
+                calls: Arc::new(AtomicUsize::new(0)),
+            }
+        }
+    }
+
+    impl Engine for EchoEngine {
+        type Input = u32;
+        type Output = u32;
+
+        fn process(&mut self, input: Self::Input) -> Result<Self::Output, QueueError> {
+            // Increment the call counter
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(input)
+        }
+
+        fn reset(&mut self) -> Result<(), QueueError> {
+            self.calls.store(0, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    // A controller that will require a configurable number of iterations
+    #[derive(Clone)]
+    struct IterativeController {
+        target_iterations: usize,
+        current_iteration: usize,
+        calls: Arc<AtomicUsize>,
+    }
+
+    impl IterativeController {
+        fn new(target_iterations: usize) -> Self {
+            Self {
+                target_iterations,
+                current_iteration: 0,
+                calls: Arc::new(AtomicUsize::new(0)),
+            }
+        }
+    }
+
+    impl ControlEngine for IterativeController {
+        type Input = u32;
+        type Output = u32;
+        type EngineInput = u32;
+        type EngineOutput = u32;
+
+        fn start(
+            &mut self,
+            input: Self::Input,
+        ) -> Result<EngineStage<Self::EngineInput, Self::Output>, QueueError> {
+            // Reset counters on start
+            self.current_iteration = 0;
+            self.calls.fetch_add(1, Ordering::SeqCst);
+
+            // Return NeedsProcessing to start the loop
+            Ok(EngineStage::NeedsProcessing(input))
+        }
+
+        fn continue_processing(
+            &mut self,
+            result: Self::EngineOutput,
+        ) -> Result<EngineStage<Self::EngineInput, Self::Output>, QueueError> {
+            self.current_iteration += 1;
+            self.calls.fetch_add(1, Ordering::SeqCst);
+
+            // If we've reached our target iterations, return the result
+            if self.current_iteration >= self.target_iterations {
+                Ok(EngineStage::Complete(result))
+            } else {
+                // Otherwise, request another round of processing
+                Ok(EngineStage::NeedsProcessing(result))
+            }
+        }
+
+        fn reset(&mut self) -> Result<(), QueueError> {
+            self.current_iteration = 0;
+            self.calls.store(0, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    // A system combining our iterative controller and echo engine
+    #[derive(Clone)]
+    struct TestSystem {
+        controller: IterativeController,
+        engine: EchoEngine,
+    }
+
+    impl TestSystem {
+        fn new(target_iterations: usize) -> Self {
+            Self {
+                controller: IterativeController::new(target_iterations),
+                engine: EchoEngine::new(),
+            }
+        }
+    }
+
+    impl Engine for TestSystem {
+        type Input = u32;
+        type Output = u32;
+
+        fn process(&mut self, input: Self::Input) -> Result<Self::Output, QueueError> {
+            self.process_as_system(input)
+        }
+
+        fn reset(&mut self) -> Result<(), QueueError> {
+            self.controller.reset()?;
+            self.engine.reset()
+        }
+    }
+
+    impl EngineSystem for TestSystem {
+        type Controller = IterativeController;
+        type ControlledEngine = EchoEngine;
+        type EngineInput = u32;
+        type EngineOutput = u32;
+
+        fn controller(&self) -> &Self::Controller {
+            &self.controller
+        }
+
+        fn controller_mut(&mut self) -> &mut Self::Controller {
+            &mut self.controller
+        }
+
+        fn engine(&self) -> &Self::ControlledEngine {
+            &self.engine
+        }
+
+        fn engine_mut(&mut self) -> &mut Self::ControlledEngine {
+            &mut self.engine
+        }
+    }
+
+    #[test]
+    fn test_engine_system_looping() {
+        // Create a system that should loop 3 times
+        let mut system = TestSystem::new(3);
+
+        // Process an input
+        let result = system.process(42).unwrap();
+
+        // Verify the result is still 42
+        assert_eq!(result, 42);
+
+        // Verify controller was called 4 times (start + 3 continue_processing)
+        assert_eq!(system.controller.calls.load(Ordering::SeqCst), 4);
+
+        // Verify engine was called 3 times
+        assert_eq!(system.engine.calls.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn test_no_loops() {
+        // Create a system that should process immediately (0 iterations)
+        let mut system = TestSystem::new(0);
+
+        // Process an input
+        let result = system.process(42).unwrap();
+
+        // Verify the result is still 42
+        assert_eq!(result, 42);
+
+        // Verify controller was called 2 times (start + 1 continue_processing)
+        assert_eq!(system.controller.calls.load(Ordering::SeqCst), 2);
+
+        // Verify engine was called 1 time
+        assert_eq!(system.engine.calls.load(Ordering::SeqCst), 1);
     }
 }

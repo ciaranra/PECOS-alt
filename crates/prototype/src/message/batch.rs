@@ -32,7 +32,7 @@ impl BatchBuilder {
         // Add padding if needed
         if current_pos % align != 0 {
             let padding = align - (current_pos % align);
-            self.buffer.extend(std::iter::repeat(0).take(padding));
+            self.buffer.extend(std::iter::repeat_n(0, padding));
         }
 
         // Create a zeroed buffer of the exact size we need
@@ -192,7 +192,7 @@ impl BatchBuilder {
             if current_pos % align != 0 {
                 let padding = align - (current_pos % align);
                 println!("Adding {padding} bytes padding for OperationData alignment");
-                self.buffer.extend(std::iter::repeat(0).take(padding));
+                self.buffer.extend(std::iter::repeat_n(0, padding));
             }
 
             // Create and write operation
