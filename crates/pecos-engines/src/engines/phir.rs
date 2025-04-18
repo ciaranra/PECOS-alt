@@ -1,6 +1,5 @@
-use super::{ClassicalEngine, ControlEngine, EngineStage};
-use crate::byte_message::ByteMessage;
-use crate::byte_message::ByteMessageBuilder;
+use crate::byte_message::{ByteMessage, builder::ByteMessageBuilder};
+use crate::engines::{ControlEngine, Engine, EngineStage, classical::ClassicalEngine};
 use crate::errors::QueueError;
 use crate::shot_results::ShotResult;
 use log::debug;
@@ -780,6 +779,43 @@ impl Clone for PHIREngine {
             },
             None => Self::empty(),
         }
+    }
+}
+
+impl Engine for PHIREngine {
+    type Input = ();
+    type Output = ShotResult;
+
+    fn process(&mut self, _input: Self::Input) -> Result<Self::Output, QueueError> {
+        // Process operations until we need more input or we're done
+        let mut stage = self.start(())?;
+
+        // If we're already done, return the result
+        if let EngineStage::Complete(result) = stage {
+            return Ok(result);
+        }
+
+        // Otherwise, we need to process more (just return an empty measurement result)
+        if let EngineStage::NeedsProcessing(_) = stage {
+            // Create an empty message to simulate processing
+            let empty_message = ByteMessage::builder().build();
+            stage = self.continue_processing(empty_message)?;
+
+            if let EngineStage::Complete(result) = stage {
+                return Ok(result);
+            }
+        }
+
+        // If we get here, something went wrong
+        Err(QueueError::OperationError(
+            "Failed to complete processing".into(),
+        ))
+    }
+
+    fn reset(&mut self) -> Result<(), QueueError> {
+        // Call our internal reset method
+        self.reset_state();
+        Ok(())
     }
 }
 

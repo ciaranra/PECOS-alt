@@ -1,16 +1,17 @@
 use crate::byte_message::ByteMessage;
-use crate::engines::noise::{self, NoiseModel};
-use crate::engines::{Engine, EngineSystem, QuantumEngine};
+use crate::engines::noise::{NoiseModel, PassThroughNoise};
+use crate::engines::quantum::{QuantumEngine, SparseStabEngine, StateVecEngine};
+use crate::engines::{Engine, EngineSystem};
 use crate::errors::QueueError;
-use dyn_clone;
+use log;
 use std::fmt::Debug;
 
 /// A system that combines a noise model with a quantum engine
 ///
-/// This system implements the `EngineSystem` trait to leverage the default
-/// implementation of processing through a controller and engine. The implementation allows
-/// it to be used as a controlled engine in higher-level engine systems like
-/// `HybridEngine`.
+/// This system serves as an intermediate layer that connects a noise model
+/// (which transforms quantum operations) with a quantum engine (which executes
+/// those operations). It's designed to be used as a controlled engine in
+/// higher-level engine systems like `HybridEngine`.
 pub struct QuantumSystem {
     // Core components
     noise_model: Box<dyn NoiseModel>,
@@ -18,7 +19,14 @@ pub struct QuantumSystem {
 }
 
 impl QuantumSystem {
-    /// Creates a new `QuantumSystem` with the specified noise model and quantum engine
+    /// Create a new `QuantumSystem` with the given noise model and quantum engine
+    ///
+    /// # Parameters
+    /// - `noise_model`: A boxed noise model implementing the `NoiseModel` trait
+    /// - `quantum_engine`: A boxed quantum engine implementing the `QuantumEngine` trait
+    ///
+    /// # Returns
+    /// A new `QuantumSystem` with the specified components
     #[must_use]
     pub fn new(noise_model: Box<dyn NoiseModel>, quantum_engine: Box<dyn QuantumEngine>) -> Self {
         Self {
@@ -27,18 +35,29 @@ impl QuantumSystem {
         }
     }
 
-    /// Creates a new `QuantumSystem` with a custom quantum engine and no noise
+    /// Create a new `QuantumSystem` with the given quantum engine and no noise
+    ///
+    /// This is a convenience method that creates a new `QuantumSystem` with a
+    /// `PassThroughNoise` model, which does not apply any noise transformations.
+    ///
+    /// # Parameters
+    /// - `quantum_engine`: A boxed quantum engine implementing the `QuantumEngine` trait
+    ///
+    /// # Returns
+    /// A new `QuantumSystem` with the specified engine and a pass-through noise model
     #[must_use]
     pub fn new_without_noise(quantum_engine: Box<dyn QuantumEngine>) -> Self {
-        Self::new(Box::new(noise::PassThroughNoise), quantum_engine)
+        Self::new(Box::new(PassThroughNoise), quantum_engine)
     }
 
-    /// Set a specific seed for both the quantum engine and noise model
+    /// Set a specific seed for all components of the quantum system
     ///
-    /// This method sets different but deterministic seeds for both the quantum engine
-    /// and the noise model (if it supports seeding). The noise model's seed is derived
-    /// from the base seed using a standard seed derivation protocol to ensure they don't
-    /// produce correlated random sequences.
+    /// This method sets different but deterministic seeds for each component:
+    /// - The noise model
+    /// - The quantum engine
+    ///
+    /// The seeds are derived from the base seed using a standard seed derivation protocol
+    /// to ensure they don't produce correlated random sequences.
     ///
     /// # Arguments
     /// * `seed` - Base seed value for the random number generators
@@ -48,15 +67,52 @@ impl QuantumSystem {
     ///
     /// # Errors
     /// Returns a `QueueError` if setting the seed fails for either component
+    ///
+    /// # Panics
+    /// This function will panic if the engine type changes between the check for engine type
+    /// and the attempt to get a mutable reference to it, which should never happen in practice.
     pub fn set_seed(&mut self, seed: u64) -> Result<(), QueueError> {
         // Derive a different seed for the noise model using the standard protocol
         let noise_seed = pecos_core::sims_rngs::rng_manageable::derive_seed(seed, "noise_model");
 
-        // Set the seed for the quantum engine
-        self.quantum_engine.set_seed(seed)?;
+        // Derive a different seed for the quantum engine using the standard protocol
+        let engine_seed =
+            pecos_core::sims_rngs::rng_manageable::derive_seed(seed, "quantum_engine");
 
         // Set the seed for the noise model
         self.noise_model.set_seed(noise_seed)?;
+
+        // Try to set the seed for the quantum engine by checking known engine types
+        let engine_ref = self.quantum_engine.as_any();
+
+        // Check for StateVecEngine
+        if let Some(_state_vec_engine) = engine_ref.downcast_ref::<StateVecEngine>() {
+            // We can't modify through a shared reference, so we need to get a mutable reference
+            let engine_mut = self
+                .quantum_engine
+                .as_any_mut()
+                .downcast_mut::<StateVecEngine>()
+                .expect("Engine type changed between downcast_ref and downcast_mut");
+
+            <StateVecEngine as QuantumEngine>::set_seed(engine_mut, engine_seed)
+                .map_err(|e| QueueError::OperationError(format!("Failed to set seed: {e}")))?;
+        }
+        // Check for SparseStabEngine
+        else if let Some(_sparse_stab_engine) = engine_ref.downcast_ref::<SparseStabEngine>() {
+            // We can't modify through a shared reference, so we need to get a mutable reference
+            let engine_mut = self
+                .quantum_engine
+                .as_any_mut()
+                .downcast_mut::<SparseStabEngine>()
+                .expect("Engine type changed between downcast_ref and downcast_mut");
+
+            <SparseStabEngine as QuantumEngine>::set_seed(engine_mut, engine_seed)
+                .map_err(|e| QueueError::OperationError(format!("Failed to set seed: {e}")))?;
+        }
+        // Unknown engine type - log a warning
+        else {
+            log::warn!("Unknown quantum engine type, seed not set");
+        }
 
         Ok(())
     }
@@ -105,7 +161,7 @@ impl Engine for QuantumSystem {
 
     fn reset(&mut self) -> Result<(), QueueError> {
         // Reset both components, disambiguating the method call
-        noise::NoiseModel::reset(&mut *self.noise_model)?;
+        NoiseModel::reset(&mut *self.noise_model)?;
         self.quantum_engine.reset()
     }
 }

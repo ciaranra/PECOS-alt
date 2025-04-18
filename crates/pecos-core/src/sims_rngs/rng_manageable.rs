@@ -10,13 +10,11 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-use rand::Rng;
+use rand::RngCore;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-
-use super::sim_rng::SimRng;
 
 /// Derive a new seed from a base seed and a purpose string
 ///
@@ -46,7 +44,7 @@ pub fn derive_seed(base_seed: u64, purpose: &str) -> u64 {
 
     // Use the combined seed to initialize an RNG and get a random number
     let mut rng = ChaCha8Rng::seed_from_u64(combined_seed);
-    rng.random()
+    rng.next_u64()
 }
 
 /// Trait for components that can have their random number generator replaced or reseeded
@@ -69,7 +67,7 @@ pub fn derive_seed(base_seed: u64, purpose: &str) -> u64 {
 ///   of the component beyond the randomness source
 pub trait RngManageable {
     /// The type of random number generator used by this component
-    type Rng: SimRng;
+    type Rng: RngCore + SeedableRng;
 
     /// Replace the random number generator with a new one
     ///
@@ -80,11 +78,14 @@ pub trait RngManageable {
     /// preserving its current state.
     ///
     /// # Arguments
-    /// * `rng` - A new random number generator implementing the `SimRng` trait
+    /// * `rng` - A new random number generator
     ///
     /// # Returns
-    /// A reference to self for method chaining
-    fn set_rng(&mut self, rng: Self::Rng) -> &mut Self;
+    /// Result indicating success or failure
+    ///
+    /// # Errors
+    /// Returns an error if setting the RNG fails
+    fn set_rng(&mut self, rng: Self::Rng) -> Result<(), Box<dyn std::error::Error>>;
 
     /// Replace the random number generator with a new one created from a seed
     ///
@@ -98,13 +99,16 @@ pub trait RngManageable {
     /// * `seed` - Seed value for the new random number generator
     ///
     /// # Returns
-    /// A reference to self for method chaining
+    /// Result indicating success or failure
+    ///
+    /// # Errors
+    /// Returns an error if setting the RNG fails
     ///
     /// # Implementation Note
     /// The default implementation creates a new RNG using `SeedableRng::seed_from_u64`
     /// and sets it using `set_rng()`. Implementers typically only need to implement
     /// `set_rng()` unless they need custom seed handling.
-    fn set_seed(&mut self, seed: u64) -> &mut Self
+    fn set_seed(&mut self, seed: u64) -> Result<(), Box<dyn std::error::Error>>
     where
         Self::Rng: SeedableRng,
     {

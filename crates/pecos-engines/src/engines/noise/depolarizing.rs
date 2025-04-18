@@ -5,7 +5,6 @@ use crate::engines::noise::NoiseModel;
 use crate::errors::QueueError;
 use log::trace;
 use pecos_core::RngManageable;
-use pecos_core::SimRng;
 use rand::Rng;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
@@ -43,7 +42,7 @@ impl DepolarizingNoise {
     #[must_use]
     pub fn new_with_options(probability: f64) -> Self {
         // Create an RNG from entropy (for non-deterministic behavior by default)
-        let rng = ChaCha8Rng::from_entropy();
+        let rng = ChaCha8Rng::from_os_rng();
 
         Self {
             probability,
@@ -202,11 +201,12 @@ impl NoiseModel for DepolarizingNoise {
     /// Result indicating success or failure
     ///
     /// # Errors
-    /// This implementation always returns `Ok(())` as seeding cannot fail
+    /// This implementation returns an error if setting the RNG fails
     fn set_seed(&mut self, seed: u64) -> Result<(), QueueError> {
-        // Use the RngManageable trait's set_seed method
-        self.set_rng(ChaCha8Rng::seed_from_u64(seed));
-        Ok(())
+        // Use the RngManageable trait's set_rng method directly with a seeded RNG
+        // to avoid infinite recursion with set_seed
+        RngManageable::set_rng(self, ChaCha8Rng::seed_from_u64(seed))
+            .map_err(|e| QueueError::OperationError(e.to_string()))
     }
 }
 
@@ -222,10 +222,10 @@ impl RngManageable for DepolarizingNoise {
     /// * `rng` - A new random number generator
     ///
     /// # Returns
-    /// A reference to self for method chaining
-    fn set_rng(&mut self, rng: ChaCha8Rng) -> &mut Self {
+    /// Result indicating success or failure
+    fn set_rng(&mut self, rng: ChaCha8Rng) -> Result<(), Box<dyn std::error::Error>> {
         self.rng = Arc::new(Mutex::new(rng));
-        self
+        Ok(())
     }
 }
 
@@ -278,7 +278,16 @@ impl DepolarizingNoiseBuilder {
             "Probability must be between 0 and 1"
         );
 
-        Box::new(DepolarizingNoise::new_with_options(probability))
+        let mut noise = DepolarizingNoise::new_with_options(probability);
+
+        // Apply the seed if specified
+        if let Some(seed) = self.seed {
+            // Explicitly call the NoiseModel trait's set_seed method
+            <DepolarizingNoise as NoiseModel>::set_seed(&mut noise, seed)
+                .expect("Failed to set seed for DepolarizingNoise");
+        }
+
+        Box::new(noise)
     }
 }
 

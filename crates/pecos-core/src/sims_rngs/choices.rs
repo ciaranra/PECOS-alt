@@ -59,7 +59,7 @@ impl<T> Choices<T> {
 
     /// Sample a choice based on the weights
     #[inline]
-    pub fn sample<R: RngCore>(&self, rng: &mut R) -> &T {
+    pub fn sample<R: RngCore + ?Sized>(&self, rng: &mut R) -> &T {
         let index = self.weighted_index.sample(rng);
         &self.items[index]
     }

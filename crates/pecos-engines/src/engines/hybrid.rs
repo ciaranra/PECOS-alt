@@ -8,13 +8,14 @@ use crate::quantum_system::QuantumSystem;
 use crate::shot_results::ShotResult;
 use dyn_clone;
 use log::debug;
+use pecos_core::sims_rngs::rng_manageable::derive_seed;
 
 /// `HybridEngine` coordinates between classical and quantum components
 ///
 /// This engine implements the `EngineSystem` trait, using a `ClassicalEngine` as
 /// the controller and a `QuantumSystem` as the controlled engine.
 pub struct HybridEngine {
-    classical_engine: Box<dyn ClassicalEngine>,
+    pub classical_engine: Box<dyn ClassicalEngine>,
     quantum_system: QuantumSystem,
 }
 
@@ -78,6 +79,34 @@ impl HybridEngine {
         }
     }
 
+    /// Set a specific seed for all components of the `HybridEngine`
+    ///
+    /// This method sets different but deterministic seeds for each component:
+    /// - Classical engine (if it implements a seed setting method)
+    /// - Quantum system (which further sets seeds for both the quantum engine and noise model)
+    ///
+    /// # Arguments
+    /// * `seed` - Base seed value for random number generators
+    ///
+    /// # Returns
+    /// Result indicating success or failure
+    ///
+    /// # Errors
+    /// Returns a `QueueError` if setting the seed fails for any component
+    pub fn set_seed(&mut self, seed: u64) -> Result<(), QueueError> {
+        // Derive seeds for each component
+        let classical_seed = derive_seed(seed, "classical_engine");
+        let quantum_seed = derive_seed(seed, "quantum_system");
+
+        // Set seed for quantum system (this sets seeds for both quantum engine and noise model)
+        self.quantum_system.set_seed(quantum_seed)?;
+
+        // Set seed for classical engine
+        self.classical_engine.set_seed(classical_seed)?;
+
+        Ok(())
+    }
+
     /// Resets the state of the hybrid engine, including classical, quantum, and noise model components.
     ///
     /// This function ensures all components are returned to their initial states,
@@ -89,8 +118,8 @@ impl HybridEngine {
     /// - Resetting the engine fails.
     pub fn reset(&mut self) -> Result<(), QueueError> {
         debug!("HybridEngine::reset() being called!");
-        // Use as_mut() to get a mutable reference to the inner ClassicalEngine
-        (self.classical_engine.as_mut() as &mut dyn ClassicalEngine).reset()?;
+        // Use the fully qualified path to disambiguate which reset to call
+        ClassicalEngine::reset(&mut *self.classical_engine)?;
         self.quantum_system.reset()
     }
 
@@ -152,8 +181,8 @@ impl Engine for HybridEngine {
     }
 
     fn reset(&mut self) -> Result<(), QueueError> {
-        // Reset both controller and engine components by using as_mut() to disambiguate
-        (self.classical_engine.as_mut() as &mut dyn ClassicalEngine).reset()?;
+        // Reset both controller and engine components by using fully qualified path
+        ClassicalEngine::reset(&mut *self.classical_engine)?;
         self.quantum_system.reset()
     }
 }

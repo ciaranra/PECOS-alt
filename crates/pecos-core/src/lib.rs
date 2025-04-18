@@ -28,21 +28,24 @@ pub use qubit_id::QubitId;
 pub use sets::set::Set;
 pub use sets::vec_set::VecSet;
 pub use sims_rngs::RngManageable;
-pub use sims_rngs::SimRng;
 
-pub use crate::sims_rngs::chacha_rng::{ChaCha8Rng, ChaCha12Rng, ChaCha20Rng};
-pub use crate::sims_rngs::choices::Choices;
-pub use crate::sims_rngs::cyclic_rng::{CyclicRng, CyclicSeed};
-pub use crate::sims_rngs::xoshiro_rng::{
-    Xoshiro128PlusPlus, Xoshiro128StarStar, Xoshiro256PlusPlus, Xoshiro256StarStar,
-    Xoshiro512PlusPlus, Xoshiro512StarStar,
-};
+// Utility functions for random number generation
+pub use sims_rngs::{choose_weighted, coin_flip, gen_bools};
+
+// Re-export RNG implementations from external crates
 pub use gate::Gate;
 pub use pauli::pauli_bitmap::PauliBitmap;
 pub use pauli::pauli_sparse::PauliSparse;
 pub use pauli::pauli_string::PauliString;
 pub use pauli::{Pauli, PauliOperator};
 pub use phase::Phase;
+pub use rand_chacha::{ChaCha8Rng, ChaCha12Rng, ChaCha20Rng};
+pub use rand_xoshiro::{
+    Xoshiro128PlusPlus, Xoshiro128StarStar, Xoshiro256PlusPlus, Xoshiro256StarStar,
+    Xoshiro512PlusPlus, Xoshiro512StarStar,
+};
+pub use sims_rngs::choices::Choices;
+pub use sims_rngs::cyclic_rng::{CyclicRng, CyclicSeed};
 
 pub use pecos_derive::StructMetadata; // Macro
 pub use struct_metadata::StructMetadata; // Trait

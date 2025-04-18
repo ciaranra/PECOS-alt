@@ -1,11 +1,10 @@
-use crate::byte_message::ByteMessage;
-use crate::byte_message::QuantumCmd;
-use crate::byte_message::QuantumCommand;
-use crate::engines::ClassicalEngine;
+use crate::byte_message::{ByteMessage, QuantumCmd, QuantumCommand};
+use crate::engines::Engine;
+use crate::engines::classical::ClassicalEngine;
 use crate::engines::qir::command_generation;
 use crate::engines::qir::common::get_thread_id;
 use crate::engines::qir::compiler::QirCompiler;
-use crate::engines::qir::error::{self as error, QirError};
+use crate::engines::qir::error::{self, QirError};
 use crate::engines::qir::library::QirLibrary;
 use crate::engines::qir::measurement;
 use crate::errors::QueueError;
@@ -871,5 +870,26 @@ impl Clone for QirEngine {
 impl Drop for QirEngine {
     fn drop(&mut self) {
         self.reset_internal_state();
+    }
+}
+
+impl Engine for QirEngine {
+    type Input = ();
+    type Output = ShotResult;
+
+    fn process(&mut self, _input: Self::Input) -> Result<Self::Output, QueueError> {
+        // Generate commands, process them, and return results
+        let commands = self.generate_commands()?;
+        if !commands.is_empty()? {
+            // In a real processing scenario, these commands would be sent to a quantum engine
+            // Here we're just handling an empty processing case
+            self.handle_measurements(ByteMessage::builder().build())?;
+        }
+        Ok(self.get_results())
+    }
+
+    fn reset(&mut self) -> Result<(), QueueError> {
+        self.reset_engine();
+        Ok(())
     }
 }

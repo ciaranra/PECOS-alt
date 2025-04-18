@@ -8,34 +8,31 @@ use pecos_core::RngManageable;
 use pecos_qsim::{
     ArbitraryRotationGateable, CliffordGateable, QuantumSimulator, StateVec, StdSparseStab,
 };
+use rand::SeedableRng;
+use std::any::Any;
 use std::fmt::Debug;
 
 /// Trait for quantum engines that can process quantum operations
 pub trait QuantumEngine:
     Engine<Input = ByteMessage, Output = ByteMessage> + DynClone + Debug
 {
-    /// Set a specific seed for the random number generator
-    ///
-    /// This method allows for deterministic behavior by setting a specific seed
-    /// for the random number generator used by the quantum simulator.
+    /// Sets a specific seed for the quantum engine
     ///
     /// # Arguments
     /// * `seed` - Seed value for the random number generator
+    ///
+    /// # Returns
+    /// Result indicating success or failure
     ///
     /// # Errors
     /// Returns a `QueueError` if setting the seed fails
     fn set_seed(&mut self, seed: u64) -> Result<(), QueueError>;
 
-    /// Reset the seed to the original value
-    ///
-    /// This method resets the random number generator to use the original seed,
-    /// which is useful for repeating simulations with the same randomness.
-    ///
-    /// # Errors
-    /// Returns a `QueueError` if resetting the seed fails
-    fn reset_seed(&mut self, seed: u64) -> Result<(), QueueError> {
-        self.set_seed(seed)
-    }
+    /// Returns a reference to this object as Any, for downcasting
+    fn as_any(&self) -> &dyn Any;
+
+    /// Returns a mutable reference to this object as Any, for downcasting
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 dyn_clone::clone_trait_object!(QuantumEngine);
@@ -182,10 +179,31 @@ impl Engine for StateVecEngine {
     }
 }
 
+impl RngManageable for StateVecEngine {
+    type Rng = <StateVec as RngManageable>::Rng;
+
+    fn set_rng(&mut self, rng: Self::Rng) -> Result<(), Box<dyn std::error::Error>> {
+        self.simulator.set_rng(rng)
+    }
+}
+
 impl QuantumEngine for StateVecEngine {
     fn set_seed(&mut self, seed: u64) -> Result<(), QueueError> {
-        self.simulator.set_seed(seed);
-        Ok(())
+        // Create a new RNG with the given seed
+        let rng = <StateVec as RngManageable>::Rng::seed_from_u64(seed);
+
+        // Set the simulator's RNG
+        self.simulator
+            .set_rng(rng)
+            .map_err(|e| QueueError::OperationError(format!("Failed to set seed: {e}")))
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -291,10 +309,31 @@ impl Engine for SparseStabEngine {
     }
 }
 
+impl RngManageable for SparseStabEngine {
+    type Rng = <StdSparseStab as RngManageable>::Rng;
+
+    fn set_rng(&mut self, rng: Self::Rng) -> Result<(), Box<dyn std::error::Error>> {
+        self.simulator.set_rng(rng)
+    }
+}
+
 impl QuantumEngine for SparseStabEngine {
     fn set_seed(&mut self, seed: u64) -> Result<(), QueueError> {
-        self.simulator.set_seed(seed);
-        Ok(())
+        // Create a new RNG with the given seed
+        let rng = <StdSparseStab as RngManageable>::Rng::seed_from_u64(seed);
+
+        // Set the simulator's RNG
+        self.simulator
+            .set_rng(rng)
+            .map_err(|e| QueueError::OperationError(format!("Failed to set seed: {e}")))
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

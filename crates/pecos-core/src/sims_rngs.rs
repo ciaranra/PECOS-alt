@@ -10,15 +10,16 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-pub mod chacha_rng;
 pub mod choices;
 pub mod cyclic_rng;
 pub mod rng_manageable;
-pub mod sim_rng;
-pub mod xoshiro_rng;
+pub mod rng_utils;
 
-pub use chacha_rng::ChaCha8Rng;
+// Re-export RNG types from external crates
 pub use cyclic_rng::CyclicRng;
+pub use rand_chacha::ChaCha8Rng;
+pub use rand_xoshiro::Xoshiro256PlusPlus;
 pub use rng_manageable::RngManageable;
-pub use sim_rng::SimRng;
-pub use xoshiro_rng::Xoshiro256PlusPlus;
+
+// Export the utility functions from rng_utils
+pub use rng_utils::{choose_weighted, coin_flip, gen_bools};

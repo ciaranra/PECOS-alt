@@ -9,7 +9,9 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 
 /// Classical engine that processes programs and handles measurements
-pub trait ClassicalEngine: DynClone + Send + Sync {
+pub trait ClassicalEngine:
+    Engine<Input = (), Output = ShotResult> + DynClone + Send + Sync
+{
     fn num_qubits(&self) -> usize;
 
     /// Generate a `ByteMessage` containing the next batch of quantum commands to execute
@@ -52,6 +54,21 @@ pub trait ClassicalEngine: DynClone + Send + Sync {
     /// - `QueueError::OperationError`: If result retrieval fails or is unsupported.
     /// - `QueueError::LockError`: If a lock cannot be acquired to access required resources.
     fn get_results(&self) -> Result<ShotResult, QueueError>;
+
+    /// Sets a specific seed for the classical engine
+    ///
+    /// # Arguments
+    /// * `seed` - Seed value for the random number generator
+    ///
+    /// # Returns
+    /// Result indicating success or failure
+    ///
+    /// # Errors
+    /// Returns a `QueueError` if setting the seed fails
+    fn set_seed(&mut self, _seed: u64) -> Result<(), QueueError> {
+        // Default implementation just succeeds without doing anything
+        Ok(())
+    }
 
     /// Compiles the classical program into an intermediate representation or directly
     /// into commands that can be executed by the engine.
@@ -145,7 +162,8 @@ impl ControlEngine for Box<dyn ClassicalEngine> {
     }
 
     fn reset(&mut self) -> Result<(), QueueError> {
-        self.as_mut().reset()
+        // Use fully qualified path to disambiguate
+        ClassicalEngine::reset(&mut **self)
     }
 }
 
@@ -170,7 +188,8 @@ impl Engine for Box<dyn ClassicalEngine> {
     }
 
     fn reset(&mut self) -> Result<(), QueueError> {
-        self.as_mut().reset()
+        // Use fully qualified path to disambiguate
+        ClassicalEngine::reset(&mut **self)
     }
 }
 

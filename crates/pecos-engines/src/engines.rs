@@ -201,12 +201,10 @@ impl<I, O> Engine for Box<dyn Engine<Input = I, Output = O>> {
     type Output = O;
 
     fn process(&mut self, input: Self::Input) -> Result<Self::Output, QueueError> {
-        // Delegate to the underlying Engine
         (**self).process(input)
     }
 
     fn reset(&mut self) -> Result<(), QueueError> {
-        // Delegate to the underlying Engine
         (**self).reset()
     }
 }
@@ -268,7 +266,6 @@ mod tests {
         type Output = u32;
 
         fn process(&mut self, input: Self::Input) -> Result<Self::Output, QueueError> {
-            // Increment the call counter
             self.calls.fetch_add(1, Ordering::SeqCst);
             Ok(input)
         }

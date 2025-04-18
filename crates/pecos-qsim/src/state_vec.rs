@@ -13,11 +13,12 @@
 use super::arbitrary_rotation_gateable::ArbitraryRotationGateable;
 use super::clifford_gateable::{CliffordGateable, MeasurementResult};
 use super::quantum_simulator::QuantumSimulator;
-use pecos_core::{RngManageable, SimRng};
+use pecos_core::RngManageable;
 use rand_chacha::ChaCha8Rng;
 
+use core::fmt::Debug;
 use num_complex::Complex64;
-use rand::Rng;
+use rand::{Rng, RngCore, SeedableRng};
 
 /// A quantum state simulator using the state vector representation
 ///
@@ -26,7 +27,7 @@ use rand::Rng;
 /// memory that scales exponentially with the number of qubits.
 ///
 /// # Type Parameters
-/// * `R` - Random number generator type implementing `SimRng` trait
+/// * `R` - Random number generator type implementing `RngCore + SeedableRng` traits
 ///
 /// # Examples
 /// ```rust
@@ -41,7 +42,7 @@ use rand::Rng;
 #[derive(Clone, Debug)]
 pub struct StateVec<R = ChaCha8Rng>
 where
-    R: SimRng,
+    R: RngCore + SeedableRng + Debug,
 {
     num_qubits: usize,
     state: Vec<Complex64>,
@@ -65,7 +66,7 @@ impl StateVec {
     #[inline]
     #[must_use]
     pub fn new(num_qubits: usize) -> StateVec<ChaCha8Rng> {
-        let rng = ChaCha8Rng::from_entropy();
+        let rng = ChaCha8Rng::from_os_rng();
         StateVec::with_rng(num_qubits, rng)
     }
 
@@ -88,14 +89,14 @@ impl StateVec {
     #[inline]
     #[must_use]
     pub fn with_seed(num_qubits: usize, seed: u64) -> StateVec<ChaCha8Rng> {
-        let rng = SimRng::from_seed(seed);
+        let rng = ChaCha8Rng::seed_from_u64(seed);
         StateVec::with_rng(num_qubits, rng)
     }
 }
 
 impl<R> StateVec<R>
 where
-    R: SimRng,
+    R: RngCore + SeedableRng + Debug,
 {
     /// Returns the number of qubits in the system
     ///
@@ -120,7 +121,7 @@ where
     ///
     /// # Arguments
     /// * `num_qubits` - Number of qubits in the system
-    /// * `rng` - Random number generator implementing `SimRng` trait
+    /// * `rng` - Random number generator implementing `RngCore + SeedableRng` traits
     ///
     /// # Examples
     /// ```rust
@@ -148,9 +149,10 @@ where
     ///
     /// # Examples
     /// ```rust
-    /// use pecos_core::SimRng;
     /// use num_complex::Complex64;
     /// use pecos_qsim::StateVec;
+    /// use rand_chacha::ChaCha8Rng;
+    /// use rand::SeedableRng;
     ///
     /// let custom_state = vec![
     ///     Complex64::new(1.0 / 2.0_f64.sqrt(), 0.0),
@@ -159,7 +161,7 @@ where
     ///     Complex64::new(0.0, 0.0),
     /// ];
     ///
-    /// let state_vec = StateVec::from_state(custom_state, rand_chacha::ChaCha8Rng::from_entropy());
+    /// let state_vec = StateVec::from_state(custom_state, ChaCha8Rng::from_os_rng());
     /// ```
     ///
     /// # Panics
@@ -436,35 +438,6 @@ where
         }
 
         self.state = new_state;
-        self
-    }
-
-    /// Replace the random number generator with a new one
-    ///
-    /// This method allows replacing the RNG without recreating the entire simulator,
-    /// preserving the current quantum state.
-    ///
-    /// # Arguments
-    /// * `rng` - A new random number generator implementing the `SimRng` trait
-    ///
-    /// # Returns
-    /// A reference to self for method chaining
-    ///
-    /// # Examples
-    /// ```rust
-    /// use pecos_qsim::StateVec;
-    /// use pecos_qsim::CliffordGateable;
-    /// use pecos_core::{SimRng, RngManageable};
-    ///
-    /// let mut state = StateVec::new(2);
-    /// // Prepare some state
-    /// state.h(0).cx(0, 1);
-    /// // Replace RNG with a seeded one
-    /// state.set_rng(SimRng::from_seed(42));
-    /// ```
-    #[inline]
-    pub fn set_rng(&mut self, rng: R) -> &mut Self {
-        self.rng = rng;
         self
     }
 }
@@ -1223,24 +1196,35 @@ impl ArbitraryRotationGateable<usize> for StateVec {
 
 impl<R> RngManageable for StateVec<R>
 where
-    R: SimRng,
+    R: RngCore + SeedableRng + Debug,
 {
     type Rng = R;
 
     /// Replace the random number generator with a new one
     ///
     /// This method allows replacing the RNG without recreating the entire simulator,
-    /// preserving the current quantum state.
+    /// which is useful for setting seeds after initialization.
     ///
     /// # Arguments
-    /// * `rng` - A new random number generator implementing the `SimRng` trait
+    /// * `rng` - A new random number generator implementing the `RngCore + SeedableRng` traits
     ///
     /// # Returns
-    /// A reference to self for method chaining
+    /// Result indicating success or failure
+    ///
+    /// # Examples
+    /// ```rust
+    /// use pecos_core::RngManageable;
+    /// use pecos_qsim::StateVec;
+    /// use rand_chacha::ChaCha8Rng;
+    /// use rand::SeedableRng;
+    ///
+    /// let mut state = StateVec::new(2);
+    /// state.set_rng(ChaCha8Rng::seed_from_u64(42));
+    /// ```
     #[inline]
-    fn set_rng(&mut self, rng: R) -> &mut Self {
+    fn set_rng(&mut self, rng: R) -> Result<(), Box<dyn std::error::Error>> {
         self.rng = rng;
-        self
+        Ok(())
     }
 }
 

@@ -17,6 +17,7 @@ fn test_bell_state_noiseless() {
         0.0, // No noise
         100,
         2,
+        None, // No specific seed
     )
     .unwrap();
 
@@ -55,6 +56,7 @@ fn test_bell_state_with_noise() {
         0.2,  // 20% noise
         1000, // More shots for better statistics
         2,
+        None, // No specific seed
     )
     .unwrap();
 

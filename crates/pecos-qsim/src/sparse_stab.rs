@@ -13,9 +13,9 @@
 use crate::{CliffordGateable, Gens, MeasurementResult, QuantumSimulator};
 use core::fmt::Debug;
 use core::mem;
-use pecos_core::{IndexableElement, RngManageable, Set, SimRng, VecSet};
+use pecos_core::{IndexableElement, RngManageable, Set, VecSet};
+use rand::{Rng, RngCore, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-// TODO: Look into seeing if a dense bool for signs_minus and signs_i is more efficient
 
 #[expect(clippy::module_name_repetitions)]
 pub type StdSparseStab = SparseStab<VecSet<usize>, usize>;
@@ -106,7 +106,7 @@ pub struct SparseStab<T, E, R = ChaCha8Rng>
 where
     T: for<'a> Set<'a, Element = E>,
     E: IndexableElement,
-    R: SimRng,
+    R: RngCore + SeedableRng + Rng + Debug,
 {
     pub(crate) num_qubits: usize,
     stabs: Gens<T, E>,
@@ -116,13 +116,13 @@ where
 impl<T, E, R> SparseStab<T, E, R>
 where
     E: IndexableElement,
-    R: SimRng,
+    R: RngCore + SeedableRng + Rng + Debug,
     T: for<'a> Set<'a, Element = E>,
 {
     #[inline]
     #[must_use]
     pub fn new(num_qubits: usize) -> Self {
-        let rng = SimRng::from_entropy();
+        let rng = R::from_os_rng();
         Self::with_rng(num_qubits, rng)
     }
 
@@ -145,7 +145,7 @@ where
     #[inline]
     #[must_use]
     pub fn with_seed(num_qubits: usize, seed: u64) -> Self {
-        let rng = SimRng::from_seed(seed);
+        let rng = R::seed_from_u64(seed);
         Self::with_rng(num_qubits, rng)
     }
 
@@ -481,41 +481,12 @@ where
         }
         meas_outcome
     }
-
-    /// Replace the random number generator with a new one
-    ///
-    /// This method allows replacing the RNG without recreating the entire simulator,
-    /// preserving the current quantum state.
-    ///
-    /// # Arguments
-    /// * `rng` - A new random number generator implementing the `SimRng` trait
-    ///
-    /// # Returns
-    /// A reference to self for method chaining
-    ///
-    /// # Examples
-    /// ```rust
-    /// use pecos_qsim::StdSparseStab;
-    /// use pecos_qsim::CliffordGateable;
-    /// use pecos_core::{SimRng, RngManageable};
-    ///
-    /// let mut state = StdSparseStab::new(2);
-    /// // Prepare some state
-    /// state.h(0).cx(0, 1);
-    /// // Replace RNG with a seeded one
-    /// state.set_rng(SimRng::from_seed(42));
-    /// ```
-    #[inline]
-    pub fn set_rng(&mut self, rng: R) -> &mut Self {
-        self.rng = rng;
-        self
-    }
 }
 
 impl<T, E, R> QuantumSimulator for SparseStab<T, E, R>
 where
     E: IndexableElement,
-    R: SimRng,
+    R: RngCore + SeedableRng + Rng + Debug,
     T: for<'a> Set<'a, Element = E>,
 {
     #[inline]
@@ -528,7 +499,7 @@ impl<T, E, R> CliffordGateable<E> for SparseStab<T, E, R>
 where
     T: for<'a> Set<'a, Element = E>,
     E: IndexableElement,
-    R: SimRng,
+    R: RngCore + SeedableRng + Rng + Debug,
 {
     // TODO: pub fun p(&mut self, pauli: &pauli, q: U) { todo!() }
     // TODO: pub fun m(&mut self, pauli: &pauli, q: U) -> bool { todo!() }
@@ -756,7 +727,7 @@ where
             // There are no stabilizers that anti-commute with Z_q
             self.deterministic_meas(q)
         } else {
-            let result = self.rng.gen_bool(0.5);
+            let result = self.rng.random_bool(0.5);
             self.nondeterministic_meas(q, result)
         }
     }
@@ -766,7 +737,7 @@ impl<T, E, R> RngManageable for SparseStab<T, E, R>
 where
     T: for<'a> Set<'a, Element = E>,
     E: IndexableElement,
-    R: SimRng,
+    R: RngCore + SeedableRng + Rng + Debug,
 {
     type Rng = R;
 
@@ -776,13 +747,14 @@ where
     /// preserving the current quantum state.
     ///
     /// # Arguments
-    /// * `rng` - A new random number generator implementing the `SimRng` trait
+    /// * `rng` - A new random number generator implementing the `RngCore + SeedableRng` traits
     ///
     /// # Returns
-    /// A reference to self for method chaining
+    /// Result indicating success or failure
     #[inline]
-    fn set_rng(&mut self, rng: R) -> &mut Self {
-        self.set_rng(rng)
+    fn set_rng(&mut self, rng: R) -> Result<(), Box<dyn std::error::Error>> {
+        self.rng = rng;
+        Ok(())
     }
 }
 

@@ -68,6 +68,7 @@ fn run_program(args: &RunArgs) -> Result<(), Box<dyn Error>> {
         prob,
         args.shots,
         args.workers,
+        None,
     )?;
 
     results.print();

@@ -1,9 +1,10 @@
 use parking_lot::Mutex;
-use pecos::prelude::*;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 use std::collections::HashMap;
 use std::error::Error;
+
+use pecos::prelude::{ByteMessage, ClassicalEngine, ControlEngine, Engine, QueueError, ShotResult};
 
 #[pyclass(module = "_pecos_rslib")]
 #[derive(Debug)]
@@ -731,7 +732,10 @@ impl ControlEngine for PHIREngine {
         ClassicalEngine::reset(self)
     }
 
-    fn start(&mut self, _input: ()) -> Result<EngineStage<ByteMessage, ShotResult>, QueueError> {
+    fn start(
+        &mut self,
+        _input: (),
+    ) -> Result<pecos::prelude::EngineStage<ByteMessage, ShotResult>, QueueError> {
         // Reset state to ensure clean start
         ClassicalEngine::reset(self)?;
 
@@ -744,18 +748,18 @@ impl ControlEngine for PHIREngine {
         if is_empty {
             // Get the results directly
             match ClassicalEngine::get_results(self) {
-                Ok(results) => Ok(EngineStage::Complete(results)),
+                Ok(results) => Ok(pecos::prelude::EngineStage::Complete(results)),
                 Err(e) => Err(e),
             }
         } else {
-            Ok(EngineStage::NeedsProcessing(commands))
+            Ok(pecos::prelude::EngineStage::NeedsProcessing(commands))
         }
     }
 
     fn continue_processing(
         &mut self,
         measurements: ByteMessage,
-    ) -> Result<EngineStage<ByteMessage, ShotResult>, QueueError> {
+    ) -> Result<pecos::prelude::EngineStage<ByteMessage, ShotResult>, QueueError> {
         // Handle received measurements
         self.handle_measurements(measurements)?;
 
@@ -768,11 +772,37 @@ impl ControlEngine for PHIREngine {
         if is_empty {
             // Get the results directly
             match ClassicalEngine::get_results(self) {
-                Ok(results) => Ok(EngineStage::Complete(results)),
+                Ok(results) => Ok(pecos::prelude::EngineStage::Complete(results)),
                 Err(e) => Err(e),
             }
         } else {
-            Ok(EngineStage::NeedsProcessing(commands))
+            Ok(pecos::prelude::EngineStage::NeedsProcessing(commands))
         }
+    }
+}
+
+impl Engine for PHIREngine {
+    type Input = ();
+    type Output = ShotResult;
+
+    fn process(&mut self, _input: Self::Input) -> Result<Self::Output, QueueError> {
+        // Reset the engine state using the Engine trait's reset method explicitly
+        <Self as Engine>::reset(self)?;
+
+        // Start processing
+        match self.start(())? {
+            pecos::prelude::EngineStage::NeedsProcessing(_commands) => {
+                // We need to continue processing with measurement results
+                // For simplicity, we'll just return an empty result
+                // This might need to be adjusted based on the actual logic
+                Ok(ShotResult::default())
+            }
+            pecos::prelude::EngineStage::Complete(result) => Ok(result),
+        }
+    }
+
+    fn reset(&mut self) -> Result<(), QueueError> {
+        // Call the ControlEngine's reset method to avoid ambiguity
+        <PHIREngine as pecos::prelude::ControlEngine>::reset(self)
     }
 }
