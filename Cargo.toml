@@ -4,6 +4,16 @@ members = [
     "python/pecos-rslib/rust",
     "crates/pecos*",
     "crates/benchmarks",
+
+    "crates/prototype",
+    "crates/proto_bytemessage",
+    "python/proto_bytemessage_py",
+    "crates/processors",
+    "crates/plugin-system",
+    "crates/plugin-python-service",
+
+    "examples/plugin-demo",
+    "examples/rust-plugins/custom-processors",
 ]
 
 [workspace.package]
@@ -35,6 +45,8 @@ num-complex = "0.4"
 num-traits = "0.2"
 criterion = "0.5"
 libloading = "0.8"
+toml = "0.8"
+memoffset = "0.9"
 bytemuck = {  version = "1", features = ["derive"] }
 bitflags = "2"
 syn = { version = "2", features = ["full"] }
@@ -52,6 +64,14 @@ pecos = { version = "0.1.1", path = "crates/pecos" }
 pecos-cli = { version = "0.1.1", path = "crates/pecos-cli" }
 pecos-rslib = { version = "0.1.1", path = "python/pecos-rslib/rust"}
 
+prototype = { version = "0.1.1", path = "crates/prototype"}
+proto_bytemessage = { version = "0.1.1", path = "crates/proto_bytemessage"}
+protot_bytemessage_py = { version = "0.1.1", path = "python/proto_bytemessage_py" }
+
+processors = { path = "crates/processors" }
+plugin-system = { path = "crates/plugin-system" }
+plugin-python-service = { path = "crates/plugin-python-service" }
+
 [profile.release]
 codegen-units = 1
 lto = "fat"
@@ -67,3 +87,6 @@ pedantic = { level = "warn", priority = -1 }
 # cargo = { level = "warn", priority = -1 }
 multiple-crate-versions = "allow" # TODO: remove when possible
 missing-errors-doc = "allow" # TODO: remove when finished development...
+
+[workspace.metadata.commands]
+test-py = ["./scripts/setup-env.sh", "cargo", "test", "-p", "pecos-python"]

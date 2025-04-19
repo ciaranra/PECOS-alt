@@ -1,0 +1,28 @@
+[package]
+name = "proto_bytemessage"
+version.workspace = true
+edition.workspace = true
+readme.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "prototype for byte messages"
+
+[dependencies]
+bytemuck.workspace = true
+bitflags.workspace = true
+serde_json.workspace = true
+
+[lib]
+name = "proto_bytemessage"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+python = [] # Optional feature to enable Python interop
+
+[lints]
+workspace = true

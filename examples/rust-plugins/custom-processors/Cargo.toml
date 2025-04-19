@@ -1,0 +1,10 @@
+[package]
+name = "custom-processors"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde_json.workspace = true
+pecos-core.workspace = true
+processors.workspace = true
+plugin-system.workspace = true

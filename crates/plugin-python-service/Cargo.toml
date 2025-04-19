@@ -1,0 +1,14 @@
+[package]
+name = "plugin-python-service"
+version.workspace = true
+edition.workspace = true
+description = "prototype for python service"
+
+[lib]
+name = "plugin_python_service"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3.workspace = true
+serde_json.workspace = true
+serde.workspace = true

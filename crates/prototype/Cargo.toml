@@ -1,0 +1,19 @@
+[package]
+name = "prototype"
+version.workspace = true
+edition.workspace = true
+readme.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Used for prototyping new features. Not intended for use."
+
+[dependencies]
+pecos-qsim.workspace = true
+memoffset.workspace = true
+
+[lints]
+workspace = true
