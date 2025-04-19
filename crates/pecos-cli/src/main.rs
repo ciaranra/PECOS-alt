@@ -45,6 +45,10 @@ struct RunArgs {
     /// Depolarizing noise probability (between 0 and 1)
     #[arg(short = 'p', long = "noise", value_parser = parse_noise_probability)]
     noise_probability: Option<f64>,
+
+    /// Seed for random number generation (for reproducible results)
+    #[arg(short = 'd', long)]
+    seed: Option<u64>,
 }
 
 fn parse_noise_probability(arg: &str) -> Result<f64, String> {
@@ -68,7 +72,7 @@ fn run_program(args: &RunArgs) -> Result<(), Box<dyn Error>> {
         prob,
         args.shots,
         args.workers,
-        None,
+        args.seed,
     )?;
 
     results.print();
@@ -99,4 +103,47 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn verify_cli_seed_argument() {
+        let cmd = Cli::parse_from([
+            "pecos",
+            "run",
+            "program.json",
+            "-d",
+            "42",
+            "-s",
+            "100",
+            "-w",
+            "2",
+        ]);
+
+        match cmd.command {
+            Commands::Run(args) => {
+                assert_eq!(args.seed, Some(42));
+                assert_eq!(args.shots, 100);
+                assert_eq!(args.workers, 2);
+            }
+            Commands::Compile(_) => panic!("Expected Run command"),
+        }
+    }
+
+    #[test]
+    fn verify_cli_no_seed_argument() {
+        let cmd = Cli::parse_from(["pecos", "run", "program.json", "-s", "100", "-w", "2"]);
+
+        match cmd.command {
+            Commands::Run(args) => {
+                assert_eq!(args.seed, None);
+                assert_eq!(args.shots, 100);
+                assert_eq!(args.workers, 2);
+            }
+            Commands::Compile(_) => panic!("Expected Run command"),
+        }
+    }
 }

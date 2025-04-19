@@ -238,17 +238,21 @@ impl MonteCarloEngine {
             num_shots, num_workers
         );
 
-        // Create a vector to hold the results
-        let results_vec = Arc::new(Mutex::new(Vec::with_capacity(num_shots)));
+        // Create a vector to hold the results with worker ID and shot index information
+        // (worker_idx, shot_idx, result)
+        let results_vec = Arc::new(Mutex::new(
+            Vec::<(usize, usize, ShotResult)>::with_capacity(num_shots),
+        ));
 
         // Calculate work distribution (shots per worker)
         let shots_per_worker = distribute_shots(num_shots, num_workers);
 
-        // Seed management: derive seeds for each worker from the base seed
+        // Seed management: derive seeds for each worker deterministically from the base seed
+        let base_seed = self.rng.next_u64();
         let worker_seeds: Vec<u64> = (0..num_workers)
             .map(|idx| {
                 let context = format!("worker_{idx}");
-                derive_seed(self.rng.next_u64(), &context)
+                derive_seed(base_seed, &context)
             })
             .collect();
 
@@ -282,24 +286,32 @@ impl MonteCarloEngine {
                     "Worker {} running {} shots with seed {}",
                     worker_idx, shots_this_worker, worker_seed
                 );
-                for _ in 0..shots_this_worker {
+                for shot_idx in 0..shots_this_worker {
                     // Reset the engine state before each shot
                     engine.reset()?;
 
                     let shot_result = engine.run_shot()?;
 
-                    // Store the result
+                    // Store the result with the worker index and shot index for deterministic ordering
                     let mut results = results_vec.lock().unwrap();
-                    results.push(shot_result);
+                    results.push((worker_idx, shot_idx, shot_result));
                 }
 
                 Ok(())
             })
             .collect::<Result<Vec<()>, QueueError>>()?;
 
+        // Sort the results by worker ID and then by shot index within each worker
+        // This ensures a completely deterministic ordering regardless of execution timing
+        let mut results = results_vec.lock().unwrap();
+        results.sort_by(|(w1, s1, _), (w2, s2, _)| w1.cmp(w2).then(s1.cmp(s2)));
+
+        // Extract just the shot results in the sorted order
+        let shot_results: Vec<ShotResult> =
+            results.iter().map(|(_, _, shot)| shot.clone()).collect();
+
         // Convert the results to a ShotResults object
-        let results = results_vec.lock().unwrap();
-        let combined_results = ShotResults::from_measurements(&results);
+        let combined_results = ShotResults::from_measurements(&shot_results);
 
         debug!("Monte Carlo simulation completed successfully");
         Ok(combined_results)
