@@ -1,9 +1,0 @@
-[package]
-name = "processors"
-version.workspace = true
-edition.workspace = true
-description = "prototype for processors"
-
-[dependencies]
-serde_json.workspace = true
-pecos-core.workspace = true
