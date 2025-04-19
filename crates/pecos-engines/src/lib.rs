@@ -1,11 +1,21 @@
 pub mod byte_message;
+pub mod core;
 pub mod engines;
 pub mod errors;
-pub mod quantum_system;
-pub mod record_data;
-pub mod result_id;
-pub mod shot_results;
 
+// Re-exports for commonly used types
 pub use byte_message::{ByteMessage, ByteMessageBuilder, GateType, QuantumGate};
-pub use record_data::RecordData;
-pub use result_id::ResultId;
+pub use core::record_data::RecordData;
+pub use core::result_id::ResultId;
+pub use core::shot_results::{ShotResult, ShotResults};
+pub use engines::{
+    ClassicalEngine, ControlEngine, Engine, EngineStage, EngineSystem,
+    hybrid::HybridEngine,
+    monte_carlo::MonteCarloEngine,
+    noise::{DepolarizingNoise, NoiseModel, PassThroughNoise},
+    quantum::QuantumEngine,
+    quantum_system::QuantumSystem,
+    qir::QirEngine,
+    phir::PHIREngine,
+};
+pub use errors::QueueError;

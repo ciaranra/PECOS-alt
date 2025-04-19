@@ -1,7 +1,7 @@
 use crate::byte_message::ByteMessage;
 use crate::engines::qir::common::get_thread_id;
 use crate::errors::QueueError;
-use crate::shot_results::ShotResult;
+use crate::core::shot_results::ShotResult;
 use log::{debug, trace, warn};
 use std::collections::HashMap;
 

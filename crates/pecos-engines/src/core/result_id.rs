@@ -13,20 +13,23 @@
 use std::fmt;
 use std::ops::Deref;
 
-/// Represents a measurement result ID
+/// Represents a result identifier for quantum measurements
 ///
-/// This newtype wrapper provides type safety to prevent mixing up
-/// result IDs with other numeric values like qubit indices.
+/// This type provides a simple wrapper around `usize` to represent
+/// result identifiers for quantum measurements.
 ///
 /// # Examples
 ///
 /// ```
-/// use pecos_engines::result_id::ResultId;
+/// use pecos_engines::core::result_id::ResultId;
 ///
-/// let result_id = ResultId::new(0);
-/// let id: usize = result_id.into(); // Convert back to usize when needed
+/// // Create a ResultId with ID 0
+/// let id = ResultId(0);
+///
+/// // Access the inner value
+/// assert_eq!(id.0, 0);
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct ResultId(pub usize);
 
 impl ResultId {

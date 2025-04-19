@@ -16,7 +16,7 @@ use crate::engines::noise::NoiseModel;
 use crate::engines::quantum::{QuantumEngine, StateVecEngine};
 use crate::engines::{ClassicalEngine, ControlEngine, Engine, EngineStage, HybridEngine};
 use crate::errors::QueueError;
-use crate::shot_results::{ShotResult, ShotResults};
+use crate::core::shot_results::{ShotResult, ShotResults};
 use log::{debug, info};
 use pecos_core::sims_rngs::rng_manageable::derive_seed;
 use rand::{RngCore, SeedableRng};
@@ -28,47 +28,58 @@ use std::sync::{Arc, Mutex};
 
 use super::builder::MonteCarloEngineBuilder;
 
-/// A high-level engine that orchestrates Monte Carlo simulations of quantum programs.
+/// Orchestrates parallel Monte Carlo simulations of quantum programs with noise
 ///
-/// This engine manages the parallel execution of multiple shots of a quantum program,
-/// coordinating the classical and quantum components through a hybrid engine setup.
-/// It handles program loading, noise model application, and result aggregation.
-///
-/// # Main Features
-///
-/// - Parallel execution of quantum simulations across multiple worker threads
-/// - Support for different noise models and quantum engines
-/// - Automatic handling of worker distribution and result collection
-/// - Configurable through a builder pattern for flexibility
-///
-/// # Examples
-///
-/// ```
-/// // Import necessary types for the example
-/// use pecos_engines::engines::monte_carlo::MonteCarloEngine;
-/// use pecos_engines::engines::monte_carlo::engine::ExternalClassicalEngine;
-/// use pecos_engines::engines::quantum;
-///
-/// // Create a Monte Carlo engine with default settings
-/// let classical_engine = Box::new(ExternalClassicalEngine::new());
-/// let mut engine = MonteCarloEngine::builder()
-///     .with_classical_engine(classical_engine)
-///     .with_quantum_engine(quantum::new_quantum_engine_with_seed(2, 42))
-///     .build();
-/// ```
-///
-/// # Component Architecture
-///
-/// The `MonteCarloEngine` uses a template `HybridEngine` that gets cloned for each
-/// worker thread, allowing efficient parallel execution of quantum simulations:
+/// # Architecture
 ///
 /// ```text
 /// MonteCarloEngine
 ///   +- HybridEngine (template, cloned for each worker)
 ///       +- ClassicalEngine (controls execution flow)
 ///       +- QuantumSystem (performs quantum operations)
-///           +- NoiseModel (applies noise to quantum operations)
+///           +- NoiseModel (applies noise to operations)
 ///           +- QuantumEngine (simulates quantum operations)
+/// ```
+///
+/// # Key Features
+///
+/// - **Parallelization**: Distributes shots across multiple worker threads
+/// - **Seed Management**: Hierarchical seeding for reproducible results
+///   - Base seed → Worker seeds → Component seeds
+/// - **Noise Integration**: Applies noise before quantum operations
+///
+/// # Best Practices
+///
+/// - **Noise Levels**: 0.001-0.01 (0.1-1%) for hardware-like simulations
+/// - **Shot Count**: 1000+ for noisy simulations
+/// - **Workers**: Set to (CPU cores - 1) for optimal performance
+/// - **Testing**: Use higher noise (~0.3) and fixed seeds
+///
+/// # Example
+///
+/// ```rust
+/// use pecos_engines::engines::monte_carlo::MonteCarloEngine;
+/// use pecos_engines::engines::monte_carlo::engine::ExternalClassicalEngine;
+/// use pecos_engines::engines::quantum::StateVecEngine;
+///
+/// // Create sample engines
+/// let classical_engine = Box::new(ExternalClassicalEngine::new());
+/// let quantum_engine = Box::new(StateVecEngine::new(2));
+///
+/// // Build the Monte Carlo engine
+/// let mut engine = MonteCarloEngine::builder()
+///     .with_classical_engine(classical_engine)
+///     .with_quantum_engine(quantum_engine)
+///     .with_depolarizing_noise(0.01)
+///     .build();
+///
+/// // For reproducibility
+/// engine.set_seed(42);
+///
+/// // This would run the simulation but we won't actually run it in the doctest
+/// # let num_shots = 10; // Using a small number for the doctest
+/// # let num_workers = 1; // Using a single worker for the doctest
+/// # let _results = engine.run(num_shots, num_workers);
 /// ```
 pub struct MonteCarloEngine {
     /// Template `HybridEngine` that is cloned for each worker

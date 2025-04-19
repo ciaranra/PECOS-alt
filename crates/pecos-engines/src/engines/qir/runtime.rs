@@ -1,5 +1,5 @@
 use crate::byte_message::QuantumCmd;
-use crate::result_id::ResultId;
+use crate::core::result_id::ResultId;
 use pecos_core::QubitId;
 use std::collections::HashMap;
 use std::env;

@@ -1,7 +1,7 @@
 use crate::byte_message::ByteMessage;
+use crate::core::shot_results::ShotResult;
 use crate::engines::{ControlEngine, Engine, EngineStage, phir, qir};
 use crate::errors::QueueError;
-use crate::shot_results::ShotResult;
 use dyn_clone::DynClone;
 use log::debug;
 use std::any::Any;

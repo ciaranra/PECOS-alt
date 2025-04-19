@@ -1,3 +1,15 @@
+// Copyright 2024 The PECOS Developers
+//
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+// in compliance with the License.You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software distributed under the License
+// is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+// or implied. See the License for the specific language governing permissions and limitations under
+// the License.
+
 use crate::byte_message::ByteMessage;
 use crate::byte_message::ByteMessageBuilder;
 use crate::byte_message::{GateType, QuantumGate};
@@ -11,10 +23,40 @@ use rand_chacha::ChaCha8Rng;
 use std::any::Any;
 use std::sync::{Arc, Mutex};
 
-/// Depolarizing noise model
+/// Implements depolarizing channel noise for quantum simulations
 ///
-/// This noise model applies random Pauli errors (X, Y, Z) to qubits
-/// with a specified probability.
+/// The depolarizing channel randomly applies Pauli errors (X, Y, Z) to qubits with
+/// specified probability, simulating quantum decoherence effects:
+///
+/// - X errors: Bit-flips (|0⟩ ↔ |1⟩)
+/// - Y errors: Combined bit and phase flips
+/// - Z errors: Phase-flips
+///
+/// Each error type is applied with equal probability (p/3), giving a total error rate of p.
+///
+/// # Usage
+///
+/// ```rust
+/// use pecos_engines::engines::monte_carlo::MonteCarloEngine;
+/// use pecos_engines::engines::monte_carlo::engine::ExternalClassicalEngine;
+/// use pecos_engines::engines::quantum::StateVecEngine;
+/// use pecos_engines::engines::noise::DepolarizingNoise;
+/// use pecos_engines::engines::noise::NoiseModel;
+///
+/// // With Monte Carlo engine
+/// let classical_engine = Box::new(ExternalClassicalEngine::new());
+/// let quantum_engine = Box::new(StateVecEngine::new(2));
+///
+/// let mut engine = MonteCarloEngine::builder()
+///     .with_classical_engine(classical_engine)
+///     .with_quantum_engine(quantum_engine)
+///     .with_depolarizing_noise(0.01) // 1% noise rate
+///     .build();
+///
+/// // Directly
+/// let mut noise_model = DepolarizingNoise::new(0.05); // 5% error rate
+/// noise_model.set_seed(42).unwrap(); // For reproducibility
+/// ```
 #[derive(Clone)]
 pub struct DepolarizingNoise {
     /// Probability of applying a random Pauli error

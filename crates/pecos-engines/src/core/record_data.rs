@@ -24,13 +24,16 @@
 /// # Examples
 ///
 /// ```
-/// use pecos_engines::record_data::RecordData;
+/// use pecos_engines::core::record_data::RecordData;
 ///
 /// // Create a result record with ID 0 and label "q0"
 /// let result_record = RecordData::result(0, Some("q0".to_string()));
 ///
 /// // Create a key-value record
 /// let kv_record = RecordData::key_value("energy".to_string(), -1.5);
+///
+/// // Create a raw record
+/// let raw_record = RecordData::RawRecord("RECORD data".to_string());
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum RecordData {

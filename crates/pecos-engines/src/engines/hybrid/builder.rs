@@ -14,7 +14,7 @@ use super::engine::HybridEngine;
 use crate::engines::noise::{DepolarizingNoise, NoiseModel, PassThroughNoise};
 use crate::engines::{ClassicalEngine, QuantumEngine};
 use crate::errors::QueueError;
-use crate::quantum_system::QuantumSystem;
+use crate::engines::quantum_system::QuantumSystem;
 
 /// Builder for creating a `HybridEngine` with customizable configuration
 ///

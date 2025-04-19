@@ -7,8 +7,7 @@ use crate::engines::qir::compiler::QirCompiler;
 use crate::engines::qir::error::{self, QirError};
 use crate::engines::qir::library::QirLibrary;
 use crate::engines::qir::measurement;
-use crate::errors::QueueError;
-use crate::shot_results::ShotResult;
+use crate::core::shot_results::ShotResult;
 use log::{debug, trace, warn};
 use regex::Regex;
 use std::collections::HashMap;
@@ -16,6 +15,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
+use crate::errors::QueueError;
 
 /// Configuration options for the QIR engine
 ///

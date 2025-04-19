@@ -1,4 +1,4 @@
-use crate::result_id::ResultId;
+use crate::core::result_id::ResultId;
 use pecos_core::QubitId;
 use std::fmt;
 

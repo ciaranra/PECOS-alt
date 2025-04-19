@@ -5,12 +5,27 @@ use crate::engines::{Engine, EngineSystem};
 use crate::errors::QueueError;
 use std::fmt::Debug;
 
-/// A system that combines a noise model with a quantum engine
+/// A system that coordinates quantum simulation with noise application
 ///
-/// This system serves as an intermediate layer that connects a noise model
-/// (which transforms quantum operations) with a quantum engine (which executes
-/// those operations). It's designed to be used as a controlled engine in
-/// higher-level engine systems like `HybridEngine`.
+/// The `QuantumSystem` combines:
+/// 1. A `NoiseModel` that transforms quantum operations
+/// 2. A `QuantumEngine` that processes those operations
+///
+/// This is a controlled execution environment where noise transforms the idealized
+/// quantum operations before they are passed to the quantum engine.
+///
+/// # Examples
+///
+/// ```
+/// use pecos_engines::engines::quantum_system::QuantumSystem;
+/// use pecos_engines::engines::noise::depolarizing::DepolarizingNoise;
+/// use pecos_engines::engines::quantum::StateVecEngine;
+///
+/// // Create a quantum system with 2 qubits
+/// let noise_model = DepolarizingNoise::new(0.01);
+/// let engine = StateVecEngine::new(2);
+/// let system = QuantumSystem::new(Box::new(noise_model), Box::new(engine));
+/// ```
 pub struct QuantumSystem {
     // Core components
     noise_model: Box<dyn NoiseModel>,
@@ -210,7 +225,7 @@ mod tests {
 
         // Create a QuantumSystem with depolarizing noise
         QuantumSystem::new(
-            Box::new(DepolarizingNoise::new_with_options(probability)),
+            Box::new(DepolarizingNoise::new(probability)),
             quantum_engine,
         )
     }
@@ -239,7 +254,7 @@ mod tests {
 
         let mut system = // Create a QuantumSystem with depolarizing noise
         QuantumSystem::new(
-            Box::new(DepolarizingNoise::new_with_options(probability)),
+            Box::new(DepolarizingNoise::new(probability)),
             quantum_engine,
         );
 

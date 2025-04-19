@@ -26,7 +26,7 @@ fn main() {
     println!("cargo:rerun-if-changed=src/engines/qir/runtime.rs");
     println!("cargo:rerun-if-changed=src/engines/qir/common.rs");
     println!("cargo:rerun-if-changed=src/engines/qir/state.rs");
-    println!("cargo:rerun-if-changed=src/result_id.rs");
+    println!("cargo:rerun-if-changed=src/core/result_id.rs");
     println!("cargo:rerun-if-changed=src/byte_message/quantum_cmd.rs");
 
     // Build the QIR runtime library
@@ -110,19 +110,21 @@ pecos-core = {{ path = "{}" }}
     fs::write(build_dir.join("src/state.rs"), modified_state)
         .map_err(|e| format!("Failed to write state.rs: {e}"))?;
 
-    // Copy result_id.rs
+    // Copy result_id.rs from the new location
     fs::copy(
-        manifest_dir.join("src/result_id.rs"),
+        manifest_dir.join("src/core/result_id.rs"),
         build_dir.join("src/result_id.rs"),
     )
     .map_err(|e| format!("Failed to copy result_id.rs: {e}"))?;
 
     // Copy quantum_cmd.rs
-    fs::copy(
-        manifest_dir.join("src/byte_message/quantum_cmd.rs"),
-        build_dir.join("src/byte_message/quantum_cmd.rs"),
-    )
-    .map_err(|e| format!("Failed to copy quantum_cmd.rs: {e}"))?;
+    let quantum_cmd_content = fs::read_to_string(manifest_dir.join("src/byte_message/quantum_cmd.rs"))
+        .map_err(|e| format!("Failed to read quantum_cmd.rs: {e}"))?;
+    // Fix the import path for ResultId
+    let modified_quantum_cmd = quantum_cmd_content
+        .replace("use crate::core::result_id::ResultId;", "use crate::result_id::ResultId;");
+    fs::write(build_dir.join("src/byte_message/quantum_cmd.rs"), modified_quantum_cmd)
+        .map_err(|e| format!("Failed to write quantum_cmd.rs: {e}"))?;
 
     // Create byte_message.rs
     let byte_message_content = r"pub mod quantum_cmd;
@@ -140,7 +142,9 @@ pub use quantum_cmd::QuantumCmd;
         .replace(
             "use crate::byte_message::quantum_cmd::",
             "use crate::byte_message::",
-        );
+        )
+        .replace("use crate::result_id::", "use crate::result_id::")
+        .replace("use crate::core::result_id::", "use crate::result_id::");
 
     // Add module declarations to the top of the file
     let module_declarations = r"pub mod byte_message;
@@ -210,7 +214,7 @@ fn needs_rebuild(manifest_dir: &Path, lib_path: &Path) -> bool {
         "src/engines/qir/runtime.rs",
         "src/engines/qir/common.rs",
         "src/engines/qir/state.rs",
-        "src/result_id.rs",
+        "src/core/result_id.rs",
         "src/byte_message/quantum_cmd.rs",
     ];
 

@@ -5,9 +5,9 @@ pub mod noise;
 pub mod phir;
 pub mod qir;
 pub mod quantum;
+pub mod quantum_system;
 
 use crate::errors::QueueError;
-pub use crate::quantum_system::QuantumSystem;
 pub use classical::ClassicalEngine;
 use dyn_clone::DynClone;
 pub use hybrid::HybridEngine;
@@ -15,6 +15,7 @@ pub use hybrid::HybridEngineBuilder;
 pub use monte_carlo::MonteCarloEngine;
 pub use monte_carlo::MonteCarloEngineBuilder;
 pub use quantum::QuantumEngine;
+pub use quantum_system::QuantumSystem;
 
 /// Core engine trait for processing inputs to outputs
 pub trait Engine: DynClone + Send + Sync {

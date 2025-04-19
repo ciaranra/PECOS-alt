@@ -11,60 +11,64 @@
 // the License.
 
 use crate::byte_message::ByteMessage;
+use crate::core::shot_results::ShotResult;
+use crate::engines::quantum_system::QuantumSystem;
 use crate::engines::{ClassicalEngine, ControlEngine, Engine, EngineStage, EngineSystem};
 use crate::errors::QueueError;
-use crate::quantum_system::QuantumSystem;
-use crate::shot_results::ShotResult;
 use dyn_clone;
 use log::debug;
 use pecos_core::sims_rngs::rng_manageable::derive_seed;
 
-/// `HybridEngine` coordinates between classical and quantum components
+/// Coordinates between classical control and quantum simulation components
 ///
-/// This engine implements the `EngineSystem` trait, using a `ClassicalEngine` as
-/// the controller and a `QuantumSystem` as the controlled engine.
+/// Serves as the central coordination point in the quantum simulation pipeline,
+/// managing communication between classical program flow and quantum execution.
 ///
-/// # Configuration
+/// # Noise Application Flow
 ///
-/// It is recommended to use the `HybridEngineBuilder` to construct a `HybridEngine`
-/// instance with the desired configuration:
-///
+/// ```text
+/// HybridEngine
+///   +- ClassicalEngine (program control)
+///   +- QuantumSystem (quantum execution)
+///       +- NoiseModel (transforms operations)
+///       +- QuantumEngine (executes operations)
 /// ```
-/// use pecos_engines::engines::hybrid::HybridEngineBuilder;
-/// use pecos_engines::engines::quantum;
-/// use pecos_engines::engines::monte_carlo::engine::ExternalClassicalEngine;
 ///
-/// let engine = HybridEngineBuilder::new()
-///     .with_classical_engine(Box::new(ExternalClassicalEngine::new()))
-///     .with_quantum_engine(quantum::new_quantum_engine_with_seed(2, 42))
+/// When a classical engine generates quantum commands, they flow through the
+/// `QuantumSystem` where noise is applied before execution, producing realistic
+/// results that reflect the effects of quantum noise.
+///
+/// # Role in Monte Carlo Simulations
+///
+/// In the `MonteCarloEngine`, this engine is:
+/// - Cloned for each worker thread
+/// - Assigned a unique derived seed
+/// - Reset between shots to ensure clean state
+///
+/// # Example
+///
+/// ```rust
+/// use pecos_engines::engines::hybrid::builder::HybridEngineBuilder;
+/// use pecos_engines::engines::monte_carlo::engine::ExternalClassicalEngine;
+/// use pecos_engines::engines::quantum::StateVecEngine;
+///
+/// // Create sample engines
+/// let classical_engine = Box::new(ExternalClassicalEngine::new());
+/// let quantum_engine = Box::new(StateVecEngine::new(2));
+///
+/// let mut engine = HybridEngineBuilder::new()
+///     .with_classical_engine(classical_engine)
+///     .with_quantum_engine(quantum_engine)
 ///     .with_depolarizing_noise(0.01)
 ///     .build();
-/// ```
 ///
-/// # Examples
-///
-/// ```
-/// use pecos_engines::engines::hybrid::{HybridEngine, HybridEngineBuilder};
-/// use pecos_engines::engines::quantum;
-/// use pecos_engines::engines::monte_carlo::engine::ExternalClassicalEngine;
-///
-/// // Create a HybridEngine with default settings (no noise)
-/// let mut engine = HybridEngineBuilder::new()
-///     .with_classical_engine(Box::new(ExternalClassicalEngine::new()))
-///     .with_quantum_engine(quantum::new_quantum_engine_with_seed(2, 42))
-///     .build();
-///
-/// // Run a shot
-/// let _ = engine.run_shot();
-///
-/// // Create a HybridEngine with a builder
-/// let mut engine = HybridEngineBuilder::new()
-///     .with_classical_engine(Box::new(ExternalClassicalEngine::new()))
-///     .with_quantum_engine(quantum::new_quantum_engine_with_seed(2, 42))
-///     .build();
+/// // This would run a single shot but we won't actually run it in the doctest
+/// # let _result = engine.run_shot();
 /// ```
 pub struct HybridEngine {
+    /// The classical engine component responsible for program flow and measurement processing
     pub classical_engine: Box<dyn ClassicalEngine>,
+    /// The quantum system component responsible for executing quantum operations
     pub quantum_system: QuantumSystem,
 }
 

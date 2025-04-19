@@ -1,9 +1,10 @@
+use crate::byte_message::gate_type::GateType;
 use crate::byte_message::message_data::MessageData;
 use crate::byte_message::protocol::{MessageFlags, MessageType};
-use crate::byte_message::{ByteMessage, ByteMessageBuilder, GateType};
+use crate::byte_message::{ByteMessage, ByteMessageBuilder};
+use crate::core::record_data::RecordData;
+use crate::core::result_id::ResultId;
 use crate::errors::QueueError;
-use crate::record_data::RecordData;
-use crate::result_id::ResultId;
 use log::debug;
 use pecos_core::QubitId;
 use std::fmt;

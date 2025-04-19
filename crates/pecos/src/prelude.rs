@@ -12,26 +12,24 @@
 
 // re-exporting pecos-core
 pub use pecos_core::{IndexableElement, Set, VecSet};
-// re-exporting pecos-engines
-pub use pecos_engines::shot_results::{ShotResult, ShotResults};
+
 // re-exporting pecos-engines
 pub use pecos_engines::{
-    byte_message::{ByteMessage, ByteMessageBuilder},
-    engines::{
-        ClassicalEngine, ControlEngine, Engine, EngineStage, EngineSystem, HybridEngine,
-        classical::{ProgramType, detect_program_type, get_program_path, setup_engine},
-        monte_carlo::MonteCarloEngine,
-        noise::{DepolarizingNoise, NoiseModel},
-        phir::PHIREngine,
-        qir::QirEngine,
-        quantum::{QuantumEngine, StateVecEngine, new_quantum_engine_arbitrary_qgate},
-    },
-    errors::QueueError,
-    quantum_system::QuantumSystem,
+    ByteMessage, ByteMessageBuilder, 
+    ClassicalEngine, ControlEngine, Engine, EngineStage, EngineSystem,
+    DepolarizingNoise, HybridEngine, MonteCarloEngine, NoiseModel, 
+    PHIREngine, QirEngine, QuantumEngine, QuantumSystem, QueueError, 
+    ShotResult, ShotResults,
 };
+
+// Re-exporting specific implementations that aren't at the crate root
+pub use pecos_engines::engines::{
+    classical::{ProgramType, detect_program_type, get_program_path, setup_engine},
+    quantum::{StateVecEngine, new_quantum_engine_arbitrary_qgate},
+};
+
 // re-exporting pecos-qsim
-pub use pecos_qsim::ArbitraryRotationGateable;
-pub use pecos_qsim::CliffordGateable;
-pub use pecos_qsim::QuantumSimulator;
-pub use pecos_qsim::SparseStab;
-pub use pecos_qsim::StateVec;
+pub use pecos_qsim::{
+    ArbitraryRotationGateable, CliffordGateable, 
+    QuantumSimulator, SparseStab, StateVec
+};

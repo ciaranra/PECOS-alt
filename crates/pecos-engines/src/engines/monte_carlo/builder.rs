@@ -16,7 +16,7 @@ use crate::engines::noise::{DepolarizingNoise, NoiseModel};
 use crate::engines::quantum::QuantumEngine;
 use crate::engines::{ClassicalEngine, HybridEngine};
 use crate::errors::QueueError;
-use crate::quantum_system::QuantumSystem;
+use crate::engines::quantum_system::QuantumSystem;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::time::{SystemTime, UNIX_EPOCH};
