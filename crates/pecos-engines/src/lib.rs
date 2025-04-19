@@ -13,9 +13,9 @@ pub use engines::{
     hybrid::HybridEngine,
     monte_carlo::MonteCarloEngine,
     noise::{DepolarizingNoise, NoiseModel, PassThroughNoise},
+    phir::PHIREngine,
+    qir::QirEngine,
     quantum::QuantumEngine,
     quantum_system::QuantumSystem,
-    qir::QirEngine,
-    phir::PHIREngine,
 };
 pub use errors::QueueError;

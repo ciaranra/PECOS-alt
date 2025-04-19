@@ -2,9 +2,9 @@ use crate::byte_message::ByteMessage;
 use crate::byte_message::QuantumCmd;
 use crate::byte_message::QuantumCommand;
 use crate::byte_message::message_data::MessageData;
+use crate::core::record_data::RecordData;
 use crate::engines::qir::common::get_thread_id;
 use crate::errors::QueueError;
-use crate::core::record_data::RecordData;
 use log::debug;
 
 /// Parses binary commands from the QIR runtime into `QuantumCommand` objects

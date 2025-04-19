@@ -1,7 +1,7 @@
 use crate::byte_message::{ByteMessage, builder::ByteMessageBuilder};
+use crate::core::shot_results::ShotResult;
 use crate::engines::{ControlEngine, Engine, EngineStage, classical::ClassicalEngine};
 use crate::errors::QueueError;
-use crate::core::shot_results::ShotResult;
 use log::debug;
 use serde::Deserialize;
 use std::any::Any;

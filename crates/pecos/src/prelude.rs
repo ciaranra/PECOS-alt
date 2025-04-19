@@ -15,11 +15,9 @@ pub use pecos_core::{IndexableElement, Set, VecSet};
 
 // re-exporting pecos-engines
 pub use pecos_engines::{
-    ByteMessage, ByteMessageBuilder, 
-    ClassicalEngine, ControlEngine, Engine, EngineStage, EngineSystem,
-    DepolarizingNoise, HybridEngine, MonteCarloEngine, NoiseModel, 
-    PHIREngine, QirEngine, QuantumEngine, QuantumSystem, QueueError, 
-    ShotResult, ShotResults,
+    ByteMessage, ByteMessageBuilder, ClassicalEngine, ControlEngine, DepolarizingNoise, Engine,
+    EngineStage, EngineSystem, HybridEngine, MonteCarloEngine, NoiseModel, PHIREngine, QirEngine,
+    QuantumEngine, QuantumSystem, QueueError, ShotResult, ShotResults,
 };
 
 // Re-exporting specific implementations that aren't at the crate root
@@ -30,6 +28,5 @@ pub use pecos_engines::engines::{
 
 // re-exporting pecos-qsim
 pub use pecos_qsim::{
-    ArbitraryRotationGateable, CliffordGateable, 
-    QuantumSimulator, SparseStab, StateVec
+    ArbitraryRotationGateable, CliffordGateable, QuantumSimulator, SparseStab, StateVec,
 };

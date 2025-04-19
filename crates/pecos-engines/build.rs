@@ -118,13 +118,19 @@ pecos-core = {{ path = "{}" }}
     .map_err(|e| format!("Failed to copy result_id.rs: {e}"))?;
 
     // Copy quantum_cmd.rs
-    let quantum_cmd_content = fs::read_to_string(manifest_dir.join("src/byte_message/quantum_cmd.rs"))
-        .map_err(|e| format!("Failed to read quantum_cmd.rs: {e}"))?;
+    let quantum_cmd_content =
+        fs::read_to_string(manifest_dir.join("src/byte_message/quantum_cmd.rs"))
+            .map_err(|e| format!("Failed to read quantum_cmd.rs: {e}"))?;
     // Fix the import path for ResultId
-    let modified_quantum_cmd = quantum_cmd_content
-        .replace("use crate::core::result_id::ResultId;", "use crate::result_id::ResultId;");
-    fs::write(build_dir.join("src/byte_message/quantum_cmd.rs"), modified_quantum_cmd)
-        .map_err(|e| format!("Failed to write quantum_cmd.rs: {e}"))?;
+    let modified_quantum_cmd = quantum_cmd_content.replace(
+        "use crate::core::result_id::ResultId;",
+        "use crate::result_id::ResultId;",
+    );
+    fs::write(
+        build_dir.join("src/byte_message/quantum_cmd.rs"),
+        modified_quantum_cmd,
+    )
+    .map_err(|e| format!("Failed to write quantum_cmd.rs: {e}"))?;
 
     // Create byte_message.rs
     let byte_message_content = r"pub mod quantum_cmd;
@@ -143,7 +149,6 @@ pub use quantum_cmd::QuantumCmd;
             "use crate::byte_message::quantum_cmd::",
             "use crate::byte_message::",
         )
-        .replace("use crate::result_id::", "use crate::result_id::")
         .replace("use crate::core::result_id::", "use crate::result_id::");
 
     // Add module declarations to the top of the file

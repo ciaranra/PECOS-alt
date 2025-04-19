@@ -11,12 +11,12 @@
 // the License.
 
 use crate::byte_message::ByteMessage;
+use crate::core::shot_results::{ShotResult, ShotResults};
 use crate::engines::hybrid::HybridEngineBuilder;
 use crate::engines::noise::NoiseModel;
 use crate::engines::quantum::{QuantumEngine, StateVecEngine};
 use crate::engines::{ClassicalEngine, ControlEngine, Engine, EngineStage, HybridEngine};
 use crate::errors::QueueError;
-use crate::core::shot_results::{ShotResult, ShotResults};
 use log::{debug, info};
 use pecos_core::sims_rngs::rng_manageable::derive_seed;
 use rand::{RngCore, SeedableRng};

@@ -4,4 +4,4 @@ pub mod shot_results;
 
 pub use record_data::RecordData;
 pub use result_id::ResultId;
-pub use shot_results::ShotResults; 
+pub use shot_results::ShotResults;
