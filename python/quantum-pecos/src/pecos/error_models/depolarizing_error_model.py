@@ -16,11 +16,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from pecos.error_models.error_model_abc import ErrorModel
+from pecos.error_models.noise_impl.gate_groups import one_qubits, two_qubits
 from pecos.error_models.noise_impl.noise_initz_bitflip import noise_initz_bitflip
 from pecos.error_models.noise_impl.noise_meas_bitflip import noise_meas_bitflip
 from pecos.error_models.noise_impl.noise_sq_depolarizing import noise_sq_depolarizing
 from pecos.error_models.noise_impl.noise_tq_depolarizing import noise_tq_depolarizing
-from pecos.error_models.noise_impl_old.gate_groups import one_qubits, two_qubits
 
 if TYPE_CHECKING:
     from pecos.reps.pypmir.block_types import SeqBlock
