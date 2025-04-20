@@ -10,16 +10,20 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-// PECOS/python/pecos-rslib/rust/src/lib.rs
-
+mod byte_message_bindings;
+mod engine_bindings;
 pub mod phir_bridge;
 mod sparse_sim;
-
 mod sparse_stab_bindings;
+mod sparse_stab_engine_bindings;
 mod state_vec_bindings;
+mod state_vec_engine_bindings;
 
+use byte_message_bindings::{PyByteMessage, PyByteMessageBuilder};
 use sparse_stab_bindings::SparseSim;
+use sparse_stab_engine_bindings::PySparseStabEngine;
 use state_vec_bindings::RsStateVec;
+use state_vec_engine_bindings::PyStateVecEngine;
 
 use pyo3::prelude::*;
 
@@ -29,5 +33,9 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SparseSim>()?;
     m.add_class::<phir_bridge::PHIREngine>()?;
     m.add_class::<RsStateVec>()?;
+    m.add_class::<PyByteMessage>()?;
+    m.add_class::<PyByteMessageBuilder>()?;
+    m.add_class::<PyStateVecEngine>()?;
+    m.add_class::<PySparseStabEngine>()?;
     Ok(())
 }
