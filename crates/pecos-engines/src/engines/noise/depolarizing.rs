@@ -269,6 +269,36 @@ impl RngManageable for DepolarizingNoise {
         self.rng = Arc::new(Mutex::new(rng));
         Ok(())
     }
+
+    /// Get a read-only reference to the internal random number generator
+    ///
+    /// # Returns
+    /// A reference to the internal RNG
+    ///
+    /// # Panics
+    /// Panics if the mutex is poisoned
+    fn rng(&self) -> &Self::Rng {
+        // Since we have the RNG behind an Arc<Mutex>, we can't return a direct reference.
+        // This is a limitation of the current design and should be reconsidered.
+        panic!(
+            "DepolarizingNoise stores its RNG behind an Arc<Mutex> and cannot return a direct reference"
+        )
+    }
+
+    /// Get a mutable reference to the internal random number generator
+    ///
+    /// # Returns
+    /// A mutable reference to the internal RNG
+    ///
+    /// # Panics
+    /// Panics if the mutex is poisoned
+    fn rng_mut(&mut self) -> &mut Self::Rng {
+        // Since we have the RNG behind an Arc<Mutex>, we can't return a direct mutable reference.
+        // This is a limitation of the current design and should be reconsidered.
+        panic!(
+            "DepolarizingNoise stores its RNG behind an Arc<Mutex> and cannot return a direct mutable reference"
+        )
+    }
 }
 
 /// Builder for creating depolarizing noise models

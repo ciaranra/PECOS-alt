@@ -18,7 +18,7 @@ use crate::engines::quantum::{QuantumEngine, StateVecEngine};
 use crate::engines::{ClassicalEngine, ControlEngine, Engine, EngineStage, HybridEngine};
 use crate::errors::QueueError;
 use log::{debug, info};
-use pecos_core::sims_rngs::rng_manageable::derive_seed;
+use pecos_core::rng::rng_manageable::derive_seed;
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};

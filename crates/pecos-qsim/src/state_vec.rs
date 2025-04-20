@@ -442,7 +442,10 @@ where
     }
 }
 
-impl QuantumSimulator for StateVec {
+impl<R> QuantumSimulator for StateVec<R>
+where
+    R: RngCore + SeedableRng + Debug,
+{
     /// # Examples
     /// ```rust
     /// use pecos_qsim::{QuantumSimulator, StateVec};
@@ -466,7 +469,10 @@ impl QuantumSimulator for StateVec {
     }
 }
 
-impl CliffordGateable<usize> for StateVec {
+impl<R> CliffordGateable<usize> for StateVec<R>
+where
+    R: RngCore + SeedableRng + Debug,
+{
     /// Implementation of Pauli-X gate for state vectors.
     ///
     /// See [`CliffordGateable::x`] for mathematical details and gate properties.
@@ -864,7 +870,10 @@ impl CliffordGateable<usize> for StateVec {
     }
 }
 
-impl ArbitraryRotationGateable<usize> for StateVec {
+impl<R> ArbitraryRotationGateable<usize> for StateVec<R>
+where
+    R: RngCore + SeedableRng + Debug,
+{
     /// Implementation of rotation around the X-axis.
     ///
     /// See [`ArbitraryRotationGateable::rx`] for mathematical details and gate properties.
@@ -1210,21 +1219,34 @@ where
     ///
     /// # Returns
     /// Result indicating success or failure
-    ///
-    /// # Examples
-    /// ```rust
-    /// use pecos_core::RngManageable;
-    /// use pecos_qsim::StateVec;
-    /// use rand_chacha::ChaCha8Rng;
-    /// use rand::SeedableRng;
-    ///
-    /// let mut state = StateVec::new(2);
-    /// state.set_rng(ChaCha8Rng::seed_from_u64(42));
-    /// ```
     #[inline]
     fn set_rng(&mut self, rng: R) -> Result<(), Box<dyn std::error::Error>> {
         self.rng = rng;
         Ok(())
+    }
+
+    /// Get a read-only reference to the internal random number generator
+    ///
+    /// This method provides access to the RNG for inspection or to retrieve
+    /// information from it (such as recorded values from a `RecordingRng`).
+    ///
+    /// # Returns
+    /// A reference to the internal RNG
+    #[inline]
+    fn rng(&self) -> &Self::Rng {
+        &self.rng
+    }
+
+    /// Get a mutable reference to the internal random number generator
+    ///
+    /// This method provides mutable access to the RNG for direct manipulation.
+    /// This is an advanced feature that should be used with care.
+    ///
+    /// # Returns
+    /// A mutable reference to the internal RNG
+    #[inline]
+    fn rng_mut(&mut self) -> &mut Self::Rng {
+        &mut self.rng
     }
 }
 

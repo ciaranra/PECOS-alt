@@ -185,6 +185,26 @@ impl RngManageable for StateVecEngine {
     fn set_rng(&mut self, rng: Self::Rng) -> Result<(), Box<dyn std::error::Error>> {
         self.simulator.set_rng(rng)
     }
+
+    /// Get a read-only reference to the internal random number generator
+    ///
+    /// This method delegates to the underlying simulator's RNG
+    ///
+    /// # Returns
+    /// A reference to the internal RNG
+    fn rng(&self) -> &Self::Rng {
+        self.simulator.rng()
+    }
+
+    /// Get a mutable reference to the internal random number generator
+    ///
+    /// This method delegates to the underlying simulator's RNG
+    ///
+    /// # Returns
+    /// A mutable reference to the internal RNG
+    fn rng_mut(&mut self) -> &mut Self::Rng {
+        self.simulator.rng_mut()
+    }
 }
 
 impl QuantumEngine for StateVecEngine {
@@ -314,6 +334,26 @@ impl RngManageable for SparseStabEngine {
 
     fn set_rng(&mut self, rng: Self::Rng) -> Result<(), Box<dyn std::error::Error>> {
         self.simulator.set_rng(rng)
+    }
+
+    /// Get a read-only reference to the internal random number generator
+    ///
+    /// This method delegates to the underlying simulator's RNG
+    ///
+    /// # Returns
+    /// A reference to the internal RNG
+    fn rng(&self) -> &Self::Rng {
+        self.simulator.rng()
+    }
+
+    /// Get a mutable reference to the internal random number generator
+    ///
+    /// This method delegates to the underlying simulator's RNG
+    ///
+    /// # Returns
+    /// A mutable reference to the internal RNG
+    fn rng_mut(&mut self) -> &mut Self::Rng {
+        self.simulator.rng_mut()
     }
 }
 

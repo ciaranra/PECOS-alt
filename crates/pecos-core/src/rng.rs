@@ -11,12 +11,13 @@
 // the License.
 
 pub mod choices;
-pub mod cyclic_rng;
+pub mod recording_rng;
+pub mod replaying_rng;
 pub mod rng_manageable;
 pub mod rng_utils;
 
-// Re-export RNG types from external crates
-pub use cyclic_rng::CyclicRng;
+pub use recording_rng::RecordingRng;
+pub use replaying_rng::ReplayingRng;
 pub use rng_manageable::RngManageable;
 
 // Export the utility functions from rng_utils

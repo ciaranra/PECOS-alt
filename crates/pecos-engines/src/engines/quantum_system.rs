@@ -87,11 +87,10 @@ impl QuantumSystem {
     /// and the attempt to get a mutable reference to it, which should never happen in practice.
     pub fn set_seed(&mut self, seed: u64) -> Result<(), QueueError> {
         // Derive a different seed for the noise model using the standard protocol
-        let noise_seed = pecos_core::sims_rngs::rng_manageable::derive_seed(seed, "noise_model");
+        let noise_seed = pecos_core::rng::rng_manageable::derive_seed(seed, "noise_model");
 
         // Derive a different seed for the quantum engine using the standard protocol
-        let engine_seed =
-            pecos_core::sims_rngs::rng_manageable::derive_seed(seed, "quantum_engine");
+        let engine_seed = pecos_core::rng::rng_manageable::derive_seed(seed, "quantum_engine");
 
         // Set the seed for the noise model
         self.noise_model.set_seed(noise_seed)?;

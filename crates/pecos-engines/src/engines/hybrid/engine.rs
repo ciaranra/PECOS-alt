@@ -17,7 +17,7 @@ use crate::engines::{ClassicalEngine, ControlEngine, Engine, EngineStage, Engine
 use crate::errors::QueueError;
 use dyn_clone;
 use log::debug;
-use pecos_core::sims_rngs::rng_manageable::derive_seed;
+use pecos_core::rng::rng_manageable::derive_seed;
 
 /// Coordinates between classical control and quantum simulation components
 ///

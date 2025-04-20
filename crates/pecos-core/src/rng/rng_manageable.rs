@@ -114,4 +114,22 @@ pub trait RngManageable {
     {
         self.set_rng(Self::Rng::seed_from_u64(seed))
     }
+
+    /// Get a read-only reference to the internal random number generator
+    ///
+    /// This method provides access to the RNG for inspection or to retrieve
+    /// information from it (such as recorded values from a `RecordingRng`).
+    ///
+    /// # Returns
+    /// A reference to the internal RNG
+    fn rng(&self) -> &Self::Rng;
+
+    /// Get a mutable reference to the internal random number generator
+    ///
+    /// This method provides mutable access to the RNG for direct manipulation.
+    /// This is an advanced feature that should be used with care.
+    ///
+    /// # Returns
+    /// A mutable reference to the internal RNG
+    fn rng_mut(&mut self) -> &mut Self::Rng;
 }

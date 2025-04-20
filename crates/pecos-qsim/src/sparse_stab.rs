@@ -741,20 +741,33 @@ where
 {
     type Rng = R;
 
-    /// Replace the random number generator with a new one
-    ///
-    /// This method allows replacing the RNG without recreating the entire simulator,
-    /// preserving the current quantum state.
-    ///
-    /// # Arguments
-    /// * `rng` - A new random number generator implementing the `RngCore + SeedableRng` traits
-    ///
-    /// # Returns
-    /// Result indicating success or failure
-    #[inline]
-    fn set_rng(&mut self, rng: R) -> Result<(), Box<dyn std::error::Error>> {
+    fn set_rng(&mut self, rng: Self::Rng) -> Result<(), Box<dyn std::error::Error>> {
         self.rng = rng;
         Ok(())
+    }
+
+    /// Get a read-only reference to the internal random number generator
+    ///
+    /// This method provides access to the RNG for inspection or to retrieve
+    /// information from it (such as recorded values from a `RecordingRng`).
+    ///
+    /// # Returns
+    /// A reference to the internal RNG
+    #[inline]
+    fn rng(&self) -> &Self::Rng {
+        &self.rng
+    }
+
+    /// Get a mutable reference to the internal random number generator
+    ///
+    /// This method provides mutable access to the RNG for direct manipulation.
+    /// This is an advanced feature that should be used with care.
+    ///
+    /// # Returns
+    /// A mutable reference to the internal RNG
+    #[inline]
+    fn rng_mut(&mut self) -> &mut Self::Rng {
+        &mut self.rng
     }
 }
 
