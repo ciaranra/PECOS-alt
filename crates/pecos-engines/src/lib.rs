@@ -12,7 +12,7 @@ pub use engines::{
     ClassicalEngine, ControlEngine, Engine, EngineStage, EngineSystem,
     hybrid::HybridEngine,
     monte_carlo::MonteCarloEngine,
-    noise::{DepolarizingNoise, NoiseModel, PassThroughNoise},
+    noise::{DepolarizingNoise, GeneralDepolarizingNoise, NoiseModel, PassThroughNoise},
     phir::PHIREngine,
     qir::QirEngine,
     quantum::QuantumEngine,

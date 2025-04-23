@@ -1,7 +1,9 @@
 pub mod depolarizing;
+pub mod general_depolarizing;
 pub mod pass_through;
 
 pub use depolarizing::DepolarizingNoise;
+pub use general_depolarizing::GeneralDepolarizingNoise;
 pub use pass_through::PassThroughNoise;
 
 use crate::byte_message::ByteMessage;

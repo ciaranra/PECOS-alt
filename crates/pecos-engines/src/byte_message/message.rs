@@ -1,8 +1,8 @@
 use crate::byte_message::builder::ByteMessageBuilder;
 use crate::byte_message::gate_type::{GateType, QuantumGate};
 use crate::byte_message::protocol::{
-    BatchHeader, MeasurementHeader, MeasurementResultHeader, MessageHeader, MessageType,
-    QuantumGateHeader, calc_padding,
+    calc_padding, BatchHeader, MeasurementHeader, MeasurementResultHeader, MessageHeader,
+    MessageType, QuantumGateHeader,
 };
 use crate::errors::QueueError;
 use bytemuck::from_bytes;
@@ -802,7 +802,7 @@ impl ByteMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engines::{Engine, quantum::StateVecEngine};
+    use crate::engines::{quantum::StateVecEngine, Engine};
 
     #[test]
     fn test_bytemap_builder() {

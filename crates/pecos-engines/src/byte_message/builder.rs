@@ -184,7 +184,7 @@ impl ByteMessageBuilder {
         let header_size = size_of::<QuantumGateHeader>();
         let qubits_size = gate.qubits.len() * size_of::<u32>();
         let params_size = match gate.gate_type {
-            GateType::RZ => size_of::<f64>(),
+            GateType::RZ | GateType::RZZ => size_of::<f64>(),
             GateType::R1XY => 2 * size_of::<f64>(),
             _ => 0,
         };

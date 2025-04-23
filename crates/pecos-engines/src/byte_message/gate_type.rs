@@ -79,6 +79,9 @@ pub struct QuantumGate {
     pub params: Vec<f64>,
     /// Optional result ID for measurement gates
     pub result_id: Option<usize>,
+    /// Whether the gate should have noise applied to it
+    pub noiseless: bool,
+    // TODO: encode noiseless in the byte representation...
 }
 
 impl QuantumGate {
@@ -95,6 +98,7 @@ impl QuantumGate {
             qubits,
             params,
             result_id,
+            noiseless: false,
         }
     }
 
@@ -161,6 +165,21 @@ impl QuantumGate {
     #[must_use]
     pub fn prep(qubit: usize) -> Self {
         Self::new(GateType::Prep, vec![qubit], vec![], None)
+    }
+
+    #[must_use]
+    pub fn set_noiseless(mut self) -> Self {
+        self.noiseless = true;
+        self
+    }
+
+    #[must_use] pub fn set_noisy(mut self) -> Self {
+        self.noiseless = false;
+        self
+    }
+
+    #[must_use] pub fn is_noiseless(&self) -> bool {
+        self.noiseless
     }
 }
 
