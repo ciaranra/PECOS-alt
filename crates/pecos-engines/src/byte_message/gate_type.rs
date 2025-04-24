@@ -173,12 +173,14 @@ impl QuantumGate {
         self
     }
 
-    #[must_use] pub fn set_noisy(mut self) -> Self {
+    #[must_use]
+    pub fn set_noisy(mut self) -> Self {
         self.noiseless = false;
         self
     }
 
-    #[must_use] pub fn is_noiseless(&self) -> bool {
+    #[must_use]
+    pub fn is_noiseless(&self) -> bool {
         self.noiseless
     }
 }

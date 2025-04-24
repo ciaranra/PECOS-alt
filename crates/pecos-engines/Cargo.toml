@@ -26,7 +26,6 @@ bytemuck.workspace = true
 bitflags.workspace = true
 dyn-clone.workspace = true
 libloading.workspace = true
-once_cell.workspace = true
 regex.workspace = true
 
 pecos-core.workspace = true

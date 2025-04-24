@@ -1,10 +1,9 @@
 use pecos_engines::byte_message::ByteMessage;
 use pecos_engines::engines::quantum::StateVecEngine;
-use pecos_engines::errors::QueueError;
 use pecos_engines::{Engine, GeneralDepolarizingNoise};
 use pecos_engines::{EngineSystem, QuantumSystem};
 
-fn main() -> () {
+fn main() {
     let circ = ByteMessage::quantum_operations_builder()
         .add_h(&[0])
         .add_cx(&[0], &[1])

@@ -619,7 +619,6 @@ dependencies = [
  "dyn-clone",
  "libloading",
  "log",
- "once_cell",
  "pecos-core",
  "pecos-qsim",
  "rand",

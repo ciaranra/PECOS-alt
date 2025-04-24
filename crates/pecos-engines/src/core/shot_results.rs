@@ -96,27 +96,51 @@ impl ShotResults {
 
         for shot in results {
             let mut processed_results: HashMap<String, String> = HashMap::new();
-            let mut measurement_values = Vec::new();
 
-            let mut keys: Vec<_> = shot.measurements.keys().collect();
-            keys.sort();
-
-            for key in &keys {
-                if key.starts_with("measurement_") {
-                    if let Some(&value) = shot.measurements.get(*key) {
-                        measurement_values.push(value.to_string());
-                    }
-                } else if let Some(&value) = shot.measurements.get(*key) {
-                    processed_results.insert((*key).to_string(), value.to_string());
+            // First, add all non-measurement values to the results
+            for (key, &value) in &shot.measurements {
+                if !key.starts_with("measurement_") {
+                    processed_results.insert(key.clone(), value.to_string());
                 }
             }
 
             // If we have a combined result from the engine, use it
             if let Some(combined) = &shot.combined_result {
                 processed_results.insert("result".to_string(), combined.clone());
-            } else if !measurement_values.is_empty() {
-                // Otherwise, use the concatenated measurement values
-                processed_results.insert("result".to_string(), measurement_values.concat());
+            } else {
+                // Otherwise, try to build a combined result from individual measurements
+                let mut measurement_values = Vec::new();
+
+                // Look for all measurement_X keys and extract the indices and values
+                for (key, &value) in &shot.measurements {
+                    if key.starts_with("measurement_") {
+                        if let Some(index_str) = key.strip_prefix("measurement_") {
+                            if let Ok(index) = index_str.parse::<usize>() {
+                                measurement_values.push((index, value.to_string()));
+                            }
+                        }
+                    }
+                }
+
+                // If we found any measurements, combine them into a result
+                if !measurement_values.is_empty() {
+                    // Sort by index for consistent ordering
+                    measurement_values.sort_by_key(|(idx, _)| *idx);
+
+                    // Join all the values into a single string
+                    let combined = measurement_values
+                        .iter()
+                        .map(|(_, val)| val.as_str())
+                        .collect::<String>();
+
+                    // Add the combined result
+                    processed_results.insert("result".to_string(), combined);
+
+                    // Also add individual measurements to make them visible in the output
+                    for (index, value) in &measurement_values {
+                        processed_results.insert(format!("q{index}"), value.clone());
+                    }
+                }
             }
 
             shots.push(processed_results);
@@ -165,9 +189,41 @@ impl fmt::Display for ShotResults {
         for (i, shot) in self.shots.iter().enumerate() {
             write!(f, "  {{")?;
 
-            // Only include the "result" key in the output
+            let mut first = true;
+
+            // First try to print the "result" key if present
             if let Some(result) = shot.get("result") {
                 write!(f, "\"result\": \"{result}\"")?;
+                first = false;
+            }
+
+            // Print any q0, q1, etc. measurement keys
+            for k in 0..10 {
+                let key = format!("q{k}");
+                if let Some(value) = shot.get(&key) {
+                    if first {
+                        first = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "\"{key}\": \"{value}\"")?;
+                }
+            }
+
+            // Print any other keys (except measurement_ keys and result_X keys)
+            for (key, value) in shot {
+                if !key.starts_with("measurement_") && 
+                   !key.starts_with("result_") &&  // Skip result_X keys
+                   key != "result" && 
+                   !key.starts_with('q')
+                {
+                    if first {
+                        first = false;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "\"{key}\": \"{value}\"")?;
+                }
             }
 
             if i < self.shots.len() - 1 {

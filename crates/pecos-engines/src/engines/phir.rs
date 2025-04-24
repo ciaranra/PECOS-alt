@@ -208,22 +208,34 @@ impl PHIREngine {
                 return_idx
             );
 
+            // Process the measurement result by copying from measurement_X to result_X
+            let meas_key = format!("measurement_{meas_idx}");
+            if let Some(&value) = self.measurement_results.get(&meas_key) {
+                // Copy the value to the result storage using the return index
+                let result_key = format!("result_{return_idx}");
+                self.measurement_results.insert(result_key, value);
+                log::debug!(
+                    "Copied measurement value {} to result_{}",
+                    value,
+                    return_idx
+                );
+            } else {
+                log::debug!("No measurement found for {}", meas_key);
+            }
+
             // Return true if this is the last Result operation in a sequence
-            // We can check this by looking at the next operation
             if let Some(prog) = &self.program {
-                let next_op = prog.ops.get(self.current_op + 1);
-                match next_op {
-                    Some(Operation::ClassicalOp {
-                        cop: result_cop, ..
-                    }) if result_cop == "Result" => {
-                        // More Result operations coming, keep accumulating
-                        Ok(false)
+                // Check if the next operation is also a Result
+                let is_next_result = prog.ops.get(self.current_op + 1).is_some_and(|op| {
+                    if let Operation::ClassicalOp { cop, .. } = op {
+                        cop == "Result"
+                    } else {
+                        false
                     }
-                    _ => {
-                        // No more Result operations, flush the batch
-                        Ok(true)
-                    }
-                }
+                });
+
+                // If it's not another Result op, flush the batch
+                Ok(!is_next_result)
             } else {
                 Ok(true)
             }
@@ -454,6 +466,34 @@ impl PHIREngine {
             _ => Err(QueueError::OperationError(format!(
                 "Unsupported quantum operation: {qop}"
             ))),
+        }
+    }
+
+    // Helper method to build a combined result string from indexed keys
+    fn build_combined_result(&self, prefix: &str) -> String {
+        let mut indexed_values = Vec::new();
+
+        // Find all keys with the given prefix and numeric suffix
+        for (key, &value) in &self.measurement_results {
+            if let Some(suffix) = key.strip_prefix(prefix) {
+                if let Ok(index) = suffix.parse::<usize>() {
+                    indexed_values.push((index, value));
+                }
+            }
+        }
+
+        // If we found any values, sort and combine them
+        if indexed_values.is_empty() {
+            String::new()
+        } else {
+            // Sort by index
+            indexed_values.sort_by_key(|(idx, _)| *idx);
+
+            // Join into a string
+            indexed_values
+                .iter()
+                .map(|(_, value)| value.to_string())
+                .collect()
         }
     }
 }
@@ -691,8 +731,8 @@ impl ClassicalEngine for PHIREngine {
 
         for (result_id, outcome) in measurements {
             debug!(
-                "PHIR: Received measurement {}, result_id={}",
-                outcome, result_id
+                "PHIR: Received measurement result_id={}, outcome={}",
+                result_id, outcome
             );
 
             // Store the measurement
@@ -711,34 +751,34 @@ impl ClassicalEngine for PHIREngine {
             self.measurement_results.len()
         );
 
-        // First add all individual measurements to the results
+        // Add all measurements to the results
         for (key, &value) in &self.measurement_results {
             results.measurements.insert(key.clone(), value);
         }
 
-        // Build a combined result string from measurement_0 and measurement_1
-        let mut result_digits = String::new();
+        // Build result string in order of priority:
+        // 1. From result_X keys (from classical ops)
+        // 2. From measurement_X keys (from quantum ops)
 
-        // Look for measurement_0 and measurement_1 in order
-        if let Some(&m0) = self.measurement_results.get("measurement_0") {
-            result_digits.push_str(&m0.to_string());
+        // Try to build from result_X keys first
+        let mut result_digits = self.build_combined_result("result_");
+
+        // If empty, try measurement_X keys
+        if result_digits.is_empty() {
+            result_digits = self.build_combined_result("measurement_");
         }
-        if let Some(&m1) = self.measurement_results.get("measurement_1") {
-            result_digits.push_str(&m1.to_string());
-        }
 
-        debug!("PHIR: Combined measurement result: {}", result_digits);
+        debug!("PHIR: Combined result string: {}", result_digits);
 
-        // Store combined result string as u32 if possible
+        // Always store a combined result, even if empty
+        results.combined_result = Some(result_digits.clone());
+
+        // Add explicit result_X entries for each bit in the combined result
+        // This makes the output consistent with QIR
         if !result_digits.is_empty() {
-            if let Ok(result_value) = result_digits.parse::<u32>() {
-                results
-                    .measurements
-                    .insert("result".to_string(), result_value);
-            } else {
-                // If parsing fails, store a default value and log warning
-                debug!("PHIR: Could not parse '{}' as u32", result_digits);
-                results.measurements.insert("result".to_string(), 0);
+            for (i, c) in result_digits.chars().enumerate() {
+                let value = u32::from(c == '1');
+                results.measurements.insert(format!("result_{i}"), value);
             }
         }
 
@@ -889,10 +929,26 @@ mod tests {
 
         engine.handle_measurements(message)?;
 
+        // Execute the "Result" classical operation to copy measurement to result
+        // Set current_op to position of the Result op
+        engine.current_op = 5;
+        let args = vec![("m".to_string(), 0)];
+        let returns = vec![("result".to_string(), 0)];
+        engine.handle_classical_op("Result", &args, &returns)?;
+
         // Verify results
         let results = engine.get_results()?;
-        assert_eq!(results.measurements.len(), 2);
+
+        // Verify that the measurement was recorded
+        assert!(results.measurements.contains_key("measurement_0"));
         assert_eq!(results.measurements["measurement_0"], 1);
+
+        // After the classical op, we should also have a result_0 key
+        assert!(results.measurements.contains_key("result_0"));
+        assert_eq!(results.measurements["result_0"], 1);
+
+        // The combined result should contain "1"
+        assert_eq!(results.combined_result, Some("1".to_string()));
 
         Ok(())
     }

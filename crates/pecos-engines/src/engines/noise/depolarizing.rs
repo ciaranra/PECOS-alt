@@ -178,25 +178,23 @@ impl DepolarizingNoise {
                 }
             }
 
-            // Apply random noise to each qubit with probability p
+            // Apply gate error with probability `self.probability`
             let mut rng = self.rng.lock().unwrap();
-            for &qubit in &gate.qubits {
-                if rng.random::<f64>() < self.probability {
-                    // Choose a random Pauli error (X, Y, or Z)
-                    let error_type = rng.random_range(0..3);
-                    match error_type {
-                        0 => {
-                            trace!("Applying X noise to qubit {}", qubit);
-                            builder.add_x(&[qubit]);
-                        }
-                        1 => {
-                            trace!("Applying Y noise to qubit {}", qubit);
-                            builder.add_y(&[qubit]);
-                        }
-                        _ => {
-                            trace!("Applying Z noise to qubit {}", qubit);
-                            builder.add_z(&[qubit]);
-                        }
+            if rng.random::<f64>() < self.probability {
+                // Choose a random error type (X, Y, or Z)
+                let error_type = rng.random_range(0..3);
+                match error_type {
+                    0 => {
+                        trace!("Applying X noise to qubit {}", gate.qubits[0]);
+                        builder.add_x(&[gate.qubits[0]]);
+                    }
+                    1 => {
+                        trace!("Applying Y noise to qubit {}", gate.qubits[0]);
+                        builder.add_y(&[gate.qubits[0]]);
+                    }
+                    _ => {
+                        trace!("Applying Z noise to qubit {}", gate.qubits[0]);
+                        builder.add_z(&[gate.qubits[0]]);
                     }
                 }
             }
@@ -206,18 +204,11 @@ impl DepolarizingNoise {
     }
 }
 
-impl NoiseModel for DepolarizingNoise {
-    fn apply_noise(&self, message: ByteMessage) -> Result<ByteMessage, QueueError> {
-        // Parse the commands from the message
-        let gates = message.parse_quantum_operations()?;
-
-        // Apply noise to the commands
-        Ok(self.apply_noise_to_gates(&gates))
-    }
-
-    fn reset(&mut self) -> Result<(), QueueError> {
-        // No state to reset
-        Ok(())
+impl crate::engines::noise::NoiseModel for DepolarizingNoise {
+    fn set_seed(&mut self, seed: u64) -> Result<(), QueueError> {
+        // Use the RngManageable trait's set_rng method to set the seed
+        RngManageable::set_rng(self, ChaCha8Rng::seed_from_u64(seed))
+            .map_err(|e| QueueError::OperationError(e.to_string()))
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -226,29 +217,6 @@ impl NoiseModel for DepolarizingNoise {
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
-    }
-
-    /// Set a specific seed for the random number generator
-    ///
-    /// This method provides deterministic behavior by setting a specific seed
-    /// for the random number generator used by the depolarizing noise model.
-    ///
-    /// This implementation leverages the `RngManageable` trait's `set_rng` method
-    /// to create and set a new random number generator from the provided seed.
-    ///
-    /// # Arguments
-    /// * `seed` - Seed value for the random number generator
-    ///
-    /// # Returns
-    /// Result indicating success or failure
-    ///
-    /// # Errors
-    /// This implementation returns an error if setting the RNG fails
-    fn set_seed(&mut self, seed: u64) -> Result<(), QueueError> {
-        // Use the RngManageable trait's set_rng method directly with a seeded RNG
-        // to avoid infinite recursion with set_seed
-        RngManageable::set_rng(self, ChaCha8Rng::seed_from_u64(seed))
-            .map_err(|e| QueueError::OperationError(e.to_string()))
     }
 }
 
@@ -363,9 +331,48 @@ impl DepolarizingNoiseBuilder {
     }
 }
 
+impl crate::engines::ControlEngine for DepolarizingNoise {
+    type Input = ByteMessage;
+    type Output = ByteMessage;
+    type EngineInput = ByteMessage;
+    type EngineOutput = ByteMessage;
+
+    fn start(
+        &mut self,
+        input: Self::Input,
+    ) -> Result<crate::engines::EngineStage<Self::EngineInput, Self::Output>, QueueError> {
+        // For quantum operations, apply gate noise
+        trace!("DepolarizingNoise::start - applying noise to quantum operations");
+
+        // Parse the input as quantum operations
+        let gates: Vec<crate::byte_message::QuantumGate> = input.parse_quantum_operations()?;
+
+        // Apply noise to the gates
+        let noisy_gates = self.apply_noise_to_gates(&gates);
+
+        // Return the noisy operations
+        Ok(crate::engines::EngineStage::NeedsProcessing(noisy_gates))
+    }
+
+    fn continue_processing(
+        &mut self,
+        result: Self::EngineOutput,
+    ) -> Result<crate::engines::EngineStage<Self::EngineInput, Self::Output>, QueueError> {
+        // Depolarizing noise doesn't modify measurement results, just pass through
+        trace!("DepolarizingNoise::continue_processing - passing through measurement results");
+        Ok(crate::engines::EngineStage::Complete(result))
+    }
+
+    fn reset(&mut self) -> Result<(), QueueError> {
+        // No state to reset
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engines::{ControlEngine, EngineStage};
 
     #[test]
     fn test_probability_getter_and_setter() {
@@ -397,25 +404,35 @@ mod tests {
     #[test]
     fn test_builder_with_probability() {
         // Create a noise model with the builder
-        let noise = DepolarizingNoise::builder().with_probability(0.3).build();
+        let mut noise = DepolarizingNoise::builder().with_probability(0.3).build();
 
         // Create a direct instance with the same probability
-        let direct_noise = DepolarizingNoise::new(0.3);
+        let mut direct_noise = DepolarizingNoise::new(0.3);
 
-        // Apply noise to a simple message and verify both produce similar results
-        // (We can't check exact equality due to randomness, but we can verify the builder works)
+        // Create a simple quantum operations message for testing
         let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_quantum_operations();
         builder.add_x(&[0]);
         let input = builder.build();
 
-        // Just verify that both can process the input without errors
-        let _result1 = noise
-            .apply_noise(input.clone())
+        // Process using the ControlEngine API instead of the old apply_noise method
+        let result1 = noise
+            .start(input.clone())
             .expect("Builder-created noise model failed");
-        let _result2 = direct_noise
-            .apply_noise(input)
+        let result2 = direct_noise
+            .start(input)
             .expect("Directly created noise model failed");
+
+        // Verify we got a valid result that needs processing
+        match result1 {
+            EngineStage::NeedsProcessing(_) => (),
+            EngineStage::Complete(_) => panic!("Expected NeedsProcessing stage"),
+        }
+
+        match result2 {
+            EngineStage::NeedsProcessing(_) => (),
+            EngineStage::Complete(_) => panic!("Expected NeedsProcessing stage"),
+        }
     }
 
     #[test]

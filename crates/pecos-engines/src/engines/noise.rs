@@ -1,45 +1,43 @@
+pub mod biased_measurement;
 pub mod depolarizing;
 pub mod general_depolarizing;
 pub mod pass_through;
+pub mod utils;
 
+pub use biased_measurement::BiasedMeasurementNoise;
 pub use depolarizing::DepolarizingNoise;
 pub use general_depolarizing::GeneralDepolarizingNoise;
 pub use pass_through::PassThroughNoise;
+pub use utils::{NoiseRng, NoiseUtils, ProbabilityValidator};
 
 use crate::byte_message::ByteMessage;
-use crate::engines::{ControlEngine, Engine, EngineStage};
+use crate::engines::{ControlEngine, EngineStage};
 use crate::errors::QueueError;
 use dyn_clone::DynClone;
+use pecos_core::RngManageable;
+use rand_chacha::ChaCha8Rng;
 use std::any::Any;
 
 /// Trait defining interface for quantum noise models
-pub trait NoiseModel: DynClone + Send + Sync + Any {
-    /// Apply noise to a `ByteMessage` containing quantum commands
-    ///
-    /// # Parameters
-    /// - `message`: A `ByteMessage` containing the quantum commands to modify
-    ///
-    /// # Returns
-    /// - `Result<ByteMessage, QueueError>`: A new message with noise applied
-    ///
-    /// # Errors
-    /// - Returns a `QueueError` if noise application fails
-    fn apply_noise(&self, message: ByteMessage) -> Result<ByteMessage, QueueError>;
-
-    /// Resets the noise model to its initial state
-    ///
-    /// # Errors
-    /// Returns a [`QueueError`] if the reset operation fails
-    fn reset(&mut self) -> Result<(), QueueError>;
-
+///
+/// Noise models are a special kind of controller that transform
+/// quantum operations before they're executed and potentially transform measurement
+/// results after they're produced.
+pub trait NoiseModel:
+    ControlEngine<
+        Input = ByteMessage,
+        Output = ByteMessage,
+        EngineInput = ByteMessage,
+        EngineOutput = ByteMessage,
+    > + DynClone
+    + Send
+    + Sync
+    + Any
+{
     /// Set a specific seed for the random number generator
     ///
     /// This method allows for deterministic behavior by setting a specific seed
     /// for the random number generator used by the noise model.
-    ///
-    /// This is the preferred method for users who need deterministic behavior from
-    /// noise models. It provides a consistent interface across all components that
-    /// manage randomness, regardless of their internal implementation details.
     ///
     /// # Arguments
     /// * `seed` - Seed value for the random number generator
@@ -49,12 +47,9 @@ pub trait NoiseModel: DynClone + Send + Sync + Any {
     ///
     /// # Errors
     /// Returns a `QueueError` if setting the seed fails
-    ///
-    /// # Implementation Note
-    /// Noise models that implement the `RngManageable` trait can leverage its
-    /// default implementation. Noise models that don't use randomness can use
-    /// the default implementation provided here, which does nothing and returns Ok.
-    fn set_seed(&mut self, _seed: u64) -> Result<(), QueueError> {
+    fn set_seed(&mut self, seed: u64) -> Result<(), QueueError> {
+        // Default implementation for noise models that don't use randomness
+        let _ = seed;
         Ok(())
     }
 
@@ -74,52 +69,218 @@ pub trait NoiseModel: DynClone + Send + Sync + Any {
 // Register the NoiseModel trait with dyn_clone
 dyn_clone::clone_trait_object!(NoiseModel);
 
+/// Base implementation for noise models
+///
+/// This struct provides common functionality for all noise models,
+/// reducing code duplication and improving maintainability.
+pub struct BaseNoiseModel {
+    /// The random number generator for the noise model
+    rng: NoiseRng,
+}
+
+impl BaseNoiseModel {
+    /// Create a new `BaseNoiseModel` with a random seed
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            rng: NoiseRng::new(),
+        }
+    }
+
+    /// Create a new `BaseNoiseModel` with a specific seed
+    #[must_use]
+    pub fn with_seed(seed: u64) -> Self {
+        Self {
+            rng: NoiseRng::with_seed(seed),
+        }
+    }
+
+    /// Get a reference to the random number generator
+    #[must_use]
+    pub fn rng(&self) -> &NoiseRng {
+        &self.rng
+    }
+
+    /// Check if a message contains measurement results
+    ///
+    /// # Arguments
+    /// * `message` - The `ByteMessage` to check
+    ///
+    /// # Returns
+    /// true if the message contains measurement results, false otherwise
+    #[must_use]
+    pub fn has_measurements(&self, message: &ByteMessage) -> bool {
+        NoiseUtils::has_measurements(message)
+    }
+}
+
+impl Default for BaseNoiseModel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Clone for BaseNoiseModel {
+    fn clone(&self) -> Self {
+        Self {
+            rng: self.rng.clone(),
+        }
+    }
+}
+
+impl RngManageable for BaseNoiseModel {
+    type Rng = ChaCha8Rng;
+
+    fn set_rng(&mut self, rng: ChaCha8Rng) -> Result<(), Box<dyn std::error::Error>> {
+        self.rng.set_rng(rng)
+    }
+
+    fn rng(&self) -> &Self::Rng {
+        // Delegate to the NoiseRng implementation, which will panic
+        self.rng.rng()
+    }
+
+    fn rng_mut(&mut self) -> &mut Self::Rng {
+        // Delegate to the NoiseRng implementation, which will panic
+        self.rng.rng_mut()
+    }
+}
+
+// Add tests for the BaseNoiseModel
+#[cfg(test)]
+mod base_tests {
+    use super::*;
+    use crate::byte_message::ByteMessageBuilder;
+
+    #[test]
+    fn test_base_noise_model_construction() {
+        // Create a noise model with default seed
+        let model = BaseNoiseModel::new();
+        assert!(model.rng().random_float() >= 0.0);
+
+        // Create a noise model with specific seed
+        let model = BaseNoiseModel::with_seed(42);
+        assert!(model.rng().random_float() >= 0.0);
+    }
+
+    #[test]
+    fn test_base_noise_model_has_measurements() {
+        let model = BaseNoiseModel::new();
+
+        // Create a message with measurements
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_measurement_results();
+        builder.add_measurement_results(&[0], &[0]);
+        let message = builder.build();
+        assert!(model.has_measurements(&message));
+
+        // Create a message without measurements
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_quantum_operations();
+        builder.add_x(&[0]);
+        let message = builder.build();
+        assert!(!model.has_measurements(&message));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::byte_message::ByteMessageBuilder;
+    use crate::engines::noise::biased_measurement::BiasedMeasurementNoise;
+    use crate::engines::noise::depolarizing::DepolarizingNoise;
+
+    #[test]
+    fn test_noise_model_biased_measurement() {
+        // Create a biased measurement noise model
+        let mut noise_model = BiasedMeasurementNoise::new(0.1, 0.2);
+
+        // Create a quantum operation message
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_quantum_operations();
+        builder.add_x(&[0]);
+        let quantum_message = builder.build();
+
+        // Create a measurement result message
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_measurement_results();
+        builder.add_measurement_results(&[0], &[0]);
+        let measurement_message = builder.build();
+
+        // Operation should pass through unchanged
+        let operation_result = noise_model.start(quantum_message.clone()).unwrap();
+        if let EngineStage::NeedsProcessing(output) = operation_result {
+            assert_eq!(
+                output.as_bytes(),
+                quantum_message.as_bytes(),
+                "Quantum operations should pass through biased measurement noise unchanged"
+            );
+        } else {
+            panic!("Expected NeedsProcessing stage");
+        }
+
+        // Measurements should be potentially modified
+        let measurement_result = noise_model
+            .continue_processing(measurement_message.clone())
+            .unwrap();
+        if let EngineStage::Complete(output) = measurement_result {
+            // We can't check for equality because the noise is random,
+            // but we can at least verify the output is a valid measurement result
+            let measurements = output.parse_measurements().unwrap();
+            assert!(
+                !measurements.is_empty(),
+                "Output should contain at least one measurement"
+            );
+        } else {
+            panic!("Expected Complete stage");
+        }
+    }
+
+    #[test]
+    fn test_noise_model_depolarizing() {
+        // Create a depolarizing noise model
+        let mut noise_model = DepolarizingNoise::new(0.1);
+
+        // Create a quantum operation message
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_quantum_operations();
+        builder.add_x(&[0]);
+        let quantum_message = builder.build();
+
+        // Create a measurement result message
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_measurement_results();
+        builder.add_measurement_results(&[0], &[0]);
+        let measurement_message = builder.build();
+
+        // Operations should be modified
+        let operation_result = noise_model.start(quantum_message.clone()).unwrap();
+        if let EngineStage::NeedsProcessing(output) = operation_result {
+            // Can't check for exact output due to randomness
+            let gates = output.parse_quantum_operations().unwrap();
+            assert!(!gates.is_empty(), "Output should contain at least one gate");
+        } else {
+            panic!("Expected NeedsProcessing stage");
+        }
+
+        // Measurements should pass through unchanged
+        let measurement_result = noise_model
+            .continue_processing(measurement_message.clone())
+            .unwrap();
+        if let EngineStage::Complete(output) = measurement_result {
+            assert_eq!(
+                output.as_bytes(),
+                measurement_message.as_bytes(),
+                "Measurements should pass through depolarizing noise unchanged"
+            );
+        } else {
+            panic!("Expected Complete stage");
+        }
+    }
+}
+
+// Implement ControlEngine for Box<dyn NoiseModel>
 impl ControlEngine for Box<dyn NoiseModel> {
-    type Input = ByteMessage;
-    type Output = ByteMessage;
-    type EngineInput = ByteMessage;
-    type EngineOutput = ByteMessage;
-
-    fn start(
-        &mut self,
-        input: ByteMessage,
-    ) -> Result<EngineStage<ByteMessage, ByteMessage>, QueueError> {
-        // Apply noise transformation to the message
-        let noisy_message = self.apply_noise(input)?;
-
-        // Request processing of the noisy commands
-        Ok(EngineStage::NeedsProcessing(noisy_message))
-    }
-
-    fn continue_processing(
-        &mut self,
-        results: ByteMessage,
-    ) -> Result<EngineStage<ByteMessage, ByteMessage>, QueueError> {
-        // For noise models, we typically just pass through the results
-        Ok(EngineStage::Complete(results))
-    }
-
-    fn reset(&mut self) -> Result<(), QueueError> {
-        self.as_mut().reset()
-    }
-}
-
-impl Engine for Box<dyn NoiseModel> {
-    type Input = ByteMessage;
-    type Output = ByteMessage;
-
-    fn process(&mut self, input: Self::Input) -> Result<Self::Output, QueueError> {
-        self.apply_noise(input)
-    }
-
-    fn reset(&mut self) -> Result<(), QueueError> {
-        self.as_mut().reset()
-    }
-}
-
-// Implement ControlEngine for all NoiseModel types
-// This allows us to use NoiseModel directly as controllers in EngineSystem
-impl<T: NoiseModel + 'static> ControlEngine for T {
     type Input = ByteMessage;
     type Output = ByteMessage;
     type EngineInput = ByteMessage;
@@ -129,22 +290,20 @@ impl<T: NoiseModel + 'static> ControlEngine for T {
         &mut self,
         input: Self::Input,
     ) -> Result<EngineStage<Self::EngineInput, Self::Output>, QueueError> {
-        // Apply noise to the input
-        let noisy_input = self.apply_noise(input)?;
-        // Request processing of the noisy commands
-        Ok(EngineStage::NeedsProcessing(noisy_input))
+        // Forward to the underlying NoiseModel implementation
+        ControlEngine::start(&mut **self, input)
     }
 
     fn continue_processing(
         &mut self,
         result: Self::EngineOutput,
     ) -> Result<EngineStage<Self::EngineInput, Self::Output>, QueueError> {
-        // For noise models, we just pass through the results
-        Ok(EngineStage::Complete(result))
+        // Forward to the underlying NoiseModel implementation
+        ControlEngine::continue_processing(&mut **self, result)
     }
 
     fn reset(&mut self) -> Result<(), QueueError> {
-        // Reset the noise model
-        NoiseModel::reset(self)
+        // Forward to the underlying NoiseModel implementation
+        ControlEngine::reset(&mut **self)
     }
 }

@@ -144,9 +144,13 @@ impl Engine for QuantumSystem {
     }
 
     fn reset(&mut self) -> Result<(), QueueError> {
-        // Reset both components, disambiguating the method call
-        NoiseModel::reset(&mut *self.noise_model)?;
-        self.quantum_engine.reset()
+        // Reset the noise model using the ControlEngine trait
+        self.noise_model.reset()?;
+
+        // Reset the quantum engine
+        self.quantum_engine.reset()?;
+
+        Ok(())
     }
 }
 
