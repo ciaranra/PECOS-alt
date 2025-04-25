@@ -10,3 +10,6 @@ proc-macro = true
 [dependencies]
 syn.workspace = true
 quote.workspace = true
+
+[dev-dependencies]
+syn = { version = "2", features = ["full"] }

@@ -1,3 +1,5 @@
+#![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+
 use pecos_engines::Engine;
 use pecos_engines::byte_message::ByteMessage;
 use pecos_engines::engines::noise::BiasedMeasurementNoise;
@@ -16,12 +18,12 @@ fn main() {
     // Create a quantum engine with 1 qubit
     let quantum = Box::new(StateVecEngine::new(1));
 
-    example1_different_bias_levels(&circ, quantum.clone());
+    example1_different_bias_levels(&circ, &quantum);
     example2_with_seed(&circ);
     example3_bell_state();
 }
 
-fn example1_different_bias_levels(circ: &ByteMessage, quantum: Box<StateVecEngine>) {
+fn example1_different_bias_levels(circ: &ByteMessage, quantum: &StateVecEngine) {
     // === EXAMPLE 1: Different bias levels ===
     println!("Example 1: Testing different bias levels with 10,000 shots");
     println!("{:-^80}", "");
@@ -49,7 +51,7 @@ fn example1_different_bias_levels(circ: &ByteMessage, quantum: Box<StateVecEngin
     for (p_flip_0, p_flip_1, desc) in configs {
         // Create the biased measurement noise model
         let noise = Box::new(BiasedMeasurementNoise::new(p_flip_0, p_flip_1));
-        let mut system = QuantumSystem::new(noise, quantum.clone());
+        let mut system = QuantumSystem::new(noise, Box::new(quantum.clone()));
 
         // For deterministic testing, set a fixed seed
         system.set_seed(42).expect("Failed to set seed");
@@ -81,8 +83,10 @@ fn example1_different_bias_levels(circ: &ByteMessage, quantum: Box<StateVecEngin
         // For a 50/50 input with H gate:
         // Expected 0s = 50% * (1-p_flip_0) + 50% * p_flip_1
         // Expected 1s = 50% * p_flip_0 + 50% * (1-p_flip_1)
-        let expected_0 = ((50.0 * (1.0 - p_flip_0) + 50.0 * p_flip_1) as f64).round() as usize;
-        let expected_1 = ((50.0 * p_flip_0 + 50.0 * (1.0 - p_flip_1)) as f64).round() as usize;
+        let calc_0: f64 = 50.0 * (1.0 - p_flip_0) + 50.0 * p_flip_1;
+        let expected_0 = calc_0.round() as usize;
+        let calc_1: f64 = 50.0 * p_flip_0 + 50.0 * (1.0 - p_flip_1);
+        let expected_1 = calc_1.round() as usize;
 
         println!(
             "{:<30} | {:<10} | {:<10} | {:<10} | {:<10}",
@@ -131,8 +135,10 @@ fn example2_with_seed(circ: &ByteMessage) {
     // Calculate expected results for this configuration
     let p_flip_0 = 0.4;
     let p_flip_1 = 0.1;
-    let expected_0 = ((50.0 * (1.0 - p_flip_0) + 50.0 * p_flip_1) as f64).round() as usize;
-    let expected_1 = ((50.0 * p_flip_0 + 50.0 * (1.0 - p_flip_1)) as f64).round() as usize;
+    let calc_0: f64 = 50.0 * (1.0 - p_flip_0) + 50.0 * p_flip_1;
+    let expected_0 = calc_0.round() as usize;
+    let calc_1: f64 = 50.0 * p_flip_0 + 50.0 * (1.0 - p_flip_1);
+    let expected_1 = calc_1.round() as usize;
 
     println!("Builder pattern with p_flip_0 = 0.4, p_flip_1 = 0.1");
     println!("  Expected results: 0: {expected_0}%, 1: {expected_1}%");

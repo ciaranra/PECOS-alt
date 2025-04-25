@@ -1,12 +1,16 @@
+//! Quantum noise models for realistic quantum computation simulation
+//!
+//! This module provides various noise models that can be used to simulate
+//! realistic quantum computation with errors. Each noise model implements
+//! the `NoiseModel` trait and can be used with the quantum engines.
+
 pub mod biased_measurement;
 pub mod depolarizing;
-pub mod general_depolarizing;
 pub mod pass_through;
 pub mod utils;
 
 pub use biased_measurement::BiasedMeasurementNoise;
 pub use depolarizing::DepolarizingNoise;
-pub use general_depolarizing::GeneralDepolarizingNoise;
 pub use pass_through::PassThroughNoise;
 pub use utils::{NoiseRng, NoiseUtils, ProbabilityValidator};
 
@@ -33,26 +37,8 @@ pub trait NoiseModel:
     + Send
     + Sync
     + Any
+    + RngManageable<Rng = ChaCha8Rng>
 {
-    /// Set a specific seed for the random number generator
-    ///
-    /// This method allows for deterministic behavior by setting a specific seed
-    /// for the random number generator used by the noise model.
-    ///
-    /// # Arguments
-    /// * `seed` - Seed value for the random number generator
-    ///
-    /// # Returns
-    /// Result indicating success or failure
-    ///
-    /// # Errors
-    /// Returns a `QueueError` if setting the seed fails
-    fn set_seed(&mut self, seed: u64) -> Result<(), QueueError> {
-        // Default implementation for noise models that don't use randomness
-        let _ = seed;
-        Ok(())
-    }
-
     /// Returns a reference to self as Any
     ///
     /// This allows for type-checking and downcasting without requiring
@@ -136,12 +122,10 @@ impl RngManageable for BaseNoiseModel {
     }
 
     fn rng(&self) -> &Self::Rng {
-        // Delegate to the NoiseRng implementation, which will panic
         self.rng.rng()
     }
 
     fn rng_mut(&mut self) -> &mut Self::Rng {
-        // Delegate to the NoiseRng implementation, which will panic
         self.rng.rng_mut()
     }
 }
@@ -188,7 +172,6 @@ mod tests {
     use super::*;
     use crate::byte_message::ByteMessageBuilder;
     use crate::engines::noise::biased_measurement::BiasedMeasurementNoise;
-    use crate::engines::noise::depolarizing::DepolarizingNoise;
 
     #[test]
     fn test_noise_model_biased_measurement() {
@@ -239,7 +222,7 @@ mod tests {
     #[test]
     fn test_noise_model_depolarizing() {
         // Create a depolarizing noise model
-        let mut noise_model = DepolarizingNoise::new(0.1);
+        let mut noise_model = DepolarizingNoise::new_uniform(0.1);
 
         // Create a quantum operation message
         let mut builder = ByteMessageBuilder::new();

@@ -212,9 +212,9 @@ impl fmt::Display for ShotResults {
 
             // Print any other keys (except measurement_ keys and result_X keys)
             for (key, value) in shot {
-                if !key.starts_with("measurement_") && 
+                if !key.starts_with("measurement_") &&
                    !key.starts_with("result_") &&  // Skip result_X keys
-                   key != "result" && 
+                   key != "result" &&
                    !key.starts_with('q')
                 {
                     if first {

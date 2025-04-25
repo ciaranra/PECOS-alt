@@ -137,7 +137,7 @@ impl HybridEngineBuilder {
     /// The builder for method chaining
     #[must_use]
     pub fn with_depolarizing_noise(mut self, probability: f64) -> Self {
-        self.noise_model = Some(Box::new(DepolarizingNoise::new_with_options(probability)));
+        self.noise_model = Some(Box::new(DepolarizingNoise::new_uniform(probability)));
         self.quantum_system = None; // Reset quantum_system as it's now invalid
         self
     }

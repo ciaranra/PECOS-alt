@@ -11,6 +11,7 @@
 // the License.
 
 use crate::byte_message::{ByteMessage, ByteMessageBuilder, QuantumGate};
+use crate::errors::QueueError;
 use pecos_core::RngManageable;
 use rand::Rng;
 use rand::SeedableRng;
@@ -89,6 +90,27 @@ impl NoiseRng {
         let mut rng = self.rng.lock().unwrap();
         rng.random_range(range)
     }
+
+    /// Set the seed for the random number generator
+    ///
+    /// This is a convenience method that wraps `RngManageable::set_seed` but returns
+    /// a `QueueError` instead of `Box<dyn Error>` for backward compatibility.
+    ///
+    /// # Arguments
+    /// * `seed` - The seed value
+    ///
+    /// # Returns
+    /// `Ok(())` if successful
+    ///
+    /// # Panics
+    /// Panics if the mutex is poisoned
+    pub fn set_seed(&mut self, seed: u64) -> Result<(), QueueError> {
+        // This implementation directly sets the RNG rather than using RngManageable::set_seed
+        // to avoid unwrapping the Arc<Mutex<>> which would cause thread-safety issues
+        let new_rng = ChaCha8Rng::seed_from_u64(seed);
+        self.rng = Arc::new(Mutex::new(new_rng));
+        Ok(())
+    }
 }
 
 impl Default for NoiseRng {
@@ -127,6 +149,21 @@ pub trait ProbabilityValidator {
         assert!(
             (0.0..=1.0).contains(&probability),
             "Probability must be between 0.0 and 1.0"
+        );
+    }
+
+    /// Validate a named probability
+    ///
+    /// # Arguments
+    /// * `probability` - The probability value to validate
+    /// * `name` - Name of the probability for error message
+    ///
+    /// # Panics
+    /// Panics if the probability is not between 0.0 and 1.0
+    fn validate_named_probability(probability: f64, name: &str) {
+        assert!(
+            (0.0..=1.0).contains(&probability),
+            "Probability {name} must be between 0.0 and 1.0, but was {probability}"
         );
     }
 }
@@ -213,6 +250,60 @@ impl NoiseUtils {
             false
         }
     }
+
+    /// Creates a new `ByteMessageBuilder` for quantum operations
+    ///
+    /// # Returns
+    /// A `ByteMessageBuilder` configured for quantum operations
+    #[must_use]
+    pub fn create_quantum_builder() -> ByteMessageBuilder {
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_quantum_operations();
+        builder
+    }
+
+    /// Creates a new `ByteMessage` from a list of gates
+    ///
+    /// # Arguments
+    /// * `gates` - The gates to include in the message
+    ///
+    /// # Returns
+    /// A `ByteMessage` containing the gates
+    #[must_use]
+    pub fn create_gate_message(gates: &[QuantumGate]) -> ByteMessage {
+        let mut builder = Self::create_quantum_builder();
+        for gate in gates {
+            Self::add_gate_to_builder(&mut builder, gate);
+        }
+        builder.build()
+    }
+
+    /// Applies X gate to a qubit via a builder
+    ///
+    /// # Arguments
+    /// * `builder` - The `ByteMessageBuilder` to add the gate to
+    /// * `qubit` - The qubit to apply the gate to
+    pub fn apply_x(builder: &mut ByteMessageBuilder, qubit: usize) {
+        builder.add_x(&[qubit]);
+    }
+
+    /// Applies Y gate to a qubit via a builder
+    ///
+    /// # Arguments
+    /// * `builder` - The `ByteMessageBuilder` to add the gate to
+    /// * `qubit` - The qubit to apply the gate to
+    pub fn apply_y(builder: &mut ByteMessageBuilder, qubit: usize) {
+        builder.add_y(&[qubit]);
+    }
+
+    /// Applies Z gate to a qubit via a builder
+    ///
+    /// # Arguments
+    /// * `builder` - The `ByteMessageBuilder` to add the gate to
+    /// * `qubit` - The qubit to apply the gate to
+    pub fn apply_z(builder: &mut ByteMessageBuilder, qubit: usize) {
+        builder.add_z(&[qubit]);
+    }
 }
 
 #[cfg(test)]
@@ -280,5 +371,40 @@ mod tests {
         for count in &counts {
             assert!(*count > 250 && *count < 400);
         }
+    }
+
+    #[test]
+    fn test_noise_utils_create_quantum_builder() {
+        let mut builder = NoiseUtils::create_quantum_builder();
+        let message = builder.build();
+        let result = message.parse_quantum_operations();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_noise_utils_create_gate_message() {
+        use crate::byte_message::GateType;
+        use crate::byte_message::QuantumGate;
+
+        let gates = vec![
+            QuantumGate {
+                gate_type: GateType::X,
+                qubits: vec![0],
+                params: vec![],
+                result_id: None,
+                noiseless: false,
+            },
+            QuantumGate {
+                gate_type: GateType::Y,
+                qubits: vec![1],
+                params: vec![],
+                result_id: None,
+                noiseless: false,
+            },
+        ];
+
+        let message = NoiseUtils::create_gate_message(&gates);
+        let parsed_gates = message.parse_quantum_operations().unwrap();
+        assert_eq!(parsed_gates.len(), 2);
     }
 }

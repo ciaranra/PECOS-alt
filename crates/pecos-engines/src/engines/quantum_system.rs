@@ -22,7 +22,7 @@ use std::fmt::Debug;
 /// use pecos_engines::engines::quantum::StateVecEngine;
 ///
 /// // Create a quantum system with 2 qubits
-/// let noise_model = DepolarizingNoise::new(0.01);
+/// let noise_model = DepolarizingNoise::new_uniform(0.01);
 /// let engine = StateVecEngine::new(2);
 /// let system = QuantumSystem::new(Box::new(noise_model), Box::new(engine));
 /// ```
@@ -92,8 +92,11 @@ impl QuantumSystem {
         // Derive a different seed for the quantum engine using the standard protocol
         let engine_seed = pecos_core::rng::rng_manageable::derive_seed(seed, "quantum_engine");
 
-        // Set the seed for the noise model
-        self.noise_model.set_seed(noise_seed)?;
+        // Set the seed for the noise model using RngManageable::set_seed
+        // Convert the error type from Box<dyn Error> to QueueError
+        self.noise_model.set_seed(noise_seed).map_err(|e| {
+            QueueError::ExecutionError(format!("Failed to set noise model seed: {e}"))
+        })?;
 
         // Directly set the seed for the quantum engine using the trait method
         self.quantum_engine.set_seed(engine_seed)?;
@@ -228,7 +231,7 @@ mod tests {
 
         // Create a QuantumSystem with depolarizing noise
         QuantumSystem::new(
-            Box::new(DepolarizingNoise::new(probability)),
+            Box::new(DepolarizingNoise::new_uniform(probability)),
             quantum_engine,
         )
     }
@@ -257,7 +260,7 @@ mod tests {
 
         let mut system = // Create a QuantumSystem with depolarizing noise
         QuantumSystem::new(
-            Box::new(DepolarizingNoise::new(probability)),
+            Box::new(DepolarizingNoise::new_uniform(probability)),
             quantum_engine,
         );
 
@@ -295,7 +298,7 @@ mod tests {
             .as_any_mut()
             .downcast_mut::<DepolarizingNoise>()
         {
-            depolarizing_noise.set_probability(0.05);
+            depolarizing_noise.set_uniform_probability(0.05);
         } else {
             panic!("Failed to downcast noise model to DepolarizingNoise");
         }

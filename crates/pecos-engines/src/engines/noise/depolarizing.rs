@@ -1,4 +1,4 @@
-// Copyright 2024 The PECOS Developers
+// Copyright 2025 The PECOS Developers
 //
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 // in compliance with the License.You may obtain a copy of the License at
@@ -10,109 +10,86 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-use crate::byte_message::ByteMessage;
-use crate::byte_message::ByteMessageBuilder;
-use crate::byte_message::{GateType, QuantumGate};
-use crate::engines::noise::NoiseModel;
+use crate::byte_message::{ByteMessage, ByteMessageBuilder, GateType, QuantumGate};
+use crate::engines::noise::{NoiseModel, NoiseRng, NoiseUtils, ProbabilityValidator};
 use crate::errors::QueueError;
 use log::trace;
 use pecos_core::RngManageable;
-use rand::Rng;
-use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::any::Any;
-use std::sync::{Arc, Mutex};
 
 /// Implements depolarizing channel noise for quantum simulations
 ///
-/// The depolarizing channel randomly applies Pauli errors (X, Y, Z) to qubits with
-/// specified probability, simulating quantum decoherence effects:
-///
-/// - X errors: Bit-flips (|0⟩ ↔ |1⟩)
-/// - Y errors: Combined bit and phase flips
-/// - Z errors: Phase-flips
-///
-/// Each error type is applied with equal probability (p/3), giving a total error rate of p.
+/// This model applies different error probabilities to various quantum operations:
+/// - `p_prep`: Preparation error probability
+/// - `p_meas`: Measurement error probability
+/// - `p1`: Single-qubit gate error probability
+/// - `p2`: Two-qubit gate error probability
 ///
 /// # Usage
 ///
 /// ```rust
-/// use pecos_engines::engines::monte_carlo::MonteCarloEngine;
-/// use pecos_engines::engines::monte_carlo::engine::ExternalClassicalEngine;
-/// use pecos_engines::engines::quantum::StateVecEngine;
 /// use pecos_engines::engines::noise::DepolarizingNoise;
 /// use pecos_engines::engines::noise::NoiseModel;
+/// use pecos_core::RngManageable;
 ///
-/// // With Monte Carlo engine
-/// let classical_engine = Box::new(ExternalClassicalEngine::new());
-/// let quantum_engine = Box::new(StateVecEngine::new(2));
+/// // Create with direct constructor
+/// let mut noise_model = DepolarizingNoise::new(0.01, 0.02, 0.03, 0.04);
+/// noise_model.set_seed(42).unwrap(); // For reproducibility
 ///
-/// let mut engine = MonteCarloEngine::builder()
-///     .with_classical_engine(classical_engine)
-///     .with_quantum_engine(quantum_engine)
-///     .with_depolarizing_noise(0.01) // 1% noise rate
+/// // Or use the builder pattern
+/// let noise_model = DepolarizingNoise::builder()
+///     .with_prep_probability(0.01)
+///     .with_meas_probability(0.02)
+///     .with_single_qubit_probability(0.03)
+///     .with_two_qubit_probability(0.04)
+///     .with_seed(42)
 ///     .build();
 ///
-/// // Directly
-/// let mut noise_model = DepolarizingNoise::new(0.05); // 5% error rate
-/// noise_model.set_seed(42).unwrap(); // For reproducibility
+/// // Or use uniform probability
+/// let noise_model = DepolarizingNoise::builder()
+///     .with_uniform_probability(0.01)
+///     .build();
 /// ```
 #[derive(Clone)]
 pub struct DepolarizingNoise {
-    /// Probability of applying a random Pauli error
-    probability: f64,
-    /// Shared random number generator
-    rng: Arc<Mutex<ChaCha8Rng>>,
+    /// Probability of applying an error during preparation
+    p_prep: f64,
+    /// Probability of applying an error during measurement
+    p_meas: f64,
+    /// Probability of applying an error after single-qubit gates
+    p1: f64,
+    /// Probability of applying an error after two-qubit gates
+    p2: f64,
+    /// Random number generator
+    rng: NoiseRng,
 }
 
-impl DepolarizingNoise {
-    /// Create a new depolarizing noise model with the given probability
-    /// of applying a random Pauli error.
-    #[must_use]
-    pub fn new(probability: f64) -> Self {
-        Self::new_with_options(probability)
-    }
+impl ProbabilityValidator for DepolarizingNoise {}
 
-    /// Create a new depolarizing noise model with the given probability.
-    ///
-    /// # Arguments
-    /// * `probability` - Probability of applying a random Pauli error
-    ///
-    /// # Note
-    /// To set a specific seed for deterministic behavior, use the `set_seed` method
-    /// after creating the noise model.
+impl DepolarizingNoise {
+    /// Create a new depolarizing noise model with the given probabilities
     #[must_use]
-    pub fn new_with_options(probability: f64) -> Self {
-        // Create an RNG from entropy (for non-deterministic behavior by default)
-        let rng = ChaCha8Rng::from_os_rng();
+    pub fn new(p_prep: f64, p_meas: f64, p1: f64, p2: f64) -> Self {
+        // Validate all probabilities
+        Self::validate_probability(p_prep);
+        Self::validate_probability(p_meas);
+        Self::validate_probability(p1);
+        Self::validate_probability(p2);
 
         Self {
-            probability,
-            rng: Arc::new(Mutex::new(rng)),
+            p_prep,
+            p_meas,
+            p1,
+            p2,
+            rng: NoiseRng::new(),
         }
     }
 
-    /// Set the probability of applying a random Pauli error
-    ///
-    /// # Arguments
-    ///
-    /// * `probability` - New probability value (between 0.0 and 1.0)
-    ///
-    /// # Panics
-    ///
-    /// Panics if the probability is not between 0 and 1.
-    pub fn set_probability(&mut self, probability: f64) {
-        assert!(
-            (0.0..=1.0).contains(&probability),
-            "Probability must be between 0 and 1"
-        );
-        self.probability = probability;
-    }
-
-    /// Get the current probability of applying a random Pauli error
+    /// Create a new noise model with uniform probability for all error types
     #[must_use]
-    pub fn probability(&self) -> f64 {
-        self.probability
+    pub fn new_uniform(probability: f64) -> Self {
+        Self::new(probability, probability, probability, probability)
     }
 
     /// Create a new builder for the depolarizing noise model
@@ -121,96 +98,198 @@ impl DepolarizingNoise {
         DepolarizingNoiseBuilder::new()
     }
 
+    /// Set all probabilities of error
+    pub fn set_probabilities(&mut self, p_prep: f64, p_meas: f64, p1: f64, p2: f64) {
+        Self::validate_probability(p_prep);
+        Self::validate_probability(p_meas);
+        Self::validate_probability(p1);
+        Self::validate_probability(p2);
+
+        self.p_prep = p_prep;
+        self.p_meas = p_meas;
+        self.p1 = p1;
+        self.p2 = p2;
+    }
+
+    /// Set a uniform probability for all error types
+    pub fn set_uniform_probability(&mut self, probability: f64) {
+        self.set_probabilities(probability, probability, probability, probability);
+    }
+
+    /// Get the current error probabilities
+    #[must_use]
+    pub fn probabilities(&self) -> (f64, f64, f64, f64) {
+        (self.p_prep, self.p_meas, self.p1, self.p2)
+    }
+
     /// Apply noise to a list of quantum gates
     fn apply_noise_to_gates(&self, gates: &[QuantumGate]) -> ByteMessage {
-        // Create a new message builder
-        let mut builder = ByteMessageBuilder::new();
-        let _ = builder.for_quantum_operations();
+        let mut builder = NoiseUtils::create_quantum_builder();
 
-        // Process each gate
         for gate in gates {
-            // First, add the original gate to the message
             match gate.gate_type {
-                GateType::X => {
-                    builder.add_x(&gate.qubits);
+                GateType::X | GateType::Y | GateType::Z | GateType::H | GateType::R1XY => {
+                    NoiseUtils::add_gate_to_builder(&mut builder, gate);
+                    trace!("Applying single-qubit gate with possible fault");
+                    self.apply_sq_faults(&mut builder, gate);
                 }
-                GateType::Y => {
-                    builder.add_y(&gate.qubits);
-                }
-                GateType::Z => {
-                    builder.add_z(&gate.qubits);
-                }
-                GateType::H => {
-                    builder.add_h(&gate.qubits);
-                }
-                GateType::CX => {
-                    if gate.qubits.len() >= 2 {
-                        builder.add_cx(&[gate.qubits[0]], &[gate.qubits[1]]);
-                    }
-                }
-                GateType::RZZ => {
-                    if gate.qubits.len() >= 2 {
-                        builder.add_rzz(gate.params[0], &[gate.qubits[0]], &[gate.qubits[1]]);
-                    }
-                }
-                GateType::SZZ => {
-                    if gate.qubits.len() >= 2 {
-                        builder.add_szz(&[gate.qubits[0]], &[gate.qubits[1]]);
-                    }
+                GateType::CX | GateType::RZZ | GateType::SZZ => {
+                    NoiseUtils::add_gate_to_builder(&mut builder, gate);
+                    trace!("Applying two-qubit gate with possible fault");
+                    self.apply_tq_faults(&mut builder, gate);
                 }
                 GateType::RZ => {
-                    if !gate.params.is_empty() {
-                        builder.add_rz(gate.params[0], &gate.qubits);
-                    }
-                }
-                GateType::R1XY => {
-                    if gate.params.len() >= 2 {
-                        builder.add_r1xy(gate.params[0], gate.params[1], &gate.qubits);
-                    }
+                    NoiseUtils::add_gate_to_builder(&mut builder, gate);
                 }
                 GateType::Measure => {
-                    if !gate.qubits.is_empty() && gate.result_id.is_some() {
-                        builder.add_measurements(&gate.qubits, &[gate.result_id.unwrap()]);
-                    }
+                    trace!("Applying measurement with possible fault");
+                    self.apply_meas_faults(&mut builder, gate);
+                    NoiseUtils::add_gate_to_builder(&mut builder, gate);
                 }
                 GateType::Prep => {
-                    builder.add_prep(&gate.qubits);
-                }
-            }
-
-            // Apply gate error with probability `self.probability`
-            let mut rng = self.rng.lock().unwrap();
-            if rng.random::<f64>() < self.probability {
-                // Choose a random error type (X, Y, or Z)
-                let error_type = rng.random_range(0..3);
-                match error_type {
-                    0 => {
-                        trace!("Applying X noise to qubit {}", gate.qubits[0]);
-                        builder.add_x(&[gate.qubits[0]]);
-                    }
-                    1 => {
-                        trace!("Applying Y noise to qubit {}", gate.qubits[0]);
-                        builder.add_y(&[gate.qubits[0]]);
-                    }
-                    _ => {
-                        trace!("Applying Z noise to qubit {}", gate.qubits[0]);
-                        builder.add_z(&[gate.qubits[0]]);
-                    }
+                    NoiseUtils::add_gate_to_builder(&mut builder, gate);
+                    trace!("Applying preparation with possible fault");
+                    self.apply_prep_faults(&mut builder, gate);
                 }
             }
         }
 
         builder.build()
     }
-}
 
-impl crate::engines::noise::NoiseModel for DepolarizingNoise {
-    fn set_seed(&mut self, seed: u64) -> Result<(), QueueError> {
-        // Use the RngManageable trait's set_rng method to set the seed
-        RngManageable::set_rng(self, ChaCha8Rng::seed_from_u64(seed))
-            .map_err(|e| QueueError::OperationError(e.to_string()))
+    fn apply_prep_faults(&self, builder: &mut ByteMessageBuilder, gate: &QuantumGate) {
+        if self.rng.occurs(self.p_prep) {
+            trace!("Applying prep fault on qubits {:?}", gate.qubits);
+            NoiseUtils::apply_x(builder, gate.qubits[0]);
+        }
     }
 
+    fn apply_meas_faults(&self, builder: &mut ByteMessageBuilder, gate: &QuantumGate) {
+        if self.rng.occurs(self.p_meas) {
+            trace!("Applying meas fault on qubits {:?}", gate.qubits);
+            NoiseUtils::apply_x(builder, gate.qubits[0]);
+        }
+    }
+
+    fn apply_sq_faults(&self, builder: &mut ByteMessageBuilder, gate: &QuantumGate) {
+        if self.rng.occurs(self.p1) {
+            let fault_type = self.rng.random_int(0..3);
+            let qubit = gate.qubits[0];
+
+            match fault_type {
+                0 => {
+                    trace!("Applying X fault on qubit {}", qubit);
+                    NoiseUtils::apply_x(builder, qubit);
+                }
+                1 => {
+                    trace!("Applying Y fault on qubit {}", qubit);
+                    NoiseUtils::apply_y(builder, qubit);
+                }
+                _ => {
+                    trace!("Applying Z fault on qubit {}", qubit);
+                    NoiseUtils::apply_z(builder, qubit);
+                }
+            }
+        }
+    }
+
+    fn apply_tq_faults(&self, builder: &mut ByteMessageBuilder, gate: &QuantumGate) {
+        if self.rng.occurs(self.p2) {
+            let fault_type = self.rng.random_int(0..15);
+            let qubit0 = gate.qubits[0];
+            let qubit1 = gate.qubits[1];
+
+            match fault_type {
+                // IX
+                0 => {
+                    trace!("Applying IX fault on qubits {:?}", gate.qubits);
+                    NoiseUtils::apply_x(builder, qubit1);
+                }
+                // IY
+                1 => {
+                    trace!("Applying IY fault on qubits {:?}", gate.qubits);
+                    NoiseUtils::apply_y(builder, qubit1);
+                }
+                // IZ
+                2 => {
+                    trace!("Applying IZ fault on qubits {:?}", gate.qubits);
+                    NoiseUtils::apply_z(builder, qubit1);
+                }
+                // XI
+                3 => {
+                    trace!("Applying XI fault on qubits {:?}", gate.qubits);
+                    NoiseUtils::apply_x(builder, qubit0);
+                }
+                // XX
+                4 => {
+                    trace!("Applying XX fault on qubits {:?}", gate.qubits);
+                    NoiseUtils::apply_x(builder, qubit0);
+                    NoiseUtils::apply_x(builder, qubit1);
+                }
+                // XY
+                5 => {
+                    trace!("Applying XY fault on qubits {:?}", gate.qubits);
+                    NoiseUtils::apply_x(builder, qubit0);
+                    NoiseUtils::apply_y(builder, qubit1);
+                }
+                // XZ
+                6 => {
+                    trace!("Applying XZ fault on qubits {:?}", gate.qubits);
+                    NoiseUtils::apply_x(builder, qubit0);
+                    NoiseUtils::apply_z(builder, qubit1);
+                }
+                // YI
+                7 => {
+                    trace!("Applying YI fault on qubits {:?}", gate.qubits);
+                    NoiseUtils::apply_y(builder, qubit0);
+                }
+                // YX
+                8 => {
+                    trace!("Applying YX fault on qubits {:?}", gate.qubits);
+                    NoiseUtils::apply_y(builder, qubit0);
+                    NoiseUtils::apply_x(builder, qubit1);
+                }
+                // YY
+                9 => {
+                    trace!("Applying YY fault on qubits {:?}", gate.qubits);
+                    NoiseUtils::apply_y(builder, qubit0);
+                    NoiseUtils::apply_y(builder, qubit1);
+                }
+                // YZ
+                10 => {
+                    trace!("Applying YZ fault on qubits {:?}", gate.qubits);
+                    NoiseUtils::apply_y(builder, qubit0);
+                    NoiseUtils::apply_z(builder, qubit1);
+                }
+                // ZI
+                11 => {
+                    trace!("Applying ZI fault on qubits {:?}", gate.qubits);
+                    NoiseUtils::apply_z(builder, qubit0);
+                }
+                // ZX
+                12 => {
+                    trace!("Applying ZX fault on qubits {:?}", gate.qubits);
+                    NoiseUtils::apply_z(builder, qubit0);
+                    NoiseUtils::apply_x(builder, qubit1);
+                }
+                // ZY
+                13 => {
+                    trace!("Applying ZY fault on qubits {:?}", gate.qubits);
+                    NoiseUtils::apply_z(builder, qubit0);
+                    NoiseUtils::apply_y(builder, qubit1);
+                }
+                // ZZ
+                _ => {
+                    trace!("Applying ZZ fault on qubits {:?}", gate.qubits);
+                    NoiseUtils::apply_z(builder, qubit0);
+                    NoiseUtils::apply_z(builder, qubit1);
+                }
+            }
+        }
+    }
+}
+
+impl NoiseModel for DepolarizingNoise {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -223,55 +302,25 @@ impl crate::engines::noise::NoiseModel for DepolarizingNoise {
 impl RngManageable for DepolarizingNoise {
     type Rng = ChaCha8Rng;
 
-    /// Replace the random number generator with a new one
-    ///
-    /// This method allows replacing the RNG without recreating the entire noise model,
-    /// preserving its current configuration.
-    ///
-    /// # Arguments
-    /// * `rng` - A new random number generator
-    ///
-    /// # Returns
-    /// Result indicating success or failure
     fn set_rng(&mut self, rng: ChaCha8Rng) -> Result<(), Box<dyn std::error::Error>> {
-        self.rng = Arc::new(Mutex::new(rng));
-        Ok(())
+        self.rng.set_rng(rng)
     }
 
-    /// Get a read-only reference to the internal random number generator
-    ///
-    /// # Returns
-    /// A reference to the internal RNG
-    ///
-    /// # Panics
-    /// Panics if the mutex is poisoned
     fn rng(&self) -> &Self::Rng {
-        // Since we have the RNG behind an Arc<Mutex>, we can't return a direct reference.
-        // This is a limitation of the current design and should be reconsidered.
-        panic!(
-            "DepolarizingNoise stores its RNG behind an Arc<Mutex> and cannot return a direct reference"
-        )
+        self.rng.rng()
     }
 
-    /// Get a mutable reference to the internal random number generator
-    ///
-    /// # Returns
-    /// A mutable reference to the internal RNG
-    ///
-    /// # Panics
-    /// Panics if the mutex is poisoned
     fn rng_mut(&mut self) -> &mut Self::Rng {
-        // Since we have the RNG behind an Arc<Mutex>, we can't return a direct mutable reference.
-        // This is a limitation of the current design and should be reconsidered.
-        panic!(
-            "DepolarizingNoise stores its RNG behind an Arc<Mutex> and cannot return a direct mutable reference"
-        )
+        self.rng.rng_mut()
     }
 }
 
 /// Builder for creating depolarizing noise models
 pub struct DepolarizingNoiseBuilder {
-    probability: Option<f64>,
+    p_prep: Option<f64>,
+    p_meas: Option<f64>,
+    p1: Option<f64>,
+    p2: Option<f64>,
     seed: Option<u64>,
 }
 
@@ -286,16 +335,71 @@ impl DepolarizingNoiseBuilder {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            probability: None,
+            p_prep: None,
+            p_meas: None,
+            p1: None,
+            p2: None,
             seed: None,
         }
     }
 
-    /// Set the probability of applying a random Pauli error
+    /// Set the same probability for all error types
+    ///
+    /// This is a convenience method to set all probabilities to the same value.
+    ///
+    /// # Arguments
+    /// * `probability` - The probability value to set for all error types
     #[must_use]
-    pub fn with_probability(mut self, probability: f64) -> Self {
-        self.probability = Some(probability);
+    pub fn with_uniform_probability(mut self, probability: f64) -> Self {
+        self.p_prep = Some(probability);
+        self.p_meas = Some(probability);
+        self.p1 = Some(probability);
+        self.p2 = Some(probability);
         self
+    }
+
+    /// Set the probability of error during preparation
+    #[must_use]
+    pub fn with_prep_probability(mut self, probability: f64) -> Self {
+        self.p_prep = Some(probability);
+        self
+    }
+
+    /// Set the probability of error during measurement
+    #[must_use]
+    pub fn with_meas_probability(mut self, probability: f64) -> Self {
+        self.p_meas = Some(probability);
+        self
+    }
+
+    /// Set the probability of error after single-qubit gates
+    #[must_use]
+    pub fn with_p1_probability(mut self, probability: f64) -> Self {
+        self.p1 = Some(probability);
+        self
+    }
+
+    /// Set the probability of error after single-qubit gates
+    ///
+    /// This is an alias for `with_p1_probability` for API consistency.
+    #[must_use]
+    pub fn with_single_qubit_probability(self, probability: f64) -> Self {
+        self.with_p1_probability(probability)
+    }
+
+    /// Set the probability of error after two-qubit gates
+    #[must_use]
+    pub fn with_p2_probability(mut self, probability: f64) -> Self {
+        self.p2 = Some(probability);
+        self
+    }
+
+    /// Set the probability of error after two-qubit gates
+    ///
+    /// This is an alias for `with_p2_probability` for API consistency.
+    #[must_use]
+    pub fn with_two_qubit_probability(self, probability: f64) -> Self {
+        self.with_p2_probability(probability)
     }
 
     /// Set the seed for the random number generator
@@ -307,24 +411,25 @@ impl DepolarizingNoiseBuilder {
 
     /// Build the depolarizing noise model
     ///
-    /// # Panics
+    /// # Returns
+    /// A boxed noise model
     ///
-    /// Panics if the probability is not set or is not between 0 and 1.
+    /// # Panics
+    /// Panics if any probabilities are not set or are not between 0 and 1.
     #[must_use]
     pub fn build(self) -> Box<dyn NoiseModel> {
-        let probability = self.probability.expect("Probability must be set");
-        assert!(
-            (0.0..=1.0).contains(&probability),
-            "Probability must be between 0 and 1"
-        );
+        let p_prep = self.p_prep.expect("Preparation probability must be set");
+        let p_meas = self.p_meas.expect("Measurement probability must be set");
+        let p1 = self.p1.expect("Single-qubit probability must be set");
+        let p2 = self.p2.expect("Two-qubit probability must be set");
 
-        let mut noise = DepolarizingNoise::new_with_options(probability);
+        // Create the noise model
+        let mut noise = DepolarizingNoise::new(p_prep, p_meas, p1, p2);
 
-        // Apply the seed if specified
+        // Set the seed if provided
         if let Some(seed) = self.seed {
-            // Explicitly call the NoiseModel trait's set_seed method
-            <DepolarizingNoise as NoiseModel>::set_seed(&mut noise, seed)
-                .expect("Failed to set seed for DepolarizingNoise");
+            // Use RngManageable::set_seed directly
+            noise.set_seed(seed).expect("Failed to set seed");
         }
 
         Box::new(noise)
@@ -358,7 +463,7 @@ impl crate::engines::ControlEngine for DepolarizingNoise {
         &mut self,
         result: Self::EngineOutput,
     ) -> Result<crate::engines::EngineStage<Self::EngineInput, Self::Output>, QueueError> {
-        // Depolarizing noise doesn't modify measurement results, just pass through
+        // This noise model doesn't directly modify measurement results, just pass through
         trace!("DepolarizingNoise::continue_processing - passing through measurement results");
         Ok(crate::engines::EngineStage::Complete(result))
     }
@@ -375,41 +480,67 @@ mod tests {
     use crate::engines::{ControlEngine, EngineStage};
 
     #[test]
-    fn test_probability_getter_and_setter() {
-        // Create a noise model with initial probability
-        let mut noise = DepolarizingNoise::new(0.01);
+    fn test_probabilities_getter_and_setter() {
+        // Create a noise model with initial probabilities
+        let mut noise = DepolarizingNoise::new(0.01, 0.02, 0.03, 0.04);
 
-        // Check initial probability
-        assert!((noise.probability() - 0.01).abs() < f64::EPSILON);
+        // Check initial probabilities
+        let (p_prep, p_meas, p1, p2) = noise.probabilities();
+        assert!((p_prep - 0.01).abs() < f64::EPSILON);
+        assert!((p_meas - 0.02).abs() < f64::EPSILON);
+        assert!((p1 - 0.03).abs() < f64::EPSILON);
+        assert!((p2 - 0.04).abs() < f64::EPSILON);
 
-        // Update probability and check it was updated
-        noise.set_probability(0.05);
-        assert!((noise.probability() - 0.05).abs() < f64::EPSILON);
-
-        // Update to boundary values
-        noise.set_probability(0.0);
-        assert!((noise.probability() - 0.0).abs() < f64::EPSILON);
-
-        noise.set_probability(1.0);
-        assert!((noise.probability() - 1.0).abs() < f64::EPSILON);
+        // Update probabilities and check they were updated
+        noise.set_probabilities(0.05, 0.06, 0.07, 0.08);
+        let (p_prep, p_meas, p1, p2) = noise.probabilities();
+        assert!((p_prep - 0.05).abs() < f64::EPSILON);
+        assert!((p_meas - 0.06).abs() < f64::EPSILON);
+        assert!((p1 - 0.07).abs() < f64::EPSILON);
+        assert!((p2 - 0.08).abs() < f64::EPSILON);
     }
 
     #[test]
-    #[should_panic(expected = "Probability must be between 0 and 1")]
+    fn test_uniform_probability() {
+        // Test the uniform probability constructor
+        let noise = DepolarizingNoise::new_uniform(0.05);
+        let (p_prep, p_meas, p1, p2) = noise.probabilities();
+        assert!((p_prep - 0.05).abs() < f64::EPSILON);
+        assert!((p_meas - 0.05).abs() < f64::EPSILON);
+        assert!((p1 - 0.05).abs() < f64::EPSILON);
+        assert!((p2 - 0.05).abs() < f64::EPSILON);
+
+        // Test the uniform probability setter
+        let mut noise = DepolarizingNoise::new(0.01, 0.02, 0.03, 0.04);
+        noise.set_uniform_probability(0.07);
+        let (p_prep, p_meas, p1, p2) = noise.probabilities();
+        assert!((p_prep - 0.07).abs() < f64::EPSILON);
+        assert!((p_meas - 0.07).abs() < f64::EPSILON);
+        assert!((p1 - 0.07).abs() < f64::EPSILON);
+        assert!((p2 - 0.07).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    #[should_panic(expected = "Probability must be between 0.0 and 1.0")]
     fn test_invalid_probability_panics() {
-        let mut noise = DepolarizingNoise::new(0.5);
-        noise.set_probability(1.1); // Should panic
+        let mut noise = DepolarizingNoise::new(0.1, 0.2, 0.3, 0.4);
+        noise.set_probabilities(0.1, 0.2, 1.1, 0.4); // Should panic
     }
 
     #[test]
-    fn test_builder_with_probability() {
+    fn test_builder() {
         // Create a noise model with the builder
-        let mut noise = DepolarizingNoise::builder().with_probability(0.3).build();
+        let mut noise = DepolarizingNoise::builder()
+            .with_prep_probability(0.1)
+            .with_meas_probability(0.2)
+            .with_p1_probability(0.3)
+            .with_p2_probability(0.4)
+            .build();
 
-        // Create a direct instance with the same probability
-        let mut direct_noise = DepolarizingNoise::new(0.3);
+        // Create a direct instance with the same probabilities
+        let mut direct_noise = DepolarizingNoise::new(0.1, 0.2, 0.3, 0.4);
 
-        // Create a simple quantum operations message for testing
+        // Create a simple message for testing
         let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_quantum_operations();
         builder.add_x(&[0]);
@@ -436,9 +567,32 @@ mod tests {
     }
 
     #[test]
+    fn test_builder_with_uniform_probability() {
+        // Create a noise model with the builder using uniform probability
+        let noise = DepolarizingNoise::builder()
+            .with_uniform_probability(0.05)
+            .build();
+
+        // Create a direct instance with the same uniform probability
+        let direct_noise = DepolarizingNoise::new_uniform(0.05);
+
+        // Check that probabilities match
+        let (p_prep1, p_meas1, p1_1, p2_1) = direct_noise.probabilities();
+
+        // Get the boxed noise model's probabilities using any_ref downcast
+        let noise_ref = noise.as_any().downcast_ref::<DepolarizingNoise>().unwrap();
+        let (p_prep2, p_meas2, p1_2, p2_2) = noise_ref.probabilities();
+
+        assert!((p_prep1 - p_prep2).abs() < f64::EPSILON);
+        assert!((p_meas1 - p_meas2).abs() < f64::EPSILON);
+        assert!((p1_1 - p1_2).abs() < f64::EPSILON);
+        assert!((p2_1 - p2_2).abs() < f64::EPSILON);
+    }
+
+    #[test]
     fn test_as_any_methods() {
         // Create a noise model
-        let mut noise = DepolarizingNoise::new(0.01);
+        let mut noise = DepolarizingNoise::new(0.1, 0.2, 0.3, 0.4);
 
         // Test as_any for type checking
         assert!(noise.as_any().is::<DepolarizingNoise>());
@@ -448,21 +602,51 @@ mod tests {
             .as_any_mut()
             .downcast_mut::<DepolarizingNoise>()
             .unwrap();
-        downcast_noise.set_probability(0.05);
-        assert!((noise.probability() - 0.05).abs() < f64::EPSILON);
+        downcast_noise.set_probabilities(0.5, 0.5, 0.5, 0.5);
 
-        // Test with boxed trait object
-        let mut boxed_noise: Box<dyn NoiseModel> = Box::new(DepolarizingNoise::new(0.01));
-        assert!(boxed_noise.as_any().is::<DepolarizingNoise>());
+        let (p_prep, p_meas, p1, p2) = noise.probabilities();
+        assert!((p_prep - 0.5).abs() < f64::EPSILON);
+        assert!((p_meas - 0.5).abs() < f64::EPSILON);
+        assert!((p1 - 0.5).abs() < f64::EPSILON);
+        assert!((p2 - 0.5).abs() < f64::EPSILON);
+    }
 
-        // Downcast and modify through the boxed trait object
-        let downcast_boxed = boxed_noise
-            .as_any_mut()
-            .downcast_mut::<DepolarizingNoise>()
-            .unwrap();
-        downcast_boxed.set_probability(0.05);
+    #[test]
+    fn test_builder_with_probability() {
+        // Create a noise model with the builder
+        let mut noise = DepolarizingNoise::builder()
+            .with_prep_probability(0.01)
+            .with_meas_probability(0.02)
+            .with_p1_probability(0.03)
+            .with_p2_probability(0.04)
+            .build();
 
-        // Verify that we can't downcast to a different type
-        assert!(boxed_noise.as_any_mut().downcast_mut::<String>().is_none());
+        // Create a direct instance with the same probabilities
+        let mut direct_noise = DepolarizingNoise::new(0.01, 0.02, 0.03, 0.04);
+
+        // Create a simple quantum operations message for testing
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_quantum_operations();
+        builder.add_x(&[0]);
+        let input = builder.build();
+
+        // Process using the ControlEngine API instead of the old apply_noise method
+        let result1 = noise
+            .start(input.clone())
+            .expect("Builder-created noise model failed");
+        let result2 = direct_noise
+            .start(input)
+            .expect("Directly created noise model failed");
+
+        // Verify we got a valid result that needs processing
+        match result1 {
+            EngineStage::NeedsProcessing(_) => (),
+            EngineStage::Complete(_) => panic!("Expected NeedsProcessing stage"),
+        }
+
+        match result2 {
+            EngineStage::NeedsProcessing(_) => (),
+            EngineStage::Complete(_) => panic!("Expected NeedsProcessing stage"),
+        }
     }
 }

@@ -11,28 +11,48 @@
 // the License.
 
 use crate::byte_message::ByteMessage;
-use crate::engines::noise::{BaseNoiseModel, NoiseModel};
+use crate::engines::noise::{NoiseModel, NoiseRng, ProbabilityValidator};
 use crate::engines::{ControlEngine, EngineStage};
 use crate::errors::QueueError;
 use pecos_core::RngManageable;
 use rand_chacha::ChaCha8Rng;
 use std::any::Any;
-use std::ops::RangeInclusive;
 
 /// A noise model that biases qubit measurements
 ///
 /// This noise model introduces bias to measurement results, changing
 /// the probability of measuring 0 vs 1. It leaves quantum operations
 /// unchanged.
+///
+/// # Usage
+///
+/// ```rust
+/// use pecos_engines::engines::noise::BiasedMeasurementNoise;
+/// use pecos_engines::engines::noise::NoiseModel;
+/// use pecos_core::RngManageable;
+///
+/// // Create directly
+/// let mut noise_model = BiasedMeasurementNoise::new(0.01, 0.02);
+/// noise_model.set_seed(42).unwrap(); // For reproducibility
+///
+/// // Or use builder pattern
+/// let noise_model = BiasedMeasurementNoise::builder()
+///     .with_prob_flip_from_0(0.01)
+///     .with_prob_flip_from_1(0.02)
+///     .with_seed(42)
+///     .build();
+/// ```
 #[derive(Clone)]
 pub struct BiasedMeasurementNoise {
     /// The probability of flipping a 0 measurement to 1
     prob_flip_from_0: f64,
     /// The probability of flipping a 1 measurement to 0
     prob_flip_from_1: f64,
-    /// Base noise model implementation
-    base: BaseNoiseModel,
+    /// Random number generator
+    rng: NoiseRng,
 }
+
+impl ProbabilityValidator for BiasedMeasurementNoise {}
 
 impl BiasedMeasurementNoise {
     /// Creates a new biased measurement noise model
@@ -45,14 +65,14 @@ impl BiasedMeasurementNoise {
     /// Panics if either probability is not in the range [0, 1]
     #[must_use]
     pub fn new(prob_flip_from_0: f64, prob_flip_from_1: f64) -> Self {
-        // Validate the probabilities
-        Self::validate_probability(prob_flip_from_0, "prob_flip_from_0");
-        Self::validate_probability(prob_flip_from_1, "prob_flip_from_1");
+        // Validate probabilities
+        Self::validate_named_probability(prob_flip_from_0, "prob_flip_from_0");
+        Self::validate_named_probability(prob_flip_from_1, "prob_flip_from_1");
 
         Self {
             prob_flip_from_0,
             prob_flip_from_1,
-            base: BaseNoiseModel::new(),
+            rng: NoiseRng::new(),
         }
     }
 
@@ -67,40 +87,30 @@ impl BiasedMeasurementNoise {
     /// Panics if either probability is not in the range [0, 1]
     #[must_use]
     pub fn with_seed(prob_flip_from_0: f64, prob_flip_from_1: f64, seed: u64) -> Self {
-        // Validate the probabilities
-        Self::validate_probability(prob_flip_from_0, "prob_flip_from_0");
-        Self::validate_probability(prob_flip_from_1, "prob_flip_from_1");
+        // Validate probabilities
+        Self::validate_named_probability(prob_flip_from_0, "prob_flip_from_0");
+        Self::validate_named_probability(prob_flip_from_1, "prob_flip_from_1");
 
         Self {
             prob_flip_from_0,
             prob_flip_from_1,
-            base: BaseNoiseModel::with_seed(seed),
+            rng: NoiseRng::with_seed(seed),
         }
     }
 
-    /// Validate that a probability is between 0.0 and 1.0
-    ///
-    /// # Arguments
-    /// * `probability` - The probability value to validate
-    /// * `name` - Name of the probability for error reporting
-    ///
-    /// # Panics
-    /// Panics if the probability is not between 0.0 and 1.0
-    fn validate_probability(probability: f64, name: &str) {
-        let valid_range: RangeInclusive<f64> = 0.0..=1.0;
-        assert!(
-            valid_range.contains(&probability),
-            "Probability {name} must be between 0.0 and 1.0, but was {probability}"
-        );
+    /// Create a new builder for the biased measurement noise model
+    #[must_use]
+    pub fn builder() -> BiasedMeasurementNoiseBuilder {
+        BiasedMeasurementNoiseBuilder::new()
     }
 
-    /// Get the probability of flipping a 0 measurement to 1
+    /// Get the probability of flipping a 0 measurement to a 1
     #[must_use]
     pub fn prob_flip_from_0(&self) -> f64 {
         self.prob_flip_from_0
     }
 
-    /// Get the probability of flipping a 1 measurement to 0
+    /// Get the probability of flipping a 1 measurement to a 0
     #[must_use]
     pub fn prob_flip_from_1(&self) -> f64 {
         self.prob_flip_from_1
@@ -118,10 +128,10 @@ impl BiasedMeasurementNoise {
         // Generate a random number to determine if we should flip
         let should_flip = if outcome == 0 {
             // Flip from 0 to 1 with probability prob_flip_from_0
-            self.base.rng().random_float() < self.prob_flip_from_0
+            self.rng.occurs(self.prob_flip_from_0)
         } else {
             // Flip from 1 to 0 with probability prob_flip_from_1
-            self.base.rng().random_float() < self.prob_flip_from_1
+            self.rng.occurs(self.prob_flip_from_1)
         };
 
         if should_flip {
@@ -169,6 +179,83 @@ impl BiasedMeasurementNoise {
     }
 }
 
+/// Builder for creating biased measurement noise models
+pub struct BiasedMeasurementNoiseBuilder {
+    /// The probability of flipping a 0 measurement to 1
+    prob_flip_from_0: Option<f64>,
+    /// The probability of flipping a 1 measurement to 0
+    prob_flip_from_1: Option<f64>,
+    /// Optional seed for the RNG
+    seed: Option<u64>,
+}
+
+impl Default for BiasedMeasurementNoiseBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl BiasedMeasurementNoiseBuilder {
+    /// Create a new builder
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            prob_flip_from_0: None,
+            prob_flip_from_1: None,
+            seed: None,
+        }
+    }
+
+    /// Set the probability of flipping a 0 measurement to 1
+    #[must_use]
+    pub fn with_prob_flip_from_0(mut self, probability: f64) -> Self {
+        self.prob_flip_from_0 = Some(probability);
+        self
+    }
+
+    /// Set the probability of flipping a 1 measurement to 0
+    #[must_use]
+    pub fn with_prob_flip_from_1(mut self, probability: f64) -> Self {
+        self.prob_flip_from_1 = Some(probability);
+        self
+    }
+
+    /// Set the seed for the random number generator
+    #[must_use]
+    pub fn with_seed(mut self, seed: u64) -> Self {
+        self.seed = Some(seed);
+        self
+    }
+
+    /// Build the biased measurement noise model
+    ///
+    /// # Returns
+    /// A boxed noise model
+    ///
+    /// # Panics
+    /// Panics if probabilities are not set or are not between 0 and 1.
+    #[must_use]
+    pub fn build(self) -> Box<dyn NoiseModel> {
+        let prob_flip_from_0 = self
+            .prob_flip_from_0
+            .expect("Probability of flipping from 0 to 1 must be set");
+        let prob_flip_from_1 = self
+            .prob_flip_from_1
+            .expect("Probability of flipping from 1 to 0 must be set");
+
+        // Create the noise model
+        let mut noise = BiasedMeasurementNoise::new(prob_flip_from_0, prob_flip_from_1);
+
+        // Set the seed if provided
+        if let Some(seed) = self.seed {
+            // Use RngManageable::set_seed directly
+            noise.set_seed(seed).expect("Failed to set seed");
+        }
+
+        Box::new(noise)
+    }
+}
+
 impl ControlEngine for BiasedMeasurementNoise {
     type Input = ByteMessage;
     type Output = ByteMessage;
@@ -199,13 +286,6 @@ impl ControlEngine for BiasedMeasurementNoise {
 }
 
 impl NoiseModel for BiasedMeasurementNoise {
-    fn set_seed(&mut self, seed: u64) -> Result<(), QueueError> {
-        // Get a mutable reference to the NoiseRng to call set_seed
-        let mut rng = self.base.rng().clone();
-        rng.set_seed(seed)?;
-        Ok(())
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -218,17 +298,75 @@ impl NoiseModel for BiasedMeasurementNoise {
 impl RngManageable for BiasedMeasurementNoise {
     type Rng = ChaCha8Rng;
 
-    fn set_rng(&mut self, rng: Self::Rng) -> Result<(), Box<dyn std::error::Error>> {
-        self.base.set_rng(rng)
+    fn set_rng(&mut self, rng: ChaCha8Rng) -> Result<(), Box<dyn std::error::Error>> {
+        self.rng.set_rng(rng)
     }
 
     fn rng(&self) -> &Self::Rng {
-        // Call BaseNoiseModel's RngManageable::rng() method
-        <BaseNoiseModel as RngManageable>::rng(&self.base)
+        // Delegate to the NoiseRng implementation
+        self.rng.rng()
     }
 
     fn rng_mut(&mut self) -> &mut Self::Rng {
-        // Call BaseNoiseModel's RngManageable::rng_mut() method
-        <BaseNoiseModel as RngManageable>::rng_mut(&mut self.base)
+        // Delegate to the NoiseRng implementation
+        self.rng.rng_mut()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_builder_pattern() {
+        // Create with builder
+        let noise1 = BiasedMeasurementNoise::builder()
+            .with_prob_flip_from_0(0.1)
+            .with_prob_flip_from_1(0.2)
+            .with_seed(42)
+            .build();
+
+        // Create directly
+        let noise2 = BiasedMeasurementNoise::with_seed(0.1, 0.2, 42);
+
+        // Verify the builder works by checking they produce the same randomness sequence
+        let noise1_ref = noise1
+            .as_any()
+            .downcast_ref::<BiasedMeasurementNoise>()
+            .unwrap();
+
+        for _ in 0..10 {
+            let flip_test = noise1_ref.apply_bias_to_measurement(0, 0);
+            let flip_test2 = noise2.apply_bias_to_measurement(0, 0);
+            assert_eq!(flip_test, flip_test2);
+        }
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Probability prob_flip_from_0 must be between 0.0 and 1.0, but was 1.1"
+    )]
+    fn test_invalid_probability() {
+        let _ = BiasedMeasurementNoise::new(1.1, 0.5);
+    }
+
+    #[test]
+    fn test_apply_bias() {
+        let mut noise = BiasedMeasurementNoise::new(1.0, 0.0);
+
+        // With prob_flip_from_0 = 1.0, all 0s should be flipped to 1s
+        assert_eq!(noise.apply_bias_to_measurement(0, 0), (0, 1));
+
+        // With prob_flip_from_1 = 0.0, all 1s should remain 1s
+        assert_eq!(noise.apply_bias_to_measurement(0, 1), (0, 1));
+
+        // Test with different probabilities
+        noise = BiasedMeasurementNoise::new(0.0, 1.0);
+
+        // With prob_flip_from_0 = 0.0, all 0s should remain 0s
+        assert_eq!(noise.apply_bias_to_measurement(0, 0), (0, 0));
+
+        // With prob_flip_from_1 = 1.0, all 1s should be flipped to 0s
+        assert_eq!(noise.apply_bias_to_measurement(0, 1), (0, 0));
     }
 }

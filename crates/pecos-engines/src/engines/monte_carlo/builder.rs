@@ -237,7 +237,7 @@ impl MonteCarloEngineBuilder {
     /// The builder for method chaining
     #[must_use]
     pub fn with_depolarizing_noise(self, probability: f64) -> Self {
-        self.with_noise_model(Box::new(DepolarizingNoise::new_with_options(probability)))
+        self.with_noise_model(Box::new(DepolarizingNoise::new_uniform(probability)))
     }
 
     /// Set the quantum system

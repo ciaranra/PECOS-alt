@@ -1,6 +1,6 @@
 use pecos_engines::byte_message::ByteMessage;
 use pecos_engines::engines::quantum::StateVecEngine;
-use pecos_engines::{Engine, GeneralDepolarizingNoise};
+use pecos_engines::{DepolarizingNoise, Engine};
 use pecos_engines::{EngineSystem, QuantumSystem};
 
 fn main() {
@@ -12,7 +12,7 @@ fn main() {
         .build();
 
     let quantum = Box::new(StateVecEngine::new(2));
-    let noise = Box::new(GeneralDepolarizingNoise::new(0.1, 0.1, 0.1, 0.1));
+    let noise = Box::new(DepolarizingNoise::new(0.1, 0.1, 0.1, 0.1));
 
     let mut system = QuantumSystem::new(noise, quantum);
 
