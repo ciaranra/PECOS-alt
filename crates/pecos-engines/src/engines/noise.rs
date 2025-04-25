@@ -6,12 +6,14 @@
 
 pub mod biased_measurement;
 pub mod depolarizing;
+pub mod general;
 pub mod pass_through;
 pub mod utils;
 
-pub use biased_measurement::BiasedMeasurementNoise;
-pub use depolarizing::DepolarizingNoise;
-pub use pass_through::PassThroughNoise;
+pub use biased_measurement::BiasedMeasurementNoiseModel;
+pub use depolarizing::DepolarizingNoiseModel;
+pub use general::GeneralNoiseModel;
+pub use pass_through::PassThroughNoiseModel;
 pub use utils::{NoiseRng, NoiseUtils, ProbabilityValidator};
 
 use crate::byte_message::ByteMessage;
@@ -171,12 +173,12 @@ mod base_tests {
 mod tests {
     use super::*;
     use crate::byte_message::ByteMessageBuilder;
-    use crate::engines::noise::biased_measurement::BiasedMeasurementNoise;
+    use crate::engines::noise::biased_measurement::BiasedMeasurementNoiseModel;
 
     #[test]
     fn test_noise_model_biased_measurement() {
         // Create a biased measurement noise model
-        let mut noise_model = BiasedMeasurementNoise::new(0.1, 0.2);
+        let mut noise_model = BiasedMeasurementNoiseModel::new(0.1, 0.2);
 
         // Create a quantum operation message
         let mut builder = ByteMessageBuilder::new();
@@ -222,7 +224,7 @@ mod tests {
     #[test]
     fn test_noise_model_depolarizing() {
         // Create a depolarizing noise model
-        let mut noise_model = DepolarizingNoise::new_uniform(0.1);
+        let mut noise_model = DepolarizingNoiseModel::new_uniform(0.1);
 
         // Create a quantum operation message
         let mut builder = ByteMessageBuilder::new();

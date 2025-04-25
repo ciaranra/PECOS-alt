@@ -1,5 +1,5 @@
 use crate::byte_message::ByteMessage;
-use crate::engines::noise::{NoiseModel, PassThroughNoise};
+use crate::engines::noise::{NoiseModel, PassThroughNoiseModel};
 use crate::engines::quantum::QuantumEngine;
 use crate::engines::{Engine, EngineSystem};
 use crate::errors::QueueError;
@@ -18,11 +18,11 @@ use std::fmt::Debug;
 ///
 /// ```
 /// use pecos_engines::engines::quantum_system::QuantumSystem;
-/// use pecos_engines::engines::noise::depolarizing::DepolarizingNoise;
+/// use pecos_engines::engines::noise::depolarizing::DepolarizingNoiseModel;
 /// use pecos_engines::engines::quantum::StateVecEngine;
 ///
 /// // Create a quantum system with 2 qubits
-/// let noise_model = DepolarizingNoise::new_uniform(0.01);
+/// let noise_model = DepolarizingNoiseModel::new_uniform(0.01);
 /// let engine = StateVecEngine::new(2);
 /// let system = QuantumSystem::new(Box::new(noise_model), Box::new(engine));
 /// ```
@@ -61,7 +61,7 @@ impl QuantumSystem {
     /// A new `QuantumSystem` with the specified engine and a pass-through noise model
     #[must_use]
     pub fn new_without_noise(quantum_engine: Box<dyn QuantumEngine>) -> Self {
-        Self::new(Box::new(PassThroughNoise), quantum_engine)
+        Self::new(Box::new(PassThroughNoiseModel), quantum_engine)
     }
 
     /// Set a specific seed for all components of the quantum system
@@ -206,7 +206,7 @@ mod tests {
     use super::*;
     use crate::byte_message::ByteMessageBuilder;
     use crate::engines::ControlEngine;
-    use crate::engines::noise::{DepolarizingNoise, PassThroughNoise};
+    use crate::engines::noise::{DepolarizingNoiseModel, PassThroughNoiseModel};
     use crate::engines::quantum::StateVecEngine;
 
     // Note: QuantumSystem implements EngineSystem and uses the blanket implementation
@@ -231,7 +231,7 @@ mod tests {
 
         // Create a QuantumSystem with depolarizing noise
         QuantumSystem::new(
-            Box::new(DepolarizingNoise::new_uniform(probability)),
+            Box::new(DepolarizingNoiseModel::new_uniform(probability)),
             quantum_engine,
         )
     }
@@ -260,7 +260,7 @@ mod tests {
 
         let mut system = // Create a QuantumSystem with depolarizing noise
         QuantumSystem::new(
-            Box::new(DepolarizingNoise::new_uniform(probability)),
+            Box::new(DepolarizingNoiseModel::new_uniform(probability)),
             quantum_engine,
         );
 
@@ -279,7 +279,7 @@ mod tests {
 
         // Get a reference to the noise model and verify it's a DepolarizingNoise
         let noise_model = system.noise_model();
-        assert!(noise_model.as_any().is::<DepolarizingNoise>());
+        assert!(noise_model.as_any().is::<DepolarizingNoiseModel>());
 
         // Create a simple quantum circuit with an X gate on qubit 0
         let mut builder = ByteMessageBuilder::new();
@@ -296,7 +296,7 @@ mod tests {
         if let Some(depolarizing_noise) = system
             .noise_model_mut()
             .as_any_mut()
-            .downcast_mut::<DepolarizingNoise>()
+            .downcast_mut::<DepolarizingNoiseModel>()
         {
             depolarizing_noise.set_uniform_probability(0.05);
         } else {
@@ -320,13 +320,13 @@ mod tests {
             system_without_noise
                 .noise_model()
                 .as_any()
-                .is::<PassThroughNoise>()
+                .is::<PassThroughNoiseModel>()
         );
         assert!(
             !system_without_noise
                 .noise_model()
                 .as_any()
-                .is::<DepolarizingNoise>()
+                .is::<DepolarizingNoiseModel>()
         );
 
         // Attempt to downcast to DepolarizingNoise should fail
@@ -334,7 +334,7 @@ mod tests {
             system_without_noise
                 .noise_model_mut()
                 .as_any_mut()
-                .downcast_mut::<DepolarizingNoise>()
+                .downcast_mut::<DepolarizingNoiseModel>()
                 .is_none()
         );
     }

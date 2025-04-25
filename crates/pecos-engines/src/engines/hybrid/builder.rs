@@ -11,7 +11,7 @@
 // the License.
 
 use super::engine::HybridEngine;
-use crate::engines::noise::{DepolarizingNoise, NoiseModel, PassThroughNoise};
+use crate::engines::noise::{DepolarizingNoiseModel, NoiseModel, PassThroughNoiseModel};
 use crate::engines::quantum_system::QuantumSystem;
 use crate::engines::{ClassicalEngine, QuantumEngine};
 use crate::errors::QueueError;
@@ -137,7 +137,7 @@ impl HybridEngineBuilder {
     /// The builder for method chaining
     #[must_use]
     pub fn with_depolarizing_noise(mut self, probability: f64) -> Self {
-        self.noise_model = Some(Box::new(DepolarizingNoise::new_uniform(probability)));
+        self.noise_model = Some(Box::new(DepolarizingNoiseModel::new_uniform(probability)));
         self.quantum_system = None; // Reset quantum_system as it's now invalid
         self
     }
@@ -204,7 +204,7 @@ impl HybridEngineBuilder {
             // Create a noise model (default to PassThroughNoise if not set)
             let noise_model = self
                 .noise_model
-                .unwrap_or_else(|| Box::new(PassThroughNoise));
+                .unwrap_or_else(|| Box::new(PassThroughNoiseModel));
 
             // Create the quantum system
             QuantumSystem::new(noise_model, quantum_engine)
@@ -327,7 +327,7 @@ mod tests {
     fn test_with_quantum_system() {
         // Create a quantum system
         let quantum_system = QuantumSystem::new(
-            Box::new(PassThroughNoise),
+            Box::new(PassThroughNoiseModel),
             quantum::new_quantum_engine_with_seed(2, 42),
         );
 

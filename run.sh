@@ -13,6 +13,9 @@ cargo run --example replaying_rng --package pecos-core
 cargo run --example bell_state_replay --package pecos-qsim
 cargo run --example run_noisy_circ
 cargo run --example biased_measurement_example
+cargo run --example compare_noise_models
+cargo run --example run_noisy_circ_with_general
+cargo run --example general_noise_test
 
 .venv/bin/python python/pecos-rslib/examples/bell_state_example.py
 .venv/bin/python python/pecos-rslib/examples/bell_state_simulator.py

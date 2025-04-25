@@ -1,7 +1,7 @@
 use pecos_engines::byte_message::ByteMessage;
+use pecos_engines::engines::noise::GeneralNoiseModel;
 use pecos_engines::engines::quantum::StateVecEngine;
-use pecos_engines::{DepolarizingNoiseModel, Engine};
-use pecos_engines::{EngineSystem, QuantumSystem};
+use pecos_engines::{Engine, EngineSystem, QuantumSystem};
 use std::env;
 
 fn main() {
@@ -27,9 +27,10 @@ fn main() {
 
     let quantum = Box::new(StateVecEngine::new(2));
 
-    // Create noise with or without seed
-    let mut noise_builder = DepolarizingNoiseModel::builder().with_uniform_probability(0.1);
+    // Create GeneralNoise with uniform probability for all error types
+    let mut noise_builder = GeneralNoiseModel::builder().with_uniform_probability(0.1); // Same as in run_noisy_circ.rs
 
+    // Set seed if provided
     if let Some(seed) = seed_option {
         noise_builder = noise_builder.with_seed(seed);
     }

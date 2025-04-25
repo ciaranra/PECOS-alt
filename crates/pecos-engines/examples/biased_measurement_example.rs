@@ -2,7 +2,7 @@
 
 use pecos_engines::Engine;
 use pecos_engines::byte_message::ByteMessage;
-use pecos_engines::engines::noise::BiasedMeasurementNoise;
+use pecos_engines::engines::noise::BiasedMeasurementNoiseModel;
 use pecos_engines::engines::quantum::StateVecEngine;
 use pecos_engines::{EngineSystem, QuantumSystem};
 use std::collections::HashMap;
@@ -50,7 +50,7 @@ fn example1_different_bias_levels(circ: &ByteMessage, quantum: &StateVecEngine) 
 
     for (p_flip_0, p_flip_1, desc) in configs {
         // Create the biased measurement noise model
-        let noise = Box::new(BiasedMeasurementNoise::new(p_flip_0, p_flip_1));
+        let noise = Box::new(BiasedMeasurementNoiseModel::new(p_flip_0, p_flip_1));
         let mut system = QuantumSystem::new(noise, Box::new(quantum.clone()));
 
         // For deterministic testing, set a fixed seed
@@ -105,7 +105,7 @@ fn example2_with_seed(circ: &ByteMessage) {
     // === EXAMPLE 2: Using direct constructor with seed ===
     println!("Example 2: Using direct constructor with seed");
 
-    let noise = Box::new(BiasedMeasurementNoise::with_seed(0.4, 0.1, 123));
+    let noise = Box::new(BiasedMeasurementNoiseModel::with_seed(0.4, 0.1, 123));
     let quantum = Box::new(StateVecEngine::new(1));
     let mut system = QuantumSystem::new(noise, quantum);
 
@@ -160,7 +160,7 @@ fn example3_bell_state() {
 
     // Create a new quantum system with 2 qubits
     let quantum2 = Box::new(StateVecEngine::new(2));
-    let noise2 = Box::new(BiasedMeasurementNoise::new(0.2, 0.3));
+    let noise2 = Box::new(BiasedMeasurementNoiseModel::new(0.2, 0.3));
     let mut system2 = QuantumSystem::new(noise2, quantum2);
 
     // Set a fixed seed for deterministic results

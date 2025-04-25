@@ -27,23 +27,23 @@ use std::any::Any;
 /// # Usage
 ///
 /// ```rust
-/// use pecos_engines::engines::noise::BiasedMeasurementNoise;
+/// use pecos_engines::engines::noise::BiasedMeasurementNoiseModel;
 /// use pecos_engines::engines::noise::NoiseModel;
 /// use pecos_core::RngManageable;
 ///
 /// // Create directly
-/// let mut noise_model = BiasedMeasurementNoise::new(0.01, 0.02);
+/// let mut noise_model = BiasedMeasurementNoiseModel::new(0.01, 0.02);
 /// noise_model.set_seed(42).unwrap(); // For reproducibility
 ///
 /// // Or use builder pattern
-/// let noise_model = BiasedMeasurementNoise::builder()
+/// let noise_model = BiasedMeasurementNoiseModel::builder()
 ///     .with_prob_flip_from_0(0.01)
 ///     .with_prob_flip_from_1(0.02)
 ///     .with_seed(42)
 ///     .build();
 /// ```
 #[derive(Clone)]
-pub struct BiasedMeasurementNoise {
+pub struct BiasedMeasurementNoiseModel {
     /// The probability of flipping a 0 measurement to 1
     prob_flip_from_0: f64,
     /// The probability of flipping a 1 measurement to 0
@@ -52,9 +52,9 @@ pub struct BiasedMeasurementNoise {
     rng: NoiseRng,
 }
 
-impl ProbabilityValidator for BiasedMeasurementNoise {}
+impl ProbabilityValidator for BiasedMeasurementNoiseModel {}
 
-impl BiasedMeasurementNoise {
+impl BiasedMeasurementNoiseModel {
     /// Creates a new biased measurement noise model
     ///
     /// # Arguments
@@ -100,8 +100,8 @@ impl BiasedMeasurementNoise {
 
     /// Create a new builder for the biased measurement noise model
     #[must_use]
-    pub fn builder() -> BiasedMeasurementNoiseBuilder {
-        BiasedMeasurementNoiseBuilder::new()
+    pub fn builder() -> BiasedMeasurementNoiseModelBuilder {
+        BiasedMeasurementNoiseModelBuilder::new()
     }
 
     /// Get the probability of flipping a 0 measurement to a 1
@@ -180,7 +180,7 @@ impl BiasedMeasurementNoise {
 }
 
 /// Builder for creating biased measurement noise models
-pub struct BiasedMeasurementNoiseBuilder {
+pub struct BiasedMeasurementNoiseModelBuilder {
     /// The probability of flipping a 0 measurement to 1
     prob_flip_from_0: Option<f64>,
     /// The probability of flipping a 1 measurement to 0
@@ -189,13 +189,13 @@ pub struct BiasedMeasurementNoiseBuilder {
     seed: Option<u64>,
 }
 
-impl Default for BiasedMeasurementNoiseBuilder {
+impl Default for BiasedMeasurementNoiseModelBuilder {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl BiasedMeasurementNoiseBuilder {
+impl BiasedMeasurementNoiseModelBuilder {
     /// Create a new builder
     #[must_use]
     pub fn new() -> Self {
@@ -244,7 +244,7 @@ impl BiasedMeasurementNoiseBuilder {
             .expect("Probability of flipping from 1 to 0 must be set");
 
         // Create the noise model
-        let mut noise = BiasedMeasurementNoise::new(prob_flip_from_0, prob_flip_from_1);
+        let mut noise = BiasedMeasurementNoiseModel::new(prob_flip_from_0, prob_flip_from_1);
 
         // Set the seed if provided
         if let Some(seed) = self.seed {
@@ -256,7 +256,7 @@ impl BiasedMeasurementNoiseBuilder {
     }
 }
 
-impl ControlEngine for BiasedMeasurementNoise {
+impl ControlEngine for BiasedMeasurementNoiseModel {
     type Input = ByteMessage;
     type Output = ByteMessage;
     type EngineInput = ByteMessage;
@@ -285,7 +285,7 @@ impl ControlEngine for BiasedMeasurementNoise {
     }
 }
 
-impl NoiseModel for BiasedMeasurementNoise {
+impl NoiseModel for BiasedMeasurementNoiseModel {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -295,7 +295,7 @@ impl NoiseModel for BiasedMeasurementNoise {
     }
 }
 
-impl RngManageable for BiasedMeasurementNoise {
+impl RngManageable for BiasedMeasurementNoiseModel {
     type Rng = ChaCha8Rng;
 
     fn set_rng(&mut self, rng: ChaCha8Rng) -> Result<(), Box<dyn std::error::Error>> {
@@ -320,19 +320,19 @@ mod tests {
     #[test]
     fn test_builder_pattern() {
         // Create with builder
-        let noise1 = BiasedMeasurementNoise::builder()
+        let noise1 = BiasedMeasurementNoiseModel::builder()
             .with_prob_flip_from_0(0.1)
             .with_prob_flip_from_1(0.2)
             .with_seed(42)
             .build();
 
         // Create directly
-        let noise2 = BiasedMeasurementNoise::with_seed(0.1, 0.2, 42);
+        let noise2 = BiasedMeasurementNoiseModel::with_seed(0.1, 0.2, 42);
 
         // Verify the builder works by checking they produce the same randomness sequence
         let noise1_ref = noise1
             .as_any()
-            .downcast_ref::<BiasedMeasurementNoise>()
+            .downcast_ref::<BiasedMeasurementNoiseModel>()
             .unwrap();
 
         for _ in 0..10 {
@@ -347,12 +347,12 @@ mod tests {
         expected = "Probability prob_flip_from_0 must be between 0.0 and 1.0, but was 1.1"
     )]
     fn test_invalid_probability() {
-        let _ = BiasedMeasurementNoise::new(1.1, 0.5);
+        let _ = BiasedMeasurementNoiseModel::new(1.1, 0.5);
     }
 
     #[test]
     fn test_apply_bias() {
-        let mut noise = BiasedMeasurementNoise::new(1.0, 0.0);
+        let mut noise = BiasedMeasurementNoiseModel::new(1.0, 0.0);
 
         // With prob_flip_from_0 = 1.0, all 0s should be flipped to 1s
         assert_eq!(noise.apply_bias_to_measurement(0, 0), (0, 1));
@@ -361,7 +361,7 @@ mod tests {
         assert_eq!(noise.apply_bias_to_measurement(0, 1), (0, 1));
 
         // Test with different probabilities
-        noise = BiasedMeasurementNoise::new(0.0, 1.0);
+        noise = BiasedMeasurementNoiseModel::new(0.0, 1.0);
 
         // With prob_flip_from_0 = 0.0, all 0s should remain 0s
         assert_eq!(noise.apply_bias_to_measurement(0, 0), (0, 0));

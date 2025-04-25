@@ -12,7 +12,7 @@
 
 use crate::engines::hybrid::HybridEngineBuilder;
 use crate::engines::monte_carlo::engine::MonteCarloEngine;
-use crate::engines::noise::{DepolarizingNoise, NoiseModel};
+use crate::engines::noise::{DepolarizingNoiseModel, NoiseModel};
 use crate::engines::quantum::QuantumEngine;
 use crate::engines::quantum_system::QuantumSystem;
 use crate::engines::{ClassicalEngine, HybridEngine};
@@ -237,7 +237,7 @@ impl MonteCarloEngineBuilder {
     /// The builder for method chaining
     #[must_use]
     pub fn with_depolarizing_noise(self, probability: f64) -> Self {
-        self.with_noise_model(Box::new(DepolarizingNoise::new_uniform(probability)))
+        self.with_noise_model(Box::new(DepolarizingNoiseModel::new_uniform(probability)))
     }
 
     /// Set the quantum system

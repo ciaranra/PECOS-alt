@@ -416,19 +416,21 @@ impl MonteCarloEngine {
         num_workers: usize,
         seed: Option<u64>,
     ) -> Result<ShotResults, QueueError> {
-        use crate::engines::noise::depolarizing::DepolarizingNoiseBuilder;
+        use crate::engines::noise::depolarizing::DepolarizingNoiseModelBuilder;
 
         // Create a noise model with the specified probability
         let noise_model = if let Some(s) = seed {
             // If a seed is provided, create a noise model with the seed
             let noise_seed = derive_seed(s, "noise_model");
-            DepolarizingNoiseBuilder::new()
+            DepolarizingNoiseModelBuilder::new()
                 .with_uniform_probability(p)
                 .with_seed(noise_seed)
                 .build()
         } else {
             // Otherwise, create a noise model without a specific seed
-            Box::new(crate::engines::noise::DepolarizingNoise::new_uniform(p))
+            Box::new(crate::engines::noise::DepolarizingNoiseModel::new_uniform(
+                p,
+            ))
         };
 
         // Create a quantum engine with the same number of qubits as the classical engine

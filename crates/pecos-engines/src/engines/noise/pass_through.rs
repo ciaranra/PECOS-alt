@@ -10,9 +10,9 @@ use std::any::Any;
 ///
 /// This is useful as a default for systems that don't need noise.
 #[derive(Clone, Debug)]
-pub struct PassThroughNoise;
+pub struct PassThroughNoiseModel;
 
-impl NoiseModel for PassThroughNoise {
+impl NoiseModel for PassThroughNoiseModel {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -23,7 +23,7 @@ impl NoiseModel for PassThroughNoise {
 }
 
 // Implement RngManageable for PassThroughNoise
-impl RngManageable for PassThroughNoise {
+impl RngManageable for PassThroughNoiseModel {
     type Rng = ChaCha8Rng;
 
     fn set_rng(&mut self, _rng: Self::Rng) -> Result<(), Box<dyn std::error::Error>> {
@@ -42,7 +42,7 @@ impl RngManageable for PassThroughNoise {
     }
 }
 
-impl ControlEngine for PassThroughNoise {
+impl ControlEngine for PassThroughNoiseModel {
     type Input = ByteMessage;
     type Output = ByteMessage;
     type EngineInput = ByteMessage;
