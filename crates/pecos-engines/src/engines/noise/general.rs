@@ -230,7 +230,7 @@ pub struct GeneralNoiseModel {
     /// Scaling parameters for RZZ gate error rate - coefficient a
     ///
     /// Part of a parameterized model for angle-dependent errors in RZZ gates.
-    /// The error rate is modeled as a function of angle θ: \\ TODO: add equation
+    /// The error rate is modeled as a function of angle θ: p(θ) = a + b|θ| + c|θ|^d
     przz_a: f64,
 
     /// Scaling parameters for RZZ gate error rate - coefficient b
@@ -494,17 +494,17 @@ impl GeneralNoiseModel {
         Self::validate_probability(p2);
 
         // Initialize default models
-        let mut p1_pauli_model = std::collections::HashMap::new();
+        let mut p1_pauli_model = HashMap::new();
         p1_pauli_model.insert("X".to_string(), 1.0 / 3.0);
         p1_pauli_model.insert("Y".to_string(), 1.0 / 3.0);
         p1_pauli_model.insert("Z".to_string(), 1.0 / 3.0);
 
-        let mut p1_emission_model = std::collections::HashMap::new();
+        let mut p1_emission_model = HashMap::new();
         p1_emission_model.insert("X".to_string(), 1.0 / 3.0);
         p1_emission_model.insert("Y".to_string(), 1.0 / 3.0);
         p1_emission_model.insert("Z".to_string(), 1.0 / 3.0);
 
-        let mut p2_pauli_model = std::collections::HashMap::new();
+        let mut p2_pauli_model = HashMap::new();
         p2_pauli_model.insert("XX".to_string(), 1.0 / 15.0);
         p2_pauli_model.insert("XY".to_string(), 1.0 / 15.0);
         p2_pauli_model.insert("XZ".to_string(), 1.0 / 15.0);
@@ -521,7 +521,7 @@ impl GeneralNoiseModel {
         p2_pauli_model.insert("YI".to_string(), 1.0 / 15.0);
         p2_pauli_model.insert("ZI".to_string(), 1.0 / 15.0);
 
-        let mut p2_emission_model = std::collections::HashMap::new();
+        let mut p2_emission_model = HashMap::new();
         p2_emission_model.insert("XX".to_string(), 1.0 / 15.0);
         p2_emission_model.insert("XY".to_string(), 1.0 / 15.0);
         p2_emission_model.insert("XZ".to_string(), 1.0 / 15.0);
@@ -636,11 +636,7 @@ impl GeneralNoiseModel {
         model.p2_pauli_model = TwoQubitSampler::new(&p2_pauli_model);
         model.p2_emission_model = TwoQubitSampler::new(&p2_emission_model);
 
-        // Note: We don't need to call scale_parameters() here because it was already
-        // called in the Self::new() constructor
-
-        // TODO: make sure the calling of scale_parameters() makes sense......
-        //       might need a new_without_scaling() and the scale...
+        // Note: We don't need to call scale_parameters() here because it gets called on start()
 
         model
     }
@@ -772,16 +768,16 @@ impl GeneralNoiseModel {
         // TODO: Make this noise model handle gates that have multiple qubit arguments
         //       Currently it is assumed one gate per gate type...
         for gate in gates {
-            // Skip noise application for software gates
-            if self.is_software_gate(&gate.gate_type) {
+            // Skip noise application for noiseless gates
+            if self.is_noiseless_gate(&gate.gate_type) {
                 // Just add the gate as-is, without any noise
                 // TODO: Still apply leakage rules
                 builder.add_quantum_gate(&gate);
-                trace!("Skipping noise for software gate: {:?}", gate.gate_type);
+                trace!("Skipping noise for noiseless gate: {:?}", gate.gate_type);
                 continue;
             }
 
-            // For non-software gates with qubits, we'll let the specific handlers
+            // For non-noiseless gates with qubits, we'll let the specific handlers
             // decide whether to add the original gate based on error models
             match gate.gate_type {
                 GateType::Idle => {
@@ -1661,7 +1657,6 @@ impl GeneralNoiseModel {
     /// heating, T2 decoherence, and other environmental interactions that affect the qubit while
     /// it's not being actively controlled.
     fn apply_idle_faults(&mut self, gate: &QuantumGate, builder: &mut ByteMessageBuilder) {
-        // TODO: Look very closely at all the dephasing...
         let duration = gate.idle_duration();
 
         // Skip if duration is too small
@@ -1932,38 +1927,38 @@ impl GeneralNoiseModel {
         self.leak2depolar = use_depolar;
     }
 
-    /// Add a gate type to the set of software gates
+    /// Add a gate type to the set of noiseless gates
     ///
     /// Gates in this set will not have noise applied to them.
     ///
     /// # Parameters
-    /// * `gate_type` - The type of gate to add to the software gates set
-    pub fn add_software_gate(&mut self, gate_type: GateType) {
+    /// * `gate_type` - The type of gate to add to the noiseless gates set
+    pub fn add_noiseless_gate(&mut self, gate_type: GateType) {
         self.noiseless_gates.insert(gate_type);
     }
 
-    /// Remove a gate type from the set of software gates
+    /// Remove a gate type from the set of noiseless gates
     ///
     /// # Parameters
-    /// * `gate_type` - The type of gate to remove from the software gates set
-    pub fn remove_software_gate(&mut self, gate_type: GateType) {
+    /// * `gate_type` - The type of gate to remove from the noiseless gates set
+    pub fn remove_noiseless_gate(&mut self, gate_type: GateType) {
         self.noiseless_gates.remove(&gate_type);
     }
 
-    /// Clear the set of software gates
-    pub fn clear_software_gates(&mut self) {
+    /// Clear the set of noiseless gates
+    pub fn clear_noiseless_gates(&mut self) {
         self.noiseless_gates.clear();
     }
 
-    /// Check if a gate type is in the set of software gates
+    /// Check if a gate type is in the set of noiseless gates
     ///
     /// # Parameters
     /// * `gate_type` - The type of gate to check
     ///
     /// # Returns
-    /// `true` if the gate is in the software gates set, `false` otherwise
+    /// `true` if the gate is in the noiseless gates set, `false` otherwise
     #[must_use]
-    pub fn is_software_gate(&self, gate_type: &GateType) -> bool {
+    pub fn is_noiseless_gate(&self, gate_type: &GateType) -> bool {
         self.noiseless_gates.contains(gate_type)
     }
 
@@ -2016,10 +2011,10 @@ pub struct GeneralNoiseModelBuilder {
     p1: Option<f64>,
     p2: Option<f64>,
     p1_emission_ratio: Option<f64>,
-    p1_pauli_model: Option<HashMap<String, f64>>,
-    p1_emission_model: Option<HashMap<String, f64>>,
-    p2_pauli_model: Option<HashMap<String, f64>>,
-    p2_emission_model: Option<HashMap<String, f64>>,
+    p1_pauli_model: Option<Sampler>,
+    p1_emission_model: Option<Sampler>,
+    p2_pauli_model: Option<TwoQubitSampler>,
+    p2_emission_model: Option<TwoQubitSampler>,
     p_prep_leak_ratio: Option<f64>,
     seed: Option<u64>,
     scale: Option<f64>,
@@ -2035,7 +2030,7 @@ pub struct GeneralNoiseModelBuilder {
     coherent_dephasing: Option<bool>,
     coherent_to_incoherent_factor: Option<f64>,
     przz_power: Option<f64>,
-    software_gates: Option<HashSet<GateType>>,
+    noiseless_gates: Option<HashSet<GateType>>,
     leak2depolar: Option<bool>,
 }
 
@@ -2075,7 +2070,7 @@ impl GeneralNoiseModelBuilder {
             coherent_dephasing: None,
             coherent_to_incoherent_factor: None,
             przz_power: None,
-            software_gates: None,
+            noiseless_gates: None,
             leak2depolar: None,
         }
     }
@@ -2158,62 +2153,56 @@ impl GeneralNoiseModelBuilder {
     /// Set the Pauli error model for single-qubit gates
     #[must_use]
     pub fn with_p1_pauli_model(mut self, model: &HashMap<String, f64>) -> Self {
-        self.p1_pauli_model = Some(model.clone());
+        self.p1_pauli_model = Some(Sampler::new(model));
         self
     }
 
     /// Set the Pauli error model for single-qubit gates with low precision
     #[must_use]
     pub fn with_p1_pauli_model_low_precision(mut self, model: &HashMap<String, f64>) -> Self {
-        let sampler = Sampler::new_with_low_precision(model);
-        self.p1_pauli_model = Some(sampler.distribution());
+        self.p1_pauli_model = Some(Sampler::new_with_low_precision(model));
         self
     }
 
     /// Set the Pauli error model for single-qubit gates with medium precision
     #[must_use]
     pub fn with_p1_pauli_model_medium_precision(mut self, model: &HashMap<String, f64>) -> Self {
-        let sampler = Sampler::new_with_medium_precision(model);
-        self.p1_pauli_model = Some(sampler.distribution());
+        self.p1_pauli_model = Some(Sampler::new_with_medium_precision(model));
         self
     }
 
     /// Set the Pauli error model for single-qubit gates with high precision
     #[must_use]
     pub fn with_p1_pauli_model_high_precision(mut self, model: &HashMap<String, f64>) -> Self {
-        let sampler = Sampler::new_with_high_precision(model);
-        self.p1_pauli_model = Some(sampler.distribution());
+        self.p1_pauli_model = Some(Sampler::new_with_high_precision(model));
         self
     }
 
     /// Set the emission error model for single-qubit gates
     #[must_use]
     pub fn with_p1_emission_model(mut self, model: &HashMap<String, f64>) -> Self {
-        self.p1_emission_model = Some(model.clone());
+        self.p1_emission_model = Some(Sampler::new(model));
         self
     }
 
     /// Set the emission error model for single-qubit gates with low precision
     #[must_use]
     pub fn with_p1_emission_model_low_precision(mut self, model: &HashMap<String, f64>) -> Self {
-        let sampler = TwoQubitSampler::new_with_low_precision(model);
-        self.p1_emission_model = Some(sampler.distribution());
+        self.p1_emission_model = Some(Sampler::new_with_low_precision(model));
         self
     }
 
     /// Set the emission error model for single-qubit gates with medium precision
     #[must_use]
     pub fn with_p1_emission_model_medium_precision(mut self, model: &HashMap<String, f64>) -> Self {
-        let sampler = TwoQubitSampler::new_with_medium_precision(model);
-        self.p1_emission_model = Some(sampler.distribution());
+        self.p1_emission_model = Some(Sampler::new_with_medium_precision(model));
         self
     }
 
     /// Set the emission error model for single-qubit gates with high precision
     #[must_use]
     pub fn with_p1_emission_model_high_precision(mut self, model: &HashMap<String, f64>) -> Self {
-        let sampler = TwoQubitSampler::new_with_high_precision(model);
-        self.p1_emission_model = Some(sampler.distribution());
+        self.p1_emission_model = Some(Sampler::new_with_high_precision(model));
         self
     }
 
@@ -2327,14 +2316,14 @@ impl GeneralNoiseModelBuilder {
         self
     }
 
-    /// Add a gate type to the set of software gates
+    /// Add a gate type to the set of noiseless gates
     #[must_use]
-    pub fn with_software_gate(mut self, gate_type: GateType) -> Self {
-        if self.software_gates.is_none() {
-            self.software_gates = Some(HashSet::new());
+    pub fn with_noiseless_gate(mut self, gate_type: GateType) -> Self {
+        if self.noiseless_gates.is_none() {
+            self.noiseless_gates = Some(HashSet::new());
         }
 
-        if let Some(ref mut gates) = self.software_gates {
+        if let Some(ref mut gates) = self.noiseless_gates {
             gates.insert(gate_type);
         }
 
@@ -2387,16 +2376,18 @@ impl GeneralNoiseModelBuilder {
     /// Set the probability model for two-qubit Pauli errors
     #[must_use]
     pub fn with_p2_pauli_model(mut self, model: &HashMap<String, f64>) -> Self {
-        self.p2_pauli_model = Some(model.clone());
+        self.p2_pauli_model = Some(TwoQubitSampler::new(model));
         self
     }
 
     /// Set the probability model for two-qubit emission errors
     #[must_use]
     pub fn with_p2_emission_model(mut self, model: &HashMap<String, f64>) -> Self {
-        self.p2_emission_model = Some(model.clone());
+        self.p2_emission_model = Some(TwoQubitSampler::new(model));
         self
     }
+
+    // TODO: Add precision versions of with_p2_...
 
     /// Build the general noise model
     ///
@@ -2424,19 +2415,19 @@ impl GeneralNoiseModelBuilder {
         }
 
         if let Some(model_map) = self.p1_pauli_model {
-            model.p1_pauli_model = Sampler::new(&model_map);
+            model.p1_pauli_model = model_map;
         }
 
         if let Some(model_map) = self.p1_emission_model {
-            model.p1_emission_model = Sampler::new(&model_map);
+            model.p1_emission_model = model_map;
         }
 
         if let Some(model_map) = self.p2_pauli_model {
-            model.p2_pauli_model = TwoQubitSampler::new(&model_map);
+            model.p2_pauli_model = model_map;
         }
 
         if let Some(model_map) = self.p2_emission_model {
-            model.p2_emission_model = TwoQubitSampler::new(&model_map);
+            model.p2_emission_model = model_map;
         }
 
         if let Some(ratio) = self.p_prep_leak_ratio {
@@ -2486,7 +2477,6 @@ impl GeneralNoiseModelBuilder {
         if let Some(coherent) = self.coherent_dephasing {
             model.set_coherent_dephasing(coherent);
         }
-        // The default is already false in the GeneralNoiseModel constructor, matching the expected behavior
 
         if let Some(factor) = self.coherent_to_incoherent_factor {
             model.set_coherent_to_incoherent_factor(factor);
@@ -2496,13 +2486,13 @@ impl GeneralNoiseModelBuilder {
             model.set_przz_power(power);
         }
 
-        if let Some(gates) = self.software_gates {
+        if let Some(gates) = self.noiseless_gates {
             for gate in gates {
-                model.add_software_gate(gate);
+                model.add_noiseless_gate(gate);
             }
         } else {
-            // If no software gates specified, ensure RZ is still a software gate
-            model.add_software_gate(GateType::RZ);
+            // If no noiseless gates specified, ensure RZ is still a noiseless gate
+            model.add_noiseless_gate(GateType::RZ);
         }
 
         if let Some(use_depolar) = self.leak2depolar {
@@ -2510,6 +2500,7 @@ impl GeneralNoiseModelBuilder {
         }
 
         model.scale_parameters();
+        // TODO: Need this Box?
         Box::new(model)
     }
 }
@@ -3148,16 +3139,16 @@ mod tests {
     }
 
     #[test]
-    fn test_software_gates() {
-        // Create a noise model and mark RZ as a software gate
+    fn test_noiseless_gates() {
+        // Create a noise model and mark RZ as a noiseless gate
         let mut noise = GeneralNoiseModel::new(0.0, 0.0, 0.0, 1.0, 0.0);
-        noise.add_software_gate(GateType::RZ);
+        noise.add_noiseless_gate(GateType::RZ);
 
         // Create a builder to capture gates
         let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_quantum_operations();
 
-        // Create an RZ gate (software - should not have noise applied)
+        // Create an RZ gate (noiseless - should not have noise applied)
         let rz_gate = QuantumGate {
             gate_type: GateType::RZ,
             qubits: vec![0],
@@ -3166,7 +3157,7 @@ mod tests {
             noiseless: false,
         };
 
-        // Create an X gate (not software - should have noise applied)
+        // Create an X gate (not noiseless - should have noise applied)
         let x_gate = QuantumGate {
             gate_type: GateType::X,
             qubits: vec![0],
@@ -3175,14 +3166,14 @@ mod tests {
             noiseless: false,
         };
 
-        // Make sure RZ is recognized as software
+        // Make sure RZ is recognized as noiseless
         assert!(
-            noise.is_software_gate(&GateType::RZ),
-            "RZ should be a software gate"
+            noise.is_noiseless_gate(&GateType::RZ),
+            "RZ should be a noiseless gate"
         );
         assert!(
-            !noise.is_software_gate(&GateType::X),
-            "X should not be a software gate"
+            !noise.is_noiseless_gate(&GateType::X),
+            "X should not be a noiseless gate"
         );
 
         let msg =

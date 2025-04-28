@@ -180,7 +180,7 @@ fn test_rotation_gate_with_different_angles() {
     let mut noise_model = GeneralNoiseModel::new(0.05, 0.05, 0.05, 0.1, 0.2);
 
     // Ensure RZ is not marked as a software gate for this test
-    noise_model.remove_software_gate(GateType::RZ);
+    noise_model.remove_noiseless_gate(GateType::RZ);
 
     // Test rotation gates with different angles
     let angles_to_test = [

@@ -28,8 +28,6 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::{Arc, Mutex};
 
-/// Default maximum qubit index to pre-cache for noise sampling
-/// This is a reasonable default that balances memory usage with performance
 /// A thread-safe wrapper for random number generators used in noise models
 ///
 /// This struct encapsulates the common pattern of using an Arc<Mutex<ChaCha8Rng>>
