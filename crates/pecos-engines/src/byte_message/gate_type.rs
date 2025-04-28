@@ -6,7 +6,7 @@ use std::fmt;
 /// It represents the same gate types as the core `GateType` enum but with a more
 /// predictable memory layout.
 #[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GateType {
     X = 1,
     Y = 2,
@@ -19,6 +19,8 @@ pub enum GateType {
     Measure = 9,
     Prep = 10,
     RZZ = 11,
+    SZZdg = 12,
+    Idle = 13,
 }
 
 impl From<u8> for GateType {
@@ -35,6 +37,8 @@ impl From<u8> for GateType {
             9 => GateType::Measure,
             10 => GateType::Prep,
             11 => GateType::RZZ,
+            12 => GateType::SZZdg,
+            13 => GateType::Idle,
             _ => panic!("Invalid gate type ID: {value}"),
         }
     }
@@ -60,6 +64,8 @@ impl fmt::Display for GateType {
             GateType::Measure => write!(f, "Measure"),
             GateType::Prep => write!(f, "Prep"),
             GateType::RZZ => write!(f, "RZZ"),
+            GateType::SZZdg => write!(f, "SZZdg"),
+            GateType::Idle => write!(f, "Idle"),
         }
     }
 }
@@ -138,6 +144,12 @@ impl QuantumGate {
         Self::new(GateType::SZZ, vec![qubit1, qubit2], vec![], None)
     }
 
+    /// Create a new `SZZdg` gate
+    #[must_use]
+    pub fn szzdg(qubit1: usize, qubit2: usize) -> Self {
+        Self::new(GateType::SZZdg, vec![qubit1, qubit2], vec![], None)
+    }
+
     /// Create a new RZZ gate
     #[must_use]
     pub fn rzz(theta: f64, qubit1: usize, qubit2: usize) -> Self {
@@ -165,6 +177,31 @@ impl QuantumGate {
     #[must_use]
     pub fn prep(qubit: usize) -> Self {
         Self::new(GateType::Prep, vec![qubit], vec![], None)
+    }
+
+    /// Create a new Idle gate for qubits idling for a specific duration
+    ///
+    /// # Arguments
+    ///
+    /// * `duration` - The duration of the idle period in seconds
+    /// * `qubits` - The qubits that are idling
+    ///
+    /// # Returns
+    ///
+    /// A new Idle gate with the specified parameters
+    #[must_use]
+    pub fn idle(duration: f64, qubits: Vec<usize>) -> Self {
+        Self::new(GateType::Idle, qubits, vec![duration], None)
+    }
+
+    /// Returns the duration of an idle gate, or 0.0 if not an idle gate
+    #[must_use]
+    pub fn idle_duration(&self) -> f64 {
+        if self.gate_type == GateType::Idle && !self.params.is_empty() {
+            self.params[0]
+        } else {
+            0.0
+        }
     }
 
     #[must_use]

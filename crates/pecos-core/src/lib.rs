@@ -42,6 +42,3 @@ pub use pauli::pauli_string::PauliString;
 pub use pauli::{Pauli, PauliOperator};
 pub use phase::Phase;
 pub use rng::choices::Choices;
-
-pub use pecos_derive::StructMetadata; // Macro
-pub use struct_metadata::StructMetadata; // Trait

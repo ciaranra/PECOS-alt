@@ -352,6 +352,32 @@ impl ByteMessageBuilder {
         self
     }
 
+    /// Add an `SZZdg` gate
+    ///
+    /// # Arguments
+    ///
+    /// * `qubits1` - First set of qubits
+    /// * `qubits2` - Second set of qubits
+    ///
+    /// # Returns
+    ///
+    /// * `&mut Self` - Returns self for method chaining
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the qubits1 and qubits2 arrays do not have the same length.
+    pub fn add_szzdg(&mut self, qubits1: &[usize], qubits2: &[usize]) -> &mut Self {
+        assert_eq!(
+            qubits1.len(),
+            qubits2.len(),
+            "Qubit1 and qubit2 arrays must have the same length"
+        );
+        for (&qubit1, &qubit2) in qubits1.iter().zip(qubits2.iter()) {
+            self.add_quantum_gate(&QuantumGate::szzdg(qubit1, qubit2));
+        }
+        self
+    }
+
     /// Add an RZ gate
     pub fn add_rz(&mut self, theta: f64, qubits: &[usize]) -> &mut Self {
         for &qubit in qubits {
@@ -592,6 +618,32 @@ impl ByteMessageBuilder {
         }
 
         self.build_unchecked()
+    }
+
+    /// Add idle operations for specified qubits for a given duration
+    ///
+    /// # Arguments
+    ///
+    /// * `duration` - The duration of the idle period in seconds
+    /// * `qubits` - The qubits that are idling
+    ///
+    /// # Returns
+    ///
+    /// A mutable reference to self for method chaining
+    pub fn add_idle(&mut self, duration: f64, qubits: &[usize]) -> &mut Self {
+        // Ensure we have qubits to work with
+        if qubits.is_empty() {
+            return self;
+        }
+
+        let mut idle_qubits = Vec::with_capacity(qubits.len());
+        for &q in qubits {
+            idle_qubits.push(q);
+        }
+
+        // Create and add the idle gate
+        let gate = QuantumGate::idle(duration, idle_qubits);
+        self.add_quantum_gate(&gate)
     }
 }
 

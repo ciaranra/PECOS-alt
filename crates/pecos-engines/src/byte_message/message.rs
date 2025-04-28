@@ -797,6 +797,68 @@ impl ByteMessage {
         builder.add_debug_message(message);
         builder.build()
     }
+
+    /// Parse measured qubits from this message
+    ///
+    /// This method extracts the qubit indices of measurements from the message.
+    /// It returns a list of qubits that were measured, in the same order as
+    /// the measurement results returned by `parse_measurements()`.
+    ///
+    /// # Returns
+    ///
+    /// A Result containing a vector of qubit indices if successful,
+    /// or a `QueueError` if there was an error parsing the message.
+    pub fn parse_measured_qubits(&self) -> Result<Vec<u32>, QueueError> {
+        if self.bytes.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut qubits = Vec::new();
+        let mut offset = 0;
+
+        while offset + size_of::<MessageHeader>() <= self.bytes.len() {
+            // Read message header
+            let msg_header = *from_bytes::<MessageHeader>(
+                &self.bytes[offset..offset + size_of::<MessageHeader>()],
+            );
+            offset += size_of::<MessageHeader>();
+
+            // Skip if not enough bytes for payload
+            let payload_size = msg_header.payload_size as usize;
+            let payload_end = offset + payload_size;
+
+            if payload_end > self.bytes.len() {
+                break;
+            }
+
+            // Convert the msg_type to MessageType
+            if let Ok(msg_type) = msg_header.get_type() {
+                if msg_type == MessageType::MeasurementResult {
+                    // Process measurement result
+                    let payload = &self.bytes[offset..payload_end];
+                    if payload.len() >= size_of::<MeasurementResultHeader>() {
+                        let result_header = *from_bytes::<MeasurementResultHeader>(
+                            &payload[0..size_of::<MeasurementResultHeader>()],
+                        );
+
+                        // Since MeasurementResultHeader doesn't have a qubit field, we can't get it directly
+                        // For now, we'll use the result_id as a placeholder - this needs to be fixed properly
+                        // by tracking qubit-to-result mappings elsewhere
+                        qubits.push(result_header.result_id);
+                    }
+                }
+            }
+
+            // Move offset to next message, accounting for padding
+            offset = payload_end;
+            let padding = calc_padding(payload_size, 4);
+            if padding > 0 {
+                offset += padding;
+            }
+        }
+
+        Ok(qubits)
+    }
 }
 
 #[cfg(test)]

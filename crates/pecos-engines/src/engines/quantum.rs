@@ -131,6 +131,13 @@ impl Engine for StateVecEngine {
                     );
                     self.simulator.szz(cmd.qubits[0], cmd.qubits[1]);
                 }
+                GateType::SZZdg => {
+                    debug!(
+                        "Processing SZZdg gate on qubits {:?} and {:?}",
+                        cmd.qubits[0], cmd.qubits[1]
+                    );
+                    self.simulator.szzdg(cmd.qubits[0], cmd.qubits[1]);
+                }
                 GateType::RZ => {
                     if !cmd.params.is_empty() {
                         debug!(
@@ -164,6 +171,10 @@ impl Engine for StateVecEngine {
                 GateType::Prep => {
                     debug!("Processing Y gate on qubit {:?}", cmd.qubits[0]);
                     self.simulator.pz(cmd.qubits[0]);
+                }
+                GateType::Idle => {
+                    // For idle gates, just let the system naturally evolve for the specified duration
+                    // No active operation needed in the simulator
                 }
             }
         }
@@ -296,6 +307,13 @@ impl Engine for SparseStabEngine {
                     );
                     self.simulator.szz(cmd.qubits[0], cmd.qubits[1]);
                 }
+                GateType::SZZdg => {
+                    debug!(
+                        "Processing SZZdg gate on qubits {:?} and {:?}",
+                        cmd.qubits[0], cmd.qubits[1]
+                    );
+                    self.simulator.szzdg(cmd.qubits[0], cmd.qubits[1]);
+                }
                 GateType::Measure => {
                     if let Some(result_id) = cmd.result_id {
                         debug!(
@@ -310,6 +328,10 @@ impl Engine for SparseStabEngine {
                 GateType::Prep => {
                     debug!("Processing Y gate on qubit {:?}", cmd.qubits[0]);
                     self.simulator.pz(cmd.qubits[0]);
+                }
+                GateType::Idle => {
+                    // For idle gates, just let the system naturally evolve for the specified duration
+                    // No active operation needed in the simulator
                 }
                 // Skip gates not supported by the stabilizer simulator
                 _ => {

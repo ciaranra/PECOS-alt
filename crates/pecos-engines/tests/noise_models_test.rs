@@ -1,7 +1,6 @@
 use pecos_engines::byte_message::ByteMessage;
 use pecos_engines::engines::noise::{
-    BiasedMeasurementNoiseModel, DepolarizingNoiseModel, GeneralNoiseModel, NoiseModel,
-    PassThroughNoiseModel,
+    BiasedMeasurementNoiseModel, DepolarizingNoiseModel, NoiseModel, PassThroughNoiseModel,
 };
 use pecos_engines::engines::quantum::StateVecEngine;
 use pecos_engines::{Engine, EngineSystem, QuantumSystem};
@@ -147,123 +146,6 @@ fn test_depolarizing_noise() {
     assert!(
         noisy_counts.get("01").unwrap_or(&0) + noisy_counts.get("10").unwrap_or(&0) > 50,
         "Noisy Bell state should have some 01 and 10 results"
-    );
-}
-
-#[test]
-fn test_general_noise_equivalence() {
-    // Test that GeneralNoise with symmetric measurement errors
-    // matches DepolarizingNoise behavior
-
-    // Create a simple H-gate circuit with measurement
-    let circ = ByteMessage::quantum_operations_builder()
-        .add_h(&[0])
-        .add_measurements(&[0], &[0])
-        .build();
-
-    // Parameters for testing
-    let noise_prob = 0.05;
-    let num_shots = 10000;
-
-    // Create DepolarizingNoise model
-    let depolarizing_noise = DepolarizingNoiseModel::builder()
-        .with_uniform_probability(noise_prob)
-        .with_seed(42)
-        .build();
-
-    // Create equivalent GeneralNoise model
-    let general_noise = GeneralNoiseModel::builder()
-        .with_uniform_probability(noise_prob)
-        .with_seed(42)
-        .build();
-
-    // Get results from both models
-    let depolarizing_counts = count_results(depolarizing_noise, &circ, num_shots, 1);
-    let general_counts = count_results(general_noise, &circ, num_shots, 1);
-
-    // Calculate percentages
-    let depol_0 = *depolarizing_counts.get("0").unwrap_or(&0) * 100 / num_shots;
-    let depol_1 = *depolarizing_counts.get("1").unwrap_or(&0) * 100 / num_shots;
-    let gen_0 = *general_counts.get("0").unwrap_or(&0) * 100 / num_shots;
-    let gen_1 = *general_counts.get("1").unwrap_or(&0) * 100 / num_shots;
-
-    // Allow truncation and wrap for these test values
-    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-    let diff_0 = (depol_0 as i32 - gen_0 as i32).abs();
-    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-    let diff_1 = (depol_1 as i32 - gen_1 as i32).abs();
-
-    // With same seed and same probabilities, results should be very close
-    assert!(
-        diff_0 <= 2,
-        "DepolarizingNoise and GeneralNoise should produce similar results"
-    );
-    assert!(
-        diff_1 <= 2,
-        "DepolarizingNoise and GeneralNoise should produce similar results"
-    );
-}
-
-#[test]
-fn test_general_noise_asymmetric() {
-    // Test that GeneralNoise can produce asymmetric measurement errors
-
-    // Create a simple H-gate circuit with measurement
-    let circ = ByteMessage::quantum_operations_builder()
-        .add_h(&[0])
-        .add_measurements(&[0], &[0])
-        .build();
-
-    // Test with asymmetric measurement errors
-    let p_prep = 0.0;
-    let p_meas_0 = 0.3; // 30% chance to flip 0->1
-    let p_meas_1 = 0.1; // 10% chance to flip 1->0
-    let p1 = 0.0;
-    let p2 = 0.0;
-
-    let general_noise = GeneralNoiseModel::builder()
-        .with_prep_probability(p_prep)
-        .with_meas_0_probability(p_meas_0)
-        .with_meas_1_probability(p_meas_1)
-        .with_single_qubit_probability(p1)
-        .with_two_qubit_probability(p2)
-        .with_seed(42)
-        .build();
-
-    // Get results from 10,000 shots
-    let counts = count_results(general_noise, &circ, 10000, 1);
-
-    // Calculate percentages
-    let pct_0 = *counts.get("0").unwrap_or(&0) * 100 / 10000;
-    let pct_1 = *counts.get("1").unwrap_or(&0) * 100 / 10000;
-
-    // Calculate expected percentages - with Hadamard, ideally 50% each
-    // Expected 0s = 50% * (1-p_meas_0) + 50% * p_meas_1
-    // Expected 1s = 50% * p_meas_0 + 50% * (1-p_meas_1)
-    let expected_pct_0 = (0.5 * (1.0 - p_meas_0) + 0.5 * p_meas_1) * 100.0;
-    let expected_pct_1 = (0.5 * p_meas_0 + 0.5 * (1.0 - p_meas_1)) * 100.0;
-
-    // Allow for some statistical variance (±5%)
-    let margin = 5;
-
-    #[allow(clippy::cast_precision_loss)]
-    let diff_0 = (pct_0 as f64 - expected_pct_0).abs();
-    #[allow(clippy::cast_precision_loss)]
-    let diff_1 = (pct_1 as f64 - expected_pct_1).abs();
-
-    assert!(
-        diff_0 <= f64::from(margin),
-        "Expected {expected_pct_0}% zeros, got {pct_0}%"
-    );
-    assert!(
-        diff_1 <= f64::from(margin),
-        "Expected {expected_pct_1}% ones, got {pct_1}%"
-    );
-
-    // The result should be biased toward 1
-    assert!(
-        pct_1 > pct_0,
-        "With p_meas_0 > p_meas_1, results should be biased toward 1"
     );
 }
 

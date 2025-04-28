@@ -37,12 +37,9 @@ criterion = "0.5"
 libloading = "0.8"
 bytemuck = {  version = "1", features = ["derive"] }
 bitflags = "2"
-syn = { version = "2", features = ["full"] }
-quote = "1"
 dyn-clone = "1"
 regex = "1"
 
-pecos-derive = { version = "0.1.1", path = "crates/pecos-derive"}
 pecos-core = { version = "0.1.1", path = "crates/pecos-core" }
 pecos-qsim = { version = "0.1.1", path = "crates/pecos-qsim" }
 pecos-engines = { version = "0.1.1", path = "crates/pecos-engines" }
@@ -63,6 +60,6 @@ perf = { level = "warn", priority = -1 }
 style = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 # restriction = "warn"
-# cargo = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
 multiple-crate-versions = "allow" # TODO: remove when possible
 missing-errors-doc = "allow" # TODO: remove when finished development...

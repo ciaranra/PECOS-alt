@@ -4,17 +4,27 @@
 //! realistic quantum computation with errors. Each noise model implements
 //! the `NoiseModel` trait and can be used with the quantum engines.
 
+pub mod biased_depolarizing;
 pub mod biased_measurement;
 pub mod depolarizing;
 pub mod general;
 pub mod pass_through;
+pub mod sampler;
+pub mod type_cache_samplers;
 pub mod utils;
 
-pub use biased_measurement::BiasedMeasurementNoiseModel;
-pub use depolarizing::DepolarizingNoiseModel;
-pub use general::GeneralNoiseModel;
-pub use pass_through::PassThroughNoiseModel;
-pub use utils::{NoiseRng, NoiseUtils, ProbabilityValidator};
+pub use self::biased_depolarizing::BiasedDepolarizingNoiseModel;
+pub use self::biased_measurement::BiasedMeasurementNoiseModel;
+pub use self::depolarizing::DepolarizingNoiseModel;
+pub use self::general::GeneralNoiseModel;
+pub use self::pass_through::PassThroughNoiseModel;
+pub use self::utils::{NoiseRng, NoiseUtils, ProbabilityValidator};
+pub use sampler::{CachedSampler, PrecisionLevel, Sampler, SamplingMethod};
+
+// Re-export the generic sampler types
+pub use type_cache_samplers::{
+    TypeCachedTableSampler8Bit, TypeCachedTableSampler16Bit, TypeCachedTableSampler32Bit,
+};
 
 use crate::byte_message::ByteMessage;
 use crate::engines::{ControlEngine, EngineStage};
@@ -129,6 +139,31 @@ impl RngManageable for BaseNoiseModel {
 
     fn rng_mut(&mut self) -> &mut Self::Rng {
         self.rng.rng_mut()
+    }
+}
+
+impl ControlEngine for Box<dyn NoiseModel> {
+    type Input = ByteMessage;
+    type Output = ByteMessage;
+    type EngineInput = ByteMessage;
+    type EngineOutput = ByteMessage;
+
+    fn start(
+        &mut self,
+        input: Self::Input,
+    ) -> Result<EngineStage<Self::EngineInput, Self::Output>, QueueError> {
+        (**self).start(input)
+    }
+
+    fn continue_processing(
+        &mut self,
+        result: Self::EngineOutput,
+    ) -> Result<EngineStage<Self::EngineInput, Self::Output>, QueueError> {
+        (**self).continue_processing(result)
+    }
+
+    fn reset(&mut self) -> Result<(), QueueError> {
+        (**self).reset()
     }
 }
 
@@ -256,39 +291,10 @@ mod tests {
             assert_eq!(
                 output.as_bytes(),
                 measurement_message.as_bytes(),
-                "Measurements should pass through depolarizing noise unchanged"
+                "Measurement results should pass through depolarizing noise unchanged"
             );
         } else {
             panic!("Expected Complete stage");
         }
-    }
-}
-
-// Implement ControlEngine for Box<dyn NoiseModel>
-impl ControlEngine for Box<dyn NoiseModel> {
-    type Input = ByteMessage;
-    type Output = ByteMessage;
-    type EngineInput = ByteMessage;
-    type EngineOutput = ByteMessage;
-
-    fn start(
-        &mut self,
-        input: Self::Input,
-    ) -> Result<EngineStage<Self::EngineInput, Self::Output>, QueueError> {
-        // Forward to the underlying NoiseModel implementation
-        ControlEngine::start(&mut **self, input)
-    }
-
-    fn continue_processing(
-        &mut self,
-        result: Self::EngineOutput,
-    ) -> Result<EngineStage<Self::EngineInput, Self::Output>, QueueError> {
-        // Forward to the underlying NoiseModel implementation
-        ControlEngine::continue_processing(&mut **self, result)
-    }
-
-    fn reset(&mut self) -> Result<(), QueueError> {
-        // Forward to the underlying NoiseModel implementation
-        ControlEngine::reset(&mut **self)
     }
 }
