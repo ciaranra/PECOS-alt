@@ -734,7 +734,30 @@ impl GeneralNoiseModel {
         self.pop0_prob = prob;
     }
 
-    /// Set RZZ angle-dependent error scaling parameters
+    /// Set RZZ parameter scaling for angle dependent error.
+    ///
+    /// The PECOS gate set has a parameterized-angle ZZ gate, RZZ(θ). For implementation
+    /// Certain parameters relate to the strength of the asymmetric
+    /// depolarizing noise. These parameters depend on the angle θ and are normalized so that
+    /// θ = π/2 gives the 2-qubit fault probability (p2).
+    ///
+    /// The parameters for asymmetric depolarizing noise are fit parameters that model how the
+    /// noise changes as the angle θ changes according to these equations:
+    ///
+    /// For θ < 0:
+    ///     (`przz_a` × (|`θ|/π)^przz_power` + `przz_b`) × p2
+    ///
+    /// For θ > 0:
+    ///     (`przz_c` × (|`θ|/π)^przz_power` + `przz_d`) × p2
+    ///
+    /// For θ = 0:
+    ///     (`przz_b` + `przz_d`) × 0.5 × p2
+    ///
+    /// # Parameters
+    /// * `a` - Coefficient for scaling negative angles (`przz_a`)
+    /// * `b` - Offset for negative angles (`przz_b`)
+    /// * `c` - Coefficient for scaling positive angles (`przz_c`)
+    /// * `d` - Offset for positive angles (`przz_d`)
     pub fn set_przz_params(&mut self, a: f64, b: f64, c: f64, d: f64) {
         self.przz_a = a;
         self.przz_b = b;
@@ -2029,6 +2052,7 @@ pub struct GeneralNoiseModelBuilder {
     p_crosstalk_prep_rescale: Option<f64>,
     coherent_dephasing: Option<bool>,
     coherent_to_incoherent_factor: Option<f64>,
+    przz_params: Option<(f64, f64, f64, f64)>,
     przz_power: Option<f64>,
     noiseless_gates: Option<HashSet<GateType>>,
     leak2depolar: Option<bool>,
@@ -2069,6 +2093,7 @@ impl GeneralNoiseModelBuilder {
             p_crosstalk_prep_rescale: None,
             coherent_dephasing: None,
             coherent_to_incoherent_factor: None,
+            przz_params: None,
             przz_power: None,
             noiseless_gates: None,
             leak2depolar: None,
@@ -2301,6 +2326,34 @@ impl GeneralNoiseModelBuilder {
         self
     }
 
+    /// Set RZZ parameter scaling for angle dependent error.
+    ///
+    /// The PECOS gate set has a parameterized-angle ZZ gate, RZZ(θ). For implementation
+    /// Certain parameters relate to the strength of the asymmetric
+    /// depolarizing noise. These parameters depend on the angle θ and are normalized so that
+    /// θ = π/2 gives the 2-qubit fault probability (p2).
+    ///
+    /// The parameters for asymmetric depolarizing noise are fit parameters that model how the
+    /// noise changes as the angle θ changes according to these equations:
+    ///
+    /// For θ < 0:
+    ///     (`przz_a` × (|`θ|/π)^przz_power` + `przz_b`) × p2
+    ///
+    /// For θ > 0:
+    ///     (`przz_c` × (|`θ|/π)^przz_power` + `przz_d`) × p2
+    ///
+    /// For θ = 0:
+    ///     (`przz_b` + `przz_d`) × 0.5 × p2
+    ///
+    /// # Parameters
+    /// * `a` - Coefficient for scaling negative angles (`przz_a`)
+    /// * `b` - Offset for negative angles (`przz_b`)
+    /// * `c` - Coefficient for scaling positive angles (`przz_c`)
+    /// * `d` - Offset for positive angles (`przz_d`)
+    pub fn with_przz_params(&mut self, a: f64, b: f64, c: f64, d: f64) {
+        self.przz_params = Some((a, b, c, d));
+    }
+
     /// Set power parameter for RZZ error scaling
     ///
     /// # Parameters
@@ -2480,6 +2533,12 @@ impl GeneralNoiseModelBuilder {
 
         if let Some(factor) = self.coherent_to_incoherent_factor {
             model.set_coherent_to_incoherent_factor(factor);
+        }
+
+        if let Some(przz_params) = self.przz_params {
+            model.set_przz_params(przz_params.0, przz_params.1, przz_params.2, przz_params.3);
+        } else {
+            model.set_przz_params(0.0, 1.0, 0.0, 1.0);
         }
 
         if let Some(power) = self.przz_power {
