@@ -16,6 +16,7 @@
 //! and convert them to quantum gates (suitable for adding to the `ByteMessage`).
 
 #![allow(clippy::too_many_arguments)]
+#![allow(clippy::missing_panics_doc)]
 
 use crate::byte_message::{ByteMessage, ByteMessageBuilder, QuantumGate};
 use crate::engines::noise::sampler::Sampler;
@@ -23,10 +24,12 @@ use crate::errors::QueueError;
 use pecos_core::RngManageable;
 use rand::Rng;
 use rand::SeedableRng;
+use rand::distr::weighted::WeightedIndex;
+use rand::prelude::Distribution;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashMap;
 use std::ops::Range;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 /// A thread-safe wrapper for random number generators used in noise models
 ///
@@ -54,6 +57,12 @@ impl NoiseRng {
         Self {
             rng: Arc::new(Mutex::new(ChaCha8Rng::seed_from_u64(seed))),
         }
+    }
+
+    pub fn get_guard(&self) -> MutexGuard<'_, ChaCha8Rng> {
+        self.rng
+            .lock()
+            .expect("Failed to lock RNG mutex in sample_from_distribution")
     }
 
     /// Generate a random float between 0.0 and 1.0
@@ -100,42 +109,23 @@ impl NoiseRng {
         rng.random_range(range)
     }
 
-    /// Choose a key from a `HashMap` based on weighted probabilities
+    /// Sample from a precomputed `WeightedIndex` distribution with f64 weights
     ///
     /// # Arguments
-    /// * `weighted_map` - `HashMap` where each key has a corresponding probability weight
+    /// * `distribution` - A precomputed `WeightedIndex` distribution with f64 weights
     ///
     /// # Returns
-    /// The chosen key, or None if the map is empty or all weights are zero
+    /// A random index selected according to the weights
     ///
     /// # Panics
-    /// Panics if the mutex is poisoned
+    /// Panics if the mutex is poisoned, with a descriptive error message
     #[must_use]
-    pub fn choose_weighted<K: Clone>(&self, weighted_map: &HashMap<K, f64>) -> Option<K> {
-        if weighted_map.is_empty() {
-            return None;
-        }
-
-        // Calculate total weight
-        let total_weight: f64 = weighted_map.values().sum();
-        if total_weight <= 0.0 {
-            return None;
-        }
-
-        // Generate a random value between 0 and total_weight
-        let rand_val = self.random_float() * total_weight;
-
-        // Select a key based on weighted probability
-        let mut cumulative = 0.0;
-        for (key, weight) in weighted_map {
-            cumulative += weight;
-            if rand_val <= cumulative {
-                return Some(key.clone());
-            }
-        }
-
-        // If we get here, return the last key (should be rare due to floating-point precision)
-        weighted_map.keys().next().cloned()
+    pub fn sample_from_distribution(&self, distribution: &WeightedIndex<f64>) -> usize {
+        let mut rng = self
+            .rng
+            .lock()
+            .expect("Failed to lock RNG mutex in sample_from_distribution");
+        distribution.sample(&mut *rng)
     }
 
     /// Set the seed for the random number generator

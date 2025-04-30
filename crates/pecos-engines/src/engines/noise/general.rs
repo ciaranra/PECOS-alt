@@ -2182,52 +2182,10 @@ impl GeneralNoiseModelBuilder {
         self
     }
 
-    /// Set the Pauli error model for single-qubit gates with low precision
-    #[must_use]
-    pub fn with_p1_pauli_model_low_precision(mut self, model: &HashMap<String, f64>) -> Self {
-        self.p1_pauli_model = Some(Sampler::new_with_low_precision(model));
-        self
-    }
-
-    /// Set the Pauli error model for single-qubit gates with medium precision
-    #[must_use]
-    pub fn with_p1_pauli_model_medium_precision(mut self, model: &HashMap<String, f64>) -> Self {
-        self.p1_pauli_model = Some(Sampler::new_with_medium_precision(model));
-        self
-    }
-
-    /// Set the Pauli error model for single-qubit gates with high precision
-    #[must_use]
-    pub fn with_p1_pauli_model_high_precision(mut self, model: &HashMap<String, f64>) -> Self {
-        self.p1_pauli_model = Some(Sampler::new_with_high_precision(model));
-        self
-    }
-
     /// Set the emission error model for single-qubit gates
     #[must_use]
     pub fn with_p1_emission_model(mut self, model: &HashMap<String, f64>) -> Self {
         self.p1_emission_model = Some(Sampler::new(model));
-        self
-    }
-
-    /// Set the emission error model for single-qubit gates with low precision
-    #[must_use]
-    pub fn with_p1_emission_model_low_precision(mut self, model: &HashMap<String, f64>) -> Self {
-        self.p1_emission_model = Some(Sampler::new_with_low_precision(model));
-        self
-    }
-
-    /// Set the emission error model for single-qubit gates with medium precision
-    #[must_use]
-    pub fn with_p1_emission_model_medium_precision(mut self, model: &HashMap<String, f64>) -> Self {
-        self.p1_emission_model = Some(Sampler::new_with_medium_precision(model));
-        self
-    }
-
-    /// Set the emission error model for single-qubit gates with high precision
-    #[must_use]
-    pub fn with_p1_emission_model_high_precision(mut self, model: &HashMap<String, f64>) -> Self {
-        self.p1_emission_model = Some(Sampler::new_with_high_precision(model));
         self
     }
 
@@ -2350,8 +2308,10 @@ impl GeneralNoiseModelBuilder {
     /// * `b` - Offset for negative angles (`przz_b`)
     /// * `c` - Coefficient for scaling positive angles (`przz_c`)
     /// * `d` - Offset for positive angles (`przz_d`)
-    pub fn with_przz_params(&mut self, a: f64, b: f64, c: f64, d: f64) {
+    #[must_use]
+    pub fn with_przz_params(mut self, a: f64, b: f64, c: f64, d: f64) -> Self {
         self.przz_params = Some((a, b, c, d));
+        self
     }
 
     /// Set power parameter for RZZ error scaling

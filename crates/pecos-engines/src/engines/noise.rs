@@ -24,6 +24,7 @@ pub mod pass_through;
 pub mod sampler;
 pub mod type_cache_samplers;
 pub mod utils;
+mod weighted_sampler;
 
 pub use self::biased_depolarizing::BiasedDepolarizingNoiseModel;
 pub use self::biased_measurement::BiasedMeasurementNoiseModel;
