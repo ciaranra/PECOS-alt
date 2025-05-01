@@ -2030,11 +2030,14 @@ pub struct GeneralNoiseModelBuilder {
     p1: Option<f64>,
     p2: Option<f64>,
     p1_emission_ratio: Option<f64>,
+    p2_emission_ratio: Option<f64>,
     p1_pauli_model: Option<SingleQubitWeightedSampler>,
     p1_emission_model: Option<SingleQubitWeightedSampler>,
     p2_pauli_model: Option<TwoQubitWeightedSampler>,
     p2_emission_model: Option<TwoQubitWeightedSampler>,
     p_prep_leak_ratio: Option<f64>,
+    seepage_prob: Option<f64>,
+    pop0_prob: Option<f64>,
     seed: Option<u64>,
     scale: Option<f64>,
     memory_scale: Option<f64>,
@@ -2044,8 +2047,11 @@ pub struct GeneralNoiseModelBuilder {
     p1_scale: Option<f64>,
     p2_scale: Option<f64>,
     emission_scale: Option<f64>,
+    p_crosstalk_meas: Option<f64>,
+    p_crosstalk_prep: Option<f64>,
     p_crosstalk_meas_rescale: Option<f64>,
     p_crosstalk_prep_rescale: Option<f64>,
+    crosstalk_per_gate: Option<bool>,
     coherent_dephasing: Option<bool>,
     coherent_to_incoherent_factor: Option<f64>,
     przz_params: Option<(f64, f64, f64, f64)>,
@@ -2071,11 +2077,14 @@ impl GeneralNoiseModelBuilder {
             p1: None,
             p2: None,
             p1_emission_ratio: None,
+            p2_emission_ratio: None,
             p1_pauli_model: None,
             p1_emission_model: None,
             p2_pauli_model: None,
             p2_emission_model: None,
             p_prep_leak_ratio: None,
+            seepage_prob: None,
+            pop0_prob: None,
             seed: None,
             scale: None,
             memory_scale: None,
@@ -2085,8 +2094,11 @@ impl GeneralNoiseModelBuilder {
             p1_scale: None,
             p2_scale: None,
             emission_scale: None,
+            p_crosstalk_meas: None,
+            p_crosstalk_prep: None,
             p_crosstalk_meas_rescale: None,
             p_crosstalk_prep_rescale: None,
+            crosstalk_per_gate: None,
             coherent_dephasing: None,
             coherent_to_incoherent_factor: None,
             przz_params: None,
@@ -2162,13 +2174,6 @@ impl GeneralNoiseModelBuilder {
     #[must_use]
     pub fn with_two_qubit_probability(self, probability: f64) -> Self {
         self.with_p2_probability(probability)
-    }
-
-    /// Set the emission ratio for single-qubit gate errors
-    #[must_use]
-    pub fn with_p1_emission_ratio(mut self, ratio: f64) -> Self {
-        self.p1_emission_ratio = Some(ratio);
-        self
     }
 
     /// Set the Pauli error model for single-qubit gates
@@ -2396,6 +2401,103 @@ impl GeneralNoiseModelBuilder {
         self
     }
 
+    /// Set the emission ratio for single-qubit gate errors
+    ///
+    /// # Panics
+    ///
+    /// Panics if the ratio is not between 0.0 and 1.0 (inclusive).
+    #[must_use]
+    pub fn with_p1_emission_ratio(mut self, ratio: f64) -> Self {
+        assert!(
+            (0.0..=1.0).contains(&ratio),
+            "Emission ratio must be between 0 and 1"
+        );
+        self.p1_emission_ratio = Some(ratio);
+        self
+    }
+
+    /// Set the two-qubit emission ratio
+    ///
+    /// # Panics
+    ///
+    /// Panics if the ratio is not between 0.0 and 1.0 (inclusive).
+    #[must_use]
+    pub fn with_p2_emission_ratio(mut self, ratio: f64) -> Self {
+        assert!(
+            (0.0..=1.0).contains(&ratio),
+            "Emission ratio must be between 0 and 1"
+        );
+        self.p2_emission_ratio = Some(ratio);
+        self
+    }
+
+    /// Set the probability of a leaked qubit being seeped (released from leakage)
+    ///
+    /// # Panics
+    ///
+    /// Panics if the probability is not between 0.0 and 1.0 (inclusive).
+    #[must_use]
+    pub fn with_seepage_prob(mut self, prob: f64) -> Self {
+        assert!(
+            (0.0..=1.0).contains(&prob),
+            "Seepage probability must be between 0 and 1"
+        );
+        self.seepage_prob = Some(prob);
+        self
+    }
+
+    /// Set the probability that a seepage operation results in |0⟩ state (vs |1⟩)
+    ///
+    /// # Panics
+    ///
+    /// Panics if the probability is not between 0.0 and 1.0 (inclusive).
+    #[must_use]
+    pub fn with_pop0_prob(mut self, prob: f64) -> Self {
+        assert!(
+            (0.0..=1.0).contains(&prob),
+            "Pop0 probability must be between 0 and 1"
+        );
+        self.pop0_prob = Some(prob);
+        self
+    }
+
+    /// Set the probability of crosstalk during measurement operations
+    ///
+    /// # Panics
+    ///
+    /// Panics if the probability is not between 0.0 and 1.0 (inclusive).
+    #[must_use]
+    pub fn with_p_crosstalk_meas(mut self, prob: f64) -> Self {
+        assert!(
+            (0.0..=1.0).contains(&prob),
+            "Measurement crosstalk probability must be between 0 and 1"
+        );
+        self.p_crosstalk_meas = Some(prob);
+        self
+    }
+
+    /// Set the probability of crosstalk during initialization operations
+    ///
+    /// # Panics
+    ///
+    /// Panics if the probability is not between 0.0 and 1.0 (inclusive).
+    #[must_use]
+    pub fn with_p_crosstalk_prep(mut self, prob: f64) -> Self {
+        assert!(
+            (0.0..=1.0).contains(&prob),
+            "Preparation crosstalk probability must be between 0 and 1"
+        );
+        self.p_crosstalk_prep = Some(prob);
+        self
+    }
+
+    /// Set whether to apply crosstalk on a per-gate basis
+    #[must_use]
+    pub fn with_crosstalk_per_gate(mut self, per_gate: bool) -> Self {
+        self.crosstalk_per_gate = Some(per_gate);
+        self
+    }
+
     /// Build the general noise model
     ///
     /// # Returns
@@ -2421,6 +2523,10 @@ impl GeneralNoiseModelBuilder {
             model.p1_emission_ratio = ratio;
         }
 
+        if let Some(ratio) = self.p2_emission_ratio {
+            model.set_p2_emission_ratio(ratio);
+        }
+
         if let Some(model_map) = self.p1_pauli_model {
             model.p1_pauli_model = model_map;
         }
@@ -2439,6 +2545,31 @@ impl GeneralNoiseModelBuilder {
 
         if let Some(ratio) = self.p_prep_leak_ratio {
             model.set_prep_leak_ratio(ratio);
+        }
+
+        if let Some(prob) = self.seepage_prob {
+            model.set_seepage_prob(prob);
+        }
+
+        if let Some(prob) = self.pop0_prob {
+            model.set_pop0_prob(prob);
+        }
+
+        if let Some(prob) = self.p_crosstalk_meas {
+            // Set crosstalk parameters
+            model.p_crosstalk_meas = prob;
+        }
+
+        if let Some(prob) = self.p_crosstalk_prep {
+            // Set crosstalk parameters
+            model.p_crosstalk_prep = prob;
+        }
+
+        if let Some(per_gate) = self.crosstalk_per_gate {
+            // Use existing crosstalk settings if they haven't been specified
+            let meas = self.p_crosstalk_meas.unwrap_or(model.p_crosstalk_meas);
+            let prep = self.p_crosstalk_prep.unwrap_or(model.p_crosstalk_prep);
+            model.set_crosstalk_parameters(meas, prep, per_gate);
         }
 
         if let Some(scale) = self.scale {
