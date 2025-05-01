@@ -70,11 +70,6 @@
 //!     .with_two_qubit_probability(0.05)
 //!     .with_seed(42)
 //!     .build();
-//!
-//! // Or using uniform probability for all error channels
-//! let noise_model = GeneralNoiseModel::builder()
-//!     .with_uniform_probability(0.01)
-//!     .build();
 //! ```
 
 #![allow(clippy::too_many_lines)]
@@ -548,7 +543,7 @@ impl GeneralNoiseModel {
             p1,
             p2,
             p1_emission_ratio: 0.5,
-            p_prep_leak_ratio: 0.0,
+            p_prep_leak_ratio: 0.5,
             p2_emission_ratio: 0.5,
             p1_pauli_model: SingleQubitWeightedSampler::new(&p1_pauli_model),
             p1_emission_model: SingleQubitWeightedSampler::new(&p1_emission_model),
@@ -556,11 +551,10 @@ impl GeneralNoiseModel {
             p2_emission_model: TwoQubitWeightedSampler::new(&p2_emission_model),
             seepage_prob: 0.5,
             pop0_prob: 0.5,
-            // TODO: see what needs to be done to ensure that by default the effective error rate for RZZ etc. is the same as SZZ
             przz_a: 0.0,
-            przz_b: 0.0,
+            przz_b: 1.0,
             przz_c: 0.0,
-            przz_d: 0.0,
+            przz_d: 1.0,
             przz_power: 1.0,
             leaked_qubits: HashSet::new(),
             rng: NoiseRng::new(),
@@ -579,111 +573,16 @@ impl GeneralNoiseModel {
             crosstalk_per_gate: false,
             coherent_dephasing: false,
             coherent_to_incoherent_factor: 2.0,
-            noiseless_gates: [GateType::RZ].iter().copied().collect(),
+            noiseless_gates: HashSet::new(),
             leak2depolar: false,
             parameters_scaled: false,
         }
-    }
-
-    /// Create a new noise model with uniform probability for all main noise types
-    ///
-    /// # Panics
-    ///
-    /// Panics if the integer conversion for the number of Pauli operators or
-    /// emission operators overflows, which should never happen with the hard-coded lists.
-    #[must_use]
-    pub fn new_uniform(probability: f64) -> Self {
-        let mut model = Self::new(
-            probability,
-            probability,
-            probability,
-            probability,
-            probability,
-        );
-        model.p_prep_leak_ratio = probability;
-        model.p2_emission_ratio = probability;
-        model.seepage_prob = probability;
-
-        // Initialize default models for two-qubit gates
-        let mut p2_pauli_model = HashMap::new();
-        let two_qubit_paulis = vec![
-            "IX", "IY", "IZ", "XI", "XX", "XY", "XZ", "YI", "YX", "YY", "YZ", "ZI", "ZX", "ZY",
-            "ZZ",
-        ];
-
-        // Equal probability for each two-qubit Pauli error
-        let num_paulis = two_qubit_paulis.len();
-        let prob_per_pauli =
-            1.0 / f64::from(u32::try_from(num_paulis).expect("num_paulis overflow"));
-        for pauli in two_qubit_paulis {
-            p2_pauli_model.insert(pauli.to_string(), prob_per_pauli);
-        }
-
-        // Default emission model
-        let mut p2_emission_model = HashMap::new();
-        // List of common emission errors
-        let emission_operators = vec![
-            "LI", "LX", "LY", "LZ", "IL", "XL", "YL", "ZL", "LL", "XI", "XX", "XY", "XZ", "YI",
-            "YX", "YY", "YZ", "ZI", "ZX", "ZY", "ZZ",
-        ];
-
-        // Equal probability for each emission error
-        let num_operators = emission_operators.len();
-        let prob_per_emission =
-            1.0 / f64::from(u32::try_from(num_operators).expect("too many operators"));
-        for op in emission_operators {
-            p2_emission_model.insert(op.to_string(), prob_per_emission);
-        }
-
-        model.p2_pauli_model = TwoQubitWeightedSampler::new(&p2_pauli_model);
-        model.p2_emission_model = TwoQubitWeightedSampler::new(&p2_emission_model);
-
-        // Note: We don't need to call scale_parameters() here because it gets called on start()
-
-        model
     }
 
     /// Create a new builder for the general noise model
     #[must_use]
     pub fn builder() -> GeneralNoiseModelBuilder {
         GeneralNoiseModelBuilder::new()
-    }
-
-    /// Set all probabilities of error
-    pub fn set_probabilities(
-        &mut self,
-        p_prep: f64,
-        p_meas_0: f64,
-        p_meas_1: f64,
-        p1: f64,
-        p2: f64,
-        p_prep_leak_ratio: f64,
-    ) {
-        Self::validate_probability(p_prep);
-        Self::validate_probability(p_meas_0);
-        Self::validate_probability(p_meas_1);
-        Self::validate_probability(p1);
-        Self::validate_probability(p2);
-        Self::validate_probability(p_prep_leak_ratio);
-
-        self.p_prep = p_prep;
-        self.p_meas_0 = p_meas_0;
-        self.p_meas_1 = p_meas_1;
-        self.p1 = p1;
-        self.p2 = p2;
-        self.p_prep_leak_ratio = p_prep_leak_ratio;
-    }
-
-    /// Set a uniform probability for all error types
-    pub fn set_uniform_probability(&mut self, probability: f64) {
-        self.set_probabilities(
-            probability,
-            probability,
-            probability,
-            probability,
-            probability,
-            probability,
-        );
     }
 
     /// Set the preparation leakage ratio
@@ -1321,6 +1220,7 @@ impl GeneralNoiseModel {
 
         // Scale preparation leakage ratio - include the global scale factor
         self.p_prep_leak_ratio *= self.leakage_scale * scale;
+        self.p_prep_leak_ratio = self.p_prep_leak_ratio.min(1.0);
 
         // Apply crosstalk rescaling factors
         self.p_crosstalk_meas *= self.p_crosstalk_meas_rescale;
@@ -2108,23 +2008,6 @@ impl GeneralNoiseModelBuilder {
         }
     }
 
-    /// Set the same probability for all error types
-    ///
-    /// This is a convenience method to set all probabilities to the same value.
-    ///
-    /// # Arguments
-    /// * `probability` - The probability value to set for all error types
-    #[must_use]
-    pub fn with_uniform_probability(mut self, probability: f64) -> Self {
-        self.p_prep = Some(probability);
-        self.p_meas_0 = Some(probability);
-        self.p_meas_1 = Some(probability);
-        self.p1 = Some(probability);
-        self.p2 = Some(probability);
-        self.p_prep_leak_ratio = Some(probability);
-        self
-    }
-
     /// Set the probability of error during preparation
     #[must_use]
     pub fn with_prep_probability(mut self, probability: f64) -> Self {
@@ -2657,138 +2540,6 @@ mod tests {
     use rand::SeedableRng;
 
     #[test]
-    fn test_probabilities_getter_and_setter() {
-        // Create a noise model with initial probabilities
-        let mut noise = GeneralNoiseModel::new(0.01, 0.02, 0.03, 0.04, 0.05);
-
-        // Use a more reasonable epsilon for floating point comparisons
-        let epsilon = 1e-10;
-
-        // Check initial probabilities before scaling
-        assert!((noise.p_prep - 0.01).abs() < epsilon);
-        assert!((noise.p_meas_0 - 0.02).abs() < epsilon);
-        assert!((noise.p_meas_1 - 0.03).abs() < epsilon);
-        assert!((noise.p1 - 0.04).abs() < epsilon);
-        assert!((noise.p2 - 0.05).abs() < epsilon);
-        assert!((noise.p_prep_leak_ratio - 0.0).abs() < epsilon); // Default value
-
-        // Apply scaling to get the scaled values
-        noise.scale_parameters();
-
-        // Now check the scaled probabilities
-        let (p_prep, p_meas_0, p_meas_1, p1, p2, p_prep_leak_ratio) = noise.probabilities();
-        assert!((p_prep - 0.01).abs() < epsilon);
-        assert!((p_meas_0 - 0.02).abs() < epsilon);
-        assert!((p_meas_1 - 0.03).abs() < epsilon);
-
-        // Account for the 3/2 and 5/4 scaling factors
-        assert!((p1 - 0.04 * (3.0 / 2.0)).abs() < epsilon);
-        assert!((p2 - 0.05 * (5.0 / 4.0)).abs() < epsilon);
-
-        assert!((p_prep_leak_ratio - 0.0).abs() < epsilon); // Default value
-
-        // Update probabilities and check they were updated
-        noise.reset_scaling_factors(); // Reset scaling to avoid double-scaling
-        noise.set_probabilities(0.05, 0.06, 0.07, 0.08, 0.09, 0.6);
-
-        // Check the unscaled values
-        assert!((noise.p_prep - 0.05).abs() < epsilon);
-        assert!((noise.p_meas_0 - 0.06).abs() < epsilon);
-        assert!((noise.p_meas_1 - 0.07).abs() < epsilon);
-        assert!((noise.p1 - 0.08).abs() < epsilon);
-        assert!((noise.p2 - 0.09).abs() < epsilon);
-        assert!((noise.p_prep_leak_ratio - 0.6).abs() < epsilon);
-        // Reset parameters_scaled flag to ensure scaling happens again
-        noise.parameters_scaled = false;
-
-        // Apply scaling
-        noise.scale_parameters();
-
-        // Check the scaled values
-        let (p_prep, p_meas_0, p_meas_1, p1, p2, p_prep_leak_ratio) = noise.probabilities();
-        assert!((p_prep - 0.05).abs() < epsilon);
-        assert!((p_meas_0 - 0.06).abs() < epsilon);
-        assert!((p_meas_1 - 0.07).abs() < epsilon);
-
-        // Account for the 3/2 and 5/4 scaling factors
-        assert!((p1 - 0.08 * (3.0 / 2.0)).abs() < epsilon);
-        assert!((p2 - 0.09 * (5.0 / 4.0)).abs() < epsilon);
-
-        assert!((p_prep_leak_ratio - 0.6).abs() < epsilon);
-
-        // Update just the leak ratio
-        noise.set_prep_leak_ratio(0.8);
-        let (_, _, _, _, _, p_prep_leak_ratio) = noise.probabilities();
-        assert!((p_prep_leak_ratio - 0.8).abs() < epsilon);
-    }
-
-    #[test]
-    fn test_uniform_probability() {
-        // Test the uniform probability constructor
-        let mut noise = GeneralNoiseModel::new_uniform(0.05);
-
-        // Check the unscaled values
-        assert!((noise.p_prep - 0.05).abs() < f64::EPSILON);
-        assert!((noise.p_meas_0 - 0.05).abs() < f64::EPSILON);
-        assert!((noise.p_meas_1 - 0.05).abs() < f64::EPSILON);
-        assert!((noise.p1 - 0.05).abs() < f64::EPSILON);
-        assert!((noise.p2 - 0.05).abs() < f64::EPSILON);
-        assert!((noise.p_prep_leak_ratio - 0.05).abs() < f64::EPSILON);
-
-        // Apply scaling
-        noise.scale_parameters();
-
-        // Check the scaled values
-        let (p_prep, p_meas_0, p_meas_1, p1, p2, p_prep_leak_ratio) = noise.probabilities();
-        assert!((p_prep - 0.05).abs() < f64::EPSILON);
-        assert!((p_meas_0 - 0.05).abs() < f64::EPSILON);
-        assert!((p_meas_1 - 0.05).abs() < f64::EPSILON);
-
-        // Account for the 3/2 and 5/4 scaling factors
-        assert!((p1 - 0.05 * (3.0 / 2.0)).abs() < f64::EPSILON);
-        assert!((p2 - 0.05 * (5.0 / 4.0)).abs() < f64::EPSILON);
-
-        assert!((p_prep_leak_ratio - 0.05).abs() < f64::EPSILON); // Default value
-
-        // Test the uniform probability setter
-        let mut noise = GeneralNoiseModel::new(0.01, 0.02, 0.03, 0.04, 0.05);
-
-        // Reset and set uniform probability
-        noise.reset_scaling_factors();
-        noise.set_uniform_probability(0.07);
-
-        // Check the unscaled values
-        assert!((noise.p_prep - 0.07).abs() < f64::EPSILON);
-        assert!((noise.p_meas_0 - 0.07).abs() < f64::EPSILON);
-        assert!((noise.p_meas_1 - 0.07).abs() < f64::EPSILON);
-        assert!((noise.p1 - 0.07).abs() < f64::EPSILON);
-        assert!((noise.p2 - 0.07).abs() < f64::EPSILON);
-        assert!((noise.p_prep_leak_ratio - 0.07).abs() < f64::EPSILON);
-
-        // Apply scaling
-        noise.scale_parameters();
-
-        // Check the scaled values
-        let (p_prep, p_meas_0, p_meas_1, p1, p2, p_prep_leak_ratio) = noise.probabilities();
-        assert!((p_prep - 0.07).abs() < f64::EPSILON);
-        assert!((p_meas_0 - 0.07).abs() < f64::EPSILON);
-        assert!((p_meas_1 - 0.07).abs() < f64::EPSILON);
-
-        // Account for the 3/2 and 5/4 scaling factors
-        assert!((p1 - 0.07 * (3.0 / 2.0)).abs() < f64::EPSILON);
-        assert!((p2 - 0.07 * (5.0 / 4.0)).abs() < f64::EPSILON);
-
-        assert!((p_prep_leak_ratio - 0.07).abs() < f64::EPSILON);
-    }
-
-    #[test]
-    #[should_panic(expected = "Probability must be between 0.0 and 1.0")]
-    fn test_invalid_probability_panics() {
-        let mut noise = GeneralNoiseModel::new(0.1, 0.2, 0.3, 0.4, 0.5);
-        noise.set_probabilities(0.1, 0.2, 1.1, 0.4, 0.5, 0.5); // Should panic
-    }
-
-    #[test]
     fn test_builder() {
         // Create a noise model with the builder
         let noise = GeneralNoiseModel::builder()
@@ -3017,7 +2768,7 @@ mod tests {
         noise.set_p2_scale(4.0); // Quadruple p2 (in addition to doubling)
         noise.set_prep_scale(5.0); // 5x prep (in addition to doubling)
         noise.set_meas_scale(6.0); // 6x meas (in addition to doubling)
-        noise.set_leakage_scale(7.0); // 7x leakage
+        noise.set_leakage_scale(0.25); // 7x leakage
 
         // Apply scaling
         noise.scale_parameters(); // Apply scaling
@@ -3031,9 +2782,10 @@ mod tests {
         let expected_p1 = 0.01 * 3.0 * 2.0 * (3.0 / 2.0); // Base * p1_scale * overall scale * avg->total
         let expected_p2 = 0.01 * 4.0 * 2.0 * (5.0 / 4.0); // Base * p2_scale * overall scale * avg->total
 
-        // Initial value in constructor is 0.0
+        // Initial value in constructor is 0.5
         // and we scale it by leakage_scale (7.0) and overall scale (2.0)
-        let expected_leak_ratio = 0.0 * 7.0 * 2.0; // Base * leakage_scale * overall scale
+        // This would be 7.0, but capped to 1.0 since it's a probability
+        let expected_leak_ratio = 0.5 * 0.25 * 2.0; // Base * leakage_scale * overall scale, capped at 1.0
 
         println!(
             "p1 actual: {}, expected: {}, diff: {}",
@@ -3079,7 +2831,12 @@ mod tests {
     fn test_builder_with_scaling() {
         // Test that builder applies scaling factors correctly
         let noise = GeneralNoiseModel::builder()
-            .with_uniform_probability(0.01)
+            .with_prep_probability(0.01)
+            .with_meas_0_probability(0.01)
+            .with_meas_1_probability(0.01)
+            .with_single_qubit_probability(0.01)
+            .with_two_qubit_probability(0.01)
+            .with_prep_leak_ratio(0.01)
             .with_scale(2.0)
             .with_p1_scale(3.0)
             .with_p2_scale(4.0)

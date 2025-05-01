@@ -28,7 +28,12 @@ fn main() {
     let quantum = Box::new(StateVecEngine::new(2));
 
     // Create GeneralNoise with uniform probability for all error types
-    let mut noise_builder = GeneralNoiseModel::builder().with_uniform_probability(0.1); // Same as in run_noisy_circ.rs
+    let mut noise_builder = GeneralNoiseModel::builder()
+        .with_prep_probability(0.1)
+        .with_meas_0_probability(0.1)
+        .with_meas_1_probability(0.1)
+        .with_single_qubit_probability(0.1)
+        .with_two_qubit_probability(0.1);
 
     // Set seed if provided
     if let Some(seed) = seed_option {

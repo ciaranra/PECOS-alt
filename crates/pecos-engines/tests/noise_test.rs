@@ -562,9 +562,7 @@ fn test_software_gates_not_affected_by_noise() {
     // Create noise model with high error rates
     let mut noise_model = GeneralNoiseModel::new(0.01, 0.01, 0.01, 0.3, 0.3);
 
-    // Note: RZ is already a software gate by default
-    // This line is kept for clarity but is not strictly necessary
-    // noise_model.add_software_gate(GateType::RZ);
+    noise_model.add_noiseless_gate(GateType::RZ);
     noise_model.set_seed(42).expect("Failed to set seed");
 
     // Create two similar circuits: one with RZ (software gate) and one with hardware gate
