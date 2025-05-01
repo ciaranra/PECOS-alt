@@ -21,10 +21,8 @@ pub mod biased_measurement;
 pub mod depolarizing;
 pub mod general;
 pub mod pass_through;
-pub mod sampler;
-pub mod type_cache_samplers;
 pub mod utils;
-mod weighted_sampler;
+pub mod weighted_sampler;
 
 pub use self::biased_depolarizing::BiasedDepolarizingNoiseModel;
 pub use self::biased_measurement::BiasedMeasurementNoiseModel;
@@ -32,14 +30,8 @@ pub use self::depolarizing::DepolarizingNoiseModel;
 pub use self::general::GeneralNoiseModel;
 pub use self::pass_through::PassThroughNoiseModel;
 pub use self::utils::{NoiseRng, NoiseUtils, ProbabilityValidator};
-pub use sampler::{CachedSampler, PrecisionLevel, Sampler, SamplingMethod};
-
-// Re-export the generic sampler types
-pub use type_cache_samplers::{
-    TypeCachedTableSampler8Bit, TypeCachedTableSampler16Bit, TypeCachedTableSampler32Bit,
-    TypeCachedTableSampler64Bit, TypeCachedTwoQubitTableSampler8Bit,
-    TypeCachedTwoQubitTableSampler16Bit, TypeCachedTwoQubitTableSampler32Bit,
-    TypeCachedTwoQubitTableSampler64Bit,
+pub use self::weighted_sampler::{
+    SingleQubitWeightedSampler, TwoQubitWeightedSampler, WeightedSampler,
 };
 
 use crate::byte_message::ByteMessage;

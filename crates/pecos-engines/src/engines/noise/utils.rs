@@ -19,7 +19,6 @@
 #![allow(clippy::missing_panics_doc)]
 
 use crate::byte_message::{ByteMessage, ByteMessageBuilder, QuantumGate};
-use crate::engines::noise::sampler::Sampler;
 use crate::errors::QueueError;
 use pecos_core::RngManageable;
 use rand::Rng;
@@ -27,7 +26,6 @@ use rand::SeedableRng;
 use rand::distr::weighted::WeightedIndex;
 use rand::prelude::Distribution;
 use rand_chacha::ChaCha8Rng;
-use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -519,36 +517,6 @@ impl NoiseUtils {
         }
     }
 
-    /// This function uses the adaptive sampling method which automatically selects the most
-    /// efficient sampling strategy based on the characteristics of the model.
-    #[must_use]
-    pub fn sample_sq_pauli_model(
-        rng: &NoiseRng,
-        pauli_model: &HashMap<String, f64>,
-        qubit: usize,
-    ) -> SingleQubitNoiseResult {
-        // Use the Sampler which automatically chooses the optimal method and precision
-        let sampler = Sampler::new(pauli_model);
-
-        sampler.sample_sq_noise(rng, qubit)
-    }
-
-    /// This function uses specialized two-qubit noise sampling that's optimized for
-    /// multi-qubit operations, similar to how the `Sampler` class is used for single-qubit
-    /// operations.
-    #[must_use]
-    pub fn sample_tq_pauli_model(
-        rng: &NoiseRng,
-        pauli_model: &HashMap<String, f64>,
-        qubit0: usize,
-        qubit1: usize,
-    ) -> TwoQubitNoiseResult {
-        // Use the Sampler to create a two-qubit sampler
-        let sampler = Sampler::new_two_qubit(pauli_model);
-
-        sampler.sample_tq_noise(rng, qubit0, qubit1)
-    }
-
     /// Prepares a qubit in the |0⟩ state via a builder
     ///
     /// # Arguments
@@ -566,40 +534,6 @@ impl NoiseUtils {
     pub fn apply_prep_1(builder: &mut ByteMessageBuilder, qubit: usize) {
         builder.add_prep(&[qubit]);
         builder.add_x(&[qubit]);
-    }
-
-    /// Sample single-qubit operations including possible leakage based on weighted distribution
-    ///
-    /// # Arguments
-    /// * `rng` - The random number generator to use for sampling
-    /// * `pauli_leakage_model` - `HashMap` containing the weights for different operations
-    /// * `qubit` - The target qubit
-    ///
-    /// Valid operations in the model include:
-    /// - Pauli operators ("X", "Y", "Z")
-    /// - "L" for leakage
-    /// - "I" for identity (no operation)
-    ///
-    /// # Returns
-    /// A `SingleQubitNoiseResult` containing:
-    /// - An optional quantum gate to apply
-    /// - A flag indicating whether the qubit leaked
-    ///
-    /// # Panics
-    /// Panics if:
-    /// - The `pauli_leakage_model` is empty
-    /// - All operations have zero weights
-    /// - Any operation string in the model is invalid
-    #[must_use]
-    pub fn sample_sq_pauli_leakage_model(
-        rng: &NoiseRng,
-        pauli_leakage_model: &HashMap<String, f64>,
-        qubit: usize,
-    ) -> SingleQubitNoiseResult {
-        // Create and use the Sampler which handles all validation
-        let sampler = Sampler::new(pauli_leakage_model);
-
-        sampler.sample_sq_noise(rng, qubit)
     }
 
     /// Randomly selects a single-qubit Pauli gate (X, Y, Z) or no gate (Identity) with equal probability
@@ -624,49 +558,14 @@ impl NoiseUtils {
             _ => None, // Identity: no gate applied
         }
     }
-
-    /// Sample two-qubit operations including possible leakage based on weighted distribution
-    ///
-    /// # Arguments
-    /// * `rng` - The random number generator to use for sampling
-    /// * `model` - `HashMap` containing the weights for different operations
-    /// * `qubit0` - The first qubit
-    /// * `qubit1` - The second qubit
-    ///
-    /// Valid operations in the model include:
-    /// - Two-character Pauli strings ("IX", "XY", "ZZ", etc.) where each character is one of "I", "X", "Y", or "Z"
-    /// - "LI", "IL" for single-qubit leakage
-    /// - "LL" for leakage on both qubits
-    ///
-    /// # Returns
-    /// A `TwoQubitNoiseResult` containing:
-    /// - Any quantum gates to apply (based on non-identity, non-leakage parts of the operation)
-    /// - Flags indicating whether each qubit leaked
-    ///
-    /// # Panics
-    /// Panics if:
-    /// - The `model` is empty
-    /// - All operations have zero weights
-    /// - Any operation string in the model is invalid
-    /// - "II" (identity on both qubits) is included
-    #[must_use]
-    pub fn sample_tq_pauli_leakage_model(
-        rng: &NoiseRng,
-        model: &HashMap<String, f64>,
-        qubit0: usize,
-        qubit1: usize,
-    ) -> TwoQubitNoiseResult {
-        // Use the Sampler to create a two-qubit sampler
-        let sampler = Sampler::new_two_qubit(model);
-
-        sampler.sample_tq_noise(rng, qubit0, qubit1)
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::byte_message::GateType;
+    use crate::engines::noise::weighted_sampler::SingleQubitWeightedSampler;
+    use std::collections::HashMap;
     use std::panic::{AssertUnwindSafe, catch_unwind};
 
     // Constants used in multiple tests
@@ -804,6 +703,7 @@ mod tests {
         let rng = NoiseRng::with_seed(42);
 
         // Test with a valid model
+        // Note: Weights must sum to exactly 1.0 to pass the strict normalization check
         let valid_model: HashMap<String, f64> = [
             ("X".to_string(), 0.5),
             ("Y".to_string(), 0.3),
@@ -813,15 +713,28 @@ mod tests {
         .cloned()
         .collect();
 
+        // Verify the sum is exactly 1.0
+        let sum: f64 = valid_model.values().sum();
+        assert!(
+            (sum - 1.0).abs() < 1e-10,
+            "Model weights should sum to 1.0, got {sum}"
+        );
+
+        // Create a SingleQubitWeightedSampler with the valid model
+        // This sampler handles validation and normalization of weights
+        let sampler = SingleQubitWeightedSampler::new(&valid_model);
+
         // Sample multiple times to ensure different outcomes
         let mut x_count = 0;
         let mut y_count = 0;
         let mut z_count = 0;
 
         for _ in 0..1000 {
-            let gate = NoiseUtils::sample_sq_pauli_model(&rng, &valid_model, 0);
+            // Use the sampler to generate quantum gates based on the weighted probabilities
+            let result = sampler.sample_gates(&rng, 0);
 
-            match gate.gate {
+            // Only check gates (no leakage in this test)
+            match result.gate {
                 Some(gate) => match gate.gate_type {
                     GateType::X => x_count += 1,
                     GateType::Y => y_count += 1,
@@ -850,26 +763,23 @@ mod tests {
         let result = catch_unwind(|| NoiseUtils::create_pauli_gate("INVALID", 0).unwrap());
         assert!(result.is_err(), "Should panic for invalid Pauli operator");
 
-        // Test empty model should panic
+        // Test that empty model causes the sampler constructor to panic
         let empty_model: HashMap<String, f64> = HashMap::new();
         let result = catch_unwind(AssertUnwindSafe(|| {
-            NoiseUtils::sample_sq_pauli_model(&rng, &empty_model, 0)
+            let _ = SingleQubitWeightedSampler::new(&empty_model);
         }));
         assert!(result.is_err(), "Should panic for empty model");
 
-        // Test model with all zero weights should panic
-        let zero_weights: HashMap<String, f64> = [
-            ("X".to_string(), 0.0),
-            ("Y".to_string(), 0.0),
-            ("Z".to_string(), 0.0),
-        ]
-        .iter()
-        .cloned()
-        .collect();
+        // Test that model with invalid keys causes the sampler constructor to panic
+        let invalid_keys: HashMap<String, f64> =
+            [("X".to_string(), 0.5), ("INVALID".to_string(), 0.5)]
+                .iter()
+                .cloned()
+                .collect();
         let result = catch_unwind(AssertUnwindSafe(|| {
-            NoiseUtils::sample_sq_pauli_model(&rng, &zero_weights, 0)
+            let _ = SingleQubitWeightedSampler::new(&invalid_keys);
         }));
-        assert!(result.is_err(), "Should panic for zero-weight model");
+        assert!(result.is_err(), "Should panic for invalid keys");
     }
 
     #[test]
@@ -930,178 +840,7 @@ mod tests {
         clippy::too_many_lines,
         clippy::no_effect_underscore_binding
     )]
-    fn test_sample_tq_pauli_model() {
-        use crate::byte_message::GateType;
-
-        let rng = NoiseRng::with_seed(42);
-
-        // Test with a valid two-qubit Pauli model
-        let valid_model: HashMap<String, f64> = [
-            ("IX".to_string(), 0.2),
-            ("IY".to_string(), 0.1),
-            ("IZ".to_string(), 0.1),
-            ("XI".to_string(), 0.1),
-            ("XX".to_string(), 0.1),
-            ("XY".to_string(), 0.1),
-            ("XZ".to_string(), 0.05),
-            ("YI".to_string(), 0.05),
-            ("YX".to_string(), 0.05),
-            ("YY".to_string(), 0.05),
-            ("YZ".to_string(), 0.02),
-            ("ZI".to_string(), 0.02),
-            ("ZX".to_string(), 0.02),
-            ("ZY".to_string(), 0.02),
-            ("ZZ".to_string(), 0.01),
-        ]
-        .iter()
-        .cloned()
-        .collect();
-
-        // Count occurrences of each Pauli operation type
-        let mut pauli_counts: HashMap<String, usize> = HashMap::new();
-
-        // Count gates on each qubit
-        let mut q0_x_count = 0;
-        let mut _q0_y_count = 0;
-        let mut _q0_z_count = 0;
-        let mut _q0_i_count = 0;
-
-        let mut q1_x_count = 0;
-        let mut _q1_y_count = 0;
-        let mut _q1_z_count = 0;
-        let mut _q1_i_count = 0;
-
-        let mut none_count = 0;
-        let mut _one_gate_count = 0;
-        let mut _two_gate_count = 0;
-
-        // Sample multiple times to ensure proper distribution
-        for _ in 0..1000 {
-            let result = NoiseUtils::sample_tq_pauli_model(&rng, &valid_model, 0, 1);
-
-            // Record the count of gates
-            match &result.gates {
-                None => none_count += 1, // Should never happen with our test model
-                Some(gates) => match gates.len() {
-                    0 => none_count += 1, // Should never happen with our test model
-                    1 => _one_gate_count += 1,
-                    2 => _two_gate_count += 1,
-                    _ => panic!("Unexpected number of gates: {}", gates.len()),
-                },
-            }
-
-            // Extract the Pauli operations from the gates
-            let mut q0_op = "I";
-            let mut q1_op = "I";
-
-            if let Some(gates) = &result.gates {
-                for gate in gates {
-                    match gate.qubits.first() {
-                        Some(&qubit) => {
-                            // Handle the qubit based on its value
-                            if qubit == 0 {
-                                // Operations on qubit 0
-                                match gate.gate_type {
-                                    GateType::X => {
-                                        q0_op = "X";
-                                        q0_x_count += 1;
-                                    }
-                                    GateType::Y => q0_op = "Y",
-                                    GateType::Z => q0_op = "Z",
-                                    _ => panic!("Unexpected gate type on qubit 0"),
-                                }
-                            } else if qubit == 1 {
-                                // Operations on qubit 1
-                                match gate.gate_type {
-                                    GateType::X => {
-                                        q1_op = "X";
-                                        q1_x_count += 1;
-                                    }
-                                    GateType::Y => q1_op = "Y",
-                                    GateType::Z => q1_op = "Z",
-                                    _ => panic!("Unexpected gate type on qubit 1"),
-                                }
-                            }
-                        }
-                        None => panic!("Missing qubit index"),
-                    }
-                }
-            }
-
-            // Construct the combined operation and update the count
-            let combined_op = format!("{q0_op}{q1_op}");
-            *pauli_counts.entry(combined_op.clone()).or_insert(0) += 1;
-        }
-
-        // Verify distributions
-        // X operations on qubit 0 occur in XI, XX, XY, XZ (total weight 0.35)
-        assert!(
-            q0_x_count > 300 && q0_x_count < 400,
-            "Expected ~350 X operations on qubit 0, got {q0_x_count}"
-        );
-
-        // X operations on qubit 1 occur in IX, XX, YX, ZX (total weight 0.37)
-        assert!(
-            q1_x_count > 320 && q1_x_count < 420,
-            "Expected ~370 X operations on qubit 1, got {q1_x_count}"
-        );
-
-        // Verify that "II" was never generated (should be none_count = 0)
-        assert_eq!(
-            none_count, 0,
-            "Got {none_count} samples with no gates, which shouldn't happen"
-        );
-
-        // Test invalid model: with "II"
-        let model_with_ii: HashMap<String, f64> =
-            [("II".to_string(), 1.0)].iter().cloned().collect();
-
-        let result = catch_unwind(AssertUnwindSafe(|| {
-            NoiseUtils::sample_tq_pauli_model(&rng, &model_with_ii, 0, 1)
-        }));
-        assert!(result.is_err(), "Should panic when model contains 'II'");
-
-        // Test invalid model: too many characters
-        let invalid_format_model: HashMap<String, f64> =
-            [("XYZ".to_string(), 1.0)].iter().cloned().collect();
-
-        let result = catch_unwind(AssertUnwindSafe(|| {
-            NoiseUtils::sample_tq_pauli_model(&rng, &invalid_format_model, 0, 1)
-        }));
-        assert!(
-            result.is_err(),
-            "Should panic when model contains operations with wrong format"
-        );
-
-        // Test invalid model: invalid operator
-        let invalid_op_model: HashMap<String, f64> =
-            [("XQ".to_string(), 1.0)].iter().cloned().collect();
-
-        let result = catch_unwind(AssertUnwindSafe(|| {
-            NoiseUtils::sample_tq_pauli_model(&rng, &invalid_op_model, 0, 1)
-        }));
-        assert!(
-            result.is_err(),
-            "Should panic when model contains invalid Pauli operators"
-        );
-
-        // Test empty model
-        let empty_model: HashMap<String, f64> = HashMap::new();
-        let result = catch_unwind(AssertUnwindSafe(|| {
-            NoiseUtils::sample_tq_pauli_model(&rng, &empty_model, 0, 1)
-        }));
-        assert!(result.is_err(), "Should panic for empty model");
-    }
-
-    #[test]
-    #[allow(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        clippy::cast_precision_loss,
-        clippy::too_many_lines,
-        clippy::no_effect_underscore_binding
-    )]
-    fn test_sample_tq_pauli_leakage_model() {
+    fn test_sample_sq_pauli_leakage_model() {
         use crate::byte_message::GateType;
 
         // Define constants at the beginning
@@ -1110,15 +849,27 @@ mod tests {
         let rng = NoiseRng::with_seed(42);
 
         // Test with a valid model including leakage
+        // Note: Weights must sum to exactly 1.0 to pass the strict normalization check
         let valid_model: HashMap<String, f64> = [
             ("X".to_string(), 0.4),
             ("Y".to_string(), 0.3),
             ("Z".to_string(), 0.2),
-            ("L".to_string(), 0.1),
+            ("L".to_string(), 0.1), // L represents leakage
         ]
         .iter()
         .cloned()
         .collect();
+
+        // Verify the sum is exactly 1.0
+        let sum: f64 = valid_model.values().sum();
+        assert!(
+            (sum - 1.0).abs() < 1e-10,
+            "Model weights should sum to 1.0, got {sum}"
+        );
+
+        // Create a SingleQubitWeightedSampler with the valid model including leakage
+        // This sampler handles both Pauli operations and leakage events
+        let sampler = SingleQubitWeightedSampler::new(&valid_model);
 
         // Sample multiple times to test distribution
         let mut x_count = 0;
@@ -1127,11 +878,12 @@ mod tests {
         let mut leakage_count = 0;
 
         for _ in 0..SAMPLE_SIZE {
-            let SingleQubitNoiseResult { gate, qubit_leaked } =
-                NoiseUtils::sample_sq_pauli_leakage_model(&rng, &valid_model, 0);
-            if qubit_leaked {
+            // Sample gates and check for both gate operations and leakage
+            let result = sampler.sample_gates(&rng, 0);
+
+            if result.qubit_leaked {
                 leakage_count += 1;
-            } else if let Some(gate) = gate {
+            } else if let Some(gate) = result.gate {
                 match gate.gate_type {
                     GateType::X => x_count += 1,
                     GateType::Y => y_count += 1,
@@ -1169,11 +921,11 @@ mod tests {
         // Verify the sum is correct
         assert_eq!(x_count + y_count + z_count + leakage_count, SAMPLE_SIZE);
 
-        // Test error cases with safe catch_unwind
+        // Test error cases with catch_unwind
         let empty_model: HashMap<String, f64> = HashMap::new();
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             // This should trigger an "empty model" panic
-            let _result = NoiseUtils::sample_sq_pauli_leakage_model(&rng, &empty_model, 0);
+            let _ = SingleQubitWeightedSampler::new(&empty_model);
         }));
         assert!(result.is_err(), "Empty model should cause panic");
 
@@ -1188,7 +940,7 @@ mod tests {
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             // This should trigger an "invalid operation" panic
-            let _result = NoiseUtils::sample_sq_pauli_leakage_model(&rng, &invalid_model, 0);
+            let _ = SingleQubitWeightedSampler::new(&invalid_model);
         }));
         assert!(result.is_err(), "Invalid operation should cause panic");
     }

@@ -84,9 +84,11 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use crate::byte_message::{ByteMessage, ByteMessageBuilder, QuantumGate, gate_type::GateType};
-use crate::engines::noise::sampler::{Sampler, TwoQubitSampler};
 use crate::engines::noise::utils::NoiseUtils;
 use crate::engines::noise::utils::{NoiseRng, ProbabilityValidator};
+use crate::engines::noise::weighted_sampler::{
+    SingleQubitWeightedSampler, TwoQubitWeightedSampler,
+};
 use crate::engines::noise::{NoiseModel, RngManageable};
 use crate::engines::{ControlEngine, EngineStage};
 use crate::errors::QueueError;
@@ -186,7 +188,7 @@ pub struct GeneralNoiseModel {
     /// For a uniform depolarizing channel, each error type would have equal probability.
     ///
     /// The distribution is stored as pre-computed, cached sampler instead of the `HashMap` that is the input.
-    p1_pauli_model: Sampler,
+    p1_pauli_model: SingleQubitWeightedSampler,
 
     /// Probability model for emission errors on single qubit gates
     ///
@@ -194,7 +196,7 @@ pub struct GeneralNoiseModel {
     /// This includes errors that may cause state transitions outside the computational basis.
     ///
     /// The distribution is stored as pre-computed, cached sampler instead of the `HashMap` that is the input.
-    p1_emission_model: Sampler,
+    p1_emission_model: SingleQubitWeightedSampler,
 
     /// Probability model for Pauli errors on two-qubit gates
     ///
@@ -203,7 +205,7 @@ pub struct GeneralNoiseModel {
     /// operators would have equal probability.
     ///
     /// The distribution is stored as pre-computed, cached sampler instead of the `HashMap` that is the input.
-    p2_pauli_model: TwoQubitSampler,
+    p2_pauli_model: TwoQubitWeightedSampler,
 
     /// Probability model for spontaneous emission errors on two-qubit gates
     ///
@@ -212,7 +214,7 @@ pub struct GeneralNoiseModel {
     /// the computational basis.
     ///
     /// The distribution is stored as pre-computed, cached sampler instead of the `HashMap` that is the input.
-    p2_emission_model: TwoQubitSampler,
+    p2_emission_model: TwoQubitWeightedSampler,
 
     /// Probability of a leaked qubit being seeped (released from leakage)
     ///
@@ -548,10 +550,10 @@ impl GeneralNoiseModel {
             p1_emission_ratio: 0.5,
             p_prep_leak_ratio: 0.0,
             p2_emission_ratio: 0.5,
-            p1_pauli_model: Sampler::new(&p1_pauli_model),
-            p1_emission_model: Sampler::new(&p1_emission_model),
-            p2_pauli_model: TwoQubitSampler::new(&p2_pauli_model),
-            p2_emission_model: TwoQubitSampler::new(&p2_emission_model),
+            p1_pauli_model: SingleQubitWeightedSampler::new(&p1_pauli_model),
+            p1_emission_model: SingleQubitWeightedSampler::new(&p1_emission_model),
+            p2_pauli_model: TwoQubitWeightedSampler::new(&p2_pauli_model),
+            p2_emission_model: TwoQubitWeightedSampler::new(&p2_emission_model),
             seepage_prob: 0.5,
             pop0_prob: 0.5,
             // TODO: see what needs to be done to ensure that by default the effective error rate for RZZ etc. is the same as SZZ
@@ -633,8 +635,8 @@ impl GeneralNoiseModel {
             p2_emission_model.insert(op.to_string(), prob_per_emission);
         }
 
-        model.p2_pauli_model = TwoQubitSampler::new(&p2_pauli_model);
-        model.p2_emission_model = TwoQubitSampler::new(&p2_emission_model);
+        model.p2_pauli_model = TwoQubitWeightedSampler::new(&p2_pauli_model);
+        model.p2_emission_model = TwoQubitWeightedSampler::new(&p2_emission_model);
 
         // Note: We don't need to call scale_parameters() here because it gets called on start()
 
@@ -704,22 +706,22 @@ impl GeneralNoiseModel {
 
     /// Set the stochastic Pauli model for single-qubit gates
     pub fn set_p1_pauli_model(&mut self, model: &HashMap<String, f64>) {
-        self.p1_pauli_model = Sampler::new(model);
+        self.p1_pauli_model = SingleQubitWeightedSampler::new(model);
     }
 
     /// Set the stochastic spontaneous model for single-qubit gates
     pub fn set_p1_emission_model(&mut self, model: &HashMap<String, f64>) {
-        self.p1_emission_model = Sampler::new(model);
+        self.p1_emission_model = SingleQubitWeightedSampler::new(model);
     }
 
     /// Set the stochastic Pauli model for two-qubit gates
     pub fn set_p2_pauli_model(&mut self, model: &HashMap<String, f64>) {
-        self.p2_pauli_model = TwoQubitSampler::new(model);
+        self.p2_pauli_model = TwoQubitWeightedSampler::new(model);
     }
 
     /// Set the stochastic spontaneous model for two-qubit gates
     pub fn set_p2_emission_model(&mut self, model: &HashMap<String, f64>) {
-        self.p2_emission_model = TwoQubitSampler::new(model);
+        self.p2_emission_model = TwoQubitWeightedSampler::new(model);
     }
 
     /// Set the seepage probability
@@ -989,12 +991,6 @@ impl GeneralNoiseModel {
     ///
     /// Panics if sampling from the Pauli model fails or if an invalid Pauli operator is encountered.
     fn apply_sq_faults(&mut self, gate: &QuantumGate, builder: &mut ByteMessageBuilder) {
-        // Skip if probability is zero
-        if self.p1 <= 0.0 {
-            builder.add_quantum_gate(gate);
-            return;
-        }
-
         // Track whether to add the original gate
         let mut add_original_gate = true;
 
@@ -1018,7 +1014,7 @@ impl GeneralNoiseModel {
                 if self.rng.occurs(self.p1_emission_ratio) {
                     add_original_gate = false;
 
-                    let result = self.p1_emission_model.sample_sq_noise(&self.rng, qubit);
+                    let result = self.p1_emission_model.sample_gates(&self.rng, qubit);
 
                     if result.has_leakage() {
                         // Handle leakage
@@ -1032,7 +1028,7 @@ impl GeneralNoiseModel {
                     }
                 } else {
                     // Pauli noise
-                    let result = self.p1_pauli_model.sample_sq_noise(&self.rng, qubit);
+                    let result = self.p1_pauli_model.sample_gates(&self.rng, qubit);
                     if let Some(gate) = result.gate {
                         noise.push(gate);
                         trace!("Applied Pauli error to qubit {}", qubit);
@@ -1095,7 +1091,7 @@ impl GeneralNoiseModel {
 
                     let result = self
                         .p2_emission_model
-                        .sample_tq_noise(&self.rng, qubits[0], qubits[1]);
+                        .sample_gates(&self.rng, qubits[0], qubits[1]);
 
                     if result.has_leakage() {
                         for (qubit, leaked) in qubits.iter().zip(result.has_leakages().iter()) {
@@ -1118,7 +1114,7 @@ impl GeneralNoiseModel {
                     // Pauli noise
                     let result = self
                         .p2_pauli_model
-                        .sample_tq_noise(&self.rng, qubits[0], qubits[1]);
+                        .sample_gates(&self.rng, qubits[0], qubits[1]);
                     if let Some(gates) = result.gates {
                         noise.extend(gates);
                         trace!(
@@ -2003,25 +1999,25 @@ impl GeneralNoiseModel {
 
     /// Accessor for the p1 Pauli distribution
     #[must_use]
-    pub fn p1_pauli_model(&self) -> &Sampler {
+    pub fn p1_pauli_model(&self) -> &SingleQubitWeightedSampler {
         &self.p1_pauli_model
     }
 
     /// Accessor for the p1 emission model
     #[must_use]
-    pub fn p1_emission_model(&self) -> &Sampler {
+    pub fn p1_emission_model(&self) -> &SingleQubitWeightedSampler {
         &self.p1_emission_model
     }
 
     /// Accessor for the p2 Pauli model
     #[must_use]
-    pub fn p2_pauli_model(&self) -> &TwoQubitSampler {
+    pub fn p2_pauli_model(&self) -> &TwoQubitWeightedSampler {
         &self.p2_pauli_model
     }
 
     /// Accessor for the p2 emission model
     #[must_use]
-    pub fn p2_emission_model(&self) -> &TwoQubitSampler {
+    pub fn p2_emission_model(&self) -> &TwoQubitWeightedSampler {
         &self.p2_emission_model
     }
 }
@@ -2034,10 +2030,10 @@ pub struct GeneralNoiseModelBuilder {
     p1: Option<f64>,
     p2: Option<f64>,
     p1_emission_ratio: Option<f64>,
-    p1_pauli_model: Option<Sampler>,
-    p1_emission_model: Option<Sampler>,
-    p2_pauli_model: Option<TwoQubitSampler>,
-    p2_emission_model: Option<TwoQubitSampler>,
+    p1_pauli_model: Option<SingleQubitWeightedSampler>,
+    p1_emission_model: Option<SingleQubitWeightedSampler>,
+    p2_pauli_model: Option<TwoQubitWeightedSampler>,
+    p2_emission_model: Option<TwoQubitWeightedSampler>,
     p_prep_leak_ratio: Option<f64>,
     seed: Option<u64>,
     scale: Option<f64>,
@@ -2178,14 +2174,14 @@ impl GeneralNoiseModelBuilder {
     /// Set the Pauli error model for single-qubit gates
     #[must_use]
     pub fn with_p1_pauli_model(mut self, model: &HashMap<String, f64>) -> Self {
-        self.p1_pauli_model = Some(Sampler::new(model));
+        self.p1_pauli_model = Some(SingleQubitWeightedSampler::new(model));
         self
     }
 
     /// Set the emission error model for single-qubit gates
     #[must_use]
     pub fn with_p1_emission_model(mut self, model: &HashMap<String, f64>) -> Self {
-        self.p1_emission_model = Some(Sampler::new(model));
+        self.p1_emission_model = Some(SingleQubitWeightedSampler::new(model));
         self
     }
 
@@ -2389,18 +2385,16 @@ impl GeneralNoiseModelBuilder {
     /// Set the probability model for two-qubit Pauli errors
     #[must_use]
     pub fn with_p2_pauli_model(mut self, model: &HashMap<String, f64>) -> Self {
-        self.p2_pauli_model = Some(TwoQubitSampler::new(model));
+        self.p2_pauli_model = Some(TwoQubitWeightedSampler::new(model));
         self
     }
 
     /// Set the probability model for two-qubit emission errors
     #[must_use]
     pub fn with_p2_emission_model(mut self, model: &HashMap<String, f64>) -> Self {
-        self.p2_emission_model = Some(TwoQubitSampler::new(model));
+        self.p2_emission_model = Some(TwoQubitWeightedSampler::new(model));
         self
     }
-
-    // TODO: Add precision versions of with_p2_...
 
     /// Build the general noise model
     ///
@@ -3300,7 +3294,7 @@ mod tests {
         model.set_p1_pauli_model(&custom_p1_pauli);
 
         // Get the distribution to verify using the direct accessor pattern
-        let p1_pauli_dist = model.p1_pauli_model().distribution();
+        let p1_pauli_dist = model.p1_pauli_model().get_weighted_map();
 
         // Check that the distribution contains the right keys and approximate values
         assert!(
@@ -3337,7 +3331,7 @@ mod tests {
         model.set_p1_emission_model(&custom_p1_emission);
 
         // Verify p1_emission_model was updated correctly
-        let p1_emission_dist = model.p1_emission_model().distribution();
+        let p1_emission_dist = model.p1_emission_model().get_weighted_map();
         assert!(
             p1_emission_dist.contains_key("X"),
             "Distribution should contain X"
@@ -3357,7 +3351,7 @@ mod tests {
         );
 
         // Verify p1_pauli_model was NOT changed by setting p1_emission_model
-        let p1_pauli_dist = model.p1_pauli_model().distribution();
+        let p1_pauli_dist = model.p1_pauli_model().get_weighted_map();
         assert!(
             (p1_pauli_dist["X"] - 0.7).abs() < EPSILON,
             "Expected X value to be close to 0.7"
@@ -3380,7 +3374,7 @@ mod tests {
         model.set_p2_pauli_model(&custom_p2_pauli);
 
         // Verify p2_pauli_model was updated correctly
-        let p2_pauli_dist = model.p2_pauli_model().distribution();
+        let p2_pauli_dist = model.p2_pauli_model().get_weighted_map();
         assert!(
             p2_pauli_dist.contains_key("XX"),
             "Distribution should contain XX"
@@ -3415,7 +3409,7 @@ mod tests {
         model.set_p2_emission_model(&custom_p2_emission);
 
         // Verify p2_emission_model was updated correctly
-        let p2_emission_dist = model.p2_emission_model().distribution();
+        let p2_emission_dist = model.p2_emission_model().get_weighted_map();
         assert!(
             p2_emission_dist.contains_key("XX"),
             "Distribution should contain XX"
@@ -3435,7 +3429,7 @@ mod tests {
         );
 
         // Verify p2_pauli_model was NOT changed by setting p2_emission_model
-        let p2_pauli_dist = model.p2_pauli_model().distribution();
+        let p2_pauli_dist = model.p2_pauli_model().get_weighted_map();
         assert!(
             (p2_pauli_dist["XX"] - 0.5).abs() < EPSILON,
             "Expected XX value to be close to 0.5"
@@ -3450,7 +3444,7 @@ mod tests {
         );
 
         // Verify p1 models were not affected by p2 model changes
-        let p1_pauli_dist = model.p1_pauli_model().distribution();
+        let p1_pauli_dist = model.p1_pauli_model().get_weighted_map();
         assert!(
             (p1_pauli_dist["X"] - 0.7).abs() < EPSILON,
             "Expected X value to be close to 0.7"
