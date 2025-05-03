@@ -32,6 +32,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Rust (for local testing)
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.cargo/bin:$PATH"
+
       - name: Set up Rust
         run: rustup override set stable && rustup update
 
@@ -76,6 +82,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Rust (for local testing)
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.cargo/bin:$PATH"
+
       - name: Set up Rust
         run: rustup show
 
@@ -83,6 +95,32 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref_name == 'master' || github.ref_name == 'development' }}
+
+      - name: Install LLVM Tools (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y llvm clang
+          which llc
+          llc --version
+
+      - name: Install LLVM Tools (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install llvm
+          echo "$(brew --prefix llvm)/bin" >> $GITHUB_PATH
+          # Make sure it's available in the current step too
+          export PATH="$(brew --prefix llvm)/bin:$PATH"
+          which llc
+
+      - name: Install LLVM Tools (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install llvm
+          echo "C:/Program Files/LLVM/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          # Verify installation
+          Get-Command llc.exe -ErrorAction SilentlyContinue | Out-String
+          & "C:/Program Files/LLVM/bin/llc.exe" --version
 
       - name: Compile tests
         run: cargo test --no-run
