@@ -127,11 +127,11 @@ jobs:
         run: |
           Write-Host "==== Installing LLVM with Chocolatey ===="
           choco install llvm
-          
+
           Write-Host "==== Checking Environment ===="
           Write-Host "Current PATH: $env:Path"
           Write-Host "Chocolatey binaries: $(Get-ChildItem -Path 'C:\ProgramData\chocolatey\bin' -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })"
-          
+
           # Find the LLVM installation
           Write-Host "==== Locating LLVM Installation ===="
           Write-Host "Checking if llc.exe is in PATH..."
@@ -158,36 +158,36 @@ jobs:
               }
             }
           }
-          
+
           if (-not $llvmPath) {
             Write-Host "==== LLVM Search: Broad Scan ===="
             Write-Host "llc.exe not found in common locations. Searching Chocolatey directories..."
             Get-ChildItem -Path "C:\ProgramData\chocolatey" -Filter "llc.exe" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "Found at: $($_.FullName)" }
-            
+
             Write-Host "Searching Program Files..."
             Get-ChildItem -Path "C:\Program Files" -Filter "llc.exe" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "Found at: $($_.FullName)" }
-            
+
             # Find any LLVM directories
             Write-Host "==== Looking for LLVM directories ===="
             Get-ChildItem -Path "C:\" -Directory -Filter "*LLVM*" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "LLVM directory: $($_.FullName)" }
-            
+
             throw "Could not locate llc.exe. Please check the logs for LLVM installation details."
           }
-          
+
           Write-Host "==== LLVM Configuration ===="
           $llvmBinDir = Split-Path -Parent $llvmPath
           Write-Host "LLVM bin directory: $llvmBinDir"
           Write-Host "Files in LLVM bin directory: $(Get-ChildItem -Path $llvmBinDir -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })"
-          
+
           Write-Host "Adding LLVM bin directory to PATH: $llvmBinDir"
           echo $llvmBinDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           $env:Path += ";$llvmBinDir"
-          
+
           # Verify by running llc
           Write-Host "==== Verifying LLVM Installation ===="
           Write-Host "Running: & $llvmPath --version"
           & $llvmPath --version
-          
+
           Write-Host "==== LLVM Installation Complete ===="
 
       - name: Compile tests
