@@ -128,21 +128,21 @@ jobs:
           Write-Host "==== Installing LLVM with Chocolatey to specific location ===="
           # Create a dedicated LLVM installation directory
           mkdir -Force C:\llvm_install
-          
+
           # Install LLVM to the specific directory
           choco install llvm --params "/InstallDir:C:\llvm_install" --yes
-          
+
           Write-Host "==== Checking LLVM Installation ===="
           # Check if LLVM was installed to the expected location
           $expectedLlcPath = "C:\llvm_install\bin\llc.exe"
-          
+
           if (Test-Path $expectedLlcPath) {
             Write-Host "Found llc.exe at expected location: $expectedLlcPath"
             $llvmPath = $expectedLlcPath
           } else {
             # Fall back to checking common locations if the specified installation didn't work
             Write-Host "llc.exe not found at expected location, checking common locations..."
-            
+
             # Try to find llc in PATH first
             $llcCmd = Get-Command llc -ErrorAction SilentlyContinue
             if ($llcCmd) {
@@ -156,7 +156,7 @@ jobs:
                 "C:\ProgramData\chocolatey\bin\llc.exe",
                 "C:\ProgramData\chocolatey\lib\llvm\tools\LLVM\bin\llc.exe"
               )
-              
+
               foreach ($path in $possiblePaths) {
                 Write-Host "Checking $path..."
                 if (Test-Path $path) {
@@ -166,12 +166,12 @@ jobs:
                 }
               }
             }
-            
+
             # If still not found, search Chocolatey directories as last resort
             if (-not $llvmPath) {
               Write-Host "Searching in Chocolatey directories..."
               $chocoResults = Get-ChildItem -Path "C:\ProgramData\chocolatey" -Filter "llc.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-              
+
               if ($chocoResults) {
                 $llvmPath = $chocoResults.FullName
                 Write-Host "Found llc.exe at: $llvmPath"
@@ -180,17 +180,17 @@ jobs:
               }
             }
           }
-          
+
           Write-Host "==== LLVM Configuration ===="
           $llvmBinDir = Split-Path -Parent $llvmPath
           Write-Host "LLVM bin directory: $llvmBinDir"
           Write-Host "Files in LLVM bin directory: $(Get-ChildItem -Path $llvmBinDir -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name)"
-          
+
           # Add LLVM bin to PATH
           Write-Host "Adding LLVM bin directory to PATH: $llvmBinDir"
           echo $llvmBinDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           $env:Path += ";$llvmBinDir"
-          
+
           # Verify by running llc
           Write-Host "Running llc version check:"
           & $llvmPath --version
