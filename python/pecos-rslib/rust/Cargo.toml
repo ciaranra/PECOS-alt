@@ -17,7 +17,7 @@ name = "pecos_rslib"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-pyo3 = { workspace=true, features = ["extension-module", "auto-initialize"] }
+pyo3 = { workspace=true, features = ["extension-module"] }
 pecos = { workspace = true }
 pecos-engines = { workspace = true }
 parking_lot = { workspace = true}
