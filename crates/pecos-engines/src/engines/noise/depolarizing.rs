@@ -11,10 +11,11 @@
 // the License.
 
 use crate::byte_message::{ByteMessage, ByteMessageBuilder, GateType, QuantumGate};
-use crate::engines::noise::{NoiseModel, NoiseRng, NoiseUtils, ProbabilityValidator};
+use crate::engines::noise::{
+    NoiseModel, NoiseRng, NoiseUtils, ProbabilityValidator, RngManageable,
+};
 use crate::errors::QueueError;
 use log::trace;
-use pecos_core::RngManageable;
 use rand_chacha::ChaCha8Rng;
 use std::any::Any;
 
@@ -30,8 +31,7 @@ use std::any::Any;
 ///
 /// ```rust
 /// use pecos_engines::engines::noise::DepolarizingNoiseModel;
-/// use pecos_engines::engines::noise::NoiseModel;
-/// use pecos_core::RngManageable;
+/// use pecos_engines::engines::noise::{NoiseModel, RngManageable};
 ///
 /// // Create with direct constructor
 /// let mut noise_model = DepolarizingNoiseModel::new(0.01, 0.02, 0.03, 0.04);

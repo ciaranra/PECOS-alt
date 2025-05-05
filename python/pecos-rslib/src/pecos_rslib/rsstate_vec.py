@@ -13,9 +13,7 @@
 
 from __future__ import annotations
 
-from typing import Any
-
-import numpy as np
+from typing import Any, List
 
 from pecos_rslib._pecos_rslib import RsStateVec as RustStateVec
 
@@ -33,24 +31,26 @@ class StateVecRs:
         self.bindings = dict(gate_dict)
 
     @property
-    def vector(self) -> np.ndarray:
+    def vector(self) -> List[complex]:
         raw_vector = self._sim.vector
-        print(f"[DEBUG] Raw vector: {raw_vector}")
-
+        # Convert to list of complex numbers
         if isinstance(raw_vector[0], (list, tuple)):
-            raw_vector = np.array([complex(r, i) for r, i in raw_vector])
+            vector = [complex(r, i) for r, i in raw_vector]
+        else:
+            vector = list(raw_vector)
 
         # Convert vector from little-endian to big-endian ordering to match BasicSV
-        raw_vector = np.array(raw_vector).flatten()
         num_qubits = self.num_qubits
 
-        # Convert to big-endian by reversing bit order
-        indices = np.arange(len(raw_vector))
-        binary_indices = [f"{idx:0{num_qubits}b}" for idx in indices]
+        # Create indices mapping using pure Python
+        indices = list(range(len(vector)))
+        # Convert indices to binary strings with proper length
+        binary_indices = [format(idx, f"0{num_qubits}b") for idx in indices]
+        # Reverse bits to change endianness
         reordered_indices = [int(bits[::-1], 2) for bits in binary_indices]
 
-        # Reorder the vector to match BasicSV's bit ordering
-        final_vector = raw_vector[reordered_indices]
+        # Reorder the vector using pure Python
+        final_vector = [vector[idx] for idx in reordered_indices]
 
         return final_vector
 

@@ -38,9 +38,12 @@ use crate::byte_message::ByteMessage;
 use crate::engines::{ControlEngine, EngineStage};
 use crate::errors::QueueError;
 use dyn_clone::DynClone;
-use pecos_core::RngManageable;
 use rand_chacha::ChaCha8Rng;
 use std::any::Any;
+
+// Re-export RngManageable to ensure consistent trait resolution
+// This helps solve Windows-specific dependency issues
+pub use pecos_core::RngManageable;
 
 /// Trait defining interface for quantum noise models
 ///
