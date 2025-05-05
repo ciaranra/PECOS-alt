@@ -74,7 +74,11 @@ lint: fmt clippy
 
 .PHONY: rstest
 rstest:  ## Run Rust tests
+ifeq ($(OS),Windows_NT)
+	cargo test --workspace --exclude pecos-rslib --doc false
+else
 	cargo test
+endif
 
 .PHONY: pytest
 pytest:  ## Run tests on the Python package (not including optional dependencies). ASSUMES: previous build command
@@ -102,6 +106,14 @@ test: rstest pytest-all ## Run all tests. ASSUMES: previous build command
 
 .PHONY: clean
 clean:  ## Clean up caches and build artifacts
+ifeq ($(OS),Windows_NT)
+	-@powershell -Command "exit 0" > NUL 2>&1 && $(MAKE) clean-windows-ps || $(MAKE) clean-windows-cmd
+else
+	$(MAKE) clean-unix
+endif
+
+.PHONY: clean-unix
+clean-unix:
 	@rm -rf *.egg-info
 	@rm -rf dist
 	@find . -type d -name "build" -exec rm -rf {} +
@@ -114,6 +126,34 @@ clean:  ## Clean up caches and build artifacts
 	@find python -name "*.so" -delete
 	@find python -name "*.pyd" -delete
 	@cargo clean
+
+.PHONY: clean-windows-ps
+clean-windows-ps:
+	@powershell -Command "if (Test-Path '*.egg-info') { Remove-Item -Recurse -Force *.egg-info }"
+	@powershell -Command "if (Test-Path 'dist') { Remove-Item -Recurse -Force dist }"
+	@powershell -Command "Get-ChildItem -Path . -Recurse -Directory -Filter 'build' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "if (Test-Path 'python\docs\_build') { Remove-Item -Recurse -Force python\docs\_build }"
+	@powershell -Command "Get-ChildItem -Path . -Recurse -Directory -Filter '.pytest_cache' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path . -Recurse -Directory -Filter '.ipynb_checkpoints' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "if (Test-Path '.ruff_cache') { Remove-Item -Recurse -Force .ruff_cache }"
+	@powershell -Command "Get-ChildItem -Path . -Recurse -Directory -Filter '.hypothesis' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path . -Recurse -Directory -Filter 'junit' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path python -Recurse -File -Include '*.so','*.pyd' | Remove-Item -Force -ErrorAction SilentlyContinue"
+	@cargo clean
+
+.PHONY: clean-windows-cmd
+clean-windows-cmd:
+	-@if exist *.egg-info rd /s /q *.egg-info
+	-@if exist dist rd /s /q dist
+	-@if exist python\docs\_build rd /s /q python\docs\_build
+	-@if exist .ruff_cache rd /s /q .ruff_cache
+	-@for /f "delims=" %%d in ('dir /s /b /ad build 2^>nul') do @rd /s /q "%%d" 2>nul
+	-@for /f "delims=" %%d in ('dir /s /b /ad .pytest_cache 2^>nul') do @rd /s /q "%%d" 2>nul
+	-@for /f "delims=" %%d in ('dir /s /b /ad .ipynb_checkpoints 2^>nul') do @rd /s /q "%%d" 2>nul
+	-@for /f "delims=" %%d in ('dir /s /b /ad .hypothesis 2^>nul') do @rd /s /q "%%d" 2>nul
+	-@for /f "delims=" %%d in ('dir /s /b /ad junit 2^>nul') do @rd /s /q "%%d" 2>nul
+	-@for /f "delims=" %%f in ('dir /s /b python\*.so python\*.pyd 2^>nul') do @del "%%f" 2>nul
+	-@cargo clean
 
 .PHONY: pip-install-uv
 pip-install-uv:  ## Install uv using pip and create a venv. (Recommended to instead follow: https://docs.astral.sh/uv/getting-started/installation/

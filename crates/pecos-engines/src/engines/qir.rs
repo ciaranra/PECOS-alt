@@ -6,6 +6,7 @@ pub mod engine;
 pub mod error;
 pub mod library;
 pub mod measurement;
+pub mod platform;
 pub mod runtime;
 pub mod state;
 
