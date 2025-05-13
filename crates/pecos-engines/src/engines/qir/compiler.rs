@@ -44,8 +44,10 @@ impl QirCompiler {
         thread_id: &str,
     ) -> Result<T, QueueError> {
         result.map_err(|e| {
-            let error_msg = format!("{error_msg}: {e}");
-            Self::log_error(QirError::CompilationFailed(error_msg), thread_id)
+            Self::log_error(
+                QirError::CompilationFailed(format!("{error_msg}: {e}")),
+                thread_id,
+            )
         })
     }
 
@@ -57,12 +59,11 @@ impl QirCompiler {
     ) -> Result<(), QueueError> {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            let error_msg = format!(
-                "{command_name} failed with status: {} and error: {stderr}",
-                output.status
-            );
             return Err(Self::log_error(
-                QirError::CompilationFailed(error_msg),
+                QirError::CompilationFailed(format!(
+                    "{command_name} failed with status: {} and error: {stderr}",
+                    output.status
+                )),
                 thread_id,
             ));
         }
@@ -84,10 +85,9 @@ impl QirCompiler {
 
     /// Helper function to ensure a path's parent directory exists
     fn ensure_parent_dir_exists(path: &Path, thread_id: &str) -> Result<(), QueueError> {
-        if let Some(parent) = path.parent() {
-            Self::ensure_directory_exists(parent, thread_id)?;
-        }
-        Ok(())
+        path.parent().map_or(Ok(()), |parent| {
+            Self::ensure_directory_exists(parent, thread_id)
+        })
     }
 
     /// Compile a QIR program to a dynamically loadable library
@@ -249,8 +249,6 @@ impl QirCompiler {
             .unwrap_or_default()
             .as_secs();
 
-        let lib_name = format!("{file_stem_str}_{timestamp}");
-
         // Determine file paths
         let object_file = output_dir.join(format!("{file_stem_str}.o"));
 
@@ -262,7 +260,8 @@ impl QirCompiler {
         #[cfg(target_os = "windows")]
         let lib_extension = "dll";
 
-        let library_file = output_dir.join(format!("lib{lib_name}.{lib_extension}"));
+        let library_file =
+            output_dir.join(format!("lib{file_stem_str}_{timestamp}.{lib_extension}"));
 
         debug!("QIR Compiler: [Thread {}] Compilation paths:", thread_id);
         debug!(
@@ -284,38 +283,31 @@ impl QirCompiler {
     /// Helper function to find an LLVM tool in the system
     ///
     /// Search order:
-    /// 1. `LLVM_HOME` environment variable (points to LLVM installation)
-    /// 2. `PECOS_LLVM_PATH` environment variable (specific override for this project)
+    /// 1. `PECOS_LLVM_PATH` environment variable (specific override for this project)
+    /// 2. `LLVM_HOME` environment variable (points to LLVM installation)
     /// 3. System PATH
     /// 4. Standard installation directories
     fn find_llvm_tool(tool_name: &str) -> Option<PathBuf> {
         let thread_id = get_thread_id();
 
-        // Check environment variables first
-        if let Some(path) = Self::find_tool_from_env(tool_name) {
-            debug!(
-                "QIR Compiler: [Thread {}] Found {} from environment variable: {:?}",
-                thread_id, tool_name, path
-            );
-            return Some(path);
-        }
+        // Use a simpler approach - try each method in sequence
+        let search_methods = [
+            ("environment variable", Self::find_tool_from_env(tool_name)),
+            ("PATH", Self::find_tool_from_path(tool_name)),
+            (
+                "standard location",
+                Self::find_tool_from_standard_locations(tool_name),
+            ),
+        ];
 
-        // Then check PATH
-        if let Some(path) = Self::find_tool_from_path(tool_name) {
-            debug!(
-                "QIR Compiler: [Thread {}] Found {} in PATH: {:?}",
-                thread_id, tool_name, path
-            );
-            return Some(path);
-        }
-
-        // Finally check standard installation directories
-        if let Some(path) = Self::find_tool_from_standard_locations(tool_name) {
-            debug!(
-                "QIR Compiler: [Thread {}] Found {} in standard location: {:?}",
-                thread_id, tool_name, path
-            );
-            return Some(path);
+        for (source, maybe_path) in search_methods {
+            if let Some(path) = maybe_path {
+                debug!(
+                    "QIR Compiler: [Thread {}] Found {} from {}: {:?}",
+                    thread_id, tool_name, source, path
+                );
+                return Some(path);
+            }
         }
 
         debug!(
@@ -327,26 +319,17 @@ impl QirCompiler {
 
     /// Find tool from environment variables
     fn find_tool_from_env(tool_name: &str) -> Option<PathBuf> {
-        // Check PECOS_LLVM_PATH first (project-specific override)
-        if let Ok(llvm_path) = env::var("PECOS_LLVM_PATH") {
-            let tool_path = PathBuf::from(llvm_path)
-                .join("bin")
-                .join(executable_name(tool_name));
-            if tool_path.exists() {
-                return Some(tool_path);
+        // Check environment variables in order of precedence
+        for env_var in ["PECOS_LLVM_PATH", "LLVM_HOME"] {
+            if let Ok(path) = env::var(env_var) {
+                let tool_path = PathBuf::from(path)
+                    .join("bin")
+                    .join(executable_name(tool_name));
+                if tool_path.exists() {
+                    return Some(tool_path);
+                }
             }
         }
-
-        // Then check LLVM_HOME
-        if let Ok(llvm_home) = env::var("LLVM_HOME") {
-            let tool_path = PathBuf::from(llvm_home)
-                .join("bin")
-                .join(executable_name(tool_name));
-            if tool_path.exists() {
-                return Some(tool_path);
-            }
-        }
-
         None
     }
 
@@ -358,34 +341,89 @@ impl QirCompiler {
         #[cfg(not(target_os = "windows"))]
         let command = "which";
 
-        if let Ok(output) = Command::new(command).arg(tool_name).output() {
-            if output.status.success() {
-                if let Ok(path_str) = String::from_utf8(output.stdout) {
-                    if let Some(path_line) = path_str.lines().next() {
-                        let path = PathBuf::from(path_line.trim());
-                        if path.exists() {
-                            return Some(path);
-                        }
-                    }
-                }
-            }
-        }
-
-        None
+        Command::new(command)
+            .arg(tool_name)
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .and_then(|output| String::from_utf8(output.stdout).ok())
+            .and_then(|path_str| path_str.lines().next().map(|s| s.trim().to_string()))
+            .map(PathBuf::from)
+            .filter(|path| path.exists())
     }
 
     /// Find tool from standard installation locations
     fn find_tool_from_standard_locations(tool_name: &str) -> Option<PathBuf> {
         let exec_name = executable_name(tool_name);
+        standard_llvm_paths()
+            .into_iter()
+            .map(|base| base.join(&exec_name))
+            .find(|path| path.exists())
+    }
 
-        for base_path in standard_llvm_paths() {
-            let tool_path = base_path.join(&exec_name);
-            if tool_path.exists() {
-                return Some(tool_path);
-            }
+    /// Check LLVM version and verify it meets specific version requirements (LLVM 14.x only)
+    fn check_llvm_version(tool_path: &Path) -> Result<String, String> {
+        // Get the version output
+        let output = Command::new(tool_path)
+            .arg("--version")
+            .output()
+            .map_err(|e| format!("Failed to check LLVM version: {e}"))?;
+
+        if !output.status.success() {
+            return Err("Failed to get LLVM version. Tool returned non-zero status.".to_string());
         }
 
-        None
+        let version_output = String::from_utf8_lossy(&output.stdout);
+
+        // Parse the version from output
+        let version = if let Some(version_str) = version_output.lines().next() {
+            // Different LLVM tools might have different version output formats
+            // Try to handle both "LLVM version X.Y.Z" and "clang version X.Y.Z" formats
+
+            // Split by whitespace and look for version number pattern
+            let parts: Vec<&str> = version_str.split_whitespace().collect();
+            let mut version_part = None;
+
+            // Try to find something that looks like a version (contains dots and digits)
+            for &part in &parts {
+                if part.contains('.') && part.chars().any(|c| c.is_ascii_digit()) {
+                    version_part = Some(part);
+                    break;
+                }
+            }
+
+            // If we didn't find anything with dots, look for just digits
+            if version_part.is_none() {
+                for &part in &parts {
+                    if part.chars().all(|c| c.is_ascii_digit()) {
+                        version_part = Some(part);
+                        break;
+                    }
+                }
+            }
+
+            version_part.ok_or_else(|| format!("Could not parse version from: {version_str}"))?
+        } else {
+            return Err("Empty LLVM version output".to_string());
+        };
+
+        // Extract major version and check requirements
+        let major_version = version
+            .split('.')
+            .next()
+            .ok_or_else(|| format!("Malformed LLVM version: {version}"))?;
+
+        let major = major_version
+            .parse::<u32>()
+            .map_err(|_| format!("Failed to parse LLVM major version: {major_version}"))?;
+
+        if major != 14 {
+            return Err(format!(
+                "LLVM version {version} is not compatible. PECOS requires LLVM version 14.x specifically for QIR functionality."
+            ));
+        }
+
+        Ok(version.to_string())
     }
 
     /// Compile QIR file to object file using LLVM tools
@@ -411,11 +449,21 @@ impl QirCompiler {
             let clang = Self::find_llvm_tool("clang").ok_or_else(|| {
                 Self::log_error(
                     QirError::CompilationFailed(
-                        "clang not found in system. Please install LLVM tools.".to_string(),
+                        "clang not found in system. LLVM version 14 is required for QIR functionality. \
+                        Please install LLVM version 14 and ensure 'clang' is in your PATH.".to_string(),
                     ),
                     thread_id,
                 )
             })?;
+
+            // Verify LLVM version
+            let version_result = Self::check_llvm_version(&clang);
+            if let Err(version_err) = version_result {
+                return Err(Self::log_error(
+                    QirError::CompilationFailed(version_err),
+                    thread_id,
+                ));
+            }
 
             debug!(
                 "QIR Compiler: [Thread {}] Using clang at {:?} on Windows",
@@ -435,10 +483,23 @@ impl QirCompiler {
         {
             let llc_path = Self::find_llvm_tool("llc").ok_or_else(|| {
                 Self::log_error(
-                    QirError::CompilationFailed("Could not find llc tool".to_string()),
+                    QirError::CompilationFailed(
+                        "Could not find 'llc' tool. LLVM version 14 is required for QIR functionality. \
+                        Please install LLVM version 14 using your package manager (e.g. 'sudo apt install llvm-14' on Ubuntu, \
+                        'brew install llvm@14' on macOS). After installation, ensure 'llc' is in your PATH.".to_string()
+                    ),
                     thread_id,
                 )
             })?;
+
+            // Verify LLVM version
+            let version_result = Self::check_llvm_version(&llc_path);
+            if let Err(version_err) = version_result {
+                return Err(Self::log_error(
+                    QirError::CompilationFailed(version_err),
+                    thread_id,
+                ));
+            }
 
             let result = Command::new(llc_path)
                 .args(["-filetype=obj", "-o"])
@@ -1058,13 +1119,13 @@ __declspec(dllexport) void __quantum__rt__result_record_output(int result) {}
         }
 
         // Try each fallback tool
-        for fallback in fallbacks {
+        for &fallback in fallbacks {
             if let Some(path) = Self::find_llvm_tool(fallback) {
                 debug!(
                     "QIR Compiler: [Thread {}] Using fallback tool {} instead of {} at {:?}",
                     thread_id, fallback, primary_tool, path
                 );
-                return Some((path, (*fallback).to_string()));
+                return Some((path, fallback.to_string()));
             }
         }
 
