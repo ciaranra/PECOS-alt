@@ -770,7 +770,6 @@ class QIRGenerator(Generator):
             return
         elif (
             isinstance(gate.qargs, tuple)
-            and len(gate.qargs) != gate.qsize
             and all(isinstance(e, tuple) for e in gate.qargs)
         ):
             for pair in gate.qargs:
