@@ -109,13 +109,11 @@ pub struct GeneralNoiseModel {
     /// with physical operations, so no noise should be applied to them.
     noiseless_gates: HashSet<GateType>,
 
-    /// Whether to replace leakage with depolarizing noise
+    /// Scale leakage events to be completely depolarizing events instead.
     ///
-    /// If true, instead of marking qubits as leaked, completely depolarizing noise will be applied.
-    /// This is useful for studying the effects for comparing the effects of leakage vs.
-    /// depolarizing noise.
-    /// TODO: Consider making this more a float and becoming `leakage_scale`
-    leak2depolar: bool,
+    /// 0.0 means no leakage and all leakage events are replaced with completely depolarizing noise.
+    /// 1.0 means all leakage events remain leakage events.
+    leakage_scale: f64,
 
     /// Probability of applying a fault during preparation (initialization)
     ///
@@ -442,7 +440,7 @@ impl GeneralNoiseModel {
         let gates = input
             .parse_quantum_operations()
             .expect("Failed to parse input as quantum operations");
-        
+
         for gate in gates {
             // Skip noise application for noiseless gates
             if self.is_noiseless_gate(&gate.gate_type) {
@@ -942,20 +940,23 @@ impl GeneralNoiseModel {
         // );
     }
 
-    /// Mark a qubit as leaked
+    /// Leak a qubit (or replace it with completely depolarizing noise)
     ///
     /// When a qubit leaks, it moves outside the computational subspace and can no longer be
-    /// affected by quantum gates, but may still be re-prepared and measured
+    /// affected by quantum gates, but may still be re-prepared and measured.
+    /// Here we have the chance to replace the leakage event with completely depolarizing noise...
+    /// `self.leakage_scale` acts like the probability to apply leakage instead of completely
+    /// depolarizing noise.
     fn leak(&mut self, qubit: usize) -> Option<QuantumGate> {
-        if self.leak2depolar {
-            // Apply completely depolarizing noise instead of leakage
-            trace!("Replaced leakage with Pauli error on qubit {}", qubit);
-            self.rng.random_pauli_or_none(qubit)
-        } else {
+        if self.leakage_scale >= 1.0 || self.rng.occurs(self.leakage_scale) {
             // Mark qubit as leaked
             trace!("Marking qubit {} as leaked", qubit);
             self.mark_as_leaked(qubit);
             Some(QuantumGate::prep(qubit))
+        } else {
+            // Apply completely depolarizing noise instead of leakage
+            trace!("Replaced leakage with Pauli error on qubit {}", qubit);
+            self.rng.random_pauli_or_none(qubit)
         }
     }
 
@@ -979,7 +980,8 @@ impl GeneralNoiseModel {
 
     fn unleak(&mut self, qubit: usize) -> Option<QuantumGate> {
         trace!("Replaced leakage with Pauli error on qubit {}", qubit);
-        if self.leak2depolar {
+        if self.leakage_scale == 0.0 {
+            // No leakage is being applied in the system
             None
         } else {
             trace!("Marking qubit {} as unleaked", qubit);
@@ -1363,7 +1365,6 @@ pub struct GeneralNoiseModelBuilder {
     p2_angle_params: Option<(f64, f64, f64, f64)>,
     p2_angle_power: Option<f64>,
     noiseless_gates: Option<HashSet<GateType>>,
-    leak2depolar: Option<bool>,
 }
 
 impl Default for GeneralNoiseModelBuilder {
@@ -1409,7 +1410,6 @@ impl GeneralNoiseModelBuilder {
             p2_angle_params: None,
             p2_angle_power: None,
             noiseless_gates: None,
-            leak2depolar: None,
         }
     }
 
@@ -1594,11 +1594,12 @@ impl GeneralNoiseModelBuilder {
 
     /// Set the scaling factor for leakage errors
     ///
-    /// Multiplier for leakage-related error probabilities. Controls how likely qubits
-    /// are to transition outside the computational subspace during various operations.
+    /// Scales how much leakage is applied and instead is replaced by completely depolarizing noise.
+    /// 1.0 means all leakage events are applied as leakage. 0.0 means all leakage events are
+    /// replaced by completely depolarizing noise.
     #[must_use]
     pub fn with_leakage_scale(mut self, scale: f64) -> Self {
-        self.leakage_scale = Some(scale);
+        self.leakage_scale = Some(Self::validate_probability(scale));
         self
     }
 
@@ -1627,7 +1628,6 @@ impl GeneralNoiseModelBuilder {
     ///
     /// Multiplier for spontaneous-emission-related error probabilities. Controls the relative
     /// strength of errors that involve transitions outside the standard computational basis.
-    /// TODO: consider replacing with leak2depolar
     #[must_use]
     pub fn with_emission_scale(mut self, scale: f64) -> Self {
         self.emission_scale = Some(scale);
@@ -1705,13 +1705,6 @@ impl GeneralNoiseModelBuilder {
             gates.insert(gate_type);
         }
 
-        self
-    }
-
-    /// Set whether to replace leakage with depolarizing noise
-    #[must_use]
-    pub fn with_leak2depolar(mut self, use_depolar: bool) -> Self {
-        self.leak2depolar = Some(use_depolar);
         self
     }
 
@@ -1814,11 +1807,12 @@ impl GeneralNoiseModelBuilder {
     /// and before using the noise model for simulation. Calling it multiple times will
     /// compound the scaling factors incorrectly.
     pub fn scale_parameters(&mut self, model: &mut GeneralNoiseModel) {
+        // Note, leakage_scale is not included here as it is used as an active parameter in the
+        // noise model
         let scale = self.scale.unwrap_or(1.0);
         // let memory_scale = self.memory_scale.unwrap_or(1.0);
         let prep_scale = self.prep_scale.unwrap_or(1.0);
         let meas_scale = self.meas_scale.unwrap_or(1.0);
-        let leakage_scale = self.leakage_scale.unwrap_or(1.0);
         let p1_scale = self.p1_scale.unwrap_or(1.0);
         let p2_scale = self.p2_scale.unwrap_or(1.0);
         let emission_scale = self.emission_scale.unwrap_or(1.0);
@@ -1842,7 +1836,7 @@ impl GeneralNoiseModelBuilder {
         model.p_prep *= prep_scale * scale;
 
         // Scale preparation leakage ratio - include the global scale factor
-        model.p_prep_leak_ratio *= leakage_scale * scale;
+        model.p_prep_leak_ratio *= scale;
         model.p_prep_leak_ratio = model.p_prep_leak_ratio.min(1.0);
 
         // Apply crosstalk rescaling factors
@@ -1964,16 +1958,16 @@ impl GeneralNoiseModelBuilder {
             }
         }
 
-        if let Some(leak2depolar) = self.leak2depolar {
-            model.leak2depolar = leak2depolar;
-        }
-
         if let Some(prob) = self.p_meas_crosstalk {
             model.p_meas_crosstalk = prob;
         }
 
         if let Some(prob) = self.p_prep_crosstalk {
             model.p_prep_crosstalk = prob;
+        }
+
+        if let Some(leakage_scale) = self.leakage_scale {
+            model.leakage_scale = leakage_scale;
         }
 
         self.scale_parameters(&mut model);
@@ -2022,10 +2016,14 @@ impl GeneralNoiseModelBuilder {
             p_prep_crosstalk_scale: None,
             coherent_dephasing: Some(model.coherent_dephasing),
             coherent_to_incoherent_factor: Some(model.coherent_to_incoherent_factor),
-            p2_angle_params: Some((model.p2_angle_a, model.p2_angle_b, model.p2_angle_c, model.p2_angle_d)),
+            p2_angle_params: Some((
+                model.p2_angle_a,
+                model.p2_angle_b,
+                model.p2_angle_c,
+                model.p2_angle_d,
+            )),
             p2_angle_power: Some(model.p2_angle_power),
             noiseless_gates: Some(model.noiseless_gates.clone()),
-            leak2depolar: Some(model.leak2depolar),
         }
     }
 }
@@ -2128,7 +2126,7 @@ impl Default for GeneralNoiseModel {
             coherent_to_incoherent_factor: 2.0,
             noiseless_gates: HashSet::new(),
             p_meas_max: p_meas_0.max(p_meas_1),
-            leak2depolar: false,
+            leakage_scale: 1.0,
         }
     }
 }
@@ -2476,8 +2474,8 @@ mod tests {
         let expected_p2 = 0.01 * 4.0 * 2.0 * (5.0 / 4.0); // Base * p2_scale * overall scale * avg->total
 
         // Initial value in constructor is 0.5
-        // and we scale it by leakage_scale (0.25) and overall scale (2.0)
-        let expected_leak_ratio = 0.5 * 0.25 * 2.0; // Base * leakage_scale * overall scale, capped at 1.0
+        // and we scale it by overall scale (2.0)
+        let expected_leak_ratio = 0.5 * 2.0; // Base * overall scale, capped at 1.0
 
         println!(
             "p1 actual: {}, expected: {}, diff: {}",
@@ -2534,7 +2532,7 @@ mod tests {
             .with_p2_scale(4.0)
             .with_prep_scale(5.0)
             .with_meas_scale(6.0)
-            .with_leakage_scale(7.0)
+            .with_leakage_scale(0.5)
             .build();
 
         // Downcast to check properties
@@ -2549,8 +2547,8 @@ mod tests {
         let expected_p2 = 0.01 * 4.0 * 2.0 * (5.0 / 4.0); // Base * p2_scale * overall scale * avg->total
 
         // When using with_uniform_probability(0.01), p_prep_leak_ratio is set to 0.01
-        // and we scale it by leakage_scale (7.0) and overall scale (2.0)
-        let expected_leak_ratio = 0.01 * 7.0 * 2.0; // Base * leakage_scale * overall scale
+        // and we scale it by leakage_scale (0.5) and overall scale (2.0)
+        let expected_leak_ratio = 0.01 * 2.0; // Base * overall scale
 
         println!("Builder with scaling test:");
         println!(
@@ -2811,9 +2809,9 @@ mod tests {
     }
 
     #[test]
-    fn test_leak2depolar() {
-        // Create a noise model with leak2depolar set to true
-        let mut model = GeneralNoiseModel::builder().with_leak2depolar(true).build();
+    fn test_leakage_scale() {
+        // Create a noise model with leakage_scale set to 0.0
+        let mut model = GeneralNoiseModel::builder().with_leakage_scale(0.0).build();
         let noise = model
             .as_any_mut()
             .downcast_mut::<GeneralNoiseModel>()
@@ -2827,15 +2825,10 @@ mod tests {
         noise.leak(0);
 
         // Verify the qubit is not marked as leaked
-        assert!(
-            !noise.is_leaked(0),
-            "Qubit should not be marked as leaked with leak2depolar=true"
-        );
+        assert!(!noise.is_leaked(0), "Qubit should not be marked as leaked");
 
-        // Reset and try with leak2depolar=false
-        let mut model = GeneralNoiseModel::builder()
-            .with_leak2depolar(false)
-            .build();
+        // Reset and try with leakage_scale 1.0
+        let mut model = GeneralNoiseModel::builder().with_leakage_scale(1.0).build();
         let noise = model
             .as_any_mut()
             .downcast_mut::<GeneralNoiseModel>()
@@ -2849,10 +2842,7 @@ mod tests {
         noise.leak(0);
 
         // Verify the qubit is marked as leaked
-        assert!(
-            noise.is_leaked(0),
-            "Qubit should be marked as leaked with leak2depolar=false"
-        );
+        assert!(noise.is_leaked(0), "Qubit should be marked as leaked");
     }
 
     #[test]
