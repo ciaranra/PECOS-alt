@@ -258,13 +258,6 @@ pub struct GeneralNoiseModel {
     /// Panics if the factor is not positive (less than or equal to 0.0).
     coherent_to_incoherent_factor: f64,
 
-    /// Whether to apply crosstalk on a per-gate basis
-    ///
-    /// If true, crosstalk is applied separately for each target qubit in a multi-qubit
-    /// operation. If false, crosstalk is applied only once for the entire operation.
-    /// TODO: consider separate per crosstalk channel
-    crosstalk_per_gate: bool,
-
     /// Probability of flipping a 0 measurement to 1
     ///
     /// This asymmetric measurement error models cases when a qubit in state |0⟩ is incorrectly
@@ -449,9 +442,7 @@ impl GeneralNoiseModel {
         let gates = input
             .parse_quantum_operations()
             .expect("Failed to parse input as quantum operations");
-
-        // TODO: Make this noise model handle gates that have multiple qubit arguments
-        //       Currently it is assumed one gate per gate type...
+        
         for gate in gates {
             // Skip noise application for noiseless gates
             if self.is_noiseless_gate(&gate.gate_type) {
@@ -851,7 +842,6 @@ impl GeneralNoiseModel {
         measured_qubits: &[usize],
         measurement_results: &[(usize, u32)],
     ) -> ByteMessage {
-        // TODO: Consider factoring out an overall measurement error rate p_meas and relative bias rates
         let mut results_builder = ByteMessage::measurement_results_builder();
 
         // Check if there are any leaked qubits
@@ -1368,7 +1358,6 @@ pub struct GeneralNoiseModelBuilder {
     p_prep_crosstalk: Option<f64>,
     p_meas_crosstalk_scale: Option<f64>,
     p_prep_crosstalk_scale: Option<f64>,
-    crosstalk_per_gate: Option<bool>,
     coherent_dephasing: Option<bool>,
     coherent_to_incoherent_factor: Option<f64>,
     przz_params: Option<(f64, f64, f64, f64)>,
@@ -1415,7 +1404,6 @@ impl GeneralNoiseModelBuilder {
             p_prep_crosstalk: None,
             p_meas_crosstalk_scale: None,
             p_prep_crosstalk_scale: None,
-            crosstalk_per_gate: None,
             coherent_dephasing: None,
             coherent_to_incoherent_factor: None,
             przz_params: None,
@@ -1815,13 +1803,6 @@ impl GeneralNoiseModelBuilder {
         self
     }
 
-    /// Set whether to apply crosstalk on a per-gate basis
-    #[must_use]
-    pub fn with_crosstalk_per_gate(mut self, per_gate: bool) -> Self {
-        self.crosstalk_per_gate = Some(per_gate);
-        self
-    }
-
     /// Scale error probabilities based on scaling factors
     ///
     /// This method applies all scaling factors to the error probabilities:
@@ -1987,10 +1968,6 @@ impl GeneralNoiseModelBuilder {
             model.leak2depolar = leak2depolar;
         }
 
-        if let Some(has_crosstalk_per_gate) = self.crosstalk_per_gate {
-            model.crosstalk_per_gate = has_crosstalk_per_gate;
-        }
-
         if let Some(prob) = self.p_meas_crosstalk {
             model.p_meas_crosstalk = prob;
         }
@@ -2043,7 +2020,6 @@ impl GeneralNoiseModelBuilder {
             p_prep_crosstalk: Some(model.p_prep_crosstalk),
             p_meas_crosstalk_scale: None,
             p_prep_crosstalk_scale: None,
-            crosstalk_per_gate: Some(model.crosstalk_per_gate),
             coherent_dephasing: Some(model.coherent_dephasing),
             coherent_to_incoherent_factor: Some(model.coherent_to_incoherent_factor),
             przz_params: Some((model.przz_a, model.przz_b, model.przz_c, model.przz_d)),
@@ -2148,7 +2124,6 @@ impl Default for GeneralNoiseModel {
             rng: NoiseRng::default(),
             p_meas_crosstalk: 0.0,
             p_prep_crosstalk: 0.0,
-            crosstalk_per_gate: false,
             coherent_dephasing: false,
             coherent_to_incoherent_factor: 2.0,
             noiseless_gates: HashSet::new(),
