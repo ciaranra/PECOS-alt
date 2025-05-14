@@ -182,27 +182,27 @@ pub struct GeneralNoiseModel {
     /// Models depolarizing channel + leakage noise for two-qubit gates.
     p2: f64,
 
-    /// Scaling parameters for RZZ gate error rate - coefficient a
+    /// Scaling parameters for two-qubit gate error rate - coefficient a
     ///
-    /// Part of a parameterized model for angle-dependent errors in RZZ gates.
+    /// Part of a parameterized model for angle-dependent errors in two-qubit gates.
     /// The error rate is modeled as a function of angle θ: p(θ) = a + b|θ| + c|θ|^d
-    przz_a: f64,
+    p2_angle_a: f64,
 
-    /// Scaling parameters for RZZ gate error rate - coefficient b
-    przz_b: f64,
+    /// Scaling parameters for two-qubit gate angular error rate dependency - coefficient b
+    p2_angle_b: f64,
 
-    /// Scaling parameters for RZZ gate error rate - coefficient c
-    przz_c: f64,
+    /// Scaling parameters for two-qubit gate angular error rate dependency - coefficient c
+    p2_angle_c: f64,
 
-    /// Scaling parameters for RZZ gate error rate - coefficient d
-    przz_d: f64,
+    /// Scaling parameters for two-qubit gate angular error rate dependency- coefficient d
+    p2_angle_d: f64,
 
-    /// Power parameter for RZZ gate error rate scaling
+    /// Power parameter for two-qubit gate angular error rate dependency
     ///
-    /// Controls how error probabilities scale with rotation angle in RZZ gates.
-    /// Error scales as `theta^przz_power` where theta is the gate angle.
+    /// Controls how error probabilities scale with rotation angle in two-qubit gates.
+    /// Error scales as `theta^p2_angle_power` where theta is the gate angle.
     /// Typically set to 1.0 for linear scaling.
-    przz_power: f64,
+    p2_angle_power: f64,
 
     /// The proportion of two-qubit errors that are emission faults
     ///
@@ -1235,18 +1235,18 @@ impl GeneralNoiseModel {
         let theta = angle.abs() / std::f64::consts::PI;
 
         // Apply power scaling to the normalized theta
-        let theta_power = theta.powf(self.przz_power);
+        let theta_power = theta.powf(self.p2_angle_power);
 
         // Determine base rate based on angle sign
         let base_rate = if angle < 0.0 {
             // Negative angle - use a and b coefficients
-            self.przz_a * theta_power + self.przz_b
+            self.p2_angle_a * theta_power + self.p2_angle_b
         } else if angle > 0.0 {
             // Positive angle - use c and d coefficients
-            self.przz_c * theta_power + self.przz_d
+            self.p2_angle_c * theta_power + self.p2_angle_d
         } else {
             // Angle is exactly zero - use average of b and d
-            (self.przz_b + self.przz_d) * 0.5
+            (self.p2_angle_b + self.p2_angle_d) * 0.5
         };
 
         base_rate * self.p2
@@ -1360,8 +1360,8 @@ pub struct GeneralNoiseModelBuilder {
     p_prep_crosstalk_scale: Option<f64>,
     coherent_dephasing: Option<bool>,
     coherent_to_incoherent_factor: Option<f64>,
-    przz_params: Option<(f64, f64, f64, f64)>,
-    przz_power: Option<f64>,
+    p2_angle_params: Option<(f64, f64, f64, f64)>,
+    p2_angle_power: Option<f64>,
     noiseless_gates: Option<HashSet<GateType>>,
     leak2depolar: Option<bool>,
 }
@@ -1406,8 +1406,8 @@ impl GeneralNoiseModelBuilder {
             p_prep_crosstalk_scale: None,
             coherent_dephasing: None,
             coherent_to_incoherent_factor: None,
-            przz_params: None,
-            przz_power: None,
+            p2_angle_params: None,
+            p2_angle_power: None,
             noiseless_gates: None,
             leak2depolar: None,
         }
@@ -1665,22 +1665,22 @@ impl GeneralNoiseModelBuilder {
     /// noise changes as the angle θ changes according to these equations:
     ///
     /// For θ < 0:
-    ///     (`przz_a` × (|`θ|/π)^przz_power` + `przz_b`) × p2
+    ///     (`p2_angle_a` × (|`θ|/π)^p2_angle_power` + `p2_angle_b`) × p2
     ///
     /// For θ > 0:
-    ///     (`przz_c` × (|`θ|/π)^przz_power` + `przz_d`) × p2
+    ///     (`p2_angle_c` × (|`θ|/π)^p2_angle_power` + `p2_angle_d`) × p2
     ///
     /// For θ = 0:
-    ///     (`przz_b` + `przz_d`) × 0.5 × p2
+    ///     (`p2_angle_b` + `p2_angle_d`) × 0.5 × p2
     ///
     /// # Parameters
-    /// * `a` - Coefficient for scaling negative angles (`przz_a`)
-    /// * `b` - Offset for negative angles (`przz_b`)
-    /// * `c` - Coefficient for scaling positive angles (`przz_c`)
-    /// * `d` - Offset for positive angles (`przz_d`)
+    /// * `a` - Coefficient for scaling negative angles (`p2_angle_a`)
+    /// * `b` - Offset for negative angles (`p2_angle_b`)
+    /// * `c` - Coefficient for scaling positive angles (`p2_angle_c`)
+    /// * `d` - Offset for positive angles (`p2_angle_d`)
     #[must_use]
-    pub fn with_przz_params(mut self, a: f64, b: f64, c: f64, d: f64) -> Self {
-        self.przz_params = Some((a, b, c, d));
+    pub fn with_p2_angle_params(mut self, a: f64, b: f64, c: f64, d: f64) -> Self {
+        self.p2_angle_params = Some((a, b, c, d));
         self
     }
 
@@ -1689,8 +1689,8 @@ impl GeneralNoiseModelBuilder {
     /// # Parameters
     /// * `power` - The power to which theta is raised in the RZZ error rate formula
     #[must_use]
-    pub fn with_przz_power(mut self, power: f64) -> Self {
-        self.przz_power = Some(Self::validate_positive(power, "RZZ power parameter"));
+    pub fn with_p2_angle_power(mut self, power: f64) -> Self {
+        self.p2_angle_power = Some(Self::validate_positive(power, "RZZ power parameter"));
         self
     }
 
@@ -1791,14 +1791,14 @@ impl GeneralNoiseModelBuilder {
 
     /// Set the probability of crosstalk during measurement operations
     #[must_use]
-    pub fn with_p_crosstalk_meas(mut self, prob: f64) -> Self {
+    pub fn with_p_meas_crosstalk(mut self, prob: f64) -> Self {
         self.p_meas_crosstalk = Some(Self::validate_probability(prob));
         self
     }
 
     /// Set the probability of crosstalk during initialization operations
     #[must_use]
-    pub fn with_p_crosstalk_prep(mut self, prob: f64) -> Self {
+    pub fn with_p_prep_crosstalk(mut self, prob: f64) -> Self {
         self.p_prep_crosstalk = Some(Self::validate_probability(prob));
         self
     }
@@ -1947,15 +1947,15 @@ impl GeneralNoiseModelBuilder {
             model.coherent_to_incoherent_factor = factor;
         }
 
-        if let Some(przz_params) = self.przz_params {
-            model.przz_a = przz_params.0;
-            model.przz_b = przz_params.1;
-            model.przz_c = przz_params.2;
-            model.przz_d = przz_params.3;
+        if let Some(p2_angle_params) = self.p2_angle_params {
+            model.p2_angle_a = p2_angle_params.0;
+            model.p2_angle_b = p2_angle_params.1;
+            model.p2_angle_c = p2_angle_params.2;
+            model.p2_angle_d = p2_angle_params.3;
         }
 
-        if let Some(power) = self.przz_power {
-            model.przz_power = power;
+        if let Some(power) = self.p2_angle_power {
+            model.p2_angle_power = power;
         }
 
         if let Some(gates) = self.noiseless_gates.clone() {
@@ -2022,8 +2022,8 @@ impl GeneralNoiseModelBuilder {
             p_prep_crosstalk_scale: None,
             coherent_dephasing: Some(model.coherent_dephasing),
             coherent_to_incoherent_factor: Some(model.coherent_to_incoherent_factor),
-            przz_params: Some((model.przz_a, model.przz_b, model.przz_c, model.przz_d)),
-            przz_power: Some(model.przz_power),
+            p2_angle_params: Some((model.p2_angle_a, model.p2_angle_b, model.p2_angle_c, model.p2_angle_d)),
+            p2_angle_power: Some(model.p2_angle_power),
             noiseless_gates: Some(model.noiseless_gates.clone()),
             leak2depolar: Some(model.leak2depolar),
         }
@@ -2115,11 +2115,11 @@ impl Default for GeneralNoiseModel {
             p2_emission_model: TwoQubitWeightedSampler::new(&p2_emission_model),
             p1_seepage_prob: 0.5,
             p2_seepage_prob: 0.5,
-            przz_a: 0.0,
-            przz_b: 1.0,
-            przz_c: 0.0,
-            przz_d: 1.0,
-            przz_power: 1.0,
+            p2_angle_a: 0.0,
+            p2_angle_b: 1.0,
+            p2_angle_c: 0.0,
+            p2_angle_d: 1.0,
+            p2_angle_power: 1.0,
             leaked_qubits: HashSet::new(),
             rng: NoiseRng::default(),
             p_meas_crosstalk: 0.0,
@@ -2701,8 +2701,8 @@ mod tests {
     fn test_rzz_error_rate() {
         let mut model = GeneralNoiseModel::builder()
             .with_average_p2_probability(0.1)
-            .with_przz_params(0.1, 0.0, 0.25, 0.0)
-            .with_przz_power(1.0)
+            .with_p2_angle_params(0.1, 0.0, 0.25, 0.0)
+            .with_p2_angle_power(1.0)
             .build();
         let noise = model
             .as_any_mut()
@@ -2730,8 +2730,8 @@ mod tests {
         // Test quadratic scaling
         let mut model = GeneralNoiseModel::builder()
             .with_average_p2_probability(0.1)
-            .with_przz_params(0.1, 0.0, 0.25, 0.0)
-            .with_przz_power(2.0)
+            .with_p2_angle_params(0.1, 0.0, 0.25, 0.0)
+            .with_p2_angle_power(2.0)
             .build();
         let noise = model
             .as_any_mut()
@@ -2859,7 +2859,7 @@ mod tests {
     fn test_rzz_error_rate_debug() {
         let mut model = GeneralNoiseModel::builder()
             .with_average_p2_probability(0.1)
-            .with_przz_params(0.1, 0.0, 0.25, 0.0)
+            .with_p2_angle_params(0.1, 0.0, 0.25, 0.0)
             .build();
         let noise = model
             .as_any_mut()
@@ -2884,7 +2884,7 @@ mod tests {
         // Check scaled przz error rate
         let mut model = GeneralNoiseModel::builder()
             .with_average_p2_probability(0.1)
-            .with_przz_params(0.1, 0.0, 0.25, 0.0)
+            .with_p2_angle_params(0.1, 0.0, 0.25, 0.0)
             .with_scale(2.0)
             .build();
         let noise = model

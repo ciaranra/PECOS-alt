@@ -472,8 +472,8 @@ fn test_rzz_angle_dependent_error_model() {
         .with_meas_1_probability(0.01)
         .with_average_p1_probability(0.05)
         .with_average_p2_probability(0.1)
-        .with_przz_params(0.05, 0.0, 0.1, 0.0) // a=0.05, b=0, c=0.1, d=0
-        .with_przz_power(1.0) // Linear scaling with angle
+        .with_p2_angle_params(0.05, 0.0, 0.1, 0.0) // a=0.05, b=0, c=0.1, d=0
+        .with_p2_angle_power(1.0) // Linear scaling with angle
         .with_seed(42)
         .build();
 
@@ -519,7 +519,7 @@ fn test_rzz_angle_dependent_error_model() {
         let counts = count_results(noise_model, &circ, NUM_SHOTS, 2);
 
         // For RZZ(θ), calculate expected error rate based on our parameters
-        // Error model: przz_a/c * (|angle|/π)^przz_power + przz_b/d
+        // Error model: p2_angle_a/c * (|angle|/π)^p2_angle_power + p2_angle_b/d
         let _expected_error_rate = if angle < 0.0 {
             // Negative angle: a*θ^power + b
             0.05 * (angle.abs() / PI).powf(1.0) + 0.0
