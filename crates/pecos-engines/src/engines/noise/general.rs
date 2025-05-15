@@ -235,6 +235,12 @@ pub struct GeneralNoiseModel {
     /// The distribution is stored as pre-computed, cached sampler instead of the `HashMap` that is the input.
     p2_emission_model: TwoQubitWeightedSampler,
 
+    /// Idle noise after each two-qubit gate that is quadratically dependent on the rate.
+    ///
+    /// This will be a coherent noise channel unless `p_idle_coherent` is set to false. If it is
+    /// false it will apply Z to each qubit with probability
+    p2_idle_quadratic_rate: f64,
+
     /// Whether to use coherent dephasing vs incoherent (stochastic) dephasing
     ///
     /// If true, dephasing is modeled as coherent phase rotations using RZ gates.
@@ -457,7 +463,7 @@ impl GeneralNoiseModel {
             match gate.gate_type {
                 GateType::Idle => {
                     // Still apply any noise that might result from idling
-                    self.apply_idle_faults(&gate, &mut builder);
+                    // self.apply_idle_faults(&gate, &mut builder);
                     // Skip adding the Idle gate itself to the builder
                 }
                 GateType::Prep => {
@@ -481,7 +487,7 @@ impl GeneralNoiseModel {
                     // For RZZ gates, use angle-dependent error rates
                     let p2 = if gate.gate_type == GateType::RZZ {
                         let angle = gate.params[0];
-                        self.rzz_error_rate(angle)
+                        self.p2_angle_error_rate(angle)
                     } else {
                         self.p2
                     };
@@ -816,7 +822,7 @@ impl GeneralNoiseModel {
             if !original_gate_qubits.is_empty() {
                 let new_gate = QuantumGate::new(
                     gate.gate_type,
-                    original_gate_qubits,
+                    original_gate_qubits.clone(),
                     gate.params.clone(),
                     None,
                 );
@@ -827,6 +833,15 @@ impl GeneralNoiseModel {
         }
 
         builder.add_quantum_gates(&noise);
+
+        // TODO: add test
+        if self.p2_idle_quadratic_rate > 0.0 {
+            self.apply_quadratic_dephasing(
+                builder,
+                self.p2_idle_quadratic_rate,
+                &original_gate_qubits,
+            );
+        }
     }
 
     /// Apply measurement bias and handle leaked qubits
@@ -891,54 +906,6 @@ impl GeneralNoiseModel {
 
         // Get the biased measurement results
         results_builder.build()
-    }
-
-    /// Apply idle qubit noise faults
-    ///
-    /// Models errors that occur during idle periods when qubits are not actively being manipulated:
-    /// 1. Coherent dephasing: Phase rotation errors that accumulate during idle time
-    /// 2. Incoherent dephasing: Stochastic Z errors
-    ///
-    /// The error rates scale with the idle duration, and are affected by `memory_scale` parameter.
-    /// In physical systems, this sensitivity to the surrounding magnetic fields, represents
-    /// heating, T2 decoherence, and other environmental interactions that affect the qubit while
-    /// it's not being actively controlled.
-    #[allow(clippy::unused_self)]
-    pub fn apply_idle_faults(&mut self, _gate: &QuantumGate, _builder: &mut ByteMessageBuilder) {
-        // let duration = gate.idle_duration();
-        //
-        // // Skip if duration is too small
-        // if duration < f64::EPSILON {
-        //     // Just pass through the gate without noise
-        //     builder.add_quantum_gate(gate);
-        //     return;
-        // }
-        //
-        // // Filter out leaked qubits
-        // let qubits: Vec<usize> = gate
-        //     .qubits
-        //     .iter()
-        //     .filter(|&&q| !self.is_leaked(q))
-        //     .copied()
-        //     .collect();
-        //
-        // if qubits.is_empty() {
-        //     return;
-        // }
-        //
-        // // Call the existing dephasing method to apply the appropriate noise
-        // // This will use the same dephasing model as other memory operations
-        // self.apply_dephasing(
-        //     builder,
-        //     gate,
-        //     duration,
-        //     // For coherent dephasing
-        //     Some(dephasing_rate),
-        //     // For incoherent dephasing
-        //     Some(dephasing_rate),
-        //     // Whether to use coherent dephasing
-        //     self.coherent_dephasing,
-        // );
     }
 
     /// Leak a qubit (or replace it with completely depolarizing noise)
@@ -1033,187 +1000,23 @@ impl GeneralNoiseModel {
     ///
     /// # Parameters
     /// * `builder` - The `ByteMessageBuilder` to add gate operations to
-    /// * `gate` - The gate experiencing dephasing
-    /// * `duration` - The time duration over which dephasing occurs
-    /// * `rate` - The dephasing rate parameter
-    #[allow(dead_code)]
-    fn apply_coherent_dephasing(
+    /// * `angle` - The time duration over which idling occurs times the rate per time
+    /// * `qubits` - The qubits that are potentially affected by the idling noise
+    fn apply_quadratic_dephasing(
         &mut self,
         builder: &mut ByteMessageBuilder,
-        gate: &QuantumGate,
-        duration: f64,
-        rate: f64,
+        angle: f64,
+        qubits: &[usize],
     ) {
-        // Only apply to qubits that are not in a leaked state
-        let qubits: Vec<usize> = gate
-            .qubits
-            .iter()
-            .filter(|&&q| !self.is_leaked(q))
-            .copied()
-            .collect();
-
-        // If there are qubits to apply dephasing to, add a rotation gate
-        if !qubits.is_empty() {
-            // Create an RZ gate with angle determined by rate * duration
-            let dephase_gate =
-                QuantumGate::new(GateType::RZ, qubits.clone(), vec![rate * duration], None);
-
-            // Add the gate to the circuit
-            NoiseUtils::add_gate_to_builder(builder, &dephase_gate);
-
-            trace!(
-                "Applied coherent dephasing to qubits {:?} with angle {}",
-                dephase_gate.qubits,
-                rate * duration
-            );
-        }
-    }
-
-    /// Apply incoherent dephasing noise to a gate
-    ///
-    /// This method implements stochastic phase flip (Z) noise that occurs during
-    /// idle periods or during gates with a specified duration. The noise can be
-    /// scaled either linearly or quadratically with time.
-    ///
-    /// In physical systems, incoherent dephasing represents:
-    /// - Random phase kicks from the environment
-    /// - T2 decoherence processes
-    /// - Fast magnetic field fluctuations
-    /// - Thermal noise affecting energy levels
-    ///
-    /// # Parameters
-    /// * `builder` - The `ByteMessageBuilder` to add gate operations to
-    /// * `gate` - The gate experiencing dephasing
-    /// * `duration` - The time duration over which dephasing occurs
-    /// * `rate` - The dephasing rate parameter
-    /// * `linear` - If true, scale linearly with time; if false, scale quadratically
-    #[allow(dead_code)]
-    fn apply_incoherent_dephasing(
-        &mut self,
-        builder: &mut ByteMessageBuilder,
-        gate: &QuantumGate,
-        duration: f64,
-        rate: f64,
-        linear: bool,
-    ) {
-        // Calculate dephasing probability
-        let mut p_deph = rate * duration;
-
-        // Apply quadratic scaling if not linear
-        if !linear {
-            p_deph = (p_deph.sin()).powi(2);
-        }
-
-        // Only proceed if there's a non-zero dephasing probability
-        if p_deph > 0.0 {
-            // Get non-leaked qubits
-            let qubits: Vec<usize> = gate
-                .qubits
-                .iter()
-                .filter(|&&q| !self.is_leaked(q))
-                .copied()
-                .collect();
-
-            // Apply Z errors with probability p_deph
-            for &qubit in &qubits {
-                if self.rng.occurs(p_deph) {
-                    // Apply a Z gate to represent a phase flip
-                    let z_gate = QuantumGate::new(GateType::Z, vec![qubit], vec![], None);
-
-                    NoiseUtils::add_gate_to_builder(builder, &z_gate);
-                    trace!("Applied incoherent dephasing (Z error) to qubit {}", qubit);
+        for qubit in qubits {
+            if !self.is_leaked(*qubit) {
+                if self.p_idle_coherent {
+                    builder.add_rz(angle, &[*qubit]);
+                } else if self.rng.occurs(angle) {
+                    builder.add_z(&[*qubit]);
                 }
             }
         }
-    }
-
-    /// Apply general dephasing noise to a gate
-    ///
-    /// This is the main entry point for applying dephasing noise. It delegates to either
-    /// coherent or incoherent dephasing methods based on the noise model parameters.
-    /// It can also apply both types if needed.
-    ///
-    /// # Parameters
-    /// * `builder` - The `ByteMessageBuilder` to add gate operations to
-    /// * `gate` - The gate experiencing dephasing
-    /// * `duration` - The time duration over which dephasing occurs
-    /// * `coherent_rate` - Rate parameter for coherent dephasing (if applicable)
-    /// * `incoherent_rate` - Rate parameter for incoherent dephasing (if applicable)
-    /// * `use_coherent` - Whether to use coherent dephasing, overrides model's setting
-    #[allow(dead_code)]
-    fn apply_dephasing(
-        &mut self,
-        builder: &mut ByteMessageBuilder,
-        gate: &QuantumGate,
-        duration: f64,
-        coherent_rate: Option<f64>,
-        incoherent_rate: Option<f64>,
-        use_coherent: bool,
-    ) {
-        // Apply coherent dephasing if enabled and rate is provided
-        if use_coherent {
-            if let Some(rate) = coherent_rate {
-                // Use RZ gates for coherent dephasing
-                for &qubit in &gate.qubits {
-                    if !self.is_leaked(qubit) {
-                        // Create RZ rotation with angle = rate * duration
-                        builder.add_rz(rate * duration, &[qubit]);
-                        trace!(
-                            "Applied coherent dephasing to qubit {} with angle {}",
-                            qubit,
-                            rate * duration
-                        );
-                    }
-                }
-            }
-        } else {
-            // Apply quadratic incoherent dephasing
-            if let Some(rate) = coherent_rate {
-                // When using incoherent dephasing, apply the conversion factor
-                let adjusted_rate = rate * self.p_idle_coherent_to_incoherent_factor;
-                let mut p_deph = adjusted_rate * duration;
-
-                // Apply quadratic scaling
-                p_deph = (p_deph.sin()).powi(2);
-
-                // Apply Z errors with probability p_deph
-                for &qubit in &gate.qubits {
-                    if !self.is_leaked(qubit) && self.rng.occurs(p_deph) {
-                        // Apply Z gate for phase error
-                        builder.add_z(&[qubit]);
-                        trace!(
-                            "Applied incoherent dephasing (Z error) to qubit {} with probability {}",
-                            qubit, p_deph
-                        );
-                    }
-                }
-            }
-        }
-
-        // Apply additional linear incoherent dephasing if rate is provided
-        if let Some(rate) = incoherent_rate {
-            let p_deph = rate * duration; // Linear scaling
-
-            // Apply Z errors with probability p_deph
-            for &qubit in &gate.qubits {
-                if !self.is_leaked(qubit) && self.rng.occurs(p_deph) {
-                    // Apply Z gate for phase error
-                    builder.add_z(&[qubit]);
-                    trace!(
-                        "Applied linear incoherent dephasing (Z error) to qubit {}",
-                        qubit
-                    );
-                }
-            }
-        }
-    }
-
-    /// Create a new method to handle requesting nearby qubits for crosstalk
-    #[allow(dead_code)]
-    fn get_nearby_qubits_for_crosstalk(_source_qubits: &[usize], _num_qubits: usize) -> Vec<usize> {
-        // PLACEHOLDER: This will eventually request information from the ClassicalEngine
-        // via the EngineSystem to get the nearest qubits based on device topology
-        todo!()
     }
 
     // Replace the meas_crosstalk method to use the correct API
@@ -1228,12 +1031,11 @@ impl GeneralNoiseModel {
         // placeholder
     }
 
-    /// Calculate the RZZ gate error rate based on the rotation angle
+    /// Calculate the two-qubit gate error rate based on the rotation angle
     ///
     /// with additional support for asymmetric scaling and power-law scaling
-    /// Includes scaling by p2 (two-qubit gate error probability) to match Python implementation
     #[must_use]
-    pub fn rzz_error_rate(&self, angle: f64) -> f64 {
+    pub fn p2_angle_error_rate(&self, angle: f64) -> f64 {
         // Normalize angle by π - convert to a value in [0, 1] range
         let theta = angle.abs() / std::f64::consts::PI;
 
@@ -1348,6 +1150,7 @@ pub struct GeneralNoiseModelBuilder {
     p_prep_leak_ratio: Option<f64>,
     p1_seepage_prob: Option<f64>,
     p2_seepage_prob: Option<f64>,
+    p2_idle_quadratic_rate: Option<f64>,
     seed: Option<u64>,
     scale: Option<f64>,
     memory_scale: Option<f64>,
@@ -1393,6 +1196,7 @@ impl GeneralNoiseModelBuilder {
             p_prep_leak_ratio: None,
             p1_seepage_prob: None,
             p2_seepage_prob: None,
+            p2_idle_quadratic_rate: None,
             seed: None,
             scale: None,
             memory_scale: None,
@@ -1521,7 +1325,13 @@ impl GeneralNoiseModelBuilder {
     /// This is an alias for `with_p2_probability` for API consistency.
     #[must_use]
     pub fn with_two_qubit_probability(self, probability: f64) -> Self {
-        self.with_p2_probability(probability)
+        self.with_p2_probability(Self::validate_probability(probability))
+    }
+
+    #[must_use]
+    pub fn p2_idle_quadratic_rate(mut self, probability: f64) -> Self {
+        self.p2_idle_quadratic_rate = Some(Self::validate_probability(probability));
+        self
     }
 
     /// Set the Pauli error model for single-qubit gates
@@ -1854,6 +1664,15 @@ impl GeneralNoiseModelBuilder {
 
         model.p2_emission_ratio *= emission_scale * scale;
         model.p2_emission_ratio = model.p2_emission_ratio.min(1.0);
+
+        if !model.p_idle_coherent {
+            // Convert to probability for Pauli twirl of RZ() channel
+            // TODO: Verify equation for Pauli twirl of noise assuming units of...
+            // TODO: clarify angular units...
+            let p = ((model.p2_idle_quadratic_rate / 2.0).sin()).powi(2)
+                * model.p_idle_coherent_to_incoherent_factor;
+            model.p2_idle_quadratic_rate = Self::validate_probability(p);
+        }
     }
 
     /// Build the general noise model
@@ -1891,6 +1710,10 @@ impl GeneralNoiseModelBuilder {
 
         if let Some(p2) = self.p2 {
             model.p2 = p2;
+        }
+
+        if let Some(p2_idle_quadratic_rate) = self.p2_idle_quadratic_rate {
+            model.p2_idle_quadratic_rate = p2_idle_quadratic_rate;
         }
 
         if let Some(ratio) = self.p1_emission_ratio {
@@ -2002,6 +1825,7 @@ impl GeneralNoiseModelBuilder {
             p_prep_leak_ratio: Some(model.p_prep_leak_ratio),
             p1_seepage_prob: Some(model.p1_seepage_prob),
             p2_seepage_prob: Some(model.p2_seepage_prob),
+            p2_idle_quadratic_rate: Some(model.p2_idle_quadratic_rate),
             seed: None, // Don't copy the seed
             scale: None,
             memory_scale: None,
@@ -2119,6 +1943,7 @@ impl Default for GeneralNoiseModel {
             p2_angle_c: 0.0,
             p2_angle_d: 1.0,
             p2_angle_power: 1.0,
+            p2_idle_quadratic_rate: 0.0,
             leaked_qubits: HashSet::new(),
             rng: NoiseRng::default(),
             p_meas_crosstalk: 0.0,
@@ -2710,7 +2535,7 @@ mod tests {
 
         // Test negative angle
         let neg_theta = -std::f64::consts::PI / 2.0;
-        let error_neg = noise.rzz_error_rate(neg_theta);
+        let error_neg = noise.p2_angle_error_rate(neg_theta);
         let expected_neg = 0.00625;
         assert!(
             (error_neg - expected_neg).abs() < 1e-6,
@@ -2719,7 +2544,7 @@ mod tests {
 
         // Test positive angle
         let pos_theta = std::f64::consts::PI / 2.0;
-        let error_pos = noise.rzz_error_rate(pos_theta);
+        let error_pos = noise.p2_angle_error_rate(pos_theta);
         let expected_pos = 0.015625;
         assert!(
             (error_pos - expected_pos).abs() < 1e-6,
@@ -2737,7 +2562,7 @@ mod tests {
             .downcast_mut::<GeneralNoiseModel>()
             .unwrap();
 
-        let error_quad = noise.rzz_error_rate(pos_theta);
+        let error_quad = noise.p2_angle_error_rate(pos_theta);
         let expected_quad = 0.0078125;
         assert!(
             (error_quad - expected_quad).abs() < 1e-6,
@@ -2860,7 +2685,7 @@ mod tests {
         // Check unscaled przz error rate
         let theta = std::f64::consts::PI / 4.0;
         let norm_theta = theta / std::f64::consts::PI;
-        let error_unscaled = noise.rzz_error_rate(theta);
+        let error_unscaled = noise.p2_angle_error_rate(theta);
         let c = 0.25;
 
         // After build(), parameters are scaled: p2 is scaled by 5/4
@@ -2883,7 +2708,7 @@ mod tests {
             .downcast_mut::<GeneralNoiseModel>()
             .unwrap();
 
-        let error_scaled = noise.rzz_error_rate(theta);
+        let error_scaled = noise.p2_angle_error_rate(theta);
 
         // After build() with scale 2.0, p2 is scaled by:
         // - scale (2.0)
