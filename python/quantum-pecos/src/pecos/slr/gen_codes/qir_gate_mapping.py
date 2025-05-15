@@ -111,7 +111,8 @@ class QIRGateMetadata(Enum):
     F4dg = QG.decompose(
         lambda f4dg: [
             q.SXdg(f4dg.qargs[0]),
-            q.SZdg(f4dg.qargs[0]),
+            #q.SZdg(f4dg.qargs[0]),
+            q.Rz[-np.pi / 2](f4dg.qargs[0]),
         ],
     )
 

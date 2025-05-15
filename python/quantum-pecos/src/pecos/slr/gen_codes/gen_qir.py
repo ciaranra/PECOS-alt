@@ -747,7 +747,7 @@ class QIRGenerator(Generator):
         # necessary mappings of parameters and qargs to the decomposed gates from
         # the 'source' gate
         if qgate_meta.decomposer:
-            self._builder.comment(f"; Decomposing gate: {gate.sym}")
+            self._builder.comment(f"Decomposing gate: {gate.sym}")
             decomposed_gates = qgate_meta.decomposer(gate)
             for decomposed_gate in decomposed_gates:
                 self._create_qgate_call(decomposed_gate)
@@ -769,10 +769,7 @@ class QIRGenerator(Generator):
                 new_gate.qargs = [qubit]
                 self._create_qgate_call(new_gate)
             return
-        elif (
-            isinstance(gate.qargs, tuple)
-            and all(isinstance(e, tuple) for e in gate.qargs)
-        ):
+        elif isinstance(gate.qargs, tuple) and all(isinstance(e, tuple) for e in gate.qargs):
             for pair in gate.qargs:
                 new_gate = gate.copy()
                 new_gate.qargs = pair
@@ -1163,7 +1160,6 @@ class QIRGenerator(Generator):
         bc = binding.parse_assembly(self.get_output()).as_bitcode()
         binding.shutdown()
         return bc
-        
 
 
 def _fix_internal_consts(llvm_ir: str) -> str:
