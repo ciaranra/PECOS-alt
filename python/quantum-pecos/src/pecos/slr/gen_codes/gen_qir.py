@@ -747,6 +747,7 @@ class QIRGenerator(Generator):
         # necessary mappings of parameters and qargs to the decomposed gates from
         # the 'source' gate
         if qgate_meta.decomposer:
+            self._builder.comment(f"; Decomposing gate: {gate.sym}")
             decomposed_gates = qgate_meta.decomposer(gate)
             for decomposed_gate in decomposed_gates:
                 self._create_qgate_call(decomposed_gate)
