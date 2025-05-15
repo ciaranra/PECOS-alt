@@ -1680,12 +1680,12 @@ impl GeneralNoiseModelBuilder {
     /// TODO: Consider another build with noiseless default
     ///
     /// # Returns
-    /// A boxed noise model
+    /// A `GeneralNoiseModel`
     ///
     /// # Panics
     /// Panics if any probabilities are not set or are not between 0 and 1.
     #[must_use]
-    pub fn build(mut self) -> Box<dyn NoiseModel> {
+    pub fn build(mut self) -> GeneralNoiseModel {
         // Start with the default noise model as a base
         let mut model = GeneralNoiseModel::default();
 
@@ -1795,7 +1795,7 @@ impl GeneralNoiseModelBuilder {
         }
 
         self.scale_parameters(&mut model);
-        Box::new(model)
+        model
     }
 
     /// Create a new builder from an existing model's configuration

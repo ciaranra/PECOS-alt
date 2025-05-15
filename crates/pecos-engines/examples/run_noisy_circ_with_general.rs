@@ -41,7 +41,7 @@ fn main() {
     }
 
     let noise = noise_builder.build();
-    let mut system = QuantumSystem::new(noise, quantum);
+    let mut system = QuantumSystem::new(Box::new(noise), quantum);
 
     // Also set seed on the system if provided
     if let Some(seed) = seed_option {

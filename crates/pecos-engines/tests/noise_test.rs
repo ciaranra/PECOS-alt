@@ -18,13 +18,13 @@ use std::f64::consts::PI;
 
 // Helper function to count measurement results from multiple shots
 fn count_results(
-    noise_model: &GeneralNoiseModel,
+    noise_model: GeneralNoiseModel,
     circ: &ByteMessage,
     num_shots: usize,
     num_qubits: usize,
 ) -> BTreeMap<String, usize> {
     let quantum = Box::new(StateVecEngine::new(num_qubits));
-    let mut system = QuantumSystem::new(Box::new(noise_model.clone()), quantum);
+    let mut system = QuantumSystem::new(Box::new(noise_model), quantum);
     system.set_seed(42).expect("Failed to set seed");
 
     let mut counts = BTreeMap::new();
@@ -99,12 +99,6 @@ fn test_single_qubit_gate_noise_distributions() {
         .with_seed(42)
         .build();
 
-    // Get the model as a GeneralNoiseModel reference
-    let noise_model = noise_model
-        .as_any()
-        .downcast_ref::<GeneralNoiseModel>()
-        .unwrap();
-
     // Print p1 and emission ratio after scaling (the builder applies scaling)
     println!(
         "After building: p1={}, p2={}",
@@ -139,7 +133,7 @@ fn test_single_qubit_gate_noise_distributions() {
         let circ = builder.build();
 
         println!("Testing {desc}...");
-        let counts = count_results(noise_model, &circ, NUM_SHOTS, 1);
+        let counts = count_results(noise_model.clone(), &circ, NUM_SHOTS, 1);
 
         // Expected bit pattern after applying gate to |0⟩
         let expected_bit = if expected_zeros { "0" } else { "1" };
@@ -186,12 +180,6 @@ fn test_rotation_gate_with_different_angles() {
         .with_average_p2_probability(0.2)
         .build();
 
-    // Get the model as a GeneralNoiseModel reference
-    let noise_model = noise_model
-        .as_any()
-        .downcast_ref::<GeneralNoiseModel>()
-        .unwrap();
-
     // Test rotation gates with different angles
     let angles_to_test = [
         (0.0, "RX(0)"),
@@ -224,7 +212,7 @@ fn test_rotation_gate_with_different_angles() {
             println!("Failed to parse circuit operations");
         }
 
-        let counts = count_results(noise_model, &circ, NUM_SHOTS, 1);
+        let counts = count_results(noise_model.clone(), &circ, NUM_SHOTS, 1);
         println!("Counts: {counts:?}");
 
         // For RX(0), expect mostly |0⟩
@@ -298,7 +286,7 @@ fn test_rotation_gate_with_different_angles() {
         println!("Failed to parse X gate circuit operations");
     }
 
-    let counts = count_results(noise_model, &circ, NUM_SHOTS, 1);
+    let counts = count_results(noise_model.clone(), &circ, NUM_SHOTS, 1);
     println!("X gate test counts: {counts:?}");
 
     // Circuit should produce mostly |1⟩ states
@@ -332,12 +320,6 @@ fn test_two_qubit_gate_noise_distributions() {
         .with_average_p2_probability(0.2)
         .build();
 
-    // Get the model as a GeneralNoiseModel reference
-    let noise_model = noise_model
-        .as_any()
-        .downcast_ref::<GeneralNoiseModel>()
-        .unwrap();
-
     // Test CNOT gate with different input states
 
     // Case 1: |00⟩ -> |00⟩ (control=0, so target unchanged)
@@ -348,7 +330,7 @@ fn test_two_qubit_gate_noise_distributions() {
         builder.add_measurements(&[0, 1], &[0, 1]);
         let circ = builder.build();
 
-        let counts = count_results(noise_model, &circ, NUM_SHOTS, 2);
+        let counts = count_results(noise_model.clone(), &circ, NUM_SHOTS, 2);
 
         // Expect mostly |00⟩ outcomes with some errors
         let count_00 = *counts.get("00").unwrap_or(&0);
@@ -378,7 +360,7 @@ fn test_two_qubit_gate_noise_distributions() {
         builder.add_measurements(&[0, 1], &[0, 1]);
         let circ = builder.build();
 
-        let counts = count_results(noise_model, &circ, NUM_SHOTS, 2);
+        let counts = count_results(noise_model.clone(), &circ, NUM_SHOTS, 2);
 
         // Expect mostly |11⟩ outcomes with some errors
         let count_11 = *counts.get("11").unwrap_or(&0);
@@ -408,7 +390,7 @@ fn test_two_qubit_gate_noise_distributions() {
         builder.add_measurements(&[0, 1], &[0, 1]);
         let circ = builder.build();
 
-        let counts = count_results(noise_model, &circ, NUM_SHOTS, 2);
+        let counts = count_results(noise_model.clone(), &circ, NUM_SHOTS, 2);
 
         // Expect mostly |01⟩ outcomes with some errors
         let count_01 = *counts.get("01").unwrap_or(&0);
@@ -439,7 +421,7 @@ fn test_two_qubit_gate_noise_distributions() {
         builder.add_measurements(&[0, 1], &[0, 1]);
         let circ = builder.build();
 
-        let counts = count_results(noise_model, &circ, NUM_SHOTS, 2);
+        let counts = count_results(noise_model.clone(), &circ, NUM_SHOTS, 2);
 
         // Expect mostly |10⟩ outcomes with some errors
         let count_10 = *counts.get("10").unwrap_or(&0);
@@ -477,12 +459,6 @@ fn test_rzz_angle_dependent_error_model() {
         .with_seed(42)
         .build();
 
-    // Get the model as a GeneralNoiseModel reference
-    let noise_model = noise_model
-        .as_any()
-        .downcast_ref::<GeneralNoiseModel>()
-        .unwrap();
-
     // Test RZZ gates with different rotation angles
     let angles_to_test = [
         (PI / 4.0, "RZZ(π/4)"),
@@ -516,7 +492,7 @@ fn test_rzz_angle_dependent_error_model() {
         let circ = builder.build();
 
         // Run with noise model and count results
-        let counts = count_results(noise_model, &circ, NUM_SHOTS, 2);
+        let counts = count_results(noise_model.clone(), &circ, NUM_SHOTS, 2);
 
         // For RZZ(θ), calculate expected error rate based on our parameters
         // Error model: p2_angle_a/c * (|angle|/π)^p2_angle_power + p2_angle_b/d
@@ -567,12 +543,6 @@ fn test_leakage_model() {
         .with_seed(42)
         .build();
 
-    // Get the model as a GeneralNoiseModel reference
-    let noise_model = noise_model
-        .as_any()
-        .downcast_ref::<GeneralNoiseModel>()
-        .unwrap();
-
     // Test leaked qubit behavior with measurement
     let mut builder = ByteMessageBuilder::new();
     let _ = builder.for_quantum_operations();
@@ -587,7 +557,7 @@ fn test_leakage_model() {
     let circ = builder.build();
 
     // Run with noise model and count results
-    let counts = count_results(noise_model, &circ, NUM_SHOTS, 1);
+    let counts = count_results(noise_model.clone(), &circ, NUM_SHOTS, 1);
 
     // In our model, leaked qubits should consistently measure as 1
     // So we expect to see a bias toward 1 in the results
@@ -615,12 +585,6 @@ fn test_software_gates_not_affected_by_noise() {
         .with_noiseless_gate(GateType::RZ)
         .build();
 
-    // Get the model as a GeneralNoiseModel reference
-    let noise_model = noise_model
-        .as_any()
-        .downcast_ref::<GeneralNoiseModel>()
-        .unwrap();
-
     // Create two similar circuits: one with RZ (software gate) and one with hardware gate
 
     // Circuit 1: |0⟩ → RZ(π) → |0⟩ (no change in population)
@@ -640,8 +604,8 @@ fn test_software_gates_not_affected_by_noise() {
     let circ_hardware = builder2.build();
 
     // Run both circuits with noise model
-    let counts_rz = count_results(noise_model, &circ_rz, NUM_SHOTS, 1);
-    let counts_hardware = count_results(noise_model, &circ_hardware, NUM_SHOTS, 1);
+    let counts_rz = count_results(noise_model.clone(), &circ_rz, NUM_SHOTS, 1);
+    let counts_hardware = count_results(noise_model.clone(), &circ_hardware, NUM_SHOTS, 1);
 
     // RZ should be nearly perfect (no noise)
     let rz_count_0 = *counts_rz.get("0").unwrap_or(&0);
@@ -678,10 +642,7 @@ fn test_coherent_vs_incoherent_dephasing() {
         .build();
 
     // Get the coherent model as a GeneralNoiseModel reference
-    let coherent_model = coherent_model
-        .as_any()
-        .downcast_ref::<GeneralNoiseModel>()
-        .unwrap();
+    // The build() method now returns GeneralNoiseModel directly
 
     let incoherent_model = GeneralNoiseModel::builder()
         .with_prep_probability(0.01)
@@ -695,10 +656,7 @@ fn test_coherent_vs_incoherent_dephasing() {
         .build();
 
     // Get the incoherent model as a GeneralNoiseModel reference
-    let incoherent_model = incoherent_model
-        .as_any()
-        .downcast_ref::<GeneralNoiseModel>()
-        .unwrap();
+    // The build() method now returns GeneralNoiseModel directly
 
     // Create a dephasing test circuit:
     // 1. Prepare |+⟩ state with H
@@ -723,8 +681,8 @@ fn test_coherent_vs_incoherent_dephasing() {
     let circ = builder.build();
 
     // Run with both noise models
-    let coherent_counts = count_results(coherent_model, &circ, NUM_SHOTS, 1);
-    let incoherent_counts = count_results(incoherent_model, &circ, NUM_SHOTS, 1);
+    let coherent_counts = count_results(coherent_model.clone(), &circ, NUM_SHOTS, 1);
+    let incoherent_counts = count_results(incoherent_model.clone(), &circ, NUM_SHOTS, 1);
 
     // Calculate bias toward 0 in both cases
     let coherent_0 = *coherent_counts.get("0").unwrap_or(&0);
@@ -767,13 +725,10 @@ fn test_parameter_scaling_impact() {
             .build();
 
         // Get the model as a GeneralNoiseModel reference
-        let noise_model = noise_model
-            .as_any()
-            .downcast_ref::<GeneralNoiseModel>()
-            .unwrap();
+        // The build() method now returns GeneralNoiseModel directly
 
         // Run with this noise model
-        let counts = count_results(noise_model, &circ, NUM_SHOTS, 1);
+        let counts = count_results(noise_model.clone(), &circ, NUM_SHOTS, 1);
 
         // After X gate, we expect to measure |1⟩, so count 0s as errors
         let error_count = *counts.get("0").unwrap_or(&0);
@@ -823,12 +778,6 @@ fn test_debug_x_gate_noise() {
         .with_p1_emission_ratio(0.0)
         .build();
 
-    // Get the model as a GeneralNoiseModel reference
-    let noise_model = noise_model
-        .as_any()
-        .downcast_ref::<GeneralNoiseModel>()
-        .unwrap();
-
     println!(
         "Debug test: p1 after scaling = {}",
         noise_model.probabilities().3
@@ -842,7 +791,7 @@ fn test_debug_x_gate_noise() {
     let circ = builder.build();
 
     // Run many shots and collect statistics
-    let counts = count_results(noise_model, &circ, NUM_SHOTS, 1);
+    let counts = count_results(noise_model.clone(), &circ, NUM_SHOTS, 1);
 
     // Calculate percentages
     let count_0 = *counts.get("0").unwrap_or(&0);
@@ -883,12 +832,6 @@ fn test_seed_effect() {
         .with_p1_emission_ratio(0.0)
         .build();
 
-    // Get the model as a GeneralNoiseModel reference
-    let noise_model = noise_model
-        .as_any()
-        .downcast_ref::<GeneralNoiseModel>()
-        .unwrap();
-
     println!("Model p1 = {}", noise_model.probabilities().3);
 
     // Create a circuit with just an X gate and measurement
@@ -907,7 +850,7 @@ fn test_seed_effect() {
         model_copy.set_seed(seed).expect("Failed to set seed");
 
         // Run the circuit
-        let counts = count_results(&model_copy, &circ, NUM_SHOTS, 1);
+        let counts = count_results(model_copy.clone(), &circ, NUM_SHOTS, 1);
 
         // Calculate percentages
         let count_0 = *counts.get("0").unwrap_or(&0);
@@ -932,7 +875,7 @@ fn test_seed_effect() {
     builder2.add_measurements(&[0], &[0]);
     let circ2 = builder2.build();
 
-    let debug_counts = count_results(&debug_model, &circ2, NUM_SHOTS, 1);
+    let debug_counts = count_results(debug_model.clone(), &circ2, NUM_SHOTS, 1);
 
     // Calculate percentages
     let debug_zero_count = *debug_counts.get("0").unwrap_or(&0);
@@ -973,13 +916,10 @@ fn test_seed_effect() {
         .build();
 
     // Get the model as a GeneralNoiseModel reference
-    let complex_model = complex_model
-        .as_any()
-        .downcast_ref::<GeneralNoiseModel>()
-        .unwrap();
+    // The build() method now returns GeneralNoiseModel directly
 
     // Run the circuit
-    let complex_counts = count_results(complex_model, &circ, NUM_SHOTS, 1);
+    let complex_counts = count_results(complex_model.clone(), &circ, NUM_SHOTS, 1);
 
     // Calculate percentages
     let complex_zero_count = *complex_counts.get("0").unwrap_or(&0);
@@ -1007,10 +947,7 @@ fn test_combined_comparison() {
         .build();
 
     // Get the model as a GeneralNoiseModel reference
-    let simple_noise_model = simple_noise_model
-        .as_any()
-        .downcast_ref::<GeneralNoiseModel>()
-        .unwrap();
+    // The build() method now returns GeneralNoiseModel directly
 
     println!(
         "Simple model: p1 after scaling = {}",
@@ -1025,7 +962,7 @@ fn test_combined_comparison() {
     let circ = builder.build();
 
     // Run tests with simple model
-    let simple_counts = count_results(simple_noise_model, &circ, NUM_SHOTS, 1);
+    let simple_counts = count_results(simple_noise_model.clone(), &circ, NUM_SHOTS, 1);
 
     // Calculate percentages
     let simple_count_0 = *simple_counts.get("0").unwrap_or(&0);
@@ -1066,10 +1003,7 @@ fn test_combined_comparison() {
         .build();
 
     // Get the model as a GeneralNoiseModel reference
-    let complex_noise_model = complex_noise_model
-        .as_any()
-        .downcast_ref::<GeneralNoiseModel>()
-        .unwrap();
+    // The build() method now returns GeneralNoiseModel directly
 
     // Print p1 and emission ratio
     println!(
@@ -1079,7 +1013,7 @@ fn test_combined_comparison() {
     );
 
     // Run tests with complex model
-    let complex_counts = count_results(complex_noise_model, &circ, NUM_SHOTS, 1);
+    let complex_counts = count_results(complex_noise_model.clone(), &circ, NUM_SHOTS, 1);
 
     // Calculate percentages
     let complex_count_0 = *complex_counts.get("0").unwrap_or(&0);
@@ -1131,10 +1065,7 @@ fn test_pauli_model_effect() {
         .build();
 
     // Get the model as a GeneralNoiseModel reference
-    let noise_model1 = noise_model1
-        .as_any()
-        .downcast_ref::<GeneralNoiseModel>()
-        .unwrap();
+    // The build() method now returns GeneralNoiseModel directly
 
     // Create a circuit with just an X gate and measurement
     let mut builder = ByteMessageBuilder::new();
@@ -1143,7 +1074,7 @@ fn test_pauli_model_effect() {
     builder.add_measurements(&[0], &[0]);
     let circ = builder.build();
 
-    let counts1 = count_results(noise_model1, &circ, NUM_SHOTS, 1);
+    let counts1 = count_results(noise_model1.clone(), &circ, NUM_SHOTS, 1);
 
     // Calculate percentages
     let default_zero_count = *counts1.get("0").unwrap_or(&0);
@@ -1180,12 +1111,9 @@ fn test_pauli_model_effect() {
         .build();
 
     // Get the model as a GeneralNoiseModel reference
-    let noise_model2 = noise_model2
-        .as_any()
-        .downcast_ref::<GeneralNoiseModel>()
-        .unwrap();
+    // The build() method now returns GeneralNoiseModel directly
 
-    let counts2 = count_results(noise_model2, &circ, NUM_SHOTS, 1);
+    let counts2 = count_results(noise_model2.clone(), &circ, NUM_SHOTS, 1);
 
     // Calculate percentages
     let explicit_zero_count = *counts2.get("0").unwrap_or(&0);
@@ -1218,12 +1146,9 @@ fn test_pauli_model_effect() {
         .build();
 
     // Get the model as a GeneralNoiseModel reference
-    let noise_model3 = noise_model3
-        .as_any()
-        .downcast_ref::<GeneralNoiseModel>()
-        .unwrap();
+    // The build() method now returns GeneralNoiseModel directly
 
-    let counts3 = count_results(noise_model3, &circ, NUM_SHOTS, 1);
+    let counts3 = count_results(noise_model3.clone(), &circ, NUM_SHOTS, 1);
 
     // Calculate percentages
     let ordered_zero_count = *counts3.get("0").unwrap_or(&0);
@@ -1258,10 +1183,10 @@ fn test_pauli_model_behavior() {
         .with_seed(42)
         .build();
 
-    let model1 = model1.as_any().downcast_ref::<GeneralNoiseModel>().unwrap();
+    // The build() method now returns GeneralNoiseModel directly
 
     println!("Running with default Pauli model (uniform distribution)");
-    let default_counts = count_results(model1, &circ, NUM_SHOTS, 1);
+    let default_counts = count_results(model1.clone(), &circ, NUM_SHOTS, 1);
 
     // Calculate percentages
     let default_zero_count = *default_counts.get("0").unwrap_or(&0);
@@ -1291,10 +1216,10 @@ fn test_pauli_model_behavior() {
         .with_seed(42)
         .build();
 
-    let model2 = model2.as_any().downcast_ref::<GeneralNoiseModel>().unwrap();
+    // The build() method now returns GeneralNoiseModel directly
 
     println!("Running with X-biased Pauli model (80% X, 10% Y, 10% Z)");
-    let xbiased_counts = count_results(model2, &circ, NUM_SHOTS, 1);
+    let xbiased_counts = count_results(model2.clone(), &circ, NUM_SHOTS, 1);
 
     // Calculate percentages
     let xbiased_zero_count = *xbiased_counts.get("0").unwrap_or(&0);
@@ -1324,10 +1249,10 @@ fn test_pauli_model_behavior() {
         .with_seed(42)
         .build();
 
-    let model3 = model3.as_any().downcast_ref::<GeneralNoiseModel>().unwrap();
+    // The build() method now returns GeneralNoiseModel directly
 
     println!("Running with Z-biased Pauli model (10% X, 10% Y, 80% Z)");
-    let zbiased_counts = count_results(model3, &circ, NUM_SHOTS, 1);
+    let zbiased_counts = count_results(model3.clone(), &circ, NUM_SHOTS, 1);
 
     // Calculate percentages
     let zbiased_zero_count = *zbiased_counts.get("0").unwrap_or(&0);

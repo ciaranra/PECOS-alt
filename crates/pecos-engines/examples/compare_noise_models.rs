@@ -47,7 +47,7 @@ fn compare_depolarizing_with_general(circ: &ByteMessage) {
         .with_two_qubit_probability(p_noise)
         .with_seed(seed)
         .build();
-    let mut general_system = QuantumSystem::new(general_noise, Box::new(quantum.clone()));
+    let mut general_system = QuantumSystem::new(Box::new(general_noise), Box::new(quantum.clone()));
 
     println!("Comparing DepolarizingNoise vs GeneralNoise with p = {p_noise}");
     println!("{:-^80}", "");
@@ -189,7 +189,7 @@ fn test_asymmetric_measurements() {
         .with_two_qubit_probability(0.0) // Not used in this circuit
         .with_seed(seed)
         .build();
-    let mut general_system = QuantumSystem::new(general_noise, Box::new(quantum.clone()));
+    let mut general_system = QuantumSystem::new(Box::new(general_noise), Box::new(quantum.clone()));
 
     // For comparison, a depolarizing model with symmetric errors
     let p_depolarizing = (p_meas_0 + p_meas_1) / 2.0; // Average of the asymmetric errors
