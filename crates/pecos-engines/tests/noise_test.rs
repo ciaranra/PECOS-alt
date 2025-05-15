@@ -673,7 +673,7 @@ fn test_coherent_vs_incoherent_dephasing() {
         .with_meas_1_probability(0.01)
         .with_average_p1_probability(0.05)
         .with_average_p2_probability(0.1)
-        .with_coherent_dephasing(true)
+        .with_p_idle_coherent(true)
         .with_seed(42)
         .build();
 
@@ -689,8 +689,8 @@ fn test_coherent_vs_incoherent_dephasing() {
         .with_meas_1_probability(0.01)
         .with_average_p1_probability(0.05)
         .with_average_p2_probability(0.1)
-        .with_coherent_dephasing(false)
-        .with_coherent_to_incoherent_factor(2.0)
+        .with_p_idle_coherent(false)
+        .with_p_idle_coherent_to_incoherent_factor(2.0)
         .with_seed(42)
         .build();
 

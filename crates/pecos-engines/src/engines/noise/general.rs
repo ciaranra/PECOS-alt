@@ -242,7 +242,7 @@ pub struct GeneralNoiseModel {
     ///
     /// In physical systems, coherent dephasing represents systematic phase evolution
     /// such as frequency offsets.
-    coherent_dephasing: bool,
+    p_idle_coherent: bool,
 
     /// Scaling factor to convert coherent dephasing rates to incoherent rates
     ///
@@ -254,8 +254,9 @@ pub struct GeneralNoiseModel {
     /// # Panics
     ///
     /// Panics if the factor is not positive (less than or equal to 0.0).
-    coherent_to_incoherent_factor: f64,
+    p_idle_coherent_to_incoherent_factor: f64,
 
+    // TODO: should have p_idle_quadratic_rate, p_idle_linear_rate
     /// Probability of flipping a 0 measurement to 1
     ///
     /// This asymmetric measurement error models cases when a qubit in state |0⟩ is incorrectly
@@ -1169,7 +1170,7 @@ impl GeneralNoiseModel {
             // Apply quadratic incoherent dephasing
             if let Some(rate) = coherent_rate {
                 // When using incoherent dephasing, apply the conversion factor
-                let adjusted_rate = rate * self.coherent_to_incoherent_factor;
+                let adjusted_rate = rate * self.p_idle_coherent_to_incoherent_factor;
                 let mut p_deph = adjusted_rate * duration;
 
                 // Apply quadratic scaling
@@ -1360,8 +1361,8 @@ pub struct GeneralNoiseModelBuilder {
     p_prep_crosstalk: Option<f64>,
     p_meas_crosstalk_scale: Option<f64>,
     p_prep_crosstalk_scale: Option<f64>,
-    coherent_dephasing: Option<bool>,
-    coherent_to_incoherent_factor: Option<f64>,
+    p_idle_coherent: Option<bool>,
+    p_idle_coherent_to_incoherent_factor: Option<f64>,
     p2_angle_params: Option<(f64, f64, f64, f64)>,
     p2_angle_power: Option<f64>,
     noiseless_gates: Option<HashSet<GateType>>,
@@ -1405,8 +1406,8 @@ impl GeneralNoiseModelBuilder {
             p_prep_crosstalk: None,
             p_meas_crosstalk_scale: None,
             p_prep_crosstalk_scale: None,
-            coherent_dephasing: None,
-            coherent_to_incoherent_factor: None,
+            p_idle_coherent: None,
+            p_idle_coherent_to_incoherent_factor: None,
             p2_angle_params: None,
             p2_angle_power: None,
             noiseless_gates: None,
@@ -1636,8 +1637,8 @@ impl GeneralNoiseModelBuilder {
 
     /// Set whether to use coherent dephasing
     #[must_use]
-    pub fn with_coherent_dephasing(mut self, use_coherent: bool) -> Self {
-        self.coherent_dephasing = Some(use_coherent);
+    pub fn with_p_idle_coherent(mut self, use_coherent: bool) -> Self {
+        self.p_idle_coherent = Some(use_coherent);
         self
     }
 
@@ -1646,8 +1647,8 @@ impl GeneralNoiseModelBuilder {
     /// # Parameters
     /// * `factor` - The conversion factor between coherent and incoherent dephasing rates
     #[must_use]
-    pub fn with_coherent_to_incoherent_factor(mut self, factor: f64) -> Self {
-        self.coherent_to_incoherent_factor = Some(Self::validate_positive(
+    pub fn with_p_idle_coherent_to_incoherent_factor(mut self, factor: f64) -> Self {
+        self.p_idle_coherent_to_incoherent_factor = Some(Self::validate_positive(
             factor,
             "Coherent-to-incoherent factor",
         ));
@@ -1933,12 +1934,12 @@ impl GeneralNoiseModelBuilder {
             model.rng = NoiseRng::with_seed(seed);
         }
 
-        if let Some(coherent) = self.coherent_dephasing {
-            model.coherent_dephasing = coherent;
+        if let Some(coherent) = self.p_idle_coherent {
+            model.p_idle_coherent = coherent;
         }
 
-        if let Some(factor) = self.coherent_to_incoherent_factor {
-            model.coherent_to_incoherent_factor = factor;
+        if let Some(factor) = self.p_idle_coherent_to_incoherent_factor {
+            model.p_idle_coherent_to_incoherent_factor = factor;
         }
 
         if let Some(p2_angle_params) = self.p2_angle_params {
@@ -2014,8 +2015,8 @@ impl GeneralNoiseModelBuilder {
             p_prep_crosstalk: Some(model.p_prep_crosstalk),
             p_meas_crosstalk_scale: None,
             p_prep_crosstalk_scale: None,
-            coherent_dephasing: Some(model.coherent_dephasing),
-            coherent_to_incoherent_factor: Some(model.coherent_to_incoherent_factor),
+            p_idle_coherent: Some(model.p_idle_coherent),
+            p_idle_coherent_to_incoherent_factor: Some(model.p_idle_coherent_to_incoherent_factor),
             p2_angle_params: Some((
                 model.p2_angle_a,
                 model.p2_angle_b,
@@ -2122,8 +2123,8 @@ impl Default for GeneralNoiseModel {
             rng: NoiseRng::default(),
             p_meas_crosstalk: 0.0,
             p_prep_crosstalk: 0.0,
-            coherent_dephasing: false,
-            coherent_to_incoherent_factor: 2.0,
+            p_idle_coherent: false,
+            p_idle_coherent_to_incoherent_factor: 2.0,
             noiseless_gates: HashSet::new(),
             p_meas_max: p_meas_0.max(p_meas_1),
             leakage_scale: 1.0,
@@ -2634,14 +2635,14 @@ mod tests {
     }
 
     // #[test]
-    // fn test_coherent_dephasing() {
+    // fn test_p_idle_coherent() {
     //     // Create a circuit builder
     //     let mut builder = ByteMessageBuilder::new();
     //     let _ = builder.for_quantum_operations();
     //
     //     // Create a noise model with coherent dephasing
     //     let mut model = GeneralNoiseModel::builder()
-    //         .with_coherent_dephasing(true)
+    //         .with_p_idle_coherent(true)
     //         .build();
     //     let noise = model
     //         .as_any_mut()
@@ -2676,7 +2677,7 @@ mod tests {
     //     let _ = builder.for_quantum_operations();
     //
     //     let mut model = GeneralNoiseModel::builder()
-    //         .with_coherent_dephasing(false)
+    //         .with_p_idle_coherent(false)
     //         .with_seed(42)
     //         .build();
     //     let noise = model
