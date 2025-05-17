@@ -93,8 +93,12 @@ class PHIRClassicalInterpreter(ClassicalInterpreter):
             PHIRModel.model_validate(self.program)
 
         if isinstance(self.program, dict):
-            assert self.program["format"] in ["PHIR/JSON", "PHIR"]  # noqa: S101
-            assert version2tuple(self.program["version"]) < (0, 2, 0)  # noqa: S101
+            if self.program["format"] not in ["PHIR/JSON", "PHIR"]:
+                msg = f"Unsupported PHIR format: {self.program['format']}"
+                raise ValueError(msg)
+            if version2tuple(self.program["version"]) >= (0, 2, 0):
+                msg = f"PHIR version {self.program['version']} not supported; only versions < 0.2.0 are supported"
+                raise ValueError(msg)
 
         # convert to a format that will, hopefully, run faster in simulation
         if not isinstance(self.program, PyPMIR):
@@ -321,6 +325,28 @@ class PHIRClassicalInterpreter(ClassicalInterpreter):
 
             for r, a in zip(op.returns, args):
                 self.assign_int(r, a)
+
+        elif op.name == "Result":
+            # The "Result" instruction maps internal register names to external ones
+            # For example: {"cop": "Result", "args": ["m"], "returns": ["c"]}
+            # maps the "m" register to "c" for user-facing results
+            for src_reg, dst_reg in zip(op.args, op.returns):
+                if isinstance(src_reg, str) and src_reg in self.csym2id:
+                    # If source register exists, copy its value to the destination register
+                    src_id = self.csym2id[src_reg]
+                    src_val = self.cenv[src_id]
+                    src_size = self.cvar_meta[src_id].size
+                    src_type = self.cvar_meta[src_id].data_type
+
+                    # Create destination register if it doesn't exist yet
+                    if dst_reg not in self.csym2id:
+                        # Use the correct method to create a new variable
+                        dtype = data_type_map[src_type]
+                        self.add_cvar(dst_reg, dtype, src_size)
+
+                    # Copy the value
+                    dst_id = self.csym2id[dst_reg]
+                    self.cenv[dst_id] = src_val
 
         elif isinstance(op, pt.opt.FFCall):
             args = []
