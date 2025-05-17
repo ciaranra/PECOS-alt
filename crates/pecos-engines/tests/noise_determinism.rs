@@ -27,7 +27,9 @@ fn reset_model_with_seed(
     model: &mut GeneralNoiseModel,
     seed: u64,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    model.reset_with_seed(seed)
+    model
+        .reset_with_seed(seed)
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
 }
 
 fn create_noise_model() -> GeneralNoiseModel {

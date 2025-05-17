@@ -272,7 +272,7 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
                 builder = builder.with_seed(noise_seed);
             }
 
-            builder.build()
+            Box::new(builder.build())
         }
     };
 
