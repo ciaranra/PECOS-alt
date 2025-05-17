@@ -70,10 +70,23 @@ class QOp(Op):
             self.sim_name = name
 
     def __repr__(self):
-        return (
-            f"<QOP: {self.name} angles: {self.angles} args: {self.args} returns: {self.returns} "
-            f"meta: {self.metadata}>"
-        )
+        repr_str = f"<QOP: {self.name}"
+
+        if self.angles:
+            repr_str += f", angles={self.angles}"
+
+        if self.args:
+            repr_str += f", args={self.args}"
+
+        if self.returns:
+            repr_str += f", returns={self.returns}"
+
+        if self.metadata:
+            repr_str += f", metadata={self.metadata}"
+
+        repr_str += ">"
+
+        return repr_str
 
     def __str__(self) -> str:
         return self.__repr__()
@@ -95,6 +108,25 @@ class COp(Op):
             returns=returns,
             metadata=metadata,
         )
+
+    def __repr__(self):
+        repr_str = f"<COP: {self.name}"
+
+        if self.args:
+            repr_str += f", args={self.args}"
+
+        if self.returns:
+            repr_str += f", returns={self.returns}"
+
+        if self.metadata:
+            repr_str += f", metadata={self.metadata}"
+
+        repr_str += ">"
+
+        return repr_str
+
+    def __str__(self) -> str:
+        return self.__repr__()
 
 
 class FFCall(COp):

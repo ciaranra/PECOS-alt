@@ -16,11 +16,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from pecos.error_models.error_model_abc import ErrorModel
+from pecos.error_models.noise_impl.gate_groups import one_qubits, two_qubits
 from pecos.error_models.noise_impl.noise_initz_bitflip import noise_initz_bitflip
 from pecos.error_models.noise_impl.noise_meas_bitflip import noise_meas_bitflip
 from pecos.error_models.noise_impl.noise_sq_depolarizing import noise_sq_depolarizing
 from pecos.error_models.noise_impl.noise_tq_depolarizing import noise_tq_depolarizing
-from pecos.error_models.noise_impl_old.gate_groups import one_qubits, two_qubits
 
 if TYPE_CHECKING:
     from pecos.reps.pypmir.block_types import SeqBlock
@@ -58,7 +58,7 @@ class DepolarizingErrorModel(ErrorModel):
 
     def __init__(self, error_params: dict) -> None:
         super().__init__(error_params=error_params)
-        self._eparams = None
+        self._eparams: dict | None = None
 
     def reset(self):
         """Reset error generator for another round of syndrome extraction."""
@@ -71,7 +71,7 @@ class DepolarizingErrorModel(ErrorModel):
             msg = "Error params not set!"
             raise Exception(msg)
 
-        self._eparams = dict(self.error_params)
+        self._eparams: dict = dict(self.error_params)
         self._scale()
 
         if "p1_error_model" not in self._eparams:
@@ -111,7 +111,10 @@ class DepolarizingErrorModel(ErrorModel):
 
             # ########################################
             # INITS WITH X NOISE
-            if op.name in ["init |0>", "Init", "Init +Z"]:
+            if op.metadata.get("noiseless"):
+                pass
+
+            elif op.name in ["init |0>", "Init", "Init +Z"]:
                 qops_after = noise_initz_bitflip(
                     op,
                     p=self._eparams["p_init"],
@@ -152,6 +155,10 @@ class DepolarizingErrorModel(ErrorModel):
                     op,
                     p=self._eparams["p_meas"],
                 )
+
+            elif op.name in ["Transport", "Idle"]:
+                # TODO: Add optional noise model for transport and idle
+                erroneous_ops = []
 
             else:
                 raise Exception("This error model doesn't handle gate: %s!" % op.name)

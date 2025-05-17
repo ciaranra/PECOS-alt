@@ -24,31 +24,43 @@ installreqs: ## Install Python project requirements to root .venv
 # ---------------------------------
 .PHONY: build
 build: installreqs ## Compile and install for development
-	cd python/pecos-rslib/ && uv run maturin develop --uv
-	cd python/quantum-pecos && uv pip install -e .[all]
+	@unset CONDA_PREFIX && cd python/pecos-rslib/ && uv run maturin develop --uv
+	@unset CONDA_PREFIX && cd python/quantum-pecos && uv pip install -e .[all]
 
 .PHONY: build-basic
 build-basic: installreqs ## Compile and install for development but do not include install extras
-	cd python/pecos-rslib/ && uv run maturin develop --uv
-	cd python/quantum-pecos && uv pip install -e .
+	@unset CONDA_PREFIX && cd python/pecos-rslib/ && uv run maturin develop --uv
+	@unset CONDA_PREFIX && cd python/quantum-pecos && uv pip install -e .
 
 .PHONY: build-release
 build-release: installreqs ## Build a faster version of binaries
-	cd python/pecos-rslib/ && uv run maturin develop --uv --release
-	cd python/quantum-pecos && uv pip install -e .[all]
+	@unset CONDA_PREFIX && cd python/pecos-rslib/ && uv run maturin develop --uv --release
+	@unset CONDA_PREFIX && cd python/quantum-pecos && uv pip install -e .[all]
 
 .PHONY: build-native
 build-native: installreqs ## Build a faster version of binaries with native CPU optimization
-	cd python/pecos-rslib/ && RUSTFLAGS='-C target-cpu=native' \
+	@unset CONDA_PREFIX && cd python/pecos-rslib/ && RUSTFLAGS='-C target-cpu=native' \
 	&& uv run maturin develop --uv --release
-	cd python/quantum-pecos && uv pip install -e .[all]
+	@unset CONDA_PREFIX && cd python/quantum-pecos && uv pip install -e .[all]
 
 # Documentation
 # -------------
 
-# .PHONY: docs
-# docs:  ## Generate documentation
-# 	#TODO: ...
+.PHONY: docs-build
+docs-build:  ## Clean, install deps, and build documentation
+	@uv run mkdocs build --clean
+
+.PHONY: docs-serve
+docs-serve:  ## Serve documentation (for  other ports add... -dev-addr=127.0.0.1:9000)
+	@uv run mkdocs serve
+
+.PHONY: docs-test
+docs-test:  ## Test all code examples in documentation
+	@uv run python scripts/docs/test_code_examples.py
+
+.PHONY: docs-test-working
+docs-test-working:  ## Test only working code examples in documentation
+	@uv run python scripts/docs/test_working_examples.py
 
 # Linting / formatting
 # --------------------
@@ -66,7 +78,7 @@ fmt: ## Run autoformatting for cargo
 	cargo fmt --all -- --check
 
 .PHONY: lint  ## Run all quality checks / linting / reformatting
-lint: fmt clippy
+lint: check fmt clippy
 	uv run pre-commit run --all-files
 
 # Testing
@@ -74,19 +86,20 @@ lint: fmt clippy
 
 .PHONY: rstest
 rstest:  ## Run Rust tests
-	cargo test
+	cargo test --workspace
 
 .PHONY: pytest
 pytest:  ## Run tests on the Python package (not including optional dependencies). ASSUMES: previous build command
 	uv run pytest ./python/tests/ -m "not optional_dependency"
+	uv run pytest ./python/pecos-rslib/tests/
 
 .PHONY: pytest-dep
 pytest-dep: ## Run tests on the Python package only for optional dependencies. ASSUMES: previous build command
 	uv run pytest ./python/tests/ -m optional_dependency
 
 .PHONY: pytest-all
-pytest-all:  ## Run all tests on the Python package ASSUMES: previous build command
-	uv run pytest ./python/tests/
+pytest-all:  pytest ## Run all tests on the Python package ASSUMES: previous build command
+	uv run pytest ./python/tests/ -m "optional_dependency"
 
 # .PHONY: pytest-doc
 # pydoctest:  ## Run doctests with pytest. ASSUMES: A build command was ran previously. ASSUMES: previous build command
@@ -101,16 +114,67 @@ test: rstest pytest-all ## Run all tests. ASSUMES: previous build command
 
 .PHONY: clean
 clean:  ## Clean up caches and build artifacts
+ifeq ($(OS),Windows_NT)
+	-@powershell -Command "exit 0" > NUL 2>&1 && $(MAKE) clean-windows-ps || $(MAKE) clean-windows-cmd
+else
+	$(MAKE) clean-unix
+endif
+
+.PHONY: clean-unix
+clean-unix:
 	@rm -rf *.egg-info
 	@rm -rf dist
-	@rm -rf **/build/
+	@find . -type d -name "build" -exec rm -rf {} +
 	@rm -rf python/docs/_build
-	@rm -rf **/.pytest_cache/
-	@rm -rf **/.ipynb_checkpoints
+	@rm -rf site
+	@find . -type d -name ".pytest_cache" -exec rm -rf {} +
+	@find . -type d -name ".ipynb_checkpoints" -exec rm -rf {} +
 	@rm -rf .ruff_cache/
-	@rm -rf **/.hypothesis/
-	@rm -rf **/junit/
+	@find . -type d -name ".hypothesis" -exec rm -rf {} +
+	@find . -type d -name "junit" -exec rm -rf {} +
+	@find python -name "*.so" -delete
+	@find python -name "*.pyd" -delete
+	@# Clean all target directories in crates (in case they were built independently)
+	@find crates -type d -name "target" -exec rm -rf {} +
+	@find python -type d -name "target" -exec rm -rf {} +
+	@# Clean the root workspace target directory
 	@cargo clean
+
+.PHONY: clean-windows-ps
+clean-windows-ps:
+	@powershell -Command "if (Test-Path '*.egg-info') { Remove-Item -Recurse -Force *.egg-info }"
+	@powershell -Command "if (Test-Path 'dist') { Remove-Item -Recurse -Force dist }"
+	@powershell -Command "Get-ChildItem -Path . -Recurse -Directory -Filter 'build' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "if (Test-Path 'python\docs\_build') { Remove-Item -Recurse -Force python\docs\_build }"
+	@powershell -Command "if (Test-Path 'site') { Remove-Item -Recurse -Force site }"
+	@powershell -Command "Get-ChildItem -Path . -Recurse -Directory -Filter '.pytest_cache' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path . -Recurse -Directory -Filter '.ipynb_checkpoints' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "if (Test-Path '.ruff_cache') { Remove-Item -Recurse -Force .ruff_cache }"
+	@powershell -Command "Get-ChildItem -Path . -Recurse -Directory -Filter '.hypothesis' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path . -Recurse -Directory -Filter 'junit' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path python -Recurse -File -Include '*.so','*.pyd' | Remove-Item -Force -ErrorAction SilentlyContinue"
+	@# Clean all target directories in crates
+	@powershell -Command "Get-ChildItem -Path crates -Recurse -Directory -Filter 'target' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path python -Recurse -Directory -Filter 'target' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@cargo clean
+
+.PHONY: clean-windows-cmd
+clean-windows-cmd:
+	-@if exist *.egg-info rd /s /q *.egg-info
+	-@if exist dist rd /s /q dist
+	-@if exist python\docs\_build rd /s /q python\docs\_build
+	-@if exist site rd /s /q site
+	-@if exist .ruff_cache rd /s /q .ruff_cache
+	-@for /f "delims=" %%d in ('dir /s /b /ad build 2^>nul') do @rd /s /q "%%d" 2>nul
+	-@for /f "delims=" %%d in ('dir /s /b /ad .pytest_cache 2^>nul') do @rd /s /q "%%d" 2>nul
+	-@for /f "delims=" %%d in ('dir /s /b /ad .ipynb_checkpoints 2^>nul') do @rd /s /q "%%d" 2>nul
+	-@for /f "delims=" %%d in ('dir /s /b /ad .hypothesis 2^>nul') do @rd /s /q "%%d" 2>nul
+	-@for /f "delims=" %%d in ('dir /s /b /ad junit 2^>nul') do @rd /s /q "%%d" 2>nul
+	-@for /f "delims=" %%f in ('dir /s /b python\*.so python\*.pyd 2^>nul') do @del "%%f" 2>nul
+	-@REM Clean all target directories in crates
+	-@for /f "delims=" %%d in ('dir /s /b /ad crates\target 2^>nul') do @rd /s /q "%%d" 2>nul
+	-@for /f "delims=" %%d in ('dir /s /b /ad python\target 2^>nul') do @rd /s /q "%%d" 2>nul
+	-@cargo clean
 
 .PHONY: pip-install-uv
 pip-install-uv:  ## Install uv using pip and create a venv. (Recommended to instead follow: https://docs.astral.sh/uv/getting-started/installation/

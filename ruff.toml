@@ -117,7 +117,10 @@ ignore = [
 ]
 
 [lint.per-file-ignores]
+"examples/python-plugins/**/*" = ["INP001"]
 "python/**/__init__.py" = ["F401"]  # imported but unused (81)
+"crates/plugin-python-service/**/__init__.py" = ["F401"]
+"examples/**/__init__.py" = ["F401"]
 "python/tests/**/*.py"         = [
     "INP001",                       # File is part of an implicit namespace package. Add an `__init__.py` (6)
     "S101",                         # Use of `assert` detected (78)
@@ -126,6 +129,7 @@ ignore = [
     "INP001",
     "S101",
 ]
+"python/quantum-pecos/src/pecos/engines/hybrid_engine_multiprocessing.py" = ["BLE001"]  # Must catch all exceptions in worker process
 # TODO: comment to work on better typing
 "python/pecos/src/pecos/circuit_converters/**/*.py" = ["ANN"]
 "python/pecos/src/pecos/circuits/**/*.py" = ["ANN"]

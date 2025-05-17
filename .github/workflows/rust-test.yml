@@ -1,5 +1,10 @@
 name: Rust test / linting
 
+env:
+  TRIGGER_ON_PR_PUSH: true  # Set to true to enable triggers on PR pushes
+  RUSTFLAGS: -C debuginfo=0
+  RUST_BACKTRACE: 1
+
 on:
   push:
     branches: [ "master", "development" ]
@@ -22,15 +27,17 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  RUSTFLAGS: -C debuginfo=0
-  RUST_BACKTRACE: 1
-
 jobs:
   rust-lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install Rust (for local testing)
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.cargo/bin:$PATH"
 
       - name: Set up Rust
         run: rustup override set stable && rustup update
@@ -76,6 +83,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Rust (for local testing)
+        if: matrix.os == 'windows-latest'
+        run: |
+          curl -sSf -o rustup-init.exe https://win.rustup.rs
+          ./rustup-init.exe -y --default-toolchain stable --profile minimal
+          echo "$HOME\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $env:Path += ";$HOME\.cargo\bin"
+
+      - name: Install Rust (for local testing)
+        if: matrix.os != 'windows-latest'
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.cargo/bin:$PATH"
+
       - name: Set up Rust
         run: rustup show
 
@@ -84,8 +106,132 @@ jobs:
         with:
           save-if: ${{ github.ref_name == 'master' || github.ref_name == 'development' }}
 
+      - name: Install LLVM Tools (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          # Add LLVM 14 repository
+          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+          sudo add-apt-repository "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-14 main"
+          sudo apt-get update
+          # Install LLVM 14 specifically
+          sudo apt-get install -y llvm-14 clang-14
+          # Create symlinks for llc and clang
+          sudo update-alternatives --install /usr/bin/llc llc /usr/bin/llc-14 100
+          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-14 100
+          # Verify installation
+          which llc
+          llc --version
+
+      - name: Install LLVM Tools (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install llvm@14
+          echo "$(brew --prefix llvm@14)/bin" >> $GITHUB_PATH
+          # Make sure it's available in the current step too
+          export PATH="$(brew --prefix llvm@14)/bin:$PATH"
+          which llc
+          llc --version
+
+      - name: Install LLVM Tools (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "14.0"
+          directory: ${{ runner.temp }}/llvm
+          env: true
+
+      - name: Setup LLVM Path (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          Write-Host "Setting up LLVM in PATH..."
+
+          # Display LLVM_PATH environment variable set by the action
+          Write-Host "LLVM_PATH environment variable: $env:LLVM_PATH"
+
+          # Add LLVM bin directory to PATH for this and subsequent steps
+          $llvmBinDir = Join-Path -Path $env:LLVM_PATH -ChildPath "bin"
+
+          # Verify the directory exists
+          if (Test-Path -Path $llvmBinDir) {
+            Write-Host "LLVM bin directory exists at $llvmBinDir"
+            # List contents to verify what's available
+            Write-Host "LLVM bin directory contents:"
+            Get-ChildItem -Path $llvmBinDir | Select-Object -First 10 | ForEach-Object {
+              Write-Host "  $($_.Name)"
+            }
+
+            # Add to PATH
+            echo "$llvmBinDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            $env:PATH = "$llvmBinDir;$env:PATH"
+
+            # Verify llc is available
+            $llcPath = Join-Path -Path $llvmBinDir -ChildPath "llc.exe"
+            if (Test-Path -Path $llcPath) {
+              Write-Host "Found llc.exe at $llcPath"
+              Write-Host "Testing llc.exe:"
+              & "$llcPath" --version
+            } else {
+              Write-Host "WARNING: llc.exe not found at $llcPath"
+              # Display all exe files to help diagnose what might be available
+              Write-Host "Available executables in bin directory:"
+              Get-ChildItem -Path $llvmBinDir -Filter "*.exe" | ForEach-Object {
+                Write-Host "  $($_.Name)"
+              }
+            }
+          } else {
+            Write-Host "ERROR: LLVM bin directory does not exist at $llvmBinDir"
+            Write-Host "LLVM_PATH contents:"
+            Get-ChildItem -Path $env:LLVM_PATH | ForEach-Object {
+              Write-Host "  $($_.Name)"
+            }
+            exit 1
+          }
+
+      - name: Verify LLVM PATH (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          Write-Host "PATH environment variable:"
+          $env:PATH -split ';' | ForEach-Object { Write-Host "  $_" }
+
+          Write-Host "Checking for llc command:"
+          try {
+            $llcCommand = Get-Command llc -ErrorAction Stop
+            Write-Host "Found llc at location $($llcCommand.Source)"
+            & $llcCommand.Source --version
+          } catch {
+            Write-Host "llc command not found in PATH. This may cause tests to fail."
+
+            # Look for llc.exe in LLVM_PATH
+            if ($env:LLVM_PATH) {
+              $llcPath = Join-Path -Path $env:LLVM_PATH -ChildPath "bin\llc.exe"
+              if (Test-Path -Path $llcPath) {
+                Write-Host "Found llc.exe at $llcPath, but it's not in PATH. Adding it now."
+                $llvmBinDir = Join-Path -Path $env:LLVM_PATH -ChildPath "bin"
+                $env:PATH = "$llvmBinDir;$env:PATH"
+                echo "PATH=$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+              }
+            }
+          }
+
       - name: Compile tests
         run: cargo test --no-run
 
-      - name: Run tests
-        run: cargo test
+      - name: Run tests (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        run: cargo test --workspace
+
+      - name: Run tests (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          # Run all non-doctest tests
+          cargo test --workspace --exclude pecos-rslib --lib --bins --tests --examples
+
+          # For Windows, we need to run doctests for the pecos crate specially
+          # to ensure they run from the crate directory
+          cd crates/pecos
+          cargo test --doc
+          cd ../..
+
+          # Run doctests for other crates normally
+          cargo test --workspace --exclude pecos-rslib --exclude pecos --doc

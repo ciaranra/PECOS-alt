@@ -13,6 +13,11 @@
 from importlib.metadata import PackageNotFoundError, version
 
 from pecos_rslib.rssparse_sim import SparseSimRs
+from pecos_rslib.rsstate_vec import StateVecRs
+from pecos_rslib._pecos_rslib import ByteMessage
+from pecos_rslib._pecos_rslib import ByteMessageBuilder
+from pecos_rslib._pecos_rslib import StateVecEngineRs
+from pecos_rslib._pecos_rslib import SparseStabEngineRs
 
 try:
     __version__ = version("pecos-rslib")
@@ -21,4 +26,9 @@ except PackageNotFoundError:
 
 __all__ = [
     "SparseSimRs",
+    "StateVecRs",
+    "ByteMessage",
+    "ByteMessageBuilder",
+    "StateVecEngineRs",
+    "SparseStabEngineRs",
 ]

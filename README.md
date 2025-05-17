@@ -1,4 +1,4 @@
-# ![PECOS](branding/logo/pecos_logo_v2.svg)
+# ![PECOS](images/pecos_logo.svg)
 
 [![PyPI version](https://badge.fury.io/py/quantum-pecos.svg)](https://badge.fury.io/py/quantum-pecos)
 [![Documentation Status](https://readthedocs.org/projects/quantum-pecos/badge/?version=latest)](https://quantum-pecos.readthedocs.io/en/latest/?badge=latest)
@@ -7,7 +7,7 @@
 
 **Performance Estimator of Codes On Surfaces (PECOS)** is a library/framework dedicated to the study, development, and
 evaluation of quantum error-correction protocols. It also offers tools for the study and evaluation of hybrid
-quantum/classical compute execution models for NISQ algorithms and beyond.
+quantum/classical compute execution models.
 
 Initially conceived and developed in 2014 to verify lattice-surgery procedures presented in
 [arXiv:1407.5103](https://arxiv.org/abs/1407.5103) and released publicly in 2018, PECOS filled the gap in
@@ -22,6 +22,7 @@ calls to Wasm VMs, conditional branching, and more.
 - Fast Simulation: Leverages a fast stabilizer simulation algorithm.
 - Multi-language extensions: Core functionalities implemented via Rust for performance and safety. Additional add-ons
 and extension support in C/C++ via Cython.
+- QIR Support: Execute Quantum Intermediate Representation programs (requires LLVM version 14 with the 'llc' tool).
 
 ## Getting Started
 
@@ -39,6 +40,10 @@ PECOS now consists of multiple interconnected components:
   - `/crates/pecos-core/`: Core Rust functionalities
   - `/crates/pecos-qsims/`: A collection of quantum simulators
   - `/crates/pecos-qec/`: Rust code for analyzing and exploring quantum error correction (QEC)
+  - `/crates/pecos-qasm/`: Implementation of QASM parsing and execution
+  - `/crates/pecos-qir/`: Implementation of QIR (Quantum Intermediate Representation) execution
+  - `/crates/pecos-engines/`: Quantum and classical engines for simulations
+  - `/crates/pecos-cli/`: Command-line interface for PECOS
   - `/crates/pecos-python/`: Rust code for Python extensions
   - `/crates/benchmarks/`: A collection of benchmarks to test the performance of the crates
 
@@ -97,10 +102,21 @@ To use PECOS in your Rust project, add the following to your `Cargo.toml`:
 pecos = "0.x.x"  # Replace with the latest version
 ```
 
+#### Optional Dependencies
+
+- **LLVM version 14**: Required for QIR (Quantum Intermediate Representation) support
+  - Linux: `sudo apt install llvm-14`
+  - macOS: `brew install llvm@14`
+  - Windows: Download LLVM 14.x installer from [LLVM releases](https://releases.llvm.org/download.html#14.0.0)
+
+  **Note**: Only LLVM version 14.x is compatible. LLVM 15 or later versions will not work with PECOS's QIR implementation.
+
+  If LLVM 14 is not installed, PECOS will still function normally but QIR-related features will be disabled.
+
 ## Development Setup
 
 If you are interested in editing or developing the code in this project, see this
-[development documentation](DEVELOPMENT.md) to get started.
+[development documentation](docs/development/DEVELOPMENT.md) to get started.
 
 ## Simulators with special requirements
 

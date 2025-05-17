@@ -10,8 +10,8 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-use crate::sets::vec_set::iterators::{Difference, Intersection, SymmetricDifference, Union};
 use crate::VecSet;
+use crate::sets::vec_set::iterators::{Difference, Intersection, SymmetricDifference, Union};
 use core::slice::Iter;
 
 use crate::{Element, Set};
@@ -25,7 +25,6 @@ impl<'a, E: Element + 'a> Set<'a> for VecSet<E> {
     type Union = Union<'a, E>;
 
     #[inline]
-    #[must_use]
     fn new() -> Self {
         Self::new()
     }
@@ -154,7 +153,6 @@ impl<'a, E: Element + 'a> Set<'a> for VecSet<E> {
     }
 
     #[inline]
-    #[must_use]
     fn with_capacity(capacity: usize) -> Self {
         Self {
             elements: Vec::with_capacity(capacity),

@@ -11,11 +11,8 @@ categories.workspace = true
 publish = false
 
 [dev-dependencies]
-criterion = "0.5"
-pecos = { workspace = true }
-pecos-core = { workspace = true }
-pecos-qsim = { workspace = true }
-pecos-qec = { workspace = true }
+criterion.workspace = true
+pecos.workspace = true
 
 [[bench]]
 name = "benchmarks"

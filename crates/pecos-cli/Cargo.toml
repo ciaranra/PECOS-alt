@@ -1,0 +1,33 @@
+[package]
+name = "pecos-cli"
+version.workspace = true
+edition.workspace = true
+readme.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Provides a CLI for PECOS."
+
+
+[[bin]]
+name = "pecos"
+path = "src/main.rs"
+
+[dependencies]
+pecos.workspace = true
+clap.workspace = true
+env_logger.workspace = true
+rand.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.0"
+tempfile = "3.8"
+serde_json = "1.0"
+
+[lints]
+workspace = true

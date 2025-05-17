@@ -1,3 +1,9 @@
+tmp/
+**/.*/settings.local.json
+
+# Ignore helper text in root
+*.txt
+
 # pytest results
 junit/
 
@@ -85,6 +91,7 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+python/docs/_build/
 
 # PyBuilder
 .pybuilder/

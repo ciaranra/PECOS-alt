@@ -10,4 +10,11 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
+//! The PECOS crate provides unified access to quantum error correction functionality.
+//!
+//! This crate serves as the main entry point for the PECOS ecosystem, re-exporting
+//! the primary functionality from the various specialized crates.
+
+pub mod engines;
 pub mod prelude;
+pub mod program;
