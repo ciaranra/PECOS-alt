@@ -21,6 +21,7 @@ keywords = ["scientific", "quantum", "QEC"]
 categories = ["science", "simulation"]
 
 [workspace.dependencies]
+thiserror = "2"
 rand = "0.9"
 rand_chacha = "0.9"
 pyo3 = { version = "0.24", features = ["extension-module"] }
@@ -40,10 +41,14 @@ bytemuck = {  version = "1", features = ["derive"] }
 bitflags = "2"
 dyn-clone = "1"
 regex = "1"
+pest = "2.7"
 
 pecos-core = { version = "0.1.1", path = "crates/pecos-core" }
 pecos-qsim = { version = "0.1.1", path = "crates/pecos-qsim" }
+pecos-qasm = { version = "0.1.1", path = "crates/pecos-qasm" }
+pecos-phir = { version = "0.1.1", path = "crates/pecos-phir" }
 pecos-engines = { version = "0.1.1", path = "crates/pecos-engines" }
+pecos-qir = { version = "0.1.1", path = "crates/pecos-qir" }
 pecos-qec = { version = "0.1.1", path = "crates/pecos-qec" }
 pecos = { version = "0.1.1", path = "crates/pecos" }
 pecos-cli = { version = "0.1.1", path = "crates/pecos-cli" }

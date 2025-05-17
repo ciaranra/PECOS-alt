@@ -219,10 +219,19 @@ jobs:
 
       - name: Run tests (Linux/macOS)
         if: matrix.os != 'windows-latest'
-        run: cargo test
+        run: cargo test --workspace
 
       - name: Run tests (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          # Run all tests with our trait re-export fix
-          cargo test --workspace --exclude pecos-rslib
+          # Run all non-doctest tests
+          cargo test --workspace --exclude pecos-rslib --lib --bins --tests --examples
+
+          # For Windows, we need to run doctests for the pecos crate specially
+          # to ensure they run from the crate directory
+          cd crates/pecos
+          cargo test --doc
+          cd ../..
+
+          # Run doctests for other crates normally
+          cargo test --workspace --exclude pecos-rslib --exclude pecos --doc

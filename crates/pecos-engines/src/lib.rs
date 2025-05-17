@@ -1,7 +1,6 @@
 pub mod byte_message;
 pub mod core;
 pub mod engines;
-pub mod errors;
 
 // Re-exports for commonly used types
 pub use byte_message::{ByteMessage, ByteMessageBuilder, GateType, QuantumGate};
@@ -13,9 +12,7 @@ pub use engines::{
     hybrid::HybridEngine,
     monte_carlo::MonteCarloEngine,
     noise::{DepolarizingNoiseModel, NoiseModel, PassThroughNoiseModel},
-    phir::PHIREngine,
-    qir::QirEngine,
     quantum::QuantumEngine,
     quantum_system::QuantumSystem,
 };
-pub use errors::QueueError;
+pub use pecos_core::errors::PecosError;

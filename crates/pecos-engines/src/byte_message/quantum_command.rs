@@ -4,9 +4,9 @@ use crate::byte_message::protocol::{MessageFlags, MessageType};
 use crate::byte_message::{ByteMessage, ByteMessageBuilder};
 use crate::core::record_data::RecordData;
 use crate::core::result_id::ResultId;
-use crate::errors::QueueError;
 use log::debug;
 use pecos_core::QubitId;
+use pecos_core::errors::PecosError;
 use std::fmt;
 
 /// Command type for unknown commands
@@ -65,6 +65,9 @@ pub enum QuantumCommand {
     /// R1XY gate with two angles (in radians) and qubit
     R1XY(f64, f64, QubitId),
 
+    /// U gate with three angles (in radians) and qubit
+    U(f64, f64, f64, QubitId),
+
     /// SZZ gate with two qubits
     SZZ(QubitId, QubitId),
 
@@ -107,6 +110,7 @@ impl QuantumCommand {
             QuantumCommand::CX(_, _) => Some(GateType::CX),
             QuantumCommand::RZ(_, _) => Some(GateType::RZ),
             QuantumCommand::R1XY(_, _, _) => Some(GateType::R1XY),
+            QuantumCommand::U(_, _, _, _) => Some(GateType::U),
             QuantumCommand::SZZ(_, _) => Some(GateType::SZZ),
             QuantumCommand::RZZ(_, _, _) => Some(GateType::RZZ),
             QuantumCommand::Measure(_, _) => Some(GateType::Measure),
@@ -144,7 +148,7 @@ impl QuantumCommand {
     }
 
     /// Add this command directly to a `ByteMessageBuilder`
-    pub fn add_to_builder(&self, builder: &mut ByteMessageBuilder) -> Result<(), QueueError> {
+    pub fn add_to_builder(&self, builder: &mut ByteMessageBuilder) -> Result<(), PecosError> {
         match self {
             QuantumCommand::H(qubit) => {
                 builder.add_h(&[qubit.0]);
@@ -172,6 +176,10 @@ impl QuantumCommand {
             }
             QuantumCommand::R1XY(theta, phi, qubit) => {
                 builder.add_r1xy(*theta, *phi, &[qubit.0]);
+                Ok(())
+            }
+            QuantumCommand::U(theta, phi, lambda, qubit) => {
+                builder.add_u(*theta, *phi, *lambda, &[qubit.0]);
                 Ok(())
             }
             QuantumCommand::SZZ(qubit1, qubit2) => {
@@ -248,7 +256,7 @@ impl QuantumCommand {
 
     /// Convert the command to a `ByteMessage`
     /// This is more efficient than string-based serialization for gate operations
-    pub fn to_byte_message(&self) -> Result<ByteMessage, QueueError> {
+    pub fn to_byte_message(&self) -> Result<ByteMessage, PecosError> {
         let mut builder = ByteMessage::quantum_operations_builder();
         self.add_to_builder(&mut builder)?;
         Ok(builder.build())
@@ -256,7 +264,7 @@ impl QuantumCommand {
 
     /// Convert a list of `QuantumCommands` to a `ByteMessage`
     /// This handles all command types, including gate operations, records, and messages
-    pub fn commands_to_byte_message(commands: &[Self]) -> Result<ByteMessage, QueueError> {
+    pub fn commands_to_byte_message(commands: &[Self]) -> Result<ByteMessage, PecosError> {
         let mut builder = ByteMessage::quantum_operations_builder();
 
         for cmd in commands {
@@ -277,6 +285,9 @@ impl fmt::Display for QuantumCommand {
             QuantumCommand::CX(control, target) => write!(f, "CX {control} {target}"),
             QuantumCommand::RZ(angle, qubit) => write!(f, "RZ {angle} {qubit}"),
             QuantumCommand::R1XY(theta, phi, qubit) => write!(f, "R1XY {theta} {phi} {qubit}"),
+            QuantumCommand::U(theta, phi, lambda, qubit) => {
+                write!(f, "U {theta} {phi} {lambda} {qubit}")
+            }
             QuantumCommand::SZZ(qubit1, qubit2) => write!(f, "SZZ {qubit1} {qubit2}"),
             QuantumCommand::RZZ(angle, qubit1, qubit2) => {
                 write!(f, "RZZ {angle} {qubit1} {qubit2}")
