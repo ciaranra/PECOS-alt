@@ -1,7 +1,4 @@
-#[path = "../helper.rs"]
-mod helper;
-
-use helper::run_qasm_sim;
+use pecos_qasm::run::run_qasm_sim;
 
 #[test]
 fn test_bell_qasm() {

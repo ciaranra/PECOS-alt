@@ -14,3 +14,4 @@ pub use std::str::FromStr;
 
 pub use crate::engine::QASMEngine;
 pub use crate::engine_builder::QASMEngineBuilder;
+pub use crate::run::run_qasm_sim;

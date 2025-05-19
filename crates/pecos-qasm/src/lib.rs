@@ -49,6 +49,7 @@ pub mod includes;
 pub mod parser;
 pub mod prelude;
 pub mod preprocessor;
+pub mod run;
 pub mod util;
 
 pub use ast::{Expression, GateOperation, Operation, OperationDisplay};

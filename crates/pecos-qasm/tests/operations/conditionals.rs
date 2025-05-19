@@ -3,9 +3,7 @@
 
 use std::error::Error;
 
-#[path = "../helper.rs"]
-mod helper;
-use helper::run_qasm_sim;
+use pecos_qasm::run::run_qasm_sim;
 
 #[test]
 fn test_conditional_execution() -> Result<(), Box<dyn Error>> {

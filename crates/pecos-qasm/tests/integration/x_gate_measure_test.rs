@@ -1,8 +1,6 @@
 use pecos_qasm::{Operation, parser::QASMParser};
 
-#[path = "../helper.rs"]
-mod helper;
-use helper::run_qasm_sim;
+use pecos_qasm::run::run_qasm_sim;
 
 #[test]
 fn test_x_gate_and_measure() {
