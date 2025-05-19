@@ -1148,12 +1148,13 @@ class GeneralNoiseModel(ErrorModel):
 
                 if previous_leaked:  # Seepage via spontaneous emission + residual gates
 
-                    if previous_leaked and self.error_params.get("seepage", True):
-                        for q in previous_leaked:
-                            if np.random.random() <= 1 / 3 * p2_emission_ratio:
-                                after.extend(
-                                    self.probabilistic_unleak({q}, pop0_prob=0.5),
-                                )
+                    if self.error_params.get("seepage", True):
+                        if np.random.random() <= p2_emission_ratio:
+                            for q in previous_leaked:
+                                if np.random.random() <= 1 / 3:
+                                    after.extend(
+                                        self.probabilistic_unleak({q}, pop0_prob=0.5),
+                                    )
 
                 elif np.random.random() <= p2_emission_ratio:  # spontaneous emission
                     spnt_emiss_happened = True
