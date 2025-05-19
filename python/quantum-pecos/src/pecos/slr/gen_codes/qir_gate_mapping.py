@@ -112,7 +112,7 @@ class QIRGateMetadata(Enum):
         lambda f4dg: [
             q.SXdg(f4dg.qargs[0]),
             #q.SZdg(f4dg.qargs[0]),
-            q.Rz[-np.pi / 2](f4dg.qargs[0]),
+            q.RZ[-np.pi / 2](f4dg.qargs[0]),
         ],
     )
 
