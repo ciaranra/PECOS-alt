@@ -10,53 +10,14 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-// re-exporting pecos-core
-pub use pecos_core::{IndexableElement, Set, VecSet, errors::PecosError};
+pub use pecos_core::prelude::*;
+pub use pecos_engines::prelude::*;
+pub use pecos_phir::prelude::*;
+pub use pecos_qasm::prelude::*;
+pub use pecos_qir::prelude::*;
+pub use pecos_qsim::prelude::*;
 
-// re-exporting pecos-engines
-pub use pecos_engines::{
-    ByteMessage, ByteMessageBuilder, ClassicalEngine, ControlEngine, DepolarizingNoiseModel,
-    Engine, EngineStage, EngineSystem, HybridEngine, MonteCarloEngine, NoiseModel, QuantumEngine,
-    QuantumSystem, ShotResult, ShotResults,
+pub use crate::{
+    engines::{setup_qasm_engine, setup_qir_engine},
+    program::{ProgramType, detect_program_type, get_program_path, setup_engine_for_program},
 };
-
-// re-exporting pecos-phir
-pub use pecos_phir::PHIREngine;
-
-// re-exporting OutputFormat enum
-pub use pecos_engines::core::shot_results::OutputFormat;
-
-// Re-exporting noise models
-pub use pecos_core::rng::RngManageable;
-pub use pecos_core::rng::rng_manageable::derive_seed;
-pub use pecos_engines::engines::noise::general::GeneralNoiseModel;
-
-// Re-exporting specific implementations that aren't at the crate root
-pub use pecos_engines::engines::quantum::{
-    SparseStabEngine, StateVecEngine, new_quantum_engine_arbitrary_qgate,
-};
-
-// Re-exporting byte_message functions
-pub use pecos_engines::byte_message::dump_batch;
-
-// re-exporting pecos-qsim
-pub use pecos_qsim::{
-    ArbitraryRotationGateable, CliffordGateable, QuantumSimulator, SparseStab, StateVec,
-};
-
-// re-exporting pecos-qasm
-pub use pecos_qasm::QASMEngine;
-
-// re-exporting pecos-qir
-pub use pecos_qir::QirEngine;
-
-// re-exporting program detection and setup
-pub use crate::program::{
-    ProgramType, detect_program_type, get_program_path, setup_engine_for_program,
-};
-
-// re-exporting engine setup functions
-pub use crate::engines::{setup_qasm_engine, setup_qir_engine};
-
-// re-exporting pecos-phir setup function
-pub use pecos_phir::setup_phir_engine;
