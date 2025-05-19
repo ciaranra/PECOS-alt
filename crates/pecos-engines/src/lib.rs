@@ -1,6 +1,7 @@
 pub mod byte_message;
 pub mod core;
 pub mod engines;
+pub mod prelude;
 
 // Re-exports for commonly used types
 pub use byte_message::{ByteMessage, ByteMessageBuilder, GateType, QuantumGate};

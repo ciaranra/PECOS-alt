@@ -1,6 +1,8 @@
 pub mod common;
 pub mod version_traits;
 
+pub mod prelude;
+
 // Version-specific implementations
 #[cfg(feature = "v0_1")]
 pub mod v0_1;

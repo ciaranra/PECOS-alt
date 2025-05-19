@@ -183,6 +183,12 @@ pip-install-uv:  ## Install uv using pip and create a venv. (Recommended to inst
 	@echo "Creating venv and installing dependencies..."
 	uv sync
 
+.PONY: dev
+dev: clean build test  ## Run the typical sequence of commands to check everything is running correctly
+
+.PONY: devl  ## Run the commands to make sure everything runs + lint
+devl: dev lint
+
 # Help
 # ----
 

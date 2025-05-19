@@ -16,6 +16,7 @@ pub mod errors;
 pub mod gate;
 pub mod pauli;
 pub mod phase;
+pub mod prelude;
 pub mod qubit_id;
 pub mod rng;
 pub mod sets;
