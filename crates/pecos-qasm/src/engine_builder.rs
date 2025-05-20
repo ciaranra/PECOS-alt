@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::engine::QASMEngine;
 use crate::parser::{ParseConfig, QASMParser};
+use crate::program::QASMProgram;
 use pecos_core::errors::PecosError;
 
 /// Builder for creating and configuring a `QASMEngine`
@@ -78,10 +79,11 @@ impl QASMEngineBuilder {
             ..Default::default()
         };
 
-        let program = QASMParser::parse_with_config(qasm, &parse_config)?;
+        let ast_program = QASMParser::parse_with_config(qasm, &parse_config)?;
+        let qasm_program = QASMProgram::new(ast_program, qasm.to_string());
 
         let mut engine = QASMEngine::default();
-        engine.load_program(program);
+        engine.load_program(qasm_program);
 
         // Apply configuration
         if self.allow_complex_conditionals {

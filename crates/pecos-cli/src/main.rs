@@ -51,6 +51,23 @@ enum NoiseModelType {
     General,
 }
 
+/// Type of quantum simulator to use for simulation
+#[derive(PartialEq, Eq, Clone, Debug, Default)]
+enum SimulatorType {
+    /// State vector simulator (full quantum state representation)
+    ///
+    /// This simulator can handle all quantum gates including arbitrary rotations.
+    /// Best for small to medium circuits with non-Clifford gates.
+    #[default]
+    StateVector,
+    /// Stabilizer simulator (Clifford circuit optimization)
+    ///
+    /// This simulator is optimized for Clifford circuits and can efficiently
+    /// simulate larger qubit counts for circuits limited to Clifford gates
+    /// (H, S, CNOT, Pauli gates, etc.)
+    Stabilizer,
+}
+
 impl std::str::FromStr for NoiseModelType {
     type Err = String;
 
@@ -60,6 +77,20 @@ impl std::str::FromStr for NoiseModelType {
             "general" | "gen" => Ok(NoiseModelType::General),
             _ => Err(format!(
                 "Unknown noise model type: {s}. Valid options are 'depolarizing' (dep) or 'general' (gen)"
+            )),
+        }
+    }
+}
+
+impl std::str::FromStr for SimulatorType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "statevector" | "state" | "sv" | "full" => Ok(SimulatorType::StateVector),
+            "stabilizer" | "stab" | "clifford" => Ok(SimulatorType::Stabilizer),
+            _ => Err(format!(
+                "Unknown simulator type: {s}. Valid options are 'statevector' (sv, state, full) or 'stabilizer' (stab, clifford)"
             )),
         }
     }
@@ -115,6 +146,12 @@ struct RunArgs {
         default_value = "depolarizing"
     )]
     noise_model: NoiseModelType,
+
+    /// Type of quantum simulator to use (statevector or stabilizer)
+    /// - statevector: Full quantum state simulator (handles all gates, default)
+    /// - stabilizer: Clifford circuit simulator (faster for Clifford circuits)
+    #[arg(short = 'S', long = "sim", value_parser, default_value = "statevector")]
+    simulator: SimulatorType,
 
     /// Noise probability (between 0 and 1)
     /// For depolarizing model: uniform error probability
@@ -276,13 +313,40 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
         }
     };
 
-    // Use the generic approach with the selected noise model
-    let results = MonteCarloEngine::run_with_noise_model(
+    // Create the appropriate quantum engine based on user selection
+    let quantum_engine: Option<Box<dyn QuantumEngine>> = match args.simulator {
+        SimulatorType::StateVector => {
+            // Use StateVecEngine - full quantum state simulator
+            let num_qubits = classical_engine.num_qubits();
+            let engine = if let Some(seed) = args.seed {
+                let engine_seed = derive_seed(seed, "quantum_engine");
+                Box::new(StateVecEngine::with_seed(num_qubits, engine_seed))
+            } else {
+                Box::new(StateVecEngine::new(num_qubits))
+            };
+            Some(engine)
+        }
+        SimulatorType::Stabilizer => {
+            // Use SparseStabEngine - Clifford circuit optimizer
+            let num_qubits = classical_engine.num_qubits();
+            let engine = if let Some(seed) = args.seed {
+                let engine_seed = derive_seed(seed, "quantum_engine");
+                Box::new(SparseStabEngine::with_seed(num_qubits, engine_seed))
+            } else {
+                Box::new(SparseStabEngine::new(num_qubits))
+            };
+            Some(engine)
+        }
+    };
+
+    // Run the simulation with the selected engine and noise model
+    let results = run_sim(
         classical_engine,
-        noise_model,
         args.shots,
-        args.workers,
         args.seed,
+        Some(args.workers),
+        Some(noise_model),
+        quantum_engine,
     )?;
 
     // Convert CLI format to engine format
@@ -379,6 +443,7 @@ mod tests {
                 assert_eq!(args.shots, 100);
                 assert_eq!(args.workers, 2);
                 assert_eq!(args.noise_model, NoiseModelType::Depolarizing); // Default
+                assert_eq!(args.simulator, SimulatorType::StateVector); // Default
                 assert_eq!(args.output_format, OutputFormatType::PrettyCompact); // Default
                 assert_eq!(args.output_file, None); // Default
             }
@@ -396,6 +461,7 @@ mod tests {
                 assert_eq!(args.shots, 100);
                 assert_eq!(args.workers, 2);
                 assert_eq!(args.noise_model, NoiseModelType::Depolarizing); // Default
+                assert_eq!(args.simulator, SimulatorType::StateVector); // Default
                 assert_eq!(args.output_format, OutputFormatType::PrettyCompact); // Default
                 assert_eq!(args.output_file, None); // Default
             }
@@ -525,6 +591,40 @@ mod tests {
 
         if let Commands::Run(args) = cmd.command {
             assert_eq!(args.output_file, Some("path/to/results.json".to_string()));
+        } else {
+            panic!("Expected Run command");
+        }
+    }
+
+    #[test]
+    fn verify_cli_simulator_options() {
+        // Test with statevector simulator (explicitly specified)
+        let cmd = Cli::parse_from(["pecos", "run", "program.json", "-S", "statevector"]);
+        if let Commands::Run(args) = cmd.command {
+            assert_eq!(args.simulator, SimulatorType::StateVector);
+        } else {
+            panic!("Expected Run command");
+        }
+
+        // Test with stabilizer simulator
+        let cmd = Cli::parse_from(["pecos", "run", "program.json", "-S", "stabilizer"]);
+        if let Commands::Run(args) = cmd.command {
+            assert_eq!(args.simulator, SimulatorType::Stabilizer);
+        } else {
+            panic!("Expected Run command");
+        }
+
+        // Test with aliases
+        let cmd = Cli::parse_from(["pecos", "run", "program.json", "--sim", "stab"]);
+        if let Commands::Run(args) = cmd.command {
+            assert_eq!(args.simulator, SimulatorType::Stabilizer);
+        } else {
+            panic!("Expected Run command");
+        }
+
+        let cmd = Cli::parse_from(["pecos", "run", "program.json", "--sim", "sv"]);
+        if let Commands::Run(args) = cmd.command {
+            assert_eq!(args.simulator, SimulatorType::StateVector);
         } else {
             panic!("Expected Run command");
         }

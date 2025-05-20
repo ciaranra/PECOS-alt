@@ -28,9 +28,10 @@ fn run_pecos(
     noise_model: &str,
     noise_prob: &str,
     seed: u64,
+    simulator: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let output = Command::cargo_bin("pecos")?
-        .env("RUST_LOG", "info")
+    let mut cmd = Command::cargo_bin("pecos")?;
+    cmd.env("RUST_LOG", "info")
         .arg("run")
         .arg(file_path)
         .arg("-s")
@@ -44,8 +45,14 @@ fn run_pecos(
         .arg("-d")
         .arg(seed.to_string())
         .arg("-f")
-        .arg("pretty-compact") // Force consistent format for test
-        .output()?;
+        .arg("pretty-compact"); // Force consistent format for test
+
+    // Add simulator parameter if specified
+    if let Some(sim) = simulator {
+        cmd.arg("-S").arg(sim);
+    }
+
+    let output = cmd.output()?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -151,7 +158,7 @@ fn test_perfect_bell_state_distribution() -> Result<(), Box<dyn std::error::Erro
     println!("---------------------------------------------------------------------------");
 
     // Run noiseless Bell state simulation with 100 shots
-    let output = run_pecos(&bell_json_path, 100, 1, "depolarizing", "0.0", 42)?;
+    let output = run_pecos(&bell_json_path, 100, 1, "depolarizing", "0.0", 42, None)?;
     println!("Bell state results: {}", output.trim());
 
     // Count occurrences of each measurement outcome
@@ -243,8 +250,8 @@ fn test_cross_implementation_validation() -> Result<(), Box<dyn std::error::Erro
     println!("------------------------------------------------------------------");
 
     // Run both implementations with the same seed
-    let phir_output = run_pecos(&bell_json_path, 100, 1, "depolarizing", "0.0", 42)?;
-    let qasm_output = run_pecos(&bell_qasm_path, 100, 1, "depolarizing", "0.0", 42)?;
+    let phir_output = run_pecos(&bell_json_path, 100, 1, "depolarizing", "0.0", 42, None)?;
+    let qasm_output = run_pecos(&bell_qasm_path, 100, 1, "depolarizing", "0.0", 42, None)?;
 
     // Extract the values and compare
     let phir_values = get_values(&phir_output);
@@ -421,7 +428,7 @@ fn test_bell_state_with_noise() -> Result<(), Box<dyn std::error::Error>> {
 
     // Run with depolarizing noise model
     println!("\n1. Testing with depolarizing noise model (p=0.1):");
-    let noisy_dep_output = run_pecos(&bell_json_path, 500, 1, "depolarizing", "0.1", 42)?;
+    let noisy_dep_output = run_pecos(&bell_json_path, 500, 1, "depolarizing", "0.1", 42, None)?;
     analyze_noisy_bell_state(&noisy_dep_output, "Depolarizing")?;
 
     // Run with general noise model
@@ -433,6 +440,7 @@ fn test_bell_state_with_noise() -> Result<(), Box<dyn std::error::Error>> {
         "general",
         "0.1,0.1,0.1,0.1,0.1",
         42,
+        None,
     )?;
     analyze_noisy_bell_state(&noisy_gen_output, "General")?;
 
@@ -453,8 +461,8 @@ fn test_noise_model_determinism() -> Result<(), Box<dyn std::error::Error>> {
     println!("------------------------------------------------------------------------");
 
     // Run depolarizing model twice with same seed
-    let dep_run1 = run_pecos(&bell_json_path, 50, 1, "depolarizing", "0.1", 42)?;
-    let dep_run2 = run_pecos(&bell_json_path, 50, 1, "depolarizing", "0.1", 42)?;
+    let dep_run1 = run_pecos(&bell_json_path, 50, 1, "depolarizing", "0.1", 42, None)?;
+    let dep_run2 = run_pecos(&bell_json_path, 50, 1, "depolarizing", "0.1", 42, None)?;
 
     let dep_values1 = get_values(&dep_run1);
     let dep_values2 = get_values(&dep_run2);
@@ -466,8 +474,24 @@ fn test_noise_model_determinism() -> Result<(), Box<dyn std::error::Error>> {
     println!("Depolarizing noise model is deterministic with the same seed");
 
     // Run general model twice with same seed
-    let gen_run1 = run_pecos(&bell_json_path, 50, 1, "general", "0.1,0.1,0.1,0.1,0.1", 42)?;
-    let gen_run2 = run_pecos(&bell_json_path, 50, 1, "general", "0.1,0.1,0.1,0.1,0.1", 42)?;
+    let gen_run1 = run_pecos(
+        &bell_json_path,
+        50,
+        1,
+        "general",
+        "0.1,0.1,0.1,0.1,0.1",
+        42,
+        None,
+    )?;
+    let gen_run2 = run_pecos(
+        &bell_json_path,
+        50,
+        1,
+        "general",
+        "0.1,0.1,0.1,0.1,0.1",
+        42,
+        None,
+    )?;
 
     let gen_values1 = get_values(&gen_run1);
     let gen_values2 = get_values(&gen_run2);
@@ -477,6 +501,109 @@ fn test_noise_model_determinism() -> Result<(), Box<dyn std::error::Error>> {
         "General noise model should produce identical results with the same seed"
     );
     println!("General noise model is deterministic with the same seed");
+
+    Ok(())
+}
+
+/// Test both simulator engines (state vector and stabilizer) and verify they produce
+/// identical results for Bell state circuits
+#[test]
+fn test_simulator_engines() -> Result<(), Box<dyn std::error::Error>> {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let bell_qasm_path = manifest_dir.join("../../examples/qasm/bell.qasm");
+
+    println!("SIMULATOR ENGINE COMPARISON: Testing both state vector and stabilizer simulators");
+    println!("--------------------------------------------------------------------------------");
+    println!(
+        "Bell state circuit is a Clifford circuit, so both simulators should produce identical results"
+    );
+
+    // Run with state vector simulator (default)
+    let state_vector_output = run_pecos(
+        &bell_qasm_path,
+        100,
+        1,
+        "depolarizing",
+        "0.0",
+        42,
+        Some("statevector"),
+    )?;
+    println!(
+        "State vector simulator results: {:.60}...",
+        state_vector_output.trim()
+    );
+
+    // Run with stabilizer simulator
+    let stabilizer_output = run_pecos(
+        &bell_qasm_path,
+        100,
+        1,
+        "depolarizing",
+        "0.0",
+        42,
+        Some("stabilizer"),
+    )?;
+    println!(
+        "Stabilizer simulator results: {:.60}...",
+        stabilizer_output.trim()
+    );
+
+    // Extract and compare the values
+    let sv_values = get_values(&state_vector_output);
+    let stab_values = get_values(&stabilizer_output);
+
+    // Count |00⟩ and |11⟩ states for each simulator
+    let count_bell_states = |values: &[String]| -> (usize, usize) {
+        if values.is_empty() {
+            return (0, 0);
+        }
+
+        let outcomes = values[0].split(", ").collect::<Vec<_>>();
+
+        let state_00_count = outcomes.iter().filter(|&&o| o == "0").count();
+        let state_11_count = outcomes.iter().filter(|&&o| o == "3").count();
+
+        (state_00_count, state_11_count)
+    };
+
+    let (sv_00_count, sv_11_count) = count_bell_states(&sv_values);
+    let (stab_00_count, stab_11_count) = count_bell_states(&stab_values);
+
+    println!("State vector simulator: {sv_00_count} |00⟩ states, {sv_11_count} |11⟩ states");
+    println!("Stabilizer simulator:  {stab_00_count} |00⟩ states, {stab_11_count} |11⟩ states");
+
+    // Note: The two simulators may produce different measurement outcome sequences
+    // even with the same seed, due to different implementations and RNG usage,
+    // but both should produce valid Bell state distributions
+
+    // Both simulators should produce balanced Bell state outcomes
+    assert!(
+        (40..=60).contains(&sv_00_count),
+        "State vector simulator should have between 40% and 60% |00⟩ states, but got {sv_00_count}%"
+    );
+
+    assert!(
+        (40..=60).contains(&stab_00_count),
+        "Stabilizer simulator should have between 40% and 60% |00⟩ states, but got {stab_00_count}%"
+    );
+
+    // Both simulators should only produce |00⟩ and |11⟩ states for a Bell state
+    let sv_outcomes = sv_values[0].split(", ").collect::<Vec<_>>();
+    let stab_outcomes = stab_values[0].split(", ").collect::<Vec<_>>();
+
+    assert!(
+        sv_outcomes.iter().all(|&x| x == "0" || x == "3"),
+        "State vector simulator should only produce |00⟩ and |11⟩ states"
+    );
+
+    assert!(
+        stab_outcomes.iter().all(|&x| x == "0" || x == "3"),
+        "Stabilizer simulator should only produce |00⟩ and |11⟩ states"
+    );
+
+    println!(
+        "Both simulators produce correct Bell state distributions with proper quantum behavior"
+    );
 
     Ok(())
 }

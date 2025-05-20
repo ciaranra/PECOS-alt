@@ -38,7 +38,7 @@ use std::fmt;
 ///
 /// Values that don't fit in 32 bits are stored in both formats (truncated in 32-bit fields)
 /// with the complete value in the 64-bit fields.
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ShotResult {
     /// Direct mapping of register names to 32-bit integer values
     /// Standard representation for classical registers in QASM and similar models
@@ -146,7 +146,7 @@ impl ShotResult {
 ///
 /// This ensures each register appears exactly once in the output, even if it's
 /// stored in multiple formats internally.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ShotResults {
     /// Each element is a mapping of register names to string values for a single shot
     pub shots: Vec<HashMap<String, String>>,

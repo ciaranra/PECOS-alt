@@ -66,7 +66,8 @@ fn test_x_gate_and_measure() {
     }
 
     // Now test actual simulation - X gate should flip the qubit from |0⟩ to |1⟩
-    let results = run_qasm_sim(qasm, 100, Some(42)).expect("Failed to run simulation");
+    let results =
+        run_qasm_sim(qasm, 100, Some(42), Some(1), None, None).expect("Failed to run simulation");
 
     // Verify that qubit 10 is always measured as 1 (since X flips it)
     let c_values = results.get("c").expect("Should have c register results");

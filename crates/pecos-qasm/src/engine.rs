@@ -10,7 +10,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 use crate::ast::{EvaluationContext, Expression, Operation};
-use crate::parser::{Program, QASMParser};
+use crate::program::QASMProgram;
 
 /// Gate handler function type
 type GateHandler = fn(&mut QASMEngine, &[usize], &[f64]) -> Result<(), PecosError>;
@@ -27,7 +27,7 @@ struct GateInfo {
 #[derive(Debug)]
 pub struct QASMEngine {
     /// The QASM Program being executed
-    program: Option<Program>,
+    program: Option<QASMProgram>,
 
     /// Mapping from result IDs to register names and bit indices
     register_result_mappings: Vec<(u32, String, usize)>,
@@ -61,36 +61,38 @@ impl QASMEngine {
         crate::engine_builder::QASMEngineBuilder::new()
     }
 
+    /// Create a new `QASMEngine` from a `QASMProgram`
+    ///
+    /// This is generally used internally. Users should prefer `from_str` or `from_file`.
+    #[must_use]
+    pub fn new(program: QASMProgram) -> Self {
+        let mut engine = Self::default();
+        engine.load_program(program);
+        engine
+    }
+
     /// Create a new `QASMEngine` and load a QASM program from a file
     pub fn from_file(qasm_path: impl AsRef<Path>) -> Result<Self, PecosError> {
-        let mut engine = Self::default();
-        let program = QASMParser::parse_file(qasm_path)?;
-        engine.load_program(program);
+        // Import here to avoid circular dependency
+        use crate::program::QASMProgram;
 
-        if let Some(program) = &engine.program {
-            let total_qubits = program.total_qubits;
-            debug!(
-                "Loaded QASM with {} qubits across {} registers",
-                total_qubits,
-                program.quantum_registers.len()
-            );
-        }
+        // Parse the program
+        let program = QASMProgram::from_file(qasm_path)?;
 
-        Ok(engine)
+        // Convert to engine
+        Ok(program.into_engine())
     }
 
     /// Load a QASM program into the engine
-    pub(crate) fn load_program(&mut self, program: Program) {
+    pub(crate) fn load_program(&mut self, program: QASMProgram) {
+        let ast = program.program();
         debug!(
             "Loading QASM program with {} quantum registers and {} operations",
-            program.quantum_registers.len(),
-            program.operations.len()
+            ast.quantum_registers.len(),
+            ast.operations.len()
         );
 
-        debug!(
-            "Total qubits from quantum registers: {}",
-            program.total_qubits
-        );
+        debug!("Total qubits from quantum registers: {}", ast.total_qubits);
 
         // Initialize simulation components
         self.classical_registers.clear();
@@ -119,13 +121,14 @@ impl QASMEngine {
     pub fn gate_definitions(
         &self,
     ) -> Option<&std::collections::BTreeMap<String, crate::ast::GateDefinition>> {
-        self.program.as_ref().map(|p| &p.gate_definitions)
+        self.program.as_ref().map(|p| &p.program().gate_definitions)
     }
 
     /// Get the physical qubit ID for a given quantum register and index
     #[must_use]
     pub fn qubit_id(&self, register_name: &str, index: usize) -> Option<usize> {
-        if let Some(program) = &self.program {
+        if let Some(qasm_program) = &self.program {
+            let program = qasm_program.program();
             if let Some(qubit_ids) = program.quantum_registers.get(register_name) {
                 if index < qubit_ids.len() {
                     return Some(qubit_ids[index]);
@@ -150,7 +153,8 @@ impl QASMEngine {
         self.message_builder.reset();
 
         // Re-initialize from program if available
-        if let Some(program) = &self.program {
+        if let Some(qasm_program) = &self.program {
+            let program = qasm_program.program();
             debug!(
                 "Initializing {} classical registers from program",
                 program.classical_registers.len()
@@ -178,7 +182,8 @@ impl QASMEngine {
         value: u8,
     ) -> Result<(), PecosError> {
         // Validate bounds if we have a program loaded
-        if let Some(program) = &self.program {
+        if let Some(qasm_program) = &self.program {
+            let program = qasm_program.program();
             if let Some(size) = program.classical_registers.get(register_name) {
                 if bit_index >= *size {
                     return Err(PecosError::Input(format!(
@@ -563,7 +568,8 @@ impl QASMEngine {
         let c_register_name = if c_reg.is_empty() { "c" } else { c_reg };
 
         // Validate classical register bounds
-        if let Some(program) = &self.program {
+        if let Some(qasm_program) = &self.program {
+            let program = qasm_program.program();
             if let Some(size) = program.classical_registers.get(c_register_name) {
                 if c_index >= *size {
                     return Err(PecosError::Input(format!(
@@ -604,9 +610,10 @@ impl QASMEngine {
         &mut self,
         q_reg: &str,
         c_reg: &str,
-        program: &Program,
+        qasm_program: &QASMProgram,
         current_operation_count: usize,
     ) -> Result<Option<usize>, PecosError> {
+        let program = qasm_program.program();
         let Some(qubit_ids) = program.quantum_registers.get(q_reg) else {
             return Err(PecosError::Input(format!(
                 "Quantum register {q_reg} not found"
@@ -656,11 +663,14 @@ impl QASMEngine {
         self.message_builder.reset();
         let _ = self.message_builder.for_quantum_operations();
 
-        let program = self
+        // Clone to avoid borrow checking issues
+        let qasm_program = self
             .program
             .as_ref()
             .ok_or_else(|| PecosError::Input("No QASM program loaded".to_string()))?
             .clone();
+
+        let program = qasm_program.program();
 
         let total_ops = program.operations.len();
 
@@ -700,8 +710,12 @@ impl QASMEngine {
                     return Ok(self.message_builder.build());
                 }
                 Operation::RegMeasure { q_reg, c_reg } => {
-                    let added_count =
-                        self.process_register_measurement(q_reg, c_reg, &program, operation_count)?;
+                    let added_count = self.process_register_measurement(
+                        q_reg,
+                        c_reg,
+                        &qasm_program,
+                        operation_count,
+                    )?;
 
                     if let Some(count) = added_count {
                         operation_count += count;
@@ -955,8 +969,8 @@ impl QASMEngine {
 
 impl ClassicalEngine for QASMEngine {
     fn num_qubits(&self) -> usize {
-        if let Some(program) = &self.program {
-            program.total_qubits
+        if let Some(qasm_program) = &self.program {
+            qasm_program.num_qubits()
         } else {
             0
         }
@@ -972,7 +986,8 @@ impl ClassicalEngine for QASMEngine {
             return Ok(self.message_builder.build());
         }
 
-        if let Some(program) = &self.program {
+        if let Some(qasm_program) = &self.program {
+            let program = qasm_program.program();
             debug!(
                 "Current operation: {}/{}",
                 self.current_op,
@@ -1094,7 +1109,8 @@ impl Clone for QASMEngine {
         };
 
         // Re-initialize classical registers from program
-        if let Some(program) = &engine.program {
+        if let Some(qasm_program) = &engine.program {
+            let program = qasm_program.program();
             for (reg_name, size) in &program.classical_registers {
                 engine
                     .classical_registers
@@ -1235,9 +1251,13 @@ impl FromStr for QASMEngine {
     type Err = PecosError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut engine = Self::default();
-        let program = QASMParser::parse_str(s)?;
-        engine.load_program(program);
-        Ok(engine)
+        // Import here to avoid circular dependency
+        use crate::program::QASMProgram;
+
+        // Parse the program
+        let program = QASMProgram::from_str(s)?;
+
+        // Convert to engine
+        Ok(program.into_engine())
     }
 }
