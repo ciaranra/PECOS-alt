@@ -78,7 +78,7 @@ all = [
     "quantum-pecos[wasm-all]",
     "quantum-pecos[visualization]",
 ]
-# The following only work for some environments/Python verions:
+# The following only work for some environments/Python versions:
 qulacs = [  # State-vector sims using Qulacs
     "qulacs>=0.6.4", # Package not currently compatible with Python 3.13
 ]

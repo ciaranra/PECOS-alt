@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+from pecos.simulators import StateVecRs
 from pecos.simulators.sparsesim.state import SparseSim
 
 try:
@@ -54,7 +55,12 @@ class QuantumSimulator:
         if isinstance(self.backend, str):
             if self.backend == "stabilizer":
                 self.state = SparseSim
-            elif self.backend in ("state-vector", "ProjectQSim"):
+            elif self.backend in "state-vector":
+                if Qulacs is not None:
+                    self.state = Qulacs
+                else:
+                    self.state = StateVecRs
+            elif "ProjectQSim":
                 self.state = ProjectQSim
             elif self.backend in {"MPS", "mps"}:
                 self.state = MPS
