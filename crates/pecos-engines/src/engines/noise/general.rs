@@ -337,8 +337,7 @@ impl ControlEngine for GeneralNoiseModel {
         &mut self,
         msg: Self::EngineOutput,
     ) -> Result<EngineStage<Self::EngineInput, Self::Output>, QueueError> {
-        // Apply biased measurement to measurement results
-        trace!("GeneralNoise::continue_processing - applying biased measurement");
+        trace!("GeneralNoise::continue_processing");
         let results = self.apply_noise_on_continue_processing(msg)?;
 
         // Calling Complete to signal that the NoiseModel is returning its msg back to the
@@ -879,17 +878,17 @@ impl GeneralNoiseModel {
                 if val == 1 {
                     if self.rng.occurs(self.p_meas_1) {
                         trace!(
-                            "Flipped measurement outcome 0->1 for result_id {}",
+                            "Flipped measurement outcome 1->0 for result_id {}",
                             result_id
                         );
                         val = 0;
                     }
                 } else {
-                    trace!(
-                        "Flipped measurement outcome 1->0 for result_id {}",
-                        result_id
-                    );
                     if self.rng.occurs(self.p_meas_0) {
+                        trace!(
+                            "Flipped measurement outcome 0->1 for result_id {}",
+                            result_id
+                        );
                         val = 1;
                     }
                 }
