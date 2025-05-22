@@ -100,100 +100,125 @@ impl Engine for StateVecEngine {
         for cmd in &batch {
             match cmd.gate_type {
                 GateType::X => {
-                    debug!("Processing X gate on qubit {:?}", cmd.qubits[0]);
-                    self.simulator.x(cmd.qubits[0]);
+                    for q in &cmd.qubits {
+                        debug!("Processing X gate on qubit {:?}", q);
+                        self.simulator.x(*q);
+                    }
                 }
                 GateType::Y => {
-                    debug!("Processing Y gate on qubit {:?}", cmd.qubits[0]);
-                    self.simulator.y(cmd.qubits[0]);
+                    for q in &cmd.qubits {
+                        debug!("Processing Y gate on qubit {:?}", q);
+                        self.simulator.y(*q);
+                    }
                 }
                 GateType::Z => {
-                    debug!("Processing Z gate on qubit {:?}", cmd.qubits[0]);
-                    self.simulator.z(cmd.qubits[0]);
+                    for q in &cmd.qubits {
+                        debug!("Processing Z gate on qubit {:?}", q);
+                        self.simulator.z(*q);
+                    }
                 }
                 GateType::H => {
-                    debug!("Processing H gate on qubit {:?}", cmd.qubits[0]);
-                    self.simulator.h(cmd.qubits[0]);
+                    for q in &cmd.qubits {
+                        debug!("Processing H gate on qubit {:?}", q);
+                        self.simulator.h(*q);
+                    }
                 }
                 GateType::CX => {
-                    debug!(
-                        "Processing CX gate with control {:?} and target {:?}",
-                        cmd.qubits[0], cmd.qubits[1]
-                    );
-                    self.simulator.cx(cmd.qubits[0], cmd.qubits[1]);
+                    for qubits in cmd.qubits.chunks_exact(2) {
+                        debug!(
+                            "Processing CX gate with control {:?} and target {:?}",
+                            qubits[0], qubits[1]
+                        );
+                        self.simulator.cx(qubits[0], qubits[1]);
+                    }
                 }
                 GateType::RZZ => {
-                    debug!(
-                        "Processing RZZ gate on qubits {:?} and {:?}",
-                        cmd.qubits[0], cmd.qubits[1]
-                    );
-                    self.simulator
-                        .rzz(cmd.params[0], cmd.qubits[0], cmd.qubits[1]);
+                    for qubits in cmd.qubits.chunks_exact(2) {
+                        debug!(
+                            "Processing RZZ gate on qubits {:?} and {:?}",
+                            qubits[0], qubits[1]
+                        );
+                        self.simulator.rzz(cmd.params[0], qubits[0], qubits[1]);
+                    }
                 }
                 GateType::SZZ => {
-                    debug!(
-                        "Processing SZZ gate on qubits {:?} and {:?}",
-                        cmd.qubits[0], cmd.qubits[1]
-                    );
-                    self.simulator.szz(cmd.qubits[0], cmd.qubits[1]);
+                    for qubits in cmd.qubits.chunks_exact(2) {
+                        debug!(
+                            "Processing SZZ gate on qubits {:?} and {:?}",
+                            qubits[0], qubits[1]
+                        );
+                        self.simulator.szz(qubits[0], qubits[1]);
+                    }
                 }
                 GateType::SZZdg => {
-                    debug!(
-                        "Processing SZZdg gate on qubits {:?} and {:?}",
-                        cmd.qubits[0], cmd.qubits[1]
-                    );
-                    self.simulator.szzdg(cmd.qubits[0], cmd.qubits[1]);
+                    for qubits in cmd.qubits.chunks_exact(2) {
+                        debug!(
+                            "Processing SZZdg gate on qubits {:?} and {:?}",
+                            qubits[0], qubits[1]
+                        );
+                        self.simulator.szzdg(qubits[0], qubits[1]);
+                    }
                 }
+                // TODO: Consider setting exact numbers of parameters
                 GateType::RZ => {
                     if !cmd.params.is_empty() {
-                        debug!(
-                            "Processing RZ gate with angle {:?} on qubit {:?}",
-                            cmd.params[0], cmd.qubits[0]
-                        );
-                        self.simulator.rz(cmd.params[0], cmd.qubits[0]);
+                        for q in &cmd.qubits {
+                            debug!(
+                                "Processing RZ gate with angle {:?} on qubit {:?}",
+                                cmd.params[0], q
+                            );
+                            self.simulator.rz(cmd.params[0], *q);
+                        }
                     }
                 }
+                // TODO: Consider setting exact number of parameters
                 GateType::R1XY => {
                     if cmd.params.len() >= 2 {
-                        debug!(
-                            "Processing R1XY gate with angles theta={:?}, phi={:?} on qubit {:?}",
-                            cmd.params[0], cmd.params[1], cmd.qubits[0]
-                        );
-                        self.simulator
-                            .r1xy(cmd.params[0], cmd.params[1], cmd.qubits[0]);
+                        for q in &cmd.qubits {
+                            debug!(
+                                "Processing R1XY gate with angles theta={:?}, phi={:?} on qubit {:?}",
+                                cmd.params[0], cmd.params[1], q
+                            );
+                            self.simulator.r1xy(cmd.params[0], cmd.params[1], *q);
+                        }
                     }
                 }
+
+                // TODO: Fix it so we have multiple result_ids or get rid of result ids...
                 GateType::Measure => {
-                    if let Some(result_id) = cmd.result_id {
-                        debug!(
-                            "Processing measurement on qubit {:?} with result_id {:?}",
-                            cmd.qubits[0], result_id
-                        );
-                        let meas_result = self.simulator.mz(cmd.qubits[0]);
-                        let outcome = u32::from(meas_result.outcome);
-                        measurements.push((result_id, outcome));
+                    for q in &cmd.qubits {
+                        if let Some(result_id) = cmd.result_id {
+                            debug!(
+                                "Processing measurement on qubit {:?} with result_id {:?}",
+                                q, result_id
+                            );
+                            let meas_result = self.simulator.mz(*q);
+                            let outcome = u32::from(meas_result.outcome);
+                            measurements.push((result_id, outcome));
+                        }
                     }
                 }
                 GateType::Prep => {
-                    debug!("Processing Y gate on qubit {:?}", cmd.qubits[0]);
-                    self.simulator.pz(cmd.qubits[0]);
+                    for q in &cmd.qubits {
+                        debug!("Processing Y gate on qubit {:?}", q);
+                        self.simulator.pz(*q);
+                    }
                 }
                 GateType::Idle => {
                     // For idle gates, just let the system naturally evolve for the specified duration
                     // No active operation needed in the simulator
                 }
                 GateType::U => {
+                    // TODO: Consider checking for the exact number of parameters
                     if cmd.params.len() >= 3 {
-                        debug!(
-                            "Processing U gate with angles theta={:?}, phi={:?}, lambda={:?} on qubit {:?}",
-                            cmd.params[0], cmd.params[1], cmd.params[2], cmd.qubits[0]
-                        );
-                        self.simulator.u(
-                            cmd.params[0],
-                            cmd.params[1],
-                            cmd.params[2],
-                            cmd.qubits[0],
-                        );
+                        for q in &cmd.qubits {
+                            debug!(
+                                "Processing U gate with angles theta={:?}, phi={:?}, lambda={:?} on qubit {:?}",
+                                cmd.params[0], cmd.params[1], cmd.params[2], q
+                            );
+                            self.simulator
+                                .u(cmd.params[0], cmd.params[1], cmd.params[2], *q);
+                        }
                     }
                 }
             }
@@ -298,56 +323,77 @@ impl Engine for SparseStabEngine {
         for cmd in &batch {
             match cmd.gate_type {
                 GateType::X => {
-                    debug!("Processing X gate on qubit {:?}", cmd.qubits[0]);
-                    self.simulator.x(cmd.qubits[0]);
+                    for q in &cmd.qubits {
+                        debug!("Processing X gate on qubit {:?}", q);
+                        self.simulator.x(*q);
+                    }
                 }
                 GateType::Y => {
-                    debug!("Processing Y gate on qubit {:?}", cmd.qubits[0]);
-                    self.simulator.y(cmd.qubits[0]);
+                    for q in &cmd.qubits {
+                        debug!("Processing Y gate on qubit {:?}", q);
+                        self.simulator.y(*q);
+                    }
                 }
                 GateType::Z => {
-                    debug!("Processing Z gate on qubit {:?}", cmd.qubits[0]);
-                    self.simulator.z(cmd.qubits[0]);
+                    for q in &cmd.qubits {
+                        debug!("Processing Z gate on qubit {:?}", q);
+                        self.simulator.z(*q);
+                    }
                 }
                 GateType::H => {
-                    debug!("Processing H gate on qubit {:?}", cmd.qubits[0]);
-                    self.simulator.h(cmd.qubits[0]);
+                    for q in &cmd.qubits {
+                        debug!("Processing H gate on qubit {:?}", q);
+                        self.simulator.h(*q);
+                    }
                 }
                 GateType::CX => {
-                    debug!(
-                        "Processing CX gate with control {:?} and target {:?}",
-                        cmd.qubits[0], cmd.qubits[1]
-                    );
-                    self.simulator.cx(cmd.qubits[0], cmd.qubits[1]);
+                    for qubits in cmd.qubits.chunks_exact(2) {
+                        debug!(
+                            "Processing CX gate with control {:?} and target {:?}",
+                            qubits[0], qubits[1]
+                        );
+                        self.simulator.cx(qubits[0], qubits[1]);
+                    }
                 }
                 GateType::SZZ => {
-                    debug!(
-                        "Processing SZZ gate on qubits {:?} and {:?}",
-                        cmd.qubits[0], cmd.qubits[1]
-                    );
-                    self.simulator.szz(cmd.qubits[0], cmd.qubits[1]);
+                    for qubits in cmd.qubits.chunks_exact(2) {
+                        debug!(
+                            "Processing SZZ gate on qubits {:?} and {:?}",
+                            qubits[0], qubits[1]
+                        );
+                        self.simulator.szz(qubits[0], qubits[1]);
+                    }
                 }
                 GateType::SZZdg => {
-                    debug!(
-                        "Processing SZZdg gate on qubits {:?} and {:?}",
-                        cmd.qubits[0], cmd.qubits[1]
-                    );
-                    self.simulator.szzdg(cmd.qubits[0], cmd.qubits[1]);
+                    for qubits in cmd.qubits.chunks_exact(2) {
+                        debug!(
+                            "Processing SZZdg gate on qubits {:?} and {:?}",
+                            qubits[0], qubits[1]
+                        );
+                        self.simulator.szzdg(qubits[0], qubits[1]);
+                    }
                 }
                 GateType::Measure => {
-                    if let Some(result_id) = cmd.result_id {
-                        debug!(
-                            "Processing measurement on qubit {:?} with result_id {:?}",
-                            cmd.qubits[0], result_id
-                        );
-                        let meas_result = self.simulator.mz(cmd.qubits[0]);
-                        let outcome = u32::from(meas_result.outcome);
-                        measurements.push((result_id, outcome));
+                    for q in &cmd.qubits {
+                        // TODO: Fix the gate command to have multiple corresponding result_ids
+                        // TODO: Consider whether we even need result ids... or if sending back
+                        //       measurement results in the same order is sufficient...
+                        if let Some(result_id) = cmd.result_id {
+                            debug!(
+                                "Processing measurement on qubit {:?} with result_id {:?}",
+                                q, result_id
+                            );
+                            let meas_result = self.simulator.mz(*q);
+                            let outcome = u32::from(meas_result.outcome);
+                            measurements.push((result_id, outcome));
+                        }
                     }
                 }
                 GateType::Prep => {
-                    debug!("Processing Y gate on qubit {:?}", cmd.qubits[0]);
-                    self.simulator.pz(cmd.qubits[0]);
+                    for q in &cmd.qubits {
+                        debug!("Processing Y gate on qubit {:?}", q);
+                        self.simulator.pz(*q);
+                    }
                 }
                 GateType::Idle => {
                     // For idle gates, just let the system naturally evolve for the specified duration

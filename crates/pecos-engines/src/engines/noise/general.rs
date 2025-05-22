@@ -237,8 +237,14 @@ pub struct GeneralNoiseModel {
     /// Idle noise after each two-qubit gate that is quadratically dependent on the rate.
     ///
     /// This will be a coherent noise channel unless `p_idle_coherent` is set to false. If it is
-    /// false it will apply Z to each qubit with probability
+    /// false it will apply Z to each qubit with quadratic dependency on time
     p2_idle_quadratic_rate: f64,
+
+    /// The idle noise rate for quadratic dependency on time (seconds).
+    ///
+    /// This will be a coherent noise channel unless `p_idle_coherent` is set to false. If it is
+    /// false it will apply Z to each qubit quadratic dependency on time
+    p_idle_quadratic_rate: f64,
 
     /// Whether to use coherent dephasing vs incoherent (stochastic) dephasing
     ///
@@ -463,9 +469,7 @@ impl GeneralNoiseModel {
             // decide whether to add the original gate based on error models
             match gate.gate_type {
                 GateType::Idle => {
-                    // Still apply any noise that might result from idling
-                    // self.apply_idle_faults(&gate, &mut builder);
-                    // Skip adding the Idle gate itself to the builder
+                    self.apply_idle_faults(&gate, self.p_idle_quadratic_rate, &mut builder);
                 }
                 GateType::Prep => {
                     self.apply_prep_faults(&gate, &mut builder);
@@ -587,6 +591,25 @@ impl GeneralNoiseModel {
 
         // Return just the biased results if no crosstalk was applied
         Ok(biased_results)
+    }
+
+    pub fn apply_idle_faults(
+        &mut self,
+        gate: &QuantumGate,
+        rate: f64,
+        builder: &mut ByteMessageBuilder,
+    ) {
+        if rate.abs() > f64::EPSILON {
+            let mut angle = rate * gate.idle_duration();
+
+            angle = if self.p_idle_coherent {
+                angle
+            } else {
+                angle.sin().powi(2)
+            };
+
+            self.apply_quadratic_dephasing(angle, &gate.qubits, builder);
+        }
     }
 
     /// Apply preparation (initialization) noise
@@ -837,13 +860,7 @@ impl GeneralNoiseModel {
         builder.add_quantum_gates(&noise);
 
         // TODO: add test
-        if self.p2_idle_quadratic_rate > 0.0 {
-            self.apply_quadratic_dephasing(
-                builder,
-                self.p2_idle_quadratic_rate,
-                &original_gate_qubits,
-            );
-        }
+        self.apply_quadratic_dephasing(self.p2_idle_quadratic_rate, &original_gate_qubits, builder);
     }
 
     /// Apply measurement bias and handle leaked qubits
@@ -1006,17 +1023,22 @@ impl GeneralNoiseModel {
     /// * `qubits` - The qubits that are potentially affected by the idling noise
     fn apply_quadratic_dephasing(
         &mut self,
-        builder: &mut ByteMessageBuilder,
         angle: f64,
         qubits: &[usize],
+        builder: &mut ByteMessageBuilder,
     ) {
-        for qubit in qubits {
-            if !self.is_leaked(*qubit) {
-                if self.p_idle_coherent {
-                    builder.add_rz(angle, &[*qubit]);
-                } else if self.rng.occurs(angle) {
-                    builder.add_z(&[*qubit]);
+        if angle.abs() > f64::EPSILON {
+            let mut noisy_qubits = vec![];
+
+            for qubit in qubits {
+                if !self.is_leaked(*qubit) && (self.p_idle_coherent || self.rng.occurs(angle)) {
+                    noisy_qubits.push(*qubit);
                 }
+            }
+            if self.p_idle_coherent {
+                builder.add_rz(angle, &noisy_qubits);
+            } else {
+                builder.add_z(&noisy_qubits);
             }
         }
     }
@@ -1155,7 +1177,7 @@ pub struct GeneralNoiseModelBuilder {
     p2_idle_quadratic_rate: Option<f64>,
     seed: Option<u64>,
     scale: Option<f64>,
-    memory_scale: Option<f64>,
+    idle_scale: Option<f64>,
     prep_scale: Option<f64>,
     meas_scale: Option<f64>,
     leakage_scale: Option<f64>,
@@ -1166,6 +1188,7 @@ pub struct GeneralNoiseModelBuilder {
     p_prep_crosstalk: Option<f64>,
     p_meas_crosstalk_scale: Option<f64>,
     p_prep_crosstalk_scale: Option<f64>,
+    p_idle_quadratic_rate: Option<f64>,
     p_idle_coherent: Option<bool>,
     p_idle_coherent_to_incoherent_factor: Option<f64>,
     p2_angle_params: Option<(f64, f64, f64, f64)>,
@@ -1201,7 +1224,7 @@ impl GeneralNoiseModelBuilder {
             p2_idle_quadratic_rate: None,
             seed: None,
             scale: None,
-            memory_scale: None,
+            idle_scale: None,
             prep_scale: None,
             meas_scale: None,
             leakage_scale: None,
@@ -1212,6 +1235,7 @@ impl GeneralNoiseModelBuilder {
             p_prep_crosstalk: None,
             p_meas_crosstalk_scale: None,
             p_prep_crosstalk_scale: None,
+            p_idle_quadratic_rate: None,
             p_idle_coherent: None,
             p_idle_coherent_to_incoherent_factor: None,
             p2_angle_params: None,
@@ -1331,7 +1355,7 @@ impl GeneralNoiseModelBuilder {
     }
 
     #[must_use]
-    pub fn p2_idle_quadratic_rate(mut self, probability: f64) -> Self {
+    pub fn with_p2_idle_quadratic_rate(mut self, probability: f64) -> Self {
         self.p2_idle_quadratic_rate = Some(Self::validate_probability(probability));
         self
     }
@@ -1375,13 +1399,13 @@ impl GeneralNoiseModelBuilder {
         self
     }
 
-    /// Set the scaling factor for memory errors
+    /// Set the scaling factor for idle noise
     ///
     /// Controls the strength of errors that occur during idle periods or memory operations.
     /// In ion trap systems, this could represent heating or dephasing during storage times.
     #[must_use]
-    pub fn with_memory_scale(mut self, scale: f64) -> Self {
-        self.memory_scale = Some(scale);
+    pub fn with_idle_scale(mut self, scale: f64) -> Self {
+        self.idle_scale = Some(scale);
         self
     }
 
@@ -1444,6 +1468,21 @@ impl GeneralNoiseModelBuilder {
     #[must_use]
     pub fn with_emission_scale(mut self, scale: f64) -> Self {
         self.emission_scale = Some(scale);
+        self
+    }
+
+    /// Set the idling noise error rate for the quadratic term
+    #[must_use]
+    pub fn with_p_idle_quadratic_rate(mut self, probability: f64) -> Self {
+        self.p_idle_quadratic_rate = Some(Self::validate_probability(probability));
+        self
+    }
+
+    /// Set the average idling noise error rate per channel for the quadratic term
+    #[must_use]
+    pub fn with_p_average_idle_quadratic_rate(mut self, probability: f64) -> Self {
+        let probability: f64 = (probability * 3.0 / 2.0).sqrt();
+        self.p_idle_quadratic_rate = Some(Self::validate_probability(probability));
         self
     }
 
@@ -1623,7 +1662,7 @@ impl GeneralNoiseModelBuilder {
         // Note, leakage_scale is not included here as it is used as an active parameter in the
         // noise model
         let scale = self.scale.unwrap_or(1.0);
-        // let memory_scale = self.memory_scale.unwrap_or(1.0);
+        let idle_scale = self.idle_scale.unwrap_or(1.0);
         let prep_scale = self.prep_scale.unwrap_or(1.0);
         let meas_scale = self.meas_scale.unwrap_or(1.0);
         let p1_scale = self.p1_scale.unwrap_or(1.0);
@@ -1631,10 +1670,6 @@ impl GeneralNoiseModelBuilder {
         let emission_scale = self.emission_scale.unwrap_or(1.0);
         let p_meas_crosstalk_scale = self.p_meas_crosstalk_scale.unwrap_or(1.0);
         let p_prep_crosstalk_scale = self.p_prep_crosstalk_scale.unwrap_or(1.0);
-
-        // Apply dephasing errors based on the duration
-        // Use memory_scale to adjust the dephasing rate
-        // model.dephasing_rate *= self.memory_scale * self.scale;
 
         // Scale single-qubit gate error probability
         model.p1 *= p1_scale * scale;
@@ -1667,14 +1702,20 @@ impl GeneralNoiseModelBuilder {
         model.p2_emission_ratio *= emission_scale * scale;
         model.p2_emission_ratio = model.p2_emission_ratio.min(1.0);
 
+        model.p_idle_quadratic_rate *= (idle_scale * scale).sqrt();
+
         if !model.p_idle_coherent {
-            // Convert to probability for Pauli twirl of RZ() channel
-            // TODO: Verify equation for Pauli twirl of noise assuming units of...
-            // TODO: clarify angular units...
-            let p = ((model.p2_idle_quadratic_rate / 2.0).sin()).powi(2)
+            // 0.5 to deal with the 0.5 in sin(rate x duration x 0.5)^2
+            let factor = model.p_idle_coherent_to_incoherent_factor * 0.5;
+            model.p_idle_quadratic_rate *= factor;
+
+            // p2_idle_quadratic_rate is an angle in radians...
+            let p = ((model.p2_idle_quadratic_rate * factor).sin()).powi(2)
                 * model.p_idle_coherent_to_incoherent_factor;
             model.p2_idle_quadratic_rate = Self::validate_probability(p);
         }
+        // frequency is in units of 2pi so convert to radians
+        model.p_idle_quadratic_rate *= 2.0 * std::f64::consts::PI;
     }
 
     /// Build the general noise model
@@ -1759,6 +1800,10 @@ impl GeneralNoiseModelBuilder {
             model.rng = NoiseRng::with_seed(seed);
         }
 
+        if let Some(p_idle_quadratic_rate) = self.p_idle_quadratic_rate {
+            model.p_idle_quadratic_rate = p_idle_quadratic_rate;
+        }
+
         if let Some(coherent) = self.p_idle_coherent {
             model.p_idle_coherent = coherent;
         }
@@ -1830,7 +1875,7 @@ impl GeneralNoiseModelBuilder {
             p2_idle_quadratic_rate: Some(model.p2_idle_quadratic_rate),
             seed: None, // Don't copy the seed
             scale: None,
-            memory_scale: None,
+            idle_scale: None,
             prep_scale: None,
             meas_scale: None,
             leakage_scale: None,
@@ -1841,6 +1886,7 @@ impl GeneralNoiseModelBuilder {
             p_prep_crosstalk: Some(model.p_prep_crosstalk),
             p_meas_crosstalk_scale: None,
             p_prep_crosstalk_scale: None,
+            p_idle_quadratic_rate: Some(model.p_idle_quadratic_rate),
             p_idle_coherent: Some(model.p_idle_coherent),
             p_idle_coherent_to_incoherent_factor: Some(model.p_idle_coherent_to_incoherent_factor),
             p2_angle_params: Some((
@@ -1950,6 +1996,7 @@ impl Default for GeneralNoiseModel {
             rng: NoiseRng::default(),
             p_meas_crosstalk: 0.0,
             p_prep_crosstalk: 0.0,
+            p_idle_quadratic_rate: 0.0,
             p_idle_coherent: false,
             p_idle_coherent_to_incoherent_factor: 2.0,
             noiseless_gates: HashSet::new(),
@@ -2461,66 +2508,97 @@ mod tests {
         assert!((noise.p2_emission_ratio - 0.6).abs() < 1e-6);
     }
 
-    // #[test]
-    // fn test_p_idle_coherent() {
-    //     // Create a circuit builder
-    //     let mut builder = ByteMessageBuilder::new();
-    //     let _ = builder.for_quantum_operations();
-    //
-    //     // Create a noise model with coherent dephasing
-    //     let mut model = GeneralNoiseModel::builder()
-    //         .with_p_idle_coherent(true)
-    //         .build();
-    //     let noise = model
-    //         .as_any_mut()
-    //         .downcast_mut::<GeneralNoiseModel>()
-    //         .unwrap();
-    //
-    //     // Create an idle gate
-    //     let gate = QuantumGate {
-    //         gate_type: GateType::Idle,
-    //         qubits: vec![0],
-    //         params: vec![1.0], // 1 second duration
-    //         result_id: None,
-    //         noiseless: false,
-    //     };
-    //
-    //     // Apply idle faults - should use coherent dephasing (RZ gates)
-    //     noise.apply_idle_faults(&gate, &mut builder);
-    //
-    //     // Get the message and verify it contains RZ gates
-    //     let message = builder.build();
-    //     let gates = message.parse_quantum_operations().unwrap();
-    //
-    //     // At least one gate should be an RZ gate
-    //     assert!(!gates.is_empty(), "Should have at least one gate");
-    //     assert!(
-    //         gates.iter().any(|g| g.gate_type == GateType::RZ),
-    //         "Should contain at least one RZ gate"
-    //     );
-    //
-    //     // Now test with incoherent dephasing
-    //     let mut builder = ByteMessageBuilder::new();
-    //     let _ = builder.for_quantum_operations();
-    //
-    //     let mut model = GeneralNoiseModel::builder()
-    //         .with_p_idle_coherent(false)
-    //         .with_seed(42)
-    //         .build();
-    //     let noise = model
-    //         .as_any_mut()
-    //         .downcast_mut::<GeneralNoiseModel>()
-    //         .unwrap();
-    //
-    //     // Apply idle faults with incoherent dephasing
-    //     noise.apply_idle_faults(&gate, &mut builder);
-    //
-    //     // The message may contain Z gates or be empty depending on random outcomes
-    //     let message = builder.build();
-    //     let _gates = message.parse_quantum_operations().unwrap();
-    //
-    //     // We can't assert specific outcomes due to randomness, but the code should run without errors
-    // }
+    #[test]
+    fn test_p_idle_coherent() {
+        // Create a circuit builder
+        let mut builder = ByteMessage::quantum_operations_builder();
+
+        // Create a noise model with coherent dephasing
+        let mut model = GeneralNoiseModel::builder()
+            .with_p_idle_coherent(true)
+            .with_p_idle_quadratic_rate(0.2)
+            .build();
+
+        // Create an idle gate
+        let gate = QuantumGate {
+            gate_type: GateType::Idle,
+            qubits: vec![0],
+            params: vec![1.0], // 1 second duration
+            result_id: None,
+            noiseless: false,
+        };
+
+        // Apply idle faults - should use coherent dephasing (RZ gates)
+        model.apply_idle_faults(&gate, model.p_idle_quadratic_rate, &mut builder);
+
+        // Get the message and verify it contains RZ gates
+        let message = builder.build();
+        let gates = message.parse_quantum_operations().unwrap();
+
+        // At least one gate should be an RZ gate
+        assert!(!gates.is_empty(), "Should have at least one gate");
+        assert!(
+            gates.iter().any(|g| g.gate_type == GateType::RZ),
+            "Should contain at least one RZ gate"
+        );
+
+        // Test multi-qubit idle gate
+        let mut builder = ByteMessage::quantum_operations_builder();
+        let multi_qubit_gate = QuantumGate {
+            gate_type: GateType::Idle,
+            qubits: vec![0, 1, 2], // 3 qubits
+            params: vec![1.0],     // 1 second duration
+            result_id: None,
+            noiseless: false,
+        };
+
+        model.apply_idle_faults(&multi_qubit_gate, model.p_idle_quadratic_rate, &mut builder);
+
+        let message = builder.build();
+        let gates = message.parse_quantum_operations().unwrap();
+
+        // Should have RZ gates for each qubit in the idle gate
+        assert!(
+            !gates.is_empty(),
+            "Should have at least one gate for multi-qubit idle"
+        );
+        let rz_gates: Vec<_> = gates
+            .iter()
+            .filter(|g| g.gate_type == GateType::RZ)
+            .collect();
+        assert_eq!(
+            rz_gates.len(),
+            3,
+            "Should have 3 RZ gates for 3-qubit idle gate"
+        );
+
+        // Check that each qubit gets an RZ gate
+        let mut affected_qubits: Vec<usize> =
+            rz_gates.iter().flat_map(|g| &g.qubits).copied().collect();
+        affected_qubits.sort_unstable();
+        assert_eq!(
+            affected_qubits,
+            vec![0, 1, 2],
+            "RZ gates should affect qubits 0, 1, 2"
+        );
+
+        // Now test with incoherent dephasing
+        let mut builder = ByteMessage::quantum_operations_builder();
+
+        let mut model = GeneralNoiseModel::builder()
+            .with_p_idle_coherent(false)
+            .with_seed(42)
+            .build();
+
+        // Apply idle faults with incoherent dephasing
+        model.apply_idle_faults(&gate, model.p_idle_quadratic_rate, &mut builder);
+
+        // The message may contain Z gates or be empty depending on random outcomes
+        let message = builder.build();
+        let _gates = message.parse_quantum_operations().unwrap();
+
+        // We can't assert specific outcomes due to randomness, but the code should run without errors
+    }
 
     #[test]
     #[allow(clippy::unreadable_literal)]

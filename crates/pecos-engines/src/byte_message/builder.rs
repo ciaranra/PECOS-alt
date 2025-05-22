@@ -12,6 +12,8 @@ use crate::byte_message::protocol::{
 use bytemuck::bytes_of;
 use std::mem::size_of;
 
+// TODO: Make add_gates() add multiple qubits at a single time...
+
 /// Enum to track what kind of message is being built
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum BuilderMode {

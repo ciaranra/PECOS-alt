@@ -111,6 +111,8 @@ impl QuantumGate {
         }
     }
 
+    // TODO: Make gates() add multiple qubits...
+
     /// Create a new X gate
     #[must_use]
     pub fn x(qubit: usize) -> Self {
