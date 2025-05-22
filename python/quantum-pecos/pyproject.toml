@@ -68,7 +68,6 @@ visualization = [
 simulators = [
     "quantum-pecos[projectq]",
     "quantum-pecos[qulacs]; python_version < '3.13'",
-    "quantum-pecos[pyquest]; python_version < '3.13'",
 ]
 wasm-all = [
     "quantum-pecos[wasmtime]",
@@ -82,9 +81,6 @@ all = [
 # The following only work for some environments/Python verions:
 qulacs = [  # State-vector sims using Qulacs
     "qulacs>=0.6.4", # Package not currently compatible with Python 3.13
-]
-pyquest = [
-        "pyquest>=0.0.1",  # Package not currently compatible with Python 3.13
 ]
 wasmer = [
     "wasmer~=1.1.0", # Package not currently compatible with Python 3.13

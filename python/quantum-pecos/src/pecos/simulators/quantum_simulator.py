@@ -28,10 +28,6 @@ try:
 except ImportError:
     Qulacs = None
 
-try:
-    from pecos.simulators import QuEST
-except ImportError:
-    QuEST = None
 
 try:
     from pecos.simulators import CuStateVec
@@ -64,8 +60,6 @@ class QuantumSimulator:
                 self.state = MPS
             elif self.backend == "Qulacs":
                 self.state = Qulacs
-            elif self.backend == "QuEST":
-                self.state = QuEST
             elif self.backend == "CuStateVec":
                 self.state = CuStateVec
             else:
