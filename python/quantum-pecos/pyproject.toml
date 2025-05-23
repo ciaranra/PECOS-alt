@@ -30,8 +30,7 @@ keywords = ["quantum", "QEC", "simulation", "PECOS"]
 dependencies = [
     "pecos-rslib==0.6.0.dev8",
     "phir>=0.3.3",
-    "numpy>=1.15.0; python_version >= '3.13'",
-    "numpy>=1.15.0,<2.0; python_version < '3.13'",
+    "numpy>=1.15.0",
     "scipy>=1.1.0",
     "networkx>=2.1.0",
     "matplotlib>=2.2.0",
@@ -69,7 +68,6 @@ visualization = [
 simulators = [
     "quantum-pecos[projectq]",
     "quantum-pecos[qulacs]; python_version < '3.13'",
-    "quantum-pecos[pyquest]; python_version < '3.13'",
 ]
 wasm-all = [
     "quantum-pecos[wasmtime]",
@@ -80,12 +78,9 @@ all = [
     "quantum-pecos[wasm-all]",
     "quantum-pecos[visualization]",
 ]
-# The following only work for some environments/Python verions:
+# The following only work for some environments/Python versions:
 qulacs = [  # State-vector sims using Qulacs
     "qulacs>=0.6.4", # Package not currently compatible with Python 3.13
-]
-pyquest = [
-        "pyquest>=0.0.1",  # Package not currently compatible with Python 3.13
 ]
 wasmer = [
     "wasmer~=1.1.0", # Package not currently compatible with Python 3.13

@@ -30,7 +30,6 @@ from pecos.simulators import (
     MPS,
     BasicSV,
     CuStateVec,
-    QuEST,
     Qulacs,
     StateVecRs,
 )
@@ -39,7 +38,6 @@ str_to_sim = {
     "StateVecRS": StateVecRs,
     "BasicSV": BasicSV,
     "Qulacs": Qulacs,
-    "QuEST": QuEST,
     "CuStateVec": CuStateVec,
     "MPS": MPS,
 }
@@ -152,7 +150,6 @@ def generate_random_state(seed: int | None = None) -> QuantumCircuit:
         "StateVecRS",
         "BasicSV",
         "Qulacs",
-        "QuEST",
         "CuStateVec",
         "MPS",
     ],
@@ -173,7 +170,6 @@ def test_init(simulator: str) -> None:
         "StateVecRS",
         "BasicSV",
         "Qulacs",
-        "QuEST",
         "CuStateVec",
         "MPS",
     ],
@@ -192,7 +188,6 @@ def test_H_measure(simulator: str) -> None:
         "StateVecRS",
         "BasicSV",
         "Qulacs",
-        "QuEST",
         "CuStateVec",
         "MPS",
     ],
@@ -238,7 +233,6 @@ def test_comp_basis_circ_and_measure(simulator: str) -> None:
     [
         "StateVecRS",
         "Qulacs",
-        "QuEST",
         "CuStateVec",
         "MPS",
     ],
@@ -392,7 +386,6 @@ def test_all_gate_circ(simulator: str) -> None:
         "StateVecRs",
         "MPS",
         "Qulacs",
-        "QuEST",
         "CuStateVec",
     ],
 )
@@ -424,7 +417,6 @@ def test_hybrid_engine_no_noise(simulator: str) -> None:
         "StateVecRs",
         "MPS",
         "Qulacs",
-        "QuEST",
         "CuStateVec",
     ],
 )
