@@ -13,8 +13,26 @@
 
 """Contains the parent classes for QECCs, logical gates, and logical instructions."""
 
+from __future__ import annotations
+
+from collections.abc import Generator  # noqa: TC003
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar
+
 from pecos.circuit_converters.checks2circuit import Check2Circuits
 from pecos.qeccs.plot import plot_qecc
+
+if TYPE_CHECKING:
+    from pecos.qeccs.gate_parent_class import LogicalGate
+    from pecos.qeccs.instruction_parent_class import LogicalInstruction
+
+T = TypeVar("T")
+
+
+class QECCElement(Protocol):
+    """Protocol for QECC elements that have symbol and params attributes."""
+
+    symbol: str
+    params: dict[str, Any]
 
 
 class QECC:
@@ -80,40 +98,34 @@ class QECC:
         self.mapping = self.qecc_params.get("mapping", NoMap())
 
     @property
-    def num_qudits(self):
+    def num_qudits(self) -> int:
         return self.num_data_qudits + self.num_ancilla_qudits
 
     @property
-    def available_gates(self):
+    def available_gates(self) -> list[str]:
         return list(self.sym2gate_class.keys())
 
     @property
-    def available_instructions(self):
+    def available_instructions(self) -> list[str]:
         return list(self.sym2instruction_class.keys())
 
-    def plot(self, figsize=(9, 9)):
+    def plot(self, figsize=(9, 9)) -> None:
         """Default plotter of the QECC.
 
         Args:
         ----
-            figsize(tuple of int):
-
-        Returns:
-        -------
+            figsize(tuple of int): The size of the plotted figure as (width, height).
 
         """
         plot_qecc(self, figsize)
 
-    def gate(self, symbol, **gate_params):
+    def gate(self, symbol, **gate_params) -> LogicalGate:
         """Returns a logical gate object.
 
         Args:
         ----
-            symbol(str):
-            **gate_params:
-
-        Returns:
-        -------
+            symbol(str): The symbol/name of the gate to retrieve or create.
+            **gate_params: Additional parameters to pass to the gate constructor.
 
         """
         # Recognize special symbol prefix
@@ -139,15 +151,16 @@ class QECC:
 
         return gotten_gate
 
-    def instruction(self, symbol, **instr_params):
+    def instruction(self, symbol, **instr_params) -> LogicalInstruction:
         """Gets logical instruction given a string and parameters.
 
         Args:
         ----
-            symbol(str):
-            **gate_params(dict):
+            symbol: The symbol/name of the instruction to retrieve or create.
+            **instr_params: Additional parameters to pass to the instruction constructor.
 
-        Returns(LogicalInstruction):
+        Returns:
+            LogicalInstruction: The requested logical instruction.
 
         """
         gotten_instr = self._retrieve_element(symbol, instr_params, self.instr_set)
@@ -162,17 +175,17 @@ class QECC:
         return gotten_instr
 
     @staticmethod
-    def _retrieve_element(symbol, params, element_set):
+    def _retrieve_element(symbol, params, element_set) -> QECCElement | None:
         """Retrieve an element from a set.
 
         Args:
         ----
+            symbol: The symbol/identifier of the element to retrieve.
+            params: Parameters that the element should match.
+            element_set: The set of elements to search through.
             symbol(str):
             gate_params(dict):
             element_set(set):
-
-        Returns:
-        -------
 
         """
         gotten_element = None
@@ -183,13 +196,8 @@ class QECC:
 
         return gotten_element
 
-    def _data_id_iter(self):
-        """Assigns qudit ids. Also, records qudit id in the sets self.
-
-        Returns:
-        -------
-
-        """
+    def _data_id_iter(self) -> Generator[int, None, None]:
+        """Assigns qudit ids. Also, records qudit id in the sets self."""
         while True:
             qudit_id = max(self.qudit_set, default=-1) + 1
             self.qudit_set.add(qudit_id)
@@ -201,13 +209,8 @@ class QECC:
 
             yield qudit_id
 
-    def _ancilla_id_iter(self):
-        """Assigns qudit ids. Also, records qudit id in the sets self.
-
-        Returns:
-        -------
-
-        """
+    def _ancilla_id_iter(self) -> Generator[int, None, None]:
+        """Assigns qudit ids. Also, records qudit id in the sets self."""
         last_ancilla_id = None
 
         while True:
@@ -222,16 +225,16 @@ class QECC:
 
                 yield qudit_id
 
-    def _add_node(self, x, y, iter_ids):
+    def _add_node(self, x, y, iter_ids) -> None:
         nid = next(iter_ids)
 
         self.layout[nid] = (x, y)
         self.position2qudit[(x, y)] = nid
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         return (self.name, self.qecc_params) == (other.name, other.qecc_params)
 
-    def __ne__(self, other):
+    def __ne__(self, other) -> bool:
         return not (self == other)
 
 
@@ -241,5 +244,5 @@ class NoMap:
     def __init__(self) -> None:
         pass
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: T) -> T:
         return item

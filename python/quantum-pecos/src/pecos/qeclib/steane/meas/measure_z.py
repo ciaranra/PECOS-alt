@@ -14,7 +14,7 @@ from pecos.slr import Block, Comment, CReg, QReg, Qubit
 
 
 class NoFlagMeasureZ(Block):
-    def __init__(self, d: list[Qubit], a: QReg, out: CReg):
+    def __init__(self, d: list[Qubit], a: QReg, out: CReg) -> None:
         super().__init__()
 
         self.extend(

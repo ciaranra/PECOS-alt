@@ -37,7 +37,7 @@ class WasmerObj(ForeignObject):
     ) -> None:
         self.compiler = compiler
 
-        if isinstance(file, (str, Path)):
+        if isinstance(file, str | Path):
             with Path.open(Path(file), "rb") as f:
                 wasm_bytes = f.read()
         else:
@@ -83,10 +83,11 @@ class WasmerObj(ForeignObject):
 
     def get_funcs(self) -> list[str]:
         if self.func_names is None:
-            fs = []
-            for f in self.module.exports:
-                if isinstance(f.type, FunctionType):
-                    fs.append(str(f.name))
+            fs = [
+                str(f.name)
+                for f in self.module.exports
+                if isinstance(f.type, FunctionType)
+            ]
 
             self.func_names = fs
 

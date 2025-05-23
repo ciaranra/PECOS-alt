@@ -17,16 +17,14 @@ from pecos.simulators.sim_class_types import StateVector
 
 
 class QuEST(StateVector):
-    """Wrapper of QuEST statevector simulator"""
+    """Wrapper of QuEST statevector simulator."""
 
     def __init__(self, num_qubits) -> None:
-        """
-        Initializes the state vector.
+        """Initializes the state vector.
 
         Args:
             num_qubits (int): Number of qubits being represented.
         """
-
         if not isinstance(num_qubits, int):
             msg = "``num_qubits`` should be of type ``int``."
             raise TypeError(msg)

@@ -14,8 +14,7 @@ from pecos.slr import Block, QReg
 
 
 class F(Block):
-    """
-    Face rotation on the octahedron.
+    """Face rotation on the octahedron.
 
     X -> Y -> Z -> X
 
@@ -25,7 +24,7 @@ class F(Block):
     Y -> Z
     """
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)
@@ -36,8 +35,7 @@ class F(Block):
 
 
 class Fdg(Block):
-    """
-    The adjoint of the Face rotation on the octahedron.
+    """The adjoint of the Face rotation on the octahedron.
 
     X -> Z -> Y -> X
 
@@ -47,7 +45,7 @@ class Fdg(Block):
     Y -> X
     """
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)

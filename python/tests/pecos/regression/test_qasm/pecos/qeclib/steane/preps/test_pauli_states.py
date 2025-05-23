@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 from pecos.qeclib.steane.preps.pauli_states import (
     LogZeroRot,
     PrepEncodingFTZero,
@@ -8,13 +10,13 @@ from pecos.qeclib.steane.preps.pauli_states import (
 from pecos.slr import CReg, QReg
 
 
-def test_PrepEncodingNonFTZero(compare_qasm):
+def test_PrepEncodingNonFTZero(compare_qasm: Callable[..., None]) -> None:
     q = QReg("q_test", 7)
     block = PrepEncodingNonFTZero(q)
     compare_qasm(block)
 
 
-def test_PrepZeroVerify(compare_qasm):
+def test_PrepZeroVerify(compare_qasm: Callable[..., None]) -> None:
     q = QReg("q_test", 7)
     a = QReg("a_test", 1)
     init_bit = CReg("init_bit", 1)
@@ -23,7 +25,7 @@ def test_PrepZeroVerify(compare_qasm):
         compare_qasm(block, reset_ancilla)
 
 
-def test_PrepEncodingFTZero(compare_qasm):
+def test_PrepEncodingFTZero(compare_qasm: Callable[..., None]) -> None:
     q = QReg("q_test", 7)
     a = QReg("a_test", 1)
     init_bit = CReg("init_bit_test", 1)
@@ -33,7 +35,7 @@ def test_PrepEncodingFTZero(compare_qasm):
         compare_qasm(block, reset)
 
 
-def test_PrepRUS(compare_qasm):
+def test_PrepRUS(compare_qasm: Callable[..., None]) -> None:
     q = QReg("q_test", 7)
     a = QReg("a_test", 1)
     init = CReg("init_test", 1)
@@ -52,7 +54,7 @@ def test_PrepRUS(compare_qasm):
                 compare_qasm(block, limit, state, first_round_reset)
 
 
-def test_LogZeroRot(compare_qasm):
+def test_LogZeroRot(compare_qasm: Callable[..., None]) -> None:
     q = QReg("q_test", 7)
 
     for state in ["-Z", "+Z", "+X", "-X", "+Y", "-Y"]:

@@ -13,8 +13,14 @@ from __future__ import annotations
 
 import copy
 from abc import ABCMeta
+from typing import TYPE_CHECKING, Self
 
 from pecos.slr.gen_codes.gen_qasm import QASMGenerator
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from pecos.slr import Qubit
 
 # ruff: noqa: B024
 
@@ -29,7 +35,7 @@ class QGate(metaclass=ABCMeta):
     csize = 0
     has_parameters = False
 
-    def __init__(self, *qargs):
+    def __init__(self, *qargs: Qubit) -> None:
         self.sym = type(self).__name__
         if self.sym.endswith("Gate"):
             self.sym = self.sym[:-4]
@@ -39,37 +45,36 @@ class QGate(metaclass=ABCMeta):
 
         self.add_qargs(qargs)
 
-    def add_qargs(self, qargs):
+    def add_qargs(self, qargs: Sequence[Qubit] | Qubit) -> None:
         if isinstance(qargs, tuple):
             self.qargs = qargs
         else:
             self.qargs = (qargs,)
 
-    def copy(self):
+    def copy(self) -> Self:
         return copy.copy(self)
 
-    def __getitem__(self, *params):
+    def __getitem__(self, *params: complex) -> Self:
         g = self.copy()
 
         if params and not self.has_parameters:
             msg = "This gate does not accept parameters. You might of meant to put qubits in square brackets."
             raise Exception(msg)
-        else:
-            g.params = params
+        g.params = params
 
         return g
 
-    def qubits(self, *qargs):
+    def qubits(self, *qargs: Qubit) -> None:
         self.__call__(qargs)
 
-    def __call__(self, *qargs):
+    def __call__(self, *qargs: Qubit) -> Self:
         g = self.copy()
 
         g.add_qargs(qargs)
 
         return g
 
-    def gen(self, target: object | str):
+    def gen(self, target: object | str) -> str:
         # TODO: Get rid of this as much as possible...
         if isinstance(target, str):
             if target == "qasm":
@@ -82,6 +87,6 @@ class QGate(metaclass=ABCMeta):
 
 
 class TQGate(QGate, metaclass=ABCMeta):
-    """Two qubit gates"""
+    """Two qubit gates."""
 
     qsize = 2

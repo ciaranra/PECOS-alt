@@ -31,10 +31,6 @@ class Simulator:
             symbol:
             locations:
             **params:
-
-        Returns:
-        -------
-
         """
         output = {}
 

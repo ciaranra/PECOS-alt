@@ -17,6 +17,7 @@ from pecos.circuits import QuantumCircuit
 def find_logical_signs(
     state,
     logical_circuit: QuantumCircuit,
+    *,
     allow_float=False,
 ) -> int:
     """Find the sign of the logical operator.
@@ -25,10 +26,6 @@ def find_logical_signs(
     ----
         state:
         logical_circuit:
-
-    Returns:
-    -------
-
     """
     if len(logical_circuit) != 1:
         msg = "Logical operators are expected to only have one tick."
@@ -42,21 +39,18 @@ def find_logical_signs(
     for symbol, gate_locations, _ in logical_circuit.items():
         if symbol == "X":
             logical_xs.update(gate_locations)
-            for loc in gate_locations:
-                op_string.append("X%s" % loc)
+            op_string.extend(f"X{loc}" for loc in gate_locations)
         elif symbol == "Z":
             logical_zs.update(gate_locations)
-            for loc in gate_locations:
-                op_string.append("Z%s" % loc)
+            op_string.extend(f"Z{loc}" for loc in gate_locations)
         elif symbol == "Y":
             logical_xs.update(gate_locations)
             logical_zs.update(gate_locations)
-            for loc in gate_locations:
-                op_string.append("Y%s" % loc)
+            op_string.extend(f"Y{loc}" for loc in gate_locations)
         else:
+            msg = f'Can not currently handle logical operator with operator "{symbol}"!'
             raise Exception(
-                'Can not currently handle logical operator with operator "%s"!'
-                % symbol,
+                msg,
             )
 
     op_string = " ".join(op_string)
@@ -70,12 +64,11 @@ def find_logical_signs(
         result = round(result, 5)
         if result == -1:
             return 1
-        elif result == 1:
+        if result == 1:
             return 0
-        else:
-            print("Operator being measured:", op_string)
-            print("RESULT FOUND:", result)
-            msg = "Unexpected result found!"
-            raise Exception(msg)
+        print("Operator being measured:", op_string)
+        print("RESULT FOUND:", result)
+        msg = "Unexpected result found!"
+        raise Exception(msg)
 
     return result

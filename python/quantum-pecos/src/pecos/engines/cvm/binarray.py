@@ -11,272 +11,169 @@
 
 from __future__ import annotations
 
+import numpy as np
+
+from pecos.reps.pypmir import unsigned_data_types
+
 
 class BinArray:
-    def __init__(self, size: int | str, value: int | None = None) -> None:
+    """As opposed to the original unsigned 32-bit BinArray, this class defaults to signed 64-bit type."""
+
+    def __init__(self, size, value=0, dtype=np.int64) -> None:
+        self.size = size
+        self.value = None
+        self.dtype = dtype
+
         if isinstance(size, int):
             self.size = size
-            self.array = [0] * size
 
             if value is not None:
                 self.set(value)
         elif isinstance(size, str):
-            str_rep = size
+            self.size = len(size)
+            value = int(size, 2)
+            self.set(value)
 
-            self.array = []
-            for i in reversed(str_rep):
-                if i == "0":
-                    self.array.append(0)
-                elif i == "1":
-                    self.array.append(1)
-                else:
-                    msg = f"Can only accept a string made of 0s and 1s! Got {str_rep}."
-                    raise Exception(msg)
-
-            self.size = len(self.array)
+    def set(self, value) -> None:
+        if isinstance(value, self.dtype):
+            self.value = value
+        elif isinstance(value, BinArray):
+            self.value = value.value
         else:
-            msg = f"First argument must be int or str! Got {size} of type {type(size)}."
+            if isinstance(value, str):
+                value = int(value, 2)
+
+            self.value = self.dtype(value)
+
+    def new_val(self, value) -> BinArray:
+        b = BinArray(self.size, value, self.dtype)
+        if self.dtype in unsigned_data_types.values():
+            b.clamp(self.size)
+        return b
+
+    def num_bits(self) -> int:
+        return len(f"{self.value:b}")
+
+    def check_size(self) -> None:
+        if self.num_bits() > self.size:
+            num = self.num_bits()
+            val = f"{self.value:b}"
+            msg = f'Number of bits ({num}) exceeds size ({self.size}) for bits "{val}"!'
+            raise Exception(msg)
+
+    def clamp(self, size) -> None:
+        if self.num_bits() > size:
+            bits = format(self.value, f"0{size}b")
+            bits = int(bits[-size:], 2)
+            self.value = self.dtype(bits)
+
+    def set_clip(self, value) -> None:
+        value = int(value)
+
+        if len(f"{value:b}") > self.size:
+            bits = format(value, f"0{self.size}b")
+            bits = int(bits[-self.size :], 2)
+            self.value = self.dtype(bits)
+        else:
+            self.value = self.dtype(value)
+
+    def _set_clip(self, ba) -> None:
+        """Take values up to the size of this BinArray. If this BinArray array is larger, fill with zeros."""
+        if isinstance(ba, int):
+            ba = self.new_val(ba)
+
+        if isinstance(ba, BinArray):
+            self._set_clip(ba)
+        else:
+            msg = "Expected int or BinArray!"
             raise TypeError(msg)
 
+    def __getitem__(self, item) -> int:
+        return int(str(self)[self.size - item - 1])
+
+    def __setitem__(self, key, value) -> None:
+        b = list(str(self))
+        b[self.size - key - 1] = str(value)
+        b = "".join(b)
+
+        self.set(b)
+
     def __str__(self) -> str:
-        bin_str = [
-            "1" if self.array[i] else "0" for i in range(len(self.array) - 1, -1, -1)
-        ]
-        return "".join(bin_str)
+        self.check_size()
+        return format(self.value, f"0{self.size}b")
 
     def __repr__(self) -> str:
         return self.__str__()
 
     def __int__(self) -> int:
-        return int(str(self), 2)
-
-    def set_clip(self, ba):
-        """Take values up to the size of this BinArray. If this BinArray array is larger, fill with zeros."""
-        if isinstance(ba, int):
-            ba = BinArray(format(ba, "b"))
-
-        if isinstance(ba, BinArray):
-            for i in range(self.size):
-                if i >= ba.size:
-                    self.array[i] = 0
-                else:
-                    self.array[i] = ba.array[i]
-        else:
-            msg = "Expected int or BinArray!"
-            raise TypeError(msg)
-
-    def set(self, value: BinArray | int):
-        value = int(value)
-
-        value = (2**self.size - 1) & value
-
-        for i, b in enumerate(reversed(format(value, f"0{self.size}b"))):
-            # Don't add more elements than size
-            if i >= self.size:
-                break
-
-            self.array[i] = int(b)
-
-        """
-        if isinstance(value, int):
-            for i, b in enumerate(reversed(format(value, f'0{self.size}b'))):
-
-                # Don't add more elements than size
-                if i >= self.size:
-                    break
-
-                self.array[i] = int(b)
-
-        elif isinstance(value, BinArray):
-            if self.size != value.size:
-                raise Exception('Binary array must be the same size as the array being set.')
-
-            # Copy the other's array into this one
-            self.array = list(value.array)
-
-        else:
-            raise Exception(f"Can't set value of type {type(value)}")
-        """
-
-    def __getitem__(self, item):
-        return self.array[item]
-
-    def __setitem__(self, key, value) -> None:
-        value_temp = int(value)
-
-        if value_temp not in {0, 1}:
-            msg = "Can only set an element to a binary value!"
-            raise Exception(msg)
-
-        self.array[key] = value_temp
+        return int(self.value)
 
     def __len__(self) -> int:
         return self.size
 
-    def __xor__(self, other):
-        if isinstance(other, BinArray) and other.size != self.size:
-            msg = "Can only do bitwise operations between BinArrays of the same size."
-            raise Exception(msg)
+    def do_binop(self, op, other) -> BinArray:
+        if hasattr(other, "value") and isinstance(other.value, self.dtype):
+            value = other.value
+        elif isinstance(other, str):
+            value = self.dtype(int(other, 2))
+        else:
+            value = self.dtype(other)
 
-        val = int(self) ^ int(other)
-        result = BinArray(self.size)
-        result.set(val)
+        op = getattr(self.value, op)
+        value = op(value)
 
-        return result
-
-    def __and__(self, other):
-        if isinstance(other, BinArray) and other.size != self.size:
-            msg = "Can only do bitwise operations between BinArrays of the same size."
-            raise Exception(msg)
-
-        val = int(self) & int(other)
-        result = BinArray(self.size)
-        result.set(val)
-
-        return result
-
-    def __or__(self, other):
-        if isinstance(other, BinArray) and other.size != self.size:
-            msg = "Can only do bitwise operations between BinArrays of the same size."
-            raise Exception(msg)
-
-        val = int(self) | int(other)
-        result = BinArray(self.size)
-        result.set(val)
-
-        return result
-
-    def __eq__(self, other):
-        val = int(self) == int(other)
-        result = BinArray(self.size)
-        result.set(val)
-
-        return result
-
-    def __ne__(self, other):
-        val = int(self) != int(other)
-        result = BinArray(self.size)
-        result.set(val)
-
-        return result
-
-    def __lt__(self, other):
-        val = int(self) < int(other)
-        result = BinArray(self.size)
-        result.set(val)
-
-        return result
-
-    def __gt__(self, other):
-        val = int(self) > int(other)
-        result = BinArray(self.size)
-        result.set(val)
-
-        return result
-
-    def __le__(self, other):
-        val = int(self) <= int(other)
-        result = BinArray(self.size)
-        result.set(val)
-
-        return result
-
-    def __ge__(self, other):
-        val = int(self) >= int(other)
-        result = BinArray(self.size)
-        result.set(val)
-
-        return result
-
-    def __add__(self, other):
-        if isinstance(other, BinArray) and other.size != self.size:
-            msg = "Can only do bitwise operations between BinArrays of the same size."
-            raise Exception(msg)
-
-        val = int(self) + int(other)
-        result = BinArray(self.size)
-        result.set(val)
-
-        return result
-
-    def __sub__(self, other):
-        if isinstance(other, BinArray) and other.size != self.size:
-            msg = "Can only do bitwise operations between BinArrays of the same size."
-            raise Exception(msg)
-
-        val = int(self) - int(other)
-        result = BinArray(self.size)
-        result.set(val)
-
-        return result
-
-    def __rshift__(self, other):
-        if isinstance(other, BinArray) and other.size != self.size:
-            msg = "Can only do bitwise operations between BinArrays of the same size."
-            raise Exception(msg)
-
-        val = int(self) >> int(other)
-        result = BinArray(self.size)
-        result.set(val)
-
-        return result
-
-    def __lshift__(self, other):
-        if isinstance(other, BinArray) and other.size != self.size:
-            msg = "Can only do bitwise operations between BinArrays of the same size."
-            raise Exception(msg)
-
-        val = int(self) << int(other)
-        result = BinArray(self.size)
-        result.set_clip(val)
-
-        return result
-
-    def __invert__(self):
-        val = int(self)
-        result = BinArray(self.size)
-        result.set(val)
-
-        for i, b in enumerate(result.array):
-            if b == 0:
-                result.array[i] = 1
-            else:
-                result.array[i] = 0
-
-        return result
-
-    def __mul__(self, other):
-        if isinstance(other, BinArray) and other.size != self.size:
-            msg = "Can only do bitwise operations between BinArrays of the same size."
-            raise Exception(msg)
-
-        val = int(self) * int(other)
-        result = BinArray(self.size)
-        result.set(val)
-
-        return result
-
-    def __floordiv__(self, other):
-        if isinstance(other, BinArray) and other.size != self.size:
-            msg = "Can only do bitwise operations between BinArrays of the same size."
-            raise Exception(msg)
-
-        val = int(self) // int(other)
-        result = BinArray(self.size)
-        result.set(val)
-
-        return result
-
-    def __mod__(self, other):
-        if isinstance(other, BinArray) and other.size != self.size:
-            msg = "Can only do bitwise operations between BinArrays of the same size."
-            raise Exception(msg)
-
-        val = int(self) % int(other)
-        result = BinArray(self.size)
-        result.set(val)
-
-        return result
+        return self.new_val(value)
 
     def __bool__(self) -> bool:
-        return bool(int(self))
+        return bool(self.value)
+
+    def __xor__(self, other) -> BinArray:
+        return self.do_binop("__xor__", other)
+
+    def __and__(self, other) -> BinArray:
+        return self.do_binop("__and__", other)
+
+    def __or__(self, other) -> BinArray:
+        return self.do_binop("__or__", other)
+
+    def __eq__(self, other) -> BinArray:
+        return self.do_binop("__eq__", other)
+
+    def __ne__(self, other) -> BinArray:
+        return self.do_binop("__ne__", other)
+
+    def __lt__(self, other) -> BinArray:
+        return self.do_binop("__lt__", other)
+
+    def __gt__(self, other) -> BinArray:
+        return self.do_binop("__gt__", other)
+
+    def __le__(self, other) -> BinArray:
+        return self.do_binop("__le__", other)
+
+    def __ge__(self, other) -> BinArray:
+        return self.do_binop("__ge__", other)
+
+    def __add__(self, other) -> BinArray:
+        return self.do_binop("__add__", other)
+
+    def __sub__(self, other) -> BinArray:
+        return self.do_binop("__sub__", other)
+
+    def __rshift__(self, other) -> BinArray:
+        return self.do_binop("__rshift__", other)
+
+    def __lshift__(self, other) -> BinArray:
+        return self.do_binop("__lshift__", other)
+
+    def __invert__(self) -> BinArray:
+        return self.new_val(~self.value)
+
+    def __mul__(self, other) -> BinArray:
+        return self.do_binop("__mul__", other)
+
+    def __floordiv__(self, other) -> BinArray:
+        return self.do_binop("__floordiv__", other)
+
+    def __mod__(self, other) -> BinArray:
+        return self.do_binop("__floordiv__", other)

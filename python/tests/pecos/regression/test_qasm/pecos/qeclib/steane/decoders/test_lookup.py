@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 from pecos.qeclib.steane.decoders.lookup import (
     FlagLookupQASM,
     FlagLookupQASMActiveCorrectionX,
@@ -6,7 +8,7 @@ from pecos.qeclib.steane.decoders.lookup import (
 from pecos.slr import CReg, QReg
 
 
-def test_FlagLookupQASM(compare_qasm):
+def test_FlagLookupQASM(compare_qasm: Callable[..., None]) -> None:
     syn = CReg("syn_test", 3)
     syndromes = CReg("syndromes_test", 3)
     raw_syn = CReg("raw_syn_test", 3)
@@ -29,7 +31,7 @@ def test_FlagLookupQASM(compare_qasm):
         compare_qasm(block, basis)
 
 
-def test_FlagLookupQASMActiveCorrectionX(compare_qasm):
+def test_FlagLookupQASMActiveCorrectionX(compare_qasm: Callable[..., None]) -> None:
     q = QReg("q_test", 7)
     syn = CReg("syn_test", 3)
     syndromes = CReg("syndromes_test", 3)
@@ -55,7 +57,7 @@ def test_FlagLookupQASMActiveCorrectionX(compare_qasm):
         compare_qasm(block, pf_bit_copy)
 
 
-def test_FlagLookupQASMActiveCorrectionZ(compare_qasm):
+def test_FlagLookupQASMActiveCorrectionZ(compare_qasm: Callable[..., None]) -> None:
     q = QReg("q_test", 7)
     syn = CReg("syn_test", 3)
     syndromes = CReg("syndromes_test", 3)

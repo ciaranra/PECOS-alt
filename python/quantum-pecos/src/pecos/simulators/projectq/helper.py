@@ -15,7 +15,7 @@ from typing import Any
 class MakeFunc:
     """Converts ProjectQ gate to a function."""
 
-    def __init__(self, gate, angle=False) -> None:
+    def __init__(self, gate, *, angle=False) -> None:
         """Args:
         ----
             gate:
@@ -23,7 +23,7 @@ class MakeFunc:
         self.gate = gate
         self.angle = angle
 
-    def func(self, state, qubits, **params: Any):
+    def func(self, state, qubits, **params: Any) -> None:
         if isinstance(qubits, int):
             qs = state.qids[qubits]
         else:

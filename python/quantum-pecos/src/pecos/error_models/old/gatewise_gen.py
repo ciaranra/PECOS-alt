@@ -77,8 +77,6 @@ class GatewiseModel(ParentErrorModel):
     inits_y: ClassVar[set[str]] = {"init |+i>", "init |-i>"}
 
     def __init__(self) -> None:
-        """ """
-
         super().__init__()
         self.gen = self.generator_class()
         self.gen.set_gate_group("measurements", self.measurements)
@@ -99,16 +97,13 @@ class GatewiseModel(ParentErrorModel):
         self.ErrorSet = self.gen.ErrorSet
         self.ErrorSetTwoQuditTensorProduct = self.gen.ErrorSetTwoQuditTensorProduct
 
-    def start(self, circuit, error_params):
+    def start(self, circuit, error_params) -> ErrorCircuits:
         """Start up at the beginning of a circuit simulation.
 
         Args:
         ----
-            circuit:
-            error_params:
-
-        Returns:
-        -------
+            circuit: The quantum circuit to simulate.
+            error_params: Parameters controlling error generation.
 
         """
         self.error_circuits = ErrorCircuits()
@@ -117,11 +112,14 @@ class GatewiseModel(ParentErrorModel):
 
         return self.error_circuits
 
-    def generate_tick_errors(self, tick_circuit, time, **params):
+    def generate_tick_errors(self, tick_circuit, time, **params) -> ErrorCircuits:
         """Returns before errors, after errors, and replaced locations for the given key (args).
 
-        Returns:
-        -------
+        Args:
+        ----
+            tick_circuit: The tick circuit containing gate operations.
+            time: The time index or tuple indicating when errors occur.
+            **params: Additional parameters including data_qudit_set.
 
         """
         tick_index = time[-1] if isinstance(time, tuple) else time
@@ -167,15 +165,19 @@ class GatewiseModel(ParentErrorModel):
 
         return self.error_circuits
 
-    def get_gate_error(self, symbol, gate_locations, error_params):
-        """Args:
-        ----
-            symbol:
-            gate_locations:
-            error_params:
+    def get_gate_error(
+        self,
+        symbol,
+        gate_locations,
+        error_params,
+    ) -> tuple[QuantumCircuit, QuantumCircuit, set]:
+        """Get error for a specific gate operation.
 
-        Returns:
-        -------
+        Args:
+        ----
+            symbol: The gate symbol/operation name.
+            gate_locations: Locations where the gate is applied.
+            error_params: Parameters controlling error generation.
 
         """
         self.error_params = error_params

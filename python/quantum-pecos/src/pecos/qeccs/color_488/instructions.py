@@ -59,7 +59,7 @@ class InstrSynExtraction(LogicalInstruction):
         # Must be called at the end of initiation.
         self._compile_circuit(self.abstract_circuit)
 
-    def _create_checks(self, ancilla):
+    def _create_checks(self, ancilla) -> None:
         self.ancilla_x_check.add(ancilla)
         self.ancilla_z_check.add(ancilla)
 

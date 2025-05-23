@@ -69,10 +69,6 @@ class SparseSim(Stabilizer):
         Args:
         ----
             num_qubits (int): Number of qubits being represented.
-
-        Returns:
-        -------
-
         """
         super().__init__()
 
@@ -110,10 +106,6 @@ class SparseSim(Stabilizer):
         """Args:
         ----
             logical_op:
-
-        Returns:
-        -------
-
         """
         return find_logical_signs(
             self,
@@ -139,10 +131,10 @@ class SparseSim(Stabilizer):
         symbol: str,
         location: set[int | tuple[int, ...]],
         **gate_kwargs: Any,
-    ):
+    ) -> None:
         self.bindings[symbol](self, location, **gate_kwargs)
 
-    def copy(self):
+    def copy(self) -> None:
         new = SparseSim(self.num_qubits)
 
         old_stabs = self.stabs
@@ -195,10 +187,6 @@ class SparseSim(Stabilizer):
             num_qubits (Optional[int]): number of qubits.
             print_signs (bool): Whether to print the signs of the generators.
             print_y (bool):
-
-        Returns:
-        -------
-
         """
         col_x = gen.col_x
         col_z = gen.col_z
@@ -263,11 +251,10 @@ class SparseSim(Stabilizer):
                             stab_letters[0] = "-i"
                         else:
                             stab_letters[0] = " i"
+                    elif has_minus:
+                        stab_letters[0] = " -"
                     else:
-                        if has_minus:
-                            stab_letters[0] = " -"
-                        else:
-                            stab_letters[0] = "  "
+                        stab_letters[0] = "  "
 
             result.append("".join(stab_letters))
 
@@ -320,8 +307,8 @@ class SparseSim(Stabilizer):
                 print(line)
 
             msg = (
-                "Something bad happened! String representation of the row-wise vs column-wise stabilizers "
-                "do not match!"
+                "Something bad happened! String representation of the row-wise vs "
+                "column-wise stabilizers do not match!"
             )
             raise Exception(msg)
 
@@ -346,8 +333,6 @@ class SparseSim(Stabilizer):
             num_qubits: number of qubits.
             print_signs: Whether to print the signs of the generators.
             print_y:
-
-        Returns:
 
         """
         row_x = gen.row_x
@@ -412,11 +397,10 @@ class SparseSim(Stabilizer):
                             stab_letters[0] = "-i"
                         else:
                             stab_letters[0] = " i"
+                    elif has_minus:
+                        stab_letters[0] = " -"
                     else:
-                        if has_minus:
-                            stab_letters[0] = " -"
-                        else:
-                            stab_letters[0] = "  "
+                        stab_letters[0] = "  "
 
             result.append("".join(stab_letters))
 
@@ -522,9 +506,6 @@ class Gens:
 
         Args:
             verbose:
-
-        Returns:
-
         """
         col_str = self.col_string()
         row_str = self.row_string()
@@ -547,9 +528,6 @@ class Gens:
 
         Args:
             num_qubits:
-
-        Returns:
-
         """
         result = []
 

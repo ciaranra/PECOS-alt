@@ -14,19 +14,25 @@
 import os
 import random
 import struct
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from pecos.misc.std_output import StdOutput
+
+if TYPE_CHECKING:
+    from pecos.error_models.class_errors_circuit import ErrorCircuits
 
 
 class Standard:
     """This class represents a standard model for running quantum circuits and adding in errors."""
 
     def __init__(self, seed=None) -> None:
-        """Args:
+        """Initialize Standard circuit runner with optional seed.
+
+        Args:
         ----
-            seed:
+            seed: Random seed for reproducibility. Can be bool True for random seed, int for specific seed, or None.
         """
         if isinstance(seed, bool) and seed is True:
             self.seed = struct.unpack("<L", os.urandom(4))[0]
@@ -49,18 +55,17 @@ class Standard:
         error_params=None,
         error_circuits=None,
         output=None,
-    ):
-        """Args:
-        ----
-            state:
-            circuit:
-            error_gen:
-            error_params:
-            error_circuits:
-            output:
+    ) -> tuple[StdOutput, "ErrorCircuits | None"]:
+        """Run quantum circuit with optional error generation.
 
-        Returns:
-        -------
+        Args:
+        ----
+            state: Quantum state to operate on.
+            circuit: Quantum circuit to execute.
+            error_gen: Error generator object for introducing errors.
+            error_params: Parameters for error generation.
+            error_circuits: Pre-generated error circuits.
+            output: Output object to store results.
 
         """
         if output is None:

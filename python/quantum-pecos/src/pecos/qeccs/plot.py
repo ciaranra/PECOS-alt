@@ -11,8 +11,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from typing import TypeVar
+
 import networkx as nx
 from matplotlib import pyplot as plt
+
+T = TypeVar("T")
 
 
 # plot intsructions
@@ -25,20 +29,24 @@ def plot_qecc(
     axis_font_size=14,
     legend_font_size=14,
     **kwargs,
-):
+) -> None:
     """Produces a plot of a qecc.
 
     Args:
     ----
         qecc(QECC): The ``qecc`` instance that is to be plotted.
         figsize(tuple of int): The size of the plotted figure.
-
-    Returns:
-    -------
+        dpi: Dots per inch resolution for the plot.
+        filename: Optional filename to save the plot. If None, the plot is displayed but not saved.
+        title_font_size: Font size for the plot title.
+        axis_font_size: Font size for axis labels.
+        legend_font_size: Font size for legend text.
+        **kwargs: Additional keyword arguments (will raise exception if any are provided).
 
     """
-    if len(kwargs):
-        raise Exception("keys %s not recognized!" % kwargs.keys())
+    if kwargs:
+        msg = f"keys {kwargs.keys()} not recognized!"
+        raise Exception(msg)
 
     g = nx.DiGraph()
 
@@ -64,7 +72,7 @@ def plot_qecc(
 
     g.add_nodes_from(qudit_nodes_qudit)
     plt.figure(num=None, figsize=figsize, dpi=dpi, edgecolor="k")
-    plt.title("QECC layout: %s" % qecc.name, size=title_font_size)
+    plt.title(f"QECC layout: {qecc.name}", size=title_font_size)
 
     # Draw data qudits
     nodes = nx.draw_networkx_nodes(
@@ -133,17 +141,24 @@ def plot_instr(
     axis_font_size=14,
     legend_font_size=14,
     **kwargs,
-):
-    """Args:
-    ----
-        instr(LogicalInstruction):
+) -> None:
+    """Plot syndrome extraction using the provided configuration.
 
-    Returns:
-    -------
+    Args:
+    ----
+        instr(LogicalInstruction): The logical instruction to plot
+        figsize(tuple of int): The size of the plotted figure
+        dpi: Dots per inch resolution for the plot
+        filename: Optional filename to save the plot. If None, the plot is displayed but not saved
+        title_font_size: Font size for the plot title
+        axis_font_size: Font size for axis labels
+        legend_font_size: Font size for legend text
+        **kwargs: Additional keyword arguments (will raise exception if any are provided)
 
     """
-    if len(kwargs):
-        raise Exception("keys %s not recognized!" % kwargs.keys())
+    if kwargs:
+        msg = f"keys {kwargs.keys()} not recognized!"
+        raise Exception(msg)
 
     g = nx.DiGraph()
 
@@ -246,7 +261,7 @@ def plot_instr(
     plt.show()
 
 
-def get_ancilla_types(instr):
+def get_ancilla_types(instr) -> tuple[set, set]:
     x_ancillas = set()
     z_ancillas = set()
     abs_circuit = instr.abstract_circuit
@@ -262,7 +277,7 @@ def get_ancilla_types(instr):
     return x_ancillas, z_ancillas
 
 
-def graph_add_directed_cnots(instr, g):
+def graph_add_directed_cnots(instr, g) -> dict:
     circuit = instr.circuit
     edge_labels = {}
     cys = []
@@ -283,16 +298,13 @@ def graph_add_directed_cnots(instr, g):
     return edge_labels, czs, cys
 
 
-def mapset(mapping, oldset):
+def mapset(mapping, oldset) -> set:
     """Applies a mapping to a set.
 
     Args:
     ----
-        mapping:
-        oldset (set):
-
-    Returns:
-    -------
+        mapping: A dictionary-like object that maps elements from the old set to new values.
+        oldset (set): The original set whose elements will be mapped to new values.
 
     """
     newset = set()
@@ -309,5 +321,5 @@ class NoMap:
     def __init__(self) -> None:
         pass
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: T) -> T:
         return item

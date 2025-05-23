@@ -84,7 +84,7 @@ class InstrSynExtraction(LogicalInstruction):
         # Must be called at the end of initiation.
         self._compile_circuit(self.abstract_circuit)
 
-    def _create_x_check(self, ancilla, x, y):
+    def _create_x_check(self, ancilla, x, y) -> None:
         """Creates X-checks for circuit_extended."""
         # register the x syndrome ancillas
         self.ancilla_x_check.add(ancilla)
@@ -113,7 +113,7 @@ class InstrSynExtraction(LogicalInstruction):
             meas_ticks=self.meas_ticks,
         )
 
-    def _create_z_check(self, ancilla, x, y):
+    def _create_z_check(self, ancilla, x, y) -> None:
         """Creates Z-checks for circuit_extended."""
         # register the z syndrome ancillas
         self.ancilla_z_check.add(ancilla)
@@ -142,8 +142,10 @@ class InstrSynExtraction(LogicalInstruction):
         )
 
     @staticmethod
-    def _find_data(position_to_qudit, positions, ticks):
-        """From the positions given for possible data qudits, add the qudits and their corresponding ticks for each
+    def _find_data(position_to_qudit, positions, ticks) -> tuple[list, list]:
+        """Find data qudits from given positions.
+
+        From the positions given for possible data qudits, add the qudits and their corresponding ticks for each
         qudit that does exist.
         """
         data_list = []
@@ -158,7 +160,7 @@ class InstrSynExtraction(LogicalInstruction):
         return data_list, tick_list
 
     @staticmethod
-    def _data_pos_z_check(x, y):
+    def _data_pos_z_check(x, y) -> list[tuple[int, int]]:
         """Determines the position of data qudits in a Z check in order of ticks.
 
         Check direction:   1  |  2
@@ -177,7 +179,7 @@ class InstrSynExtraction(LogicalInstruction):
         ]
 
     @staticmethod
-    def _data_pos_x_check(x, y):
+    def _data_pos_x_check(x, y) -> list[tuple[int, int]]:
         """Determines the position of data qudits in a Z check in order of ticks.
 
         Check direction:   1  |  3

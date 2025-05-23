@@ -1,8 +1,10 @@
+from collections.abc import Callable
+
 from pecos.qeclib.steane.qec.qec_3parallel import ParallelFlagQECActiveCorrection
 from pecos.slr import CReg, QReg
 
 
-def test_ParallelFlagQECActiveCorrection(compare_qasm):
+def test_ParallelFlagQECActiveCorrection(compare_qasm: Callable[..., None]) -> None:
     q = QReg("q_test", 7)
     a = QReg("a_test", 3)
     flag_x = CReg("flag_x_test", 3)

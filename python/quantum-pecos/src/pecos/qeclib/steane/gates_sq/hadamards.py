@@ -14,8 +14,7 @@ from pecos.slr import Block, Comment, QReg
 
 
 class H(Block):
-    """
-    Hadamard
+    """Hadamard.
 
     X -> Z
     Z -> X
@@ -23,7 +22,7 @@ class H(Block):
     Y -> -Y
     """
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)

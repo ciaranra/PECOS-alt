@@ -35,7 +35,7 @@ class MeasureX(Block):
         log_raw: Bit,
         *,
         barrier: bool = True,
-    ):
+    ) -> None:
         super().__init__()
 
         self.extend(
@@ -59,7 +59,7 @@ class MeasureY(Block):
         log_raw: Bit,
         *,
         barrier: bool = True,
-    ):
+    ) -> None:
         super().__init__()
 
         self.extend(
@@ -71,7 +71,14 @@ class MeasureY(Block):
 class MeasureZ(Block):
     """Measure in the logical Z basis."""
 
-    def __init__(self, qubits: QReg, meas: CReg, log_raw: Bit, *, barrier: bool = True):
+    def __init__(
+        self,
+        qubits: QReg,
+        meas: CReg,
+        log_raw: Bit,
+        *,
+        barrier: bool = True,
+    ) -> None:
         super().__init__()
 
         q = qubits
@@ -106,7 +113,7 @@ class MeasureZ(Block):
 
 
 class Measure(Block):
-    def __init__(self, q: QReg, meas_creg: CReg, log_raw: Bit, meas_basis: str):
+    def __init__(self, q: QReg, meas_creg: CReg, log_raw: Bit, meas_basis: str) -> None:
         super().__init__()
 
         if meas_basis == "X":
@@ -130,8 +137,11 @@ class Measure(Block):
 
 
 class ProcessMeas(Block):
-    """Process measurement results to determine additional corrections. Applies these and previous corrections to
-    logical measurement."""
+    """Process measurement results and apply corrections to logical measurement.
+
+    Process measurement results to determine additional corrections.
+    Applies these and previous corrections to logical measurement.
+    """
 
     def __init__(
         self,
@@ -142,13 +152,13 @@ class ProcessMeas(Block):
         syn_meas: CReg,
         pf_x: Bit,
         pf_z: Bit,
-        check_type="xz",
+        check_type: str = "xz",
         last_raw_syn_x: CReg | None = None,
         last_raw_syn_y: CReg | None = None,
         last_raw_syn_z: CReg | None = None,
         *,
         ft_meas: bool = True,
-    ):
+    ) -> None:
         super().__init__()
 
         log = log_bit
@@ -247,7 +257,7 @@ Determine correction to get logical output
             raise Exception(msg)
 
 
-def MeasDecode(
+def MeasDecode(  # noqa: N802
     q: QReg,
     meas_basis: str,
     meas: CReg,
@@ -259,8 +269,11 @@ def MeasDecode(
     last_raw_syn_x: CReg,
     last_raw_syn_z: CReg,
 ) -> Block:
-    """Measure out in the appropriate logical basis, determine correction,
-    apply to logical output."""
+    """Perform logical measurement with error correction.
+
+    Measure out in the appropriate logical basis, determine correction,
+    and apply to logical output.
+    """
     return Block(
         Measure(q, meas, log_raw, meas_basis),
         ProcessMeas(

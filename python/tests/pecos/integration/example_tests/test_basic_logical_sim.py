@@ -13,14 +13,13 @@
 import pecos as pc
 
 
-def test_surface():
-    """
-    This is to make sure no errors occur for running simple logical circuit.
+def test_surface() -> None:
+    """This is to make sure no errors occur for running simple logical circuit.
 
     Returns:
+        None
 
     """
-
     surface = pc.qeccs.Surface4444(distance=3)
 
     mwpm2d = pc.decoders.MWPM2D(surface)

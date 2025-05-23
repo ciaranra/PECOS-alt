@@ -30,7 +30,7 @@ def run_multisim(
     seed: int | None = None,
     pool_size: int = 1,
     reset_engine: bool = True,
-):
+) -> dict:
     """Parallelize the running of the sim."""
     if reset_engine:
         eng.reset_all()
@@ -153,7 +153,8 @@ def worker_wrapper(args) -> tuple[dict, dict]:
         results = run(**pkwargs)
     except (ValueError, TypeError, RuntimeError, KeyError, AttributeError) as e:
         queue.put((pid, "error", f"{type(e).__name__}: {e}"))
-    except Exception as e:
+    # Must catch all exceptions in worker process to prevent silent failures
+    except Exception as e:  # noqa: BLE001
         queue.put((pid, "error", f"Unexpected error: {type(e).__name__}: {e}"))
 
     return results, run_info
@@ -165,8 +166,8 @@ class WriteStream:
         self.stream_type = stream_type
         self.pid = pid
 
-    def write(self, msg):
+    def write(self, msg) -> None:
         self.queue.put((self.pid, self.stream_type, msg))
 
-    def flush(self):
+    def flush(self) -> None:
         pass

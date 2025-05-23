@@ -9,6 +9,7 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from collections.abc import Callable
 from threading import Event, Thread
 
 # These values multiplied should equal the intended maximum execution time
@@ -17,11 +18,11 @@ WASM_EXECUTION_MAX_TICKS: int = 4
 
 
 class WasmExecutionTimerThread(Thread):
-    def __init__(self, stop_event: Event, func) -> None:
+    def __init__(self, stop_event: Event, func: Callable[[], None]) -> None:
         Thread.__init__(self, daemon=True)
         self._stop_event = stop_event
         self._func = func
 
-    def run(self):
+    def run(self) -> None:
         while not self._stop_event.wait(WASM_EXECUTION_TICK_LENGTH_S):
             self._func()

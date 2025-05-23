@@ -30,7 +30,7 @@ class FlagLookupQASM(Block):
         flag: CReg,
         flags: CReg,
         scratch: CReg,
-    ):
+    ) -> None:
         super().__init__()
 
         # qasm_syn_decoder('X', syn_x, flag_x, 'last_raw_syn_x', 'pf_z1')
@@ -100,7 +100,7 @@ class FlagLookupQASMActiveCorrectionX(Block):
         flags: CReg,
         scratch: CReg,
         pf_bit_copy: Bit | None = None,
-    ):
+    ) -> None:
         super().__init__()
         # qasm_syn_decoder('X', syn_x, flag_x, 'last_raw_syn_x', 'pf_z1')
         # qasm_syn_decoder(basis_check, syn, flag, raw_syn, pf, pf_index=0)
@@ -166,16 +166,16 @@ class FlagLookupQASMActiveCorrectionX(Block):
 class FlagLookupQASMActiveCorrectionZ(Block):
     def __init__(
         self,
-        qubits,
-        syn,
-        syndromes,
-        raw_syn,
-        pf,
-        flag,
-        flags,
-        scratch,
+        qubits: QReg,
+        syn: CReg,
+        syndromes: CReg,
+        raw_syn: CReg,
+        pf: Bit,
+        flag: CReg,
+        flags: CReg,
+        scratch: CReg,
         pf_bit_copy: Bit = None,
-    ):
+    ) -> None:
         super().__init__()
         q = qubits
 

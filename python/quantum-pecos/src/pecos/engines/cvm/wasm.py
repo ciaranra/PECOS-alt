@@ -11,17 +11,24 @@
 
 import pickle
 from pathlib import Path
+from typing import Protocol
 
-from pecos.engines.cvm.binarray2 import BinArray2 as BinArray
+from pecos.engines.cvm.binarray import BinArray
 from pecos.engines.cvm.sim_func import sim_exec
-from pecos.engines.cvm.wasm_vms.pywasm import read_pywasm
-from pecos.engines.cvm.wasm_vms.pywasm3 import read_pywasm3
 from pecos.engines.cvm.wasm_vms.wasmer import read_wasmer
 from pecos.engines.cvm.wasm_vms.wasmtime import read_wasmtime
 from pecos.errors import MissingCCOPError
 
 
-def read_pickle(picklefile):
+class CCOPObject(Protocol):
+    """Protocol for CCOP objects."""
+
+    def exec(self, func_name: str, args: list) -> int:
+        """Execute a function."""
+        ...
+
+
+def read_pickle(picklefile) -> CCOPObject:
     """Read in either a file path or byte object meant to be a pickled class used to define the ccop.
 
     Warning: This function loads pickled data which can be a security risk if the data
@@ -34,7 +41,7 @@ def read_pickle(picklefile):
         return pickle.loads(picklefile)  # noqa: S301 - Loading trusted circuit metadata
 
 
-def get_ccop(circuit):
+def get_ccop(circuit) -> CCOPObject | None:
     if circuit.metadata.get("ccop"):
         ccop = circuit.metadata["ccop"]
         ccop_type = circuit.metadata["ccop_type"]
@@ -49,12 +56,6 @@ def get_ccop(circuit):
 
         elif ccop_type == "wasmtime":
             ccop = read_wasmtime(ccop)
-
-        elif ccop_type == "pywasm":
-            ccop = read_pywasm(ccop)
-
-        elif ccop_type == "pywasm3":
-            ccop = read_pywasm3(ccop)
 
         elif ccop_type in {"wasmer", "wasmer_cl"}:
             ccop = read_wasmer(ccop, compiler="wasmer_cl")
@@ -78,14 +79,12 @@ def get_ccop(circuit):
     return ccop
 
 
-def eval_cfunc(runner, params, output):
+def eval_cfunc(runner, params, output) -> None:
     func = params["func"]
     assign_vars = params["assign_vars"]
     args = params["args"]
 
-    valargs = []
-    for sym in args:
-        valargs.append((sym, output[sym]))
+    valargs = [(sym, output[sym]) for sym in args]
 
     try:
         if runner.debug and func.startswith("sim_"):
@@ -115,15 +114,14 @@ def eval_cfunc(runner, params, output):
                 a_obj.set(b)
 
         else:
-            for asym, b in zip(assign_vars, vals):
+            for asym, b in zip(assign_vars, vals, strict=False):
                 a_obj = output[asym]
 
                 if runner.debug and func.startswith("sim_"):
                     output[asym] = b
+                elif isinstance(b, int):
+                    b = BinArray(a_obj.size, int(b))
+                    a_obj.set(b)
                 else:
-                    if isinstance(b, int):
-                        b = BinArray(a_obj.size, int(b))
-                        a_obj.set(b)
-                    else:
-                        msg = "Only int return values are supported currently"
-                        raise NotImplementedError(msg)
+                    msg = "Only int return values are supported currently"
+                    raise NotImplementedError(msg)

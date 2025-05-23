@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 
 @pytest.fixture
-def compare_qasm():
+def compare_qasm() -> Callable[..., None]:
     def _compare_qasm(
-        block,
-        *params,
+        block: object,
+        *params: object,
         directory: Path | None = None,
         filename: str | None = None,
-    ):
+    ) -> None:
         if directory is None:
             directory = Path(__file__).parent
 

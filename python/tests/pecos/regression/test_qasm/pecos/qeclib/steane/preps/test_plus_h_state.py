@@ -1,8 +1,10 @@
+from collections.abc import Callable
+
 from pecos.qeclib.steane.preps.plus_h_state import PrepHStateFT
 from pecos.slr import CReg, QReg
 
 
-def test_PrepHStateFT(compare_qasm):
+def test_PrepHStateFT(compare_qasm: Callable[..., None]) -> None:
     q = QReg("q_test", 7)
     a = QReg("a_test", 3)
     out = CReg("out_test", 2)

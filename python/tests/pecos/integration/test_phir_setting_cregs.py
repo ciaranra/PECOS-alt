@@ -1,7 +1,7 @@
 from pecos.engines.hybrid_engine import HybridEngine
 
 
-def test_setting_bits():
+def test_setting_bits() -> None:
     phir = {
         "format": "PHIR/JSON",
         "version": "0.1.0",
@@ -17,7 +17,7 @@ def test_setting_bits():
     assert results["c"].count("101") == len(results["c"])
 
 
-def test_setting_cvar():
+def test_setting_cvar() -> None:
     phir = {
         "format": "PHIR/JSON",
         "version": "0.1.0",
@@ -37,7 +37,7 @@ def test_setting_cvar():
     assert results["c"].count("010") == len(results["c"])
 
 
-def test_setting_expr():
+def test_setting_expr() -> None:
     phir = {
         "format": "PHIR/JSON",
         "version": "0.1.0",
@@ -65,7 +65,7 @@ def test_setting_expr():
     assert results["c"].count("010") == len(results["c"])
 
 
-def test_setting_mixed():
+def test_setting_mixed() -> None:
     phir = {
         "format": "PHIR/JSON",
         "version": "0.1.0",

@@ -14,13 +14,14 @@ import numpy as np
 from pecos.reps.pypmir.op_types import QOp
 
 
-def noise_meas_bitflip_leakage(op: QOp, p: float, machine):
+def noise_meas_bitflip_leakage(op: QOp, p: float, machine) -> list[QOp] | None:
     """Bit-flip noise model for measurements.
 
     Args:
     ----
         op: Ideal quantum operation.
         p: measurement error rate.
+        machine: Machine instance containing leakage state information.
     """
     # Bit flip noise
     # --------------
@@ -35,7 +36,7 @@ def noise_meas_bitflip_leakage(op: QOp, p: float, machine):
 
     if np.any(rand_nums):
         bitflips = []
-        for r, loc in zip(rand_nums, op.args):
+        for r, loc in zip(rand_nums, op.args, strict=False):
             if r:
                 bitflips.append(loc)
 
@@ -50,8 +51,6 @@ def noise_meas_bitflip_leakage(op: QOp, p: float, machine):
 
         return noise
 
-    else:
-        if noise:
-            return noise
-        else:
-            return None
+    if noise:
+        return noise
+    return None

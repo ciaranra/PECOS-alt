@@ -36,7 +36,7 @@ class WasmtimeObj(ForeignObject):
     """
 
     def __init__(self, file: str | bytes | Path) -> None:
-        if isinstance(file, (str, Path)):
+        if isinstance(file, str | Path):
             with Path.open(Path(file), "rb") as f:
                 wasm_bytes = f.read()
         else:
@@ -87,16 +87,15 @@ class WasmtimeObj(ForeignObject):
 
     def get_funcs(self) -> list[str]:
         if self.func_names is None:
-            fs = []
-            for f in self.module.exports:
-                if isinstance(f.type, FuncType):
-                    fs.append(str(f.name))
+            fs = [
+                str(f.name) for f in self.module.exports if isinstance(f.type, FuncType)
+            ]
 
             self.func_names = fs
 
         return self.func_names
 
-    def _increment_engine(self):
+    def _increment_engine(self) -> None:
         self.store.engine.increment_epoch()
 
     def exec(self, func_name: str, args: Sequence) -> tuple:

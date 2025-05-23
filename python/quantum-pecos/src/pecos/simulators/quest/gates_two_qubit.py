@@ -19,8 +19,7 @@ from pecos.simulators.quest.gates_one_qubit import H
 
 
 def CX(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply controlled X gate.
+    """Apply controlled X gate.
 
     Args:
         state: An instance of QuEST
@@ -34,8 +33,7 @@ def CX(state, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def CY(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply controlled Y gate.
+    """Apply controlled Y gate.
 
     Args:
         state: An instance of QuEST
@@ -49,8 +47,7 @@ def CY(state, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def CZ(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply controlled Z gate.
+    """Apply controlled Z gate.
 
     Args:
         state: An instance of QuEST
@@ -64,8 +61,7 @@ def CZ(state, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def RXX(state, qubits: tuple[int, int], angles: tuple[float], **params: Any) -> None:
-    """
-    Apply a rotation about XX.
+    """Apply a rotation about XX.
 
     Args:
         state: An instance of QuEST
@@ -92,8 +88,7 @@ def RXX(state, qubits: tuple[int, int], angles: tuple[float], **params: Any) -> 
 
 
 def RYY(state, qubits: tuple[int, int], angles: tuple[float], **params: Any) -> None:
-    """
-    Apply a rotation about YY.
+    """Apply a rotation about YY.
 
     Args:
         state: An instance of QuEST
@@ -120,8 +115,7 @@ def RYY(state, qubits: tuple[int, int], angles: tuple[float], **params: Any) -> 
 
 
 def RZZ(state, qubits: tuple[int, int], angles: tuple[float], **params: Any) -> None:
-    """
-    Apply a rotation about ZZ.
+    """Apply a rotation about ZZ.
 
     Args:
         state: An instance of QuEST
@@ -153,8 +147,7 @@ def R2XXYYZZ(
     angles: tuple[float, float, float],
     **params: Any,
 ) -> None:
-    """
-    Apply RXX*RYY*RZZ.
+    """Apply RXX*RYY*RZZ.
 
     Args:
         state: An instance of QuEST
@@ -171,8 +164,7 @@ def R2XXYYZZ(
 
 
 def SXX(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply a square root of XX gate.
+    """Apply a square root of XX gate.
 
     Args:
         state: An instance of QuEST
@@ -182,8 +174,7 @@ def SXX(state, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def SXXdg(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply adjoint of a square root of XX gate.
+    """Apply adjoint of a square root of XX gate.
 
     Args:
         state: An instance of QuEST
@@ -193,8 +184,7 @@ def SXXdg(state, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def SYY(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply a square root of YY gate.
+    """Apply a square root of YY gate.
 
     Args:
         state: An instance of QuEST
@@ -204,8 +194,7 @@ def SYY(state, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def SYYdg(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply adjoint of a square root of YY gate.
+    """Apply adjoint of a square root of YY gate.
 
     Args:
         state: An instance of QuEST
@@ -215,8 +204,7 @@ def SYYdg(state, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def SZZ(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply a square root of ZZ gate.
+    """Apply a square root of ZZ gate.
 
     Args:
         state: An instance of QuEST
@@ -226,8 +214,7 @@ def SZZ(state, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def SZZdg(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply adjoint of a square root of ZZ gate.
+    """Apply adjoint of a square root of ZZ gate.
 
     Args:
         state: An instance of QuEST
@@ -237,8 +224,7 @@ def SZZdg(state, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def SWAP(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply a SWAP gate.
+    """Apply a SWAP gate.
 
     Args:
         state: An instance of QuEST
@@ -251,7 +237,7 @@ def SWAP(state, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def G(state, qubits: tuple[int, int], **params: Any) -> None:
-    """'G': (('I', 'H'), 'CNOT', ('H', 'H'), 'CNOT', ('I', 'H'))"""
+    """'G': (('I', 'H'), 'CNOT', ('H', 'H'), 'CNOT', ('I', 'H'))."""
     H(state, qubits[1])
     CX(state, qubits)
     H(state, qubits[0])

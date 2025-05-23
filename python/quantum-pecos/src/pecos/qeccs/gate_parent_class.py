@@ -13,7 +13,14 @@
 
 """Contains the parent classes for logical gates."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from pecos.qeccs.helper_functions import expected_params, make_hashable_params
+
+if TYPE_CHECKING:
+    from pecos.qeccs.instruction_parent_class import LogicalInstruction
 
 
 class LogicalGate:
@@ -52,23 +59,18 @@ class LogicalGate:
         )  # Used for hashing.
         self.gate_params_tuple = make_hashable_params(gate_params)  # Used for hashing.
 
-    def final_instr(self):
-        """Gives the final Logical Instruction instance.
-
-        Returns:
-        -------
-
-        """
+    def final_instr(self) -> LogicalInstruction:
+        """Gives the final Logical Instruction instance."""
         return self.instr_instances[-1]
 
-    def final_logical_stabs(self):
+    def final_logical_stabs(self) -> dict:
         """Gives the final_logical_ops dict."""
         return self.instr_instances[-1].final_logical_ops
 
-    def expected_params(self, params, expected_set):
+    def expected_params(self, params, expected_set) -> None:
         expected_params(params, expected_set)
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         # Added so the logical gate can be a key (gate symbol) in a ``QuantumCircuit``.
 
         # These uniquely identify the logical and do not change.
@@ -76,7 +78,7 @@ class LogicalGate:
             ("gate", self.symbol, self.qecc_params_tuple, self.gate_params_tuple),
         )
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         return (self.symbol, self.qecc_params_tuple, self.gate_params_tuple, True) == (
             other.symbol,
             other.qecc_params_tuple,
@@ -84,7 +86,7 @@ class LogicalGate:
             hasattr(other, "instr_symbols"),
         )
 
-    def __ne__(self, other):
+    def __ne__(self, other) -> bool:
         return not (self == other)
 
     def __str__(self) -> str:

@@ -9,7 +9,14 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from pecos.qeclib.qubit.qgate_base import QGate
+
+if TYPE_CHECKING:
+    from pecos.slr import Bit, Qubit
 
 
 class Measure(QGate):
@@ -17,11 +24,11 @@ class Measure(QGate):
 
     csize = 1
 
-    def __init__(self, *qargs):
+    def __init__(self, *qargs: Qubit) -> None:
         super().__init__(*qargs)
         self.cout = None
 
-    def __gt__(self, cout):
+    def __gt__(self, cout: Bit | tuple[Bit, ...]) -> Measure:
         g = self.copy()
 
         if isinstance(cout, tuple):

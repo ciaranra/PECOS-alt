@@ -14,7 +14,12 @@ import numpy as np
 from pecos.reps.pypmir.op_types import QOp
 
 
-def noise_tq_depolarizing_leakage(op: QOp, p: float, noise_dict: dict, machine):
+def noise_tq_depolarizing_leakage(
+    op: QOp,
+    p: float,
+    noise_dict: dict,
+    machine,
+) -> list[QOp] | None:
     """Two-qubit gate depolarizing noise plus leakage."""
     # TODO: precompute, in PyPMIR, a flattened version of args
     args = set()
@@ -39,7 +44,7 @@ def noise_tq_depolarizing_leakage(op: QOp, p: float, noise_dict: dict, machine):
 
     if np.any(rand_nums):
         noise = {}
-        for r, loc in zip(rand_nums, op.args):
+        for r, loc in zip(rand_nums, op.args, strict=False):
             if r:
                 rand = np.random.random()
                 p_tot = 0.0

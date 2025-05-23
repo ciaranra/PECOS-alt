@@ -14,8 +14,7 @@ from pecos.slr import Block, Comment, QReg
 
 
 class X(Block):
-    """
-    Pauli X
+    """Pauli X.
 
     X -> X
     Z -> -Z
@@ -23,7 +22,7 @@ class X(Block):
     Y -> -Y
     """
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)
@@ -37,8 +36,7 @@ class X(Block):
 
 
 class Y(Block):
-    """
-    Pauli Y
+    """Pauli Y.
 
     X -> -X
     Z -> -Z
@@ -46,7 +44,7 @@ class Y(Block):
     Y -> Y
     """
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)
@@ -60,8 +58,7 @@ class Y(Block):
 
 
 class Z(Block):
-    """
-    Pauli Z
+    """Pauli Z.
 
     X -> -X
     Z -> Z
@@ -69,7 +66,7 @@ class Z(Block):
     Y -> -Y
     """
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)

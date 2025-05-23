@@ -37,10 +37,11 @@ def noise_depolarizing_two_qubit_gates(
     ----
         locations: Set of tuples of qubit pairs the ideal gates act on.
         after: QuantumCircuit collecting the noise that occurs after the ideal gates.
+        p: The probability of a depolarizing error occurring on the two-qubit gate.
     """
     rand_nums = np.random.random(len(locations)) <= p
 
-    for r, (loc1, loc2) in zip(rand_nums, locations):
+    for r, (loc1, loc2) in zip(rand_nums, locations, strict=False):
         if r:
             index = np.random.choice(len(error_two_paulis_collection))
             err1, err2 = error_two_paulis_collection[index]
@@ -64,15 +65,17 @@ def noise_two_qubit_gates_depolarizing_with_noiseless(
     ----
         locations: Set of tuples of qubit pairs the ideal gates act on.
         after: QuantumCircuit collecting the noise that occurs after the ideal gates.
+        p: The probability of a depolarizing error occurring on the two-qubit gate.
+        noiseless_qubits: Set of qubits that are considered noiseless. Defaults to None.
     """
     rand_nums = np.random.random(len(locations)) <= p
 
-    for r, (loc1, loc2) in zip(rand_nums, locations):
+    for r, (loc1, loc2) in zip(rand_nums, locations, strict=False):
         if r:
             if loc1 in noiseless_qubits and loc1 in noiseless_qubits:
                 continue
 
-            elif loc1 in noiseless_qubits:
+            if loc1 in noiseless_qubits:
                 err = np.random.choice(error_one_paulis_collection)
                 after.append(err, {loc2})
 

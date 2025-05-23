@@ -11,10 +11,10 @@
 
 from __future__ import annotations
 
-from pecos.engines.cvm.binarray2 import BinArray2 as BinArray
+from pecos.engines.cvm.binarray import BinArray
 
 
-def set_output(state, circuit, output_spec, output):
+def set_output(state, circuit, output_spec, output) -> dict[str, BinArray]:
     if output_spec is None:
         output_spec = {}
 
@@ -35,7 +35,7 @@ def set_output(state, circuit, output_spec, output):
     return output
 
 
-def eval_op(op, a, b=None, width=32):
+def eval_op(op, a, b=None, width=32) -> BinArray:
     if isinstance(a, int):
         a = BinArray(width, a)
 
@@ -46,7 +46,7 @@ def eval_op(op, a, b=None, width=32):
 
         return a
 
-    elif op == "|":
+    if op == "|":
         expr_eval = a | b
     elif op == "^":
         expr_eval = a ^ b
@@ -96,11 +96,11 @@ def eval_op(op, a, b=None, width=32):
     return expr_eval
 
 
-def get_val(a, output, width):
+def get_val(a, output, width) -> BinArray:
     if isinstance(a, BinArray):
         return a
 
-    if isinstance(a, (tuple, list)):
+    if isinstance(a, tuple | list):
         sym, idx = a
         val = output[sym][idx]
 
@@ -111,13 +111,13 @@ def get_val(a, output, width):
         val = a
 
     else:
-        msg = f'Could not evaluate "{str(a)}". Wrong type, got type: {type(a)}.'
+        msg = f'Could not evaluate "{a!s}". Wrong type, got type: {type(a)}.'
         raise TypeError(msg)
 
     return BinArray(width, val)
 
 
-def recur_eval_op(expr_dict, output, width):
+def recur_eval_op(expr_dict, output, width) -> BinArray:
     a = expr_dict.get("a")
     op = expr_dict.get("op")
     b = expr_dict.get("b")
@@ -150,8 +150,10 @@ def recur_eval_op(expr_dict, output, width):
     return a
 
 
-def eval_cop(cop_expr, output, width):
-    """Evaluate classical expression such as:
+def eval_cop(cop_expr, output, width) -> None:
+    """Evaluate classical operation expression.
+
+    Evaluate classical expression such as:
 
     assignment:
     t = a     BinArray = (BinArray | int)
@@ -170,7 +172,7 @@ def eval_cop(cop_expr, output, width):
     if isinstance(t, str):
         t_sym = t
         t_index = None
-    elif isinstance(t, (tuple, list)) and len(t) == 2:
+    elif isinstance(t, tuple | list) and len(t) == 2:
         t_sym = t[0]
         t_index = t[1]
     else:
@@ -192,7 +194,7 @@ def eval_cop(cop_expr, output, width):
         t_obj.set_clip(expr_eval)
 
 
-def eval_tick_conds(tick_circuit, output):
+def eval_tick_conds(tick_circuit, output) -> list[bool]:
     conds = []
 
     for _symbol, _locations, params in tick_circuit.items():
@@ -204,7 +206,7 @@ def eval_tick_conds(tick_circuit, output):
 
 def eval_condition(conditional_expr, output) -> bool:
     # Handle if a condition might eval to something else (eval_to)
-    if isinstance(conditional_expr, (tuple, list)):
+    if isinstance(conditional_expr, tuple | list):
         if len(conditional_expr) != 2:
             msg = "Not expected conditional to have more than 2 elements."
             raise Exception(msg)
@@ -225,7 +227,7 @@ def eval_condition(conditional_expr, output) -> bool:
 
         if isinstance(a, str):
             a = output[a]  # str -> BinArray
-        elif isinstance(a, (tuple, list)) and len(a) == 2:
+        elif isinstance(a, tuple | list) and len(a) == 2:
             a = output[a[0]][a[1]]  # (str, int) -> int (1 or 0)
         else:
             msg = "`a` should be `str` or `Tuple[str, int]`!"
@@ -233,7 +235,7 @@ def eval_condition(conditional_expr, output) -> bool:
 
         if isinstance(b, str):
             b = output[b]  # str -> BinArray
-        elif isinstance(b, (tuple, list)) and len(b) == 2:
+        elif isinstance(b, tuple | list) and len(b) == 2:
             b = output[b[0]][b[1]]  # (str, int) -> int (1 or 0)
         elif isinstance(b, int):
             pass
@@ -241,51 +243,28 @@ def eval_condition(conditional_expr, output) -> bool:
             msg = "`b` should be `str` or `Tuple[str, int]` or `int`!"
             raise Exception(msg)
 
-        if op == "==":
-            return bool(a.__eq__(b))
+        # Map of operators to their evaluation functions
+        ops = {
+            "==": lambda a, b: bool(a.__eq__(b)),
+            "!=": lambda a, b: bool(a.__ne__(b)),
+            "^": lambda a, b: bool(a.__xor__(b).__int__()),
+            "|": lambda a, b: bool(a.__or__(b).__int__()),
+            "&": lambda a, b: bool(a.__and__(b).__int__()),
+            "<": lambda a, b: a.__lt__(b),
+            ">": lambda a, b: a.__gt__(b),
+            "<=": lambda a, b: a.__le__(b),
+            ">=": lambda a, b: a.__ge__(b),
+            ">>": lambda a, b: a.__rshift__(b),
+            "<<": lambda a, b: a.__lshift__(b),
+            "~": lambda a, _: a.__invert__(),
+            "*": lambda a, b: a.__mul__(b),
+            "/": lambda a, b: a.__floordiv__(b),
+        }
 
-        if op == "!=":
-            return bool(a.__ne__(b))
+        if op in ops:
+            return ops[op](a, b)
 
-        elif op == "^":
-            return bool(a.__xor__(b).__int__())
+        msg = "Comparison operator not recognized!"
+        raise Exception(msg)
 
-        elif op == "|":
-            return bool(a.__or__(b).__int__())
-
-        elif op == "&":
-            return bool(a.__and__(b).__int__())
-
-        elif op == "<":
-            return a.__lt__(b)
-
-        elif op == ">":
-            return a.__gt__(b)
-
-        elif op == "<=":
-            return a.__le__(b)
-
-        elif op == ">=":
-            return a.__ge__(b)
-
-        elif op == ">>":
-            return a.__rshift__(b)
-
-        elif op == "<<":
-            return a.__lshift__(b)
-
-        elif op == "~":
-            return a.__invert__()
-
-        elif op == "*":
-            return a.__mul__()
-
-        elif op == "/":
-            return a.__floordiv__()
-
-        else:
-            msg = "Comparison operator not recognized!"
-            raise Exception(msg)
-
-    else:
-        return True
+    return True

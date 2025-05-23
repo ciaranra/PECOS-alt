@@ -69,7 +69,7 @@ class QOp(Op):
         if self.sim_name is None:
             self.sim_name = name
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         repr_str = f"<QOP: {self.name}"
 
         if self.angles:
@@ -109,7 +109,7 @@ class COp(Op):
             metadata=metadata,
         )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         repr_str = f"<COP: {self.name}"
 
         if self.args:

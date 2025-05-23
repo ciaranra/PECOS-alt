@@ -16,8 +16,7 @@ import pyquest.unitaries as qgate
 
 
 def identity(state, qubit: int, **params: Any) -> None:
-    """
-    Identity gate.
+    """Identity gate.
 
     Args:
         state: An instance of QuEST
@@ -26,8 +25,7 @@ def identity(state, qubit: int, **params: Any) -> None:
 
 
 def X(state, qubit: int, **params: Any) -> None:
-    """
-    Pauli X gate.
+    """Pauli X gate.
 
     Args:
         state: An instance of QuEST
@@ -39,8 +37,7 @@ def X(state, qubit: int, **params: Any) -> None:
 
 
 def Y(state, qubit: int, **params: Any) -> None:
-    """
-    Pauli Y gate.
+    """Pauli Y gate.
 
     Args:
         state: An instance of QuEST
@@ -52,8 +49,7 @@ def Y(state, qubit: int, **params: Any) -> None:
 
 
 def Z(state, qubit: int, **params: Any) -> None:
-    """
-    Pauli Z gate.
+    """Pauli Z gate.
 
     Args:
         state: An instance of QuEST
@@ -65,8 +61,7 @@ def Z(state, qubit: int, **params: Any) -> None:
 
 
 def RX(state, qubit: int, angles: tuple[float], **params: Any) -> None:
-    """
-    Apply an RX gate.
+    """Apply an RX gate.
 
     Args:
         state: An instance of QuEST
@@ -84,8 +79,7 @@ def RX(state, qubit: int, angles: tuple[float], **params: Any) -> None:
 
 
 def RY(state, qubit: int, angles: tuple[float], **params: Any) -> None:
-    """
-    Apply an RY gate.
+    """Apply an RY gate.
 
     Args:
         state: An instance of QuEST
@@ -103,8 +97,7 @@ def RY(state, qubit: int, angles: tuple[float], **params: Any) -> None:
 
 
 def RZ(state, qubit: int, angles: tuple[float], **params: Any) -> None:
-    """
-    Apply an RZ gate.
+    """Apply an RZ gate.
 
     Args:
         state: An instance of QuEST
@@ -122,8 +115,7 @@ def RZ(state, qubit: int, angles: tuple[float], **params: Any) -> None:
 
 
 def R1XY(state, qubit: int, angles: tuple[float, float], **params: Any) -> None:
-    """
-    Apply an R1XY gate.
+    """Apply an R1XY gate.
 
     Args:
         state: An instance of QuEST
@@ -143,8 +135,7 @@ def R1XY(state, qubit: int, angles: tuple[float, float], **params: Any) -> None:
 
 
 def SX(state, qubit: int, **params: Any) -> None:
-    """
-    Apply a square-root of X.
+    """Apply a square-root of X.
 
     Args:
         state: An instance of QuEST
@@ -154,8 +145,7 @@ def SX(state, qubit: int, **params: Any) -> None:
 
 
 def SXdg(state, qubit: int, **params: Any) -> None:
-    """
-    Apply adjoint of the square-root of X.
+    """Apply adjoint of the square-root of X.
 
     Args:
         state: An instance of QuEST
@@ -165,8 +155,7 @@ def SXdg(state, qubit: int, **params: Any) -> None:
 
 
 def SY(state, qubit: int, **params: Any) -> None:
-    """
-    Apply a square-root of Y.
+    """Apply a square-root of Y.
 
     Args:
         state: An instance of QuEST
@@ -176,8 +165,7 @@ def SY(state, qubit: int, **params: Any) -> None:
 
 
 def SYdg(state, qubit: int, **params: Any) -> None:
-    """
-    Apply adjoint of the square-root of Y.
+    """Apply adjoint of the square-root of Y.
 
     Args:
         state: An instance of QuEST
@@ -187,8 +175,7 @@ def SYdg(state, qubit: int, **params: Any) -> None:
 
 
 def SZ(state, qubit: int, **params: Any) -> None:
-    """
-    Apply a square-root of Z.
+    """Apply a square-root of Z.
 
     Args:
         state: An instance of QuEST
@@ -198,8 +185,7 @@ def SZ(state, qubit: int, **params: Any) -> None:
 
 
 def SZdg(state, qubit: int, **params: Any) -> None:
-    """
-    Apply adjoint of the square-root of Z.
+    """Apply adjoint of the square-root of Z.
 
     Args:
         state: An instance of QuEST
@@ -209,8 +195,7 @@ def SZdg(state, qubit: int, **params: Any) -> None:
 
 
 def H(state, qubit: int, **params: Any) -> None:
-    """
-    Apply Hadamard gate.
+    """Apply Hadamard gate.
 
     Args:
         state: An instance of QuEST
@@ -222,8 +207,7 @@ def H(state, qubit: int, **params: Any) -> None:
 
 
 def F(state, qubit: int, **params: Any) -> None:
-    """
-    Apply face rotation of an octahedron #1 (X->Y->Z->X).
+    """Apply face rotation of an octahedron #1 (X->Y->Z->X).
 
     Args:
         state: An instance of QuEST
@@ -234,8 +218,7 @@ def F(state, qubit: int, **params: Any) -> None:
 
 
 def Fdg(state, qubit: int, **params: Any) -> None:
-    """
-    Apply adjoint of face rotation of an octahedron #1 (X<-Y<-Z<-X).
+    """Apply adjoint of face rotation of an octahedron #1 (X<-Y<-Z<-X).
 
     Args:
         state: An instance of QuEST
@@ -246,8 +229,7 @@ def Fdg(state, qubit: int, **params: Any) -> None:
 
 
 def T(state, qubit: int, **params: Any) -> None:
-    """
-    Apply a T gate.
+    """Apply a T gate.
 
     Args:
         state: An instance of QuEST
@@ -257,8 +239,7 @@ def T(state, qubit: int, **params: Any) -> None:
 
 
 def Tdg(state, qubit: int, **params: Any) -> None:
-    """
-    Apply adjoint of a T gate.
+    """Apply adjoint of a T gate.
 
     Args:
         state: An instance of QuEST
@@ -267,76 +248,74 @@ def Tdg(state, qubit: int, **params: Any) -> None:
     RZ(state, qubit, angles=(-np.pi / 4,))
 
 
-# The definition of the extra Clifford gates added below come from
-# circuit_converters/std2chs.py
 def H2(state, qubit: int, **params: Any) -> None:
-    """'H2': ('S', 'S', 'H', 'S', 'S')"""
+    """'H2': ('S', 'S', 'H', 'S', 'S')."""
     Z(state, qubit)
     H(state, qubit)
     Z(state, qubit)
 
 
 def H3(state, qubit: int, **params: Any) -> None:
-    """'H3': ('H', 'S', 'S', 'H', 'S',)"""
+    """'H3': ('H', 'S', 'S', 'H', 'S',)."""
     X(state, qubit)
     SZ(state, qubit)
 
 
 def H4(state, qubit: int, **params: Any) -> None:
-    """'H4': ('H', 'S', 'S', 'H', 'S', 'S', 'S',)"""
+    """'H4': ('H', 'S', 'S', 'H', 'S', 'S', 'S',)."""
     X(state, qubit)
     SZdg(state, qubit)
 
 
 def H5(state, qubit: int, **params: Any) -> None:
-    """'H5': ('S', 'S', 'S', 'H', 'S')"""
+    """'H5': ('S', 'S', 'S', 'H', 'S')."""
     SZdg(state, qubit)
     H(state, qubit)
     SZ(state, qubit)
 
 
 def H6(state, qubit: int, **params: Any) -> None:
-    """'H6': ('S', 'H', 'S', 'S', 'S',)"""
+    """'H6': ('S', 'H', 'S', 'S', 'S',)."""
     SZ(state, qubit)
     H(state, qubit)
     SZdg(state, qubit)
 
 
 def F2(state, qubit: int, **params: Any) -> None:
-    """'F2': ('S', 'S', 'H', 'S')"""
+    """'F2': ('S', 'S', 'H', 'S')."""
     Z(state, qubit)
     H(state, qubit)
     SZ(state, qubit)
 
 
 def F2d(state, qubit: int, **params: Any) -> None:
-    """'F2d': ('S', 'S', 'S', 'H', 'S', 'S')"""
+    """'F2d': ('S', 'S', 'S', 'H', 'S', 'S')."""
     SZdg(state, qubit)
     H(state, qubit)
     Z(state, qubit)
 
 
 def F3(state, qubit: int, **params: Any) -> None:
-    """'F3': ('S', 'H', 'S', 'S')"""
+    """'F3': ('S', 'H', 'S', 'S')."""
     SZ(state, qubit)
     H(state, qubit)
     Z(state, qubit)
 
 
 def F3d(state, qubit: int, **params: Any) -> None:
-    """'F3d': ('S', 'S', 'H', 'S', 'S', 'S')"""
+    """'F3d': ('S', 'S', 'H', 'S', 'S', 'S')."""
     Z(state, qubit)
     H(state, qubit)
     SZdg(state, qubit)
 
 
 def F4(state, qubit: int, **params: Any) -> None:
-    """'F4': ('H', 'S', 'S', 'S')"""
+    """'F4': ('H', 'S', 'S', 'S')."""
     H(state, qubit)
     SZdg(state, qubit)
 
 
 def F4d(state, qubit: int, **params: Any) -> None:
-    """'F4d': ('S', 'H')"""
+    """'F4d': ('S', 'H')."""
     SZ(state, qubit)
     H(state, qubit)

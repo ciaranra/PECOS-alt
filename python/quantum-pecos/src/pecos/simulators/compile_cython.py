@@ -59,7 +59,7 @@ if __name__ == "__main__":
 
         for f, error in failed.items():
             print("--------------")
-            print('Cython package "%s" failed to compile!' % f)
+            print(f'Cython package "{f}" failed to compile!')
 
             print("\nError:\n")
             print(error.decode())

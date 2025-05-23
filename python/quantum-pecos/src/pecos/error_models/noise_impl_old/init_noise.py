@@ -34,9 +34,10 @@ def noise_init_bitflip(
         locations: Set of qubits the ideal gates act on.
         after: QuantumCircuit collecting the noise that occurs after the ideal gates.
         flip: The symbol for what Pauli operator should be applied if an initialization fault occurs.
+        p: The probability of a bit-flip error occurring during initialization.
     """
     rand_nums = np.random.random(len(locations)) <= p
 
-    for r, loc in zip(rand_nums, locations):
+    for r, loc in zip(rand_nums, locations, strict=False):
         if r:
             after.append(flip, {loc})

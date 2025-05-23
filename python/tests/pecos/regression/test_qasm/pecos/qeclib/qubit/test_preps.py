@@ -1,8 +1,10 @@
+from collections.abc import Callable
+
 from pecos.qeclib import qubit
 from pecos.slr import QReg
 
 
-def test_Prep(compare_qasm):
+def test_Prep(compare_qasm: Callable[..., None]) -> None:
     q = QReg("q_test", 1)
 
     prog = qubit.Prep(q[0])

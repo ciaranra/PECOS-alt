@@ -9,6 +9,8 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+# ruff: noqa: A005
+
 # ruff: noqa: F401
 
 from pecos.reps.pypmir import block_types as block

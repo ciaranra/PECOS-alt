@@ -24,13 +24,11 @@ def init_zero(
     forced_outcome: int = -1,
     **params: Any,
 ) -> None:
-    """
-
-    Args:
-        state: Instance representing the stabilizer state.
-        qubit: Integer that indexes the qubit being acted on.
-        forced_outcome: Value for a "random" outcome. Default is -1, which means 0 and 1 are equally probable.
-        **params:
+    """Args:
+    state: Instance representing the stabilizer state.
+    qubit: Integer that indexes the qubit being acted on.
+    forced_outcome: Value for a "random" outcome. Default is -1, which means 0 and 1 are equally probable.
+    **params:
     """
     # Measure in the Z basis. (If random outcome, force a 0 outcome).
     # If outcome is 1 apply an X.

@@ -10,10 +10,10 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-"""repetition_z
-~~~~~~~~~~~~.
+"""Color 4.8.8 quantum error correcting code implementation.
 
-Generates circuits for the repetition code in the Z-Basis.
+This module provides the Color 4.8.8 topological quantum error correcting code,
+which is based on a 4.8.8 lattice structure.
 """
 
 from pecos.qeccs.color_488.circuit_implementation1 import OneAncillaPerCheck
@@ -96,7 +96,7 @@ class Color488(QECC):
         self.sides = self._determine_sides()
 
     @staticmethod
-    def _set_symbols():
+    def _set_symbols() -> tuple[dict, dict]:
         # gate and instruction symbol bindings
         # ------------------------------------
         # gate symbol => gate class
@@ -116,8 +116,9 @@ class Color488(QECC):
         return sym2gate_class, sym2instruction_class
 
     @staticmethod
-    def _get_distance(params):
-        """Check and set the distance
+    def _get_distance(params) -> tuple[int, int, int]:
+        """Check and set the distance.
+
         :return:
         """
         distance = params.get("distance")
@@ -136,7 +137,7 @@ class Color488(QECC):
 
         return distance, distance_height, distance_width
 
-    def _generate_layout(self):
+    def _generate_layout(self) -> dict:
         """Creates the layout dictionary which describes the location of the qubits in the code."""
         self.lattice_height = 4 * self.distance - 4
         self.lattice_width = 2 * self.distance - 2
@@ -164,9 +165,8 @@ class Color488(QECC):
                         if (x / 2) % 4 == 2 or (x / 2) % 4 == 3:
                             self._add_node(x, y, data_ids)
 
-                    else:
-                        if (x / 2) % 4 == 0 or (x / 2) % 4 == 1:
-                            self._add_node(x, y, data_ids)
+                    elif (x / 2) % 4 == 0 or (x / 2) % 4 == 1:
+                        self._add_node(x, y, data_ids)
 
                 if x % 4 == 1 and y % 4 == 3:
                     self._add_node(x, y, ancilla_ids)
@@ -176,7 +176,7 @@ class Color488(QECC):
 
         return self.layout
 
-    def _determine_sides(self):
+    def _determine_sides(self) -> dict[str, list]:
         """Outputs a dictionary that describes the sides of the code.
 
         The repetition code is essentially a line.
@@ -189,7 +189,6 @@ class Color488(QECC):
 
         :return:
         """
-
         bottom_nodes = []
         left_nodes = []
 

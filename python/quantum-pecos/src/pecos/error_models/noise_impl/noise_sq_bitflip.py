@@ -14,7 +14,7 @@ import numpy as np
 from pecos.reps.pypmir.op_types import QOp
 
 
-def noise_sq_bitflip(op: QOp, p: float):
+def noise_sq_bitflip(op: QOp, p: float) -> list[QOp] | None:
     """The noise model for qubit (re)initialization.
 
     Args:
@@ -26,12 +26,11 @@ def noise_sq_bitflip(op: QOp, p: float):
 
     if np.any(rand_nums):
         flip_locs = []
-        for r, loc in zip(rand_nums, op.args):
+        for r, loc in zip(rand_nums, op.args, strict=False):
             if r:
                 flip_locs.append(loc)
 
             return [QOp(name="X", args=flip_locs, metadata={})]
         return None
 
-    else:
-        return None
+    return None

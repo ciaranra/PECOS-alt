@@ -12,14 +12,17 @@
 from __future__ import annotations
 
 from itertools import permutations, product
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any
 
 from pecos import QuantumCircuit
 from pecos.engines.circuit_runners import Standard
 from pecos.simulators import SparseSim
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Generator, Sequence
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
 
 
 def find_pauli_fault(
@@ -27,7 +30,7 @@ def find_pauli_fault(
     wt: int,
     fail_func: Callable,
     num_qubits: int | None = None,
-    simulator: str = "stabilizer",
+    simulator: str = "stabilizer",  # noqa: ARG001
     *,
     verbose: bool = True,
     failure_break: bool = True,
@@ -94,7 +97,7 @@ def find_pauli_fault(
 def get_all_spacetime(
     qcirc: QuantumCircuit,
     initial_qubits: Sequence[int] | None = None,
-):
+) -> Generator[dict[str, Any], None, None]:
     """Determine all the spacetime locations of gates/error events."""
     if initial_qubits is not None:
         for q in initial_qubits:
@@ -127,19 +130,15 @@ def get_wt_paulis(
     initial_qubits: Sequence[int] | None = None,
     *,
     make_qc: bool = True,
-):
+) -> Generator[dict[int, Any] | tuple[dict, dict], None, None]:
     """A generator of all combinations of Pauli faults of a given weight.
 
     Args:
     ----
-        circ:
-        wt:
-        initial_qubits:
-        make_qc:
-
-    Returns:
-    -------
-
+        circ: The quantum circuit to generate faults for.
+        wt: The weight (number) of Pauli faults to generate.
+        initial_qubits: The qubits that are initialized at the beginning of the circuit.
+        make_qc: If True, returns QuantumCircuit objects; otherwise returns raw error data.
     """
     # get the spacetime locations that will have errors
     for gate_data in permutations(get_all_spacetime(circ, initial_qubits), wt):
@@ -178,13 +177,14 @@ def get_wt_paulis(
                 loc_list,
                 before_list,
                 cond_list,
+                strict=False,
             ):
                 tick_dict = tick_dict_before if before else tick_dict_after
 
                 gate_dict = tick_dict.setdefault(tick, {})
                 cond_dict[tick] = cond
 
-                for p, q in zip(errs, locs):
+                for p, q in zip(errs, locs, strict=False):
                     if p != "I":
                         loc_set = gate_dict.setdefault(p, set())
                         loc_set.add(q)

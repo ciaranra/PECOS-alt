@@ -64,11 +64,11 @@ class PauliFaultProp(PauliPropagation):
             if v in self.bindings:
                 self.bindings[k] = self.bindings[v]
 
-    def flip_sign(self):
+    def flip_sign(self) -> None:
         self.sign += 1
         self.sign %= 2
 
-    def flip_img(self, num_is):
+    def flip_img(self, num_is) -> None:
         self.img += num_is
         self.img %= 4
 
@@ -117,13 +117,12 @@ class PauliFaultProp(PauliPropagation):
         if circuit_type in {"faults", "recovery"}:
             self.add_faults(circuit)
             return None
-        else:
-            if self.faults["X"] or self.faults["Y"] or self.faults["Z"]:
-                # Only apply gates if there are faults to act on
-                return super().run_circuit(circuit, removed_locations)
-            return None
+        if self.faults["X"] or self.faults["Y"] or self.faults["Z"]:
+            # Only apply gates if there are faults to act on
+            return super().run_circuit(circuit, removed_locations)
+        return None
 
-            # need to return output?
+        # need to return output?
 
     def add_faults(
         self,
@@ -295,7 +294,7 @@ class PauliFaultProp(PauliPropagation):
 
         return "".join(fault_str)
 
-    def fault_string(self):
+    def fault_string(self) -> str:
         return f"{self.fault_str_sign()}{self.fault_str_operator()}"
 
     def fault_wt(self):

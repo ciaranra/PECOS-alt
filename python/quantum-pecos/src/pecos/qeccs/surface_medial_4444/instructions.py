@@ -92,7 +92,7 @@ class InstrSynExtraction(LogicalInstruction):
 
         self._stabs_destabs = {}
 
-    def _create_x_check(self, ancilla, x, y):
+    def _create_x_check(self, ancilla, x, y) -> None:
         """Creates X-checks for circuit_extended."""
         # register the x syndrome ancillas
         self.ancilla_x_check.add(ancilla)
@@ -120,7 +120,7 @@ class InstrSynExtraction(LogicalInstruction):
             meas_ticks=self.meas_ticks,
         )
 
-    def _create_z_check(self, ancilla, x, y):
+    def _create_z_check(self, ancilla, x, y) -> None:
         """Creates Z-checks for circuit_extended."""
         # register the z syndrome ancillas
         self.ancilla_z_check.add(ancilla)
@@ -148,17 +148,16 @@ class InstrSynExtraction(LogicalInstruction):
         )
 
     @staticmethod
-    def _find_data(position_to_qudit, positions, ticks):
-        """
-        From the positions given for possible data qudits, add the qudits and their corresponding ticks for each qudit
-        that does exist.
+    def _find_data(position_to_qudit, positions, ticks) -> tuple[list, list]:
+        """Find data qudits from given positions.
+
+        From the positions given for possible data qudits, add the qudits and their corresponding ticks for
+        each qudit that does exist.
 
         Args:
-            position_to_qudit:
-            positions:
-            ticks:
-
-        Returns:
+            position_to_qudit: A dictionary mapping positions to qudit IDs.
+            positions: A list of positions to check for data qudits.
+            ticks: A list of corresponding time ticks for each position.
 
         """
         data_list = []
@@ -173,7 +172,7 @@ class InstrSynExtraction(LogicalInstruction):
         return data_list, tick_list
 
     @staticmethod
-    def _data_pos_z_check(x, y):
+    def _data_pos_z_check(x, y) -> list[tuple[int, int]]:
         """Determines the position of data qudits in a Z check in order of ticks.
 
         Check direction:   1  |  2
@@ -192,7 +191,7 @@ class InstrSynExtraction(LogicalInstruction):
         ]
 
     @staticmethod
-    def _data_pos_x_check(x, y):
+    def _data_pos_x_check(x, y) -> list[tuple[int, int]]:
         """Determines the position of data qudits in a Z check in order of ticks.
 
         Check direction:   1  |  3
@@ -209,7 +208,7 @@ class InstrSynExtraction(LogicalInstruction):
         ]
 
     @property
-    def stabs_destabs(self):
+    def stabs_destabs(self) -> dict:
         if self._stabs_destabs:
             return self._stabs_destabs
 
@@ -262,7 +261,7 @@ class InstrSynExtraction(LogicalInstruction):
 
         return output_dict
 
-    def generate_xdestabs(self):
+    def generate_xdestabs(self) -> dict:
         distance = self.qecc.distance
 
         # x-type destabilizers
@@ -298,17 +297,11 @@ class InstrSynExtraction(LogicalInstruction):
         # -----------------
 
         # ladder climb
-        ladder = []
-        x = 0
-        for y in range(distance - 1, 0, -1):
-            ladder.append((x, y))
+        ladder = [(0, y) for y in range(distance - 1, 0, -1)]
 
-        for i in range(len(ladder)):
-            xdestabs.append(ladder[: i + 1])
+        xdestabs.extend(ladder[: i + 1] for i in range(len(ladder)))
 
-        ladder_points = []
-        for i in range((distance + 1) % 2, distance - 1, 2):
-            ladder_points.append(i)
+        ladder_points = list(range((distance + 1) % 2, distance - 1, 2))
 
         ladder_temp = []
         for i in ladder_points:
@@ -350,7 +343,7 @@ class InstrSynExtraction(LogicalInstruction):
 
         return set_destabs
 
-    def generate_zdestabs(self):
+    def generate_zdestabs(self) -> dict:
         distance = self.qecc.distance
 
         # x-type destabilizers
@@ -386,17 +379,11 @@ class InstrSynExtraction(LogicalInstruction):
         # -----------------
 
         # ladder climb
-        ladder = []
-        y = 0
-        for x in range(distance - 1, 0, -1):
-            ladder.append((x, y))
+        ladder = [(x, 0) for x in range(distance - 1, 0, -1)]
 
-        for i in range(len(ladder)):
-            zdestabs.append(ladder[: i + 1])
+        zdestabs.extend(ladder[: i + 1] for i in range(len(ladder)))
 
-        ladder_points = []
-        for i in range(distance % 2, distance - 1, 2):
-            ladder_points.append(i)
+        ladder_points = list(range(distance % 2, distance - 1, 2))
 
         ladder_temp = []
         for i in ladder_points:
@@ -496,7 +483,7 @@ class InstrInitZero(LogicalInstruction):
         self._stabs_destabs = {}
 
     @property
-    def stabs_destabs(self):
+    def stabs_destabs(self) -> dict:
         if self._stabs_destabs:
             return self._stabs_destabs
 
@@ -575,7 +562,7 @@ class InstrInitPlus(LogicalInstruction):
         self._stabs_destabs = {}
 
     @property
-    def stabs_destabs(self):
+    def stabs_destabs(self) -> dict:
         if self._stabs_destabs:
             return self._stabs_destabs
 

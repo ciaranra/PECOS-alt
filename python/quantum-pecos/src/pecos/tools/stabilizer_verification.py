@@ -11,7 +11,9 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from collections.abc import Generator
 from itertools import combinations, product
+from typing import Any
 
 from pecos import simulators
 from pecos.circuits import QuantumCircuit
@@ -52,11 +54,12 @@ class VerifyStabilizers:
 
         self.state = None
 
-    def check(self, paulis, qubits):
-        """Args:
-        ----
-            paulis(sequence of str):
-            qubits(sequence of int):
+    def check(self, paulis, qubits) -> None:
+        """Check if the given Pauli operators stabilize the state.
+
+        Args:
+            paulis: Sequence of Pauli operators to check (e.g., ['X', 'Z', 'Y']).
+            qubits: Sequence of qubit indices corresponding to the Pauli operators.
 
         Returns: None
 
@@ -82,17 +85,13 @@ class VerifyStabilizers:
         self.checks.append((paulis, qubits, check_string))
         self.data_qubits.update(qubits)
 
-    def logicalz(self, paulis, qubits):
+    def logicalz(self, paulis, qubits) -> None:
         """Used to define logical Z.
 
         Args:
         ----
-            paulis:
-            qubits:
-
-        Returns:
-        -------
-
+            paulis: Either a single Pauli string ('X', 'Y', or 'Z') or a list of Pauli operators.
+            qubits: List of qubit indices where the logical Z operator acts.
         """
         if not qubits:
             msg = "No qubit ids given."
@@ -114,17 +113,13 @@ class VerifyStabilizers:
 
         self.logical_zs.append((paulis, qubits, logical_string))
 
-    def logicalx(self, paulis, qubits):
+    def logicalx(self, paulis, qubits) -> None:
         """Used to define logical X.
 
         Args:
         ----
-            paulis:
-            qubits:
-
-        Returns:
-        -------
-
+            paulis: Either a single Pauli string ('X', 'Y', or 'Z') or a list of Pauli operators.
+            qubits: List of qubit indices where the logical X operator acts.
         """
         if not qubits:
             msg = "No qubit ids given."
@@ -146,20 +141,26 @@ class VerifyStabilizers:
 
         self.logical_xs.append((paulis, qubits, logical_string))
 
-    def num_logical_qubits(self):
+    def num_logical_qubits(self) -> int:
         return len(self.data_qubits) - len(self.checks)
 
-    def generators(self, print_y=True, verbose=True):
+    def generators(
+        self,
+        *,
+        print_y=True,
+        verbose=True,
+    ) -> tuple[
+        list[dict[str, set[int]]],
+        list[dict[str, set[int]]],
+        list[str],
+        list[str],
+    ]:
         """Evaluates the stabilizer generators that have been supplied via the `check` method.
 
         Args:
         ----
-            print_y:
-            verbose:
-
-        Returns:
-        -------
-
+            print_y: If True, includes Y operators in the output (otherwise converts to X and Z).
+            verbose: If True, prints detailed information about the generators.
         """
         if self.circuit is None:
             msg = "Must compile circuits first!"
@@ -174,13 +175,8 @@ class VerifyStabilizers:
 
         return z, x, stab_strings, destab_strings
 
-    def _check_all_labels(self):
-        """This checks to see that all the consecutive qubit ids have been used and none are missing.
-
-        Returns:
-        -------
-
-        """
+    def _check_all_labels(self) -> None:
+        """This checks to see that all the consecutive qubit ids have been used and none are missing."""
         qubit_labels = set()
 
         checks = self.checks
@@ -194,7 +190,8 @@ class VerifyStabilizers:
         dont_have = labels_should_have - qubit_labels
 
         if dont_have:
-            raise Exception("Qubit ids missing: %s" % dont_have)
+            msg = f"Qubit ids missing: {dont_have}"
+            raise Exception(msg)
 
     def _check2rowcol(self) -> None:
         """Creates row and column matrices."""
@@ -209,7 +206,7 @@ class VerifyStabilizers:
         for stab_id, check in enumerate(checks):
             ps, qs, _ = check
 
-            for p, q in zip(ps, qs):
+            for p, q in zip(ps, qs, strict=False):
                 if p in {"X", "x"}:
                     row_x[stab_id].add(q)
                     col_x[q].add(stab_id)
@@ -229,7 +226,7 @@ class VerifyStabilizers:
         self.check_col_x = col_x
         self.check_col_z = col_z
 
-    def _check_commute(self):
+    def _check_commute(self) -> bool:
         """Checks to see that all the stabilizer generators commute.
 
         Returns:
@@ -264,13 +261,8 @@ class VerifyStabilizers:
                 raise Exception(msg)
         return True
 
-    def compile(self):
-        """Checks commutation relations and creates a circuit to measure the checks.
-
-        Returns:
-        -------
-
-        """
+    def compile(self) -> None:
+        """Checks commutation relations and creates a circuit to measure the checks."""
         if self.circuit:
             msg = "Measurement encoding-circuit has already been compiled!"
             raise Exception(msg)
@@ -296,7 +288,7 @@ class VerifyStabilizers:
             ancilla_qubits.add(ancilla_id)
             qc.append("init |+>", {ancilla_id})
 
-            for p, q in zip(ps, qs):
+            for p, q in zip(ps, qs, strict=False):
                 symbol = None
 
                 if p in {"X", "x"}:
@@ -326,7 +318,7 @@ class VerifyStabilizers:
         self._verify_checks()
         self._check_logical_commute()
 
-    def _check_logical_commute(self):
+    def _check_logical_commute(self) -> None:
         logical_z_col_x = [set() for _ in range(self.num_data_qubits)]
         logical_z_col_z = [set() for _ in range(self.num_data_qubits)]
         logical_z_row_x = [set() for _ in range(len(self.logical_zs))]
@@ -338,7 +330,7 @@ class VerifyStabilizers:
         logical_x_row_z = [set() for _ in range(len(self.logical_xs))]
 
         for i, (ps, qs, _) in enumerate(self.logical_zs):
-            for p, q in zip(ps, qs):
+            for p, q in zip(ps, qs, strict=False):
                 if p in {"X", "Y"}:
                     logical_z_col_x[q].add(i)
                     logical_z_row_x[i].add(q)
@@ -348,7 +340,7 @@ class VerifyStabilizers:
                     logical_z_row_z[i].add(q)
 
         for i, (ps, qs, _) in enumerate(self.logical_xs):
-            for p, q in zip(ps, qs):
+            for p, q in zip(ps, qs, strict=False):
                 if p in {"X", "Y"}:
                     logical_x_col_x[q].add(i)
                     logical_x_row_x[i].add(q)
@@ -412,13 +404,13 @@ class VerifyStabilizers:
         # destabilizers and then determine if the required multiplication is valid with fix stabiliziers and whatever
         # has been fixed for the logical operators...
 
-    def _verify_checks(self):
+    def _verify_checks(self) -> bool:
         # Stabilizers:
         checks = []
 
         for strings, qids, _ in self.checks:
             check_dict = {}
-            for pauli, q in zip(strings, qids):
+            for pauli, q in zip(strings, qids, strict=False):
                 if pauli == "X":
                     qset = check_dict.setdefault("X", set())
                 elif pauli == "Z":
@@ -453,7 +445,7 @@ class VerifyStabilizers:
 
         return checks != checks2
 
-    def eval(self, verbose=False):
+    def eval(self, *, verbose=False) -> dict[str, Any]:
         if self.circuit is None:
             self.compile()
 
@@ -467,7 +459,7 @@ class VerifyStabilizers:
 
         for strings, qids, _ in self.checks:
             check_dict = {}
-            for pauli, q in zip(strings, qids):
+            for pauli, q in zip(strings, qids, strict=False):
                 if pauli == "X":
                     qset = check_dict.setdefault("X", set())
                 elif pauli == "Z":
@@ -517,18 +509,18 @@ class VerifyStabilizers:
         return output_dict
 
     @property
-    def num_data_qubits(self):
+    def num_data_qubits(self) -> int:
         return len(self.data_qubits)
 
     @property
-    def num_ancilla_qubits(self):
+    def num_ancilla_qubits(self) -> int:
         return len(self.ancilla_qubits)
 
     @property
-    def num_qubits(self):
+    def num_qubits(self) -> int:
         return len(self.data_qubits) + len(self.ancilla_qubits)
 
-    def refactor(self, state):
+    def refactor(self, state) -> None:
         found_stab_ids = set()
 
         refactor_things = list(self.checks)
@@ -539,7 +531,7 @@ class VerifyStabilizers:
             xs = set()
             zs = set()
 
-            for p, q in zip(ps, qs):
+            for p, q in zip(ps, qs, strict=False):
                 if p in {"X", "x"}:
                     xs.add(q)
                 elif p in {"Z", "z"}:
@@ -578,9 +570,12 @@ class VerifyStabilizers:
             found_stab_ids.add(stab_id)
 
             if not found:
-                raise Exception("Could not find ancilla %s" % q)
+                msg = f"Could not find ancilla {q}"
+                raise Exception(msg)
 
-    def get_check_ancilla(self):
+    def get_check_ancilla(
+        self,
+    ) -> tuple[list[tuple[set[int], set[int]]], list[tuple[set[int], set[int]]]]:
         check_tuples = []
         ancilla_tuples = []
 
@@ -588,7 +583,7 @@ class VerifyStabilizers:
             xs = set()
             zs = set()
 
-            for p, q in zip(ps, qs):
+            for p, q in zip(ps, qs, strict=False):
                 if p in {"X", "x"}:
                     xs.add(q)
                 elif p in {"Z", "z"}:
@@ -599,12 +594,23 @@ class VerifyStabilizers:
 
             check_tuples.append((xs, zs))
 
-        for q in self.ancilla_qubits:
-            ancilla_tuples.append(({q}, set()))
+        ancilla_tuples.extend(({q}, set()) for q in self.ancilla_qubits)
 
         return check_tuples, ancilla_tuples
 
-    def get_info(self, state, stop_search=1000, verbose=True, print_y=False):
+    def get_info(
+        self,
+        state,
+        stop_search=1000,
+        *,
+        verbose=True,
+        print_y=False,
+    ) -> tuple[
+        list[dict[str, set[int]]],
+        list[dict[str, set[int]]],
+        list[str],
+        list[str],
+    ]:
         if self.circuit is None:
             return Exception("Must run `compile()` first!")
 
@@ -621,9 +627,9 @@ class VerifyStabilizers:
         num_checks = len(self.checks)
 
         if verbose:
-            print("Number of data qubits: %s" % self.num_data_qubits)
-            print("Number of checks: %s" % num_checks)
-            print("Number of logical qubits: %s" % num_logical)
+            print(f"Number of data qubits: {self.num_data_qubits}")
+            print(f"Number of checks: {num_checks}")
+            print(f"Number of logical qubits: {num_logical}")
 
         check_tuples, ancilla_tuples = self.get_check_ancilla()
         # determine the gen_id of the checks and logicals
@@ -640,15 +646,17 @@ class VerifyStabilizers:
         while not found_all:
             if verbose:
                 print("----")
-            for g, gtuple in enumerate(zip(state.stabs.row_x, state.stabs.row_z)):
+            for g, gtuple in enumerate(
+                zip(state.stabs.row_x, state.stabs.row_z, strict=False),
+            ):
                 if gtuple in missing_checks:
                     missing_checks.remove(gtuple)
                     try:
                         notmatched_gens.remove(g)
                     except ValueError:
+                        msg = f"list.remove(x): x not in list.\nThe stabilizer {gtuple!s} is likely redundant!"
                         raise Exception(
-                            "list.remove(x): x not in list.\nThe stabilizer %s is likely redundant!"
-                            % str(gtuple),
+                            msg,
                         ) from ValueError
 
                     check_gens.append(g)
@@ -668,8 +676,7 @@ class VerifyStabilizers:
             if search_count == stop_search:
                 msg = "Can not refactor properly!"
                 raise Exception(msg)
-            else:
-                search_count += 1
+            search_count += 1
 
         self.data_gens = set(check_gens)
         self.ancilla_gens = set(ancilla_gens)
@@ -698,9 +705,9 @@ class VerifyStabilizers:
             print("\nLogical operators:")
 
             for i, gen in enumerate(logical_gens):
-                print("\n. Logical Z #%s:" % str(i + 1))
+                print(f"\n. Logical Z #{i + 1!s}:")
                 print(stab_strs[gen][: len(stab_strs[gen]) - num_ancillas])
-                print(". Logical X #%s:" % str(i + 1))
+                print(f". Logical X #{i + 1!s}:")
                 print(destab_strs[gen][: len(destab_strs[gen]) - num_ancillas])
 
         logical_z_strings = []
@@ -739,13 +746,8 @@ class VerifyStabilizers:
 
         return logical_z_strings, logical_x_strings, stab_strs, destab_strs
 
-    def distance(self, css=False, verbose=True):
-        """Checks the distance of the code.
-
-        Returns:
-        -------
-
-        """
+    def distance(self, *, css=False, verbose=True) -> tuple[set[int], set[int]] | None:
+        """Checks the distance of the code."""
         if self.circuit is None:
             msg = "Must compile circuits first!"
             raise Exception(msg)
@@ -768,30 +770,32 @@ class VerifyStabilizers:
                 "No logical errors found... Checks might describe a stabilizer state.",
             )
             return None
-        else:
-            xs, zs = found
-            self.dist = len(xs | zs)
-            return found
+        xs, zs = found
+        self.dist = len(xs | zs)
+        return found
 
     def _dist_mode_smallest(
         self,
         state,
         qudit_set,
+        *,
         css=False,
         verbose=True,
         start_len=None,
         end_len=None,
         list_ops=False,
-    ):
+    ) -> Generator[tuple[set, set], None, None]:
         """Determine if a logical error can be found by starting with the smallest weight errors.
 
         Args:
         ----
-            state:
-            qudit_set:
-
-        Returns:
-        -------
+            state: The quantum state to check for logical errors.
+            qudit_set: Set of qudit indices to consider for errors.
+            css: If True, only checks CSS (Calderbank-Shor-Steane) type errors.
+            verbose: If True, prints progress and found logical operators.
+            start_len: Starting weight of errors to check (default: 1).
+            end_len: Maximum weight of errors to check (default: number of qudits).
+            list_ops: If True, returns a list of all logical operators found.
 
         """
         ops = []
@@ -804,7 +808,7 @@ class VerifyStabilizers:
 
         for lenq in range(start_len, end_len + 1):
             if verbose:
-                print("Checking Paulis of weight %s..." % lenq)
+                print(f"Checking Paulis of weight {lenq}...")
 
             for xs, zs in self.gen_errors(qudit_set, lenq, lenq, css=css):
                 if self._is_logical_error(state, xs, zs):
@@ -818,16 +822,22 @@ class VerifyStabilizers:
 
         return ops
 
-    def gen_errors(self, qubits, min_errors=1, max_errors=False, css=False):
-        """Args:
-        ----
-            qubits (set of int):
-            min_errors (int):
-            max_errors (bool, int):
-            css (bool):
+    def gen_errors(
+        self,
+        qubits,
+        min_errors=1,
+        *,
+        max_errors=False,
+        css=False,
+    ) -> Generator[tuple[set[int], set[int]], None, None]:
+        """Generate error patterns for testing stabilizer codes.
 
-        Returns:
-        -------
+        Args:
+        ----
+            qubits (set of int): Set of qubit indices to generate errors on.
+            min_errors (int): Minimum number of errors to generate.
+            max_errors (bool, int): Maximum number of errors to generate. False for no limit.
+            css (bool): If True, generate only CSS-compatible errors (X and Z only).
 
         """
         paulis = ("X", "Z", "Y")
@@ -847,7 +857,7 @@ class VerifyStabilizers:
                 for ps in xzs:
                     x_set = set()
                     z_set = set()
-                    for p, q in zip(ps, b):
+                    for p, q in zip(ps, b, strict=False):
                         if p == "X":
                             x_set.add(q)
                         else:
@@ -862,7 +872,7 @@ class VerifyStabilizers:
                     for b in combinations(qubits, i):
                         x_set = set()
                         z_set = set()
-                        for p, q in zip(a, b):
+                        for p, q in zip(a, b, strict=False):
                             if p == "X":
                                 x_set.add(q)
                             elif p == "Z":
@@ -872,7 +882,7 @@ class VerifyStabilizers:
                                 z_set.add(q)
                         yield x_set, z_set
 
-    def _is_logical_error(self, state, xs, zs):
+    def _is_logical_error(self, state, xs, zs) -> bool:
         # A trivial error anticommutes with the checks. (Might or might not anticommute with the logical stabilizers)
         # A logical error commutes with the checks and is not a product of checks.
 
@@ -891,34 +901,47 @@ class VerifyStabilizers:
 
         if anticoms:
             return False
-        elif anticom_logical_zs:
+        if anticom_logical_zs:
             # So the error commutes with all the stabilizers
             # Did it anticommute with any logical Z operations? If so... It is a product of logical Xs!
             # (and possibly other things)
             return True
-        else:
-            # Let's see if the error anticommuted with any logical X operators:
+        # Let's see if the error anticommuted with any logical X operators:
 
-            x_anticoms_destabs = set()
-            z_anticoms_destabs = set()
+        x_anticoms_destabs = set()
+        z_anticoms_destabs = set()
 
-            for q in xs:
-                x_anticoms_destabs ^= state.destabs.col_z[q]
+        for q in xs:
+            x_anticoms_destabs ^= state.destabs.col_z[q]
 
-            for q in zs:
-                z_anticoms_destabs ^= state.destabs.col_x[q]
+        for q in zs:
+            z_anticoms_destabs ^= state.destabs.col_x[q]
 
-            anticoms_destabs = x_anticoms_destabs ^ z_anticoms_destabs
-            anticom_logical_xs = self.logical_gens & anticoms_destabs
+        anticoms_destabs = x_anticoms_destabs ^ z_anticoms_destabs
+        anticom_logical_xs = self.logical_gens & anticoms_destabs
 
-            # The error is a product of logical Zs
-            return bool(anticom_logical_xs)
+        # The error is a product of logical Zs
+        return bool(anticom_logical_xs)
 
-    def shortest_logicals(self, start_weight=None, delta=0, verbose=True, css=False):
-        """Find the shortest logical op
+    def shortest_logicals(
+        self,
+        start_weight=None,
+        delta=0,
+        *,
+        verbose=True,
+        css=False,
+    ) -> tuple[
+        list[dict[str, Any]],
+        dict[str, dict[str, set[int]]],
+        dict[str, dict[str, set[int]]],
+    ]:
+        """Find the shortest logical operators.
+
         Args:
             start_weight (int): Weight of operators to begin searching.
             delta (int): Method will look for all logical ops with weight =< minimum weight + `delta`.
+            verbose (bool): If True, print progress information during the search.
+            css (bool): If True, restrict search to CSS-compatible operators (X and Z only).
 
         Returns:
         -------
@@ -1001,7 +1024,7 @@ class VerifyStabilizers:
         return oplist, self.logical_xs_reference, self.logical_zs_reference
 
     @staticmethod
-    def op_anticommute(op1, op2):
+    def op_anticommute(op1, op2) -> bool:
         return bool(
             (
                 len(op1.get("X", set()) & op2.get("Z", set()))

@@ -13,6 +13,8 @@
 
 """Simple error generator meant to demonstrate a basic error generator that produces errors."""
 
+from __future__ import annotations
+
 import numpy as np
 
 from pecos.error_models.class_errors_circuit import ErrorCircuits
@@ -25,23 +27,18 @@ class ParentErrorModel:
     """
 
     def __init__(self) -> None:
-        """ """
         self.error_circuits = None
 
         self.error_params = None
         self.circuit = None
         self.generator_class = Generator
 
-    def start(self, circuit, error_params):
+    def start(self, circuit, error_params) -> ErrorCircuits:
         """Start up at the beginning of a circuit simulation.
 
         Args:
-        ----
-            circuit:
-            error_params:
-
-        Returns:
-        -------
+            circuit: Quantum circuit to simulate.
+            error_params: Dictionary of error parameters.
 
         """
         self.error_circuits = ErrorCircuits()
@@ -50,19 +47,21 @@ class ParentErrorModel:
 
         return self.error_circuits
 
-    def generate_tick_errors(self, tick_circuit, time, **params):
-        """Returns before errors, after errors, and replaced locations for the given key (args).
-
-        Returns:
-        -------
-
-        """
+    def generate_tick_errors(
+        self,
+        tick_circuit,  # noqa: ARG002
+        time,  # noqa: ARG002
+        **params,  # noqa: ARG002
+    ) -> dict:
+        """Returns before errors, after errors, and replaced locations for the given key (args)."""
         return {}
 
 
 class Generator:
-    """Class that keeps track of how errors are generated for each gate and groups of gates. It also has a method for
-    generating errors.
+    """Class that tracks and generates errors for gates and gate groups.
+
+    Keeps track of how errors are generated for each gate and groups of gates.
+    It also has a method for generating errors.
     """
 
     def __init__(self) -> None:
@@ -70,43 +69,46 @@ class Generator:
         self.error_func_dict = {}
         self.default_error_tuple = (False, "p")
 
-    def set_gate_group(self, group_symbol, gate_set):
-        """Args:
-        ----
+    def set_gate_group(self, group_symbol, gate_set) -> None:
+        """Set a group of gates associated with a symbol.
+
+        Args:
             group_symbol: Symbol representing the group.
-            gate_set: Iterable of gate symbols.
+            gate_set: Iterable of gate symbols to include in the group.
 
         Returns: None
 
         """
         self.gate_groups[group_symbol] = set(gate_set)
 
-    def in_group(self, group_symbol, gate_symbol):
+    def in_group(self, group_symbol, gate_symbol) -> bool:
         """Returns whether the `gate_symbol` is in the group represented by `group_symbol`.
 
         Args:
-        ----
-            group_symbol:
-            gate_symbol:
-
-        Returns:
-        -------
+            group_symbol: Symbol representing the group to check.
+            gate_symbol: Symbol of the gate to check membership for.
 
         """
         return gate_symbol in self.gate_groups[group_symbol]
 
-    def set_gate_error(self, gate_symbol, error_func, error_param="p", after=True):
+    def set_gate_error(
+        self,
+        gate_symbol,
+        error_func,
+        error_param="p",
+        *,
+        after=True,
+    ) -> None:
         """Sets the errors for a gate.
 
         Args:
-        ----
             gate_symbol: The gate symbol that is being evaluated for errors.
-            error_func (callable, iterable, str, bool, None): A callable to generate errors or an iterable of gate
-            symbols from which errors are uniformly drawn from. It can also be a str that represents an gate error that
-            is always returned if an error occurs.
+            error_func: A callable to generate errors or an iterable of gate symbols from which errors are uniformly
+                drawn from. It can also be a str that represents an gate error that is always returned if an error
+                occurs.
             error_param: What error parameter determines if an error occurs or not. Error functions will be given the
-            error_params are an argument so more detailed error distributions can be created.
-            after (bool):
+                error_params are an argument so more detailed error distributions can be created.
+            after: If True, apply errors after the gate; if False, apply before.
 
         Returns: None
 
@@ -144,32 +146,37 @@ class Generator:
         else:
             self.error_func_dict[gate_symbol] = (error_func, error_param)
 
-    def set_group_error(self, group_symbol, error_func, error_param="p", after=True):
+    def set_group_error(
+        self,
+        group_symbol,
+        error_func,
+        error_param="p",
+        *,
+        after=True,
+    ) -> None:
         """Sets the errors for a group of gates.
 
         Args:
-        ----
-            group_symbol:
-            error_func:
-            error_param (str):
-            after (bool)
+            group_symbol: Symbol identifying the gate group.
+            error_func: Error function to apply to the gates in the group.
+            error_param (str): Parameter name for the error function.
+            after (bool): If True, apply errors after the gate; if False, apply before.
 
         Returns: None
 
         """
         for symbol in self.gate_groups[group_symbol]:
             if symbol in self.error_func_dict:
-                print("Overriding gate error for gate: %s." % symbol)
+                print(f"Overriding gate error for gate: {symbol}.")
 
             self.set_gate_error(symbol, error_func, error_param, after)
 
-    def set_default_error(self, error_func, error_param="p"):
-        """Sets the default error if gate is not found.
+    def set_default_error(self, error_func, error_param="p") -> None:
+        """Sets the default error if a gate is not found.
 
         Args:
-        ----
-            error_func:
-            error_param:
+            error_func: Default error function to use when a gate-specific error is not defined.
+            error_param: Parameter name for the default error function.
 
         Returns: None
 
@@ -185,19 +192,19 @@ class Generator:
         before,
         replace,
         **kwargs,
-    ):
-        """Used to determine if an error occurs and if so, calls the error function to determine errors.
+    ) -> set | list | None:
+        """Used to determine if an error occurs, and if so, calls the error function to determine errors.
 
         It also updates the `error_circuit` with the errors.
 
         Args:
-        ----
-            err_gen:
-            gate_symbol:
-            locations:
-            after:
-            before:
-            replace:
+            err_gen: Error generator instance.
+            gate_symbol: Symbol of the gate to apply errors to.
+            locations: Qubit locations where the gate is applied.
+            after: Whether to apply errors after the gate.
+            before: Whether to apply errors before the gate.
+            replace: Whether to remove the gate.
+            **kwargs: Additional keyword arguments passed to the error function.
 
         Returns: None
 
@@ -210,7 +217,7 @@ class Generator:
         if error_func is True:  # Default error
             # Use the default error function.
             error_func = self.default_error_tuple[0]
-            # If no default error has been defined then no error will be applied.
+            # If no default error has been defined, then no error will be applied.
 
         if error_func is False:  # No errors
             return None
@@ -223,32 +230,31 @@ class Generator:
 
             return locations
 
-        else:
-            # Create len(locations) number of random float between 0 and 1.
-            rand_nums = np.random.random(len(locations))
-            rand_nums = rand_nums <= p  # Boolean evaluation of random number <= p
+        # Create len(locations) number of random float between 0 and 1.
+        rand_nums = np.random.random(len(locations))
+        rand_nums = rand_nums <= p  # Boolean evaluation of random number <= p
 
-            # TODO: Think about using the numpy function vectorize...
-            error_locations = set()
+        # TODO: Think about using the numpy function vectorize...
+        error_locations = set()
 
-            for i, loc in enumerate(locations):
-                if rand_nums[i]:
-                    error_locations.add(loc)
-                    error_func(
-                        after,
-                        before,
-                        replace,
-                        loc,
-                        err_gen.error_params,
-                        **kwargs,
-                    )
+        for i, loc in enumerate(locations):
+            if rand_nums[i]:
+                error_locations.add(loc)
+                error_func(
+                    after,
+                    before,
+                    replace,
+                    loc,
+                    err_gen.error_params,
+                    **kwargs,
+                )
 
-            return error_locations
+        return error_locations
 
     class ErrorStaticSymbol:
         """Class used to create a callable that just returns a symbol."""
 
-        def __init__(self, symbol, after=True) -> None:
+        def __init__(self, symbol, *, after=True) -> None:
             self.data = symbol
 
             if after:
@@ -256,16 +262,30 @@ class Generator:
             else:
                 self.error_func = self.error_func_before
 
-        def error_func_after(self, after, before, replace, location, error_params):
+        def error_func_after(
+            self,
+            after,
+            before,  # noqa: ARG002
+            replace,  # noqa: ARG002
+            location,
+            error_params,  # noqa: ARG002
+        ) -> None:
             after.update(self.data, {location}, emptyappend=True)
 
-        def error_func_before(self, after, before, replace, location, error_params):
+        def error_func_before(
+            self,
+            after,  # noqa: ARG002
+            before,
+            replace,  # noqa: ARG002
+            location,
+            error_params,  # noqa: ARG002
+        ) -> None:
             before.update(self.data, {location}, emptyappend=True)
 
     class ErrorSet:
         """Class used to create a callable that returns an element from the error_set with uniform distribution."""
 
-        def __init__(self, error_set, after=True) -> None:
+        def __init__(self, error_set, *, after=True) -> None:
             self.data = np.array(list(error_set))
 
             if after:
@@ -273,16 +293,30 @@ class Generator:
             else:
                 self.error_func = self.error_func_before
 
-        def error_func_after(self, after, before, replace, location, error_params):
+        def error_func_after(
+            self,
+            after,
+            before,  # noqa: ARG002
+            replace,  # noqa: ARG002
+            location,
+            error_params,  # noqa: ARG002
+        ) -> None:
             after.update(np.random.choice(self.data), {location}, emptyappend=True)
 
-        def error_func_before(self, after, before, replace, location, error_params):
+        def error_func_before(
+            self,
+            after,  # noqa: ARG002
+            before,
+            replace,  # noqa: ARG002
+            location,
+            error_params,  # noqa: ARG002
+        ) -> None:
             before.update(np.random.choice(self.data), {location}, emptyappend=True)
 
     class ErrorSetMultiQuditGate:
         """Class used to create a callable that returns an element from the error_set with uniform distribution."""
 
-        def __init__(self, error_set, after=True) -> None:
+        def __init__(self, error_set, *, after=True) -> None:
             try:
                 self.data = np.array(list(error_set))
             except ValueError:
@@ -294,16 +328,20 @@ class Generator:
             else:
                 self.error_func = self.error_func_before
 
-        def error_func_after(self, after, before, replace, location, error_params):
+        def error_func_after(
+            self,
+            after,
+            before,  # noqa: ARG002
+            replace,  # noqa: ARG002
+            location,
+            error_params,  # noqa: ARG002
+        ) -> None:
             # Choose an error symbol or tuple of symbols:
             indx = np.random.choice(len(self.data))
             error_symbols = self.data[indx]
 
-            if (
-                isinstance(error_symbols, (tuple, np.ndarray))
-                and len(error_symbols) > 1
-            ):
-                for sym, loc in zip(error_symbols, location):
+            if isinstance(error_symbols, tuple | np.ndarray) and len(error_symbols) > 1:
+                for sym, loc in zip(error_symbols, location, strict=False):
                     if sym != "I":
                         after.update(sym, {loc}, emptyappend=True)
 
@@ -319,12 +357,19 @@ class Generator:
                 msg = "Only tuples and strings are currently accepted"
                 raise Exception(msg)
 
-        def error_func_before(self, after, before, replace, location, error_params):
+        def error_func_before(
+            self,
+            after,  # noqa: ARG002
+            before,
+            replace,  # noqa: ARG002
+            location,
+            error_params,  # noqa: ARG002
+        ) -> None:
             indx = np.random.choice(len(self.data))
             error_symbols = self.data[indx]
 
             if isinstance(error_symbols, np.ndarray) and len(error_symbols) > 1:
-                for sym, loc in zip(error_symbols, location):
+                for sym, loc in zip(error_symbols, location, strict=False):
                     if sym != "I":
                         before.update(sym, {loc}, emptyappend=True)
             elif isinstance(error_symbols, str):
@@ -345,5 +390,5 @@ class Generator:
         Creates a uniform distribution... not a tensor product.
         """
 
-        def __init__(self, error_set, after=True) -> None:
-            super().__init__(error_set, after)
+        def __init__(self, error_set, *, after=True) -> None:
+            super().__init__(error_set, after=after)

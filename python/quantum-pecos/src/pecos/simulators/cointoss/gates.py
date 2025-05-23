@@ -15,27 +15,19 @@ import numpy as np
 
 
 def ignore_gate(state, qubits: int, **params: Any) -> None:
-    """
-    Ignore the gate.
+    """Ignore the gate.
 
     Args:
         state: An instance of ``CoinToss``.
         qubits: The qubits the gate was applied to.
-
-    Returns:
-
     """
 
 
-def measure(state, qubits: int, **params: Any):
-    """
-    Return |1> with probability ``state.prob`` or |0> otherwise.
+def measure(state, qubits: int, **params: Any) -> int:
+    """Return |1> with probability ``state.prob`` or |0> otherwise.
 
     Args:
         state: An instance of ``CoinToss``.
         qubit: The qubit the measurement is applied to.
-
-    Returns:
-
     """
     return 1 if np.random.random() < state.prob else 0

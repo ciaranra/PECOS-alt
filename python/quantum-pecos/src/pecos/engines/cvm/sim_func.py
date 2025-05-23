@@ -9,39 +9,43 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
 
-def sim_print(runner, *args):
+from typing import Any
+
+
+def sim_print(_runner, *args) -> None:
     syms = [s for s, _ in args]
     syms = ", ".join(syms)
     print(f"sim_print({syms}):")
     for sym, b in args:
-        print(f"    {sym}: {str(b)} ({int(b)})")
+        print(f"    {sym}: {b!s} ({int(b)})")
     print()
 
 
-def sim_test(runner, *args):
+def sim_test(_runner, *_args) -> None:
     print("SIM TEST!")
 
 
-def sim_get_amp(runner, key_state):
+def sim_get_amp(runner, key_state) -> dict[str, Any]:
     st = str(key_state[0][1])
     return runner.state.get_amps(st)
 
 
-def sim_get_amps(runner, *args):
+def sim_get_amps(runner, *_args) -> dict[str, Any]:
     return runner.state.get_amps()
 
 
-def sim_noise(runner, *args):
+def sim_noise(runner, *_args) -> int:
     return int(runner.generate_errors)
 
 
-def sim_noise_off(runner, *args):
+def sim_noise_off(runner, *_args) -> int:
     runner.generate_errors = False
     return sim_noise(runner)
 
 
-def sim_noise_on(runner, *args):
+def sim_noise_on(runner, *_args) -> int:
     runner.generate_errors = True
     return sim_noise(runner)
 
@@ -57,5 +61,5 @@ sim_funcs = {
 }
 
 
-def sim_exec(func, runner, *args):
+def sim_exec(func, runner, *args) -> None | int | dict[str, Any]:
     return sim_funcs[func](runner, *args)

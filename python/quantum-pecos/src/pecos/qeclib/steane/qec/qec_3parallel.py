@@ -39,7 +39,7 @@ class ParallelFlagQECActiveCorrection(Block):
         pf_x: Bit,
         pf_z: Bit,
         scratch: CReg,
-    ):
+    ) -> None:
         super().__init__(
             # flagging XZZ checks
             ThreeParallelFlaggingXZZ(

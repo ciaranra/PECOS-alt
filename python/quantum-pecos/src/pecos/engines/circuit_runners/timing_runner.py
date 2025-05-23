@@ -20,9 +20,12 @@ class TimingRunner(Standard):
     """This class represents a standard model for running quantum circuits and adding in errors."""
 
     def __init__(self, seed=None, timer=None) -> None:
-        """Args:
+        """Initialize timing runner with optional seed and timer.
+
+        Args:
         ----
-            seed:
+            seed: Random seed for reproducibility. Can be bool True for random seed, int for specific seed, or None.
+            timer: Timer function to use for performance measurements. Defaults to perf_counter if None.
         """
         super().__init__(seed)
 
@@ -34,27 +37,19 @@ class TimingRunner(Standard):
         else:
             self.timer = timer
 
-    def reset_time(self):
-        """Used to clear the time data in `total_time`.
-
-        Returns:
-        -------
-
-        """
+    def reset_time(self) -> None:
+        """Used to clear the time data in `total_time`."""
         self.total_time = 0.0
         self.num_gates = 0
 
-    def run_gates(self, state, gates, removed_locations=None):
+    def run_gates(self, state, gates, removed_locations=None) -> dict:
         """Directly apply a collection of quantum gates to a state.
 
         Args:
         ----
-            state:
-            gates:
-            removed_locations:
-
-        Returns:
-        -------
+            state: The quantum state to apply gates to.
+            gates: Collection of gates to apply.
+            removed_locations: Set of qubit locations to skip when applying gates.
 
         """
         timer = self.timer

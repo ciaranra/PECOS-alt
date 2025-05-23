@@ -26,12 +26,7 @@ def II(state, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def G2(state, qubits: tuple[int, int], **params: Any) -> None:
-    """Applies a CZ.H(1).H(2).CZ.
-
-    Returns:
-    -------
-
-    """
+    """Applies a CZ.H(1).H(2).CZ."""
     CZ(state, qubits)
     H(state, qubits[0])
     H(state, qubits[1])

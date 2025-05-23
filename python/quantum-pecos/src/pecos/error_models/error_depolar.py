@@ -9,6 +9,8 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
 import numpy as np
 
 from pecos.circuits import QuantumCircuit
@@ -37,8 +39,7 @@ class DepolarizingErrorModel(ParentErrorModel):
         self.error_params = None
         self.circuit = None
 
-    def scaling(self):
-
+    def scaling(self) -> None:
         if "p2_mem" not in self.error_params:
             self.error_params["p2_mem"] = None
 
@@ -56,7 +57,13 @@ class DepolarizingErrorModel(ParentErrorModel):
         self.error_params["p_meas"] *= scale
         self.error_params["p_init"] *= scale
 
-    def start(self, circuit, error_params, reset_leakage=True):
+    def start(
+        self,
+        circuit,
+        error_params,
+        *,
+        reset_leakage=True,  # noqa: ARG002
+    ) -> ErrorCircuits:
         self.qubit_set = set(range(circuit.metadata["num_qubits"]))
 
         self.error_circuits = ErrorCircuits()
@@ -81,7 +88,7 @@ class DepolarizingErrorModel(ParentErrorModel):
 
         return self.error_circuits
 
-    def reset(self):
+    def reset(self) -> DepolarizingErrorModel:
         return DepolarizingErrorModel()
 
     def generate_tick_errors(
@@ -89,9 +96,10 @@ class DepolarizingErrorModel(ParentErrorModel):
         tick_circuit,
         time,
         output=None,
-        reset_leakage=False,
-        **params,
-    ):
+        *,
+        reset_leakage=False,  # noqa: ARG002
+        **params,  # noqa: ARG002
+    ) -> ErrorCircuits:
         """The method that gets called each circuit tick to generate circuit noise for that tick."""
         # Get the tick
         tick_index = time[-1] if isinstance(time, tuple) else time
@@ -151,7 +159,8 @@ class DepolarizingErrorModel(ParentErrorModel):
                 pass
 
             else:
-                raise Exception("This error model doesn't handle gate: %s!" % symbol)
+                msg = f"This error model doesn't handle gate: {symbol}!"
+                raise Exception(msg)
 
         self.error_circuits.add_circuits(time, before, after, remove_locations)
 

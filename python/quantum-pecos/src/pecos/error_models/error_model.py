@@ -11,36 +11,43 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import TYPE_CHECKING
 
 from pecos.error_models.error_model_abc import ErrorModel
 from pecos.reps.pypmir.op_types import EMOp, MOp, QOp
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class NoErrorModel(ErrorModel):
     """Represents having no error model."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(error_params={})
 
     def reset(self) -> None:
         """Reset state to initialization state."""
 
-    def init(self, num_qubits, machine=None):
+    def init(self, num_qubits, machine=None) -> None:
         super().init(num_qubits=num_qubits, machine=machine)
         if self.error_params:
             msg = "No error model is being utilized but error parameters are being provided!"
             raise Exception(msg)
 
-    def shot_reinit(self):
+    def shot_reinit(self) -> None:
         pass
 
-    def process(self, ops: list, call_back: Callable | None = None) -> list | None:
+    def process(
+        self,
+        ops: list,
+        call_back: Callable | None = None,  # noqa: ARG002
+    ) -> list | None:
         noisy_ops = []
         for op in ops:
             if isinstance(op, QOp):
                 noisy_ops.append(op)
-            elif isinstance(op, (MOp, EMOp)):
+            elif isinstance(op, MOp | EMOp):
                 pass
             else:
                 msg = f"Operation type '{type(op)}' is not supported!"

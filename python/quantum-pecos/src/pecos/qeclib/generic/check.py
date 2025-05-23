@@ -9,8 +9,16 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from pecos.qeclib.qubit import CX, CY, CZ, H, Measure, Prep
-from pecos.slr import Barrier, Bit, Block, Comment, Qubit
+from pecos.slr import Barrier, Block, Comment
+
+if TYPE_CHECKING:
+    from pecos.qeclib.qubit.qgate_base import QGate
+    from pecos.slr import Bit, Qubit
 
 
 class Check(Block):
@@ -20,7 +28,7 @@ class Check(Block):
         paulis: str,
         a: Qubit,
         out: Bit,
-    ):
+    ) -> None:
         super().__init__()
 
         n: int = len(d)
@@ -61,13 +69,12 @@ class Check(Block):
         )
 
     @staticmethod
-    def cp(p, a, d):
+    def cp(p: str, a: Qubit, d: Qubit) -> QGate:
         if p == "X":
             return CX(a, d)
-        elif p == "Y":
+        if p == "Y":
             return CY(a, d)
-        elif p == "Z":
+        if p == "Z":
             return CZ(a, d)
-        else:
-            msg = f"Symbol '{p}' not supported!"
-            raise Exception(msg)
+        msg = f"Symbol '{p}' not supported!"
+        raise Exception(msg)

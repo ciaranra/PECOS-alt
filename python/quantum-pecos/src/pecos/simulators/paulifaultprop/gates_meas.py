@@ -22,15 +22,10 @@ def meas_x(state, qubit: int, **params: Any) -> int:
         state:
         qubit:
         **params:
-
-    Returns:
-    -------
-
     """
     if qubit in state.faults["Z"] or qubit in state.faults["Y"]:
         return 1
-    else:
-        return 0
+    return 0
 
 
 def meas_z(state, qubit: int, **params: Any) -> int:
@@ -41,18 +36,13 @@ def meas_z(state, qubit: int, **params: Any) -> int:
         state:
         qubit:
         **params:
-
-    Returns:
-    -------
-
     """
     if qubit in state.faults["X"] or qubit in state.faults["Y"]:
         return 1
-    else:
-        return 0
+    return 0
 
 
-def meas_y(state, qubit: int, **params: Any):
+def meas_y(state, qubit: int, **params: Any) -> int:
     """Measurement in the Y basis.
 
     Args:
@@ -60,15 +50,10 @@ def meas_y(state, qubit: int, **params: Any):
         state:
         qubit:
         **params:
-
-    Returns:
-    -------
-
     """
     if qubit in state.faults["X"] or qubit in state.faults["Z"]:
         return 1
-    else:
-        return 0
+    return 0
 
 
 def meas_pauli(state, qubits: int | tuple[int, ...], **params: Any) -> int:
@@ -80,17 +65,16 @@ def meas_pauli(state, qubits: int | tuple[int, ...], **params: Any) -> int:
 
     if pauli in ["X", "Y", "Z"]:
         pauli = pauli * len(qubits)
-    else:
-        if len(pauli) == len(qubits) + 1:
-            # last qubit is considered the syndrome ancilla
-            qubits = qubits[:-1]
-        elif len(pauli) != len(qubits):
-            msg = "The Pauli operator needs to be the size of the qubits it is acting on or a single type."
-            raise Exception(msg)
+    elif len(pauli) == len(qubits) + 1:
+        # last qubit is considered the syndrome ancilla
+        qubits = qubits[:-1]
+    elif len(pauli) != len(qubits):
+        msg = "The Pauli operator needs to be the size of the qubits it is acting on or a single type."
+        raise Exception(msg)
 
     meas = 0
 
-    for q, p in zip(qubits, pauli):
+    for q, p in zip(qubits, pauli, strict=False):
         if p == "X":
             meas += meas_x(state, q)
         elif p == "Z":
@@ -114,9 +98,5 @@ def force_output(state, qubit: int, forced_output: int = -1) -> int:
         state:
         qubit:
         forced_output:
-
-    Returns:
-    -------
-
     """
     return forced_output

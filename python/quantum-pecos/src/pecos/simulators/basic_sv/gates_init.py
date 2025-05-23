@@ -16,7 +16,7 @@ from pecos.simulators.basic_sv.gates_one_qubit import X
 
 
 def init_zero(state, qubit: int, **params: Any) -> None:
-    """Initialise or reset the qubit to state |0>
+    """Initialise or reset the qubit to state |0>.
 
     Args:
         state: An instance of BasicSV
@@ -32,7 +32,7 @@ def init_one(state, qubit: int, **params: Any) -> None:
     """Initialise or reset the qubit to state |1>
     Args:
         state: An instance of BasicSV
-        qubit: The index of the qubit to be initialised
+        qubit: The index of the qubit to be initialised.
     """
     result = meas_z(state, qubit)
 

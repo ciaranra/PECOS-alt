@@ -5,7 +5,7 @@ def bin2int(result: list[str]) -> int:
     return int(result[0], base=2)
 
 
-def test_setting_cvar():
+def test_setting_cvar() -> None:
     phir = {
         "format": "PHIR/JSON",
         "version": "0.1.0",

@@ -10,7 +10,7 @@
 # specific language governing permissions and limitations under the License.
 
 
-def anticommute(qc1, qc2):
+def anticommute(qc1, qc2) -> int:
     x1 = set()
     y1 = set()
     z1 = set()

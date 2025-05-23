@@ -11,7 +11,7 @@
 # specific language governing permissions and limitations under the License.
 
 
-def circ2set(circuit):
+def circ2set(circuit) -> tuple[set, set]:
     qudit_xs = set()
     qudit_zs = set()
     for gate, qubits in circuit:
@@ -20,12 +20,13 @@ def circ2set(circuit):
         elif gate == "Z":
             qudit_zs = qubits
         else:
-            raise Exception('Operator "%s" not handled for logical ops!' % gate)
+            msg = f'Operator "{gate}" not handled for logical ops!'
+            raise Exception(msg)
 
     return qudit_xs, qudit_zs
 
 
-def op_commutes(stab_xs, stab_zs, commute_with):
+def op_commutes(stab_xs, stab_zs, commute_with) -> bool:
     # Does the stabilizer anti-commute with any of the stabilizers in the stabilizer state?
 
     anticom_stabs = set()
@@ -39,20 +40,16 @@ def op_commutes(stab_xs, stab_zs, commute_with):
     return not len(anticom_stabs)
 
 
-def find_stab(state, stab_xs, stab_zs):
+def find_stab(state, stab_xs, stab_zs) -> bool:
     """Find the sign of the logical operator.
 
     Args:
     ----
-        state:
-        stab_xs:
-        stab_zs:
-
-    Returns:
-    -------
+        state: The stabilizer state containing stabilizers and destabilizers.
+        stab_xs: Set of qubit indices where the stabilizer has X operators.
+        stab_zs: Set of qubit indices where the stabilizer has Z operators.
 
     """
-
     if len(stab_xs) == 0 and len(stab_zs) == 0:
         return True
 
@@ -83,7 +80,7 @@ def find_stab(state, stab_xs, stab_zs):
     return not (len(built_up_xs) != 0 or len(built_up_zs) != 0)
 
 
-def remove_stab(state, stab_xs, stab_zs, destab_xs, destab_zs):
+def remove_stab(state, stab_xs, stab_zs, destab_xs, destab_zs) -> None:
     # make sure stabs and destabs anti-commute
     # ----------------------------------------
     if (len(stab_xs & destab_zs) + len(stab_zs & destab_xs)) % 2 == 0:
@@ -271,7 +268,7 @@ def remove_stab(state, stab_xs, stab_zs, destab_xs, destab_zs):
         stabs.signs_i ^= delog_anticom
 
 
-def is_not_stabilizer(state, qubits_x, qubits_z):
+def is_not_stabilizer(state, qubits_x, qubits_z) -> int:
     stabs = state.stabs
     destabs = state.destabs
 
@@ -324,5 +321,5 @@ def is_not_stabilizer(state, qubits_x, qubits_z):
         # (But did commute)
         return 2  # Not in the stabilizers group
 
-    else:  # Was able to get supplied Paulis from the stabilizers
-        return 0  # In the stabilizer group
+    # Was able to get supplied Paulis from the stabilizers
+    return 0  # In the stabilizer group

@@ -16,7 +16,7 @@ from pecos.circuits import QuantumCircuit
 from pecos.simulators import CoinToss
 
 
-def test_fixed_prob():
+def test_fixed_prob() -> None:
     qc = QuantumCircuit()
     qc.append({"Init": {0, 1, 2, 3, 4}})
     qc.append({"Measure": {0, 1, 2, 3, 4}})
@@ -32,7 +32,7 @@ def test_fixed_prob():
     assert len(results) == len(qc.qudits)  # All measurements returned 1
 
 
-def test_all_gate_circ():
+def test_all_gate_circ() -> None:
     qc = QuantumCircuit()
 
     # Apply each gate once

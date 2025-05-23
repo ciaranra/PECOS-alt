@@ -66,10 +66,7 @@ def meas_z(state, qubit: int, **params: Any) -> int:
     prob_0 = np.sum(projected_vector * np.conjugate(projected_vector))
 
     # Simulate the measurement
-    if np.random.random() < prob_0:
-        result = 0
-    else:
-        result = 1
+    result = 0 if np.random.random() < prob_0 else 1
 
     # Collapse the state
     if result == 0:

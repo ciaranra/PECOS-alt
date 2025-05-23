@@ -15,7 +15,7 @@ from __future__ import annotations
 from pecos.circuits import QuantumCircuit
 
 
-def test_quantum_circuits():
+def test_quantum_circuits() -> None:
     # Check the method append with check_overlap == True
     # ---------------------------------------------------
     qc = QuantumCircuit()

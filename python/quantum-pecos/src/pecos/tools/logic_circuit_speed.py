@@ -11,6 +11,8 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from typing import Any
+
 import numpy as np
 
 from pecos.circuits import QuantumCircuit
@@ -19,13 +21,13 @@ from pecos.simulators import SparseSimPy
 
 
 def random_circuit_speed(
-    state_sim,
+    state_sim,  # noqa: ARG001
     num_qubits,
     circuit_depth,
     trials=10000,
     gates=None,
     seed_start=0,
-):
+) -> tuple[list[float], list[Any]]:
     circuits = generate_circuits(num_qubits, circuit_depth, trials, gates, seed_start)
 
     times = []
@@ -47,7 +49,7 @@ def generate_circuits(
     trials=100000,
     gates=None,
     seed_start=0,
-):
+) -> list[QuantumCircuit]:
     if gates is None:
         gates = [
             "I",
@@ -125,5 +127,5 @@ def generate_circuits(
     return circuits
 
 
-def get_qubits(num_qubits, size):
+def get_qubits(num_qubits, size) -> np.ndarray:
     return np.random.choice(list(range(num_qubits)), size, replace=False)

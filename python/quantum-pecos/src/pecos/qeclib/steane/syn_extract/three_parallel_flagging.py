@@ -14,7 +14,8 @@ from pecos.slr import Barrier, Block, Comment, CReg, QReg
 
 
 class ThreeParallelFlaggingXZZ(Block):
-    """
+    """Three parallel flagging circuit for X and Z stabilizer checks.
+
     Args:
         data (QReg[7]):
         ancillas (QReg[3]):
@@ -34,7 +35,7 @@ class ThreeParallelFlaggingXZZ(Block):
         flags: CReg,
         last_raw_syn_x: CReg,
         last_raw_syn_z: CReg,
-    ):
+    ) -> None:
         super().__init__()
         d = data
         a = ancillas
@@ -125,7 +126,7 @@ class ThreeParallelFlaggingZXX(Block):
         flags: CReg,
         last_raw_syn_x: CReg,
         last_raw_syn_z: CReg,
-    ):
+    ) -> None:
         super().__init__()
         d = data
         a = ancillas

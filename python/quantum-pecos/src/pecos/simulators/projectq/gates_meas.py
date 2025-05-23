@@ -28,10 +28,6 @@ def force_output(state, qubit, forced_output=-1, **params: Any):
         state:
         qubit:
         forced_output:
-
-    Returns:
-    -------
-
     """
     return forced_output
 
@@ -44,9 +40,6 @@ def meas_z(state, qubit, forced_outcome=-1, **params: Any):
         qubit:
         forced_outcome:
         **params:
-
-    Returns:
-
     """
     q = state.qids[qubit]
 
@@ -59,11 +52,10 @@ def meas_z(state, qubit, forced_outcome=-1, **params: Any):
 
         return forced_outcome
 
-    else:
-        Measure | q
-        state.eng.flush()
+    Measure | q
+    state.eng.flush()
 
-        return int(q)
+    return int(q)
 
 
 def meas_y(state, qubit, forced_outcome=-1, **params: Any):
@@ -74,10 +66,6 @@ def meas_y(state, qubit, forced_outcome=-1, **params: Any):
         state:
         qubit:
         forced_outcome:
-
-    Returns:
-    -------
-
     """
     H5(state, qubit)
     meas_outcome = meas_z(state, qubit, forced_outcome)
@@ -94,10 +82,6 @@ def meas_x(state, qubit, forced_outcome=-1, **params: Any):
         state:
         qubit:
         forced_outcome:
-
-    Returns:
-    -------
-
     """
     H(state, qubit)
     meas_outcome = meas_z(state, qubit, forced_outcome)

@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Callable
+    from collections.abc import Callable
 
     from pecos.simulators.sim_class_types import StateVector
 
@@ -45,13 +45,13 @@ str_to_sim = {
 }
 
 
-def check_dependencies(simulator) -> Callable[[int], StateVector]:
+def check_dependencies(simulator: str) -> Callable[[int], StateVector]:
     if simulator not in str_to_sim or str_to_sim[simulator] is None:
         pytest.skip(f"Requirements to test {simulator} are not met.")
     return str_to_sim[simulator]
 
 
-def verify(simulator, qc: QuantumCircuit, final_vector: np.ndarray) -> None:
+def verify(simulator: str, qc: QuantumCircuit, final_vector: np.ndarray) -> None:
     sim = check_dependencies(simulator)(len(qc.qudits))
     sim.run_circuit(qc)
 
@@ -59,10 +59,11 @@ def verify(simulator, qc: QuantumCircuit, final_vector: np.ndarray) -> None:
     sim_vector_normalized = sim.vector / (np.linalg.norm(sim.vector) or 1)
     final_vector_normalized = final_vector / (np.linalg.norm(final_vector) or 1)
 
-    if np.abs(final_vector_normalized[0]) > 1e-10:
-        phase = sim_vector_normalized[0] / final_vector_normalized[0]
-    else:
-        phase = 1
+    phase = (
+        sim_vector_normalized[0] / final_vector_normalized[0]
+        if np.abs(final_vector_normalized[0]) > 1e-10
+        else 1
+    )
 
     final_vector_adjusted = final_vector_normalized * phase
 
@@ -75,7 +76,7 @@ def verify(simulator, qc: QuantumCircuit, final_vector: np.ndarray) -> None:
 
 
 def check_measurement(
-    simulator,
+    simulator: str,
     qc: QuantumCircuit,
     final_results: dict[int, int] | None = None,
 ) -> None:
@@ -104,7 +105,7 @@ def check_measurement(
     assert np.allclose(abs_values_vector, final_vector)
 
 
-def compare_against_basicsv(simulator, qc: QuantumCircuit):
+def compare_against_basicsv(simulator: str, qc: QuantumCircuit) -> None:
     basicsv = BasicSV(len(qc.qudits))
     basicsv.run_circuit(qc)
 
@@ -119,7 +120,7 @@ def compare_against_basicsv(simulator, qc: QuantumCircuit):
     verify(simulator, qc, basicsv.vector)
 
 
-def generate_random_state(seed=None) -> QuantumCircuit:
+def generate_random_state(seed: int | None = None) -> QuantumCircuit:
     np.random.seed(seed)
 
     qc = QuantumCircuit()
@@ -156,7 +157,7 @@ def generate_random_state(seed=None) -> QuantumCircuit:
         "MPS",
     ],
 )
-def test_init(simulator):
+def test_init(simulator: str) -> None:
     qc = QuantumCircuit()
     qc.append({"Init": {0, 1, 2, 3}})
 
@@ -177,7 +178,7 @@ def test_init(simulator):
         "MPS",
     ],
 )
-def test_H_measure(simulator):
+def test_H_measure(simulator: str) -> None:
     qc = QuantumCircuit()
     qc.append({"H": {0, 1, 2, 3, 4}})
     qc.append({"Measure": {0, 1, 2, 3, 4}})
@@ -196,7 +197,7 @@ def test_H_measure(simulator):
         "MPS",
     ],
 )
-def test_comp_basis_circ_and_measure(simulator):
+def test_comp_basis_circ_and_measure(simulator: str) -> None:
     qc = QuantumCircuit()
     qc.append({"Init": {0, 1, 2, 3}})
 
@@ -242,7 +243,7 @@ def test_comp_basis_circ_and_measure(simulator):
         "MPS",
     ],
 )
-def test_all_gate_circ(simulator):
+def test_all_gate_circ(simulator: str) -> None:
     # Generate three different arbitrary states
     qcs: list[QuantumCircuit] = []
     qcs.append(generate_random_state(seed=1234))
@@ -395,8 +396,8 @@ def test_all_gate_circ(simulator):
         "CuStateVec",
     ],
 )
-def test_hybrid_engine_no_noise(simulator):
-    """Test that HybridEngine can use these simulators"""
+def test_hybrid_engine_no_noise(simulator: str) -> None:
+    """Test that HybridEngine can use these simulators."""
     check_dependencies(simulator)
 
     n_shots = 1000
@@ -427,8 +428,8 @@ def test_hybrid_engine_no_noise(simulator):
         "CuStateVec",
     ],
 )
-def test_hybrid_engine_noisy(simulator):
-    """Test that HybridEngine with noise can use these simulators"""
+def test_hybrid_engine_noisy(simulator: str) -> None:
+    """Test that HybridEngine with noise can use these simulators."""
     check_dependencies(simulator)
 
     n_shots = 1000

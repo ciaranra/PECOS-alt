@@ -6,7 +6,7 @@ from pecos.slr.gen_codes.gen_qasm import QASMGenerator
 # TODO: Remove reference to hqslib1.inc... better yet, don't have tests on qasm
 
 
-def test_bell():
+def test_bell() -> None:
     """Test that a simple Bell prep and measure circuit can be created."""
     prog = Main(
         q := QReg("q", 2),
@@ -30,11 +30,11 @@ def test_bell():
     assert prog.gen(QASMGenerator()) == qasm
 
 
-def test_if_bell():
+def test_if_bell() -> None:
     """Test that a more complex Bell prep and measure circuit with if statemenscan be created."""
 
     class Bell(Block):
-        def __init__(self, q0: Qubit, q1: Qubit, m0: Bit, m1: Bit):
+        def __init__(self, q0: Qubit, q1: Qubit, m0: Bit, m1: Bit) -> None:
             super().__init__()
             self.extend(
                 p.Prep(q0),
@@ -70,9 +70,8 @@ def test_if_bell():
     assert prog.gen("qasm") == qasm
 
 
-def test_strange_program():
+def test_strange_program() -> None:
     """Test a weird program to verify we get what is expected for various other SLR objects."""
-
     prog = Main(
         q := QReg("q", 2),
         c := CReg("c", 4),

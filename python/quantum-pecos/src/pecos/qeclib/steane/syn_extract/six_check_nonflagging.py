@@ -13,7 +13,7 @@ from pecos.slr import Block, Comment, CReg, QReg
 
 
 class SixUnflaggedSyn(Block):
-    def __init__(self, data: QReg, ancillas: QReg, syn_x: CReg, syn_z: CReg):
+    def __init__(self, data: QReg, ancillas: QReg, syn_x: CReg, syn_z: CReg) -> None:
         super().__init__()
 
         d = data

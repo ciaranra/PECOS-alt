@@ -71,7 +71,6 @@ gate_dict = {
     "SqrtZZ": two_q.SZZ,
     "SZZdg": two_q.SZZdg,
     "SWAP": two_q.SWAP,
-    # Additional Cliffords from `circuit_converters/std2chs.py`
     "Q": one_q.SX,
     "Qd": one_q.SXdg,
     "R": one_q.SY,

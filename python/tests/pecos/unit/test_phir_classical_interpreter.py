@@ -9,7 +9,7 @@ from pecos.classical_interpreters.phir_classical_interpreter import (
 
 
 @pytest.fixture
-def interpreter():
+def interpreter() -> PHIRClassicalInterpreter:
     """Create and initialize a PHIRClassicalInterpreter with essential test data."""
     interpreter = PHIRClassicalInterpreter()
 
@@ -33,7 +33,7 @@ def interpreter():
     return interpreter
 
 
-def test_get_bit_basic_functionality(interpreter):
+def test_get_bit_basic_functionality(interpreter: PHIRClassicalInterpreter) -> None:
     """Test basic bit retrieval functionality."""
     # Test alternating 0s and 1s in the 8-bit variable
     assert interpreter.get_bit("u8_var", 0) == 0
@@ -41,7 +41,7 @@ def test_get_bit_basic_functionality(interpreter):
     assert interpreter.get_bit("u8_var", 7) == 1
 
 
-def test_get_bit_highest_bit(interpreter):
+def test_get_bit_highest_bit(interpreter: PHIRClassicalInterpreter) -> None:
     """Test accessing the highest bit of a 64-bit value, which is most likely to cause issues."""
     # This is the critical test for the potential overflow issue
     assert interpreter.get_bit("u64_var", 63) == 1
@@ -51,7 +51,7 @@ def test_get_bit_highest_bit(interpreter):
     assert interpreter.get_bit("u64_var", 62) == 0
 
 
-def test_get_bit_out_of_bounds(interpreter):
+def test_get_bit_out_of_bounds(interpreter: PHIRClassicalInterpreter) -> None:
     """Test that attempting to access bits beyond the data type width raises an error."""
     # Test with specific error message patterns matching the implementation
     with pytest.raises(

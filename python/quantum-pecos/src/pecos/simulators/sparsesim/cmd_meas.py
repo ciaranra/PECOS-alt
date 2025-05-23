@@ -139,26 +139,25 @@ def meas_z(
 
         meas_outcome = num_minuses % 2
 
-    else:  # There is at least one anti-commuting stabilizer. => indetermined sign
-        if collapse:
-            return nondeterministic_meas(
-                state,
-                qubit,
-                anticom_stabs_col,
-                anticom_destabs_col,
-                forced_outcome,
-            )
+    elif collapse:
+        return nondeterministic_meas(
+            state,
+            qubit,
+            anticom_stabs_col,
+            anticom_destabs_col,
+            forced_outcome,
+        )
 
+    elif forced_outcome is not None:
+        if forced_outcome in {0, 1}:
+            meas_outcome = forced_outcome
         else:
-            if forced_outcome is not None:
-                if forced_outcome in {0, 1}:
-                    meas_outcome = forced_outcome
-                else:
-                    raise Exception(
-                        "forced_outcome can only be 0 or 1 and not %s" % forced_outcome,
-                    )
-            else:
-                meas_outcome = np.random.randint(2)
+            msg = f"forced_outcome can only be 0 or 1 and not {forced_outcome}"
+            raise Exception(
+                msg,
+            )
+    else:
+        meas_outcome = np.random.randint(2)
 
     return meas_outcome
 

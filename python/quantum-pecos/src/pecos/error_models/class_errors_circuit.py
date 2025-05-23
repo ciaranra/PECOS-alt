@@ -24,18 +24,15 @@ class ErrorCircuits(dict):
         before_faults=None,
         after_faults=None,
         replaced_locations=None,
-    ):
+    ) -> None:
         """Add error circuits and gate locations to ignore (replaced_locations).
 
         Args:
         ----
-            time:
-            before_faults:
-            after_faults:
-            replaced_locations:
-
-        Returns:
-        -------
+            time: The time tick at which to add the error circuits.
+            before_faults: Circuit containing faults to apply before the main circuit.
+            after_faults: Circuit containing faults to apply after the main circuit.
+            replaced_locations: Set of gate locations that should be replaced/ignored.
 
         """
         error_dict = {}

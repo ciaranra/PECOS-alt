@@ -16,7 +16,7 @@ from pecos.simulators.custatevec.gates_one_qubit import X
 
 
 def init_zero(state, qubit: int, **params: Any) -> None:
-    """Initialise or reset the qubit to state |0>
+    """Initialise or reset the qubit to state |0>.
 
     Args:
         state: An instance of CuStateVec
@@ -29,7 +29,7 @@ def init_zero(state, qubit: int, **params: Any) -> None:
 
 
 def init_one(state, qubit: int, **params: Any) -> None:
-    """Initialise or reset the qubit to state |1>
+    """Initialise or reset the qubit to state |1>.
 
     Args:
         state: An instance of CuStateVec

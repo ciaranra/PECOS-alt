@@ -27,56 +27,57 @@ with contextlib.suppress(ImportError):
     from wasmer_compiler_llvm import Compiler as CompilerLLVM
 
 
-def read_wasmer(path, compiler="wasm_cl"):
-    """Helper method to create a wasmer instance."""
+class WasmerInstance:
+    """Wrapper class to create a wasmer instance and access its functions."""
 
-    class WasmerInstance:
-        """Wrapper class to create a wasmer instance and access its functions."""
-
+    def __init__(self, file: str | bytes, compiler="wasm_cl") -> None:
         if "wasmer" not in sys.modules:
             msg = 'wasmer is being called but not installed! Install "wasmer"'
             raise ImportError(msg)
+        if isinstance(file, str):
+            with Path.open(file, "rb") as f:
+                wasm_b = f.read()
+        else:
+            wasm_b = file
 
-        # '"wasmer_compiler_cranelift"!')
+        store = (
+            Store(engine.JIT(CompilerLLVM))
+            if compiler == "wasm_llvm"
+            else Store(engine.JIT(CompilerCranelift))
+        )
 
-        def __init__(self, file: str | bytes, compiler="wasm_cl") -> None:
-            if isinstance(file, str):
-                with Path.open(file, "rb") as f:
-                    wasm_b = f.read()
-            else:
-                wasm_b = file
+        module = Module(store, wasm_b)
+        instance = Instance(module)
 
-            store = (
-                Store(engine.JIT(CompilerLLVM))
-                if compiler == "wasm_llvm"
-                else Store(engine.JIT(CompilerCranelift))
-            )
+        self.wasm = instance
+        self.module = module
 
-            module = Module(store, wasm_b)
-            instance = Instance(module)
+    def get_funcs(self) -> list[str]:
+        return [
+            str(f.name)
+            for f in self.module.exports
+            if str(f.type).startswith("FunctionType")
+        ]
 
-            self.wasm = instance
-            self.module = module
+    def exec(
+        self,
+        func_name,
+        args,
+        *,
+        debug=False,
+    ) -> int:
+        if debug and func_name.startswith("sim_"):
+            method = sim_funcs[func_name]
+            return method(*args)
 
-        def get_funcs(self):
-            fs = []
-            for f in self.module.exports:
-                if str(f.type).startswith("FunctionType"):
-                    fs.append(str(f.name))
+        method = getattr(self.wasm.exports, func_name)
+        args = [int(b) for _, b in args]
+        return method(*args)
 
-            return fs
+    def teardown(self) -> None:
+        pass  # Only needed for wasmtime
 
-        def exec(self, func_name, args, debug=False):
-            if debug and func_name.startswith("sim_"):
-                method = sim_funcs[func_name]
-                return method(*args)
 
-            else:
-                method = getattr(self.wasm.exports, func_name)
-                args = [int(b) for _, b in args]
-                return method(*args)
-
-        def teardown(self):
-            pass  # Only needed for wasmtime
-
+def read_wasmer(path, compiler="wasm_cl") -> WasmerInstance:
+    """Helper method to create a wasmer instance."""
     return WasmerInstance(path, compiler)

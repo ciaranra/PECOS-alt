@@ -21,27 +21,23 @@ class StdOutput(dict):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
-    def record(self, result_dict, time):
-        """Args:
-        ----
-            result_dict:
-            time:
+    def record(self, result_dict, time) -> None:
+        """Record result dictionary at specified time.
 
-        Returns:
-        -------
+        Args:
+        ----
+            result_dict: Dictionary of results to record.
+            time: Time value to associate with the results.
 
         """
         if result_dict:
             logical_dict = self.setdefault(time, {})
             logical_dict.update(result_dict)
 
-    def simplified(self, last=False):
+    def simplified(self, *, last=False) -> dict | set:
         """Gives output in a simplified version. {logical coord=>{set of locations}, ...}.
 
         Outputs the syndromes of the final logical instruction.
-
-        Returns:
-        -------
 
         """
         simple = {}

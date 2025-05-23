@@ -19,8 +19,7 @@ from pecos.simulators.basic_sv.gates_one_qubit import H
 
 
 def _apply_two_qubit_matrix(state, qubits: tuple[int, int], matrix: np.array) -> None:
-    """
-    Apply the matrix to the state.
+    """Apply the matrix to the state.
 
     Args:
         state: An instance of BasicSV
@@ -67,8 +66,7 @@ def _apply_two_qubit_matrix(state, qubits: tuple[int, int], matrix: np.array) ->
 
 
 def CX(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply controlled X gate.
+    """Apply controlled X gate.
 
     Args:
         state: An instance of BasicSV
@@ -87,8 +85,7 @@ def CX(state, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def CY(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply controlled Y gate.
+    """Apply controlled Y gate.
 
     Args:
         state: An instance of BasicSV
@@ -107,8 +104,7 @@ def CY(state, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def CZ(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply controlled Z gate.
+    """Apply controlled Z gate.
 
     Args:
         state: An instance of BasicSV
@@ -127,8 +123,7 @@ def CZ(state, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def RXX(state, qubits: tuple[int, int], angles: tuple[float], **params: Any) -> None:
-    """
-    Apply a rotation about XX.
+    """Apply a rotation about XX.
 
     Args:
         state: An instance of BasicSV
@@ -152,8 +147,7 @@ def RXX(state, qubits: tuple[int, int], angles: tuple[float], **params: Any) -> 
 
 
 def RYY(state, qubits: tuple[int, int], angles: tuple[float], **params: Any) -> None:
-    """
-    Apply a rotation about YY.
+    """Apply a rotation about YY.
 
     Args:
         state: An instance of BasicSV
@@ -177,8 +171,7 @@ def RYY(state, qubits: tuple[int, int], angles: tuple[float], **params: Any) -> 
 
 
 def RZZ(state, qubits: tuple[int, int], angles: tuple[float], **params: Any) -> None:
-    """
-    Apply a rotation about ZZ.
+    """Apply a rotation about ZZ.
 
     Args:
         state: An instance of BasicSV
@@ -207,8 +200,7 @@ def R2XXYYZZ(
     angles: tuple[float, float, float],
     **params: Any,
 ) -> None:
-    """
-    Apply RXX*RYY*RZZ.
+    """Apply RXX*RYY*RZZ.
 
     Args:
         state: An instance of BasicSV
@@ -225,8 +217,7 @@ def R2XXYYZZ(
 
 
 def SXX(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply a square root of XX gate.
+    """Apply a square root of XX gate.
 
     Args:
         state: An instance of BasicSV
@@ -236,8 +227,7 @@ def SXX(state, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def SXXdg(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply adjoint of a square root of XX gate.
+    """Apply adjoint of a square root of XX gate.
 
     Args:
         state: An instance of BasicSV
@@ -247,8 +237,7 @@ def SXXdg(state, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def SYY(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply a square root of YY gate.
+    """Apply a square root of YY gate.
 
     Args:
         state: An instance of BasicSV
@@ -258,8 +247,7 @@ def SYY(state, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def SYYdg(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply adjoint of a square root of YY gate.
+    """Apply adjoint of a square root of YY gate.
 
     Args:
         state: An instance of BasicSV
@@ -269,8 +257,7 @@ def SYYdg(state, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def SZZ(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply a square root of ZZ gate.
+    """Apply a square root of ZZ gate.
 
     Args:
         state: An instance of BasicSV
@@ -280,8 +267,7 @@ def SZZ(state, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def SZZdg(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply adjoint of a square root of ZZ gate.
+    """Apply adjoint of a square root of ZZ gate.
 
     Args:
         state: An instance of BasicSV
@@ -291,8 +277,7 @@ def SZZdg(state, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def SWAP(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply a SWAP gate.
+    """Apply a SWAP gate.
 
     Args:
         state: An instance of BasicSV
@@ -310,7 +295,7 @@ def SWAP(state, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def G(state, qubits: tuple[int, int], **params: Any) -> None:
-    """'G': (('I', 'H'), 'CNOT', ('H', 'H'), 'CNOT', ('I', 'H'))"""
+    """'G': (('I', 'H'), 'CNOT', ('H', 'H'), 'CNOT', ('I', 'H'))."""
     H(state, qubits[1])
     CX(state, qubits)
     H(state, qubits[0])

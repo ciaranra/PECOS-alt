@@ -13,13 +13,14 @@ from pecos.error_models.noise_impl.noise_initz_bitflip import noise_initz_bitfli
 from pecos.reps.pypmir.op_types import QOp
 
 
-def noise_initz_bitflip_leakage(op: QOp, p: float, machine):
+def noise_initz_bitflip_leakage(op: QOp, p: float, machine) -> None:
     """The noise model for qubit (re)initialization, including leakage support.
 
     Args:
     ----
         op: Ideal quantum operation.
         p: Probability of bitflip.
+        machine: Machine instance containing leakage state information.
     """
     args = set(op.args)
     leaked = machine.leaked_qubits & args

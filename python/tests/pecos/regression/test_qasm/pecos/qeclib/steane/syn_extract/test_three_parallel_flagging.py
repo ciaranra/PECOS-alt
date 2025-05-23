@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 from pecos.qeclib.steane.syn_extract.three_parallel_flagging import (
     ThreeParallelFlaggingXZZ,
     ThreeParallelFlaggingZXX,
@@ -5,7 +7,7 @@ from pecos.qeclib.steane.syn_extract.three_parallel_flagging import (
 from pecos.slr import CReg, QReg
 
 
-def test_ThreeParallelFlaggingXZZ(compare_qasm):
+def test_ThreeParallelFlaggingXZZ(compare_qasm: Callable[..., None]) -> None:
     q = QReg("q_test", 7)
     a = QReg("a_test", 3)
     flag_x = CReg("flag_x_test", 3)
@@ -26,7 +28,7 @@ def test_ThreeParallelFlaggingXZZ(compare_qasm):
     compare_qasm(block)
 
 
-def test_ThreeParallelFlaggingZXX(compare_qasm):
+def test_ThreeParallelFlaggingZXX(compare_qasm: Callable[..., None]) -> None:
     q = QReg("q_test", 7)
     a = QReg("a_test", 3)
     flag_x = CReg("flag_x_test", 3)

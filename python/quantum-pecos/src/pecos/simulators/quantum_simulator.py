@@ -48,11 +48,11 @@ class QuantumSimulator:
         self.backend = backend
         self.qsim_params = params
 
-    def reset(self):
+    def reset(self) -> None:
         self.num_qubits = None
         self.state = None
 
-    def init(self, num_qubits: int):
+    def init(self, num_qubits: int) -> None:
         self.num_qubits = num_qubits
 
         if isinstance(self.backend, str):
@@ -77,7 +77,7 @@ class QuantumSimulator:
 
         self.state = self.state(num_qubits=num_qubits, **self.qsim_params)
 
-    def shot_reinit(self):
+    def shot_reinit(self) -> None:
         """Run all code needed at the beginning of each shot, e.g., resetting state."""
         self.state.reset()
 
@@ -94,7 +94,7 @@ class QuantumSimulator:
                 if op.returns:
                     temp = {}
                     bitflips = op.metadata.get("bitflips")
-                    for q, r in zip(op.args, op.returns):
+                    for q, r in zip(op.args, op.returns, strict=False):
                         out = output.get(q, 0)
                         if bitflips and q in bitflips:
                             out ^= 1

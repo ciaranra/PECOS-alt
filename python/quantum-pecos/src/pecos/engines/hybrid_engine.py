@@ -12,7 +12,7 @@
 from __future__ import annotations
 
 import random
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol, Union
 
 import numpy as np
 
@@ -33,6 +33,18 @@ if TYPE_CHECKING:
     from pecos.foreign_objects.foreign_object_abc import ForeignObject
     from pecos.machines.generic_machine import Machine
     from pecos.op_processors.generic_op_processor import OpProcessor
+    from pecos.reps.pypmir import PyPMIR
+
+
+class PHIRConvertible(Protocol):
+    """Protocol for objects that can be converted to PHIR dictionary format."""
+
+    def to_phir_dict(self) -> dict[str, Any]:
+        """Convert to PHIR dictionary format."""
+        ...
+
+
+PHIRProgram = Union[str, dict[str, Any], "PyPMIR", PHIRConvertible]
 
 
 class HybridEngine:
@@ -88,12 +100,12 @@ class HybridEngine:
         self.results = {}
         self.multisim_process_info = {}
 
-    def init(self):
+    def init(self) -> None:
         """Reset the state of `Engine` before a simulation run."""
         self.results = {}
         self.multisim_process_info = {}
 
-    def reset_all(self):
+    def reset_all(self) -> None:
         """Reset to the state of initialization."""
         self.cinterp.reset()
         self._internal_cinterp.reset()
@@ -105,7 +117,7 @@ class HybridEngine:
 
     def initialize_sim_components(
         self,
-        program: Any,
+        program: PHIRProgram,
         foreign_object: ForeignObject | None = None,
     ) -> None:
         """Get objects to initialize before potentially running many simulations."""
@@ -120,8 +132,10 @@ class HybridEngine:
         self.qsim.init(num_qubits)
 
     def shot_reinit_components(self) -> None:
-        """Tells components that a new shot is starting and to run any tasks necessary, such as resetting their
-        states.
+        """Reinitialize components for a new shot.
+
+        Tells components that a new shot is starting and to run any tasks necessary,
+        such as resetting their states.
         """
         self.cinterp.shot_reinit()
         self._internal_cinterp.shot_reinit()
@@ -160,18 +174,14 @@ class HybridEngine:
 
         Args:
         ----
-            program:
-            foreign_object:
-            shots:
-            seed:
-            initialize:
-            return_int:
-
-        Returns:
-        -------
+            program: The quantum program to execute.
+            foreign_object: Optional foreign object for external function calls.
+            shots: Number of times to run the simulation.
+            seed: Random seed for reproducibility.
+            initialize: Whether to initialize the quantum state before running.
+            return_int: Whether to return measurement results as integers.
 
         """
-
         measurements = MeasData()
 
         if initialize:
@@ -195,7 +205,7 @@ class HybridEngine:
                 transmit_meas = self._internal_cinterp.result_bits(measurements)
                 self.cinterp.receive_results([transmit_meas])
 
-            self.results_accumulator(self.cinterp.results(return_int))
+            self.results_accumulator(self.cinterp.results(return_int=return_int))
 
         return self.results
 

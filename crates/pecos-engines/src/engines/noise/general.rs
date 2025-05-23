@@ -906,14 +906,12 @@ impl GeneralNoiseModel {
                         );
                         val = 0;
                     }
-                } else {
-                    if self.rng.occurs(self.p_meas_0) {
-                        trace!(
-                            "Flipped measurement outcome 0->1 for result_id {}",
-                            result_id
-                        );
-                        val = 1;
-                    }
+                } else if self.rng.occurs(self.p_meas_0) {
+                    trace!(
+                        "Flipped measurement outcome 0->1 for result_id {}",
+                        result_id
+                    );
+                    val = 1;
                 }
             }
             results_builder.add_measurement_results(&[val as usize], &[result_id]);

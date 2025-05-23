@@ -14,7 +14,7 @@ from pecos.error_models.noise_impl.noise_sq_bitflip import noise_sq_bitflip
 from pecos.reps.pypmir.op_types import QOp
 
 
-def noise_initz_bitflip(op: QOp, p: float):
+def noise_initz_bitflip(op: QOp, p: float) -> None:
     """The noise model for qubit (re)initialization.
 
     Args:

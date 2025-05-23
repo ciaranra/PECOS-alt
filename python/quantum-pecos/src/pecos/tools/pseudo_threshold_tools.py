@@ -11,6 +11,8 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from typing import Any
+
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import brentq, curve_fit, newton
@@ -34,31 +36,30 @@ def pseudo_threshold_code_capacity(
     qecc_class=None,
     error_gen=None,
     decoder_class=None,
+    *,
     verbose=True,
     mode=1,
     deg=2,
     circuit_runner=None,
     plotting=False,
     basis=None,
-):
+) -> dict[str, Any]:
     """Function that generates p_logical values given a list of physical errors (ps) and distance (ds).
 
     Args:
     ----
-        ps:
-        distance:
-        runs:
-        qecc_class:
-        error_gen:
-        decoder_class:
-        verbose:
-        mode:
-        deg:
-        circuit_runner:
-
-    Returns:
-    -------
-
+        ps: List of physical error probabilities to test.
+        distance: The code distance to use for the simulation.
+        runs: Number of Monte Carlo runs to perform for each error probability.
+        qecc_class: The quantum error correcting code class to use (default: Surface4444).
+        error_gen: The error generator for creating noise models (default: XModel).
+        decoder_class: The decoder class to use for error correction (default: MWPM2D).
+        verbose: If True, prints detailed progress and results.
+        mode: The mode for logical rate calculation (1, 2, or 3).
+        deg: Degree of the polynomial fit for pseudo-threshold calculation.
+        circuit_runner: The circuit runner to use for simulations.
+        plotting: If True, generates plots of the results.
+        basis: The basis for logical measurements (e.g., 'X' or 'Z').
     """
     if circuit_runner is None:
         circuit_runner = circuit_runners.Standard()
@@ -79,7 +80,8 @@ def pseudo_threshold_code_capacity(
     elif mode == 3:
         determine_rate = codecapacity_logical_rate3
     else:
-        raise Exception('Mode "%s" is not handled!' % mode)
+        msg = f'Mode "{mode}" is not handled!'
+        raise Exception(msg)
 
     ps = np.array(ps)
 
@@ -101,7 +103,7 @@ def pseudo_threshold_code_capacity(
             basis=basis,
         )
         if verbose and time:
-            print("Runtime: %s s" % time)
+            print(f"Runtime: {time} s")
 
         if verbose:
             print("----")
@@ -124,7 +126,13 @@ def pseudo_threshold_code_capacity(
     return {"ps": ps, "distance": distance, "plog": plog}
 
 
-def find_polyfit(ps, plog, deg, verbose=True):
+def find_polyfit(
+    ps,
+    plog,
+    deg,
+    *,
+    verbose=True,
+) -> tuple[float, np.ndarray, np.ndarray]:
     plist = np.array(ps)
 
     popt, pcov = np.polyfit(ps, plog, deg=deg, cov=True)
@@ -139,7 +147,7 @@ def find_polyfit(ps, plog, deg, verbose=True):
     pseudo_thr = find_pseudo(plist, plog, deg)
 
     if verbose:
-        print("Pseudo-threshold: %s" % pseudo_thr)
+        print(f"Pseudo-threshold: {pseudo_thr}")
 
     return pseudo_thr, popt, pcov
 
@@ -150,9 +158,10 @@ def find_uniscalefit(
     distance,
     p0=None,
     maxfev=1000000,
+    *,
     verbose=True,
     **kwargs,
-):
+) -> tuple[float, float, float, float, np.ndarray, np.ndarray]:
     plist = np.array(ps)
     dlist = ns2nsfit(distance, len(plist))
 
@@ -178,7 +187,7 @@ def find_uniscalefit(
     return pseudo_thr, pseudo_thr_std, v0, v0_std, popt, pcov
 
 
-def ns2nsfit(ns, num):
+def ns2nsfit(ns, num) -> list[int]:
     """Returns a list of distances or ps for performing fits.
 
     If ds == 5 and num == 3:
@@ -191,32 +200,27 @@ def ns2nsfit(ns, num):
 
     Args:
     ----
-        ds:
-        num:
-
-    Returns:
-    -------
-
+        ns: Either a single integer or a list of integers (distances or probabilities).
+        num: Number of times to repeat each element in the output list.
     """
     if isinstance(ns, int):
         return [ns] * num
 
-    else:
-        new_list = []
+    new_list = []
 
-        for i in ns:
-            new_list.extend([i] * num)
-        return new_list
+    for i in ns:
+        new_list.extend([i] * num)
+    return new_list
 
 
-def find_pseudo(plist, plog, deg):
+def find_pseudo(plist, plog, deg) -> float:
     """Determines the pseudo threshold from list of ps and plogs.
 
     Args:
     ----
-        plist:
-        plog:
-        deg:
+        plist: List of physical error probabilities.
+        plog: List of logical error probabilities corresponding to plist.
+        deg: Degree of the polynomial fit to use.
 
     Returns:
     -------
@@ -226,7 +230,7 @@ def find_pseudo(plist, plog, deg):
     popt = np.polyfit(plist, plog, deg=deg)
     poly = np.poly1d(popt)
 
-    def fnc(x):
+    def fnc(x) -> float:
         return poly(x) - x
 
     try:
@@ -237,19 +241,17 @@ def find_pseudo(plist, plog, deg):
     return pseudo_thr
 
 
-def plot(plist, plog, deg=2, figsize=(10, 10), p_start=None, p_end=None):
-    """Args:
+def plot(plist, plog, deg=2, figsize=(10, 10), p_start=None, p_end=None) -> None:
+    """Plot pseudo-threshold curve with polynomial fit.
+
+    Args:
     ----
-        plist:
-        plog:
+        plist: List of physical error rates.
+        plog: List of logical error rates.
         deg(int): Degree of polynomial fit.
-        figsize(tuple of int):
-        axis_start(float): Where the x and y axes begin.
-        axis_end(float): Where the x and y axes end.
-
-    Returns:
-    -------
-
+        figsize(tuple of int): Figure size for the plot.
+        p_start(float): Starting point for the plot axes. If None, automatically determined.
+        p_end(float): Ending point for the plot axes. If None, automatically determined.
     """
     if p_start is None:
         p_start = min(plog) * 0.9
@@ -276,7 +278,7 @@ def plot(plist, plog, deg=2, figsize=(10, 10), p_start=None, p_end=None):
 
     # Do the plotting:
     fg, ax = plt.subplots(1, 1, figsize=figsize)
-    ax.set_title("Pseudothreshold from Polynomial Fit of Degree %s" % deg, size=20)
+    ax.set_title(f"Pseudothreshold from Polynomial Fit of Degree {deg}", size=20)
 
     ax.plot(x, yi, "-")
     ax.plot(plist, plog, "ro")
@@ -297,7 +299,7 @@ def plot(plist, plog, deg=2, figsize=(10, 10), p_start=None, p_end=None):
         color="green",
         linewidth=2,
         linestyle="dashed",
-        label="Pseudo-threshold (%s)" % pth,
+        label=f"Pseudo-threshold ({pth})",
     )
     plt.legend(fontsize=16)
 

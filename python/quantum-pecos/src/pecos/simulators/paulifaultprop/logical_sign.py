@@ -19,10 +19,6 @@ def find_logical_signs(state, logical_circuit: QuantumCircuit) -> int:
     ----
         state:
         logical_circuit:
-
-    Returns:
-    -------
-
     """
     if len(logical_circuit) != 1:
         msg = "Logical operators are expected to only have one tick."
@@ -40,9 +36,9 @@ def find_logical_signs(state, logical_circuit: QuantumCircuit) -> int:
             logical_xs.update(gate_locations)
             logical_zs.update(gate_locations)
         else:
+            msg = f'Can not currently handle logical operator with operator "{symbol}"!'
             raise Exception(
-                'Can not currently handle logical operator with operator "%s"!'
-                % symbol,
+                msg,
             )
 
     anticom = len(state.faults["X"] & logical_zs)

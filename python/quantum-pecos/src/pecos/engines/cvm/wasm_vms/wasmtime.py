@@ -19,29 +19,34 @@ with contextlib.suppress(ImportError):
     from pecos.foreign_objects.wasmtime import WasmtimeObj
 
 
-def read_wasmtime(path: str | bytes):
+class WASM:
+    """Helper class to provide the same interface as other Wasm objects."""
+
+    def __init__(self, _path: str | bytes) -> None:
+        self.wasmtime = WasmtimeObj(_path)
+        self.wasmtime.init()
+
+    def get_funcs(self) -> list[str]:
+        return self.wasmtime.get_funcs()
+
+    def exec(
+        self,
+        func_name,
+        args,
+        *,
+        debug=False,
+    ) -> int:
+        if debug and func_name.startswith("sim_"):
+            method = sim_funcs[func_name]
+            return method(*args)
+
+        args = [int(b) for _, b in args]
+        return self.wasmtime.exec(func_name, args)
+
+    def teardown(self) -> None:
+        self.wasmtime.teardown()
+
+
+def read_wasmtime(path: str | bytes) -> WASM:
     """Helper method to create a wasmtime instance."""
-
-    class WASM:
-        """Helper class to provide the same interface as other Wasm objects."""
-
-        def __init__(self, _path: str | bytes):
-            self.wasmtime = WasmtimeObj(_path)
-            self.wasmtime.init()
-
-        def get_funcs(self):
-            return self.wasmtime.get_funcs()
-
-        def exec(self, func_name, args, debug=False):
-            if debug and func_name.startswith("sim_"):
-                method = sim_funcs[func_name]
-                return method(*args)
-
-            else:
-                args = [int(b) for _, b in args]
-                return self.wasmtime.exec(func_name, args)
-
-        def teardown(self):
-            self.wasmtime.teardown()
-
     return WASM(path)

@@ -9,11 +9,11 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-# ruff: noqa: SLF001
-
 from __future__ import annotations
 
-from typing import Any
+# ruff: noqa: SLF001
+
+from typing import Any, NoReturn
 
 from pecos_rslib._pecos_rslib import SparseSim as RustSparseSim
 
@@ -24,7 +24,7 @@ class SparseSimRs:
         self.num_qubits = num_qubits
         self.bindings = dict(gate_dict)
 
-    def reset(self):
+    def reset(self) -> SparseSimRs:
         self._sim.reset()
         return self
 
@@ -80,20 +80,20 @@ class SparseSimRs:
     #     return self._sim.print_stabs(verbose, print_y, print_destabs)
 
     @property
-    def stabs(self):
+    def stabs(self) -> TableauWrapper:
         return TableauWrapper(self._sim, is_stab=True)
 
     @property
-    def destabs(self):
+    def destabs(self) -> TableauWrapper:
         return TableauWrapper(self._sim, is_stab=False)
 
     def print_stabs(
         self,
         *,
         verbose: bool = True,
-        print_y: bool = True,
+        print_y: bool = True,  # noqa: ARG002
         print_destabs: bool = False,
-    ):
+    ) -> str | tuple[str, str]:
         stabs = self._sim.stab_tableau()
         if print_destabs:
             destabs = self._sim.destab_tableau()
@@ -109,25 +109,27 @@ class SparseSimRs:
                 print(stabs)
             return stabs
 
-    def logical_sign(self, logical_op):
+    def logical_sign(self, logical_op) -> NoReturn:  # noqa: ARG002
         # This method needs to be implemented based on the Python version
         # It might require additional Rust functions to be exposed
         msg = "logical_sign method not implemented yet"
         raise NotImplementedError(msg)
 
-    def refactor(self, xs, zs, choose=None, prefer=None, protected=None):
+    def refactor(
+        self, xs, zs, choose=None, prefer=None, protected=None
+    ) -> NoReturn:  # noqa: ARG002
         # This method needs to be implemented based on the Python version
         # It might require additional Rust functions to be exposed
         msg = "refactor method not implemented yet"
         raise NotImplementedError(msg)
 
-    def find_stab(self, xs, zs):
+    def find_stab(self, xs, zs) -> NoReturn:  # noqa: ARG002
         # This method needs to be implemented based on the Python version
         # It might require additional Rust functions to be exposed
         msg = "find_stab method not implemented yet"
         raise NotImplementedError(msg)
 
-    def copy(self):
+    def copy(self) -> NoReturn:
         # This method needs to be implemented
         # It might require an additional Rust function to be exposed
         msg = "copy method not implemented yet"
@@ -189,7 +191,7 @@ def adjust_tableau_string(line: str, *, is_stab: bool) -> str:
 
 # Define the gate dictionary
 gate_dict = {
-    "I": lambda sim, q, **params: None,
+    "I": lambda sim, q, **params: None,  # noqa: ARG005
     "X": lambda sim, q, **params: sim._sim.run_1q_gate("X", q, params),
     "Y": lambda sim, q, **params: sim._sim.run_1q_gate("Y", q, params),
     "Z": lambda sim, q, **params: sim._sim.run_1q_gate("Z", q, params),
@@ -213,7 +215,7 @@ gate_dict = {
     "F3dg": lambda sim, q, **params: sim._sim.run_1q_gate("F3dg", q, params),
     "F4": lambda sim, q, **params: sim._sim.run_1q_gate("F4", q, params),
     "F4dg": lambda sim, q, **params: sim._sim.run_1q_gate("F4dg", q, params),
-    "II": lambda sim, qs, **params: None,
+    "II": lambda sim, qs, **params: None,  # noqa: ARG005
     "CX": lambda sim, qs, **params: sim._sim.run_2q_gate("CX", qs, params),
     "CNOT": lambda sim, qs, **params: sim._sim.run_2q_gate("CX", qs, params),
     "CY": lambda sim, qs, **params: sim._sim.run_2q_gate("CY", qs, params),

@@ -21,22 +21,15 @@ from pecos.simulators.sim_class_types import StateVector
 
 
 class CuStateVec(StateVector):
-    """
-    Simulation using cuQuantum's cuStateVec.
-    """
+    """Simulation using cuQuantum's cuStateVec."""
 
     def __init__(self, num_qubits, seed=None) -> None:
-        """
-        Initializes the state vector.
+        """Initializes the state vector.
 
         Args:
             num_qubits (int): Number of qubits being represented.
             seed (int): Seed for randomness.
-
-        Returns:
-
         """
-
         if not isinstance(num_qubits, int):
             msg = "``num_qubits`` should be of type ``int``."
             raise TypeError(msg)
@@ -91,7 +84,7 @@ class CuStateVec(StateVector):
         def malloc(size, stream):
             return cp.cuda.runtime.mallocAsync(size, stream)
 
-        def free(ptr, size, stream):
+        def free(ptr, size, stream) -> None:
             cp.cuda.runtime.freeAsync(ptr, stream)
 
         mem_handler = (malloc, free, "GPU memory handler")

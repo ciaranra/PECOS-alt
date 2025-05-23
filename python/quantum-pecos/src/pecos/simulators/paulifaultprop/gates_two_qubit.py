@@ -100,11 +100,8 @@ def CX(state, qubits: tuple[int, int]) -> None:
             state.faults["X"].add(q2)
             # YI -> YX
 
-    else:
-        # IZ -> ZZ
-        # IY -> ZY
-        if q2 in state.faults["Z"] or q2 in state.faults["Y"]:  # IY
-            state.faults["Z"].add(q1)
+    elif q2 in state.faults["Z"] or q2 in state.faults["Y"]:  # IY
+        state.faults["Z"].add(q1)
 
     if state.track_sign and (q1 in state.faults["Y"] and q2 in state.faults["Y"]):
         state.flip_sign()
@@ -260,10 +257,6 @@ def SYY(state, qubits: tuple[int, int], **params: Any) -> None:
     ----
         state:
         qubits:
-
-    Returns:
-    -------
-
     """
     qubit1, qubit2 = qubits
     SZdg(state, qubit1)  # rZd
@@ -281,10 +274,6 @@ def SYYdg(state, qubits: tuple[int, int], **params: Any) -> None:
         state:
         qubits:
         **params:
-
-    Returns:
-    -------
-
     """
     qubit1, qubit2 = qubits
     SZdg(state, qubit1)

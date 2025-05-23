@@ -22,8 +22,9 @@ from pecos.slr import Bit, Block, Comment, CReg, If, QReg, Repeat
 
 
 class PrepHStateFT(Block):
-    """
-    Prepare a |+H> state fault tolerantly by using an encoding circuit to prepare logical|+H>, measuring the logical
+    """Prepare a |+H> state fault tolerantly.
+
+    By using an encoding circuit to prepare logical|+H>, measuring the logical
     Hadamard with a flag, doing a QED round, and post-selecting based on non-trivial measurements.
 
     Arguments:
@@ -46,7 +47,7 @@ class PrepHStateFT(Block):
         last_raw_syn_z: CReg,
         *,
         condition_qed: bool = True,
-    ):
+    ) -> None:
         super().__init__()
 
         # non-fault-tolerantly encode logical |+H>
@@ -117,8 +118,9 @@ class PrepHStateFT(Block):
 
 
 class PrepHStateFTRUS(Block):
-    """
-    Prepare a |+H> state fault tolerantly by using an encoding circuit to prepare logical|+H>, measuring the logical
+    """Prepare a |+H> state fault tolerantly using repeat-until-success.
+
+    By using an encoding circuit to prepare logical|+H>, measuring the logical
     Hadamard with a flag, doing a QED round, and post-selecting based on non-trivial measurements.
 
     Arguments:
@@ -140,7 +142,7 @@ class PrepHStateFTRUS(Block):
         last_raw_syn_x: CReg,
         last_raw_syn_z: CReg,
         limit: int,
-    ):
+    ) -> None:
         super().__init__(
             PrepHStateFT(
                 d,

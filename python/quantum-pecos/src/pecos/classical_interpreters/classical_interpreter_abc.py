@@ -12,10 +12,12 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Sequence
+
+    from pecos import QuantumCircuit
 
 
 class ClassicalInterpreter(metaclass=abc.ABCMeta):
@@ -28,7 +30,11 @@ class ClassicalInterpreter(metaclass=abc.ABCMeta):
         """Reset state to initialization state."""
 
     @abc.abstractmethod
-    def init(self, program: Any, foreign_classical_obj: object | None = None) -> int:
+    def init(
+        self,
+        program: str | dict | QuantumCircuit,
+        foreign_classical_obj: object | None = None,
+    ) -> int:
         pass
 
     @abc.abstractmethod
@@ -40,7 +46,7 @@ class ClassicalInterpreter(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def receive_results(self, qsim_results):
+    def receive_results(self, qsim_results: list[dict]) -> None:
         pass
 
     @abc.abstractmethod

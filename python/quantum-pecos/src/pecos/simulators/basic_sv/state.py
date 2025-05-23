@@ -18,8 +18,7 @@ from pecos.simulators.sim_class_types import StateVector
 
 
 class BasicSV(StateVector):
-    """
-    Basic state vector simulator using NumPy.
+    """Basic state vector simulator using NumPy.
 
     Notes:
         The purpose of this simulator is to provide a minimum requirement approach
@@ -28,8 +27,7 @@ class BasicSV(StateVector):
     """
 
     def __init__(self, num_qubits, seed=None) -> None:
-        """
-        Initializes the state vector.
+        """Initializes the state vector.
 
         Args:
             num_qubits (int): Number of qubits being represented.
@@ -38,7 +36,6 @@ class BasicSV(StateVector):
         Raises:
             ValueError: If `num_qubits` is larger than 10.
         """
-
         if not isinstance(num_qubits, int):
             msg = "``num_qubits`` should be of type ``int``."
             raise TypeError(msg)
@@ -74,7 +71,6 @@ class BasicSV(StateVector):
             ValueError: If a label in `labels` would collide with another label.
             ValueError: If the length of `qubits` and `labels` do not match.
         """
-
         if any(q >= self.num_qubits or q < 0 for q in qubits):
             msg = "Qubit out of range."
             raise ValueError(msg)
@@ -93,7 +89,7 @@ class BasicSV(StateVector):
             raise ValueError(msg)
 
         # Rename the qubits with special labels
-        for q, lbl in zip(qubits, labels):
+        for q, lbl in zip(qubits, labels, strict=False):
             qubit_ids[q] = lbl
 
         # Concatenate characters into a string and return

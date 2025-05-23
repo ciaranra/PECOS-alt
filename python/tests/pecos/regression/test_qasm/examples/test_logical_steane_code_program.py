@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 from pecos.qeclib.steane.steane_class import Steane
 from pecos.slr import Barrier, CReg, If, Main
 
@@ -35,7 +37,7 @@ def telep(prep_basis: str, meas_basis: str) -> Main:
     )
 
 
-def test_telep(compare_qasm):
+def test_telep(compare_qasm: Callable[..., None]) -> None:
     for prep_basis in ["-X", "+X", "+Y", "-Y", "+Z", "-Z"]:
         for meas_basis in ["X", "Y", "Z"]:
             prog = telep(prep_basis, meas_basis)
@@ -57,9 +59,9 @@ def t_gate(prep_basis: str, meas_basis: str) -> Main:
             include: "X", "Y", and "Z".
 
     Returns:
-        A logical program written in extended OpenQASM 2.0"""
-
-    prog = Main(
+        A logical program written in extended OpenQASM 2.0
+    """
+    return Main(
         m_reject := CReg("m_reject", size=2),
         m_t := CReg("m_t", 1),
         m_out := CReg("m_out", size=2),
@@ -85,10 +87,8 @@ def t_gate(prep_basis: str, meas_basis: str) -> Main:
         sin.m(meas_basis, m_out[1]),
     )
 
-    return prog
 
-
-def test_t_gate(compare_qasm):
+def test_t_gate(compare_qasm: Callable[..., None]) -> None:
     for prep_basis in ["-X", "+X", "+Y", "-Y", "+Z", "-Z"]:
         for meas_basis in ["X", "Y", "Z"]:
             prog = t_gate(prep_basis, meas_basis)

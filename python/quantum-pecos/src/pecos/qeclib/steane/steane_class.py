@@ -38,14 +38,15 @@ class Steane(Vars):
     """A generic implementation of a Steane code and operations.
 
     This represents one particular choice of Steane protocols. For finer control construct your own class
-    or utilize the library of Steane code protocols directly."""
+    or utilize the library of Steane code protocols directly.
+    """
 
     def __init__(
         self,
         name: str,
         default_rus_limit: int = 3,
         ancillas: QReg | None = None,
-    ):
+    ) -> None:
         super().__init__()
         self.d = QReg(f"{name}_d", 7)
         self.a = ancillas or QReg(f"{name}_a", 3)
@@ -109,7 +110,12 @@ class Steane(Vars):
 
         self.default_rus_limit = default_rus_limit
 
-    def p(self, state: str, reject: Bit | None = None, rus_limit: int | None = None):
+    def p(
+        self,
+        state: str,
+        reject: Bit | None = None,
+        rus_limit: int | None = None,
+    ) -> Block:
         """Prepare a logical qubit in a logical Pauli basis state."""
         block = PrepRUS(
             q=self.d,
@@ -123,33 +129,32 @@ class Steane(Vars):
             block.extend(reject.set(self.verify_prep[0]))
         return block
 
-    def px(self, reject: Bit | None = None, rus_limit: int | None = None):
-        """Prepare logical |+X>, a.k.a. |+>"""
+    def px(self, reject: Bit | None = None, rus_limit: int | None = None) -> Block:
+        """Prepare logical |+X>, a.k.a. |+>."""
         return self.p("+X", reject=reject, rus_limit=rus_limit)
 
-    def pnx(self, reject: Bit | None = None, rus_limit: int | None = None):
-        """Prepare logical |-X>, a.k.a. |->"""
+    def pnx(self, reject: Bit | None = None, rus_limit: int | None = None) -> Block:
+        """Prepare logical |-X>, a.k.a. |->."""
         return self.p("-X", reject=reject, rus_limit=rus_limit)
 
-    def py(self, reject: Bit | None = None, rus_limit: int | None = None):
-        """Prepare logical |+Y>, a.k.a. |+i>"""
+    def py(self, reject: Bit | None = None, rus_limit: int | None = None) -> Block:
+        """Prepare logical |+Y>, a.k.a. |+i>."""
         return self.p("+Y", reject=reject, rus_limit=rus_limit)
 
-    def pny(self, reject: Bit | None = None, rus_limit: int | None = None):
-        """Prepare logical |-Y>, a.k.a. |-i>"""
+    def pny(self, reject: Bit | None = None, rus_limit: int | None = None) -> Block:
+        """Prepare logical |-Y>, a.k.a. |-i>."""
         return self.p("-Y", reject=reject, rus_limit=rus_limit)
 
-    def pz(self, reject: Bit | None = None, rus_limit: int | None = None):
-        """Prepare logical |+Z>, a.k.a. |0>"""
+    def pz(self, reject: Bit | None = None, rus_limit: int | None = None) -> Block:
+        """Prepare logical |+Z>, a.k.a. |0>."""
         return self.p("+Z", reject=reject, rus_limit=rus_limit)
 
-    def pnz(self, reject: Bit | None = None, rus_limit: int | None = None):
-        """Prepare logical |-Z>, a.k.a. |1>"""
+    def pnz(self, reject: Bit | None = None, rus_limit: int | None = None) -> Block:
+        """Prepare logical |-Z>, a.k.a. |1>."""
         return self.p("-Z", reject=reject, rus_limit=rus_limit)
 
-    def nonft_prep_t_plus_state(self):
+    def nonft_prep_t_plus_state(self) -> Block:
         """Prepare logical T|+X> in a non-fault tolerant manner."""
-
         return PrepEncodeTPlusNonFT(
             q=self.d,
         )
@@ -158,7 +163,7 @@ class Steane(Vars):
         self,
         reject: Bit | None = None,
         rus_limit: int | None = None,
-    ):
+    ) -> Block:
         """Prepare logical T|+X> in a fault tolerant manner."""
         block = Block(
             self.scratch.set(0),
@@ -179,7 +184,7 @@ class Steane(Vars):
             block.extend(reject.set(self.scratch[2]))
         return block
 
-    def nonft_prep_tdg_plus_state(self):
+    def nonft_prep_tdg_plus_state(self) -> Block:
         """Prepare logical Tdg|+X> in a non-fault tolerant manner."""
         return Block(
             self.nonft_prep_t_plus_state(),
@@ -190,50 +195,50 @@ class Steane(Vars):
         self,
         reject: Bit | None = None,
         rus_limit: int | None = None,
-    ):
+    ) -> Block:
         """Prepare logical Tdg|+X> in a fault tolerant manner."""
         return Block(
             self.prep_t_plus_state(reject=reject, rus_limit=rus_limit),
             self.szdg(),
         )
 
-    def x(self):
-        """Logical Pauli X gate"""
+    def x(self) -> Block:
+        """Logical Pauli X gate."""
         return paulis.X(self.d)
 
-    def y(self):
-        """Logical Pauli Y gate"""
+    def y(self) -> Block:
+        """Logical Pauli Y gate."""
         return paulis.Y(self.d)
 
-    def z(self):
-        """Logical Pauli Z gate"""
+    def z(self) -> Block:
+        """Logical Pauli Z gate."""
         return paulis.Z(self.d)
 
-    def h(self):
-        """Logical Hadamard gate"""
+    def h(self) -> Block:
+        """Logical Hadamard gate."""
         return H(self.d)
 
-    def sx(self):
+    def sx(self) -> Block:
         """Sqrt of X."""
         return sqrt_paulis.SX(self.d)
 
-    def sxdg(self):
+    def sxdg(self) -> Block:
         """Adjoint of sqrt of X."""
         return sqrt_paulis.SXdg(self.d)
 
-    def sy(self):
+    def sy(self) -> Block:
         """Sqrt of Y."""
         return sqrt_paulis.SY(self.d)
 
-    def sydg(self):
+    def sydg(self) -> Block:
         """Adjoint of sqrt of Y."""
         return sqrt_paulis.SYdg(self.d)
 
-    def sz(self):
+    def sz(self) -> Block:
         """Sqrt of Z. Also known as the S gate."""
         return sqrt_paulis.SZ(self.d)
 
-    def nonft_t(self, aux: Steane):
+    def nonft_t(self, aux: Steane) -> Block:
         """T gate via teleportation using non-fault-tolerant initialization of the T|+> state."""
         return Block(
             aux.nonft_prep_t_plus_state(),
@@ -242,7 +247,12 @@ class Steane(Vars):
             If(self.t_meas == 1).Then(self.sz()),
         )
 
-    def t(self, aux: Steane, reject: Bit | None = None, rus_limit: int | None = None):
+    def t(
+        self,
+        aux: Steane,
+        reject: Bit | None = None,
+        rus_limit: int | None = None,
+    ) -> Block:
         """T gate via teleportation using fault-tolerant initialization of the T|+> state."""
         return Block(
             aux.prep_t_plus_state(reject=reject, rus_limit=rus_limit),
@@ -251,7 +261,7 @@ class Steane(Vars):
             If(self.t_meas == 1).Then(self.sz()),  # SZ/S correction.
         )
 
-    def nonft_tdg(self, aux: Steane):
+    def nonft_tdg(self, aux: Steane) -> Block:
         """Tdg gate via teleportation using non-fault-tolerant initialization of the Tdg|+> state."""
         return Block(
             aux.nonft_prep_tdg_plus_state(),
@@ -260,7 +270,12 @@ class Steane(Vars):
             If(self.tdg_meas == 1).Then(self.szdg()),
         )
 
-    def tdg(self, aux: Steane, reject: Bit | None = None, rus_limit: int | None = None):
+    def tdg(
+        self,
+        aux: Steane,
+        reject: Bit | None = None,
+        rus_limit: int | None = None,
+    ) -> Block:
         """Tdg gate via teleportation using fault-tolerant initialization of the Tdg|+> state."""
         return Block(
             aux.prep_tdg_plus_state(reject=reject, rus_limit=rus_limit),
@@ -271,8 +286,10 @@ class Steane(Vars):
 
     #  Begin Experimental: ------------------------------------
 
-    def nonft_t_tel(self, aux: Steane):
-        """Warning:
+    def nonft_t_tel(self, aux: Steane) -> Block:
+        """T gate via teleportation (non-fault-tolerant, experimental).
+
+        Warning:
             This is experimental.
 
         T gate via teleportation using non-fault-tolerant initialization of the T|+> state.
@@ -294,8 +311,10 @@ class Steane(Vars):
         aux: Steane,
         reject: Bit | None = None,
         rus_limit: int | None = None,
-    ):
-        """Warning:
+    ) -> Block:
+        """T gate via teleportation (fault-tolerant, experimental).
+
+        Warning:
             This is experimental.
 
         T gate via teleportation using fault-tolerant initialization of the T|+> state.
@@ -312,8 +331,10 @@ class Steane(Vars):
             self.permute(aux),
         )
 
-    def nonft_tdg_tel(self, aux: Steane):
-        """Warning:
+    def nonft_tdg_tel(self, aux: Steane) -> Block:
+        """T† gate via teleportation (non-fault-tolerant, experimental).
+
+        Warning:
             This is experimental.
 
         Tdg gate via teleportation using non-fault-tolerant initialization of the Tdg|+> state.
@@ -335,8 +356,10 @@ class Steane(Vars):
         aux: Steane,
         reject: Bit | None = None,
         rus_limit: int | None = None,
-    ):
-        """Warning:
+    ) -> Block:
+        """T† gate via teleportation (fault-tolerant, experimental).
+
+        Warning:
             This is experimental.
 
         Tdg gate via teleportation using fault-tolerant initialization of the Tdg|+> state.
@@ -359,7 +382,7 @@ class Steane(Vars):
         reject: Bit | None = None,
         flag: Bit | None = None,
         rus_limit: int | None = None,
-    ):
+    ) -> Block:
         """T gate via teleportation using fault-tolerant initialization of the T|+> state.
 
         Applies active corrections of errors diagnozed by the measurement for gate teleportation.
@@ -397,7 +420,7 @@ class Steane(Vars):
         reject: Bit | None = None,
         flag: Bit | None = None,
         rus_limit: int | None = None,
-    ):
+    ) -> Block:
         """Tdg gate via teleportation using fault-tolerant initialization of the Tdg|+> state.
 
         Applies active corrections of errors diagnozed by the measurement for gate teleportation.
@@ -431,23 +454,23 @@ class Steane(Vars):
 
     # End Experimental: ------------------------------------
 
-    def szdg(self):
+    def szdg(self) -> Block:
         """Adjoint of Sqrt of Z. Also known as the Sdg gate."""
         return sqrt_paulis.SZdg(self.d)
 
-    def cx(self, target: Steane):
-        """Logical CX"""
+    def cx(self, target: Steane) -> Block:
+        """Logical CX."""
         return transversal_tq.CX(self.d, target.d)
 
-    def cy(self, target: Steane):
-        """Logical CY"""
+    def cy(self, target: Steane) -> Block:
+        """Logical CY."""
         return transversal_tq.CY(self.d, target.d)
 
-    def cz(self, target: Steane):
-        """Logical CZ"""
+    def cz(self, target: Steane) -> Block:
+        """Logical CZ."""
         return transversal_tq.CZ(self.d, target.d)
 
-    def m(self, meas_basis: str, log: Bit | None = None):
+    def m(self, meas_basis: str, log: Bit | None = None) -> Block:
         """Destructively measure the logical qubit in some Pauli basis."""
         block = MeasDecode(
             q=self.d,
@@ -465,19 +488,19 @@ class Steane(Vars):
             block.extend(log.set(self.log))
         return block
 
-    def mx(self, log: Bit | None = None):
+    def mx(self, log: Bit | None = None) -> Block:
         """Logical destructive measurement of the logical X operator."""
         return self.m("X", log=log)
 
-    def my(self, log: Bit | None = None):
+    def my(self, log: Bit | None = None) -> Block:
         """Logical destructive measurement of the logical Y operator."""
         return self.m("Y", log=log)
 
-    def mz(self, log: Bit | None = None):
+    def mz(self, log: Bit | None = None) -> Block:
         """Logical destructive measurement of the logical Z operator."""
         return self.m("Z", log=log)
 
-    def qec(self, flag: Bit | None = None):
+    def qec(self, flag: Bit | None = None) -> Block:
         block = ParallelFlagQECActiveCorrection(
             q=self.d,
             a=self.a,
@@ -651,13 +674,13 @@ class Steane(Vars):
             block.extend(If(self.syn_meas != 0).Then(flag.set(1)))
         return block
 
-    def permute(self, other: Steane):
+    def permute(self, other: Steane) -> Block:
         """Permute this code block (including both quantum and classical registers) with another."""
         block = Block(
             Permute(self.d, other.d),
             Permute(self.a, other.a),
         )
-        for var_a, var_b in zip(self.vars, other.vars):
+        for var_a, var_b in zip(self.vars, other.vars, strict=False):
             if isinstance(var_a, CReg):
                 block.extend(
                     var_a.set(var_a ^ var_b),

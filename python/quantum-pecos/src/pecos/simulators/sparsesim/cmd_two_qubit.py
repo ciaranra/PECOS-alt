@@ -613,10 +613,6 @@ def SYY(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
     ----
         state:
         qubits:
-
-    Returns:
-    -------
-
     """
     qubit1, qubit2 = qubits
     SZdg(state, qubit1)  # rZd
@@ -634,10 +630,6 @@ def SYYdg(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
         state:
         qubits:
         **params:
-
-    Returns:
-    -------
-
     """
     qubit1, qubit2 = qubits
     SZdg(state, qubit1)
@@ -659,10 +651,6 @@ def SZZ(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
     ----
         state:
         qubits:
-
-    Returns:
-    -------
-
     """
     qubit1, qubit2 = qubits
     SYdg(state, qubit1)  # rYd
@@ -679,10 +667,6 @@ def SZZdg(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
     ----
         state:
         qubits:
-
-    Returns:
-    -------
-
     """
     qubit1, qubit2 = qubits
     SYdg(state, qubit1)  # rYd
@@ -693,7 +677,7 @@ def SZZdg(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
 
 
 def iSWAP(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
-    r"""iSWAP = e^{i(XX+YY) \pi / 4"""
+    r"""ISWAP = e^{i(XX+YY) \pi / 4."""
     qubit1, qubit2 = qubits
     SWAP(state, qubits)
     SZ(state, qubit1)

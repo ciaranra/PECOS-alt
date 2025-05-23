@@ -14,7 +14,7 @@ from pecos.slr import Barrier, Block, Comment, QReg
 
 
 class CX(Block):
-    def __init__(self, q1: QReg, q2: QReg, *, barrier=True):
+    def __init__(self, q1: QReg, q2: QReg, *, barrier: bool = True) -> None:
         if len(q1.elems) != 7:
             msg = f"Size of register {len(q1.elems)} != 7"
             raise Exception(msg)
@@ -49,7 +49,7 @@ class CX(Block):
 
 
 class CY(Block):
-    def __init__(self, q1: QReg, q2: QReg):
+    def __init__(self, q1: QReg, q2: QReg) -> None:
         if len(q1.elems) != 7:
             msg = f"Size of register {len(q1.elems)} != 7"
             raise Exception(msg)
@@ -75,7 +75,7 @@ class CY(Block):
 
 
 class CZ(Block):
-    def __init__(self, q1: QReg, q2: QReg):
+    def __init__(self, q1: QReg, q2: QReg) -> None:
         if len(q1.elems) != 7:
             msg = f"Size of register {len(q1.elems)} != 7"
             raise Exception(msg)
@@ -101,7 +101,7 @@ class CZ(Block):
 
 
 class SZZ(Block):
-    def __init__(self, q1: QReg, q2: QReg):
+    def __init__(self, q1: QReg, q2: QReg) -> None:
         if len(q1.elems) != 7:
             msg = f"Size of register {len(q1.elems)} != 7"
             raise Exception(msg)

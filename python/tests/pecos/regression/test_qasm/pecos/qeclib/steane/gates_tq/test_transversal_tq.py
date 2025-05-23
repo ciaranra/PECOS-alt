@@ -1,8 +1,10 @@
+from collections.abc import Callable
+
 from pecos.qeclib.steane.gates_tq.transversal_tq import CX, CY, CZ, SZZ
 from pecos.slr import QReg
 
 
-def test_CX(compare_qasm):
+def test_CX(compare_qasm: Callable[..., None]) -> None:
     q1 = QReg("q1_test", 7)
     q2 = QReg("q2_test", 7)
 
@@ -11,7 +13,7 @@ def test_CX(compare_qasm):
         compare_qasm(block, barrier)
 
 
-def test_CY(compare_qasm):
+def test_CY(compare_qasm: Callable[..., None]) -> None:
     q1 = QReg("q1_test", 7)
     q2 = QReg("q2_test", 7)
 
@@ -19,7 +21,7 @@ def test_CY(compare_qasm):
     compare_qasm(block)
 
 
-def test_CZ(compare_qasm):
+def test_CZ(compare_qasm: Callable[..., None]) -> None:
     q1 = QReg("q1_test", 7)
     q2 = QReg("q2_test", 7)
 
@@ -27,7 +29,7 @@ def test_CZ(compare_qasm):
     compare_qasm(block)
 
 
-def test_SZZ(compare_qasm):
+def test_SZZ(compare_qasm: Callable[..., None]) -> None:
     q1 = QReg("q1_test", 7)
     q2 = QReg("q2_test", 7)
 

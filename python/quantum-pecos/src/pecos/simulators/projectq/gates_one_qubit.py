@@ -102,7 +102,9 @@ RZ = MakeFunc(ops.Rz, angle=True).func  # Rotation about Z (takes angle arg)
 
 
 def R1XY(state, qubit: int, angles: tuple[float, float], **params: Any) -> None:
-    """R1XY(theta, phi) = U1q(theta, phi) = RZ(phi-pi/2)*RY(theta)*RZ(-phi+pi/2).
+    """Apply a single-qubit rotation gate composed of Y and Z rotations.
+
+    R1XY(theta, phi) = U1q(theta, phi) = RZ(phi-pi/2)*RY(theta)*RZ(-phi+pi/2).
 
     Args:
     ----
@@ -110,10 +112,6 @@ def R1XY(state, qubit: int, angles: tuple[float, float], **params: Any) -> None:
         qubit:
         angles:
         **params:
-
-    Returns:
-    -------
-
     """
     theta = angles[0]
     phi = angles[1]

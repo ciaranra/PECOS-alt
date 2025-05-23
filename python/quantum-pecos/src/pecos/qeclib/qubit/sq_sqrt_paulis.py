@@ -13,7 +13,9 @@ from pecos.qeclib.qubit.qgate_base import QGate
 
 
 class SX(QGate):
-    """
+    """Square root of Pauli X gate.
+
+    Action on Pauli operators:
     X -> X
     Z -> -Y
     Y -> Z

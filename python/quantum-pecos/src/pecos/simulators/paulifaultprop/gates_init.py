@@ -17,10 +17,6 @@ def init(state, qubit: int, **params: Any) -> None:
     ----
         state:
         qubit:
-
-    Returns:
-    -------
-
     """
     state.faults["X"].discard(qubit)
     state.faults["Y"].discard(qubit)

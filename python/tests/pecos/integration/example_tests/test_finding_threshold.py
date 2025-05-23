@@ -10,12 +10,13 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+
 import numpy as np
 import pecos as pc
 from pecos.misc.threshold_curve import func
 
 
-def test_finding_threshold():
+def test_finding_threshold() -> None:
     depolar = pc.error_models.DepolarModel(
         model_level="code_capacity",
         perp_errors=True,
@@ -24,10 +25,7 @@ def test_finding_threshold():
     ds = [5, 7, 9]
     plist = np.array(ps * len(ds))
 
-    dlist = []
-    for d in ds:
-        for _ in ps:
-            dlist.append(d)
+    dlist = [d for d in ds for _ in ps]
     dlist = np.array(dlist)
 
     plog = []

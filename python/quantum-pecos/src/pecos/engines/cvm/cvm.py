@@ -36,7 +36,7 @@ class CVM:
         self.cinterpreter = cinterpreter
         self.sim_debug = sim_debug
 
-    def reset_state(self):
+    def reset_state(self) -> None:
         self.state = ()
 
-    def exec(self, func_name, args): ...
+    def exec(self, func_name, args) -> None: ...

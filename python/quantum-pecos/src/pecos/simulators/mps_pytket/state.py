@@ -23,24 +23,17 @@ from pecos.simulators.sim_class_types import StateTN
 
 
 class MPS(StateTN):
-    """
-    Simulation using the gate-by-gate on demand MPS simulator from pytket-cutensornet.
-    """
+    """Simulation using the gate-by-gate on demand MPS simulator from pytket-cutensornet."""
 
     def __init__(self, num_qubits, **mps_params) -> None:
-        """
-        Initializes the MPS.
+        """Initializes the MPS.
 
         Args:
             num_qubits (int): Number of qubits being represented.
             mps_params: a collection of keyword arguments passed down to
                 the ``Config`` object of the MPS. See the docs of pytket-cutensornet
                 for a list of all available parameters.
-
-        Returns:
-
         """
-
         if not isinstance(num_qubits, int):
             msg = "``num_qubits`` should be of type ``int``."
             raise TypeError(msg)

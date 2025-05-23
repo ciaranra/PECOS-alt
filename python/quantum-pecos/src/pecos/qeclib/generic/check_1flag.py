@@ -9,8 +9,16 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from pecos.qeclib.qubit import CH, CX, CY, CZ, H, Measure, Prep
-from pecos.slr import Barrier, Bit, Block, Comment, Qubit
+from pecos.slr import Barrier, Block, Comment
+
+if TYPE_CHECKING:
+    from pecos.qeclib.qubit.qgate_base import QGate
+    from pecos.slr import Bit, Qubit
 
 
 class Check1Flag(Block):
@@ -22,7 +30,7 @@ class Check1Flag(Block):
         flag: Qubit,
         out: Bit,
         out_flag: Bit,
-    ):
+    ) -> None:
         super().__init__()
 
         n: int = len(d)
@@ -71,15 +79,14 @@ class Check1Flag(Block):
         )
 
     @staticmethod
-    def cu(u, a, d):
+    def cu(u: str, a: Qubit, d: Qubit) -> QGate:
         if u == "X":
             return CX(a, d)
-        elif u == "Y":
+        if u == "Y":
             return CY(a, d)
-        elif u == "Z":
+        if u == "Z":
             return CZ(a, d)
-        elif u == "H":
+        if u == "H":
             return CH(a, d)
-        else:
-            msg = f"Symbol '{u}' not supported!"
-            raise Exception(msg)
+        msg = f"Symbol '{u}' not supported!"
+        raise Exception(msg)

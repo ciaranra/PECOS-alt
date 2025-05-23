@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 from pecos.qeclib.steane.preps.t_plus_state import (
     PrepEncodeTDagPlusNonFT,
     PrepEncodeTPlusFT,
@@ -7,19 +9,19 @@ from pecos.qeclib.steane.preps.t_plus_state import (
 from pecos.slr import CReg, QReg
 
 
-def test_PrepEncodeTPlusNonFT(compare_qasm):
+def test_PrepEncodeTPlusNonFT(compare_qasm: Callable[..., None]) -> None:
     q = QReg("q_test", 7)
     block = PrepEncodeTPlusNonFT(q)
     compare_qasm(block)
 
 
-def test_PrepEncodeTDagPlusNonFT(compare_qasm):
+def test_PrepEncodeTDagPlusNonFT(compare_qasm: Callable[..., None]) -> None:
     q = QReg("q_test", 7)
     block = PrepEncodeTDagPlusNonFT(q)
     compare_qasm(block)
 
 
-def test_PrepEncodeTPlusFT(compare_qasm):
+def test_PrepEncodeTPlusFT(compare_qasm: Callable[..., None]) -> None:
     q = QReg("q_test", 7)
     a = QReg("a_test", 3)
     out = CReg("out_test", 2)
@@ -43,7 +45,7 @@ def test_PrepEncodeTPlusFT(compare_qasm):
     compare_qasm(block)
 
 
-def test_PrepEncodeTPlusFTRUS(compare_qasm):
+def test_PrepEncodeTPlusFTRUS(compare_qasm: Callable[..., None]) -> None:
     q = QReg("q_test", 7)
     a = QReg("a_test", 3)
     out = CReg("out_test", 2)

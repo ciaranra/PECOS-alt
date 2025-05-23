@@ -17,15 +17,11 @@ from pecos.simulators.projectq.gates_meas import meas_z
 from pecos.simulators.projectq.gates_one_qubit import H2, H5, H6, H, X
 
 
-def init_zero(state, qubit, **params: Any):
+def init_zero(state, qubit, **params: Any) -> None:
     """Args:
     ----
         state:
         qubit:
-
-    Returns:
-    -------
-
     """
     result = meas_z(state, qubit)
 
@@ -33,7 +29,7 @@ def init_zero(state, qubit, **params: Any):
         X(state, qubit)
 
 
-def init_one(state, qubit, **params: Any):
+def init_one(state, qubit, **params: Any) -> None:
     """Initialize qubit in state |1>.
 
     :param state:
@@ -44,7 +40,7 @@ def init_one(state, qubit, **params: Any):
     X(state, qubit)
 
 
-def init_plus(state, qubit, **params: Any):
+def init_plus(state, qubit, **params: Any) -> None:
     """Initialize qubit in state |+>.
 
     :param gens:
@@ -55,7 +51,7 @@ def init_plus(state, qubit, **params: Any):
     H(state, qubit)
 
 
-def init_minus(state, qubit, **params: Any):
+def init_minus(state, qubit, **params: Any) -> None:
     """Initialize qubit in state |->.
 
     :param gens:
@@ -66,7 +62,7 @@ def init_minus(state, qubit, **params: Any):
     H2(state, qubit)
 
 
-def init_plusi(state, qubit, **params: Any):
+def init_plusi(state, qubit, **params: Any) -> None:
     """Initialize qubit in state |+i>.
 
     :param gens:
@@ -77,17 +73,13 @@ def init_plusi(state, qubit, **params: Any):
     H5(state, qubit)
 
 
-def init_minusi(state, qubit, **params: Any):
+def init_minusi(state, qubit, **params: Any) -> None:
     """Initialize qubit in state |-i>.
 
     Args:
     ----
         state:
         qubit:
-
-    Returns:
-    -------
-
     """
     init_zero(state, qubit)
     H6(state, qubit)

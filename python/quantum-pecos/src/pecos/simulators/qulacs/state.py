@@ -20,13 +20,11 @@ class Qulacs(StateVector):
     """Wrapper of Qulacs state vector simulator."""
 
     def __init__(self, num_qubits) -> None:
-        """
-        Initializes the state vector.
+        """Initializes the state vector.
 
         Args:
             num_qubits (int): Number of qubits being represented.
         """
-
         if not isinstance(num_qubits, int):
             msg = "``num_qubits`` should be of type ``int``."
             raise TypeError(msg)

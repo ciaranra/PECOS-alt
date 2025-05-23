@@ -17,13 +17,11 @@ states = [
 ]
 
 
-def test_init_zero():
-    """
-    Test initializing |0>.
+def test_init_zero() -> None:
+    """Test initializing |0>.
 
     :return:
     """
-
     for state in states:
         state = state(1)
         state.run_gate("init |0>", {0})
@@ -37,9 +35,8 @@ def test_init_zero():
         assert destab_rep == ["  X"]
 
 
-def test_init_one():
-    """
-    Test initializing |1>.
+def test_init_one() -> None:
+    """Test initializing |1>.
 
     stab: +Z
     destab: X
@@ -47,7 +44,6 @@ def test_init_one():
 
     :return:
     """
-
     for state in states:
         state = state(1)
         state.run_gate("init |1>", {0})
@@ -61,9 +57,8 @@ def test_init_one():
         assert destab_rep == ["  X"]
 
 
-def test_init_plus():
-    """
-    Test initializing |+>.
+def test_init_plus() -> None:
+    """Test initializing |+>.
 
     stab: +X
     destab: Z
@@ -71,7 +66,6 @@ def test_init_plus():
 
     :return:
     """
-
     for state in states:
         state = state(1)
         state.run_gate("init |+>", {0})
@@ -85,16 +79,14 @@ def test_init_plus():
         assert destab_rep == ["  Z"]
 
 
-def test_init_minus():
-    """
-    Test initializing |->.
+def test_init_minus() -> None:
+    """Test initializing |->.
 
     stab: -X
     destab: Z
 
     :return:
     """
-
     for state in states:
         state = state(1)
         state.run_gate("init |->", {0})
@@ -108,16 +100,14 @@ def test_init_minus():
         assert destab_rep == ["  Z"]
 
 
-def test_init_plus_i():
-    """
-    Test initializing |+i>.
+def test_init_plus_i() -> None:
+    """Test initializing |+i>.
 
     stab: +Y
     destab: X | Z
 
     :return:
     """
-
     for state in states:
         state = state(1)
         state.run_gate("init |+i>", {0})
@@ -131,16 +121,14 @@ def test_init_plus_i():
         assert destab_rep in [["  X"], ["  Z"]]
 
 
-def test_init_minus_i():
-    """
-    Test initializing |+i>.
+def test_init_minus_i() -> None:
+    """Test initializing |+i>.
 
     stab: -Y
     destab: X | Z
 
     :return:
     """
-
     for state in states:
         state = state(1)
         state.run_gate("init |-i>", {0})

@@ -50,11 +50,11 @@ class SimpleDepolarizingErrorModel(ErrorModel):
         super().__init__(error_params=error_params)
         self._eparams = None
 
-    def reset(self):
+    def reset(self) -> SimpleDepolarizingErrorModel:
         """Reset error generator for another round of syndrome extraction."""
         return SimpleDepolarizingErrorModel(error_params=self.error_params)
 
-    def init(self, num_qubits, machine=None):
+    def init(self, num_qubits, machine=None) -> None:  # noqa: ARG002
         self.machine = machine
 
         if not self.error_params:
@@ -64,7 +64,7 @@ class SimpleDepolarizingErrorModel(ErrorModel):
         self._eparams = dict(self.error_params)
         self._scale()
 
-    def _scale(self):
+    def _scale(self) -> None:
         # conversion from average error to total error
         self._eparams["p1"] *= 3 / 2
         self._eparams["p2"] *= 5 / 4
@@ -75,7 +75,11 @@ class SimpleDepolarizingErrorModel(ErrorModel):
     def shot_reinit(self) -> None:
         """Run all code needed at the beginning of each shot, e.g., resetting state."""
 
-    def process(self, qops: list[QOp], call_back=None) -> list[QOp | SeqBlock]:
+    def process(
+        self,
+        qops: list[QOp],
+        call_back=None,  # noqa: ARG002
+    ) -> list[QOp | SeqBlock]:
         noisy_ops = []
 
         for op in qops:
@@ -88,7 +92,7 @@ class SimpleDepolarizingErrorModel(ErrorModel):
                 rand_nums = np.random.random(len(op.args)) <= self._eparams["p_init"]
 
                 if np.any(rand_nums):
-                    for r, loc in zip(rand_nums, op.args):
+                    for r, loc in zip(rand_nums, op.args, strict=False):
                         if r:
                             erroneous_ops.append(QOp(name="X", args=[loc], metadata={}))
 
@@ -99,7 +103,7 @@ class SimpleDepolarizingErrorModel(ErrorModel):
                 rand_nums = np.random.random(len(op.args)) <= self._eparams["p1"]
 
                 if np.any(rand_nums):
-                    for r, loc in zip(rand_nums, op.args):
+                    for r, loc in zip(rand_nums, op.args, strict=False):
                         if r:
                             err = np.random.choice(one_qubit_paulis)
                             erroneous_ops.append(
@@ -113,7 +117,7 @@ class SimpleDepolarizingErrorModel(ErrorModel):
                 rand_nums = np.random.random(len(op.args)) <= self._eparams["p2"]
 
                 if np.any(rand_nums):
-                    for r, loc in zip(rand_nums, op.args):
+                    for r, loc in zip(rand_nums, op.args, strict=False):
                         if r:
                             err = np.random.choice(two_qubit_paulis)
                             loc1, loc2 = loc
@@ -133,14 +137,15 @@ class SimpleDepolarizingErrorModel(ErrorModel):
                 rand_nums = np.random.random(len(op.args)) <= self._eparams["p_meas"]
 
                 if np.any(rand_nums):
-                    for r, loc in zip(rand_nums, op.args):
+                    for r, loc in zip(rand_nums, op.args, strict=False):
                         if r:
                             erroneous_ops.append(QOp(name="X", args=[loc], metadata={}))
 
                 erroneous_ops.append(op)
 
             else:
-                raise Exception("This error model doesn't handle gate: %s!" % op.name)
+                msg = f"This error model doesn't handle gate: {op.name}!"
+                raise Exception(msg)
 
             if erroneous_ops is None:
                 noisy_ops.append(op)

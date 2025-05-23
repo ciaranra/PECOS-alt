@@ -68,7 +68,6 @@ gate_dict = {
     "SqrtZZ": ignore_gate,
     "SZZdg": ignore_gate,
     "SWAP": ignore_gate,
-    # Additional Cliffords from `circuit_converters/std2chs.py`
     "Q": ignore_gate,
     "Qd": ignore_gate,
     "R": ignore_gate,

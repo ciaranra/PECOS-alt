@@ -19,7 +19,7 @@ from phir.model import PHIRModel
 this_dir = Path(__file__).parent
 
 
-def test_spec_example():
+def test_spec_example() -> None:
     # From https://github.com/CQCL/phir/blob/main/phir_spec_qasm.md#overall-phir-example-with-quantinuums-extended-openqasm-20
     data = json.load(Path.open(this_dir / "phir/spec_example.json"))
 

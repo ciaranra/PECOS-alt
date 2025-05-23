@@ -16,25 +16,19 @@ from pecos.simulators.parent_sim_classes import Simulator
 
 
 class CoinToss(Simulator):
-    """
-    Ignore all quantum operations and toss a coin to decide measurement outcomes.
+    """Ignore all quantum operations and toss a coin to decide measurement outcomes.
     Meant for stochastical debugging of the classical branches.
     """
 
-    def __init__(self, num_qubits, prob=0.5, seed=None):
-        """
-        Initialization is trivial, since there is no state.
+    def __init__(self, num_qubits, prob=0.5, seed=None) -> None:
+        """Initialization is trivial, since there is no state.
 
         Args:
             num_qubits (int): Number of qubits being represented.
             prob (float): Probability of measurements returning |1>.
                 Default value is 0.5.
             seed (int): Seed for randomness.
-
-        Returns:
-
         """
-
         if not isinstance(num_qubits, int):
             msg = "``num_qubits`` should be of type ``int``."
             raise TypeError(msg)

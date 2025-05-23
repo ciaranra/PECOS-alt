@@ -12,6 +12,7 @@
 # specific language governing permissions and limitations under the License.
 
 import contextlib
+from typing import Any
 
 import numpy as np
 
@@ -32,6 +33,7 @@ def threshold_code_capacity(
     ps,
     ds,
     runs,
+    *,
     verbose=False,
     mode=1,
     threshold_fit=None,
@@ -39,27 +41,24 @@ def threshold_code_capacity(
     func=None,
     circuit_runner=None,
     basis=None,
-):
+) -> dict[str, Any]:
     """Function that generates p_logical values given a list of physical errors (ps) and distance (ds).
 
     Args:
     ----
-        qecc_class:
-        error_gen:
-        decoder_class:
-        ps:
-        ds:
-        runs:
-        verbose:
-        mode:
-        threshold_fit:
-        p0:
-        func:
-        circuit_runner:
-        basis:
-
-    Returns:
-    -------
+        qecc_class: The quantum error correcting code class to use.
+        error_gen: The error generator for creating noise models.
+        decoder_class: The decoder class to use for error correction.
+        ps: List of physical error probabilities to test.
+        ds: List of code distances to test.
+        runs: Number of Monte Carlo runs to perform for each (p, d) pair.
+        verbose: If True, prints detailed progress and results.
+        mode: The mode for logical rate calculation (1, 2, or 3).
+        threshold_fit: Function to use for fitting the threshold curve.
+        p0: Initial parameters for the threshold fitting function.
+        func: The functional form to use for threshold fitting.
+        circuit_runner: The circuit runner to use for simulations.
+        basis: The basis for logical measurements (e.g., 'X' or 'Z').
 
     """
     if circuit_runner is None:
@@ -94,7 +93,8 @@ def threshold_code_capacity(
     elif mode == 2:
         determine_rate = codecapacity_logical_rate3
     else:
-        raise Exception('Mode "%s" is not handled!' % mode)
+        msg = f'Mode "{mode}" is not handled!'
+        raise Exception(msg)
 
     plist = np.array(ps * len(ds))
 
@@ -125,7 +125,7 @@ def threshold_code_capacity(
             )
             if verbose:
                 if time:
-                    print("Runtime: %s s" % time)
+                    print(f"Runtime: {time} s")
 
                 print("----")
 
@@ -143,32 +143,30 @@ def threshold_code_capacity_calc(
     error_gen=None,
     qecc_class=None,
     decoder_class=None,
+    *,
     verbose=True,
     mode=1,
     threshold_fit=None,
     p0=None,
     func=None,
     circuit_runner=None,
-):
+) -> dict[str, Any]:
     """Function that generates p_logical values given a list of physical errors (ps) and distance (ds).
 
     Args:
     ----
-        ps(list of float):
-        ds(list of int):
-        runs(int):
-        error_gen:
-        qecc_class:
-        decoder_class:
-        verbose:
-        mode:
-        threshold_fit:
-        p0:
-        func:
-        circuit_runner:
-
-    Returns:
-    -------
+        ps(list of float): List of physical error probabilities to test.
+        ds(list of int): List of code distances to test.
+        runs(int): Number of Monte Carlo runs to perform for each (p, d) pair.
+        error_gen: The error generator for creating noise models.
+        qecc_class: The quantum error correcting code class to use.
+        decoder_class: The decoder class to use for error correction.
+        verbose: If True, prints detailed progress and results.
+        mode: The mode for logical rate calculation (1, 2, or 3).
+        threshold_fit: Function to use for fitting the threshold curve.
+        p0: Initial parameters for the threshold fitting function.
+        func: The functional form to use for threshold fitting.
+        circuit_runner: The circuit runner to use for simulations.
 
     """
     if circuit_runner is None:
@@ -199,14 +197,12 @@ def threshold_code_capacity_calc(
     elif mode == 3:
         determine_rate = codecapacity_logical_rate3
     else:
-        raise Exception('Mode "%s" is not handled!' % mode)
+        msg = f'Mode "{mode}" is not handled!'
+        raise Exception(msg)
 
     plist = np.array(ps * len(ds))
 
-    dlist = []
-    for d in ds:
-        for _p in ps:
-            dlist.append(d)
+    dlist = [d for d in ds for _p in ps]
     dlist = np.array(dlist)
 
     plog = []
@@ -227,7 +223,7 @@ def threshold_code_capacity_calc(
             )
             if verbose:
                 if time:
-                    print("Runtime: %s s" % time)
+                    print(f"Runtime: {time} s")
 
                 print("----")
 
@@ -254,11 +250,12 @@ def codecapacity_logical_rate(
     error_params,
     decoder,
     seed=None,
-    state_sim=None,
+    state_sim=None,  # noqa: ARG001
+    *,
     verbose=True,
     circuit_runner=None,
     basis=None,
-):
+) -> tuple[float, float]:
     """A tool for determining the code-capacity logical-error rate for syndrome extraction.
 
     In this analysis only logical |0> is prepared and each run consists of an ideal logical |0> preparation followed by
@@ -268,18 +265,16 @@ def codecapacity_logical_rate(
     Args:
     ----
         runs: Number of runs to evaluate the logical error rate.
-        qecc:
-        distance:
-        error_gen:
-        error_params:
-        decoder:
-        seed:
-        state_sim:
-        verbose:
-        circuit_runner:
-
-    Returns:
-    -------
+        qecc: The quantum error correcting code instance.
+        distance: The code distance (used for creating the QECC instance if needed).
+        error_gen: The error generator for creating noise models.
+        error_params: Dictionary of error parameters (must include 'p' for error probability).
+        decoder: The decoder instance for error correction.
+        seed: Random seed for reproducibility.
+        state_sim: The state simulator to use (deprecated parameter).
+        verbose: If True, prints detailed progress and results.
+        circuit_runner: The circuit runner to use for simulations.
+        basis: The basis for logical measurements (e.g., 'X' or 'Z').
 
     """
     p = error_params["p"]
@@ -304,7 +299,7 @@ def codecapacity_logical_rate(
 
     # init circuit
     initzero = circuits.LogicalCircuit(suppress_warning=True)
-    instr_symbol = "ideal init %s" % basis
+    instr_symbol = f"ideal init {basis}"
     gate = qecc.gate(instr_symbol)
     initzero.append(gate)
 
@@ -351,13 +346,13 @@ def codecapacity_logical_rate(
     logical_rate = float(num_failure) / float(runs)
 
     if verbose:
-        print("\ndistance = %s" % distance)
-        print("p = %s" % p)
-        print("runs = %s" % runs)
+        print(f"\ndistance = {distance}")
+        print(f"p = {p}")
+        print(f"runs = {runs}")
 
-        print("\nlogical error rate: %s" % logical_rate)
+        print(f"\nlogical error rate: {logical_rate}")
         r = float(logical_rate) / float(p)
-        print("\nplog/p = %s" % r)
+        print(f"\nplog/p = {r}")
 
     return logical_rate, total_time
 
@@ -371,10 +366,11 @@ def codecapacity_logical_rate2(
     decoder,
     seed=None,
     state_sim=None,
+    *,
     verbose=True,
     circuit_runner=None,
-    basis=None,
-):
+    basis=None,  # noqa: ARG001
+) -> tuple[float, float]:
     """A tool for determining the code-capacity logical-error rate for syndrome extraction.
 
     In this analysis only logical |0> is prepared and each run consists of an ideal logical |0> preparation followed by
@@ -384,18 +380,16 @@ def codecapacity_logical_rate2(
     Args:
     ----
         runs: Number of runs to evaluate the logical error rate.
-        qecc:
-        distance:
-        error_gen:
-        error_params:
-        decoder:
-        seed:
-        state_sim:
-        verbose:
-        circuit_runner:
-
-    Returns:
-    -------
+        qecc: The quantum error correcting code instance.
+        distance: The code distance (used for creating the QECC instance if needed).
+        error_gen: The error generator for creating noise models.
+        error_params: Dictionary of error parameters (must include 'p' for error probability).
+        decoder: The decoder instance for error correction.
+        seed: Random seed for reproducibility.
+        state_sim: The state simulator to use.
+        verbose: If True, prints detailed progress and results.
+        circuit_runner: The circuit runner to use for simulations.
+        basis: The basis for logical measurements (e.g., 'X' or 'Z').
 
     """
     p = error_params["p"]
@@ -472,13 +466,13 @@ def codecapacity_logical_rate2(
     logical_rate = float(num_failure) / float(runs)
 
     if verbose:
-        print("\ndistance = %s" % distance)
-        print("p = %s" % p)
-        print("runs = %s" % runs)
+        print(f"\ndistance = {distance}")
+        print(f"p = {p}")
+        print(f"runs = {runs}")
 
-        print("\nlogical error rate: %s" % logical_rate)
+        print(f"\nlogical error rate: {logical_rate}")
         r = float(logical_rate) / float(p)
-        print("\nplog/p = %s" % r)
+        print(f"\nplog/p = {r}")
 
     return logical_rate, total_time
 
@@ -494,11 +488,12 @@ def codecapacity_logical_rate3(
     state_sim=None,
     max_syn_extract=1e7,
     circuit_runner=None,
+    *,
     verbose=True,
     init_circuit=None,
     init_logical_ops=None,
     basis=None,
-):
+) -> tuple[float, float]:
     """A tool for determining the code-capacity logical-error rate for syndrome extraction.
 
     In this analysis only logical |0> is prepared and each run consists of an ideal logical |0> preparation followed by
@@ -510,21 +505,19 @@ def codecapacity_logical_rate3(
     Args:
     ----
         runs: Number of runs to evaluate the logical error rate.
-        qecc:
-        distance:
-        error_gen:
-        error_params:
-        decoder:
-        seed:
-        state_sim:
-        max_syn_extract:
-        circuit_runner:
-        verbose:
-        init_circuit:
-        init_logical_ops:
-
-    Returns:
-    -------
+        qecc: The quantum error correcting code instance.
+        distance: The code distance (used for creating the QECC instance if needed).
+        error_gen: The error generator for creating noise models.
+        error_params: Dictionary of error parameters (must include 'p' for error probability).
+        decoder: The decoder instance for error correction.
+        seed: Random seed for reproducibility.
+        state_sim: The state simulator to use.
+        max_syn_extract: Maximum number of syndrome extraction rounds before declaring success.
+        circuit_runner: The circuit runner to use for simulations.
+        verbose: If True, prints detailed progress and results.
+        init_circuit: Custom initialization circuit (if None, uses default logical |0> or |+>).
+        init_logical_ops: Custom logical operators for the initialized state.
+        basis: The basis for logical measurements (e.g., 'X' or 'Z').
 
     """
     p = error_params["p"]
@@ -547,12 +540,12 @@ def codecapacity_logical_rate3(
             msg = 'Basis must be "zero", "plus", "None"!'
             raise Exception(msg)
 
-        gate = qecc.gate("ideal init %s" % basis)
+        gate = qecc.gate(f"ideal init {basis}")
         init_circuit.append(gate)
 
     if init_logical_ops is None:
         if init_circuit is None:
-            gate = qecc.gate("ideal init %s" % basis)
+            gate = qecc.gate(f"ideal init {basis}")
 
             # if len(gate.final_logical_stabs()) != 1:
 
@@ -611,14 +604,15 @@ def codecapacity_logical_rate3(
                 break
 
         else:
-            raise Exception("Max syndrome extraction (%s) met." % max_syn_extract)
+            msg = f"Max syndrome extraction ({max_syn_extract}) met."
+            raise Exception(msg)
 
         run_durations.append(
             max_syn_extract,
         )  # duration + 1 == number of syndrome extractions.
 
     if verbose:
-        print("\nTotal number of runs: %s" % sum(run_durations))
+        print(f"\nTotal number of runs: {sum(run_durations)}")
 
     run_durations = np.array(run_durations)
     duration_mean = np.mean(run_durations)
@@ -626,12 +620,12 @@ def codecapacity_logical_rate3(
     logical_rate = 1.0 / duration_mean
 
     if verbose:
-        print("\ndistance = %s" % distance)
-        print("p = %s" % p)
-        print("Number of failures = %s" % runs)
+        print(f"\ndistance = {distance}")
+        print(f"p = {p}")
+        print(f"Number of failures = {runs}")
 
-        print("\nlogical error rate: %s" % logical_rate)
+        print(f"\nlogical error rate: {logical_rate}")
         r = float(logical_rate) / float(p)
-        print("\nplog/p = %s" % r)
+        print(f"\nplog/p = {r}")
 
     return logical_rate, total_time

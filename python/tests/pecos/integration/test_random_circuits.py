@@ -13,12 +13,14 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 from pecos.simulators import SparseSimPy, SparseSimRs
 
 
-def test_random_circuits():
-    state_sims = []
+def test_random_circuits() -> None:
+    state_sims: list[type[Any]] = []
 
     # Add wrapped CHP
     try:
@@ -62,7 +64,7 @@ def test_random_circuits():
 
 
 def run_circuit_test(
-    state_sims: list,
+    state_sims: list[type[Any]],
     num_qubits: int,
     circuit_depth: int,
     trials: int = 1000,
@@ -92,24 +94,25 @@ def run_circuit_test(
     return True
 
 
-def get_qubits(num_qubits: int, size: int):
+def get_qubits(num_qubits: int, size: int) -> np.ndarray:
     return np.random.choice(list(range(num_qubits)), size, replace=False)
 
 
 def generate_circuit(
-    gates: list,
+    gates: list[str],
     num_qubits: int,
     circuit_depth: int,
-):
+) -> list[tuple[str, int | np.ndarray]]:
     circuit_elements = list(np.random.choice(gates, circuit_depth))
 
     circuit = []
 
     for element in circuit_elements:
-        if element == "CNOT":
-            q = get_qubits(num_qubits, 2)
-        else:
-            q = int(get_qubits(num_qubits, 1)[0])
+        q = (
+            get_qubits(num_qubits, 2)
+            if element == "CNOT"
+            else int(get_qubits(num_qubits, 1)[0])
+        )
 
         circuit.append((element, q))
 
@@ -118,11 +121,11 @@ def generate_circuit(
 
 def run_a_circuit(
     num_qubits: int,
-    state_rep,
-    circuit,
+    state_rep: type[Any],
+    circuit: list[tuple[str, int | np.ndarray]],
     *,
     verbose: bool = False,
-):
+) -> list[int]:
     state = state_rep(num_qubits)
     measurements = []
 

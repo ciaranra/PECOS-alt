@@ -46,8 +46,7 @@ class NamedObjectPool(ForeignObject):
         if namespace in self.objs:
             msg = f"Object named '{namespace}' already exists!"
             raise Exception(msg)
-        else:
-            self.objs[namespace] = obj
+        self.objs[namespace] = obj
 
     def get_funcs(self) -> list[str]:
         """Get a list of function names available from the object."""

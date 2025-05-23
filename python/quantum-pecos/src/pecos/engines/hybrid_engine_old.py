@@ -15,7 +15,7 @@ import struct
 
 import numpy as np
 
-from pecos.engines.cvm.binarray2 import BinArray2 as BinArray
+from pecos.engines.cvm.binarray import BinArray
 from pecos.engines.cvm.classical import eval_condition, eval_cop, set_output
 from pecos.engines.cvm.wasm import eval_cfunc, get_ccop
 from pecos.error_models.fake_error_model import FakeErrorModel
@@ -25,13 +25,13 @@ from pecos.errors import NotSupportedGateError
 class HybridEngine:
     """This class represents a standard model for running quantum circuits and adding in errors."""
 
-    def __init__(self, seed=None, debug=False, regwidth: int = 32) -> None:
-        """
+    def __init__(self, seed=None, *, debug=False, regwidth: int = 32) -> None:
+        """Initialize hybrid engine with seed, debug mode, and register width.
 
         Args:
-            seed:
-            debug:
-            regwidth:
+        seed: Random seed for reproducibility. Can be bool True for random seed, int for specific seed, or None.
+        debug: Enable debug mode for additional output.
+        regwidth: Width of classical registers in bits.
         """
         self.debug = debug
         self.state = None
@@ -65,7 +65,7 @@ class HybridEngine:
         output=None,
         output_spec=None,
         circ_inspector=None,
-    ):
+    ) -> tuple[dict, dict]:
         output = set_output(state, circuit, output_spec, output)
         output_export = {}
 
@@ -150,11 +150,16 @@ class HybridEngine:
         circuit,
         error_gen,
         removed_locations=None,
-    ):
-        """Args:
+    ) -> None:
+        """Run quantum circuit with error generation and classical operations.
 
+        Args:
+            state: Quantum state to operate on.
+            output: Output object to store results.
+            output_export: Dictionary for exported output values.
             circuit (QuantumCircuit): A circuit instance or object with an appropriate items() generator.
-            removed_locations:
+            error_gen: Error generator object.
+            removed_locations: Set of qubit locations to exclude from operations.
 
         Returns (list): If output is True then the circuit output is returned. Note that this output format may differ
         from what a ``circuit_runner`` will return for the same method named ``run_circuit``.
@@ -211,7 +216,6 @@ class HybridEngine:
                         and not params.get("linebreak")
                         and not params.get("barrier")
                     ):
-                        print("received:", symbol, locations, params)
                         msg = "A cop must have an `expr`, `comment`, `linebreak`, or `barrier` entry!"
                         raise Exception(msg)
 
@@ -234,20 +238,17 @@ class HybridEngine:
                         error_gen.leaked_qubits -= locations
 
     @staticmethod
-    def run_gate(state, output, symbol: str, locations, **params):
-        """
+    def run_gate(state, output, symbol: str, locations, **params) -> None:
+        """Run a single gate operation on the quantum state.
 
         Args:
-            state:
-            output:
-            symbol:
-            locations:
-            **params:
-
-        Returns:
+        state: Quantum state to operate on.
+        output: Output object to store measurement results.
+        symbol: Gate symbol identifying the operation.
+        locations: Set of qubit locations to apply gate to.
+        **params: Additional parameters for the gate operation.
 
         """
-
         if params.get("simulate_gate", True):
             for location in locations:
                 if params.get("angles") and len(params["angles"]) == 1:
@@ -264,8 +265,7 @@ class HybridEngine:
                             f"Metadata: {params}"
                         )
                         raise NotSupportedGateError(msg) from KeyError
-                    else:
-                        raise
+                    raise
 
                 sym = None
                 indx = None

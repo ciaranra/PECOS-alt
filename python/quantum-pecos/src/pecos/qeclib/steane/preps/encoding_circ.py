@@ -14,7 +14,7 @@ from pecos.slr import Block, Comment, QReg
 
 
 class EncodingCircuit(Block):
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
         self.q = q
         super().__init__()
         self.extend(

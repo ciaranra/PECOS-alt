@@ -41,10 +41,6 @@ class ProjectQSim(StateVector):
     Args:
     ----
         num_qubits (int): Number of qubits being represented.
-
-    Returns:
-    -------
-
     """
 
     def __init__(self, num_qubits) -> None:
@@ -79,14 +75,10 @@ class ProjectQSim(StateVector):
         """Args:
         ----
             logical_op:
-
-        Returns:
-        -------
-
         """
         return find_logical_signs(self, logical_op)
 
-    def add_gate(self, symbol: str, gate_obj, *, make_func: bool = True):
+    def add_gate(self, symbol: str, gate_obj, *, make_func: bool = True) -> None:
         """Adds a new gate on the fly to this Simulator.
 
         Args:
@@ -94,18 +86,13 @@ class ProjectQSim(StateVector):
             symbol:
             gate_obj:
             make_func:
-
-        Returns:
-        -------
-
         """
         if symbol in self.gate_dict:
             print("WARNING: Can not add gate as the symbol has already been taken.")
+        elif make_func:
+            self.gate_dict[symbol] = MakeFunc(gate_obj).func
         else:
-            if make_func:
-                self.gate_dict[symbol] = MakeFunc(gate_obj).func
-            else:
-                self.gate_dict[symbol] = gate_obj
+            self.gate_dict[symbol] = gate_obj
 
     def get_probs(self, key_basis=None):
         self.eng.flush()
@@ -119,15 +106,14 @@ class ProjectQSim(StateVector):
                 probs_dict[b] = p
             return probs_dict
 
-        else:
-            probs_dict = {}
-            for b in range(np.power(2, self.num_qubits)):
-                b = format(b, f"0{self.num_qubits}b")
-                p = self.eng.backend.get_probability(b, self.qureg)
-                b = b[::-1]
-                probs_dict[b] = p
+        probs_dict = {}
+        for b in range(np.power(2, self.num_qubits)):
+            b = format(b, f"0{self.num_qubits}b")
+            p = self.eng.backend.get_probability(b, self.qureg)
+            b = b[::-1]
+            probs_dict[b] = p
 
-            return probs_dict
+        return probs_dict
 
     def get_amps(self, key_basis=None):
         self.eng.flush()
@@ -141,15 +127,14 @@ class ProjectQSim(StateVector):
                 amps_dict[b] = p
             return amps_dict
 
-        else:
-            amp_dict = {}
-            for b in range(np.power(2, self.num_qubits)):
-                b = format(b, f"0{self.num_qubits}b")
-                a = self.eng.backend.get_amplitude(b, self.qureg)
-                b = b[::-1]
-                amp_dict[b] = a
+        amp_dict = {}
+        for b in range(np.power(2, self.num_qubits)):
+            b = format(b, f"0{self.num_qubits}b")
+            a = self.eng.backend.get_amplitude(b, self.qureg)
+            b = b[::-1]
+            amp_dict[b] = a
 
-            return amp_dict
+        return amp_dict
 
     def __del__(self) -> None:
         self.eng.flush()

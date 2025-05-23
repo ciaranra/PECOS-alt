@@ -51,14 +51,14 @@ two_qubit_paulis = {
     "ZY",
     "ZZ",
 }
-SYMMETRIC_P2_PAULI_MODEL = {p: 1 / 15 for p in two_qubit_paulis}
+SYMMETRIC_P2_PAULI_MODEL = dict.fromkeys(two_qubit_paulis, 1 / 15)
 
 one_qubit_paulis = {
     "X",
     "Y",
     "Z",
 }
-SYMMETRIC_P1_PAULI_MODEL = {p: 1 / 3 for p in one_qubit_paulis}
+SYMMETRIC_P1_PAULI_MODEL = dict.fromkeys(one_qubit_paulis, 1 / 3)
 
 
 class GenericErrorModel(ErrorModel):
@@ -68,11 +68,11 @@ class GenericErrorModel(ErrorModel):
         super().__init__(error_params=error_params)
         self._eparams = None
 
-    def reset(self):
+    def reset(self) -> GenericErrorModel:
         """Reset error generator for another round of syndrome extraction."""
         return GenericErrorModel(error_params=self.error_params)
 
-    def init(self, num_qubits, machine=None):
+    def init(self, num_qubits, machine=None) -> None:  # noqa: ARG002
         self.machine = machine
 
         if not self.error_params:
@@ -91,7 +91,7 @@ class GenericErrorModel(ErrorModel):
         if "p2_mem" in self._eparams and "p2_mem_error_model" not in self._eparams:
             self._eparams["p2_mem_error_model"] = SYMMETRIC_P2_PAULI_MODEL
 
-    def _scale(self):
+    def _scale(self) -> None:
         # conversion from average error to total error
         self._eparams["p1"] *= 3 / 2
         self._eparams["p2"] *= 5 / 4
@@ -109,7 +109,11 @@ class GenericErrorModel(ErrorModel):
     def shot_reinit(self) -> None:
         """Run all code needed at the beginning of each shot, e.g., resetting state."""
 
-    def process(self, qops: list[QOp], call_back=None) -> list[QOp | SeqBlock]:
+    def process(
+        self,
+        qops: list[QOp],
+        call_back=None,  # noqa: ARG002
+    ) -> list[QOp | SeqBlock]:
         noisy_ops = []
 
         for op in qops:
@@ -167,7 +171,8 @@ class GenericErrorModel(ErrorModel):
                 )
 
             else:
-                raise Exception("This error model doesn't handle gate: %s!" % op.name)
+                msg = f"This error model doesn't handle gate: {op.name}!"
+                raise Exception(msg)
 
             if qops_before:
                 noisy_ops.extend(qops_before)

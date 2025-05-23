@@ -27,8 +27,8 @@ def telep(prep_basis: str, meas_basis: str) -> str:
             include: "X", "Y", and "Z".
 
     Returns:
-        A logical program written in extended OpenQASM 2.0"""
-
+        A logical program written in extended OpenQASM 2.0
+    """
     prog = Main(
         m_bell := CReg("m_bell", size=2),
         m_out := CReg("m_out", size=1),
@@ -82,8 +82,8 @@ def t_gate(prep_basis: str, meas_basis: str) -> str:
             include: "X", "Y", and "Z".
 
     Returns:
-        A logical program written in extended OpenQASM 2.0"""
-
+        A logical program written in extended OpenQASM 2.0
+    """
     prog = Main(
         m_reject := CReg("m_reject", size=2),
         m_t := CReg("m_t", 1),

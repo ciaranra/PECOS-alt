@@ -14,22 +14,26 @@
 from __future__ import annotations
 
 from itertools import combinations, product
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from pecos import circuits
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 from pecos.circuits import QuantumCircuit
 from pecos.engines.circuit_runners import Standard
 from pecos.simulators import SparseSimPy
 
 
-def fault_tolerance_check(qecc, decoder):
+def fault_tolerance_check(qecc, decoder) -> None:
     """Checks that the decoder can correct all Pauli errors of weight up to floor(distance/2).
 
     Args:
     ----
-        QECC:
-        decoder:
+        qecc: The quantum error correcting code instance to check.
+        decoder: The decoder instance used for error correction.
 
     Raises:
     ------
@@ -75,7 +79,8 @@ def fault_tolerance_check(qecc, decoder):
         )
 
         if sign:
-            raise Exception("Decoder failed to correct error: %s" % err)
+            msg = f"Decoder failed to correct error: {err}"
+            raise Exception(msg)
 
         sign = _apply_err(
             state,
@@ -88,7 +93,8 @@ def fault_tolerance_check(qecc, decoder):
         )
 
         if sign:
-            raise Exception("Decoder failed to correct error: %s" % err)
+            msg = f"Decoder failed to correct error: {err}"
+            raise Exception(msg)
 
     # Check circuit errors
     # Need to apply errors amongst any combination of ticks and qubits
@@ -114,7 +120,8 @@ def fault_tolerance_check(qecc, decoder):
         )
 
         if sign:
-            raise Exception("Decoder failed to correct error: %s" % str(spacetime))
+            msg = f"Decoder failed to correct error: {spacetime!s}"
+            raise Exception(msg)
 
         sign = _apply_err_spacetime(
             state,
@@ -127,10 +134,11 @@ def fault_tolerance_check(qecc, decoder):
         )
 
         if sign:
-            raise Exception("Decoder failed to correct error: %s" % str(spacetime))
+            msg = f"Decoder failed to correct error: {spacetime!s}"
+            raise Exception(msg)
 
 
-def form_errors(xs, zs):
+def form_errors(xs, zs) -> dict:
     errors = {}
     for t, q in xs:
         xerr = errors.setdefault(t, {}).setdefault("X", set())
@@ -151,7 +159,7 @@ def _apply_err_spacetime(
     decoder,
     logical_op,
     qecc,
-):
+) -> int:
     circ_runner.run(state, init_circ)
 
     syn_circ = qecc.instruction("instr_syn_extract", num_syn_extract=1)
@@ -189,11 +197,19 @@ def _apply_err_spacetime(
     return state.logical_sign(logical_op)
 
 
-def _apply_err(state, circ_runner, init_circ, syn_circ, error, decoder, logical_op):
+def _apply_err(
+    state,
+    circ_runner,
+    init_circ,
+    syn_circ,
+    error,
+    decoder,
+    logical_op,
+) -> int:
     circ_runner.run(state, init_circ)
     circ_runner.run(state, error)
     output, _ = circ_runner.run(state, syn_circ)
-    syn = output.simplified(True)
+    syn = output.simplified(last=True)
 
     if syn:
         recovery = decoder.decode(syn)
@@ -208,13 +224,15 @@ def gen_pauli_errors(
     min_errors: int = 1,
     max_errors: bool | int = False,
     css: bool = False,
-):
-    """Args:
+) -> Generator[tuple[set[int], set[int]], None, None]:
+    """Generate Pauli error patterns for fault tolerance testing.
+
+    Args:
     ----
-        qubits:
-        min_errors:
-        max_errors:
-        css:
+        qubits: Set or sequence of qubit indices to generate errors on.
+        min_errors: Minimum number of errors to generate.
+        max_errors: Maximum number of errors to generate. False for no limit.
+        css: If True, generate only CSS-compatible errors (X and Z only).
 
     Returns:
     -------
@@ -238,7 +256,7 @@ def gen_pauli_errors(
             for ps in xzs:
                 x_set = set()
                 z_set = set()
-                for p, q in zip(ps, b):
+                for p, q in zip(ps, b, strict=False):
                     if p == "X":
                         x_set.add(q)
                     else:
@@ -253,7 +271,7 @@ def gen_pauli_errors(
                 for b in combinations(qubits, i):
                     x_set = set()
                     z_set = set()
-                    for p, q in zip(a, b):
+                    for p, q in zip(a, b, strict=False):
                         if p == "X":
                             x_set.add(q)
                         elif p == "Z":

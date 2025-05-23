@@ -20,7 +20,7 @@ from pecos.slr import Barrier, Bit, Block, Comment, If, QReg, Qubit, Repeat
 class PrepEncodingNonFTZero(Block):
     """Represents the non-fault-tolerant encoding circuit for the Steane code."""
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)
@@ -46,7 +46,7 @@ class PrepEncodingNonFTZero(Block):
 
 
 class PrepZeroVerify(Block):
-    """Verify the initialization of InitEncodingNonFTZero"""
+    """Verify the initialization of InitEncodingNonFTZero."""
 
     def __init__(
         self,
@@ -55,7 +55,7 @@ class PrepZeroVerify(Block):
         init_bit: Bit,
         *,
         reset_ancilla: bool = True,
-    ):
+    ) -> None:
         q = qubits
         a = ancilla
         c = init_bit
@@ -100,7 +100,7 @@ class PrepEncodingFTZero(Block):
         init_bit: Bit,
         *,
         reset: bool = True,
-    ):
+    ) -> None:
         q = data
         a = ancilla
 
@@ -138,7 +138,7 @@ class PrepRUS(Block):
         state: str = "|0>",
         *,
         first_round_reset: bool = True,
-    ):
+    ) -> None:
         super().__init__(
             PrepEncodingFTZero(q, a, init, reset=first_round_reset),
             Repeat(limit - 1).block(
@@ -161,7 +161,7 @@ class PrepRUS(Block):
 class LogZeroRot(Block):
     """Rotate logical |0> to appropriate Pauli state."""
 
-    def __init__(self, q: QReg, state: str):
+    def __init__(self, q: QReg, state: str) -> None:
         super().__init__()
 
         match state:

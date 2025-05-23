@@ -24,8 +24,10 @@ class Block(Instr):
 
 
 class SeqBlock(Block):
-    """A generic sequence block. This is not meant to indicate parallelism or lack of it but is just a way to structure
-    operations/blocks."""
+    """A generic sequence block.
+
+    This is not meant to indicate parallelism or lack of it but is just a way to structure operations/blocks.
+    """
 
     def __init__(self, ops: list[Op | Block], metadata: dict | None = None) -> None:
         super().__init__(metadata=metadata)

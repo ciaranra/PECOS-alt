@@ -14,12 +14,12 @@ import numpy as np
 from pecos.reps.pypmir.op_types import QOp
 
 
-def noise_tq_depolarizing(op: QOp, p: float, noise_dict: dict):
+def noise_tq_depolarizing(op: QOp, p: float, noise_dict: dict) -> list[QOp] | None:
     rand_nums = np.random.random(len(op.args)) <= p
 
     if np.any(rand_nums):
         noise = {}
-        for r, loc in zip(rand_nums, op.args):
+        for r, loc in zip(rand_nums, op.args, strict=False):
             if r:
                 rand = np.random.random()
                 p_tot = 0.0

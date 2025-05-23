@@ -18,7 +18,7 @@ class NotSupportedGateError(PECOSError):
 
 
 class WasmError(PECOSError):
-    """Base WASM-related exception type"""
+    """Base WASM-related exception type."""
 
 
 class MissingCCOPError(WasmError):

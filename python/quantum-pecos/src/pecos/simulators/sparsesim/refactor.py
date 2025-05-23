@@ -26,10 +26,6 @@ def find_stab(state, xs: set[int], zs: set[int]):
         state:
         xs:
         zs:
-
-    Returns:
-    -------
-
     """
     stabs = state.stabs
     destabs = state.destabs
@@ -74,9 +70,6 @@ def refactor(state, xs, zs, choose=None, prefer=None, protected=None):
         choose (None, int): Order of stabilizer ids to choose from.
         prefer (None, set): Stabilizer ids that we should choose from.
         protected (None, set): Stabilizer ids not to choose from.
-
-    Returns:
-    -------
 
     """
     stabs = state.stabs

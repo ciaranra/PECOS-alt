@@ -22,10 +22,12 @@ class GateIdentity(LogicalGate):
     """
 
     def __init__(self, qecc, symbol, **gate_params) -> None:
-        """Args:
+        """Initialize the GateSynExtract with the given parameters.
+
+        Args:
         ----
-            qecc(QECC):
-            symbol(str):
+            qecc(QECC): The quantum error correcting code instance
+            symbol(str): Symbol identifier for the gate
             **gate_params(dict): kwargs including keys: 'num_syn_extract' (default: qecc.distance).
         """
         super().__init__(qecc, symbol, **gate_params)
@@ -45,10 +47,12 @@ class GateInitZero(LogicalGate):
     """Initialize logical state zero."""
 
     def __init__(self, qecc, symbol, **gate_params) -> None:
-        """Args:
+        """Initialize the GateInitZero with the given parameters.
+
+        Args:
         ----
-            qecc(QECC):
-            symbol(str):
+            qecc(QECC): The quantum error correcting code instance
+            symbol(str): Symbol identifier for the gate
             **gate_params(dict): kwargs including keys: 'num_syn_extract' (default: 0).
         """
         super().__init__(qecc, symbol, **gate_params)
@@ -70,10 +74,12 @@ class GateInitPlus(LogicalGate):
     """Initialize logical state plus."""
 
     def __init__(self, qecc, symbol, **gate_params) -> None:
-        """Args:
+        """Initialize the GateInitPlus with the given parameters.
+
+        Args:
         ----
-            qecc(QECC):
-            symbol(str):
+            qecc(QECC): The quantum error correcting code instance
+            symbol(str): Symbol identifier for the gate
             **gate_params(dict): kwargs including keys: 'num_syn_extract' (default: 0).
         """
         super().__init__(qecc, symbol, **gate_params)

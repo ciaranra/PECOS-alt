@@ -25,11 +25,13 @@ from pecos.reps.pypmir import types as pt
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Sequence
 
+    from numpy import integer
+
     from pecos import QuantumCircuit
     from pecos.foreign_objects.foreign_object_abc import ForeignObject
 
 
-def version2tuple(v):
+def version2tuple(v: str) -> tuple[int, ...]:
     """Get version tuple from string."""
     return tuple(map(int, (v.split("."))))
 
@@ -56,11 +58,11 @@ class PHIRClassicalInterpreter(ClassicalInterpreter):
 
         self.reset()
 
-    def _reset_env(self):
+    def _reset_env(self) -> None:
         self.cenv = []
         self.cid2dtype = []
 
-    def reset(self):
+    def reset(self) -> None:
         """Reset the state to that at initialization."""
         self.program = None
         self.foreign_obj = None
@@ -71,8 +73,9 @@ class PHIRClassicalInterpreter(ClassicalInterpreter):
         program: str | (dict | QuantumCircuit),
         foreign_obj: ForeignObject | None = None,
     ) -> int:
-        """Initialize the interpreter to validate the format of the program, optimize the program representation,
-        etc.
+        """Initialize the interpreter to validate and optimize the program.
+
+        Validates the format of the program and optimizes the program representation.
         """
         self.program = program
         self.foreign_obj = foreign_obj
@@ -83,7 +86,7 @@ class PHIRClassicalInterpreter(ClassicalInterpreter):
             str,
         ):  # Assume it is in the PHIR/JSON format and convert to dict
             self.program = json.loads(program)
-        elif isinstance(self.program, (PyPMIR, dict)):
+        elif isinstance(self.program, PyPMIR | dict):
             pass
         else:
             self.program = self.program.to_phir_dict()
@@ -113,7 +116,7 @@ class PHIRClassicalInterpreter(ClassicalInterpreter):
 
         return self.program.num_qubits
 
-    def check_ffc(self, call_list: list[str], fobj: ForeignObject):
+    def check_ffc(self, call_list: list[str], fobj: ForeignObject) -> None:
         if self.program.foreign_func_calls:
             func_names = set(fobj.get_funcs())
             not_supported = set(call_list) - func_names
@@ -127,7 +130,7 @@ class PHIRClassicalInterpreter(ClassicalInterpreter):
             msg = "No foreign function calls being made but foreign object is supplied."
             raise warnings.warn(msg, stacklevel=2)
 
-    def shot_reinit(self):
+    def shot_reinit(self) -> None:
         """Run all code needed at the beginning of each shot, e.g., resetting state."""
         self.initialize_cenv()
 
@@ -140,7 +143,7 @@ class PHIRClassicalInterpreter(ClassicalInterpreter):
                 self.cenv.append(dtype(0))
                 self.cid2dtype.append(dtype)
 
-    def add_cvar(self, cvar: str, dtype, size: int):
+    def add_cvar(self, cvar: str, dtype: type[np.integer], size: int) -> None:
         """Adds a new classical variable to the interpreter."""
         if cvar not in self.csym2id:
             cid = len(self.csym2id)
@@ -156,7 +159,7 @@ class PHIRClassicalInterpreter(ClassicalInterpreter):
                 ),
             )
 
-    def _flatten_blocks(self, seq: Sequence):
+    def _flatten_blocks(self, seq: Sequence) -> Generator[Any, None, None]:
         """Flattens the ops of blocks to be processed by the execute() method."""
         for op in seq:
             if isinstance(op, pt.block.SeqBlock):
@@ -175,7 +178,6 @@ class PHIRClassicalInterpreter(ClassicalInterpreter):
 
     def execute(self, seq: Sequence) -> Generator[list, Any, None]:
         """A generator that runs through and executes classical logic and yields other operations via a buffer."""
-
         op_buffer = []
 
         for op in self._flatten_blocks(seq):
@@ -203,15 +205,15 @@ class PHIRClassicalInterpreter(ClassicalInterpreter):
         if op_buffer:
             yield op_buffer
 
-    def get_cval(self, cvar):
+    def get_cval(self, cvar: str) -> np.integer:
         cid = self.csym2id[cvar]
         return self.cenv[cid]
 
-    def get_bit(self, cvar, idx):
+    def get_bit(self, cvar: str, idx: int) -> int:
         cval = self.get_cval(cvar)
         dtype = type(cval)
 
-        # Check if idx is within valid range for the data type
+        # Check if idx is within the valid range for the data type
         bit_width = 8 * np.dtype(dtype).itemsize
         if idx >= bit_width:
             msg = f"Bit index {idx} out of range for {dtype} (max {bit_width - 1})"
@@ -219,14 +221,16 @@ class PHIRClassicalInterpreter(ClassicalInterpreter):
                 msg,
             )
 
-        # Use the same data type for the constant 1
+        # Use the same data type for constant 1
         one = dtype(1)
         mask = one << dtype(idx)
 
-        val = (cval & mask) >> dtype(idx)
-        return val
+        return (cval & mask) >> dtype(idx)
 
-    def eval_expr(self, expr: int | str | list | pt.opt.COp) -> int | None:
+    def eval_expr(
+        self,
+        expr: int | str | list | pt.opt.COp,
+    ) -> None | int | integer:
         """Evaluates integer expressions."""
         match expr:
             case int():
@@ -241,58 +245,47 @@ class PHIRClassicalInterpreter(ClassicalInterpreter):
                 args = expr.args
 
                 if sym in {"~"}:  # Unary ops
-                    lhs = args[0]
-                    rhs = None
-                else:
-                    lhs, rhs = args
-                    rhs = self.eval_expr(rhs)
+                    lhs = self.eval_expr(args[0])
+                    dtype = type(lhs)
+                    return dtype(~lhs)
 
+                # Binary operators
+                lhs, rhs = args
                 lhs = self.eval_expr(lhs)
+                rhs = self.eval_expr(rhs)
                 dtype = type(lhs)
 
-                if sym == "^":
-                    return dtype(lhs ^ rhs)
-                elif sym == "+":
-                    return dtype(lhs + rhs)
-                elif sym == "-":
-                    return dtype(lhs - rhs)
-                elif sym == "|":
-                    return dtype(lhs | rhs)
-                elif sym == "&":
-                    return dtype(lhs & rhs)
-                elif sym == ">>":
-                    return dtype(lhs >> rhs)
-                elif sym == "<<":
-                    return dtype(lhs << rhs)
-                elif sym == "*":
-                    return dtype(lhs * rhs)
-                elif sym == "/":
-                    return dtype(lhs // rhs)
-                elif sym == "==":
-                    return dtype(lhs == rhs)
-                elif sym == "!=":
-                    return dtype(lhs != rhs)
-                elif sym == "<=":
-                    return dtype(lhs <= rhs)
-                elif sym == ">=":
-                    return dtype(lhs >= rhs)
-                elif sym == "<":
-                    return dtype(lhs < rhs)
-                elif sym == ">":
-                    return dtype(lhs > rhs)
-                elif sym == "%":
-                    return dtype(lhs % rhs)
-                elif sym == "~":
-                    return dtype(~lhs)
-                else:
-                    msg = f"Unknown expression type: {sym}"
-                    raise ValueError(msg)
+                # Map of operators to their functions
+                ops = {
+                    "^": lambda x, y: x ^ y,
+                    "+": lambda x, y: x + y,
+                    "-": lambda x, y: x - y,
+                    "|": lambda x, y: x | y,
+                    "&": lambda x, y: x & y,
+                    ">>": lambda x, y: x >> y,
+                    "<<": lambda x, y: x << y,
+                    "*": lambda x, y: x * y,
+                    "/": lambda x, y: x // y,
+                    "==": lambda x, y: x == y,
+                    "!=": lambda x, y: x != y,
+                    "<=": lambda x, y: x <= y,
+                    ">=": lambda x, y: x >= y,
+                    "<": lambda x, y: x < y,
+                    ">": lambda x, y: x > y,
+                    "%": lambda x, y: x % y,
+                }
+
+                if sym in ops:
+                    return dtype(ops[sym](lhs, rhs))
+
+                msg = f"Unknown expression type: {sym}"
+                raise ValueError(msg)
             case _:
                 return None
 
-    def assign_int(self, cvar, val: int):
+    def assign_int(self, cvar: str | tuple | list, val: int) -> None:
         i = None
-        if isinstance(cvar, (tuple, list)):
+        if isinstance(cvar, tuple | list):
             cvar, i = cvar
 
         cid = self.csym2id[cvar]
@@ -315,22 +308,19 @@ class PHIRClassicalInterpreter(ClassicalInterpreter):
             cval &= (1 << size) - 1
         self.cenv[cid] = cval
 
-    def handle_cops(self, op):
+    def handle_cops(self, op: pt.opt.COp) -> None:
         """Handle the processing of classical operations."""
-
         if op.name == "=":
-            args = []
-            for a in op.args:
-                args.append(self.eval_expr(a))
+            args = [self.eval_expr(a) for a in op.args]
 
-            for r, a in zip(op.returns, args):
+            for r, a in zip(op.returns, args, strict=False):
                 self.assign_int(r, a)
 
         elif op.name == "Result":
             # The "Result" instruction maps internal register names to external ones
             # For example: {"cop": "Result", "args": ["m"], "returns": ["c"]}
             # maps the "m" register to "c" for user-facing results
-            for src_reg, dst_reg in zip(op.args, op.returns):
+            for src_reg, dst_reg in zip(op.args, op.returns, strict=False):
                 if isinstance(src_reg, str) and src_reg in self.csym2id:
                     # If source register exists, copy its value to the destination register
                     src_id = self.csym2id[src_reg]
@@ -368,20 +358,20 @@ class PHIRClassicalInterpreter(ClassicalInterpreter):
                     (cvar,) = op.returns
                     self.assign_int(cvar, results)
                 else:
-                    for cvar, val in zip(op.returns, results):
+                    for cvar, val in zip(op.returns, results, strict=False):
                         self.assign_int(cvar, val)
 
         else:
             msg = f"Unsupported COp: {op}"
             raise Exception(msg)
 
-    def receive_results(self, qsim_results: list[dict]):
+    def receive_results(self, qsim_results: list[dict]) -> None:
         """Receive measurement results and assign as needed."""
         for meas in qsim_results:
             for cvar, val in meas.items():
                 self.assign_int(cvar, val)
 
-    def results(self, return_int=True) -> dict:
+    def results(self, *, return_int: bool = True) -> dict:
         """Dumps program final results."""
         result = {}
         for csym, cid in self.csym2id.items():
@@ -397,10 +387,12 @@ class PHIRClassicalInterpreter(ClassicalInterpreter):
         self,
         bits: Iterable[tuple[str, int]],
         *,
-        filter_private=True,
+        filter_private: bool = True,
     ) -> dict[tuple[str, int], int]:
-        """Git a dictionary of bit values given an iterable of bits (which are encoded as tuple[str, int]
-        for str[int])."""
+        """Get a dictionary of bit values given an iterable of bits.
+
+        Bits are encoded as tuple[str, int] for str[int].
+        """
         send_meas = {}
         for b in bits:
             for m, i in b:

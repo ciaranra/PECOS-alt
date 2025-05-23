@@ -25,7 +25,7 @@ class ErrorModel(metaclass=ABCMeta):
     def reset(self) -> None:
         """Reset state to initialization state."""
 
-    def init(self, num_qubits, machine=None):
+    def init(self, num_qubits, machine=None) -> None:
         self.machine = machine
         self.num_qubits = num_qubits
 
