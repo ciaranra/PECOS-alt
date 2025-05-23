@@ -11,7 +11,12 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from pecos.circuits import QuantumCircuit
+
+JSONType = dict[str, Any] | list[Any] | str | int | float | bool | None
 
 
 class Simulator:
@@ -24,13 +29,16 @@ class Simulator:
         self,
         symbol: str,
         locations: set[int] | set[tuple[int, ...]],
-        **params: Any,
-    ):
-        """Args:
+        **params: JSONType,
+    ) -> dict[int | tuple[int, ...], JSONType]:
+        """Run a gate operation on the simulator.
+
+        Args:
         ----
-            symbol:
-            locations:
-            **params:
+            symbol: The gate symbol/name to execute.
+            locations: Set of qubit indices or tuples of indices where the gate should be applied.
+            **params: Additional parameters for the gate operation.
+
         """
         output = {}
 
@@ -54,11 +62,17 @@ class Simulator:
 
         return output
 
-    def run_circuit(self, circuit, removed_locations=None):
-        """Args:
+    def run_circuit(  # noqa: D417
+        self,
+        circuit: QuantumCircuit,
+        removed_locations: set | None = None,
+    ) -> dict[int | tuple[int, ...], JSONType]:
+        """Run a quantum circuit on the simulator.
+
+        Args:
         ----
             circuit (QuantumCircuit): A circuit instance or object with an appropriate items() generator.
-            removed_locations:
+            removed_locations: Optional set of locations to skip when running the circuit.
 
         Returns (list): If output is True then the circuit output is returned. Note that this output format may differ
         from what a ``circuit_runner`` will return for the same method named ``run_circuit``.
@@ -81,5 +95,9 @@ class Simulator:
 
         return results
 
-    def add_faults(self, circuit, removed_locations=None) -> None:
+    def add_faults(
+        self,
+        circuit: QuantumCircuit,
+        removed_locations: set | None = None,
+    ) -> None:
         self.run_circuit(circuit, removed_locations)

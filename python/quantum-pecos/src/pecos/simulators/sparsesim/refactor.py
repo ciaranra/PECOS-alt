@@ -18,7 +18,7 @@ logical_flip
 """
 
 
-def find_stab(state, xs: set[int], zs: set[int]):
+def find_stab(state, xs: set[int], zs: set[int]) -> tuple[bool, set[int]]:
     """Find a stabilizer in the stabilizer group.
 
     Args:
@@ -59,7 +59,9 @@ def find_stab(state, xs: set[int], zs: set[int]):
     return found, antidestabs
 
 
-def refactor(state, xs, zs, choose=None, prefer=None, protected=None):
+def refactor(
+    state, xs, zs, choose=None, prefer=None, protected=None
+) -> tuple[bool, int | None]:
     """Find the sign of the logical operator.
 
     Args:

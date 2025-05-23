@@ -11,10 +11,13 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pecos.type_defs import SimulatorGateParams
 
 
-def meas_x(state, qubit: int, **params: Any) -> int:
+def meas_x(state, qubit: int, **_params: SimulatorGateParams) -> int:
     """Measurement in the X basis.
 
     Args:
@@ -28,7 +31,7 @@ def meas_x(state, qubit: int, **params: Any) -> int:
     return 0
 
 
-def meas_z(state, qubit: int, **params: Any) -> int:
+def meas_z(state, qubit: int, **_params: SimulatorGateParams) -> int:
     """Measurement in the Z basis.
 
     Args:
@@ -42,7 +45,7 @@ def meas_z(state, qubit: int, **params: Any) -> int:
     return 0
 
 
-def meas_y(state, qubit: int, **params: Any) -> int:
+def meas_y(state, qubit: int, **_params: SimulatorGateParams) -> int:
     """Measurement in the Y basis.
 
     Args:
@@ -56,7 +59,9 @@ def meas_y(state, qubit: int, **params: Any) -> int:
     return 0
 
 
-def meas_pauli(state, qubits: int | tuple[int, ...], **params: Any) -> int:
+def meas_pauli(
+    state, qubits: int | tuple[int, ...], **params: SimulatorGateParams
+) -> int:
     pauli = params["Pauli"]
 
     if isinstance(qubits, int) and pauli not in ["X", "Y", "Z"]:
@@ -88,7 +93,7 @@ def meas_pauli(state, qubits: int | tuple[int, ...], **params: Any) -> int:
     return meas % 2
 
 
-def force_output(state, qubit: int, forced_output: int = -1) -> int:
+def force_output(_state, _qubit: int, forced_output: int = -1) -> int:
     """Outputs value.
 
     Used for error generators to generate outputs when replacing measurements.

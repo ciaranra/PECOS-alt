@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 
-def main():
+def main() -> None:
     # See if Cython has been installed...
 
     current_location = Path.parent(Path.resolve(__file__))

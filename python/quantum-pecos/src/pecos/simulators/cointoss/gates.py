@@ -9,25 +9,31 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import numpy as np
 
+if TYPE_CHECKING:
+    from pecos.simulators.cointoss.state import CoinToss
+    from pecos.type_defs import SimulatorGateParams
 
-def ignore_gate(state, qubits: int, **params: Any) -> None:
+
+def ignore_gate(state: CoinToss, _qubits: int, **_params: SimulatorGateParams) -> None:
     """Ignore the gate.
 
     Args:
         state: An instance of ``CoinToss``.
-        qubits: The qubits the gate was applied to.
+        _qubits: The qubits the gate was applied to.
     """
 
 
-def measure(state, qubits: int, **params: Any) -> int:
+def measure(state: CoinToss, _qubits: int, **_params: SimulatorGateParams) -> int:
     """Return |1> with probability ``state.prob`` or |0> otherwise.
 
     Args:
         state: An instance of ``CoinToss``.
-        qubit: The qubit the measurement is applied to.
+        _qubits: The qubit the measurement is applied to.
     """
     return 1 if np.random.random() < state.prob else 0

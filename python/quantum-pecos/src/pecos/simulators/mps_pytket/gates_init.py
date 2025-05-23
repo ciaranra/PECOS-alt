@@ -9,13 +9,18 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pecos.type_defs import SimulatorGateParams
 
 from pecos.simulators.mps_pytket.gates_meas import meas_z
 from pecos.simulators.mps_pytket.gates_one_qubit import X
 
 
-def init_zero(state, qubit: int, **params: Any) -> None:
+def init_zero(state, qubit: int, **_params: SimulatorGateParams) -> None:
     """Initialise or reset the qubit to state |0>.
 
     Args:
@@ -28,7 +33,7 @@ def init_zero(state, qubit: int, **params: Any) -> None:
         X(state, qubit)
 
 
-def init_one(state, qubit: int, **params: Any) -> None:
+def init_one(state, qubit: int, **_params: SimulatorGateParams) -> None:
     """Initialise or reset the qubit to state |1>.
 
     Args:

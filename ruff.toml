@@ -72,6 +72,10 @@ ignore = [
     "D106", # Missing docstring in public nested class
     "D107", # Missing docstring in __init__
 
+    # flake8-annotations
+    "ANN101", # Missing type annotation for self in method
+    "ANN102", # Missing type annotation for cls in classmethod
+
     # pylint
     "PLR0912", # Too many branches
     "PLR0913", # Too many arguments
@@ -85,6 +89,9 @@ ignore = [
 
     # tryceratops
     "TRY002", # Custom exceptions
+
+    # flake8-commas
+    "COM812", # Trailing comma missing - conflicts with formatter
 ]
 
 [lint.per-file-ignores]
@@ -94,46 +101,84 @@ ignore = [
     "S101",                         # Use of `assert` detected - Assert is standard practice in test files
     "N802",                         # Function name should be lowercase - Test functions often match gate names
 ]
-
-"python/quantum-pecos/src/pecos/circuits/*.py" = [
-]
-
-"python/quantum-pecos/src/pecos/qeclib/*.py" = [
-]
+"python/quantum-pecos/src/pecos/simulators/*.py" = ["N802"]
 
 "python/quantum-pecos/src/pecos/misc/*.py" = [
     "ANN001",
-    "ANN002",
-    "ANN003",
 ]
 "python/quantum-pecos/src/pecos/engines/*.py" = [
     "ANN001",
-    "ANN002",
-    "ANN003",
 ]
 "python/quantum-pecos/src/pecos/tools/*.py" = [
     "ANN001",
-    "ANN002",
-    "ANN003",
 ]
 "python/quantum-pecos/src/pecos/error_models/*.py" = [
     "ANN001",
-    "ANN002",
-    "ANN003",
 ]
 "python/quantum-pecos/src/pecos/qeccs/*.py" = [
     "ANN001",
-    "ANN002",
-    "ANN003",
 ]
-"python/quantum-pecos/src/pecos/simulators/*.py" = [
-    "ANN",
-    "N802",
-    "ARG",
+"python/quantum-pecos/src/pecos/simulators/basic_sv/*.py" = [
+    "ANN001",
     "D205", # 1 blank line required between summary line and description
     "D415", # The first line should end with a period, question mark, or exclamation point
     "D417", # Missing argument descriptions in the docstring
 ]
+"python/quantum-pecos/src/pecos/simulators/cointoss/*.py" = [
+    "D205", # 1 blank line required between summary line and description
+    "D415", # The first line should end with a period, question mark, or exclamation point
+    "D417", # Missing argument descriptions in the docstring
+]
+"python/quantum-pecos/src/pecos/simulators/custatevec/*.py" = [
+    "ANN001",
+    # "ARG001",
+    "D205", # 1 blank line required between summary line and description
+    "D415", # The first line should end with a period, question mark, or exclamation point
+    "D417", # Missing argument descriptions in the docstring
+]
+"python/quantum-pecos/src/pecos/simulators/cysparsesim*/*.py" = [
+    "ANN001",
+    "D205", # 1 blank line required between summary line and description
+    "D415", # The first line should end with a period, question mark, or exclamation point
+    "D417", # Missing argument descriptions in the docstring
+]
+"python/quantum-pecos/src/pecos/simulators/mps_pytket/*.py" = [
+    "ANN001",
+    # "ARG001",
+    "D205", # 1 blank line required between summary line and description
+    "D415", # The first line should end with a period, question mark, or exclamation point
+    "D417", # Missing argument descriptions in the docstring
+]
+"python/quantum-pecos/src/pecos/simulators/paulifaultprop/*.py" = [
+    "ANN001",
+    "ARG001",
+    "D205", # 1 blank line required between summary line and description
+    "D415", # The first line should end with a period, question mark, or exclamation point
+    "D417", # Missing argument descriptions in the docstring
+]
+"python/quantum-pecos/src/pecos/simulators/projectq/*.py" = [
+    "ANN001",
+    "ARG001",
+    "D205", # 1 blank line required between summary line and description
+    "D415", # The first line should end with a period, question mark, or exclamation point
+    "D417", # Missing argument descriptions in the docstring
+]
+"python/quantum-pecos/src/pecos/simulators/qulacs/*.py" = [
+    "ANN001",
+    "ARG001",
+    "D205", # 1 blank line required between summary line and description
+    "D415", # The first line should end with a period, question mark, or exclamation point
+    "D417", # Missing argument descriptions in the docstring
+]
+"python/quantum-pecos/src/pecos/simulators/sparsesim/*.py" = [
+    "ANN001",
+    "ARG001",
+    "D205", # 1 blank line required between summary line and description
+    "D415", # The first line should end with a period, question mark, or exclamation point
+    "D417", # Missing argument descriptions in the docstring
+]
+
+
 "python/quantum-pecos/src/pecos/slr/*.py" = [
     "ANN",
     "D205",

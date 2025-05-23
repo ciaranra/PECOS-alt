@@ -13,7 +13,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pecos.type_defs import SimulatorGateParams
 
 import numpy as np
 from projectq import ops
@@ -21,7 +24,7 @@ from projectq import ops
 from pecos.simulators.projectq.helper import MakeFunc
 
 
-def Identity(state, qubit: int, **params: Any) -> None:
+def Identity(state, qubit: int, **_params: SimulatorGateParams) -> None:
     """Identity does nothing.
 
     X -> X
@@ -40,7 +43,7 @@ def Identity(state, qubit: int, **params: Any) -> None:
     """
 
 
-def X(state, qubit: int, **params: Any) -> None:
+def X(state, qubit: int, **_params: SimulatorGateParams) -> None:
     """Pauli X.
 
     X -> X
@@ -60,7 +63,7 @@ def X(state, qubit: int, **params: Any) -> None:
     ops.X | state.qids[qubit]
 
 
-def Y(state, qubit: int, **params: Any) -> None:
+def Y(state, qubit: int, **_params: SimulatorGateParams) -> None:
     """X -> -X.
 
     Z -> -Z
@@ -78,7 +81,7 @@ def Y(state, qubit: int, **params: Any) -> None:
     ops.Y | state.qids[qubit]
 
 
-def Z(state, qubit: int, **params: Any) -> None:
+def Z(state, qubit: int, **_params: SimulatorGateParams) -> None:
     """X -> -X.
 
     Z -> Z
@@ -101,7 +104,9 @@ RY = MakeFunc(ops.Ry, angle=True).func  # Rotation about Y (takes angle arg)
 RZ = MakeFunc(ops.Rz, angle=True).func  # Rotation about Z (takes angle arg)
 
 
-def R1XY(state, qubit: int, angles: tuple[float, float], **params: Any) -> None:
+def R1XY(
+    state, qubit: int, angles: tuple[float, float], **_params: SimulatorGateParams
+) -> None:
     """Apply a single-qubit rotation gate composed of Y and Z rotations.
 
     R1XY(theta, phi) = U1q(theta, phi) = RZ(phi-pi/2)*RY(theta)*RZ(-phi+pi/2).
@@ -121,37 +126,37 @@ def R1XY(state, qubit: int, angles: tuple[float, float], **params: Any) -> None:
     RZ(state, qubit, angle=phi - np.pi / 2)
 
 
-def SX(state, qubit: int, **params: Any) -> None:
+def SX(state, qubit: int, **_params: SimulatorGateParams) -> None:
     """Square-root of X gate class."""
     RX(state, qubit, angle=np.pi / 2)
 
 
-def SXdg(state, qubit: int, **params: Any) -> None:
+def SXdg(state, qubit: int, **_params: SimulatorGateParams) -> None:
     """Adjoint of the square-root of X gate class."""
     RX(state, qubit, angle=-np.pi / 2)
 
 
-def SY(state, qubit: int, **params: Any) -> None:
+def SY(state, qubit: int, **_params: SimulatorGateParams) -> None:
     """Square-root of Y gate class."""
     RY(state, qubit, angle=np.pi / 2)
 
 
-def SYdg(state, qubit: int, **params: Any) -> None:
+def SYdg(state, qubit: int, **_params: SimulatorGateParams) -> None:
     """Adjoint of the square-root of Y gate class."""
     RY(state, qubit, angle=-np.pi / 2)
 
 
-def SZ(state, qubit: int, **params: Any) -> None:
+def SZ(state, qubit: int, **_params: SimulatorGateParams) -> None:
     """Square-root of Z gate class."""
     ops.S | state.qids[qubit]
 
 
-def SZdg(state, qubit: int, **params: Any) -> None:
+def SZdg(state, qubit: int, **_params: SimulatorGateParams) -> None:
     """Adjoint of the square-root of Z gate class."""
     ops.Sdag | state.qids[qubit]
 
 
-def H(state, qubit: int, **params: Any) -> None:
+def H(state, qubit: int, **_params: SimulatorGateParams) -> None:
     """Square root of Z.
 
     X -> Z
@@ -171,7 +176,7 @@ def H(state, qubit: int, **params: Any) -> None:
     ops.H | state.qids[qubit]
 
 
-def H2(state, qubit: int, **params: Any) -> None:
+def H2(state, qubit: int, **_params: SimulatorGateParams) -> None:
     # @property
     # def matrix(self):
 
@@ -179,7 +184,7 @@ def H2(state, qubit: int, **params: Any) -> None:
     ops.Z | state.qids[qubit]
 
 
-def H3(state, qubit: int, **params: Any) -> None:
+def H3(state, qubit: int, **_params: SimulatorGateParams) -> None:
     # @property
     # def matrix(self):
 
@@ -187,7 +192,7 @@ def H3(state, qubit: int, **params: Any) -> None:
     ops.Y | state.qids[qubit]
 
 
-def H4(state, qubit: int, **params: Any) -> None:
+def H4(state, qubit: int, **_params: SimulatorGateParams) -> None:
     # @property
     # def matrix(self):
 
@@ -195,7 +200,7 @@ def H4(state, qubit: int, **params: Any) -> None:
     ops.X | state.qids[qubit]
 
 
-def H5(state, qubit: int, **params: Any) -> None:
+def H5(state, qubit: int, **_params: SimulatorGateParams) -> None:
     # @property
     # def matrix(self):
 
@@ -203,7 +208,7 @@ def H5(state, qubit: int, **params: Any) -> None:
     ops.Z | state.qids[qubit]
 
 
-def H6(state, qubit: int, **params: Any) -> None:
+def H6(state, qubit: int, **_params: SimulatorGateParams) -> None:
     # @property
     # def matrix(self):
 
@@ -211,7 +216,7 @@ def H6(state, qubit: int, **params: Any) -> None:
     ops.Y | state.qids[qubit]
 
 
-def F(state, qubit: int, **params: Any) -> None:
+def F(state, qubit: int, **_params: SimulatorGateParams) -> None:
     """Face rotations of an octahedron #1."""
     # @property
     # def matrix(self):
@@ -220,13 +225,13 @@ def F(state, qubit: int, **params: Any) -> None:
     ops.Rz(np.pi / 2) | state.qids[qubit]
 
 
-def Fdg(state, qubit: int, **params: Any) -> None:
+def Fdg(state, qubit: int, **_params: SimulatorGateParams) -> None:
     """Adjoint of face rotations of an octahedron #1."""
     ops.Rz(-np.pi / 2) | state.qids[qubit]
     ops.Rx(-np.pi / 2) | state.qids[qubit]
 
 
-def F2(state, qubit: int, **params: Any) -> None:
+def F2(state, qubit: int, **_params: SimulatorGateParams) -> None:
     """Face rotations of an octahedron #2."""
     # @property
     # def matrix(self):
@@ -235,13 +240,13 @@ def F2(state, qubit: int, **params: Any) -> None:
     ops.Rx(-np.pi / 2) | state.qids[qubit]
 
 
-def F2dg(state, qubit: int, **params: Any) -> None:
+def F2dg(state, qubit: int, **_params: SimulatorGateParams) -> None:
     """Adjoint of face rotations of an octahedron #2."""
     ops.Rx(np.pi / 2) | state.qids[qubit]
     ops.Rz(-np.pi / 2) | state.qids[qubit]
 
 
-def F3(state, qubit: int, **params: Any) -> None:
+def F3(state, qubit: int, **_params: SimulatorGateParams) -> None:
     """Face rotations of an octahedron #3."""
     # @property
     # def matrix(self):
@@ -250,13 +255,13 @@ def F3(state, qubit: int, **params: Any) -> None:
     ops.Rz(np.pi / 2) | state.qids[qubit]
 
 
-def F3dg(state, qubit: int, **params: Any) -> None:
+def F3dg(state, qubit: int, **_params: SimulatorGateParams) -> None:
     """Adjoint of face rotations of an octahedron #3."""
     ops.Rz(-np.pi / 2) | state.qids[qubit]
     ops.Rx(np.pi / 2) | state.qids[qubit]
 
 
-def F4(state, qubit: int, **params: Any) -> None:
+def F4(state, qubit: int, **_params: SimulatorGateParams) -> None:
     """Face rotations of an octahedron #4."""
     # @property
     # def matrix(self):
@@ -265,7 +270,7 @@ def F4(state, qubit: int, **params: Any) -> None:
     ops.Rx(np.pi / 2) | state.qids[qubit]
 
 
-def F4dg(state, qubit: int, **params: Any) -> None:
+def F4dg(state, qubit: int, **_params: SimulatorGateParams) -> None:
     """Adjoint of face rotations of an octahedron #4."""
     ops.Rx(-np.pi / 2) | state.qids[qubit]
     ops.Rz(-np.pi / 2) | state.qids[qubit]

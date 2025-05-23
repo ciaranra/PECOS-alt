@@ -15,9 +15,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 import numpy as np
 
 from pecos.error_models.class_errors_circuit import ErrorCircuits
+
+if TYPE_CHECKING:
+    from pecos.type_defs import GateParams
 
 
 class ParentErrorModel:
@@ -49,12 +54,24 @@ class ParentErrorModel:
 
     def generate_tick_errors(
         self,
-        tick_circuit,  # noqa: ARG002
-        time,  # noqa: ARG002
-        **params,  # noqa: ARG002
+        _tick_circuit,
+        _time,
+        **_params: GateParams,
     ) -> dict:
-        """Returns before errors, after errors, and replaced locations for the given key (args)."""
-        return {}
+        """Returns before errors, after errors, and replaced locations for the given key (args).
+
+        This method should be overridden in subclasses.
+
+        Args:
+            tick_circuit: The tick circuit containing gate operations
+            time: The time index or tuple indicating when errors occur
+            **params: Additional parameters for error generation
+
+        Raises:
+            NotImplementedError: This base implementation should be overridden
+        """
+        msg = "Subclasses must implement generate_tick_errors"
+        raise NotImplementedError(msg)
 
 
 class Generator:
@@ -191,7 +208,7 @@ class Generator:
         after,
         before,
         replace,
-        **kwargs,
+        **kwargs: Any,  # noqa: ANN401 - Error functions have varying signatures
     ) -> set | list | None:
         """Used to determine if an error occurs, and if so, calls the error function to determine errors.
 
@@ -265,20 +282,20 @@ class Generator:
         def error_func_after(
             self,
             after,
-            before,  # noqa: ARG002
-            replace,  # noqa: ARG002
+            _before,
+            _replace,
             location,
-            error_params,  # noqa: ARG002
+            _error_params,
         ) -> None:
             after.update(self.data, {location}, emptyappend=True)
 
         def error_func_before(
             self,
-            after,  # noqa: ARG002
+            _after,
             before,
-            replace,  # noqa: ARG002
+            _replace,
             location,
-            error_params,  # noqa: ARG002
+            _error_params,
         ) -> None:
             before.update(self.data, {location}, emptyappend=True)
 
@@ -296,20 +313,20 @@ class Generator:
         def error_func_after(
             self,
             after,
-            before,  # noqa: ARG002
-            replace,  # noqa: ARG002
+            _before,
+            _replace,
             location,
-            error_params,  # noqa: ARG002
+            _error_params,
         ) -> None:
             after.update(np.random.choice(self.data), {location}, emptyappend=True)
 
         def error_func_before(
             self,
-            after,  # noqa: ARG002
+            _after,
             before,
-            replace,  # noqa: ARG002
+            _replace,
             location,
-            error_params,  # noqa: ARG002
+            _error_params,
         ) -> None:
             before.update(np.random.choice(self.data), {location}, emptyappend=True)
 
@@ -331,10 +348,10 @@ class Generator:
         def error_func_after(
             self,
             after,
-            before,  # noqa: ARG002
-            replace,  # noqa: ARG002
+            _before,
+            _replace,
             location,
-            error_params,  # noqa: ARG002
+            _error_params,
         ) -> None:
             # Choose an error symbol or tuple of symbols:
             indx = np.random.choice(len(self.data))
@@ -359,11 +376,11 @@ class Generator:
 
         def error_func_before(
             self,
-            after,  # noqa: ARG002
+            _after,
             before,
-            replace,  # noqa: ARG002
+            _replace,
             location,
-            error_params,  # noqa: ARG002
+            _error_params,
         ) -> None:
             indx = np.random.choice(len(self.data))
             error_symbols = self.data[indx]

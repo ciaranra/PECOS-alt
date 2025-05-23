@@ -10,7 +10,10 @@
 # specific language governing permissions and limitations under the License.
 
 
-import numpy as np
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from pytket import Qubit
 from pytket.extensions.cutensornet.structured_state import (
     Config,
@@ -21,11 +24,16 @@ from pytket.extensions.cutensornet.structured_state import (
 from pecos.simulators.mps_pytket import bindings
 from pecos.simulators.sim_class_types import StateTN
 
+if TYPE_CHECKING:
+    import numpy as np
+
+    from pecos.type_defs import SimulatorInitParams
+
 
 class MPS(StateTN):
     """Simulation using the gate-by-gate on demand MPS simulator from pytket-cutensornet."""
 
-    def __init__(self, num_qubits, **mps_params) -> None:
+    def __init__(self, num_qubits: int, **mps_params: SimulatorInitParams) -> None:
         """Initializes the MPS.
 
         Args:

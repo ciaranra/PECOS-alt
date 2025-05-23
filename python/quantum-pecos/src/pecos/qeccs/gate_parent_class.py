@@ -21,6 +21,7 @@ from pecos.qeccs.helper_functions import expected_params, make_hashable_params
 
 if TYPE_CHECKING:
     from pecos.qeccs.instruction_parent_class import LogicalInstruction
+    from pecos.type_defs import QECCGateParams
 
 
 class LogicalGate:
@@ -32,7 +33,7 @@ class LogicalGate:
     instruction symbols, which is an attribute of the class.
     """
 
-    def __init__(self, qecc, symbol, **gate_params) -> None:
+    def __init__(self, qecc, symbol, **gate_params: QECCGateParams) -> None:
         self.symbol = symbol
         self.qecc = qecc  # The qecc the gate is a member of.
         self.gate_params = gate_params  # Gate parameters

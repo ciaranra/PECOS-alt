@@ -9,15 +9,22 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
 import random
+from typing import TYPE_CHECKING
 
 import cupy as cp
 from cuquantum import ComputeType, cudaDataType
 from cuquantum import custatevec as cusv
-from numpy.typing import ArrayLike
 
 from pecos.simulators.custatevec import bindings
 from pecos.simulators.sim_class_types import StateVector
+
+if TYPE_CHECKING:
+    from typing import Self
+
+    from numpy.typing import ArrayLike
 
 
 class CuStateVec(StateVector):
@@ -81,16 +88,16 @@ class CuStateVec(StateVector):
         cusv.set_stream(self.libhandle, self.stream.ptr)
 
         # Device memory handler
-        def malloc(size, stream):
+        def malloc(size, stream) -> int:
             return cp.cuda.runtime.mallocAsync(size, stream)
 
-        def free(ptr, size, stream) -> None:
+        def free(ptr, _size, stream) -> None:
             cp.cuda.runtime.freeAsync(ptr, stream)
 
         mem_handler = (malloc, free, "GPU memory handler")
         cusv.set_device_mem_handler(self.libhandle, mem_handler)
 
-    def reset(self):
+    def reset(self) -> Self:
         """Reset the quantum state for another run without reinitializing."""
         # Initialize all qubits in the zero state
         self.cupy_vector = cp.zeros(shape=2**self.num_qubits, dtype=self.cp_type)

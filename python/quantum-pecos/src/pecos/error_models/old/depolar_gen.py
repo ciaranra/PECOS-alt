@@ -15,11 +15,14 @@
 
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from pecos.circuits.quantum_circuit import QuantumCircuit
 from pecos.error_models.class_errors_circuit import ErrorCircuits
 from pecos.error_models.parent_class_error_gen import ParentErrorModel
+
+if TYPE_CHECKING:
+    from pecos.type_defs import GateParams
 
 
 class DepolarModel(ParentErrorModel):
@@ -172,7 +175,12 @@ class DepolarModel(ParentErrorModel):
 
         return self.error_circuits
 
-    def generate_tick_errors(self, tick_circuit, time, **params) -> ErrorCircuits:
+    def generate_tick_errors(
+        self,
+        tick_circuit,
+        time,
+        **params: GateParams,
+    ) -> ErrorCircuits:
         """Returns before errors, after errors, and replaced locations for the given key (args)."""
         tick_index = time[-1] if isinstance(time, tuple) else time
 

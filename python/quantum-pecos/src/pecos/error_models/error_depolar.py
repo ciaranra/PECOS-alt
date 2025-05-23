@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from pecos.circuits import QuantumCircuit
@@ -25,6 +27,9 @@ from pecos.error_models.noise_impl_old.tq_noise import (
     noise_two_qubit_gates_depolarizing_with_noiseless,
 )
 from pecos.error_models.parent_class_error_gen import ParentErrorModel
+
+if TYPE_CHECKING:
+    from pecos.type_defs import GateParams
 
 
 class DepolarizingErrorModel(ParentErrorModel):
@@ -62,7 +67,7 @@ class DepolarizingErrorModel(ParentErrorModel):
         circuit,
         error_params,
         *,
-        reset_leakage=True,  # noqa: ARG002
+        _reset_leakage=True,  # Reserved for future leakage handling
     ) -> ErrorCircuits:
         self.qubit_set = set(range(circuit.metadata["num_qubits"]))
 
@@ -97,8 +102,8 @@ class DepolarizingErrorModel(ParentErrorModel):
         time,
         output=None,
         *,
-        reset_leakage=False,  # noqa: ARG002
-        **params,  # noqa: ARG002
+        _reset_leakage=False,  # Reserved for future leakage handling
+        **_params: GateParams,  # Reserved for additional parameters
     ) -> ErrorCircuits:
         """The method that gets called each circuit tick to generate circuit noise for that tick."""
         # Get the tick

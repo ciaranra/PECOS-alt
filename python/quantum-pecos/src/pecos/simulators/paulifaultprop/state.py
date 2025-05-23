@@ -97,8 +97,8 @@ class PauliFaultProp(PauliPropagation):
         circuit: ParamGateCollection,
         removed_locations: set[int] | (set[tuple[int, ...]] | None) = None,
         *,
-        apply_faults: bool = False,
-    ):
+        _apply_faults: bool = False,
+    ) -> None:
         """Used to apply a quantum circuit to a state, whether the circuit represents an fault or ideal circuit.
 
         Args:
@@ -106,7 +106,7 @@ class PauliFaultProp(PauliPropagation):
             circuit: A class representing a circuit. # TODO: Shouldn't this also include QuantumCircuit
             removed_locations : A set of qudit locations that correspond to
                 ideal gates that should be removed.
-            apply_faults: Whether to apply the `circuit` as a Pauli fault (True) or as a Clifford to update the
+            _apply_faults: Whether to apply the `circuit` as a Pauli fault (True) or as a Clifford to update the
                 faults (False).
 
         Returns: None
@@ -240,7 +240,7 @@ class PauliFaultProp(PauliPropagation):
                 msg = f"Got {symbol}. Can only handle Pauli errors."
                 raise Exception(msg)
 
-    def get_str(self):
+    def get_str(self) -> str:
         fault_dict = self.faults
 
         pstr = "-" if self.sign else "+"
@@ -256,7 +256,7 @@ class PauliFaultProp(PauliPropagation):
                 pstr += "I"
         return pstr
 
-    def fault_str_sign(self, *, strip=False):
+    def fault_str_sign(self, *, strip=False) -> str:
         fault_str = []
 
         if self.sign:
@@ -276,7 +276,7 @@ class PauliFaultProp(PauliPropagation):
 
         return fault_str
 
-    def fault_str_operator(self):
+    def fault_str_operator(self) -> str:
         fault_str = []
 
         for q in range(self.num_qubits):
@@ -297,7 +297,7 @@ class PauliFaultProp(PauliPropagation):
     def fault_string(self) -> str:
         return f"{self.fault_str_sign()}{self.fault_str_operator()}"
 
-    def fault_wt(self):
+    def fault_wt(self) -> int:
         wt = len(self.faults["X"])
         wt += len(self.faults["Y"])
         wt += len(self.faults["Z"])

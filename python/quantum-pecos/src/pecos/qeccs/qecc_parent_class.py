@@ -15,15 +15,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Generator  # noqa: TC003
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
 from pecos.circuit_converters.checks2circuit import Check2Circuits
 from pecos.qeccs.plot import plot_qecc
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
     from pecos.qeccs.gate_parent_class import LogicalGate
     from pecos.qeccs.instruction_parent_class import LogicalInstruction
+    from pecos.type_defs import QECCGateParams, QECCInstrParams, QECCParams
 
 T = TypeVar("T")
 
@@ -47,7 +49,7 @@ class QECC:
         Do not change the value of ``params`` once set during initialization.
     """
 
-    def __init__(self, **qecc_params) -> None:
+    def __init__(self, **qecc_params: QECCParams) -> None:
         # Give name for others classes to identify this code
         # --------------------------------------------------
         self.name = None  # Name that identifies to other what QECC this is.
@@ -119,7 +121,7 @@ class QECC:
         """
         plot_qecc(self, figsize)
 
-    def gate(self, symbol, **gate_params) -> LogicalGate:
+    def gate(self, symbol, **gate_params: QECCGateParams) -> LogicalGate:
         """Returns a logical gate object.
 
         Args:
@@ -151,7 +153,11 @@ class QECC:
 
         return gotten_gate
 
-    def instruction(self, symbol, **instr_params) -> LogicalInstruction:
+    def instruction(
+        self,
+        symbol,
+        **instr_params: QECCInstrParams,
+    ) -> LogicalInstruction:
         """Gets logical instruction given a string and parameters.
 
         Args:

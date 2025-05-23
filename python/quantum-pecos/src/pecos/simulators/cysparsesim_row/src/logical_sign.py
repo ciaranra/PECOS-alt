@@ -17,8 +17,10 @@ find_logical_signs
 logical_flip
 """
 
+from __future__ import annotations
 
-def find_logical_signs(state, logical_circuit, delogical_circuit):
+
+def find_logical_signs(state, logical_circuit, delogical_circuit) -> int:
     """Find the sign of the logical operator.
 
     Args:

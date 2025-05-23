@@ -9,10 +9,16 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
 import random
+from typing import TYPE_CHECKING
 
 from pecos.simulators.cointoss import bindings
 from pecos.simulators.parent_sim_classes import Simulator
+
+if TYPE_CHECKING:
+    from typing import Self
 
 
 class CoinToss(Simulator):
@@ -20,7 +26,9 @@ class CoinToss(Simulator):
     Meant for stochastical debugging of the classical branches.
     """
 
-    def __init__(self, num_qubits, prob=0.5, seed=None) -> None:
+    def __init__(
+        self, num_qubits: int, prob: float = 0.5, seed: int | None = None
+    ) -> None:
         """Initialization is trivial, since there is no state.
 
         Args:
@@ -43,7 +51,7 @@ class CoinToss(Simulator):
         self.num_qubits = num_qubits
         self.prob = prob
 
-    def reset(self):
+    def reset(self) -> Self:
         """Reset the quantum state for another run without reinitializing."""
         # Do nothing, this simulator does not keep a state!
         return self

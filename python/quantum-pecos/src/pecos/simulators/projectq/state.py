@@ -63,7 +63,7 @@ class ProjectQSim(StateVector):
         self.qids = dict(enumerate(self.qs))
         self.gate_dict = {}
 
-    def reset(self):
+    def reset(self) -> ProjectQSim:
         """Reset the quantum state to all 0 for another run without reinitializing."""
         self.eng.flush()
         amps = [0] * 2**self.num_qubits
@@ -94,7 +94,7 @@ class ProjectQSim(StateVector):
         else:
             self.gate_dict[symbol] = gate_obj
 
-    def get_probs(self, key_basis=None):
+    def get_probs(self, key_basis=None) -> dict[str, float]:
         self.eng.flush()
 
         if key_basis:
@@ -115,7 +115,7 @@ class ProjectQSim(StateVector):
 
         return probs_dict
 
-    def get_amps(self, key_basis=None):
+    def get_amps(self, key_basis=None) -> dict[str, complex]:
         self.eng.flush()
 
         if key_basis:

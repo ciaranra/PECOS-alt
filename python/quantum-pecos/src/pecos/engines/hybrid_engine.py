@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from pecos.machines.generic_machine import Machine
     from pecos.op_processors.generic_op_processor import OpProcessor
     from pecos.reps.pypmir import PyPMIR
+    from pecos.type_defs import GateParams
 
 
 class PHIRConvertible(Protocol):
@@ -62,7 +63,7 @@ class HybridEngine:
         machine: Machine | None = None,
         error_model: ErrorModel | None = None,
         op_processor: OpProcessor | None = None,
-        **params,
+        **params: GateParams,
     ) -> None:
         self.seed = None
 

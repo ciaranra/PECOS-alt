@@ -26,14 +26,13 @@ from pecos.circuits import qc2phir
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+    from pecos.type_defs import JSONDict, JSONValue
+
 # Type aliases
 Location = int | tuple[int, ...]
 LocationSet = set[Location] | list[Location] | tuple[Location, ...]
 GateDict = dict[str, LocationSet]
 CircuitSetup = None | int | list[GateDict]
-# JSON-like types
-JSONValue = "str | int | float | bool | None | JSONDict | list[JSONValue]"
-JSONDict = dict[str, JSONValue]
 
 
 class QuantumCircuit(MutableSequence):
@@ -336,8 +335,14 @@ class QuantumCircuit(MutableSequence):
         """Create a shallow copy."""
         newone = QuantumCircuit()
         newone.metadata = dict(self.metadata)
-        newone._ticks = self._ticks_class(self._ticks)
-
+        # Use a public property to access the number of ticks
+        num_ticks = len(self)
+        # Add empty ticks first
+        newone.add_ticks(num_ticks)
+        # Then populate each tick with gates
+        for i in range(num_ticks):
+            for symbol, locations, params in self[i].items():
+                newone.update(symbol, locations, tick=i, **params)
         return newone
 
     def copy(self) -> QuantumCircuit:

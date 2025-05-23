@@ -11,8 +11,13 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from pecos.reps.pypmir.op_types import QOp
 from pecos.simulators import StateVecRs
 from pecos.simulators.sparsesim.state import SparseSim
+
+JSONType = dict[str, Any] | list[Any] | str | int | float | bool | None
 
 try:
     from pecos.simulators.projectq.state import ProjectQSim
@@ -35,11 +40,9 @@ try:
 except ImportError:
     CuStateVec = None
 
-from pecos.reps.pypmir.op_types import QOp
-
 
 class QuantumSimulator:
-    def __init__(self, backend: str | object | None = None, **params) -> None:
+    def __init__(self, backend: str | object | None = None, **params: JSONType) -> None:
         self.num_qubits = None
         self.state = None
         self.backend = backend
@@ -82,7 +85,9 @@ class QuantumSimulator:
         self.state.reset()
 
     def run(self, qops: list[QOp]) -> list:
-        """Given a list of quantum operations, run them, update the state, and return any measurement results that
+        """Run a list of quantum operations and return measurement results.
+
+        Given a list of quantum operations, run them, update the state, and return any measurement results that
         are generated in the form {qid: result, ...}.
         """
         meas = []

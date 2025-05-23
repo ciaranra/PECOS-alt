@@ -14,6 +14,7 @@
 from pecos.circuits.quantum_circuit import QuantumCircuit
 from pecos.qeccs.helper_functions import pos2qudit
 from pecos.qeccs.instruction_parent_class import LogicalInstruction
+from pecos.type_defs import QECCInstrParams
 
 
 class InstrSynExtraction(LogicalInstruction):
@@ -22,7 +23,7 @@ class InstrSynExtraction(LogicalInstruction):
     Parent class sets self.qecc.
     """
 
-    def __init__(self, qecc, symbol, **params) -> None:
+    def __init__(self, qecc, symbol, **params: QECCInstrParams) -> None:
         super().__init__(qecc, symbol, **params)
 
         self.abstract_circuit = QuantumCircuit(**params)
@@ -148,7 +149,7 @@ class InstrInitZero(LogicalInstruction):
     Parent class sets self.qecc.
     """
 
-    def __init__(self, qecc, symbol, **params) -> None:
+    def __init__(self, qecc, symbol, **params: QECCInstrParams) -> None:
         super().__init__(qecc, symbol, **params)
 
         self.symbol = "instr_init_zero"
@@ -203,7 +204,7 @@ class InstrInitPlus(LogicalInstruction):
     Parent class sets self.qecc.
     """
 
-    def __init__(self, qecc, symbol, **params) -> None:
+    def __init__(self, qecc, symbol, **params: QECCInstrParams) -> None:
         super().__init__(qecc, symbol, **params)
 
         self.symbol = "instr_init_plus"

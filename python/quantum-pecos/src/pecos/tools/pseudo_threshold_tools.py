@@ -153,14 +153,14 @@ def find_polyfit(
 
 
 def find_uniscalefit(
-    ps,
-    plog,
-    distance,
-    p0=None,
-    maxfev=1000000,
+    ps: list[float] | np.ndarray,
+    plog: list[float] | np.ndarray,
+    distance: int,
+    p0: list[float] | np.ndarray | None = None,
+    maxfev: int = 1000000,
     *,
-    verbose=True,
-    **kwargs,
+    verbose: bool = True,
+    **kwargs: float | bool | str | None,
 ) -> tuple[float, float, float, float, np.ndarray, np.ndarray]:
     plist = np.array(ps)
     dlist = ns2nsfit(distance, len(plist))

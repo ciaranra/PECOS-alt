@@ -9,7 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pecos.type_defs import SimulatorGateParams
 
 
 class MakeFunc:
@@ -23,7 +28,7 @@ class MakeFunc:
         self.gate = gate
         self.angle = angle
 
-    def func(self, state, qubits, **params: Any) -> None:
+    def func(self, state, qubits, **params: SimulatorGateParams) -> None:
         if isinstance(qubits, int):
             qs = state.qids[qubits]
         else:

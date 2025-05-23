@@ -119,17 +119,17 @@ class LogicalCircuit(QuantumCircuit):
 
     @staticmethod
     def update(
-        symbol: str | GateDict,
-        locations: LocationSet | None = None,
-        tick: int = -1,
+        _symbol: str | GateDict,
+        _locations: LocationSet | None = None,
+        _tick: int = -1,
         *,
-        emptyappend: bool = False,
-        **params: JSONValue,
+        _emptyappend: bool = False,
+        **_params: JSONValue,
     ) -> NoReturn:
         msg = "!!!"
         raise NotImplementedError(msg)
 
-    def discard(self, locations: LocationSet, tick: int = -1) -> NoReturn:
+    def discard(self, _locations: LocationSet, _tick: int = -1) -> NoReturn:
         msg = "!!!"
         raise NotImplementedError(msg)
 

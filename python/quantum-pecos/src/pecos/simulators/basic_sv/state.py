@@ -10,11 +10,19 @@
 # specific language governing permissions and limitations under the License.
 
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
-from numpy.typing import ArrayLike
 
 from pecos.simulators.basic_sv import bindings
 from pecos.simulators.sim_class_types import StateVector
+
+if TYPE_CHECKING:
+    from typing import Self
+
+    from numpy.typing import ArrayLike
 
 
 class BasicSV(StateVector):
@@ -52,7 +60,7 @@ class BasicSV(StateVector):
         self.internal_vector = None
         self.reset()
 
-    def subscript_string(self, qubits: tuple[int], labels: tuple[chr]):
+    def subscript_string(self, qubits: tuple[int], labels: tuple[chr]) -> str:
         """Returns a string of subscripts to use with `np.einsum`.
 
         The string returned identifies each of the qubits (ndarray axes) in
@@ -95,7 +103,7 @@ class BasicSV(StateVector):
         # Concatenate characters into a string and return
         return "".join(qubit_ids)
 
-    def reset(self):
+    def reset(self) -> Self:
         """Reset the quantum state for another run without reinitializing."""
         # Initialize state vector to |0>
         self.internal_vector = np.zeros(shape=2**self.num_qubits)

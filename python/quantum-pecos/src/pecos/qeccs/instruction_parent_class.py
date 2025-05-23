@@ -15,15 +15,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator  # noqa: TC003
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pecos.qeccs.helper_functions import make_hashable_params
 from pecos.qeccs.plot import plot_instr
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from pecos.circuits import LocationSet
     from pecos.misc.symbol_library import JSONDict
+    from pecos.type_defs import QECCInstrParams
 
 
 class LogicalInstruction:
@@ -32,7 +34,7 @@ class LogicalInstruction:
     Logical instructions are circuits that
     """
 
-    def __init__(self, qecc, symbol, **params) -> None:
+    def __init__(self, qecc, symbol, **params: QECCInstrParams) -> None:
         """Initialize the LogicalInstruction with the given parameters.
 
         Args:
@@ -70,7 +72,7 @@ class LogicalInstruction:
 
         self.params_tuple = make_hashable_params(params)  # Used for hashing.
 
-    def plot(self, **kwargs) -> None:
+    def plot(self, **kwargs: Any) -> None:  # noqa: ANN401
         """Creates a plot of the logical instruction.
 
         Returns: None
@@ -78,7 +80,12 @@ class LogicalInstruction:
         """
         plot_instr(self, **kwargs)
 
-    def _compile_circuit(self, abstract_circuit, *args, **kwargs) -> None:
+    def _compile_circuit(
+        self,
+        abstract_circuit,
+        *args: Any,  # noqa: ANN401 - Allows for subclass extensions
+        **kwargs: Any,  # noqa: ANN401 - Compiler may need various parameters
+    ) -> None:
         """Create `circuit` instance from `abstract_circuit` instance for the logical instruction.
 
         If the instruction already has a `circuit` instance, do not bother compiling.

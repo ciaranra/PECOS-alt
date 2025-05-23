@@ -11,13 +11,18 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pecos.type_defs import SimulatorGateParams
 
 from pecos.simulators.projectq.gates_meas import meas_z
 from pecos.simulators.projectq.gates_one_qubit import H2, H5, H6, H, X
 
 
-def init_zero(state, qubit, **params: Any) -> None:
+def init_zero(state, qubit, **_params: SimulatorGateParams) -> None:
     """Args:
     ----
         state:
@@ -29,7 +34,7 @@ def init_zero(state, qubit, **params: Any) -> None:
         X(state, qubit)
 
 
-def init_one(state, qubit, **params: Any) -> None:
+def init_one(state, qubit, **_params: SimulatorGateParams) -> None:
     """Initialize qubit in state |1>.
 
     :param state:
@@ -40,7 +45,7 @@ def init_one(state, qubit, **params: Any) -> None:
     X(state, qubit)
 
 
-def init_plus(state, qubit, **params: Any) -> None:
+def init_plus(state, qubit, **_params: SimulatorGateParams) -> None:
     """Initialize qubit in state |+>.
 
     :param gens:
@@ -51,7 +56,7 @@ def init_plus(state, qubit, **params: Any) -> None:
     H(state, qubit)
 
 
-def init_minus(state, qubit, **params: Any) -> None:
+def init_minus(state, qubit, **_params: SimulatorGateParams) -> None:
     """Initialize qubit in state |->.
 
     :param gens:
@@ -62,7 +67,7 @@ def init_minus(state, qubit, **params: Any) -> None:
     H2(state, qubit)
 
 
-def init_plusi(state, qubit, **params: Any) -> None:
+def init_plusi(state, qubit, **_params: SimulatorGateParams) -> None:
     """Initialize qubit in state |+i>.
 
     :param gens:
@@ -73,7 +78,7 @@ def init_plusi(state, qubit, **params: Any) -> None:
     H5(state, qubit)
 
 
-def init_minusi(state, qubit, **params: Any) -> None:
+def init_minusi(state, qubit, **_params: SimulatorGateParams) -> None:
     """Initialize qubit in state |-i>.
 
     Args:

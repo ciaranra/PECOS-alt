@@ -10,9 +10,17 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
-from numpy.typing import NDArray
 from scipy.optimize import curve_fit
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from numpy.typing import NDArray
 
 
 def func(x, pth, v0, a, b, c) -> float | NDArray[np.float64]:
@@ -178,13 +186,13 @@ def func6(x, a, pth) -> float | NDArray[np.float64]:
 
 
 def threshold_fit(
-    plist,
-    dlist,
-    plog,
-    func,
-    p0,
-    maxfev=100000,
-    **kwargs,
+    plist: NDArray[np.float64] | list[float],
+    dlist: NDArray[np.float64] | list[float],
+    plog: NDArray[np.float64] | list[float],
+    func: Callable[..., float | NDArray[np.float64]],
+    p0: NDArray[np.float64] | list[float],
+    maxfev: int = 100000,
+    **kwargs: float | bool | str | None,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Fit threshold curve to logical error rate data.
 

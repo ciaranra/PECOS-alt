@@ -11,13 +11,20 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pecos.simulators.sparsesim.state import SparseSim
+    from pecos.type_defs import SimulatorGateParams
 
 from pecos.simulators.sparsesim.cmd_one_qubit import SX, SY, SZ, SYdg, SZdg, X
-from pecos.simulators.sparsesim.state import SparseSim
 
 
-def CX(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
+def CX(
+    state: SparseSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     """XI -> XX
     IX -> IX
     ZI -> ZI
@@ -89,7 +96,9 @@ def CX(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
         g.col_z[qubit1] ^= g.col_z[qubit2]
 
 
-def CZ(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
+def CZ(
+    state: SparseSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     """Applies a Controlled-Z gate (CZ) rotation.
 
     This version is best for a large number of qubits (aboa ut >= 150)
@@ -186,7 +195,9 @@ def CZ(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
             g.row_z[i].discard(qubit2)
 
 
-def CY(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
+def CY(
+    state: SparseSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     """Applies a Controlled-Y gate.
 
     XI -> -XY
@@ -207,7 +218,9 @@ def CY(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
     SZdg(state, qubit2)
 
 
-def SWAP(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
+def SWAP(
+    state: SparseSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     """Applies a SWAP gate to the generators.
 
     XI -> IX
@@ -292,7 +305,9 @@ def SWAP(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
         g.col_z[qubit1], g.col_z[qubit2] = g.col_z[qubit2], g.col_z[qubit1]
 
 
-def G2(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
+def G2(
+    state: SparseSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     """Applies a CZ.H(1).H(2).CZ to the generators.
 
     XI -> IX
@@ -405,7 +420,9 @@ def G2(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
         del x2_removed
 
 
-def II(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
+def II(
+    state: SparseSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     """Two qubit identity.
 
     XI -> XI
@@ -421,7 +438,9 @@ def II(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
     """
 
 
-def SXX(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
+def SXX(
+    state: SparseSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     """Applies a square root of XX rotation to generators.
 
     XI -> XI
@@ -533,14 +552,18 @@ def SXX(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
             g.row_x[i].discard(qubit2)
 
 
-def SXXdg(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
+def SXXdg(
+    state: SparseSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     qubit1, qubit2 = qubits
     X(state, qubit1)
     X(state, qubit2)
     SXX(state, qubits)
 
 
-def SqrtXX2(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
+def SqrtXX2(
+    state: SparseSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     """Applies a square root of XX rotation to generators.
 
     XI -> XI
@@ -599,7 +622,9 @@ def SqrtXX2(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
     SY(state, qubit1)  # Sqrt Y
 
 
-def SYY(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
+def SYY(
+    state: SparseSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     r"""Sqrt of YY == (rZ,rZ).SqrtXX.(rZd,rZd).
 
     XI -> -ZY
@@ -622,7 +647,9 @@ def SYY(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
     SZ(state, qubit2)  # rZ
 
 
-def SYYdg(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
+def SYYdg(
+    state: SparseSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     """Adjoint of SYY.
 
     Args:
@@ -639,7 +666,9 @@ def SYYdg(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
     SZ(state, qubit2)
 
 
-def SZZ(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
+def SZZ(
+    state: SparseSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     r"""Sqrt of ZZ == (rY,rY).SqrtXX.(rYd,rYd).
 
     XI -> YZ
@@ -660,7 +689,9 @@ def SZZ(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
     SY(state, qubit2)  # rY
 
 
-def SZZdg(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
+def SZZdg(
+    state: SparseSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     r"""Adjoint of SZZ.
 
     Args:
@@ -676,7 +707,9 @@ def SZZdg(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
     SY(state, qubit2)  # rY
 
 
-def iSWAP(state: SparseSim, qubits: tuple[int, int], **params: Any) -> None:
+def iSWAP(
+    state: SparseSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     r"""ISWAP = e^{i(XX+YY) \pi / 4."""
     qubit1, qubit2 = qubits
     SWAP(state, qubits)

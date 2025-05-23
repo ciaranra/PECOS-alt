@@ -11,14 +11,19 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pecos.type_defs import SimulatorGateParams
 
 from projectq.ops import Measure
 
 from pecos.simulators.projectq.gates_one_qubit import H5, H
 
 
-def force_output(state, qubit, forced_output=-1, **params: Any):
+def force_output(state, qubit, forced_output=-1, **params: SimulatorGateParams) -> int:
     """Outputs value.
 
     Used for error generators to generate outputs when replacing measurements.
@@ -32,7 +37,7 @@ def force_output(state, qubit, forced_output=-1, **params: Any):
     return forced_output
 
 
-def meas_z(state, qubit, forced_outcome=-1, **params: Any):
+def meas_z(state, qubit, forced_outcome=-1, **params: SimulatorGateParams) -> int:
     """Measurement in the Z-basis.
 
     Args:
@@ -58,7 +63,7 @@ def meas_z(state, qubit, forced_outcome=-1, **params: Any):
     return int(q)
 
 
-def meas_y(state, qubit, forced_outcome=-1, **params: Any):
+def meas_y(state, qubit, forced_outcome=-1, **params: SimulatorGateParams) -> int:
     """Measurement in the Y-basis.
 
     Args:
@@ -74,7 +79,7 @@ def meas_y(state, qubit, forced_outcome=-1, **params: Any):
     return meas_outcome
 
 
-def meas_x(state, qubit, forced_outcome=-1, **params: Any):
+def meas_x(state, qubit, forced_outcome=-1, **params: SimulatorGateParams) -> int:
     """Measurement in the X-basis.
 
     Args:

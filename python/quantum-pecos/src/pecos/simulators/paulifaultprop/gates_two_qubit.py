@@ -9,9 +9,14 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from pecos.simulators.paulifaultprop.gates_one_qubit import SX, SY, SZ, H, SYdg, SZdg, X
+
+if TYPE_CHECKING:
+    from pecos.type_defs import SimulatorGateParams
 
 
 def CX(state, qubits: tuple[int, int]) -> None:
@@ -200,7 +205,7 @@ def G2(state, qubits: tuple[int, int]) -> None:
     CZ(state, qubits)
 
 
-def II(state, qubits: tuple[int, int], **params) -> None:
+def II(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     """Two qubit identity.
 
     state (SparseSim): Instance representing the stabilizer state.
@@ -211,7 +216,7 @@ def II(state, qubits: tuple[int, int], **params) -> None:
     """
 
 
-def SXX(state, qubits: tuple[int, int], **params) -> None:
+def SXX(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     """Applies a square root of XX rotation to generators.
 
     state (SparseSim): Instance representing the stabilizer state.
@@ -228,7 +233,7 @@ def SXX(state, qubits: tuple[int, int], **params) -> None:
     SY(state, qubit1)  # Sqrt Y
 
 
-def SXXdg(state, qubits: tuple[int, int], **params) -> None:
+def SXXdg(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     """Applies a square root of XX rotation to generators.
 
     state (SparseSim): Instance representing the stabilizer state.
@@ -243,7 +248,7 @@ def SXXdg(state, qubits: tuple[int, int], **params) -> None:
     SXX(state, qubits)
 
 
-def SYY(state, qubits: tuple[int, int], **params: Any) -> None:
+def SYY(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     r"""Sqrt of YY == (rZ,rZ).SqrtXX.(rZd,rZd).
 
     XI -> -ZY
@@ -266,7 +271,7 @@ def SYY(state, qubits: tuple[int, int], **params: Any) -> None:
     SZ(state, qubit2)  # rZ
 
 
-def SYYdg(state, qubits: tuple[int, int], **params: Any) -> None:
+def SYYdg(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     """Adjoint of SYY.
 
     Args:
@@ -283,7 +288,7 @@ def SYYdg(state, qubits: tuple[int, int], **params: Any) -> None:
     SZ(state, qubit2)
 
 
-def SZZ(state, qubits: tuple[int, int], **params) -> None:
+def SZZ(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     """Applies a square root of ZZ rotation to generators.
 
     state (SparseSim): Instance representing the stabilizer state.
@@ -297,7 +302,7 @@ def SZZ(state, qubits: tuple[int, int], **params) -> None:
     SY(state, qubit2)  # rY
 
 
-def SZZdg(state, qubits: tuple[int, int], **params) -> None:
+def SZZdg(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     """Applies an adjoint of square root of ZZ rotation to generators.
 
     state (SparseSim): Instance representing the stabilizer state.

@@ -13,9 +13,12 @@ from __future__ import annotations
 
 # ruff: noqa: SLF001
 
-from typing import Any, NoReturn
+from typing import TYPE_CHECKING, NoReturn
 
 from pecos_rslib._pecos_rslib import SparseSim as RustSparseSim
+
+if TYPE_CHECKING:
+    from pecos.type_defs import SimulatorGateParams
 
 
 class SparseSimRs:
@@ -32,7 +35,7 @@ class SparseSimRs:
         self,
         symbol: str,
         locations: set[int] | set[tuple[int, ...]],
-        **params: Any,
+        **params: SimulatorGateParams,
     ) -> dict[int, int]:
         output = {}
 

@@ -11,10 +11,18 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+
+    class Runner(Protocol):
+        """Protocol for runner objects used in simulation functions."""
+
+        generate_errors: bool
+        state: Any  # Has get_amps method
 
 
-def sim_print(_runner, *args) -> None:
+def sim_print(_runner: Runner, *args: tuple[str, Any]) -> None:
     syms = [s for s, _ in args]
     syms = ", ".join(syms)
     print(f"sim_print({syms}):")
@@ -23,29 +31,47 @@ def sim_print(_runner, *args) -> None:
     print()
 
 
-def sim_test(_runner, *_args) -> None:
+def sim_test(
+    _runner: Runner,
+    *_args: Any,  # noqa: ANN401 - Dispatcher ignores args
+) -> None:
     print("SIM TEST!")
 
 
-def sim_get_amp(runner, key_state) -> dict[str, Any]:
+def sim_get_amp(
+    runner: Runner,
+    key_state: tuple[tuple[Any, Any], ...],
+) -> dict[str, Any]:
     st = str(key_state[0][1])
     return runner.state.get_amps(st)
 
 
-def sim_get_amps(runner, *_args) -> dict[str, Any]:
+def sim_get_amps(
+    runner: Runner,
+    *_args: Any,  # noqa: ANN401 - Dispatcher ignores args
+) -> dict[str, Any]:
     return runner.state.get_amps()
 
 
-def sim_noise(runner, *_args) -> int:
+def sim_noise(
+    runner: Runner,
+    *_args: Any,  # noqa: ANN401 - Dispatcher ignores args
+) -> int:
     return int(runner.generate_errors)
 
 
-def sim_noise_off(runner, *_args) -> int:
+def sim_noise_off(
+    runner: Runner,
+    *_args: Any,  # noqa: ANN401 - Dispatcher ignores args
+) -> int:
     runner.generate_errors = False
     return sim_noise(runner)
 
 
-def sim_noise_on(runner, *_args) -> int:
+def sim_noise_on(
+    runner: Runner,
+    *_args: Any,  # noqa: ANN401 - Dispatcher ignores args
+) -> int:
     runner.generate_errors = True
     return sim_noise(runner)
 
@@ -61,5 +87,9 @@ sim_funcs = {
 }
 
 
-def sim_exec(func, runner, *args) -> None | int | dict[str, Any]:
+def sim_exec(
+    func: str,
+    runner: Runner,
+    *args: Any,  # noqa: ANN401 - Dynamic dispatch requires Any
+) -> None | int | dict[str, Any]:
     return sim_funcs[func](runner, *args)

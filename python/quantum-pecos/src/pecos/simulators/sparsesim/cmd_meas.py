@@ -11,12 +11,17 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import numpy as np
 
+if TYPE_CHECKING:
+    from pecos.simulators.sparsesim.state import SparseSim
+    from pecos.type_defs import SimulatorGateParams
+
 from pecos.simulators.sparsesim.cmd_one_qubit import H5, H
-from pecos.simulators.sparsesim.state import SparseSim
 
 
 def meas_x(
@@ -25,7 +30,7 @@ def meas_x(
     *,
     forced_outcome: int = -1,
     collapse: bool = True,
-    **params,
+    **params: SimulatorGateParams,
 ) -> int:
     """Measurement in the X basis.
 
@@ -60,7 +65,7 @@ def meas_y(
     *,
     forced_outcome: int = -1,
     collapse: bool = True,
-    **params,
+    **params: SimulatorGateParams,
 ) -> int:
     """Measurement in the Y basis.
 
@@ -95,7 +100,7 @@ def meas_z(
     *,
     forced_outcome: int = -1,
     collapse: bool = True,
-    **params,
+    **params: SimulatorGateParams,
 ) -> int:
     """Args:
         state (SparseSim): Instance representing the stabilizer state.
@@ -341,7 +346,7 @@ def force_output(
     state: SparseSim,
     qubit: int,
     forced_output: int = -1,
-    **params: Any,
+    **params: SimulatorGateParams,
 ) -> int:
     """Outputs value.
 

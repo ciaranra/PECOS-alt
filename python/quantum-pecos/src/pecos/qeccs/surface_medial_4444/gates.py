@@ -13,6 +13,7 @@
 
 from pecos.qeccs.gate_parent_class import LogicalGate
 from pecos.qeccs.helper_functions import expected_params
+from pecos.type_defs import QECCGateParams
 
 
 class GateIdentity(LogicalGate):
@@ -21,7 +22,7 @@ class GateIdentity(LogicalGate):
     This is equivalent to ``distance`` number of syndrome of extraction rounds.
     """
 
-    def __init__(self, qecc, symbol, **gate_params) -> None:
+    def __init__(self, qecc, symbol, **gate_params: QECCGateParams) -> None:
         """Initialize the GateSynExtract with the given parameters.
 
         Args:
@@ -46,7 +47,7 @@ class GateIdentity(LogicalGate):
 class GateInitZero(LogicalGate):
     """Initialize logical state zero."""
 
-    def __init__(self, qecc, symbol, **gate_params) -> None:
+    def __init__(self, qecc, symbol, **gate_params: QECCGateParams) -> None:
         """Initialize the GateInitZero with the given parameters.
 
         Args:
@@ -73,7 +74,7 @@ class GateInitZero(LogicalGate):
 class GateInitPlus(LogicalGate):
     """Initialize logical state plus."""
 
-    def __init__(self, qecc, symbol, **gate_params) -> None:
+    def __init__(self, qecc, symbol, **gate_params: QECCGateParams) -> None:
         """Initialize the GateInitPlus with the given parameters.
 
         Args:

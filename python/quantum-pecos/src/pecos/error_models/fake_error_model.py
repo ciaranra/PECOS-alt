@@ -17,6 +17,7 @@ from pecos.error_models.parent_class_error_gen import ParentErrorModel
 
 if TYPE_CHECKING:
     from pecos.error_models.parent_class_error_gen import ErrorCircuits
+    from pecos.type_defs import GateParams
 
 
 class FakeErrorModel(ParentErrorModel):
@@ -25,8 +26,15 @@ class FakeErrorModel(ParentErrorModel):
         self.error_circuits = error_circuits
         self.leaked_qubits = set()
 
-    def start(self, *args, **kwargs) -> ErrorCircuits:  # noqa: ARG002
+    def start(self, _circuit, _error_params) -> ErrorCircuits:
+        """Start method that ignores parameters and returns pre-configured error circuits."""
         return self.error_circuits
 
-    def generate_tick_errors(self, *args, **kwargs) -> ErrorCircuits:  # noqa: ARG002
+    def generate_tick_errors(
+        self,
+        _tick_circuit,
+        _time,
+        **_params: GateParams,
+    ) -> ErrorCircuits:
+        """Generate tick errors that ignores parameters and returns pre-configured error circuits."""
         return self.error_circuits

@@ -24,12 +24,13 @@ from pecos.qeccs.color_488.instructions import (
     InstrSynExtraction,
 )
 from pecos.qeccs.qecc_parent_class import QECC
+from pecos.type_defs import QECCParams
 
 
 class Color488(QECC):
     """Canonical triangular color-code on a 4.8.8 lattice."""
 
-    def __init__(self, distance=None, **qecc_params) -> None:
+    def __init__(self, distance=None, **qecc_params: QECCParams) -> None:
         # TODO: Need to switch to codes each having a class defining how classes are implemented. From that we get the
         # layout and ancillas. We don't need a general circuit conversion script... The default implementation may
         # still be overridden.

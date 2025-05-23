@@ -38,7 +38,7 @@ Date        Author  Comment
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from pecos.simulators.gate_syms import alt_symbols
 from pecos.simulators.sim_class_types import Stabilizer
@@ -49,6 +49,7 @@ from pecos.simulators.sparsesim.refactor import refactor as refactor_generators
 
 if TYPE_CHECKING:
     from pecos.circuits import QuantumCircuit
+    from pecos.type_defs import SimulatorGateParams
 
 
 class SparseSim(Stabilizer):
@@ -92,7 +93,7 @@ class SparseSim(Stabilizer):
 
         self.reset()
 
-    def reset(self):
+    def reset(self) -> SparseSim:
         """Reset the quantum state for another run without reinitializing."""
         # Initialize all qubits in the zero state
         self.stabs.init_all_z()
@@ -120,17 +121,17 @@ class SparseSim(Stabilizer):
         choose=None,
         prefer=None,
         protected=None,
-    ):
+    ) -> tuple[bool, int | None]:
         return refactor_generators(self, xs, zs, choose, prefer, protected)
 
-    def find_stab(self, xs: set[int], zs: set[int]):
+    def find_stab(self, xs: set[int], zs: set[int]) -> tuple[bool, set[int]]:
         return find_stabilizer(self, xs, zs)
 
     def run_direct(
         self,
         symbol: str,
         location: set[int | tuple[int, ...]],
-        **gate_kwargs: Any,
+        **gate_kwargs: SimulatorGateParams,
     ) -> None:
         self.bindings[symbol](self, location, **gate_kwargs)
 
@@ -178,7 +179,7 @@ class SparseSim(Stabilizer):
         *,
         print_signs: bool = True,
         print_y: bool = False,
-    ):
+    ) -> list[str]:
         """Prints out the stabilizers for the column-wise sparse representation.
 
         Args:
@@ -266,7 +267,7 @@ class SparseSim(Stabilizer):
         verbose: bool = True,
         print_y: bool = True,
         print_destabs: bool = False,
-    ):
+    ) -> str | tuple[str, str]:
         str_s = self.print_tableau(self.stabs, verbose=verbose, print_y=print_y)
 
         if print_destabs:
@@ -290,7 +291,7 @@ class SparseSim(Stabilizer):
         verbose: bool = True,
         print_signs: bool = True,
         print_y: bool = True,
-    ):
+    ) -> list[str]:
         """Prints out the stabilizers.
         :return:
         """
@@ -306,10 +307,7 @@ class SparseSim(Stabilizer):
             for line in row_str:
                 print(line)
 
-            msg = (
-                "Something bad happened! String representation of the row-wise vs "
-                "column-wise stabilizers do not match!"
-            )
+            msg = "String representation of row-wise vs column-wise stabilizers do not match!"
             raise Exception(msg)
 
         if verbose:

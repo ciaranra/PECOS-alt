@@ -13,9 +13,12 @@
 
 from __future__ import annotations
 
-from typing import Any, List
+from typing import TYPE_CHECKING, List
 
 from pecos_rslib._pecos_rslib import RsStateVec as RustStateVec
+
+if TYPE_CHECKING:
+    from pecos.type_defs import SimulatorGateParams
 
 
 class StateVecRs:
@@ -63,7 +66,7 @@ class StateVecRs:
         self,
         symbol: str,
         locations: set[int] | set[tuple[int, ...]],
-        **params: Any,
+        **params: SimulatorGateParams,
     ) -> dict[int, int]:
         """
         Applies a gate to the quantum state.

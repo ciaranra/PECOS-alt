@@ -13,6 +13,10 @@ from __future__ import annotations
 
 import abc
 from abc import ABCMeta
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class ErrorModel(metaclass=ABCMeta):
@@ -30,9 +34,9 @@ class ErrorModel(metaclass=ABCMeta):
         self.num_qubits = num_qubits
 
     @abc.abstractmethod
-    def shot_reinit(self, *args, **kwargs) -> None:
+    def shot_reinit(self) -> None:
         """Run all code needed at the beginning of each shot, e.g., resetting state."""
 
     @abc.abstractmethod
-    def process(self, qops: list, **kwargs) -> list | None:
+    def process(self, qops: list, call_back: Callable | None = None) -> list | None:
         pass

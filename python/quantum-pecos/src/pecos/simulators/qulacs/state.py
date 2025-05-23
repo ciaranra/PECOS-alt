@@ -9,11 +9,17 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from numpy.typing import ArrayLike
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from qulacs import QuantumState
 
 from pecos.simulators.qulacs import bindings
 from pecos.simulators.sim_class_types import StateVector
+
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike
 
 
 class Qulacs(StateVector):
@@ -37,7 +43,7 @@ class Qulacs(StateVector):
 
         self.reset()
 
-    def reset(self):
+    def reset(self) -> Qulacs:
         """Reset the quantum state for another run without reinitializing."""
         # Initialize state vector to |0>
         self.qulacs_state.set_zero_state()

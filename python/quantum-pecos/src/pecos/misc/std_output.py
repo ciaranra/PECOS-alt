@@ -11,15 +11,14 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
 
 class StdOutput(dict):
     """Class used to record results of gates (typically, measurements).
 
     (logical space, logical time) -> time(tick) -> {location: result}
     """
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
 
     def record(self, result_dict, time) -> None:
         """Record result dictionary at specified time.

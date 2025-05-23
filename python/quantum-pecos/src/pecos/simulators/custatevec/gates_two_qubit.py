@@ -9,11 +9,16 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
 import cmath
 import math
-from typing import Any
+from typing import TYPE_CHECKING
 
 import cupy as cp
+
+if TYPE_CHECKING:
+    from pecos.type_defs import SimulatorGateParams
 from cuquantum import custatevec as cusv
 
 from pecos.simulators.custatevec.gates_one_qubit import H
@@ -64,7 +69,7 @@ def _apply_controlled_matrix(
     state.stream.synchronize()
 
 
-def CX(state, qubits: tuple[int, int], **params: Any) -> None:
+def CX(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     """Apply controlled X gate.
 
     Args:
@@ -84,7 +89,7 @@ def CX(state, qubits: tuple[int, int], **params: Any) -> None:
     _apply_controlled_matrix(state, qubits[0], qubits[1], matrix)
 
 
-def CY(state, qubits: tuple[int, int], **params: Any) -> None:
+def CY(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     """Apply controlled Y gate.
 
     Args:
@@ -104,7 +109,7 @@ def CY(state, qubits: tuple[int, int], **params: Any) -> None:
     _apply_controlled_matrix(state, qubits[0], qubits[1], matrix)
 
 
-def CZ(state, qubits: tuple[int, int], **params: Any) -> None:
+def CZ(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     """Apply controlled Z gate.
 
     Args:
@@ -163,7 +168,9 @@ def _apply_two_qubit_matrix(state, qubits: tuple[int, int], matrix: cp.ndarray) 
     state.stream.synchronize()
 
 
-def RXX(state, qubits: tuple[int, int], angles: tuple[float], **params: Any) -> None:
+def RXX(
+    state, qubits: tuple[int, int], angles: tuple[float], **_params: SimulatorGateParams
+) -> None:
     """Apply a rotation about XX.
 
     Args:
@@ -200,7 +207,9 @@ def RXX(state, qubits: tuple[int, int], angles: tuple[float], **params: Any) -> 
     _apply_two_qubit_matrix(state, qubits, matrix)
 
 
-def RYY(state, qubits: tuple[int, int], angles: tuple[float], **params: Any) -> None:
+def RYY(
+    state, qubits: tuple[int, int], angles: tuple[float], **_params: SimulatorGateParams
+) -> None:
     """Apply a rotation about YY.
 
     Args:
@@ -237,7 +246,9 @@ def RYY(state, qubits: tuple[int, int], angles: tuple[float], **params: Any) -> 
     _apply_two_qubit_matrix(state, qubits, matrix)
 
 
-def RZZ(state, qubits: tuple[int, int], angles: tuple[float], **params: Any) -> None:
+def RZZ(
+    state, qubits: tuple[int, int], angles: tuple[float], **_params: SimulatorGateParams
+) -> None:
     """Apply a rotation about ZZ.
 
     Args:
@@ -278,7 +289,7 @@ def R2XXYYZZ(
     state,
     qubits: tuple[int, int],
     angles: tuple[float, float, float],
-    **params: Any,
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply RXX*RYY*RZZ.
 
@@ -296,7 +307,7 @@ def R2XXYYZZ(
     RZZ(state, qubits, (angles[2],))
 
 
-def SXX(state, qubits: tuple[int, int], **params: Any) -> None:
+def SXX(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     """Apply a square root of XX gate.
 
     Args:
@@ -306,7 +317,7 @@ def SXX(state, qubits: tuple[int, int], **params: Any) -> None:
     RXX(state, qubits, angles=(math.pi / 2,))
 
 
-def SXXdg(state, qubits: tuple[int, int], **params: Any) -> None:
+def SXXdg(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     """Apply adjoint of a square root of XX gate.
 
     Args:
@@ -316,7 +327,7 @@ def SXXdg(state, qubits: tuple[int, int], **params: Any) -> None:
     RXX(state, qubits, angles=(-math.pi / 2,))
 
 
-def SYY(state, qubits: tuple[int, int], **params: Any) -> None:
+def SYY(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     """Apply a square root of YY gate.
 
     Args:
@@ -326,7 +337,7 @@ def SYY(state, qubits: tuple[int, int], **params: Any) -> None:
     RYY(state, qubits, angles=(math.pi / 2,))
 
 
-def SYYdg(state, qubits: tuple[int, int], **params: Any) -> None:
+def SYYdg(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     """Apply adjoint of a square root of YY gate.
 
     Args:
@@ -336,7 +347,7 @@ def SYYdg(state, qubits: tuple[int, int], **params: Any) -> None:
     RYY(state, qubits, angles=(-math.pi / 2,))
 
 
-def SZZ(state, qubits: tuple[int, int], **params: Any) -> None:
+def SZZ(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     """Apply a square root of ZZ gate.
 
     Args:
@@ -346,7 +357,7 @@ def SZZ(state, qubits: tuple[int, int], **params: Any) -> None:
     RZZ(state, qubits, angles=(math.pi / 2,))
 
 
-def SZZdg(state, qubits: tuple[int, int], **params: Any) -> None:
+def SZZdg(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     """Apply adjoint of a square root of ZZ gate.
 
     Args:
@@ -356,7 +367,7 @@ def SZZdg(state, qubits: tuple[int, int], **params: Any) -> None:
     RZZ(state, qubits, angles=(-math.pi / 2,))
 
 
-def SWAP(state, qubits: tuple[int, int], **params: Any) -> None:
+def SWAP(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     """Apply a SWAP gate.
 
     Args:
@@ -399,7 +410,7 @@ def SWAP(state, qubits: tuple[int, int], **params: Any) -> None:
     state.stream.synchronize()
 
 
-def G(state, qubits: tuple[int, int], **params: Any) -> None:
+def G(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     """'G': (('I', 'H'), 'CNOT', ('H', 'H'), 'CNOT', ('I', 'H'))."""
     H(state, qubits[1])
     CX(state, qubits)

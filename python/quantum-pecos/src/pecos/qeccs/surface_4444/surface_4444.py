@@ -27,12 +27,19 @@ from pecos.qeccs.surface_4444.instructions import (
     InstrInitZero,
     InstrSynExtraction,
 )
+from pecos.type_defs import QECCParams
 
 
 class Surface4444(QECC):
     """Non-medial Surface code on 4.4.4.4 lattice."""
 
-    def __init__(self, distance=None, height=None, width=None, **qecc_params) -> None:
+    def __init__(
+        self,
+        distance=None,
+        height=None,
+        width=None,
+        **qecc_params: QECCParams,
+    ) -> None:
         """Initialize the Surface4444 code with the given parameters.
 
         Args:
