@@ -125,7 +125,10 @@ def Z(state: CuStateVec, qubit: int, **_params: SimulatorGateParams) -> None:
 
 
 def RX(
-    state: CuStateVec, qubit: int, angles: tuple[float], **_params: SimulatorGateParams
+    state: CuStateVec,
+    qubit: int,
+    angles: tuple[float],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply an RX gate.
 
@@ -152,7 +155,10 @@ def RX(
 
 
 def RY(
-    state: CuStateVec, qubit: int, angles: tuple[float], **_params: SimulatorGateParams
+    state: CuStateVec,
+    qubit: int,
+    angles: tuple[float],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply an RY gate.
 
@@ -179,7 +185,10 @@ def RY(
 
 
 def RZ(
-    state: CuStateVec, qubit: int, angles: tuple[float], **_params: SimulatorGateParams
+    state: CuStateVec,
+    qubit: int,
+    angles: tuple[float],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply an RZ gate.
 

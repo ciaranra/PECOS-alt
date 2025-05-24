@@ -49,7 +49,10 @@ def set_output(
 
 
 def eval_op(
-    op: str, a: BinArray | int, b: BinArray | int | None = None, width: int = 32
+    op: str,
+    a: BinArray | int,
+    b: BinArray | int | None = None,
+    width: int = 32,
 ) -> BinArray:
     if isinstance(a, int):
         a = BinArray(width, a)
@@ -137,7 +140,9 @@ def get_val(
 
 
 def recur_eval_op(
-    expr_dict: dict[str, Any], output: dict[str, BinArray], width: int
+    expr_dict: dict[str, Any],
+    output: dict[str, BinArray],
+    width: int,
 ) -> BinArray:
     a = expr_dict.get("a")
     op = expr_dict.get("op")
@@ -220,7 +225,8 @@ def eval_cop(
 
 
 def eval_tick_conds(
-    tick_circuit: QuantumCircuit, output: dict[str, BinArray]
+    tick_circuit: QuantumCircuit,
+    output: dict[str, BinArray],
 ) -> list[bool]:
     conds = []
 

@@ -24,7 +24,10 @@ class MakeFunc:
     """Converts ProjectQ gate to a function."""
 
     def __init__(
-        self, gate: BasicGate | type[BasicGate], *, angle: bool = False
+        self,
+        gate: BasicGate | type[BasicGate],
+        *,
+        angle: bool = False,
     ) -> None:
         """Initialize MakeFunc with a gate.
 
@@ -36,7 +39,10 @@ class MakeFunc:
         self.angle = angle
 
     def func(
-        self, state: ProjectQSim, qubits: Location, **params: SimulatorGateParams
+        self,
+        state: ProjectQSim,
+        qubits: Location,
+        **params: SimulatorGateParams,
     ) -> None:
         if isinstance(qubits, int):
             qs = state.qids[qubits]

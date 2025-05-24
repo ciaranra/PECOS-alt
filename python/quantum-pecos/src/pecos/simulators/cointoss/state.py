@@ -28,7 +28,10 @@ class CoinToss(DefaultSimulator):
     """
 
     def __init__(
-        self, num_qubits: int, prob: float = 0.5, seed: int | None = None
+        self,
+        num_qubits: int,
+        prob: float = 0.5,
+        seed: int | None = None,
     ) -> None:
         """Initialization is trivial, since there is no state.
 

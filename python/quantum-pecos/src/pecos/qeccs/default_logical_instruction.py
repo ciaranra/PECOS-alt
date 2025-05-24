@@ -42,7 +42,10 @@ class DefaultLogicalInstruction:
     """
 
     def __init__(
-        self, qecc: QECCProtocol, symbol: str, **params: QECCInstrParams
+        self,
+        qecc: QECCProtocol,
+        symbol: str,
+        **params: QECCInstrParams,
     ) -> None:
         """Initialize the LogicalInstruction with the given parameters.
 

@@ -26,7 +26,9 @@ from pecos.simulators.mps_pytket.gates_one_qubit import H
 
 
 def _apply_two_qubit_matrix(
-    state: MPS, qubits: tuple[int, int], matrix: cp.ndarray
+    state: MPS,
+    qubits: tuple[int, int],
+    matrix: cp.ndarray,
 ) -> None:
     """Apply the matrix to the state.
 

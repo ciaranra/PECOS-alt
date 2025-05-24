@@ -194,7 +194,9 @@ class DefaultQECC:
 
     @staticmethod
     def _retrieve_element(
-        symbol: str, params: dict[str, Any], element_set: set[QECCElement]
+        symbol: str,
+        params: dict[str, Any],
+        element_set: set[QECCElement],
     ) -> QECCElement | None:
         """Retrieve an element from a set.
 

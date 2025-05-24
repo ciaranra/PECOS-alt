@@ -30,7 +30,10 @@ class GateIdentity(DefaultLogicalGate):
     """
 
     def __init__(
-        self, qecc: QECCProtocol, symbol: str, **gate_params: QECCGateParams
+        self,
+        qecc: QECCProtocol,
+        symbol: str,
+        **gate_params: QECCGateParams,
     ) -> None:
         """Initialize the GateSynExtract with the given parameters.
 
@@ -57,7 +60,10 @@ class GateInitZero(DefaultLogicalGate):
     """Initialize logical state zero."""
 
     def __init__(
-        self, qecc: QECCProtocol, symbol: str, **gate_params: QECCGateParams
+        self,
+        qecc: QECCProtocol,
+        symbol: str,
+        **gate_params: QECCGateParams,
     ) -> None:
         """Initialize the GateInitZero with the given parameters.
 
@@ -86,7 +92,10 @@ class GateInitPlus(DefaultLogicalGate):
     """Initialize logical state plus."""
 
     def __init__(
-        self, qecc: QECCProtocol, symbol: str, **gate_params: QECCGateParams
+        self,
+        qecc: QECCProtocol,
+        symbol: str,
+        **gate_params: QECCGateParams,
     ) -> None:
         """Initialize the GateInitPlus with the given parameters.
 

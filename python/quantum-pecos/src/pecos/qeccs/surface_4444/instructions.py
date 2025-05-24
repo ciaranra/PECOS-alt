@@ -33,7 +33,10 @@ class InstrSynExtraction(DefaultLogicalInstruction):
     """
 
     def __init__(
-        self, qecc: QECCProtocol, symbol: str, **params: QECCInstrParams
+        self,
+        qecc: QECCProtocol,
+        symbol: str,
+        **params: QECCInstrParams,
     ) -> None:
         """Initialize the syndrome extraction instruction for Surface 4.4.4.4 code.
 
@@ -233,7 +236,10 @@ class InstrInitZero(DefaultLogicalInstruction):
     """
 
     def __init__(
-        self, qecc: QECCProtocol, symbol: str, **params: QECCInstrParams
+        self,
+        qecc: QECCProtocol,
+        symbol: str,
+        **params: QECCInstrParams,
     ) -> None:
         """Initialize the logical zero state preparation instruction.
 
@@ -300,7 +306,10 @@ class InstrInitPlus(DefaultLogicalInstruction):
     """
 
     def __init__(
-        self, qecc: QECCProtocol, symbol: str, **params: QECCInstrParams
+        self,
+        qecc: QECCProtocol,
+        symbol: str,
+        **params: QECCInstrParams,
     ) -> None:
         """Initialize the logical plus state preparation instruction.
 

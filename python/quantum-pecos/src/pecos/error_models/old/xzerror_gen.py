@@ -150,7 +150,9 @@ class XZModel(ParentErrorModel):
             self.gen.set_gate_error("idle", pauli_errors.error_func)
 
     def start(
-        self, circuit: QuantumCircuit, error_params: ErrorParams
+        self,
+        circuit: QuantumCircuit,
+        error_params: ErrorParams,
     ) -> ErrorCircuits:
         """Start up at the beginning of a circuit simulation.
 

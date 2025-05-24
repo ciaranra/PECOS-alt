@@ -36,7 +36,10 @@ if TYPE_CHECKING:
         """Protocol for circuit inspector objects."""
 
         def analyze(
-            self, tick_circuit: QuantumCircuit, time: int, output: dict[str, BinArray]
+            self,
+            tick_circuit: QuantumCircuit,
+            time: int,
+            output: dict[str, BinArray],
         ) -> None: ...
 
 
@@ -44,7 +47,11 @@ class HybridEngine:
     """This class represents a standard model for running quantum circuits and adding in errors."""
 
     def __init__(
-        self, seed: int | bool | None = None, *, debug: bool = False, regwidth: int = 32
+        self,
+        seed: int | bool | None = None,
+        *,
+        debug: bool = False,
+        regwidth: int = 32,
     ) -> None:
         """Initialize hybrid engine with seed, debug mode, and register width.
 

@@ -207,7 +207,9 @@ def G2(state: PauliFaultProp, qubits: tuple[int, int]) -> None:
 
 
 def II(
-    state: PauliFaultProp, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: PauliFaultProp,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Two qubit identity.
 
@@ -220,7 +222,9 @@ def II(
 
 
 def SXX(
-    state: PauliFaultProp, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: PauliFaultProp,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Applies a square root of XX rotation to generators.
 
@@ -239,7 +243,9 @@ def SXX(
 
 
 def SXXdg(
-    state: PauliFaultProp, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: PauliFaultProp,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Applies a square root of XX rotation to generators.
 
@@ -256,7 +262,9 @@ def SXXdg(
 
 
 def SYY(
-    state: PauliFaultProp, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: PauliFaultProp,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     r"""Sqrt of YY == (rZ,rZ).SqrtXX.(rZd,rZd).
 
@@ -280,7 +288,9 @@ def SYY(
 
 
 def SYYdg(
-    state: PauliFaultProp, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: PauliFaultProp,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Adjoint of SYY.
 
@@ -298,7 +308,9 @@ def SYYdg(
 
 
 def SZZ(
-    state: PauliFaultProp, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: PauliFaultProp,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Applies a square root of ZZ rotation to generators.
 
@@ -314,7 +326,9 @@ def SZZ(
 
 
 def SZZdg(
-    state: PauliFaultProp, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: PauliFaultProp,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Applies an adjoint of square root of ZZ rotation to generators.
 

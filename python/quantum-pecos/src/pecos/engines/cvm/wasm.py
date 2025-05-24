@@ -95,7 +95,9 @@ def get_ccop(circuit: QuantumCircuit) -> CCOPObject | None:
 
 
 def eval_cfunc(
-    runner: EngineRunner, params: dict[str, Any], output: dict[str, BinArray]
+    runner: EngineRunner,
+    params: dict[str, Any],
+    output: dict[str, BinArray],
 ) -> None:
     func = params["func"]
     assign_vars = params["assign_vars"]

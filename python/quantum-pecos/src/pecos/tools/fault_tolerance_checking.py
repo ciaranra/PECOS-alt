@@ -130,7 +130,9 @@ def get_wt_paulis(
     *,
     make_qc: bool = True,
 ) -> Generator[
-    dict[int, list[str]] | tuple[QuantumCircuit, QuantumCircuit], None, None
+    dict[int, list[str]] | tuple[QuantumCircuit, QuantumCircuit],
+    None,
+    None,
 ]:
     """A generator of all combinations of Pauli faults of a given weight.
 

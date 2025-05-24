@@ -110,7 +110,8 @@ class OutputDict(TypedDict, total=False):
 
 # Logical operator types
 LogicalOperator = dict[
-    str, set[int]
+    str,
+    set[int],
 ]  # Maps Pauli operator ('X', 'Y', 'Z') to qubit indices
 
 # Gate location types

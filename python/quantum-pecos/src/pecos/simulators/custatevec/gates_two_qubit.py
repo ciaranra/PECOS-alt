@@ -71,7 +71,9 @@ def _apply_controlled_matrix(
 
 
 def CX(
-    state: CuStateVec, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply controlled X gate.
 
@@ -93,7 +95,9 @@ def CX(
 
 
 def CY(
-    state: CuStateVec, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply controlled Y gate.
 
@@ -115,7 +119,9 @@ def CY(
 
 
 def CZ(
-    state: CuStateVec, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply controlled Z gate.
 
@@ -137,7 +143,9 @@ def CZ(
 
 
 def _apply_two_qubit_matrix(
-    state: CuStateVec, qubits: tuple[int, int], matrix: cp.ndarray
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    matrix: cp.ndarray,
 ) -> None:
     """Apply the matrix to the state.
 
@@ -326,7 +334,9 @@ def R2XXYYZZ(
 
 
 def SXX(
-    state: CuStateVec, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply a square root of XX gate.
 
@@ -338,7 +348,9 @@ def SXX(
 
 
 def SXXdg(
-    state: CuStateVec, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply adjoint of a square root of XX gate.
 
@@ -350,7 +362,9 @@ def SXXdg(
 
 
 def SYY(
-    state: CuStateVec, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply a square root of YY gate.
 
@@ -362,7 +376,9 @@ def SYY(
 
 
 def SYYdg(
-    state: CuStateVec, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply adjoint of a square root of YY gate.
 
@@ -374,7 +390,9 @@ def SYYdg(
 
 
 def SZZ(
-    state: CuStateVec, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply a square root of ZZ gate.
 
@@ -386,7 +404,9 @@ def SZZ(
 
 
 def SZZdg(
-    state: CuStateVec, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply adjoint of a square root of ZZ gate.
 
@@ -398,7 +418,9 @@ def SZZdg(
 
 
 def SWAP(
-    state: CuStateVec, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply a SWAP gate.
 
@@ -443,7 +465,9 @@ def SWAP(
 
 
 def G(
-    state: CuStateVec, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """'G': (('I', 'H'), 'CNOT', ('H', 'H'), 'CNOT', ('I', 'H'))."""
     H(state, qubits[1])

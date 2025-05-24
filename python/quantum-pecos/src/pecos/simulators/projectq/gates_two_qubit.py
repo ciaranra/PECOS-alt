@@ -26,13 +26,17 @@ from pecos.simulators.projectq.gates_one_qubit import H
 
 
 def II(
-    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: ProjectQSim,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     pass
 
 
 def G2(
-    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: ProjectQSim,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Applies a CZ.H(1).H(2).CZ."""
     CZ(state, qubits)
@@ -42,7 +46,9 @@ def G2(
 
 
 def CNOT(
-    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: ProjectQSim,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     q1 = state.qids[qubits[0]]
     q2 = state.qids[qubits[1]]
@@ -51,7 +57,9 @@ def CNOT(
 
 
 def CZ(
-    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: ProjectQSim,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     q1 = state.qids[qubits[0]]
     q2 = state.qids[qubits[1]]
@@ -60,7 +68,9 @@ def CZ(
 
 
 def CY(
-    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: ProjectQSim,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     q1 = state.qids[qubits[0]]
     q2 = state.qids[qubits[1]]
@@ -69,7 +79,9 @@ def CY(
 
 
 def SWAP(
-    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: ProjectQSim,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     q1 = state.qids[qubits[0]]
     q2 = state.qids[qubits[1]]
@@ -78,7 +90,9 @@ def SWAP(
 
 
 def SXX(
-    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: ProjectQSim,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Square root of XX rotation to generators.
 
@@ -93,7 +107,9 @@ def SXX(
 
 
 def SXXdg(
-    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: ProjectQSim,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Adjoint of square root of XX rotation.
 
@@ -108,7 +124,9 @@ def SXXdg(
 
 
 def SYY(
-    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: ProjectQSim,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Square root of YY rotation to generators.
 
@@ -123,7 +141,9 @@ def SYY(
 
 
 def SYYdg(
-    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: ProjectQSim,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Adjoint of square root of YY rotation to generators.
 
@@ -138,7 +158,9 @@ def SYYdg(
 
 
 def SZZ(
-    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: ProjectQSim,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Applies a square root of ZZ rotation to generators.
 
@@ -153,7 +175,9 @@ def SZZ(
 
 
 def SZZdg(
-    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: ProjectQSim,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Applies an adjoint of square root of ZZ rotation to generators.
 

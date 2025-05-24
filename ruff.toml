@@ -69,12 +69,6 @@ ignore = [
     "D103", # Missing docstring in public function
     "D104", # Missing docstring in public package
     "D105", # Missing docstring in magic method
-    "D106", # Missing docstring in public nested class
-    # "D107", # Missing docstring in __init__
-
-    # flake8-annotations
-    "ANN101", # Missing type annotation for self in method
-    "ANN102", # Missing type annotation for cls in classmethod
 
     # pylint
     "PLR0912", # Too many branches
@@ -89,9 +83,6 @@ ignore = [
 
     # tryceratops
     "TRY002", # Custom exceptions
-
-    # flake8-commas
-    "COM812", # Trailing comma missing - conflicts with formatter
 ]
 
 [lint.per-file-ignores]
@@ -114,7 +105,6 @@ ignore = [
 "python/quantum-pecos/src/pecos/qeccs/*.py" = [
 ]
 "python/quantum-pecos/src/pecos/qeclib/*.py" = [
-    # "D107",
 ]
 
 
@@ -139,9 +129,7 @@ ignore = [
 
 "python/quantum-pecos/src/pecos/slr/*.py" = [
     "ANN",
-    "D205",
-    "D415",
-    "D107",
+    "D",
 ]
 
 

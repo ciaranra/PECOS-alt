@@ -53,7 +53,10 @@ class XModel(ParentErrorModel):
     ]
 
     def __init__(
-        self, model_level: str = "circuit", *, has_idle_errors: bool = False
+        self,
+        model_level: str = "circuit",
+        *,
+        has_idle_errors: bool = False,
     ) -> None:
         """Initialize X error generator.
 
@@ -126,7 +129,9 @@ class XModel(ParentErrorModel):
             self.gen.set_gate_error("idle", xerror.error_func)
 
     def start(
-        self, circuit: QuantumCircuit, error_params: ErrorParams
+        self,
+        circuit: QuantumCircuit,
+        error_params: ErrorParams,
     ) -> ErrorCircuits:
         """Start up at the beginning of a circuit simulation.
 

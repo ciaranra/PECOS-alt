@@ -281,7 +281,8 @@ def get_ancilla_types(instr: "LogicalInstructionProtocol") -> tuple[set, set]:
 
 
 def graph_add_directed_cnots(
-    instr: "LogicalInstructionProtocol", g: nx.DiGraph
+    instr: "LogicalInstructionProtocol",
+    g: nx.DiGraph,
 ) -> tuple[dict, list, list]:
     circuit = instr.circuit
     edge_labels = {}

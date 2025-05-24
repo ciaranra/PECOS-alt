@@ -67,7 +67,10 @@ def Z(state: Qulacs, qubit: int, **_params: SimulatorGateParams) -> None:
 
 
 def RX(
-    state: Qulacs, qubit: int, angles: tuple[float], **_params: SimulatorGateParams
+    state: Qulacs,
+    qubit: int,
+    angles: tuple[float],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply an RX gate.
 
@@ -87,7 +90,10 @@ def RX(
 
 
 def RY(
-    state: Qulacs, qubit: int, angles: tuple[float], **_params: SimulatorGateParams
+    state: Qulacs,
+    qubit: int,
+    angles: tuple[float],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply an RY gate.
 
@@ -107,7 +113,10 @@ def RY(
 
 
 def RZ(
-    state: Qulacs, qubit: int, angles: tuple[float], **_params: SimulatorGateParams
+    state: Qulacs,
+    qubit: int,
+    angles: tuple[float],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply an RZ gate.
 

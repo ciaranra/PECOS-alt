@@ -34,7 +34,9 @@ class FakeErrorModel(ParentErrorModel):
         self.leaked_qubits = set()
 
     def start(
-        self, _circuit: QuantumCircuit, _error_params: ErrorParams
+        self,
+        _circuit: QuantumCircuit,
+        _error_params: ErrorParams,
     ) -> ErrorCircuits:
         """Start method that ignores parameters and returns pre-configured error circuits."""
         return self.error_circuits

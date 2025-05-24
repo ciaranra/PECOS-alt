@@ -34,7 +34,8 @@ T = TypeVar("T")
 
 
 def powerset(
-    iterable: Iterable[T], bound: int | None = None
+    iterable: Iterable[T],
+    bound: int | None = None,
 ) -> it.chain[tuple[T, ...]]:
     """Returns the power set of an iterable."""
     powerlist = list(iterable)
@@ -326,7 +327,9 @@ def fault_check(
 
 
 def distance_check(
-    qecc: QECCProtocol, mode: str | None = None, dist_mode: str | None = None
+    qecc: QECCProtocol,
+    mode: str | None = None,
+    dist_mode: str | None = None,
 ) -> int:
     """Determines the distance of the code by looking for the smallest logical errors.
 

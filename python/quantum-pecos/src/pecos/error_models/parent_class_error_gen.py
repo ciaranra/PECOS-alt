@@ -47,7 +47,9 @@ class ParentErrorModel:
         self.generator_class = Generator
 
     def start(
-        self, circuit: QuantumCircuit, error_params: dict[str, Any]
+        self,
+        circuit: QuantumCircuit,
+        error_params: dict[str, Any],
     ) -> ErrorCircuits:
         """Start up at the beginning of a circuit simulation.
 
@@ -204,7 +206,9 @@ class Generator:
             self.set_gate_error(symbol, error_func, error_param, after)
 
     def set_default_error(
-        self, error_func: Callable[..., Any] | str, error_param: str = "p"
+        self,
+        error_func: Callable[..., Any] | str,
+        error_param: str = "p",
     ) -> None:
         """Sets the default error if a gate is not found.
 
@@ -363,7 +367,10 @@ class Generator:
         """Class used to create a callable that returns an element from the error_set with uniform distribution."""
 
         def __init__(
-            self, error_set: Iterable[str | tuple[str, ...]], *, after: bool = True
+            self,
+            error_set: Iterable[str | tuple[str, ...]],
+            *,
+            after: bool = True,
         ) -> None:
             """Initialize an ErrorSetMultiQuditGate.
 
@@ -445,7 +452,10 @@ class Generator:
         """
 
         def __init__(
-            self, error_set: Iterable[str | tuple[str, ...]], *, after: bool = True
+            self,
+            error_set: Iterable[str | tuple[str, ...]],
+            *,
+            after: bool = True,
         ) -> None:
             """Initialize an ErrorSetTwoQuditTensorProduct.
 

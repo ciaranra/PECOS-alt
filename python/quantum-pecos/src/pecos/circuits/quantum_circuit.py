@@ -357,6 +357,8 @@ class ParamGateCollection:
     """Data structure for a tick."""
 
     class Gate(NamedTuple):
+        """Gate representation with symbol, parameters, and locations."""
+
         symbol: str
         params: JSONDict
         locations: set[int | tuple[int]]

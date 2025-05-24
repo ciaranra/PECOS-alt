@@ -255,7 +255,10 @@ class SimulatorProtocol(Protocol):
     ) -> dict[int | tuple[int, ...], Any]: ...
 
     def run_circuit_with_errors(
-        self, circuit: QuantumCircuit, error_gen: ParentErrorModel, error_params: dict
+        self,
+        circuit: QuantumCircuit,
+        error_gen: ParentErrorModel,
+        error_params: dict,
     ) -> tuple[dict, OutputDict]: ...
 
 
@@ -265,11 +268,15 @@ class ErrorGenerator(Protocol):
     error_params: ErrorParams
 
     def start(
-        self, circuit: QuantumCircuit, error_params: ErrorParams
+        self,
+        circuit: QuantumCircuit,
+        error_params: ErrorParams,
     ) -> ErrorCircuits: ...
 
     def generate_tick_errors(
-        self, time: int, gate_time: dict[str, set[int]]
+        self,
+        time: int,
+        gate_time: dict[str, set[int]],
     ) -> QuantumCircuit: ...
 
 
@@ -363,10 +370,14 @@ class QECCProtocol(Protocol):
     mapping: Any
 
     def gate(
-        self, symbol: str, **gate_params: QECCGateParams
+        self,
+        symbol: str,
+        **gate_params: QECCGateParams,
     ) -> LogicalGateProtocol: ...
     def instruction(
-        self, symbol: str, **instr_params: QECCInstrParams
+        self,
+        symbol: str,
+        **instr_params: QECCInstrParams,
     ) -> LogicalInstructionProtocol: ...
     def distance(self, *args: int, **kwargs: int) -> int: ...
     def plot(self, figsize: tuple[int, int] | None = None) -> None: ...

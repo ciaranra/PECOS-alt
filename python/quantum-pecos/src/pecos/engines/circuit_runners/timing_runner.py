@@ -30,7 +30,9 @@ class TimingRunner(Standard):
     """This class represents a standard model for running quantum circuits and adding in errors."""
 
     def __init__(
-        self, seed: int | bool | None = None, timer: Callable[[], float] | None = None
+        self,
+        seed: int | bool | None = None,
+        timer: Callable[[], float] | None = None,
     ) -> None:
         """Initialize timing runner with optional seed and timer.
 

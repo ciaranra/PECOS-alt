@@ -25,7 +25,9 @@ if TYPE_CHECKING:
 
 
 def _apply_two_qubit_matrix(
-    state: BasicSV, qubits: tuple[int, int], matrix: np.array
+    state: BasicSV,
+    qubits: tuple[int, int],
+    matrix: np.array,
 ) -> None:
     """Apply the matrix to the state.
 
@@ -240,7 +242,9 @@ def R2XXYYZZ(
 
 
 def SXX(
-    state: BasicSV, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: BasicSV,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply a square root of XX gate.
 
@@ -252,7 +256,9 @@ def SXX(
 
 
 def SXXdg(
-    state: BasicSV, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: BasicSV,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply adjoint of a square root of XX gate.
 
@@ -264,7 +270,9 @@ def SXXdg(
 
 
 def SYY(
-    state: BasicSV, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: BasicSV,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply a square root of YY gate.
 
@@ -276,7 +284,9 @@ def SYY(
 
 
 def SYYdg(
-    state: BasicSV, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: BasicSV,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply adjoint of a square root of YY gate.
 
@@ -288,7 +298,9 @@ def SYYdg(
 
 
 def SZZ(
-    state: BasicSV, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: BasicSV,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply a square root of ZZ gate.
 
@@ -300,7 +312,9 @@ def SZZ(
 
 
 def SZZdg(
-    state: BasicSV, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: BasicSV,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply adjoint of a square root of ZZ gate.
 
@@ -312,7 +326,9 @@ def SZZdg(
 
 
 def SWAP(
-    state: BasicSV, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: BasicSV,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply a SWAP gate.
 

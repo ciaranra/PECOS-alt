@@ -19,7 +19,9 @@ if TYPE_CHECKING:
 
 
 def switch(
-    state: PauliFaultProp, switch_list: list[tuple[str, str]], qubit: int
+    state: PauliFaultProp,
+    switch_list: list[tuple[str, str]],
+    qubit: int,
 ) -> None:
     for symbol_init, symbol_final in switch_list:
         if qubit in state.faults[symbol_init]:

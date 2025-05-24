@@ -36,7 +36,10 @@ class DefaultLogicalGate:
     """
 
     def __init__(
-        self, qecc: QECCProtocol, symbol: str, **gate_params: QECCGateParams
+        self,
+        qecc: QECCProtocol,
+        symbol: str,
+        **gate_params: QECCGateParams,
     ) -> None:
         """Initialize a default logical gate.
 

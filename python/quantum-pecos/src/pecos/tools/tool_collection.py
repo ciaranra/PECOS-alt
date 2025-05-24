@@ -144,7 +144,8 @@ def fault_tolerance_check(qecc: QECCProtocol, decoder: Decoder) -> None:
 
 
 def form_errors(
-    xs: Iterable[tuple[int, int]], zs: Iterable[tuple[int, int]]
+    xs: Iterable[tuple[int, int]],
+    zs: Iterable[tuple[int, int]],
 ) -> dict[int, dict[str, set[int]]]:
     errors = {}
     for t, q in xs:

@@ -206,7 +206,9 @@ def func5(
 
 
 def func6(
-    x: tuple[NDArray[np.float64], NDArray[np.float64]], a: float, pth: float
+    x: tuple[NDArray[np.float64], NDArray[np.float64]],
+    a: float,
+    pth: float,
 ) -> float | NDArray[np.float64]:
     """Fit error rates using power law relationship to determine threshold.
 
@@ -369,7 +371,10 @@ def jackknife_d(
 
 
 def get_est(
-    value_is: list[float], label: str, *, verbose: bool = True
+    value_is: list[float],
+    label: str,
+    *,
+    verbose: bool = True,
 ) -> tuple[float, float]:
     v_est = sum(value_is) / len(value_is)
     v_est_std = np.std(value_is)

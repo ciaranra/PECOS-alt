@@ -759,7 +759,10 @@ class VerifyStabilizers:
         return logical_z_strings, logical_x_strings, stab_strs, destab_strs
 
     def distance(
-        self, *, css: bool = False, verbose: bool = True
+        self,
+        *,
+        css: bool = False,
+        verbose: bool = True,
     ) -> tuple[set[int], set[int]] | None:
         """Checks the distance of the code."""
         if self.circuit is None:
@@ -897,7 +900,10 @@ class VerifyStabilizers:
                         yield x_set, z_set
 
     def _is_logical_error(
-        self, state: SimulatorProtocol, xs: set[int], zs: set[int]
+        self,
+        state: SimulatorProtocol,
+        xs: set[int],
+        zs: set[int],
     ) -> bool:
         # A trivial error anticommutes with the checks. (Might or might not anticommute with the logical stabilizers)
         # A logical error commutes with the checks and is not a product of checks.

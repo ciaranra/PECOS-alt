@@ -22,7 +22,9 @@ if TYPE_CHECKING:
 
 
 def noise_meas_bitflip_leakage(
-    op: QOp, p: float, machine: MachineProtocol
+    op: QOp,
+    p: float,
+    machine: MachineProtocol,
 ) -> list[QOp] | None:
     """Bit-flip noise model for measurements.
 

@@ -183,7 +183,9 @@ def SXX(state: Qulacs, qubits: tuple[int, int], **_params: SimulatorGateParams) 
 
 
 def SXXdg(
-    state: Qulacs, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: Qulacs,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply adjoint of a square root of XX gate.
 
@@ -205,7 +207,9 @@ def SYY(state: Qulacs, qubits: tuple[int, int], **_params: SimulatorGateParams) 
 
 
 def SYYdg(
-    state: Qulacs, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: Qulacs,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply adjoint of a square root of YY gate.
 
@@ -227,7 +231,9 @@ def SZZ(state: Qulacs, qubits: tuple[int, int], **_params: SimulatorGateParams) 
 
 
 def SZZdg(
-    state: Qulacs, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: Qulacs,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply adjoint of a square root of ZZ gate.
 
@@ -239,7 +245,9 @@ def SZZdg(
 
 
 def SWAP(
-    state: Qulacs, qubits: tuple[int, int], **_params: SimulatorGateParams
+    state: Qulacs,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply a SWAP gate.
 

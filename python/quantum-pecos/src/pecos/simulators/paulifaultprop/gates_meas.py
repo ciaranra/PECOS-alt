@@ -58,7 +58,9 @@ def meas_y(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) ->
 
 
 def meas_pauli(
-    state: PauliFaultProp, qubits: int | tuple[int, ...], **params: SimulatorGateParams
+    state: PauliFaultProp,
+    qubits: int | tuple[int, ...],
+    **params: SimulatorGateParams,
 ) -> int:
     pauli = params["Pauli"]
 
