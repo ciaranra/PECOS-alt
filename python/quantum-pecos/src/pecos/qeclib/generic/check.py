@@ -29,6 +29,20 @@ class Check(Block):
         a: Qubit,
         out: Bit,
     ) -> None:
+        """Initialize a stabilizer check measurement.
+
+        Args:
+            d: List of data qubits to check.
+            paulis: String of Pauli operators (X, Y, or Z) to apply to each data qubit.
+                Can be a single character (applied to all qubits) or one character per qubit.
+            a: Ancilla qubit used for the check measurement.
+            out: Classical bit to store the measurement result.
+
+        Raises:
+            Exception: If check weight is less than 2.
+            Exception: If number of Paulis doesn't match number of data qubits.
+            Exception: If invalid Pauli operator is specified.
+        """
         super().__init__()
 
         n: int = len(d)

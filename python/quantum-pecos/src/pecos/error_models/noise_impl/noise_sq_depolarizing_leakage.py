@@ -9,16 +9,23 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from pecos.reps.pypmir.op_types import QOp
+
+if TYPE_CHECKING:
+    from pecos.protocols import MachineProtocol
 
 
 def noise_sq_depolarizing_leakage(
     op: QOp,
     p: float,
     noise_dict: dict,
-    machine,
+    machine: MachineProtocol,
 ) -> list[QOp] | None:
     args = set(op.args)
     leaked = machine.leaked_qubits & args

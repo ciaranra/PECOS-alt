@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 class Qulacs(StateVector):
     """Wrapper of Qulacs state vector simulator."""
 
-    def __init__(self, num_qubits) -> None:
+    def __init__(self, num_qubits: int) -> None:
         """Initializes the state vector.
 
         Args:

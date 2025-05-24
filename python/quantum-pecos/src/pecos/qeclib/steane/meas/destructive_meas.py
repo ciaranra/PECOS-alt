@@ -36,6 +36,14 @@ class MeasureX(Block):
         *,
         barrier: bool = True,
     ) -> None:
+        """Initialize MeasureX block for logical X basis measurement.
+
+        Args:
+            qubits: Data register containing the 7 qubits of the Steane code.
+            meas_creg: Classical register to store the measurement results.
+            log_raw: Bit to store the raw logical measurement result.
+            barrier: Whether to include a barrier before measurement. Defaults to True.
+        """
         super().__init__()
 
         self.extend(
@@ -60,6 +68,14 @@ class MeasureY(Block):
         *,
         barrier: bool = True,
     ) -> None:
+        """Initialize MeasureY block for logical Y basis measurement.
+
+        Args:
+            qubits: Data register containing the 7 qubits of the Steane code.
+            meas_creg: Classical register to store the measurement results.
+            log_raw: Bit to store the raw logical measurement result.
+            barrier: Whether to include a barrier before measurement. Defaults to True.
+        """
         super().__init__()
 
         self.extend(
@@ -79,6 +95,14 @@ class MeasureZ(Block):
         *,
         barrier: bool = True,
     ) -> None:
+        """Initialize MeasureZ block for logical Z basis measurement.
+
+        Args:
+            qubits: Data register containing the 7 qubits of the Steane code.
+            meas: Classical register to store the measurement results.
+            log_raw: Bit to store the raw logical measurement result.
+            barrier: Whether to include a barrier before measurement. Defaults to True.
+        """
         super().__init__()
 
         q = qubits
@@ -114,6 +138,17 @@ class MeasureZ(Block):
 
 class Measure(Block):
     def __init__(self, q: QReg, meas_creg: CReg, log_raw: Bit, meas_basis: str) -> None:
+        """Initialize Measure block for logical measurement in specified basis.
+
+        Args:
+            q: Data register containing the 7 qubits of the Steane code.
+            meas_creg: Classical register to store the measurement results.
+            log_raw: Bit to store the raw logical measurement result.
+            meas_basis: Measurement basis ('X', 'Y', or 'Z').
+
+        Raises:
+            Exception: If meas_basis is not 'X', 'Y', or 'Z'.
+        """
         super().__init__()
 
         if meas_basis == "X":
@@ -159,6 +194,25 @@ class ProcessMeas(Block):
         *,
         ft_meas: bool = True,
     ) -> None:
+        """Initialize ProcessMeas block for processing measurement results.
+
+        Args:
+            basis: Measurement basis ('X', 'Y', or 'Z').
+            meas: Classical register containing measurement results.
+            log_raw_bit: Raw logical measurement result bit.
+            log_bit: Corrected logical measurement result bit.
+            syn_meas: Classical register for syndrome measurements.
+            pf_x: Pauli frame bit for X errors.
+            pf_z: Pauli frame bit for Z errors.
+            check_type: Type of stabilizer checks ('xy', 'xz', or 'yz'). Defaults to 'xz'.
+            last_raw_syn_x: Previous X syndrome measurements. Defaults to None.
+            last_raw_syn_y: Previous Y syndrome measurements. Defaults to None.
+            last_raw_syn_z: Previous Z syndrome measurements. Defaults to None.
+            ft_meas: Whether to apply fault-tolerant corrections. Defaults to True.
+
+        Raises:
+            Exception: If check_type is not recognized or basis is invalid.
+        """
         super().__init__()
 
         log = log_bit

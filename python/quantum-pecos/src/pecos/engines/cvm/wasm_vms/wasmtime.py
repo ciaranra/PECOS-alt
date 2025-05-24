@@ -12,17 +12,27 @@
 from __future__ import annotations
 
 import contextlib
+from typing import TYPE_CHECKING
 
 from pecos.engines.cvm.sim_func import sim_funcs
 
 with contextlib.suppress(ImportError):
     from pecos.foreign_objects.wasmtime import WasmtimeObj
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from typing import Any
+
 
 class WASM:
     """Helper class to provide the same interface as other Wasm objects."""
 
     def __init__(self, _path: str | bytes) -> None:
+        """Initialize a WASM instance using the Wasmtime runtime.
+
+        Args:
+            _path: Path to a WebAssembly file or raw WebAssembly bytes.
+        """
         self.wasmtime = WasmtimeObj(_path)
         self.wasmtime.init()
 
@@ -31,10 +41,10 @@ class WASM:
 
     def exec(
         self,
-        func_name,
-        args,
+        func_name: str,
+        args: Sequence[tuple[Any, int]],
         *,
-        debug=False,
+        debug: bool = False,
     ) -> int:
         if debug and func_name.startswith("sim_"):
             method = sim_funcs[func_name]

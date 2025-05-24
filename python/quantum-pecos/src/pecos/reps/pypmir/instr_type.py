@@ -16,4 +16,9 @@ class Instr:
     """Base type for all PyMIR instructions including QOps, Blocks, MOps, etc."""
 
     def __init__(self, metadata: dict | None = None) -> None:
+        """Initialize an instruction.
+
+        Args:
+            metadata: Optional metadata dictionary associated with the instruction.
+        """
         self.metadata = metadata

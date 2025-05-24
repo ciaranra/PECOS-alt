@@ -16,10 +16,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
+    from pecos.simulators.basic_sv.state import BasicSV
     from pecos.type_defs import SimulatorGateParams
 
 
-def meas_z(state, qubit: int, **_params: SimulatorGateParams) -> int:
+def meas_z(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> int:
     """Measure in the Z-basis, collapse and normalise.
 
     Notes:

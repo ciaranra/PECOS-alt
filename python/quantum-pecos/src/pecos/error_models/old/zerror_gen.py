@@ -22,7 +22,7 @@ from pecos.error_models.class_errors_circuit import ErrorCircuits
 from pecos.error_models.parent_class_error_gen import ParentErrorModel
 
 if TYPE_CHECKING:
-    from pecos.type_defs import GateParams
+    from pecos.type_defs import ErrorParams, GateParams
 
 
 class ZModel(ParentErrorModel):
@@ -52,7 +52,9 @@ class ZModel(ParentErrorModel):
         ("Z", "X"),
     ]
 
-    def __init__(self, model_level="circuit", *, has_idle_errors=False) -> None:
+    def __init__(
+        self, model_level: str = "circuit", *, has_idle_errors: bool = False
+    ) -> None:
         """Initialize Z error generator.
 
         Args:
@@ -123,7 +125,9 @@ class ZModel(ParentErrorModel):
         if has_idle_errors:
             self.gen.set_gate_error("idle", zerror.error_func)
 
-    def start(self, circuit, error_params) -> ErrorCircuits:
+    def start(
+        self, circuit: QuantumCircuit, error_params: ErrorParams
+    ) -> ErrorCircuits:
         """Start up at the beginning of a circuit simulation.
 
         Args:
@@ -140,8 +144,8 @@ class ZModel(ParentErrorModel):
 
     def generate_tick_errors(
         self,
-        tick_circuit,
-        time,
+        tick_circuit: QuantumCircuit,
+        time: int | tuple[int, ...],
         **params: GateParams,
     ) -> ErrorCircuits:
         """Returns before errors, after errors, and replaced locations for the given key (args).

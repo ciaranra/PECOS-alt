@@ -31,6 +31,11 @@ class SymbolLibrary(Generic[T]):
     """
 
     def __init__(self) -> None:
+        """Initialize the SymbolLibrary.
+
+        Creates empty constructors dictionary, sets default_constructor to None,
+        and initializes the library as a defaultdict of sets.
+        """
         self.constructors = {}
         self.default_constructor = None
         self.library = defaultdict(set)

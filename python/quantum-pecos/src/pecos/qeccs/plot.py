@@ -11,23 +11,26 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import networkx as nx
 from matplotlib import pyplot as plt
+
+if TYPE_CHECKING:
+    from pecos.protocols import LogicalInstructionProtocol, QECCProtocol
 
 T = TypeVar("T")
 
 
 # plot intsructions
 def plot_qecc(
-    qecc,
-    figsize=(9, 9),
-    dpi=80,
-    filename=None,
-    title_font_size=16,
-    axis_font_size=14,
-    legend_font_size=14,
+    qecc: "QECCProtocol",
+    figsize: tuple[int, int] = (9, 9),
+    dpi: int = 80,
+    filename: str | None = None,
+    title_font_size: int = 16,
+    axis_font_size: int = 14,
+    legend_font_size: int = 14,
     **kwargs: Any,  # noqa: ANN401 - Matplotlib accepts various parameter types
 ) -> None:
     """Produces a plot of a qecc.
@@ -133,13 +136,13 @@ def plot_qecc(
 
 
 def plot_instr(
-    instr,
-    figsize=(9, 9),
-    dpi=80,
-    filename=None,
-    title_font_size=16,
-    axis_font_size=14,
-    legend_font_size=14,
+    instr: "LogicalInstructionProtocol",
+    figsize: tuple[int, int] = (9, 9),
+    dpi: int = 80,
+    filename: str | None = None,
+    title_font_size: int = 16,
+    axis_font_size: int = 14,
+    legend_font_size: int = 14,
     **kwargs: Any,  # noqa: ANN401 - Matplotlib accepts various parameter types
 ) -> None:
     """Plot syndrome extraction using the provided configuration.
@@ -261,7 +264,7 @@ def plot_instr(
     plt.show()
 
 
-def get_ancilla_types(instr) -> tuple[set, set]:
+def get_ancilla_types(instr: "LogicalInstructionProtocol") -> tuple[set, set]:
     x_ancillas = set()
     z_ancillas = set()
     abs_circuit = instr.abstract_circuit
@@ -277,7 +280,9 @@ def get_ancilla_types(instr) -> tuple[set, set]:
     return x_ancillas, z_ancillas
 
 
-def graph_add_directed_cnots(instr, g) -> dict:
+def graph_add_directed_cnots(
+    instr: "LogicalInstructionProtocol", g: nx.DiGraph
+) -> tuple[dict, list, list]:
     circuit = instr.circuit
     edge_labels = {}
     cys = []
@@ -298,7 +303,17 @@ def graph_add_directed_cnots(instr, g) -> dict:
     return edge_labels, czs, cys
 
 
-def mapset(mapping, oldset) -> set:
+class NoMap:
+    """Default Mapping: item -> item."""
+
+    def __init__(self) -> None:
+        """Initialize the NoMap identity mapping."""
+
+    def __getitem__(self, item: T) -> T:
+        return item
+
+
+def mapset(mapping: dict | NoMap, oldset: set) -> set:
     """Applies a mapping to a set.
 
     Args:
@@ -313,13 +328,3 @@ def mapset(mapping, oldset) -> set:
         newset.add(mapping[e])
 
     return newset
-
-
-class NoMap:
-    """Default Mapping: item -> item."""
-
-    def __init__(self) -> None:
-        pass
-
-    def __getitem__(self, item: T) -> T:
-        return item

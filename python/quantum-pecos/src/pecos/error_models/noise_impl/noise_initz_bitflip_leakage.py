@@ -9,18 +9,25 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from pecos.error_models.noise_impl.noise_initz_bitflip import noise_initz_bitflip
 from pecos.reps.pypmir.op_types import QOp
 
+if TYPE_CHECKING:
+    from pecos.protocols import MachineProtocol
 
-def noise_initz_bitflip_leakage(op: QOp, p: float, machine) -> None:
+
+def noise_initz_bitflip_leakage(op: QOp, p: float, machine: MachineProtocol) -> None:
     """The noise model for qubit (re)initialization, including leakage support.
 
     Args:
     ----
         op: Ideal quantum operation.
         p: Probability of bitflip.
-        machine: Machine instance containing leakage state information.
+        machine: Machine protocol instance containing leakage state information.
     """
     args = set(op.args)
     leaked = machine.leaked_qubits & args

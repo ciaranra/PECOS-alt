@@ -18,13 +18,12 @@ from wasmer import FunctionType, Instance, Module, Store, engine
 from wasmer_compiler_cranelift import Compiler as Cranelift
 
 from pecos.errors import MissingCCOPError, WasmRuntimeError
-from pecos.foreign_objects.foreign_object_abc import ForeignObject
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
-class WasmerObj(ForeignObject):
+class WasmerObj:
     """Wrapper class to create a Wasmer instance and access its functions.
 
     For more info on using Wasmer, see: https://wasmerio.github.io/wasmer-python/api/wasmer/wasmer.html
@@ -35,6 +34,13 @@ class WasmerObj(ForeignObject):
         file: str | bytes | Path,
         compiler: object | None = None,
     ) -> None:
+        """Initialize a WasmerObj.
+
+        Args:
+        ----
+            file: Path to WASM file, file bytes, or Path object to load.
+            compiler: Optional Wasmer compiler to use. Defaults to Cranelift if None.
+        """
         self.compiler = compiler
 
         if isinstance(file, str | Path):

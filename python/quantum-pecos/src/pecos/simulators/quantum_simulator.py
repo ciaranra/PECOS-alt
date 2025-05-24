@@ -43,6 +43,16 @@ except ImportError:
 
 class QuantumSimulator:
     def __init__(self, backend: str | object | None = None, **params: JSONType) -> None:
+        """Initialize the QuantumSimulator.
+
+        Args:
+        ----
+            backend: The simulation backend to use. Can be a string identifier
+                (e.g., 'stabilizer', 'state-vector', 'MPS', 'Qulacs', 'CuStateVec')
+                or a custom backend object. Defaults to None, which uses SparseSim.
+            **params: Additional parameters passed to the underlying simulator backend.
+
+        """
         self.num_qubits = None
         self.state = None
         self.backend = backend

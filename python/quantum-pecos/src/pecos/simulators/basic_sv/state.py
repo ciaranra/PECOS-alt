@@ -34,7 +34,7 @@ class BasicSV(StateVector):
         Maximum number of qubits is restricted to 10.
     """
 
-    def __init__(self, num_qubits, seed=None) -> None:
+    def __init__(self, num_qubits: int, seed: int | None = None) -> None:
         """Initializes the state vector.
 
         Args:

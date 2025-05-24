@@ -32,7 +32,12 @@ from pecos.simulators.projectq.logical_sign import find_logical_signs
 from pecos.simulators.sim_class_types import StateVector
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from projectq.ops._basics import BasicGate
+
     from pecos.circuits import QuantumCircuit
+    from pecos.type_defs import Location, SimulatorGateParams
 
 
 class ProjectQSim(StateVector):
@@ -43,7 +48,15 @@ class ProjectQSim(StateVector):
         num_qubits (int): Number of qubits being represented.
     """
 
-    def __init__(self, num_qubits) -> None:
+    def __init__(self, num_qubits: int) -> None:
+        """Initialize the ProjectQ quantum simulator state.
+
+        Args:
+            num_qubits: Number of qubits to simulate.
+
+        Raises:
+            TypeError: If num_qubits is not an integer.
+        """
         if not isinstance(num_qubits, int):
             msg = f"`num_qubits` should be of type `int.` but got type: {type(num_qubits)} "
             raise TypeError(msg)
@@ -72,20 +85,31 @@ class ProjectQSim(StateVector):
         return self
 
     def logical_sign(self, logical_op: QuantumCircuit) -> int:
-        """Args:
-        ----
-            logical_op:
+        """Find the sign of a logical operator.
+
+        Args:
+            logical_op (QuantumCircuit): The logical operator circuit.
         """
         return find_logical_signs(self, logical_op)
 
-    def add_gate(self, symbol: str, gate_obj, *, make_func: bool = True) -> None:
+    def add_gate(
+        self,
+        symbol: str,
+        gate_obj: (
+            BasicGate
+            | type[BasicGate]
+            | Callable[[ProjectQSim, Location, SimulatorGateParams], None]
+        ),
+        *,
+        make_func: bool = True,
+    ) -> None:
         """Adds a new gate on the fly to this Simulator.
 
         Args:
         ----
-            symbol:
-            gate_obj:
-            make_func:
+            symbol: The symbol/name for the gate
+            gate_obj: The gate object to add
+            make_func: Whether to wrap the gate object with MakeFunc
         """
         if symbol in self.gate_dict:
             print("WARNING: Can not add gate as the symbol has already been taken.")
@@ -94,7 +118,7 @@ class ProjectQSim(StateVector):
         else:
             self.gate_dict[symbol] = gate_obj
 
-    def get_probs(self, key_basis=None) -> dict[str, float]:
+    def get_probs(self, key_basis: list[str] | None = None) -> dict[str, float]:
         self.eng.flush()
 
         if key_basis:
@@ -115,7 +139,7 @@ class ProjectQSim(StateVector):
 
         return probs_dict
 
-    def get_amps(self, key_basis=None) -> dict[str, complex]:
+    def get_amps(self, key_basis: list[str] | None = None) -> dict[str, complex]:
         self.eng.flush()
 
         if key_basis:

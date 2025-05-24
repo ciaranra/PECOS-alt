@@ -25,7 +25,9 @@ from pecos.simulators.sparsesim.cmd_one_qubit import SX, SY, SZ, SYdg, SZdg, X
 def CX(
     state: SparseSim, qubits: tuple[int, int], **_params: SimulatorGateParams
 ) -> None:
-    """XI -> XX
+    """Apply CNOT gate (controlled-X).
+
+    XI -> XX
     IX -> IX
     ZI -> ZI
     IZ -> ZZ.
@@ -65,8 +67,10 @@ def CX(
     YZ -> XY
     YY -> -XZ
 
-    state (SparseSim): Instance representing the stabilizer state.
-    qubit (int): Integer that indexes the qubit being acted on.
+    Args:
+        state (SparseSim): Instance representing the stabilizer state.
+        qubits (tuple[int, int]): A tuple of (control, target) qubit indices.
+        **_params: Unused additional parameters (kept for interface compatibility).
 
     Returns: None
 
@@ -635,9 +639,8 @@ def SYY(
     TODO: verify implementation!
 
     Args:
-    ----
-        state:
-        qubits:
+        state (SparseSim): Instance representing the stabilizer state.
+        qubits (tuple[int, int]): A tuple of two qubit indices to apply the gate to.
     """
     qubit1, qubit2 = qubits
     SZdg(state, qubit1)  # rZd
@@ -653,10 +656,9 @@ def SYYdg(
     """Adjoint of SYY.
 
     Args:
-    ----
-        state:
-        qubits:
-        **params:
+        state (SparseSim): Instance representing the stabilizer state.
+        qubits (tuple[int, int]): A tuple of two qubit indices to apply the gate to.
+        **_params: Unused additional parameters (kept for interface compatibility).
     """
     qubit1, qubit2 = qubits
     SZdg(state, qubit1)
@@ -677,9 +679,8 @@ def SZZ(
     IZ -> IZ
 
     Args:
-    ----
-        state:
-        qubits:
+        state (SparseSim): Instance representing the stabilizer state.
+        qubits (tuple[int, int]): A tuple of two qubit indices to apply the gate to.
     """
     qubit1, qubit2 = qubits
     SYdg(state, qubit1)  # rYd
@@ -695,9 +696,8 @@ def SZZdg(
     r"""Adjoint of SZZ.
 
     Args:
-    ----
-        state:
-        qubits:
+        state (SparseSim): Instance representing the stabilizer state.
+        qubits (tuple[int, int]): A tuple of two qubit indices to apply the gate to.
     """
     qubit1, qubit2 = qubits
     SYdg(state, qubit1)  # rYd

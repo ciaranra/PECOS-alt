@@ -18,7 +18,9 @@ if TYPE_CHECKING:
     from pecos.type_defs import SimulatorGateParams
 
 
-def switch(state, switch_list: list[tuple[str, str]], qubit: int) -> None:
+def switch(
+    state: PauliFaultProp, switch_list: list[tuple[str, str]], qubit: int
+) -> None:
     for symbol_init, symbol_final in switch_list:
         if qubit in state.faults[symbol_init]:
             state.faults[symbol_init].remove(qubit)
@@ -34,8 +36,7 @@ def Identity(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) 
     Y -> Y
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -51,8 +52,7 @@ def X(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> None
     Y -> -Y
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -63,13 +63,14 @@ def X(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> None
 
 
 def Y(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> None:
-    """X -> -X
+    """Apply Pauli Y gate.
+
+    X -> -X
     Z -> -Z
     Y -> Y.
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -80,13 +81,14 @@ def Y(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> None
 
 
 def Z(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> None:
-    """X -> -X
+    """Apply Pauli Z gate.
+
+    X -> -X
     Z -> Z
     Y -> -Y.
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -104,8 +106,7 @@ def SX(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> Non
     Y -> Z
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -132,8 +133,7 @@ def SXdg(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> N
     Y -> -Z
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -160,8 +160,7 @@ def SY(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> Non
     Y -> Y
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -188,8 +187,7 @@ def SYdg(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> N
     Y -> Y
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -216,8 +214,7 @@ def SZ(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> Non
     Y -> -X
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -244,8 +241,7 @@ def SZdg(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> N
     Y -> X
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -272,8 +268,7 @@ def H(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> None
     Y -> -Y
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -300,8 +295,7 @@ def H2(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> Non
     Y -> -Y
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -328,8 +322,7 @@ def H3(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> Non
     Y -> X
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -356,8 +349,7 @@ def H4(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> Non
     Y -> -X
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -384,8 +376,7 @@ def H5(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> Non
     Y -> Z
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -412,8 +403,7 @@ def H6(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> Non
     Y -> -Z
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -440,8 +430,7 @@ def F(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> None
     Y -> Z
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -466,8 +455,7 @@ def F2(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> Non
     Y -> -X
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -495,8 +483,7 @@ def F3(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> Non
     Y -> -Z
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -524,8 +511,7 @@ def F4(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> Non
     Y -> -X
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -553,8 +539,7 @@ def Fdg(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> No
     Y -> X
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -579,8 +564,7 @@ def F2dg(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> N
     Y -> Z
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -608,8 +592,7 @@ def F3dg(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> N
     Y -> X
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None
@@ -637,8 +620,7 @@ def F4dg(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> N
     Y -> -Z
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
+        state (PauliFaultProp): The class representing the Pauli fault state.
         qubit (int): An integer indexing the qubit being operated on.
 
     Returns: None

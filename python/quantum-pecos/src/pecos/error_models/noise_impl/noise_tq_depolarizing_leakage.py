@@ -9,16 +9,23 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from pecos.reps.pypmir.op_types import QOp
+
+if TYPE_CHECKING:
+    from pecos.protocols import MachineProtocol
 
 
 def noise_tq_depolarizing_leakage(
     op: QOp,
     p: float,
     noise_dict: dict,
-    machine,
+    machine: MachineProtocol,
 ) -> list[QOp] | None:
     """Two-qubit gate depolarizing noise plus leakage."""
     # TODO: precompute, in PyPMIR, a flattened version of args

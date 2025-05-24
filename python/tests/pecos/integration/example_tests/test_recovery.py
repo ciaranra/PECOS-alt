@@ -21,7 +21,7 @@ def test_recovery() -> None:
         recovery_tester(surface)
 
 
-def recovery_tester(qecc: pc.qeccs.qecc_parent_class.QECC) -> None:
+def recovery_tester(qecc: pc.protocols.QECCProtocol) -> None:
     """Used to check recovery operations.
 
      - That ideal logical |0> and |+> return the same output for check measurements.

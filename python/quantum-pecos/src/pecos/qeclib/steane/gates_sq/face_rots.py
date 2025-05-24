@@ -25,6 +25,15 @@ class F(Block):
     """
 
     def __init__(self, q: QReg) -> None:
+        """Initialize a face rotation gate on the Steane code.
+
+        Args:
+            q: A quantum register containing exactly 7 qubits representing a logical qubit
+                in the Steane code.
+
+        Raises:
+            Exception: If the quantum register does not contain exactly 7 qubits.
+        """
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)
@@ -46,6 +55,15 @@ class Fdg(Block):
     """
 
     def __init__(self, q: QReg) -> None:
+        """Initialize an adjoint face rotation gate on the Steane code.
+
+        Args:
+            q: A quantum register containing exactly 7 qubits representing a logical qubit
+                in the Steane code.
+
+        Raises:
+            Exception: If the quantum register does not contain exactly 7 qubits.
+        """
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)

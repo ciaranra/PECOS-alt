@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from phir.model import PHIRModel
 
-from pecos.classical_interpreters.classical_interpreter_abc import ClassicalInterpreter
 from pecos.reps.pypmir import PyPMIR, signed_data_types, unsigned_data_types
 from pecos.reps.pypmir import types as pt
 
@@ -28,7 +27,7 @@ if TYPE_CHECKING:
     from numpy import integer
 
     from pecos import QuantumCircuit
-    from pecos.foreign_objects.foreign_object_abc import ForeignObject
+    from pecos.protocols import ForeignObjectProtocol
 
 
 def version2tuple(v: str) -> tuple[int, ...]:
@@ -41,12 +40,15 @@ data_type_map = signed_data_types | unsigned_data_types
 data_type_map_rev = {v: k for k, v in data_type_map.items()}
 
 
-class PHIRClassicalInterpreter(ClassicalInterpreter):
+class PHIRClassicalInterpreter:
     """An interpreter that takes in a PHIR program and runs the classical side of the program."""
 
     def __init__(self) -> None:
-        super().__init__()
+        """Initialize the PHIR classical interpreter.
 
+        Sets up the interpreter with default values for program state,
+        environment variables, and validation settings.
+        """
         self.program = None
         self.foreign_obj = None
         self.cenv = None
@@ -71,7 +73,7 @@ class PHIRClassicalInterpreter(ClassicalInterpreter):
     def init(
         self,
         program: str | (dict | QuantumCircuit),
-        foreign_obj: ForeignObject | None = None,
+        foreign_obj: ForeignObjectProtocol | None = None,
     ) -> int:
         """Initialize the interpreter to validate and optimize the program.
 
@@ -116,7 +118,7 @@ class PHIRClassicalInterpreter(ClassicalInterpreter):
 
         return self.program.num_qubits
 
-    def check_ffc(self, call_list: list[str], fobj: ForeignObject) -> None:
+    def check_ffc(self, call_list: list[str], fobj: ForeignObjectProtocol) -> None:
         if self.program.foreign_func_calls:
             func_names = set(fobj.get_funcs())
             not_supported = set(call_list) - func_names

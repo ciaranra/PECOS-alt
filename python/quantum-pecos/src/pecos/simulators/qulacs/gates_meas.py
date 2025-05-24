@@ -16,10 +16,11 @@ from typing import TYPE_CHECKING
 from qulacs.gate import Measurement
 
 if TYPE_CHECKING:
+    from pecos.simulators.qulacs.state import Qulacs
     from pecos.type_defs import SimulatorGateParams
 
 
-def meas_z(state, qubit: int, **_params: SimulatorGateParams) -> int:
+def meas_z(state: Qulacs, qubit: int, **_params: SimulatorGateParams) -> int:
     """Measure in the Z-basis, collapse and normalise.
 
     Notes:

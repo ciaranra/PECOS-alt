@@ -11,19 +11,33 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from typing import TYPE_CHECKING
+
 from pecos.circuits.quantum_circuit import QuantumCircuit
+from pecos.qeccs.default_logical_instruction import DefaultLogicalInstruction
 from pecos.qeccs.helper_functions import pos2qudit
-from pecos.qeccs.instruction_parent_class import LogicalInstruction
 from pecos.type_defs import QECCInstrParams
 
+if TYPE_CHECKING:
+    from pecos.protocols import QECCProtocol
 
-class InstrSynExtraction(LogicalInstruction):
+
+class InstrSynExtraction(DefaultLogicalInstruction):
     """Instruction for a round of syndrome extraction.
 
     Parent class sets self.qecc.
     """
 
-    def __init__(self, qecc, symbol, **params: QECCInstrParams) -> None:
+    def __init__(
+        self, qecc: "QECCProtocol", symbol: str, **params: QECCInstrParams
+    ) -> None:
+        """Initialize the syndrome extraction instruction for Color 4.8.8 code.
+
+        Args:
+            qecc: The parent QECC instance.
+            symbol: The instruction symbol identifier.
+            **params: Additional instruction parameters.
+        """
         super().__init__(qecc, symbol, **params)
 
         self.abstract_circuit = QuantumCircuit(**params)
@@ -60,7 +74,7 @@ class InstrSynExtraction(LogicalInstruction):
         # Must be called at the end of initiation.
         self._compile_circuit(self.abstract_circuit)
 
-    def _create_checks(self, ancilla) -> None:
+    def _create_checks(self, ancilla: int) -> None:
         self.ancilla_x_check.add(ancilla)
         self.ancilla_z_check.add(ancilla)
 
@@ -139,7 +153,7 @@ class InstrSynExtraction(LogicalInstruction):
             )
 
 
-class InstrInitZero(LogicalInstruction):
+class InstrInitZero(DefaultLogicalInstruction):
     """Instruction for initializing a logical zero.
 
     It is just like syndrome extraction except the data qubits are initialized in the zero state at tick = 0.
@@ -149,7 +163,19 @@ class InstrInitZero(LogicalInstruction):
     Parent class sets self.qecc.
     """
 
-    def __init__(self, qecc, symbol, **params: QECCInstrParams) -> None:
+    def __init__(
+        self, qecc: "QECCProtocol", symbol: str, **params: QECCInstrParams
+    ) -> None:
+        """Initialize the logical zero state preparation instruction.
+
+        Initializes all data qubits in the |0⟩ state followed by syndrome extraction.
+
+        Args:
+            qecc: The parent QECC instance.
+            symbol: The instruction symbol identifier.
+            **params: Additional instruction parameters including:
+                - ideal_meas: If True, measurements are replaced with ideal measurements.
+        """
         super().__init__(qecc, symbol, **params)
 
         self.symbol = "instr_init_zero"
@@ -194,7 +220,7 @@ class InstrInitZero(LogicalInstruction):
         self._compile_circuit(self.abstract_circuit)
 
 
-class InstrInitPlus(LogicalInstruction):
+class InstrInitPlus(DefaultLogicalInstruction):
     """Instruction for initializing a logical plus.
 
     It is just like syndrome extraction except the data qubits are initialized in the plus state at tick = 0.
@@ -204,7 +230,19 @@ class InstrInitPlus(LogicalInstruction):
     Parent class sets self.qecc.
     """
 
-    def __init__(self, qecc, symbol, **params: QECCInstrParams) -> None:
+    def __init__(
+        self, qecc: "QECCProtocol", symbol: str, **params: QECCInstrParams
+    ) -> None:
+        """Initialize the logical plus state preparation instruction.
+
+        Initializes all data qubits in the |+⟩ state followed by syndrome extraction.
+
+        Args:
+            qecc: The parent QECC instance.
+            symbol: The instruction symbol identifier.
+            **params: Additional instruction parameters including:
+                - ideal_meas: If True, measurements are replaced with ideal measurements.
+        """
         super().__init__(qecc, symbol, **params)
 
         self.symbol = "instr_init_plus"

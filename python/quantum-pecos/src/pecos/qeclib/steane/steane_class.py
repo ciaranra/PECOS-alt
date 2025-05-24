@@ -47,6 +47,17 @@ class Steane(Vars):
         default_rus_limit: int = 3,
         ancillas: QReg | None = None,
     ) -> None:
+        """Initialize a Steane code instance with associated quantum and classical registers.
+
+        Args:
+            name: Name prefix for all registers associated with this Steane code instance.
+            default_rus_limit: Default limit for repeat-until-success procedures. Defaults to 3.
+            ancillas: Optional pre-existing ancilla register. If None, creates a new 3-qubit
+                ancilla register. Must have at least 3 qubits if provided.
+
+        Raises:
+            ValueError: If provided ancilla register has fewer than 3 qubits.
+        """
         super().__init__()
         self.d = QReg(f"{name}_d", 7)
         self.a = ancillas or QReg(f"{name}_a", 3)

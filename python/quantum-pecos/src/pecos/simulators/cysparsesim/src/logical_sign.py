@@ -11,7 +11,7 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-"""Functions:
+"""Functions for logical sign computation.
 
 find_logical_signs
 logical_flip
@@ -19,15 +19,25 @@ logical_flip
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 
-def find_logical_signs(state, logical_circuit, delogical_circuit=None) -> int:
+if TYPE_CHECKING:
+    from pecos.circuits import QuantumCircuit
+    from pecos.protocols import SimulatorProtocol
+
+
+def find_logical_signs(
+    state: SimulatorProtocol,
+    logical_circuit: QuantumCircuit,
+    delogical_circuit: QuantumCircuit | None = None,
+) -> int:
     """Find the sign of the logical operator.
 
     Args:
     ----
-        state:
-        logical_circuit (QuantumCircuit):
-        delogical_circuit (QuantumCircuit):
+        state: The quantum state instance
+        logical_circuit: The logical circuit to find the sign of
+        delogical_circuit: Optional delogical circuit to check anti-commutation with
     """
     if len(logical_circuit) != 1:
         msg = "Logical operators are expected to only have one tick."

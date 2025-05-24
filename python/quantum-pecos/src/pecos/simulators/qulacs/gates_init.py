@@ -17,10 +17,11 @@ from pecos.simulators.qulacs.gates_meas import meas_z
 from pecos.simulators.qulacs.gates_one_qubit import X
 
 if TYPE_CHECKING:
+    from pecos.simulators.qulacs.state import Qulacs
     from pecos.type_defs import SimulatorGateParams
 
 
-def init_zero(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def init_zero(state: Qulacs, qubit: int, **_params: SimulatorGateParams) -> None:
     """Initialise or reset the qubit to state |0>.
 
     Args:
@@ -33,8 +34,9 @@ def init_zero(state, qubit: int, **_params: SimulatorGateParams) -> None:
         X(state, qubit)
 
 
-def init_one(state, qubit: int, **_params: SimulatorGateParams) -> None:
-    """Initialise or reset the qubit to state |1>
+def init_one(state: Qulacs, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Initialise or reset the qubit to state |1>.
+
     Args:
         state: An instance of Qulacs
         qubit: The index of the qubit to be initialised.

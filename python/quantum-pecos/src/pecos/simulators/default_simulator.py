@@ -19,10 +19,19 @@ if TYPE_CHECKING:
 JSONType = dict[str, Any] | list[Any] | str | int | float | bool | None
 
 
-class Simulator:
-    """A parent class to provide standard methods for simulators."""
+class DefaultSimulator:
+    """A class providing default method implementations for simulators.
+
+    This class provides default implementations of the SimulatorProtocol interface.
+    Simulator implementations can inherit from this class to get the standard
+    behavior, or implement the SimulatorProtocol directly for custom behavior.
+    """
 
     def __init__(self) -> None:
+        """Initialize the DefaultSimulator.
+
+        Creates an empty bindings dictionary to store gate operation mappings.
+        """
         self.bindings = {}
 
     def run_gate(
@@ -78,26 +87,17 @@ class Simulator:
         from what a ``circuit_runner`` will return for the same method named ``run_circuit``.
 
         """
-        # TODO: removed_locations doesn't make sense except if circuit is tick_circuit
-        # because can't say not to do gates for particular ticks....
+        output = {}
 
-        if removed_locations is None:
-            removed_locations = set()
-
-        results = {}
         for symbol, locations, params in circuit.items():
-            gate_results = self.run_gate(
-                symbol,
-                locations - removed_locations,
-                **params,
-            )
-            results.update(gate_results)
+            gate_locations = locations
+            if removed_locations is not None:
+                gate_locations = set(locations) - removed_locations
+                # TODO: need to handle multi-qubit ops that are partially removed
 
-        return results
+            gate_output = self.run_gate(symbol, gate_locations, **params)
 
-    def add_faults(
-        self,
-        circuit: QuantumCircuit,
-        removed_locations: set | None = None,
-    ) -> None:
-        self.run_circuit(circuit, removed_locations)
+            if gate_output:
+                output.update(gate_output)
+
+        return output

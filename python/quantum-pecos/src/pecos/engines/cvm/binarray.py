@@ -11,15 +11,36 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from pecos.reps.pypmir import unsigned_data_types
+
+if TYPE_CHECKING:
+    from typing import Any
 
 
 class BinArray:
     """As opposed to the original unsigned 32-bit BinArray, this class defaults to signed 64-bit type."""
 
-    def __init__(self, size, value=0, dtype=np.int64) -> None:
+    def __init__(
+        self,
+        size: int | str,
+        value: int | str | BinArray | None = 0,
+        dtype: type[np.integer[Any]] = np.int64,
+    ) -> None:
+        """Initialize a binary array with given size and value.
+
+        Args:
+            size: The number of bits in the array. Can be an integer or a binary
+                string (e.g., '1101'). If a binary string is provided, its length
+                becomes the size and its value is used.
+            value: The initial value for the array. Can be an integer, binary string,
+                or another BinArray. Defaults to 0.
+            dtype: The NumPy integer data type to use for internal storage.
+                Defaults to np.int64 for signed 64-bit integers.
+        """
         self.size = size
         self.value = None
         self.dtype = dtype
@@ -34,7 +55,7 @@ class BinArray:
             value = int(size, 2)
             self.set(value)
 
-    def set(self, value) -> None:
+    def set(self, value: int | str | BinArray) -> None:
         if isinstance(value, self.dtype):
             self.value = value
         elif isinstance(value, BinArray):
@@ -45,7 +66,7 @@ class BinArray:
 
             self.value = self.dtype(value)
 
-    def new_val(self, value) -> BinArray:
+    def new_val(self, value: int | str | BinArray) -> BinArray:
         b = BinArray(self.size, value, self.dtype)
         if self.dtype in unsigned_data_types.values():
             b.clamp(self.size)
@@ -61,13 +82,13 @@ class BinArray:
             msg = f'Number of bits ({num}) exceeds size ({self.size}) for bits "{val}"!'
             raise Exception(msg)
 
-    def clamp(self, size) -> None:
+    def clamp(self, size: int) -> None:
         if self.num_bits() > size:
             bits = format(self.value, f"0{size}b")
             bits = int(bits[-size:], 2)
             self.value = self.dtype(bits)
 
-    def set_clip(self, value) -> None:
+    def set_clip(self, value: int | BinArray) -> None:
         value = int(value)
 
         if len(f"{value:b}") > self.size:
@@ -77,7 +98,7 @@ class BinArray:
         else:
             self.value = self.dtype(value)
 
-    def _set_clip(self, ba) -> None:
+    def _set_clip(self, ba: int | BinArray) -> None:
         """Take values up to the size of this BinArray. If this BinArray array is larger, fill with zeros."""
         if isinstance(ba, int):
             ba = self.new_val(ba)
@@ -88,10 +109,10 @@ class BinArray:
             msg = "Expected int or BinArray!"
             raise TypeError(msg)
 
-    def __getitem__(self, item) -> int:
+    def __getitem__(self, item: int) -> int:
         return int(str(self)[self.size - item - 1])
 
-    def __setitem__(self, key, value) -> None:
+    def __setitem__(self, key: int, value: int | str) -> None:
         b = list(str(self))
         b[self.size - key - 1] = str(value)
         b = "".join(b)
@@ -111,7 +132,7 @@ class BinArray:
     def __len__(self) -> int:
         return self.size
 
-    def do_binop(self, op, other) -> BinArray:
+    def do_binop(self, op: str, other: BinArray | str | int) -> BinArray:
         if hasattr(other, "value") and isinstance(other.value, self.dtype):
             value = other.value
         elif isinstance(other, str):
@@ -127,53 +148,53 @@ class BinArray:
     def __bool__(self) -> bool:
         return bool(self.value)
 
-    def __xor__(self, other) -> BinArray:
+    def __xor__(self, other: BinArray | str | int) -> BinArray:
         return self.do_binop("__xor__", other)
 
-    def __and__(self, other) -> BinArray:
+    def __and__(self, other: BinArray | str | int) -> BinArray:
         return self.do_binop("__and__", other)
 
-    def __or__(self, other) -> BinArray:
+    def __or__(self, other: BinArray | str | int) -> BinArray:
         return self.do_binop("__or__", other)
 
-    def __eq__(self, other) -> BinArray:
+    def __eq__(self, other: BinArray | str | int) -> BinArray:
         return self.do_binop("__eq__", other)
 
-    def __ne__(self, other) -> BinArray:
+    def __ne__(self, other: BinArray | str | int) -> BinArray:
         return self.do_binop("__ne__", other)
 
-    def __lt__(self, other) -> BinArray:
+    def __lt__(self, other: BinArray | str | int) -> BinArray:
         return self.do_binop("__lt__", other)
 
-    def __gt__(self, other) -> BinArray:
+    def __gt__(self, other: BinArray | str | int) -> BinArray:
         return self.do_binop("__gt__", other)
 
-    def __le__(self, other) -> BinArray:
+    def __le__(self, other: BinArray | str | int) -> BinArray:
         return self.do_binop("__le__", other)
 
-    def __ge__(self, other) -> BinArray:
+    def __ge__(self, other: BinArray | str | int) -> BinArray:
         return self.do_binop("__ge__", other)
 
-    def __add__(self, other) -> BinArray:
+    def __add__(self, other: BinArray | str | int) -> BinArray:
         return self.do_binop("__add__", other)
 
-    def __sub__(self, other) -> BinArray:
+    def __sub__(self, other: BinArray | str | int) -> BinArray:
         return self.do_binop("__sub__", other)
 
-    def __rshift__(self, other) -> BinArray:
+    def __rshift__(self, other: BinArray | str | int) -> BinArray:
         return self.do_binop("__rshift__", other)
 
-    def __lshift__(self, other) -> BinArray:
+    def __lshift__(self, other: BinArray | str | int) -> BinArray:
         return self.do_binop("__lshift__", other)
 
     def __invert__(self) -> BinArray:
         return self.new_val(~self.value)
 
-    def __mul__(self, other) -> BinArray:
+    def __mul__(self, other: BinArray | str | int) -> BinArray:
         return self.do_binop("__mul__", other)
 
-    def __floordiv__(self, other) -> BinArray:
+    def __floordiv__(self, other: BinArray | str | int) -> BinArray:
         return self.do_binop("__floordiv__", other)
 
-    def __mod__(self, other) -> BinArray:
+    def __mod__(self, other: BinArray | str | int) -> BinArray:
         return self.do_binop("__floordiv__", other)

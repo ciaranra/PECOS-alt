@@ -17,27 +17,33 @@ This module provides the Surface code on a 4.4.4.4 lattice structure,
 a topological quantum error correcting code.
 """
 
-from collections.abc import Generator
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from pecos.circuit_converters.checks2circuit import Check2Circuits
-from pecos.qeccs.qecc_parent_class import QECC
+from pecos.qeccs.default_qecc import DefaultQECC
 from pecos.qeccs.surface_4444.gates import GateIdentity, GateInitPlus, GateInitZero
 from pecos.qeccs.surface_4444.instructions import (
     InstrInitPlus,
     InstrInitZero,
     InstrSynExtraction,
 )
-from pecos.type_defs import QECCParams
+
+if TYPE_CHECKING:
+    from collections.abc import Generator, Iterator
+
+    from pecos.type_defs import QECCParams
 
 
-class Surface4444(QECC):
+class Surface4444(DefaultQECC):
     """Non-medial Surface code on 4.4.4.4 lattice."""
 
     def __init__(
         self,
-        distance=None,
-        height=None,
-        width=None,
+        distance: int | None = None,
+        height: int | None = None,
+        width: int | None = None,
         **qecc_params: QECCParams,
     ) -> None:
         """Initialize the Surface4444 code with the given parameters.
@@ -192,7 +198,7 @@ class Surface4444(QECC):
 
                 yield qudit_id
 
-    def _add_node(self, x, y, iter_ids) -> None:
+    def _add_node(self, x: int, y: int, iter_ids: Iterator[int]) -> None:
         nid = next(iter_ids)
 
         self.layout[nid] = (x, y)

@@ -14,12 +14,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from pecos.simulators.mps_pytket.state import MPS
     from pecos.type_defs import SimulatorGateParams
 
 from pytket import Qubit
 
 
-def meas_z(state, qubit: int, **_params: SimulatorGateParams) -> int:
+def meas_z(state: MPS, qubit: int, **_params: SimulatorGateParams) -> int:
     """Measure in the Z-basis, collapse and normalise.
 
     Notes:

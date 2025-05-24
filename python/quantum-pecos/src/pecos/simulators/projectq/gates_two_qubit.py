@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from pecos.simulators.projectq.state import ProjectQSim
     from pecos.type_defs import SimulatorGateParams
 
 from numpy import pi
@@ -24,11 +25,15 @@ from projectq import ops
 from pecos.simulators.projectq.gates_one_qubit import H
 
 
-def II(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
+def II(
+    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     pass
 
 
-def G2(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
+def G2(
+    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     """Applies a CZ.H(1).H(2).CZ."""
     CZ(state, qubits)
     H(state, qubits[0])
@@ -36,35 +41,45 @@ def G2(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     CZ(state, qubits)
 
 
-def CNOT(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
+def CNOT(
+    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     q1 = state.qids[qubits[0]]
     q2 = state.qids[qubits[1]]
 
     ops.CNOT | (q1, q2)
 
 
-def CZ(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
+def CZ(
+    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     q1 = state.qids[qubits[0]]
     q2 = state.qids[qubits[1]]
 
     ops.C(ops.Z) | (q1, q2)
 
 
-def CY(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
+def CY(
+    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     q1 = state.qids[qubits[0]]
     q2 = state.qids[qubits[1]]
 
     ops.C(ops.Y) | (q1, q2)
 
 
-def SWAP(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
+def SWAP(
+    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     q1 = state.qids[qubits[0]]
     q2 = state.qids[qubits[1]]
 
     ops.Swap | (q1, q2)
 
 
-def SXX(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
+def SXX(
+    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     """Square root of XX rotation to generators.
 
     state (SparseSim): Instance representing the stabilizer state.
@@ -77,7 +92,9 @@ def SXX(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     ops.Rxx(pi / 2) | (q1, q2)
 
 
-def SXXdg(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
+def SXXdg(
+    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     """Adjoint of square root of XX rotation.
 
     state: Instance representing the stabilizer state.
@@ -90,7 +107,9 @@ def SXXdg(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> Non
     ops.Rxx(-pi / 2) | (q1, q2)
 
 
-def SYY(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
+def SYY(
+    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     """Square root of YY rotation to generators.
 
     state: Instance representing the stabilizer state.
@@ -103,7 +122,9 @@ def SYY(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     ops.Ryy(pi / 2) | (q1, q2)
 
 
-def SYYdg(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
+def SYYdg(
+    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     """Adjoint of square root of YY rotation to generators.
 
     state: Instance representing the stabilizer state.
@@ -116,7 +137,9 @@ def SYYdg(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> Non
     ops.Ryy(-pi / 2) | (q1, q2)
 
 
-def SZZ(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
+def SZZ(
+    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     """Applies a square root of ZZ rotation to generators.
 
     state: Instance representing the stabilizer state.
@@ -129,7 +152,9 @@ def SZZ(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
     ops.Rzz(pi / 2) | (q1, q2)
 
 
-def SZZdg(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:
+def SZZdg(
+    state: ProjectQSim, qubits: tuple[int, int], **_params: SimulatorGateParams
+) -> None:
     """Applies an adjoint of square root of ZZ rotation to generators.
 
     state: Instance representing the stabilizer state.
@@ -142,25 +167,45 @@ def SZZdg(state, qubits: tuple[int, int], **_params: SimulatorGateParams) -> Non
     ops.Rzz(-pi / 2) | (q1, q2)
 
 
-def RXX(state, qubits, angle=None, **_params: SimulatorGateParams) -> None:
+def RXX(
+    state: ProjectQSim,
+    qubits: tuple[int, int],
+    angle: float | None = None,
+    **_params: SimulatorGateParams,
+) -> None:
     q1 = state.qids[qubits[0]]
     q2 = state.qids[qubits[1]]
     ops.Rxx(angle) | (q1, q2)
 
 
-def RYY(state, qubits, angle=None, **_params: SimulatorGateParams) -> None:
+def RYY(
+    state: ProjectQSim,
+    qubits: tuple[int, int],
+    angle: float | None = None,
+    **_params: SimulatorGateParams,
+) -> None:
     q1 = state.qids[qubits[0]]
     q2 = state.qids[qubits[1]]
     ops.Ryy(angle) | (q1, q2)
 
 
-def RZZ(state, qubits, angle=None, **_params: SimulatorGateParams) -> None:
+def RZZ(
+    state: ProjectQSim,
+    qubits: tuple[int, int],
+    angle: float | None = None,
+    **_params: SimulatorGateParams,
+) -> None:
     q1 = state.qids[qubits[0]]
     q2 = state.qids[qubits[1]]
     ops.Rzz(angle) | (q1, q2)
 
 
-def R2XXYYZZ(state, qubits, angles=None, **_params: SimulatorGateParams) -> None:
+def R2XXYYZZ(
+    state: ProjectQSim,
+    qubits: tuple[int, int],
+    angles: tuple[float, float, float] | None = None,
+    **_params: SimulatorGateParams,
+) -> None:
     q1 = state.qids[qubits[0]]
     q2 = state.qids[qubits[1]]
     ops.Rxx(angles[0]) | (q1, q2)

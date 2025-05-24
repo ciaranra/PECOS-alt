@@ -11,7 +11,9 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -28,22 +30,38 @@ from pecos.tools.threshold_tools import (
     codecapacity_logical_rate3,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from typing import TypedDict
+
+    from numpy.typing import NDArray
+
+    from pecos.engines.circuit_runners import Standard
+    from pecos.protocols import Decoder, ErrorGenerator, QECCProtocol
+
+    class PseudoThresholdResult(TypedDict):
+        """Result from pseudo threshold calculations."""
+
+        ps: NDArray[np.float64]
+        distance: int
+        plog: NDArray[np.float64]
+
 
 def pseudo_threshold_code_capacity(
-    ps,
-    distance,
-    runs,
-    qecc_class=None,
-    error_gen=None,
-    decoder_class=None,
+    ps: Sequence[float],
+    distance: int,
+    runs: int,
+    qecc_class: type[QECCProtocol] | None = None,
+    error_gen: type[ErrorGenerator] | None = None,
+    decoder_class: type[Decoder] | None = None,
     *,
-    verbose=True,
-    mode=1,
-    deg=2,
-    circuit_runner=None,
-    plotting=False,
-    basis=None,
-) -> dict[str, Any]:
+    verbose: bool = True,
+    mode: int = 1,
+    deg: int = 2,
+    circuit_runner: Standard | None = None,
+    plotting: bool = False,
+    basis: str | None = None,
+) -> PseudoThresholdResult:
     """Function that generates p_logical values given a list of physical errors (ps) and distance (ds).
 
     Args:
@@ -127,11 +145,11 @@ def pseudo_threshold_code_capacity(
 
 
 def find_polyfit(
-    ps,
-    plog,
-    deg,
+    ps: Sequence[float] | NDArray[np.float64],
+    plog: Sequence[float] | NDArray[np.float64],
+    deg: int,
     *,
-    verbose=True,
+    verbose: bool = True,
 ) -> tuple[float, np.ndarray, np.ndarray]:
     plist = np.array(ps)
 
@@ -187,7 +205,7 @@ def find_uniscalefit(
     return pseudo_thr, pseudo_thr_std, v0, v0_std, popt, pcov
 
 
-def ns2nsfit(ns, num) -> list[int]:
+def ns2nsfit(ns: Sequence[int], num: int) -> list[int]:
     """Returns a list of distances or ps for performing fits.
 
     If ds == 5 and num == 3:
@@ -213,7 +231,11 @@ def ns2nsfit(ns, num) -> list[int]:
     return new_list
 
 
-def find_pseudo(plist, plog, deg) -> float:
+def find_pseudo(
+    plist: Sequence[float] | NDArray[np.float64],
+    plog: Sequence[float] | NDArray[np.float64],
+    deg: int,
+) -> float:
     """Determines the pseudo threshold from list of ps and plogs.
 
     Args:
@@ -230,7 +252,7 @@ def find_pseudo(plist, plog, deg) -> float:
     popt = np.polyfit(plist, plog, deg=deg)
     poly = np.poly1d(popt)
 
-    def fnc(x) -> float:
+    def fnc(x: float) -> float:
         return poly(x) - x
 
     try:
@@ -241,7 +263,14 @@ def find_pseudo(plist, plog, deg) -> float:
     return pseudo_thr
 
 
-def plot(plist, plog, deg=2, figsize=(10, 10), p_start=None, p_end=None) -> None:
+def plot(
+    plist: Sequence[float] | NDArray[np.float64],
+    plog: Sequence[float] | NDArray[np.float64],
+    deg: int = 2,
+    figsize: tuple[int, int] = (10, 10),
+    p_start: float | None = None,
+    p_end: float | None = None,
+) -> None:
     """Plot pseudo-threshold curve with polynomial fit.
 
     Args:

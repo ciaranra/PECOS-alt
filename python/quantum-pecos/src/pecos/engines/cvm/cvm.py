@@ -11,13 +11,29 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from typing import Any, Protocol
+
+    class CCOPVMProtocol(Protocol):
+        """Protocol for CCOP VM objects."""
+
+        def exec(self, func_name: str, args: list) -> int | None: ...
+
+    class InterpreterProtocol(Protocol):
+        """Protocol for interpreter objects."""
+
+        # Without more context, we'll keep this minimal
+
 
 class CVM:
     def __init__(
         self,
-        ccop_vm=None,
-        cinterpreter=None,
-        sim_debug=None,
+        ccop_vm: CCOPVMProtocol | None = None,
+        cinterpreter: InterpreterProtocol | None = None,
+        sim_debug: dict[str, Callable[..., Any]] | None = None,
     ) -> None:
         """Classical Virtual Machine, which is responsible for executing classical functions and statements.
 
@@ -39,4 +55,4 @@ class CVM:
     def reset_state(self) -> None:
         self.state = ()
 
-    def exec(self, func_name, args) -> None: ...
+    def exec(self, func_name: str, args: list[Any]) -> None: ...

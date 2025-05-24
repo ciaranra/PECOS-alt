@@ -20,6 +20,11 @@ class InstrList(TypedList):
     _type = Instr
 
     def __init__(self, data: Iterable[Instr] | None = None) -> None:
+        """Initialize an InstrList.
+
+        Args:
+            data: Optional iterable of Instr objects to initialize the list.
+        """
         super().__init__(self._type, data)
         self.metadata = None
 
@@ -30,6 +35,11 @@ class OpList(InstrList):
     _type = Op
 
     def __init__(self, data: Iterable[Op] | None = None) -> None:
+        """Initialize an OpList.
+
+        Args:
+            data: Optional iterable of Op objects to initialize the list.
+        """
         super().__init__(data)
 
 
@@ -39,4 +49,9 @@ class QOpList(OpList):
     _type = QOp
 
     def __init__(self, data: Iterable[QOp] | None = None) -> None:
+        """Initialize a QOpList.
+
+        Args:
+            data: Optional iterable of QOp (quantum operation) objects to initialize the list.
+        """
         super().__init__(data)

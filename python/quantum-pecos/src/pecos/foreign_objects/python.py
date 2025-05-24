@@ -14,13 +14,11 @@ from __future__ import annotations
 import inspect
 from typing import TYPE_CHECKING
 
-from pecos.foreign_objects.foreign_object_abc import ForeignObject
-
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
-class PythonObj(ForeignObject):
+class PythonObj:
     """A Python object with an interface consistent with "foreign objects."."""
 
     def get_funcs(self) -> list[str]:

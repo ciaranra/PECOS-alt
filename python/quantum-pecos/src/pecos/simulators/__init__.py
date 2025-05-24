@@ -21,7 +21,7 @@ from pecos.simulators.cointoss import (
 )
 
 # Ignores quantum gates, coin toss for measurements
-from pecos.simulators.parent_sim_classes import Simulator
+from pecos.simulators.default_simulator import DefaultSimulator
 from pecos.simulators.paulifaultprop import (
     PauliFaultProp,
 )

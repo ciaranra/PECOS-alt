@@ -11,19 +11,41 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from pecos.circuits.quantum_circuit import QuantumCircuit
+from pecos.qeccs.default_logical_instruction import DefaultLogicalInstruction
 from pecos.qeccs.helper_functions import pos2qudit
-from pecos.qeccs.instruction_parent_class import LogicalInstruction
-from pecos.type_defs import QECCInstrParams
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from pecos.protocols import QECCProtocol
+    from pecos.type_defs import QECCInstrParams
 
 
-class InstrSynExtraction(LogicalInstruction):
+class InstrSynExtraction(DefaultLogicalInstruction):
     """Instruction for a round of syndrome extraction.
 
     Parent class sets self.qecc.
     """
 
-    def __init__(self, qecc, symbol, **params: QECCInstrParams) -> None:
+    def __init__(
+        self, qecc: QECCProtocol, symbol: str, **params: QECCInstrParams
+    ) -> None:
+        """Initialize the syndrome extraction instruction for Medial Surface 4.4.4.4 code.
+
+        Args:
+            qecc: The parent QECC instance.
+            symbol: The instruction symbol identifier.
+            **params: Additional instruction parameters including:
+                - init_ticks: Initialization time tick (default from QECC params or 0)
+                - meas_ticks: Measurement time tick (default from QECC params or 7)
+                - x_ticks: X-check data qubit interaction ticks (default from QECC params or [2, 4, 3, 5])
+                - z_ticks: Z-check data qubit interaction ticks (default from QECC params or [2, 4, 3, 5])
+        """
         super().__init__(qecc, symbol, **params)
 
         qecc_init_ticks = qecc.qecc_params.get("init_ticks", 0)
@@ -93,7 +115,7 @@ class InstrSynExtraction(LogicalInstruction):
 
         self._stabs_destabs = {}
 
-    def _create_x_check(self, ancilla, x, y) -> None:
+    def _create_x_check(self, ancilla: int, x: int, y: int) -> None:
         """Creates X-checks for circuit_extended."""
         # register the x syndrome ancillas
         self.ancilla_x_check.add(ancilla)
@@ -121,7 +143,7 @@ class InstrSynExtraction(LogicalInstruction):
             meas_ticks=self.meas_ticks,
         )
 
-    def _create_z_check(self, ancilla, x, y) -> None:
+    def _create_z_check(self, ancilla: int, x: int, y: int) -> None:
         """Creates Z-checks for circuit_extended."""
         # register the z syndrome ancillas
         self.ancilla_z_check.add(ancilla)
@@ -149,7 +171,11 @@ class InstrSynExtraction(LogicalInstruction):
         )
 
     @staticmethod
-    def _find_data(position_to_qudit, positions, ticks) -> tuple[list, list]:
+    def _find_data(
+        position_to_qudit: dict[tuple[int, int], int],
+        positions: list[tuple[int, int]],
+        ticks: Sequence[int],
+    ) -> tuple[list, list]:
         """Find data qudits from given positions.
 
         From the positions given for possible data qudits, add the qudits and their corresponding ticks for
@@ -165,7 +191,7 @@ class InstrSynExtraction(LogicalInstruction):
         tick_list = []
 
         for i, p in enumerate(positions):
-            data = position_to_qudit.get(p, None)
+            data = position_to_qudit.get(p)
             if data is not None:
                 data_list.append(data)
                 tick_list.append(ticks[i])
@@ -173,7 +199,7 @@ class InstrSynExtraction(LogicalInstruction):
         return data_list, tick_list
 
     @staticmethod
-    def _data_pos_z_check(x, y) -> list[tuple[int, int]]:
+    def _data_pos_z_check(x: int, y: int) -> list[tuple[int, int]]:
         """Determines the position of data qudits in a Z check in order of ticks.
 
         Check direction:   1  |  2
@@ -192,7 +218,7 @@ class InstrSynExtraction(LogicalInstruction):
         ]
 
     @staticmethod
-    def _data_pos_x_check(x, y) -> list[tuple[int, int]]:
+    def _data_pos_x_check(x: int, y: int) -> list[tuple[int, int]]:
         """Determines the position of data qudits in a Z check in order of ticks.
 
         Check direction:   1  |  3
@@ -427,7 +453,7 @@ class InstrSynExtraction(LogicalInstruction):
         return set_destabs
 
 
-class InstrInitZero(LogicalInstruction):
+class InstrInitZero(DefaultLogicalInstruction):
     """Instruction for initializing a logical zero.
 
     It is just like syndrome extraction except the data qubits are initialized in the zero state at tick = 0.
@@ -437,7 +463,19 @@ class InstrInitZero(LogicalInstruction):
     Parent class sets self.qecc.
     """
 
-    def __init__(self, qecc, symbol, **params: QECCInstrParams) -> None:
+    def __init__(
+        self, qecc: QECCProtocol, symbol: str, **params: QECCInstrParams
+    ) -> None:
+        """Initialize the logical zero state preparation instruction.
+
+        Initializes all data qubits in the |0⟩ state followed by syndrome extraction.
+
+        Args:
+            qecc: The parent QECC instance.
+            symbol: The instruction symbol identifier.
+            **params: Additional instruction parameters including:
+                - ideal_meas: If True, measurements are replaced with ideal measurements.
+        """
         super().__init__(qecc, symbol, **params)
 
         self.symbol = "instr_init_zero"
@@ -505,7 +543,7 @@ class InstrInitZero(LogicalInstruction):
         return self._stabs_destabs
 
 
-class InstrInitPlus(LogicalInstruction):
+class InstrInitPlus(DefaultLogicalInstruction):
     """Instruction for initializing a logical plus.
 
     It is just like syndrome extraction except the data qubits are initialized in the plus state at tick = 0.
@@ -515,7 +553,19 @@ class InstrInitPlus(LogicalInstruction):
     Parent class sets self.qecc.
     """
 
-    def __init__(self, qecc, symbol, **params: QECCInstrParams) -> None:
+    def __init__(
+        self, qecc: QECCProtocol, symbol: str, **params: QECCInstrParams
+    ) -> None:
+        """Initialize the logical plus state preparation instruction.
+
+        Initializes all data qubits in the |+⟩ state followed by syndrome extraction.
+
+        Args:
+            qecc: The parent QECC instance.
+            symbol: The instruction symbol identifier.
+            **params: Additional instruction parameters including:
+                - ideal_meas: If True, measurements are replaced with ideal measurements.
+        """
         super().__init__(qecc, symbol, **params)
 
         self.symbol = "instr_init_plus"

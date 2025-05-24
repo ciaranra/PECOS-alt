@@ -14,16 +14,24 @@ from __future__ import annotations
 import multiprocessing
 import sys
 from os import getpid
+from typing import TYPE_CHECKING
 from warnings import warn
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from multiprocessing.managers import SyncManager
+    from typing import Any
+
+    from pecos.engines.hybrid_engine import HybridEngine, PHIRProgram
 
 # TODO: Add runtime data to multisim_proc_info
 
 
 def run_multisim(
-    eng,
-    program,
+    eng: HybridEngine,
+    program: PHIRProgram,
     foreign_object: object = None,
     *,
     shots: int = 1,
@@ -128,7 +136,9 @@ class MultisimError(Exception):
     pass
 
 
-def worker_wrapper(args) -> tuple[dict, dict]:
+def worker_wrapper(
+    args: tuple[SyncManager.Queue, Callable[..., dict], dict[str, Any], int],
+) -> tuple[dict, dict]:
     """A wrapper to pass kwargs onto run for multiprocess.pool.map."""
     queue, run, pkwargs, i = args
     pid = getpid()
@@ -161,12 +171,19 @@ def worker_wrapper(args) -> tuple[dict, dict]:
 
 
 class WriteStream:
-    def __init__(self, q, pid: int, stream_type: str) -> None:
+    def __init__(self, q: SyncManager.Queue, pid: int, stream_type: str) -> None:
+        """Initialize a write stream for capturing process output.
+
+        Args:
+            q: The multiprocessing queue for sending messages.
+            pid: The process ID of the worker process.
+            stream_type: The type of stream ('stdout' or 'stderr').
+        """
         self.queue = q
         self.stream_type = stream_type
         self.pid = pid
 
-    def write(self, msg) -> None:
+    def write(self, msg: str) -> None:
         self.queue.put((self.pid, self.stream_type, msg))
 
     def flush(self) -> None:

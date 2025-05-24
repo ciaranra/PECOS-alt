@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from pecos.misc.std_output import StdOutput
-    from pecos.qeccs.qecc_parent_class import QECC
+    from pecos.protocols import QECCProtocol
 
 
 class MWPM2D:
@@ -42,7 +42,13 @@ class MWPM2D:
     output = None
     input = None
 
-    def __init__(self, qecc: QECC) -> None:
+    def __init__(self, qecc: QECCProtocol) -> None:
+        """Initialize the MWPM2D decoder.
+
+        Args:
+        ----
+            qecc: The quantum error correcting code protocol to use for decoding.
+        """
         instr = qecc.instruction("instr_syn_extract")
 
         self.instr = instr

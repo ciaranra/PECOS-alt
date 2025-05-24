@@ -11,10 +11,10 @@
 # specific language governing permissions and limitations under the License.
 
 from pecos.qeccs.color_488.color_488 import Color488
-from pecos.qeccs.gate_parent_class import LogicalGate
-from pecos.qeccs.instruction_parent_class import LogicalInstruction
+from pecos.qeccs.default_logical_gate import DefaultLogicalGate
+from pecos.qeccs.default_logical_instruction import DefaultLogicalInstruction
 
 # Parent Classes:
-from pecos.qeccs.qecc_parent_class import QECC
+from pecos.qeccs.default_qecc import DefaultQECC
 from pecos.qeccs.surface_4444.surface_4444 import Surface4444
 from pecos.qeccs.surface_medial_4444.surface_medial_4444 import SurfaceMedial4444

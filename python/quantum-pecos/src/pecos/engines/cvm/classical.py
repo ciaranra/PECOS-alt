@@ -11,10 +11,23 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pecos.engines.cvm.binarray import BinArray
 
+if TYPE_CHECKING:
+    from typing import Any
 
-def set_output(state, circuit, output_spec, output) -> dict[str, BinArray]:
+    from pecos.circuits import QuantumCircuit
+    from pecos.protocols import SimulatorProtocol
+
+
+def set_output(
+    state: SimulatorProtocol,
+    circuit: QuantumCircuit,
+    output_spec: dict[str, int] | None,
+    output: dict[str, BinArray] | None,
+) -> dict[str, BinArray]:
     if output_spec is None:
         output_spec = {}
 
@@ -35,7 +48,9 @@ def set_output(state, circuit, output_spec, output) -> dict[str, BinArray]:
     return output
 
 
-def eval_op(op, a, b=None, width=32) -> BinArray:
+def eval_op(
+    op: str, a: BinArray | int, b: BinArray | int | None = None, width: int = 32
+) -> BinArray:
     if isinstance(a, int):
         a = BinArray(width, a)
 
@@ -96,7 +111,11 @@ def eval_op(op, a, b=None, width=32) -> BinArray:
     return expr_eval
 
 
-def get_val(a, output, width) -> BinArray:
+def get_val(
+    a: BinArray | tuple[str, int] | list[str | int] | str | int,
+    output: dict[str, BinArray],
+    width: int,
+) -> BinArray:
     if isinstance(a, BinArray):
         return a
 
@@ -117,7 +136,9 @@ def get_val(a, output, width) -> BinArray:
     return BinArray(width, val)
 
 
-def recur_eval_op(expr_dict, output, width) -> BinArray:
+def recur_eval_op(
+    expr_dict: dict[str, Any], output: dict[str, BinArray], width: int
+) -> BinArray:
     a = expr_dict.get("a")
     op = expr_dict.get("op")
     b = expr_dict.get("b")
@@ -150,7 +171,11 @@ def recur_eval_op(expr_dict, output, width) -> BinArray:
     return a
 
 
-def eval_cop(cop_expr, output, width) -> None:
+def eval_cop(
+    cop_expr: dict[str, Any] | list[dict[str, Any]],
+    output: dict[str, BinArray],
+    width: int,
+) -> None:
     """Evaluate classical operation expression.
 
     Evaluate classical expression such as:
@@ -194,7 +219,9 @@ def eval_cop(cop_expr, output, width) -> None:
         t_obj.set_clip(expr_eval)
 
 
-def eval_tick_conds(tick_circuit, output) -> list[bool]:
+def eval_tick_conds(
+    tick_circuit: QuantumCircuit, output: dict[str, BinArray]
+) -> list[bool]:
     conds = []
 
     for _symbol, _locations, params in tick_circuit.items():
@@ -204,7 +231,10 @@ def eval_tick_conds(tick_circuit, output) -> list[bool]:
     return conds
 
 
-def eval_condition(conditional_expr, output) -> bool:
+def eval_condition(
+    conditional_expr: dict[str, Any] | tuple[Any, ...] | list[Any] | None,
+    output: dict[str, BinArray],
+) -> bool:
     # Handle if a condition might eval to something else (eval_to)
     if isinstance(conditional_expr, tuple | list):
         if len(conditional_expr) != 2:

@@ -368,6 +368,15 @@ class ParamGateCollection:
         locations: LocationSet | None = None,
         **params: JSONValue,
     ) -> None:
+        """Initialize a ParamGateCollection.
+
+        Args:
+        ----
+            circuit: The parent QuantumCircuit this collection belongs to.
+            symbol: Optional gate symbol or gate dictionary to initialize with.
+            locations: Optional set of qudit locations where the gate is applied.
+            **params: Additional parameters for the gate.
+        """
         self.circuit = circuit
         self.metadata = circuit.metadata
         self.active_qudits = set()

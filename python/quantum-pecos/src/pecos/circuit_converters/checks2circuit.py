@@ -30,7 +30,7 @@ from pecos.circuits import QuantumCircuit
 
 if TYPE_CHECKING:
     from pecos.circuits.logical_circuit import LogicalCircuit
-    from pecos.qeccs.instruction_parent_class import LogicalInstruction
+    from pecos.protocols import LogicalInstructionProtocol
 
 T = TypeVar("T")
 
@@ -39,6 +39,10 @@ class Check2Circuits:
     """Converts checks to circuits."""
 
     def __init__(self) -> None:
+        """Initialize the Check2Circuits converter.
+
+        Sets the name attribute to "Check2Circuits".
+        """
         self.name = "Check2Circuits"
 
     @staticmethod
@@ -53,7 +57,7 @@ class Check2Circuits:
 
     def compile(
         self,
-        instr: LogicalInstruction,
+        instr: LogicalInstructionProtocol,
         abstract_circuit: LogicalCircuit,
         mapping: dict[int, int] | None = None,
     ) -> QuantumCircuit:
@@ -296,7 +300,10 @@ class NoMap:
     """Default Mapping: item -> item."""
 
     def __init__(self) -> None:
-        pass
+        """Initialize the NoMap identity mapping.
+
+        NoMap provides a default identity mapping where each item maps to itself.
+        """
 
     def __getitem__(self, item: T) -> T:
         return item

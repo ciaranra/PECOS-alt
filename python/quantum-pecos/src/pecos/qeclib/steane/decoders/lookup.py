@@ -31,6 +31,18 @@ class FlagLookupQASM(Block):
         flags: CReg,
         scratch: CReg,
     ) -> None:
+        """Initialize flag-based lookup decoder for Steane code.
+
+        Args:
+            basis: The basis ('X' or 'Z') for syndrome decoding.
+            syn: Classical register containing current syndrome values.
+            syndromes: Classical register for processed syndrome values.
+            raw_syn: Classical register storing raw syndrome values.
+            pf: Pauli frame bit for tracking logical operations.
+            flag: Classical register containing flag qubit measurements.
+            flags: Classical register for flag status.
+            scratch: Classical register used for intermediate calculations.
+        """
         super().__init__()
 
         # qasm_syn_decoder('X', syn_x, flag_x, 'last_raw_syn_x', 'pf_z1')
@@ -101,6 +113,19 @@ class FlagLookupQASMActiveCorrectionX(Block):
         scratch: CReg,
         pf_bit_copy: Bit | None = None,
     ) -> None:
+        """Initialize X-basis active error correction with flag-based lookup.
+
+        Args:
+            qubits: Quantum register containing the logical qubit data.
+            syn: Classical register containing current syndrome values.
+            syndromes: Classical register for processed syndrome values.
+            raw_syn: Classical register storing raw syndrome values.
+            pf: Pauli frame bit for tracking logical operations.
+            flag: Classical register containing flag qubit measurements.
+            flags: Classical register for flag status.
+            scratch: Classical register used for intermediate calculations.
+            pf_bit_copy: Optional bit to copy the Pauli frame value to.
+        """
         super().__init__()
         # qasm_syn_decoder('X', syn_x, flag_x, 'last_raw_syn_x', 'pf_z1')
         # qasm_syn_decoder(basis_check, syn, flag, raw_syn, pf, pf_index=0)
@@ -176,6 +201,19 @@ class FlagLookupQASMActiveCorrectionZ(Block):
         scratch: CReg,
         pf_bit_copy: Bit = None,
     ) -> None:
+        """Initialize Z-basis active error correction with flag-based lookup.
+
+        Args:
+            qubits: Quantum register containing the logical qubit data.
+            syn: Classical register containing current syndrome values.
+            syndromes: Classical register for processed syndrome values.
+            raw_syn: Classical register storing raw syndrome values.
+            pf: Pauli frame bit for tracking logical operations.
+            flag: Classical register containing flag qubit measurements.
+            flags: Classical register for flag status.
+            scratch: Classical register used for intermediate calculations.
+            pf_bit_copy: Optional bit to copy the Pauli frame value to.
+        """
         super().__init__()
         q = qubits
 

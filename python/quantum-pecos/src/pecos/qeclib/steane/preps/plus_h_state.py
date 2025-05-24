@@ -48,6 +48,21 @@ class PrepHStateFT(Block):
         *,
         condition_qed: bool = True,
     ) -> None:
+        """Initialize PrepHStateFT block for fault-tolerant |+H> state preparation.
+
+        Args:
+            d: Data qubits (size 7) for the Steane code.
+            a: Ancillary qubits (size 2) for measurements.
+            out: Measurement outputs (size 2). out[0] is the Hadamard measurement,
+                out[1] is the flag result.
+            reject: Bit indicating preparation failure (0 for success, 1 for failure).
+            flag_x: Classical register for X stabilizer flags.
+            flag_z: Classical register for Z stabilizer flags.
+            flags: Combined flags register.
+            last_raw_syn_x: Previous X syndrome measurements.
+            last_raw_syn_z: Previous Z syndrome measurements.
+            condition_qed: Whether to condition second QED round on first. Defaults to True.
+        """
         super().__init__()
 
         # non-fault-tolerantly encode logical |+H>
@@ -143,6 +158,21 @@ class PrepHStateFTRUS(Block):
         last_raw_syn_z: CReg,
         limit: int,
     ) -> None:
+        """Initialize PrepHStateFTRUS block for repeat-until-success |+H> preparation.
+
+        Args:
+            d: Data qubits (size 7) for the Steane code.
+            a: Ancillary qubits (size 2) for measurements.
+            out: Measurement outputs (size 2). out[0] is the Hadamard measurement,
+                out[1] is the flag result.
+            reject: Bit indicating preparation failure (0 for success, 1 for failure).
+            flag_x: Classical register for X stabilizer flags.
+            flag_z: Classical register for Z stabilizer flags.
+            flags: Combined flags register.
+            last_raw_syn_x: Previous X syndrome measurements.
+            last_raw_syn_z: Previous Z syndrome measurements.
+            limit: Maximum number of preparation attempts.
+        """
         super().__init__(
             PrepHStateFT(
                 d,

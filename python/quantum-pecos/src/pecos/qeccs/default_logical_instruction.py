@@ -11,30 +11,39 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-"""Contains the parent classes for logical instructions."""
+"""Contains the default implementation of the logical instruction protocol."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from pecos.protocols import LogicalInstructionProtocol
 from pecos.qeccs.helper_functions import make_hashable_params
 from pecos.qeccs.plot import plot_instr
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from pecos.circuits import LocationSet
+    from pecos.circuits import LocationSet, QuantumCircuit
     from pecos.misc.symbol_library import JSONDict
+    from pecos.protocols import QECCProtocol
     from pecos.type_defs import QECCInstrParams
 
 
-class LogicalInstruction:
-    """A parent class for logical instructions.
+class DefaultLogicalInstruction:
+    """Default logical instruction class providing standard implementations.
 
-    Logical instructions are circuits that
+    Logical instructions are circuits that implement specific quantum operations
+    at the logical level. This class provides default implementations of the
+    LogicalInstructionProtocol interface.
+
+    Instruction implementations can inherit from this class to get the standard
+    behavior, or implement the LogicalInstructionProtocol directly for custom behavior.
     """
 
-    def __init__(self, qecc, symbol, **params: QECCInstrParams) -> None:
+    def __init__(
+        self, qecc: QECCProtocol, symbol: str, **params: QECCInstrParams
+    ) -> None:
         """Initialize the LogicalInstruction with the given parameters.
 
         Args:
@@ -82,7 +91,7 @@ class LogicalInstruction:
 
     def _compile_circuit(
         self,
-        abstract_circuit,
+        abstract_circuit: QuantumCircuit,
         *args: Any,  # noqa: ANN401 - Allows for subclass extensions
         **kwargs: Any,  # noqa: ANN401 - Compiler may need various parameters
     ) -> None:
@@ -109,12 +118,15 @@ class LogicalInstruction:
         # The instruction is unique. A hash can be used to identify it.
         return hash(("instr", self.symbol, self.params_tuple))
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: object) -> bool:
+        # Check if other implements the LogicalInstructionProtocol
+        if not isinstance(other, LogicalInstructionProtocol):
+            return NotImplemented
         return (self.symbol, self.params_tuple, True) == (
             other.symbol,
-            other.params_tuple,
+            getattr(other, "params_tuple", None),
             hasattr(other, "circuit"),
         )
 
-    def __ne__(self, other) -> bool:
+    def __ne__(self, other: object) -> bool:
         return not (self == other)

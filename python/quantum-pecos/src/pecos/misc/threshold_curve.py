@@ -23,7 +23,14 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 
-def func(x, pth, v0, a, b, c) -> float | NDArray[np.float64]:
+def func(
+    x: tuple[NDArray[np.float64], NDArray[np.float64]],
+    pth: float,
+    v0: float,
+    a: float,
+    b: float,
+    c: float,
+) -> float | NDArray[np.float64]:
     """Fit error rates to determine threshold using polynomial expansion.
 
     Function that represents the curve to fit error rates to in order to determine the threshold. (see:
@@ -48,7 +55,16 @@ def func(x, pth, v0, a, b, c) -> float | NDArray[np.float64]:
     return a + b * x + c * np.power(x, 2)
 
 
-def func2(x, pth, v0, a, b, c, d, u) -> float | NDArray[np.float64]:
+def func2(
+    x: tuple[NDArray[np.float64], NDArray[np.float64]],
+    pth: float,
+    v0: float,
+    a: float,
+    b: float,
+    c: float,
+    d: float,
+    u: float,
+) -> float | NDArray[np.float64]:
     """Fit error rates with finite-size correction to determine threshold.
 
     Function that represents the curve to fit error rates to in order to determine the threshold. (see:
@@ -79,7 +95,17 @@ def func2(x, pth, v0, a, b, c, d, u) -> float | NDArray[np.float64]:
     return z
 
 
-def func3(x, pth, v0, a, b, c, d, uodd, ueven) -> float | NDArray[np.float64]:
+def func3(
+    x: tuple[NDArray[np.float64], NDArray[np.float64]],
+    pth: float,
+    v0: float,
+    a: float,
+    b: float,
+    c: float,
+    d: float,
+    uodd: float,
+    ueven: float,
+) -> float | NDArray[np.float64]:
     """Fit error rates with odd/even distance corrections to determine threshold.
 
     Function that represents the curve to fit error rates to in order to determine the threshold. (see:
@@ -115,7 +141,13 @@ def func3(x, pth, v0, a, b, c, d, uodd, ueven) -> float | NDArray[np.float64]:
     return z
 
 
-def func4(x, pth, v0, a, b) -> float | NDArray[np.float64]:
+def func4(
+    x: tuple[NDArray[np.float64], NDArray[np.float64]],
+    pth: float,
+    v0: float,
+    a: float,
+    b: float,
+) -> float | NDArray[np.float64]:
     """Fit error rates using exponential decay to determine threshold.
 
     Function that represents the curve to fit error rates to in order to determine the threshold. (see:
@@ -139,7 +171,15 @@ def func4(x, pth, v0, a, b) -> float | NDArray[np.float64]:
     return a * np.exp(-b * np.power(x, v0))
 
 
-def func5(x, pth, v0, a, b, c, d) -> float | NDArray[np.float64]:
+def func5(
+    x: tuple[NDArray[np.float64], NDArray[np.float64]],
+    pth: float,
+    v0: float,
+    a: float,
+    b: float,
+    c: float,
+    d: float,
+) -> float | NDArray[np.float64]:
     """Fit error rates using cubic polynomial to determine threshold.
 
     Function that represents the curve to fit error rates to in order to determine the threshold. (see:
@@ -165,7 +205,9 @@ def func5(x, pth, v0, a, b, c, d) -> float | NDArray[np.float64]:
     return a + b * x + c * np.power(x, 2) + d * np.power(x, 3)
 
 
-def func6(x, a, pth) -> float | NDArray[np.float64]:
+def func6(
+    x: tuple[NDArray[np.float64], NDArray[np.float64]], a: float, pth: float
+) -> float | NDArray[np.float64]:
     """Fit error rates using power law relationship to determine threshold.
 
     Function that represents the curve to fit error rates to in order to determine the threshold. (see:
@@ -216,14 +258,14 @@ def threshold_fit(
 
 
 def jackknife_pd(
-    plist,
-    dlist,
-    plog,
-    func,
-    p0,
-    maxfev=100000,
+    plist: NDArray[np.float64] | list[float],
+    dlist: NDArray[np.float64] | list[float],
+    plog: NDArray[np.float64] | list[float],
+    func: Callable[..., float | NDArray[np.float64]],
+    p0: NDArray[np.float64] | list[float],
+    maxfev: int = 100000,
     *,
-    verbose=True,
+    verbose: bool = True,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     opt_list = []
     cov_list = []
@@ -252,13 +294,14 @@ def jackknife_pd(
 
 
 def jackknife_p(
-    plist,
-    dlist,
-    plog,
-    p0,
-    maxfev=100000,
+    plist: NDArray[np.float64] | list[float],
+    dlist: NDArray[np.float64] | list[float],
+    plog: NDArray[np.float64] | list[float],
+    func: Callable[..., float | NDArray[np.float64]],
+    p0: NDArray[np.float64] | list[float],
+    maxfev: int = 100000,
     *,
-    verbose=True,
+    verbose: bool = True,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     opt_list = []
     cov_list = []
@@ -269,7 +312,7 @@ def jackknife_p(
         plog_copy = plog[mask]
         dlist_copy = dlist[mask]
 
-        result = threshold_fit(p_copy, dlist_copy, plog_copy, p0, maxfev)
+        result = threshold_fit(p_copy, dlist_copy, plog_copy, func, p0, maxfev)
         opt_list.append(result[0])
         cov_list.append(result[1])
 
@@ -288,13 +331,14 @@ def jackknife_p(
 
 
 def jackknife_d(
-    plist,
-    dlist,
-    plog,
-    p0,
-    maxfev=100000,
+    plist: NDArray[np.float64] | list[float],
+    dlist: NDArray[np.float64] | list[float],
+    plog: NDArray[np.float64] | list[float],
+    func: Callable[..., float | NDArray[np.float64]],
+    p0: NDArray[np.float64] | list[float],
+    maxfev: int = 100000,
     *,
-    verbose=True,
+    verbose: bool = True,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     opt_list = []
     cov_list = []
@@ -306,7 +350,7 @@ def jackknife_d(
         plog_copy = plog[mask]
         dlist_copy = dlist[mask]
 
-        result = threshold_fit(p_copy, dlist_copy, plog_copy, p0, maxfev)
+        result = threshold_fit(p_copy, dlist_copy, plog_copy, func, p0, maxfev)
         opt_list.append(result[0])
         cov_list.append(result[1])
 
@@ -324,7 +368,9 @@ def jackknife_d(
     return est, std
 
 
-def get_est(value_is, label, *, verbose=True) -> tuple[float, float]:
+def get_est(
+    value_is: list[float], label: str, *, verbose: bool = True
+) -> tuple[float, float]:
     v_est = sum(value_is) / len(value_is)
     v_est_std = np.std(value_is)
 
@@ -334,7 +380,13 @@ def get_est(value_is, label, *, verbose=True) -> tuple[float, float]:
     return v_est, v_est_std
 
 
-def get_i(result, symbol, value_list, *, verbose=True) -> None:
+def get_i(
+    result: dict[str, tuple[float, float]],
+    symbol: str,
+    value_list: list[float],
+    *,
+    verbose: bool = True,
+) -> None:
     value_i = result[symbol][0]
     value_list.append(value_i)
 

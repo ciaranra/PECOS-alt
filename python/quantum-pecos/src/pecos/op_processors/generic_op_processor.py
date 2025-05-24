@@ -13,20 +13,25 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pecos.op_processors.op_processor_abc import OpProcessor
 from pecos.reps.pypmir import types as pt
 
 if TYPE_CHECKING:
-    from pecos.error_models.error_model_abc import ErrorModel
-    from pecos.machines.machine_abc import Machine
+    from pecos.protocols import ErrorModelProtocol, MachineProtocol
 
 
-class GenericOpProc(OpProcessor):
+class GenericOpProc:
     def __init__(
         self,
-        machine: Machine | None = None,
-        error_model: ErrorModel | None = None,
+        machine: MachineProtocol | None = None,
+        error_model: ErrorModelProtocol | None = None,
     ) -> None:
+        """Initialize the GenericOpProc.
+
+        Args:
+        ----
+            machine: Optional machine protocol for processing machine operations.
+            error_model: Optional error model protocol for applying noise.
+        """
         self.machine = machine
         self.error_model = error_model
 
@@ -36,10 +41,10 @@ class GenericOpProc(OpProcessor):
     def init(self) -> None:
         pass
 
-    def attach_machine(self, machine: Machine) -> None:
+    def attach_machine(self, machine: MachineProtocol) -> None:
         self.machine = machine
 
-    def attach_error_model(self, error_model: ErrorModel) -> None:
+    def attach_error_model(self, error_model: ErrorModelProtocol) -> None:
         self.error_model = error_model
 
     def shot_reinit(self) -> None:

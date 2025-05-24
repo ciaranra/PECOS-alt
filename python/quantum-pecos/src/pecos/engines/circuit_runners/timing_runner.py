@@ -11,15 +11,27 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
 from time import perf_counter as default_timer
+from typing import TYPE_CHECKING
 
 from pecos.engines.circuit_runners.standard import Standard
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from typing import Any
+
+    from pecos.circuits import QuantumCircuit
+    from pecos.protocols import SimulatorProtocol
 
 
 class TimingRunner(Standard):
     """This class represents a standard model for running quantum circuits and adding in errors."""
 
-    def __init__(self, seed=None, timer=None) -> None:
+    def __init__(
+        self, seed: int | bool | None = None, timer: Callable[[], float] | None = None
+    ) -> None:
         """Initialize timing runner with optional seed and timer.
 
         Args:
@@ -42,7 +54,12 @@ class TimingRunner(Standard):
         self.total_time = 0.0
         self.num_gates = 0
 
-    def run_gates(self, state, gates, removed_locations=None) -> dict:
+    def run_gates(
+        self,
+        state: SimulatorProtocol,
+        gates: QuantumCircuit,
+        removed_locations: set[int] | None = None,
+    ) -> dict[str, Any]:
         """Directly apply a collection of quantum gates to a state.
 
         Args:

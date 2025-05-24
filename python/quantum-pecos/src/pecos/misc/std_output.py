@@ -13,6 +13,11 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Any
+
 
 class StdOutput(dict):
     """Class used to record results of gates (typically, measurements).
@@ -20,7 +25,7 @@ class StdOutput(dict):
     (logical space, logical time) -> time(tick) -> {location: result}
     """
 
-    def record(self, result_dict, time) -> None:
+    def record(self, result_dict: dict[Any, Any], time: int | tuple[int, ...]) -> None:
         """Record result dictionary at specified time.
 
         Args:
@@ -33,7 +38,7 @@ class StdOutput(dict):
             logical_dict = self.setdefault(time, {})
             logical_dict.update(result_dict)
 
-    def simplified(self, *, last=False) -> dict | set:
+    def simplified(self, *, last: bool = False) -> dict | set:
         """Gives output in a simplified version. {logical coord=>{set of locations}, ...}.
 
         Outputs the syndromes of the final logical instruction.

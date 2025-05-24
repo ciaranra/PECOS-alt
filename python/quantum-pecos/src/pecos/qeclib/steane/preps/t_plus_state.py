@@ -20,6 +20,11 @@ class PrepEncodeTPlusNonFT(Block):
     """Uses the encoding circuit to non-fault-tolerantly initialize the logical T|+> magic state."""
 
     def __init__(self, q: QReg) -> None:
+        """Initialize PrepEncodeTPlusNonFT block for non-fault-tolerant T|+> preparation.
+
+        Args:
+            q: Quantum register containing 7 qubits for the Steane code.
+        """
         super().__init__(
             Comment("Initialize logical |T> = T|+>\n============================="),
             qubit.Prep(q[6]),
@@ -33,6 +38,11 @@ class PrepEncodeTDagPlusNonFT(Block):
     """Uses the encoding circuit to non-fault-tolerantly initialize the logical T|+> magic state."""
 
     def __init__(self, q: QReg) -> None:
+        """Initialize PrepEncodeTDagPlusNonFT block for non-fault-tolerant T†|+> preparation.
+
+        Args:
+            q: Quantum register containing 7 qubits for the Steane code.
+        """
         super().__init__(
             Comment("Initialize logical |T> = T|+>\n============================="),
             qubit.Prep(q[6]),
@@ -67,6 +77,20 @@ class PrepEncodeTPlusFT(Block):
         last_raw_syn_x: CReg,
         last_raw_syn_z: CReg,
     ) -> None:
+        """Initialize PrepEncodeTPlusFT block for fault-tolerant T|+> preparation.
+
+        Args:
+            d: Data qubits (size 7) for the Steane code.
+            a: Ancillary qubits (size 2) for measurements.
+            out: Measurement outputs (size 2). out[0] is the Hadamard measurement,
+                out[1] is the flag result.
+            reject: Bit indicating preparation failure (0 for success, 1 for failure).
+            flag_x: Classical register for X stabilizer flags.
+            flag_z: Classical register for Z stabilizer flags.
+            flags: Combined flags register.
+            last_raw_syn_x: Previous X syndrome measurements.
+            last_raw_syn_z: Previous Z syndrome measurements.
+        """
         super().__init__(
             PrepHStateFT(
                 d,
@@ -110,6 +134,21 @@ class PrepEncodeTPlusFTRUS(Block):
         last_raw_syn_z: CReg,
         limit: int,
     ) -> None:
+        """Initialize PrepEncodeTPlusFTRUS block for repeat-until-success T|+> preparation.
+
+        Args:
+            d: Data qubits (size 7) for the Steane code.
+            a: Ancillary qubits (size 2) for measurements.
+            out: Measurement outputs (size 2). out[0] is the Hadamard measurement,
+                out[1] is the flag result.
+            reject: Bit indicating preparation failure (0 for success, 1 for failure).
+            flag_x: Classical register for X stabilizer flags.
+            flag_z: Classical register for Z stabilizer flags.
+            flags: Combined flags register.
+            last_raw_syn_x: Previous X syndrome measurements.
+            last_raw_syn_z: Previous Z syndrome measurements.
+            limit: Maximum number of preparation attempts.
+        """
         # NOTE: For QASM, have to avoid nested If statements
         super().__init__(
             PrepHStateFTRUS(

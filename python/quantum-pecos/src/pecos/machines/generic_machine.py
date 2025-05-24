@@ -13,19 +13,38 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pecos.machines.machine_abc import Machine
 from pecos.reps.pypmir.op_types import QOp
 
 if TYPE_CHECKING:
     from pecos.reps.pypmir.op_types import MOp
 
 
-class GenericMachine(Machine):
+class GenericMachine:
     """Represents generic, abstract machine."""
 
-    def __init__(self, num_qubits: int | None = None) -> None:
-        super().__init__(num_qubits=num_qubits)
-        self.qubit_set = set()
+    def __init__(
+        self,
+        machine_params: dict | None = None,
+        num_qubits: int | None = None,
+        metadata: dict | None = None,
+        pos: dict | None = None,
+    ) -> None:
+        """Initialize a GenericMachine.
+
+        Args:
+        ----
+            machine_params: Optional dictionary of machine-specific parameters.
+            num_qubits: Number of qubits in the machine.
+            metadata: Optional metadata dictionary.
+            pos: Optional position information for qubits.
+        """
+        self.machine_params = (
+            dict(machine_params) if machine_params is not None else None
+        )
+        self.num_qubits = num_qubits
+        self.metadata = metadata
+        self.pos = pos
+        self.qubit_set = set(range(num_qubits)) if num_qubits is not None else set()
         self.leaked_qubits = set()
         self.lost_qubits = set()
 

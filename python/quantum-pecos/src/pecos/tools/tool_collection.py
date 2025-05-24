@@ -21,13 +21,18 @@ import numpy as np
 from pecos import circuits
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Iterable
+
+    from pecos.circuits import LogicalCircuit
+    from pecos.protocols import Decoder, QECCProtocol, SimulatorProtocol
+
+
 from pecos.circuits import QuantumCircuit
 from pecos.engines.circuit_runners import Standard
 from pecos.simulators import SparseSimPy
 
 
-def fault_tolerance_check(qecc, decoder) -> None:
+def fault_tolerance_check(qecc: QECCProtocol, decoder: Decoder) -> None:
     """Checks that the decoder can correct all Pauli errors of weight up to floor(distance/2).
 
     Args:
@@ -138,7 +143,9 @@ def fault_tolerance_check(qecc, decoder) -> None:
             raise Exception(msg)
 
 
-def form_errors(xs, zs) -> dict:
+def form_errors(
+    xs: Iterable[tuple[int, int]], zs: Iterable[tuple[int, int]]
+) -> dict[int, dict[str, set[int]]]:
     errors = {}
     for t, q in xs:
         xerr = errors.setdefault(t, {}).setdefault("X", set())
@@ -152,13 +159,13 @@ def form_errors(xs, zs) -> dict:
 
 
 def _apply_err_spacetime(
-    state,
-    circ_runner,
-    init_circ,
-    err_dict,
-    decoder,
-    logical_op,
-    qecc,
+    state: SimulatorProtocol,
+    circ_runner: Standard,
+    init_circ: QuantumCircuit | LogicalCircuit,
+    err_dict: dict[int, dict[str, set[int]]],
+    decoder: Decoder,
+    logical_op: QuantumCircuit | LogicalCircuit,
+    qecc: QECCProtocol,
 ) -> int:
     circ_runner.run(state, init_circ)
 
@@ -198,13 +205,13 @@ def _apply_err_spacetime(
 
 
 def _apply_err(
-    state,
-    circ_runner,
-    init_circ,
-    syn_circ,
-    error,
-    decoder,
-    logical_op,
+    state: SimulatorProtocol,
+    circ_runner: Standard,
+    init_circ: QuantumCircuit | LogicalCircuit,
+    syn_circ: QuantumCircuit | LogicalCircuit,
+    error: QuantumCircuit,
+    decoder: Decoder,
+    logical_op: QuantumCircuit | LogicalCircuit,
 ) -> int:
     circ_runner.run(state, init_circ)
     circ_runner.run(state, error)
@@ -219,7 +226,7 @@ def _apply_err(
 
 
 def gen_pauli_errors(
-    qubits,
+    qubits: Iterable[int | tuple[int, int]],
     *,
     min_errors: int = 1,
     max_errors: bool | int = False,

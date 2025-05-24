@@ -14,6 +14,14 @@ from pecos.slr import Block, Comment, CReg, QReg
 
 class SixUnflaggedSyn(Block):
     def __init__(self, data: QReg, ancillas: QReg, syn_x: CReg, syn_z: CReg) -> None:
+        """Initialize SixUnflaggedSyn block for unflagged syndrome extraction.
+
+        Args:
+            data: Data register containing the 7 qubits of the Steane code.
+            ancillas: Ancilla register for syndrome measurements.
+            syn_x: Classical register to store X stabilizer syndromes.
+            syn_z: Classical register to store Z stabilizer syndromes.
+        """
         super().__init__()
 
         d = data

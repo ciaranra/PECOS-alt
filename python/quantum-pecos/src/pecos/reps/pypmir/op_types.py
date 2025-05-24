@@ -24,6 +24,14 @@ class Op(Instr):
         returns: list | None = None,
         metadata: dict | None = None,
     ) -> None:
+        """Initialize an operation.
+
+        Args:
+            name: The operation name.
+            args: Optional list of operation arguments.
+            returns: Optional list of return values (cvars or cbits).
+            metadata: Optional metadata dictionary.
+        """
         super().__init__(metadata=metadata)
         self.name = name
         self.args = args
@@ -58,6 +66,16 @@ class QOp(Op):
         angles: tuple[float, ...] | None = None,
         sim_name: str | None = None,
     ) -> None:
+        """Initialize a quantum operation.
+
+        Args:
+            name: The operation name.
+            args: List of operation arguments (typically qubits).
+            returns: Optional list of return values.
+            metadata: Optional metadata dictionary.
+            angles: Optional tuple of rotation angles.
+            sim_name: Optional simulator-specific name. If not provided, uses name.
+        """
         super().__init__(
             name=name,
             args=args,
@@ -102,6 +120,14 @@ class COp(Op):
         returns: list | None = None,
         metadata: dict | None = None,
     ) -> None:
+        """Initialize a classical operation.
+
+        Args:
+            name: The operation name.
+            args: List of operation arguments.
+            returns: Optional list of return values.
+            metadata: Optional metadata dictionary.
+        """
         super().__init__(
             name=name,
             args=args,

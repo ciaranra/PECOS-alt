@@ -36,6 +36,11 @@ class QGate(metaclass=ABCMeta):
     has_parameters = False
 
     def __init__(self, *qargs: Qubit) -> None:
+        """Initialize a quantum gate.
+
+        Args:
+            *qargs: Qubit(s) that the gate acts on.
+        """
         self.sym = type(self).__name__
         if self.sym.endswith("Gate"):
             self.sym = self.sym[:-4]

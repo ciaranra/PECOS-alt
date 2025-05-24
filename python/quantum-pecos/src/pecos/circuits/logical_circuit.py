@@ -49,6 +49,14 @@ class LogicalCircuit(QuantumCircuit):
         suppress_warning: bool = True,
         **params: JSONValue,
     ) -> None:
+        """Initialize a LogicalCircuit.
+
+        Args:
+        ----
+            layout: Optional layout dictionary defining the qudit arrangement.
+            suppress_warning: If True, suppresses warnings about missing layout.
+            **params: Additional parameters passed to the parent QuantumCircuit.
+        """
         self.layout = layout
         if self.layout is not None:
             self.qudit_set = set(self.layout.keys())

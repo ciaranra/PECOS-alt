@@ -25,7 +25,10 @@ class DummyDecoder:
     """This decoder is just a simple look-up decoder."""
 
     def __init__(self) -> None:
-        pass
+        """Initialize the DummyDecoder.
+
+        This decoder provides no recovery operations for any syndrome input.
+        """
 
     @staticmethod
     def decode(

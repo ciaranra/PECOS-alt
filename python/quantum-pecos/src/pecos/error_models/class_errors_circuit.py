@@ -11,19 +11,30 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pecos.circuits.quantum_circuit import QuantumCircuit
+
 
 class ErrorCircuits(dict):
     """Used to store error circuits."""
 
     def __init__(self) -> None:
+        """Initialize an ErrorCircuits instance.
+
+        This creates an empty dictionary to store error circuits.
+        """
         super().__init__()
 
     def add_circuits(
         self,
         time: int,
-        before_faults=None,
-        after_faults=None,
-        replaced_locations=None,
+        before_faults: QuantumCircuit | None = None,
+        after_faults: QuantumCircuit | None = None,
+        replaced_locations: set[int] | None = None,
     ) -> None:
         """Add error circuits and gate locations to ignore (replaced_locations).
 

@@ -38,9 +38,11 @@ class PauliFaultProp(PauliPropagation):
     """
 
     def __init__(self, *, num_qubits: int, track_sign: bool = False) -> None:
-        """Args:
-        ----
-            num_qubits (int):
+        """Initialize a PauliFaultProp state.
+
+        Args:
+            num_qubits (int): Number of qubits in the system.
+            track_sign (bool): Whether to track the global phase/sign.
 
         Returns: None
 
@@ -68,7 +70,7 @@ class PauliFaultProp(PauliPropagation):
         self.sign += 1
         self.sign %= 2
 
-    def flip_img(self, num_is) -> None:
+    def flip_img(self, num_is: int) -> None:
         self.img += num_is
         self.img %= 4
 
@@ -78,13 +80,14 @@ class PauliFaultProp(PauliPropagation):
         self.img %= 2
 
     def logical_sign(self, logical_op: QuantumCircuit) -> int:
-        """Find the sign of a logical operator, which is equivalent to determining if the faults commute (sign == 0) or
+        """Find the sign of a logical operator.
+
+        This is equivalent to determining if the faults commute (sign == 0) or
         anticommute (sign == 1) with the logical operator.
 
         That is, compare the commutation of `logical_op` with `faults.`
 
         Args:
-        ----
             logical_op (QuantumCircuit): Quantum circuit representing a logical operator.
 
         Returns: int - sign.
@@ -102,9 +105,8 @@ class PauliFaultProp(PauliPropagation):
         """Used to apply a quantum circuit to a state, whether the circuit represents an fault or ideal circuit.
 
         Args:
-        ----
             circuit: A class representing a circuit. # TODO: Shouldn't this also include QuantumCircuit
-            removed_locations : A set of qudit locations that correspond to
+            removed_locations: A set of qudit locations that correspond to
                 ideal gates that should be removed.
             _apply_faults: Whether to apply the `circuit` as a Pauli fault (True) or as a Clifford to update the
                 faults (False).
@@ -128,13 +130,13 @@ class PauliFaultProp(PauliPropagation):
         self,
         circuit: QuantumCircuit | ParamGateCollection,
         *,
-        minus=False,
+        minus: bool = False,
     ) -> None:
         """A methods to add faults to the state.
 
         Args:
-        ----
             circuit (Union[QuantumCircuit, ParamGateCollection]): A quantum circuit representing Pauli faults.
+            minus (bool): Whether to flip the sign when adding faults.
 
         Returns: None
 
@@ -256,7 +258,7 @@ class PauliFaultProp(PauliPropagation):
                 pstr += "I"
         return pstr
 
-    def fault_str_sign(self, *, strip=False) -> str:
+    def fault_str_sign(self, *, strip: bool = False) -> str:
         fault_str = []
 
         if self.sign:

@@ -15,6 +15,13 @@ from pecos.slr import Block, Comment, CReg, QReg, Qubit
 
 class NoFlagMeasureX(Block):
     def __init__(self, d: list[Qubit], a: QReg, out: CReg) -> None:
+        """Initialize NoFlagMeasureX block for non-flagged logical X measurement.
+
+        Args:
+            d: List of data qubits for the logical measurement.
+            a: Ancilla qubit register for the measurement.
+            out: Classical register to store the measurement result.
+        """
         super().__init__()
 
         self.extend(

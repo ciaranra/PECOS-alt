@@ -30,6 +30,12 @@ class SeqBlock(Block):
     """
 
     def __init__(self, ops: list[Op | Block], metadata: dict | None = None) -> None:
+        """Initialize a sequence block.
+
+        Args:
+            ops: List of operations or blocks to be executed in sequence.
+            metadata: Optional metadata dictionary.
+        """
         super().__init__(metadata=metadata)
         self.ops = ops
 
@@ -38,6 +44,12 @@ class QParallelBlock(SeqBlock):
     """A block to indicate that a collection of QOps are applied in parallel."""
 
     def __init__(self, ops: list[QOp], metadata: dict | None = None) -> None:
+        """Initialize a parallel quantum operations block.
+
+        Args:
+            ops: List of quantum operations to be applied in parallel.
+            metadata: Optional metadata dictionary.
+        """
         super().__init__(ops=ops, metadata=metadata)
 
 
@@ -51,6 +63,14 @@ class IfBlock(Block):
         false_branch: list[Op] | None = None,
         metadata: dict | None = None,
     ) -> None:
+        """Initialize an if/else block.
+
+        Args:
+            condition: Classical operation that evaluates to a boolean condition.
+            true_branch: List of operations to execute if condition is true.
+            false_branch: Optional list of operations to execute if condition is false.
+            metadata: Optional metadata dictionary.
+        """
         super().__init__(metadata=metadata)
         self.condition = condition
         self.true_branch = true_branch

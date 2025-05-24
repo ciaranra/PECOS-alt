@@ -10,8 +10,18 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
 
-def circ2set(circuit) -> tuple[set, set]:
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from typing import Any
+
+    from pecos.simulators.sparsesim.state import Gens, SparseSim
+
+
+def circ2set(circuit: Iterable[tuple[str, Any]]) -> tuple[set, set]:
     qudit_xs = set()
     qudit_zs = set()
     for gate, qubits in circuit:
@@ -26,7 +36,7 @@ def circ2set(circuit) -> tuple[set, set]:
     return qudit_xs, qudit_zs
 
 
-def op_commutes(stab_xs, stab_zs, commute_with) -> bool:
+def op_commutes(stab_xs: set[int], stab_zs: set[int], commute_with: Gens) -> bool:
     # Does the stabilizer anti-commute with any of the stabilizers in the stabilizer state?
 
     anticom_stabs = set()
@@ -40,7 +50,7 @@ def op_commutes(stab_xs, stab_zs, commute_with) -> bool:
     return not len(anticom_stabs)
 
 
-def find_stab(state, stab_xs, stab_zs) -> bool:
+def find_stab(state: SparseSim, stab_xs: set[int], stab_zs: set[int]) -> bool:
     """Find the sign of the logical operator.
 
     Args:
@@ -80,7 +90,13 @@ def find_stab(state, stab_xs, stab_zs) -> bool:
     return not (len(built_up_xs) != 0 or len(built_up_zs) != 0)
 
 
-def remove_stab(state, stab_xs, stab_zs, destab_xs, destab_zs) -> None:
+def remove_stab(
+    state: SparseSim,
+    stab_xs: set[int],
+    stab_zs: set[int],
+    destab_xs: set[int],
+    destab_zs: set[int],
+) -> None:
     # make sure stabs and destabs anti-commute
     # ----------------------------------------
     if (len(stab_xs & destab_zs) + len(stab_zs & destab_xs)) % 2 == 0:
@@ -268,7 +284,7 @@ def remove_stab(state, stab_xs, stab_zs, destab_xs, destab_zs) -> None:
         stabs.signs_i ^= delog_anticom
 
 
-def is_not_stabilizer(state, qubits_x, qubits_z) -> int:
+def is_not_stabilizer(state: SparseSim, qubits_x: set[int], qubits_z: set[int]) -> int:
     stabs = state.stabs
     destabs = state.destabs
 

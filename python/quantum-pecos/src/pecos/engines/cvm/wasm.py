@@ -9,15 +9,22 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
 import pickle
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from pecos.engines.cvm.binarray import BinArray
 from pecos.engines.cvm.sim_func import sim_exec
 from pecos.engines.cvm.wasm_vms.wasmer import read_wasmer
 from pecos.engines.cvm.wasm_vms.wasmtime import read_wasmtime
 from pecos.errors import MissingCCOPError
+
+if TYPE_CHECKING:
+    from typing import Any
+
+    from pecos.circuits import QuantumCircuit
 
 
 class CCOPObject(Protocol):
@@ -28,7 +35,15 @@ class CCOPObject(Protocol):
         ...
 
 
-def read_pickle(picklefile) -> CCOPObject:
+class EngineRunner(Protocol):
+    """Protocol for engine runner objects."""
+
+    debug: bool
+    ccop: CCOPObject | None
+    circuit: QuantumCircuit
+
+
+def read_pickle(picklefile: str | bytes) -> CCOPObject:
     """Read in either a file path or byte object meant to be a pickled class used to define the ccop.
 
     Warning: This function loads pickled data which can be a security risk if the data
@@ -41,7 +56,7 @@ def read_pickle(picklefile) -> CCOPObject:
         return pickle.loads(picklefile)  # noqa: S301 - Loading trusted circuit metadata
 
 
-def get_ccop(circuit) -> CCOPObject | None:
+def get_ccop(circuit: QuantumCircuit) -> CCOPObject | None:
     if circuit.metadata.get("ccop"):
         ccop = circuit.metadata["ccop"]
         ccop_type = circuit.metadata["ccop_type"]
@@ -79,7 +94,9 @@ def get_ccop(circuit) -> CCOPObject | None:
     return ccop
 
 
-def eval_cfunc(runner, params, output) -> None:
+def eval_cfunc(
+    runner: EngineRunner, params: dict[str, Any], output: dict[str, BinArray]
+) -> None:
     func = params["func"]
     assign_vars = params["assign_vars"]
     args = params["args"]

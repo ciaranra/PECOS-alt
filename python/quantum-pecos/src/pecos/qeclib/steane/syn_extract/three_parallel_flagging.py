@@ -36,6 +36,19 @@ class ThreeParallelFlaggingXZZ(Block):
         last_raw_syn_x: CReg,
         last_raw_syn_z: CReg,
     ) -> None:
+        """Initialize ThreeParallelFlaggingXZZ block for parallel flagged syndrome extraction.
+
+        Performs three parallel flagging circuits: one X check and two Z checks.
+
+        Args:
+            data: Data register containing the 7 qubits of the Steane code.
+            ancillas: Ancilla register (size 3) for syndrome measurements.
+            flag_x: Classical register for X stabilizer flags.
+            flag_z: Classical register for Z stabilizer flags.
+            flags: Combined flags register.
+            last_raw_syn_x: Previous X syndrome measurements.
+            last_raw_syn_z: Previous Z syndrome measurements.
+        """
         super().__init__()
         d = data
         a = ancillas
@@ -127,6 +140,19 @@ class ThreeParallelFlaggingZXX(Block):
         last_raw_syn_x: CReg,
         last_raw_syn_z: CReg,
     ) -> None:
+        """Initialize ThreeParallelFlaggingZXX block for parallel flagged syndrome extraction.
+
+        Performs three parallel flagging circuits: one Z check and two X checks.
+
+        Args:
+            data: Data register containing the 7 qubits of the Steane code.
+            ancillas: Ancilla register (size 3) for syndrome measurements.
+            flag_x: Classical register for X stabilizer flags.
+            flag_z: Classical register for Z stabilizer flags.
+            flags: Combined flags register.
+            last_raw_syn_x: Previous X syndrome measurements.
+            last_raw_syn_z: Previous Z syndrome measurements.
+        """
         super().__init__()
         d = data
         a = ancillas

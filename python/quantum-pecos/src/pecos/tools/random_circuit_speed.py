@@ -11,8 +11,9 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from collections.abc import Generator
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -20,16 +21,21 @@ from pecos.circuits import QuantumCircuit
 from pecos.engines.circuit_runners import TimingRunner
 from pecos.simulators import SparseSimPy
 
+if TYPE_CHECKING:
+    from collections.abc import Callable, Generator, Sequence
+
+    from pecos.protocols import SimulatorProtocol
+
 
 def random_circuit_speed(
-    state_sim,  # noqa: ARG001
-    num_qubits,
-    circuit_depth,
-    trials=10000,
-    gates=None,
-    seed_start=0,
-    converter=None,
-) -> tuple[list[float], list[Any], list[QuantumCircuit]]:
+    state_sim: type[SimulatorProtocol],  # noqa: ARG001
+    num_qubits: int,
+    circuit_depth: int,
+    trials: int = 10000,
+    gates: Sequence[str] | None = None,
+    seed_start: int = 0,
+    converter: Callable[[QuantumCircuit], QuantumCircuit] | None = None,
+) -> tuple[list[float], list[dict[str, int | list[int]]], list[QuantumCircuit]]:
     circuits = generate_circuits(num_qubits, circuit_depth, trials, gates, seed_start)
 
     times = []
@@ -50,13 +56,13 @@ def random_circuit_speed(
 
 
 def generate_circuits(
-    num_qubits,
-    circuit_depth,
-    trials=100000,
-    gates=None,
-    seed_start=0,
+    num_qubits: int,
+    circuit_depth: int,
+    trials: int = 100000,
+    gates: Sequence[str] | None = None,
+    seed_start: int = 0,
     *,
-    iterate=False,
+    iterate: bool = False,
 ) -> list[QuantumCircuit] | Generator[QuantumCircuit, None, None]:
     if gates is None:
         gates = [
@@ -138,5 +144,5 @@ def generate_circuits(
         return circuits
 
 
-def get_qubits(num_qubits, size) -> np.ndarray:
+def get_qubits(num_qubits: int, size: int) -> np.ndarray:
     return np.random.choice(list(range(num_qubits)), size, replace=False)

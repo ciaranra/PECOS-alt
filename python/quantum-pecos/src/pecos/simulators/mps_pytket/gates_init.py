@@ -14,13 +14,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from pecos.simulators.mps_pytket.state import MPS
     from pecos.type_defs import SimulatorGateParams
 
 from pecos.simulators.mps_pytket.gates_meas import meas_z
 from pecos.simulators.mps_pytket.gates_one_qubit import X
 
 
-def init_zero(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def init_zero(state: MPS, qubit: int, **_params: SimulatorGateParams) -> None:
     """Initialise or reset the qubit to state |0>.
 
     Args:
@@ -33,7 +34,7 @@ def init_zero(state, qubit: int, **_params: SimulatorGateParams) -> None:
         X(state, qubit)
 
 
-def init_one(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def init_one(state: MPS, qubit: int, **_params: SimulatorGateParams) -> None:
     """Initialise or reset the qubit to state |1>.
 
     Args:

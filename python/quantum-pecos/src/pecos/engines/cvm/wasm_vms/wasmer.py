@@ -14,8 +14,13 @@ from __future__ import annotations
 import contextlib
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pecos.engines.cvm.sim_func import sim_funcs
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from typing import Any
 
 with contextlib.suppress(ImportError):
     from wasmer import Instance, Module, Store, engine
@@ -30,7 +35,17 @@ with contextlib.suppress(ImportError):
 class WasmerInstance:
     """Wrapper class to create a wasmer instance and access its functions."""
 
-    def __init__(self, file: str | bytes, compiler="wasm_cl") -> None:
+    def __init__(self, file: str | bytes, compiler: str = "wasm_cl") -> None:
+        """Initialize a Wasmer WebAssembly instance.
+
+        Args:
+            file: Path to a WebAssembly file or raw WebAssembly bytes.
+            compiler: The compiler backend to use. Options are 'wasm_cl' for
+                Cranelift (default) or 'wasm_llvm' for LLVM.
+
+        Raises:
+            ImportError: If the wasmer module is not installed.
+        """
         if "wasmer" not in sys.modules:
             msg = 'wasmer is being called but not installed! Install "wasmer"'
             raise ImportError(msg)
@@ -61,10 +76,10 @@ class WasmerInstance:
 
     def exec(
         self,
-        func_name,
-        args,
+        func_name: str,
+        args: Sequence[tuple[Any, int]],
         *,
-        debug=False,
+        debug: bool = False,
     ) -> int:
         if debug and func_name.startswith("sim_"):
             method = sim_funcs[func_name]
@@ -78,6 +93,6 @@ class WasmerInstance:
         pass  # Only needed for wasmtime
 
 
-def read_wasmer(path, compiler="wasm_cl") -> WasmerInstance:
+def read_wasmer(path: str | bytes, compiler: str = "wasm_cl") -> WasmerInstance:
     """Helper method to create a wasmer instance."""
     return WasmerInstance(path, compiler)

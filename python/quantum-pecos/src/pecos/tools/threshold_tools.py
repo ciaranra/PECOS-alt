@@ -11,8 +11,10 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
 import contextlib
-from typing import Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -25,23 +27,73 @@ from pecos.misc.threshold_curve import threshold_fit as default_fit
 from pecos.qeccs import Surface4444
 from pecos.simulators import SparseSimPy
 
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+    from typing import TypedDict
+
+    from numpy.typing import NDArray
+
+    from pecos.circuits import LogicalCircuit, QuantumCircuit
+    from pecos.engines.circuit_runners import Standard
+    from pecos.protocols import Decoder, ErrorGenerator, QECCProtocol, SimulatorProtocol
+    from pecos.type_defs import ErrorParams, LogicalOperator
+
+    ThresholdFitFunc = Callable[
+        [
+            tuple[NDArray[np.float64], NDArray[np.float64]],  # x = (p, dist)
+            float,  # pth
+            float,  # v0
+            float,  # a
+            float,  # b
+            float,  # c
+        ],
+        float | NDArray[np.float64],
+    ]
+
+    ThresholdFitter = Callable[
+        [
+            NDArray[np.float64] | list[float],  # plist
+            NDArray[np.float64] | list[float],  # dlist
+            NDArray[np.float64] | list[float],  # plog
+            ThresholdFitFunc,  # func
+            NDArray[np.float64] | list[float],  # p0
+        ],
+        tuple[NDArray[np.float64], NDArray[np.float64]],
+    ]
+
+    class ThresholdResult(TypedDict):
+        """Result from threshold calculations."""
+
+        distances: Sequence[int]
+        ps_physical: NDArray[np.float64]
+        p_logical: NDArray[np.float64]
+
+    class ThresholdCalcResult(TypedDict):
+        """Result from threshold calculations with fitting."""
+
+        plist: NDArray[np.float64]
+        dlist: NDArray[np.float64]
+        plog: NDArray[np.float64]
+        opt: NDArray[np.float64]
+        std: NDArray[np.float64]
+
 
 def threshold_code_capacity(
-    qecc_class,
-    error_gen,
-    decoder_class,
-    ps,
-    ds,
-    runs,
+    qecc_class: type[QECCProtocol],
+    error_gen: type[ErrorGenerator],
+    decoder_class: type[Decoder],
+    ps: Sequence[float],
+    ds: Sequence[int],
+    runs: int,
     *,
-    verbose=False,
-    mode=1,
-    threshold_fit=None,
-    p0=None,
-    func=None,
-    circuit_runner=None,
-    basis=None,
-) -> dict[str, Any]:
+    verbose: bool = False,
+    mode: int = 1,
+    threshold_fit: ThresholdFitter | None = None,
+    p0: tuple[float, ...] | None = None,
+    func: ThresholdFitFunc | None = None,
+    circuit_runner: Standard | None = None,
+    basis: str | None = None,
+) -> ThresholdResult:
     """Function that generates p_logical values given a list of physical errors (ps) and distance (ds).
 
     Args:
@@ -137,20 +189,20 @@ def threshold_code_capacity(
 
 
 def threshold_code_capacity_calc(
-    ps,
-    ds,
-    runs,
-    error_gen=None,
-    qecc_class=None,
-    decoder_class=None,
+    ps: Sequence[float],
+    ds: Sequence[int],
+    runs: int,
+    error_gen: type[ErrorGenerator] | None = None,
+    qecc_class: type[QECCProtocol] | None = None,
+    decoder_class: type[Decoder] | None = None,
     *,
-    verbose=True,
-    mode=1,
-    threshold_fit=None,
-    p0=None,
-    func=None,
-    circuit_runner=None,
-) -> dict[str, Any]:
+    verbose: bool = True,
+    mode: int = 1,
+    threshold_fit: ThresholdFitter | None = None,
+    p0: tuple[float, ...] | None = None,
+    func: ThresholdFitFunc | None = None,
+    circuit_runner: Standard | None = None,
+) -> ThresholdCalcResult:
     """Function that generates p_logical values given a list of physical errors (ps) and distance (ds).
 
     Args:
@@ -243,18 +295,18 @@ def threshold_code_capacity_calc(
 
 
 def codecapacity_logical_rate(
-    runs,
-    qecc,
-    distance,
-    error_gen,
-    error_params,
-    decoder,
-    seed=None,
-    state_sim=None,  # noqa: ARG001
+    runs: int,
+    qecc: QECCProtocol,
+    distance: int,
+    error_gen: type[ErrorGenerator],
+    error_params: ErrorParams,
+    decoder: Decoder,
+    seed: int | None = None,
+    state_sim: SimulatorProtocol | None = None,  # noqa: ARG001
     *,
-    verbose=True,
-    circuit_runner=None,
-    basis=None,
+    verbose: bool = True,
+    circuit_runner: Standard | None = None,
+    basis: str | None = None,
 ) -> tuple[float, float]:
     """A tool for determining the code-capacity logical-error rate for syndrome extraction.
 
@@ -358,18 +410,18 @@ def codecapacity_logical_rate(
 
 
 def codecapacity_logical_rate2(
-    runs,
-    qecc,
-    distance,
-    error_gen,
-    error_params,
-    decoder,
-    seed=None,
-    state_sim=None,
+    runs: int,
+    qecc: QECCProtocol,
+    distance: int,
+    error_gen: type[ErrorGenerator],
+    error_params: ErrorParams,
+    decoder: Decoder,
+    seed: int | None = None,
+    state_sim: SimulatorProtocol | None = None,
     *,
-    verbose=True,
-    circuit_runner=None,
-    basis=None,  # noqa: ARG001
+    verbose: bool = True,
+    circuit_runner: Standard | None = None,
+    basis: str | None = None,  # noqa: ARG001
 ) -> tuple[float, float]:
     """A tool for determining the code-capacity logical-error rate for syndrome extraction.
 
@@ -478,21 +530,21 @@ def codecapacity_logical_rate2(
 
 
 def codecapacity_logical_rate3(
-    runs,
-    qecc,
-    distance,
-    error_gen,
-    error_params,
-    decoder,
-    seed=None,
-    state_sim=None,
-    max_syn_extract=1e7,
-    circuit_runner=None,
+    runs: int,
+    qecc: QECCProtocol,
+    distance: int,
+    error_gen: type[ErrorGenerator],
+    error_params: ErrorParams,
+    decoder: Decoder,
+    seed: int | None = None,
+    state_sim: SimulatorProtocol | None = None,
+    max_syn_extract: float = 1e7,
+    circuit_runner: Standard | None = None,
     *,
-    verbose=True,
-    init_circuit=None,
-    init_logical_ops=None,
-    basis=None,
+    verbose: bool = True,
+    init_circuit: QuantumCircuit | LogicalCircuit | None = None,
+    init_logical_ops: LogicalOperator | None = None,
+    basis: str | None = None,
 ) -> tuple[float, float]:
     """A tool for determining the code-capacity logical-error rate for syndrome extraction.
 

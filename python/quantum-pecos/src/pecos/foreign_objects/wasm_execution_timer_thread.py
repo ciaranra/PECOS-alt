@@ -19,6 +19,13 @@ WASM_EXECUTION_MAX_TICKS: int = 4
 
 class WasmExecutionTimerThread(Thread):
     def __init__(self, stop_event: Event, func: Callable[[], None]) -> None:
+        """Initialize the WasmExecutionTimerThread.
+
+        Args:
+        ----
+            stop_event: Threading event to signal when the timer should stop.
+            func: Function to call periodically while the timer is running.
+        """
         Thread.__init__(self, daemon=True)
         self._stop_event = stop_event
         self._func = func

@@ -23,6 +23,15 @@ class X(Block):
     """
 
     def __init__(self, q: QReg) -> None:
+        """Initialize a logical Pauli X gate on the Steane code.
+
+        Args:
+            q: A quantum register containing exactly 7 qubits representing a logical qubit
+                in the Steane code.
+
+        Raises:
+            Exception: If the quantum register does not contain exactly 7 qubits.
+        """
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)
@@ -45,6 +54,15 @@ class Y(Block):
     """
 
     def __init__(self, q: QReg) -> None:
+        """Initialize a logical Pauli Y gate on the Steane code.
+
+        Args:
+            q: A quantum register containing exactly 7 qubits representing a logical qubit
+                in the Steane code.
+
+        Raises:
+            Exception: If the quantum register does not contain exactly 7 qubits.
+        """
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)
@@ -67,6 +85,15 @@ class Z(Block):
     """
 
     def __init__(self, q: QReg) -> None:
+        """Initialize a logical Pauli Z gate on the Steane code.
+
+        Args:
+            q: A quantum register containing exactly 7 qubits representing a logical qubit
+                in the Steane code.
+
+        Raises:
+            Exception: If the quantum register does not contain exactly 7 qubits.
+        """
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)

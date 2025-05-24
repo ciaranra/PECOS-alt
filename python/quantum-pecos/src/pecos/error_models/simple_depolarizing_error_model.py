@@ -15,11 +15,13 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from pecos.error_models.error_model_abc import ErrorModel
 from pecos.error_models.noise_impl_old.gate_groups import one_qubits, two_qubits
 from pecos.reps.pypmir.op_types import QOp
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from pecos.protocols import MachineProtocol
     from pecos.reps.pypmir.block_types import SeqBlock
 
 one_qubit_paulis = ["X", "Y", "Z"]
@@ -43,19 +45,31 @@ two_qubit_paulis = [
 ]
 
 
-class SimpleDepolarizingErrorModel(ErrorModel):
+class SimpleDepolarizingErrorModel:
     """Parameterized error mode."""
 
     def __init__(self, error_params: dict) -> None:
-        super().__init__(error_params=error_params)
+        """Initialize a simple depolarizing error model.
+
+        Args:
+            error_params: Dictionary containing error parameters including:
+                - p1: Single-qubit gate error probability
+                - p2: Two-qubit gate error probability
+                - p_meas: Measurement error probability
+                - p_init: Initialization error probability
+        """
+        self.error_params = dict(error_params)
+        self.machine = None
+        self.num_qubits = None
         self._eparams = None
 
     def reset(self) -> SimpleDepolarizingErrorModel:
         """Reset error generator for another round of syndrome extraction."""
         return SimpleDepolarizingErrorModel(error_params=self.error_params)
 
-    def init(self, num_qubits, machine=None) -> None:  # noqa: ARG002
+    def init(self, num_qubits: int, machine: MachineProtocol | None = None) -> None:
         self.machine = machine
+        self.num_qubits = num_qubits
 
         if not self.error_params:
             msg = "Error params not set!"
@@ -78,7 +92,7 @@ class SimpleDepolarizingErrorModel(ErrorModel):
     def process(
         self,
         qops: list[QOp],
-        call_back=None,  # noqa: ARG002
+        call_back: Callable[..., None] | None = None,  # noqa: ARG002
     ) -> list[QOp | SeqBlock]:
         noisy_ops = []
 

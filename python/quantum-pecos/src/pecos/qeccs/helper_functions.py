@@ -12,8 +12,10 @@
 
 """A collection of useful functions."""
 
+from typing import Any
 
-def make_hashable_params(params) -> tuple:
+
+def make_hashable_params(params: dict[str, Any]) -> tuple:
     """Checks to make sure that the parameters submitted is hashable.
 
     Args:
@@ -43,7 +45,7 @@ def make_hashable_params(params) -> tuple:
     return tuple_params
 
 
-def pos2qudit(layout) -> dict:
+def pos2qudit(layout: dict[Any, tuple]) -> dict[tuple, Any]:
     """Reverses the layout dictionary. Makes a new dictionary with (x, y, ...) => qudit_id.
 
     Args:
@@ -54,7 +56,7 @@ def pos2qudit(layout) -> dict:
     return {p: qid for qid, p in layout.items()}
 
 
-def expected_params(params, expected_set) -> None:
+def expected_params(params: dict[str, Any], expected_set: set[str]) -> None:
     """Check that all parameters are in the expected set.
 
     Args:

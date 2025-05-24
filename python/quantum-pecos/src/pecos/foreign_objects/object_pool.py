@@ -13,16 +13,22 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pecos.foreign_objects.foreign_object_abc import ForeignObject
-
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from pecos.protocols import ForeignObjectProtocol
 
-class NamedObjectPool(ForeignObject):
+
+class NamedObjectPool:
     """A collection of objections that can be access via this class."""
 
-    def __init__(self, **objects: ForeignObject) -> None:
+    def __init__(self, **objects: ForeignObjectProtocol) -> None:
+        """Initialize the NamedObjectPool.
+
+        Args:
+        ----
+            **objects: Foreign objects to include in the pool, keyed by namespace name.
+        """
         self.objs = objects
         self.default = objects.get("default")
 
@@ -42,7 +48,7 @@ class NamedObjectPool(ForeignObject):
             if "shot_reinit" in obj.get_funcs():
                 obj.exec("shot_reinit", [])
 
-    def add(self, namespace: str, obj: ForeignObject) -> None:
+    def add(self, namespace: str, obj: ForeignObjectProtocol) -> None:
         if namespace in self.objs:
             msg = f"Object named '{namespace}' already exists!"
             raise Exception(msg)

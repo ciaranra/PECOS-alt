@@ -16,11 +16,12 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
+    from pecos.simulators.custatevec.state import CuStateVec
     from pecos.type_defs import SimulatorGateParams
 from cuquantum import custatevec as cusv
 
 
-def meas_z(state, qubit: int, **_params: SimulatorGateParams) -> int:
+def meas_z(state: CuStateVec, qubit: int, **_params: SimulatorGateParams) -> int:
     """Measure in the Z-basis, collapse and normalise.
 
     Notes:

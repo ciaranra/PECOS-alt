@@ -23,6 +23,11 @@ if TYPE_CHECKING:
 
 class SparseSimRs:
     def __init__(self, num_qubits: int):
+        """Initialize the Rust-based sparse simulator.
+
+        Args:
+            num_qubits: Number of qubits to simulate.
+        """
         self._sim = RustSparseSim(num_qubits)
         self.num_qubits = num_qubits
         self.bindings = dict(gate_dict)

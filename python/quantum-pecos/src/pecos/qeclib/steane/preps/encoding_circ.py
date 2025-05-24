@@ -15,6 +15,12 @@ from pecos.slr import Block, Comment, QReg
 
 class EncodingCircuit(Block):
     def __init__(self, q: QReg) -> None:
+        """Initialize EncodingCircuit block for Steane code encoding.
+
+        Args:
+            q: Quantum register containing 7 qubits for the Steane code.
+                The qubit at index 6 is the input qubit to be encoded.
+        """
         self.q = q
         super().__init__()
         self.extend(

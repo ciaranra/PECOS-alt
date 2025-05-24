@@ -16,6 +16,8 @@ This module provides the Color 4.8.8 topological quantum error correcting code,
 which is based on a 4.8.8 lattice structure.
 """
 
+from typing import Any
+
 from pecos.qeccs.color_488.circuit_implementation1 import OneAncillaPerCheck
 from pecos.qeccs.color_488.gates import GateIdentity, GateInitPlus, GateInitZero
 from pecos.qeccs.color_488.instructions import (
@@ -23,14 +25,26 @@ from pecos.qeccs.color_488.instructions import (
     InstrInitZero,
     InstrSynExtraction,
 )
-from pecos.qeccs.qecc_parent_class import QECC
+from pecos.qeccs.default_qecc import DefaultQECC
 from pecos.type_defs import QECCParams
 
 
-class Color488(QECC):
+class Color488(DefaultQECC):
     """Canonical triangular color-code on a 4.8.8 lattice."""
 
-    def __init__(self, distance=None, **qecc_params: QECCParams) -> None:
+    def __init__(self, distance: int | None = None, **qecc_params: QECCParams) -> None:
+        """Initialize the Color 4.8.8 quantum error correcting code.
+
+        Args:
+            distance: The code distance. If not provided, must be specified in qecc_params.
+            **qecc_params: Additional QECC parameters including:
+                - distance: The code distance (required if not provided as first argument)
+                - circuit_compiler: The circuit compiler to use (default: OneAncillaPerCheck)
+                - mapping: Optional qubit mapping
+
+        Raises:
+            Exception: If the distance is even (this code requires odd distance).
+        """
         # TODO: Need to switch to codes each having a class defining how classes are implemented. From that we get the
         # layout and ancillas. We don't need a general circuit conversion script... The default implementation may
         # still be overridden.
@@ -117,7 +131,7 @@ class Color488(QECC):
         return sym2gate_class, sym2instruction_class
 
     @staticmethod
-    def _get_distance(params) -> tuple[int, int, int]:
+    def _get_distance(params: dict[str, Any]) -> tuple[int, int, int]:
         """Check and set the distance.
 
         :return:

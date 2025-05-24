@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from pecos.simulators.projectq.state import ProjectQSim
     from pecos.type_defs import SimulatorGateParams
 
 import numpy as np
@@ -24,7 +25,7 @@ from projectq import ops
 from pecos.simulators.projectq.helper import MakeFunc
 
 
-def Identity(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def Identity(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     """Identity does nothing.
 
     X -> X
@@ -34,16 +35,15 @@ def Identity(state, qubit: int, **_params: SimulatorGateParams) -> None:
     Y -> Y
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
-        qubit (int): An integer indexing the qubit being operated on.
+        state: The ProjectQ state instance.
+        qubit (int): The qubit index to apply the gate to.
 
     Returns: None
 
     """
 
 
-def X(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def X(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     """Pauli X.
 
     X -> X
@@ -53,9 +53,8 @@ def X(state, qubit: int, **_params: SimulatorGateParams) -> None:
     Y -> -Y
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
-        qubit (int): An integer indexing the qubit being operated on.
+        state: The ProjectQ state instance.
+        qubit (int): The qubit index to apply the gate to.
 
     Returns: None
 
@@ -63,7 +62,7 @@ def X(state, qubit: int, **_params: SimulatorGateParams) -> None:
     ops.X | state.qids[qubit]
 
 
-def Y(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def Y(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     """X -> -X.
 
     Z -> -Z
@@ -71,9 +70,8 @@ def Y(state, qubit: int, **_params: SimulatorGateParams) -> None:
     Y -> Y
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
-        qubit (int): An integer indexing the qubit being operated on.
+        state: The ProjectQ state instance.
+        qubit (int): The qubit index to apply the gate to.
 
     Returns: None
 
@@ -81,7 +79,7 @@ def Y(state, qubit: int, **_params: SimulatorGateParams) -> None:
     ops.Y | state.qids[qubit]
 
 
-def Z(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def Z(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     """X -> -X.
 
     Z -> Z
@@ -89,9 +87,8 @@ def Z(state, qubit: int, **_params: SimulatorGateParams) -> None:
     Y -> -Y
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
-        qubit (int): An integer indexing the qubit being operated on.
+        state: The ProjectQ state instance.
+        qubit (int): The qubit index to apply the gate to.
 
     Returns: None
 
@@ -105,18 +102,20 @@ RZ = MakeFunc(ops.Rz, angle=True).func  # Rotation about Z (takes angle arg)
 
 
 def R1XY(
-    state, qubit: int, angles: tuple[float, float], **_params: SimulatorGateParams
+    state: ProjectQSim,
+    qubit: int,
+    angles: tuple[float, float],
+    **_params: SimulatorGateParams,
 ) -> None:
     """Apply a single-qubit rotation gate composed of Y and Z rotations.
 
     R1XY(theta, phi) = U1q(theta, phi) = RZ(phi-pi/2)*RY(theta)*RZ(-phi+pi/2).
 
     Args:
-    ----
-        state:
-        qubit:
-        angles:
-        **params:
+        state: The ProjectQ state instance.
+        qubit (int): The qubit index to apply the gate to.
+        angles (tuple[float, float]): A tuple of (theta, phi) rotation angles.
+        **_params: Unused additional parameters (kept for interface compatibility).
     """
     theta = angles[0]
     phi = angles[1]
@@ -126,37 +125,37 @@ def R1XY(
     RZ(state, qubit, angle=phi - np.pi / 2)
 
 
-def SX(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def SX(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     """Square-root of X gate class."""
     RX(state, qubit, angle=np.pi / 2)
 
 
-def SXdg(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def SXdg(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     """Adjoint of the square-root of X gate class."""
     RX(state, qubit, angle=-np.pi / 2)
 
 
-def SY(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def SY(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     """Square-root of Y gate class."""
     RY(state, qubit, angle=np.pi / 2)
 
 
-def SYdg(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def SYdg(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     """Adjoint of the square-root of Y gate class."""
     RY(state, qubit, angle=-np.pi / 2)
 
 
-def SZ(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def SZ(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     """Square-root of Z gate class."""
     ops.S | state.qids[qubit]
 
 
-def SZdg(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def SZdg(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     """Adjoint of the square-root of Z gate class."""
     ops.Sdag | state.qids[qubit]
 
 
-def H(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def H(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     """Square root of Z.
 
     X -> Z
@@ -166,9 +165,8 @@ def H(state, qubit: int, **_params: SimulatorGateParams) -> None:
     Y -> -Y
 
     Args:
-    ----
-        state (PauliFaultProp):  The class representing the Pauli fault state.
-        qubit (int): An integer indexing the qubit being operated on.
+        state: The ProjectQ state instance.
+        qubit (int): The qubit index to apply the gate to.
 
     Returns: None
 
@@ -176,7 +174,7 @@ def H(state, qubit: int, **_params: SimulatorGateParams) -> None:
     ops.H | state.qids[qubit]
 
 
-def H2(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def H2(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     # @property
     # def matrix(self):
 
@@ -184,7 +182,7 @@ def H2(state, qubit: int, **_params: SimulatorGateParams) -> None:
     ops.Z | state.qids[qubit]
 
 
-def H3(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def H3(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     # @property
     # def matrix(self):
 
@@ -192,7 +190,7 @@ def H3(state, qubit: int, **_params: SimulatorGateParams) -> None:
     ops.Y | state.qids[qubit]
 
 
-def H4(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def H4(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     # @property
     # def matrix(self):
 
@@ -200,7 +198,7 @@ def H4(state, qubit: int, **_params: SimulatorGateParams) -> None:
     ops.X | state.qids[qubit]
 
 
-def H5(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def H5(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     # @property
     # def matrix(self):
 
@@ -208,7 +206,7 @@ def H5(state, qubit: int, **_params: SimulatorGateParams) -> None:
     ops.Z | state.qids[qubit]
 
 
-def H6(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def H6(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     # @property
     # def matrix(self):
 
@@ -216,7 +214,7 @@ def H6(state, qubit: int, **_params: SimulatorGateParams) -> None:
     ops.Y | state.qids[qubit]
 
 
-def F(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def F(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     """Face rotations of an octahedron #1."""
     # @property
     # def matrix(self):
@@ -225,13 +223,13 @@ def F(state, qubit: int, **_params: SimulatorGateParams) -> None:
     ops.Rz(np.pi / 2) | state.qids[qubit]
 
 
-def Fdg(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def Fdg(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     """Adjoint of face rotations of an octahedron #1."""
     ops.Rz(-np.pi / 2) | state.qids[qubit]
     ops.Rx(-np.pi / 2) | state.qids[qubit]
 
 
-def F2(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def F2(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     """Face rotations of an octahedron #2."""
     # @property
     # def matrix(self):
@@ -240,13 +238,13 @@ def F2(state, qubit: int, **_params: SimulatorGateParams) -> None:
     ops.Rx(-np.pi / 2) | state.qids[qubit]
 
 
-def F2dg(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def F2dg(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     """Adjoint of face rotations of an octahedron #2."""
     ops.Rx(np.pi / 2) | state.qids[qubit]
     ops.Rz(-np.pi / 2) | state.qids[qubit]
 
 
-def F3(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def F3(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     """Face rotations of an octahedron #3."""
     # @property
     # def matrix(self):
@@ -255,13 +253,13 @@ def F3(state, qubit: int, **_params: SimulatorGateParams) -> None:
     ops.Rz(np.pi / 2) | state.qids[qubit]
 
 
-def F3dg(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def F3dg(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     """Adjoint of face rotations of an octahedron #3."""
     ops.Rz(-np.pi / 2) | state.qids[qubit]
     ops.Rx(np.pi / 2) | state.qids[qubit]
 
 
-def F4(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def F4(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     """Face rotations of an octahedron #4."""
     # @property
     # def matrix(self):
@@ -270,7 +268,7 @@ def F4(state, qubit: int, **_params: SimulatorGateParams) -> None:
     ops.Rx(np.pi / 2) | state.qids[qubit]
 
 
-def F4dg(state, qubit: int, **_params: SimulatorGateParams) -> None:
+def F4dg(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
     """Adjoint of face rotations of an octahedron #4."""
     ops.Rx(-np.pi / 2) | state.qids[qubit]
     ops.Rz(-np.pi / 2) | state.qids[qubit]

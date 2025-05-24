@@ -29,13 +29,18 @@ from pecos.error_models.noise_impl_old.tq_noise import (
 from pecos.error_models.parent_class_error_gen import ParentErrorModel
 
 if TYPE_CHECKING:
-    from pecos.type_defs import GateParams
+    from pecos.type_defs import ErrorParams, GateParams, OutputDict
 
 
 class DepolarizingErrorModel(ParentErrorModel):
     """Parameterized error model for Beta and ARC1."""
 
     def __init__(self) -> None:
+        """Initialize a depolarizing error model.
+
+        Sets up the error model with empty state for tracking qubits,
+        error circuits, error parameters, and the quantum circuit.
+        """
         super().__init__()
 
         self.qubit_set = set()
@@ -64,10 +69,10 @@ class DepolarizingErrorModel(ParentErrorModel):
 
     def start(
         self,
-        circuit,
-        error_params,
+        circuit: QuantumCircuit,
+        error_params: ErrorParams,
         *,
-        _reset_leakage=True,  # Reserved for future leakage handling
+        _reset_leakage: bool = True,  # Reserved for future leakage handling
     ) -> ErrorCircuits:
         self.qubit_set = set(range(circuit.metadata["num_qubits"]))
 
@@ -98,11 +103,11 @@ class DepolarizingErrorModel(ParentErrorModel):
 
     def generate_tick_errors(
         self,
-        tick_circuit,
-        time,
-        output=None,
+        tick_circuit: QuantumCircuit,
+        time: int | tuple[int, ...],
+        output: OutputDict | None = None,
         *,
-        _reset_leakage=False,  # Reserved for future leakage handling
+        _reset_leakage: bool = False,  # Reserved for future leakage handling
         **_params: GateParams,  # Reserved for additional parameters
     ) -> ErrorCircuits:
         """The method that gets called each circuit tick to generate circuit noise for that tick."""

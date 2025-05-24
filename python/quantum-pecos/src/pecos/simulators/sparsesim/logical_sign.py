@@ -11,7 +11,7 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-"""Functions:
+"""Functions for logical sign computation.
 
 find_logical_signs
 logical_flip
@@ -23,19 +23,20 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pecos.circuits import QuantumCircuit
+    from pecos.simulators.sparsesim.state import SparseSim
 
 
 def find_logical_signs(
-    state,
+    state: SparseSim,
     logical_circuit: QuantumCircuit,
     delogical_circuit: QuantumCircuit | None = None,
 ) -> int:
     """Find the sign of the logical operator.
 
     Args:
-    ----
-        state:
-        logical_circuit:
+        state (SparseSim): The SparseSim state instance.
+        logical_circuit (QuantumCircuit): The logical circuit to find the sign of.
+        delogical_circuit (QuantumCircuit | None): Optional delogical circuit to check anti-commutation with.
     """
     if len(logical_circuit) != 1:
         msg = "Logical operators are expected to only have one tick."

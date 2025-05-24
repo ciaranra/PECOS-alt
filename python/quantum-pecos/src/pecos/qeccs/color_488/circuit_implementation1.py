@@ -11,7 +11,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from typing import TYPE_CHECKING, Any
+
 from pecos.circuits import QuantumCircuit
+
+if TYPE_CHECKING:
+    from pecos.protocols import LogicalInstructionProtocol
 
 
 class OneAncillaPerCheck:
@@ -19,10 +24,10 @@ class OneAncillaPerCheck:
 
     def __init__(
         self,
-        square_x_ticks=None,
-        square_z_ticks=None,
-        octagon_x_ticks=None,
-        octagon_z_ticks=None,
+        square_x_ticks: list[int] | None = None,
+        square_z_ticks: list[int] | None = None,
+        octagon_x_ticks: list[int] | None = None,
+        octagon_z_ticks: list[int] | None = None,
     ) -> None:
         """Initialize the CircuitCompiler1 with tick configurations.
 
@@ -88,7 +93,7 @@ class OneAncillaPerCheck:
         self.octagon_z_ticks = octagon_z_ticks
 
     @staticmethod
-    def get_num_ancillas(num_checks) -> int:
+    def get_num_ancillas(num_checks: int) -> int:
         """Get the number of ancillas based on the number of checks.
 
         Args:
@@ -98,7 +103,12 @@ class OneAncillaPerCheck:
         """
         return int(num_checks / 2)
 
-    def compile(self, instr, abstract_circuit, mapping=None) -> QuantumCircuit:
+    def compile(
+        self,
+        instr: "LogicalInstructionProtocol",
+        abstract_circuit: dict[str, Any],
+        mapping: dict[Any, Any] | None = None,
+    ) -> QuantumCircuit:
         """Compile the instruction into an abstract circuit.
 
         Args:
@@ -181,7 +191,7 @@ class OneAncillaPerCheck:
         return circuit
 
     @staticmethod
-    def mapset(mapping, oldset) -> set:
+    def mapset(mapping: dict[Any, Any], oldset: set) -> set:
         """Applies a mapping to a set.
 
         Args:
@@ -199,13 +209,13 @@ class OneAncillaPerCheck:
 
     def _create_check(
         self,
-        circuit,
-        polygon,
-        ticks,
-        check_type,
-        datas,
-        ancilla,
-        mapping,
+        circuit: QuantumCircuit,
+        polygon: str,
+        ticks: list[int],
+        check_type: str,
+        datas: list[int | None],
+        ancilla: int,
+        mapping: dict[Any, Any] | None,
     ) -> None:
         """Add polygon extraction to the circuit.
 

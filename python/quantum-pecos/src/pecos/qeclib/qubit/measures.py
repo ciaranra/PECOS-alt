@@ -25,6 +25,11 @@ class Measure(QGate):
     csize = 1
 
     def __init__(self, *qargs: Qubit) -> None:
+        """Initialize a measurement gate.
+
+        Args:
+            *qargs: Qubit(s) to measure in the Z basis.
+        """
         super().__init__(*qargs)
         self.cout = None
 

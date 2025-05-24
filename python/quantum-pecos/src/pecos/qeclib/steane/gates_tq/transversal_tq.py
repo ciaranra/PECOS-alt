@@ -15,6 +15,17 @@ from pecos.slr import Barrier, Block, Comment, QReg
 
 class CX(Block):
     def __init__(self, q1: QReg, q2: QReg, *, barrier: bool = True) -> None:
+        """Initialize a transversal logical CX gate on two Steane code logical qubits.
+
+        Args:
+            q1: First quantum register containing exactly 7 qubits (control).
+            q2: Second quantum register containing exactly 7 qubits (target).
+            barrier: Whether to include barriers before and after the gate operation.
+                Defaults to True.
+
+        Raises:
+            Exception: If either quantum register does not contain exactly 7 qubits.
+        """
         if len(q1.elems) != 7:
             msg = f"Size of register {len(q1.elems)} != 7"
             raise Exception(msg)
@@ -50,6 +61,15 @@ class CX(Block):
 
 class CY(Block):
     def __init__(self, q1: QReg, q2: QReg) -> None:
+        """Initialize a transversal logical CY gate on two Steane code logical qubits.
+
+        Args:
+            q1: First quantum register containing exactly 7 qubits (control).
+            q2: Second quantum register containing exactly 7 qubits (target).
+
+        Raises:
+            Exception: If either quantum register does not contain exactly 7 qubits.
+        """
         if len(q1.elems) != 7:
             msg = f"Size of register {len(q1.elems)} != 7"
             raise Exception(msg)
@@ -76,6 +96,15 @@ class CY(Block):
 
 class CZ(Block):
     def __init__(self, q1: QReg, q2: QReg) -> None:
+        """Initialize a transversal logical CZ gate on two Steane code logical qubits.
+
+        Args:
+            q1: First quantum register containing exactly 7 qubits.
+            q2: Second quantum register containing exactly 7 qubits.
+
+        Raises:
+            Exception: If either quantum register does not contain exactly 7 qubits.
+        """
         if len(q1.elems) != 7:
             msg = f"Size of register {len(q1.elems)} != 7"
             raise Exception(msg)
@@ -102,6 +131,15 @@ class CZ(Block):
 
 class SZZ(Block):
     def __init__(self, q1: QReg, q2: QReg) -> None:
+        """Initialize a transversal logical SZZ gate on two Steane code logical qubits.
+
+        Args:
+            q1: First quantum register containing exactly 7 qubits.
+            q2: Second quantum register containing exactly 7 qubits.
+
+        Raises:
+            Exception: If either quantum register does not contain exactly 7 qubits.
+        """
         if len(q1.elems) != 7:
             msg = f"Size of register {len(q1.elems)} != 7"
             raise Exception(msg)

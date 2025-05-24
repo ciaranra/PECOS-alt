@@ -16,8 +16,15 @@
 The main use case for this is to determine if an ideal recovery operator would change a logical sign or not.
 """
 
+from __future__ import annotations
 
-def qubit_pauli(first_circuit, second_circuit) -> bool:
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pecos.circuits import QuantumCircuit
+
+
+def qubit_pauli(first_circuit: QuantumCircuit, second_circuit: QuantumCircuit) -> bool:
     if len(first_circuit) != 1 or len(second_circuit) != 1:
         msg = "Circuits are expected to only have one tick."
         raise Exception(msg)

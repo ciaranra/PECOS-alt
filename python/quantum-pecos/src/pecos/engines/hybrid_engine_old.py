@@ -9,9 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
 import os
 import random
 import struct
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -20,13 +23,29 @@ from pecos.engines.cvm.classical import eval_condition, eval_cop, set_output
 from pecos.engines.cvm.wasm import eval_cfunc, get_ccop
 from pecos.error_models.fake_error_model import FakeErrorModel
 from pecos.errors import NotSupportedGateError
-from pecos.type_defs import GateParams
+
+if TYPE_CHECKING:
+    from typing import Protocol
+
+    from pecos.circuits import QuantumCircuit
+    from pecos.error_models.parent_class_error_gen import ParentErrorModel
+    from pecos.protocols import SimulatorProtocol
+    from pecos.type_defs import GateParams
+
+    class CircuitInspector(Protocol):
+        """Protocol for circuit inspector objects."""
+
+        def analyze(
+            self, tick_circuit: QuantumCircuit, time: int, output: dict[str, BinArray]
+        ) -> None: ...
 
 
 class HybridEngine:
     """This class represents a standard model for running quantum circuits and adding in errors."""
 
-    def __init__(self, seed=None, *, debug=False, regwidth: int = 32) -> None:
+    def __init__(
+        self, seed: int | bool | None = None, *, debug: bool = False, regwidth: int = 32
+    ) -> None:
         """Initialize hybrid engine with seed, debug mode, and register width.
 
         Args:
@@ -58,14 +77,14 @@ class HybridEngine:
 
     def run(
         self,
-        state,
-        circuit,
-        error_gen=None,
-        error_params=None,
-        error_circuits=None,
-        output=None,
-        output_spec=None,
-        circ_inspector=None,
+        state: SimulatorProtocol,
+        circuit: QuantumCircuit,
+        error_gen: ParentErrorModel | None = None,
+        error_params: dict[str, float | dict[str, float]] | None = None,
+        error_circuits: dict[int, dict[str, QuantumCircuit | set[int]]] | None = None,
+        output: dict[str, BinArray] | None = None,
+        output_spec: dict[str, int] | None = None,
+        circ_inspector: CircuitInspector | None = None,
     ) -> tuple[dict, dict]:
         output = set_output(state, circuit, output_spec, output)
         output_export = {}
@@ -145,12 +164,12 @@ class HybridEngine:
 
     def run_circuit(
         self,
-        state,
-        output,
-        output_export,
-        circuit,
-        error_gen,
-        removed_locations=None,
+        state: SimulatorProtocol,
+        output: dict[str, BinArray],
+        output_export: dict[str, BinArray],
+        circuit: QuantumCircuit,
+        error_gen: ParentErrorModel,
+        removed_locations: set[int] | None = None,
     ) -> None:
         """Run quantum circuit with error generation and classical operations.
 
@@ -239,7 +258,13 @@ class HybridEngine:
                         error_gen.leaked_qubits -= locations
 
     @staticmethod
-    def run_gate(state, output, symbol: str, locations, **params: GateParams) -> None:
+    def run_gate(
+        state: SimulatorProtocol,
+        output: dict[str, BinArray],
+        symbol: str,
+        locations: set[int],
+        **params: GateParams,
+    ) -> None:
         """Run a single gate operation on the quantum state.
 
         Args:

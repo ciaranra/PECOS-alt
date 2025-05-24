@@ -11,6 +11,8 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
 import os
 import random
 import struct
@@ -21,13 +23,18 @@ import numpy as np
 from pecos.misc.std_output import StdOutput
 
 if TYPE_CHECKING:
+    from typing import Any
+
+    from pecos.circuits import QuantumCircuit
     from pecos.error_models.class_errors_circuit import ErrorCircuits
+    from pecos.error_models.parent_class_error_gen import ParentErrorModel
+    from pecos.protocols import SimulatorProtocol
 
 
 class Standard:
     """This class represents a standard model for running quantum circuits and adding in errors."""
 
-    def __init__(self, seed=None) -> None:
+    def __init__(self, seed: int | bool | None = None) -> None:
         """Initialize Standard circuit runner with optional seed.
 
         Args:
@@ -49,13 +56,13 @@ class Standard:
 
     @staticmethod
     def run(
-        state,
-        circuit,
-        error_gen=None,
-        error_params=None,
-        error_circuits=None,
-        output=None,
-    ) -> tuple[StdOutput, "ErrorCircuits | None"]:
+        state: SimulatorProtocol,
+        circuit: QuantumCircuit,
+        error_gen: ParentErrorModel | None = None,
+        error_params: dict[str, Any] | None = None,
+        error_circuits: ErrorCircuits | dict[Any, Any] | None = None,
+        output: StdOutput | None = None,
+    ) -> tuple[StdOutput, ErrorCircuits | None]:
         """Run quantum circuit with optional error generation.
 
         Args:

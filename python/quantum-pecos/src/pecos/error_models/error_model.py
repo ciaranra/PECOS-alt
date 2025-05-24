@@ -13,24 +13,32 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pecos.error_models.error_model_abc import ErrorModel
 from pecos.reps.pypmir.op_types import EMOp, MOp, QOp
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from pecos.protocols import MachineProtocol
 
-class NoErrorModel(ErrorModel):
+
+class NoErrorModel:
     """Represents having no error model."""
 
     def __init__(self) -> None:
-        super().__init__(error_params={})
+        """Initialize a NoErrorModel instance.
+
+        Creates an empty error model that applies no noise to quantum operations.
+        """
+        self.error_params = {}
+        self.machine = None
+        self.num_qubits = None
 
     def reset(self) -> None:
         """Reset state to initialization state."""
 
-    def init(self, num_qubits, machine=None) -> None:
-        super().init(num_qubits=num_qubits, machine=machine)
+    def init(self, num_qubits: int, machine: MachineProtocol | None = None) -> None:
+        self.machine = machine
+        self.num_qubits = num_qubits
         if self.error_params:
             msg = "No error model is being utilized but error parameters are being provided!"
             raise Exception(msg)

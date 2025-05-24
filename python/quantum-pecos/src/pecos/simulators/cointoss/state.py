@@ -15,14 +15,15 @@ import random
 from typing import TYPE_CHECKING
 
 from pecos.simulators.cointoss import bindings
-from pecos.simulators.parent_sim_classes import Simulator
+from pecos.simulators.default_simulator import DefaultSimulator
 
 if TYPE_CHECKING:
     from typing import Self
 
 
-class CoinToss(Simulator):
+class CoinToss(DefaultSimulator):
     """Ignore all quantum operations and toss a coin to decide measurement outcomes.
+
     Meant for stochastical debugging of the classical branches.
     """
 

@@ -32,8 +32,7 @@ def Identity(state: SparseSim, qubit: int, **_params: SimulatorGateParams) -> No
 
 
 def X(state: SparseSim, qubit: int, **_params: SimulatorGateParams) -> None:
-    """X
-    Returns:
+    """Apply Pauli X gate.
 
     X -> X
     Z -> -Z
@@ -41,8 +40,10 @@ def X(state: SparseSim, qubit: int, **_params: SimulatorGateParams) -> None:
     Y -> -Y
     => If you have a Z component, add a -1.
 
-    state (SparseSim): Instance representing the stabilizer state.
-    qubit (int): Integer that indexes the qubit being acted on.
+    Args:
+        state (SparseSim): Instance representing the stabilizer state.
+        qubit (int): Integer that indexes the qubit being acted on.
+        **_params: Unused additional parameters (kept for interface compatibility).
 
     Returns: None
 
@@ -81,8 +82,7 @@ def Y(state: SparseSim, qubit: int, **_params: SimulatorGateParams) -> None:
 
 
 def Z(state: SparseSim, qubit: int, **_params: SimulatorGateParams) -> None:
-    """Z
-    Returns:
+    """Apply Pauli Z gate.
 
     X -> -X
     Z -> Z
@@ -90,8 +90,10 @@ def Z(state: SparseSim, qubit: int, **_params: SimulatorGateParams) -> None:
     Y -> -Y
     => If you have a X component, add a -1.
 
-    state (SparseSim): Instance representing the stabilizer state.
-    qubit (int): Integer that indexes the qubit being acted on.
+    Args:
+        state (SparseSim): Instance representing the stabilizer state.
+        qubit (int): Integer that indexes the qubit being acted on.
+        **_params: Unused additional parameters (kept for interface compatibility).
 
     Returns: None
 

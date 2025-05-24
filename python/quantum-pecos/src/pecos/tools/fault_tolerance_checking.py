@@ -12,17 +12,16 @@
 from __future__ import annotations
 
 from itertools import permutations, product
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from pecos import QuantumCircuit
 from pecos.engines.circuit_runners import Standard
 from pecos.simulators import SparseSim
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Sequence
+    from collections.abc import Callable, Generator, Sequence
 
-if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from pecos.type_defs import FaultDict, SpacetimeLocation
 
 
 def find_pauli_fault(
@@ -34,7 +33,7 @@ def find_pauli_fault(
     *,
     verbose: bool = True,
     failure_break: bool = True,
-) -> list[dict | tuple[dict, dict]]:
+) -> list[FaultDict | tuple[FaultDict, FaultDict]]:
     """Determines if there is a Pauli fault for the entire quantum circuit.
 
     TODO: Need to be able to only check a portion of the circuit.
@@ -97,7 +96,7 @@ def find_pauli_fault(
 def get_all_spacetime(
     qcirc: QuantumCircuit,
     initial_qubits: Sequence[int] | None = None,
-) -> Generator[dict[str, Any], None, None]:
+) -> Generator[SpacetimeLocation, None, None]:
     """Determine all the spacetime locations of gates/error events."""
     if initial_qubits is not None:
         for q in initial_qubits:
@@ -130,7 +129,9 @@ def get_wt_paulis(
     initial_qubits: Sequence[int] | None = None,
     *,
     make_qc: bool = True,
-) -> Generator[dict[int, Any] | tuple[dict, dict], None, None]:
+) -> Generator[
+    dict[int, list[str]] | tuple[QuantumCircuit, QuantumCircuit], None, None
+]:
     """A generator of all combinations of Pauli faults of a given weight.
 
     Args:

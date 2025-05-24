@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING
 from wasmtime import Config, Engine, FuncType, Instance, Module, Store, Trap, TrapCode
 
 from pecos.errors import MissingCCOPError, WasmRuntimeError
-from pecos.foreign_objects.foreign_object_abc import ForeignObject
 from pecos.foreign_objects.wasm_execution_timer_thread import (
     WASM_EXECUTION_MAX_TICKS,
     WASM_EXECUTION_TICK_LENGTH_S,
@@ -29,13 +28,19 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
-class WasmtimeObj(ForeignObject):
+class WasmtimeObj:
     """Wrapper class to create a wasmtime instance and access its functions.
 
     For more info on using Wasmer, see: https://wasmerio.github.io/wasmer-python/api/wasmer/wasmer.html
     """
 
     def __init__(self, file: str | bytes | Path) -> None:
+        """Initialize a WasmtimeObj.
+
+        Args:
+        ----
+            file: Path to WASM file, file bytes, or Path object to load.
+        """
         if isinstance(file, str | Path):
             with Path.open(Path(file), "rb") as f:
                 wasm_bytes = f.read()

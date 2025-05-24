@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import itertools as it
 from itertools import combinations, product
-from typing import Any
+from typing import TYPE_CHECKING, TypeVar
 
 import numpy as np
 
@@ -25,8 +25,17 @@ from pecos.error_models.parent_class_error_gen import ErrorCircuits
 from pecos.misc.stabilizer_funcs import circ2set, find_stab, op_commutes, remove_stab
 from pecos.simulators import SparseSimPy
 
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
-def powerset(iterable, bound=None) -> it.chain[tuple[Any, ...]]:
+    from pecos.protocols import Decoder, QECCProtocol, SimulatorProtocol
+
+T = TypeVar("T")
+
+
+def powerset(
+    iterable: Iterable[T], bound: int | None = None
+) -> it.chain[tuple[T, ...]]:
     """Returns the power set of an iterable."""
     powerlist = list(iterable)
     if bound is None:
@@ -37,16 +46,16 @@ def powerset(iterable, bound=None) -> it.chain[tuple[Any, ...]]:
 
 
 def t_errors_check(
-    qecc,
-    logical_gate=None,
-    syn_extract=None,
-    decoder=None,
-    t_weight=None,
-    error_set=None,
+    qecc: QECCProtocol,
+    logical_gate: QuantumCircuit | LogicalCircuit | None = None,
+    syn_extract: QuantumCircuit | LogicalCircuit | None = None,
+    decoder: Decoder | None = None,
+    t_weight: int | None = None,
+    error_set: Iterable[tuple[set[int], set[int]]] | None = None,
     *,
-    verbose=True,
-    data_errors=True,
-    ancilla_errors=False,
+    verbose: bool = True,
+    data_errors: bool = True,
+    ancilla_errors: bool = False,
 ) -> tuple[bool, int]:
     """Check exRec conditions for fault-free error correction or logical gate.
 
@@ -185,15 +194,15 @@ def t_errors_check(
 
 
 def fault_check(
-    qecc,
-    logical_gate=None,
-    decoder=None,
-    t_weight=None,
-    error_set=None,
+    qecc: QECCProtocol,
+    logical_gate: QuantumCircuit | LogicalCircuit | None = None,
+    decoder: Decoder | None = None,
+    t_weight: int | None = None,
+    error_set: Iterable[tuple[set[int], set[int]]] | None = None,
     *,
-    verbose=True,
-    data_errors=True,
-    ancilla_errors=False,
+    verbose: bool = True,
+    data_errors: bool = True,
+    ancilla_errors: bool = False,
 ) -> tuple[bool, int]:
     """Check exRec conditions for faulty error correction or logical gate.
 
@@ -316,7 +325,9 @@ def fault_check(
     return True, int(t_weight)
 
 
-def distance_check(qecc, mode=None, dist_mode=None) -> int:
+def distance_check(
+    qecc: QECCProtocol, mode: str | None = None, dist_mode: str | None = None
+) -> int:
     """Determines the distance of the code by looking for the smallest logical errors.
 
     Args:
@@ -362,7 +373,7 @@ def distance_check(qecc, mode=None, dist_mode=None) -> int:
     return dist_mode(state, qudit_set)
 
 
-def dist_mode_powerset(state, qudit_set) -> str | bool:
+def dist_mode_powerset(state: SimulatorProtocol, qudit_set: set[int]) -> str | bool:
     """Check for logical errors using powerset of all possible X and Z errors.
 
     Args:
@@ -381,7 +392,7 @@ def dist_mode_powerset(state, qudit_set) -> str | bool:
     return False
 
 
-def dist_mode_smallest(state, qudit_set) -> str | bool:
+def dist_mode_smallest(state: SimulatorProtocol, qudit_set: set[int]) -> str | bool:
     """Find smallest logical error by checking errors in increasing size.
 
     Args:
@@ -404,7 +415,7 @@ def dist_mode_smallest(state, qudit_set) -> str | bool:
     return False
 
 
-def dist_mode_x(state, qudit_set) -> str | bool:
+def dist_mode_x(state: SimulatorProtocol, qudit_set: set[int]) -> str | bool:
     """Check for X-type logical errors only.
 
     Args:
@@ -424,7 +435,7 @@ def dist_mode_x(state, qudit_set) -> str | bool:
     return False
 
 
-def dist_mode_z(state, qudit_set) -> str | bool:
+def dist_mode_z(state: SimulatorProtocol, qudit_set: set[int]) -> str | bool:
     """Check for Z-type logical errors only.
 
     Args:

@@ -55,6 +55,13 @@ class PyPMIR:
         metadata: dict | None = None,
         name_resolver: Callable[[QOp], str] | None = None,
     ) -> None:
+        """Initialize the PyPMIR instance.
+
+        Args:
+            metadata: Optional metadata dictionary for the IR.
+            name_resolver: Optional callable to resolve quantum operation names.
+                If not provided, uses the default sim_name_resolver.
+        """
         self.ops = []
         self.metadata = metadata
 

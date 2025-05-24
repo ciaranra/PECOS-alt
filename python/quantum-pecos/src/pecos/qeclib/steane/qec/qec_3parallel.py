@@ -40,6 +40,23 @@ class ParallelFlagQECActiveCorrection(Block):
         pf_z: Bit,
         scratch: CReg,
     ) -> None:
+        """Initialize ParallelFlagQECActiveCorrection block for error correction.
+
+        Args:
+            q: Data register containing the 7 qubits of the Steane code.
+            a: Ancilla register for syndrome extraction.
+            flag_x: Classical register for X stabilizer flags.
+            flag_z: Classical register for Z stabilizer flags.
+            flags: Combined flags register.
+            syn_x: Classical register for X syndromes.
+            syn_z: Classical register for Z syndromes.
+            last_raw_syn_x: Previous X syndrome measurements.
+            last_raw_syn_z: Previous Z syndrome measurements.
+            syndromes: Classical register for syndrome storage.
+            pf_x: Pauli frame bit for X errors.
+            pf_z: Pauli frame bit for Z errors.
+            scratch: Scratch classical register for intermediate calculations.
+        """
         super().__init__(
             # flagging XZZ checks
             ThreeParallelFlaggingXZZ(

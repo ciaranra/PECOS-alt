@@ -11,12 +11,19 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from collections.abc import Generator
+from __future__ import annotations
+
 from itertools import combinations, product
-from typing import Any
+from typing import TYPE_CHECKING
 
 from pecos import simulators
 from pecos.circuits import QuantumCircuit
+
+if TYPE_CHECKING:
+    from collections.abc import Generator, Sequence
+
+    from pecos.protocols import SimulatorProtocol
+    from pecos.type_defs import LogicalOpInfo, StabilizerVerificationResult
 
 # TODO: NEED TO ADD SIGN TRACKING TO DESTABILIZERS TO GET THE RIGHT SIGN FOR LOGICAL Xs
 
@@ -25,6 +32,11 @@ class VerifyStabilizers:
     """Used to define a stabilizer QECC."""
 
     def __init__(self) -> None:
+        """Initialize the VerifyStabilizers instance.
+
+        Sets up the circuit simulator and initializes empty data structures
+        for stabilizer checks, logical operators, and qubit tracking.
+        """
         self.circ_sim = simulators.SparseSimPy
 
         self.checks = []
@@ -54,7 +66,7 @@ class VerifyStabilizers:
 
         self.state = None
 
-    def check(self, paulis, qubits) -> None:
+    def check(self, paulis: str | Sequence[str], qubits: Sequence[int]) -> None:
         """Check if the given Pauli operators stabilize the state.
 
         Args:
@@ -85,7 +97,7 @@ class VerifyStabilizers:
         self.checks.append((paulis, qubits, check_string))
         self.data_qubits.update(qubits)
 
-    def logicalz(self, paulis, qubits) -> None:
+    def logicalz(self, paulis: str | Sequence[str], qubits: Sequence[int]) -> None:
         """Used to define logical Z.
 
         Args:
@@ -113,7 +125,7 @@ class VerifyStabilizers:
 
         self.logical_zs.append((paulis, qubits, logical_string))
 
-    def logicalx(self, paulis, qubits) -> None:
+    def logicalx(self, paulis: str | Sequence[str], qubits: Sequence[int]) -> None:
         """Used to define logical X.
 
         Args:
@@ -147,8 +159,8 @@ class VerifyStabilizers:
     def generators(
         self,
         *,
-        print_y=True,
-        verbose=True,
+        print_y: bool = True,
+        verbose: bool = True,
     ) -> tuple[
         list[dict[str, set[int]]],
         list[dict[str, set[int]]],
@@ -445,7 +457,7 @@ class VerifyStabilizers:
 
         return checks != checks2
 
-    def eval(self, *, verbose=False) -> dict[str, Any]:
+    def eval(self, *, verbose: bool = False) -> StabilizerVerificationResult:
         if self.circuit is None:
             self.compile()
 
@@ -520,7 +532,7 @@ class VerifyStabilizers:
     def num_qubits(self) -> int:
         return len(self.data_qubits) + len(self.ancilla_qubits)
 
-    def refactor(self, state) -> None:
+    def refactor(self, state: SimulatorProtocol) -> None:
         found_stab_ids = set()
 
         refactor_things = list(self.checks)
@@ -600,11 +612,11 @@ class VerifyStabilizers:
 
     def get_info(
         self,
-        state,
-        stop_search=1000,
+        state: SimulatorProtocol,
+        stop_search: int = 1000,
         *,
-        verbose=True,
-        print_y=False,
+        verbose: bool = True,
+        print_y: bool = False,
     ) -> tuple[
         list[dict[str, set[int]]],
         list[dict[str, set[int]]],
@@ -746,7 +758,9 @@ class VerifyStabilizers:
 
         return logical_z_strings, logical_x_strings, stab_strs, destab_strs
 
-    def distance(self, *, css=False, verbose=True) -> tuple[set[int], set[int]] | None:
+    def distance(
+        self, *, css: bool = False, verbose: bool = True
+    ) -> tuple[set[int], set[int]] | None:
         """Checks the distance of the code."""
         if self.circuit is None:
             msg = "Must compile circuits first!"
@@ -776,14 +790,14 @@ class VerifyStabilizers:
 
     def _dist_mode_smallest(
         self,
-        state,
-        qudit_set,
+        state: SimulatorProtocol,
+        qudit_set: set[int],
         *,
-        css=False,
-        verbose=True,
-        start_len=None,
-        end_len=None,
-        list_ops=False,
+        css: bool = False,
+        verbose: bool = True,
+        start_len: int | None = None,
+        end_len: int | None = None,
+        list_ops: bool = False,
     ) -> Generator[tuple[set, set], None, None]:
         """Determine if a logical error can be found by starting with the smallest weight errors.
 
@@ -824,11 +838,11 @@ class VerifyStabilizers:
 
     def gen_errors(
         self,
-        qubits,
-        min_errors=1,
+        qubits: set[int] | Sequence[int],
+        min_errors: int = 1,
         *,
-        max_errors=False,
-        css=False,
+        max_errors: bool | int = False,
+        css: bool = False,
     ) -> Generator[tuple[set[int], set[int]], None, None]:
         """Generate error patterns for testing stabilizer codes.
 
@@ -882,7 +896,9 @@ class VerifyStabilizers:
                                 z_set.add(q)
                         yield x_set, z_set
 
-    def _is_logical_error(self, state, xs, zs) -> bool:
+    def _is_logical_error(
+        self, state: SimulatorProtocol, xs: set[int], zs: set[int]
+    ) -> bool:
         # A trivial error anticommutes with the checks. (Might or might not anticommute with the logical stabilizers)
         # A logical error commutes with the checks and is not a product of checks.
 
@@ -925,13 +941,13 @@ class VerifyStabilizers:
 
     def shortest_logicals(
         self,
-        start_weight=None,
-        delta=0,
+        start_weight: int | None = None,
+        delta: int = 0,
         *,
-        verbose=True,
-        css=False,
+        verbose: bool = True,
+        css: bool = False,
     ) -> tuple[
-        list[dict[str, Any]],
+        list[LogicalOpInfo],
         dict[str, dict[str, set[int]]],
         dict[str, dict[str, set[int]]],
     ]:
@@ -1024,7 +1040,7 @@ class VerifyStabilizers:
         return oplist, self.logical_xs_reference, self.logical_zs_reference
 
     @staticmethod
-    def op_anticommute(op1, op2) -> bool:
+    def op_anticommute(op1: dict[str, set[int]], op2: dict[str, set[int]]) -> bool:
         return bool(
             (
                 len(op1.get("X", set()) & op2.get("Z", set()))

@@ -20,10 +20,10 @@ from typing import TYPE_CHECKING, Any
 import networkx as nx
 
 if TYPE_CHECKING:
-    from pecos.qeccs.instruction_parent_class import LogicalInstruction
+    from pecos.protocols import LogicalInstructionProtocol
 
 
-def precompute(instr: LogicalInstruction) -> dict[str, Any]:
+def precompute(instr: LogicalInstructionProtocol) -> dict[str, Any]:
     """Precompute decoder information for the given instruction.
 
     Args:
@@ -51,7 +51,7 @@ def precompute(instr: LogicalInstruction) -> dict[str, Any]:
     return precomputed_data
 
 
-def code_surface4444(instr: LogicalInstruction) -> dict[str, Any]:
+def code_surface4444(instr: LogicalInstructionProtocol) -> dict[str, Any]:
     """Pre-computing for surface4444 class.
 
     This decoder is for 2D slices. It is assumed that it can decode logical instruction by logical instruction.
@@ -71,7 +71,7 @@ def code_surface4444(instr: LogicalInstruction) -> dict[str, Any]:
     return decoder_data
 
 
-def code_surface4444medial(instr: LogicalInstruction) -> dict[str, Any]:
+def code_surface4444medial(instr: LogicalInstructionProtocol) -> dict[str, Any]:
     """Pre-computing for surface4444 class.
 
     This decoder is for 2D slices. It is assumed that it can decode logical instruction by logical instruction.
@@ -113,7 +113,7 @@ def compute_all_shortest_paths(graph: nx.Graph) -> dict[Any, dict[Any, list[Any]
     return all_paths
 
 
-def surface4444_identity(instr: LogicalInstruction) -> dict[str, Any]:
+def surface4444_identity(instr: LogicalInstructionProtocol) -> dict[str, Any]:
     """Compute decoder information for Surface 4444 identity gate.
 
     For X and Z decoding separately:
@@ -337,7 +337,7 @@ def surface4444_identity(instr: LogicalInstruction) -> dict[str, Any]:
     return info
 
 
-def surface4444medial_identity(instr: LogicalInstruction) -> dict[str, Any]:
+def surface4444medial_identity(instr: LogicalInstructionProtocol) -> dict[str, Any]:
     """Compute decoder information for Surface 4444 medial identity gate.
 
     For X and Z decoding separately:

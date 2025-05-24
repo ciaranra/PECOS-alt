@@ -9,8 +9,15 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
 
-def anticommute(qc1, qc2) -> int:
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pecos.circuits import QuantumCircuit
+
+
+def anticommute(qc1: QuantumCircuit, qc2: QuantumCircuit) -> int:
     x1 = set()
     y1 = set()
     z1 = set()

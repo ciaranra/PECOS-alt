@@ -12,7 +12,7 @@
 from __future__ import annotations
 
 import random
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import cupy as cp
 from cuquantum import ComputeType, cudaDataType
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 class CuStateVec(StateVector):
     """Simulation using cuQuantum's cuStateVec."""
 
-    def __init__(self, num_qubits, seed=None) -> None:
+    def __init__(self, num_qubits: int, seed: int | None = None) -> None:
         """Initializes the state vector.
 
         Args:
@@ -88,10 +88,10 @@ class CuStateVec(StateVector):
         cusv.set_stream(self.libhandle, self.stream.ptr)
 
         # Device memory handler
-        def malloc(size, stream) -> int:
+        def malloc(size: int, stream: Any) -> int:  # noqa: ANN401
             return cp.cuda.runtime.mallocAsync(size, stream)
 
-        def free(ptr, _size, stream) -> None:
+        def free(ptr: int, _size: int, stream: Any) -> None:  # noqa: ANN401
             cp.cuda.runtime.freeAsync(ptr, stream)
 
         mem_handler = (malloc, free, "GPU memory handler")

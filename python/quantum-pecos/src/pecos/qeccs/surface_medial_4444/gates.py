@@ -11,18 +11,27 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from pecos.qeccs.gate_parent_class import LogicalGate
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from pecos.qeccs.default_logical_gate import DefaultLogicalGate
 from pecos.qeccs.helper_functions import expected_params
-from pecos.type_defs import QECCGateParams
+
+if TYPE_CHECKING:
+    from pecos.protocols import QECCProtocol
+    from pecos.type_defs import QECCGateParams
 
 
-class GateIdentity(LogicalGate):
+class GateIdentity(DefaultLogicalGate):
     """Logical Identity.
 
     This is equivalent to ``distance`` number of syndrome of extraction rounds.
     """
 
-    def __init__(self, qecc, symbol, **gate_params: QECCGateParams) -> None:
+    def __init__(
+        self, qecc: QECCProtocol, symbol: str, **gate_params: QECCGateParams
+    ) -> None:
         """Initialize the GateSynExtract with the given parameters.
 
         Args:
@@ -44,10 +53,12 @@ class GateIdentity(LogicalGate):
         self.instr_symbols = ["instr_syn_extract"] * self.num_syn_extract
 
 
-class GateInitZero(LogicalGate):
+class GateInitZero(DefaultLogicalGate):
     """Initialize logical state zero."""
 
-    def __init__(self, qecc, symbol, **gate_params: QECCGateParams) -> None:
+    def __init__(
+        self, qecc: QECCProtocol, symbol: str, **gate_params: QECCGateParams
+    ) -> None:
         """Initialize the GateInitZero with the given parameters.
 
         Args:
@@ -71,10 +82,12 @@ class GateInitZero(LogicalGate):
         self.instr_symbols.extend(syn_extract)
 
 
-class GateInitPlus(LogicalGate):
+class GateInitPlus(DefaultLogicalGate):
     """Initialize logical state plus."""
 
-    def __init__(self, qecc, symbol, **gate_params: QECCGateParams) -> None:
+    def __init__(
+        self, qecc: QECCProtocol, symbol: str, **gate_params: QECCGateParams
+    ) -> None:
         """Initialize the GateInitPlus with the given parameters.
 
         Args:

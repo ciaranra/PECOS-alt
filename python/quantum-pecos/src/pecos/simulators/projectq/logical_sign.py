@@ -9,23 +9,30 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from projectq.ops import QubitOperator
 
-from pecos.circuits import QuantumCircuit
+if TYPE_CHECKING:
+    from pecos.circuits import QuantumCircuit
+    from pecos.simulators.projectq.state import ProjectQSim
 
 
 def find_logical_signs(
-    state,
+    state: ProjectQSim,
     logical_circuit: QuantumCircuit,
     *,
-    allow_float=False,
-) -> int:
+    allow_float: bool = False,
+) -> int | float:
     """Find the sign of the logical operator.
 
     Args:
     ----
-        state:
-        logical_circuit:
+        state: The ProjectQ state instance
+        logical_circuit: The logical circuit to find the sign of
+        allow_float: Whether to allow floating point results
     """
     if len(logical_circuit) != 1:
         msg = "Logical operators are expected to only have one tick."

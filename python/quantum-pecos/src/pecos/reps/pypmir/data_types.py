@@ -25,6 +25,13 @@ class DefineVar(Data):
         variable: str,
         metadata: dict | None = None,
     ) -> None:
+        """Initialize a variable definition.
+
+        Args:
+            data_type: The data type of the variable (string or type object).
+            variable: The variable name.
+            metadata: Optional metadata dictionary.
+        """
         super().__init__(metadata=metadata)
         self.data_type = data_type
         self.variable = variable
@@ -39,6 +46,15 @@ class CVarDefine(DefineVar):
         size: int,
         metadata: dict | None = None,
     ) -> None:
+        """Initialize a classical variable definition.
+
+        Args:
+            data_type: The data type of the classical variable.
+            variable: The variable name.
+            cvar_id: The unique identifier for this classical variable.
+            size: The size of the classical variable.
+            metadata: Optional metadata dictionary.
+        """
         super().__init__(data_type=data_type, variable=variable, metadata=metadata)
         self.size = size
         self.cvar_id = cvar_id
@@ -53,6 +69,15 @@ class QVarDefine(DefineVar):
         qubit_ids: list[int],
         metadata: dict | None = None,
     ) -> None:
+        """Initialize a quantum variable definition.
+
+        Args:
+            data_type: The data type of the quantum variable.
+            variable: The variable name.
+            size: The size of the quantum variable (number of qubits).
+            qubit_ids: List of qubit identifiers associated with this variable.
+            metadata: Optional metadata dictionary.
+        """
         super().__init__(data_type=data_type, variable=variable, metadata=metadata)
         self.size = size
         self.qubit_ids = qubit_ids
@@ -65,6 +90,13 @@ class ExportVar(Data):
         to: list[str] | None = None,
         metadata: dict | None = None,
     ) -> None:
+        """Initialize a variable export instruction.
+
+        Args:
+            variables: List of variable names to export.
+            to: Optional list of destination names for the exported variables.
+            metadata: Optional metadata dictionary.
+        """
         super().__init__(metadata=metadata)
         self.variables = variables
         self.to = to

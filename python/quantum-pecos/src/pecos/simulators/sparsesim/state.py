@@ -104,9 +104,10 @@ class SparseSim(Stabilizer):
         self,
         logical_op: QuantumCircuit,
     ) -> int:
-        """Args:
-        ----
-            logical_op:
+        """Find the sign of a logical operator.
+
+        Args:
+            logical_op (QuantumCircuit): The logical operator circuit.
         """
         return find_logical_signs(
             self,
@@ -118,9 +119,9 @@ class SparseSim(Stabilizer):
         self,
         xs: set[int],
         zs: set[int],
-        choose=None,
-        prefer=None,
-        protected=None,
+        choose: int | None = None,
+        prefer: set[int] | None = None,
+        protected: set[int] | None = None,
     ) -> tuple[bool, int | None]:
         return refactor_generators(self, xs, zs, choose, prefer, protected)
 
@@ -164,7 +165,7 @@ class SparseSim(Stabilizer):
                 new_gen.col_z[j].update(gen.col_z[j])
 
     @staticmethod
-    def _pauli_sign(gen, i_gen: int) -> str:
+    def _pauli_sign(gen: Gens, i_gen: int) -> str:
         if i_gen in gen.signs_minus:
             sign = "-i" if i_gen in gen.signs_i else " -"
         else:
@@ -174,7 +175,7 @@ class SparseSim(Stabilizer):
 
     def col_string(
         self,
-        gen,
+        gen: Gens,
         num_qubits: int | None = None,
         *,
         print_signs: bool = True,
@@ -183,11 +184,10 @@ class SparseSim(Stabilizer):
         """Prints out the stabilizers for the column-wise sparse representation.
 
         Args:
-        ----
             gen (Gens): A generator instance.
-            num_qubits (Optional[int]): number of qubits.
+            num_qubits (int | None): number of qubits.
             print_signs (bool): Whether to print the signs of the generators.
-            print_y (bool):
+            print_y (bool): Whether to print Y operators instead of W (XZ) operators.
         """
         col_x = gen.col_x
         col_z = gen.col_z
@@ -286,14 +286,16 @@ class SparseSim(Stabilizer):
 
     def print_tableau(
         self,
-        gen,
+        gen: Gens,
         *,
         verbose: bool = True,
         print_signs: bool = True,
         print_y: bool = True,
     ) -> list[str]:
-        """Prints out the stabilizers.
-        :return:
+        """Print out the stabilizers.
+
+        Returns:
+            list[str]: String representation of the stabilizers.
         """
         col_str = self.col_string(gen, print_signs=print_signs, print_y=print_y)
         row_str = self.row_string(gen, print_signs=print_signs, print_y=print_y)
@@ -318,7 +320,7 @@ class SparseSim(Stabilizer):
 
     def row_string(
         self,
-        gen,
+        gen: Gens,
         num_qubits: int | None = None,
         *,
         print_signs: bool = True,
@@ -327,10 +329,10 @@ class SparseSim(Stabilizer):
         """Prints out the stabilizers for the row-wise sparse representation.
 
         Args:
-            gen: A generator instance.
-            num_qubits: number of qubits.
-            print_signs: Whether to print the signs of the generators.
-            print_y:
+            gen (Gens): A generator instance.
+            num_qubits (int | None): number of qubits.
+            print_signs (bool): Whether to print the signs of the generators.
+            print_y (bool): Whether to print Y operators instead of W (XZ) operators.
 
         """
         row_x = gen.row_x
@@ -503,7 +505,7 @@ class Gens:
         """Prints out the stabilizers.
 
         Args:
-            verbose:
+            verbose (bool): Whether to print the tableau to stdout.
         """
         col_str = self.col_string()
         row_str = self.row_string()
@@ -525,7 +527,7 @@ class Gens:
         """Prints out the stabilizers for the row-wise sparse representation.
 
         Args:
-            num_qubits:
+            num_qubits (int | None): Number of qubits. If None, uses self.num_qubits.
         """
         result = []
 

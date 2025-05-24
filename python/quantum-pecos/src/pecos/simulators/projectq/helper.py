@@ -14,21 +14,30 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pecos.type_defs import SimulatorGateParams
+    from projectq.ops._basics import BasicGate
+
+    from pecos.simulators.projectq.state import ProjectQSim
+    from pecos.type_defs import Location, SimulatorGateParams
 
 
 class MakeFunc:
     """Converts ProjectQ gate to a function."""
 
-    def __init__(self, gate, *, angle=False) -> None:
-        """Args:
-        ----
-            gate:
+    def __init__(
+        self, gate: BasicGate | type[BasicGate], *, angle: bool = False
+    ) -> None:
+        """Initialize MakeFunc with a gate.
+
+        Args:
+            gate: The ProjectQ gate to wrap.
+            angle (bool): Whether the gate takes an angle parameter.
         """
         self.gate = gate
         self.angle = angle
 
-    def func(self, state, qubits, **params: SimulatorGateParams) -> None:
+    def func(
+        self, state: ProjectQSim, qubits: Location, **params: SimulatorGateParams
+    ) -> None:
         if isinstance(qubits, int):
             qs = state.qids[qubits]
         else:
