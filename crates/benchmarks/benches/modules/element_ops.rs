@@ -11,7 +11,7 @@
 // the License.
 
 use criterion::{black_box, measurement::Measurement, BenchmarkGroup, Criterion};
-use pecos_core::IndexableElement;
+use pecos::prelude::*;
 
 pub fn benchmarks<M: Measurement>(c: &mut Criterion<M>) {
     let mut group = c.benchmark_group("Element Operations");
@@ -30,7 +30,7 @@ fn bench_conversion<E: IndexableElement + From<u16>, M: Measurement>(
         b.iter(|| {
             let mut sum = 0_usize;
             for i in 0..1000_u16 {
-                sum += E::from(i).to_usize();
+                sum += E::from(i).to_index();
             }
             black_box(sum)
         });
@@ -50,7 +50,7 @@ fn bench_memory_access<E: IndexableElement + From<u16>, M: Measurement>(
         b.iter(|| {
             let mut sum = E::from(0_u16);
             for &item in &vec {
-                sum = E::from((sum.to_usize() + item.to_usize()) as u16);
+                sum = E::from((sum.to_index() + item.to_index()) as u16);
             }
             black_box(sum)
         });

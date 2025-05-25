@@ -11,12 +11,19 @@
 // the License.
 
 mod sparse_sim;
-use sparse_sim::SparseSim;
+
+mod sparse_stab_bindings;
+mod state_vec_bindings;
+
+use sparse_stab_bindings::SparseSim;
+use state_vec_bindings::RsStateVec;
 
 use pyo3::prelude::*;
 
+/// A Python module implemented in Rust.
 #[pymodule]
 fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SparseSim>()?;
+    m.add_class::<RsStateVec>()?;
     Ok(())
 }

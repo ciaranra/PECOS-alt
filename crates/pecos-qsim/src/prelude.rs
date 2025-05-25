@@ -10,13 +10,10 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-// re-exporting pecos-core
-pub use pecos_core::{IndexableElement, Set, VecSet};
-// re-exporting pecos-engines
-pub use pecos_core::types::{CommandBatch, GateType, QuantumCommand, ShotResult};
-// re-exporting pecos-qsim
-pub use pecos_qsim::ArbitraryRotationGateable;
-pub use pecos_qsim::CliffordGateable;
-pub use pecos_qsim::QuantumSimulator;
-pub use pecos_qsim::SparseStab;
-pub use pecos_qsim::StateVec;
+pub use crate::arbitrary_rotation_gateable::ArbitraryRotationGateable;
+pub use crate::clifford_gateable::CliffordGateable;
+pub use crate::pauli_prop::{PauliProp, StdPauliProp};
+pub use crate::quantum_simulator::QuantumSimulator;
+pub use crate::sparse_stab::SparseStab;
+pub use crate::state_vec::StateVec;
+pub use pecos_core::{IndexableElement, VecSet};
