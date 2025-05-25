@@ -27,3 +27,6 @@ python-tests = []  # Empty feature just for enabling tests
 
 [lints]
 workspace = true
+
+[build-dependencies]
+pyo3-build-config = { workspace = true }

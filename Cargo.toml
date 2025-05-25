@@ -26,6 +26,7 @@ rand_chacha = "0.9"
 rand_xoshiro = "0.7"
 uuid = { version = "1", features = ["v4"] }
 pyo3 = "0.23"
+pyo3-build-config = { version = "0.24", features = ["resolve-config"] }
 log = "0.4"
 env_logger = "0.11"
 memmap2 = "0.9"
