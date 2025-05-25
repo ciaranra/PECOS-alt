@@ -1,5 +1,6 @@
+# PECOS/python/pecos-rslib/rust/Cargo.toml
 [package]
-name = "pecos-python"
+name = "pecos-rslib"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -12,13 +13,17 @@ description = "Allows running Rust code in Python."
 publish = false
 
 [lib]
-crate-type = ["cdylib"]
+name = "pecos_rslib"
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-pyo3 = { workspace=true, features = ["extension-module"] }
+pyo3 = { workspace=true, features = ["extension-module", "auto-initialize"] }
 pecos = { workspace = true }
-num-complex = { workspace = true }
-rand = { workspace = true }
+parking_lot = { workspace = true}
+serde_json = { workspace = true }
+
+[features]
+python-tests = []  # Empty feature just for enabling tests
 
 [lints]
 workspace = true
