@@ -8,7 +8,9 @@ authors = [
 maintainers =[
     {name = "Ciaran Ryan-Anderson", email = "ciaranra@gmail.com"},
 ]
-dependencies = []
+dependencies = [
+    "numpy",
+]
 readme = "README.md"
 requires-python = ">= 3.8"
 
