@@ -13,8 +13,6 @@
 
 from __future__ import annotations
 
-from typing import TypedDict
-
 # JSON-like types for gate parameters and metadata
 JSONValue = str | int | float | bool | None | dict[str, "JSONValue"] | list["JSONValue"]
 JSONDict = dict[str, JSONValue]
@@ -26,4 +24,3 @@ SimulatorGateParams = JSONDict
 SimulatorInitParams = (
     JSONDict  # Parameters for simulator initialization (e.g., MPS config)
 )
-

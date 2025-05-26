@@ -13,7 +13,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 
 from pecos_rslib._pecos_rslib import RsStateVec as RustStateVec
 
@@ -34,7 +34,7 @@ class StateVecRs:
         self.bindings = dict(gate_dict)
 
     @property
-    def vector(self) -> List[complex]:
+    def vector(self) -> list[complex]:
         raw_vector = self._sim.vector
         # Convert to list of complex numbers
         if isinstance(raw_vector[0], (list, tuple)):
@@ -126,7 +126,7 @@ class StateVecRs:
 
 # Define the gate dictionary
 gate_dict = {
-    "I": lambda sim, q, **params: None,  # noqa: ARG005
+    "I": lambda sim, q, **params: None,
     "X": lambda sim, q, **params: sim._sim.run_1q_gate("X", q, params),
     "Y": lambda sim, q, **params: sim._sim.run_1q_gate("Y", q, params),
     "Z": lambda sim, q, **params: sim._sim.run_1q_gate("Z", q, params),
@@ -159,43 +159,69 @@ gate_dict = {
     "F4dg": lambda sim, q, **params: sim._sim.run_1q_gate("F4dg", q, params),
     "II": lambda sim, qs, **params: None,
     "CX": lambda sim, qs, **params: sim._sim.run_2q_gate(
-        "CX", tuple(qs) if isinstance(qs, list) else qs, params
+        "CX",
+        tuple(qs) if isinstance(qs, list) else qs,
+        params,
     ),
     "CNOT": lambda sim, qs, **params: sim._sim.run_2q_gate(
-        "CX", tuple(qs) if isinstance(qs, list) else qs, params
+        "CX",
+        tuple(qs) if isinstance(qs, list) else qs,
+        params,
     ),
     "CY": lambda sim, qs, **params: sim._sim.run_2q_gate(
-        "CY", tuple(qs) if isinstance(qs, list) else qs, params
+        "CY",
+        tuple(qs) if isinstance(qs, list) else qs,
+        params,
     ),
     "CZ": lambda sim, qs, **params: sim._sim.run_2q_gate(
-        "CZ", tuple(qs) if isinstance(qs, list) else qs, params
+        "CZ",
+        tuple(qs) if isinstance(qs, list) else qs,
+        params,
     ),
     "SXX": lambda sim, qs, **params: sim._sim.run_2q_gate(
-        "SXX", tuple(qs) if isinstance(qs, list) else qs, params
+        "SXX",
+        tuple(qs) if isinstance(qs, list) else qs,
+        params,
     ),
     "SXXdg": lambda sim, qs, **params: sim._sim.run_2q_gate(
-        "SXXdg", tuple(qs) if isinstance(qs, list) else qs, params
+        "SXXdg",
+        tuple(qs) if isinstance(qs, list) else qs,
+        params,
     ),
     "SYY": lambda sim, qs, **params: sim._sim.run_2q_gate(
-        "SYY", tuple(qs) if isinstance(qs, list) else qs, params
+        "SYY",
+        tuple(qs) if isinstance(qs, list) else qs,
+        params,
     ),
     "SYYdg": lambda sim, qs, **params: sim._sim.run_2q_gate(
-        "SYYdg", tuple(qs) if isinstance(qs, list) else qs, params
+        "SYYdg",
+        tuple(qs) if isinstance(qs, list) else qs,
+        params,
     ),
     "SZZ": lambda sim, qs, **params: sim._sim.run_2q_gate(
-        "SZZ", tuple(qs) if isinstance(qs, list) else qs, params
+        "SZZ",
+        tuple(qs) if isinstance(qs, list) else qs,
+        params,
     ),
     "SZZdg": lambda sim, qs, **params: sim._sim.run_2q_gate(
-        "SZZdg", tuple(qs) if isinstance(qs, list) else qs, params
+        "SZZdg",
+        tuple(qs) if isinstance(qs, list) else qs,
+        params,
     ),
     "SWAP": lambda sim, qs, **params: sim._sim.run_2q_gate(
-        "SWAP", tuple(qs) if isinstance(qs, list) else qs, params
+        "SWAP",
+        tuple(qs) if isinstance(qs, list) else qs,
+        params,
     ),
     "G": lambda sim, qs, **params: sim._sim.run_2q_gate(
-        "G2", tuple(qs) if isinstance(qs, list) else qs, params
+        "G2",
+        tuple(qs) if isinstance(qs, list) else qs,
+        params,
     ),
     "G2": lambda sim, qs, **params: sim._sim.run_2q_gate(
-        "G2", tuple(qs) if isinstance(qs, list) else qs, params
+        "G2",
+        tuple(qs) if isinstance(qs, list) else qs,
+        params,
     ),
     "MZ": lambda sim, q, **params: sim._sim.run_1q_gate("MZ", q, params),
     "MX": lambda sim, q, **params: sim._sim.run_1q_gate("MX", q, params),
@@ -237,26 +263,38 @@ gate_dict = {
     "F3d": lambda sim, q, **params: sim._sim.run_1q_gate("F3dg", q, params),
     "F4d": lambda sim, q, **params: sim._sim.run_1q_gate("F4dg", q, params),
     "SqrtXX": lambda sim, qs, **params: sim._sim.run_2q_gate(
-        "SXX", tuple(qs) if isinstance(qs, list) else qs, params
+        "SXX",
+        tuple(qs) if isinstance(qs, list) else qs,
+        params,
     ),
     "SqrtYY": lambda sim, qs, **params: sim._sim.run_2q_gate(
-        "SYY", tuple(qs) if isinstance(qs, list) else qs, params
+        "SYY",
+        tuple(qs) if isinstance(qs, list) else qs,
+        params,
     ),
     "SqrtZZ": lambda sim, qs, **params: sim._sim.run_2q_gate(
-        "SZZ", tuple(qs) if isinstance(qs, list) else qs, params
+        "SZZ",
+        tuple(qs) if isinstance(qs, list) else qs,
+        params,
     ),
     "Measure": lambda sim, q, **params: sim._sim.run_1q_gate("MZ", q, params),
     "measure Z": lambda sim, q, **params: sim._sim.run_1q_gate("MZ", q, params),
     # "MZForced": lambda sim, q, **params: sim._sim.run_1q_gate("MZForced", q, params),
     # "PZForced": lambda sim, q, **params: sim._sim.run_1q_gate("PZForced", q, params),
     "SqrtXXd": lambda sim, qs, **params: sim._sim.run_2q_gate(
-        "SXXdg", tuple(qs) if isinstance(qs, list) else qs, params
+        "SXXdg",
+        tuple(qs) if isinstance(qs, list) else qs,
+        params,
     ),
     "SqrtYYd": lambda sim, qs, **params: sim._sim.run_2q_gate(
-        "SYYdg", tuple(qs) if isinstance(qs, list) else qs, params
+        "SYYdg",
+        tuple(qs) if isinstance(qs, list) else qs,
+        params,
     ),
     "SqrtZZd": lambda sim, qs, **params: sim._sim.run_2q_gate(
-        "SZZdg", tuple(qs) if isinstance(qs, list) else qs, params
+        "SZZdg",
+        tuple(qs) if isinstance(qs, list) else qs,
+        params,
     ),
     "SqrtX": lambda sim, q, **params: sim._sim.run_1q_gate("SX", q, params),
     "SqrtXd": lambda sim, q, **params: sim._sim.run_1q_gate("SXdg", q, params),

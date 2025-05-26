@@ -12,7 +12,6 @@
 from __future__ import annotations
 
 # ruff: noqa: SLF001
-
 from typing import TYPE_CHECKING, NoReturn
 
 from pecos_rslib._pecos_rslib import SparseSim as RustSparseSim
@@ -99,7 +98,7 @@ class SparseSimRs:
         self,
         *,
         verbose: bool = True,
-        print_y: bool = True,  # noqa: ARG002
+        print_y: bool = True,
         print_destabs: bool = False,
     ) -> str | tuple[str, str]:
         stabs = self._sim.stab_tableau()
@@ -117,21 +116,26 @@ class SparseSimRs:
                 print(stabs)
             return stabs
 
-    def logical_sign(self, logical_op) -> NoReturn:  # noqa: ARG002
+    def logical_sign(self, logical_op) -> NoReturn:
         # This method needs to be implemented based on the Python version
         # It might require additional Rust functions to be exposed
         msg = "logical_sign method not implemented yet"
         raise NotImplementedError(msg)
 
     def refactor(
-        self, xs, zs, choose=None, prefer=None, protected=None
-    ) -> NoReturn:  # noqa: ARG002
+        self,
+        xs,
+        zs,
+        choose=None,
+        prefer=None,
+        protected=None,
+    ) -> NoReturn:
         # This method needs to be implemented based on the Python version
         # It might require additional Rust functions to be exposed
         msg = "refactor method not implemented yet"
         raise NotImplementedError(msg)
 
-    def find_stab(self, xs, zs) -> NoReturn:  # noqa: ARG002
+    def find_stab(self, xs, zs) -> NoReturn:
         # This method needs to be implemented based on the Python version
         # It might require additional Rust functions to be exposed
         msg = "find_stab method not implemented yet"
@@ -199,7 +203,7 @@ def adjust_tableau_string(line: str, *, is_stab: bool) -> str:
 
 # Define the gate dictionary
 gate_dict = {
-    "I": lambda sim, q, **params: None,  # noqa: ARG005
+    "I": lambda sim, q, **params: None,
     "X": lambda sim, q, **params: sim._sim.run_1q_gate("X", q, params),
     "Y": lambda sim, q, **params: sim._sim.run_1q_gate("Y", q, params),
     "Z": lambda sim, q, **params: sim._sim.run_1q_gate("Z", q, params),
@@ -223,7 +227,7 @@ gate_dict = {
     "F3dg": lambda sim, q, **params: sim._sim.run_1q_gate("F3dg", q, params),
     "F4": lambda sim, q, **params: sim._sim.run_1q_gate("F4", q, params),
     "F4dg": lambda sim, q, **params: sim._sim.run_1q_gate("F4dg", q, params),
-    "II": lambda sim, qs, **params: None,  # noqa: ARG005
+    "II": lambda sim, qs, **params: None,
     "CX": lambda sim, qs, **params: sim._sim.run_2q_gate("CX", qs, params),
     "CNOT": lambda sim, qs, **params: sim._sim.run_2q_gate("CX", qs, params),
     "CY": lambda sim, qs, **params: sim._sim.run_2q_gate("CY", qs, params),
