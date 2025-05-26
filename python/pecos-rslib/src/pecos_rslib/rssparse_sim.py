@@ -9,22 +9,29 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-# ruff: noqa: SLF001
-
 from __future__ import annotations
 
-from typing import Any
+# ruff: noqa: SLF001
+from typing import TYPE_CHECKING, NoReturn
 
 from pecos_rslib._pecos_rslib import SparseSim as RustSparseSim
+
+if TYPE_CHECKING:
+    from pecos_rslib.type_defs import SimulatorGateParams
 
 
 class SparseSimRs:
     def __init__(self, num_qubits: int):
+        """Initialize the Rust-based sparse simulator.
+
+        Args:
+            num_qubits: Number of qubits to simulate.
+        """
         self._sim = RustSparseSim(num_qubits)
         self.num_qubits = num_qubits
         self.bindings = dict(gate_dict)
 
-    def reset(self):
+    def reset(self) -> SparseSimRs:
         self._sim.reset()
         return self
 
@@ -32,7 +39,7 @@ class SparseSimRs:
         self,
         symbol: str,
         locations: set[int] | set[tuple[int, ...]],
-        **params: Any,
+        **params: SimulatorGateParams,
     ) -> dict[int, int]:
         output = {}
 
@@ -80,11 +87,11 @@ class SparseSimRs:
     #     return self._sim.print_stabs(verbose, print_y, print_destabs)
 
     @property
-    def stabs(self):
+    def stabs(self) -> TableauWrapper:
         return TableauWrapper(self._sim, is_stab=True)
 
     @property
-    def destabs(self):
+    def destabs(self) -> TableauWrapper:
         return TableauWrapper(self._sim, is_stab=False)
 
     def print_stabs(
@@ -93,7 +100,7 @@ class SparseSimRs:
         verbose: bool = True,
         print_y: bool = True,
         print_destabs: bool = False,
-    ):
+    ) -> str | tuple[str, str]:
         stabs = self._sim.stab_tableau()
         if print_destabs:
             destabs = self._sim.destab_tableau()
@@ -109,25 +116,32 @@ class SparseSimRs:
                 print(stabs)
             return stabs
 
-    def logical_sign(self, logical_op):
+    def logical_sign(self, logical_op) -> NoReturn:
         # This method needs to be implemented based on the Python version
         # It might require additional Rust functions to be exposed
         msg = "logical_sign method not implemented yet"
         raise NotImplementedError(msg)
 
-    def refactor(self, xs, zs, choose=None, prefer=None, protected=None):
+    def refactor(
+        self,
+        xs,
+        zs,
+        choose=None,
+        prefer=None,
+        protected=None,
+    ) -> NoReturn:
         # This method needs to be implemented based on the Python version
         # It might require additional Rust functions to be exposed
         msg = "refactor method not implemented yet"
         raise NotImplementedError(msg)
 
-    def find_stab(self, xs, zs):
+    def find_stab(self, xs, zs) -> NoReturn:
         # This method needs to be implemented based on the Python version
         # It might require additional Rust functions to be exposed
         msg = "find_stab method not implemented yet"
         raise NotImplementedError(msg)
 
-    def copy(self):
+    def copy(self) -> NoReturn:
         # This method needs to be implemented
         # It might require an additional Rust function to be exposed
         msg = "copy method not implemented yet"
