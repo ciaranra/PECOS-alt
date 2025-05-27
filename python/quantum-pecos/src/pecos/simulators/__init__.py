@@ -53,12 +53,6 @@ try:
 except ImportError:
     Qulacs = None
 
-# Attempt to import optional QuEST package
-try:
-    from pecos.simulators.quest.state import QuEST  # wrapper for QuEST sim
-except ImportError:
-    QuEST = None
-
 # Attempt to import optional cuquantum and cupy packages
 try:
     import cupy
