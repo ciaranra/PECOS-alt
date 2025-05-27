@@ -57,11 +57,11 @@ class QuantumSimulator:
                 self.state = SparseSim
             elif self.backend == "state-vector":
                 if Qulacs is not None:
-                    self.backend = Qulacs
+                    self.state = Qulacs
                 else:
-                    self.backend = StateVecRs
+                    self.state = StateVecRs
             elif self.backend == "StateVecRs":
-                self.backend = StateVecRs
+                self.state = StateVecRs
             elif self.backend == "ProjectQSim":
                 self.state = ProjectQSim
             elif self.backend in {"MPS", "mps"}:
