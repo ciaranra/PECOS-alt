@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""WebAssembly integration for the classical virtual machine.
+
+This module provides WebAssembly support for the PECOS classical virtual machine,
+enabling execution of compiled classical functions in quantum-classical algorithms.
+"""
+
 from __future__ import annotations
 
 import pickle
@@ -57,6 +63,21 @@ def read_pickle(picklefile: str | bytes) -> CCOPObject:
 
 
 def get_ccop(circuit: QuantumCircuit) -> CCOPObject | None:
+    """Get classical coprocessor object from circuit metadata.
+
+    Extracts and initializes the classical coprocessor (CCOP) object from
+    the circuit metadata, supporting various CCOP types including Python,
+    WebAssembly, and object-based implementations.
+
+    Args:
+        circuit: Quantum circuit containing CCOP metadata.
+
+    Returns:
+        Initialized CCOP object, or None if no CCOP is specified.
+
+    Raises:
+        Exception: If CCOP type is unknown or unsupported.
+    """
     if circuit.metadata.get("ccop"):
         ccop = circuit.metadata["ccop"]
         ccop_type = circuit.metadata["ccop_type"]
@@ -99,6 +120,21 @@ def eval_cfunc(
     params: dict[str, Any],
     output: dict[str, BinArray],
 ) -> None:
+    """Evaluate a classical function using the coprocessor.
+
+    Executes a classical function through the CCOP interface, handling
+    argument preparation, function dispatch, and result assignment to
+    output variables.
+
+    Args:
+        runner: Engine runner containing CCOP and execution context.
+        params: Function parameters including function name, arguments, and assignments.
+        output: Dictionary for storing function results.
+
+    Raises:
+        MissingCCOPError: If CCOP is not available or function is not found.
+        NotImplementedError: If return value types are unsupported.
+    """
     func = params["func"]
     assign_vars = params["assign_vars"]
     args = params["args"]
@@ -139,7 +175,7 @@ def eval_cfunc(
                 if runner.debug and func.startswith("sim_"):
                     output[asym] = b
                 elif isinstance(b, int):
-                    b = BinArray(a_obj.size, int(b))
+                    b = BinArray(a_obj.size, int(b))  # noqa: PLW2901 - convert int to BinArray
                     a_obj.set(b)
                 else:
                     msg = "Only int return values are supported currently"

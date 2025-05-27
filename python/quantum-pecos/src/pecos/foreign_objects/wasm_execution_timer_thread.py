@@ -1,3 +1,10 @@
+"""WebAssembly execution timer thread for timeout management.
+
+This module provides a timer thread implementation for managing WebAssembly execution timeouts within the PECOS
+framework, ensuring that WASM foreign object executions do not exceed specified time limits and providing safe
+interruption mechanisms for long-running computations.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -18,6 +25,12 @@ WASM_EXECUTION_MAX_TICKS: int = 4
 
 
 class WasmExecutionTimerThread(Thread):
+    """Timer thread for monitoring WebAssembly execution timeouts.
+
+    This thread runs in the background to monitor the execution time of WebAssembly
+    code and can trigger callbacks when execution times exceed expected limits.
+    """
+
     def __init__(self, stop_event: Event, func: Callable[[], None]) -> None:
         """Initialize the WasmExecutionTimerThread.
 
@@ -31,5 +44,6 @@ class WasmExecutionTimerThread(Thread):
         self._func = func
 
     def run(self) -> None:
+        """Run the timer thread, executing the function at regular intervals."""
         while not self._stop_event.wait(WASM_EXECUTION_TICK_LENGTH_S):
             self._func()

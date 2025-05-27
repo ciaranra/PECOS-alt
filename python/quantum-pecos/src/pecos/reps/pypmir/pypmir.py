@@ -9,6 +9,11 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Main PyPMIR intermediate representation module.
+
+This module provides the core PyPMIR (Python PECOS Medium-level Intermediate Representation) functionality for quantum
+circuit compilation, execution, and representation in the PECOS framework.
+"""
 
 from __future__ import annotations
 
@@ -80,6 +85,15 @@ class PyPMIR:
 
     @classmethod
     def handle_op(cls, o: dict | str | int, p: PyPMIR) -> TypeOp | str | list | int:
+        """Handle different types of operations in PyPMIR.
+
+        Args:
+            o: Operation data (dict, string, or integer).
+            p: PyPMIR instance for context.
+
+        Returns:
+            Processed operation of appropriate type.
+        """
         match o:
             case int() | str():  # Assume int value or register
                 o: int | str
@@ -225,6 +239,15 @@ class PyPMIR:
 
     @staticmethod
     def get_qargs(o: dict[str, Any], p: PyPMIR) -> list[int] | list[tuple[int]]:
+        """Extract quantum arguments from operation dictionary.
+
+        Args:
+            o: Operation dictionary containing quantum arguments.
+            p: PyPMIR instance for variable metadata.
+
+        Returns:
+            List of qubit IDs or tuples of qubit IDs.
+        """
         args = []
         for a in o["args"]:
             if isinstance(a[0], list):

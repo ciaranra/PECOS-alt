@@ -11,6 +11,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Quantum measurement operations for ProjectQ simulator.
+
+This module provides quantum measurement operations for the ProjectQ simulator, including projective measurements
+with proper state collapse and sampling using the ProjectQ quantum computing framework.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

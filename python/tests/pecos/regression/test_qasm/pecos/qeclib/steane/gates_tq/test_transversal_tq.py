@@ -1,3 +1,4 @@
+"""QASM regression tests for Steane transversal two-qubit gates."""
 from collections.abc import Callable
 
 from pecos.qeclib.steane.gates_tq.transversal_tq import CX, CY, CZ, SZZ
@@ -5,6 +6,7 @@ from pecos.slr import QReg
 
 
 def test_CX(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane transversal CX gate QASM regression."""
     q1 = QReg("q1_test", 7)
     q2 = QReg("q2_test", 7)
 
@@ -14,6 +16,7 @@ def test_CX(compare_qasm: Callable[..., None]) -> None:
 
 
 def test_CY(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane transversal CY gate QASM regression."""
     q1 = QReg("q1_test", 7)
     q2 = QReg("q2_test", 7)
 
@@ -22,6 +25,7 @@ def test_CY(compare_qasm: Callable[..., None]) -> None:
 
 
 def test_CZ(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane transversal CZ gate QASM regression."""
     q1 = QReg("q1_test", 7)
     q2 = QReg("q2_test", 7)
 
@@ -30,6 +34,7 @@ def test_CZ(compare_qasm: Callable[..., None]) -> None:
 
 
 def test_SZZ(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane transversal SZZ gate QASM regression."""
     q1 = QReg("q1_test", 7)
     q2 = QReg("q2_test", 7)
 

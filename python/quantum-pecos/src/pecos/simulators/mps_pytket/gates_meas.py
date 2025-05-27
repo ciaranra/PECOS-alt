@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Quantum measurement operations for MPS PyTket simulator.
+
+This module provides quantum measurement operations for the Matrix Product State PyTket simulator, including
+projective measurements with MPS state collapse and sampling from low-entanglement quantum states.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

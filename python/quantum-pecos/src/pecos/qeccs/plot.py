@@ -1,3 +1,10 @@
+"""Plotting utilities for quantum error correction codes.
+
+This module provides visualization tools for quantum error correction codes,
+including lattice plots, syndrome visualization, and code structure diagrams
+for various QECC implementations in PECOS.
+"""
+
 # Copyright 2019 The PECOS Developers
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
@@ -265,6 +272,17 @@ def plot_instr(
 
 
 def get_ancilla_types(instr: "LogicalInstructionProtocol") -> tuple[set, set]:
+    """Extract X and Z ancilla qubits from logical instruction.
+
+    Analyzes the abstract circuit of a logical instruction to identify
+    which ancilla qubits are used for X-type and Z-type stabilizer checks.
+
+    Args:
+        instr: Logical instruction containing abstract circuit with check operations.
+
+    Returns:
+        Tuple of (X ancillas set, Z ancillas set) containing qubit identifiers.
+    """
     x_ancillas = set()
     z_ancillas = set()
     abs_circuit = instr.abstract_circuit
@@ -284,6 +302,19 @@ def graph_add_directed_cnots(
     instr: "LogicalInstructionProtocol",
     g: nx.DiGraph,
 ) -> tuple[dict, list, list]:
+    """Add directed CNOT edges to graph from logical instruction.
+
+    Processes the circuit of a logical instruction to add directed edges
+    for two-qubit gates (CNOT, CZ, CY) to a NetworkX directed graph,
+    with edge labels indicating the time step.
+
+    Args:
+        instr: Logical instruction containing the quantum circuit.
+        g: NetworkX directed graph to add edges to.
+
+    Returns:
+        Tuple of (edge labels dict, CZ gate list, CY gate list).
+    """
     circuit = instr.circuit
     edge_labels = {}
     cys = []
@@ -311,6 +342,7 @@ class NoMap:
         """Initialize the NoMap identity mapping."""
 
     def __getitem__(self, item: T) -> T:
+        """Return the item unchanged (identity mapping)."""
         return item
 
 

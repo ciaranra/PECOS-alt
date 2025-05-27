@@ -11,6 +11,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Single-qubit gate operations for ProjectQ simulator.
+
+This module provides single-qubit quantum gate operations for the ProjectQ simulator, including Pauli gates,
+rotation gates, Hadamard gates, and other fundamental single-qubit operations using the ProjectQ framework.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -175,6 +181,12 @@ def H(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
 
 
 def H2(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Apply H2 Hadamard variant gate (Ry(π/2) followed by Z).
+
+    Args:
+        state: ProjectQ simulator state.
+        qubit: Target qubit index.
+    """
     # @property
     # def matrix(self):
 
@@ -183,6 +195,12 @@ def H2(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
 
 
 def H3(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Apply H3 Hadamard variant gate (S followed by Y).
+
+    Args:
+        state: ProjectQ simulator state.
+        qubit: Target qubit index.
+    """
     # @property
     # def matrix(self):
 
@@ -191,6 +209,12 @@ def H3(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
 
 
 def H4(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Apply H4 Hadamard variant gate (S followed by X).
+
+    Args:
+        state: ProjectQ simulator state.
+        qubit: Target qubit index.
+    """
     # @property
     # def matrix(self):
 
@@ -199,6 +223,12 @@ def H4(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
 
 
 def H5(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Apply H5 Hadamard variant gate (Rx(π/2) followed by Z).
+
+    Args:
+        state: ProjectQ simulator state.
+        qubit: Target qubit index.
+    """
     # @property
     # def matrix(self):
 
@@ -207,6 +237,12 @@ def H5(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
 
 
 def H6(state: ProjectQSim, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Apply H6 Hadamard variant gate (Rx(π/2) followed by Y).
+
+    Args:
+        state: ProjectQ simulator state.
+        qubit: Target qubit index.
+    """
     # @property
     # def matrix(self):
 

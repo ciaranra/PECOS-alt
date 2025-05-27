@@ -1,3 +1,10 @@
+"""Logical instruction implementations for the 4.8.8 color code.
+
+This module provides logical instruction implementations for the 4.8.8 color code,
+including syndrome extraction, error correction procedures, and logical
+measurement operations specific to the color code architecture.
+"""
+
 # Copyright 2018 The PECOS Developers
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.

@@ -1,3 +1,7 @@
+"""Steane code single-qubit gates.
+
+This package provides single-qubit logical gate implementations for the Steane code.
+"""
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

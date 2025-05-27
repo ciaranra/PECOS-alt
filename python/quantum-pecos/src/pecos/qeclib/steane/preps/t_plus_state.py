@@ -1,3 +1,9 @@
+"""T|+⟩ magic state preparation for the Steane 7-qubit code.
+
+This module provides implementations for preparing the logical T|+⟩ magic state in the Steane 7-qubit code, which is
+essential for implementing non-Clifford gates in fault-tolerant quantum computation.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

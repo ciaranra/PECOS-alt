@@ -134,10 +134,31 @@ class LogicalCircuit(QuantumCircuit):
         _emptyappend: bool = False,
         **_params: JSONValue,
     ) -> NoReturn:
+        """Update operation (not implemented for logical circuits).
+
+        Args:
+            _symbol: Gate symbol or dictionary.
+            _locations: Target locations.
+            _tick: Time tick.
+            _emptyappend: Whether to append empty operations.
+            **_params: Additional parameters.
+
+        Raises:
+            NotImplementedError: This method is not implemented.
+        """
         msg = "!!!"
         raise NotImplementedError(msg)
 
     def discard(self, _locations: LocationSet, _tick: int = -1) -> NoReturn:
+        """Discard operations at specified locations (not implemented).
+
+        Args:
+            _locations: Locations to discard operations from.
+            _tick: Time tick to discard from.
+
+        Raises:
+            NotImplementedError: This method is not implemented.
+        """
         msg = "!!!"
         raise NotImplementedError(msg)
 
@@ -158,14 +179,17 @@ class LogicalCircuit(QuantumCircuit):
                         yield tick_gates, time, params
 
     def __iter__(self) -> Iterator[Any]:
+        """Iterate over all logical gates in the circuit."""
         for element in self._ticks:
             for gate, _, _ in element.items():
                 yield gate
 
     def __str__(self) -> str:
+        """Return string representation of the logical circuit."""
         return f"LogicalCircuit({self._ticks})"
 
     def __repr__(self) -> str:
+        """Return detailed string representation of the logical circuit."""
         return self.__str__()
 
     def __getitem__(self, tick: int | tuple[int, int, int]) -> ParamGateCollection:

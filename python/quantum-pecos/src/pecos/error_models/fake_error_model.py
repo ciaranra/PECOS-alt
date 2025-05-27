@@ -1,3 +1,10 @@
+"""Fake error model for testing and debugging.
+
+This module provides a fake error model implementation that can be used
+for testing quantum error correction systems without introducing actual
+errors, useful for debugging and validation purposes.
+"""
+
 # Copyright 2020 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -22,6 +29,14 @@ if TYPE_CHECKING:
 
 
 class FakeErrorModel(ParentErrorModel):
+    """Fake error model that returns pre-configured error circuits.
+
+    This error model is designed for testing purposes and always returns
+    the same pre-configured error circuits regardless of the input parameters.
+    It provides a deterministic and controllable way to inject specific
+    error patterns into quantum simulations.
+    """
+
     def __init__(self, error_circuits: ErrorCircuits) -> None:
         """Initialize a FakeErrorModel with pre-configured error circuits.
 

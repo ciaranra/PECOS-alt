@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Quantum state representation for Qulacs simulator.
+
+This module provides quantum state representation and management for the Qulacs simulator, including state vector
+storage and manipulation using Qulacs quantum simulation framework.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -51,4 +57,9 @@ class Qulacs(StateVector):
 
     @property
     def vector(self) -> ArrayLike:
+        """Get the quantum state vector from Qulacs.
+
+        Returns:
+            The state vector as a numpy array.
+        """
         return self.qulacs_state.get_vector()

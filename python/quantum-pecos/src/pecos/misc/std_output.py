@@ -11,6 +11,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Standard output handling and formatting for PECOS measurements.
+
+This module provides utilities for processing and formatting measurement
+results and simulation outputs in standard formats for analysis and debugging.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

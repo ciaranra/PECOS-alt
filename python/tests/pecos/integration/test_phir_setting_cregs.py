@@ -1,7 +1,9 @@
+"""Integration tests for PHIR classical register setting."""
 from pecos.engines.hybrid_engine import HybridEngine
 
 
 def test_setting_bits() -> None:
+    """Test setting individual bits in classical registers."""
     phir = {
         "format": "PHIR/JSON",
         "version": "0.1.0",
@@ -18,6 +20,7 @@ def test_setting_bits() -> None:
 
 
 def test_setting_cvar() -> None:
+    """Test setting classical variables in PHIR."""
     phir = {
         "format": "PHIR/JSON",
         "version": "0.1.0",
@@ -38,6 +41,7 @@ def test_setting_cvar() -> None:
 
 
 def test_setting_expr() -> None:
+    """Test setting expressions in classical registers."""
     phir = {
         "format": "PHIR/JSON",
         "version": "0.1.0",
@@ -66,6 +70,7 @@ def test_setting_expr() -> None:
 
 
 def test_setting_mixed() -> None:
+    """Test setting mixed types in classical registers."""
     phir = {
         "format": "PHIR/JSON",
         "version": "0.1.0",

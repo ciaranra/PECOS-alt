@@ -1,3 +1,7 @@
+"""Row-wise Cython sparse stabilizer simulator.
+
+This package provides a row-wise implementation of the Cython sparse stabilizer simulator.
+"""
 # Copyright 2018 The PECOS Developers
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.

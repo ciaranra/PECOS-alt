@@ -1,3 +1,10 @@
+"""Wasmtime WebAssembly runtime integration for PECOS.
+
+This module provides integration with the Wasmtime WebAssembly runtime, enabling high-performance execution of WASM
+modules for classical computations within the PECOS quantum error correction framework. It supports advanced features
+like timeout handling, resource limits, and secure sandboxed execution of WebAssembly code.
+"""
+
 # Copyright 2022 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -77,6 +84,7 @@ class WasmtimeObj:
         self.instance = Instance(self.store, self.module, [])
 
     def spin_up_wasm(self) -> None:
+        """Initialize the WASM module with epoch interruption and start timer thread."""
         config = Config()
         config.epoch_interruption = True
         engine = Engine(config)
@@ -91,6 +99,11 @@ class WasmtimeObj:
         self.new_instance()
 
     def get_funcs(self) -> list[str]:
+        """Get list of function names exported by the WASM module.
+
+        Returns:
+            List of function names available for execution.
+        """
         if self.func_names is None:
             fs = [
                 str(f.name) for f in self.module.exports if isinstance(f.type, FuncType)
@@ -104,6 +117,19 @@ class WasmtimeObj:
         self.store.engine.increment_epoch()
 
     def exec(self, func_name: str, args: Sequence) -> tuple:
+        """Execute a function in the WASM module with timeout protection.
+
+        Args:
+            func_name: Name of the function to execute.
+            args: Sequence of arguments to pass to the function.
+
+        Returns:
+            Tuple containing the function result.
+
+        Raises:
+            MissingCCOPError: If function not found in WASM module.
+            WasmRuntimeError: If WASM execution fails or times out.
+        """
         try:
             func = self.instance.exports(self.store)[func_name]
         except KeyError as e:
@@ -137,12 +163,26 @@ class WasmtimeObj:
         return output
 
     def teardown(self) -> None:
+        """Cleanup resources by stopping the timer thread."""
         self.stop_flag.set()
         self.inc_thread_handle.join()
 
     def to_dict(self) -> dict:
+        """Convert the WasmtimeObj to a dictionary for serialization.
+
+        Returns:
+            Dictionary containing the object class and WASM bytes.
+        """
         return {"fobj_class": WasmtimeObj, "wasm_bytes": self.wasm_bytes}
 
     @staticmethod
     def from_dict(wasmtime_dict: dict) -> WasmtimeObj:
+        """Create a WasmtimeObj from a dictionary.
+
+        Args:
+            wasmtime_dict: Dictionary containing object class and WASM bytes.
+
+        Returns:
+            New WasmtimeObj instance.
+        """
         return wasmtime_dict["fobj_class"](wasmtime_dict["wasm_bytes"])

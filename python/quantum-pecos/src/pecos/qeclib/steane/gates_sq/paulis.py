@@ -1,3 +1,9 @@
+"""Logical Pauli gates for the Steane 7-qubit code.
+
+This module provides logical Pauli gate implementations (X, Y, Z) for the Steane 7-qubit code, implemented as
+transversal operations that preserve the quantum error correction properties.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

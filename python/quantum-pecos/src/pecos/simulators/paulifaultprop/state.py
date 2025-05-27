@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Quantum state representation for Pauli fault propagation simulator.
+
+This module provides the quantum state representation for the Pauli fault propagation simulator, implementing
+efficient Pauli frame tracking and stabilizer tableau management for fast stabilizer circuit simulation.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -67,10 +73,16 @@ class PauliFaultProp(PauliPropagation):
                 self.bindings[k] = self.bindings[v]
 
     def flip_sign(self) -> None:
+        """Flip the sign of the Pauli string."""
         self.sign += 1
         self.sign %= 2
 
     def flip_img(self, num_is: int) -> None:
+        """Flip the imaginary component based on number of i factors.
+
+        Args:
+            num_is: Number of imaginary factors to add.
+        """
         self.img += num_is
         self.img %= 4
 
@@ -243,6 +255,11 @@ class PauliFaultProp(PauliPropagation):
                 raise Exception(msg)
 
     def get_str(self) -> str:
+        """Get string representation of the Pauli fault state.
+
+        Returns:
+            String representation with sign and Pauli operators.
+        """
         fault_dict = self.faults
 
         pstr = "-" if self.sign else "+"
@@ -259,6 +276,14 @@ class PauliFaultProp(PauliPropagation):
         return pstr
 
     def fault_str_sign(self, *, strip: bool = False) -> str:
+        """Get the sign component of the fault string.
+
+        Args:
+            strip: If True, strip leading/trailing whitespace.
+
+        Returns:
+            String representation of the sign component.
+        """
         fault_str = []
 
         if self.sign:
@@ -279,6 +304,11 @@ class PauliFaultProp(PauliPropagation):
         return fault_str
 
     def fault_str_operator(self) -> str:
+        """Get the operator component of the fault string.
+
+        Returns:
+            String representation of the Pauli operators.
+        """
         fault_str = []
 
         for q in range(self.num_qubits):
@@ -297,9 +327,19 @@ class PauliFaultProp(PauliPropagation):
         return "".join(fault_str)
 
     def fault_string(self) -> str:
+        """Get the complete fault string with sign and operators.
+
+        Returns:
+            Complete string representation of the fault state.
+        """
         return f"{self.fault_str_sign()}{self.fault_str_operator()}"
 
     def fault_wt(self) -> int:
+        """Get the weight of the fault (number of non-identity operators).
+
+        Returns:
+            Total weight of X, Y, and Z operators.
+        """
         wt = len(self.faults["X"])
         wt += len(self.faults["Y"])
         wt += len(self.faults["Z"])
@@ -307,6 +347,7 @@ class PauliFaultProp(PauliPropagation):
         return wt
 
     def __str__(self) -> str:
+        """Return string representation of the Pauli fault state."""
         return "{{'X': {}, 'Y': {}, 'Z': {}}}".format(
             self.faults["X"],
             self.faults["Y"],

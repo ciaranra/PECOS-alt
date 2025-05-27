@@ -1,3 +1,4 @@
+"""QASM regression tests for control flow structures."""
 from collections.abc import Callable
 
 from pecos.qeclib import qubit as qb
@@ -5,6 +6,7 @@ from pecos.slr import Block, CReg, If, Main, QReg, Repeat
 
 
 def test_phys_teleport(compare_qasm: Callable[..., None]) -> None:
+    """Test basic physical teleportation circuit QASM regression."""
     prog = Main(
         q := QReg("q", 2),
         c := CReg("m", 2),
@@ -17,6 +19,7 @@ def test_phys_teleport(compare_qasm: Callable[..., None]) -> None:
 
 
 def test_phys_tele_block_block(compare_qasm: Callable[..., None]) -> None:
+    """Test teleportation with nested block structure QASM regression."""
     prog = Main(
         q := QReg("q", 2),
         c := CReg("m", 2),
@@ -35,6 +38,7 @@ def test_phys_tele_block_block(compare_qasm: Callable[..., None]) -> None:
 
 
 def test_phys_tele_if(compare_qasm: Callable[..., None]) -> None:
+    """Test teleportation with conditional statements QASM regression."""
     prog = Main(
         q := QReg("q", 2),
         c := CReg("m", 2),
@@ -50,6 +54,7 @@ def test_phys_tele_if(compare_qasm: Callable[..., None]) -> None:
 
 
 def test_phys_tele_if_block_block(compare_qasm: Callable[..., None]) -> None:
+    """Test teleportation with conditional and nested blocks QASM regression."""
     prog = Main(
         q := QReg("q", 2),
         c := CReg("m", 2),
@@ -68,6 +73,7 @@ def test_phys_tele_if_block_block(compare_qasm: Callable[..., None]) -> None:
 
 
 def test_phys_tele_block_telep_block(compare_qasm: Callable[..., None]) -> None:
+    """Test complex teleportation with multiple nested blocks QASM regression."""
     prog = Main(
         q := QReg("q", 2),
         c := CReg("m", 2),
@@ -90,6 +96,7 @@ def test_phys_tele_block_telep_block(compare_qasm: Callable[..., None]) -> None:
 
 
 def test_phys_repeat(compare_qasm: Callable[..., None]) -> None:
+    """Test teleportation with repeat blocks QASM regression."""
     prog = Main(
         q := QReg("q", 2),
         c := CReg("m", 2),

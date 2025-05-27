@@ -113,14 +113,29 @@ class DefaultQECC:
 
     @property
     def num_qudits(self) -> int:
+        """Get the total number of qudits (data + ancilla).
+
+        Returns:
+            Total number of qudits in the QECC.
+        """
         return self.num_data_qudits + self.num_ancilla_qudits
 
     @property
     def available_gates(self) -> list[str]:
+        """Get list of available logical gate symbols.
+
+        Returns:
+            List of gate symbols that can be applied to this QECC.
+        """
         return list(self.sym2gate_class.keys())
 
     @property
     def available_instructions(self) -> list[str]:
+        """Get list of available logical instruction symbols.
+
+        Returns:
+            List of instruction symbols that can be applied to this QECC.
+        """
         return list(self.sym2instruction_class.keys())
 
     def plot(self, figsize: tuple[int, int] = (9, 9)) -> None:
@@ -254,12 +269,14 @@ class DefaultQECC:
         self.position2qudit[(x, y)] = nid
 
     def __eq__(self, other: object) -> bool:
+        """Check equality with another QECC."""
         # Check if other implements the QECCProtocol
         if not isinstance(other, QECCProtocol):
             return NotImplemented
         return (self.name, self.qecc_params) == (other.name, other.qecc_params)
 
     def __ne__(self, other: object) -> bool:
+        """Check inequality with another QECC."""
         return not (self == other)
 
 
@@ -270,4 +287,5 @@ class NoMap:
         """Initialize the NoMap identity mapping."""
 
     def __getitem__(self, item: T) -> T:
+        """Return the item unchanged (identity mapping)."""
         return item

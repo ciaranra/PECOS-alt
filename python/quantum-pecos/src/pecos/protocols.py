@@ -35,13 +35,32 @@ if TYPE_CHECKING:
 class Decoder(Protocol):
     """Protocol for decoder objects."""
 
-    def decode(self, syndrome: set[int]) -> QuantumCircuit | LogicalCircuit: ...
+    def decode(self, syndrome: set[int]) -> QuantumCircuit | LogicalCircuit:
+        """Decode syndrome measurements to determine error correction.
+
+        Args:
+            syndrome: Set of syndrome measurement outcomes.
+
+        Returns:
+            Quantum or logical circuit implementing the error correction.
+        """
+        ...
 
 
 class CCOPProtocol(Protocol):
     """Protocol for CCOP (Classical Co-processor) objects."""
 
-    def exec(self, func_name: str, args: list[int | float | bool]) -> int | None: ...
+    def exec(self, func_name: str, args: list[int | float | bool]) -> int | None:
+        """Execute a function on the classical co-processor.
+
+        Args:
+            func_name: Name of the function to execute.
+            args: List of arguments to pass to the function.
+
+        Returns:
+            Optional integer result from the function execution.
+        """
+        ...
 
 
 class SimulatorState(Protocol):
@@ -57,7 +76,17 @@ class CircuitRunner(Protocol):
         self,
         state: SimulatorState,
         circuit: QuantumCircuit | LogicalCircuit,
-    ) -> tuple[SimulatorState, dict[str, int | list[int]]]: ...
+    ) -> tuple[SimulatorState, dict[str, int | list[int]]]:
+        """Run a quantum circuit on the given state.
+
+        Args:
+            state: Initial quantum state.
+            circuit: Quantum or logical circuit to execute.
+
+        Returns:
+            Tuple of final state and measurement results.
+        """
+        ...
 
 
 class EngineRunner(Protocol):
@@ -76,7 +105,15 @@ class CircuitInspector(Protocol):
         tick_circuit: QuantumCircuit,
         time: int,
         output: OutputDict,
-    ) -> None: ...
+    ) -> None:
+        """Analyze a circuit at a specific time tick.
+
+        Args:
+            tick_circuit: Quantum circuit for the current time tick.
+            time: Current time step.
+            output: Output dictionary to store analysis results.
+        """
+        ...
 
 
 class MachineProtocol(Protocol):
@@ -246,20 +283,52 @@ class SimulatorProtocol(Protocol):
         symbol: str,
         locations: set[int] | set[tuple[int, ...]],
         **params: dict,
-    ) -> dict[int | tuple[int, ...], Any]: ...
+    ) -> dict[int | tuple[int, ...], Any]:
+        """Execute a quantum gate on specified locations.
+
+        Args:
+            symbol: Gate symbol/name to execute.
+            locations: Set of qubit locations to apply the gate to.
+            **params: Additional gate parameters.
+
+        Returns:
+            Dictionary mapping locations to results.
+        """
+        ...
 
     def run_circuit(
         self,
         circuit: QuantumCircuit,
         removed_locations: set | None = None,
-    ) -> dict[int | tuple[int, ...], Any]: ...
+    ) -> dict[int | tuple[int, ...], Any]:
+        """Execute a quantum circuit.
+
+        Args:
+            circuit: Quantum circuit to execute.
+            removed_locations: Optional set of locations to exclude.
+
+        Returns:
+            Dictionary mapping locations to execution results.
+        """
+        ...
 
     def run_circuit_with_errors(
         self,
         circuit: QuantumCircuit,
         error_gen: ParentErrorModel,
         error_params: dict,
-    ) -> tuple[dict, OutputDict]: ...
+    ) -> tuple[dict, OutputDict]:
+        """Execute a quantum circuit with error modeling.
+
+        Args:
+            circuit: Quantum circuit to execute.
+            error_gen: Error model to apply during execution.
+            error_params: Parameters for the error model.
+
+        Returns:
+            Tuple of execution results and output dictionary.
+        """
+        ...
 
 
 class ErrorGenerator(Protocol):
@@ -271,13 +340,33 @@ class ErrorGenerator(Protocol):
         self,
         circuit: QuantumCircuit,
         error_params: ErrorParams,
-    ) -> ErrorCircuits: ...
+    ) -> ErrorCircuits:
+        """Initialize error generation for a circuit.
+
+        Args:
+            circuit: Quantum circuit to generate errors for.
+            error_params: Parameters controlling error generation.
+
+        Returns:
+            Error circuits object containing generated errors.
+        """
+        ...
 
     def generate_tick_errors(
         self,
         time: int,
         gate_time: dict[str, set[int]],
-    ) -> QuantumCircuit: ...
+    ) -> QuantumCircuit:
+        """Generate errors for a specific time tick.
+
+        Args:
+            time: Current time step.
+            gate_time: Dictionary mapping gate types to qubit sets.
+
+        Returns:
+            Quantum circuit containing the generated errors.
+        """
+        ...
 
 
 @runtime_checkable
@@ -299,8 +388,13 @@ class LogicalGateProtocol(Protocol):
     forced_outcome: bool
     qecc_params_tuple: tuple
 
-    def __eq__(self, other: object) -> bool: ...
-    def __hash__(self) -> int: ...
+    def __eq__(self, other: object) -> bool:
+        """Check equality based on protocol implementation."""
+        ...
+
+    def __hash__(self) -> int:
+        """Return hash value based on protocol implementation."""
+        ...
 
 
 @runtime_checkable
@@ -323,10 +417,28 @@ class LogicalInstructionProtocol(Protocol):
     output_set: set[int]
     gate_params_tuple: tuple
 
-    def items(self) -> Iterator[tuple[str, LocationSet, JSONDict]]: ...
-    def __eq__(self, other: object) -> bool: ...
-    def __hash__(self) -> int: ...
-    def plot(self, figsize: tuple[int, int] | None = None) -> None: ...
+    def items(self) -> Iterator[tuple[str, LocationSet, JSONDict]]:
+        """Iterate over instruction items.
+
+        Returns:
+            Iterator of tuples containing symbol, locations, and parameters.
+        """
+        ...
+    def __eq__(self, other: object) -> bool:
+        """Check equality based on protocol implementation."""
+        ...
+
+    def __hash__(self) -> int:
+        """Return hash value based on protocol implementation."""
+        ...
+
+    def plot(self, figsize: tuple[int, int] | None = None) -> None:
+        """Plot the logical instruction.
+
+        Args:
+            figsize: Optional figure size as (width, height) tuple.
+        """
+        ...
 
 
 @runtime_checkable
@@ -373,11 +485,47 @@ class QECCProtocol(Protocol):
         self,
         symbol: str,
         **gate_params: QECCGateParams,
-    ) -> LogicalGateProtocol: ...
+    ) -> LogicalGateProtocol:
+        """Create a logical gate instance.
+
+        Args:
+            symbol: Gate symbol/name.
+            **gate_params: Gate parameters.
+
+        Returns:
+            Logical gate instance implementing the specified gate.
+        """
+        ...
     def instruction(
         self,
         symbol: str,
         **instr_params: QECCInstrParams,
-    ) -> LogicalInstructionProtocol: ...
-    def distance(self, *args: int, **kwargs: int) -> int: ...
-    def plot(self, figsize: tuple[int, int] | None = None) -> None: ...
+    ) -> LogicalInstructionProtocol:
+        """Create a logical instruction instance.
+
+        Args:
+            symbol: Instruction symbol/name.
+            **instr_params: Instruction parameters.
+
+        Returns:
+            Logical instruction instance implementing the specified instruction.
+        """
+        ...
+    def distance(self, *args: int, **kwargs: int) -> int:
+        """Calculate the distance of the quantum error correcting code.
+
+        Args:
+            *args: Positional arguments for distance calculation.
+            **kwargs: Keyword arguments for distance calculation.
+
+        Returns:
+            Distance of the QECC.
+        """
+        ...
+    def plot(self, figsize: tuple[int, int] | None = None) -> None:
+        """Plot the quantum error correcting code layout.
+
+        Args:
+            figsize: Optional figure size as (width, height) tuple.
+        """
+        ...

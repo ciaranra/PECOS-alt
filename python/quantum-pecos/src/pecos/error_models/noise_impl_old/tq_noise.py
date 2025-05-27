@@ -1,3 +1,10 @@
+"""Legacy two-qubit noise implementation.
+
+This module provides legacy noise models for two-qubit operations,
+maintained for backward compatibility with existing error models
+and simulations in PECOS.
+"""
+
 # Copyright 2021 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

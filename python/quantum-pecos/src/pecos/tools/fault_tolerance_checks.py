@@ -1,3 +1,10 @@
+"""Comprehensive fault tolerance verification for quantum error correction.
+
+This module provides advanced tools for systematic fault tolerance analysis,
+including multi-level error injection, propagation analysis, and verification
+of quantum error correction protocols under various fault models.
+"""
+
 # Copyright 2018 The PECOS Developers
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.

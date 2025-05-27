@@ -1,3 +1,10 @@
+"""Pseudo-threshold analysis tools for quantum error correction.
+
+This module provides tools for analyzing pseudo-thresholds in quantum
+error correction codes, including curve fitting, data analysis, and
+threshold estimation for various error models and code parameters.
+"""
+
 # Copyright 2018 The PECOS Developers
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
@@ -151,6 +158,20 @@ def find_polyfit(
     *,
     verbose: bool = True,
 ) -> tuple[float, np.ndarray, np.ndarray]:
+    """Find polynomial fit for pseudo-threshold analysis.
+
+    Performs polynomial fitting on error probability data to determine
+    pseudo-threshold values for quantum error correction performance.
+
+    Args:
+        ps: Physical error probabilities.
+        plog: Logarithm of logical error probabilities.
+        deg: Degree of polynomial fit.
+        verbose: Whether to print fitting results.
+
+    Returns:
+        Tuple of pseudo-threshold, fitted parameters, and covariance matrix.
+    """
     plist = np.array(ps)
 
     popt, pcov = np.polyfit(ps, plog, deg=deg, cov=True)
@@ -180,6 +201,27 @@ def find_uniscalefit(
     verbose: bool = True,
     **kwargs: float | bool | str | None,
 ) -> tuple[float, float, float, float, np.ndarray, np.ndarray]:
+    """Find universal scaling fit for pseudo-threshold analysis.
+
+    Performs universal scaling function fitting to extract pseudo-threshold
+    and critical exponent from quantum error correction data.
+
+    Args:
+        ps: Physical error probabilities.
+        plog: Logarithm of logical error probabilities.
+        distance: Code distance for scaling analysis.
+        p0: Initial parameter guess for fitting.
+        maxfev: Maximum function evaluations for curve fitting.
+        verbose: Whether to print fitting results.
+        **kwargs: Additional arguments for curve fitting.
+
+    Returns:
+        Tuple of pseudo-threshold, its standard deviation, critical exponent,
+        its standard deviation, fitted parameters, and covariance matrix.
+
+    Raises:
+        Exception: If fitting fails to converge.
+    """
     plist = np.array(ps)
     dlist = ns2nsfit(distance, len(plist))
 

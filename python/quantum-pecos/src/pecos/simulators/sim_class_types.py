@@ -9,6 +9,13 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Simulator class type definitions for PECOS quantum error correction.
+
+This module defines specialized simulator class types that extend the default
+simulator interface for specific quantum error correction simulation approaches
+like Pauli propagation and stabilizer simulations.
+"""
+
 from pecos.simulators.default_simulator import DefaultSimulator
 
 

@@ -1,3 +1,4 @@
+"""Tests for PHIR classical interpreter functionality."""
 import numpy as np
 import pytest
 from pecos.classical_interpreters.phir_classical_interpreter import (

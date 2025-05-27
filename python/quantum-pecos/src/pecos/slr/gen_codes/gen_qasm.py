@@ -181,10 +181,10 @@ class QASMGenerator:
             op_list = op_str.split("\n")
             op_new = []
             for o in op_list:
-                o = o.strip()
+                o = o.strip()  # noqa: PLW2901 - clean whitespace
                 if o != "" and not o.startswith("//"):
                     for qi in o.split(";"):
-                        qi = qi.strip()
+                        qi = qi.strip()  # noqa: PLW2901 - clean whitespace
                         if qi != "" and not qi.startswith("//"):
                             op_new.append(f"if({cond}) {qi};")
                 else:

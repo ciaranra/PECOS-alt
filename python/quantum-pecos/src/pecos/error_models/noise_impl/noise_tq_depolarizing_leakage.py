@@ -1,3 +1,10 @@
+"""Two-qubit depolarizing noise with leakage.
+
+This module provides depolarizing noise models for two-qubit operations
+that include leakage to states outside the computational subspace,
+providing comprehensive error modeling for two-qubit quantum gates.
+"""
+
 # Copyright 2023 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

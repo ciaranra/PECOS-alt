@@ -1,3 +1,10 @@
+"""Base classes for quantum gate implementations.
+
+This module provides the foundational base classes for quantum gate
+implementations in the PECOS quantum error correction library,
+defining interfaces and common functionality for quantum operations.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -51,15 +58,26 @@ class QGate(metaclass=ABCMeta):
         self.add_qargs(qargs)
 
     def add_qargs(self, qargs: Sequence[Qubit] | Qubit) -> None:
+        """Add quantum arguments to the gate.
+
+        Args:
+            qargs: Qubit or sequence of qubits to add as arguments.
+        """
         if isinstance(qargs, tuple):
             self.qargs = qargs
         else:
             self.qargs = (qargs,)
 
     def copy(self) -> Self:
+        """Create a shallow copy of the gate.
+
+        Returns:
+            Copy of the gate instance.
+        """
         return copy.copy(self)
 
     def __getitem__(self, *params: complex) -> Self:
+        """Set gate parameters using square bracket notation."""
         g = self.copy()
 
         if params and not self.has_parameters:
@@ -70,9 +88,22 @@ class QGate(metaclass=ABCMeta):
         return g
 
     def qubits(self, *qargs: Qubit) -> None:
+        """Add qubits to the gate.
+
+        Args:
+            *qargs: Variable number of qubits to add.
+        """
         self.__call__(qargs)
 
     def __call__(self, *qargs: Qubit) -> Self:
+        """Create a new gate instance with specified qubits.
+
+        Args:
+            *qargs: Variable number of qubits to apply the gate to.
+
+        Returns:
+            New gate instance with the specified qubits.
+        """
         g = self.copy()
 
         g.add_qargs(qargs)
@@ -80,6 +111,14 @@ class QGate(metaclass=ABCMeta):
         return g
 
     def gen(self, target: object | str) -> str:
+        """Generate code representation for the gate.
+
+        Args:
+            target: Code generation target (e.g., 'qasm' or generator object).
+
+        Returns:
+            String representation of the gate for the target format.
+        """
         # TODO: Get rid of this as much as possible...
         if isinstance(target, str):
             if target == "qasm":

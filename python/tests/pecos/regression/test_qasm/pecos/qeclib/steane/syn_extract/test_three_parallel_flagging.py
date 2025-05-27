@@ -1,3 +1,4 @@
+"""QASM regression tests for Steane three-parallel flagged syndrome extraction."""
 from collections.abc import Callable
 
 from pecos.qeclib.steane.syn_extract.three_parallel_flagging import (
@@ -8,6 +9,7 @@ from pecos.slr import CReg, QReg
 
 
 def test_ThreeParallelFlaggingXZZ(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane three-parallel XZZ flagged syndrome extraction QASM regression."""
     q = QReg("q_test", 7)
     a = QReg("a_test", 3)
     flag_x = CReg("flag_x_test", 3)
@@ -29,6 +31,7 @@ def test_ThreeParallelFlaggingXZZ(compare_qasm: Callable[..., None]) -> None:
 
 
 def test_ThreeParallelFlaggingZXX(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane three-parallel ZXX flagged syndrome extraction QASM regression."""
     q = QReg("q_test", 7)
     a = QReg("a_test", 3)
     flag_x = CReg("flag_x_test", 3)

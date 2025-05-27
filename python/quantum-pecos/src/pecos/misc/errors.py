@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Error handling utilities for PECOS miscellaneous operations.
+
+This module defines specialized exception types for handling errors in
+PECOS utility functions and gate operations.
+"""
+
 
 class PECOSTypeError(TypeError):
     """General gate error."""

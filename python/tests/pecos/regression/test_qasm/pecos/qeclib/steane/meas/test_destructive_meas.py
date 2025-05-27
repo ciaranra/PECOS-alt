@@ -1,3 +1,4 @@
+"""QASM regression tests for Steane destructive measurement operations."""
 from collections.abc import Callable
 
 from pecos.qeclib.steane.meas.destructive_meas import (
@@ -12,6 +13,7 @@ from pecos.slr import CReg, QReg
 
 
 def test_MeasureX(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane destructive X measurement QASM regression."""
     q = QReg("q_test", 7)
     meas_creg = CReg("meas_creg_test", 7)
     log_raw = CReg("log_raw_test", 1)
@@ -22,6 +24,7 @@ def test_MeasureX(compare_qasm: Callable[..., None]) -> None:
 
 
 def test_MeasureY(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane destructive Y measurement QASM regression."""
     q = QReg("q_test", 7)
     meas_creg = CReg("meas_creg_test", 7)
     log_raw = CReg("log_raw_test", 1)
@@ -32,6 +35,7 @@ def test_MeasureY(compare_qasm: Callable[..., None]) -> None:
 
 
 def test_MeasureZ(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane destructive Z measurement QASM regression."""
     q = QReg("q_test", 7)
     meas_creg = CReg("meas_creg_test", 7)
     log_raw = CReg("log_raw_test", 1)
@@ -42,6 +46,7 @@ def test_MeasureZ(compare_qasm: Callable[..., None]) -> None:
 
 
 def test_Measure(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane destructive measurement QASM regression."""
     q = QReg("q_test", 7)
     meas_creg = CReg("meas_creg_test", 7)
     log_raw = CReg("log_raw_test", 1)
@@ -52,6 +57,7 @@ def test_Measure(compare_qasm: Callable[..., None]) -> None:
 
 
 def test_ProcessMeas(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane measurement processing QASM regression."""
     meas = CReg("meas_test", 7)
     log = CReg("log_test", 2)
     syn_meas = CReg("syn_meas_test", 3)
@@ -79,6 +85,7 @@ def test_ProcessMeas(compare_qasm: Callable[..., None]) -> None:
 
 
 def test_MeasDecode(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane measurement decoding QASM regression."""
     q = QReg("q_test", 7)
     meas = CReg("meas_test", 7)
     log = CReg("log_test", 2)

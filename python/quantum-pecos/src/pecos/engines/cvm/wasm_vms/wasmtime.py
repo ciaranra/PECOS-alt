@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Wasmtime WebAssembly runtime integration.
+
+This module provides integration with the Wasmtime WebAssembly runtime for
+executing compiled classical functions in the PECOS framework.
+"""
+
 from __future__ import annotations
 
 import contextlib
@@ -37,6 +43,11 @@ class WASM:
         self.wasmtime.init()
 
     def get_funcs(self) -> list[str]:
+        """Get list of available function names from the WASM module.
+
+        Returns:
+            List of function names that can be executed.
+        """
         return self.wasmtime.get_funcs()
 
     def exec(
@@ -46,6 +57,16 @@ class WASM:
         *,
         debug: bool = False,
     ) -> int:
+        """Execute a WASM function with given arguments.
+
+        Args:
+            func_name: Name of the function to execute.
+            args: Sequence of (type, value) tuples for arguments.
+            debug: Whether to use debug simulation functions.
+
+        Returns:
+            Integer result from the function execution.
+        """
         if debug and func_name.startswith("sim_"):
             method = sim_funcs[func_name]
             return method(*args)
@@ -54,6 +75,7 @@ class WASM:
         return self.wasmtime.exec(func_name, args)
 
     def teardown(self) -> None:
+        """Clean up wasmtime resources."""
         self.wasmtime.teardown()
 
 

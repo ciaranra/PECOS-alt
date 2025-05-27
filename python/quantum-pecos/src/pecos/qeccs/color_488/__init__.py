@@ -1,3 +1,7 @@
+"""Color 4.8.8 quantum error correcting code.
+
+This package provides the implementation of the color 4.8.8 code.
+"""
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
 #

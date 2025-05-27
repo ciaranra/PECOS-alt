@@ -1,3 +1,4 @@
+"""QASM regression tests for Steane T+ state preparation."""
 from collections.abc import Callable
 
 from pecos.qeclib.steane.preps.t_plus_state import (
@@ -10,18 +11,21 @@ from pecos.slr import CReg, QReg
 
 
 def test_PrepEncodeTPlusNonFT(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane non-fault-tolerant T+ state preparation QASM regression."""
     q = QReg("q_test", 7)
     block = PrepEncodeTPlusNonFT(q)
     compare_qasm(block)
 
 
 def test_PrepEncodeTDagPlusNonFT(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane non-fault-tolerant T†+ state preparation QASM regression."""
     q = QReg("q_test", 7)
     block = PrepEncodeTDagPlusNonFT(q)
     compare_qasm(block)
 
 
 def test_PrepEncodeTPlusFT(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane fault-tolerant T+ state preparation QASM regression."""
     q = QReg("q_test", 7)
     a = QReg("a_test", 3)
     out = CReg("out_test", 2)
@@ -46,6 +50,7 @@ def test_PrepEncodeTPlusFT(compare_qasm: Callable[..., None]) -> None:
 
 
 def test_PrepEncodeTPlusFTRUS(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane fault-tolerant T+ state with RUS preparation QASM regression."""
     q = QReg("q_test", 7)
     a = QReg("a_test", 3)
     out = CReg("out_test", 2)

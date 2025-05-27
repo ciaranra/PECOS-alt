@@ -1,3 +1,10 @@
+"""Depolarizing error generation and application.
+
+This module provides utilities for generating and applying depolarizing
+errors to quantum circuits, including error rate calculations and
+conditional error application based on circuit structure.
+"""
+
 # Copyright 2021 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -50,6 +57,7 @@ class DepolarizingErrorModel(ParentErrorModel):
         self.circuit = None
 
     def scaling(self) -> None:
+        """Apply scaling factors to error parameters."""
         if "p2_mem" not in self.error_params:
             self.error_params["p2_mem"] = None
 
@@ -74,6 +82,16 @@ class DepolarizingErrorModel(ParentErrorModel):
         *,
         _reset_leakage: bool = True,  # Reserved for future leakage handling
     ) -> ErrorCircuits:
+        """Initialize error generation for a quantum circuit.
+
+        Args:
+            circuit: Quantum circuit to generate errors for.
+            error_params: Error parameters dictionary.
+            _reset_leakage: Reserved for future leakage handling.
+
+        Returns:
+            Error circuits object containing generated errors.
+        """
         self.qubit_set = set(range(circuit.metadata["num_qubits"]))
 
         self.error_circuits = ErrorCircuits()
@@ -99,6 +117,11 @@ class DepolarizingErrorModel(ParentErrorModel):
         return self.error_circuits
 
     def reset(self) -> DepolarizingErrorModel:
+        """Reset the error model to its initial state.
+
+        Returns:
+            New instance of DepolarizingErrorModel.
+        """
         return DepolarizingErrorModel()
 
     def generate_tick_errors(

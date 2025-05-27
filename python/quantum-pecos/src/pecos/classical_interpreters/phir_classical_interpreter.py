@@ -9,6 +9,13 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""PHIR classical interpreter for quantum-classical hybrid computations.
+
+This module provides a classical interpreter for PHIR (PECOS High-level Intermediate Representation) programs,
+enabling the execution of classical logic and control flow within quantum-classical hybrid algorithms in the PECOS
+framework.
+"""
+
 from __future__ import annotations
 
 import json
@@ -119,6 +126,15 @@ class PHIRClassicalInterpreter:
         return self.program.num_qubits
 
     def check_ffc(self, call_list: list[str], fobj: ForeignObjectProtocol) -> None:
+        """Check foreign function calls compatibility with the foreign object.
+
+        Args:
+            call_list: List of foreign function calls from the program.
+            fobj: Foreign object protocol to check against.
+
+        Raises:
+            Exception: If foreign function calls are not supported by the object.
+        """
         if self.program.foreign_func_calls:
             func_names = set(fobj.get_funcs())
             not_supported = set(call_list) - func_names
@@ -137,6 +153,7 @@ class PHIRClassicalInterpreter:
         self.initialize_cenv()
 
     def initialize_cenv(self) -> None:
+        """Initialize the classical environment with program variables."""
         self._reset_env()
         if self.program:
             for cvar in self.cvar_meta:
@@ -208,10 +225,27 @@ class PHIRClassicalInterpreter:
             yield op_buffer
 
     def get_cval(self, cvar: str) -> np.integer:
+        """Get the classical value of a variable.
+
+        Args:
+            cvar: Name of the classical variable.
+
+        Returns:
+            The classical value as a numpy integer.
+        """
         cid = self.csym2id[cvar]
         return self.cenv[cid]
 
     def get_bit(self, cvar: str, idx: int) -> int:
+        """Get a specific bit from a classical variable.
+
+        Args:
+            cvar: Name of the classical variable.
+            idx: Bit index to extract.
+
+        Returns:
+            The bit value (0 or 1).
+        """
         cval = self.get_cval(cvar)
         dtype = type(cval)
 
@@ -286,6 +320,12 @@ class PHIRClassicalInterpreter:
                 return None
 
     def assign_int(self, cvar: str | tuple | list, val: int) -> None:
+        """Assign an integer value to a classical variable or specific bit.
+
+        Args:
+            cvar: Variable name or tuple/list containing (variable_name, bit_index).
+            val: Integer value to assign.
+        """
         i = None
         if isinstance(cvar, tuple | list):
             cvar, i = cvar

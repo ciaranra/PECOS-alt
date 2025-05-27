@@ -9,6 +9,13 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Example demonstrating logical teleportation using Steane quantum error correction code.
+
+This module provides an example implementation of logical teleportation using the
+7-qubit Steane quantum error correction code, showcasing fault-tolerant quantum
+computation with error correction circuits.
+"""
+
 from pecos.qeclib.steane.steane_class import Steane
 from pecos.slr import Barrier, CReg, If, Main
 

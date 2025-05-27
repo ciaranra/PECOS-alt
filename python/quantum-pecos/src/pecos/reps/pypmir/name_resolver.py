@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Name resolution utilities for PyPMIR operations.
+
+This module provides functions to resolve and translate operation names for compatibility across different quantum
+simulators in the PECOS framework.
+"""
+
 import numpy as np
 
 from pecos.reps.pypmir.op_types import QOp

@@ -1,3 +1,10 @@
+"""Quantum measurement gate implementations.
+
+This module provides measurement gate implementations for qubits,
+including various measurement bases and projective measurements
+used in quantum error correction protocols.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -34,6 +41,7 @@ class Measure(QGate):
         self.cout = None
 
     def __gt__(self, cout: Bit | tuple[Bit, ...]) -> Measure:
+        """Set the classical output bit(s) for measurement using > operator."""
         g = self.copy()
 
         if isinstance(cout, tuple):

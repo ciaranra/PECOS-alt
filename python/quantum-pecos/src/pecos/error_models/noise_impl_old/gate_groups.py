@@ -1,3 +1,10 @@
+"""Legacy gate grouping definitions for noise models.
+
+This module contains the legacy gate grouping definitions used by
+older noise model implementations, maintained for backward compatibility
+with existing error models in PECOS.
+"""
+
 # Copyright 2021 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

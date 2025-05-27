@@ -9,6 +9,13 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Quantum circuit to PHIR conversion utilities.
+
+This module provides functions to convert PECOS QuantumCircuit objects to
+PHIR (PECOS High-level Intermediate Representation) format for execution
+on quantum hardware and classical simulators.
+"""
+
 from __future__ import annotations
 
 import json
@@ -36,6 +43,19 @@ qsym_conv = {
 
 
 def conv_expr(expr: dict[str, Any]) -> dict[str, Any]:
+    """Convert expression dictionary to PHIR format.
+
+    Transforms expression dictionaries from quantum circuit format to PHIR
+    (PECOS High-level Intermediate Representation) format, handling assignment
+    operations and binary operations with proper argument structure.
+
+    Args:
+        expr: Expression dictionary with operation and operand information.
+
+    Returns:
+        Converted expression dictionary in PHIR format with 'cop', 'args',
+        and optionally 'returns' fields.
+    """
     if "t" in expr:
         op = "="
 

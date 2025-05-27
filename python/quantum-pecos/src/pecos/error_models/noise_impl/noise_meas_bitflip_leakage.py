@@ -1,3 +1,10 @@
+"""Bitflip noise with leakage for measurement operations.
+
+This module provides noise models for quantum measurement operations that
+include both bitflip errors and leakage effects, providing comprehensive
+error modeling for measurement processes.
+"""
+
 # Copyright 2023 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

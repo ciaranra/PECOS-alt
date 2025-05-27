@@ -9,6 +9,7 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Integration tests for state vector quantum simulators."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -44,12 +45,14 @@ str_to_sim = {
 
 
 def check_dependencies(simulator: str) -> Callable[[int], StateVector]:
+    """Check if dependencies for a simulator are available and skip test if not."""
     if simulator not in str_to_sim or str_to_sim[simulator] is None:
         pytest.skip(f"Requirements to test {simulator} are not met.")
     return str_to_sim[simulator]
 
 
 def verify(simulator: str, qc: QuantumCircuit, final_vector: np.ndarray) -> None:
+    """Verify quantum circuit simulation results against expected state vector."""
     sim = check_dependencies(simulator)(len(qc.qudits))
     sim.run_circuit(qc)
 
@@ -78,6 +81,7 @@ def check_measurement(
     qc: QuantumCircuit,
     final_results: dict[int, int] | None = None,
 ) -> None:
+    """Check measurement results from quantum circuit simulation."""
     sim = check_dependencies(simulator)(len(qc.qudits))
 
     results = sim.run_circuit(qc)
@@ -104,6 +108,7 @@ def check_measurement(
 
 
 def compare_against_basicsv(simulator: str, qc: QuantumCircuit) -> None:
+    """Compare simulator results against BasicSV reference implementation."""
     basicsv = BasicSV(len(qc.qudits))
     basicsv.run_circuit(qc)
 
@@ -119,6 +124,7 @@ def compare_against_basicsv(simulator: str, qc: QuantumCircuit) -> None:
 
 
 def generate_random_state(seed: int | None = None) -> QuantumCircuit:
+    """Generate a quantum circuit with random gates for testing."""
     np.random.seed(seed)
 
     qc = QuantumCircuit()
@@ -155,6 +161,7 @@ def generate_random_state(seed: int | None = None) -> QuantumCircuit:
     ],
 )
 def test_init(simulator: str) -> None:
+    """Test quantum state initialization."""
     qc = QuantumCircuit()
     qc.append({"Init": {0, 1, 2, 3}})
 
@@ -175,6 +182,7 @@ def test_init(simulator: str) -> None:
     ],
 )
 def test_H_measure(simulator: str) -> None:
+    """Test Hadamard gate followed by measurement."""
     qc = QuantumCircuit()
     qc.append({"H": {0, 1, 2, 3, 4}})
     qc.append({"Measure": {0, 1, 2, 3, 4}})
@@ -193,6 +201,7 @@ def test_H_measure(simulator: str) -> None:
     ],
 )
 def test_comp_basis_circ_and_measure(simulator: str) -> None:
+    """Test computational basis circuit and measurement."""
     qc = QuantumCircuit()
     qc.append({"Init": {0, 1, 2, 3}})
 
@@ -238,6 +247,7 @@ def test_comp_basis_circ_and_measure(simulator: str) -> None:
     ],
 )
 def test_all_gate_circ(simulator: str) -> None:
+    """Test circuit with all quantum gates."""
     # Generate three different arbitrary states
     qcs: list[QuantumCircuit] = []
     qcs.append(generate_random_state(seed=1234))

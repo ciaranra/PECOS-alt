@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Gate bindings for coin toss quantum simulator.
+
+This module provides gate operation bindings for the coin toss quantum simulator, which provides a simplified
+quantum simulation model that treats all quantum operations as classical coin tosses for rapid prototyping.
+"""
+
 from pecos.simulators.cointoss.gates import ignore_gate, measure
 
 # Supporting gates from table:

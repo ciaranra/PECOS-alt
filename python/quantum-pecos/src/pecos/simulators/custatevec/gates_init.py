@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Qubit initialization operations for cuStateVec simulator.
+
+This module provides GPU-accelerated quantum state initialization operations for the NVIDIA cuStateVec simulator,
+including functions to initialize qubits to computational basis states using CUDA acceleration.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

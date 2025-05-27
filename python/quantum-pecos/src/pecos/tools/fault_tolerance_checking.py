@@ -1,3 +1,11 @@
+"""Fault tolerance checking utilities for quantum error correction.
+
+This module provides tools for analyzing and verifying the fault-tolerant
+properties of quantum circuits and quantum error correction protocols.
+It includes functions for testing circuit fault tolerance and validating
+error correction capabilities.
+"""
+
 # Copyright 2022 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -112,7 +120,7 @@ def get_all_spacetime(
         for sym, locations, metadata in gates.items():
             for loc in locations:
                 if isinstance(loc, int):
-                    loc = (loc,)
+                    loc = (loc,)  # noqa: PLW2901 - normalize int to tuple
 
                 yield {
                     "tick": tick,

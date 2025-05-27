@@ -1,3 +1,10 @@
+"""Stabilizer verification tools for quantum error correction.
+
+This module provides utilities for verifying stabilizer codes and analyzing
+their properties, including stabilizer group verification, code distance
+calculation, and logical operator validation.
+"""
+
 # Copyright 2018 The PECOS Developers
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
@@ -154,6 +161,11 @@ class VerifyStabilizers:
         self.logical_xs.append((paulis, qubits, logical_string))
 
     def num_logical_qubits(self) -> int:
+        """Calculate the number of logical qubits in the stabilizer code.
+
+        Returns:
+            Number of logical qubits (data qubits minus stabilizer checks).
+        """
         return len(self.data_qubits) - len(self.checks)
 
     def generators(
@@ -458,6 +470,14 @@ class VerifyStabilizers:
         return checks != checks2
 
     def eval(self, *, verbose: bool = False) -> StabilizerVerificationResult:
+        """Evaluate the stabilizer code verification.
+
+        Args:
+            verbose: Whether to print detailed output during evaluation.
+
+        Returns:
+            Verification result containing success status and error details.
+        """
         if self.circuit is None:
             self.compile()
 
@@ -522,17 +542,37 @@ class VerifyStabilizers:
 
     @property
     def num_data_qubits(self) -> int:
+        """Get the number of data qubits.
+
+        Returns:
+            Number of data qubits in the stabilizer code.
+        """
         return len(self.data_qubits)
 
     @property
     def num_ancilla_qubits(self) -> int:
+        """Get the number of ancilla qubits.
+
+        Returns:
+            Number of ancilla qubits in the stabilizer code.
+        """
         return len(self.ancilla_qubits)
 
     @property
     def num_qubits(self) -> int:
+        """Get the total number of qubits.
+
+        Returns:
+            Total number of qubits (data + ancilla).
+        """
         return len(self.data_qubits) + len(self.ancilla_qubits)
 
     def refactor(self, state: SimulatorProtocol) -> None:
+        """Refactor the stabilizer state to match the expected generators.
+
+        Args:
+            state: Simulator state to refactor.
+        """
         found_stab_ids = set()
 
         refactor_things = list(self.checks)
@@ -588,6 +628,11 @@ class VerifyStabilizers:
     def get_check_ancilla(
         self,
     ) -> tuple[list[tuple[set[int], set[int]]], list[tuple[set[int], set[int]]]]:
+        """Get check and ancilla operator sets.
+
+        Returns:
+            Tuple containing lists of (X set, Z set) tuples for checks and ancillas.
+        """
         check_tuples = []
         ancilla_tuples = []
 
@@ -623,6 +668,17 @@ class VerifyStabilizers:
         list[str],
         list[str],
     ]:
+        """Get stabilizer information from the quantum state.
+
+        Args:
+            state: Simulator state to analyze.
+            stop_search: Maximum number of refactoring attempts.
+            verbose: Whether to print detailed information.
+            print_y: Whether to include Y operators in output.
+
+        Returns:
+            Tuple of logical Z operators, logical X operators, stabilizer strings, destabilizer strings.
+        """
         if self.circuit is None:
             return Exception("Must run `compile()` first!")
 
@@ -1047,6 +1103,15 @@ class VerifyStabilizers:
 
     @staticmethod
     def op_anticommute(op1: dict[str, set[int]], op2: dict[str, set[int]]) -> bool:
+        """Check if two Pauli operators anticommute.
+
+        Args:
+            op1: First Pauli operator as dictionary with X, Y, Z keys and qubit sets.
+            op2: Second Pauli operator as dictionary with X, Y, Z keys and qubit sets.
+
+        Returns:
+            True if the operators anticommute, False otherwise.
+        """
         return bool(
             (
                 len(op1.get("X", set()) & op2.get("Z", set()))

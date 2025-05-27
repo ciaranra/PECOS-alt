@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Multiprocessing hybrid engine for parallel quantum-classical computation.
+
+This module provides a multiprocessing-enabled hybrid engine for parallel
+execution of quantum-classical algorithms across multiple CPU cores.
+"""
+
 from __future__ import annotations
 
 import multiprocessing
@@ -133,7 +139,12 @@ def run_multisim(
 
 
 class MultisimError(Exception):
-    pass
+    """Exception raised when errors occur during multi-simulation execution.
+
+    This exception is used to signal errors that occur during parallel
+    simulation runs in the multiprocessing engine.
+    """
+
 
 
 def worker_wrapper(
@@ -171,6 +182,12 @@ def worker_wrapper(
 
 
 class WriteStream:
+    """Custom stream for capturing and redirecting process output.
+
+    This class captures stdout/stderr from worker processes and forwards
+    the output through a multiprocessing queue for centralized handling.
+    """
+
     def __init__(self, q: SyncManager.Queue, pid: int, stream_type: str) -> None:
         """Initialize a write stream for capturing process output.
 
@@ -184,7 +201,12 @@ class WriteStream:
         self.pid = pid
 
     def write(self, msg: str) -> None:
+        """Write message to the output queue.
+
+        Args:
+            msg: Message string to write.
+        """
         self.queue.put((self.pid, self.stream_type, msg))
 
     def flush(self) -> None:
-        pass
+        """Flush the output stream (no-op for queue-based output)."""

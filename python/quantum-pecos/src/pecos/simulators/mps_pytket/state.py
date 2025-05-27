@@ -9,6 +9,11 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Quantum state representation for MPS PyTket simulator.
+
+This module provides Matrix Product State quantum state representation and management for the PyTket-based simulator,
+including tensor network storage and manipulation for low-entanglement quantum circuits.
+"""
 
 from __future__ import annotations
 
@@ -69,6 +74,7 @@ class MPS(StateTN):
         return self
 
     def __del__(self) -> None:
+        """Clean up tensor network library resources when the object is destroyed."""
         # CuPy will release GPU memory when the variable ``self.mps`` is no longer
         # reachable. However, we need to manually destroy the library handle.
         self.libhandle.destroy()

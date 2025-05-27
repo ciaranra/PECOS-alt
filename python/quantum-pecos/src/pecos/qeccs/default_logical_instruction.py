@@ -115,13 +115,16 @@ class DefaultLogicalInstruction:
         raise Exception(msg)
 
     def __str__(self) -> str:
+        """Return string representation of the logical instruction."""
         return f"[{self.qecc.name} {self.qecc.qecc_params}] - Logical instruction: '{self.symbol}' {self.params}"
 
     def __hash__(self) -> int:
+        """Return hash value for use as dictionary key."""
         # The instruction is unique. A hash can be used to identify it.
         return hash(("instr", self.symbol, self.params_tuple))
 
     def __eq__(self, other: object) -> bool:
+        """Check equality with another logical instruction."""
         # Check if other implements the LogicalInstructionProtocol
         if not isinstance(other, LogicalInstructionProtocol):
             return NotImplemented
@@ -132,4 +135,5 @@ class DefaultLogicalInstruction:
         )
 
     def __ne__(self, other: object) -> bool:
+        """Check inequality with another logical instruction."""
         return not (self == other)

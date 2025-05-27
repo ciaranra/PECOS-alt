@@ -1,3 +1,10 @@
+"""Bitflip noise with leakage for qubit initialization.
+
+This module provides noise models for qubit initialization operations that
+include both bitflip errors and leakage to states outside the computational
+subspace, providing more realistic error modeling.
+"""
+
 # Copyright 2023 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

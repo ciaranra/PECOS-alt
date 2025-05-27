@@ -9,6 +9,13 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Default simulator implementation for PECOS quantum error correction.
+
+This module provides a generic simulator interface that can dynamically select
+appropriate simulator backends based on quantum circuit requirements and available
+system resources.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any

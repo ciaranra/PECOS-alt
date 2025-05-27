@@ -1,3 +1,10 @@
+"""Error circuit generation and management.
+
+This module provides the ErrorCircuits class for generating and managing
+error circuits in quantum error correction simulations. It handles the
+creation of error patterns and their application to quantum circuits.
+"""
+
 # Copyright 2018 The PECOS Developers
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.

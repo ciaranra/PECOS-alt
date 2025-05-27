@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Gate bindings for basic state vector simulator.
+
+This module provides gate operation bindings for the basic state vector quantum simulator, organizing and exposing
+the quantum gate implementations for initialization, measurement, single-qubit, and two-qubit operations.
+"""
+
 import pecos.simulators.basic_sv.gates_one_qubit as one_q
 import pecos.simulators.basic_sv.gates_two_qubit as two_q
 from pecos.simulators.basic_sv.gates_init import init_one, init_zero

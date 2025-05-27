@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Quantum state representation for cuStateVec simulator.
+
+This module provides GPU-accelerated quantum state representation and management for the NVIDIA cuStateVec simulator,
+including CUDA-based state vector storage and manipulation for high-performance quantum simulation.
+"""
+
 from __future__ import annotations
 
 import random
@@ -105,10 +111,16 @@ class CuStateVec(StateVector):
         return self
 
     def __del__(self) -> None:
+        """Clean up GPU resources when the object is destroyed."""
         # CuPy will release GPU memory when the variable ``self.cupy_vector`` is no longer
         # reachable. However, we need to manually destroy the library handle.
         cusv.destroy(self.libhandle)
 
     @property
     def vector(self) -> ArrayLike:
+        """Get the quantum state vector from GPU memory.
+
+        Returns:
+            The state vector transferred from GPU to CPU memory.
+        """
         return self.cupy_vector.get()

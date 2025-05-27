@@ -1,3 +1,9 @@
+"""Logical |+H⟩ state preparation for the Steane 7-qubit code.
+
+This module provides implementations for preparing the logical |+H⟩ state in the Steane 7-qubit code using
+fault-tolerant distillation and verification protocols.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Two-qubit gate operations for Pauli fault propagation simulator.
+
+This module provides two-qubit quantum gate operations for the Pauli fault propagation simulator, including Clifford
+gates and their effect on Pauli frame propagation for efficient stabilizer circuit simulation with entangling gates.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

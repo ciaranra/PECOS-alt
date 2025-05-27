@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""State representation for coin toss quantum simulator.
+
+This module provides the quantum state representation for the coin toss simulator, implementing a minimal state
+model that tracks qubit count without maintaining actual quantum state information for rapid simulation.
+"""
+
 from __future__ import annotations
 
 import random

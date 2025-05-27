@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Symbol library and registry for PECOS operations.
+
+This module provides a flexible symbol library system for registering and
+retrieving quantum operations, gates, and other symbols used throughout PECOS.
+"""
+
 from __future__ import annotations
 
 from collections import defaultdict

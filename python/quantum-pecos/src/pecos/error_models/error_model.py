@@ -1,3 +1,10 @@
+"""Base error model implementation framework.
+
+This module provides the foundation for error model implementations in PECOS,
+including base classes and interfaces for creating custom error models
+for quantum error correction simulations.
+"""
+
 # Copyright 2023 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -37,6 +44,15 @@ class NoErrorModel:
         """Reset state to initialization state."""
 
     def init(self, num_qubits: int, machine: MachineProtocol | None = None) -> None:
+        """Initialize the error model.
+
+        Args:
+            num_qubits: Number of qubits in the system.
+            machine: Optional machine protocol for hardware-specific behavior.
+
+        Raises:
+            Exception: If error parameters are provided for a no-error model.
+        """
         self.machine = machine
         self.num_qubits = num_qubits
         if self.error_params:
@@ -44,13 +60,22 @@ class NoErrorModel:
             raise Exception(msg)
 
     def shot_reinit(self) -> None:
-        pass
+        """Reinitialize for each shot (no-op for base error model)."""
 
     def process(
         self,
         ops: list,
         call_back: Callable | None = None,  # noqa: ARG002
     ) -> list | None:
+        """Process operations without applying any errors.
+
+        Args:
+            ops: List of operations to process.
+            call_back: Optional callback function (unused).
+
+        Returns:
+            List of processed operations without errors.
+        """
         noisy_ops = []
         for op in ops:
             if isinstance(op, QOp):

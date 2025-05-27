@@ -1,3 +1,9 @@
+"""Logical Z measurement implementations for the Steane 7-qubit code.
+
+This module provides logical Z measurement implementations for the Steane 7-qubit code, enabling measurements in the Z
+basis while preserving error correction capabilities.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -14,6 +20,12 @@ from pecos.slr import Block, Comment, CReg, QReg, Qubit
 
 
 class NoFlagMeasureZ(Block):
+    """Non-flagged logical Z measurement for Steane code.
+
+    This class performs a logical Z measurement without using flag qubits
+    for error detection during the measurement process.
+    """
+
     def __init__(self, d: list[Qubit], a: QReg, out: CReg) -> None:
         """Initialize NoFlagMeasureZ block for non-flagged logical Z measurement.
 

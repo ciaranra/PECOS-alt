@@ -1,3 +1,4 @@
+"""QASM regression tests for SLR physical quantum circuits."""
 from pecos import __version__
 from pecos.qeclib import qubit as p
 from pecos.slr import Bit, Block, Comment, CReg, If, Main, Permute, QReg, Qubit, Repeat

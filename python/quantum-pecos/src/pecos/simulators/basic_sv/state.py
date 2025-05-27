@@ -9,6 +9,11 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Quantum state representation for basic state vector simulator.
+
+This module provides the quantum state representation and management functionality for the basic state vector
+simulator, including state vector storage, manipulation, and utility functions for quantum state operations.
+"""
 
 from __future__ import annotations
 
@@ -120,5 +125,10 @@ class BasicSV(StateVector):
 
     @property
     def vector(self) -> ArrayLike:
+        """Get the quantum state vector as a numpy array.
+
+        Returns:
+            The state vector reshaped to have 2^num_qubits elements.
+        """
         # Use positional argument for backward compatibility with NumPy < 2.0
         return np.reshape(self.internal_vector, 2**self.num_qubits)

@@ -1,4 +1,10 @@
 # PECOS/python/pecos-rslib/tests/test_phir_engine.py
+"""Tests for PHIR engine integration with Rust-based simulators.
+
+This module contains test cases for verifying the integration between PHIR (PECOS High-level Intermediate
+Representation) and the Rust-based quantum simulators, ensuring proper execution of quantum programs and
+correct simulation results.
+"""
 import json
 
 import pytest
@@ -97,6 +103,7 @@ def test_phir_minimal() -> None:
 
 
 def test_phir_invalid_json() -> None:
+    """Test PHIR engine handling of invalid JSON input."""
     invalid_json = '{"format": "PHIR/JSON", "invalid": }'
     with pytest.raises(
         json.decoder.JSONDecodeError,
@@ -106,6 +113,7 @@ def test_phir_invalid_json() -> None:
 
 
 def test_phir_empty_program() -> None:
+    """Test PHIR engine processing of empty program."""
     phir = json.dumps(
         {
             "format": "PHIR/JSON",
@@ -121,6 +129,7 @@ def test_phir_empty_program() -> None:
 
 
 def test_phir_full_circuit() -> None:
+    """Test PHIR engine processing of complete quantum circuit."""
     phir = json.dumps(
         {
             "format": "PHIR/JSON",

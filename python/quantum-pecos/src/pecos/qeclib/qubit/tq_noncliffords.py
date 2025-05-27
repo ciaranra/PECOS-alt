@@ -1,3 +1,10 @@
+"""Two-qubit non-Clifford gate implementations.
+
+This module provides two-qubit non-Clifford gate implementations that
+extend beyond the Clifford group, enabling universal quantum computation
+when combined with Clifford gates in quantum algorithms.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -12,4 +19,9 @@
 from pecos.qeclib.qubit.qgate_base import TQGate
 
 
-class CH(TQGate): ...
+class CH(TQGate):
+    """Controlled-Hadamard gate.
+
+    This gate applies a Hadamard gate to the target qubit if the control qubit is in state |1⟩.
+    """
+

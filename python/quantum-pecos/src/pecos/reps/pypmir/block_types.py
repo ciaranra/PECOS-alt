@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Block type definitions for PyPMIR intermediate representation.
+
+This module defines block structures for PyPMIR (Python PECOS Medium-level Intermediate Representation) including
+conditional blocks and control flow structures for quantum circuit execution.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

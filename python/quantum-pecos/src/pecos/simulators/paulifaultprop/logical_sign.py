@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Logical sign tracking for Pauli fault propagation simulator.
+
+This module provides logical sign tracking functionality for the Pauli fault propagation simulator, managing the
+global phase and logical operator signs that arise from Pauli frame propagation in stabilizer circuits.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

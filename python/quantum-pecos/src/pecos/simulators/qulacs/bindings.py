@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Gate bindings for Qulacs quantum simulator.
+
+This module provides gate operation bindings for the Qulacs quantum simulator, organizing and exposing
+quantum gate implementations using the Qulacs framework for quantum circuit simulation.
+"""
+
 import pecos.simulators.qulacs.gates_one_qubit as one_q
 import pecos.simulators.qulacs.gates_two_qubit as two_q
 from pecos.simulators.qulacs.gates_init import init_one, init_zero

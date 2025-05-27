@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Data type definitions for PyPMIR intermediate representation.
+
+This module defines data types and structures used in PyPMIR (Python PECOS Medium-level Intermediate Representation) for
+representing quantum and classical data in quantum circuit execution.
+"""
+
 from __future__ import annotations
 
 from pecos.reps.pypmir.instr_type import Instr
@@ -19,6 +25,12 @@ class Data(Instr):
 
 
 class DefineVar(Data):
+    """Base class for variable definitions in PMIR.
+
+    This class provides the foundation for defining variables of various types
+    in the Pecos Machine Intermediate Representation.
+    """
+
     def __init__(
         self,
         data_type: str | type,
@@ -38,6 +50,12 @@ class DefineVar(Data):
 
 
 class CVarDefine(DefineVar):
+    """Classical variable definition in PMIR.
+
+    This class represents the definition of a classical variable with its associated
+    data type, size, and unique identifier.
+    """
+
     def __init__(
         self,
         data_type: str | type,
@@ -61,6 +79,12 @@ class CVarDefine(DefineVar):
 
 
 class QVarDefine(DefineVar):
+    """Quantum variable definition in PMIR.
+
+    This class represents the definition of a quantum variable with its associated
+    data type, size (number of qubits), and qubit identifiers.
+    """
+
     def __init__(
         self,
         data_type: str | type,
@@ -84,6 +108,12 @@ class QVarDefine(DefineVar):
 
 
 class ExportVar(Data):
+    """Variable export instruction in PMIR.
+
+    This class represents an instruction to export variables from the current
+    scope, optionally renaming them in the export destination.
+    """
+
     def __init__(
         self,
         variables: list[str],

@@ -1,3 +1,9 @@
+"""Circuit implementation for the 4.8.8 color code.
+
+This module provides circuit implementations for the 4.8.8 color code,
+a topological quantum error correction code based on 4.8.8 regular lattice.
+"""
+
 # Copyright 2018 The PECOS Developers
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.

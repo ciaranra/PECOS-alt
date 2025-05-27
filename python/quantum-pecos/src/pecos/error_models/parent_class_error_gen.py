@@ -314,6 +314,7 @@ class Generator:
             location: int,
             _error_params: dict[str, Any],
         ) -> None:
+            """Apply deterministic error after gate execution."""
             after.update(self.data, {location}, emptyappend=True)
 
         def error_func_before(
@@ -324,6 +325,7 @@ class Generator:
             location: int,
             _error_params: dict[str, Any],
         ) -> None:
+            """Apply deterministic error before gate execution."""
             before.update(self.data, {location}, emptyappend=True)
 
     class ErrorSet:
@@ -351,6 +353,7 @@ class Generator:
             location: int,
             _error_params: dict[str, Any],
         ) -> None:
+            """Apply random error after gate execution."""
             after.update(np.random.choice(self.data), {location}, emptyappend=True)
 
         def error_func_before(
@@ -361,6 +364,7 @@ class Generator:
             location: int,
             _error_params: dict[str, Any],
         ) -> None:
+            """Apply random error before gate execution."""
             before.update(np.random.choice(self.data), {location}, emptyappend=True)
 
     class ErrorSetMultiQuditGate:
@@ -397,6 +401,7 @@ class Generator:
             location: int | set[int],
             _error_params: dict[str, Any],
         ) -> None:
+            """Apply sampled multi-qubit error after gate execution."""
             # Choose an error symbol or tuple of symbols:
             indx = np.random.choice(len(self.data))
             error_symbols = self.data[indx]
@@ -426,6 +431,7 @@ class Generator:
             location: int | set[int],
             _error_params: dict[str, Any],
         ) -> None:
+            """Apply sampled multi-qubit error before gate execution."""
             indx = np.random.choice(len(self.data))
             error_symbols = self.data[indx]
 

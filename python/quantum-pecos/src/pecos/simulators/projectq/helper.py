@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Helper utilities for ProjectQ simulator.
+
+This module provides helper utilities and utility functions for the ProjectQ simulator, including common operations
+and support functions used across the ProjectQ-based quantum simulation components.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -44,6 +50,13 @@ class MakeFunc:
         qubits: Location,
         **params: SimulatorGateParams,
     ) -> None:
+        """Apply the wrapped ProjectQ gate to the quantum state.
+
+        Args:
+            state: The ProjectQ simulator state.
+            qubits: Qubit location(s) to apply the gate to.
+            **params: Additional gate parameters (e.g., angles).
+        """
         if isinstance(qubits, int):
             qs = state.qids[qubits]
         else:

@@ -9,6 +9,13 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Quantum simulator interface and implementation for PECOS.
+
+This module provides a unified quantum simulator interface that can dispatch
+quantum operations to different backend simulators including state vector
+and sparse stabilizer implementations.
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -42,6 +49,13 @@ except ImportError:
 
 
 class QuantumSimulator:
+    """General-purpose quantum simulator with multiple backend support.
+
+    This class provides a unified interface for various quantum simulation backends
+    including stabilizer simulators, state vector simulators, and specialized
+    simulators like MPS, Qulacs, and cuQuantum.
+    """
+
     def __init__(self, backend: str | object | None = None, **params: JSONType) -> None:
         """Initialize the QuantumSimulator.
 
@@ -59,10 +73,16 @@ class QuantumSimulator:
         self.qsim_params = params
 
     def reset(self) -> None:
+        """Reset the quantum simulator to its initial state."""
         self.num_qubits = None
         self.state = None
 
     def init(self, num_qubits: int) -> None:
+        """Initialize the quantum simulator with specified number of qubits.
+
+        Args:
+            num_qubits: Number of qubits to initialize.
+        """
         self.num_qubits = num_qubits
 
         if isinstance(self.backend, str):

@@ -1,3 +1,4 @@
+"""Tests for BinArray binary array operations."""
 from typing import Final
 
 import numpy as np
@@ -13,29 +14,34 @@ int_range = st.integers(min_value=MIN, max_value=MAX)
 
 @given(st.text(alphabet=["0", "1"], min_size=1))
 def test_init(x: str) -> None:
+    """Test BinArray initialization from binary string."""
     ba = BinArray(x)
     assert ba == f"0b{x}"
 
 
 def test_set_bit() -> None:
+    """Test setting individual bits in BinArray."""
     ba = BinArray("0000")
     ba[2] = 1
     assert ba == 0b0100
 
 
 def test_get_bit() -> None:
+    """Test getting individual bits from BinArray."""
     ba = BinArray("1010")
     assert ba[2] == 0
     assert ba[3] == 1
 
 
 def test_to_int() -> None:
+    """Test converting BinArray to integer."""
     ba = BinArray("1010")
     assert int(ba) == 10
 
 
 @given(int_range, int_range)
 def test_addition(x: int, y: int) -> None:
+    """Test BinArray addition operation."""
     assume(MIN <= x + y <= MAX)
     ba1 = BinArray(DEFAULT_SIZE, x)
     ba2 = BinArray(DEFAULT_SIZE, y)
@@ -44,6 +50,7 @@ def test_addition(x: int, y: int) -> None:
 
 
 def test_subtraction() -> None:
+    """Test BinArray subtraction operation."""
     ba1 = BinArray("1101")  # 13
     ba2 = BinArray("1010")  # 10
     result = ba1 - ba2
@@ -52,6 +59,7 @@ def test_subtraction() -> None:
 
 @given(int_range, int_range)
 def test_multiplication(x: int, y: int) -> None:
+    """Test BinArray multiplication operation."""
     assume(MIN <= x * y <= MAX)
     ba1 = BinArray(DEFAULT_SIZE, x)
     ba2 = BinArray(DEFAULT_SIZE, y)
@@ -60,6 +68,7 @@ def test_multiplication(x: int, y: int) -> None:
 
 
 def test_comparison() -> None:
+    """Test BinArray comparison operations."""
     ba1 = BinArray("1010")  # 10
     ba2 = BinArray("1010")  # 10
     ba3 = BinArray("1101")  # 13
@@ -71,6 +80,7 @@ def test_comparison() -> None:
 
 
 def test_bitwise_and() -> None:
+    """Test BinArray bitwise AND operation."""
     ba1 = BinArray("1010")  # 10
     ba2 = BinArray("1101")  # 13
     result = ba1 & ba2
@@ -78,6 +88,7 @@ def test_bitwise_and() -> None:
 
 
 def test_bitwise_or() -> None:
+    """Test BinArray bitwise OR operation."""
     ba1 = BinArray("1010")  # 10
     ba2 = BinArray("1101")  # 13
     result = ba1 | ba2
@@ -85,6 +96,7 @@ def test_bitwise_or() -> None:
 
 
 def test_bitwise_xor() -> None:
+    """Test BinArray bitwise XOR operation."""
     ba1 = BinArray("1010")  # 10
     ba2 = BinArray("1101")  # 13
     result = ba1 ^ ba2
@@ -92,6 +104,7 @@ def test_bitwise_xor() -> None:
 
 
 def test_unsigned_bitwise_not() -> None:
+    """Test BinArray bitwise NOT operation for unsigned data."""
     ba = BinArray("1010", dtype=np.uint64)  # 10
     result = ~ba
     assert result == 0b0101
@@ -99,6 +112,7 @@ def test_unsigned_bitwise_not() -> None:
 
 @given(int_range)
 def test_signed_bitwise_not(x: int) -> None:
+    """Test BinArray bitwise NOT operation for signed data."""
     ba = BinArray(DEFAULT_SIZE, x)
     result = ~ba
     assert int(result) == -x - 1  # (two's complement)

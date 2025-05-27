@@ -11,6 +11,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Timing circuit runner for performance measurement.
+
+This module provides a circuit runner with timing capabilities to measure
+the execution performance of quantum circuits in the PECOS framework.
+"""
+
 from __future__ import annotations
 
 from time import perf_counter as default_timer

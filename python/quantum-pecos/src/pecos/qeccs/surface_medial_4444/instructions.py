@@ -1,3 +1,10 @@
+"""Logical instruction implementations for the surface-medial-4444 code.
+
+This module provides logical instruction implementations for the surface-medial-4444 code,
+including syndrome extraction, error correction procedures, and logical
+measurement operations for this medial lattice variant of the surface code.
+"""
+
 # Copyright 2018 The PECOS Developers
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
@@ -239,6 +246,11 @@ class InstrSynExtraction(DefaultLogicalInstruction):
 
     @property
     def stabs_destabs(self) -> dict:
+        """Get stabilizers and destabilizers for the surface code instruction.
+
+        Returns:
+            Dictionary containing stabilizer and destabilizer information.
+        """
         if self._stabs_destabs:
             return self._stabs_destabs
 
@@ -292,6 +304,11 @@ class InstrSynExtraction(DefaultLogicalInstruction):
         return output_dict
 
     def generate_xdestabs(self) -> dict:
+        """Generate X-type destabilizers for the surface code.
+
+        Returns:
+            Dictionary containing X-type destabilizer information.
+        """
         distance = self.qecc.distance
 
         # x-type destabilizers
@@ -374,6 +391,11 @@ class InstrSynExtraction(DefaultLogicalInstruction):
         return set_destabs
 
     def generate_zdestabs(self) -> dict:
+        """Generate Z-type destabilizers for the surface code.
+
+        Returns:
+            Dictionary containing Z-type destabilizer information.
+        """
         distance = self.qecc.distance
 
         # x-type destabilizers
@@ -529,6 +551,11 @@ class InstrInitZero(DefaultLogicalInstruction):
 
     @property
     def stabs_destabs(self) -> dict:
+        """Get stabilizers and destabilizers for logical Z measurement.
+
+        Returns:
+            Dictionary containing stabilizer and destabilizer information.
+        """
         if self._stabs_destabs:
             return self._stabs_destabs
 
@@ -623,6 +650,7 @@ class InstrInitPlus(DefaultLogicalInstruction):
 
     @property
     def stabs_destabs(self) -> dict:
+        """Get stabilizers and destabilizers for the logical plus state initialization."""
         if self._stabs_destabs:
             return self._stabs_destabs
 

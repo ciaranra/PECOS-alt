@@ -25,6 +25,18 @@ if TYPE_CHECKING:
 
 
 def qubit_pauli(first_circuit: QuantumCircuit, second_circuit: QuantumCircuit) -> bool:
+    """Check if two single-tick Pauli circuits commute.
+
+    Args:
+        first_circuit: First quantum circuit containing Pauli operations.
+        second_circuit: Second quantum circuit containing Pauli operations.
+
+    Returns:
+        True if the circuits commute, False if they anticommute.
+
+    Raises:
+        Exception: If either circuit contains more than one tick.
+    """
     if len(first_circuit) != 1 or len(second_circuit) != 1:
         msg = "Circuits are expected to only have one tick."
         raise Exception(msg)

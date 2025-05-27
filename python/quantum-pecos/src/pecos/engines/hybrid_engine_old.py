@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Legacy hybrid engine implementation for PECOS.
+
+This module provides the legacy hybrid engine implementation maintained
+for backward compatibility with existing quantum-classical workflows.
+"""
+
 from __future__ import annotations
 
 import os
@@ -40,7 +46,15 @@ if TYPE_CHECKING:
             tick_circuit: QuantumCircuit,
             time: int,
             output: dict[str, BinArray],
-        ) -> None: ...
+        ) -> None:
+            """Analyze a circuit at a specific time tick.
+
+            Args:
+                tick_circuit: Quantum circuit for the current time tick.
+                time: Current time step.
+                output: Output dictionary with binary arrays.
+            """
+            ...
 
 
 class HybridEngine:
@@ -93,6 +107,21 @@ class HybridEngine:
         output_spec: dict[str, int] | None = None,
         circ_inspector: CircuitInspector | None = None,
     ) -> tuple[dict, dict]:
+        """Run a quantum circuit with optional error modeling.
+
+        Args:
+            state: Quantum simulator state.
+            circuit: Quantum circuit to execute.
+            error_gen: Optional error model.
+            error_params: Parameters for error generation.
+            error_circuits: Pre-generated error circuits.
+            output: Output dictionary for results.
+            output_spec: Specification for output variables.
+            circ_inspector: Optional circuit inspector.
+
+        Returns:
+            Tuple of final simulator state and output dictionary.
+        """
         output = set_output(state, circuit, output_spec, output)
         output_export = {}
 

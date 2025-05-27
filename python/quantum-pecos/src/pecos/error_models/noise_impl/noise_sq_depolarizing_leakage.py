@@ -1,3 +1,10 @@
+"""Single-qubit depolarizing noise with leakage.
+
+This module provides depolarizing noise models for single-qubit operations
+that include leakage to states outside the computational subspace,
+providing more realistic error modeling for quantum systems.
+"""
+
 # Copyright 2023 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -27,6 +34,22 @@ def noise_sq_depolarizing_leakage(
     noise_dict: dict,
     machine: MachineProtocol,
 ) -> list[QOp] | None:
+    """Apply single-qubit depolarizing noise with leakage support.
+
+    Applies depolarizing noise to quantum operations while handling
+    leaked qubits through the machine protocol. Leaked qubits are
+    excluded from noise application.
+
+    Args:
+        op: Quantum operation to apply noise to.
+        p: Probability of noise occurring on each non-leaked qubit.
+        noise_dict: Dictionary mapping fault types to their probabilities.
+        machine: Machine protocol handling qubit leakage states.
+
+    Returns:
+        List of quantum operations including modified operation and noise,
+        or None if no noise or leakage occurs.
+    """
     args = set(op.args)
     leaked = machine.leaked_qubits & args
 

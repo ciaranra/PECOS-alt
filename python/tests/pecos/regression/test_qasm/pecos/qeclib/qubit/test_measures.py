@@ -1,3 +1,4 @@
+"""QASM regression tests for qubit measurement operations."""
 from collections.abc import Callable
 
 from pecos.qeclib import qubit
@@ -5,6 +6,7 @@ from pecos.slr import CReg, QReg
 
 
 def test_Measure(compare_qasm: Callable[..., None]) -> None:
+    """Test Measure gate QASM regression."""
     q = QReg("q_test", 1)
     m = CReg("m_test", 1)
 

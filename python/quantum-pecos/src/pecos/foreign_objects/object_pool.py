@@ -1,3 +1,10 @@
+"""Object pool management for foreign object lifecycle.
+
+This module provides object pool management functionality for handling the lifecycle of foreign objects within the
+PECOS framework, enabling efficient resource management and reuse of external computational resources such as
+WebAssembly modules and other foreign language integrations.
+"""
+
 # Copyright 2023 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -49,6 +56,15 @@ class NamedObjectPool:
                 obj.exec("shot_reinit", [])
 
     def add(self, namespace: str, obj: ForeignObjectProtocol) -> None:
+        """Add a foreign object to the pool.
+
+        Args:
+            namespace: Name identifier for the object.
+            obj: Foreign object to add to the pool.
+
+        Raises:
+            Exception: If an object with the same namespace already exists.
+        """
         if namespace in self.objs:
             msg = f"Object named '{namespace}' already exists!"
             raise Exception(msg)

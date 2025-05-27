@@ -1,3 +1,10 @@
+"""Generic error model with comprehensive noise support.
+
+This module provides a generic error model implementation that supports
+various noise types including bitflip, depolarizing, and leakage errors
+for comprehensive quantum error correction simulations.
+"""
+
 # Copyright 2023 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -90,6 +97,12 @@ class GenericErrorModel:
         return GenericErrorModel(error_params=self.error_params)
 
     def init(self, num_qubits: int, machine: MachineProtocol | None = None) -> None:
+        """Initialize the generic error model.
+
+        Args:
+            num_qubits: Number of qubits in the system.
+            machine: Optional machine protocol for hardware-specific behavior.
+        """
         self.machine = machine
         self.num_qubits = num_qubits
 
@@ -132,6 +145,15 @@ class GenericErrorModel:
         qops: list[QOp],
         call_back: Callable | None = None,  # noqa: ARG002
     ) -> list[QOp | SeqBlock]:
+        """Process quantum operations and apply generic errors.
+
+        Args:
+            qops: List of quantum operations to process.
+            call_back: Optional callback function for additional processing.
+
+        Returns:
+            List of quantum operations with applied errors.
+        """
         noisy_ops = []
 
         for op in qops:

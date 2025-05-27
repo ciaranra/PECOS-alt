@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Quantum measurement operations for Pauli fault propagation simulator.
+
+This module provides quantum measurement operations for the Pauli fault propagation simulator, including projective
+measurements with efficient Pauli frame updates and fault propagation tracking through measurement operations.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -62,6 +68,22 @@ def meas_pauli(
     qubits: int | tuple[int, ...],
     **params: SimulatorGateParams,
 ) -> int:
+    """Measure a multi-qubit Pauli operator.
+
+    Performs measurement of a specified Pauli operator on one or more qubits,
+    returning the parity of individual Pauli measurements on each qubit.
+
+    Args:
+        state: Pauli fault propagation state containing fault information.
+        qubits: Qubit index or tuple of qubit indices to measure.
+        **params: Gate parameters including 'Pauli' specifying the operator.
+
+    Returns:
+        Measurement result (0 or 1) as parity of individual measurements.
+
+    Raises:
+        Exception: If Pauli operator specification is invalid.
+    """
     pauli = params["Pauli"]
 
     if isinstance(qubits, int) and pauli not in ["X", "Y", "Z"]:

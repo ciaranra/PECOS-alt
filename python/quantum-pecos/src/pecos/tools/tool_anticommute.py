@@ -1,3 +1,10 @@
+"""Anticommutation analysis tools for quantum circuits.
+
+This module provides utilities for analyzing anticommutation relationships
+between quantum circuits and operators, which is essential for understanding
+operator algebra in quantum error correction and quantum computing.
+"""
+
 # Copyright 2022 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -18,6 +25,21 @@ if TYPE_CHECKING:
 
 
 def anticommute(qc1: QuantumCircuit, qc2: QuantumCircuit) -> int:
+    """Check if two Pauli operator circuits anticommute.
+
+    Determines whether two quantum circuits representing Pauli operators
+    anticommute by counting overlapping qubits with different Pauli operators.
+
+    Args:
+        qc1: First quantum circuit containing only Pauli X, Y, Z gates.
+        qc2: Second quantum circuit containing only Pauli X, Y, Z gates.
+
+    Returns:
+        1 if the circuits anticommute, 0 if they commute.
+
+    Raises:
+        Exception: If circuits contain non-Pauli gates.
+    """
     x1 = set()
     y1 = set()
     z1 = set()

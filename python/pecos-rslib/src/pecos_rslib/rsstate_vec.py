@@ -9,6 +9,13 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Rust-based state vector simulator for PECOS.
+
+This module provides a Python interface to the high-performance Rust implementation of quantum state vector simulation,
+enabling efficient quantum circuit simulation with full quantum state representation and support for arbitrary quantum
+gates and measurements.
+"""
+
 # ruff: noqa: SLF001
 
 from __future__ import annotations
@@ -22,6 +29,11 @@ if TYPE_CHECKING:
 
 
 class StateVecRs:
+    """Rust-based quantum state vector simulator.
+
+    A high-performance quantum state vector simulator implemented in Rust, providing efficient simulation of arbitrary
+    quantum circuits with full quantum state representation and support for complex quantum operations.
+    """
     def __init__(self, num_qubits: int):
         """
         Initializes the Rust-backed state vector simulator.
@@ -35,6 +47,11 @@ class StateVecRs:
 
     @property
     def vector(self) -> List[complex]:
+        """Get the state vector as a list of complex numbers.
+
+        Returns:
+            List of complex amplitudes representing the quantum state.
+        """
         raw_vector = self._sim.vector
         # Convert to list of complex numbers
         if isinstance(raw_vector[0], (list, tuple)):
@@ -91,7 +108,7 @@ class StateVecRs:
 
                 # Convert list to tuple if needed (for Rust bindings compatibility)
                 if isinstance(location, list):
-                    location = tuple(location)
+                    location = tuple(location)  # noqa: PLW2901 # Necessary conversion for Rust bindings
 
                 if symbol in self.bindings:
                     results = self.bindings[symbol](self, location, **params)
@@ -109,6 +126,15 @@ class StateVecRs:
         circuit,
         removed_locations: set[int] | None = None,
     ) -> dict[int, int]:
+        """Execute a quantum circuit.
+
+        Args:
+            circuit: Quantum circuit to execute.
+            removed_locations: Optional set of locations to exclude.
+
+        Returns:
+            Dictionary mapping locations to measurement results.
+        """
         if removed_locations is None:
             removed_locations = set()
 

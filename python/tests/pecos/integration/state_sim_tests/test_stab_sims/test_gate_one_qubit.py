@@ -27,7 +27,7 @@ def gate_test(gate_symbol: str, stab_dict: dict[str, list[str]]) -> None:
     :return:
     """
     for state in states:
-        state = state(1)
+        state = state(1)  # noqa: PLW2901 - instantiate class
 
         # X stabilizer
         state.run_gate("init |+>", {0})
@@ -59,6 +59,7 @@ def destab_test(
     init_destab: str,
     stab_dict: dict[str, list[str]],
 ) -> None:
+    """Test destabilizer operations for stabilizer simulators."""
     destab = state.destabs.print_tableau(verbose=False)[0]
 
     init_destab = init_destab.strip()

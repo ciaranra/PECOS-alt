@@ -1,3 +1,7 @@
+"""WebAssembly virtual machines for CVM.
+
+This package provides WebAssembly runtime implementations for the CVM engine.
+"""
 # Copyright 2022 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

@@ -11,6 +11,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Two-qubit gate operations for ProjectQ simulator.
+
+This module provides two-qubit quantum gate operations for the ProjectQ simulator, including CNOT gates,
+controlled gates, and other fundamental two-qubit operations using the ProjectQ framework.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -30,7 +36,12 @@ def II(
     qubits: tuple[int, int],
     **_params: SimulatorGateParams,
 ) -> None:
-    pass
+    """Apply two-qubit identity gate (no operation).
+
+    Args:
+        state: ProjectQ simulator state.
+        qubits: Tuple of two target qubit indices.
+    """
 
 
 def G2(
@@ -50,6 +61,12 @@ def CNOT(
     qubits: tuple[int, int],
     **_params: SimulatorGateParams,
 ) -> None:
+    """Apply controlled-NOT (CNOT) gate.
+
+    Args:
+        state: ProjectQ simulator state.
+        qubits: Tuple of (control, target) qubit indices.
+    """
     q1 = state.qids[qubits[0]]
     q2 = state.qids[qubits[1]]
 
@@ -61,6 +78,12 @@ def CZ(
     qubits: tuple[int, int],
     **_params: SimulatorGateParams,
 ) -> None:
+    """Apply controlled-Z (CZ) gate.
+
+    Args:
+        state: ProjectQ simulator state.
+        qubits: Tuple of (control, target) qubit indices.
+    """
     q1 = state.qids[qubits[0]]
     q2 = state.qids[qubits[1]]
 
@@ -72,6 +95,12 @@ def CY(
     qubits: tuple[int, int],
     **_params: SimulatorGateParams,
 ) -> None:
+    """Apply controlled-Y (CY) gate.
+
+    Args:
+        state: ProjectQ simulator state.
+        qubits: Tuple of (control, target) qubit indices.
+    """
     q1 = state.qids[qubits[0]]
     q2 = state.qids[qubits[1]]
 
@@ -83,6 +112,12 @@ def SWAP(
     qubits: tuple[int, int],
     **_params: SimulatorGateParams,
 ) -> None:
+    """Apply SWAP gate to exchange qubit states.
+
+    Args:
+        state: ProjectQ simulator state.
+        qubits: Tuple of two qubit indices to swap.
+    """
     q1 = state.qids[qubits[0]]
     q2 = state.qids[qubits[1]]
 
@@ -197,6 +232,13 @@ def RXX(
     angle: float | None = None,
     **_params: SimulatorGateParams,
 ) -> None:
+    """Apply RXX rotation gate around XX axis.
+
+    Args:
+        state: ProjectQ simulator state.
+        qubits: Tuple of two target qubit indices.
+        angle: Rotation angle in radians.
+    """
     q1 = state.qids[qubits[0]]
     q2 = state.qids[qubits[1]]
     ops.Rxx(angle) | (q1, q2)
@@ -208,6 +250,13 @@ def RYY(
     angle: float | None = None,
     **_params: SimulatorGateParams,
 ) -> None:
+    """Apply RYY rotation gate around YY axis.
+
+    Args:
+        state: ProjectQ simulator state.
+        qubits: Tuple of two target qubit indices.
+        angle: Rotation angle in radians.
+    """
     q1 = state.qids[qubits[0]]
     q2 = state.qids[qubits[1]]
     ops.Ryy(angle) | (q1, q2)
@@ -219,6 +268,13 @@ def RZZ(
     angle: float | None = None,
     **_params: SimulatorGateParams,
 ) -> None:
+    """Apply RZZ rotation gate around ZZ axis.
+
+    Args:
+        state: ProjectQ simulator state.
+        qubits: Tuple of two target qubit indices.
+        angle: Rotation angle in radians.
+    """
     q1 = state.qids[qubits[0]]
     q2 = state.qids[qubits[1]]
     ops.Rzz(angle) | (q1, q2)
@@ -230,6 +286,15 @@ def R2XXYYZZ(
     angles: tuple[float, float, float] | None = None,
     **_params: SimulatorGateParams,
 ) -> None:
+    """Apply combined RXX, RYY, RZZ rotation gates.
+
+    Sequentially applies RXX, RYY, and RZZ rotations with given angles.
+
+    Args:
+        state: ProjectQ simulator state.
+        qubits: Tuple of two target qubit indices.
+        angles: Tuple of (RXX angle, RYY angle, RZZ angle) in radians.
+    """
     q1 = state.qids[qubits[0]]
     q2 = state.qids[qubits[1]]
     ops.Rxx(angles[0]) | (q1, q2)

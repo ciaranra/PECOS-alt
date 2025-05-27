@@ -276,6 +276,17 @@ class Check2Circuits:
         locations: set[int],  # noqa: ARG004
         params: dict[str, Any],
     ) -> dict[str, Any]:
+        """Generate tick data for stabilizer checks.
+
+        Args:
+            make_ticks_data: Data structure containing tick generation parameters.
+            gate_symbol: Symbol identifying the type of gate/check to generate.
+            locations: Set of qubit locations (unused in this implementation).
+            params: Additional parameters for gate generation.
+
+        Returns:
+            Dictionary containing generated tick data.
+        """
         # X check: init   H    [all data ticks begin] <- H meas [slide to the left]
         # Z check: [idle] init [all data ticks begin] <- meas [slide to the left]
 
@@ -306,4 +317,5 @@ class NoMap:
         """
 
     def __getitem__(self, item: T) -> T:
+        """Return the item unchanged (identity mapping)."""
         return item

@@ -9,6 +9,13 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Type-safe list implementation with runtime type checking.
+
+This module provides a TypedList class that enforces type constraints on list
+elements at runtime, ensuring all items conform to a specified type throughout
+the list's lifetime.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Iterable

@@ -1,3 +1,8 @@
+"""Error models for quantum simulations.
+
+This package provides various error models for simulating noise in quantum circuits,
+including depolarizing, Pauli, and circuit-based error models.
+"""
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
 #

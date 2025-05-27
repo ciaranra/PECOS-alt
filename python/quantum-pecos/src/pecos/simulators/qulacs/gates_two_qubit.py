@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Two-qubit gate operations for Qulacs simulator.
+
+This module provides two-qubit quantum gate operations for the Qulacs simulator, including CNOT gates,
+controlled gates, and other fundamental two-qubit operations using Qulacs framework.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

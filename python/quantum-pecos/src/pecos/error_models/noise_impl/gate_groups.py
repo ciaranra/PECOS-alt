@@ -1,3 +1,10 @@
+"""Gate grouping definitions for noise models.
+
+This module defines gate groups (single-qubit and two-qubit) used by
+noise implementations to categorize quantum gates for appropriate
+noise application in error models.
+"""
+
 # Copyright 2021 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

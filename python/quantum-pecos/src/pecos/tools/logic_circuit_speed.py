@@ -1,3 +1,10 @@
+"""Performance benchmarking tools for logical quantum circuits.
+
+This module provides utilities for measuring and analyzing the execution
+speed and performance characteristics of logical quantum circuits in
+quantum error correction systems.
+"""
+
 # Copyright 2019 The PECOS Developers
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
@@ -19,7 +26,6 @@ import numpy as np
 
 from pecos.circuits import QuantumCircuit
 from pecos.engines.circuit_runners import TimingRunner
-from pecos.simulators import SparseSimPy
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -28,13 +34,29 @@ if TYPE_CHECKING:
 
 
 def random_circuit_speed(
-    state_sim: type[SimulatorProtocol],  # noqa: ARG001
+    state_sim: type[SimulatorProtocol],
     num_qubits: int,
     circuit_depth: int,
     trials: int = 10000,
     gates: Sequence[str] | None = None,
     seed_start: int = 0,
 ) -> tuple[list[float], list[dict[str, int | list[int]]]]:
+    """Measure execution speed of random quantum circuits.
+
+    Generates random quantum circuits and measures their execution times
+    using particular simulator for performance benchmarking.
+
+    Args:
+        state_sim: Simulator protocol type (unused in current implementation).
+        num_qubits: Number of qubits in the circuits.
+        circuit_depth: Number of gates per circuit.
+        trials: Number of random circuits to generate and test.
+        gates: List of gate types to use, defaults to comprehensive gate set.
+        seed_start: Starting seed for random number generation.
+
+    Returns:
+        Tuple of execution times and measurement results for each circuit.
+    """
     circuits = generate_circuits(num_qubits, circuit_depth, trials, gates, seed_start)
 
     times = []
@@ -42,7 +64,7 @@ def random_circuit_speed(
 
     circ_sim = TimingRunner()
     for qc in circuits:
-        state = SparseSimPy(num_qubits)
+        state = state_sim(num_qubits)
         meas = circ_sim.run(state, qc)
         times.append(circ_sim.total_time)
         measurements.append(meas)
@@ -57,6 +79,21 @@ def generate_circuits(
     gates: Sequence[str] | None = None,
     seed_start: int = 0,
 ) -> list[QuantumCircuit]:
+    """Generate random quantum circuits for performance testing.
+
+    Creates a collection of random quantum circuits with specified parameters,
+    using a comprehensive set of quantum gates and operations.
+
+    Args:
+        num_qubits: Number of qubits per circuit.
+        circuit_depth: Number of gates per circuit.
+        trials: Number of circuits to generate.
+        gates: Gate types to use, defaults to extensive gate library.
+        seed_start: Starting seed for reproducible randomness.
+
+    Returns:
+        List of randomly generated quantum circuits.
+    """
     if gates is None:
         gates = [
             "I",
@@ -135,4 +172,13 @@ def generate_circuits(
 
 
 def get_qubits(num_qubits: int, size: int) -> np.ndarray:
+    """Get random qubit indices without replacement.
+
+    Args:
+        num_qubits: Total number of qubits available.
+        size: Number of qubits to select.
+
+    Returns:
+        Array of randomly selected qubit indices.
+    """
     return np.random.choice(list(range(num_qubits)), size, replace=False)

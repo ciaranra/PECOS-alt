@@ -1,3 +1,10 @@
+"""Single-qubit bitflip noise implementation.
+
+This module provides bitflip noise models for single-qubit operations,
+applying X (bitflip) errors to individual qubits with specified
+probabilities during quantum computations.
+"""
+
 # Copyright 2023 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

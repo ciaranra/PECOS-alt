@@ -1,3 +1,9 @@
+"""Three-parallel flagging syndrome extraction for the Steane 7-qubit code.
+
+This module provides fault-tolerant syndrome extraction implementations using three parallel flagging circuits for
+detecting hook errors during stabilizer measurements in the Steane 7-qubit quantum error correction code.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -130,6 +136,12 @@ class ThreeParallelFlaggingXZZ(Block):
 
 
 class ThreeParallelFlaggingZXX(Block):
+    """Three parallel flagging syndrome extraction for Steane code.
+
+    This class implements syndrome extraction using three parallel flag/ancilla qubits
+    for the ZXX measurement process.
+    """
+
     def __init__(
         self,
         data: QReg,

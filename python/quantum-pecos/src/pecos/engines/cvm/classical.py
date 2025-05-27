@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Classical computation utilities for the PECOS virtual machine.
+
+This module provides functions for evaluating classical operations, expressions,
+and conditional logic in the PECOS classical virtual machine (CVM).
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -28,6 +34,21 @@ def set_output(
     output_spec: dict[str, int] | None,
     output: dict[str, BinArray] | None,
 ) -> dict[str, BinArray]:
+    """Set up output dictionary for classical variable storage.
+
+    Initializes the output dictionary with BinArrays for storing classical
+    computation results, using size specifications from the circuit metadata
+    and provided output specification.
+
+    Args:
+        state: Quantum simulator state providing qubit count.
+        circuit: Quantum circuit containing variable specifications.
+        output_spec: Dictionary mapping variable names to bit sizes.
+        output: Existing output dictionary to update, if any.
+
+    Returns:
+        Initialized output dictionary with BinArrays for each variable.
+    """
     if output_spec is None:
         output_spec = {}
 
@@ -54,6 +75,23 @@ def eval_op(
     b: BinArray | int | None = None,
     width: int = 32,
 ) -> BinArray:
+    """Evaluate a binary or unary operation on BinArrays.
+
+    Performs arithmetic, logical, or comparison operations on binary arrays,
+    supporting assignment, bitwise operations, arithmetic, and comparisons.
+
+    Args:
+        op: Operation string (e.g., '=', '+', '&', '==', '~').
+        a: First operand as BinArray or integer.
+        b: Second operand for binary operations, None for unary operations.
+        width: Bit width for integer to BinArray conversion.
+
+    Returns:
+        Result of the operation as a BinArray.
+
+    Raises:
+        Exception: If operation is unsupported or arguments are invalid.
+    """
     if isinstance(a, int):
         a = BinArray(width, a)
 
@@ -119,6 +157,22 @@ def get_val(
     output: dict[str, BinArray],
     width: int,
 ) -> BinArray:
+    """Extract and convert a value to BinArray.
+
+    Retrieves values from the output dictionary or converts literals to BinArrays,
+    supporting indexed access for array variables.
+
+    Args:
+        a: Value to extract - can be BinArray, variable reference, or literal.
+        output: Dictionary containing variable values.
+        width: Bit width for value conversion.
+
+    Returns:
+        Value converted to BinArray format.
+
+    Raises:
+        TypeError: If the input type is not supported.
+    """
     if isinstance(a, BinArray):
         return a
 
@@ -144,6 +198,19 @@ def recur_eval_op(
     output: dict[str, BinArray],
     width: int,
 ) -> BinArray:
+    """Recursively evaluate a nested expression dictionary.
+
+    Processes nested expressions by recursively evaluating sub-expressions
+    and combining results using the specified operations.
+
+    Args:
+        expr_dict: Dictionary containing expression with 'op', 'a', 'b', 'c' keys.
+        output: Dictionary containing variable values.
+        width: Bit width for operations.
+
+    Returns:
+        Result of the evaluated expression as BinArray.
+    """
     a = expr_dict.get("a")
     op = expr_dict.get("op")
     b = expr_dict.get("b")
@@ -228,6 +295,18 @@ def eval_tick_conds(
     tick_circuit: QuantumCircuit,
     output: dict[str, BinArray],
 ) -> list[bool]:
+    """Evaluate conditional expressions for each operation in a tick circuit.
+
+    Processes each operation in the circuit and evaluates its conditional
+    expression to determine if the operation should be executed.
+
+    Args:
+        tick_circuit: Quantum circuit containing operations with conditions.
+        output: Dictionary containing variable values for condition evaluation.
+
+    Returns:
+        List of boolean values indicating whether each operation's condition is true.
+    """
     conds = []
 
     for _symbol, _locations, params in tick_circuit.items():
@@ -241,6 +320,23 @@ def eval_condition(
     conditional_expr: dict[str, Any] | tuple[Any, ...] | list[Any] | None,
     output: dict[str, BinArray],
 ) -> bool:
+    """Evaluate a conditional expression to a boolean result.
+
+    Processes conditional expressions supporting comparison operators,
+    variable references, and nested conditions. Returns True for None conditions.
+
+    Args:
+        conditional_expr: Expression dictionary with 'op', 'a', 'b' keys,
+                         tuple/list for complex conditions, or None.
+        output: Dictionary containing variable values.
+
+    Returns:
+        Boolean result of the conditional evaluation.
+
+    Raises:
+        Exception: If expression format is invalid.
+        TypeError: If operand types are unexpected.
+    """
     # Handle if a condition might eval to something else (eval_to)
     if isinstance(conditional_expr, tuple | list):
         if len(conditional_expr) != 2:

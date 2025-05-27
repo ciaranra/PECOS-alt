@@ -1,3 +1,9 @@
+"""Destructive logical measurements for the Steane 7-qubit code.
+
+This module provides destructive logical measurement implementations for the Steane 7-qubit code that extract logical
+measurement outcomes while destroying the encoded quantum state.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -137,6 +143,12 @@ class MeasureZ(Block):
 
 
 class Measure(Block):
+    """Destructive logical measurement for Steane code.
+
+    This class performs a destructive measurement of a logical qubit encoded
+    in the Steane code, measuring in the X, Y, or Z basis.
+    """
+
     def __init__(self, q: QReg, meas_creg: CReg, log_raw: Bit, meas_basis: str) -> None:
         """Initialize Measure block for logical measurement in specified basis.
 

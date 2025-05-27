@@ -1,3 +1,9 @@
+"""Lookup table decoder for the Steane 7-qubit code.
+
+This module provides lookup table decoding implementations for the Steane 7-qubit quantum error correction code,
+enabling syndrome-based error correction through pre-computed correction tables.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -20,6 +26,12 @@ if TYPE_CHECKING:
 
 
 class FlagLookupQASM(Block):
+    """Flag-based lookup decoder for Steane code syndrome decoding.
+
+    This class implements a lookup table-based decoder that uses flag qubits
+    to determine the appropriate error correction based on measured syndromes.
+    """
+
     def __init__(
         self,
         basis: str,
@@ -101,6 +113,12 @@ BEGIN Run {basis} decoder
 
 
 class FlagLookupQASMActiveCorrectionX(Block):
+    """Active X-basis correction using flag-based lookup for Steane code.
+
+    This class applies X-basis error corrections based on syndrome measurements
+    and flag qubit information using a lookup table approach.
+    """
+
     def __init__(
         self,
         qubits: QReg,
@@ -189,6 +207,12 @@ class FlagLookupQASMActiveCorrectionX(Block):
 
 
 class FlagLookupQASMActiveCorrectionZ(Block):
+    """Active Z-basis correction using flag-based lookup for Steane code.
+
+    This class applies Z-basis error corrections based on syndrome measurements
+    and flag qubit information using a lookup table approach.
+    """
+
     def __init__(
         self,
         qubits: QReg,

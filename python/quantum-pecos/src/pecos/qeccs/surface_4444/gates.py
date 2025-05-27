@@ -1,3 +1,10 @@
+"""Logical gate implementations for the surface-4444 code.
+
+This module provides logical gate implementations for the surface-4444 code,
+a variant of the surface code with specific boundary conditions and
+stabilizer arrangements for quantum error correction.
+"""
+
 # Copyright 2019 The PECOS Developers
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.

@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Single-qubit gate operations for basic state vector simulator.
+
+This module provides single-qubit quantum gate operations for the basic state vector simulator, including Pauli
+gates, rotation gates, Hadamard gates, and other fundamental single-qubit quantum operations.
+"""
+
 from __future__ import annotations
 
 import cmath

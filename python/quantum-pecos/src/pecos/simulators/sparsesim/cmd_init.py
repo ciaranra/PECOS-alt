@@ -11,6 +11,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Qubit initialization commands for sparse stabilizer simulator.
+
+This module provides quantum state initialization operations for the sparse stabilizer simulator, including
+commands to initialize qubits to computational basis states using efficient stabilizer tableau representation.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

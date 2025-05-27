@@ -119,48 +119,69 @@ class ProjectQSim(StateVector):
             self.gate_dict[symbol] = gate_obj
 
     def get_probs(self, key_basis: list[str] | None = None) -> dict[str, float]:
+        """Get measurement probabilities for computational basis states.
+
+        Args:
+            key_basis: Optional list of basis states to get probabilities for.
+                      If None, returns probabilities for all 2^n basis states.
+
+        Returns:
+            Dictionary mapping basis state strings to their probabilities.
+        """
         self.eng.flush()
 
         if key_basis:
             probs_dict = {}
             for b in key_basis:
-                b = b[::-1]
-                p = self.eng.backend.get_probability(b, self.qureg)
-                b = b[::-1]
+                # ProjectQ uses reversed bit order
+                b_reversed = b[::-1]
+                p = self.eng.backend.get_probability(b_reversed, self.qureg)
                 probs_dict[b] = p
             return probs_dict
 
         probs_dict = {}
-        for b in range(np.power(2, self.num_qubits)):
-            b = format(b, f"0{self.num_qubits}b")
-            p = self.eng.backend.get_probability(b, self.qureg)
-            b = b[::-1]
-            probs_dict[b] = p
+        for i in range(np.power(2, self.num_qubits)):
+            b_str = format(i, f"0{self.num_qubits}b")
+            p = self.eng.backend.get_probability(b_str, self.qureg)
+            # Store with reversed bit order for consistent output
+            b_key = b_str[::-1]
+            probs_dict[b_key] = p
 
         return probs_dict
 
     def get_amps(self, key_basis: list[str] | None = None) -> dict[str, complex]:
+        """Get probability amplitudes for computational basis states.
+
+        Args:
+            key_basis: Optional list of basis states to get amplitudes for.
+                      If None, returns amplitudes for all 2^n basis states.
+
+        Returns:
+            Dictionary mapping basis state strings to their complex amplitudes.
+        """
         self.eng.flush()
 
         if key_basis:
             amps_dict = {}
             for b in key_basis:
-                b = b[::-1]
-                p = self.eng.backend.get_amplitude(b, self.qureg)
-                b = b[::-1]
+                # ProjectQ uses reversed bit order
+                b_reversed = b[::-1]
+                p = self.eng.backend.get_amplitude(b_reversed, self.qureg)
                 amps_dict[b] = p
             return amps_dict
 
         amp_dict = {}
-        for b in range(np.power(2, self.num_qubits)):
-            b = format(b, f"0{self.num_qubits}b")
-            a = self.eng.backend.get_amplitude(b, self.qureg)
-            b = b[::-1]
-            amp_dict[b] = a
+        for i in range(np.power(2, self.num_qubits)):
+            b_str = format(i, f"0{self.num_qubits}b")
+            a = self.eng.backend.get_amplitude(b_str, self.qureg)
+            # Store with reversed bit order for consistent output
+            b_key = b_str[::-1]
+            amp_dict[b_key] = a
 
         return amp_dict
 
     def __del__(self) -> None:
+        """Clean up ProjectQ engine and deallocate qubits when the object is destroyed."""
         self.eng.flush()
         All(Measure) | self.qureg  # Requirement by ProjectQ...
 

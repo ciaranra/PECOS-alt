@@ -1,3 +1,9 @@
+"""Encoding circuit implementations for the Steane 7-qubit code.
+
+This module provides encoding circuit implementations that transform single logical qubits into the 7-qubit Steane code
+representation, enabling quantum error correction.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -14,6 +20,12 @@ from pecos.slr import Block, Comment, QReg
 
 
 class EncodingCircuit(Block):
+    """Encoding circuit for Steane code.
+
+    This class implements the encoding circuit that transforms a single logical
+    qubit into the 7-qubit Steane code representation.
+    """
+
     def __init__(self, q: QReg) -> None:
         """Initialize EncodingCircuit block for Steane code encoding.
 

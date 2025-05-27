@@ -185,6 +185,11 @@ class QuantumCircuit(MutableSequence):
                 yield symbol, locations, params
 
     def iter_ticks(self) -> Iterator[tuple[int, ParamGateCollection, JSONDict]]:
+        """Iterate over circuit time ticks.
+
+        Yields:
+            Tuples containing gate collection, tick number, and metadata.
+        """
         for tick in range(len(self)):
             gates = self[tick]
             yield gates, tick, self.metadata
@@ -292,6 +297,7 @@ class QuantumCircuit(MutableSequence):
         return self._ticks[tick]
 
     def __setitem__(self, tick: int, item: tuple[GateDict, JSONDict]) -> None:
+        """Set gate collection at specified tick."""
         gate_dict, params = item
         self._ticks[tick] = self._gates_class(self, gate_dict, **params)
 
@@ -350,6 +356,7 @@ class QuantumCircuit(MutableSequence):
         return self.__copy__()
 
     def __iter__(self) -> Iterator[tuple[str, LocationSet, JSONDict]]:
+        """Iterate over all gates in the circuit."""
         return self.items()
 
 
@@ -490,6 +497,7 @@ class ParamGateCollection:
                 yield gate_symbol, gate.locations, gate.params
 
     def __str__(self) -> str:
+        """Return string representation of the tick."""
         tick_list = []
         for symbol, locations, params in self.items():
             if len(params) == 0:
@@ -501,4 +509,5 @@ class ParamGateCollection:
         return f"Tick({{{tick_list}}})"
 
     def __repr__(self) -> str:
+        """Return detailed string representation of the tick."""
         return self.__str__()

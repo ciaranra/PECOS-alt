@@ -1,3 +1,10 @@
+"""Generic stabilizer check implementations.
+
+This module provides generic implementations for stabilizer checks in
+quantum error correction, including syndrome extraction circuits and
+check operations that can be used across different QEC codes.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -22,6 +29,12 @@ if TYPE_CHECKING:
 
 
 class Check(Block):
+    """Generic stabilizer check operation.
+
+    This class implements a generic stabilizer check operation that applies
+    a sequence of Pauli operators to data qubits controlled by an ancilla qubit.
+    """
+
     def __init__(
         self,
         d: list[Qubit],
@@ -84,6 +97,16 @@ class Check(Block):
 
     @staticmethod
     def cp(p: str, a: Qubit, d: Qubit) -> QGate:
+        """Create controlled Pauli gate based on string identifier.
+
+        Args:
+            p: Pauli gate identifier ('X', 'Y', or 'Z').
+            a: Control qubit.
+            d: Target qubit.
+
+        Returns:
+            Corresponding controlled Pauli gate.
+        """
         if p == "X":
             return CX(a, d)
         if p == "Y":

@@ -136,6 +136,7 @@ def test_qparallel() -> None:
 
 
 def test_if_true() -> None:
+    """Test PHIR conditional block execution when condition is true."""
     program = {
         "format": "PHIR/JSON",
         "version": "0.1.0",
@@ -180,6 +181,7 @@ def test_if_true() -> None:
 
 
 def test_if_false() -> None:
+    """Test PHIR conditional block execution when condition is false."""
     program = {
         "format": "PHIR/JSON",
         "version": "0.1.0",
@@ -224,6 +226,7 @@ def test_if_false() -> None:
 
 
 def test_if_no_false() -> None:
+    """Test PHIR conditional block with no false branch."""
     program = {
         "format": "PHIR/JSON",
         "version": "0.1.0",

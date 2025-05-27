@@ -1,3 +1,9 @@
+"""Steane 7-qubit quantum error correction code implementation.
+
+This module provides the main Steane class that implements the Steane 7-qubit quantum error correction code, including
+all necessary operations for fault-tolerant quantum computation.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -512,6 +518,14 @@ class Steane(Vars):
         return self.m("Z", log=log)
 
     def qec(self, flag: Bit | None = None) -> Block:
+        """Perform quantum error correction using parallel flag-based active correction.
+
+        Args:
+            flag: Optional flag bit for conditional execution.
+
+        Returns:
+            Block containing the quantum error correction operations.
+        """
         block = ParallelFlagQECActiveCorrection(
             q=self.d,
             a=self.a,

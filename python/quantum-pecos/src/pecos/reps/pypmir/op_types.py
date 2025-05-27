@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Operation type definitions for PyPMIR intermediate representation.
+
+This module defines operation classes for PyPMIR (Python PECOS Medium-level Intermediate Representation) including
+quantum operations, classical operations, and machine operations for quantum circuit execution.
+"""
+
 from __future__ import annotations
 
 from pecos.reps.pypmir.instr_type import Instr
@@ -51,6 +57,7 @@ class Op(Instr):
                     raise TypeError(msg)
 
     def __str__(self) -> str:
+        """Return string representation of the operation."""
         return f"<{self.name}, {self.args}, {self.returns}, {self.metadata}>"
 
 
@@ -88,6 +95,7 @@ class QOp(Op):
             self.sim_name = name
 
     def __repr__(self) -> str:
+        """Return detailed string representation of the quantum operation."""
         repr_str = f"<QOP: {self.name}"
 
         if self.angles:
@@ -107,6 +115,7 @@ class QOp(Op):
         return repr_str
 
     def __str__(self) -> str:
+        """Return string representation of the quantum operation."""
         return self.__repr__()
 
 
@@ -136,6 +145,7 @@ class COp(Op):
         )
 
     def __repr__(self) -> str:
+        """Return detailed string representation of the classical operation."""
         repr_str = f"<COP: {self.name}"
 
         if self.args:
@@ -152,6 +162,7 @@ class COp(Op):
         return repr_str
 
     def __str__(self) -> str:
+        """Return string representation of the classical operation."""
         return self.__repr__()
 
 

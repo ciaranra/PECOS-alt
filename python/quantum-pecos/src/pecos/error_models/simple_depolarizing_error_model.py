@@ -1,3 +1,10 @@
+"""Simple depolarizing error model implementation.
+
+This module provides a simplified depolarizing error model for basic
+quantum error correction simulations with uniform depolarizing noise
+applied to quantum gates.
+"""
+
 # Copyright 2023 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -68,6 +75,12 @@ class SimpleDepolarizingErrorModel:
         return SimpleDepolarizingErrorModel(error_params=self.error_params)
 
     def init(self, num_qubits: int, machine: MachineProtocol | None = None) -> None:
+        """Initialize the simple depolarizing error model.
+
+        Args:
+            num_qubits: Number of qubits in the system.
+            machine: Optional machine protocol for hardware-specific behavior.
+        """
         self.machine = machine
         self.num_qubits = num_qubits
 
@@ -94,6 +107,15 @@ class SimpleDepolarizingErrorModel:
         qops: list[QOp],
         call_back: Callable[..., None] | None = None,  # noqa: ARG002
     ) -> list[QOp | SeqBlock]:
+        """Process quantum operations and apply simple depolarizing errors.
+
+        Args:
+            qops: List of quantum operations to process.
+            call_back: Optional callback function for additional processing.
+
+        Returns:
+            List of quantum operations with applied errors.
+        """
         noisy_ops = []
 
         for op in qops:

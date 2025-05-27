@@ -1,3 +1,10 @@
+"""Single-flag stabilizer check implementations.
+
+This module provides stabilizer check implementations with single flag
+qubits for fault-tolerant syndrome extraction, enabling detection of
+errors that occur during the measurement process.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -22,6 +29,12 @@ if TYPE_CHECKING:
 
 
 class Check1Flag(Block):
+    """Single-flag stabilizer check operation.
+
+    This class implements a stabilizer check operation with a single flag qubit
+    to detect errors during the syndrome extraction process.
+    """
+
     def __init__(
         self,
         d: list[Qubit],
@@ -96,6 +109,16 @@ class Check1Flag(Block):
 
     @staticmethod
     def cu(u: str, a: Qubit, d: Qubit) -> QGate:
+        """Create controlled unitary gate based on string identifier.
+
+        Args:
+            u: Unitary gate identifier ('X', 'Y', 'Z', or 'H').
+            a: Control qubit.
+            d: Target qubit.
+
+        Returns:
+            Corresponding controlled unitary gate.
+        """
         if u == "X":
             return CX(a, d)
         if u == "Y":

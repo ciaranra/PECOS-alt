@@ -1,3 +1,7 @@
+"""Dummy decoder for testing and validation purposes.
+
+This package provides a simple dummy decoder implementation.
+"""
 # Copyright 2023 The PECOS Developers
 #
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract

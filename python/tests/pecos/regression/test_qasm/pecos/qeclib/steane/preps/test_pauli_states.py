@@ -1,3 +1,4 @@
+"""QASM regression tests for Steane Pauli state preparations."""
 from collections.abc import Callable
 
 from pecos.qeclib.steane.preps.pauli_states import (
@@ -11,12 +12,14 @@ from pecos.slr import CReg, QReg
 
 
 def test_PrepEncodingNonFTZero(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane non-fault-tolerant zero state preparation QASM regression."""
     q = QReg("q_test", 7)
     block = PrepEncodingNonFTZero(q)
     compare_qasm(block)
 
 
 def test_PrepZeroVerify(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane zero state verification QASM regression."""
     q = QReg("q_test", 7)
     a = QReg("a_test", 1)
     init_bit = CReg("init_bit", 1)
@@ -26,6 +29,7 @@ def test_PrepZeroVerify(compare_qasm: Callable[..., None]) -> None:
 
 
 def test_PrepEncodingFTZero(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane fault-tolerant zero state preparation QASM regression."""
     q = QReg("q_test", 7)
     a = QReg("a_test", 1)
     init_bit = CReg("init_bit_test", 1)
@@ -36,6 +40,7 @@ def test_PrepEncodingFTZero(compare_qasm: Callable[..., None]) -> None:
 
 
 def test_PrepRUS(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane repeat-until-success state preparation QASM regression."""
     q = QReg("q_test", 7)
     a = QReg("a_test", 1)
     init = CReg("init_test", 1)
@@ -55,6 +60,7 @@ def test_PrepRUS(compare_qasm: Callable[..., None]) -> None:
 
 
 def test_LogZeroRot(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane logical zero rotation QASM regression."""
     q = QReg("q_test", 7)
 
     for state in ["-Z", "+Z", "+X", "-X", "+Y", "-Y"]:

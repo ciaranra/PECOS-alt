@@ -1,3 +1,10 @@
+"""Wasmer WebAssembly runtime integration for PECOS.
+
+This module provides integration with the Wasmer WebAssembly runtime, enabling the execution of WASM modules for
+classical computations within the PECOS quantum error correction framework. It supports compilation, instantiation,
+and execution of WebAssembly code with proper error handling and resource management.
+"""
+
 # Copyright 2022 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -78,6 +85,7 @@ class WasmerObj:
         self.instance = Instance(self.module)
 
     def spin_up_wasm(self) -> None:
+        """Initialize the WASM module and create a new instance."""
         compiler = self.compiler
         if compiler is None:
             compiler = Cranelift
@@ -88,6 +96,11 @@ class WasmerObj:
         self.new_instance()
 
     def get_funcs(self) -> list[str]:
+        """Get list of function names exported by the WASM module.
+
+        Returns:
+            List of function names available for execution.
+        """
         if self.func_names is None:
             fs = [
                 str(f.name)
@@ -100,6 +113,18 @@ class WasmerObj:
         return self.func_names
 
     def exec(self, func_name: str, args: Sequence) -> tuple:
+        """Execute a function in the WASM module.
+
+        Args:
+            func_name: Name of the function to execute.
+            args: Sequence of arguments to pass to the function.
+
+        Returns:
+            Tuple containing the function result.
+
+        Raises:
+            WasmRuntimeError: If WASM execution fails.
+        """
         try:
             func = getattr(self.instance.exports, func_name)
         except AttributeError as e:
@@ -117,8 +142,21 @@ class WasmerObj:
             raise WasmRuntimeError(ex.args[0]) from ex
 
     def to_dict(self) -> dict:
+        """Convert the WasmerObj to a dictionary for serialization.
+
+        Returns:
+            Dictionary containing the object class and WASM bytes.
+        """
         return {"fobj_class": WasmerObj, "wasm_bytes": self.wasm_bytes}
 
     @staticmethod
     def from_dict(wasmer_dict: dict) -> WasmerObj:
+        """Create a WasmerObj from a dictionary.
+
+        Args:
+            wasmer_dict: Dictionary containing object class and WASM bytes.
+
+        Returns:
+            New WasmerObj instance.
+        """
         return wasmer_dict["fobj_class"](wasmer_dict["wasm_bytes"])

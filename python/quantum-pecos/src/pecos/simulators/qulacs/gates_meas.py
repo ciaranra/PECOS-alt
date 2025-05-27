@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Quantum measurement operations for Qulacs simulator.
+
+This module provides quantum measurement operations for the Qulacs simulator, including projective measurements
+with proper state collapse using Qulacs quantum simulation framework.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

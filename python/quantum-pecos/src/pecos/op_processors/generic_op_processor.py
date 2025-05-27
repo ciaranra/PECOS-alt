@@ -1,3 +1,10 @@
+"""Generic operation processor for quantum error correction simulations.
+
+This module provides a generic operation processor that handles the processing and transformation of quantum operations
+within the PECOS quantum error correction framework, supporting various machine and error model protocols for flexible
+quantum circuit execution and error injection.
+"""
+
 # Copyright 2023 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -20,6 +27,12 @@ if TYPE_CHECKING:
 
 
 class GenericOpProc:
+    """Generic operation processor for quantum circuits.
+
+    This class provides a generic framework for processing quantum operations
+    with support for different machine architectures and error models.
+    """
+
     def __init__(
         self,
         machine: MachineProtocol | None = None,
@@ -39,18 +52,36 @@ class GenericOpProc:
         """Reset state to initialization state."""
 
     def init(self) -> None:
-        pass
+        """Initialize the operation processor."""
 
     def attach_machine(self, machine: MachineProtocol) -> None:
+        """Attach a machine to the operation processor.
+
+        Args:
+            machine: The machine protocol to attach.
+        """
         self.machine = machine
 
     def attach_error_model(self, error_model: ErrorModelProtocol) -> None:
+        """Attach an error model to the operation processor.
+
+        Args:
+            error_model: The error model protocol to attach.
+        """
         self.error_model = error_model
 
     def shot_reinit(self) -> None:
-        pass
+        """Reinitialize for a new shot."""
 
     def process(self, buffered_ops: list) -> list:
+        """Process buffered operations through machine and error model.
+
+        Args:
+            buffered_ops: List of operations to process.
+
+        Returns:
+            List of processed noisy quantum operations.
+        """
         buffered_noisy_qops = []
         for op in buffered_ops:
             if isinstance(op, pt.opt.MOp):
@@ -68,4 +99,12 @@ class GenericOpProc:
         return buffered_noisy_qops
 
     def process_meas(self, measurements: list[dict]) -> list[dict]:
+        """Process measurement results.
+
+        Args:
+            measurements: List of measurement dictionaries.
+
+        Returns:
+            List of processed measurement dictionaries.
+        """
         return measurements

@@ -1,3 +1,4 @@
+"""QASM regression test configuration and fixtures."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -11,6 +12,7 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 def compare_qasm() -> Callable[..., None]:
+    """Pytest fixture for comparing QASM output against regression files."""
     def _compare_qasm(
         block: object,
         *params: object,

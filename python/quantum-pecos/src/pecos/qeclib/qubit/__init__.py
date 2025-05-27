@@ -1,3 +1,8 @@
+"""Qubit-level quantum operations.
+
+This package provides fundamental qubit operations including Pauli gates, Clifford gates,
+rotations, measurements, and state preparations.
+"""
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

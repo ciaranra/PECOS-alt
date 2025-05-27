@@ -1,3 +1,10 @@
+"""Logical gate implementations for the 4.8.8 color code.
+
+This module provides logical gate implementations for the 4.8.8 color code,
+including transversal gates and other logical operations that preserve
+the color code's error correction properties.
+"""
+
 # Copyright 2018 The PECOS Developers
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.

@@ -1,3 +1,9 @@
+"""Three-parallel quantum error correction for the Steane 7-qubit code.
+
+This module provides three-parallel quantum error correction implementations for the Steane 7-qubit code, enabling
+fault-tolerant error detection and correction using parallel syndrome extraction circuits.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

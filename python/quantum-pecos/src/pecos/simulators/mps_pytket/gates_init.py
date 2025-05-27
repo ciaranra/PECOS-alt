@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Qubit initialization operations for MPS PyTket simulator.
+
+This module provides quantum state initialization operations for the Matrix Product State PyTket simulator,
+including functions to initialize qubits to computational basis states using MPS representations.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

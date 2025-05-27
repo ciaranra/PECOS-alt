@@ -11,6 +11,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Standard circuit runner for quantum circuit execution.
+
+This module provides the standard circuit runner implementation for executing
+quantum circuits on various simulator backends in the PECOS framework.
+"""
+
 from __future__ import annotations
 
 import os

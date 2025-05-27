@@ -1,3 +1,10 @@
+"""Bitflip noise implementation for measurement operations.
+
+This module provides noise models for quantum measurement operations,
+applying bitflip errors to measurement results to simulate measurement
+errors in quantum error correction protocols.
+"""
+
 # Copyright 2023 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

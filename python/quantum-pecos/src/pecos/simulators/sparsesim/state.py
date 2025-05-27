@@ -123,9 +123,30 @@ class SparseSim(Stabilizer):
         prefer: set[int] | None = None,
         protected: set[int] | None = None,
     ) -> tuple[bool, int | None]:
+        """Refactor stabilizer generators to find a specific stabilizer.
+
+        Args:
+            xs: Set of X operator locations.
+            zs: Set of Z operator locations.
+            choose: Optional specific generator to choose.
+            prefer: Optional set of preferred generator indices.
+            protected: Optional set of protected generator indices.
+
+        Returns:
+            Tuple containing success flag and chosen generator index.
+        """
         return refactor_generators(self, xs, zs, choose, prefer, protected)
 
     def find_stab(self, xs: set[int], zs: set[int]) -> tuple[bool, set[int]]:
+        """Find a stabilizer with given X and Z operator locations.
+
+        Args:
+            xs: Set of X operator locations.
+            zs: Set of Z operator locations.
+
+        Returns:
+            Tuple containing success flag and set of generator indices.
+        """
         return find_stabilizer(self, xs, zs)
 
     def run_direct(
@@ -134,9 +155,21 @@ class SparseSim(Stabilizer):
         location: set[int | tuple[int, ...]],
         **gate_kwargs: SimulatorGateParams,
     ) -> None:
+        """Directly run a quantum gate operation.
+
+        Args:
+            symbol: Gate symbol identifier.
+            location: Set of qubit locations for the gate.
+            **gate_kwargs: Additional gate parameters.
+        """
         self.bindings[symbol](self, location, **gate_kwargs)
 
     def copy(self) -> None:
+        """Create a copy of the sparse stabilizer simulator state.
+
+        Returns:
+            New SparseSim instance with copied state.
+        """
         new = SparseSim(self.num_qubits)
 
         old_stabs = self.stabs
@@ -268,6 +301,16 @@ class SparseSim(Stabilizer):
         print_y: bool = True,
         print_destabs: bool = False,
     ) -> str | tuple[str, str]:
+        """Print stabilizer tableau in a readable format.
+
+        Args:
+            verbose: If True, print to stdout in addition to returning string.
+            print_y: If True, include Y operators in the output.
+            print_destabs: If True, also print destabilizers.
+
+        Returns:
+            String representation of stabilizers, or tuple of (stabs, destabs) if print_destabs=True.
+        """
         str_s = self.print_tableau(self.stabs, verbose=verbose, print_y=print_y)
 
         if print_destabs:

@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Quantum measurement operations for basic state vector simulator.
+
+This module provides quantum measurement operations for the basic state vector simulator, including projective
+measurements in the computational basis and other measurement schemes with proper state collapse.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

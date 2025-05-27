@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Single-qubit gate operations for MPS PyTket simulator.
+
+This module provides single-qubit quantum gate operations for the Matrix Product State PyTket simulator, including
+Pauli gates, rotation gates, and other fundamental operations for MPS tensor operations.
+"""
+
 from __future__ import annotations
 
 import cmath

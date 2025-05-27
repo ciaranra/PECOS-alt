@@ -11,6 +11,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Two-qubit commands for sparse stabilizer simulator.
+
+This module provides two-qubit Clifford gate operations for the sparse stabilizer simulator, including CNOT gates
+and other entangling Clifford operations optimized for sparse stabilizer tableau representation.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -575,6 +581,15 @@ def SXXdg(
     qubits: tuple[int, int],
     **_params: SimulatorGateParams,
 ) -> None:
+    """Apply adjoint of square root of XX rotation gate.
+
+    Implements the inverse/adjoint operation of the SXX gate by applying
+    X gates to both qubits followed by the SXX operation.
+
+    Args:
+        state: Sparse stabilizer simulator state.
+        qubits: Tuple of two target qubit indices.
+    """
     qubit1, qubit2 = qubits
     X(state, qubit1)
     X(state, qubit2)

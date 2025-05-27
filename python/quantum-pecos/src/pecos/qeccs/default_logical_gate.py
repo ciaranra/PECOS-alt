@@ -85,9 +85,16 @@ class DefaultLogicalGate:
         return self.instr_instances[-1].final_logical_ops
 
     def expected_params(self, params: dict[str, Any], expected_set: set[str]) -> None:
+        """Validate that gate parameters match expected parameter set.
+
+        Args:
+            params: Dictionary of gate parameters to validate.
+            expected_set: Set of expected parameter names.
+        """
         expected_params(params, expected_set)
 
     def __hash__(self) -> int:
+        """Return hash value for use as dictionary key in QuantumCircuit."""
         # Added so the logical gate can be a key (gate symbol) in a ``QuantumCircuit``.
 
         # These uniquely identify the logical and do not change.
@@ -96,6 +103,7 @@ class DefaultLogicalGate:
         )
 
     def __eq__(self, other: object) -> bool:
+        """Check equality with another logical gate."""
         # Check if other implements the LogicalGateProtocol
         if not isinstance(other, LogicalGateProtocol):
             return NotImplemented
@@ -107,9 +115,11 @@ class DefaultLogicalGate:
         )
 
     def __ne__(self, other: object) -> bool:
+        """Check inequality with another logical gate."""
         return not (self == other)
 
     def __str__(self) -> str:
+        """Return string representation of the logical gate."""
         return (
             f"Logical gate: '{self.symbol}' params={self.gate_params} - QECC: {self.qecc.name} "
             f"params={self.qecc.qecc_params} - Instructions: {self.instr_symbols}"

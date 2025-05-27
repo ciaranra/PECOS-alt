@@ -11,6 +11,7 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Integration tests for random quantum circuit simulations."""
 from __future__ import annotations
 
 from typing import Any
@@ -20,6 +21,7 @@ from pecos.simulators import SparseSimPy, SparseSimRs
 
 
 def test_random_circuits() -> None:
+    """Test random quantum circuits on different simulators."""
     state_sims: list[type[Any]] = []
 
     # Add wrapped CHP
@@ -70,6 +72,7 @@ def run_circuit_test(
     trials: int = 1000,
     gates: list[str] | None = None,
 ) -> bool:
+    """Run circuit test comparing different simulators."""
     if gates is None:
         gates = ["H", "S", "CNOT", "measure Z", "init |0>"]
 
@@ -95,6 +98,7 @@ def run_circuit_test(
 
 
 def get_qubits(num_qubits: int, size: int) -> np.ndarray:
+    """Get random qubit indices for gate operations."""
     return np.random.choice(list(range(num_qubits)), size, replace=False)
 
 
@@ -103,6 +107,7 @@ def generate_circuit(
     num_qubits: int,
     circuit_depth: int,
 ) -> list[tuple[str, int | np.ndarray]]:
+    """Generate a random quantum circuit with specified gates and depth."""
     circuit_elements = list(np.random.choice(gates, circuit_depth))
 
     circuit = []
@@ -126,6 +131,7 @@ def run_a_circuit(
     *,
     verbose: bool = False,
 ) -> list[int]:
+    """Run a quantum circuit on a specific simulator and return measurements."""
     state = state_rep(num_qubits)
     measurements = []
 
@@ -142,13 +148,13 @@ def run_a_circuit(
 
         elif element == "init |0>":
             if isinstance(q, np.ndarray):
-                q = tuple(q)
+                q = tuple(q)  # noqa: PLW2901 - convert array to tuple
 
             state.run_gate(element, {q}, forced_outcome=0)
 
         else:
             if isinstance(q, np.ndarray):
-                q = tuple(q)
+                q = tuple(q)  # noqa: PLW2901 - convert array to tuple
 
             state.run_gate(element, {q})
 

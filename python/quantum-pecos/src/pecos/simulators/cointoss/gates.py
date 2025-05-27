@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Gate operations for coin toss quantum simulator.
+
+This module provides gate operations for the coin toss quantum simulator, implementing a simplified quantum model
+where all quantum gates are treated as no-ops and measurements return random classical outcomes.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

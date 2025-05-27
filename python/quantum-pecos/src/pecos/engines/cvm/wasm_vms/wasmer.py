@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Wasmer WebAssembly runtime integration.
+
+This module provides integration with the Wasmer WebAssembly runtime for
+executing compiled classical functions in the PECOS framework.
+"""
+
 from __future__ import annotations
 
 import contextlib
@@ -68,6 +74,11 @@ class WasmerInstance:
         self.module = module
 
     def get_funcs(self) -> list[str]:
+        """Get list of available function names from the WASM module.
+
+        Returns:
+            List of function names that can be executed.
+        """
         return [
             str(f.name)
             for f in self.module.exports
@@ -81,6 +92,16 @@ class WasmerInstance:
         *,
         debug: bool = False,
     ) -> int:
+        """Execute a WASM function with given arguments.
+
+        Args:
+            func_name: Name of the function to execute.
+            args: Sequence of (type, value) tuples for arguments.
+            debug: Whether to use debug simulation functions.
+
+        Returns:
+            Integer result from the function execution.
+        """
         if debug and func_name.startswith("sim_"):
             method = sim_funcs[func_name]
             return method(*args)
@@ -90,7 +111,8 @@ class WasmerInstance:
         return method(*args)
 
     def teardown(self) -> None:
-        pass  # Only needed for wasmtime
+        """Clean up resources (no-op for Wasmer)."""
+        # Only needed for wasmtime
 
 
 def read_wasmer(path: str | bytes, compiler: str = "wasm_cl") -> WasmerInstance:

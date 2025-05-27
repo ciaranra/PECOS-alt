@@ -10,6 +10,13 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Threshold curve analysis and fitting for quantum error correction.
+
+This module provides utilities for analyzing and fitting threshold curves
+in quantum error correction, including error rate scaling and critical
+threshold determination.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -269,6 +276,20 @@ def jackknife_pd(
     *,
     verbose: bool = True,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Perform jackknife resampling for parameter and distance data.
+
+    Args:
+        plist: List of probability values.
+        dlist: List of distance values.
+        plog: List of logical error probabilities.
+        func: Fitting function to use.
+        p0: Initial parameter guess.
+        maxfev: Maximum function evaluations.
+        verbose: If True, print progress information.
+
+    Returns:
+        Tuple of (optimized_parameters, covariance_matrices).
+    """
     opt_list = []
     cov_list = []
     for i in range(len(plog)):
@@ -305,6 +326,20 @@ def jackknife_p(
     *,
     verbose: bool = True,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Perform jackknife resampling by removing each unique probability value.
+
+    Args:
+        plist: List of probability values.
+        dlist: List of distance values.
+        plog: List of logical error probabilities.
+        func: Fitting function to use.
+        p0: Initial parameter guess.
+        maxfev: Maximum function evaluations.
+        verbose: If True, print progress information.
+
+    Returns:
+        Tuple of (mean_parameters, std_parameters).
+    """
     opt_list = []
     cov_list = []
     uplist = sorted(set(plist))
@@ -342,6 +377,20 @@ def jackknife_d(
     *,
     verbose: bool = True,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Perform jackknife resampling by removing each unique distance value.
+
+    Args:
+        plist: List of probability values.
+        dlist: List of distance values.
+        plog: List of logical error probabilities.
+        func: Fitting function to use.
+        p0: Initial parameter guess.
+        maxfev: Maximum function evaluations.
+        verbose: If True, print progress information.
+
+    Returns:
+        Tuple of (mean_parameters, std_parameters).
+    """
     opt_list = []
     cov_list = []
 
@@ -376,6 +425,16 @@ def get_est(
     *,
     verbose: bool = True,
 ) -> tuple[float, float]:
+    """Calculate mean and standard deviation estimate.
+
+    Args:
+        value_is: List of values to analyze.
+        label: Label for verbose output.
+        verbose: If True, print the results.
+
+    Returns:
+        Tuple of (mean, standard_deviation).
+    """
     v_est = sum(value_is) / len(value_is)
     v_est_std = np.std(value_is)
 
@@ -392,6 +451,14 @@ def get_i(
     *,
     verbose: bool = True,
 ) -> None:
+    """Extract and append a value from results dictionary.
+
+    Args:
+        result: Dictionary containing parameter estimates.
+        symbol: Key to extract from the results.
+        value_list: List to append the extracted value to.
+        verbose: If True, print the extracted value.
+    """
     value_i = result[symbol][0]
     value_list.append(value_i)
 

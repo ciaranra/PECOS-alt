@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Quantum measurement operations for cuStateVec simulator.
+
+This module provides GPU-accelerated quantum measurement operations for the NVIDIA cuStateVec simulator, including
+projective measurements with proper state collapse using CUDA acceleration for high-performance simulation.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

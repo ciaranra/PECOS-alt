@@ -1,3 +1,10 @@
+"""General-purpose tools and utilities for quantum error correction.
+
+This module provides a collection of miscellaneous tools and utilities
+for quantum error correction analysis, circuit manipulation, and
+general-purpose functions used throughout the PECOS framework.
+"""
+
 # Copyright 2018 The PECOS Developers
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
@@ -109,8 +116,8 @@ def fault_tolerance_check(qecc: QECCProtocol, decoder: Decoder) -> None:
     spacetime = set(product(list(range(num_ticks)), qudits))
     for xs, zs in gen_pauli_errors(spacetime, max_errors=t):
         state = SparseSimPy(num_qudits)
-        xs = list(xs)
-        zs = list(zs)
+        xs = list(xs)  # noqa: PLW2901 - convert generator to list
+        zs = list(zs)  # noqa: PLW2901 - convert generator to list
 
         err_dict = form_errors(xs, zs)
 
@@ -147,6 +154,19 @@ def form_errors(
     xs: Iterable[tuple[int, int]],
     zs: Iterable[tuple[int, int]],
 ) -> dict[int, dict[str, set[int]]]:
+    """Form error dictionary from X and Z error events.
+
+    Converts iterables of X and Z error events into a structured dictionary
+    organized by time steps and error types for error correction processing.
+
+    Args:
+        xs: Iterable of (time, qubit) tuples for X errors.
+        zs: Iterable of (time, qubit) tuples for Z errors.
+
+    Returns:
+        Dictionary mapping time steps to error types and affected qubits.
+        Structure: {time: {'X': {qubits}, 'Z': {qubits}}}
+    """
     errors = {}
     for t, q in xs:
         xerr = errors.setdefault(t, {}).setdefault("X", set())

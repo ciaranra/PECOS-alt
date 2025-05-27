@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Single-qubit gate operations for Pauli fault propagation simulator.
+
+This module provides single-qubit quantum gate operations for the Pauli fault propagation simulator, including
+Clifford gates and their effect on Pauli frame propagation for efficient stabilizer circuit simulation.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -23,6 +29,16 @@ def switch(
     switch_list: list[tuple[str, str]],
     qubit: int,
 ) -> None:
+    """Switch Pauli fault type on a qubit according to provided mapping.
+
+    Transforms the fault type on a qubit by checking the current fault
+    against a list of transformation rules and applying the first match.
+
+    Args:
+        state: Pauli fault propagation state containing fault sets.
+        switch_list: List of (initial_fault, final_fault) transformation pairs.
+        qubit: Index of the qubit to apply transformation to.
+    """
     for symbol_init, symbol_final in switch_list:
         if qubit in state.faults[symbol_init]:
             state.faults[symbol_init].remove(qubit)

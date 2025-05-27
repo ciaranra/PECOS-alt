@@ -11,6 +11,13 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Minimum-weight Perfect-matching decoder for 2D surface codes.
+
+This module implements a 2D minimum-weight perfect-matching (MWPM) decoder for
+surface code quantum error correction, designed for code capacity modeling
+and ideal decoding scenarios.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -171,6 +178,11 @@ class MWPM2D:
 
     @staticmethod
     def itr_v_name() -> Iterator[str]:
+        """Generate unique vertex names for matching graph.
+
+        Yields:
+            Unique vertex name strings in the format 'vu1', 'vu2', etc.
+        """
         i = 0
 
         while True:

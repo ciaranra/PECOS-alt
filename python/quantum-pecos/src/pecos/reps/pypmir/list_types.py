@@ -1,3 +1,9 @@
+"""List type definitions for PyPMIR intermediate representation.
+
+This module defines specialized list types for PyPMIR (Python PECOS Medium-level Intermediate Representation) including
+typed lists for instructions, operations, and other quantum circuit elements.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -8,10 +14,6 @@ from pecos.typed_list import TypedList
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-
-# from pecos.reps.pypmir.op_types import Op, QOp, COp, MOp, EMOp
-# from pecos.reps.pypmir.block_types import Block
-# from pecos.reps.pypmir.data_types import Data
 
 
 class InstrList(TypedList):
