@@ -43,8 +43,8 @@ fn compare_depolarizing_with_general(circ: &ByteMessage) {
         .with_prep_probability(p_noise)
         .with_meas_0_probability(p_noise)
         .with_meas_1_probability(p_noise)
-        .with_single_qubit_probability(p_noise)
-        .with_two_qubit_probability(p_noise)
+        .with_p1_probability(p_noise)
+        .with_p2_probability(p_noise)
         .with_seed(seed)
         .build();
     let mut general_system = QuantumSystem::new(Box::new(general_noise), Box::new(quantum.clone()));
@@ -185,8 +185,8 @@ fn test_asymmetric_measurements() {
         .with_prep_probability(p_prep)
         .with_meas_0_probability(p_meas_0)
         .with_meas_1_probability(p_meas_1)
-        .with_single_qubit_probability(p1)
-        .with_two_qubit_probability(0.0) // Not used in this circuit
+        .with_p1_probability(p1)
+        .with_p2_probability(0.0) // Not used in this circuit
         .with_seed(seed)
         .build();
     let mut general_system = QuantumSystem::new(Box::new(general_noise), Box::new(quantum.clone()));

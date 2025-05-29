@@ -58,8 +58,8 @@ fn compare_biased_and_general(circ: &ByteMessage, quantum: &StateVecEngine) {
             .with_prep_probability(0.0)
             .with_meas_0_probability(p_flip_0)
             .with_meas_1_probability(p_flip_1)
-            .with_single_qubit_probability(0.0)
-            .with_two_qubit_probability(0.0)
+            .with_p1_probability(0.0)
+            .with_p2_probability(0.0)
             .with_seed(seed)
             .build();
         let mut general_system =
@@ -158,8 +158,8 @@ fn bell_state_comparison() {
         .with_prep_probability(0.0)
         .with_meas_0_probability(p_flip_0)
         .with_meas_1_probability(p_flip_1)
-        .with_single_qubit_probability(0.0)
-        .with_two_qubit_probability(0.0)
+        .with_p1_probability(0.0)
+        .with_p2_probability(0.0)
         .with_seed(seed)
         .build();
     let mut general_system = QuantumSystem::new(Box::new(general_noise), Box::new(quantum.clone()));
