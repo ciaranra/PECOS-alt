@@ -1,5 +1,5 @@
 use pecos_engines::byte_message::ByteMessage;
-use pecos_engines::engines::quantum::StateVecEngine;
+use pecos_engines::quantum::StateVecEngine;
 use pecos_engines::{DepolarizingNoiseModel, Engine};
 use pecos_engines::{EngineSystem, QuantumSystem};
 use std::env;

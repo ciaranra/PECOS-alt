@@ -10,12 +10,12 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-use crate::engines::hybrid::HybridEngineBuilder;
-use crate::engines::monte_carlo::engine::MonteCarloEngine;
-use crate::engines::noise::{DepolarizingNoiseModel, NoiseModel};
-use crate::engines::quantum::QuantumEngine;
-use crate::engines::quantum_system::QuantumSystem;
-use crate::engines::{ClassicalEngine, HybridEngine};
+use crate::engine_system::{ClassicalEngine, HybridEngine};
+use crate::hybrid::HybridEngineBuilder;
+use crate::monte_carlo::engine::MonteCarloEngine;
+use crate::noise::{DepolarizingNoiseModel, NoiseModel};
+use crate::quantum::QuantumEngine;
+use crate::quantum_system::QuantumSystem;
 use pecos_core::errors::PecosError;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
@@ -30,9 +30,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// # Examples
 ///
 /// ```
-/// use pecos_engines::engines::monte_carlo::MonteCarloEngineBuilder;
-/// use pecos_engines::engines::quantum;
-/// use pecos_engines::engines::monte_carlo::engine::ExternalClassicalEngine;
+/// use pecos_engines::monte_carlo::MonteCarloEngineBuilder;
+/// use pecos_engines::quantum;
+/// use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
 ///
 /// // Create a basic Monte Carlo engine
 /// let engine = MonteCarloEngineBuilder::new()
@@ -204,9 +204,7 @@ impl MonteCarloEngineBuilder {
 
                 builder
                     .with_classical_engine(classical_engine)
-                    .with_quantum_engine(Box::new(crate::engines::quantum::StateVecEngine::new(
-                        num_qubits,
-                    )))
+                    .with_quantum_engine(Box::new(crate::quantum::StateVecEngine::new(num_qubits)))
                     .with_noise_model(model)
             } else {
                 // Otherwise just add the noise model
@@ -313,9 +311,7 @@ impl MonteCarloEngineBuilder {
     #[must_use]
     pub fn with_num_qubits(mut self, num_qubits: usize) -> Self {
         let update_fn = move |builder: HybridEngineBuilder| {
-            builder.with_quantum_engine(Box::new(crate::engines::quantum::StateVecEngine::new(
-                num_qubits,
-            )))
+            builder.with_quantum_engine(Box::new(crate::quantum::StateVecEngine::new(num_qubits)))
         };
 
         let (builder, engine) = Self::update_hybrid_builder_with(
@@ -417,8 +413,8 @@ impl MonteCarloEngineBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engines::monte_carlo::engine::ExternalClassicalEngine;
-    use crate::engines::quantum;
+    use crate::monte_carlo::engine::ExternalClassicalEngine;
+    use crate::quantum;
 
     #[test]
     fn test_basic_builder() {

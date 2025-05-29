@@ -11,8 +11,8 @@
 // the License.
 
 use crate::byte_message::ByteMessage;
-use crate::engines::noise::{NoiseModel, NoiseRng, ProbabilityValidator, RngManageable};
-use crate::engines::{ControlEngine, EngineStage};
+use crate::engine_system::{ControlEngine, EngineStage};
+use crate::noise::{NoiseModel, NoiseRng, ProbabilityValidator, RngManageable};
 use pecos_core::errors::PecosError;
 use rand_chacha::ChaCha8Rng;
 use std::any::Any;
@@ -26,8 +26,8 @@ use std::any::Any;
 /// # Usage
 ///
 /// ```rust
-/// use pecos_engines::engines::noise::BiasedMeasurementNoiseModel;
-/// use pecos_engines::engines::noise::{NoiseModel, RngManageable};
+/// use pecos_engines::noise::BiasedMeasurementNoiseModel;
+/// use pecos_engines::noise::{NoiseModel, RngManageable};
 ///
 /// // Create directly
 /// let mut noise_model = BiasedMeasurementNoiseModel::new(0.01, 0.02);

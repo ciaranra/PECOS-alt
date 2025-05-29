@@ -59,7 +59,7 @@
 //! The noise model can be instantiated directly or through a builder pattern:
 //!
 //! ```rust
-//! use pecos_engines::engines::noise::GeneralNoiseModel;
+//! use pecos_engines::noise::GeneralNoiseModel;
 //!
 //! // Using the builder with explicit error rates
 //! let noise_model = GeneralNoiseModel::builder()
@@ -75,14 +75,12 @@
 #![allow(clippy::too_many_lines)]
 
 use crate::byte_message::{ByteMessage, ByteMessageBuilder, QuantumGate, gate_type::GateType};
-use crate::engines::noise::noise_rng::NoiseRng;
-use crate::engines::noise::utils::NoiseUtils;
-use crate::engines::noise::utils::ProbabilityValidator;
-use crate::engines::noise::weighted_sampler::{
-    SingleQubitWeightedSampler, TwoQubitWeightedSampler,
-};
-use crate::engines::noise::{NoiseModel, RngManageable};
-use crate::engines::{ControlEngine, EngineStage};
+use crate::engine_system::{ControlEngine, EngineStage};
+use crate::noise::noise_rng::NoiseRng;
+use crate::noise::utils::NoiseUtils;
+use crate::noise::utils::ProbabilityValidator;
+use crate::noise::weighted_sampler::{SingleQubitWeightedSampler, TwoQubitWeightedSampler};
+use crate::noise::{NoiseModel, RngManageable};
 use log::trace;
 use pecos_core::errors::PecosError;
 use rand_chacha::ChaCha8Rng;
@@ -404,7 +402,7 @@ impl GeneralNoiseModel {
     ///
     /// # Example
     /// ```
-    /// use pecos_engines::engines::noise::GeneralNoiseModel;
+    /// use pecos_engines::noise::GeneralNoiseModel;
     ///
     /// // Create model with specified error probabilities
     /// let mut model = GeneralNoiseModel::new(0.01, 0.01, 0.01, 0.05, 0.1);
@@ -906,14 +904,12 @@ impl GeneralNoiseModel {
                         );
                         val = 0;
                     }
-                } else {
-                    if self.rng.occurs(self.p_meas_0) {
-                        trace!(
-                            "Flipped measurement outcome 0->1 for result_id {}",
-                            result_id
-                        );
-                        val = 1;
-                    }
+                } else if self.rng.occurs(self.p_meas_0) {
+                    trace!(
+                        "Flipped measurement outcome 0->1 for result_id {}",
+                        result_id
+                    );
+                    val = 1;
                 }
             }
             results_builder.add_measurement_results(&[val as usize], &[result_id]);
@@ -1915,7 +1911,7 @@ impl Default for GeneralNoiseModel {
     ///
     /// # Example
     /// ```
-    /// use pecos_engines::engines::noise::GeneralNoiseModel;
+    /// use pecos_engines::noise::GeneralNoiseModel;
     ///
     /// // Create model with default error probabilities
     /// let mut model = GeneralNoiseModel::default();

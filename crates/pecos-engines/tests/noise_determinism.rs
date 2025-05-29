@@ -11,12 +11,10 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use log::info;
+use pecos_engines::noise::general::GeneralNoiseModel;
+use pecos_engines::quantum::{QuantumEngine, StateVecEngine};
 use pecos_engines::{
-    Engine, QuantumSystem,
-    byte_message::ByteMessage,
-    engines::ControlEngine,
-    engines::noise::general::GeneralNoiseModel,
-    engines::quantum::{QuantumEngine, StateVecEngine},
+    Engine, QuantumSystem, byte_message::ByteMessage, engine_system::ControlEngine,
 };
 use std::collections::BTreeMap;
 
@@ -78,19 +76,19 @@ fn apply_noise(model: &mut GeneralNoiseModel, msg: &ByteMessage) -> ByteMessage 
         .start(msg.clone())
         .expect("Failed to start noise model processing")
     {
-        pecos_engines::engines::EngineStage::NeedsProcessing(noisy_msg) => {
+        pecos_engines::engine_system::EngineStage::NeedsProcessing(noisy_msg) => {
             info!("Processing noisy message");
             match model
                 .continue_processing(noisy_msg)
                 .expect("Failed to continue processing with noise model")
             {
-                pecos_engines::engines::EngineStage::Complete(result) => result,
-                pecos_engines::engines::EngineStage::NeedsProcessing(_) => {
+                pecos_engines::engine_system::EngineStage::Complete(result) => result,
+                pecos_engines::engine_system::EngineStage::NeedsProcessing(_) => {
                     panic!("Expected Complete stage")
                 }
             }
         }
-        pecos_engines::engines::EngineStage::Complete(_) => {
+        pecos_engines::engine_system::EngineStage::Complete(_) => {
             panic!("Expected NeedsProcessing stage")
         }
     }

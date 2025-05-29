@@ -368,8 +368,8 @@ impl NoiseUtils {
 mod tests {
     use super::*;
     use crate::byte_message::GateType;
-    use crate::engines::noise::noise_rng::NoiseRng;
-    use crate::engines::noise::weighted_sampler::SingleQubitWeightedSampler;
+    use crate::noise::noise_rng::NoiseRng;
+    use crate::noise::weighted_sampler::SingleQubitWeightedSampler;
     use rand_chacha::ChaCha8Rng;
     use std::collections::BTreeMap;
     use std::panic::{AssertUnwindSafe, catch_unwind};

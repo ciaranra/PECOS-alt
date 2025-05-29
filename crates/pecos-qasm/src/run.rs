@@ -1,10 +1,8 @@
 use crate::QASMEngine;
 use pecos_core::errors::PecosError;
-use pecos_engines::{
-    ClassicalEngine, MonteCarloEngine, PassThroughNoiseModel,
-    engines::noise::NoiseModel,
-    engines::quantum::{QuantumEngine, StateVecEngine},
-};
+use pecos_engines::noise::NoiseModel;
+use pecos_engines::quantum::{QuantumEngine, StateVecEngine};
+use pecos_engines::{ClassicalEngine, MonteCarloEngine, PassThroughNoiseModel};
 use std::collections::HashMap;
 use std::str::FromStr;
 

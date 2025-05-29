@@ -37,7 +37,7 @@ pub use self::weighted_sampler::{
 };
 
 use crate::byte_message::ByteMessage;
-use crate::engines::{ControlEngine, EngineStage};
+use crate::engine_system::{ControlEngine, EngineStage};
 use dyn_clone::DynClone;
 use pecos_core::errors::PecosError;
 use rand_chacha::ChaCha8Rng;
@@ -231,7 +231,7 @@ mod base_tests {
 mod tests {
     use super::*;
     use crate::byte_message::ByteMessageBuilder;
-    use crate::engines::noise::biased_measurement::BiasedMeasurementNoiseModel;
+    use crate::noise::biased_measurement::BiasedMeasurementNoiseModel;
 
     #[test]
     fn test_noise_model_biased_measurement() {

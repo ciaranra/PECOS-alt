@@ -11,9 +11,9 @@
 // the License.
 
 use super::engine::HybridEngine;
-use crate::engines::noise::{DepolarizingNoiseModel, NoiseModel, PassThroughNoiseModel};
-use crate::engines::quantum_system::QuantumSystem;
-use crate::engines::{ClassicalEngine, QuantumEngine};
+use crate::engine_system::{ClassicalEngine, QuantumEngine};
+use crate::noise::{DepolarizingNoiseModel, NoiseModel, PassThroughNoiseModel};
+use crate::quantum_system::QuantumSystem;
 use pecos_core::errors::PecosError;
 
 /// Builder for creating a `HybridEngine` with customizable configuration
@@ -25,9 +25,9 @@ use pecos_core::errors::PecosError;
 /// # Examples
 ///
 /// ```
-/// use pecos_engines::engines::hybrid::HybridEngineBuilder;
-/// use pecos_engines::engines::quantum;
-/// use pecos_engines::engines::monte_carlo::engine::ExternalClassicalEngine;
+/// use pecos_engines::hybrid::HybridEngineBuilder;
+/// use pecos_engines::quantum;
+/// use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
 ///
 /// // Create a HybridEngine with default settings (no noise)
 /// let engine = HybridEngineBuilder::new()
@@ -264,8 +264,8 @@ impl Default for HybridEngineBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engines::monte_carlo::engine::ExternalClassicalEngine;
-    use crate::engines::quantum;
+    use crate::monte_carlo::engine::ExternalClassicalEngine;
+    use crate::quantum;
 
     #[test]
     fn test_basic_builder() {

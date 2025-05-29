@@ -1,7 +1,8 @@
+use crate::Engine;
 use crate::byte_message::ByteMessage;
-use crate::engines::noise::{NoiseModel, PassThroughNoiseModel};
-use crate::engines::quantum::QuantumEngine;
-use crate::engines::{Engine, EngineSystem};
+use crate::engine_system::EngineSystem;
+use crate::noise::{NoiseModel, PassThroughNoiseModel};
+use crate::quantum::QuantumEngine;
 use pecos_core::errors::PecosError;
 use std::fmt::Debug;
 
@@ -17,9 +18,9 @@ use std::fmt::Debug;
 /// # Examples
 ///
 /// ```
-/// use pecos_engines::engines::quantum_system::QuantumSystem;
-/// use pecos_engines::engines::noise::depolarizing::DepolarizingNoiseModel;
-/// use pecos_engines::engines::quantum::StateVecEngine;
+/// use pecos_engines::quantum_system::QuantumSystem;
+/// use pecos_engines::noise::depolarizing::DepolarizingNoiseModel;
+/// use pecos_engines::quantum::StateVecEngine;
 ///
 /// // Create a quantum system with 2 qubits
 /// let noise_model = DepolarizingNoiseModel::new_uniform(0.01);
@@ -205,9 +206,9 @@ impl Debug for QuantumSystem {
 mod tests {
     use super::*;
     use crate::byte_message::ByteMessageBuilder;
-    use crate::engines::ControlEngine;
-    use crate::engines::noise::{DepolarizingNoiseModel, PassThroughNoiseModel};
-    use crate::engines::quantum::StateVecEngine;
+    use crate::engine_system::ControlEngine;
+    use crate::noise::{DepolarizingNoiseModel, PassThroughNoiseModel};
+    use crate::quantum::StateVecEngine;
 
     // Note: QuantumSystem implements EngineSystem and uses the blanket implementation
     // of Engine for EngineSystem. This allows it to be used as a controlled engine

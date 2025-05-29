@@ -2,8 +2,8 @@
 
 use pecos_engines::Engine;
 use pecos_engines::byte_message::ByteMessage;
-use pecos_engines::engines::noise::BiasedMeasurementNoiseModel;
-use pecos_engines::engines::quantum::StateVecEngine;
+use pecos_engines::noise::BiasedMeasurementNoiseModel;
+use pecos_engines::quantum::StateVecEngine;
 use pecos_engines::{EngineSystem, QuantumSystem};
 use std::collections::HashMap;
 

@@ -905,7 +905,8 @@ impl ByteMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engines::{Engine, quantum::StateVecEngine};
+    use crate::Engine;
+    use crate::quantum::StateVecEngine;
 
     #[test]
     fn test_bytemap_builder() {

@@ -1,10 +1,9 @@
 use log::debug;
 use pecos_core::errors::PecosError;
+use pecos_engines::noise::NoiseModel;
+use pecos_engines::quantum::{QuantumEngine, StateVecEngine};
 use pecos_engines::{
-    ClassicalEngine, MonteCarloEngine, PassThroughNoiseModel,
-    core::shot_results::ShotResults,
-    engines::noise::NoiseModel,
-    engines::quantum::{QuantumEngine, StateVecEngine},
+    ClassicalEngine, MonteCarloEngine, PassThroughNoiseModel, core::shot_results::ShotResults,
 };
 use std::path::Path;
 // Import the QirEngine from pecos-qir

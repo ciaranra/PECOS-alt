@@ -12,7 +12,7 @@
 
 use super::NoiseModel;
 use crate::byte_message::ByteMessage;
-use crate::engines::{ControlEngine, EngineStage};
+use crate::engine_system::{ControlEngine, EngineStage};
 use pecos_core::RngManageable;
 use pecos_core::errors::PecosError;
 use rand_chacha::ChaCha8Rng;

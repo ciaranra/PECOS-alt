@@ -1,6 +1,6 @@
+use crate::Engine;
 use crate::byte_message::ByteMessage;
 use crate::byte_message::GateType;
-use crate::engines::Engine;
 use dyn_clone::DynClone;
 use log::debug;
 use pecos_core::RngManageable;

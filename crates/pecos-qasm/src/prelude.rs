@@ -54,18 +54,18 @@ pub use crate::program::QASMProgram;
 pub use crate::run::run_qasm_sim;
 
 // Re-export noise models from pecos-engines
-pub use pecos_engines::{
-    MonteCarloEngine, PassThroughNoiseModel,
-    engines::noise::{
-        BiasedDepolarizingNoiseModel, BiasedMeasurementNoiseModel, DepolarizingNoiseModel,
-        GeneralNoiseModel, NoiseModel,
-    },
-    engines::quantum::{
-        QuantumEngine, SparseStabEngine, StateVecEngine, new_stabilizer_engine,
-        new_stabilizer_engine_with_seed,
-    },
-};
+pub use pecos_engines::{MonteCarloEngine, PassThroughNoiseModel};
 
 // Re-export core error type and traits
 pub use pecos_core::RngManageable;
 pub use pecos_core::errors::PecosError;
+// Re-export noise models from pecos-engines
+pub use pecos_engines::noise::{
+    BiasedDepolarizingNoiseModel, BiasedMeasurementNoiseModel, DepolarizingNoiseModel,
+    GeneralNoiseModel, NoiseModel,
+};
+// Re-export noise models from pecos-engines
+pub use pecos_engines::quantum::{
+    QuantumEngine, SparseStabEngine, StateVecEngine, new_stabilizer_engine,
+    new_stabilizer_engine_with_seed,
+};

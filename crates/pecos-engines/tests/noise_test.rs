@@ -9,9 +9,9 @@
 
 use pecos_engines::byte_message::gate_type::GateType;
 use pecos_engines::byte_message::{ByteMessage, ByteMessageBuilder};
-use pecos_engines::engines::noise::RngManageable;
-use pecos_engines::engines::noise::general::GeneralNoiseModel;
-use pecos_engines::engines::quantum::StateVecEngine;
+use pecos_engines::noise::RngManageable;
+use pecos_engines::noise::general::GeneralNoiseModel;
+use pecos_engines::quantum::StateVecEngine;
 use pecos_engines::{Engine, QuantumSystem};
 use std::collections::BTreeMap;
 use std::f64::consts::PI;
