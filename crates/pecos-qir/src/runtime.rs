@@ -1,3 +1,4 @@
+use log::info;
 use pecos_core::QubitId;
 use pecos_engines::byte_message::QuantumCmd;
 use std::collections::HashMap;
@@ -389,7 +390,7 @@ pub unsafe extern "C" fn __quantum__rt__result_release(result: usize) {
     // In a real implementation, we would recycle the ID
 }
 
-/// Records a message.
+/// Records a message using Rust logging.
 ///
 /// # Arguments
 ///
@@ -402,9 +403,11 @@ pub unsafe extern "C" fn __quantum__rt__result_release(result: usize) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__message(msg: *const c_char) {
     let c_str = unsafe { CStr::from_ptr(msg) };
-    let msg_str = c_str.to_string_lossy().into_owned();
+    let msg_str = c_str.to_string_lossy();
+    let thread_id = get_thread_id();
 
-    store_command(&QuantumCmd::Message(msg_str));
+    // Use proper Rust logging instead of storing as QuantumCmd
+    info!("QIR Message [Thread {}]: {}", thread_id, msg_str);
 }
 
 /// Records data.

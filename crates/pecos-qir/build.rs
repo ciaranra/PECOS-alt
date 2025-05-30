@@ -8,11 +8,10 @@ use std::process::Command;
 //------------------------------------------------------------------------------
 
 // Source files that trigger rebuilds when changed
-const QIR_SOURCE_FILES: [&str; 5] = [
+const QIR_SOURCE_FILES: [&str; 4] = [
     "src/runtime.rs",
     "src/common.rs",
     "src/state.rs",
-    "../pecos-engines/src/core/result_id.rs",
     "../pecos-engines/src/byte_message/quantum_cmd.rs",
 ];
 
@@ -391,6 +390,7 @@ crate-type = ["staticlib"]
 
 [dependencies]
 pecos-core = {{ path = "{}" }}
+log = "0.4"
 
 [workspace]
 resolver = "2"

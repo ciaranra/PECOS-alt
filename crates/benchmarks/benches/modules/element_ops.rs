@@ -10,8 +10,9 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-use criterion::{BenchmarkGroup, Criterion, black_box, measurement::Measurement};
+use criterion::{BenchmarkGroup, Criterion, measurement::Measurement};
 use pecos::prelude::*;
+use std::hint::black_box;
 
 pub fn benchmarks<M: Measurement>(c: &mut Criterion<M>) {
     let mut group = c.benchmark_group("Element Operations");

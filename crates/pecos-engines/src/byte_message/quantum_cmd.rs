@@ -27,8 +27,6 @@ use std::fmt;
 /// # Non-Gate Operations
 ///
 /// - `Record` - Record data for classical processing
-/// - `Message` - Send a message (info, warning, error, debug)
-/// - `RecordResult` - Record a measurement result with a name for output
 #[derive(Debug, Clone, PartialEq)]
 pub enum QuantumCmd {
     /// Hadamard gate on qubit
@@ -49,6 +47,12 @@ pub enum QuantumCmd {
     /// RZ gate with angle (in radians) and qubit
     RZ(f64, QubitId),
 
+    /// R1XY gate with theta, phi angles (in radians) and qubit
+    R1XY(f64, f64, QubitId),
+
+    /// U gate with theta, phi, lambda angles (in radians) and qubit
+    U(f64, f64, f64, QubitId),
+
     /// SZZ gate with two qubits
     SZZ(QubitId, QubitId),
 
@@ -63,15 +67,6 @@ pub enum QuantumCmd {
 
     /// Record command with string data
     Record(String),
-
-    /// Message command with string data
-    Message(String),
-
-    /// R1XY gate with theta, phi angles (in radians) and qubit
-    R1XY(f64, f64, QubitId),
-
-    /// U gate with theta, phi, lambda angles (in radians) and qubit
-    U(f64, f64, f64, QubitId),
 }
 
 impl fmt::Display for QuantumCmd {
@@ -87,7 +82,7 @@ impl fmt::Display for QuantumCmd {
             QuantumCmd::RZZ(theta, qubit1, qubit2) => write!(f, "RZZ {qubit1} {qubit2} {theta}"),
             QuantumCmd::Measure(qubit) => write!(f, "M {qubit}"),
             QuantumCmd::Prep(qubit) => write!(f, "Prep {qubit}"),
-            QuantumCmd::Record(cmd) | QuantumCmd::Message(cmd) => write!(f, "{cmd}"),
+            QuantumCmd::Record(cmd) => write!(f, "{cmd}"),
             QuantumCmd::R1XY(theta, phi, qubit) => write!(f, "R1XY {theta} {phi} {qubit}"),
             QuantumCmd::U(theta, phi, lambda, qubit) => {
                 write!(f, "U {theta} {phi} {lambda} {qubit}")

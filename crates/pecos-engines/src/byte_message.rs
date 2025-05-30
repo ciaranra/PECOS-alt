@@ -7,7 +7,6 @@ pub mod builder;
 pub mod debug;
 pub mod gate_type;
 pub mod message;
-pub mod message_data;
 pub mod protocol;
 pub mod quantum_cmd;
 pub mod quantum_command;
@@ -17,7 +16,6 @@ pub use debug::dump_batch;
 pub use gate_type::GateType;
 pub use gate_type::QuantumGate;
 pub use message::ByteMessage;
-pub use message_data::MessageData;
 pub use quantum_cmd::QuantumCmd;
 pub use quantum_command::{CommandType, QuantumCommand};
 

@@ -1,5 +1,4 @@
 use crate::byte_message::gate_type::GateType;
-use crate::byte_message::message_data::MessageData;
 use crate::byte_message::protocol::{MessageFlags, MessageType};
 use crate::byte_message::{ByteMessage, ByteMessageBuilder};
 use crate::core::record_data::RecordData;
@@ -82,9 +81,6 @@ pub enum QuantumCommand {
     // Non-gate operations (for filtering)
     /// Record command with structured data
     Record(RecordData),
-
-    /// Message command with structured data
-    Message(MessageData),
 
     /// Unknown command with command type
     Unknown(CommandType),
@@ -216,33 +212,6 @@ impl QuantumCommand {
                 }
                 Ok(())
             }
-            QuantumCommand::Message(data) => {
-                match data {
-                    MessageData::Info(msg) => {
-                        builder.add_info_message(msg);
-                        debug!("Added Info message to ByteMessageBuilder");
-                    }
-                    MessageData::Warning(msg) => {
-                        builder.add_warning_message(msg);
-                        debug!("Added Warning message to ByteMessageBuilder");
-                    }
-                    MessageData::Error(msg) => {
-                        builder.add_error_message(msg);
-                        debug!("Added Error message to ByteMessageBuilder");
-                    }
-                    MessageData::Debug(msg) => {
-                        builder.add_debug_message(msg);
-                        debug!("Added Debug message to ByteMessageBuilder");
-                    }
-                    MessageData::Raw(msg) => {
-                        // For raw messages, we still need to use the string representation
-                        let payload = msg.clone().into_bytes();
-                        builder.add_message(MessageType::InfoMessage, &payload, MessageFlags::NONE);
-                        debug!("Added Raw message to ByteMessageBuilder");
-                    }
-                }
-                Ok(())
-            }
             QuantumCommand::Unknown(cmd) => {
                 // For unknown commands, use an error message
                 let error_msg = cmd.to_string();
@@ -300,13 +269,6 @@ impl fmt::Display for QuantumCommand {
                 RecordData::ResultRecord(result_id, None) => write!(f, "RECORD {result_id}"),
                 RecordData::KeyValueRecord(key, value) => write!(f, "RECORD {key} {value}"),
                 RecordData::RawRecord(cmd) => write!(f, "{cmd}"),
-            },
-            QuantumCommand::Message(data) => match data {
-                MessageData::Info(msg) => write!(f, "MESSAGE Info: {msg}"),
-                MessageData::Warning(msg) => write!(f, "MESSAGE Warning: {msg}"),
-                MessageData::Error(msg) => write!(f, "MESSAGE Error: {msg}"),
-                MessageData::Debug(msg) => write!(f, "MESSAGE Debug: {msg}"),
-                MessageData::Raw(msg) => write!(f, "{msg}"),
             },
             QuantumCommand::Unknown(cmd) => write!(f, "{cmd}"),
         }

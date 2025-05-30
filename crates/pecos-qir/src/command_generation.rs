@@ -4,7 +4,6 @@ use pecos_core::errors::PecosError;
 use pecos_engines::byte_message::ByteMessage;
 use pecos_engines::byte_message::QuantumCmd;
 use pecos_engines::byte_message::QuantumCommand;
-use pecos_engines::byte_message::message_data::MessageData;
 use pecos_engines::core::record_data::RecordData;
 
 /// Parses binary commands from the QIR runtime into `QuantumCommand` objects
@@ -75,25 +74,6 @@ pub fn parse_binary_commands(commands: &[QuantumCmd]) -> Vec<QuantumCommand> {
                     cmd
                 );
                 QuantumCommand::Record(RecordData::RawRecord(cmd.clone()))
-            }
-        }
-        QuantumCmd::Message(msg) => {
-            // Parse message commands into structured data
-            let msg_str = msg.as_str();
-            if let Some(stripped) = msg_str.strip_prefix("Info: ") {
-                QuantumCommand::Message(MessageData::info(stripped.to_string()))
-            } else if let Some(stripped) = msg_str.strip_prefix("Warning: ") {
-                QuantumCommand::Message(MessageData::warning(stripped.to_string()))
-            } else if let Some(stripped) = msg_str.strip_prefix("Error: ") {
-                QuantumCommand::Message(MessageData::error(stripped.to_string()))
-            } else if let Some(stripped) = msg_str.strip_prefix("Debug: ") {
-                QuantumCommand::Message(MessageData::debug(stripped.to_string()))
-            } else {
-                debug!(
-                    "QIR: Unable to parse message command as structured data: {}",
-                    msg
-                );
-                QuantumCommand::Message(MessageData::Raw(msg.clone()))
             }
         }
     })
