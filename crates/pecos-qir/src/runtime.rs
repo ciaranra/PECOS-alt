@@ -425,7 +425,7 @@ pub unsafe extern "C" fn __quantum__rt__record(data: *const c_char) {
     let c_str = unsafe { CStr::from_ptr(data) };
     let data_str = c_str.to_string_lossy().into_owned();
 
-    store_command(&QuantumCmd::Record(data_str));
+    store_command(&QuantumCmd::record_from_string(data_str));
 }
 
 /// Resets the QIR runtime.
@@ -589,5 +589,7 @@ pub unsafe extern "C" fn __quantum__rt__result_record_output(result: usize, name
         println!("[Thread {thread_id}] Recording result {result} as '{name_str}'");
     }
 
-    store_command(&QuantumCmd::Record(format!("RECORD {result} {name_str}")));
+    store_command(&QuantumCmd::record_from_string(format!(
+        "RECORD {result} {name_str}"
+    )));
 }

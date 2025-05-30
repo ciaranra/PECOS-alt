@@ -208,15 +208,25 @@ impl ResultNameMap {
     ///
     /// * `cmd` - The QIR command to process
     pub fn process_command(&mut self, cmd: &QuantumCmd) {
-        if let QuantumCmd::Record(cmd_str) = cmd {
-            // Parse record commands to extract result naming information
-            let parts: Vec<&str> = cmd_str.split_whitespace().collect();
-            if parts.len() >= 3 && parts[0] == "RECORD" {
-                if let Ok(result_id) = parts[1].parse::<usize>() {
+        if let QuantumCmd::Record(record_data) = cmd {
+            // Handle different types of record data
+            match record_data {
+                pecos_engines::RecordData::ResultRecord(result_id, Some(label)) => {
                     // This is a result record with a name
-                    let name = parts[2].to_string();
-                    self.register_named_result(result_id, name);
+                    self.register_named_result(*result_id, label.clone());
                 }
+                pecos_engines::RecordData::RawRecord(cmd_str) => {
+                    // Parse raw record commands to extract result naming information
+                    let parts: Vec<&str> = cmd_str.split_whitespace().collect();
+                    if parts.len() >= 3 && parts[0] == "RECORD" {
+                        if let Ok(result_id) = parts[1].parse::<usize>() {
+                            // This is a result record with a name
+                            let name = parts[2].to_string();
+                            self.register_named_result(result_id, name);
+                        }
+                    }
+                }
+                _ => {}
             }
         }
     }

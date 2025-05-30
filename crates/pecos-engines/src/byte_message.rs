@@ -9,15 +9,15 @@ pub mod gate_type;
 pub mod message;
 pub mod protocol;
 pub mod quantum_cmd;
-pub mod quantum_command;
+pub mod quantum_cmd_converter;
 
 pub use builder::ByteMessageBuilder;
 pub use debug::dump_batch;
 pub use gate_type::GateType;
 pub use gate_type::QuantumGate;
 pub use message::ByteMessage;
-pub use quantum_cmd::QuantumCmd;
-pub use quantum_command::{CommandType, QuantumCommand};
+pub use quantum_cmd::{CommandType, QuantumCmd};
+pub use quantum_cmd_converter::QuantumCmdConverter;
 
 // Re-export QubitId from pecos-core
 pub use pecos_core::QubitId;

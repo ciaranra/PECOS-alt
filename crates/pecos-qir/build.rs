@@ -222,8 +222,10 @@ struct FilePaths {
     common: (PathBuf, PathBuf),
     state: (PathBuf, PathBuf),
     quantum_cmd: (PathBuf, PathBuf),
+    record_data: (PathBuf, PathBuf),
     runtime: (PathBuf, PathBuf),
     byte_message: PathBuf,
+    core_mod: PathBuf,
     cargo_toml: PathBuf,
     lib_rs: PathBuf,
 }
@@ -285,6 +287,8 @@ fn build_qir_runtime() -> Result<(), String> {
     fs::create_dir_all(&build_dir).map_err(|e| format!("Failed to create build directory: {e}"))?;
     fs::create_dir_all(build_dir.join("src/byte_message"))
         .map_err(|e| format!("Failed to create source directories: {e}"))?;
+    fs::create_dir_all(build_dir.join("src/core"))
+        .map_err(|e| format!("Failed to create core directory: {e}"))?;
 
     // Set up file paths and create temporary project
     let paths = setup_file_paths(&manifest_dir, &build_dir);
@@ -355,11 +359,16 @@ fn setup_file_paths(manifest_dir: &Path, build_dir: &Path) -> FilePaths {
             pecos_engines_dir.join("src/byte_message/quantum_cmd.rs"),
             build_dir.join("src/byte_message/quantum_cmd.rs"),
         ),
+        record_data: (
+            pecos_engines_dir.join("src/core/record_data.rs"),
+            build_dir.join("src/core/record_data.rs"),
+        ),
         runtime: (
             manifest_dir.join("src/runtime.rs"),
             build_dir.join("src/lib.rs"),
         ),
         byte_message: build_dir.join("src/byte_message.rs"),
+        core_mod: build_dir.join("src/core.rs"),
         cargo_toml: build_dir.join("Cargo.toml"),
         lib_rs: build_dir.join("src/lib.rs"),
     }
@@ -413,17 +422,31 @@ members = ["."]
     fs::write(&paths.state.1, state_content)
         .map_err(|e| format!("Failed to write state.rs: {e}"))?;
 
-    // 4. Modify quantum_cmd.rs: update imports
+    // 4. Copy quantum_cmd.rs and adjust imports
     let quantum_cmd_content = fs::read_to_string(&paths.quantum_cmd.0)
         .map_err(|e| format!("Failed to read quantum_cmd.rs: {e}"))?;
-    let modified_quantum_cmd = quantum_cmd_content.replace("use pecos_core::", "use crate::");
+    let modified_quantum_cmd =
+        quantum_cmd_content.replace("use pecos_core::QubitId;", "use crate::QubitId;");
     fs::write(&paths.quantum_cmd.1, modified_quantum_cmd)
         .map_err(|e| format!("Failed to write quantum_cmd.rs: {e}"))?;
 
-    // 5. Create byte_message.rs module file
+    // 5. Copy record_data.rs
+    let record_data_content = fs::read_to_string(&paths.record_data.0)
+        .map_err(|e| format!("Failed to read record_data.rs: {e}"))?;
+    fs::write(&paths.record_data.1, record_data_content)
+        .map_err(|e| format!("Failed to write record_data.rs: {e}"))?;
+
+    // 6. Create core.rs module file
+    fs::write(
+        &paths.core_mod,
+        "pub mod record_data;\npub use record_data::RecordData;\n",
+    )
+    .map_err(|e| format!("Failed to write core.rs: {e}"))?;
+
+    // 7. Create byte_message.rs module file
     fs::write(
         &paths.byte_message,
-        "pub mod quantum_cmd;\npub use quantum_cmd::QuantumCmd;\n",
+        "pub mod quantum_cmd;\npub use quantum_cmd::{QuantumCmd, CommandType};\n",
     )
     .map_err(|e| format!("Failed to write byte_message.rs: {e}"))?;
 
@@ -437,10 +460,11 @@ members = ["."]
             "use pecos_engines::byte_message::",
             "use crate::byte_message::",
         )
-        .replace("use pecos_engines::core::", "use crate::");
+        .replace("use pecos_engines::core::", "use crate::core::")
+        .replace("use pecos_core::QubitId;\n", ""); // Remove duplicate QubitId import
 
-    // Add module declarations
-    let module_declarations = "pub mod byte_message;\npub mod common;\npub mod state;\n\n";
+    // Add module declarations and re-export QubitId
+    let module_declarations = "pub mod byte_message;\npub mod common;\npub mod core;\npub mod state;\n\n// Re-export QubitId from pecos-core\npub use pecos_core::QubitId;\n\n";
 
     fs::write(
         &paths.lib_rs,

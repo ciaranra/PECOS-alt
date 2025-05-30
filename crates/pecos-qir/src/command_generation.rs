@@ -1,15 +1,13 @@
 use crate::common::get_thread_id;
 use log::debug;
 use pecos_core::errors::PecosError;
-use pecos_engines::byte_message::ByteMessage;
-use pecos_engines::byte_message::QuantumCmd;
-use pecos_engines::byte_message::QuantumCommand;
-use pecos_engines::core::record_data::RecordData;
+use pecos_engines::byte_message::{ByteMessage, QuantumCmd, QuantumCmdConverter};
 
-/// Parses binary commands from the QIR runtime into `QuantumCommand` objects
+/// Parses binary commands from the QIR runtime into `QuantumCmd` objects
 ///
-/// This function converts the binary commands from the QIR runtime into
-/// `QuantumCommand` objects that can be processed by the quantum system.
+/// This function is no longer needed as conversion because we've merged
+/// `QuantumCommand` functionality into `QuantumCmd`. This is kept for backward
+/// compatibility and now just returns the input.
 ///
 /// # Arguments
 ///
@@ -17,66 +15,10 @@ use pecos_engines::core::record_data::RecordData;
 ///
 /// # Returns
 ///
-/// * `Vec<QuantumCommand>` - The parsed quantum commands
+/// * `Vec<QuantumCmd>` - The same quantum commands
 #[must_use]
-pub fn parse_binary_commands(commands: &[QuantumCmd]) -> Vec<QuantumCommand> {
-    QuantumCommand::parse_binary_commands(commands, |cmd| match cmd {
-        QuantumCmd::H(qubit) => QuantumCommand::H(*qubit),
-        QuantumCmd::X(qubit) => QuantumCommand::X(*qubit),
-        QuantumCmd::Y(qubit) => QuantumCommand::Y(*qubit),
-        QuantumCmd::Z(qubit) => QuantumCommand::Z(*qubit),
-        QuantumCmd::CX(control, target) => QuantumCommand::CX(*control, *target),
-        QuantumCmd::RZ(angle, qubit) => QuantumCommand::RZ(*angle, *qubit),
-        QuantumCmd::R1XY(theta, phi, qubit) => QuantumCommand::R1XY(*theta, *phi, *qubit),
-        QuantumCmd::U(theta, phi, lambda, qubit) => {
-            QuantumCommand::U(*theta, *phi, *lambda, *qubit)
-        }
-        QuantumCmd::SZZ(qubit1, qubit2) => QuantumCommand::SZZ(*qubit1, *qubit2),
-        QuantumCmd::RZZ(angle, qubit1, qubit2) => QuantumCommand::RZZ(*angle, *qubit1, *qubit2),
-        QuantumCmd::Measure(qubit) => QuantumCommand::Measure(*qubit),
-        QuantumCmd::Prep(qubit) => QuantumCommand::Prep(*qubit),
-        QuantumCmd::Record(cmd) => {
-            // Parse record commands into structured data
-            let parts: Vec<&str> = cmd.split_whitespace().collect();
-            if parts.len() >= 2 && parts[0] == "RECORD" {
-                if let Ok(result_id) = parts[1].parse::<usize>() {
-                    // This is a result record
-                    let label = if parts.len() >= 3 {
-                        Some(parts[2].to_string())
-                    } else {
-                        None
-                    };
-                    QuantumCommand::Record(RecordData::result(result_id, label))
-                } else if parts.len() >= 3 {
-                    // Try to parse as a key-value record
-                    if let Ok(value) = parts[2].parse::<f64>() {
-                        QuantumCommand::Record(RecordData::key_value(parts[1].to_string(), value))
-                    } else {
-                        // Fall back to raw record
-                        debug!(
-                            "QIR: Unable to parse record command as structured data: {}",
-                            cmd
-                        );
-                        QuantumCommand::Record(RecordData::RawRecord(cmd.clone()))
-                    }
-                } else {
-                    // Fall back to raw record
-                    debug!(
-                        "QIR: Unable to parse record command as structured data: {}",
-                        cmd
-                    );
-                    QuantumCommand::Record(RecordData::RawRecord(cmd.clone()))
-                }
-            } else {
-                // Fall back to raw record
-                debug!(
-                    "QIR: Unable to parse record command as structured data: {}",
-                    cmd
-                );
-                QuantumCommand::Record(RecordData::RawRecord(cmd.clone()))
-            }
-        }
-    })
+pub fn parse_binary_commands(commands: &[QuantumCmd]) -> Vec<QuantumCmd> {
+    commands.to_vec()
 }
 
 /// Identifies circuit boundaries by analyzing command patterns
@@ -91,9 +33,9 @@ pub fn parse_binary_commands(commands: &[QuantumCmd]) -> Vec<QuantumCommand> {
 ///
 /// # Returns
 ///
-/// * `Vec<QuantumCommand>` - The commands up to the identified circuit boundary
+/// * `Vec<QuantumCmd>` - The commands up to the identified circuit boundary
 #[must_use]
-pub fn identify_circuit_boundaries(commands: &[QuantumCommand]) -> Vec<QuantumCommand> {
+pub fn identify_circuit_boundaries(commands: &[QuantumCmd]) -> Vec<QuantumCmd> {
     // Identify circuit boundaries by looking for measurement patterns
     let mut measurement_indices = Vec::new();
     let mut gate_indices = Vec::new();
@@ -144,9 +86,9 @@ pub fn identify_circuit_boundaries(commands: &[QuantumCommand]) -> Vec<QuantumCo
     }
 }
 
-/// Converts a list of `QuantumCommands` to a `ByteMessage`
+/// Converts a list of `QuantumCmds` to a `ByteMessage`
 ///
-/// This function converts a list of `QuantumCommands` to a `ByteMessage` that can
+/// This function converts a list of `QuantumCmds` to a `ByteMessage` that can
 /// be processed by the quantum system.
 ///
 /// # Arguments
@@ -160,7 +102,7 @@ pub fn identify_circuit_boundaries(commands: &[QuantumCommand]) -> Vec<QuantumCo
 /// # Errors
 ///
 /// Returns an error if the commands cannot be converted to a `ByteMessage`.
-pub fn commands_to_byte_message(commands: &[QuantumCommand]) -> Result<ByteMessage, PecosError> {
+pub fn commands_to_byte_message(commands: &[QuantumCmd]) -> Result<ByteMessage, PecosError> {
     // Get the current thread ID for logging
     let thread_id = get_thread_id();
 
@@ -170,8 +112,8 @@ pub fn commands_to_byte_message(commands: &[QuantumCommand]) -> Result<ByteMessa
         commands.len()
     );
 
-    // Use the QuantumCommand's built-in method to convert to ByteMessage
-    QuantumCommand::commands_to_byte_message(commands).map_err(|e| {
+    // Use the QuantumCmdConverter trait method to convert to ByteMessage
+    <QuantumCmd as QuantumCmdConverter>::commands_to_byte_message(commands).map_err(|e| {
         PecosError::Processing(format!("Failed to convert commands to ByteMessage: {e}"))
     })
 }
