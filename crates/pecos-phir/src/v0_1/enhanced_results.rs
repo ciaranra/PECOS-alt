@@ -6,9 +6,15 @@ use std::collections::HashMap;
 /// These provide similar functionality to the Python PHIR interpreter's result handling
 pub trait EnhancedResultHandling {
     /// Get a specific bit from a variable
+    ///
+    /// # Errors
+    /// Returns an error if the variable doesn't exist or the bit index is out of range.
     fn get_result_bit(&self, var_name: &str, bit_index: usize) -> Result<BoolBit, PecosError>;
 
     /// Get multiple bits from a variable
+    ///
+    /// # Errors
+    /// Returns an error if the variable doesn't exist or any bit index is out of range.
     fn get_result_bits(
         &self,
         var_name: &str,
@@ -16,6 +22,9 @@ pub trait EnhancedResultHandling {
     ) -> Result<Vec<BoolBit>, PecosError>;
 
     /// Convert a variable to a bit string
+    ///
+    /// # Errors
+    /// Returns an error if the variable doesn't exist.
     fn get_result_as_bit_string(
         &self,
         var_name: &str,
@@ -23,6 +32,9 @@ pub trait EnhancedResultHandling {
     ) -> Result<String, PecosError>;
 
     /// Convert a variable to a binary string (like '0b101')
+    ///
+    /// # Errors
+    /// Returns an error if the variable doesn't exist.
     fn get_result_as_binary_string(&self, var_name: &str) -> Result<String, PecosError>;
 
     /// Get results with various formats
@@ -197,6 +209,9 @@ impl ResultUtils {
     }
 
     /// Combines a set of bit values at the specified indices
+    ///
+    /// # Errors
+    /// Returns an error if the variable doesn't exist or any bit index is out of range.
     pub fn combine_bits(
         env: &Environment,
         var_name: &str,

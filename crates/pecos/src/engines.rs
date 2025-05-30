@@ -130,6 +130,9 @@ pub fn setup_qir_engine(
 /// let program = QASMProgram::from_str(program_str).unwrap();
 /// let results2 = run_sim(program.into_engine_box(), 1000, Some(42), None, None, None).unwrap();
 /// ```
+///
+/// # Errors
+/// Returns an error if the hybrid engine creation or execution fails.
 pub fn run_sim(
     classical_engine: Box<dyn ClassicalEngine>,
     shots: usize,

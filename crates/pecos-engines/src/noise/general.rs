@@ -464,6 +464,10 @@ impl GeneralNoiseModel {
     /// # Panics
     ///
     /// Panics if the input `ByteMessage` cannot be parsed as quantum operations.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if noise application fails or the message cannot be processed.
     pub fn apply_noise_on_start(&mut self, input: &ByteMessage) -> Result<ByteMessage, String> {
         let mut builder = NoiseUtils::create_quantum_builder();
         let mut err = None;
@@ -557,6 +561,10 @@ impl GeneralNoiseModel {
     /// Note: Measurements do NOT unleak qubits. Only preparation operations unleak qubits.
     /// If a leaked qubit is measured, it remains leaked and will continue to measure as 1
     /// until a preparation operation is performed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if noise application fails or the message cannot be processed.
     pub fn apply_noise_on_continue_processing(
         &mut self,
         message: ByteMessage,
@@ -1136,6 +1144,10 @@ impl GeneralNoiseModel {
     ///
     /// # Returns
     /// Result indicating success or failure
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the seed cannot be set or the noise model cannot be rebuilt.
     pub fn reset_with_seed(&mut self, seed: u64) -> Result<(), PecosError> {
         // First reset the noise model
         self.reset_noise_model();

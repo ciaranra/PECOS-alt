@@ -156,6 +156,10 @@ pub fn identify_circuit_boundaries(commands: &[QuantumCommand]) -> Vec<QuantumCo
 /// # Returns
 ///
 /// * `Result<ByteMessage, PecosError>` - The `ByteMessage` if successful, or an error if the operation fails
+///
+/// # Errors
+///
+/// Returns an error if the commands cannot be converted to a `ByteMessage`.
 pub fn commands_to_byte_message(commands: &[QuantumCommand]) -> Result<ByteMessage, PecosError> {
     // Get the current thread ID for logging
     let thread_id = get_thread_id();

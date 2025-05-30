@@ -102,6 +102,9 @@ impl PHIREngine {
     /// Creates a new `PHIREngine` with validation disabled.
     /// This is useful for testing experimental features like the "Result" instruction
     /// that aren't in the current PHIR validator.
+    ///
+    /// # Errors
+    /// Returns an error if the engine cannot be created or Python imports fail.
     #[staticmethod]
     pub fn create_with_validation_disabled(phir_json: &str) -> PyResult<Self> {
         Python::with_gil(|py| {
@@ -169,6 +172,9 @@ impl PHIREngine {
 
     /// Processes the quantum program and returns commands as Python objects
     /// This is a Python-facing method used primarily for testing
+    ///
+    /// # Errors
+    /// Returns an error if command generation or conversion fails.
     pub fn process_program(&mut self) -> PyResult<Vec<PyObject>> {
         Python::with_gil(|py| {
             // If we don't have a Rust engine, this is a test program
@@ -279,6 +285,9 @@ impl PHIREngine {
 
     /// Handles a measurement and updates the Python interpreter
     /// This is a Python-facing method used primarily for testing
+    ///
+    /// # Errors
+    /// Returns an error if the measurement cannot be handled.
     pub fn handle_measurement(&mut self, outcome: u32) -> PyResult<()> {
         // For compatibility with existing code, always use result_id 0
         let result_id = 0;
@@ -376,6 +385,9 @@ impl PHIREngine {
 
     /// Gets the current results from the engine
     /// This is a Python-facing method used primarily for testing
+    ///
+    /// # Errors
+    /// Returns an error if results cannot be retrieved.
     pub fn get_results(&self) -> PyResult<HashMap<String, u32>> {
         Python::with_gil(|py| {
             // First try to use the Rust engine if available

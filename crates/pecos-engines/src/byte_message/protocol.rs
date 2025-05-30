@@ -113,6 +113,10 @@ impl MessageHeader {
     }
 
     /// Get the message type from a raw header
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the message type is unknown or invalid.
     pub fn get_type(&self) -> Result<MessageType, &'static str> {
         match self.msg_type {
             1 => Ok(MessageType::BeginBatch),

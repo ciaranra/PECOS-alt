@@ -156,6 +156,9 @@ impl PHIREngine {
     ///
     /// # Returns
     /// - Returns a new `PHIREngine` initialized with the provided program.
+    ///
+    /// # Errors
+    /// - Returns an error if variable definitions cannot be processed.
     pub fn from_program(program: PHIRProgram) -> Result<Self, PecosError> {
         let mut processor = OperationProcessor::new();
 

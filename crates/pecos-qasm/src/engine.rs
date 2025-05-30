@@ -75,6 +75,10 @@ impl QASMEngine {
     }
 
     /// Create a new `QASMEngine` and load a QASM program from a file
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read or parsed.
     pub fn from_file(qasm_path: impl AsRef<Path>) -> Result<Self, PecosError> {
         // Import here to avoid circular dependency
         use crate::program::QASMProgram;

@@ -416,6 +416,10 @@ impl ByteMessage {
     }
 
     /// Parse quantum operations from this message
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the message is malformed or contains invalid quantum operations.
     pub fn parse_quantum_operations(&self) -> Result<Vec<QuantumGate>, PecosError> {
         if self.bytes.len() < size_of::<BatchHeader>() {
             return Err(PecosError::Input(
@@ -504,6 +508,10 @@ impl ByteMessage {
     }
 
     /// Parse measurements from this message
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the message is malformed or contains invalid measurement data.
     pub fn parse_measurements(&self) -> Result<Vec<u32>, PecosError> {
         if self.bytes.len() < size_of::<BatchHeader>() {
             return Err(PecosError::Input(
@@ -581,6 +589,10 @@ impl ByteMessage {
     ///
     /// A Result containing a vector of measurement outcomes if successful,
     /// or a `PecosError` if there was an error parsing the message.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the message is malformed or contains invalid measurement data.
     pub fn measurement_results_as_vec(&self) -> Result<Vec<(usize, u32)>, PecosError> {
         let outcomes = self.parse_measurements()?;
 
@@ -834,6 +846,10 @@ impl ByteMessage {
     ///
     /// A Result containing a vector of qubit indices if successful,
     /// or a `PecosError` if there was an error parsing the message.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the message is malformed or contains invalid measurement data.
     pub fn parse_measured_qubits(&self) -> Result<Vec<u32>, PecosError> {
         if self.bytes.is_empty() {
             return Ok(Vec::new());

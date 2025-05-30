@@ -336,6 +336,10 @@ pub struct EvaluationCtx<'a> {
 
 impl Expression {
     /// Evaluate expression with an optional parameter context
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the expression cannot be evaluated (e.g., undefined variables, division by zero).
     #[allow(clippy::too_many_lines)]
     pub fn evaluate(&self, context: Option<&EvaluationCtx>) -> Result<f64, PecosError> {
         match self {
@@ -496,6 +500,10 @@ impl Expression {
     }
 
     /// Compatibility method for existing code
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the expression cannot be evaluated.
     pub fn evaluate_with_context(
         &self,
         context: Option<&dyn crate::ast::EvaluationContext>,
@@ -512,7 +520,18 @@ impl Expression {
 
 // For compatibility with existing code, we keep the trait
 pub trait EvaluationContext {
+    /// Evaluate an expression as a float
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the expression cannot be evaluated.
     fn evaluate_float(&self, expr: &Expression) -> Result<f64, PecosError>;
+
+    /// Evaluate an expression as an integer
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the expression cannot be evaluated.
     fn evaluate_int(&self, expr: &Expression) -> Result<i64, PecosError> {
         #[allow(clippy::cast_possible_truncation)]
         self.evaluate_float(expr).map(|f| f as i64)

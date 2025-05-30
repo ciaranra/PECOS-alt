@@ -76,11 +76,17 @@ impl BlockExecutor {
     }
 
     /// Add a quantum variable to the processor
+    ///
+    /// # Errors
+    /// Returns an error if the variable already exists or cannot be added.
     pub fn add_quantum_variable(&mut self, variable: &str, size: usize) -> Result<(), PecosError> {
         self.processor.add_quantum_variable(variable, size)
     }
 
     /// Add a classical variable to the processor
+    ///
+    /// # Errors
+    /// Returns an error if the data type is invalid or the variable already exists.
     pub fn add_classical_variable(
         &mut self,
         variable: &str,
@@ -111,6 +117,9 @@ impl BlockExecutor {
     }
 
     /// Handle variable definition operations
+    ///
+    /// # Errors
+    /// Returns an error if the variable definition type is unknown.
     pub fn handle_variable_definition(
         &mut self,
         data: &str,
@@ -123,6 +132,9 @@ impl BlockExecutor {
     }
 
     /// Processes a single operation
+    ///
+    /// # Errors
+    /// Returns an error if the operation cannot be processed.
     pub fn process_operation(&mut self, op: &Operation) -> Result<(), PecosError> {
         match op {
             Operation::VariableDefinition {
@@ -212,6 +224,9 @@ impl BlockExecutor {
     }
 
     /// Executes a block of operations in sequence (previously `execute_block`)
+    ///
+    /// # Errors
+    /// Returns an error if any operation in the sequence fails.
     pub fn execute_sequence(&mut self, operations: &[Operation]) -> Result<(), PecosError> {
         debug!(
             "Executing sequence block with {} operations",
@@ -226,6 +241,9 @@ impl BlockExecutor {
     }
 
     /// Evaluates a conditional expression using the environment
+    ///
+    /// # Errors
+    /// Returns an error if the expression cannot be evaluated.
     pub fn evaluate_condition(&self, condition: &Expression) -> Result<bool, PecosError> {
         debug!("Evaluating condition: {:?}", condition);
 
@@ -240,6 +258,9 @@ impl BlockExecutor {
     }
 
     /// Executes a conditional (if/else) block
+    ///
+    /// # Errors
+    /// Returns an error if the condition cannot be evaluated or branch execution fails.
     pub fn execute_conditional(
         &mut self,
         condition: &Expression,
@@ -271,6 +292,12 @@ impl BlockExecutor {
     }
 
     /// Executes a quantum parallel block
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Non-quantum operations are found in the block
+    /// - A qubit is used more than once
+    /// - Any operation fails to process
     pub fn execute_qparallel(&mut self, operations: &[Operation]) -> Result<(), PecosError> {
         debug!(
             "Executing quantum parallel block with {} operations",
@@ -330,6 +357,12 @@ impl BlockExecutor {
     }
 
     /// Process a block operation (sequence, qparallel, conditional)
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The block type is unknown
+    /// - Required block components are missing
+    /// - Block execution fails
     fn process_block_operation(&mut self, op: &Operation) -> Result<(), PecosError> {
         if let Operation::Block {
             block,
@@ -377,6 +410,9 @@ impl BlockExecutor {
     }
 
     /// Process a block with the appropriate handler (wraps `process_block_operation`)
+    ///
+    /// # Errors
+    /// Returns an error if the block type is unknown or block execution fails.
     pub fn process_block(
         &mut self,
         block_type: &str,
@@ -412,6 +448,9 @@ impl BlockExecutor {
     }
 
     /// Handles measurement results from the quantum backend
+    ///
+    /// # Errors
+    /// Returns an error if variable creation or value setting fails.
     pub fn handle_measurements(
         &mut self,
         measurements: &[u32],
@@ -439,6 +478,9 @@ impl BlockExecutor {
     }
 
     /// Execute a complete PHIR program
+    ///
+    /// # Errors
+    /// Returns an error if any operation in the program fails.
     pub fn execute_program(
         &mut self,
         program: &[Operation],

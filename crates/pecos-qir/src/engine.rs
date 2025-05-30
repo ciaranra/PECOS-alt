@@ -237,6 +237,10 @@ impl QirEngine {
     /// # Returns
     ///
     /// `Ok(())` if successful, or an error if the operation fails
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the shots cannot be set.
     pub fn set_assigned_shots(&mut self, shots: usize) -> Result<(), PecosError> {
         debug!(
             "QIR: Setting assigned shots to {} (but limiting to 1 shot per run_shot call)",
@@ -419,6 +423,10 @@ impl QirEngine {
     }
 
     /// Compile the QIR program
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the QIR program cannot be compiled.
     pub fn compile(&self) -> Result<(), PecosError> {
         debug!("QIR: Compiling program");
         match QirCompiler::compile(&self.qir_file, None) {
@@ -438,6 +446,10 @@ impl QirEngine {
     }
 
     /// Pre-compile the QIR library to prepare for cloning
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the QIR library cannot be pre-compiled.
     pub fn pre_compile(&mut self) -> Result<(), PecosError> {
         // Get the current thread ID for logging
         let thread_id = get_thread_id();

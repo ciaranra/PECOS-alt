@@ -248,6 +248,9 @@ impl OperationProcessor {
 
     /// Set a variable value in the environment
     /// Environment is the single source of truth for all variables
+    ///
+    /// # Errors
+    /// Returns an error if the variable cannot be created or updated.
     pub fn set_variable_value(&mut self, name: &str, value: u64) -> Result<(), PecosError> {
         // Create the variable if it doesn't exist
         if !self.environment.has_variable(name) {
@@ -281,6 +284,9 @@ impl OperationProcessor {
     }
 
     /// Evaluates a classical expression
+    ///
+    /// # Errors
+    /// Returns an error if the expression cannot be evaluated (e.g., undefined variables).
     pub fn evaluate_expression(&self, expr: &Expression) -> Result<i64, PecosError> {
         log::info!("Evaluating expression: {:?}", expr);
 
@@ -307,6 +313,9 @@ impl OperationProcessor {
     // Removed get_variable_value method as it's no longer needed
 
     /// Process a block operation with improved validation and handling
+    ///
+    /// # Errors
+    /// Returns an error if the block type is unknown or invalid.
     pub fn process_block(
         &self,
         block_type: &str,
@@ -408,6 +417,9 @@ impl OperationProcessor {
     }
 
     /// Process a conditional (if/else) block with improved evaluation
+    ///
+    /// # Errors
+    /// Returns an error if the condition expression cannot be evaluated.
     pub fn process_conditional_block(
         &self,
         condition: &Expression,
@@ -450,6 +462,9 @@ impl OperationProcessor {
     }
 
     /// Process a meta instruction
+    ///
+    /// # Errors
+    /// Returns an error if the meta instruction type is unsupported or arguments are invalid.
     pub fn process_meta_instruction(
         &self,
         meta_type: &str,
@@ -478,6 +493,9 @@ impl OperationProcessor {
     }
 
     /// Add a meta instruction to the byte message builder
+    ///
+    /// # Errors
+    /// Currently never returns an error, but may in future implementations.
     pub fn add_meta_instruction_to_builder(
         &self,
         _builder: &mut ByteMessageBuilder,
@@ -515,6 +533,13 @@ impl OperationProcessor {
     ///
     /// * `Ok(MachineOperationResult)` - A structured result object representing the machine operation
     /// * `Err(PecosError)` - If the operation parameters are invalid
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The duration is negative
+    /// - The time unit is not supported
+    /// - The duration value would overflow when converted to nanoseconds
+    /// - The machine operation type is not supported
     ///
     /// # Examples
     ///
@@ -712,6 +737,9 @@ impl OperationProcessor {
     /// * `Ok(())` - If the operation was successfully added to the builder
     /// * `Err(PecosError)` - If the operation could not be added
     ///
+    /// # Errors
+    /// Currently never returns an error, but may in future implementations.
+    ///
     /// # Notes
     ///
     /// Some machine operations may not be directly supported by all hardware backends. In these cases,
@@ -802,6 +830,9 @@ impl OperationProcessor {
 
     /// Add a quantum variable to the environment
     /// Uses the environment as the single source of truth
+    ///
+    /// # Errors
+    /// Returns an error if the variable already exists or cannot be added.
     pub fn add_quantum_variable(&mut self, variable: &str, size: usize) -> Result<(), PecosError> {
         // Store in the environment (single source of truth)
         self.environment
@@ -812,6 +843,9 @@ impl OperationProcessor {
 
     /// Add a classical variable to the environment
     /// Uses the environment as the single source of truth
+    ///
+    /// # Errors
+    /// Returns an error if the data type is invalid.
     pub fn add_classical_variable(
         &mut self,
         variable: &str,
@@ -848,6 +882,9 @@ impl OperationProcessor {
     }
 
     /// Handle variable definition operations
+    ///
+    /// # Errors
+    /// Returns an error if the variable definition type is unknown.
     pub fn handle_variable_definition(
         &mut self,
         data: &str,
@@ -883,6 +920,9 @@ impl OperationProcessor {
     /// This method ensures the variable exists and the index is within bounds.
     /// It no longer auto-creates missing variables as that's inconsistent with
     /// using the environment as a single source of truth.
+    ///
+    /// # Errors
+    /// Returns an error if the variable doesn't exist or the index is out of bounds.
     pub fn validate_variable_access(&self, var: &str, idx: usize) -> Result<(), PecosError> {
         // Check in environment (single source of truth)
         if self.environment.has_variable(var) {
@@ -906,6 +946,9 @@ impl OperationProcessor {
     /// Ensure all variables in the environment have consistent values
     /// This method is now much simpler since the environment is the single source of truth.
     /// It's primarily kept for compatibility with code that expects this method to exist.
+    ///
+    /// # Errors
+    /// Currently never returns an error.
     pub fn update_expression_results(&mut self) -> Result<(), PecosError> {
         log::debug!("Variables from environment are already the single source of truth");
         // No need to do anything - the environment already has all the values
@@ -913,6 +956,13 @@ impl OperationProcessor {
     }
 
     /// Handle classical operations
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Variable references are invalid
+    /// - Expressions cannot be evaluated
+    /// - Foreign function calls fail
+    /// - Assignment operations fail
     #[allow(clippy::too_many_lines)]
     pub fn handle_classical_op(
         &mut self,
@@ -1450,6 +1500,13 @@ impl OperationProcessor {
     }
 
     /// Process a quantum operation and return the gate type, qubit arguments, and angle arguments
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - No qubit arguments are provided
+    /// - Required angle parameters are missing
+    /// - The quantum gate type is not supported
+    /// - Qubit variables are invalid
     pub fn process_quantum_op(
         &self,
         qop: &str,
@@ -1551,6 +1608,9 @@ impl OperationProcessor {
     }
 
     /// Add quantum operation to byte message builder
+    ///
+    /// # Errors
+    /// Returns an error if the gate type is not supported.
     pub fn add_quantum_operation_to_builder(
         &self,
         builder: &mut ByteMessageBuilder,
@@ -1661,6 +1721,9 @@ impl OperationProcessor {
     /// 1. The environment (single source of truth for all variables)
     /// 2. Standard measurement variables (e.g., "`measurement_0`")
     /// 3. Named variables from the program (e.g., "m")
+    ///
+    /// # Errors
+    /// Returns an error if variable creation or value setting fails.
     pub fn handle_measurements(
         &mut self,
         measurements: &[u32],

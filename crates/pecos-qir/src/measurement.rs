@@ -20,6 +20,10 @@ use std::collections::HashMap;
 /// # Returns
 ///
 /// * `Result<(), PecosError>` - Ok if successful, or an error if the operation fails
+///
+/// # Errors
+///
+/// Returns an error if the measurement results cannot be processed.
 pub fn process_measurements<S: ::std::hash::BuildHasher>(
     message: &ByteMessage,
     measurement_results: &mut HashMap<usize, u32, S>,

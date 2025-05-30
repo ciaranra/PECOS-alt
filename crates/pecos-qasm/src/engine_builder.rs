@@ -67,6 +67,10 @@ impl QASMEngineBuilder {
     }
 
     /// Build a `QASMEngine` from a QASM string
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the QASM string cannot be parsed.
     pub fn build_from_str(self, qasm: &str) -> Result<QASMEngine, PecosError> {
         // Parse with configuration
         let parse_config = ParseConfig {
@@ -94,6 +98,10 @@ impl QASMEngineBuilder {
     }
 
     /// Build a `QASMEngine` from a file
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read or parsed.
     pub fn build_from_file(self, path: impl AsRef<Path>) -> Result<QASMEngine, PecosError> {
         let content = std::fs::read_to_string(path)?;
         self.build_from_str(&content)

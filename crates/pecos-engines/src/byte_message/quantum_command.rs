@@ -143,6 +143,10 @@ impl QuantumCommand {
     }
 
     /// Add this command directly to a `ByteMessageBuilder`
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the command cannot be added to the builder.
     pub fn add_to_builder(&self, builder: &mut ByteMessageBuilder) -> Result<(), PecosError> {
         match self {
             QuantumCommand::H(qubit) => {
@@ -224,6 +228,10 @@ impl QuantumCommand {
 
     /// Convert the command to a `ByteMessage`
     /// This is more efficient than string-based serialization for gate operations
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the command cannot be converted to a byte message.
     pub fn to_byte_message(&self) -> Result<ByteMessage, PecosError> {
         let mut builder = ByteMessage::quantum_operations_builder();
         self.add_to_builder(&mut builder)?;
@@ -232,6 +240,10 @@ impl QuantumCommand {
 
     /// Convert a list of `QuantumCommands` to a `ByteMessage`
     /// This handles all command types, including gate operations, records, and messages
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any command cannot be converted to a byte message.
     pub fn commands_to_byte_message(commands: &[Self]) -> Result<ByteMessage, PecosError> {
         let mut builder = ByteMessage::quantum_operations_builder();
 
