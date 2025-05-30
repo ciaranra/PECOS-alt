@@ -1,6 +1,5 @@
 use pecos_core::QubitId;
 use pecos_engines::byte_message::QuantumCmd;
-use pecos_engines::core::result_id::ResultId;
 use std::collections::HashMap;
 use std::env;
 use std::ffi::{CStr, c_char};
@@ -279,8 +278,8 @@ pub unsafe extern "C" fn __quantum__qis__rzz__body(theta: f64, qubit1: usize, qu
 /// are valid and have been properly allocated. Calling with invalid IDs may lead to
 /// undefined behavior.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__m__body(qubit: usize, result: usize) -> u32 {
-    store_command(&QuantumCmd::Measure(QubitId(qubit), ResultId(result)));
+pub unsafe extern "C" fn __quantum__qis__m__body(qubit: usize, _result: usize) -> u32 {
+    store_command(&QuantumCmd::Measure(QubitId(qubit)));
     // In the real QIR runtime, this would return the actual measurement result
     // For this implementation, we just return 0
     0
@@ -587,5 +586,5 @@ pub unsafe extern "C" fn __quantum__rt__result_record_output(result: usize, name
         println!("[Thread {thread_id}] Recording result {result} as '{name_str}'");
     }
 
-    store_command(&QuantumCmd::RecordResult(ResultId(result), name_str));
+    store_command(&QuantumCmd::Record(format!("RECORD {result} {name_str}")));
 }

@@ -63,10 +63,10 @@ def test_byte_message_bell_state():
     assert ops[1]["qubits"] == [0, 1]
     assert ops[2]["gate_type"] == "Measure"
     assert ops[2]["qubits"] == [0]
-    assert ops[2]["result_id"] == 0
+    # result_id is no longer included in parsed operations (measurements tracked by order)
     assert ops[3]["gate_type"] == "Measure"
     assert ops[3]["qubits"] == [1]
-    assert ops[3]["result_id"] == 1
+    # result_id is no longer included in parsed operations (measurements tracked by order)
 
     # Dump the batch for debugging
     batch_dump = message.dump_batch()
@@ -164,7 +164,7 @@ def test_byte_message_with_measurements():
     assert ops[0]["gate_type"] == "H"
     assert ops[1]["gate_type"] == "Measure"
     assert ops[1]["qubits"] == [0]
-    assert ops[1]["result_id"] == 42
+    # result_id is no longer included in parsed operations (measurements tracked by order)
 
 
 def example_bell_state_experiment():

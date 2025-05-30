@@ -34,12 +34,8 @@ pub fn parse_binary_commands(commands: &[QuantumCmd]) -> Vec<QuantumCommand> {
         }
         QuantumCmd::SZZ(qubit1, qubit2) => QuantumCommand::SZZ(*qubit1, *qubit2),
         QuantumCmd::RZZ(angle, qubit1, qubit2) => QuantumCommand::RZZ(*angle, *qubit1, *qubit2),
-        QuantumCmd::Measure(qubit, result_id) => QuantumCommand::Measure(*qubit, *result_id),
+        QuantumCmd::Measure(qubit) => QuantumCommand::Measure(*qubit),
         QuantumCmd::Prep(qubit) => QuantumCommand::Prep(*qubit),
-        QuantumCmd::RecordResult(result_id, name) => {
-            // Create a result record with the given name
-            QuantumCommand::Record(RecordData::ResultRecord(result_id.0, Some(name.clone())))
-        }
         QuantumCmd::Record(cmd) => {
             // Parse record commands into structured data
             let parts: Vec<&str> = cmd.split_whitespace().collect();

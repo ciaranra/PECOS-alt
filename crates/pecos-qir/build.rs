@@ -222,7 +222,6 @@ fn check_llvm_version(tool_path: &Path) -> Result<String, String> {
 struct FilePaths {
     common: (PathBuf, PathBuf),
     state: (PathBuf, PathBuf),
-    result_id: (PathBuf, PathBuf),
     quantum_cmd: (PathBuf, PathBuf),
     runtime: (PathBuf, PathBuf),
     byte_message: PathBuf,
@@ -353,10 +352,6 @@ fn setup_file_paths(manifest_dir: &Path, build_dir: &Path) -> FilePaths {
             manifest_dir.join("src/state.rs"),
             build_dir.join("src/state.rs"),
         ),
-        result_id: (
-            pecos_engines_dir.join("src/core/result_id.rs"),
-            build_dir.join("src/result_id.rs"),
-        ),
         quantum_cmd: (
             pecos_engines_dir.join("src/byte_message/quantum_cmd.rs"),
             build_dir.join("src/byte_message/quantum_cmd.rs"),
@@ -412,11 +407,7 @@ members = ["."]
     fs::copy(&paths.common.0, &paths.common.1)
         .map_err(|e| format!("Failed to copy common.rs: {e}"))?;
 
-    // 2. Copy result_id.rs
-    fs::copy(&paths.result_id.0, &paths.result_id.1)
-        .map_err(|e| format!("Failed to copy result_id.rs: {e}"))?;
-
-    // 3. Copy state.rs (no need to modify imports)
+    // 2. Copy state.rs (no need to modify imports)
     let state_content =
         fs::read_to_string(&paths.state.0).map_err(|e| format!("Failed to read state.rs: {e}"))?;
     fs::write(&paths.state.1, state_content)
@@ -425,10 +416,7 @@ members = ["."]
     // 4. Modify quantum_cmd.rs: update imports
     let quantum_cmd_content = fs::read_to_string(&paths.quantum_cmd.0)
         .map_err(|e| format!("Failed to read quantum_cmd.rs: {e}"))?;
-    let modified_quantum_cmd = quantum_cmd_content.replace(
-        "use crate::core::result_id::ResultId;",
-        "use crate::result_id::ResultId;",
-    );
+    let modified_quantum_cmd = quantum_cmd_content.replace("use pecos_core::", "use crate::");
     fs::write(&paths.quantum_cmd.1, modified_quantum_cmd)
         .map_err(|e| format!("Failed to write quantum_cmd.rs: {e}"))?;
 
@@ -449,14 +437,10 @@ members = ["."]
             "use pecos_engines::byte_message::",
             "use crate::byte_message::",
         )
-        .replace(
-            "use pecos_engines::core::result_id::",
-            "use crate::result_id::",
-        );
+        .replace("use pecos_engines::core::", "use crate::");
 
     // Add module declarations
-    let module_declarations =
-        "pub mod byte_message;\npub mod result_id;\npub mod common;\npub mod state;\n\n";
+    let module_declarations = "pub mod byte_message;\npub mod common;\npub mod state;\n\n";
 
     fs::write(
         &paths.lib_rs,

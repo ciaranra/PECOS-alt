@@ -167,7 +167,7 @@ impl NoiseUtils {
     ///
     /// # Panics
     /// Panics if:
-    /// - `gate.result_id` is `None` when processing a measurement gate
+    /// - `gate` is `None` when processing a measurement gate
     /// - The gate type is invalid or has insufficient parameters/qubits for the operation
     pub fn add_gate_to_builder(builder: &mut ByteMessageBuilder, gate: &QuantumGate) {
         use crate::byte_message::GateType;
@@ -212,9 +212,9 @@ impl NoiseUtils {
                 builder.add_r1xy(gate.params[0], gate.params[1], &gate.qubits);
             }
 
-            // Measurement gates need both qubits and result IDs
-            GateType::Measure if !gate.qubits.is_empty() && gate.result_id.is_some() => {
-                builder.add_measurements(&gate.qubits, &[gate.result_id.unwrap()]);
+            // Measurement gates
+            GateType::Measure if !gate.qubits.is_empty() => {
+                builder.add_measurements(&gate.qubits);
             }
 
             // Idle gates need special handling for qubit lists
@@ -392,14 +392,12 @@ mod tests {
                 gate_type: GateType::X,
                 qubits: vec![0],
                 params: vec![],
-                result_id: None,
                 noiseless: false,
             },
             QuantumGate {
                 gate_type: GateType::Y,
                 qubits: vec![1],
                 params: vec![],
-                result_id: None,
                 noiseless: false,
             },
         ];

@@ -414,7 +414,7 @@ impl BlockExecutor {
     /// Handles measurement results from the quantum backend
     pub fn handle_measurements(
         &mut self,
-        measurements: &[(u32, u32)],
+        measurements: &[u32],
         ops: &[Operation],
     ) -> Result<(), PecosError> {
         self.processor.handle_measurements(measurements, ops)
@@ -740,7 +740,7 @@ mod tests {
         }];
 
         // Define measurement results
-        let measurements = vec![(0, 1)]; // Result ID 0, value 1
+        let measurements = vec![1]; // Index 0, value 1
 
         // Handle measurements
         let result = executor.handle_measurements(&measurements, &operations);

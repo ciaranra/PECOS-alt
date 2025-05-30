@@ -157,16 +157,13 @@ pub struct QuantumGateHeader {
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 pub struct MeasurementHeader {
     pub qubit: u32, // Qubit index
-    pub result_id: u32, // Result identifier
-                    // No additional data
 }
 
 /// Measurement result message payload header
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 pub struct MeasurementResultHeader {
-    pub result_id: u32, // Result identifier
-    pub outcome: u32,   // Measurement outcome (0 or 1, but u32 for alignment)
+    pub outcome: u32, // Measurement outcome (0 or 1, but u32 for alignment)
 }
 
 /// Calculate padding needed for alignment

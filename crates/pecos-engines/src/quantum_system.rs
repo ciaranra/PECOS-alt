@@ -354,7 +354,7 @@ mod tests {
         let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_quantum_operations();
         builder.add_h(&[0]);
-        builder.add_measurements(&[0], &[0]);
+        builder.add_measurements(&[0]);
         let input = builder.build();
 
         // Process the input with both systems - they should produce the same results
@@ -434,7 +434,7 @@ mod tests {
         let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_quantum_operations();
         builder.add_x(&[0]);
-        builder.add_measurements(&[0], &[0]);
+        builder.add_measurements(&[0]);
         let input = builder.build();
 
         // Process the input using the blanket implementation of Engine for EngineSystem
@@ -457,7 +457,7 @@ mod tests {
         let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_quantum_operations();
         builder.add_x(&[0]);
-        builder.add_measurements(&[0], &[0]);
+        builder.add_measurements(&[0]);
         let input = builder.build();
 
         // Process the input through the system

@@ -263,8 +263,8 @@ fn test_measurement_determinism() {
     builder.add_h(&[0]);
     builder.add_h(&[1]);
     builder.add_cx(&[0], &[1]);
-    builder.add_measurements(&[0], &[0]);
-    builder.add_measurements(&[1], &[1]);
+    builder.add_measurements(&[0]);
+    builder.add_measurements(&[1]);
     let msg = builder.build();
 
     // Apply noise multiple times
@@ -378,7 +378,7 @@ fn test_complete_measurement_determinism() {
     builder.add_h(&[0]);
     builder.add_cx(&[0], &[1]);
     // Add measurements for both qubits
-    builder.add_measurements(&[0, 1], &[0, 1]);
+    builder.add_measurements(&[0]);
     let circuit = builder.build();
 
     // Create two identical quantum engines
@@ -437,7 +437,7 @@ fn test_deterministic_measurement() {
     // Create a circuit that puts a qubit in superposition and measures it
     let mut builder = ByteMessage::quantum_operations_builder();
     builder.add_h(&[0]); // Put qubit 0 in superposition
-    builder.add_measurements(&[0], &[0]); // Measure qubit 0
+    builder.add_measurements(&[0]); // Measure qubit 0
     let circuit = builder.build();
 
     info!("Running first measurement with seed {seed}");
@@ -602,7 +602,7 @@ fn test_comprehensive_noise_determinism() {
     builder.add_cx(&[2], &[0]); // Apply CNOT from qubit 2 to qubit 0
 
     // Add measurements for all qubits
-    builder.add_measurements(&[0, 1, 2], &[0, 1, 2]);
+    builder.add_measurements(&[0]);
 
     let circuit = builder.build();
 
@@ -743,7 +743,7 @@ fn test_long_running_determinism() {
     }
 
     // Add measurements for all qubits
-    builder.add_measurements(&[0, 1, 2, 3, 4], &[0, 1, 2, 3, 4]);
+    builder.add_measurements(&[0]);
 
     let circuit = builder.build();
 

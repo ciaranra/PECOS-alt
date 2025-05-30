@@ -3,7 +3,6 @@ use crate::byte_message::message_data::MessageData;
 use crate::byte_message::protocol::{MessageFlags, MessageType};
 use crate::byte_message::{ByteMessage, ByteMessageBuilder};
 use crate::core::record_data::RecordData;
-use crate::core::result_id::ResultId;
 use log::debug;
 use pecos_core::QubitId;
 use pecos_core::errors::PecosError;
@@ -74,8 +73,8 @@ pub enum QuantumCommand {
     /// RZZ gate with angle (in radians) and two qubits
     RZZ(f64, QubitId, QubitId),
 
-    /// Measure qubit and store in `result_id`
-    Measure(QubitId, ResultId),
+    /// Measure qubit
+    Measure(QubitId),
 
     /// Prepare qubit in the |0⟩ state
     Prep(QubitId),
@@ -113,7 +112,7 @@ impl QuantumCommand {
             QuantumCommand::U(_, _, _, _) => Some(GateType::U),
             QuantumCommand::SZZ(_, _) => Some(GateType::SZZ),
             QuantumCommand::RZZ(_, _, _) => Some(GateType::RZZ),
-            QuantumCommand::Measure(_, _) => Some(GateType::Measure),
+            QuantumCommand::Measure(_) => Some(GateType::Measure),
             QuantumCommand::Prep(_) => Some(GateType::Prep),
             _ => None,
         }
@@ -134,16 +133,16 @@ impl QuantumCommand {
     /// Check if this command is a measurement
     #[must_use]
     pub fn is_measurement(&self) -> bool {
-        matches!(self, QuantumCommand::Measure(_, _))
+        matches!(self, QuantumCommand::Measure(_))
     }
 
     /// Get the `result_id` if this is a measurement command or a result record
     #[must_use]
     pub fn result_id(&self) -> Option<usize> {
-        match self {
-            QuantumCommand::Measure(_, result_id) => Some(result_id.0),
-            QuantumCommand::Record(RecordData::ResultRecord(result_id, _)) => Some(*result_id),
-            _ => None,
+        if let QuantumCommand::Record(RecordData::ResultRecord(result_id, _)) = self {
+            Some(*result_id)
+        } else {
+            None
         }
     }
 
@@ -190,8 +189,8 @@ impl QuantumCommand {
                 builder.add_rzz(*angle, &[qubit1.0], &[qubit2.0]);
                 Ok(())
             }
-            QuantumCommand::Measure(qubit, result_id) => {
-                builder.add_measurements(&[qubit.0], &[result_id.0]);
+            QuantumCommand::Measure(qubit) => {
+                builder.add_measurements(&[qubit.0]);
                 Ok(())
             }
             QuantumCommand::Prep(qubit) => {
@@ -292,7 +291,7 @@ impl fmt::Display for QuantumCommand {
             QuantumCommand::RZZ(angle, qubit1, qubit2) => {
                 write!(f, "RZZ {angle} {qubit1} {qubit2}")
             }
-            QuantumCommand::Measure(qubit, result_id) => write!(f, "M {qubit} {result_id}"),
+            QuantumCommand::Measure(qubit) => write!(f, "M {qubit}"),
             QuantumCommand::Prep(qubit) => write!(f, "PREP {qubit}"),
             QuantumCommand::Record(data) => match data {
                 RecordData::ResultRecord(result_id, Some(label)) => {

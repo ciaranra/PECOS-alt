@@ -29,8 +29,9 @@ pub struct QASMEngine {
     /// The QASM Program being executed
     program: Option<QASMProgram>,
 
-    /// Mapping from result IDs to register names and bit indices
-    register_result_mappings: Vec<(u32, String, usize)>,
+    /// Mapping from measurement order to register names and bit indices
+    /// Each entry is (`register_name`, `bit_index`) mapped by the order of measurements
+    register_result_mappings: Vec<(String, usize)>,
 
     /// Classical register values
     classical_registers: HashMap<String, Vec<u32>>,
@@ -39,10 +40,12 @@ pub struct QASMEngine {
     raw_measurements: HashMap<u32, u32>,
 
     /// Next available result ID to use for measurements
-    next_result_id: u32,
 
     /// Current operation index in the program
     current_op: usize,
+
+    /// Number of measurements processed so far
+    measurements_processed: usize,
 
     /// Reusable message builder for generating commands
     message_builder: ByteMessageBuilder,
@@ -98,7 +101,6 @@ impl QASMEngine {
         self.classical_registers.clear();
         self.raw_measurements.clear();
         self.register_result_mappings.clear();
-        self.next_result_id = 0;
 
         self.program = Some(program);
         self.reset_state();
@@ -144,7 +146,7 @@ impl QASMEngine {
 
         // Reset counters and operational state
         self.current_op = 0;
-        self.next_result_id = 0;
+        self.measurements_processed = 0;
 
         // Clear all collections
         self.raw_measurements.clear();
@@ -583,24 +585,18 @@ impl QASMEngine {
             }
         }
 
-        // Create a unique result ID
-        let result_id = self.next_result_id;
-        self.next_result_id += 1;
-
-        // Store the mapping for result handling
+        // Store the mapping for result handling by order
         self.register_result_mappings
-            .push((result_id, c_register_name.to_string(), c_index));
+            .push((c_register_name.to_string(), c_index));
 
         debug!(
-            "Adding measurement on qubit {} with result_id {}",
-            physical_qubit, result_id
+            "Adding measurement on qubit {} (measurement #{})",
+            physical_qubit,
+            self.register_result_mappings.len() - 1
         );
 
         // Add measurement to the command batch
-        self.message_builder.add_measurements(
-            &[physical_qubit],
-            &[usize::try_from(result_id).unwrap_or_default()],
-        );
+        self.message_builder.add_measurements(&[physical_qubit]);
 
         Ok(())
     }
@@ -1022,14 +1018,21 @@ impl ClassicalEngine for QASMEngine {
                 let mappings = self.register_result_mappings.clone();
 
                 debug!("Processing {} measurement results", results.len());
+                debug!(
+                    "Starting from global measurement index {}",
+                    self.measurements_processed
+                );
 
-                for (result_id, value) in results {
-                    debug!("Found measurement result_id={} value={}", result_id, value);
+                let num_results = results.len();
+                for (local_index, value) in results {
+                    // Calculate the global index for this measurement
+                    let global_index = self.measurements_processed + local_index;
+                    debug!(
+                        "Found measurement local_index={} global_index={} value={}",
+                        local_index, global_index, value
+                    );
 
-                    if let Some((_, register, bit)) = mappings
-                        .iter()
-                        .find(|(id, _, _)| *id == u32::try_from(result_id).unwrap_or_default())
-                    {
+                    if let Some((register, bit)) = mappings.get(global_index) {
                         debug!(
                             "Updating register {}[{}] with value {}",
                             register, bit, value
@@ -1038,13 +1041,18 @@ impl ClassicalEngine for QASMEngine {
                         let safe_value = u8::try_from(value).unwrap_or(1);
                         self.update_register_bit(register, *bit, safe_value)?;
                     } else {
-                        debug!("No register mapping found for result_id={}", result_id);
+                        debug!(
+                            "No register mapping found for measurement global_index={}",
+                            global_index
+                        );
                     }
 
-                    if let Ok(u32_id) = u32::try_from(result_id) {
-                        self.raw_measurements.insert(u32_id, value);
-                    }
+                    self.raw_measurements
+                        .insert(u32::try_from(global_index).unwrap_or_default(), value);
                 }
+
+                // Update the count of measurements processed
+                self.measurements_processed += num_results;
 
                 Ok(())
             }
@@ -1227,8 +1235,8 @@ impl Default for QASMEngine {
             register_result_mappings: Vec::new(),
             classical_registers: HashMap::new(),
             raw_measurements: HashMap::new(),
-            next_result_id: 0,
             current_op: 0,
+            measurements_processed: 0,
             message_builder: ByteMessageBuilder::new(),
             allow_complex_conditionals: false,
         }

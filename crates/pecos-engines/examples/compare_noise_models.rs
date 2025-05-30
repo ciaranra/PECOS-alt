@@ -9,8 +9,8 @@ fn main() {
     let circ = ByteMessage::quantum_operations_builder()
         .add_h(&[0])
         .add_cx(&[0], &[1])
-        .add_measurements(&[0], &[0])
-        .add_measurements(&[1], &[1])
+        .add_measurements(&[0])
+        .add_measurements(&[1])
         .build();
 
     // Test that GeneralNoise can reproduce DepolarizingNoise behavior
@@ -76,7 +76,7 @@ fn compare_depolarizing_with_general(circ: &ByteMessage) {
         // Format result string
         let result_str = measurements
             .iter()
-            .map(|&(_, value)| value.to_string())
+            .map(|&value| value.to_string())
             .collect::<String>();
 
         depolarizing_results.push(result_str);
@@ -95,7 +95,7 @@ fn compare_depolarizing_with_general(circ: &ByteMessage) {
         // Format result string
         let result_str = measurements
             .iter()
-            .map(|&(_, value)| value.to_string())
+            .map(|&value| value.to_string())
             .collect::<String>();
 
         general_results.push(result_str);
@@ -165,7 +165,7 @@ fn test_asymmetric_measurements() {
     // Create a simple circuit with H-gate and measurement
     let circ = ByteMessage::quantum_operations_builder()
         .add_h(&[0])
-        .add_measurements(&[0], &[0])
+        .add_measurements(&[0])
         .build();
 
     // Create quantum engine
@@ -219,7 +219,7 @@ fn test_asymmetric_measurements() {
             .expect("Failed to parse general measurements");
         let result = measurements
             .first()
-            .map_or("?", |&(_, v)| if v == 1 { "1" } else { "0" });
+            .map_or("?", |&v| if v == 1 { "1" } else { "0" });
         *general_counts.entry(result.to_string()).or_insert(0) += 1;
 
         // Run with depolarizing noise
@@ -234,7 +234,7 @@ fn test_asymmetric_measurements() {
             .expect("Failed to parse depolarizing measurements");
         let result = measurements
             .first()
-            .map_or("?", |&(_, v)| if v == 1 { "1" } else { "0" });
+            .map_or("?", |&v| if v == 1 { "1" } else { "0" });
         *depolarizing_counts.entry(result.to_string()).or_insert(0) += 1;
     }
 

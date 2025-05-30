@@ -1584,7 +1584,7 @@ impl OperationProcessor {
                 builder.add_z(&[qubit_args[0]]);
             }
             "Measure" => {
-                builder.add_measurements(&[qubit_args[0]], &[qubit_args[0]]);
+                builder.add_measurements(&[qubit_args[0]]);
             }
             "Init" => {
                 // Initialize qubit to |0⟩ state using the Prep gate
@@ -1663,15 +1663,16 @@ impl OperationProcessor {
     /// 3. Named variables from the program (e.g., "m")
     pub fn handle_measurements(
         &mut self,
-        measurements: &[(u32, u32)],
+        measurements: &[u32],
         ops: &[Operation],
     ) -> Result<(), PecosError> {
         log::info!("PHIR: Handling {} measurement results", measurements.len());
 
-        for (result_id, outcome) in measurements {
+        for (index, outcome) in measurements.iter().enumerate() {
+            let result_id = u32::try_from(index).unwrap_or(u32::MAX);
             log::info!(
-                "PHIR: Received measurement result_id={}, outcome={}",
-                result_id,
+                "PHIR: Received measurement index={}, outcome={}",
+                index,
                 outcome
             );
 
@@ -1719,7 +1720,7 @@ impl OperationProcessor {
                         let (var_name, var_idx) = &returns[0];
 
                         // Check if this is the right measurement result
-                        if *var_idx == *result_id as usize {
+                        if *var_idx == result_id as usize {
                             // Store the result in the specific bit of the variable
                             self.store_measurement_result(var_name, *var_idx, *outcome);
                             found_mapping = true;
@@ -1732,7 +1733,7 @@ impl OperationProcessor {
             // This helps with tests and interoperability, particularly Bell state tests
             if !found_mapping && self.environment.has_variable("m") {
                 // Store in main "m" variable for test compatibility
-                let idx = *result_id as usize;
+                let idx = result_id as usize;
                 self.store_measurement_result("m", idx, *outcome);
                 log::info!(
                     "PHIR: Auto-mapped measurement result {} to m[{}] = {}",

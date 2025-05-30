@@ -86,8 +86,6 @@ pub struct QuantumGate {
     pub qubits: Vec<usize>,
     /// Optional parameters for parameterized gates
     pub params: Vec<f64>,
-    /// Optional result ID for measurement gates
-    pub result_id: Option<usize>,
     /// Whether the gate should have noise applied to it
     pub noiseless: bool,
     // TODO: encode noiseless in the byte representation...
@@ -96,17 +94,11 @@ pub struct QuantumGate {
 impl QuantumGate {
     /// Create a new quantum gate
     #[must_use]
-    pub fn new(
-        gate_type: GateType,
-        qubits: Vec<usize>,
-        params: Vec<f64>,
-        result_id: Option<usize>,
-    ) -> Self {
+    pub fn new(gate_type: GateType, qubits: Vec<usize>, params: Vec<f64>) -> Self {
         Self {
             gate_type,
             qubits,
             params,
-            result_id,
             noiseless: false,
         }
     }
@@ -116,78 +108,78 @@ impl QuantumGate {
     /// Create a new X gate
     #[must_use]
     pub fn x(qubit: usize) -> Self {
-        Self::new(GateType::X, vec![qubit], vec![], None)
+        Self::new(GateType::X, vec![qubit], vec![])
     }
 
     /// Create a new Y gate
     #[must_use]
     pub fn y(qubit: usize) -> Self {
-        Self::new(GateType::Y, vec![qubit], vec![], None)
+        Self::new(GateType::Y, vec![qubit], vec![])
     }
 
     /// Create a new Z gate
     #[must_use]
     pub fn z(qubit: usize) -> Self {
-        Self::new(GateType::Z, vec![qubit], vec![], None)
+        Self::new(GateType::Z, vec![qubit], vec![])
     }
 
     /// Create a new H gate
     #[must_use]
     pub fn h(qubit: usize) -> Self {
-        Self::new(GateType::H, vec![qubit], vec![], None)
+        Self::new(GateType::H, vec![qubit], vec![])
     }
 
     /// Create a new CX gate
     #[must_use]
     pub fn cx(control: usize, target: usize) -> Self {
-        Self::new(GateType::CX, vec![control, target], vec![], None)
+        Self::new(GateType::CX, vec![control, target], vec![])
     }
 
     /// Create a new SZZ gate
     #[must_use]
     pub fn szz(qubit1: usize, qubit2: usize) -> Self {
-        Self::new(GateType::SZZ, vec![qubit1, qubit2], vec![], None)
+        Self::new(GateType::SZZ, vec![qubit1, qubit2], vec![])
     }
 
     /// Create a new `SZZdg` gate
     #[must_use]
     pub fn szzdg(qubit1: usize, qubit2: usize) -> Self {
-        Self::new(GateType::SZZdg, vec![qubit1, qubit2], vec![], None)
+        Self::new(GateType::SZZdg, vec![qubit1, qubit2], vec![])
     }
 
     /// Create a new RZZ gate
     #[must_use]
     pub fn rzz(theta: f64, qubit1: usize, qubit2: usize) -> Self {
-        Self::new(GateType::RZZ, vec![qubit1, qubit2], vec![theta], None)
+        Self::new(GateType::RZZ, vec![qubit1, qubit2], vec![theta])
     }
 
     /// Create a new RZ gate
     #[must_use]
     pub fn rz(theta: f64, qubit: usize) -> Self {
-        Self::new(GateType::RZ, vec![qubit], vec![theta], None)
+        Self::new(GateType::RZ, vec![qubit], vec![theta])
     }
 
     /// Create a new R1XY gate
     #[must_use]
     pub fn r1xy(theta: f64, phi: f64, qubit: usize) -> Self {
-        Self::new(GateType::R1XY, vec![qubit], vec![theta, phi], None)
+        Self::new(GateType::R1XY, vec![qubit], vec![theta, phi])
     }
 
     /// Create a new U gate
     #[must_use]
     pub fn u(theta: f64, phi: f64, lambda: f64, qubit: usize) -> Self {
-        Self::new(GateType::U, vec![qubit], vec![theta, phi, lambda], None)
+        Self::new(GateType::U, vec![qubit], vec![theta, phi, lambda])
     }
 
     /// Create a new Measure gate
     #[must_use]
-    pub fn measure(qubit: usize, result_id: usize) -> Self {
-        Self::new(GateType::Measure, vec![qubit], vec![], Some(result_id))
+    pub fn measure(qubit: usize) -> Self {
+        Self::new(GateType::Measure, vec![qubit], vec![])
     }
 
     #[must_use]
     pub fn prep(qubit: usize) -> Self {
-        Self::new(GateType::Prep, vec![qubit], vec![], None)
+        Self::new(GateType::Prep, vec![qubit], vec![])
     }
 
     /// Create a new Idle gate for qubits idling for a specific duration
@@ -202,7 +194,7 @@ impl QuantumGate {
     /// A new Idle gate with the specified parameters
     #[must_use]
     pub fn idle(duration: f64, qubits: Vec<usize>) -> Self {
-        Self::new(GateType::Idle, qubits, vec![duration], None)
+        Self::new(GateType::Idle, qubits, vec![duration])
     }
 
     /// Returns the duration of an idle gate, or 0.0 if not an idle gate
@@ -266,18 +258,15 @@ mod tests {
         assert_eq!(x_gate.gate_type, GateType::X);
         assert_eq!(x_gate.qubits, vec![0]);
         assert!(x_gate.params.is_empty());
-        assert_eq!(x_gate.result_id, None);
 
         let rz_gate = QuantumGate::rz(0.5, 1);
         assert_eq!(rz_gate.gate_type, GateType::RZ);
         assert_eq!(rz_gate.qubits, vec![1]);
         assert_eq!(rz_gate.params, vec![0.5]);
-        assert_eq!(rz_gate.result_id, None);
 
-        let measure_gate = QuantumGate::measure(2, 42);
+        let measure_gate = QuantumGate::measure(2);
         assert_eq!(measure_gate.gate_type, GateType::Measure);
         assert_eq!(measure_gate.qubits, vec![2]);
         assert!(measure_gate.params.is_empty());
-        assert_eq!(measure_gate.result_id, Some(42));
     }
 }

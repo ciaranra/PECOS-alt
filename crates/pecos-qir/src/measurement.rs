@@ -139,7 +139,7 @@ impl ResultNameMap {
     ///
     /// * `bool` - True if the result ID has a custom name, false otherwise
     #[must_use]
-    pub fn has_custom_name_for_result(&self, result_id: usize) -> bool {
+    pub fn has_custom_name(&self, result_id: usize) -> bool {
         self.result_id_to_name.contains_key(&result_id)
     }
 
@@ -167,7 +167,7 @@ impl ResultNameMap {
     ///
     /// The name for the result ID, or None if not found
     #[must_use]
-    pub fn get_name_for_result(&self, result_id: usize) -> Option<String> {
+    pub fn get_name(&self, result_id: usize) -> Option<String> {
         self.get_custom_name_for_result(result_id)
     }
 
@@ -204,9 +204,16 @@ impl ResultNameMap {
     ///
     /// * `cmd` - The QIR command to process
     pub fn process_command(&mut self, cmd: &QuantumCmd) {
-        if let QuantumCmd::RecordResult(result_id, name) = cmd {
-            // Always register the result name, regardless of what it is
-            self.register_named_result(result_id.0, name.clone());
+        if let QuantumCmd::Record(cmd_str) = cmd {
+            // Parse record commands to extract result naming information
+            let parts: Vec<&str> = cmd_str.split_whitespace().collect();
+            if parts.len() >= 3 && parts[0] == "RECORD" {
+                if let Ok(result_id) = parts[1].parse::<usize>() {
+                    // This is a result record with a name
+                    let name = parts[2].to_string();
+                    self.register_named_result(result_id, name);
+                }
+            }
         }
     }
 }

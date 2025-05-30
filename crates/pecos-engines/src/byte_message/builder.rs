@@ -176,10 +176,7 @@ impl ByteMessageBuilder {
     pub fn add_quantum_gate(&mut self, gate: &QuantumGate) -> &mut Self {
         // Handle measurement gates using the add_measurements method
         if gate.gate_type == GateType::Measure {
-            if let Some(result_id) = gate.result_id {
-                return self.add_measurements(&gate.qubits, &[result_id]);
-            }
-            return self;
+            return self.add_measurements(&gate.qubits);
         }
 
         // Calculate total payload size
@@ -237,19 +234,9 @@ impl ByteMessageBuilder {
     ///
     /// # Panics
     ///
-    /// This function will panic if the outcomes and `result_ids` arrays do not have the same length.
-    pub fn add_measurement_results(
-        &mut self,
-        results: &[usize],
-        result_ids: &[usize],
-    ) -> &mut Self {
-        assert_eq!(
-            results.len(),
-            result_ids.len(),
-            "Outcomes and result_ids arrays must have the same length"
-        );
-
-        for (i, (&result, &result_id)) in results.iter().zip(result_ids.iter()).enumerate() {
+    /// Panics if any result outcome is too large to fit in a u32.
+    pub fn add_measurement_results(&mut self, results: &[usize]) -> &mut Self {
+        for (i, &result) in results.iter().enumerate() {
             let is_last = i == results.len() - 1;
             let flags = if is_last {
                 MessageFlags::LAST_MESSAGE
@@ -258,7 +245,6 @@ impl ByteMessageBuilder {
             };
 
             let result_header = MeasurementResultHeader {
-                result_id: u32::try_from(result_id).expect("Result ID too large"),
                 outcome: u32::try_from(result).expect("Result outcome too large"),
             };
 
@@ -408,20 +394,12 @@ impl ByteMessageBuilder {
     ///
     /// # Panics
     ///
-    /// This function will panic if there are not enough result IDs provided for all qubits.
-    pub fn add_measurements(&mut self, qubit_ids: &[usize], result_ids: &[usize]) -> &mut Self {
-        assert!(
-            qubit_ids.len() <= result_ids.len(),
-            "Not enough result IDs provided for all qubits"
-        );
-
-        for (i, &qubit) in qubit_ids.iter().enumerate() {
-            let result_id = result_ids[i];
-
+    /// Panics if any qubit ID is too large to fit in a u32.
+    pub fn add_measurements(&mut self, qubit_ids: &[usize]) -> &mut Self {
+        for &qubit in qubit_ids {
             // Create measurement header directly
             let meas_header = MeasurementHeader {
                 qubit: u32::try_from(qubit).unwrap(),
-                result_id: u32::try_from(result_id).unwrap(),
             };
 
             // Add measurement message
@@ -672,7 +650,7 @@ mod tests {
         // Add some gates
         builder.add_h(&[0]);
         builder.add_cx(&[0], &[1]);
-        builder.add_measurements(&[2], &[0]);
+        builder.add_measurements(&[2]);
 
         // Build the message
         let message = builder.build();
@@ -688,7 +666,6 @@ mod tests {
         assert_eq!(commands[1].qubits, vec![0, 1]);
         assert_eq!(commands[2].gate_type, GateType::Measure);
         assert_eq!(commands[2].qubits, vec![2]);
-        assert_eq!(commands[2].result_id, Some(0));
     }
 
     #[test]
@@ -698,7 +675,7 @@ mod tests {
         let _ = builder.for_measurement_results();
 
         // Add some measurement results
-        builder.add_measurement_results(&[0, 1], &[0, 1]);
+        builder.add_measurement_results(&[0]);
 
         // Build the message
         let message = builder.build();
@@ -720,7 +697,7 @@ mod tests {
         builder.add_z(&[3]);
         builder.add_rz(0.5, &[4]);
         builder.add_r1xy(0.1, 0.2, &[5]);
-        builder.add_measurements(&[6], &[0]);
+        builder.add_measurements(&[6]);
 
         // Build the message
         let message = builder.build();
@@ -739,7 +716,6 @@ mod tests {
         assert_eq!(commands[5].gate_type, GateType::R1XY);
         assert_eq!(commands[5].params, vec![0.1, 0.2]);
         assert_eq!(commands[6].gate_type, GateType::Measure);
-        assert_eq!(commands[6].result_id, Some(0));
     }
 
     #[test]
@@ -776,8 +752,7 @@ mod tests {
 
         // Add measurements for multiple qubits
         let qubits = vec![0, 1, 2];
-        let result_ids = vec![10, 11, 12];
-        builder.add_measurements(&qubits, &result_ids);
+        builder.add_measurements(&qubits);
 
         // Build the message
         let message = builder.build();
@@ -790,7 +765,6 @@ mod tests {
         for i in 0..3 {
             assert_eq!(commands[i].gate_type, GateType::Measure);
             assert_eq!(commands[i].qubits, vec![qubits[i]]);
-            assert_eq!(commands[i].result_id, Some(result_ids[i]));
         }
     }
 

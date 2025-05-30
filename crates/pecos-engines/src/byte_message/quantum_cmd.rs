@@ -1,4 +1,3 @@
-use crate::core::result_id::ResultId;
 use pecos_core::QubitId;
 use std::fmt;
 
@@ -56,8 +55,8 @@ pub enum QuantumCmd {
     /// RZZ gate with angle (in radians) and two qubits
     RZZ(f64, QubitId, QubitId),
 
-    /// Measure qubit and store in `result_id`
-    Measure(QubitId, ResultId),
+    /// Measure qubit
+    Measure(QubitId),
 
     /// Prepare qubit in the |0⟩ state
     Prep(QubitId),
@@ -67,12 +66,6 @@ pub enum QuantumCmd {
 
     /// Message command with string data
     Message(String),
-
-    /// Records a result with a name for output
-    ///
-    /// This variant is used to associate a result ID with a name for output purposes.
-    /// The first parameter is the result ID, and the second parameter is the name.
-    RecordResult(ResultId, String),
 
     /// R1XY gate with theta, phi angles (in radians) and qubit
     R1XY(f64, f64, QubitId),
@@ -92,10 +85,9 @@ impl fmt::Display for QuantumCmd {
             QuantumCmd::RZ(theta, qubit) => write!(f, "RZ {qubit} {theta}"),
             QuantumCmd::SZZ(qubit1, qubit2) => write!(f, "SZZ {qubit1} {qubit2}"),
             QuantumCmd::RZZ(theta, qubit1, qubit2) => write!(f, "RZZ {qubit1} {qubit2} {theta}"),
-            QuantumCmd::Measure(qubit, result) => write!(f, "M {qubit} {result}"),
+            QuantumCmd::Measure(qubit) => write!(f, "M {qubit}"),
             QuantumCmd::Prep(qubit) => write!(f, "Prep {qubit}"),
             QuantumCmd::Record(cmd) | QuantumCmd::Message(cmd) => write!(f, "{cmd}"),
-            QuantumCmd::RecordResult(result, name) => write!(f, "RecordResult {result} {name}"),
             QuantumCmd::R1XY(theta, phi, qubit) => write!(f, "R1XY {theta} {phi} {qubit}"),
             QuantumCmd::U(theta, phi, lambda, qubit) => {
                 write!(f, "U {theta} {phi} {lambda} {qubit}")

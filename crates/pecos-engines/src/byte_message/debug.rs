@@ -209,7 +209,6 @@ pub fn dump_batch(data: &[u8]) -> String {
 
                         output.push_str("  Measurement:\n");
                         writeln!(output, "    Qubit: {}", meas_header.qubit).unwrap();
-                        writeln!(output, "    Result ID: {}", meas_header.result_id).unwrap();
                     }
                 }
                 20 => {
@@ -220,7 +219,6 @@ pub fn dump_batch(data: &[u8]) -> String {
                         );
 
                         output.push_str("  Measurement Result:\n");
-                        writeln!(output, "    Result ID: {}", result_header.result_id).unwrap();
                         writeln!(output, "    Outcome: {}", result_header.outcome).unwrap();
                     }
                 }
