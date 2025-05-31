@@ -8,7 +8,7 @@ env:
 
 on:
   push:
-    branches: [ "master", "development" ]
+    branches: [ "master", "development", "dev" ]
     paths:
       - 'python/**'
       - '.github/workflows/python-test.yml'
@@ -16,7 +16,7 @@ on:
       - 'ruff.toml'
       - '.pre-commit-config.yaml'
   pull_request:
-    branches: [ "master", "development" ]
+    branches: [ "master", "development", "dev" ]
     paths:
       - 'python/**'
       - '.github/workflows/python-test.yml'
