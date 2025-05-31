@@ -3,6 +3,7 @@
 This package provides a library of quantum error correction primitives, gate implementations, and code-specific
 operations.
 """
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

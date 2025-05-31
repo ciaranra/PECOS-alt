@@ -1,4 +1,5 @@
 """QASM regression tests for two-qubit non-Clifford gates."""
+
 from collections.abc import Callable
 
 from pecos.qeclib import qubit

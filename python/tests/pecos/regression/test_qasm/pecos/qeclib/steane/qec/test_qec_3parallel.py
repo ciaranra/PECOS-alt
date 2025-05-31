@@ -1,4 +1,5 @@
 """QASM regression tests for Steane three-parallel QEC operations."""
+
 from collections.abc import Callable
 
 from pecos.qeclib.steane.qec.qec_3parallel import ParallelFlagQECActiveCorrection

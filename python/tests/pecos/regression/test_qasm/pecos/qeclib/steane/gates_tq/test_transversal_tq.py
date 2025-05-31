@@ -1,4 +1,5 @@
 """QASM regression tests for Steane transversal two-qubit gates."""
+
 from collections.abc import Callable
 
 from pecos.qeclib.steane.gates_tq.transversal_tq import CX, CY, CZ, SZZ

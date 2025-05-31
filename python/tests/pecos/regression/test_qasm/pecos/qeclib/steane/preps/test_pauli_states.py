@@ -1,4 +1,5 @@
 """QASM regression tests for Steane Pauli state preparations."""
+
 from collections.abc import Callable
 
 from pecos.qeclib.steane.preps.pauli_states import (

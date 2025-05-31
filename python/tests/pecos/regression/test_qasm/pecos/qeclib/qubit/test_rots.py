@@ -1,4 +1,5 @@
 """QASM regression tests for qubit rotation gates."""
+
 from collections.abc import Callable
 
 from numpy import pi

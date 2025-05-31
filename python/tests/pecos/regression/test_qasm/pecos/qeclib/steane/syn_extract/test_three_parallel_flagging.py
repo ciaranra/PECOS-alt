@@ -1,4 +1,5 @@
 """QASM regression tests for Steane three-parallel flagged syndrome extraction."""
+
 from collections.abc import Callable
 
 from pecos.qeclib.steane.syn_extract.three_parallel_flagging import (

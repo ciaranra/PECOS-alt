@@ -175,8 +175,11 @@ def eval_cfunc(
                 if runner.debug and func.startswith("sim_"):
                     output[asym] = b
                 elif isinstance(b, int):
-                    b = BinArray(a_obj.size, int(b))  # noqa: PLW2901 - convert int to BinArray
-                    a_obj.set(b)
+                    bin_array = BinArray(
+                        a_obj.size,
+                        int(b),
+                    )
+                    a_obj.set(bin_array)
                 else:
                     msg = "Only int return values are supported currently"
                     raise NotImplementedError(msg)

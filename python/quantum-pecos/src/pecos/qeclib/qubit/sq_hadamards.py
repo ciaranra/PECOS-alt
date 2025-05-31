@@ -24,4 +24,3 @@ class H(QGate):
 
     This gate creates superposition states and transforms between X and Z bases.
     """
-

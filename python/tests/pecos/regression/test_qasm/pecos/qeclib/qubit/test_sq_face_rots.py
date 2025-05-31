@@ -1,4 +1,5 @@
 """QASM regression tests for single-qubit face rotation gates."""
+
 from collections.abc import Callable
 
 from pecos.qeclib import qubit

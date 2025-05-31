@@ -26,13 +26,11 @@ class CX(TQGate):
     """
 
 
-
 class CY(TQGate):
     """Controlled-Y gate.
 
     This gate applies a Pauli-Y to the target qubit if the control qubit is in state |1⟩.
     """
-
 
 
 class CZ(TQGate):
@@ -42,13 +40,11 @@ class CZ(TQGate):
     """
 
 
-
 class SXX(TQGate):
     """Two-qubit square root of XX interaction gate.
 
     This gate implements the Sqrt XX interaction between two qubits.
     """
-
 
 
 class SYY(TQGate):
@@ -58,13 +54,11 @@ class SYY(TQGate):
     """
 
 
-
 class SZZ(TQGate):
     """Two-qubit square root of ZZ interaction gate.
 
     This gate implements the Sqrt ZZ interaction between two qubits.
     """
-
 
 
 class SXXdg(TQGate):
@@ -74,7 +68,6 @@ class SXXdg(TQGate):
     """
 
 
-
 class SYYdg(TQGate):
     """Inverse two-qubit square root of YY interaction gate.
 
@@ -82,10 +75,8 @@ class SYYdg(TQGate):
     """
 
 
-
 class SZZdg(TQGate):
     """Inverse two-qubit square root of ZZ interaction gate.
 
     This gate implements the inverse of the Sqrt ZZ interaction between two qubits.
     """
-

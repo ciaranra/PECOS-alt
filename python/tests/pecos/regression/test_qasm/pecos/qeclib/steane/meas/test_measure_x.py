@@ -1,4 +1,5 @@
 """QASM regression tests for Steane non-flagged X measurement."""
+
 from collections.abc import Callable
 
 from pecos.qeclib.steane.meas.measure_x import NoFlagMeasureX

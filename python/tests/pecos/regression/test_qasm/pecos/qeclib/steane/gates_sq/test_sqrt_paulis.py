@@ -1,4 +1,5 @@
 """QASM regression tests for Steane single-qubit square root Pauli gates."""
+
 from collections.abc import Callable
 
 from pecos.qeclib.steane.gates_sq.sqrt_paulis import SX, SY, SZ, SXdg, SYdg, SZdg

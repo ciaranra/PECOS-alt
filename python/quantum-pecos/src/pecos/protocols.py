@@ -424,6 +424,7 @@ class LogicalInstructionProtocol(Protocol):
             Iterator of tuples containing symbol, locations, and parameters.
         """
         ...
+
     def __eq__(self, other: object) -> bool:
         """Check equality based on protocol implementation."""
         ...
@@ -496,6 +497,7 @@ class QECCProtocol(Protocol):
             Logical gate instance implementing the specified gate.
         """
         ...
+
     def instruction(
         self,
         symbol: str,
@@ -511,6 +513,7 @@ class QECCProtocol(Protocol):
             Logical instruction instance implementing the specified instruction.
         """
         ...
+
     def distance(self, *args: int, **kwargs: int) -> int:
         """Calculate the distance of the quantum error correcting code.
 
@@ -522,6 +525,7 @@ class QECCProtocol(Protocol):
             Distance of the QECC.
         """
         ...
+
     def plot(self, figsize: tuple[int, int] | None = None) -> None:
         """Plot the quantum error correcting code layout.
 

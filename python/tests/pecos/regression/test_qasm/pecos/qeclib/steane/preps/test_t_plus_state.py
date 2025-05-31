@@ -1,4 +1,5 @@
 """QASM regression tests for Steane T+ state preparation."""
+
 from collections.abc import Callable
 
 from pecos.qeclib.steane.preps.t_plus_state import (

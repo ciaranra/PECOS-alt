@@ -2,6 +2,7 @@
 
 This package provides syndrome extraction operations for the Steane quantum error correction code.
 """
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

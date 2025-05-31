@@ -1,4 +1,5 @@
 """QASM regression tests for control flow structures."""
+
 from collections.abc import Callable
 
 from pecos.qeclib import qubit as qb

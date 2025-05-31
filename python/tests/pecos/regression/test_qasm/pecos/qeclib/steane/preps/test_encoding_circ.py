@@ -1,4 +1,5 @@
 """QASM regression tests for Steane encoding circuits."""
+
 from collections.abc import Callable
 
 from pecos.qeclib.steane.preps.encoding_circ import EncodingCircuit

@@ -1,4 +1,5 @@
 """QASM regression tests for Steane single-qubit Hadamard gates."""
+
 from collections.abc import Callable
 
 from pecos.qeclib.steane.gates_sq.hadamards import H

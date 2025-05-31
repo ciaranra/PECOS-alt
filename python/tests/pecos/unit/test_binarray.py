@@ -1,4 +1,5 @@
 """Tests for BinArray binary array operations."""
+
 from typing import Final
 
 import numpy as np

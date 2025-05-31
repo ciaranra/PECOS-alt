@@ -1,4 +1,5 @@
 """QASM regression tests for Steane six-check non-flagged syndrome extraction."""
+
 from collections.abc import Callable
 
 from pecos.qeclib.steane.syn_extract.six_check_nonflagging import SixUnflaggedSyn

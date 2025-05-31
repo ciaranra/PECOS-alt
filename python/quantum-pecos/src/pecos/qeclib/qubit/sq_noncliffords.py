@@ -26,10 +26,8 @@ class T(QGate):
     """
 
 
-
 class Tdg(QGate):
     """T-dagger gate (inverse T gate).
 
     This gate performs a -π/4 rotation around the Z-axis.
     """
-

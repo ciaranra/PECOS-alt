@@ -1,4 +1,5 @@
 """QASM regression tests for qubit preparation operations."""
+
 from collections.abc import Callable
 
 from pecos.qeclib import qubit

@@ -34,6 +34,7 @@ class SparseSimRs:
     A high-performance sparse stabilizer simulator implemented in Rust, providing efficient simulation of quantum
     circuits that can be represented using the stabilizer formalism with reduced memory requirements.
     """
+
     def __init__(self, num_qubits: int):
         """Initialize the Rust-based sparse simulator.
 

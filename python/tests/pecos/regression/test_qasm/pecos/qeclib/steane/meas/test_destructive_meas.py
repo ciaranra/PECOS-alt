@@ -1,4 +1,5 @@
 """QASM regression tests for Steane destructive measurement operations."""
+
 from collections.abc import Callable
 
 from pecos.qeclib.steane.meas.destructive_meas import (

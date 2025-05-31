@@ -1,4 +1,5 @@
 """QASM regression tests for Steane code lookup decoders."""
+
 from collections.abc import Callable
 
 from pecos.qeclib.steane.decoders.lookup import (

@@ -1,4 +1,5 @@
 """Regression tests for logical Steane code teleportation programs."""
+
 from collections.abc import Callable
 
 from pecos.qeclib.steane.steane_class import Steane

@@ -1,4 +1,5 @@
 """QASM regression tests for Steane single-qubit face rotation gates."""
+
 from collections.abc import Callable
 
 from pecos.qeclib.steane.gates_sq.face_rots import F, Fdg
