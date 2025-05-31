@@ -9,21 +9,54 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from typing import Any
+"""Helper utilities for ProjectQ simulator.
+
+This module provides helper utilities and utility functions for the ProjectQ simulator, including common operations
+and support functions used across the ProjectQ-based quantum simulation components.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from projectq.ops._basics import BasicGate
+
+    from pecos.simulators.projectq.state import ProjectQSim
+    from pecos.type_defs import Location, SimulatorGateParams
 
 
 class MakeFunc:
     """Converts ProjectQ gate to a function."""
 
-    def __init__(self, gate, angle=False) -> None:
-        """Args:
-        ----
-            gate:
+    def __init__(
+        self,
+        gate: BasicGate | type[BasicGate],
+        *,
+        angle: bool = False,
+    ) -> None:
+        """Initialize MakeFunc with a gate.
+
+        Args:
+            gate: The ProjectQ gate to wrap.
+            angle (bool): Whether the gate takes an angle parameter.
         """
         self.gate = gate
         self.angle = angle
 
-    def func(self, state, qubits, **params: Any):
+    def func(
+        self,
+        state: ProjectQSim,
+        qubits: Location,
+        **params: SimulatorGateParams,
+    ) -> None:
+        """Apply the wrapped ProjectQ gate to the quantum state.
+
+        Args:
+            state: The ProjectQ simulator state.
+            qubits: Qubit location(s) to apply the gate to.
+            **params: Additional gate parameters (e.g., angles).
+        """
         if isinstance(qubits, int):
             qs = state.qids[qubits]
         else:

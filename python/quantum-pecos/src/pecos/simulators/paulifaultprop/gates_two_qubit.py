@@ -9,12 +9,24 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from typing import Any
+"""Two-qubit gate operations for Pauli fault propagation simulator.
+
+This module provides two-qubit quantum gate operations for the Pauli fault propagation simulator, including Clifford
+gates and their effect on Pauli frame propagation for efficient stabilizer circuit simulation with entangling gates.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from pecos.simulators.paulifaultprop.gates_one_qubit import SX, SY, SZ, H, SYdg, SZdg, X
 
+if TYPE_CHECKING:
+    from pecos.simulators.paulifaultprop.state import PauliFaultProp
+    from pecos.type_defs import SimulatorGateParams
 
-def CX(state, qubits: tuple[int, int]) -> None:
+
+def CX(state: PauliFaultProp, qubits: tuple[int, int]) -> None:
     """Applies the controlled-X gate.
 
     state (SparseSim): Instance representing the stabilizer state.
@@ -100,17 +112,14 @@ def CX(state, qubits: tuple[int, int]) -> None:
             state.faults["X"].add(q2)
             # YI -> YX
 
-    else:
-        # IZ -> ZZ
-        # IY -> ZY
-        if q2 in state.faults["Z"] or q2 in state.faults["Y"]:  # IY
-            state.faults["Z"].add(q1)
+    elif q2 in state.faults["Z"] or q2 in state.faults["Y"]:  # IY
+        state.faults["Z"].add(q1)
 
     if state.track_sign and (q1 in state.faults["Y"] and q2 in state.faults["Y"]):
         state.flip_sign()
 
 
-def CZ(state, qubits: tuple[int, int]) -> None:
+def CZ(state: PauliFaultProp, qubits: tuple[int, int]) -> None:
     """Applies the controlled-Z gate.
 
     II -> II
@@ -141,7 +150,7 @@ def CZ(state, qubits: tuple[int, int]) -> None:
     H(state, qubits[1])
 
 
-def CY(state, qubits: tuple[int, int]) -> None:
+def CY(state: PauliFaultProp, qubits: tuple[int, int]) -> None:
     """Applies the controlled-Y gate.
 
     II -> II
@@ -172,7 +181,7 @@ def CY(state, qubits: tuple[int, int]) -> None:
     SZ(state, qubits[1])
 
 
-def SWAP(state, qubits: tuple[int, int]) -> None:
+def SWAP(state: PauliFaultProp, qubits: tuple[int, int]) -> None:
     """Applies a SWAP gate.
 
     state (SparseSim): Instance representing the stabilizer state.
@@ -188,7 +197,7 @@ def SWAP(state, qubits: tuple[int, int]) -> None:
     CX(state, (q1, q2))
 
 
-def G2(state, qubits: tuple[int, int]) -> None:
+def G2(state: PauliFaultProp, qubits: tuple[int, int]) -> None:
     """Applies a CZ.H(1).H(2).CZ.
 
     state (SparseSim): Instance representing the stabilizer state.
@@ -203,7 +212,11 @@ def G2(state, qubits: tuple[int, int]) -> None:
     CZ(state, qubits)
 
 
-def II(state, qubits: tuple[int, int], **params) -> None:
+def II(
+    state: PauliFaultProp,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
+) -> None:
     """Two qubit identity.
 
     state (SparseSim): Instance representing the stabilizer state.
@@ -214,7 +227,11 @@ def II(state, qubits: tuple[int, int], **params) -> None:
     """
 
 
-def SXX(state, qubits: tuple[int, int], **params) -> None:
+def SXX(
+    state: PauliFaultProp,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
+) -> None:
     """Applies a square root of XX rotation to generators.
 
     state (SparseSim): Instance representing the stabilizer state.
@@ -231,7 +248,11 @@ def SXX(state, qubits: tuple[int, int], **params) -> None:
     SY(state, qubit1)  # Sqrt Y
 
 
-def SXXdg(state, qubits: tuple[int, int], **params) -> None:
+def SXXdg(
+    state: PauliFaultProp,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
+) -> None:
     """Applies a square root of XX rotation to generators.
 
     state (SparseSim): Instance representing the stabilizer state.
@@ -246,7 +267,11 @@ def SXXdg(state, qubits: tuple[int, int], **params) -> None:
     SXX(state, qubits)
 
 
-def SYY(state, qubits: tuple[int, int], **params: Any) -> None:
+def SYY(
+    state: PauliFaultProp,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
+) -> None:
     r"""Sqrt of YY == (rZ,rZ).SqrtXX.(rZd,rZd).
 
     XI -> -ZY
@@ -257,13 +282,8 @@ def SYY(state, qubits: tuple[int, int], **params: Any) -> None:
     TODO: verify implementation!
 
     Args:
-    ----
-        state:
-        qubits:
-
-    Returns:
-    -------
-
+        state: The PauliFaultProp state instance.
+        qubits (tuple[int, int]): A tuple of two qubit indices to apply the gate to.
     """
     qubit1, qubit2 = qubits
     SZdg(state, qubit1)  # rZd
@@ -273,18 +293,17 @@ def SYY(state, qubits: tuple[int, int], **params: Any) -> None:
     SZ(state, qubit2)  # rZ
 
 
-def SYYdg(state, qubits: tuple[int, int], **params: Any) -> None:
+def SYYdg(
+    state: PauliFaultProp,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
+) -> None:
     """Adjoint of SYY.
 
     Args:
-    ----
-        state:
-        qubits:
-        **params:
-
-    Returns:
-    -------
-
+        state: The PauliFaultProp state instance.
+        qubits (tuple[int, int]): A tuple of two qubit indices to apply the gate to.
+        **_params: Unused additional parameters (kept for interface compatibility).
     """
     qubit1, qubit2 = qubits
     SZdg(state, qubit1)
@@ -294,7 +313,11 @@ def SYYdg(state, qubits: tuple[int, int], **params: Any) -> None:
     SZ(state, qubit2)
 
 
-def SZZ(state, qubits: tuple[int, int], **params) -> None:
+def SZZ(
+    state: PauliFaultProp,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
+) -> None:
     """Applies a square root of ZZ rotation to generators.
 
     state (SparseSim): Instance representing the stabilizer state.
@@ -308,7 +331,11 @@ def SZZ(state, qubits: tuple[int, int], **params) -> None:
     SY(state, qubit2)  # rY
 
 
-def SZZdg(state, qubits: tuple[int, int], **params) -> None:
+def SZZdg(
+    state: PauliFaultProp,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
+) -> None:
     """Applies an adjoint of square root of ZZ rotation to generators.
 
     state (SparseSim): Instance representing the stabilizer state.

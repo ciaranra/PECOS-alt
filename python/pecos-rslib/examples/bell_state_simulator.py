@@ -23,7 +23,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pecos_rslib import ByteMessage, StateVecEngineRs
 
 
-def run_bell_state_experiment():
+def run_bell_state_experiment() -> None:
     """Run a Bell state experiment using the StateVecEngineRs."""
     print("==== Bell State Experiment with Simulator ====")
 
@@ -89,10 +89,10 @@ def run_bell_state_experiment():
 
     print("\nCorrelation analysis:")
     print(
-        f"  Correlated outcomes (00 or 11): {correlated_outcomes} ({correlated_outcomes/num_shots*100:.1f}%)"
+        f"  Correlated outcomes (00 or 11): {correlated_outcomes} ({correlated_outcomes / num_shots * 100:.1f}%)"
     )
     print(
-        f"  Anti-correlated outcomes (01 or 10): {anticorrelated_outcomes} ({anticorrelated_outcomes/num_shots*100:.1f}%)"
+        f"  Anti-correlated outcomes (01 or 10): {anticorrelated_outcomes} ({anticorrelated_outcomes / num_shots * 100:.1f}%)"
     )
 
     if correlated_outcomes > 0.95 * num_shots:
@@ -111,7 +111,7 @@ def run_bell_state_experiment():
     print("\n==== End of Bell State Experiment ====")
 
 
-def run_custom_experiment():
+def run_custom_experiment() -> None:
     """Run a custom quantum experiment using the StateVecEngineRs."""
     print("\n==== Custom Quantum Experiment ====")
 
@@ -164,10 +164,10 @@ def run_custom_experiment():
 
     print("\nGHZ state analysis:")
     print(
-        f"  Expected outcomes (000 or 111): {expected_outcomes} ({expected_outcomes/num_shots*100:.1f}%)"
+        f"  Expected outcomes (000 or 111): {expected_outcomes} ({expected_outcomes / num_shots * 100:.1f}%)"
     )
     print(
-        f"  Unexpected outcomes: {unexpected_outcomes} ({unexpected_outcomes/num_shots*100:.1f}%)"
+        f"  Unexpected outcomes: {unexpected_outcomes} ({unexpected_outcomes / num_shots * 100:.1f}%)"
     )
 
     print("\n==== End of Custom Experiment ====")

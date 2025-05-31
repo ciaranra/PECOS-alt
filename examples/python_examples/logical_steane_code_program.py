@@ -9,6 +9,13 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Example demonstrating logical teleportation using Steane quantum error correction code.
+
+This module provides an example implementation of logical teleportation using the
+7-qubit Steane quantum error correction code, showcasing fault-tolerant quantum
+computation with error correction circuits.
+"""
+
 from pecos.qeclib.steane.steane_class import Steane
 from pecos.slr import Barrier, CReg, If, Main
 
@@ -27,8 +34,8 @@ def telep(prep_basis: str, meas_basis: str) -> str:
             include: "X", "Y", and "Z".
 
     Returns:
-        A logical program written in extended OpenQASM 2.0"""
-
+        A logical program written in extended OpenQASM 2.0
+    """
     prog = Main(
         m_bell := CReg("m_bell", size=2),
         m_out := CReg("m_out", size=1),
@@ -82,8 +89,8 @@ def t_gate(prep_basis: str, meas_basis: str) -> str:
             include: "X", "Y", and "Z".
 
     Returns:
-        A logical program written in extended OpenQASM 2.0"""
-
+        A logical program written in extended OpenQASM 2.0
+    """
     prog = Main(
         m_reject := CReg("m_reject", size=2),
         m_t := CReg("m_t", 1),

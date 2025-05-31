@@ -12,16 +12,15 @@
 
 """A collection of useful functions."""
 
+from typing import Any
 
-def make_hashable_params(params):
+
+def make_hashable_params(params: dict[str, Any]) -> tuple:
     """Checks to make sure that the parameters submitted is hashable.
 
     Args:
     ----
-        params(dict):
-
-    Returns:
-    -------
+        params(dict): A dictionary of parameters to be made hashable. Values can be dicts, lists, sets, or other types.
 
     """
     tuple_params = []
@@ -30,11 +29,10 @@ def make_hashable_params(params):
         if isinstance(value, dict):
             dict_tuple = tuple(value.items())
             tuple_params.append(dict_tuple)
+        elif isinstance(value, list | set):
+            tuple_params.append((key, tuple(value)))
         else:
-            if isinstance(value, (list, set)):
-                tuple_params.append((key, tuple(value)))
-            else:
-                tuple_params.append((key, value))
+            tuple_params.append((key, value))
 
     tuple_params = tuple(tuple_params)
 
@@ -47,28 +45,24 @@ def make_hashable_params(params):
     return tuple_params
 
 
-def pos2qudit(layout):
+def pos2qudit(layout: dict[Any, tuple]) -> dict[tuple, Any]:
     """Reverses the layout dictionary. Makes a new dictionary with (x, y, ...) => qudit_id.
 
     Args:
     ----
-        layout:
-
-    Returns:
-    -------
+        layout: A dictionary mapping qudit IDs to their positions (coordinates).
 
     """
     return {p: qid for qid, p in layout.items()}
 
 
-def expected_params(params, expected_set):
-    """Args:
-    ----
-        params(dict):
-        expected_set(set):
+def expected_params(params: dict[str, Any], expected_set: set[str]) -> None:
+    """Check that all parameters are in the expected set.
 
-    Returns:
-    -------
+    Args:
+    ----
+        params(dict): Dictionary of parameters to validate
+        expected_set(set): Set of expected parameter keys
 
     """
     keys = set(params.keys())

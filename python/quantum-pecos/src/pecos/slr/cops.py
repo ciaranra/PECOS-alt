@@ -51,93 +51,85 @@ class PyCOp:
         raise NotImplementedError
 
     def __invert__(self):
-        """~a"""
-
+        """~a."""
         return NOT(self)
 
     def __neg__(self):
-        """-a"""
-
+        """-a."""
         return NEG(self)
 
     def __xor__(self, other):
-        """a ^ b"""
-
+        """A ^ b."""
         return XOR(self, other)
 
     def __and__(self, other):
-        """a & b"""
-
+        """A & b."""
         return AND(self, other)
 
     def __or__(self, other):
-        """a | b"""
-
+        """A | b."""
         return OR(self, other)
 
     def __eq__(self, other):
-        """a == b"""
-
+        """A == b."""
         return EQUIV(self, other)
 
     def __ne__(self, other):
-        """a != b"""
-
+        """A != b."""
         return NEQUIV(self, other)
 
     def __lt__(self, other):
-        """a < b"""
-
+        """A < b."""
         return LT(self, other)
 
     def __gt__(self, other):
-        """a > b"""
+        """A > b."""
         return GT(self, other)
 
     def __le__(self, other):
-        """a <= b"""
+        """A <= b."""
         return LE(self, other)
 
     def __ge__(self, other):
-        """a >= b"""
+        """A >= b."""
         return GE(self, other)
 
     def __add__(self, other):
-        """a + b"""
+        """A + b."""
         return PLUS(self, other)
 
     def __sub__(self, other):
-        """a - b"""
+        """A - b."""
         return MINUS(self, other)
 
     def __rshift__(self, other):
-        """a >> b"""
+        """A >> b."""
         return RSHIFT(self, other)
 
     def __lshift__(self, other):
-        """a << b"""
+        """A << b."""
         return LSHIFT(self, other)
 
 
 class COp(Expression, PyCOp):
-    """Classical operation"""
+    """Classical operation."""
 
 
 class BinOp(COp):
-    """Binary Operation"""
+    """Binary Operation."""
 
     symbol = "@"
 
-    def __init__(self, left, right):
+    def __init__(self, left, right) -> None:
         self.left = left
         self.right = right
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.left}, {self.right})"
 
 
 class AssignmentOp(BinOp):
-    """Assignment Operation"""
+    """Assignment Operation."""
 
 
 class SET(AssignmentOp):
@@ -145,27 +137,27 @@ class SET(AssignmentOp):
 
 
 class CompOp(COp):
-    """Comparison Operation"""
+    """Comparison Operation."""
 
     symbol = "@@"
 
-    def __init__(self, left, right):
+    def __init__(self, left, right) -> None:
         self.left = left
         self.right = right
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.left}, {self.right})"
 
 
 class UnaryOp(COp):
-    """Unary Operation"""
+    """Unary Operation."""
 
     symbol = "#"
 
-    def __init__(self, value):
+    def __init__(self, value) -> None:
         self.value = value
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.value})"
 
 

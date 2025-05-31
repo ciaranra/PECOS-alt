@@ -1,3 +1,8 @@
+"""Pauli fault propagation simulator.
+
+This package provides a simulator for propagating Pauli faults through quantum circuits.
+"""
+
 # Copyright 2018 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

@@ -16,7 +16,7 @@ impl ExportedFunction {
         } else {
             self.params
                 .iter()
-                .map(|(typ, name)| format!("{typ} {name}"))
+                .map(|(param_type, name)| format!("{param_type} {name}"))
                 .collect::<Vec<_>>()
                 .join(", ")
         };

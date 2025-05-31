@@ -18,7 +18,7 @@ from pecos.slr.vars import Var, Vars
 class Block(Node):
     """A collection of other operations and blocks."""
 
-    def __init__(self, *args, ops=None, vargs=None, allow_no_ops=True):
+    def __init__(self, *args, ops=None, vargs=None, allow_no_ops=True) -> None:
         self.ops = []
         self.vars = Vars()
 
@@ -26,7 +26,7 @@ class Block(Node):
             msg = "Can not use both *args for ops and the ops keyword argument."
             raise Exception(msg)
 
-        elif args:
+        if args:
             ops = args
 
         if vargs is not None:
@@ -41,7 +41,6 @@ class Block(Node):
 
     def extend(self, *stmts):
         """Adds more ops to the Block."""
-
         for s in stmts:
             if isinstance(s, Var):
                 self.vars.append(s)
@@ -62,7 +61,7 @@ class Block(Node):
     def iter(self):
         yield from self.__iter__()
 
-    def gen(self, target: object | str, add_versions=True):
+    def gen(self, target: object | str, *, add_versions=True):
         if isinstance(target, str):
             if target == "qasm":
                 target = QASMGenerator(add_versions=add_versions)
@@ -73,5 +72,5 @@ class Block(Node):
         target.generate_block(self)
         return target.get_output()
 
-    def qasm(self, add_versions=True):
+    def qasm(self, *, add_versions=True):
         return self.gen("qasm", add_versions=add_versions)

@@ -1,3 +1,10 @@
+"""Plotting utilities for quantum error correction codes.
+
+This module provides visualization tools for quantum error correction codes,
+including lattice plots, syndrome visualization, and code structure diagrams
+for various QECC implementations in PECOS.
+"""
+
 # Copyright 2019 The PECOS Developers
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
@@ -11,34 +18,45 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from typing import TYPE_CHECKING, Any, TypeVar
+
 import networkx as nx
 from matplotlib import pyplot as plt
+
+if TYPE_CHECKING:
+    from pecos.protocols import LogicalInstructionProtocol, QECCProtocol
+
+T = TypeVar("T")
 
 
 # plot intsructions
 def plot_qecc(
-    qecc,
-    figsize=(9, 9),
-    dpi=80,
-    filename=None,
-    title_font_size=16,
-    axis_font_size=14,
-    legend_font_size=14,
-    **kwargs,
-):
+    qecc: "QECCProtocol",
+    figsize: tuple[int, int] = (9, 9),
+    dpi: int = 80,
+    filename: str | None = None,
+    title_font_size: int = 16,
+    axis_font_size: int = 14,
+    legend_font_size: int = 14,
+    **kwargs: Any,  # noqa: ANN401 - Matplotlib accepts various parameter types
+) -> None:
     """Produces a plot of a qecc.
 
     Args:
     ----
         qecc(QECC): The ``qecc`` instance that is to be plotted.
         figsize(tuple of int): The size of the plotted figure.
-
-    Returns:
-    -------
+        dpi: Dots per inch resolution for the plot.
+        filename: Optional filename to save the plot. If None, the plot is displayed but not saved.
+        title_font_size: Font size for the plot title.
+        axis_font_size: Font size for axis labels.
+        legend_font_size: Font size for legend text.
+        **kwargs: Additional keyword arguments (will raise exception if any are provided).
 
     """
-    if len(kwargs):
-        raise Exception("keys %s not recognized!" % kwargs.keys())
+    if kwargs:
+        msg = f"keys {kwargs.keys()} not recognized!"
+        raise Exception(msg)
 
     g = nx.DiGraph()
 
@@ -64,7 +82,7 @@ def plot_qecc(
 
     g.add_nodes_from(qudit_nodes_qudit)
     plt.figure(num=None, figsize=figsize, dpi=dpi, edgecolor="k")
-    plt.title("QECC layout: %s" % qecc.name, size=title_font_size)
+    plt.title(f"QECC layout: {qecc.name}", size=title_font_size)
 
     # Draw data qudits
     nodes = nx.draw_networkx_nodes(
@@ -125,25 +143,32 @@ def plot_qecc(
 
 
 def plot_instr(
-    instr,
-    figsize=(9, 9),
-    dpi=80,
-    filename=None,
-    title_font_size=16,
-    axis_font_size=14,
-    legend_font_size=14,
-    **kwargs,
-):
-    """Args:
-    ----
-        instr(LogicalInstruction):
+    instr: "LogicalInstructionProtocol",
+    figsize: tuple[int, int] = (9, 9),
+    dpi: int = 80,
+    filename: str | None = None,
+    title_font_size: int = 16,
+    axis_font_size: int = 14,
+    legend_font_size: int = 14,
+    **kwargs: Any,  # noqa: ANN401 - Matplotlib accepts various parameter types
+) -> None:
+    """Plot syndrome extraction using the provided configuration.
 
-    Returns:
-    -------
+    Args:
+    ----
+        instr(LogicalInstruction): The logical instruction to plot
+        figsize(tuple of int): The size of the plotted figure
+        dpi: Dots per inch resolution for the plot
+        filename: Optional filename to save the plot. If None, the plot is displayed but not saved
+        title_font_size: Font size for the plot title
+        axis_font_size: Font size for axis labels
+        legend_font_size: Font size for legend text
+        **kwargs: Additional keyword arguments (will raise exception if any are provided)
 
     """
-    if len(kwargs):
-        raise Exception("keys %s not recognized!" % kwargs.keys())
+    if kwargs:
+        msg = f"keys {kwargs.keys()} not recognized!"
+        raise Exception(msg)
 
     g = nx.DiGraph()
 
@@ -246,7 +271,18 @@ def plot_instr(
     plt.show()
 
 
-def get_ancilla_types(instr):
+def get_ancilla_types(instr: "LogicalInstructionProtocol") -> tuple[set, set]:
+    """Extract X and Z ancilla qubits from logical instruction.
+
+    Analyzes the abstract circuit of a logical instruction to identify
+    which ancilla qubits are used for X-type and Z-type stabilizer checks.
+
+    Args:
+        instr: Logical instruction containing abstract circuit with check operations.
+
+    Returns:
+        Tuple of (X ancillas set, Z ancillas set) containing qubit identifiers.
+    """
     x_ancillas = set()
     z_ancillas = set()
     abs_circuit = instr.abstract_circuit
@@ -262,7 +298,23 @@ def get_ancilla_types(instr):
     return x_ancillas, z_ancillas
 
 
-def graph_add_directed_cnots(instr, g):
+def graph_add_directed_cnots(
+    instr: "LogicalInstructionProtocol",
+    g: nx.DiGraph,
+) -> tuple[dict, list, list]:
+    """Add directed CNOT edges to graph from logical instruction.
+
+    Processes the circuit of a logical instruction to add directed edges
+    for two-qubit gates (CNOT, CZ, CY) to a NetworkX directed graph,
+    with edge labels indicating the time step.
+
+    Args:
+        instr: Logical instruction containing the quantum circuit.
+        g: NetworkX directed graph to add edges to.
+
+    Returns:
+        Tuple of (edge labels dict, CZ gate list, CY gate list).
+    """
     circuit = instr.circuit
     edge_labels = {}
     cys = []
@@ -283,16 +335,24 @@ def graph_add_directed_cnots(instr, g):
     return edge_labels, czs, cys
 
 
-def mapset(mapping, oldset):
+class NoMap:
+    """Default Mapping: item -> item."""
+
+    def __init__(self) -> None:
+        """Initialize the NoMap identity mapping."""
+
+    def __getitem__(self, item: T) -> T:
+        """Return the item unchanged (identity mapping)."""
+        return item
+
+
+def mapset(mapping: dict | NoMap, oldset: set) -> set:
     """Applies a mapping to a set.
 
     Args:
     ----
-        mapping:
-        oldset (set):
-
-    Returns:
-    -------
+        mapping: A dictionary-like object that maps elements from the old set to new values.
+        oldset (set): The original set whose elements will be mapped to new values.
 
     """
     newset = set()
@@ -301,13 +361,3 @@ def mapset(mapping, oldset):
         newset.add(mapping[e])
 
     return newset
-
-
-class NoMap:
-    """Default Mapping: item -> item."""
-
-    def __init__(self) -> None:
-        pass
-
-    def __getitem__(self, item):
-        return item

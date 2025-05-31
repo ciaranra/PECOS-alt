@@ -1,3 +1,9 @@
+"""Circuit implementation for the 4.8.8 color code.
+
+This module provides circuit implementations for the 4.8.8 color code,
+a topological quantum error correction code based on 4.8.8 regular lattice.
+"""
+
 # Copyright 2018 The PECOS Developers
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
@@ -11,7 +17,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from typing import TYPE_CHECKING, Any
+
 from pecos.circuits import QuantumCircuit
+
+if TYPE_CHECKING:
+    from pecos.protocols import LogicalInstructionProtocol
 
 
 class OneAncillaPerCheck:
@@ -19,19 +30,20 @@ class OneAncillaPerCheck:
 
     def __init__(
         self,
-        square_x_ticks=None,
-        square_z_ticks=None,
-        octagon_x_ticks=None,
-        octagon_z_ticks=None,
+        square_x_ticks: list[int] | None = None,
+        square_z_ticks: list[int] | None = None,
+        octagon_x_ticks: list[int] | None = None,
+        octagon_z_ticks: list[int] | None = None,
     ) -> None:
-        """Args:
-        ----
-            square_x_ticks:
-            square_z_ticks:
-            octagon_x_ticks:
-            octagon_z_ticks:
-        """
+        """Initialize the CircuitCompiler1 with tick configurations.
 
+        Args:
+        ----
+            square_x_ticks: List of tick indices for X-type stabilizer measurements on square faces
+            square_z_ticks: List of tick indices for Z-type stabilizer measurements on square faces
+            octagon_x_ticks: List of tick indices for X-type stabilizer measurements on octagon faces
+            octagon_z_ticks: List of tick indices for Z-type stabilizer measurements on octagon faces
+        """
         if square_x_ticks is None:
             # 8 ticks
             square_x_ticks = [
@@ -87,26 +99,29 @@ class OneAncillaPerCheck:
         self.octagon_z_ticks = octagon_z_ticks
 
     @staticmethod
-    def get_num_ancillas(num_checks):
-        """Args:
-        ----
-            num_checks:
+    def get_num_ancillas(num_checks: int) -> int:
+        """Get the number of ancillas based on the number of checks.
 
-        Returns:
-        -------
+        Args:
+        ----
+            num_checks: Number of stabilizer checks to be measured
 
         """
         return int(num_checks / 2)
 
-    def compile(self, instr, abstract_circuit, mapping=None):
-        """Args:
-        ----
-            abstract_circuit:
-            mapping:
-            **gate_params:
+    def compile(
+        self,
+        instr: "LogicalInstructionProtocol",
+        abstract_circuit: dict[str, Any],
+        mapping: dict[Any, Any] | None = None,
+    ) -> QuantumCircuit:
+        """Compile the instruction into an abstract circuit.
 
-        Returns:
-        -------
+        Args:
+        ----
+            instr: Instruction object containing gate parameters
+            abstract_circuit: Dictionary representation of the abstract quantum circuit to compile
+            mapping: Optional qubit mapping dictionary to apply during compilation
 
         """
         gate_params = instr.gate_params
@@ -182,16 +197,13 @@ class OneAncillaPerCheck:
         return circuit
 
     @staticmethod
-    def mapset(mapping, oldset):
+    def mapset(mapping: dict[Any, Any], oldset: set) -> set:
         """Applies a mapping to a set.
 
         Args:
         ----
-            mapping:
-            oldset (set):
-
-        Returns:
-        -------
+            mapping: A dictionary-like object that maps elements from the old set to new values.
+            oldset (set): The original set whose elements will be mapped to new values.
 
         """
         newset = set()
@@ -203,26 +215,25 @@ class OneAncillaPerCheck:
 
     def _create_check(
         self,
-        circuit,
-        polygon,
-        ticks,
-        check_type,
-        datas,
-        ancilla,
-        mapping,
-    ):
-        """Args:
-        ----
-            circuit:
-            polygon:
-            ticks:
-            check_type:
-            datas:
-            ancilla:
-            mapping:
+        circuit: QuantumCircuit,
+        polygon: str,
+        ticks: list[int],
+        check_type: str,
+        datas: list[int | None],
+        ancilla: int,
+        mapping: dict[Any, Any] | None,
+    ) -> None:
+        """Add polygon extraction to the circuit.
 
-        Returns:
-        -------
+        Args:
+        ----
+            circuit: QuantumCircuit object to add the check operations to
+            polygon: Type of polygon ('square' or 'octagon') for the check
+            ticks: List of tick indices for the check operations
+            check_type: Type of stabilizer check ('X check' or 'Z check')
+            datas: List of data qubit indices involved in the check
+            ancilla: Index of the ancilla qubit used for the measurement
+            mapping: Optional qubit mapping dictionary to apply
 
         """
         if polygon == "square":
@@ -249,14 +260,14 @@ class OneAncillaPerCheck:
 
                 # CNOTs...
 
-                for d, t in zip(datas, data_ticks):
+                for d, t in zip(datas, data_ticks, strict=False):
                     if d is not None:
                         circuit.update({"CNOT": {(ancilla, d)}}, tick=t)
             else:
                 circuit.update({"H": {mapping[ancilla]}}, tick=h1_tick)
                 circuit.update({"H": {mapping[ancilla]}}, tick=h2_tick)
 
-                for d, t in zip(datas, data_ticks):
+                for d, t in zip(datas, data_ticks, strict=False):
                     if d is not None:
                         circuit.update(
                             {"CNOT": {(mapping[ancilla], mapping[d])}},
@@ -267,11 +278,11 @@ class OneAncillaPerCheck:
             data_ticks = ticks[1 : sides + 1]
 
             if mapping is None:
-                for d, t in zip(datas, data_ticks):
+                for d, t in zip(datas, data_ticks, strict=False):
                     if d is not None:
                         circuit.update({"CNOT": {(d, ancilla)}}, tick=t)
             else:
-                for d, t in zip(datas, data_ticks):
+                for d, t in zip(datas, data_ticks, strict=False):
                     if d is not None:
                         circuit.update(
                             {"CNOT": {(mapping[d], mapping[ancilla])}},

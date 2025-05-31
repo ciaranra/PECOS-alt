@@ -11,14 +11,18 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-"""repetition_z
-~~~~~~~~~~~~.
+"""Surface 4.4.4.4 quantum error correcting code implementation.
 
-Generates circuits for the repetition code in the Z-Basis.
+This module provides the Surface code on a 4.4.4.4 lattice structure,
+a topological quantum error correcting code.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from pecos.circuit_converters.checks2circuit import Check2Circuits
-from pecos.qeccs.qecc_parent_class import QECC
+from pecos.qeccs.default_qecc import DefaultQECC
 from pecos.qeccs.surface_4444.gates import GateIdentity, GateInitPlus, GateInitZero
 from pecos.qeccs.surface_4444.instructions import (
     InstrInitPlus,
@@ -26,18 +30,31 @@ from pecos.qeccs.surface_4444.instructions import (
     InstrSynExtraction,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Generator, Iterator
 
-class Surface4444(QECC):
+    from pecos.type_defs import QECCParams
+
+
+class Surface4444(DefaultQECC):
     """Non-medial Surface code on 4.4.4.4 lattice."""
 
-    def __init__(self, distance=None, height=None, width=None, **qecc_params) -> None:
-        """Args:
+    def __init__(
+        self,
+        distance: int | None = None,
+        height: int | None = None,
+        width: int | None = None,
+        **qecc_params: QECCParams,
+    ) -> None:
+        """Initialize the Surface4444 code with the given parameters.
+
+        Args:
         ----
             distance: The distance of the code. If specified a square code of height and width equaled to the distance
             will be returned.
             height: The height of the code block. This is the size of the minimum logical X.
             width: The width of the code block. This is the size of the minimum logical Z.
-            **qecc_params:
+            **qecc_params: Additional keyword arguments for QECC configuration
         """
         qecc_params["distance"] = distance
         qecc_params["height"] = height
@@ -96,7 +113,7 @@ class Surface4444(QECC):
         self.sides = self._determine_sides()
 
     @staticmethod
-    def _set_symbols():
+    def _set_symbols() -> tuple[dict, dict]:
         # gate and instruction symbol bindings
         # ------------------------------------
         # gate symbol => gate class
@@ -115,8 +132,9 @@ class Surface4444(QECC):
 
         return sym2gate_class, sym2instruction_class
 
-    def _get_distance(self):
-        """Check and set the distance
+    def _get_distance(self) -> tuple[int, int, int]:
+        """Check and set the distance.
+
         :return:
         """
         params = self.qecc_params
@@ -151,13 +169,8 @@ class Surface4444(QECC):
 
         return distance, height, width
 
-    def _data_id_iter(self):
-        """Assigns qudit ids. Also, records qudit id in the sets self.
-
-        Returns:
-        -------
-
-        """
+    def _data_id_iter(self) -> Generator[int, None, None]:
+        """Assigns qudit ids. Also, records qudit id in the sets self."""
         while True:
             qudit_id = max(self.qudit_set, default=-1) + 1
             self.qudit_set.add(qudit_id)
@@ -169,13 +182,8 @@ class Surface4444(QECC):
 
             yield qudit_id
 
-    def _ancilla_id_iter(self):
-        """Assigns qudit ids. Also, records qudit id in the sets self.
-
-        Returns:
-        -------
-
-        """
+    def _ancilla_id_iter(self) -> Generator[int, None, None]:
+        """Assigns qudit ids. Also, records qudit id in the sets self."""
         last_ancilla_id = None
 
         while True:
@@ -190,13 +198,13 @@ class Surface4444(QECC):
 
                 yield qudit_id
 
-    def _add_node(self, x, y, iter_ids):
+    def _add_node(self, x: int, y: int, iter_ids: Iterator[int]) -> None:
         nid = next(iter_ids)
 
         self.layout[nid] = (x, y)
         self.position_to_qubit[(x, y)] = nid
 
-    def _generate_layout(self):
+    def _generate_layout(self) -> dict:
         """Creates the layout dictionary which describes the location of the qubits in the code.
 
         :param qudit_ids:
@@ -233,7 +241,7 @@ class Surface4444(QECC):
 
         return self.layout
 
-    def _determine_sides(self):
+    def _determine_sides(self) -> dict[str, list]:
         """Outputs a dictionary that describes the sides of the code.
 
         The repetition code is essentially a line.

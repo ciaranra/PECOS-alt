@@ -11,22 +11,41 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Standard circuit runner for quantum circuit execution.
+
+This module provides the standard circuit runner implementation for executing
+quantum circuits on various simulator backends in the PECOS framework.
+"""
+
+from __future__ import annotations
+
 import os
 import random
 import struct
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from pecos.misc.std_output import StdOutput
 
+if TYPE_CHECKING:
+    from typing import Any
+
+    from pecos.circuits import QuantumCircuit
+    from pecos.error_models.class_errors_circuit import ErrorCircuits
+    from pecos.error_models.parent_class_error_gen import ParentErrorModel
+    from pecos.protocols import SimulatorProtocol
+
 
 class Standard:
     """This class represents a standard model for running quantum circuits and adding in errors."""
 
-    def __init__(self, seed=None) -> None:
-        """Args:
+    def __init__(self, seed: int | bool | None = None) -> None:
+        """Initialize Standard circuit runner with optional seed.
+
+        Args:
         ----
-            seed:
+            seed: Random seed for reproducibility. Can be bool True for random seed, int for specific seed, or None.
         """
         if isinstance(seed, bool) and seed is True:
             self.seed = struct.unpack("<L", os.urandom(4))[0]
@@ -43,24 +62,23 @@ class Standard:
 
     @staticmethod
     def run(
-        state,
-        circuit,
-        error_gen=None,
-        error_params=None,
-        error_circuits=None,
-        output=None,
-    ):
-        """Args:
-        ----
-            state:
-            circuit:
-            error_gen:
-            error_params:
-            error_circuits:
-            output:
+        state: SimulatorProtocol,
+        circuit: QuantumCircuit,
+        error_gen: ParentErrorModel | None = None,
+        error_params: dict[str, Any] | None = None,
+        error_circuits: ErrorCircuits | dict[Any, Any] | None = None,
+        output: StdOutput | None = None,
+    ) -> tuple[StdOutput, ErrorCircuits | None]:
+        """Run quantum circuit with optional error generation.
 
-        Returns:
-        -------
+        Args:
+        ----
+            state: Quantum state to operate on.
+            circuit: Quantum circuit to execute.
+            error_gen: Error generator object for introducing errors.
+            error_params: Parameters for error generation.
+            error_circuits: Pre-generated error circuits.
+            output: Output object to store results.
 
         """
         if output is None:

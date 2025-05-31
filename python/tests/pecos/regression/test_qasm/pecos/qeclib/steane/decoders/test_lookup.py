@@ -1,3 +1,7 @@
+"""QASM regression tests for Steane code lookup decoders."""
+
+from collections.abc import Callable
+
 from pecos.qeclib.steane.decoders.lookup import (
     FlagLookupQASM,
     FlagLookupQASMActiveCorrectionX,
@@ -6,7 +10,8 @@ from pecos.qeclib.steane.decoders.lookup import (
 from pecos.slr import CReg, QReg
 
 
-def test_FlagLookupQASM(compare_qasm):
+def test_FlagLookupQASM(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane flag lookup decoder QASM regression."""
     syn = CReg("syn_test", 3)
     syndromes = CReg("syndromes_test", 3)
     raw_syn = CReg("raw_syn_test", 3)
@@ -29,7 +34,8 @@ def test_FlagLookupQASM(compare_qasm):
         compare_qasm(block, basis)
 
 
-def test_FlagLookupQASMActiveCorrectionX(compare_qasm):
+def test_FlagLookupQASMActiveCorrectionX(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane flag lookup decoder with X correction QASM regression."""
     q = QReg("q_test", 7)
     syn = CReg("syn_test", 3)
     syndromes = CReg("syndromes_test", 3)
@@ -55,7 +61,8 @@ def test_FlagLookupQASMActiveCorrectionX(compare_qasm):
         compare_qasm(block, pf_bit_copy)
 
 
-def test_FlagLookupQASMActiveCorrectionZ(compare_qasm):
+def test_FlagLookupQASMActiveCorrectionZ(compare_qasm: Callable[..., None]) -> None:
+    """Test Steane flag lookup decoder with Z correction QASM regression."""
     q = QReg("q_test", 7)
     syn = CReg("syn_test", 3)
     syndromes = CReg("syndromes_test", 3)

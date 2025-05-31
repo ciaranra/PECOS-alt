@@ -9,31 +9,51 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Default simulator implementation for PECOS quantum error correction.
+
+This module provides a generic simulator interface that can dynamically select
+appropriate simulator backends based on quantum circuit requirements and available
+system resources.
+"""
+
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from pecos.circuits import QuantumCircuit
+
+JSONType = dict[str, Any] | list[Any] | str | int | float | bool | None
 
 
-class Simulator:
-    """A parent class to provide standard methods for simulators."""
+class DefaultSimulator:
+    """A class providing default method implementations for simulators.
+
+    This class provides default implementations of the SimulatorProtocol interface.
+    Simulator implementations can inherit from this class to get the standard
+    behavior, or implement the SimulatorProtocol directly for custom behavior.
+    """
 
     def __init__(self) -> None:
+        """Initialize the DefaultSimulator.
+
+        Creates an empty bindings dictionary to store gate operation mappings.
+        """
         self.bindings = {}
 
     def run_gate(
         self,
         symbol: str,
         locations: set[int] | set[tuple[int, ...]],
-        **params: Any,
-    ):
-        """Args:
-        ----
-            symbol:
-            locations:
-            **params:
+        **params: JSONType,
+    ) -> dict[int | tuple[int, ...], JSONType]:
+        """Run a gate operation on the simulator.
 
-        Returns:
-        -------
+        Args:
+        ----
+            symbol: The gate symbol/name to execute.
+            locations: Set of qubit indices or tuples of indices where the gate should be applied.
+            **params: Additional parameters for the gate operation.
 
         """
         output = {}
@@ -58,32 +78,33 @@ class Simulator:
 
         return output
 
-    def run_circuit(self, circuit, removed_locations=None):
-        """Args:
+    def run_circuit(  # noqa: D417
+        self,
+        circuit: QuantumCircuit,
+        removed_locations: set | None = None,
+    ) -> dict[int | tuple[int, ...], JSONType]:
+        """Run a quantum circuit on the simulator.
+
+        Args:
         ----
             circuit (QuantumCircuit): A circuit instance or object with an appropriate items() generator.
-            removed_locations:
+            removed_locations: Optional set of locations to skip when running the circuit.
 
         Returns (list): If output is True then the circuit output is returned. Note that this output format may differ
         from what a ``circuit_runner`` will return for the same method named ``run_circuit``.
 
         """
-        # TODO: removed_locations doesn't make sense except if circuit is tick_circuit
-        # because can't say not to do gates for particular ticks....
+        output = {}
 
-        if removed_locations is None:
-            removed_locations = set()
-
-        results = {}
         for symbol, locations, params in circuit.items():
-            gate_results = self.run_gate(
-                symbol,
-                locations - removed_locations,
-                **params,
-            )
-            results.update(gate_results)
+            gate_locations = locations
+            if removed_locations is not None:
+                gate_locations = set(locations) - removed_locations
+                # TODO: need to handle multi-qubit ops that are partially removed
 
-        return results
+            gate_output = self.run_gate(symbol, gate_locations, **params)
 
-    def add_faults(self, circuit, removed_locations=None) -> None:
-        self.run_circuit(circuit, removed_locations)
+            if gate_output:
+                output.update(gate_output)
+
+        return output

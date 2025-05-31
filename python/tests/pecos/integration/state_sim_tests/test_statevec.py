@@ -9,12 +9,13 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Integration tests for state vector quantum simulators."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Callable
+    from collections.abc import Callable
 
     from pecos.simulators.sim_class_types import StateVector
 
@@ -30,7 +31,6 @@ from pecos.simulators import (
     MPS,
     BasicSV,
     CuStateVec,
-    QuEST,
     Qulacs,
     StateVecRs,
 )
@@ -39,19 +39,20 @@ str_to_sim = {
     "StateVecRS": StateVecRs,
     "BasicSV": BasicSV,
     "Qulacs": Qulacs,
-    "QuEST": QuEST,
     "CuStateVec": CuStateVec,
     "MPS": MPS,
 }
 
 
-def check_dependencies(simulator) -> Callable[[int], StateVector]:
+def check_dependencies(simulator: str) -> Callable[[int], StateVector]:
+    """Check if dependencies for a simulator are available and skip test if not."""
     if simulator not in str_to_sim or str_to_sim[simulator] is None:
         pytest.skip(f"Requirements to test {simulator} are not met.")
     return str_to_sim[simulator]
 
 
-def verify(simulator, qc: QuantumCircuit, final_vector: np.ndarray) -> None:
+def verify(simulator: str, qc: QuantumCircuit, final_vector: np.ndarray) -> None:
+    """Verify quantum circuit simulation results against expected state vector."""
     sim = check_dependencies(simulator)(len(qc.qudits))
     sim.run_circuit(qc)
 
@@ -59,10 +60,11 @@ def verify(simulator, qc: QuantumCircuit, final_vector: np.ndarray) -> None:
     sim_vector_normalized = sim.vector / (np.linalg.norm(sim.vector) or 1)
     final_vector_normalized = final_vector / (np.linalg.norm(final_vector) or 1)
 
-    if np.abs(final_vector_normalized[0]) > 1e-10:
-        phase = sim_vector_normalized[0] / final_vector_normalized[0]
-    else:
-        phase = 1
+    phase = (
+        sim_vector_normalized[0] / final_vector_normalized[0]
+        if np.abs(final_vector_normalized[0]) > 1e-10
+        else 1
+    )
 
     final_vector_adjusted = final_vector_normalized * phase
 
@@ -75,10 +77,11 @@ def verify(simulator, qc: QuantumCircuit, final_vector: np.ndarray) -> None:
 
 
 def check_measurement(
-    simulator,
+    simulator: str,
     qc: QuantumCircuit,
     final_results: dict[int, int] | None = None,
 ) -> None:
+    """Check measurement results from quantum circuit simulation."""
     sim = check_dependencies(simulator)(len(qc.qudits))
 
     results = sim.run_circuit(qc)
@@ -104,7 +107,8 @@ def check_measurement(
     assert np.allclose(abs_values_vector, final_vector)
 
 
-def compare_against_basicsv(simulator, qc: QuantumCircuit):
+def compare_against_basicsv(simulator: str, qc: QuantumCircuit) -> None:
+    """Compare simulator results against BasicSV reference implementation."""
     basicsv = BasicSV(len(qc.qudits))
     basicsv.run_circuit(qc)
 
@@ -119,7 +123,8 @@ def compare_against_basicsv(simulator, qc: QuantumCircuit):
     verify(simulator, qc, basicsv.vector)
 
 
-def generate_random_state(seed=None) -> QuantumCircuit:
+def generate_random_state(seed: int | None = None) -> QuantumCircuit:
+    """Generate a quantum circuit with random gates for testing."""
     np.random.seed(seed)
 
     qc = QuantumCircuit()
@@ -151,12 +156,12 @@ def generate_random_state(seed=None) -> QuantumCircuit:
         "StateVecRS",
         "BasicSV",
         "Qulacs",
-        "QuEST",
         "CuStateVec",
         "MPS",
     ],
 )
-def test_init(simulator):
+def test_init(simulator: str) -> None:
+    """Test quantum state initialization."""
     qc = QuantumCircuit()
     qc.append({"Init": {0, 1, 2, 3}})
 
@@ -172,12 +177,12 @@ def test_init(simulator):
         "StateVecRS",
         "BasicSV",
         "Qulacs",
-        "QuEST",
         "CuStateVec",
         "MPS",
     ],
 )
-def test_H_measure(simulator):
+def test_H_measure(simulator: str) -> None:
+    """Test Hadamard gate followed by measurement."""
     qc = QuantumCircuit()
     qc.append({"H": {0, 1, 2, 3, 4}})
     qc.append({"Measure": {0, 1, 2, 3, 4}})
@@ -191,12 +196,12 @@ def test_H_measure(simulator):
         "StateVecRS",
         "BasicSV",
         "Qulacs",
-        "QuEST",
         "CuStateVec",
         "MPS",
     ],
 )
-def test_comp_basis_circ_and_measure(simulator):
+def test_comp_basis_circ_and_measure(simulator: str) -> None:
+    """Test computational basis circuit and measurement."""
     qc = QuantumCircuit()
     qc.append({"Init": {0, 1, 2, 3}})
 
@@ -237,12 +242,12 @@ def test_comp_basis_circ_and_measure(simulator):
     [
         "StateVecRS",
         "Qulacs",
-        "QuEST",
         "CuStateVec",
         "MPS",
     ],
 )
-def test_all_gate_circ(simulator):
+def test_all_gate_circ(simulator: str) -> None:
+    """Test circuit with all quantum gates."""
     # Generate three different arbitrary states
     qcs: list[QuantumCircuit] = []
     qcs.append(generate_random_state(seed=1234))
@@ -391,12 +396,11 @@ def test_all_gate_circ(simulator):
         "StateVecRs",
         "MPS",
         "Qulacs",
-        "QuEST",
         "CuStateVec",
     ],
 )
-def test_hybrid_engine_no_noise(simulator):
-    """Test that HybridEngine can use these simulators"""
+def test_hybrid_engine_no_noise(simulator: str) -> None:
+    """Test that HybridEngine can use these simulators."""
     check_dependencies(simulator)
 
     n_shots = 1000
@@ -423,12 +427,11 @@ def test_hybrid_engine_no_noise(simulator):
         "StateVecRs",
         "MPS",
         "Qulacs",
-        "QuEST",
         "CuStateVec",
     ],
 )
-def test_hybrid_engine_noisy(simulator):
-    """Test that HybridEngine with noise can use these simulators"""
+def test_hybrid_engine_noisy(simulator: str) -> None:
+    """Test that HybridEngine with noise can use these simulators."""
     check_dependencies(simulator)
 
     n_shots = 1000

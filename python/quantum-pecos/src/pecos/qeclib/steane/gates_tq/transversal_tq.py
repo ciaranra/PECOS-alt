@@ -1,3 +1,9 @@
+"""Transversal two-qubit logical gates for the Steane 7-qubit code.
+
+This module provides transversal two-qubit logical gate implementations for the Steane 7-qubit code, enabling
+fault-tolerant operations between logical qubits while preserving error correction properties.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -14,7 +20,24 @@ from pecos.slr import Barrier, Block, Comment, QReg
 
 
 class CX(Block):
-    def __init__(self, q1: QReg, q2: QReg, *, barrier=True):
+    """Transversal logical CX gate for Steane code.
+
+    This class implements a transversal logical controlled-X gate between
+    two logical qubits encoded in the Steane code.
+    """
+
+    def __init__(self, q1: QReg, q2: QReg, *, barrier: bool = True) -> None:
+        """Initialize a transversal logical CX gate on two Steane code logical qubits.
+
+        Args:
+            q1: First quantum register containing exactly 7 qubits (control).
+            q2: Second quantum register containing exactly 7 qubits (target).
+            barrier: Whether to include barriers before and after the gate operation.
+                Defaults to True.
+
+        Raises:
+            Exception: If either quantum register does not contain exactly 7 qubits.
+        """
         if len(q1.elems) != 7:
             msg = f"Size of register {len(q1.elems)} != 7"
             raise Exception(msg)
@@ -49,7 +72,22 @@ class CX(Block):
 
 
 class CY(Block):
-    def __init__(self, q1: QReg, q2: QReg):
+    """Transversal logical CY gate for Steane code.
+
+    This class implements a transversal logical controlled-Y gate between
+    two logical qubits encoded in the Steane code.
+    """
+
+    def __init__(self, q1: QReg, q2: QReg) -> None:
+        """Initialize a transversal logical CY gate on two Steane code logical qubits.
+
+        Args:
+            q1: First quantum register containing exactly 7 qubits (control).
+            q2: Second quantum register containing exactly 7 qubits (target).
+
+        Raises:
+            Exception: If either quantum register does not contain exactly 7 qubits.
+        """
         if len(q1.elems) != 7:
             msg = f"Size of register {len(q1.elems)} != 7"
             raise Exception(msg)
@@ -75,7 +113,22 @@ class CY(Block):
 
 
 class CZ(Block):
-    def __init__(self, q1: QReg, q2: QReg):
+    """Transversal logical CZ gate for Steane code.
+
+    This class implements a transversal logical controlled-Z gate between
+    two logical qubits encoded in the Steane code.
+    """
+
+    def __init__(self, q1: QReg, q2: QReg) -> None:
+        """Initialize a transversal logical CZ gate on two Steane code logical qubits.
+
+        Args:
+            q1: First quantum register containing exactly 7 qubits.
+            q2: Second quantum register containing exactly 7 qubits.
+
+        Raises:
+            Exception: If either quantum register does not contain exactly 7 qubits.
+        """
         if len(q1.elems) != 7:
             msg = f"Size of register {len(q1.elems)} != 7"
             raise Exception(msg)
@@ -101,7 +154,22 @@ class CZ(Block):
 
 
 class SZZ(Block):
-    def __init__(self, q1: QReg, q2: QReg):
+    """Transversal logical SZZ gate for Steane code.
+
+    This class implements a transversal logical SZZ interaction gate between
+    two logical qubits encoded in the Steane code.
+    """
+
+    def __init__(self, q1: QReg, q2: QReg) -> None:
+        """Initialize a transversal logical SZZ gate on two Steane code logical qubits.
+
+        Args:
+            q1: First quantum register containing exactly 7 qubits.
+            q2: Second quantum register containing exactly 7 qubits.
+
+        Raises:
+            Exception: If either quantum register does not contain exactly 7 qubits.
+        """
         if len(q1.elems) != 7:
             msg = f"Size of register {len(q1.elems)} != 7"
             raise Exception(msg)

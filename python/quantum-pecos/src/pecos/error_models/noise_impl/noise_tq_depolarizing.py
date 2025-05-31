@@ -1,3 +1,10 @@
+"""Two-qubit depolarizing noise implementation.
+
+This module provides depolarizing noise models for two-qubit operations,
+applying random two-qubit Pauli errors to qubit pairs during
+two-qubit gate operations like CNOT and CZ gates.
+"""
+
 # Copyright 2023 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -14,12 +21,30 @@ import numpy as np
 from pecos.reps.pypmir.op_types import QOp
 
 
-def noise_tq_depolarizing(op: QOp, p: float, noise_dict: dict):
+def noise_tq_depolarizing(op: QOp, p: float, noise_dict: dict) -> list[QOp] | None:
+    """Apply two-qubit depolarizing noise to quantum operation.
+
+    Applies depolarizing noise to two-qubit operations by randomly selecting
+    fault combinations from the noise dictionary and applying them to the
+    individual qubits of each two-qubit pair.
+
+    Args:
+        op: Quantum operation to apply noise to.
+        p: Probability of noise occurring on each qubit pair.
+        noise_dict: Dictionary mapping fault pair tuples to their probabilities.
+
+    Returns:
+        List of single-qubit noise operations to apply,
+        or None if no noise is applied.
+
+    Raises:
+        NotImplementedError: If leakage faults are encountered.
+    """
     rand_nums = np.random.random(len(op.args)) <= p
 
     if np.any(rand_nums):
         noise = {}
-        for r, loc in zip(rand_nums, op.args):
+        for r, loc in zip(rand_nums, op.args, strict=False):
             if r:
                 rand = np.random.random()
                 p_tot = 0.0

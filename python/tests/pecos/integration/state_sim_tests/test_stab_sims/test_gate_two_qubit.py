@@ -9,9 +9,7 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-"""
-Test all one-qubit gates.
-"""
+"""Test all one-qubit gates."""
 
 from pecos.simulators import SparseSimPy, SparseSimRs
 
@@ -21,15 +19,13 @@ states = [
 ]
 
 
-def gate_test(gate_symbol, stab_dict):
-    """
-    Function that is called to test one-qubit gates.
+def gate_test(gate_symbol: str, stab_dict: dict[str, list[str]]) -> None:
+    """Function that is called to test one-qubit gates.
 
     :param gate_symbol:
     :param stab_dict:
     :return:
     """
-
     for s in states:
         # XI, IX
         state = s(2)
@@ -152,9 +148,8 @@ def gate_test(gate_symbol, stab_dict):
         # destab_test(state, init_destab, stab_dict)
 
 
-def test_CNOT():
-    """
-    Test CNOT.
+def test_CNOT() -> None:
+    """Test CNOT.
 
     II -> II
     .XI -> XX
@@ -173,7 +168,6 @@ def test_CNOT():
     .iWZ -> iXW
     -WW -> -XZ
     """
-
     stab_transform = {
         "XI": "  XX",
         "IX": "  IX",
@@ -195,9 +189,8 @@ def test_CNOT():
     gate_test("CNOT", stab_transform)
 
 
-def test_CZ():
-    """
-    Test CZ.
+def test_CZ() -> None:
+    """Test CZ.
 
     II -> II
     XI -> XZ
@@ -216,7 +209,6 @@ def test_CZ():
     WZ -> WI
     WW -> -XX
     """
-
     stab_transform = {
         "XI": "  XZ",
         "ZI": "  ZI",
@@ -238,11 +230,8 @@ def test_CZ():
     gate_test("CZ", stab_transform)
 
 
-def test_SWAP():
-    """
-    Test SWAP.
-    """
-
+def test_SWAP() -> None:
+    """Test SWAP."""
     stab_transform = {
         "XI": "  IX",
         "ZI": "  IZ",
@@ -264,9 +253,8 @@ def test_SWAP():
     gate_test("SWAP", stab_transform)
 
 
-def test_G2():
-    """
-    Test G2.
+def test_G2() -> None:
+    """Test G2.
 
     II -> II
     XI -> IX
@@ -285,7 +273,6 @@ def test_G2():
     WZ -> -WZ
     WW -> ZZ
     """
-
     stab_transform = {
         "XI": "  IX",
         "ZI": "  XZ",
@@ -307,9 +294,8 @@ def test_G2():
     gate_test("G2", stab_transform)
 
 
-def test_SqrtXX():
-    """
-    Test 'Sqrt XX test'.
+def test_SqrtXX() -> None:
+    """Test 'Sqrt XX test'.
 
     II -> II
     XI -> XI
@@ -328,7 +314,6 @@ def test_SqrtXX():
     WZ -> WZ
     WW -> WW
     """
-
     stab_transform = {
         "XI": "  XI",
         "ZI": "-iWX",

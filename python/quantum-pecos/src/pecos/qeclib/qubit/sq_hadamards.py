@@ -1,3 +1,10 @@
+"""Single-qubit Hadamard gate implementations.
+
+This module provides Hadamard gate implementations for creating superposition
+states and performing basis transformations between computational and
+Hadamard bases in quantum error correction protocols.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -12,4 +19,8 @@
 from pecos.qeclib.qubit.qgate_base import QGate
 
 
-class H(QGate): ...
+class H(QGate):
+    """Hadamard gate.
+
+    This gate creates superposition states and transforms between X and Z bases.
+    """

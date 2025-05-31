@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Gate bindings for cuStateVec quantum simulator.
+
+This module provides gate operation bindings for the NVIDIA cuStateVec-based quantum simulator, organizing and
+exposing GPU-accelerated quantum gate implementations for high-performance quantum circuit simulation.
+"""
+
 import pecos.simulators.custatevec.gates_one_qubit as one_q
 import pecos.simulators.custatevec.gates_two_qubit as two_q
 from pecos.simulators.custatevec.gates_init import init_one, init_zero
@@ -71,7 +77,6 @@ gate_dict = {
     "SqrtZZ": two_q.SZZ,
     "SZZdg": two_q.SZZdg,
     "SWAP": two_q.SWAP,
-    # Additional Cliffords from `circuit_converters/std2chs.py`
     "Q": one_q.SX,
     "Qd": one_q.SXdg,
     "R": one_q.SY,

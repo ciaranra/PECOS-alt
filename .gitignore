@@ -1,9 +1,6 @@
 tmp/
 **/.*/settings.local.json
 
-# Ignore helper text in root
-*.txt
-
 # pytest results
 junit/
 

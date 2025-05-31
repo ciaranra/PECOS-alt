@@ -9,29 +9,70 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Legacy hybrid engine implementation for PECOS.
+
+This module provides the legacy hybrid engine implementation maintained
+for backward compatibility with existing quantum-classical workflows.
+"""
+
+from __future__ import annotations
+
 import os
 import random
 import struct
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from pecos.engines.cvm.binarray2 import BinArray2 as BinArray
+from pecos.engines.cvm.binarray import BinArray
 from pecos.engines.cvm.classical import eval_condition, eval_cop, set_output
 from pecos.engines.cvm.wasm import eval_cfunc, get_ccop
 from pecos.error_models.fake_error_model import FakeErrorModel
 from pecos.errors import NotSupportedGateError
 
+if TYPE_CHECKING:
+    from typing import Protocol
+
+    from pecos.circuits import QuantumCircuit
+    from pecos.error_models.parent_class_error_gen import ParentErrorModel
+    from pecos.protocols import SimulatorProtocol
+    from pecos.type_defs import GateParams
+
+    class CircuitInspector(Protocol):
+        """Protocol for circuit inspector objects."""
+
+        def analyze(
+            self,
+            tick_circuit: QuantumCircuit,
+            time: int,
+            output: dict[str, BinArray],
+        ) -> None:
+            """Analyze a circuit at a specific time tick.
+
+            Args:
+                tick_circuit: Quantum circuit for the current time tick.
+                time: Current time step.
+                output: Output dictionary with binary arrays.
+            """
+            ...
+
 
 class HybridEngine:
     """This class represents a standard model for running quantum circuits and adding in errors."""
 
-    def __init__(self, seed=None, debug=False, regwidth: int = 32) -> None:
-        """
+    def __init__(
+        self,
+        seed: int | bool | None = None,
+        *,
+        debug: bool = False,
+        regwidth: int = 32,
+    ) -> None:
+        """Initialize hybrid engine with seed, debug mode, and register width.
 
         Args:
-            seed:
-            debug:
-            regwidth:
+        seed: Random seed for reproducibility. Can be bool True for random seed, int for specific seed, or None.
+        debug: Enable debug mode for additional output.
+        regwidth: Width of classical registers in bits.
         """
         self.debug = debug
         self.state = None
@@ -57,15 +98,30 @@ class HybridEngine:
 
     def run(
         self,
-        state,
-        circuit,
-        error_gen=None,
-        error_params=None,
-        error_circuits=None,
-        output=None,
-        output_spec=None,
-        circ_inspector=None,
-    ):
+        state: SimulatorProtocol,
+        circuit: QuantumCircuit,
+        error_gen: ParentErrorModel | None = None,
+        error_params: dict[str, float | dict[str, float]] | None = None,
+        error_circuits: dict[int, dict[str, QuantumCircuit | set[int]]] | None = None,
+        output: dict[str, BinArray] | None = None,
+        output_spec: dict[str, int] | None = None,
+        circ_inspector: CircuitInspector | None = None,
+    ) -> tuple[dict, dict]:
+        """Run a quantum circuit with optional error modeling.
+
+        Args:
+            state: Quantum simulator state.
+            circuit: Quantum circuit to execute.
+            error_gen: Optional error model.
+            error_params: Parameters for error generation.
+            error_circuits: Pre-generated error circuits.
+            output: Output dictionary for results.
+            output_spec: Specification for output variables.
+            circ_inspector: Optional circuit inspector.
+
+        Returns:
+            Tuple of final simulator state and output dictionary.
+        """
         output = set_output(state, circuit, output_spec, output)
         output_export = {}
 
@@ -144,17 +200,22 @@ class HybridEngine:
 
     def run_circuit(
         self,
-        state,
-        output,
-        output_export,
-        circuit,
-        error_gen,
-        removed_locations=None,
-    ):
-        """Args:
+        state: SimulatorProtocol,
+        output: dict[str, BinArray],
+        output_export: dict[str, BinArray],
+        circuit: QuantumCircuit,
+        error_gen: ParentErrorModel,
+        removed_locations: set[int] | None = None,
+    ) -> None:
+        """Run quantum circuit with error generation and classical operations.
 
+        Args:
+            state: Quantum state to operate on.
+            output: Output object to store results.
+            output_export: Dictionary for exported output values.
             circuit (QuantumCircuit): A circuit instance or object with an appropriate items() generator.
-            removed_locations:
+            error_gen: Error generator object.
+            removed_locations: Set of qubit locations to exclude from operations.
 
         Returns (list): If output is True then the circuit output is returned. Note that this output format may differ
         from what a ``circuit_runner`` will return for the same method named ``run_circuit``.
@@ -211,7 +272,6 @@ class HybridEngine:
                         and not params.get("linebreak")
                         and not params.get("barrier")
                     ):
-                        print("received:", symbol, locations, params)
                         msg = "A cop must have an `expr`, `comment`, `linebreak`, or `barrier` entry!"
                         raise Exception(msg)
 
@@ -234,20 +294,23 @@ class HybridEngine:
                         error_gen.leaked_qubits -= locations
 
     @staticmethod
-    def run_gate(state, output, symbol: str, locations, **params):
-        """
+    def run_gate(
+        state: SimulatorProtocol,
+        output: dict[str, BinArray],
+        symbol: str,
+        locations: set[int],
+        **params: GateParams,
+    ) -> None:
+        """Run a single gate operation on the quantum state.
 
         Args:
-            state:
-            output:
-            symbol:
-            locations:
-            **params:
-
-        Returns:
+        state: Quantum state to operate on.
+        output: Output object to store measurement results.
+        symbol: Gate symbol identifying the operation.
+        locations: Set of qubit locations to apply gate to.
+        **params: Additional parameters for the gate operation.
 
         """
-
         if params.get("simulate_gate", True):
             for location in locations:
                 if params.get("angles") and len(params["angles"]) == 1:
@@ -264,8 +327,7 @@ class HybridEngine:
                             f"Metadata: {params}"
                         )
                         raise NotSupportedGateError(msg) from KeyError
-                    else:
-                        raise
+                    raise
 
                 sym = None
                 indx = None

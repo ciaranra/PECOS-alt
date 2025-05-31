@@ -1,3 +1,9 @@
+"""Logical square root Pauli gates for the Steane 7-qubit code.
+
+This module provides logical square root Pauli gate implementations for the Steane 7-qubit code, implemented as
+transversal Clifford operations that preserve the error correction properties of the code.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -14,8 +20,7 @@ from pecos.slr import Block, Comment, QReg
 
 
 class SX(Block):
-    """
-    Square root of X.
+    """Square root of X.
 
     X -> X
     Z -> -Y
@@ -23,7 +28,16 @@ class SX(Block):
     Y -> Z
     """
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
+        """Initialize a logical square root of X gate on the Steane code.
+
+        Args:
+            q: A quantum register containing exactly 7 qubits representing a logical qubit
+                in the Steane code.
+
+        Raises:
+            Exception: If the quantum register does not contain exactly 7 qubits.
+        """
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)
@@ -35,8 +49,7 @@ class SX(Block):
 
 
 class SXdg(Block):
-    """
-    Hermitian adjoint of the square root of X.
+    """Hermitian adjoint of the square root of X.
 
     X -> X
     Z -> Y
@@ -44,7 +57,16 @@ class SXdg(Block):
     Y -> -Z
     """
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
+        """Initialize a logical adjoint square root of X gate on the Steane code.
+
+        Args:
+            q: A quantum register containing exactly 7 qubits representing a logical qubit
+                in the Steane code.
+
+        Raises:
+            Exception: If the quantum register does not contain exactly 7 qubits.
+        """
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)
@@ -56,8 +78,7 @@ class SXdg(Block):
 
 
 class SY(Block):
-    """
-    Square root of Y.
+    """Square root of Y.
 
     X -> -Z
     Z -> X
@@ -65,7 +86,16 @@ class SY(Block):
     Y -> Y
     """
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
+        """Initialize a logical square root of Y gate on the Steane code.
+
+        Args:
+            q: A quantum register containing exactly 7 qubits representing a logical qubit
+                in the Steane code.
+
+        Raises:
+            Exception: If the quantum register does not contain exactly 7 qubits.
+        """
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)
@@ -77,8 +107,7 @@ class SY(Block):
 
 
 class SYdg(Block):
-    """
-    Square root of X.
+    """Square root of X.
 
     X -> Z
     Z -> -X
@@ -86,7 +115,16 @@ class SYdg(Block):
     Y -> Y
     """
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
+        """Initialize a logical adjoint square root of Y gate on the Steane code.
+
+        Args:
+            q: A quantum register containing exactly 7 qubits representing a logical qubit
+                in the Steane code.
+
+        Raises:
+            Exception: If the quantum register does not contain exactly 7 qubits.
+        """
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)
@@ -98,17 +136,26 @@ class SYdg(Block):
 
 
 class SZ(Block):
-    """
-    Square root of Z. Also known as the S gate.
-    diag(1, i)
+    """Square root of Z gate (S gate).
 
+    Also known as the S gate with matrix representation diag(1, i).
+
+    Action on Pauli operators:
     X -> Y
     Z -> Z
-
     Y -> -X
     """
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
+        """Initialize a logical square root of Z gate (S gate) on the Steane code.
+
+        Args:
+            q: A quantum register containing exactly 7 qubits representing a logical qubit
+                in the Steane code.
+
+        Raises:
+            Exception: If the quantum register does not contain exactly 7 qubits.
+        """
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)
@@ -120,17 +167,26 @@ class SZ(Block):
 
 
 class SZdg(Block):
-    """
-    Hermitian adjoint of the square root of Z. Also known as the Sdg gate.
-    diag(1, -i)
+    """Hermitian adjoint of the square root of Z gate (S† gate).
 
+    Also known as the Sdg gate with matrix representation diag(1, -i).
+
+    Action on Pauli operators:
     X -> -Y
     Z -> Z
-
     Y -> X
     """
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
+        """Initialize a logical adjoint square root of Z gate (S† gate) on the Steane code.
+
+        Args:
+            q: A quantum register containing exactly 7 qubits representing a logical qubit
+                in the Steane code.
+
+        Raises:
+            Exception: If the quantum register does not contain exactly 7 qubits.
+        """
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)

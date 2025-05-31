@@ -11,42 +11,59 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from typing import Any
+"""Quantum measurement operations for ProjectQ simulator.
+
+This module provides quantum measurement operations for the ProjectQ simulator, including projective measurements
+with proper state collapse and sampling using the ProjectQ quantum computing framework.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pecos.simulators.projectq.state import ProjectQSim
+    from pecos.type_defs import SimulatorGateParams
 
 from projectq.ops import Measure
 
 from pecos.simulators.projectq.gates_one_qubit import H5, H
 
 
-def force_output(state, qubit, forced_output=-1, **params: Any):
+def force_output(
+    _state: ProjectQSim,
+    _qubit: int,
+    forced_output: int = -1,
+    **_params: SimulatorGateParams,
+) -> int:
     """Outputs value.
 
     Used for error generators to generate outputs when replacing measurements.
 
     Args:
     ----
-        state:
-        qubit:
-        forced_output:
-
-    Returns:
-    -------
-
+        _state: Unused state parameter (kept for interface compatibility)
+        _qubit: Unused qubit parameter (kept for interface compatibility)
+        forced_output: The value to output
+        **_params: Unused additional parameters (kept for interface compatibility)
     """
     return forced_output
 
 
-def meas_z(state, qubit, forced_outcome=-1, **params: Any):
+def meas_z(
+    state: ProjectQSim,
+    qubit: int,
+    forced_outcome: int = -1,
+    **_params: SimulatorGateParams,
+) -> int:
     """Measurement in the Z-basis.
 
     Args:
-        state:
-        qubit:
-        forced_outcome:
-        **params:
-
-    Returns:
-
+        state: The ProjectQ state instance
+        qubit: The qubit index to measure
+        forced_outcome: If 0 or 1, forces the measurement outcome to that value when the measurement would
+            otherwise be non-deterministic
+        **_params: Unused additional parameters (kept for interface compatibility)
     """
     q = state.qids[qubit]
 
@@ -59,25 +76,27 @@ def meas_z(state, qubit, forced_outcome=-1, **params: Any):
 
         return forced_outcome
 
-    else:
-        Measure | q
-        state.eng.flush()
+    Measure | q
+    state.eng.flush()
 
-        return int(q)
+    return int(q)
 
 
-def meas_y(state, qubit, forced_outcome=-1, **params: Any):
+def meas_y(
+    state: ProjectQSim,
+    qubit: int,
+    forced_outcome: int = -1,
+    **_params: SimulatorGateParams,
+) -> int:
     """Measurement in the Y-basis.
 
     Args:
     ----
-        state:
-        qubit:
-        forced_outcome:
-
-    Returns:
-    -------
-
+        state: The ProjectQ state instance
+        qubit: The qubit index to measure
+        forced_outcome: If 0 or 1, forces the measurement outcome to that value when the measurement would
+            otherwise be non-deterministic
+        **_params: Unused additional parameters (kept for interface compatibility)
     """
     H5(state, qubit)
     meas_outcome = meas_z(state, qubit, forced_outcome)
@@ -86,18 +105,21 @@ def meas_y(state, qubit, forced_outcome=-1, **params: Any):
     return meas_outcome
 
 
-def meas_x(state, qubit, forced_outcome=-1, **params: Any):
+def meas_x(
+    state: ProjectQSim,
+    qubit: int,
+    forced_outcome: int = -1,
+    **_params: SimulatorGateParams,
+) -> int:
     """Measurement in the X-basis.
 
     Args:
     ----
-        state:
-        qubit:
-        forced_outcome:
-
-    Returns:
-    -------
-
+        state: The ProjectQ state instance
+        qubit: The qubit index to measure
+        forced_outcome: If 0 or 1, forces the measurement outcome to that value when the measurement would
+            otherwise be non-deterministic
+        **_params: Unused additional parameters (kept for interface compatibility)
     """
     H(state, qubit)
     meas_outcome = meas_z(state, qubit, forced_outcome)

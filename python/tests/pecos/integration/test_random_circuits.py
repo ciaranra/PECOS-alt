@@ -11,14 +11,18 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Integration tests for random quantum circuit simulations."""
 from __future__ import annotations
+
+from typing import Any
 
 import numpy as np
 from pecos.simulators import SparseSimPy, SparseSimRs
 
 
-def test_random_circuits():
-    state_sims = []
+def test_random_circuits() -> None:
+    """Test random quantum circuits on different simulators."""
+    state_sims: list[type[Any]] = []
 
     # Add wrapped CHP
     try:
@@ -62,12 +66,13 @@ def test_random_circuits():
 
 
 def run_circuit_test(
-    state_sims: list,
+    state_sims: list[type[Any]],
     num_qubits: int,
     circuit_depth: int,
     trials: int = 1000,
     gates: list[str] | None = None,
 ) -> bool:
+    """Run circuit test comparing different simulators."""
     if gates is None:
         gates = ["H", "S", "CNOT", "measure Z", "init |0>"]
 
@@ -92,24 +97,27 @@ def run_circuit_test(
     return True
 
 
-def get_qubits(num_qubits: int, size: int):
+def get_qubits(num_qubits: int, size: int) -> np.ndarray:
+    """Get random qubit indices for gate operations."""
     return np.random.choice(list(range(num_qubits)), size, replace=False)
 
 
 def generate_circuit(
-    gates: list,
+    gates: list[str],
     num_qubits: int,
     circuit_depth: int,
-):
+) -> list[tuple[str, int | np.ndarray]]:
+    """Generate a random quantum circuit with specified gates and depth."""
     circuit_elements = list(np.random.choice(gates, circuit_depth))
 
     circuit = []
 
     for element in circuit_elements:
-        if element == "CNOT":
-            q = get_qubits(num_qubits, 2)
-        else:
-            q = int(get_qubits(num_qubits, 1)[0])
+        q = (
+            get_qubits(num_qubits, 2)
+            if element == "CNOT"
+            else int(get_qubits(num_qubits, 1)[0])
+        )
 
         circuit.append((element, q))
 
@@ -118,11 +126,12 @@ def generate_circuit(
 
 def run_a_circuit(
     num_qubits: int,
-    state_rep,
-    circuit,
+    state_rep: type[Any],
+    circuit: list[tuple[str, int | np.ndarray]],
     *,
     verbose: bool = False,
-):
+) -> list[int]:
+    """Run a quantum circuit on a specific simulator and return measurements."""
     state = state_rep(num_qubits)
     measurements = []
 
@@ -139,13 +148,13 @@ def run_a_circuit(
 
         elif element == "init |0>":
             if isinstance(q, np.ndarray):
-                q = tuple(q)
+                q = tuple(q)  # noqa: PLW2901 - convert array to tuple
 
             state.run_gate(element, {q}, forced_outcome=0)
 
         else:
             if isinstance(q, np.ndarray):
-                q = tuple(q)
+                q = tuple(q)  # noqa: PLW2901 - convert array to tuple
 
             state.run_gate(element, {q})
 

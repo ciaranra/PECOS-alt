@@ -1,3 +1,8 @@
+"""Matrix Product State simulator using PyTKET.
+
+This package provides a Matrix Product State simulator using the PyTKET library.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

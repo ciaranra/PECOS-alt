@@ -11,12 +11,23 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from typing import Any
+"""Quantum measurement commands for sparse stabilizer simulator.
+
+This module provides quantum measurement operations for the sparse stabilizer simulator, including projective
+measurements with efficient stabilizer tableau updates and measurement outcome determination.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import numpy as np
 
+if TYPE_CHECKING:
+    from pecos.simulators.sparsesim.state import SparseSim
+    from pecos.type_defs import SimulatorGateParams
+
 from pecos.simulators.sparsesim.cmd_one_qubit import H5, H
-from pecos.simulators.sparsesim.state import SparseSim
 
 
 def meas_x(
@@ -25,7 +36,7 @@ def meas_x(
     *,
     forced_outcome: int = -1,
     collapse: bool = True,
-    **params,
+    **_params: SimulatorGateParams,
 ) -> int:
     """Measurement in the X basis.
 
@@ -35,6 +46,7 @@ def meas_x(
         forced_outcome (int):  Integer that will be outputted by the measurement if the measurement is
             non-deterministic. If equal to -1, however, the outcome will be uniformly chosen from {0, 1}.
         collapse (bool): Whether state should be collapsed.
+        **_params: Unused additional parameters (kept for interface compatibility).
 
     Returns:
         Measurement outcome (0 or 1).
@@ -60,7 +72,7 @@ def meas_y(
     *,
     forced_outcome: int = -1,
     collapse: bool = True,
-    **params,
+    **_params: SimulatorGateParams,
 ) -> int:
     """Measurement in the Y basis.
 
@@ -70,6 +82,7 @@ def meas_y(
         forced_outcome (int):  Integer that will be outputted by the measurement if the measurement is
             non-deterministic. If equal to -1, however, the outcome will be uniformly chosen from {0, 1}.
         collapse (bool): Whether to collapse the state if measurement is not already determined.
+        **_params: Unused additional parameters (kept for interface compatibility).
 
     Returns:
         Measurement outcome (0 or 1).
@@ -95,9 +108,11 @@ def meas_z(
     *,
     forced_outcome: int = -1,
     collapse: bool = True,
-    **params,
+    **_params: SimulatorGateParams,
 ) -> int:
-    """Args:
+    """Measurement in the Z basis.
+
+    Args:
         state (SparseSim): Instance representing the stabilizer state.
         qubit (int): Integer that indexes the qubit being acted on.
         forced_outcome (int):  Integer that will be outputted by the measurement if the measurement is
@@ -139,26 +154,25 @@ def meas_z(
 
         meas_outcome = num_minuses % 2
 
-    else:  # There is at least one anti-commuting stabilizer. => indetermined sign
-        if collapse:
-            return nondeterministic_meas(
-                state,
-                qubit,
-                anticom_stabs_col,
-                anticom_destabs_col,
-                forced_outcome,
-            )
+    elif collapse:
+        return nondeterministic_meas(
+            state,
+            qubit,
+            anticom_stabs_col,
+            anticom_destabs_col,
+            forced_outcome,
+        )
 
+    elif forced_outcome is not None:
+        if forced_outcome in {0, 1}:
+            meas_outcome = forced_outcome
         else:
-            if forced_outcome is not None:
-                if forced_outcome in {0, 1}:
-                    meas_outcome = forced_outcome
-                else:
-                    raise Exception(
-                        "forced_outcome can only be 0 or 1 and not %s" % forced_outcome,
-                    )
-            else:
-                meas_outcome = np.random.randint(2)
+            msg = f"forced_outcome can only be 0 or 1 and not {forced_outcome}"
+            raise Exception(
+                msg,
+            )
+    else:
+        meas_outcome = np.random.randint(2)
 
     return meas_outcome
 
@@ -170,11 +184,13 @@ def nondeterministic_meas(
     anticom_destabs_col: set[int],
     forced_outcome: int,
 ) -> int:
-    """Args:
+    """Non-deterministic measurement outcome.
+
+    Args:
         state (SparseSim): Instance representing the stabilizer state.
         qubit (int): Integer that indexes the qubit being acted on.
-        anticom_stabs_col (Set[int]):
-        anticom_destabs_col (Set[int]):
+        anticom_stabs_col (Set[int]): Set of stabilizer indices that anticommute with measurement.
+        anticom_destabs_col (Set[int]): Set of destabilizer indices that anticommute with measurement.
         forced_outcome (int):  Integer that will be outputted by the measurement if the measurement is
             non-deterministic. If equal to -1, however, the outcome will be uniformly chosen from {0, 1}.
 
@@ -339,10 +355,10 @@ def nondeterministic_meas(
 
 
 def force_output(
-    state: SparseSim,
-    qubit: int,
+    _state: SparseSim,
+    _qubit: int,
     forced_output: int = -1,
-    **params: Any,
+    **_params: SimulatorGateParams,
 ) -> int:
     """Outputs value.
 
@@ -350,9 +366,10 @@ def force_output(
 
     Args:
     ----
-        state (SparseSim): Instance representing the stabilizer state.
-        qubit (int): Integer that indexes the qubit being acted on.
+        _state (SparseSim): Unused state parameter (kept for interface compatibility).
+        _qubit (int): Unused qubit parameter (kept for interface compatibility).
         forced_output (int): Integer that will be outputted.
+        **_params: Unused additional parameters (kept for interface compatibility).
 
     Returns:
         Measurement outcome that is force to be a particular value.

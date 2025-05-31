@@ -1,3 +1,10 @@
+"""Comprehensive fault tolerance verification for quantum error correction.
+
+This module provides advanced tools for systematic fault tolerance analysis,
+including multi-level error injection, propagation analysis, and verification
+of quantum error correction protocols under various fault models.
+"""
+
 # Copyright 2018 The PECOS Developers
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
@@ -10,9 +17,11 @@
 # Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
+from __future__ import annotations
 
 import itertools as it
 from itertools import combinations, product
+from typing import TYPE_CHECKING, TypeVar
 
 import numpy as np
 
@@ -23,8 +32,18 @@ from pecos.error_models.parent_class_error_gen import ErrorCircuits
 from pecos.misc.stabilizer_funcs import circ2set, find_stab, op_commutes, remove_stab
 from pecos.simulators import SparseSimPy
 
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
-def powerset(iterable, bound=None):
+    from pecos.protocols import Decoder, QECCProtocol, SimulatorProtocol
+
+T = TypeVar("T")
+
+
+def powerset(
+    iterable: Iterable[T],
+    bound: int | None = None,
+) -> it.chain[tuple[T, ...]]:
     """Returns the power set of an iterable."""
     powerlist = list(iterable)
     if bound is None:
@@ -35,17 +54,20 @@ def powerset(iterable, bound=None):
 
 
 def t_errors_check(
-    qecc,
-    logical_gate=None,
-    syn_extract=None,
-    decoder=None,
-    t_weight=None,
-    error_set=None,
-    verbose=True,
-    data_errors=True,
-    ancilla_errors=False,
-):
-    """This checks that the exRec conditions for a fault-free error correction (EC) or logical gate (Ga) as described in
+    qecc: QECCProtocol,
+    logical_gate: QuantumCircuit | LogicalCircuit | None = None,
+    syn_extract: QuantumCircuit | LogicalCircuit | None = None,
+    decoder: Decoder | None = None,
+    t_weight: int | None = None,
+    error_set: Iterable[tuple[set[int], set[int]]] | None = None,
+    *,
+    verbose: bool = True,
+    data_errors: bool = True,
+    ancilla_errors: bool = False,
+) -> tuple[bool, int]:
+    """Check exRec conditions for fault-free error correction or logical gate.
+
+    This checks that the exRec conditions for a fault-free error correction (EC) or logical gate (Ga) as described in
     arXiv:quant-ph/0504218.
 
     For fault-free EC, weight <= t errors in produce no errors out.
@@ -68,15 +90,15 @@ def t_errors_check(
 
     Args:
     ----
-        qecc:
-        logical_gate(QuantumCircuit):
-        syn_extract(QuantumCircuit):
-        decoder:
-        t_weight:
-        error_set:
-        verbose:
-        data_errors:
-        ancilla_errors:
+        qecc: The quantum error correcting code instance.
+        logical_gate(QuantumCircuit): The logical gate circuit to test (None for error correction only).
+        syn_extract(QuantumCircuit): The syndrome extraction circuit to use.
+        decoder: The decoder instance for error correction.
+        t_weight: The maximum weight of errors to check (typically floor((distance-1)/2)).
+        error_set: Custom set of errors to check (if None, all Pauli errors are checked).
+        verbose: If True, prints detailed information about failures.
+        data_errors: If True, includes errors on data qubits.
+        ancilla_errors: If True, includes errors on ancilla qubits.
 
     Returns:
     -------
@@ -137,7 +159,7 @@ def t_errors_check(
 
             errors.simple_add(0, 0, 0, before_errors=error_circ)
 
-            for e, q in zip(error_comb, qubit_comb):
+            for e, q in zip(error_comb, qubit_comb, strict=False):
                 error_circ.update(e, {q})
 
             state_zero = SparseSimPy(qecc.num_qudits)
@@ -149,7 +171,7 @@ def t_errors_check(
             output, _ = circ_sim.run(state_zero, logic, error_circuits=errors)
             circ_sim.run(state_plus, logic, error_circuits=errors)
 
-            syn = output.simplified(True)
+            syn = output.simplified(last=True)
 
             if syn:
                 # Recovery operation
@@ -168,11 +190,11 @@ def t_errors_check(
             if logical_gate is None:  # The following is only required for EC.
                 # Any remaining syndromes?
                 output, _ = circ_sim.run(state_zero, syn_extract)
-                syn = output.simplified(True)
+                syn = output.simplified(last=True)
 
                 if syn:
                     if verbose:
-                        print("syndromes = %s" % syn)
+                        print(f"syndromes = {syn}")
                         print(errors)
                     return False, len(error_comb)
 
@@ -180,16 +202,19 @@ def t_errors_check(
 
 
 def fault_check(
-    qecc,
-    logical_gate=None,
-    decoder=None,
-    t_weight=None,
-    error_set=None,
-    verbose=True,
-    data_errors=True,
-    ancilla_errors=False,
-):
-    """This checks that the exRec conditions for a faulty error correction (EC) or logical gate (Ga) as described in
+    qecc: QECCProtocol,
+    logical_gate: QuantumCircuit | LogicalCircuit | None = None,
+    decoder: Decoder | None = None,
+    t_weight: int | None = None,
+    error_set: Iterable[tuple[set[int], set[int]]] | None = None,
+    *,
+    verbose: bool = True,
+    data_errors: bool = True,
+    ancilla_errors: bool = False,
+) -> tuple[bool, int]:
+    """Check exRec conditions for faulty error correction or logical gate.
+
+    This checks that the exRec conditions for a faulty error correction (EC) or logical gate (Ga) as described in
     arXiv:quant-ph/0504218.
 
     For fault-free EC, weight <= t errors in produce no errors out.
@@ -212,14 +237,14 @@ def fault_check(
 
     Args:
     ----
-        qecc:
-        logical_gate(QuantumCircuit):
-        decoder:
-        t_weight:
-        error_set:
-        verbose:
-        data_errors:
-        ancilla_errors:
+        qecc: The quantum error correcting code instance.
+        logical_gate(QuantumCircuit): The logical gate circuit to test (None for error correction only).
+        decoder: The decoder instance for error correction.
+        t_weight: The maximum weight of errors to check (typically floor((distance-1)/2)).
+        error_set: Custom set of errors to check (if None, all Pauli errors are checked).
+        verbose: If True, prints detailed information about failures.
+        data_errors: If True, includes errors on data qubits.
+        ancilla_errors: If True, includes errors on ancilla qubits.
 
     Returns:
     -------
@@ -277,7 +302,7 @@ def fault_check(
 
             errors.simple_add(0, 0, 0, before_errors=error_circ)
 
-            for e, q in zip(error_comb, qubit_comb):
+            for e, q in zip(error_comb, qubit_comb, strict=False):
                 error_circ.update(e, {q})
 
             state_zero = SparseSimPy(qecc.num_qudits)
@@ -289,7 +314,7 @@ def fault_check(
             output, _ = circ_sim.run(state_zero, logic, error_circuits=errors)
             circ_sim.run(state_plus, logic, error_circuits=errors)
 
-            syn = output.simplified(True)
+            syn = output.simplified(last=True)
 
             if syn:
                 # Recovery operation
@@ -308,14 +333,18 @@ def fault_check(
     return True, int(t_weight)
 
 
-def distance_check(qecc, mode=None, dist_mode=None):
+def distance_check(
+    qecc: QECCProtocol,
+    mode: str | None = None,
+    dist_mode: str | None = None,
+) -> int:
     """Determines the distance of the code by looking for the smallest logical errors.
 
     Args:
     ----
-        qecc:
-        mode:
-        dist_mode:
+        qecc: The quantum error correcting code instance.
+        mode: The mode for distance checking ('X', 'x', 'Z', 'z', or None for automatic).
+        dist_mode: The specific distance checking mode to use (if None, uses default based on mode).
 
     Returns:
     -------
@@ -344,25 +373,22 @@ def distance_check(qecc, mode=None, dist_mode=None):
         if mode in {"X", "x"}:
             print("x")
             return dist_mode_x(state, qudit_set)
-        elif mode in {"Z", "z"}:
+        if mode in {"Z", "z"}:
             print("z")
             return dist_mode_z(state, qudit_set)
-        elif mode == "power":
+        if mode == "power":
             return dist_mode_powerset(state, qudit_set)
-        else:
-            return dist_mode_smallest(state, qudit_set)
+        return dist_mode_smallest(state, qudit_set)
 
-    else:
-        return dist_mode(state, qudit_set)
+    return dist_mode(state, qudit_set)
 
 
-def dist_mode_powerset(state, qudit_set):
-    """Args:
-        state:
-        qudit_set:
+def dist_mode_powerset(state: SimulatorProtocol, qudit_set: set[int]) -> str | bool:
+    """Check for logical errors using powerset of all possible X and Z errors.
 
-    Returns:
-
+    Args:
+    state: Stabilizer state to check.
+    qudit_set: Set of qudit/qubit indices to check for errors.
     """
     for x_errors in powerset(qudit_set):
         for z_errors in powerset(qudit_set):
@@ -376,15 +402,13 @@ def dist_mode_powerset(state, qudit_set):
     return False
 
 
-def dist_mode_smallest(state, qudit_set):
-    """Args:
+def dist_mode_smallest(state: SimulatorProtocol, qudit_set: set[int]) -> str | bool:
+    """Find smallest logical error by checking errors in increasing size.
+
+    Args:
     ----
-        state:
-        qudit_set:
-
-    Returns:
-    -------
-
+        state: Stabilizer state to check.
+        qudit_set: Set of qudit/qubit indices to check for errors.
     """
     for lenq in range(len(qudit_set) + 1):
         for qs in combinations(qudit_set, lenq):
@@ -401,15 +425,13 @@ def dist_mode_smallest(state, qudit_set):
     return False
 
 
-def dist_mode_x(state, qudit_set):
-    """Args:
+def dist_mode_x(state: SimulatorProtocol, qudit_set: set[int]) -> str | bool:
+    """Check for X-type logical errors only.
+
+    Args:
     ----
-        state:
-        qudit_set:
-
-    Returns:
-    -------
-
+        state: Stabilizer state to check.
+        qudit_set: Set of qudit/qubit indices to check for errors.
     """
     z_errors = ()
     for x_errors in powerset(qudit_set):
@@ -423,15 +445,13 @@ def dist_mode_x(state, qudit_set):
     return False
 
 
-def dist_mode_z(state, qudit_set):
-    """Args:
+def dist_mode_z(state: SimulatorProtocol, qudit_set: set[int]) -> str | bool:
+    """Check for Z-type logical errors only.
+
+    Args:
     ----
-        state:
-        qudit_set:
-
-    Returns:
-    -------
-
+        state: Stabilizer state to check.
+        qudit_set: Set of qudit/qubit indices to check for errors.
     """
     x_errors = ()
     for z_errors in powerset(qudit_set):

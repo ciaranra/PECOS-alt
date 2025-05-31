@@ -15,11 +15,14 @@
 
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from pecos.circuits.quantum_circuit import QuantumCircuit
 from pecos.error_models.class_errors_circuit import ErrorCircuits
 from pecos.error_models.parent_class_error_gen import ParentErrorModel
+
+if TYPE_CHECKING:
+    from pecos.type_defs import ErrorParams, GateParams
 
 
 class XModel(ParentErrorModel):
@@ -49,11 +52,18 @@ class XModel(ParentErrorModel):
         ("X", "X"),
     ]
 
-    def __init__(self, model_level="circuit", has_idle_errors=False) -> None:
-        """Args:
+    def __init__(
+        self,
+        model_level: str = "circuit",
+        *,
+        has_idle_errors: bool = False,
+    ) -> None:
+        """Initialize X error generator.
+
+        Args:
         ----
-            model_level(str):
-            has_idle_errors(bool):
+            model_level(str): The error model level ('circuit', 'phenomenological', or 'code_capacity').
+            has_idle_errors(bool): Whether to generate errors on idle qubits.
         """
         super().__init__()
 
@@ -102,8 +112,8 @@ class XModel(ParentErrorModel):
             # Don't generate data errors
             self.gen.set_gate_error(
                 "data",
-                False,
-            )  # Don't generate errors for data qudits.
+                error_func=False,  # Don't generate errors for data qudits
+            )
 
             # Generate measurement errors (before errors)
             self.gen.set_group_error("measurements", xerror_before.error_func)
@@ -112,21 +122,23 @@ class XModel(ParentErrorModel):
             # By default generate pauli errors. (It is expected that this is only for one-qubit and init gates.)
             self.gen.set_default_error(xerror.error_func)
         else:
-            raise Exception("Can not handle model_level == %s" % model_level)
+            msg = f"Can not handle model_level == {model_level}"
+            raise Exception(msg)
 
         if has_idle_errors:
             self.gen.set_gate_error("idle", xerror.error_func)
 
-    def start(self, circuit, error_params):
+    def start(
+        self,
+        circuit: QuantumCircuit,
+        error_params: ErrorParams,
+    ) -> ErrorCircuits:
         """Start up at the beginning of a circuit simulation.
 
         Args:
         ----
-            circuit:
-            error_params:
-
-        Returns:
-        -------
+            circuit: The quantum circuit to simulate.
+            error_params: Parameters controlling error generation.
 
         """
         self.error_circuits = ErrorCircuits()
@@ -135,11 +147,19 @@ class XModel(ParentErrorModel):
 
         return self.error_circuits
 
-    def generate_tick_errors(self, tick_circuit, time, **params):
+    def generate_tick_errors(
+        self,
+        tick_circuit: QuantumCircuit,
+        time: int | tuple[int, ...],
+        **params: GateParams,
+    ) -> ErrorCircuits:
         """Returns before errors, after errors, and replaced locations for the given key (args).
 
-        Returns:
-        -------
+        Args:
+        ----
+            tick_circuit: The tick circuit containing gate operations.
+            time: The time index or tuple indicating when errors occur.
+            **params: Additional parameters including data_qudit_set.
 
         """
         tick_index = time[-1] if isinstance(time, tuple) else time

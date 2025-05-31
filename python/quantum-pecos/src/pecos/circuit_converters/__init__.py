@@ -10,8 +10,8 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-"""This name space contains classes and functions for converting circuit data-structures into other circuit
-data-structures.
-"""
+"""Circuit converters for transforming between different circuit representations.
 
-from pecos.circuit_converters.std2chs import std2chs
+This name space contains classes and functions for converting circuit data-structures
+into other circuit data-structures.
+"""

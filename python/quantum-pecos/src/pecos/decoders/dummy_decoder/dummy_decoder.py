@@ -12,22 +12,39 @@
 
 """A dummy decoder that gives no recovery (outputs do nothing) given any input."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pecos.circuits import QuantumCircuit
+    from pecos.misc.std_output import StdOutput
+
 
 class DummyDecoder:
-    """This decoder is just a simple look up decoder."""
+    """This decoder is just a simple look-up decoder."""
 
     def __init__(self) -> None:
-        pass
+        """Initialize the DummyDecoder.
+
+        This decoder provides no recovery operations for any syndrome input.
+        """
 
     @staticmethod
-    def decode(*args, **kwargs):
-        """Args:
+    def decode(
+        measurements: StdOutput,  # noqa: ARG004
+        **kwargs: object,  # noqa: ARG004
+    ) -> list[QuantumCircuit]:
+        """Decode measurements and return recovery operations.
+
+        Args:
         ----
-            *args:
-            **kwargs:
+            measurements: The stabilizer measurements to decode
+            **kwargs: Additional keyword arguments (ignored)
 
         Returns:
         -------
+            Empty list - no recovery operations
 
         """
         return []

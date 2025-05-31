@@ -8,6 +8,13 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Exception classes for PECOS quantum error correction framework.
+
+This module defines custom exception types used throughout PECOS for error
+handling, including base exceptions and specialized errors for simulators,
+WASM integration, and classical coprocessor operations.
+"""
+
 
 class PECOSError(Exception):
     """Base exception raised by PECOS."""
@@ -18,7 +25,7 @@ class NotSupportedGateError(PECOSError):
 
 
 class WasmError(PECOSError):
-    """Base WASM-related exception type"""
+    """Base WASM-related exception type."""
 
 
 class MissingCCOPError(WasmError):

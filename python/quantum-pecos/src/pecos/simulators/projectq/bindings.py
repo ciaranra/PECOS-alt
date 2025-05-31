@@ -11,6 +11,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Gate bindings for ProjectQ quantum simulator.
+
+This module provides gate operation bindings for the ProjectQ quantum simulator, organizing and exposing
+Quantum gate implementations using the ProjectQ framework for full quantum circuit simulation.
+"""
+
 from projectq import ops
 
 from pecos.simulators.projectq import (
