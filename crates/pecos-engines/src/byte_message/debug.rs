@@ -8,9 +8,12 @@ use crate::byte_message::protocol::{
     BATCH_MAGIC, BatchHeader, MeasurementHeader, MeasurementResultHeader, MessageHeader,
     QuantumGateHeader, calc_padding,
 };
+use bytemuck;
 use std::fmt::Write;
 use std::io::Write as IoWrite;
 use std::mem::size_of;
+
+// ByteMessage guarantees 4-byte alignment by storing data in Vec<u32>
 
 /// Dump a binary message batch to a string for debugging
 #[allow(clippy::too_many_lines)]
@@ -24,8 +27,8 @@ pub fn dump_batch(data: &[u8]) -> String {
         return output;
     }
 
-    // Parse batch header
-    let header = *bytemuck::from_bytes::<BatchHeader>(&data[0..size_of::<BatchHeader>()]);
+    // Parse batch header - unaligned read for external data compatibility
+    let header = bytemuck::pod_read_unaligned::<BatchHeader>(&data[0..size_of::<BatchHeader>()]);
 
     if header.magic != BATCH_MAGIC {
         writeln!(
@@ -55,7 +58,7 @@ pub fn dump_batch(data: &[u8]) -> String {
         }
 
         // Parse message header
-        let msg_header = *bytemuck::from_bytes::<MessageHeader>(
+        let msg_header = bytemuck::pod_read_unaligned::<MessageHeader>(
             &data[offset..offset + size_of::<MessageHeader>()],
         );
 
@@ -93,7 +96,7 @@ pub fn dump_batch(data: &[u8]) -> String {
                 10 => {
                     // QuantumGate
                     if payload.len() >= size_of::<QuantumGateHeader>() {
-                        let gate_header = *bytemuck::from_bytes::<QuantumGateHeader>(
+                        let gate_header = bytemuck::pod_read_unaligned::<QuantumGateHeader>(
                             &payload[0..size_of::<QuantumGateHeader>()],
                         );
 
@@ -203,7 +206,7 @@ pub fn dump_batch(data: &[u8]) -> String {
                 11 => {
                     // Measurement
                     if payload.len() >= size_of::<MeasurementHeader>() {
-                        let meas_header = *bytemuck::from_bytes::<MeasurementHeader>(
+                        let meas_header = bytemuck::pod_read_unaligned::<MeasurementHeader>(
                             &payload[0..size_of::<MeasurementHeader>()],
                         );
 
@@ -214,7 +217,7 @@ pub fn dump_batch(data: &[u8]) -> String {
                 20 => {
                     // MeasurementResult
                     if payload.len() >= size_of::<MeasurementResultHeader>() {
-                        let result_header = *bytemuck::from_bytes::<MeasurementResultHeader>(
+                        let result_header = bytemuck::pod_read_unaligned::<MeasurementResultHeader>(
                             &payload[0..size_of::<MeasurementResultHeader>()],
                         );
 
@@ -259,6 +262,7 @@ pub fn write_message_to_file(message: &ByteMessage, filename: &str) -> std::io::
     file.write_all(message.as_bytes())?;
     Ok(())
 }
+
 
 #[cfg(test)]
 mod tests {

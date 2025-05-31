@@ -58,7 +58,7 @@ pub enum MessageType {
 }
 
 /// Message batch header for framing multiple messages
-#[repr(C)]
+#[repr(C, align(4))]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 pub struct BatchHeader {
     pub magic: u32,      // Magic number 'PEQS'
@@ -91,7 +91,7 @@ impl BatchHeader {
 }
 
 /// Individual message header
-#[repr(C)]
+#[repr(C, align(4))]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 pub struct MessageHeader {
     pub msg_type: u8,      // Message type
@@ -144,7 +144,7 @@ impl MessageHeader {
 }
 
 /// Quantum gate message payload header
-#[repr(C)]
+#[repr(C, align(4))]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 pub struct QuantumGateHeader {
     pub gate_type: u8,  // Gate type (using GateType enum values)
@@ -157,14 +157,14 @@ pub struct QuantumGateHeader {
 }
 
 /// Measurement message payload header
-#[repr(C)]
+#[repr(C, align(4))]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 pub struct MeasurementHeader {
     pub qubit: u32, // Qubit index
 }
 
 /// Measurement result message payload header
-#[repr(C)]
+#[repr(C, align(4))]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 pub struct MeasurementResultHeader {
     pub outcome: u32, // Measurement outcome (0 or 1, but u32 for alignment)

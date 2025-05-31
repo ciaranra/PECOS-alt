@@ -12,6 +12,8 @@ use crate::byte_message::protocol::{
 use bytemuck::bytes_of;
 use std::mem::size_of;
 
+// ByteMessage guarantees 4-byte alignment by storing data in Vec<u32>
+
 // TODO: Make add_gates() add multiple qubits at a single time...
 
 /// Enum to track what kind of message is being built
@@ -593,7 +595,8 @@ impl ByteMessageBuilder {
                     let header_offset = self.buffer.len() - size_of::<MessageHeader>();
                     let header_slice =
                         &self.buffer[header_offset..header_offset + size_of::<MessageHeader>()];
-                    let header = bytemuck::from_bytes::<MessageHeader>(header_slice);
+                    // Unaligned read needed since message might not end on 4-byte boundary  
+                    let header = bytemuck::pod_read_unaligned::<MessageHeader>(header_slice);
                     header.msg_type == MessageType::EndBatch as u8
                 };
 
@@ -633,6 +636,7 @@ impl ByteMessageBuilder {
         let gate = QuantumGate::idle(duration, idle_qubits);
         self.add_quantum_gate(&gate)
     }
+
 }
 
 #[cfg(test)]
@@ -784,8 +788,8 @@ mod tests {
         let bytes = message.as_bytes();
         assert!(bytes.len() >= size_of::<BatchHeader>());
 
-        // Parse the batch header
-        let batch_header = bytemuck::from_bytes::<BatchHeader>(&bytes[0..size_of::<BatchHeader>()]);
+        // Parse the batch header - guaranteed aligned at offset 0
+        let batch_header = *bytemuck::from_bytes::<BatchHeader>(&bytes[0..size_of::<BatchHeader>()]);
         assert_eq!(batch_header.magic, BATCH_MAGIC);
         assert_eq!(batch_header.version, PROTOCOL_VERSION);
         assert_eq!(batch_header.msg_count, 3);

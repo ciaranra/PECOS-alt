@@ -1,4 +1,4 @@
-use log::{debug, info};
+use log::info;
 use pecos_core::errors::PecosError;
 use std::env;
 use std::fs;
@@ -27,20 +27,12 @@ impl RuntimeBuilder {
 
     /// Build the Rust QIR runtime as a static library
     ///
-    /// This method ensures we have an up-to-date static library by:
-    /// 1. Checking if the library exists in the persistent location
-    /// 2. If not, building it using Cargo (which uses fingerprinting for efficiency)
+    /// This method ensures we have an up-to-date static library by leveraging
+    /// Cargo's built-in incremental compilation and dependency tracking.
+    /// Cargo will only rebuild if dependencies have actually changed.
     pub fn build_runtime() -> Result<PathBuf, PecosError> {
-        let persistent_lib_path = Self::get_persistent_lib_path();
-
-        // If library exists, Cargo's fingerprinting will handle updates
-        if persistent_lib_path.exists() {
-            debug!("Found existing runtime library: {:?}", persistent_lib_path);
-            return Ok(persistent_lib_path);
-        }
-
-        // Build the library
-        info!("Building static runtime library");
+        // Always try to build - let Cargo's incremental compilation handle efficiency
+        // This is much more robust than trying to reimplement Cargo's dependency tracking
         Self::build_static_library()
     }
 
@@ -52,13 +44,17 @@ impl RuntimeBuilder {
         let persistent_lib_path = Self::get_persistent_lib_path();
         let persistent_dir = persistent_lib_path.parent().unwrap();
 
-        // Early return if library exists
-        if persistent_lib_path.exists() {
-            return Ok(persistent_lib_path);
-        }
-
         // Create persistent directory
         Self::ensure_dir(persistent_dir)?;
+
+        // Check if we need to rebuild by comparing source modification times
+        let build_dir = persistent_dir.join("build");
+        let needs_rebuild = Self::needs_rebuild(&persistent_lib_path, &build_dir)?;
+
+        if !needs_rebuild && persistent_lib_path.exists() {
+            info!("Static library is up to date, skipping build");
+            return Ok(persistent_lib_path);
+        }
 
         // Atomic lock file creation
         let lock_file = persistent_dir.join(".building.lock");
@@ -224,6 +220,88 @@ pecos-qir = {{ path = {:?} }}
         }
 
         Ok((version, edition))
+    }
+
+    /// Check if we need to rebuild the static library
+    /// 
+    /// Returns true if:
+    /// - The static library doesn't exist
+    /// - The build wrapper doesn't exist (need to create it)
+    /// - Any source files in pecos-qir are newer than the static library
+    fn needs_rebuild(lib_path: &Path, build_dir: &Path) -> Result<bool, PecosError> {
+        // If library doesn't exist, we need to rebuild
+        if !lib_path.exists() {
+            return Ok(true);
+        }
+
+        // If build directory doesn't exist, we need to rebuild
+        if !build_dir.exists() {
+            return Ok(true);
+        }
+
+        // Get the library's modification time
+        let lib_mtime = fs::metadata(lib_path)
+            .map_err(|e| PecosError::Processing(format!("Failed to get library metadata: {e}")))?
+            .modified()
+            .map_err(|e| PecosError::Processing(format!("Failed to get library modification time: {e}")))?;
+
+        // Check if any source files in pecos-qir are newer than the library
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let src_dir = manifest_dir.join("src");
+        
+        if Self::dir_newer_than(&src_dir, lib_mtime)? {
+            return Ok(true);
+        }
+
+        // Check Cargo.toml
+        let cargo_toml = manifest_dir.join("Cargo.toml");
+        if cargo_toml.exists() {
+            let cargo_mtime = fs::metadata(&cargo_toml)
+                .map_err(|e| PecosError::Processing(format!("Failed to get Cargo.toml metadata: {e}")))?
+                .modified()
+                .map_err(|e| PecosError::Processing(format!("Failed to get Cargo.toml modification time: {e}")))?;
+            
+            if cargo_mtime > lib_mtime {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
+    /// Check if any file in a directory tree is newer than the given time
+    fn dir_newer_than(dir: &Path, reference_time: std::time::SystemTime) -> Result<bool, PecosError> {
+        if !dir.exists() {
+            return Ok(false);
+        }
+
+        let entries = fs::read_dir(dir)
+            .map_err(|e| PecosError::Processing(format!("Failed to read directory {}: {e}", dir.display())))?;
+
+        for entry in entries {
+            let entry = entry
+                .map_err(|e| PecosError::Processing(format!("Failed to read directory entry: {e}")))?;
+            let path = entry.path();
+            
+            if path.is_dir() {
+                // Recursively check subdirectories
+                if Self::dir_newer_than(&path, reference_time)? {
+                    return Ok(true);
+                }
+            } else {
+                // Check if this file is newer
+                let metadata = fs::metadata(&path)
+                    .map_err(|e| PecosError::Processing(format!("Failed to get metadata for {}: {e}", path.display())))?;
+                let mtime = metadata.modified()
+                    .map_err(|e| PecosError::Processing(format!("Failed to get modification time for {}: {e}", path.display())))?;
+                
+                if mtime > reference_time {
+                    return Ok(true);
+                }
+            }
+        }
+
+        Ok(false)
     }
 
     /// Ensure a directory exists, creating it if necessary

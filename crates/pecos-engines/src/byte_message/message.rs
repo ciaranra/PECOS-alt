@@ -4,34 +4,74 @@ use crate::byte_message::protocol::{
     BatchHeader, MeasurementHeader, MeasurementResultHeader, MessageHeader, MessageType,
     QuantumGateHeader, calc_padding,
 };
-use bytemuck::from_bytes;
 use log::trace;
 use pecos_core::errors::PecosError;
 use std::mem::size_of;
 
 /// A message encoded using the PECOS byte protocol
+/// 
+/// Uses Vec<u32> for guaranteed 4-byte alignment matching our protocol design
 #[derive(Clone)]
 pub struct ByteMessage {
-    bytes: Vec<u8>,
+    data: Vec<u32>,
+    byte_len: usize,
 }
 
 impl ByteMessage {
     /// Create a new `ByteMessage` from raw bytes
     #[must_use]
     pub fn new(bytes: Vec<u8>) -> Self {
-        Self { bytes }
+        let byte_len = bytes.len();
+        
+        if byte_len == 0 {
+            return Self {
+                data: Vec::new(),
+                byte_len: 0,
+            };
+        }
+        
+        // Calculate word count (round up to 4-byte boundary)
+        let word_count = (byte_len + 3) / 4;
+        
+        // Create aligned storage
+        let mut data = vec![0u32; word_count];
+        
+        // Copy bytes into aligned storage
+        let data_bytes = bytemuck::cast_slice_mut::<u32, u8>(&mut data);
+        data_bytes[..byte_len].copy_from_slice(&bytes);
+        
+        Self { data, byte_len }
+    }
+
+    /// Create a new `ByteMessage` from already-aligned u32 data
+    /// 
+    /// This method is used when receiving data from FFI boundaries where
+    /// the data is already guaranteed to be 4-byte aligned.
+    #[must_use]
+    pub fn from_aligned_u32_data(data: Vec<u32>, byte_len: usize) -> Self {
+        Self { data, byte_len }
     }
 
     /// Get a reference to the raw bytes
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
-        &self.bytes
+        if self.byte_len == 0 {
+            return &[];
+        }
+        
+        let all_bytes = bytemuck::cast_slice::<u32, u8>(&self.data);
+        &all_bytes[..self.byte_len]
     }
 
     /// Consume the message and return the raw bytes
     #[must_use]
     pub fn into_bytes(self) -> Vec<u8> {
-        self.bytes
+        if self.byte_len == 0 {
+            return Vec::new();
+        }
+        
+        let all_bytes = bytemuck::cast_slice::<u32, u8>(&self.data);
+        all_bytes[..self.byte_len].to_vec()
     }
 
     /// Create a new message builder
@@ -354,14 +394,14 @@ impl ByteMessage {
     /// - The message is too small to contain a message header
     /// - The message header contains an invalid message type
     pub fn message_type(&self) -> Result<MessageType, PecosError> {
-        if self.bytes.len() < size_of::<BatchHeader>() {
+        if self.byte_len < size_of::<BatchHeader>() {
             return Err(PecosError::Input(
                 "Message too small for batch header".to_string(),
             ));
         }
 
-        // Parse batch header
-        let batch_header = *from_bytes::<BatchHeader>(&self.bytes[0..size_of::<BatchHeader>()]);
+        // Parse batch header - guaranteed aligned at offset 0 due to Vec<u32> storage
+        let batch_header = *bytemuck::from_bytes::<BatchHeader>(&self.as_bytes()[0..size_of::<BatchHeader>()]);
         if !batch_header.is_valid() {
             return Err(PecosError::Input("Invalid batch header".to_string()));
         }
@@ -373,15 +413,15 @@ impl ByteMessage {
 
         // Skip to first message header (after batch header)
         let msg_offset = size_of::<BatchHeader>();
-        if self.bytes.len() < msg_offset + size_of::<MessageHeader>() {
+        if self.byte_len < msg_offset + size_of::<MessageHeader>() {
             return Err(PecosError::Input(
                 "Message too small for message header".to_string(),
             ));
         }
 
-        // Parse message header
-        let msg_header = *from_bytes::<MessageHeader>(
-            &self.bytes[msg_offset..msg_offset + size_of::<MessageHeader>()],
+        // Parse message header - guaranteed aligned due to builder padding
+        let msg_header = *bytemuck::from_bytes::<MessageHeader>(
+            &self.as_bytes()[msg_offset..msg_offset + size_of::<MessageHeader>()],
         );
         msg_header
             .get_type()
@@ -421,14 +461,14 @@ impl ByteMessage {
     ///
     /// Returns an error if the message is malformed or contains invalid quantum operations.
     pub fn parse_quantum_operations(&self) -> Result<Vec<QuantumGate>, PecosError> {
-        if self.bytes.len() < size_of::<BatchHeader>() {
+        if self.byte_len < size_of::<BatchHeader>() {
             return Err(PecosError::Input(
                 "Message too small for batch header".to_string(),
             ));
         }
 
-        // Parse batch header
-        let batch_header = *from_bytes::<BatchHeader>(&self.bytes[0..size_of::<BatchHeader>()]);
+        // Parse batch header - guaranteed aligned at offset 0 due to Vec<u32> storage
+        let batch_header = *bytemuck::from_bytes::<BatchHeader>(&self.as_bytes()[0..size_of::<BatchHeader>()]);
         if !batch_header.is_valid() {
             return Err(PecosError::Input("Invalid batch header".to_string()));
         }
@@ -439,13 +479,13 @@ impl ByteMessage {
 
         // Process each message
         for _ in 0..batch_header.msg_count {
-            if offset + size_of::<MessageHeader>() > self.bytes.len() {
+            if offset + size_of::<MessageHeader>() > self.byte_len {
                 break;
             }
 
-            // Parse message header
-            let msg_header = *from_bytes::<MessageHeader>(
-                &self.bytes[offset..offset + size_of::<MessageHeader>()],
+            // Parse message header - guaranteed aligned due to builder padding
+            let msg_header = *bytemuck::from_bytes::<MessageHeader>(
+                &self.as_bytes()[offset..offset + size_of::<MessageHeader>()],
             );
             offset += size_of::<MessageHeader>();
 
@@ -470,9 +510,9 @@ impl ByteMessage {
             // Process payload based on message type
             match msg_header.msg_type {
                 x if x == MessageType::QuantumGate as u8 => {
-                    if offset + msg_header.payload_size as usize <= self.bytes.len() {
+                    if offset + msg_header.payload_size as usize <= self.byte_len {
                         let payload =
-                            &self.bytes[offset..offset + msg_header.payload_size as usize];
+                            &self.as_bytes()[offset..offset + msg_header.payload_size as usize];
                         match Self::parse_quantum_gate(payload) {
                             Ok(cmd) => commands.push(cmd),
                             Err(e) => {
@@ -482,9 +522,9 @@ impl ByteMessage {
                     }
                 }
                 x if x == MessageType::Measurement as u8 => {
-                    if offset + msg_header.payload_size as usize <= self.bytes.len() {
+                    if offset + msg_header.payload_size as usize <= self.byte_len {
                         let payload =
-                            &self.bytes[offset..offset + msg_header.payload_size as usize];
+                            &self.as_bytes()[offset..offset + msg_header.payload_size as usize];
                         match Self::parse_measurement(payload) {
                             Ok(cmd) => commands.push(cmd),
                             Err(e) => {
@@ -513,14 +553,14 @@ impl ByteMessage {
     ///
     /// Returns an error if the message is malformed or contains invalid measurement data.
     pub fn parse_measurements(&self) -> Result<Vec<u32>, PecosError> {
-        if self.bytes.len() < size_of::<BatchHeader>() {
+        if self.byte_len < size_of::<BatchHeader>() {
             return Err(PecosError::Input(
                 "Message too small for batch header".to_string(),
             ));
         }
 
-        // Parse batch header
-        let batch_header = *from_bytes::<BatchHeader>(&self.bytes[0..size_of::<BatchHeader>()]);
+        // Parse batch header - guaranteed aligned at offset 0 due to Vec<u32> storage
+        let batch_header = *bytemuck::from_bytes::<BatchHeader>(&self.as_bytes()[0..size_of::<BatchHeader>()]);
         if !batch_header.is_valid() {
             return Err(PecosError::Input("Invalid batch header".to_string()));
         }
@@ -530,13 +570,13 @@ impl ByteMessage {
 
         // Process each message
         for _ in 0..batch_header.msg_count {
-            if offset + size_of::<MessageHeader>() > self.bytes.len() {
+            if offset + size_of::<MessageHeader>() > self.byte_len {
                 break;
             }
 
-            // Parse message header
-            let msg_header = *from_bytes::<MessageHeader>(
-                &self.bytes[offset..offset + size_of::<MessageHeader>()],
+            // Parse message header - guaranteed aligned due to builder padding
+            let msg_header = *bytemuck::from_bytes::<MessageHeader>(
+                &self.as_bytes()[offset..offset + size_of::<MessageHeader>()],
             );
             offset += size_of::<MessageHeader>();
 
@@ -547,20 +587,21 @@ impl ByteMessage {
             let payload_size = msg_header.payload_size as usize;
             let payload_end = offset + payload_size;
 
-            if payload_end > self.bytes.len() {
+            if payload_end > self.byte_len {
                 return Err(PecosError::Input(format!(
                     "Message payload extends beyond message bounds: offset={}, size={}, total_len={}",
                     offset,
                     payload_size,
-                    self.bytes.len()
+                    self.byte_len
                 )));
             }
 
             if msg_type == MessageType::MeasurementResult {
                 // Process measurement result
-                let payload = &self.bytes[offset..payload_end];
+                let payload = &self.as_bytes()[offset..payload_end];
                 if payload.len() >= size_of::<MeasurementResultHeader>() {
-                    let result_header = *from_bytes::<MeasurementResultHeader>(
+                    // MeasurementResultHeader at aligned payload start
+                    let result_header = *bytemuck::from_bytes::<MeasurementResultHeader>(
                         &payload[0..size_of::<MeasurementResultHeader>()],
                     );
 
@@ -606,7 +647,8 @@ impl ByteMessage {
     fn parse_quantum_gate(payload: &[u8]) -> Result<QuantumGate, PecosError> {
         Self::validate_gate_payload_size(payload)?;
 
-        let header = *from_bytes::<QuantumGateHeader>(&payload[0..size_of::<QuantumGateHeader>()]);
+        // Parse gate header - guaranteed aligned since payload starts at aligned boundary
+        let header = *bytemuck::from_bytes::<QuantumGateHeader>(&payload[0..size_of::<QuantumGateHeader>()]);
         let num_qubits = header.num_qubits as usize;
         let has_params = header.has_params != 0;
         let gate_type = GateType::from(header.gate_type);
@@ -770,11 +812,13 @@ impl ByteMessage {
             ));
         }
 
-        let header = *from_bytes::<MeasurementHeader>(&payload[0..size_of::<MeasurementHeader>()]);
+        // Parse measurement header - guaranteed aligned since payload starts at aligned boundary
+        let header = *bytemuck::from_bytes::<MeasurementHeader>(&payload[0..size_of::<MeasurementHeader>()]);
         let qubit = header.qubit as usize;
 
         Ok(QuantumGate::measure(qubit))
     }
+
 
     /// Creates an empty `ByteMessage`
     ///
@@ -785,7 +829,7 @@ impl ByteMessage {
     /// A new empty `ByteMessage`
     #[must_use]
     pub fn create_empty() -> Self {
-        Self { bytes: Vec::new() }
+        Self { data: Vec::new(), byte_len: 0 }
     }
 
     /// Create a record data message with key-value pair
@@ -851,17 +895,17 @@ impl ByteMessage {
     ///
     /// Returns an error if the message is malformed or contains invalid measurement data.
     pub fn parse_measured_qubits(&self) -> Result<Vec<u32>, PecosError> {
-        if self.bytes.is_empty() {
+        if self.byte_len == 0 {
             return Ok(Vec::new());
         }
 
         let qubits = Vec::new();
         let mut offset = 0;
 
-        while offset + size_of::<MessageHeader>() <= self.bytes.len() {
-            // Read message header
-            let msg_header = *from_bytes::<MessageHeader>(
-                &self.bytes[offset..offset + size_of::<MessageHeader>()],
+        while offset + size_of::<MessageHeader>() <= self.byte_len {
+            // Read message header - guaranteed aligned due to builder padding  
+            let msg_header = *bytemuck::from_bytes::<MessageHeader>(
+                &self.as_bytes()[offset..offset + size_of::<MessageHeader>()],
             );
             offset += size_of::<MessageHeader>();
 
@@ -869,7 +913,7 @@ impl ByteMessage {
             let payload_size = msg_header.payload_size as usize;
             let payload_end = offset + payload_size;
 
-            if payload_end > self.bytes.len() {
+            if payload_end > self.byte_len {
                 break;
             }
 
@@ -877,9 +921,10 @@ impl ByteMessage {
             if let Ok(msg_type) = msg_header.get_type() {
                 if msg_type == MessageType::MeasurementResult {
                     // Process measurement result
-                    let payload = &self.bytes[offset..payload_end];
+                    let payload = &self.as_bytes()[offset..payload_end];
                     if payload.len() >= size_of::<MeasurementResultHeader>() {
-                        let _result_header = *from_bytes::<MeasurementResultHeader>(
+                        // MeasurementResultHeader at aligned payload start
+                        let _result_header = *bytemuck::from_bytes::<MeasurementResultHeader>(
                             &payload[0..size_of::<MeasurementResultHeader>()],
                         );
 
@@ -1107,6 +1152,28 @@ mod tests {
         assert_eq!(indexed_results[2], (2, 1), "Third indexed result");
         assert_eq!(indexed_results[3], (3, 1), "Fourth indexed result");
         assert_eq!(indexed_results[4], (4, 0), "Fifth indexed result");
+    }
+
+    #[test]
+    fn test_alignment_guarantees() {
+        // Test various buffer sizes to ensure alignment is guaranteed
+        for size in [0, 1, 2, 3, 4, 5, 7, 8, 15, 16, 32, 1024] {
+            let test_data: Vec<u8> = (0..size).map(|i| (i % 256) as u8).collect();
+            let message = ByteMessage::new(test_data.clone());
+            let bytes = message.as_bytes();
+            
+            // Verify data integrity
+            assert_eq!(bytes, &test_data[..], "Data integrity check failed for size {}", size);
+            
+            // Verify alignment - the internal buffer should be 4-byte aligned
+            // We can't directly test the internal alignment, but we can test that
+            // our bytemuck calls work without fallback by creating structures
+            if bytes.len() >= 4 {
+                // Try to parse as u32 - guaranteed aligned at offset 0
+                let _test_u32 = *bytemuck::from_bytes::<u32>(&bytes[0..4]);
+                // If we reach here, parsing is working correctly
+            }
+        }
     }
 
     #[test]
