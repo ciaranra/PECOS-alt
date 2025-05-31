@@ -10,11 +10,13 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-"""repetition_z
-~~~~~~~~~~~~.
+"""Color 4.8.8 quantum error correcting code implementation.
 
-Generates circuits for the repetition code in the Z-Basis.
+This module provides the Color 4.8.8 topological quantum error correcting code,
+which is based on a 4.8.8 lattice structure.
 """
+
+from typing import Any
 
 from pecos.qeccs.color_488.circuit_implementation1 import OneAncillaPerCheck
 from pecos.qeccs.color_488.gates import GateIdentity, GateInitPlus, GateInitZero
@@ -23,13 +25,26 @@ from pecos.qeccs.color_488.instructions import (
     InstrInitZero,
     InstrSynExtraction,
 )
-from pecos.qeccs.qecc_parent_class import QECC
+from pecos.qeccs.default_qecc import DefaultQECC
+from pecos.type_defs import QECCParams
 
 
-class Color488(QECC):
+class Color488(DefaultQECC):
     """Canonical triangular color-code on a 4.8.8 lattice."""
 
-    def __init__(self, distance=None, **qecc_params) -> None:
+    def __init__(self, distance: int | None = None, **qecc_params: QECCParams) -> None:
+        """Initialize the Color 4.8.8 quantum error correcting code.
+
+        Args:
+            distance: The code distance. If not provided, must be specified in qecc_params.
+            **qecc_params: Additional QECC parameters including:
+                - distance: The code distance (required if not provided as first argument)
+                - circuit_compiler: The circuit compiler to use (default: OneAncillaPerCheck)
+                - mapping: Optional qubit mapping
+
+        Raises:
+            Exception: If the distance is even (this code requires odd distance).
+        """
         # TODO: Need to switch to codes each having a class defining how classes are implemented. From that we get the
         # layout and ancillas. We don't need a general circuit conversion script... The default implementation may
         # still be overridden.
@@ -96,7 +111,7 @@ class Color488(QECC):
         self.sides = self._determine_sides()
 
     @staticmethod
-    def _set_symbols():
+    def _set_symbols() -> tuple[dict, dict]:
         # gate and instruction symbol bindings
         # ------------------------------------
         # gate symbol => gate class
@@ -116,8 +131,9 @@ class Color488(QECC):
         return sym2gate_class, sym2instruction_class
 
     @staticmethod
-    def _get_distance(params):
-        """Check and set the distance
+    def _get_distance(params: dict[str, Any]) -> tuple[int, int, int]:
+        """Check and set the distance.
+
         :return:
         """
         distance = params.get("distance")
@@ -136,7 +152,7 @@ class Color488(QECC):
 
         return distance, distance_height, distance_width
 
-    def _generate_layout(self):
+    def _generate_layout(self) -> dict:
         """Creates the layout dictionary which describes the location of the qubits in the code."""
         self.lattice_height = 4 * self.distance - 4
         self.lattice_width = 2 * self.distance - 2
@@ -164,9 +180,8 @@ class Color488(QECC):
                         if (x / 2) % 4 == 2 or (x / 2) % 4 == 3:
                             self._add_node(x, y, data_ids)
 
-                    else:
-                        if (x / 2) % 4 == 0 or (x / 2) % 4 == 1:
-                            self._add_node(x, y, data_ids)
+                    elif (x / 2) % 4 == 0 or (x / 2) % 4 == 1:
+                        self._add_node(x, y, data_ids)
 
                 if x % 4 == 1 and y % 4 == 3:
                     self._add_node(x, y, ancilla_ids)
@@ -176,7 +191,7 @@ class Color488(QECC):
 
         return self.layout
 
-    def _determine_sides(self):
+    def _determine_sides(self) -> dict[str, list]:
         """Outputs a dictionary that describes the sides of the code.
 
         The repetition code is essentially a line.
@@ -189,7 +204,6 @@ class Color488(QECC):
 
         :return:
         """
-
         bottom_nodes = []
         left_nodes = []
 

@@ -9,18 +9,28 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from typing import Any
+"""Qubit initialization operations for Pauli fault propagation simulator.
+
+This module provides quantum state initialization operations for the Pauli fault propagation simulator, including
+functions to initialize qubits to computational basis states using efficient Pauli frame tracking.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pecos.simulators.paulifaultprop.state import PauliFaultProp
+    from pecos.type_defs import SimulatorGateParams
 
 
-def init(state, qubit: int, **params: Any) -> None:
-    """Args:
-    ----
-        state:
-        qubit:
+def init(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Initialize qubit to zero state.
 
-    Returns:
-    -------
-
+    Args:
+        state: The PauliFaultProp state instance.
+        qubit (int): The qubit index to initialize.
+        **_params: Unused additional parameters (kept for interface compatibility).
     """
     state.faults["X"].discard(qubit)
     state.faults["Y"].discard(qubit)

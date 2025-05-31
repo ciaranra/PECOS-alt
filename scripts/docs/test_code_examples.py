@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""
-Test script for validating code examples in PECOS documentation.
+"""Test script for validating code examples in PECOS documentation.
 
 This script extracts code blocks from Markdown files and tests them
 to ensure they run correctly. It supports both Python and Rust code examples.
 """
+
+from __future__ import annotations
 
 import re
 import shutil
@@ -17,12 +18,12 @@ from pathlib import Path
 DOCS_DIR = Path("docs")
 
 
-def find_markdown_files():
+def find_markdown_files() -> list[Path]:
     """Find all Markdown files in the documentation directory."""
     return list(DOCS_DIR.rglob("*.md"))
 
 
-def extract_code_blocks(file_path, language="python"):
+def extract_code_blocks(file_path: str | Path, language: str = "python") -> list[str]:
     """Extract code blocks of a specific language from a Markdown file."""
     with Path(file_path).open(encoding="utf-8") as f:
         content = f.read()
@@ -59,7 +60,11 @@ def extract_code_blocks(file_path, language="python"):
     return cleaned_blocks
 
 
-def test_python_block(code_block, block_number, file_path):
+def test_python_block(
+    code_block: str,
+    block_number: int,
+    file_path: str | Path,
+) -> bool | None:
     """Test a Python code block by executing it and checking for errors."""
     print(f"Testing Python block #{block_number} from {file_path}...")
 
@@ -83,9 +88,8 @@ def test_python_block(code_block, block_number, file_path):
             print(f"FAIL: Error in Python block #{block_number} from {file_path}:")
             print(result.stderr)
             return False
-        else:
-            print(f"PASS: Python block #{block_number} from {file_path}")
-            return True
+        print(f"PASS: Python block #{block_number} from {file_path}")
+        return True  # noqa: TRY300
     except subprocess.TimeoutExpired:
         print(f"FAIL: Timeout in Python block #{block_number} from {file_path}")
         return False
@@ -101,7 +105,11 @@ def test_python_block(code_block, block_number, file_path):
         return False
 
 
-def test_rust_block(code_block, block_number, file_path):
+def test_rust_block(
+    code_block: str,
+    block_number: int,
+    file_path: str | Path,
+) -> bool | None:
     """Test a Rust code block by compiling and running it."""
     print(f"Testing Rust block #{block_number} from {file_path}...")
 
@@ -116,65 +124,61 @@ def test_rust_block(code_block, block_number, file_path):
         with temp_file.open("w", encoding="utf-8") as f:
             f.write(code_block)
 
+        result = False
+        error_msg = None
+
         try:
             # Find rustc executable
             rustc_path = shutil.which("rustc")
             if not rustc_path:
-                print(
-                    f"FAIL: rustc not found in PATH for Rust block #{block_number} from {file_path}",
-                )
-                return False
-
-            # Compile and run the Rust code
-            compile_result = subprocess.run(  # noqa: S603
-                [rustc_path, str(temp_file), "-o", str(Path(tmpdir) / "rust_test")],
-                capture_output=True,
-                text=True,
-                timeout=30,
-                check=False,
-            )
-
-            if compile_result.returncode != 0:
-                print(
-                    f"FAIL: Compilation error in Rust block #{block_number} from {file_path}:",
-                )
-                print(compile_result.stderr)
-                return False
-
-            # Run the compiled program
-            run_result = subprocess.run(  # noqa: S603
-                [str(Path(tmpdir) / "rust_test")],
-                capture_output=True,
-                text=True,
-                timeout=30,
-                check=False,
-            )
-
-            if run_result.returncode != 0:
-                print(
-                    f"FAIL: Runtime error in Rust block #{block_number} from {file_path}:",
-                )
-                print(run_result.stderr)
-                return False
+                error_msg = f"FAIL: rustc not found in PATH for Rust block #{block_number} from {file_path}"
             else:
-                print(f"PASS: Rust block #{block_number} from {file_path}")
-                return True
+                # Compile and run the Rust code
+                compile_result = subprocess.run(  # noqa: S603
+                    [rustc_path, str(temp_file), "-o", str(Path(tmpdir) / "rust_test")],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    check=False,
+                )
+
+                if compile_result.returncode != 0:
+                    error_msg = (
+                        f"FAIL: Compilation error in Rust block #{block_number} "
+                        f"from {file_path}:\n{compile_result.stderr}"
+                    )
+                else:
+                    # Run the compiled program
+                    run_result = subprocess.run(  # noqa: S603
+                        [str(Path(tmpdir) / "rust_test")],
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                        check=False,
+                    )
+
+                    if run_result.returncode != 0:
+                        error_msg = (
+                            f"FAIL: Runtime error in Rust block #{block_number} from {file_path}:\n"
+                            f"{run_result.stderr}"
+                        )
+                    else:
+                        print(f"PASS: Rust block #{block_number} from {file_path}")
+                        result = True
         except subprocess.TimeoutExpired:
-            print(f"FAIL: Timeout in Rust block #{block_number} from {file_path}")
-            return False
+            error_msg = f"FAIL: Timeout in Rust block #{block_number} from {file_path}"
         except OSError as e:
-            print(
-                f"FAIL: OS error testing Rust block #{block_number} from {file_path}: {e}",
-            )
-            return False
+            error_msg = f"FAIL: OS error testing Rust block #{block_number} from {file_path}: {e}"
         except subprocess.SubprocessError as e:
-            print(
-                f"FAIL: Subprocess error testing Rust block #{block_number} from {file_path}: {e}",
-            )
-            return False
+            error_msg = f"FAIL: Subprocess error testing Rust block #{block_number} from {file_path}: {e}"
+
+        if error_msg:
+            print(error_msg)
+
+        return result
 
 
-def main():
+def main() -> None:
     """Main function to test all code examples in documentation."""
     print("Testing PECOS documentation code examples...")
 
@@ -206,13 +210,13 @@ def main():
 
     print("\n===== SUMMARY =====")
     python_success_rate = (
-        f"{python_passed/python_total*100:.1f}%" if python_total > 0 else "N/A"
+        f"{python_passed / python_total * 100:.1f}%" if python_total > 0 else "N/A"
     )
     print(
         f"Python: {python_passed}/{python_total} blocks passed ({python_success_rate} success rate)",
     )
     rust_success_rate = (
-        f"{rust_passed/rust_total*100:.1f}%" if rust_total > 0 else "N/A"
+        f"{rust_passed / rust_total * 100:.1f}%" if rust_total > 0 else "N/A"
     )
     print(
         f"Rust: {rust_passed}/{rust_total} blocks passed ({rust_success_rate} success rate)",

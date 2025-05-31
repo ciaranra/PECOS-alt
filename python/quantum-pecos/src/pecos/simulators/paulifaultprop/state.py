@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Quantum state representation for Pauli fault propagation simulator.
+
+This module provides the quantum state representation for the Pauli fault propagation simulator, implementing
+efficient Pauli frame tracking and stabilizer tableau management for fast stabilizer circuit simulation.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -38,9 +44,11 @@ class PauliFaultProp(PauliPropagation):
     """
 
     def __init__(self, *, num_qubits: int, track_sign: bool = False) -> None:
-        """Args:
-        ----
-            num_qubits (int):
+        """Initialize a PauliFaultProp state.
+
+        Args:
+            num_qubits (int): Number of qubits in the system.
+            track_sign (bool): Whether to track the global phase/sign.
 
         Returns: None
 
@@ -64,11 +72,17 @@ class PauliFaultProp(PauliPropagation):
             if v in self.bindings:
                 self.bindings[k] = self.bindings[v]
 
-    def flip_sign(self):
+    def flip_sign(self) -> None:
+        """Flip the sign of the Pauli string."""
         self.sign += 1
         self.sign %= 2
 
-    def flip_img(self, num_is):
+    def flip_img(self, num_is: int) -> None:
+        """Flip the imaginary component based on number of i factors.
+
+        Args:
+            num_is: Number of imaginary factors to add.
+        """
         self.img += num_is
         self.img %= 4
 
@@ -78,13 +92,14 @@ class PauliFaultProp(PauliPropagation):
         self.img %= 2
 
     def logical_sign(self, logical_op: QuantumCircuit) -> int:
-        """Find the sign of a logical operator, which is equivalent to determining if the faults commute (sign == 0) or
+        """Find the sign of a logical operator.
+
+        This is equivalent to determining if the faults commute (sign == 0) or
         anticommute (sign == 1) with the logical operator.
 
         That is, compare the commutation of `logical_op` with `faults.`
 
         Args:
-        ----
             logical_op (QuantumCircuit): Quantum circuit representing a logical operator.
 
         Returns: int - sign.
@@ -97,16 +112,15 @@ class PauliFaultProp(PauliPropagation):
         circuit: ParamGateCollection,
         removed_locations: set[int] | (set[tuple[int, ...]] | None) = None,
         *,
-        apply_faults: bool = False,
-    ):
+        _apply_faults: bool = False,
+    ) -> None:
         """Used to apply a quantum circuit to a state, whether the circuit represents an fault or ideal circuit.
 
         Args:
-        ----
             circuit: A class representing a circuit. # TODO: Shouldn't this also include QuantumCircuit
-            removed_locations : A set of qudit locations that correspond to
+            removed_locations: A set of qudit locations that correspond to
                 ideal gates that should be removed.
-            apply_faults: Whether to apply the `circuit` as a Pauli fault (True) or as a Clifford to update the
+            _apply_faults: Whether to apply the `circuit` as a Pauli fault (True) or as a Clifford to update the
                 faults (False).
 
         Returns: None
@@ -117,25 +131,24 @@ class PauliFaultProp(PauliPropagation):
         if circuit_type in {"faults", "recovery"}:
             self.add_faults(circuit)
             return None
-        else:
-            if self.faults["X"] or self.faults["Y"] or self.faults["Z"]:
-                # Only apply gates if there are faults to act on
-                return super().run_circuit(circuit, removed_locations)
-            return None
+        if self.faults["X"] or self.faults["Y"] or self.faults["Z"]:
+            # Only apply gates if there are faults to act on
+            return super().run_circuit(circuit, removed_locations)
+        return None
 
-            # need to return output?
+        # need to return output?
 
     def add_faults(
         self,
         circuit: QuantumCircuit | ParamGateCollection,
         *,
-        minus=False,
+        minus: bool = False,
     ) -> None:
         """A methods to add faults to the state.
 
         Args:
-        ----
             circuit (Union[QuantumCircuit, ParamGateCollection]): A quantum circuit representing Pauli faults.
+            minus (bool): Whether to flip the sign when adding faults.
 
         Returns: None
 
@@ -241,7 +254,12 @@ class PauliFaultProp(PauliPropagation):
                 msg = f"Got {symbol}. Can only handle Pauli errors."
                 raise Exception(msg)
 
-    def get_str(self):
+    def get_str(self) -> str:
+        """Get string representation of the Pauli fault state.
+
+        Returns:
+            String representation with sign and Pauli operators.
+        """
         fault_dict = self.faults
 
         pstr = "-" if self.sign else "+"
@@ -257,7 +275,15 @@ class PauliFaultProp(PauliPropagation):
                 pstr += "I"
         return pstr
 
-    def fault_str_sign(self, *, strip=False):
+    def fault_str_sign(self, *, strip: bool = False) -> str:
+        """Get the sign component of the fault string.
+
+        Args:
+            strip: If True, strip leading/trailing whitespace.
+
+        Returns:
+            String representation of the sign component.
+        """
         fault_str = []
 
         if self.sign:
@@ -277,7 +303,12 @@ class PauliFaultProp(PauliPropagation):
 
         return fault_str
 
-    def fault_str_operator(self):
+    def fault_str_operator(self) -> str:
+        """Get the operator component of the fault string.
+
+        Returns:
+            String representation of the Pauli operators.
+        """
         fault_str = []
 
         for q in range(self.num_qubits):
@@ -295,10 +326,20 @@ class PauliFaultProp(PauliPropagation):
 
         return "".join(fault_str)
 
-    def fault_string(self):
+    def fault_string(self) -> str:
+        """Get the complete fault string with sign and operators.
+
+        Returns:
+            Complete string representation of the fault state.
+        """
         return f"{self.fault_str_sign()}{self.fault_str_operator()}"
 
-    def fault_wt(self):
+    def fault_wt(self) -> int:
+        """Get the weight of the fault (number of non-identity operators).
+
+        Returns:
+            Total weight of X, Y, and Z operators.
+        """
         wt = len(self.faults["X"])
         wt += len(self.faults["Y"])
         wt += len(self.faults["Z"])
@@ -306,6 +347,7 @@ class PauliFaultProp(PauliPropagation):
         return wt
 
     def __str__(self) -> str:
+        """Return string representation of the Pauli fault state."""
         return "{{'X': {}, 'Y': {}, 'Z': {}}}".format(
             self.faults["X"],
             self.faults["Y"],

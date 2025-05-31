@@ -13,13 +13,50 @@
 
 """Provides class to represent a logical circuit."""
 
-from pecos.circuits.quantum_circuit import QuantumCircuit
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, NoReturn, Protocol
+
+from pecos.circuits.quantum_circuit import (
+    QuantumCircuit,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from pecos.circuits.quantum_circuit import (
+        GateDict,
+        JSONValue,
+        LocationSet,
+        ParamGateCollection,
+    )
+
+
+class LogicalGateProtocol(Protocol):
+    """Protocol for logical gate objects."""
+
+    qecc: Any
+    circuits: list[Any]
 
 
 class LogicalCircuit(QuantumCircuit):
     """Data structure used to represent a logical circuit."""
 
-    def __init__(self, layout=None, suppress_warning=True, **params) -> None:
+    def __init__(
+        self,
+        layout: dict[Any, Any] | None = None,
+        *,
+        suppress_warning: bool = True,
+        **params: JSONValue,
+    ) -> None:
+        """Initialize a LogicalCircuit.
+
+        Args:
+        ----
+            layout: Optional layout dictionary defining the qudit arrangement.
+            suppress_warning: If True, suppresses warnings about missing layout.
+            **params: Additional parameters passed to the parent QuantumCircuit.
+        """
         self.layout = layout
         if self.layout is not None:
             self.qudit_set = set(self.layout.keys())
@@ -32,16 +69,19 @@ class LogicalCircuit(QuantumCircuit):
 
         super().__init__(**params)
 
-    def append(self, logical_gate, gate_locations=None, **params):
-        """Args:
+    def append(
+        self,
+        logical_gate: LogicalGateProtocol | GateDict,
+        gate_locations: LocationSet | None = None,
+        **params: JSONValue,
+    ) -> None:
+        """Append a logical gate to the circuit.
+
+        Args:
         ----
-            logical_gate:
-            gate_locations:
-            **params:
-
-        Returns:
-        -------
-
+            logical_gate: The logical gate to append, either a LogicalGateProtocol or GateDict.
+            gate_locations: Set of locations where the gate should be applied.
+            **params: Additional parameters for the gate.
         """
         if gate_locations is None and not isinstance(logical_gate, dict):
             super().append(logical_gate, frozenset([None]), **params)
@@ -86,15 +126,43 @@ class LogicalCircuit(QuantumCircuit):
                 raise Exception(msg)
 
     @staticmethod
-    def update(symbol, locations=None, tick=-1, emptyappend=False, **params):
+    def update(
+        _symbol: str | GateDict,
+        _locations: LocationSet | None = None,
+        _tick: int = -1,
+        *,
+        _emptyappend: bool = False,
+        **_params: JSONValue,
+    ) -> NoReturn:
+        """Update operation (not implemented for logical circuits).
+
+        Args:
+            _symbol: Gate symbol or dictionary.
+            _locations: Target locations.
+            _tick: Time tick.
+            _emptyappend: Whether to append empty operations.
+            **_params: Additional parameters.
+
+        Raises:
+            NotImplementedError: This method is not implemented.
+        """
         msg = "!!!"
         raise NotImplementedError(msg)
 
-    def discard(self, locations, tick=-1):
+    def discard(self, _locations: LocationSet, _tick: int = -1) -> NoReturn:
+        """Discard operations at specified locations (not implemented).
+
+        Args:
+            _locations: Locations to discard operations from.
+            _tick: Time tick to discard from.
+
+        Raises:
+            NotImplementedError: This method is not implemented.
+        """
         msg = "!!!"
         raise NotImplementedError(msg)
 
-    def iter_ticks(self):
+    def iter_ticks(self) -> Iterator[tuple[Any, tuple[int, int, int], dict[str, Any]]]:
         """An iterator for looping over the various quantum circuits comprising this data structure."""
         for logical_tick in range(len(self)):
             for logical_gate, _, _ in self.items(tick=logical_tick):
@@ -110,30 +178,28 @@ class LogicalCircuit(QuantumCircuit):
                         time = (logical_tick, instr_index, tick)
                         yield tick_gates, time, params
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Any]:
+        """Iterate over all logical gates in the circuit."""
         for element in self._ticks:
             for gate, _, _ in element.items():
                 yield gate
 
     def __str__(self) -> str:
-        return "LogicalCircuit(%s)" % self._ticks
+        """Return string representation of the logical circuit."""
+        return f"LogicalCircuit({self._ticks})"
 
     def __repr__(self) -> str:
+        """Return detailed string representation of the logical circuit."""
         return self.__str__()
 
-    def __getitem__(self, tick):
+    def __getitem__(self, tick: int | tuple[int, int, int]) -> ParamGateCollection:
         """Returns tick when instance[index] is used.
 
         Args:
         ----
             tick(int): Tick index of ``self._ticks``.
-
-        Returns:
-        -------
-
         """
         if isinstance(tick, int):
             return self._ticks[tick]
-        else:
-            logical_tick, _, _ = tick
-            return self[logical_tick]
+        logical_tick, _, _ = tick
+        return self[logical_tick]

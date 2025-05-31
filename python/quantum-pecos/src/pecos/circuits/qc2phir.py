@@ -9,10 +9,23 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Quantum circuit to PHIR conversion utilities.
+
+This module provides functions to convert PECOS QuantumCircuit objects to
+PHIR (PECOS High-level Intermediate Representation) format for execution
+on quantum hardware and classical simulators.
+"""
+
+from __future__ import annotations
+
 import json
 from copy import deepcopy
+from typing import TYPE_CHECKING, Any
 
 import pecos
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 # TODO: Does this handle parallel gate ticks?
 
@@ -29,7 +42,20 @@ qsym_conv = {
 }
 
 
-def conv_expr(expr):
+def conv_expr(expr: dict[str, Any]) -> dict[str, Any]:
+    """Convert expression dictionary to PHIR format.
+
+    Transforms expression dictionaries from quantum circuit format to PHIR
+    (PECOS High-level Intermediate Representation) format, handling assignment
+    operations and binary operations with proper argument structure.
+
+    Args:
+        expr: Expression dictionary with operation and operand information.
+
+    Returns:
+        Converted expression dictionary in PHIR format with 'cop', 'args',
+        and optionally 'returns' fields.
+    """
     if "t" in expr:
         op = "="
 
@@ -75,9 +101,10 @@ def conv_expr(expr):
     return new_expr
 
 
-def to_phir_dict(qc: "pecos.QuantumCircuit") -> dict:
-    """Creates a json str representation of the QuantumCircuit listing all the gates. It does not preserve ticks or
-    parallel gating of different gate types.
+def to_phir_dict(qc: pecos.QuantumCircuit) -> dict:
+    """Creates a json str representation of the QuantumCircuit listing all the gates.
+
+    It does not preserve ticks or parallel gating of different gate types.
     """
     prog = {
         "format": "PHIR/JSON",
@@ -98,7 +125,7 @@ def to_phir_dict(qc: "pecos.QuantumCircuit") -> dict:
     else:
         qid2qsym = {}
 
-    def get_qsym(qid: int) -> list[str, int]:
+    def get_qsym(qid: int) -> list[str | int]:
         qsym = qid2qsym.get(qid)
 
         if qsym is None:
@@ -111,10 +138,12 @@ def to_phir_dict(qc: "pecos.QuantumCircuit") -> dict:
                 raise Exception(msg)
         return list(qsym)
 
-    def find_qid2qsym(qubits):
+    def find_qid2qsym(
+        qubits: Sequence[int | tuple[int, ...] | list[int]],
+    ) -> list[str | list[str]]:
         qs = []
         for loc in qubits:
-            if isinstance(loc, (tuple, list)):
+            if isinstance(loc, tuple | list):
                 qtup = []
                 for q in loc:
                     qsym = get_qsym(q)
@@ -126,7 +155,11 @@ def to_phir_dict(qc: "pecos.QuantumCircuit") -> dict:
                 qs.append(qsym)
         return qs
 
-    def flush_ops_buffer(ops, ops_buffer, current_cond) -> None:
+    def flush_ops_buffer(
+        ops: list[dict[str, Any]],
+        ops_buffer: list[dict[str, Any]],
+        current_cond: dict[str, Any] | None,
+    ) -> None:
         if current_cond is None:
             ops.extend(ops_buffer)
         else:
@@ -138,13 +171,14 @@ def to_phir_dict(qc: "pecos.QuantumCircuit") -> dict:
             ops.append(block)
 
     def handle_ops_buffer(
-        current_op,
-        ops,
-        ops_buffer,
-        cond,
-        current_cond,
-        force_flush=False,
-    ):
+        current_op: dict[str, Any] | None,
+        ops: list[dict[str, Any]],
+        ops_buffer: list[dict[str, Any]],
+        cond: dict[str, Any] | None,
+        current_cond: dict[str, Any] | None,
+        *,
+        force_flush: bool = False,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any] | None]:
         if (cond != current_cond or force_flush) and ops_buffer:
             flush_ops_buffer(ops, ops_buffer, current_cond)
             ops_buffer = []
@@ -155,7 +189,12 @@ def to_phir_dict(qc: "pecos.QuantumCircuit") -> dict:
 
         return ops, ops_buffer, current_cond
 
-    def ops_buffer_append(ops_buffer, current_op, compact_gates=True):
+    def ops_buffer_append(
+        ops_buffer: list[dict[str, Any]],
+        current_op: dict[str, Any],
+        *,
+        compact_gates: bool = True,
+    ) -> list[dict[str, Any]]:
         # TODO: When you do that make sure gates don't overlap
 
         if ops_buffer and compact_gates:
@@ -344,6 +383,6 @@ def to_phir_dict(qc: "pecos.QuantumCircuit") -> dict:
     return prog
 
 
-def to_phir_json(qc: "pecos.QuantumCircuit"):
+def to_phir_json(qc: pecos.QuantumCircuit) -> str:
     """Convert the QuantumCircuit to the PHIR/JSON format."""
     return json.dumps(to_phir_dict(qc))

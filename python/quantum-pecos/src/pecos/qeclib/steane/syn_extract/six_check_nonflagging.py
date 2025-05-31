@@ -1,3 +1,9 @@
+"""Six-check non-flagging syndrome extraction for the Steane 7-qubit code.
+
+This module provides syndrome extraction implementations using six stabilizer checks without flag qubits, enabling
+efficient error detection for the Steane 7-qubit quantum error correction code.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -13,7 +19,21 @@ from pecos.slr import Block, Comment, CReg, QReg
 
 
 class SixUnflaggedSyn(Block):
-    def __init__(self, data: QReg, ancillas: QReg, syn_x: CReg, syn_z: CReg):
+    """Six-qubit unflagged syndrome extraction for Steane code.
+
+    This class performs syndrome extraction using six ancilla qubits without
+    flag qubits during the measurement process.
+    """
+
+    def __init__(self, data: QReg, ancillas: QReg, syn_x: CReg, syn_z: CReg) -> None:
+        """Initialize SixUnflaggedSyn block for unflagged syndrome extraction.
+
+        Args:
+            data: Data register containing the 7 qubits of the Steane code.
+            ancillas: Ancilla register for syndrome measurements.
+            syn_x: Classical register to store X stabilizer syndromes.
+            syn_z: Classical register to store Z stabilizer syndromes.
+        """
         super().__init__()
 
         d = data

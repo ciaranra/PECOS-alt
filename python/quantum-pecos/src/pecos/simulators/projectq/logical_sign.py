@@ -9,26 +9,36 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Logical sign tracking for ProjectQ simulator.
+
+This module provides logical sign tracking functionality for the ProjectQ simulator, managing global phase and
+logical operator signs that arise during quantum circuit execution using the ProjectQ framework.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from projectq.ops import QubitOperator
 
-from pecos.circuits import QuantumCircuit
+if TYPE_CHECKING:
+    from pecos.circuits import QuantumCircuit
+    from pecos.simulators.projectq.state import ProjectQSim
 
 
 def find_logical_signs(
-    state,
+    state: ProjectQSim,
     logical_circuit: QuantumCircuit,
-    allow_float=False,
-) -> int:
+    *,
+    allow_float: bool = False,
+) -> int | float:
     """Find the sign of the logical operator.
 
     Args:
     ----
-        state:
-        logical_circuit:
-
-    Returns:
-    -------
-
+        state: The ProjectQ state instance
+        logical_circuit: The logical circuit to find the sign of
+        allow_float: Whether to allow floating point results
     """
     if len(logical_circuit) != 1:
         msg = "Logical operators are expected to only have one tick."
@@ -42,21 +52,18 @@ def find_logical_signs(
     for symbol, gate_locations, _ in logical_circuit.items():
         if symbol == "X":
             logical_xs.update(gate_locations)
-            for loc in gate_locations:
-                op_string.append("X%s" % loc)
+            op_string.extend(f"X{loc}" for loc in gate_locations)
         elif symbol == "Z":
             logical_zs.update(gate_locations)
-            for loc in gate_locations:
-                op_string.append("Z%s" % loc)
+            op_string.extend(f"Z{loc}" for loc in gate_locations)
         elif symbol == "Y":
             logical_xs.update(gate_locations)
             logical_zs.update(gate_locations)
-            for loc in gate_locations:
-                op_string.append("Y%s" % loc)
+            op_string.extend(f"Y{loc}" for loc in gate_locations)
         else:
+            msg = f'Can not currently handle logical operator with operator "{symbol}"!'
             raise Exception(
-                'Can not currently handle logical operator with operator "%s"!'
-                % symbol,
+                msg,
             )
 
     op_string = " ".join(op_string)
@@ -70,12 +77,11 @@ def find_logical_signs(
         result = round(result, 5)
         if result == -1:
             return 1
-        elif result == 1:
+        if result == 1:
             return 0
-        else:
-            print("Operator being measured:", op_string)
-            print("RESULT FOUND:", result)
-            msg = "Unexpected result found!"
-            raise Exception(msg)
+        print("Operator being measured:", op_string)
+        print("RESULT FOUND:", result)
+        msg = "Unexpected result found!"
+        raise Exception(msg)
 
     return result

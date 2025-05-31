@@ -1,3 +1,10 @@
+"""General-purpose tools and utilities for quantum error correction.
+
+This module provides a collection of miscellaneous tools and utilities
+for quantum error correction analysis, circuit manipulation, and
+general-purpose functions used throughout the PECOS framework.
+"""
+
 # Copyright 2018 The PECOS Developers
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
@@ -14,22 +21,31 @@
 from __future__ import annotations
 
 from itertools import combinations, product
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from pecos import circuits
+
+if TYPE_CHECKING:
+    from collections.abc import Generator, Iterable
+
+    from pecos.circuits import LogicalCircuit
+    from pecos.protocols import Decoder, QECCProtocol, SimulatorProtocol
+
+
 from pecos.circuits import QuantumCircuit
 from pecos.engines.circuit_runners import Standard
 from pecos.simulators import SparseSimPy
 
 
-def fault_tolerance_check(qecc, decoder):
+def fault_tolerance_check(qecc: QECCProtocol, decoder: Decoder) -> None:
     """Checks that the decoder can correct all Pauli errors of weight up to floor(distance/2).
 
     Args:
     ----
-        QECC:
-        decoder:
+        qecc: The quantum error correcting code instance to check.
+        decoder: The decoder instance used for error correction.
 
     Raises:
     ------
@@ -75,7 +91,8 @@ def fault_tolerance_check(qecc, decoder):
         )
 
         if sign:
-            raise Exception("Decoder failed to correct error: %s" % err)
+            msg = f"Decoder failed to correct error: {err}"
+            raise Exception(msg)
 
         sign = _apply_err(
             state,
@@ -88,7 +105,8 @@ def fault_tolerance_check(qecc, decoder):
         )
 
         if sign:
-            raise Exception("Decoder failed to correct error: %s" % err)
+            msg = f"Decoder failed to correct error: {err}"
+            raise Exception(msg)
 
     # Check circuit errors
     # Need to apply errors amongst any combination of ticks and qubits
@@ -98,8 +116,8 @@ def fault_tolerance_check(qecc, decoder):
     spacetime = set(product(list(range(num_ticks)), qudits))
     for xs, zs in gen_pauli_errors(spacetime, max_errors=t):
         state = SparseSimPy(num_qudits)
-        xs = list(xs)
-        zs = list(zs)
+        xs = list(xs)  # noqa: PLW2901 - convert generator to list
+        zs = list(zs)  # noqa: PLW2901 - convert generator to list
 
         err_dict = form_errors(xs, zs)
 
@@ -114,7 +132,8 @@ def fault_tolerance_check(qecc, decoder):
         )
 
         if sign:
-            raise Exception("Decoder failed to correct error: %s" % str(spacetime))
+            msg = f"Decoder failed to correct error: {spacetime!s}"
+            raise Exception(msg)
 
         sign = _apply_err_spacetime(
             state,
@@ -127,10 +146,27 @@ def fault_tolerance_check(qecc, decoder):
         )
 
         if sign:
-            raise Exception("Decoder failed to correct error: %s" % str(spacetime))
+            msg = f"Decoder failed to correct error: {spacetime!s}"
+            raise Exception(msg)
 
 
-def form_errors(xs, zs):
+def form_errors(
+    xs: Iterable[tuple[int, int]],
+    zs: Iterable[tuple[int, int]],
+) -> dict[int, dict[str, set[int]]]:
+    """Form error dictionary from X and Z error events.
+
+    Converts iterables of X and Z error events into a structured dictionary
+    organized by time steps and error types for error correction processing.
+
+    Args:
+        xs: Iterable of (time, qubit) tuples for X errors.
+        zs: Iterable of (time, qubit) tuples for Z errors.
+
+    Returns:
+        Dictionary mapping time steps to error types and affected qubits.
+        Structure: {time: {'X': {qubits}, 'Z': {qubits}}}
+    """
     errors = {}
     for t, q in xs:
         xerr = errors.setdefault(t, {}).setdefault("X", set())
@@ -144,14 +180,14 @@ def form_errors(xs, zs):
 
 
 def _apply_err_spacetime(
-    state,
-    circ_runner,
-    init_circ,
-    err_dict,
-    decoder,
-    logical_op,
-    qecc,
-):
+    state: SimulatorProtocol,
+    circ_runner: Standard,
+    init_circ: QuantumCircuit | LogicalCircuit,
+    err_dict: dict[int, dict[str, set[int]]],
+    decoder: Decoder,
+    logical_op: QuantumCircuit | LogicalCircuit,
+    qecc: QECCProtocol,
+) -> int:
     circ_runner.run(state, init_circ)
 
     syn_circ = qecc.instruction("instr_syn_extract", num_syn_extract=1)
@@ -189,11 +225,19 @@ def _apply_err_spacetime(
     return state.logical_sign(logical_op)
 
 
-def _apply_err(state, circ_runner, init_circ, syn_circ, error, decoder, logical_op):
+def _apply_err(
+    state: SimulatorProtocol,
+    circ_runner: Standard,
+    init_circ: QuantumCircuit | LogicalCircuit,
+    syn_circ: QuantumCircuit | LogicalCircuit,
+    error: QuantumCircuit,
+    decoder: Decoder,
+    logical_op: QuantumCircuit | LogicalCircuit,
+) -> int:
     circ_runner.run(state, init_circ)
     circ_runner.run(state, error)
     output, _ = circ_runner.run(state, syn_circ)
-    syn = output.simplified(True)
+    syn = output.simplified(last=True)
 
     if syn:
         recovery = decoder.decode(syn)
@@ -203,18 +247,20 @@ def _apply_err(state, circ_runner, init_circ, syn_circ, error, decoder, logical_
 
 
 def gen_pauli_errors(
-    qubits,
+    qubits: Iterable[int | tuple[int, int]],
     *,
     min_errors: int = 1,
     max_errors: bool | int = False,
     css: bool = False,
-):
-    """Args:
+) -> Generator[tuple[set[int], set[int]], None, None]:
+    """Generate Pauli error patterns for fault tolerance testing.
+
+    Args:
     ----
-        qubits:
-        min_errors:
-        max_errors:
-        css:
+        qubits: Set or sequence of qubit indices to generate errors on.
+        min_errors: Minimum number of errors to generate.
+        max_errors: Maximum number of errors to generate. False for no limit.
+        css: If True, generate only CSS-compatible errors (X and Z only).
 
     Returns:
     -------
@@ -238,7 +284,7 @@ def gen_pauli_errors(
             for ps in xzs:
                 x_set = set()
                 z_set = set()
-                for p, q in zip(ps, b):
+                for p, q in zip(ps, b, strict=False):
                     if p == "X":
                         x_set.add(q)
                     else:
@@ -253,7 +299,7 @@ def gen_pauli_errors(
                 for b in combinations(qubits, i):
                     x_set = set()
                     z_set = set()
-                    for p, q in zip(a, b):
+                    for p, q in zip(a, b, strict=False):
                         if p == "X":
                             x_set.add(q)
                         elif p == "Z":

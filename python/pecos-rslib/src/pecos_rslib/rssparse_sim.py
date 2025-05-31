@@ -9,22 +9,48 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-# ruff: noqa: SLF001
+"""Rust-based sparse stabilizer simulator for PECOS.
+
+This module provides a Python interface to the high-performance Rust implementation of sparse stabilizer simulation,
+enabling efficient quantum circuit simulation for stabilizer circuits with reduced memory overhead and improved
+performance compared to dense state vector representations.
+"""
 
 from __future__ import annotations
 
-from typing import Any
+# ruff: noqa: SLF001
+
+from typing import TYPE_CHECKING, NoReturn
 
 from pecos_rslib._pecos_rslib import SparseSim as RustSparseSim
 
+if TYPE_CHECKING:
+    from pecos.type_defs import SimulatorGateParams
+
 
 class SparseSimRs:
+    """Rust-based sparse stabilizer simulator.
+
+    A high-performance sparse stabilizer simulator implemented in Rust, providing efficient simulation of quantum
+    circuits that can be represented using the stabilizer formalism with reduced memory requirements.
+    """
+
     def __init__(self, num_qubits: int):
+        """Initialize the Rust-based sparse simulator.
+
+        Args:
+            num_qubits: Number of qubits to simulate.
+        """
         self._sim = RustSparseSim(num_qubits)
         self.num_qubits = num_qubits
         self.bindings = dict(gate_dict)
 
-    def reset(self):
+    def reset(self) -> SparseSimRs:
+        """Reset the simulator to its initial state.
+
+        Returns:
+            Self for method chaining.
+        """
         self._sim.reset()
         return self
 
@@ -32,8 +58,18 @@ class SparseSimRs:
         self,
         symbol: str,
         locations: set[int] | set[tuple[int, ...]],
-        **params: Any,
+        **params: SimulatorGateParams,
     ) -> dict[int, int]:
+        """Execute a quantum gate on specified locations.
+
+        Args:
+            symbol: Gate symbol/name to execute.
+            locations: Set of qubit locations to apply the gate to.
+            **params: Additional gate parameters.
+
+        Returns:
+            Dictionary mapping locations to measurement results.
+        """
         output = {}
 
         if params.get("simulate_gate", True) and locations:
@@ -59,6 +95,15 @@ class SparseSimRs:
         circuit,
         removed_locations: set[int] | None = None,
     ) -> dict[int, int]:
+        """Execute a quantum circuit.
+
+        Args:
+            circuit: Quantum circuit to execute.
+            removed_locations: Optional set of locations to exclude.
+
+        Returns:
+            Dictionary mapping locations to measurement results.
+        """
         if removed_locations is None:
             removed_locations = set()
 
@@ -74,26 +119,52 @@ class SparseSimRs:
         return results
 
     def add_faults(self, circuit, removed_locations: set[int] | None = None) -> None:
+        """Add faults to the simulator by running a circuit.
+
+        Args:
+            circuit: Circuit containing fault operations.
+            removed_locations: Optional set of locations to exclude.
+        """
         self.run_circuit(circuit, removed_locations)
 
     # def print_stabs(self, *, verbose: bool = True, print_y: bool = True, print_destabs: bool = False) -> list[str]:
     #     return self._sim.print_stabs(verbose, print_y, print_destabs)
 
     @property
-    def stabs(self):
+    def stabs(self) -> TableauWrapper:
+        """Get stabilizers tableau wrapper.
+
+        Returns:
+            Wrapper for accessing stabilizer tableau.
+        """
         return TableauWrapper(self._sim, is_stab=True)
 
     @property
-    def destabs(self):
+    def destabs(self) -> TableauWrapper:
+        """Get destabilizers tableau wrapper.
+
+        Returns:
+            Wrapper for accessing destabilizer tableau.
+        """
         return TableauWrapper(self._sim, is_stab=False)
 
     def print_stabs(
         self,
         *,
         verbose: bool = True,
-        print_y: bool = True,
+        print_y: bool = True,  # noqa: ARG002
         print_destabs: bool = False,
-    ):
+    ) -> str | tuple[str, str]:
+        """Print stabilizer tableau(s).
+
+        Args:
+            verbose: Whether to print to stdout.
+            print_y: Whether to print Y operators (unused).
+            print_destabs: Whether to also print destabilizers.
+
+        Returns:
+            String representation of stabilizers, or tuple if destabs included.
+        """
         stabs = self._sim.stab_tableau()
         if print_destabs:
             destabs = self._sim.destab_tableau()
@@ -109,25 +180,61 @@ class SparseSimRs:
                 print(stabs)
             return stabs
 
-    def logical_sign(self, logical_op):
+    def logical_sign(self, logical_op) -> NoReturn:  # noqa: ARG002
+        """Calculate logical sign (not implemented).
+
+        Args:
+            logical_op: Logical operator to analyze.
+
+        Raises:
+            NotImplementedError: This method is not yet implemented.
+        """
         # This method needs to be implemented based on the Python version
         # It might require additional Rust functions to be exposed
         msg = "logical_sign method not implemented yet"
         raise NotImplementedError(msg)
 
-    def refactor(self, xs, zs, choose=None, prefer=None, protected=None):
+    def refactor(
+        self, xs, zs, choose=None, prefer=None, protected=None
+    ) -> NoReturn:  # noqa: ARG002
+        """Refactor stabilizer tableau (not implemented).
+
+        Args:
+            xs: X component.
+            zs: Z component.
+            choose: Choice parameter.
+            prefer: Preference parameter.
+            protected: Protection parameter.
+
+        Raises:
+            NotImplementedError: This method is not yet implemented.
+        """
         # This method needs to be implemented based on the Python version
         # It might require additional Rust functions to be exposed
         msg = "refactor method not implemented yet"
         raise NotImplementedError(msg)
 
-    def find_stab(self, xs, zs):
+    def find_stab(self, xs, zs) -> NoReturn:  # noqa: ARG002
+        """Find stabilizer (not implemented).
+
+        Args:
+            xs: X component.
+            zs: Z component.
+
+        Raises:
+            NotImplementedError: This method is not yet implemented.
+        """
         # This method needs to be implemented based on the Python version
         # It might require additional Rust functions to be exposed
         msg = "find_stab method not implemented yet"
         raise NotImplementedError(msg)
 
-    def copy(self):
+    def copy(self) -> NoReturn:
+        """Create a copy of the simulator (not implemented).
+
+        Raises:
+            NotImplementedError: This method is not yet implemented.
+        """
         # This method needs to be implemented
         # It might require an additional Rust function to be exposed
         msg = "copy method not implemented yet"
@@ -189,7 +296,7 @@ def adjust_tableau_string(line: str, *, is_stab: bool) -> str:
 
 # Define the gate dictionary
 gate_dict = {
-    "I": lambda sim, q, **params: None,
+    "I": lambda sim, q, **params: None,  # noqa: ARG005
     "X": lambda sim, q, **params: sim._sim.run_1q_gate("X", q, params),
     "Y": lambda sim, q, **params: sim._sim.run_1q_gate("Y", q, params),
     "Z": lambda sim, q, **params: sim._sim.run_1q_gate("Z", q, params),
@@ -213,7 +320,7 @@ gate_dict = {
     "F3dg": lambda sim, q, **params: sim._sim.run_1q_gate("F3dg", q, params),
     "F4": lambda sim, q, **params: sim._sim.run_1q_gate("F4", q, params),
     "F4dg": lambda sim, q, **params: sim._sim.run_1q_gate("F4dg", q, params),
-    "II": lambda sim, qs, **params: None,
+    "II": lambda sim, qs, **params: None,  # noqa: ARG005
     "CX": lambda sim, qs, **params: sim._sim.run_2q_gate("CX", qs, params),
     "CNOT": lambda sim, qs, **params: sim._sim.run_2q_gate("CX", qs, params),
     "CY": lambda sim, qs, **params: sim._sim.run_2q_gate("CY", qs, params),

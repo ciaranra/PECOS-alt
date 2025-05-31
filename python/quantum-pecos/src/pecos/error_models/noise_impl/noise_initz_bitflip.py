@@ -1,3 +1,10 @@
+"""Bitflip noise implementation for qubit initialization.
+
+This module provides noise models for qubit initialization operations,
+applying bitflip errors during qubit reset and initialization procedures
+in quantum error correction simulations.
+"""
+
 # Copyright 2023 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -14,7 +21,7 @@ from pecos.error_models.noise_impl.noise_sq_bitflip import noise_sq_bitflip
 from pecos.reps.pypmir.op_types import QOp
 
 
-def noise_initz_bitflip(op: QOp, p: float):
+def noise_initz_bitflip(op: QOp, p: float) -> None:
     """The noise model for qubit (re)initialization.
 
     Args:

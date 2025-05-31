@@ -1,3 +1,8 @@
+"""Execution engines for PECOS.
+
+This package provides various execution engines for quantum simulations.
+"""
+
 # Copyright 2022 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

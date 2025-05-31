@@ -9,12 +9,24 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from typing import Any
+"""Quantum measurement operations for basic state vector simulator.
+
+This module provides quantum measurement operations for the basic state vector simulator, including projective
+measurements in the computational basis and other measurement schemes with proper state collapse.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import numpy as np
 
+if TYPE_CHECKING:
+    from pecos.simulators.basic_sv.state import BasicSV
+    from pecos.type_defs import SimulatorGateParams
 
-def meas_z(state, qubit: int, **params: Any) -> int:
+
+def meas_z(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> int:
     """Measure in the Z-basis, collapse and normalise.
 
     Notes:
@@ -66,10 +78,7 @@ def meas_z(state, qubit: int, **params: Any) -> int:
     prob_0 = np.sum(projected_vector * np.conjugate(projected_vector))
 
     # Simulate the measurement
-    if np.random.random() < prob_0:
-        result = 0
-    else:
-        result = 1
+    result = 0 if np.random.random() < prob_0 else 1
 
     # Collapse the state
     if result == 0:

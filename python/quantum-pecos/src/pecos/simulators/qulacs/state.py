@@ -9,24 +9,34 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from numpy.typing import ArrayLike
+"""Quantum state representation for Qulacs simulator.
+
+This module provides quantum state representation and management for the Qulacs simulator, including state vector
+storage and manipulation using Qulacs quantum simulation framework.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from qulacs import QuantumState
 
 from pecos.simulators.qulacs import bindings
 from pecos.simulators.sim_class_types import StateVector
 
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike
+
 
 class Qulacs(StateVector):
     """Wrapper of Qulacs state vector simulator."""
 
-    def __init__(self, num_qubits) -> None:
-        """
-        Initializes the state vector.
+    def __init__(self, num_qubits: int) -> None:
+        """Initializes the state vector.
 
         Args:
             num_qubits (int): Number of qubits being represented.
         """
-
         if not isinstance(num_qubits, int):
             msg = "``num_qubits`` should be of type ``int``."
             raise TypeError(msg)
@@ -39,7 +49,7 @@ class Qulacs(StateVector):
 
         self.reset()
 
-    def reset(self):
+    def reset(self) -> Qulacs:
         """Reset the quantum state for another run without reinitializing."""
         # Initialize state vector to |0>
         self.qulacs_state.set_zero_state()
@@ -47,4 +57,9 @@ class Qulacs(StateVector):
 
     @property
     def vector(self) -> ArrayLike:
+        """Get the quantum state vector from Qulacs.
+
+        Returns:
+            The state vector as a numpy array.
+        """
         return self.qulacs_state.get_vector()

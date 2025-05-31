@@ -1,11 +1,15 @@
+"""Integration tests for PHIR 64-bit value handling."""
+
 from pecos.engines.hybrid_engine import HybridEngine
 
 
 def bin2int(result: list[str]) -> int:
+    """Convert binary string to integer."""
     return int(result[0], base=2)
 
 
-def test_setting_cvar():
+def test_setting_cvar() -> None:
+    """Test setting classical variables in PHIR with 64-bit values."""
     phir = {
         "format": "PHIR/JSON",
         "version": "0.1.0",

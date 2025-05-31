@@ -1,3 +1,9 @@
+"""Logical Pauli gates for the Steane 7-qubit code.
+
+This module provides logical Pauli gate implementations (X, Y, Z) for the Steane 7-qubit code, implemented as
+transversal operations that preserve the quantum error correction properties.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -14,8 +20,7 @@ from pecos.slr import Block, Comment, QReg
 
 
 class X(Block):
-    """
-    Pauli X
+    """Pauli X.
 
     X -> X
     Z -> -Z
@@ -23,7 +28,16 @@ class X(Block):
     Y -> -Y
     """
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
+        """Initialize a logical Pauli X gate on the Steane code.
+
+        Args:
+            q: A quantum register containing exactly 7 qubits representing a logical qubit
+                in the Steane code.
+
+        Raises:
+            Exception: If the quantum register does not contain exactly 7 qubits.
+        """
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)
@@ -37,8 +51,7 @@ class X(Block):
 
 
 class Y(Block):
-    """
-    Pauli Y
+    """Pauli Y.
 
     X -> -X
     Z -> -Z
@@ -46,7 +59,16 @@ class Y(Block):
     Y -> Y
     """
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
+        """Initialize a logical Pauli Y gate on the Steane code.
+
+        Args:
+            q: A quantum register containing exactly 7 qubits representing a logical qubit
+                in the Steane code.
+
+        Raises:
+            Exception: If the quantum register does not contain exactly 7 qubits.
+        """
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)
@@ -60,8 +82,7 @@ class Y(Block):
 
 
 class Z(Block):
-    """
-    Pauli Z
+    """Pauli Z.
 
     X -> -X
     Z -> Z
@@ -69,7 +90,16 @@ class Z(Block):
     Y -> -Y
     """
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
+        """Initialize a logical Pauli Z gate on the Steane code.
+
+        Args:
+            q: A quantum register containing exactly 7 qubits representing a logical qubit
+                in the Steane code.
+
+        Raises:
+            Exception: If the quantum register does not contain exactly 7 qubits.
+        """
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)

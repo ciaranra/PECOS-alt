@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""PECOS Rust library Python bindings.
+
+This package provides Python bindings for high-performance Rust implementations of quantum simulators and computational
+components within the PECOS framework, enabling efficient quantum circuit simulation and error correction computations.
+"""
+
 # ruff: noqa: TID252
 from importlib.metadata import PackageNotFoundError, version
 

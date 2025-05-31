@@ -1,3 +1,10 @@
+"""Legacy single-qubit noise implementation.
+
+This module provides legacy noise models for single-qubit operations,
+maintained for backward compatibility with existing error models
+and simulations in PECOS.
+"""
+
 # Copyright 2021 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -29,7 +36,7 @@ def noise_depolarizing_sq_gate(
     """Apply a symmetric depolarizing noise model."""
     rand_nums = np.random.random(len(locations)) <= p
 
-    for r, loc in zip(rand_nums, locations):
+    for r, loc in zip(rand_nums, locations, strict=False):
         if r:
             err = np.random.choice(error_one_paulis_collection)
             after.append(err, {loc})

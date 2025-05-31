@@ -11,25 +11,57 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-"""Contains the parent classes for QECCs, logical gates, and logical instructions."""
+"""Contains the default implementation of the QECC protocol."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
 from pecos.circuit_converters.checks2circuit import Check2Circuits
+from pecos.protocols import QECCProtocol
 from pecos.qeccs.plot import plot_qecc
 
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
-class QECC:
-    """Parent class for QECCs.
+    from pecos.protocols import LogicalGateProtocol, LogicalInstructionProtocol
+    from pecos.type_defs import QECCGateParams, QECCInstrParams, QECCParams
+
+T = TypeVar("T")
+
+
+class QECCElement(Protocol):
+    """Protocol for QECC elements that have symbol and params attributes."""
+
+    symbol: str
+    params: dict[str, Any]
+
+
+class DefaultQECC:
+    """Default QECC class providing standard implementations.
 
     A QECC's role is to output circuits for logical gates. Logical gates are a collection of logical instructions.
     Logical instructions might be called multiple times. To save time and memory, logical instructions are saved to
     the QECC instance.
+
+    This class provides default implementations of the QECCProtocol interface.
+    QECC implementations can inherit from this class to get the standard behavior,
+    or implement the QECCProtocol directly for custom behavior.
 
     Warnings:
     --------
         Do not change the value of ``params`` once set during initialization.
     """
 
-    def __init__(self, **qecc_params) -> None:
+    def __init__(self, **qecc_params: QECCParams) -> None:
+        """Initialize the default QECC base class.
+
+        Args:
+            **qecc_params: QECC parameters including:
+                - distance: The code distance
+                - circuit_compiler: Circuit compiler instance (default: Check2Circuits())
+                - mapping: Optional qubit mapping (default: NoMap())
+        """
         # Give name for others classes to identify this code
         # --------------------------------------------------
         self.name = None  # Name that identifies to other what QECC this is.
@@ -80,40 +112,49 @@ class QECC:
         self.mapping = self.qecc_params.get("mapping", NoMap())
 
     @property
-    def num_qudits(self):
+    def num_qudits(self) -> int:
+        """Get the total number of qudits (data + ancilla).
+
+        Returns:
+            Total number of qudits in the QECC.
+        """
         return self.num_data_qudits + self.num_ancilla_qudits
 
     @property
-    def available_gates(self):
+    def available_gates(self) -> list[str]:
+        """Get list of available logical gate symbols.
+
+        Returns:
+            List of gate symbols that can be applied to this QECC.
+        """
         return list(self.sym2gate_class.keys())
 
     @property
-    def available_instructions(self):
+    def available_instructions(self) -> list[str]:
+        """Get list of available logical instruction symbols.
+
+        Returns:
+            List of instruction symbols that can be applied to this QECC.
+        """
         return list(self.sym2instruction_class.keys())
 
-    def plot(self, figsize=(9, 9)):
+    def plot(self, figsize: tuple[int, int] = (9, 9)) -> None:
         """Default plotter of the QECC.
 
         Args:
         ----
-            figsize(tuple of int):
-
-        Returns:
-        -------
+            figsize(tuple of int): The size of the plotted figure as (width, height).
 
         """
         plot_qecc(self, figsize)
 
-    def gate(self, symbol, **gate_params):
+    def gate(self, symbol: str, **gate_params: QECCGateParams) -> LogicalGateProtocol:
         """Returns a logical gate object.
 
         Args:
         ----
-            symbol(str):
-            **gate_params:
-
-        Returns:
-        -------
+            symbol(str): The symbol/name of the gate to retrieve or create.
+            **gate_params: Additional parameters to pass to the gate constructor.
 
         """
         # Recognize special symbol prefix
@@ -139,15 +180,20 @@ class QECC:
 
         return gotten_gate
 
-    def instruction(self, symbol, **instr_params):
+    def instruction(
+        self,
+        symbol: str,
+        **instr_params: QECCInstrParams,
+    ) -> LogicalInstructionProtocol:
         """Gets logical instruction given a string and parameters.
 
         Args:
         ----
-            symbol(str):
-            **gate_params(dict):
+            symbol: The symbol/name of the instruction to retrieve or create.
+            **instr_params: Additional parameters to pass to the instruction constructor.
 
-        Returns(LogicalInstruction):
+        Returns:
+            LogicalInstructionProtocol: The requested logical instruction.
 
         """
         gotten_instr = self._retrieve_element(symbol, instr_params, self.instr_set)
@@ -162,17 +208,21 @@ class QECC:
         return gotten_instr
 
     @staticmethod
-    def _retrieve_element(symbol, params, element_set):
+    def _retrieve_element(
+        symbol: str,
+        params: dict[str, Any],
+        element_set: set[QECCElement],
+    ) -> QECCElement | None:
         """Retrieve an element from a set.
 
         Args:
         ----
+            symbol: The symbol/identifier of the element to retrieve.
+            params: Parameters that the element should match.
+            element_set: The set of elements to search through.
             symbol(str):
             gate_params(dict):
             element_set(set):
-
-        Returns:
-        -------
 
         """
         gotten_element = None
@@ -183,13 +233,8 @@ class QECC:
 
         return gotten_element
 
-    def _data_id_iter(self):
-        """Assigns qudit ids. Also, records qudit id in the sets self.
-
-        Returns:
-        -------
-
-        """
+    def _data_id_iter(self) -> Generator[int, None, None]:
+        """Assigns qudit ids. Also, records qudit id in the sets self."""
         while True:
             qudit_id = max(self.qudit_set, default=-1) + 1
             self.qudit_set.add(qudit_id)
@@ -201,13 +246,8 @@ class QECC:
 
             yield qudit_id
 
-    def _ancilla_id_iter(self):
-        """Assigns qudit ids. Also, records qudit id in the sets self.
-
-        Returns:
-        -------
-
-        """
+    def _ancilla_id_iter(self) -> Generator[int, None, None]:
+        """Assigns qudit ids. Also, records qudit id in the sets self."""
         last_ancilla_id = None
 
         while True:
@@ -222,16 +262,21 @@ class QECC:
 
                 yield qudit_id
 
-    def _add_node(self, x, y, iter_ids):
+    def _add_node(self, x: int, y: int, iter_ids: Generator[int, None, None]) -> None:
         nid = next(iter_ids)
 
         self.layout[nid] = (x, y)
         self.position2qudit[(x, y)] = nid
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
+        """Check equality with another QECC."""
+        # Check if other implements the QECCProtocol
+        if not isinstance(other, QECCProtocol):
+            return NotImplemented
         return (self.name, self.qecc_params) == (other.name, other.qecc_params)
 
-    def __ne__(self, other):
+    def __ne__(self, other: object) -> bool:
+        """Check inequality with another QECC."""
         return not (self == other)
 
 
@@ -239,7 +284,8 @@ class NoMap:
     """Default Mapping: item -> item."""
 
     def __init__(self) -> None:
-        pass
+        """Initialize the NoMap identity mapping."""
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: T) -> T:
+        """Return the item unchanged (identity mapping)."""
         return item

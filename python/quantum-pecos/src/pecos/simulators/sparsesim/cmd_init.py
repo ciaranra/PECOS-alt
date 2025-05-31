@@ -11,26 +11,37 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from typing import Any
+"""Qubit initialization commands for sparse stabilizer simulator.
+
+This module provides quantum state initialization operations for the sparse stabilizer simulator, including
+commands to initialize qubits to computational basis states using efficient stabilizer tableau representation.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pecos.simulators.sparsesim.state import SparseSim
+    from pecos.type_defs import SimulatorGateParams
 
 from pecos.simulators.sparsesim.cmd_meas import meas_z
 from pecos.simulators.sparsesim.cmd_one_qubit import H2, H5, H6, H, X
-from pecos.simulators.sparsesim.state import SparseSim
 
 
 def init_zero(
     state: SparseSim,
     qubit: int,
     forced_outcome: int = -1,
-    **params: Any,
+    **_params: SimulatorGateParams,
 ) -> None:
-    """
+    """Initialize qubit to zero state.
 
     Args:
-        state: Instance representing the stabilizer state.
-        qubit: Integer that indexes the qubit being acted on.
-        forced_outcome: Value for a "random" outcome. Default is -1, which means 0 and 1 are equally probable.
-        **params:
+        state (SparseSim): Instance representing the stabilizer state.
+        qubit (int): Integer that indexes the qubit being acted on.
+        forced_outcome (int): Value for a "random" outcome. Default is -1, which means 0 and 1 are equally probable.
+        **_params: Unused additional parameters (kept for interface compatibility).
     """
     # Measure in the Z basis. (If random outcome, force a 0 outcome).
     # If outcome is 1 apply an X.
@@ -42,7 +53,7 @@ def init_one(
     state: SparseSim,
     qubit: int,
     forced_outcome: int = -1,
-    **params: Any,
+    **_params: SimulatorGateParams,
 ) -> None:
     """Initialize qubit in state |1>.
 
@@ -59,7 +70,7 @@ def init_plus(
     state: SparseSim,
     qubit: int,
     forced_outcome: int = -1,
-    **params: Any,
+    **_params: SimulatorGateParams,
 ) -> None:
     """Initialize qubit in state |+>.
 
@@ -76,7 +87,7 @@ def init_minus(
     state: SparseSim,
     qubit: int,
     forced_outcome: int = -1,
-    **params: Any,
+    **_params: SimulatorGateParams,
 ) -> None:
     """Initialize qubit in state |->.
 
@@ -93,7 +104,7 @@ def init_plusi(
     state: SparseSim,
     qubit: int,
     forced_outcome: int = -1,
-    **params: Any,
+    **_params: SimulatorGateParams,
 ) -> None:
     """Initialize qubit in state |+i>.
 
@@ -110,7 +121,7 @@ def init_minusi(
     state: SparseSim,
     qubit: int,
     forced_outcome: int = -1,
-    **params: Any,
+    **_params: SimulatorGateParams,
 ) -> None:
     """Initialize qubit in state |-i>.
 

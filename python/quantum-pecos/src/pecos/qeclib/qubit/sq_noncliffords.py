@@ -1,3 +1,10 @@
+"""Single-qubit non-Clifford gate implementations.
+
+This module provides non-Clifford gate implementations including T gates
+and other gates that extend beyond the Clifford group, enabling
+universal quantum computation when combined with Clifford gates.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -12,7 +19,15 @@
 from pecos.qeclib.qubit.qgate_base import QGate
 
 
-class T(QGate): ...
+class T(QGate):
+    """T gate (π/8 rotation).
+
+    This gate performs a π/4 rotation around the Z-axis.
+    """
 
 
-class Tdg(QGate): ...
+class Tdg(QGate):
+    """T-dagger gate (inverse T gate).
+
+    This gate performs a -π/4 rotation around the Z-axis.
+    """

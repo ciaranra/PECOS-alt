@@ -1,3 +1,10 @@
+"""Wasmer WebAssembly runtime integration for PECOS.
+
+This module provides integration with the Wasmer WebAssembly runtime, enabling the execution of WASM modules for
+classical computations within the PECOS quantum error correction framework. It supports compilation, instantiation,
+and execution of WebAssembly code with proper error handling and resource management.
+"""
+
 # Copyright 2022 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -18,13 +25,12 @@ from wasmer import FunctionType, Instance, Module, Store, engine
 from wasmer_compiler_cranelift import Compiler as Cranelift
 
 from pecos.errors import MissingCCOPError, WasmRuntimeError
-from pecos.foreign_objects.foreign_object_abc import ForeignObject
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
-class WasmerObj(ForeignObject):
+class WasmerObj:
     """Wrapper class to create a Wasmer instance and access its functions.
 
     For more info on using Wasmer, see: https://wasmerio.github.io/wasmer-python/api/wasmer/wasmer.html
@@ -35,9 +41,16 @@ class WasmerObj(ForeignObject):
         file: str | bytes | Path,
         compiler: object | None = None,
     ) -> None:
+        """Initialize a WasmerObj.
+
+        Args:
+        ----
+            file: Path to WASM file, file bytes, or Path object to load.
+            compiler: Optional Wasmer compiler to use. Defaults to Cranelift if None.
+        """
         self.compiler = compiler
 
-        if isinstance(file, (str, Path)):
+        if isinstance(file, str | Path):
             with Path.open(Path(file), "rb") as f:
                 wasm_bytes = f.read()
         else:
@@ -72,6 +85,7 @@ class WasmerObj(ForeignObject):
         self.instance = Instance(self.module)
 
     def spin_up_wasm(self) -> None:
+        """Initialize the WASM module and create a new instance."""
         compiler = self.compiler
         if compiler is None:
             compiler = Cranelift
@@ -82,17 +96,35 @@ class WasmerObj(ForeignObject):
         self.new_instance()
 
     def get_funcs(self) -> list[str]:
+        """Get list of function names exported by the WASM module.
+
+        Returns:
+            List of function names available for execution.
+        """
         if self.func_names is None:
-            fs = []
-            for f in self.module.exports:
-                if isinstance(f.type, FunctionType):
-                    fs.append(str(f.name))
+            fs = [
+                str(f.name)
+                for f in self.module.exports
+                if isinstance(f.type, FunctionType)
+            ]
 
             self.func_names = fs
 
         return self.func_names
 
     def exec(self, func_name: str, args: Sequence) -> tuple:
+        """Execute a function in the WASM module.
+
+        Args:
+            func_name: Name of the function to execute.
+            args: Sequence of arguments to pass to the function.
+
+        Returns:
+            Tuple containing the function result.
+
+        Raises:
+            WasmRuntimeError: If WASM execution fails.
+        """
         try:
             func = getattr(self.instance.exports, func_name)
         except AttributeError as e:
@@ -110,8 +142,21 @@ class WasmerObj(ForeignObject):
             raise WasmRuntimeError(ex.args[0]) from ex
 
     def to_dict(self) -> dict:
+        """Convert the WasmerObj to a dictionary for serialization.
+
+        Returns:
+            Dictionary containing the object class and WASM bytes.
+        """
         return {"fobj_class": WasmerObj, "wasm_bytes": self.wasm_bytes}
 
     @staticmethod
     def from_dict(wasmer_dict: dict) -> WasmerObj:
+        """Create a WasmerObj from a dictionary.
+
+        Args:
+            wasmer_dict: Dictionary containing object class and WASM bytes.
+
+        Returns:
+            New WasmerObj instance.
+        """
         return wasmer_dict["fobj_class"](wasmer_dict["wasm_bytes"])

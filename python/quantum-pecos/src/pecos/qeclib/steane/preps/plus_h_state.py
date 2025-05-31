@@ -1,3 +1,9 @@
+"""Logical |+H⟩ state preparation for the Steane 7-qubit code.
+
+This module provides implementations for preparing the logical |+H⟩ state in the Steane 7-qubit code using
+fault-tolerant distillation and verification protocols.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -22,8 +28,9 @@ from pecos.slr import Bit, Block, Comment, CReg, If, QReg, Repeat
 
 
 class PrepHStateFT(Block):
-    """
-    Prepare a |+H> state fault tolerantly by using an encoding circuit to prepare logical|+H>, measuring the logical
+    """Prepare a |+H> state fault tolerantly.
+
+    By using an encoding circuit to prepare logical|+H>, measuring the logical
     Hadamard with a flag, doing a QED round, and post-selecting based on non-trivial measurements.
 
     Arguments:
@@ -46,7 +53,22 @@ class PrepHStateFT(Block):
         last_raw_syn_z: CReg,
         *,
         condition_qed: bool = True,
-    ):
+    ) -> None:
+        """Initialize PrepHStateFT block for fault-tolerant |+H> state preparation.
+
+        Args:
+            d: Data qubits (size 7) for the Steane code.
+            a: Ancillary qubits (size 2) for measurements.
+            out: Measurement outputs (size 2). out[0] is the Hadamard measurement,
+                out[1] is the flag result.
+            reject: Bit indicating preparation failure (0 for success, 1 for failure).
+            flag_x: Classical register for X stabilizer flags.
+            flag_z: Classical register for Z stabilizer flags.
+            flags: Combined flags register.
+            last_raw_syn_x: Previous X syndrome measurements.
+            last_raw_syn_z: Previous Z syndrome measurements.
+            condition_qed: Whether to condition second QED round on first. Defaults to True.
+        """
         super().__init__()
 
         # non-fault-tolerantly encode logical |+H>
@@ -117,8 +139,9 @@ class PrepHStateFT(Block):
 
 
 class PrepHStateFTRUS(Block):
-    """
-    Prepare a |+H> state fault tolerantly by using an encoding circuit to prepare logical|+H>, measuring the logical
+    """Prepare a |+H> state fault tolerantly using repeat-until-success.
+
+    By using an encoding circuit to prepare logical|+H>, measuring the logical
     Hadamard with a flag, doing a QED round, and post-selecting based on non-trivial measurements.
 
     Arguments:
@@ -140,7 +163,22 @@ class PrepHStateFTRUS(Block):
         last_raw_syn_x: CReg,
         last_raw_syn_z: CReg,
         limit: int,
-    ):
+    ) -> None:
+        """Initialize PrepHStateFTRUS block for repeat-until-success |+H> preparation.
+
+        Args:
+            d: Data qubits (size 7) for the Steane code.
+            a: Ancillary qubits (size 2) for measurements.
+            out: Measurement outputs (size 2). out[0] is the Hadamard measurement,
+                out[1] is the flag result.
+            reject: Bit indicating preparation failure (0 for success, 1 for failure).
+            flag_x: Classical register for X stabilizer flags.
+            flag_z: Classical register for Z stabilizer flags.
+            flags: Combined flags register.
+            last_raw_syn_x: Previous X syndrome measurements.
+            last_raw_syn_z: Previous Z syndrome measurements.
+            limit: Maximum number of preparation attempts.
+        """
         super().__init__(
             PrepHStateFT(
                 d,

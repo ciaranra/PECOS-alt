@@ -36,7 +36,6 @@
    pecos.simulators.paulifaultprop
    pecos.simulators.projectq
    pecos.simulators.quantum_simulator
-   pecos.simulators.quest
    pecos.simulators.qulacs
    pecos.simulators.sim_class_types
    pecos.simulators.sparsesim

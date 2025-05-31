@@ -9,28 +9,42 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Multiprocessing hybrid engine for parallel quantum-classical computation.
+
+This module provides a multiprocessing-enabled hybrid engine for parallel
+execution of quantum-classical algorithms across multiple CPU cores.
+"""
+
 from __future__ import annotations
 
 import multiprocessing
 import sys
 from os import getpid
+from typing import TYPE_CHECKING
 from warnings import warn
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from multiprocessing.managers import SyncManager
+    from typing import Any
+
+    from pecos.engines.hybrid_engine import HybridEngine, PHIRProgram
 
 # TODO: Add runtime data to multisim_proc_info
 
 
 def run_multisim(
-    eng,
-    program,
+    eng: HybridEngine,
+    program: PHIRProgram,
     foreign_object: object = None,
     *,
     shots: int = 1,
     seed: int | None = None,
     pool_size: int = 1,
     reset_engine: bool = True,
-):
+) -> dict:
     """Parallelize the running of the sim."""
     if reset_engine:
         eng.reset_all()
@@ -125,10 +139,16 @@ def run_multisim(
 
 
 class MultisimError(Exception):
-    pass
+    """Exception raised when errors occur during multi-simulation execution.
+
+    This exception is used to signal errors that occur during parallel
+    simulation runs in the multiprocessing engine.
+    """
 
 
-def worker_wrapper(args) -> tuple[dict, dict]:
+def worker_wrapper(
+    args: tuple[SyncManager.Queue, Callable[..., dict], dict[str, Any], int],
+) -> tuple[dict, dict]:
     """A wrapper to pass kwargs onto run for multiprocess.pool.map."""
     queue, run, pkwargs, i = args
     pid = getpid()
@@ -153,20 +173,39 @@ def worker_wrapper(args) -> tuple[dict, dict]:
         results = run(**pkwargs)
     except (ValueError, TypeError, RuntimeError, KeyError, AttributeError) as e:
         queue.put((pid, "error", f"{type(e).__name__}: {e}"))
-    except Exception as e:
+    # Must catch all exceptions in worker process to prevent silent failures
+    except Exception as e:  # noqa: BLE001
         queue.put((pid, "error", f"Unexpected error: {type(e).__name__}: {e}"))
 
     return results, run_info
 
 
 class WriteStream:
-    def __init__(self, q, pid: int, stream_type: str) -> None:
+    """Custom stream for capturing and redirecting process output.
+
+    This class captures stdout/stderr from worker processes and forwards
+    the output through a multiprocessing queue for centralized handling.
+    """
+
+    def __init__(self, q: SyncManager.Queue, pid: int, stream_type: str) -> None:
+        """Initialize a write stream for capturing process output.
+
+        Args:
+            q: The multiprocessing queue for sending messages.
+            pid: The process ID of the worker process.
+            stream_type: The type of stream ('stdout' or 'stderr').
+        """
         self.queue = q
         self.stream_type = stream_type
         self.pid = pid
 
-    def write(self, msg):
+    def write(self, msg: str) -> None:
+        """Write message to the output queue.
+
+        Args:
+            msg: Message string to write.
+        """
         self.queue.put((self.pid, self.stream_type, msg))
 
-    def flush(self):
-        pass
+    def flush(self) -> None:
+        """Flush the output stream (no-op for queue-based output)."""

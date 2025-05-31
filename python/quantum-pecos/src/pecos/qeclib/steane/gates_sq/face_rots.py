@@ -1,3 +1,9 @@
+"""Face rotation logical gates for the Steane 7-qubit code.
+
+This module provides face rotation logical gate implementations for the Steane 7-qubit code, performing octahedral
+rotations on the logical qubit's Bloch sphere representation.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -14,8 +20,7 @@ from pecos.slr import Block, QReg
 
 
 class F(Block):
-    """
-    Face rotation on the octahedron.
+    """Face rotation on the octahedron.
 
     X -> Y -> Z -> X
 
@@ -25,7 +30,16 @@ class F(Block):
     Y -> Z
     """
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
+        """Initialize a face rotation gate on the Steane code.
+
+        Args:
+            q: A quantum register containing exactly 7 qubits representing a logical qubit
+                in the Steane code.
+
+        Raises:
+            Exception: If the quantum register does not contain exactly 7 qubits.
+        """
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)
@@ -36,8 +50,7 @@ class F(Block):
 
 
 class Fdg(Block):
-    """
-    The adjoint of the Face rotation on the octahedron.
+    """The adjoint of the Face rotation on the octahedron.
 
     X -> Z -> Y -> X
 
@@ -47,7 +60,16 @@ class Fdg(Block):
     Y -> X
     """
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
+        """Initialize an adjoint face rotation gate on the Steane code.
+
+        Args:
+            q: A quantum register containing exactly 7 qubits representing a logical qubit
+                in the Steane code.
+
+        Raises:
+            Exception: If the quantum register does not contain exactly 7 qubits.
+        """
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)

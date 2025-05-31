@@ -9,13 +9,25 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from typing import Any
+"""Quantum measurement operations for cuStateVec simulator.
+
+This module provides GPU-accelerated quantum measurement operations for the NVIDIA cuStateVec simulator, including
+projective measurements with proper state collapse using CUDA acceleration for high-performance simulation.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from pecos.simulators.custatevec.state import CuStateVec
+    from pecos.type_defs import SimulatorGateParams
 from cuquantum import custatevec as cusv
 
 
-def meas_z(state, qubit: int, **params: Any) -> int:
+def meas_z(state: CuStateVec, qubit: int, **_params: SimulatorGateParams) -> int:
     """Measure in the Z-basis, collapse and normalise.
 
     Notes:

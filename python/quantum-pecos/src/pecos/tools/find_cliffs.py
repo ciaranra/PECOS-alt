@@ -96,7 +96,7 @@ def r1xy_matrix(theta: float, phi: float) -> np.ndarray:
     c = np.cos(theta * 0.5)
     s = np.sin(theta * 0.5)
 
-    m = np.array(
+    return np.array(
         [
             [c, -1j * np.exp(-1j * phi) * s],
             [-1j * np.exp(1j * phi) * s, c],
@@ -104,12 +104,10 @@ def r1xy_matrix(theta: float, phi: float) -> np.ndarray:
         dtype=dtype,
     )
 
-    return m
-
 
 def rz_matrix(theta: float) -> np.ndarray:
     """Creates a np.array matrix for a RZ gate."""
-    m = np.array(
+    return np.array(
         [
             [np.exp(-1j * theta * 0.5), 0.0],
             [0.0, np.exp(1j * theta * 0.5)],
@@ -117,15 +115,10 @@ def rz_matrix(theta: float) -> np.ndarray:
         dtype=dtype,
     )
 
-    return m
-
 
 def mnormal(m: np.ndarray, *, atol: float = 1e-12) -> np.ndarray:
     """Normalizes a np.array to help with comparing matrices up to global phases."""
-    if not np.isclose(m[0, 0], 0.0, atol=atol):
-        unit = m[0, 0]
-    else:
-        unit = m[0, 1]
+    unit = m[0, 0] if not np.isclose(m[0, 0], 0.0, atol=atol) else m[0, 1]
 
     return m / unit
 
@@ -151,11 +144,10 @@ def r1xy2cliff(
     if use_conv_table:
         if np.isclose(theta % 2 * np.pi, 0.0, atol=atol):
             return "I"
-        else:
-            for cangs, csym in r1xy_ang2str.items():
-                a, b = cangs
-                if np.isclose(a, theta, atol=atol) and np.isclose(b, phi, atol=atol):
-                    return csym
+        for cangs, csym in r1xy_ang2str.items():
+            a, b = cangs
+            if np.isclose(a, theta, atol=atol) and np.isclose(b, phi, atol=atol):
+                return csym
 
     m = r1xy_matrix(theta, phi)
 
@@ -169,15 +161,13 @@ def rz2cliff(
     use_conv_table: bool = True,
 ) -> str | bool:
     """Identifies (ignoring global phases) a Clifford given the angles of a RZ gate."""
-
     if use_conv_table:
         if np.isclose(theta % 2 * np.pi, 0.0, atol=atol):
             return "I"
-        else:
-            for cangs, csym in rz_ang2str.items():
-                a = cangs[0]
-                if np.isclose(a, theta, atol=atol):
-                    return csym
+        for cangs, csym in rz_ang2str.items():
+            a = cangs[0]
+            if np.isclose(a, theta, atol=atol):
+                return csym
 
     m = rz_matrix(theta)
 

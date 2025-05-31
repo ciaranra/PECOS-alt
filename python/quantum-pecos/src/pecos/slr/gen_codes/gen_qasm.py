@@ -16,14 +16,14 @@ from pecos.slr.vars import QReg
 
 
 class QASMGenerator:
-    def __init__(self, includes: list[str] | None = None, add_versions=True):
+    def __init__(self, includes: list[str] | None = None, *, add_versions=True) -> None:
         self.output = []
         self.current_scope = None
         self.includes = includes
         self.cond = None
         self.add_versions = add_versions
 
-    def write(self, line):
+    def write(self, line) -> None:
         self.output.append(line)
 
     def enter_block(self, block):
@@ -37,7 +37,7 @@ class QASMGenerator:
             self.write("OPENQASM 2.0;")
             if self.includes:
                 for inc in self.includes:
-                    self.write(f'include "{str(inc)}";')
+                    self.write(f'include "{inc!s}";')
             else:
                 # TODO: dump definitions in for things that are used instead of using includes
                 self.write('include "hqslib1.inc";')
@@ -55,15 +55,15 @@ class QASMGenerator:
                         self.write(var_def)
         return previous_scope
 
-    def process_var_def(self, var):
+    def process_var_def(self, var) -> str:
         var_type = type(var).__name__
         return f"{var_type.lower()} {var.sym}[{var.size}];"
 
-    def exit_block(self, block):
+    def exit_block(self, block) -> None:
         # self.output.append("# Exiting block")
         pass
 
-    def generate_block(self, block):
+    def generate_block(self, block) -> None:
         previous_scope = self.enter_block(block)
 
         block_name = type(block).__name__
@@ -83,7 +83,7 @@ class QASMGenerator:
         self.exit_block(block)
         self.current_scope = previous_scope
 
-    def block_op_loop(self, block):
+    def block_op_loop(self, block) -> None:
         if len(block.ops) == 0:
             self.write("")
         else:
@@ -101,13 +101,11 @@ class QASMGenerator:
 
         if op_name == "Barrier":
             stat = True
-            if isinstance(op.qregs, list | tuple | set):
-                qubits = []
-                for q in op.qregs:
-                    qubits.append(str(q))
-                qubits = ", ".join(qubits)
-            else:
-                qubits = op.qregs
+            qubits = (
+                ", ".join(str(q) for q in op.qregs)
+                if isinstance(op.qregs, list | tuple | set)
+                else op.qregs
+            )
 
             op_str = f"barrier {qubits};"
         elif op_name == "Comment":
@@ -183,10 +181,10 @@ class QASMGenerator:
             op_list = op_str.split("\n")
             op_new = []
             for o in op_list:
-                o = o.strip()
+                o = o.strip()  # noqa: PLW2901 - clean whitespace
                 if o != "" and not o.startswith("//"):
                     for qi in o.split(";"):
-                        qi = qi.strip()
+                        qi = qi.strip()  # noqa: PLW2901 - clean whitespace
                         if qi != "" and not qi.startswith("//"):
                             op_new.append(f"if({cond}) {qi};")
                 else:
@@ -221,7 +219,7 @@ class QASMGenerator:
                 case "Measure":
                     op_str = " ".join(
                         [
-                            f"measure {str(q)} -> {c};"
+                            f"measure {q!s} -> {c};"
                             for q, c in zip(op.qargs, op.cout, strict=True)
                         ],
                     )
@@ -341,14 +339,14 @@ class QASMGenerator:
         for q in op.qargs:
             if isinstance(q, tuple):
                 q1, q2 = q
-                str_list.append(f"{repr_str} {str(q1)}, {str(q2)};")
+                str_list.append(f"{repr_str} {q1!s}, {q2!s};")
             else:
                 msg = f"For TQ gate, expected args to be a collection of size two tuples! Got: {op.qargs}"
                 raise TypeError(msg)
 
         return "\n".join(str_list)
 
-    def process_set(self, op):
+    def process_set(self, op) -> str:
         right_qasm = (
             op.right.qasm() if hasattr(op.right, "qasm") else self.generate_op(op.right)
         )
@@ -356,7 +354,7 @@ class QASMGenerator:
             right_qasm = right_qasm[1:-1]
         return f"{op.left} = {right_qasm};"
 
-    def process_general_binary_op(self, op):
+    def process_general_binary_op(self, op) -> str:
         left_qasm = (
             op.left.qasm() if hasattr(op.left, "qasm") else self.generate_op(op.left)
         )
@@ -365,7 +363,7 @@ class QASMGenerator:
         )
         return f"({left_qasm} {op.symbol} {right_qasm})"
 
-    def process_general_unary_op(self, op):
+    def process_general_unary_op(self, op) -> str:
         right_qasm = (
             op.value.qasm() if hasattr(op.value, "qasm") else self.generate_op(op.vale)
         )
@@ -400,9 +398,7 @@ def process_permute(op):
             msg = "The number of input and output elements are not the same."
             raise Exception(msg)
 
-        temp = []
-        for ei in op.elems_i:
-            temp.append((ei.reg, ei.index))
+        temp = [(ei.reg, ei.index) for ei in op.elems_i]
 
         for ti, ef in zip(temp, op.elems_f, strict=True):
             ef.reg = ti[0]
@@ -413,5 +409,4 @@ def process_permute(op):
         for ei, ej in zip(op.elems_i, op.elems_f, strict=True):
             qstr.append(f"{ei} -> {ej}")
         return "// Permuting: " + ", ".join(qstr)
-    else:
-        return ""
+    return ""

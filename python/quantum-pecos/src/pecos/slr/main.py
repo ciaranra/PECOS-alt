@@ -16,7 +16,7 @@ from pecos.slr.block import Block
 class Main(Block):
     """This serves as the entry point for the program."""
 
-    def __init__(self, *args, vargs=None, ops=None):
+    def __init__(self, *args, vargs=None, ops=None) -> None:
         super().__init__(*args, ops=ops, vargs=vargs)
 
     def get_var(self, sym: str):

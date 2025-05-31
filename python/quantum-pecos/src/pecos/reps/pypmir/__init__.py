@@ -1,3 +1,8 @@
+"""Python PMIR (Pecos Medium-level Intermediate Representation).
+
+This package provides Python bindings and utilities for PMIR.
+"""
+
 # Copyright 2023 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

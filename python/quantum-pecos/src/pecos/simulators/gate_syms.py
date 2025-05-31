@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Gate symbol mappings for PECOS quantum simulators.
+
+This module defines alternative gate symbol mappings used across different
+PECOS simulator backends to provide consistent gate naming conventions.
+"""
+
 alt_symbols = {
     # Initialization
     # ==============

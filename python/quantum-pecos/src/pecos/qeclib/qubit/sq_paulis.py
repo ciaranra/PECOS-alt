@@ -1,3 +1,10 @@
+"""Single-qubit Pauli gate implementations.
+
+This module provides Pauli gate implementations (X, Y, Z) which form
+the fundamental error operators in quantum error correction and are
+essential building blocks for stabilizer codes.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

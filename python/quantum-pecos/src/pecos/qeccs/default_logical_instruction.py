@@ -11,24 +11,49 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-"""Contains the parent classes for logical instructions."""
+"""Contains the default implementation of the logical instruction protocol."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from pecos.protocols import LogicalInstructionProtocol
 from pecos.qeccs.helper_functions import make_hashable_params
 from pecos.qeccs.plot import plot_instr
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
-class LogicalInstruction:
-    """A parent class for logical instructions.
+    from pecos.circuits import LocationSet, QuantumCircuit
+    from pecos.misc.symbol_library import JSONDict
+    from pecos.protocols import QECCProtocol
+    from pecos.type_defs import QECCInstrParams
 
-    Logical instructions are circuits that
+
+class DefaultLogicalInstruction:
+    """Default logical instruction class providing standard implementations.
+
+    Logical instructions are circuits that implement specific quantum operations
+    at the logical level. This class provides default implementations of the
+    LogicalInstructionProtocol interface.
+
+    Instruction implementations can inherit from this class to get the standard
+    behavior, or implement the LogicalInstructionProtocol directly for custom behavior.
     """
 
-    def __init__(self, qecc, symbol, **params) -> None:
-        """Args:
+    def __init__(
+        self,
+        qecc: QECCProtocol,
+        symbol: str,
+        **params: QECCInstrParams,
+    ) -> None:
+        """Initialize the LogicalInstruction with the given parameters.
+
+        Args:
         ----
-            qecc(QECC):
-            symbol(str):
-            **params:
+            qecc(QECC): The quantum error correcting code instance
+            symbol(str): Symbol identifier for the instruction
+            **params: Additional keyword arguments for instruction parameters
         """
         self.symbol = symbol
         self.qecc = qecc  # The QECC object this instruction belongs to.
@@ -59,7 +84,7 @@ class LogicalInstruction:
 
         self.params_tuple = make_hashable_params(params)  # Used for hashing.
 
-    def plot(self, **kwargs):
+    def plot(self, **kwargs: Any) -> None:  # noqa: ANN401
         """Creates a plot of the logical instruction.
 
         Returns: None
@@ -67,7 +92,12 @@ class LogicalInstruction:
         """
         plot_instr(self, **kwargs)
 
-    def _compile_circuit(self, abstract_circuit, *args, **kwargs):
+    def _compile_circuit(
+        self,
+        abstract_circuit: QuantumCircuit,
+        *args: Any,  # noqa: ANN401 - Allows for subclass extensions
+        **kwargs: Any,  # noqa: ANN401 - Compiler may need various parameters
+    ) -> None:
         """Create `circuit` instance from `abstract_circuit` instance for the logical instruction.
 
         If the instruction already has a `circuit` instance, do not bother compiling.
@@ -77,27 +107,33 @@ class LogicalInstruction:
 
         self.circuit = compiler.compile(self, abstract_circuit, *args, **kwargs)
 
-    def items(self):
+    def items(self) -> Iterator[tuple[str, LocationSet, JSONDict]]:
         """Yields: Yields the."""
         if self.circuit:
             return self.circuit.items()
-        else:
-            msg = ""
-            raise Exception(msg)
+        msg = ""
+        raise Exception(msg)
 
     def __str__(self) -> str:
+        """Return string representation of the logical instruction."""
         return f"[{self.qecc.name} {self.qecc.qecc_params}] - Logical instruction: '{self.symbol}' {self.params}"
 
-    def __hash__(self):
+    def __hash__(self) -> int:
+        """Return hash value for use as dictionary key."""
         # The instruction is unique. A hash can be used to identify it.
         return hash(("instr", self.symbol, self.params_tuple))
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
+        """Check equality with another logical instruction."""
+        # Check if other implements the LogicalInstructionProtocol
+        if not isinstance(other, LogicalInstructionProtocol):
+            return NotImplemented
         return (self.symbol, self.params_tuple, True) == (
             other.symbol,
-            other.params_tuple,
+            getattr(other, "params_tuple", None),
             hasattr(other, "circuit"),
         )
 
-    def __ne__(self, other):
+    def __ne__(self, other: object) -> bool:
+        """Check inequality with another logical instruction."""
         return not (self == other)

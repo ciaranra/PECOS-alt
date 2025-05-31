@@ -1,3 +1,10 @@
+"""Bitflip noise implementation for measurement operations.
+
+This module provides noise models for quantum measurement operations,
+applying bitflip errors to measurement results to simulate measurement
+errors in quantum error correction protocols.
+"""
+
 # Copyright 2023 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -14,7 +21,7 @@ import numpy as np
 from pecos.reps.pypmir.op_types import QOp
 
 
-def noise_meas_bitflip(op: QOp, p: float):
+def noise_meas_bitflip(op: QOp, p: float) -> list[QOp] | None:
     """Bit-flip noise model for measurements.
 
     Args:
@@ -30,7 +37,7 @@ def noise_meas_bitflip(op: QOp, p: float):
 
     if np.any(rand_nums):
         bitflips = []
-        for r, loc in zip(rand_nums, op.args):
+        for r, loc in zip(rand_nums, op.args, strict=False):
             if r:
                 bitflips.append(loc)
 
@@ -44,5 +51,4 @@ def noise_meas_bitflip(op: QOp, p: float):
         noise.append(noisy_op)
         return noise
 
-    else:
-        return None
+    return None

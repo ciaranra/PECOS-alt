@@ -1,3 +1,9 @@
+"""Pauli eigenstate preparation for the Steane 7-qubit code.
+
+This module provides implementations for preparing logical Pauli eigenstates (|0⟩, |1⟩, |+⟩, |-⟩ |+i⟩, |-i⟩) in the
+Steane 7-qubit code using both fault-tolerant and non-fault-tolerant encoding methods.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -20,7 +26,15 @@ from pecos.slr import Barrier, Bit, Block, Comment, If, QReg, Qubit, Repeat
 class PrepEncodingNonFTZero(Block):
     """Represents the non-fault-tolerant encoding circuit for the Steane code."""
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
+        """Initialize PrepEncodingNonFTZero block for non-fault-tolerant zero state preparation.
+
+        Args:
+            q: Quantum register containing exactly 7 qubits for the Steane code.
+
+        Raises:
+            Exception: If the register does not contain exactly 7 qubits.
+        """
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)
@@ -46,7 +60,7 @@ class PrepEncodingNonFTZero(Block):
 
 
 class PrepZeroVerify(Block):
-    """Verify the initialization of InitEncodingNonFTZero"""
+    """Verify the initialization of InitEncodingNonFTZero."""
 
     def __init__(
         self,
@@ -55,7 +69,15 @@ class PrepZeroVerify(Block):
         init_bit: Bit,
         *,
         reset_ancilla: bool = True,
-    ):
+    ) -> None:
+        """Initialize PrepZeroVerify block for verification of zero state preparation.
+
+        Args:
+            qubits: Data register containing the 7 qubits of the Steane code.
+            ancilla: Ancilla qubit used for verification.
+            init_bit: Bit to store the verification result.
+            reset_ancilla: Whether to reset the ancilla qubit. Defaults to True.
+        """
         q = qubits
         a = ancilla
         c = init_bit
@@ -100,7 +122,15 @@ class PrepEncodingFTZero(Block):
         init_bit: Bit,
         *,
         reset: bool = True,
-    ):
+    ) -> None:
+        """Initialize PrepEncodingFTZero block for fault-tolerant zero state preparation.
+
+        Args:
+            data: Data register containing the 7 qubits of the Steane code.
+            ancilla: Ancilla qubit used for verification.
+            init_bit: Bit to store the initialization result.
+            reset: Whether to reset qubits before preparation. Defaults to True.
+        """
         q = data
         a = ancilla
 
@@ -138,7 +168,17 @@ class PrepRUS(Block):
         state: str = "|0>",
         *,
         first_round_reset: bool = True,
-    ):
+    ) -> None:
+        """Initialize PrepRUS block for repeat-until-success state preparation.
+
+        Args:
+            q: Data register containing the 7 qubits of the Steane code.
+            a: Ancilla qubit used for verification.
+            init: Bit to track initialization success.
+            limit: Maximum number of preparation attempts.
+            state: Target Pauli eigenstate to prepare. Defaults to '|0>'.
+            first_round_reset: Whether to reset on first round. Defaults to True.
+        """
         super().__init__(
             PrepEncodingFTZero(q, a, init, reset=first_round_reset),
             Repeat(limit - 1).block(
@@ -161,7 +201,16 @@ class PrepRUS(Block):
 class LogZeroRot(Block):
     """Rotate logical |0> to appropriate Pauli state."""
 
-    def __init__(self, q: QReg, state: str):
+    def __init__(self, q: QReg, state: str) -> None:
+        """Initialize LogZeroRot block to rotate logical |0> to target Pauli state.
+
+        Args:
+            q: Data register containing the 7 qubits of the Steane code.
+            state: Target state notation (e.g., '|0>', '|1>', '|+>', '|->', '|+i>', '|-i>').
+
+        Raises:
+            Exception: If the target state is not supported.
+        """
         super().__init__()
 
         match state:

@@ -32,7 +32,12 @@ from pecos.simulators.projectq.logical_sign import find_logical_signs
 from pecos.simulators.sim_class_types import StateVector
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from projectq.ops._basics import BasicGate
+
     from pecos.circuits import QuantumCircuit
+    from pecos.type_defs import Location, SimulatorGateParams
 
 
 class ProjectQSim(StateVector):
@@ -41,13 +46,17 @@ class ProjectQSim(StateVector):
     Args:
     ----
         num_qubits (int): Number of qubits being represented.
-
-    Returns:
-    -------
-
     """
 
-    def __init__(self, num_qubits) -> None:
+    def __init__(self, num_qubits: int) -> None:
+        """Initialize the ProjectQ quantum simulator state.
+
+        Args:
+            num_qubits: Number of qubits to simulate.
+
+        Raises:
+            TypeError: If num_qubits is not an integer.
+        """
         if not isinstance(num_qubits, int):
             msg = f"`num_qubits` should be of type `int.` but got type: {type(num_qubits)} "
             raise TypeError(msg)
@@ -67,7 +76,7 @@ class ProjectQSim(StateVector):
         self.qids = dict(enumerate(self.qs))
         self.gate_dict = {}
 
-    def reset(self):
+    def reset(self) -> ProjectQSim:
         """Reset the quantum state to all 0 for another run without reinitializing."""
         self.eng.flush()
         amps = [0] * 2**self.num_qubits
@@ -76,82 +85,103 @@ class ProjectQSim(StateVector):
         return self
 
     def logical_sign(self, logical_op: QuantumCircuit) -> int:
-        """Args:
-        ----
-            logical_op:
+        """Find the sign of a logical operator.
 
-        Returns:
-        -------
-
+        Args:
+            logical_op (QuantumCircuit): The logical operator circuit.
         """
         return find_logical_signs(self, logical_op)
 
-    def add_gate(self, symbol: str, gate_obj, *, make_func: bool = True):
+    def add_gate(
+        self,
+        symbol: str,
+        gate_obj: (
+            BasicGate
+            | type[BasicGate]
+            | Callable[[ProjectQSim, Location, SimulatorGateParams], None]
+        ),
+        *,
+        make_func: bool = True,
+    ) -> None:
         """Adds a new gate on the fly to this Simulator.
 
         Args:
         ----
-            symbol:
-            gate_obj:
-            make_func:
-
-        Returns:
-        -------
-
+            symbol: The symbol/name for the gate
+            gate_obj: The gate object to add
+            make_func: Whether to wrap the gate object with MakeFunc
         """
         if symbol in self.gate_dict:
             print("WARNING: Can not add gate as the symbol has already been taken.")
+        elif make_func:
+            self.gate_dict[symbol] = MakeFunc(gate_obj).func
         else:
-            if make_func:
-                self.gate_dict[symbol] = MakeFunc(gate_obj).func
-            else:
-                self.gate_dict[symbol] = gate_obj
+            self.gate_dict[symbol] = gate_obj
 
-    def get_probs(self, key_basis=None):
+    def get_probs(self, key_basis: list[str] | None = None) -> dict[str, float]:
+        """Get measurement probabilities for computational basis states.
+
+        Args:
+            key_basis: Optional list of basis states to get probabilities for.
+                      If None, returns probabilities for all 2^n basis states.
+
+        Returns:
+            Dictionary mapping basis state strings to their probabilities.
+        """
         self.eng.flush()
 
         if key_basis:
             probs_dict = {}
             for b in key_basis:
-                b = b[::-1]
-                p = self.eng.backend.get_probability(b, self.qureg)
-                b = b[::-1]
+                # ProjectQ uses reversed bit order
+                b_reversed = b[::-1]
+                p = self.eng.backend.get_probability(b_reversed, self.qureg)
                 probs_dict[b] = p
             return probs_dict
 
-        else:
-            probs_dict = {}
-            for b in range(np.power(2, self.num_qubits)):
-                b = format(b, f"0{self.num_qubits}b")
-                p = self.eng.backend.get_probability(b, self.qureg)
-                b = b[::-1]
-                probs_dict[b] = p
+        probs_dict = {}
+        for i in range(np.power(2, self.num_qubits)):
+            b_str = format(i, f"0{self.num_qubits}b")
+            p = self.eng.backend.get_probability(b_str, self.qureg)
+            # Store with reversed bit order for consistent output
+            b_key = b_str[::-1]
+            probs_dict[b_key] = p
 
-            return probs_dict
+        return probs_dict
 
-    def get_amps(self, key_basis=None):
+    def get_amps(self, key_basis: list[str] | None = None) -> dict[str, complex]:
+        """Get probability amplitudes for computational basis states.
+
+        Args:
+            key_basis: Optional list of basis states to get amplitudes for.
+                      If None, returns amplitudes for all 2^n basis states.
+
+        Returns:
+            Dictionary mapping basis state strings to their complex amplitudes.
+        """
         self.eng.flush()
 
         if key_basis:
             amps_dict = {}
             for b in key_basis:
-                b = b[::-1]
-                p = self.eng.backend.get_amplitude(b, self.qureg)
-                b = b[::-1]
+                # ProjectQ uses reversed bit order
+                b_reversed = b[::-1]
+                p = self.eng.backend.get_amplitude(b_reversed, self.qureg)
                 amps_dict[b] = p
             return amps_dict
 
-        else:
-            amp_dict = {}
-            for b in range(np.power(2, self.num_qubits)):
-                b = format(b, f"0{self.num_qubits}b")
-                a = self.eng.backend.get_amplitude(b, self.qureg)
-                b = b[::-1]
-                amp_dict[b] = a
+        amp_dict = {}
+        for i in range(np.power(2, self.num_qubits)):
+            b_str = format(i, f"0{self.num_qubits}b")
+            a = self.eng.backend.get_amplitude(b_str, self.qureg)
+            # Store with reversed bit order for consistent output
+            b_key = b_str[::-1]
+            amp_dict[b_key] = a
 
-            return amp_dict
+        return amp_dict
 
     def __del__(self) -> None:
+        """Clean up ProjectQ engine and deallocate qubits when the object is destroyed."""
         self.eng.flush()
         All(Measure) | self.qureg  # Requirement by ProjectQ...
 

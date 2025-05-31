@@ -11,7 +11,7 @@
 
 
 class Node:
-    """Base language object"""
+    """Base language object."""
 
 
 class Operation(Node):
