@@ -10,12 +10,13 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
+use crate::Engine;
 use crate::byte_message::ByteMessage;
 use crate::core::shot_results::{ShotResult, ShotResults};
-use crate::engines::hybrid::HybridEngineBuilder;
-use crate::engines::noise::NoiseModel;
-use crate::engines::quantum::{QuantumEngine, StateVecEngine};
-use crate::engines::{ClassicalEngine, ControlEngine, Engine, EngineStage, HybridEngine};
+use crate::engine_system::{ClassicalEngine, ControlEngine, EngineStage, HybridEngine};
+use crate::hybrid::HybridEngineBuilder;
+use crate::noise::NoiseModel;
+use crate::quantum::{QuantumEngine, StateVecEngine};
 use log::debug;
 use pecos_core::errors::PecosError;
 use pecos_core::rng::RngManageable;
@@ -59,9 +60,9 @@ use super::builder::MonteCarloEngineBuilder;
 /// # Example
 ///
 /// ```rust
-/// use pecos_engines::engines::monte_carlo::MonteCarloEngine;
-/// use pecos_engines::engines::monte_carlo::engine::ExternalClassicalEngine;
-/// use pecos_engines::engines::quantum::StateVecEngine;
+/// use pecos_engines::monte_carlo::MonteCarloEngine;
+/// use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
+/// use pecos_engines::quantum::StateVecEngine;
 ///
 /// // Create sample engines
 /// let classical_engine = Box::new(ExternalClassicalEngine::new());
@@ -99,9 +100,9 @@ impl MonteCarloEngine {
     ///
     /// ```
     /// // Import necessary types for the example
-    /// use pecos_engines::engines::monte_carlo::MonteCarloEngine;
-    /// use pecos_engines::engines::monte_carlo::engine::ExternalClassicalEngine;
-    /// use pecos_engines::engines::quantum;
+    /// use pecos_engines::monte_carlo::MonteCarloEngine;
+    /// use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
+    /// use pecos_engines::quantum;
     ///
     /// // Create a Monte Carlo engine with default settings
     /// let classical_engine = Box::new(ExternalClassicalEngine::new());
@@ -130,9 +131,9 @@ impl MonteCarloEngine {
     ///
     /// ```
     /// // Import necessary types for the example
-    /// use pecos_engines::engines::monte_carlo::MonteCarloEngine;
-    /// use pecos_engines::engines::monte_carlo::engine::ExternalClassicalEngine;
-    /// use pecos_engines::engines::quantum;
+    /// use pecos_engines::monte_carlo::MonteCarloEngine;
+    /// use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
+    /// use pecos_engines::quantum;
     ///
     /// // Create a Monte Carlo engine with default settings
     /// let classical_engine = Box::new(ExternalClassicalEngine::new());
@@ -164,9 +165,9 @@ impl MonteCarloEngine {
     ///
     /// ```
     /// // Import necessary types for the example
-    /// use pecos_engines::engines::monte_carlo::MonteCarloEngine;
-    /// use pecos_engines::engines::monte_carlo::engine::ExternalClassicalEngine;
-    /// use pecos_engines::engines::quantum;
+    /// use pecos_engines::monte_carlo::MonteCarloEngine;
+    /// use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
+    /// use pecos_engines::quantum;
     ///
     /// // Create a Monte Carlo engine with depolarizing noise
     /// let classical_engine = Box::new(ExternalClassicalEngine::new());
@@ -432,7 +433,7 @@ impl MonteCarloEngine {
         })?;
 
         // Create and seed a depolarizing noise model
-        let mut noise_model = crate::engines::noise::DepolarizingNoiseModel::new_uniform(p);
+        let mut noise_model = crate::noise::DepolarizingNoiseModel::new_uniform(p);
 
         if let Some(s) = seed {
             noise_model

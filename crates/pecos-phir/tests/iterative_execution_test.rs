@@ -51,7 +51,7 @@ fn test_basic_iterative_execution() -> Result<(), PecosError> {
     iterative_executor.process()?;
 
     // Set up a measurement result value
-    let measurements = vec![(0, 1)]; // Result ID 0, outcome 1
+    let measurements = vec![1]; // Index 0, outcome 1
     executor.handle_measurements(&measurements, &operations)?;
 
     // Verify the values

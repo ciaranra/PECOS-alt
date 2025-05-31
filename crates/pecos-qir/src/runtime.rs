@@ -1,6 +1,6 @@
+use log::info;
 use pecos_core::QubitId;
 use pecos_engines::byte_message::QuantumCmd;
-use pecos_engines::core::result_id::ResultId;
 use std::collections::HashMap;
 use std::env;
 use std::ffi::{CStr, c_char};
@@ -279,8 +279,8 @@ pub unsafe extern "C" fn __quantum__qis__rzz__body(theta: f64, qubit1: usize, qu
 /// are valid and have been properly allocated. Calling with invalid IDs may lead to
 /// undefined behavior.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__m__body(qubit: usize, result: usize) -> u32 {
-    store_command(&QuantumCmd::Measure(QubitId(qubit), ResultId(result)));
+pub unsafe extern "C" fn __quantum__qis__m__body(qubit: usize, _result: usize) -> u32 {
+    store_command(&QuantumCmd::Measure(QubitId(qubit)));
     // In the real QIR runtime, this would return the actual measurement result
     // For this implementation, we just return 0
     0
@@ -390,7 +390,7 @@ pub unsafe extern "C" fn __quantum__rt__result_release(result: usize) {
     // In a real implementation, we would recycle the ID
 }
 
-/// Records a message.
+/// Records a message using Rust logging.
 ///
 /// # Arguments
 ///
@@ -403,9 +403,11 @@ pub unsafe extern "C" fn __quantum__rt__result_release(result: usize) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__message(msg: *const c_char) {
     let c_str = unsafe { CStr::from_ptr(msg) };
-    let msg_str = c_str.to_string_lossy().into_owned();
+    let msg_str = c_str.to_string_lossy();
+    let thread_id = get_thread_id();
 
-    store_command(&QuantumCmd::Message(msg_str));
+    // Use proper Rust logging instead of storing as QuantumCmd
+    info!("QIR Message [Thread {}]: {}", thread_id, msg_str);
 }
 
 /// Records data.
@@ -423,7 +425,7 @@ pub unsafe extern "C" fn __quantum__rt__record(data: *const c_char) {
     let c_str = unsafe { CStr::from_ptr(data) };
     let data_str = c_str.to_string_lossy().into_owned();
 
-    store_command(&QuantumCmd::Record(data_str));
+    store_command(&QuantumCmd::record_from_string(data_str));
 }
 
 /// Resets the QIR runtime.
@@ -587,5 +589,7 @@ pub unsafe extern "C" fn __quantum__rt__result_record_output(result: usize, name
         println!("[Thread {thread_id}] Recording result {result} as '{name_str}'");
     }
 
-    store_command(&QuantumCmd::RecordResult(ResultId(result), name_str));
+    store_command(&QuantumCmd::record_from_string(format!(
+        "RECORD {result} {name_str}"
+    )));
 }

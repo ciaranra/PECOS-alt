@@ -112,11 +112,19 @@ impl QASMParser {
     }
 
     /// Parse QASM source with default configuration
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the QASM source cannot be parsed.
     pub fn parse_str(source: &str) -> Result<Program, PecosError> {
         Self::parse_with_config(source, &ParseConfig::default())
     }
 
     /// Main parsing method using configuration
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the QASM source cannot be parsed with the given configuration.
     pub fn parse_with_config(source: &str, config: &ParseConfig) -> Result<Program, PecosError> {
         // Create preprocessor
         let mut preprocessor = Preprocessor::new();
@@ -150,6 +158,10 @@ impl QASMParser {
     }
 
     /// Parse a file with default configuration
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read or parsed.
     pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Program, PecosError> {
         let path = path.as_ref();
         let content = std::fs::read_to_string(path)?;
@@ -170,6 +182,10 @@ impl QASMParser {
     }
 
     /// Get the preprocessed QASM (after phase 1 - include resolution)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if preprocessing fails.
     pub fn preprocess(source: &str) -> Result<String, PecosError> {
         let mut preprocessor = Preprocessor::new();
         // Add standard includes path as fallback for filesystem includes
@@ -180,6 +196,10 @@ impl QASMParser {
     }
 
     /// Get the preprocessed and expanded QASM (after phases 1 and 2)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if preprocessing or expansion fails.
     pub fn preprocess_and_expand(source: &str) -> Result<String, PecosError> {
         // Phase 1: Preprocess includes
         let preprocessed = Self::preprocess(source)?;
@@ -189,6 +209,10 @@ impl QASMParser {
     }
 
     /// Expand all gate definitions in QASM source to native gates only.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if gate expansion fails.
     pub fn expand_all_gate_definitions(source: &str) -> Result<String, PecosError> {
         // Parse the source to get gate definitions and operations
         let mut program = Self::parse_phase1(source)?;
@@ -291,6 +315,10 @@ impl QASMParser {
     }
 
     /// Parse QASM with virtual includes but without gate expansion (for testing)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if parsing fails.
     #[cfg(test)]
     pub fn parse_str_with_virtual_includes_no_expansion(
         source: &str,
@@ -307,6 +335,10 @@ impl QASMParser {
     }
 
     /// Parse QASM source string without preprocessing includes
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if parsing fails.
     pub fn parse_str_raw(source: &str) -> Result<Program, PecosError> {
         let mut program = Program::default();
         let mut pairs =

@@ -102,6 +102,9 @@ impl PHIREngine {
     /// Creates a new `PHIREngine` with validation disabled.
     /// This is useful for testing experimental features like the "Result" instruction
     /// that aren't in the current PHIR validator.
+    ///
+    /// # Errors
+    /// Returns an error if the engine cannot be created or Python imports fail.
     #[staticmethod]
     pub fn create_with_validation_disabled(phir_json: &str) -> PyResult<Self> {
         Python::with_gil(|py| {
@@ -169,6 +172,9 @@ impl PHIREngine {
 
     /// Processes the quantum program and returns commands as Python objects
     /// This is a Python-facing method used primarily for testing
+    ///
+    /// # Errors
+    /// Returns an error if command generation or conversion fails.
     pub fn process_program(&mut self) -> PyResult<Vec<PyObject>> {
         Python::with_gil(|py| {
             // If we don't have a Rust engine, this is a test program
@@ -208,23 +214,6 @@ impl PHIREngine {
                                     let params_dict = PyDict::new(py);
                                     // Use string matching instead of GateType enum
                                     match op.gate_type.to_string().as_str() {
-                                        "Measure" => {
-                                            if let Some(result_id) = op.result_id {
-                                                // Convert usize to u32 using try_from to avoid truncation
-                                                // This is safe for our expected use cases as result_id
-                                                // is typically a small integer (<1000)
-                                                if let Ok(id) = u32::try_from(result_id) {
-                                                    params_dict.set_item("result_id", id)?;
-                                                } else {
-                                                    // Handle extremely large values (unlikely in practice)
-                                                    // by using the largest u32 value as a fallback
-                                                    eprintln!(
-                                                        "Warning: result_id {result_id} is too large for u32, using max value"
-                                                    );
-                                                    params_dict.set_item("result_id", u32::MAX)?;
-                                                }
-                                            }
-                                        }
                                         "RZ" => {
                                             if !op.params.is_empty() {
                                                 params_dict.set_item("theta", op.params[0])?;
@@ -238,7 +227,14 @@ impl PHIREngine {
                                                 )?;
                                             }
                                         }
-                                        _ => {}
+                                        #[allow(clippy::match_same_arms)]
+                                        "Measure" => {
+                                            // result_id no longer exists on QuantumGate
+                                            // Measurements are now tracked by order
+                                        }
+                                        _ => {
+                                            // Other gates have no parameters
+                                        }
                                     }
                                     py_dict.set_item("params", params_dict)?;
 
@@ -289,6 +285,9 @@ impl PHIREngine {
 
     /// Handles a measurement and updates the Python interpreter
     /// This is a Python-facing method used primarily for testing
+    ///
+    /// # Errors
+    /// Returns an error if the measurement cannot be handled.
     pub fn handle_measurement(&mut self, outcome: u32) -> PyResult<()> {
         // For compatibility with existing code, always use result_id 0
         let result_id = 0;
@@ -301,7 +300,7 @@ impl PHIREngine {
                 let handle_result = {
                     let mut builder = ByteMessage::measurement_results_builder();
                     // Convert outcome from u32 to usize
-                    builder.add_measurement_results(&[outcome as usize], &[result_id as usize]);
+                    builder.add_measurement_results(&[outcome as usize]);
                     let message = builder.build();
 
                     let mut engine_guard = engine.lock();
@@ -386,6 +385,9 @@ impl PHIREngine {
 
     /// Gets the current results from the engine
     /// This is a Python-facing method used primarily for testing
+    ///
+    /// # Errors
+    /// Returns an error if results cannot be retrieved.
     pub fn get_results(&self) -> PyResult<HashMap<String, u32>> {
         Python::with_gil(|py| {
             // First try to use the Rust engine if available
@@ -915,15 +917,12 @@ impl ClassicalEngine for PHIREngine {
                             let result_id_f64 = params[0];
                             if result_id_f64 < 0.0 || result_id_f64 > f64::from(u32::MAX) {
                                 eprintln!("Warning: Invalid result_id {result_id_f64}, using 0");
-                                builder.add_measurements(&qubits, &[0]);
+                                builder.add_measurements(&qubits);
                             } else {
                                 // Safe to convert to u32 and then usize
                                 // We've already checked the bounds, so we can safely convert
-                                // We must truncate to u32 first (as we validated against MAX),
-                                // then convert to usize (which is always larger than u32)
-                                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                                let result_id = result_id_f64 as u32 as usize;
-                                builder.add_measurements(&qubits, &[result_id]);
+                                // result_id is no longer needed for measurements, just add the measurement
+                                builder.add_measurements(&qubits);
                             }
                         }
                     }
@@ -954,7 +953,9 @@ impl ClassicalEngine for PHIREngine {
         let measurements = message.parse_measurements()?;
 
         Python::with_gil(|py| -> Result<(), PecosError> {
-            for (result_id, outcome) in measurements {
+            // Measurements are now just outcomes in order, with implicit result_ids
+            for (result_id, outcome) in measurements.into_iter().enumerate() {
+                let result_id = u32::try_from(result_id).unwrap_or(u32::MAX);
                 // Create a dictionary with just the outcome (no result_id)
                 let measurement = PyDict::new(py);
 
@@ -1202,12 +1203,11 @@ impl Engine for PHIREngine {
                     // Create a response ByteMessage with measurement results
                     let mut builder = ByteMessage::measurement_results_builder();
 
-                    // Create arrays for results and result_ids
+                    // Create arrays for results
                     let results = vec![0; measurement_count];
-                    let result_ids: Vec<usize> = (0..measurement_count).collect();
 
                     // Add all measurement results at once
-                    builder.add_measurement_results(&results, &result_ids);
+                    builder.add_measurement_results(&results);
 
                     let response = builder.build();
 

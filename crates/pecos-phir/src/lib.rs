@@ -131,9 +131,7 @@ mod tests {
 
         // Create a measurement message and test handling
         // result_id=0, outcome=1
-        let message = ByteMessage::builder()
-            .add_measurement_results(&[1], &[0])
-            .build();
+        let message = ByteMessage::builder().add_measurement_results(&[1]).build();
 
         // Wrap in a try-catch to be more resilient to variable naming issues in tests
         match engine.handle_measurements(message) {

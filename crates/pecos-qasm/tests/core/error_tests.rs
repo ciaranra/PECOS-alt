@@ -1,5 +1,5 @@
 // Test cases for error handling in QASM parsing and execution
-use pecos_engines::engines::classical::ClassicalEngine;
+use pecos_engines::classical::ClassicalEngine;
 use pecos_qasm::{QASMEngine, QASMParser};
 use std::str::FromStr;
 

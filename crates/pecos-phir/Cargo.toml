@@ -23,12 +23,12 @@ serde.workspace = true
 serde_json.workspace = true
 pecos-core.workspace = true
 pecos-engines.workspace = true
-wasmtime = { version = "32.0.0", optional = true }
-parking_lot = { version = "0.12.1", optional = true }
+wasmtime = { workspace = true, optional = true }
+parking_lot = { workspace = true, optional = true }
 
 [dev-dependencies]
 # Testing
-tempfile = "3"
+tempfile.workspace = true
 
 [lints]
 workspace = true

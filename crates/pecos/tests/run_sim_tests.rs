@@ -13,7 +13,8 @@
 //! Tests for the `run_sim` function in the PECOS crate.
 
 use pecos::prelude::*;
-use pecos_engines::{PassThroughNoiseModel, engines::quantum::StateVecEngine};
+use pecos_engines::PassThroughNoiseModel;
+use pecos_engines::quantum::StateVecEngine;
 use std::str::FromStr;
 
 /// Simple bell state program for testing.

@@ -11,6 +11,10 @@ use std::path::Path;
 /// # Returns
 ///
 /// * `Result<usize, PecosError>` - The total number of qubits on success, or a parsing error
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be read or parsed.
 pub fn count_qubits_in_file<P: AsRef<Path>>(path: P) -> Result<usize, PecosError> {
     // Parse the file using the existing parser
     let program = QASMParser::parse_file(path)?;
@@ -28,6 +32,10 @@ pub fn count_qubits_in_file<P: AsRef<Path>>(path: P) -> Result<usize, PecosError
 /// # Returns
 ///
 /// * `Result<usize, PecosError>` - The total number of qubits on success, or a parsing error
+///
+/// # Errors
+///
+/// Returns an error if the QASM string cannot be parsed.
 pub fn count_qubits_in_str(qasm: &str) -> Result<usize, PecosError> {
     // Parse the string using the existing parser
     let program = QASMParser::parse_str(qasm)?;

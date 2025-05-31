@@ -11,8 +11,8 @@
 // the License.
 
 use crate::byte_message::ByteMessage;
-use crate::engines::noise::{NoiseModel, NoiseRng, ProbabilityValidator, RngManageable};
-use crate::engines::{ControlEngine, EngineStage};
+use crate::engine_system::{ControlEngine, EngineStage};
+use crate::noise::{NoiseModel, NoiseRng, ProbabilityValidator, RngManageable};
 use pecos_core::errors::PecosError;
 use rand_chacha::ChaCha8Rng;
 use std::any::Any;
@@ -26,8 +26,8 @@ use std::any::Any;
 /// # Usage
 ///
 /// ```rust
-/// use pecos_engines::engines::noise::BiasedMeasurementNoiseModel;
-/// use pecos_engines::engines::noise::{NoiseModel, RngManageable};
+/// use pecos_engines::noise::BiasedMeasurementNoiseModel;
+/// use pecos_engines::noise::{NoiseModel, RngManageable};
 ///
 /// // Create directly
 /// let mut noise_model = BiasedMeasurementNoiseModel::new(0.01, 0.02);
@@ -153,7 +153,9 @@ impl BiasedMeasurementNoiseModel {
     /// Returns a `PecosError` if applying bias fails
     fn apply_bias_to_message(&mut self, message: ByteMessage) -> Result<ByteMessage, PecosError> {
         // Parse the message to extract the measurement results
-        let measurements = message.parse_measurements()?;
+        let measurement_outcomes = message.parse_measurements()?;
+        let measurements: Vec<(usize, u32)> =
+            measurement_outcomes.into_iter().enumerate().collect();
 
         // If the message doesn't contain measurements, return it unchanged
         if measurements.is_empty() {
@@ -162,11 +164,12 @@ impl BiasedMeasurementNoiseModel {
 
         // Apply bias to each measurement
         let biased_measurements: Vec<(usize, u32)> = measurements
-            .iter()
-            .map(|(result_id, outcome)| {
-                let (biased_result_id, biased_outcome) =
-                    self.apply_bias_to_measurement(*result_id, *outcome);
-                (biased_result_id as usize, biased_outcome)
+            .into_iter()
+            .map(|(index, outcome)| {
+                let index_u32 = u32::try_from(index).unwrap_or(u32::MAX);
+                let (_biased_index, biased_outcome) =
+                    self.apply_bias_to_measurement(index_u32, outcome);
+                (index, biased_outcome)
             })
             .collect();
 

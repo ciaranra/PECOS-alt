@@ -1,43 +1,13 @@
-pub mod classical;
-pub mod hybrid;
-pub mod monte_carlo;
-pub mod noise;
-pub mod quantum;
-pub mod quantum_system;
-
-pub use classical::ClassicalEngine;
+use crate::Engine;
+pub use crate::classical::ClassicalEngine;
+pub use crate::hybrid::HybridEngine;
+pub use crate::hybrid::HybridEngineBuilder;
+pub use crate::monte_carlo::MonteCarloEngine;
+pub use crate::monte_carlo::MonteCarloEngineBuilder;
+pub use crate::quantum::QuantumEngine;
+pub use crate::quantum_system::QuantumSystem;
 use dyn_clone::DynClone;
-pub use hybrid::HybridEngine;
-pub use hybrid::HybridEngineBuilder;
-pub use monte_carlo::MonteCarloEngine;
-pub use monte_carlo::MonteCarloEngineBuilder;
 use pecos_core::errors::PecosError;
-pub use quantum::QuantumEngine;
-pub use quantum_system::QuantumSystem;
-
-/// Core engine trait for processing inputs to outputs
-pub trait Engine: DynClone + Send + Sync {
-    type Input;
-    type Output;
-
-    /// Process a single input
-    ///
-    /// # Errors
-    /// This function may return an error if:
-    /// - There is an error during processing.
-    /// - The input cannot be processed due to a serialization or execution issue.
-    fn process(&mut self, input: Self::Input) -> Result<Self::Output, PecosError>;
-
-    /// Reset engine state for reuse
-    ///
-    /// This allows engines to be reused for multiple simulation runs
-    /// by resetting any internal state to initial conditions.
-    ///
-    /// # Errors
-    /// This function may return an error if:
-    /// - There is an error during resetting the engine state.
-    fn reset(&mut self) -> Result<(), PecosError>;
-}
 
 /// A control engine that orchestrates execution flow with another engine
 ///

@@ -13,8 +13,8 @@
 use std::collections::BTreeMap;
 
 use crate::byte_message::QuantumGate;
-use crate::engines::noise::noise_rng::NoiseRng;
-use crate::engines::noise::utils::{SingleQubitNoiseResult, TwoQubitNoiseResult};
+use crate::noise::noise_rng::NoiseRng;
+use crate::noise::utils::{SingleQubitNoiseResult, TwoQubitNoiseResult};
 use rand::distr::weighted::WeightedIndex;
 
 /// Tolerance for weight normalization - total weights should be within this amount of 1.0
@@ -350,7 +350,7 @@ impl TwoQubitWeightedSampler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engines::noise::noise_rng::NoiseRng;
+    use crate::noise::noise_rng::NoiseRng;
     use rand_chacha::ChaCha8Rng;
 
     const SAMPLE_SIZE: usize = 100;

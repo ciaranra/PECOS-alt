@@ -209,7 +209,6 @@ pub fn dump_batch(data: &[u8]) -> String {
 
                         output.push_str("  Measurement:\n");
                         writeln!(output, "    Qubit: {}", meas_header.qubit).unwrap();
-                        writeln!(output, "    Result ID: {}", meas_header.result_id).unwrap();
                     }
                 }
                 20 => {
@@ -220,7 +219,6 @@ pub fn dump_batch(data: &[u8]) -> String {
                         );
 
                         output.push_str("  Measurement Result:\n");
-                        writeln!(output, "    Result ID: {}", result_header.result_id).unwrap();
                         writeln!(output, "    Outcome: {}", result_header.outcome).unwrap();
                     }
                 }
@@ -252,6 +250,10 @@ pub fn dump_message(message: &ByteMessage) -> String {
 }
 
 /// Utility function to write a `ByteMessage` to a file for debugging
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be created or written to.
 pub fn write_message_to_file(message: &ByteMessage, filename: &str) -> std::io::Result<()> {
     let mut file = std::fs::File::create(filename)?;
     file.write_all(message.as_bytes())?;

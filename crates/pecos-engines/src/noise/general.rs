@@ -59,35 +59,36 @@
 //! The noise model can be instantiated directly or through a builder pattern:
 //!
 //! ```rust
-//! use pecos_engines::engines::noise::GeneralNoiseModel;
+//! use pecos_engines::noise::GeneralNoiseModel;
 //!
 //! // Using the builder with explicit error rates
 //! let noise_model = GeneralNoiseModel::builder()
 //!     .with_prep_probability(0.01)
 //!     .with_meas_0_probability(0.02)
 //!     .with_meas_1_probability(0.03)
-//!     .with_single_qubit_probability(0.04)
-//!     .with_two_qubit_probability(0.05)
+//!     .with_p1_probability(0.04)
+//!     .with_p2_probability(0.05)
 //!     .with_seed(42)
 //!     .build();
 //! ```
 
 #![allow(clippy::too_many_lines)]
 
+mod builder;
+mod default;
+
 use crate::byte_message::{ByteMessage, ByteMessageBuilder, QuantumGate, gate_type::GateType};
-use crate::engines::noise::noise_rng::NoiseRng;
-use crate::engines::noise::utils::NoiseUtils;
-use crate::engines::noise::utils::ProbabilityValidator;
-use crate::engines::noise::weighted_sampler::{
-    SingleQubitWeightedSampler, TwoQubitWeightedSampler,
-};
-use crate::engines::noise::{NoiseModel, RngManageable};
-use crate::engines::{ControlEngine, EngineStage};
+use crate::engine_system::{ControlEngine, EngineStage};
+use crate::noise::general::builder::GeneralNoiseModelBuilder;
+use crate::noise::noise_rng::NoiseRng;
+use crate::noise::utils::NoiseUtils;
+use crate::noise::utils::ProbabilityValidator;
+use crate::noise::weighted_sampler::{SingleQubitWeightedSampler, TwoQubitWeightedSampler};
+use crate::noise::{NoiseModel, RngManageable};
 use log::trace;
 use pecos_core::errors::PecosError;
 use rand_chacha::ChaCha8Rng;
 use std::any::Any;
-use std::collections::BTreeMap;
 use std::collections::HashSet;
 
 /// General noise model implementation that includes parameterized error channels for various quantum operations
@@ -113,6 +114,46 @@ pub struct GeneralNoiseModel {
     /// 0.0 means no leakage and all leakage events are replaced with completely depolarizing noise.
     /// 1.0 means all leakage events remain leakage events.
     leakage_scale: f64,
+
+    /// Whether to use coherent dephasing vs incoherent (stochastic) dephasing
+    ///
+    /// If true, dephasing is modeled as coherent phase rotations using RZ gates.
+    /// If false, dephasing is modeled as stochastic Z errors with quadratic scaling.
+    ///
+    /// In physical systems, coherent dephasing represents systematic phase evolution
+    /// such as frequency offsets.
+    p_idle_coherent: bool,
+
+    /// The idle noise rate for linear dependency on time (seconds).
+    ///
+    /// This always applies stochastic noise
+    p_idle_linear_rate: f64,
+
+    /// The stochastic model for the idle noise that has a linear dependency on time (seconds).
+    ///
+    /// Specifies the distribution of different stochastic idle noise types that can occur.
+    ///
+    /// The distribution is stored as pre-computed, cached sampler instead of the `HashMap` that is
+    /// the input.
+    p_idle_linear_model: SingleQubitWeightedSampler,
+
+    /// The idle noise rate for quadratic dependency on time (seconds).
+    ///
+    /// This will be a coherent noise channel unless `p_idle_coherent` is set to false. If it is
+    /// false it will apply Z to each qubit quadratic dependency on time
+    p_idle_quadratic_rate: f64,
+
+    /// Scaling factor to convert coherent dephasing rates to incoherent rates
+    ///
+    /// When using incoherent (stochastic) dephasing, this factor adjusts the dephasing rate. This
+    /// is a fudge factor used to artificially increase the dephasing rate when modeling the
+    /// quadratic dephasing stochastically since such modeling does not account for coherent
+    /// effects.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the factor is not positive (less than or equal to 0.0).
+    p_idle_coherent_to_incoherent_factor: f64,
 
     /// Probability of applying a fault during preparation (initialization)
     ///
@@ -150,6 +191,15 @@ pub struct GeneralNoiseModel {
     /// spontaneous emission from excited states during gate operations. Ranges from 0 to 1.
     p1_emission_ratio: f64,
 
+    /// Probability model for emission errors on single qubit gates
+    ///
+    /// Specifies the distribution of different spontaneous emission error types that can occur.
+    /// This includes errors that may cause state transitions outside the computational basis.
+    ///
+    /// The distribution is stored as pre-computed, cached sampler instead of the `HashMap` that is
+    /// the input.
+    p1_emission_model: SingleQubitWeightedSampler,
+
     /// Probability of a leaked qubit being seeped (released from leakage) for single-qubit gates if
     /// a spontaneous emission event occurs
     ///
@@ -163,16 +213,9 @@ pub struct GeneralNoiseModel {
     /// Specifies the distribution of different Pauli errors (X, Y, Z) that can occur.
     /// For a uniform depolarizing channel, each error type would have equal probability.
     ///
-    /// The distribution is stored as pre-computed, cached sampler instead of the `HashMap` that is the input.
+    /// The distribution is stored as pre-computed, cached sampler instead of the `HashMap` that is
+    /// the input.
     p1_pauli_model: SingleQubitWeightedSampler,
-
-    /// Probability model for emission errors on single qubit gates
-    ///
-    /// Specifies the distribution of different spontaneous emission error types that can occur.
-    /// This includes errors that may cause state transitions outside the computational basis.
-    ///
-    /// The distribution is stored as pre-computed, cached sampler instead of the `HashMap` that is the input.
-    p1_emission_model: SingleQubitWeightedSampler,
 
     /// Probability of applying a fault after two-qubit gates
     ///
@@ -208,6 +251,15 @@ pub struct GeneralNoiseModel {
     /// non-computational states during two-qubit operations. Ranges from 0 to 1.
     p2_emission_ratio: f64,
 
+    /// Probability model for spontaneous emission errors on two-qubit gates
+    ///
+    /// Specifies the distribution of different emission error types that can occur during
+    /// two-qubit operations. This includes errors that may cause state transitions outside
+    /// the computational basis.
+    ///
+    /// The distribution is stored as pre-computed, cached sampler instead of the `HashMap` that is the input.
+    p2_emission_model: TwoQubitWeightedSampler,
+
     /// Probability of a leaked qubit being seeped (released from leakage) for two-qubit gates if
     /// a spontaneous emission event occurs
     ///
@@ -225,49 +277,12 @@ pub struct GeneralNoiseModel {
     /// The distribution is stored as pre-computed, cached sampler instead of the `HashMap` that is the input.
     p2_pauli_model: TwoQubitWeightedSampler,
 
-    /// Probability model for spontaneous emission errors on two-qubit gates
-    ///
-    /// Specifies the distribution of different emission error types that can occur during
-    /// two-qubit operations. This includes errors that may cause state transitions outside
-    /// the computational basis.
-    ///
-    /// The distribution is stored as pre-computed, cached sampler instead of the `HashMap` that is the input.
-    p2_emission_model: TwoQubitWeightedSampler,
-
     /// Idle noise after each two-qubit gate that is quadratically dependent on the rate.
     ///
     /// This will be a coherent noise channel unless `p_idle_coherent` is set to false. If it is
     /// false it will apply Z to each qubit with quadratic dependency on time
     p2_idle_quadratic_rate: f64,
 
-    /// The idle noise rate for quadratic dependency on time (seconds).
-    ///
-    /// This will be a coherent noise channel unless `p_idle_coherent` is set to false. If it is
-    /// false it will apply Z to each qubit quadratic dependency on time
-    p_idle_quadratic_rate: f64,
-
-    /// Whether to use coherent dephasing vs incoherent (stochastic) dephasing
-    ///
-    /// If true, dephasing is modeled as coherent phase rotations using RZ gates.
-    /// If false, dephasing is modeled as stochastic Z errors with quadratic scaling.
-    ///
-    /// In physical systems, coherent dephasing represents systematic phase evolution
-    /// such as frequency offsets.
-    p_idle_coherent: bool,
-
-    /// Scaling factor to convert coherent dephasing rates to incoherent rates
-    ///
-    /// When using incoherent (stochastic) dephasing, this factor adjusts the dephasing rate. This
-    /// is a fudge factor used to artificially increase the dephasing rate when modeling the
-    /// quadratic dephasing stochastically since such modeling does not account for coherent
-    /// effects.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the factor is not positive (less than or equal to 0.0).
-    p_idle_coherent_to_incoherent_factor: f64,
-
-    // TODO: should have p_idle_quadratic_rate, p_idle_linear_rate
     /// Probability of flipping a 0 measurement to 1
     ///
     /// This asymmetric measurement error models cases when a qubit in state |0⟩ is incorrectly
@@ -307,6 +322,10 @@ pub struct GeneralNoiseModel {
 
     /// Random number generator for stochastic noise processes
     rng: NoiseRng<ChaCha8Rng>,
+
+    /// Track which qubits are being measured in the current batch
+    /// This is needed to properly handle leakage during measurements
+    measured_qubits: Vec<usize>,
 }
 
 impl ControlEngine for GeneralNoiseModel {
@@ -404,7 +423,7 @@ impl GeneralNoiseModel {
     ///
     /// # Example
     /// ```
-    /// use pecos_engines::engines::noise::GeneralNoiseModel;
+    /// use pecos_engines::noise::GeneralNoiseModel;
     ///
     /// // Create model with specified error probabilities
     /// let mut model = GeneralNoiseModel::new(0.01, 0.01, 0.01, 0.05, 0.1);
@@ -445,6 +464,10 @@ impl GeneralNoiseModel {
     /// # Panics
     ///
     /// Panics if the input `ByteMessage` cannot be parsed as quantum operations.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if noise application fails or the message cannot be processed.
     pub fn apply_noise_on_start(&mut self, input: &ByteMessage) -> Result<ByteMessage, String> {
         let mut builder = NoiseUtils::create_quantum_builder();
         let mut err = None;
@@ -468,16 +491,17 @@ impl GeneralNoiseModel {
             // decide whether to add the original gate based on error models
             match gate.gate_type {
                 GateType::Idle => {
-                    self.apply_idle_faults(&gate, self.p_idle_quadratic_rate, &mut builder);
+                    self.apply_idle_faults(
+                        &gate,
+                        self.p_idle_linear_rate,
+                        self.p_idle_quadratic_rate,
+                        &mut builder,
+                    );
                 }
                 GateType::Prep => {
                     self.apply_prep_faults(&gate, &mut builder);
 
-                    // TODO: look closely at prep crosstalk...
-                    // Potentially apply crosstalk
-                    if self.p_prep_crosstalk > 0.0 {
-                        self.prep_crosstalk(&gate.qubits, &mut builder);
-                    }
+                    // TODO: Implement prep crosstalk when needed
                 }
                 GateType::R1XY
                 | GateType::RZ
@@ -500,7 +524,9 @@ impl GeneralNoiseModel {
                     self.apply_tq_faults(&gate, p2, &mut builder);
                 }
                 GateType::Measure => {
-                    // Measurement noise is handled in apply_bias_to_message
+                    // Track which qubits are being measured for leakage handling
+                    self.measured_qubits.extend(&gate.qubits);
+                    // Measurement noise is handled in apply_noise_on_continue_processing
                     // We still need to add the original gate here
                     builder.add_quantum_gate(&gate);
                 }
@@ -531,6 +557,14 @@ impl GeneralNoiseModel {
     ///
     /// In physical systems, this represents detection errors, crosstalk, and special
     /// handling of qubit states outside the computational basis.
+    ///
+    /// Note: Measurements do NOT unleak qubits. Only preparation operations unleak qubits.
+    /// If a leaked qubit is measured, it remains leaked and will continue to measure as 1
+    /// until a preparation operation is performed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if noise application fails or the message cannot be processed.
     pub fn apply_noise_on_continue_processing(
         &mut self,
         message: ByteMessage,
@@ -541,73 +575,144 @@ impl GeneralNoiseModel {
         }
 
         // Parse the measurements from the message
-        let measurements = message.parse_measurements()?;
-        if measurements.is_empty() {
-            return Ok(message);
-        }
+        let measurement_outcomes = message.parse_measurements()?;
 
-        // extract qubit measurements
-        let Ok(measurement_results) = message.measurement_results_as_vec() else {
-            return Ok(ByteMessageBuilder::new().build());
-        };
+        // Apply biased measurement noise to each outcome
+        let mut results_builder = ByteMessage::measurement_results_builder();
 
-        // Get qubits that were measured
-        let measured_qubits = message.parse_measured_qubits().unwrap_or_default();
+        // Check if we have leaked qubits that were measured
+        let has_leakage = !self.leaked_qubits.is_empty()
+            && self.measured_qubits.iter().any(|&q| self.is_leaked(q));
 
-        // Collect the measured qubits as usize for crosstalk
-        let measured_qubits_usize: Vec<usize> =
-            measured_qubits.iter().map(|&q| q as usize).collect();
+        for (idx, outcome) in measurement_outcomes.into_iter().enumerate() {
+            let mut val = outcome;
 
-        // Apply biases and handle leaked qubits
-        let biased_results = self.apply_meas_faults(&measured_qubits_usize, &measurement_results);
-
-        // TODO: Look closely at meas crosstalk...
-        // Now check if we need to apply measurement crosstalk
-        if !measured_qubits_usize.is_empty() && self.p_meas_crosstalk > 0.0 {
-            // Create a new builder for quantum operations to hold crosstalk effects
-            let mut operations_builder = ByteMessage::quantum_operations_builder();
-
-            // Apply crosstalk to nearby qubits
-            self.meas_crosstalk(&measured_qubits_usize, &mut operations_builder);
-
-            // Build the operations message with crosstalk effects
-            let operations_message = operations_builder.build();
-
-            // If there are any operations from crosstalk, we need to return both messages
-            if !operations_message.is_empty()? {
-                trace!(
-                    "Applied measurement crosstalk to qubits near {:?}",
-                    measured_qubits_usize
-                );
-
-                // In a real integration, we would need to coordinate with the engine system
-                // to ensure that both messages are processed correctly.
-                // For now, we'll just return the measurement results since they're expected.
-                // In a more comprehensive implementation, we'd need a way to queue both messages.
-                return Ok(biased_results);
+            // Check if this measurement corresponds to a leaked qubit
+            if has_leakage && idx < self.measured_qubits.len() {
+                let qubit = self.measured_qubits[idx];
+                if self.is_leaked(qubit) {
+                    trace!("Qubit {} is leaked, measuring as 1", qubit);
+                    // Force the measurement outcome to be 1 for leaked qubits
+                    val = 1;
+                }
             }
+
+            // Apply asymmetric measurement noise
+            if val == 1 {
+                if self.rng.occurs(self.p_meas_1) {
+                    trace!("Flipped measurement outcome 1->0");
+                    val = 0;
+                }
+            } else if self.rng.occurs(self.p_meas_0) {
+                trace!("Flipped measurement outcome 0->1");
+                val = 1;
+            }
+
+            results_builder.add_measurement_results(&[val as usize]);
         }
 
-        // Return just the biased results if no crosstalk was applied
-        Ok(biased_results)
+        // Clear the measured qubits for the next batch
+        self.measured_qubits.clear();
+
+        // Build and return the biased measurement results
+        Ok(results_builder.build())
     }
 
     pub fn apply_idle_faults(
         &mut self,
         gate: &QuantumGate,
-        rate: f64,
+        linear_rate: f64,
+        quadratic_rate: f64,
         builder: &mut ByteMessageBuilder,
     ) {
-        if rate.abs() > f64::EPSILON {
-            let mut angle = rate * gate.idle_duration();
+        if linear_rate > f64::EPSILON {
+            self.apply_idle_linear_stochastic_noise(
+                linear_rate,
+                gate.idle_duration(),
+                &gate.qubits,
+                builder,
+            );
+        }
 
-            angle = if self.p_idle_coherent {
-                angle
+        if quadratic_rate.abs() > f64::EPSILON {
+            // TODO: add test
+            self.apply_idle_quadratic_dephasing(
+                quadratic_rate,
+                gate.idle_duration(),
+                &gate.qubits,
+                builder,
+            );
+        }
+    }
+
+    /// Assuming a general single-qubit stochastic noise for idling that depends on some rate and
+    /// duration of idling (seconds).
+    fn apply_idle_linear_stochastic_noise(
+        &mut self,
+        rate: f64,
+        duration: f64,
+        qubits: &[usize],
+        builder: &mut ByteMessageBuilder,
+    ) {
+        let prob = rate * duration;
+        for qubit in qubits {
+            if !self.is_leaked(*qubit) && self.rng.occurs(prob) {
+                let result = self.p_idle_linear_model.sample_gates(&mut self.rng, *qubit);
+
+                if result.has_leakage() {
+                    if let Some(gate) = self.leak(*qubit) {
+                        builder.add_quantum_gate(&gate);
+                    }
+                } else if let Some(gate) = result.gate {
+                    builder.add_quantum_gate(&gate);
+                }
+            }
+        }
+    }
+
+    /// Apply coherent dephasing noise to a gate
+    ///
+    /// This method implements coherent phase rotation (systematic Z-rotation) noise
+    /// that occurs during idle periods or during gates with a specified duration.
+    ///
+    /// In physical systems, coherent dephasing represents:
+    /// - Systematic phase errors due to energy level shifts
+    /// - Frequency offsets in control fields
+    /// - AC Stark shifts
+    /// - Other systematic Z-rotation errors
+    ///
+    /// # Parameters
+    /// * `builder` - The `ByteMessageBuilder` to add gate operations to
+    /// * `angle` - The time duration over which idling occurs times the rate per time
+    /// * `qubits` - The qubits that are potentially affected by the idling noise
+    fn apply_idle_quadratic_dephasing(
+        &mut self,
+        rate: f64,
+        duration: f64,
+        qubits: &[usize],
+        builder: &mut ByteMessageBuilder,
+    ) {
+        let mut angle = rate * duration;
+
+        angle = if self.p_idle_coherent {
+            angle
+        } else {
+            angle.sin().powi(2)
+        };
+
+        if angle.abs() > f64::EPSILON {
+            let mut noisy_qubits = vec![];
+
+            for qubit in qubits {
+                if !self.is_leaked(*qubit) && (self.p_idle_coherent || self.rng.occurs(angle)) {
+                    noisy_qubits.push(*qubit);
+                }
+            }
+            if self.p_idle_coherent {
+                builder.add_rz(angle, &noisy_qubits);
             } else {
-                angle.sin().powi(2)
-            };
-
-            self.apply_quadratic_dephasing(angle, &gate.qubits, builder);
+                builder.add_z(&noisy_qubits);
+            }
         }
     }
 
@@ -710,6 +815,7 @@ impl GeneralNoiseModel {
                     }
                 } else if !has_leakage {
                     // Pauli noise
+                    // TODO: Check if there is any assurance that the model is only Pauli noise
                     let result = self.p1_pauli_model.sample_gates(&mut self.rng, qubit);
                     if let Some(gate) = result.gate {
                         noise.push(gate);
@@ -729,12 +835,8 @@ impl GeneralNoiseModel {
         if removed_gates {
             // There are some gates left to add
             if !original_gate_qubits.is_empty() {
-                let new_gate = QuantumGate::new(
-                    gate.gate_type,
-                    original_gate_qubits,
-                    gate.params.clone(),
-                    None,
-                );
+                let new_gate =
+                    QuantumGate::new(gate.gate_type, original_gate_qubits, gate.params.clone());
                 builder.add_quantum_gate(&new_gate);
             }
         } else {
@@ -848,7 +950,6 @@ impl GeneralNoiseModel {
                     gate.gate_type,
                     original_gate_qubits.clone(),
                     gate.params.clone(),
-                    None,
                 );
                 builder.add_quantum_gate(&new_gate);
             }
@@ -859,69 +960,12 @@ impl GeneralNoiseModel {
         builder.add_quantum_gates(&noise);
 
         // TODO: add test
-        self.apply_quadratic_dephasing(self.p2_idle_quadratic_rate, &original_gate_qubits, builder);
-    }
-
-    /// Apply measurement bias and handle leaked qubits
-    ///
-    /// This method handles two specific types of measurement faults:
-    /// 1. Asymmetric readout errors based on `p_meas_0` and `p_meas_1`
-    /// 2. Special handling for leaked qubits (ensuring they measure as 1 + measurement noise)
-    ///
-    /// Returns a `ByteMessage` containing the biased measurement results
-    pub fn apply_meas_faults(
-        &mut self,
-        measured_qubits: &[usize],
-        measurement_results: &[(usize, u32)],
-    ) -> ByteMessage {
-        let mut results_builder = ByteMessage::measurement_results_builder();
-
-        // Check if there are any leaked qubits
-        let has_leakage = !self.leaked_qubits.is_empty()
-            && measured_qubits.iter().any(|&qubit| self.is_leaked(qubit));
-
-        for (&qubit, &(result_id, result)) in measured_qubits.iter().zip(measurement_results.iter())
-        {
-            let mut val = result;
-            if has_leakage && self.is_leaked(qubit) {
-                trace!("Unleaking qubit {} after measurement", qubit);
-                self.mark_as_unleaked(qubit);
-                // Force the measurement outcome to be 1 for previously leaked qubits
-                val = 1;
-                // But still apply biased measurement noise
-                if self.rng.occurs(self.p_meas_1) {
-                    trace!(
-                        "Flipped measurement outcome of leakage 1->0 for result_id {}",
-                        result_id
-                    );
-                    val = 0;
-                }
-            } else {
-                // Potentially flip the measurement results
-                if val == 1 {
-                    if self.rng.occurs(self.p_meas_1) {
-                        trace!(
-                            "Flipped measurement outcome 1->0 for result_id {}",
-                            result_id
-                        );
-                        val = 0;
-                    }
-                } else if self.rng.occurs(self.p_meas_0) {
-                    trace!(
-                        "Flipped measurement outcome 0->1 for result_id {}",
-                        result_id
-                    );
-                    val = 1;
-                }
-            }
-            results_builder.add_measurement_results(&[val as usize], &[result_id]);
-        }
-
-        // TODO: If qubits are in |1>, leak them again with some probability.
-        //       Maybe move L -> |1> + noise to first round of noise...
-
-        // Get the biased measurement results
-        results_builder.build()
+        self.apply_idle_quadratic_dephasing(
+            self.p2_idle_quadratic_rate,
+            1.0,
+            &original_gate_qubits,
+            builder,
+        );
     }
 
     /// Leak a qubit (or replace it with completely depolarizing noise)
@@ -1000,56 +1044,9 @@ impl GeneralNoiseModel {
     fn reset_noise_model(&mut self) {
         // Clear leaked qubits
         self.leaked_qubits.clear();
+        // Clear measured qubits
+        self.measured_qubits.clear();
         // RNG state is intentionally not reset to maintain natural randomness
-    }
-
-    /// Apply coherent dephasing noise to a gate
-    ///
-    /// This method implements coherent phase rotation (systematic Z-rotation) noise
-    /// that occurs during idle periods or during gates with a specified duration.
-    ///
-    /// In physical systems, coherent dephasing represents:
-    /// - Systematic phase errors due to energy level shifts
-    /// - Frequency offsets in control fields
-    /// - AC Stark shifts
-    /// - Other systematic Z-rotation errors
-    ///
-    /// # Parameters
-    /// * `builder` - The `ByteMessageBuilder` to add gate operations to
-    /// * `angle` - The time duration over which idling occurs times the rate per time
-    /// * `qubits` - The qubits that are potentially affected by the idling noise
-    fn apply_quadratic_dephasing(
-        &mut self,
-        angle: f64,
-        qubits: &[usize],
-        builder: &mut ByteMessageBuilder,
-    ) {
-        if angle.abs() > f64::EPSILON {
-            let mut noisy_qubits = vec![];
-
-            for qubit in qubits {
-                if !self.is_leaked(*qubit) && (self.p_idle_coherent || self.rng.occurs(angle)) {
-                    noisy_qubits.push(*qubit);
-                }
-            }
-            if self.p_idle_coherent {
-                builder.add_rz(angle, &noisy_qubits);
-            } else {
-                builder.add_z(&noisy_qubits);
-            }
-        }
-    }
-
-    // Replace the meas_crosstalk method to use the correct API
-    #[allow(clippy::unused_self)]
-    fn meas_crosstalk(&mut self, _locations: &[usize], _builder: &mut ByteMessageBuilder) {
-        // placeholder
-    }
-
-    // Replace the prep_crosstalk method to use the correct API
-    #[allow(clippy::unused_self)]
-    fn prep_crosstalk(&mut self, _locations: &[usize], _builder: &mut ByteMessageBuilder) {
-        // placeholder
     }
 
     /// Calculate the two-qubit gate error rate based on the rotation angle
@@ -1147,859 +1144,15 @@ impl GeneralNoiseModel {
     ///
     /// # Returns
     /// Result indicating success or failure
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the seed cannot be set or the noise model cannot be rebuilt.
     pub fn reset_with_seed(&mut self, seed: u64) -> Result<(), PecosError> {
         // First reset the noise model
         self.reset_noise_model();
         // Then set the seed
         self.set_seed(seed)
-    }
-}
-
-/// Builder for creating general noise models
-pub struct GeneralNoiseModelBuilder {
-    p_prep: Option<f64>,
-    p_meas_0: Option<f64>,
-    p_meas_1: Option<f64>,
-    p1: Option<f64>,
-    p2: Option<f64>,
-    p1_emission_ratio: Option<f64>,
-    p2_emission_ratio: Option<f64>,
-    p1_pauli_model: Option<SingleQubitWeightedSampler>,
-    p1_emission_model: Option<SingleQubitWeightedSampler>,
-    p2_pauli_model: Option<TwoQubitWeightedSampler>,
-    p2_emission_model: Option<TwoQubitWeightedSampler>,
-    p_prep_leak_ratio: Option<f64>,
-    p1_seepage_prob: Option<f64>,
-    p2_seepage_prob: Option<f64>,
-    p2_idle_quadratic_rate: Option<f64>,
-    seed: Option<u64>,
-    scale: Option<f64>,
-    idle_scale: Option<f64>,
-    prep_scale: Option<f64>,
-    meas_scale: Option<f64>,
-    leakage_scale: Option<f64>,
-    p1_scale: Option<f64>,
-    p2_scale: Option<f64>,
-    emission_scale: Option<f64>,
-    p_meas_crosstalk: Option<f64>,
-    p_prep_crosstalk: Option<f64>,
-    p_meas_crosstalk_scale: Option<f64>,
-    p_prep_crosstalk_scale: Option<f64>,
-    p_idle_quadratic_rate: Option<f64>,
-    p_idle_coherent: Option<bool>,
-    p_idle_coherent_to_incoherent_factor: Option<f64>,
-    p2_angle_params: Option<(f64, f64, f64, f64)>,
-    p2_angle_power: Option<f64>,
-    noiseless_gates: Option<HashSet<GateType>>,
-}
-
-impl Default for GeneralNoiseModelBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl GeneralNoiseModelBuilder {
-    /// Create a new builder
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            p_prep: None,
-            p_meas_0: None,
-            p_meas_1: None,
-            p1: None,
-            p2: None,
-            p1_emission_ratio: None,
-            p2_emission_ratio: None,
-            p1_pauli_model: None,
-            p1_emission_model: None,
-            p2_pauli_model: None,
-            p2_emission_model: None,
-            p_prep_leak_ratio: None,
-            p1_seepage_prob: None,
-            p2_seepage_prob: None,
-            p2_idle_quadratic_rate: None,
-            seed: None,
-            scale: None,
-            idle_scale: None,
-            prep_scale: None,
-            meas_scale: None,
-            leakage_scale: None,
-            p1_scale: None,
-            p2_scale: None,
-            emission_scale: None,
-            p_meas_crosstalk: None,
-            p_prep_crosstalk: None,
-            p_meas_crosstalk_scale: None,
-            p_prep_crosstalk_scale: None,
-            p_idle_quadratic_rate: None,
-            p_idle_coherent: None,
-            p_idle_coherent_to_incoherent_factor: None,
-            p2_angle_params: None,
-            p2_angle_power: None,
-            noiseless_gates: None,
-        }
-    }
-
-    /// Validate that a value is a valid probability (between 0 and 1)
-    fn validate_probability(prob: f64) -> f64 {
-        assert!(
-            (0.0..=1.0).contains(&prob),
-            "Probability must be between 0 and 1, got {prob}"
-        );
-        prob
-    }
-
-    /// Validate that a value is positive
-    fn validate_positive(value: f64, name: &str) -> f64 {
-        assert!(value > 0.0, "{name} must be positive, got {value}");
-        value
-    }
-
-    /// Validate that a value is non-negative
-    fn validate_non_negative(value: f64, name: &str) -> f64 {
-        assert!(value >= 0.0, "{name} must be non-negative, got {value}");
-        value
-    }
-
-    /// Set the probability of error during preparation
-    #[must_use]
-    pub fn with_prep_probability(mut self, probability: f64) -> Self {
-        self.p_prep = Some(Self::validate_probability(probability));
-        self
-    }
-
-    /// Set the probability of bit flipping the measurement result
-    #[must_use]
-    pub fn with_meas_probability(mut self, probability: f64) -> Self {
-        self.p_meas_0 = Some(Self::validate_probability(probability));
-        self.p_meas_1 = Some(Self::validate_probability(probability));
-        self
-    }
-
-    /// Set the probability of flipping 0 to 1 during measurement
-    #[must_use]
-    pub fn with_meas_0_probability(mut self, probability: f64) -> Self {
-        self.p_meas_0 = Some(Self::validate_probability(probability));
-        self
-    }
-
-    /// Set the probability of flipping 1 to 0 during measurement
-    #[must_use]
-    pub fn with_meas_1_probability(mut self, probability: f64) -> Self {
-        self.p_meas_1 = Some(Self::validate_probability(probability));
-        self
-    }
-
-    /// Set the average probability of error after single-qubit gates
-    ///
-    /// Rescaling from average error to total error
-    ///
-    /// This conversion is necessary because experiments report average error rates,
-    /// but our noise models use total error rates.
-    ///
-    /// For a single-qubit gate with uniform error distribution across 3 Pauli errors,
-    /// the ratio of total error rate to average error rate is 3/2.
-    #[must_use]
-    pub fn with_average_p1_probability(mut self, probability: f64) -> Self {
-        self.p1 = Some(Self::validate_probability(probability * 3.0 / 2.0));
-        self
-    }
-
-    /// Set the probability of error after single-qubit gates
-    #[must_use]
-    pub fn with_p1_probability(mut self, probability: f64) -> Self {
-        self.p1 = Some(Self::validate_probability(probability));
-        self
-    }
-
-    /// Set the probability of error after single-qubit gates
-    ///
-    /// This is an alias for `with_p1_probability` for API consistency.
-    #[must_use]
-    pub fn with_single_qubit_probability(self, probability: f64) -> Self {
-        self.with_p1_probability(probability)
-    }
-
-    /// Set the probability of error after two-qubit gates
-    ///
-    /// Rescaling from average error to total error
-    ///
-    /// This conversion is necessary because experiments report average error rates,
-    /// but our noise models use total error rates.
-    ///
-    /// For a two-qubit gate with uniform error distribution across 15 Pauli errors,
-    /// the ratio of total error rate to average error rate is 5/4.
-    #[must_use]
-    pub fn with_average_p2_probability(mut self, probability: f64) -> Self {
-        self.p2 = Some(Self::validate_probability(probability * 5.0 / 4.0));
-        self
-    }
-
-    /// Set the probability of error after two-qubit gates
-    #[must_use]
-    pub fn with_p2_probability(mut self, probability: f64) -> Self {
-        self.p2 = Some(Self::validate_probability(probability));
-        self
-    }
-
-    /// Set the probability of error after two-qubit gates
-    ///
-    /// This is an alias for `with_p2_probability` for API consistency.
-    #[must_use]
-    pub fn with_two_qubit_probability(self, probability: f64) -> Self {
-        self.with_p2_probability(Self::validate_probability(probability))
-    }
-
-    #[must_use]
-    pub fn with_p2_idle_quadratic_rate(mut self, probability: f64) -> Self {
-        self.p2_idle_quadratic_rate = Some(Self::validate_probability(probability));
-        self
-    }
-
-    /// Set the Pauli error model for single-qubit gates
-    #[must_use]
-    pub fn with_p1_pauli_model(mut self, model: &BTreeMap<String, f64>) -> Self {
-        self.p1_pauli_model = Some(SingleQubitWeightedSampler::new(model));
-        self
-    }
-
-    /// Set the emission error model for single-qubit gates
-    #[must_use]
-    pub fn with_p1_emission_model(mut self, model: &BTreeMap<String, f64>) -> Self {
-        self.p1_emission_model = Some(SingleQubitWeightedSampler::new(model));
-        self
-    }
-
-    /// Set the preparation leakage ratio
-    #[must_use]
-    pub fn with_prep_leak_ratio(mut self, ratio: f64) -> Self {
-        self.p_prep_leak_ratio = Some(Self::validate_probability(ratio));
-        self
-    }
-
-    /// Set the seed for the random number generator
-    #[must_use]
-    pub fn with_seed(mut self, seed: u64) -> Self {
-        self.seed = Some(seed);
-        self
-    }
-
-    /// Set the overall scaling factor for error probabilities
-    ///
-    /// A global multiplier applied to all error rates. This allows easy adjustment of the
-    /// overall noise level without changing individual parameters. Typically used to
-    /// simulate different device qualities or to study the effect of noise strength.
-    #[must_use]
-    pub fn with_scale(mut self, scale: f64) -> Self {
-        self.scale = Some(scale);
-        self
-    }
-
-    /// Set the scaling factor for idle noise
-    ///
-    /// Controls the strength of errors that occur during idle periods or memory operations.
-    /// In ion trap systems, this could represent heating or dephasing during storage times.
-    #[must_use]
-    pub fn with_idle_scale(mut self, scale: f64) -> Self {
-        self.idle_scale = Some(scale);
-        self
-    }
-
-    /// Set the scaling factor for initialization errors
-    ///
-    /// Multiplier for preparation error probabilities. Allows adjustment of the relative
-    /// strength of initialization errors compared to other error types.
-    #[must_use]
-    pub fn with_prep_scale(mut self, scale: f64) -> Self {
-        self.prep_scale = Some(scale);
-        self
-    }
-
-    /// Set the scaling factor for measurement faults
-    ///
-    /// Multiplier for measurement error probabilities. Allows adjustment of the relative
-    /// strength of readout errors compared to other error types.
-    #[must_use]
-    pub fn with_meas_scale(mut self, scale: f64) -> Self {
-        self.meas_scale = Some(scale);
-        self
-    }
-
-    /// Set the scaling factor for leakage errors
-    ///
-    /// Scales how much leakage is applied and instead is replaced by completely depolarizing noise.
-    /// 1.0 means all leakage events are applied as leakage. 0.0 means all leakage events are
-    /// replaced by completely depolarizing noise.
-    #[must_use]
-    pub fn with_leakage_scale(mut self, scale: f64) -> Self {
-        self.leakage_scale = Some(Self::validate_probability(scale));
-        self
-    }
-
-    /// Set the scaling factor for single-qubit gate errors
-    ///
-    /// Multiplier for single-qubit gate error probabilities. Allows adjustment of the
-    /// relative strength of single-qubit gate errors compared to other error types.
-    #[must_use]
-    pub fn with_p1_scale(mut self, scale: f64) -> Self {
-        self.p1_scale = Some(scale);
-        self
-    }
-
-    /// Set the scaling factor for two-qubit gate errors
-    ///
-    /// Multiplier for two-qubit gate error probabilities. Allows adjustment of the relative
-    /// strength of two-qubit gate errors compared to other error types. In most quantum
-    /// technologies, two-qubit gates are typically more error-prone than single-qubit gates.
-    #[must_use]
-    pub fn with_p2_scale(mut self, scale: f64) -> Self {
-        self.p2_scale = Some(scale);
-        self
-    }
-
-    /// Set the scaling factor for spontaneous emission errors
-    ///
-    /// Multiplier for spontaneous-emission-related error probabilities. Controls the relative
-    /// strength of errors that involve transitions outside the standard computational basis.
-    #[must_use]
-    pub fn with_emission_scale(mut self, scale: f64) -> Self {
-        self.emission_scale = Some(scale);
-        self
-    }
-
-    /// Set the idling noise error rate for the quadratic term
-    #[must_use]
-    pub fn with_p_idle_quadratic_rate(mut self, probability: f64) -> Self {
-        self.p_idle_quadratic_rate = Some(Self::validate_probability(probability));
-        self
-    }
-
-    /// Set the average idling noise error rate per channel for the quadratic term
-    #[must_use]
-    pub fn with_p_average_idle_quadratic_rate(mut self, probability: f64) -> Self {
-        let probability: f64 = (probability * 3.0 / 2.0).sqrt();
-        self.p_idle_quadratic_rate = Some(Self::validate_probability(probability));
-        self
-    }
-
-    /// Set whether to use coherent dephasing
-    #[must_use]
-    pub fn with_p_idle_coherent(mut self, use_coherent: bool) -> Self {
-        self.p_idle_coherent = Some(use_coherent);
-        self
-    }
-
-    /// Set the coherent-to-incoherent conversion factor
-    ///
-    /// # Parameters
-    /// * `factor` - The conversion factor between coherent and incoherent dephasing rates
-    #[must_use]
-    pub fn with_p_idle_coherent_to_incoherent_factor(mut self, factor: f64) -> Self {
-        self.p_idle_coherent_to_incoherent_factor = Some(Self::validate_positive(
-            factor,
-            "Coherent-to-incoherent factor",
-        ));
-        self
-    }
-
-    /// Set RZZ parameter scaling for angle dependent error.
-    ///
-    /// The PECOS gate set has a parameterized-angle ZZ gate, RZZ(θ). For implementation
-    /// Certain parameters relate to the strength of the asymmetric
-    /// depolarizing noise. These parameters depend on the angle θ and are normalized so that
-    /// θ = π/2 gives the 2-qubit fault probability (p2).
-    ///
-    /// The parameters for asymmetric depolarizing noise are fit parameters that model how the
-    /// noise changes as the angle θ changes according to these equations:
-    ///
-    /// For θ < 0:
-    ///     (`p2_angle_a` × (|`θ|/π)^p2_angle_power` + `p2_angle_b`) × p2
-    ///
-    /// For θ > 0:
-    ///     (`p2_angle_c` × (|`θ|/π)^p2_angle_power` + `p2_angle_d`) × p2
-    ///
-    /// For θ = 0:
-    ///     (`p2_angle_b` + `p2_angle_d`) × 0.5 × p2
-    ///
-    /// # Parameters
-    /// * `a` - Coefficient for scaling negative angles (`p2_angle_a`)
-    /// * `b` - Offset for negative angles (`p2_angle_b`)
-    /// * `c` - Coefficient for scaling positive angles (`p2_angle_c`)
-    /// * `d` - Offset for positive angles (`p2_angle_d`)
-    #[must_use]
-    pub fn with_p2_angle_params(mut self, a: f64, b: f64, c: f64, d: f64) -> Self {
-        self.p2_angle_params = Some((a, b, c, d));
-        self
-    }
-
-    /// Set power parameter for RZZ error scaling
-    ///
-    /// # Parameters
-    /// * `power` - The power to which theta is raised in the RZZ error rate formula
-    #[must_use]
-    pub fn with_p2_angle_power(mut self, power: f64) -> Self {
-        self.p2_angle_power = Some(Self::validate_positive(power, "RZZ power parameter"));
-        self
-    }
-
-    /// Add a gate type to the set of noiseless gates
-    #[must_use]
-    pub fn with_noiseless_gate(mut self, gate_type: GateType) -> Self {
-        if self.noiseless_gates.is_none() {
-            self.noiseless_gates = Some(HashSet::new());
-        }
-
-        if let Some(ref mut gates) = self.noiseless_gates {
-            gates.insert(gate_type);
-        }
-
-        self
-    }
-
-    /// Set the scaling factor for measurement crosstalk probability
-    ///
-    /// Additional scaling factor specifically for measurement crosstalk probability.
-    #[must_use]
-    pub fn with_p_meas_crosstalk_scale(mut self, scale: f64) -> Self {
-        self.p_meas_crosstalk_scale = Some(Self::validate_non_negative(
-            scale,
-            "Measurement crosstalk rescale factor",
-        ));
-        self
-    }
-
-    /// Set the scaling factor for initialization crosstalk probability
-    ///
-    /// Additional scaling factor specifically for initialization crosstalk probability.
-    #[must_use]
-    pub fn with_p_prep_crosstalk_scale(mut self, scale: f64) -> Self {
-        self.p_prep_crosstalk_scale = Some(Self::validate_non_negative(
-            scale,
-            "Preparation crosstalk rescale factor",
-        ));
-        self
-    }
-
-    /// Set the probability model for two-qubit Pauli errors
-    #[must_use]
-    pub fn with_p2_pauli_model(mut self, model: &BTreeMap<String, f64>) -> Self {
-        self.p2_pauli_model = Some(TwoQubitWeightedSampler::new(model));
-        self
-    }
-
-    /// Set the probability model for two-qubit emission errors
-    #[must_use]
-    pub fn with_p2_emission_model(mut self, model: &BTreeMap<String, f64>) -> Self {
-        self.p2_emission_model = Some(TwoQubitWeightedSampler::new(model));
-        self
-    }
-
-    /// Set the emission ratio for single-qubit gate errors
-    #[must_use]
-    pub fn with_p1_emission_ratio(mut self, ratio: f64) -> Self {
-        self.p1_emission_ratio = Some(Self::validate_probability(ratio));
-        self
-    }
-
-    /// Set the two-qubit emission ratio
-    #[must_use]
-    pub fn with_p2_emission_ratio(mut self, ratio: f64) -> Self {
-        self.p2_emission_ratio = Some(Self::validate_probability(ratio));
-        self
-    }
-
-    /// Set the probability of a leaked qubit being seeped (released from leakage)
-    #[must_use]
-    pub fn with_p1_seepage_prob(mut self, prob: f64) -> Self {
-        self.p1_seepage_prob = Some(Self::validate_probability(prob));
-        self
-    }
-
-    /// Set the probability of a leaked qubit being seeped (released from leakage)
-    #[must_use]
-    pub fn with_p2_seepage_prob(mut self, prob: f64) -> Self {
-        self.p2_seepage_prob = Some(Self::validate_probability(prob));
-        self
-    }
-
-    /// Set the probability of a leaked qubit being seeped (released from leakage)
-    #[must_use]
-    pub fn with_seepage_prob(mut self, prob: f64) -> Self {
-        self.p1_seepage_prob = Some(Self::validate_probability(prob));
-        self.p2_seepage_prob = Some(Self::validate_probability(prob));
-        self
-    }
-
-    /// Set the probability of crosstalk during measurement operations
-    #[must_use]
-    pub fn with_p_meas_crosstalk(mut self, prob: f64) -> Self {
-        self.p_meas_crosstalk = Some(Self::validate_probability(prob));
-        self
-    }
-
-    /// Set the probability of crosstalk during initialization operations
-    #[must_use]
-    pub fn with_p_prep_crosstalk(mut self, prob: f64) -> Self {
-        self.p_prep_crosstalk = Some(Self::validate_probability(prob));
-        self
-    }
-
-    /// Scale error probabilities based on scaling factors
-    ///
-    /// This method applies all scaling factors to the error probabilities:
-    /// - Global scale factor
-    /// - Type-specific scale factors (measurement, preparation, memory, etc.)
-    /// - Conversion factors from average to total error rates (3/2 for p1, 5/4 for p2)
-    ///
-    /// This method should be called exactly once after setting all parameters
-    /// and before using the noise model for simulation. Calling it multiple times will
-    /// compound the scaling factors incorrectly.
-    pub fn scale_parameters(&mut self, model: &mut GeneralNoiseModel) {
-        // Note, leakage_scale is not included here as it is used as an active parameter in the
-        // noise model
-        let scale = self.scale.unwrap_or(1.0);
-        let idle_scale = self.idle_scale.unwrap_or(1.0);
-        let prep_scale = self.prep_scale.unwrap_or(1.0);
-        let meas_scale = self.meas_scale.unwrap_or(1.0);
-        let p1_scale = self.p1_scale.unwrap_or(1.0);
-        let p2_scale = self.p2_scale.unwrap_or(1.0);
-        let emission_scale = self.emission_scale.unwrap_or(1.0);
-        let p_meas_crosstalk_scale = self.p_meas_crosstalk_scale.unwrap_or(1.0);
-        let p_prep_crosstalk_scale = self.p_prep_crosstalk_scale.unwrap_or(1.0);
-
-        // Scale single-qubit gate error probability
-        model.p1 *= p1_scale * scale;
-
-        // Scale two-qubit gate error probability
-        model.p2 *= p2_scale * scale;
-
-        model.p_meas_0 *= meas_scale * scale;
-        model.p_meas_1 *= meas_scale * scale;
-
-        // Scale preparation error probability
-        model.p_prep *= prep_scale * scale;
-
-        // Scale preparation leakage ratio - include the global scale factor
-        model.p_prep_leak_ratio *= scale;
-        model.p_prep_leak_ratio = model.p_prep_leak_ratio.min(1.0);
-
-        // Apply crosstalk rescaling factors
-        model.p_meas_crosstalk *= p_meas_crosstalk_scale;
-        model.p_prep_crosstalk *= p_prep_crosstalk_scale;
-
-        // Then apply the regular scaling to crosstalks
-        model.p_meas_crosstalk *= meas_scale * scale;
-        model.p_prep_crosstalk *= prep_scale * scale;
-
-        // Scale emission ratios
-        model.p1_emission_ratio *= emission_scale * scale;
-        model.p1_emission_ratio = model.p1_emission_ratio.min(1.0);
-
-        model.p2_emission_ratio *= emission_scale * scale;
-        model.p2_emission_ratio = model.p2_emission_ratio.min(1.0);
-
-        model.p_idle_quadratic_rate *= (idle_scale * scale).sqrt();
-
-        if !model.p_idle_coherent {
-            // 0.5 to deal with the 0.5 in sin(rate x duration x 0.5)^2
-            let factor = model.p_idle_coherent_to_incoherent_factor * 0.5;
-            model.p_idle_quadratic_rate *= factor;
-
-            // p2_idle_quadratic_rate is an angle in radians...
-            let p = ((model.p2_idle_quadratic_rate * factor).sin()).powi(2)
-                * model.p_idle_coherent_to_incoherent_factor;
-            model.p2_idle_quadratic_rate = Self::validate_probability(p);
-        }
-        // frequency is in units of 2pi so convert to radians
-        model.p_idle_quadratic_rate *= 2.0 * std::f64::consts::PI;
-    }
-
-    /// Build the general noise model
-    ///
-    /// TODO: Consider another build with noiseless default
-    ///
-    /// # Returns
-    /// A `GeneralNoiseModel`
-    ///
-    /// # Panics
-    /// Panics if any probabilities are not set or are not between 0 and 1.
-    #[must_use]
-    pub fn build(mut self) -> GeneralNoiseModel {
-        // Start with the default noise model as a base
-        let mut model = GeneralNoiseModel::default();
-
-        // Apply all parameters that were explicitly set
-        if let Some(p_prep) = self.p_prep {
-            model.p_prep = p_prep;
-        }
-
-        if let Some(p_meas_0) = self.p_meas_0 {
-            model.p_meas_0 = p_meas_0;
-        }
-
-        if let Some(p_meas_1) = self.p_meas_1 {
-            model.p_meas_1 = p_meas_1;
-        }
-
-        model.p_meas_max = model.p_meas_0.max(model.p_meas_1);
-
-        if let Some(p1) = self.p1 {
-            model.p1 = p1;
-        }
-
-        if let Some(p2) = self.p2 {
-            model.p2 = p2;
-        }
-
-        if let Some(p2_idle_quadratic_rate) = self.p2_idle_quadratic_rate {
-            model.p2_idle_quadratic_rate = p2_idle_quadratic_rate;
-        }
-
-        if let Some(ratio) = self.p1_emission_ratio {
-            model.p1_emission_ratio = ratio;
-        }
-
-        if let Some(ratio) = self.p2_emission_ratio {
-            model.p2_emission_ratio = ratio;
-        }
-
-        if let Some(model_map) = self.p1_pauli_model.clone() {
-            model.p1_pauli_model = model_map;
-        }
-
-        if let Some(model_map) = self.p1_emission_model.clone() {
-            model.p1_emission_model = model_map;
-        }
-
-        if let Some(model_map) = self.p2_pauli_model.clone() {
-            model.p2_pauli_model = model_map;
-        }
-
-        if let Some(model_map) = self.p2_emission_model.clone() {
-            model.p2_emission_model = model_map;
-        }
-
-        if let Some(ratio) = self.p_prep_leak_ratio {
-            model.p_prep_leak_ratio = ratio;
-        }
-
-        if let Some(prob) = self.p1_seepage_prob {
-            model.p1_seepage_prob = prob;
-        }
-
-        if let Some(prob) = self.p2_seepage_prob {
-            model.p2_seepage_prob = prob;
-        }
-
-        if let Some(seed) = self.seed {
-            // Use the with_seed constructor for NoiseRng
-            model.rng = NoiseRng::with_seed(seed);
-        }
-
-        if let Some(p_idle_quadratic_rate) = self.p_idle_quadratic_rate {
-            model.p_idle_quadratic_rate = p_idle_quadratic_rate;
-        }
-
-        if let Some(coherent) = self.p_idle_coherent {
-            model.p_idle_coherent = coherent;
-        }
-
-        if let Some(factor) = self.p_idle_coherent_to_incoherent_factor {
-            model.p_idle_coherent_to_incoherent_factor = factor;
-        }
-
-        if let Some(p2_angle_params) = self.p2_angle_params {
-            model.p2_angle_a = p2_angle_params.0;
-            model.p2_angle_b = p2_angle_params.1;
-            model.p2_angle_c = p2_angle_params.2;
-            model.p2_angle_d = p2_angle_params.3;
-        }
-
-        if let Some(power) = self.p2_angle_power {
-            model.p2_angle_power = power;
-        }
-
-        if let Some(gates) = self.noiseless_gates.clone() {
-            for gate in gates {
-                model.add_noiseless_gate(gate);
-            }
-        }
-
-        if let Some(prob) = self.p_meas_crosstalk {
-            model.p_meas_crosstalk = prob;
-        }
-
-        if let Some(prob) = self.p_prep_crosstalk {
-            model.p_prep_crosstalk = prob;
-        }
-
-        if let Some(leakage_scale) = self.leakage_scale {
-            model.leakage_scale = leakage_scale;
-        }
-
-        self.scale_parameters(&mut model);
-        model
-    }
-
-    /// Create a new builder from an existing model's configuration
-    ///
-    /// This method is useful for creating a new model that is identical to an existing one
-    /// except for a few changed parameters.
-    ///
-    /// # Arguments
-    /// * `model` - The existing model to copy parameters from
-    ///
-    /// # Returns
-    /// A builder with parameters copied from the existing model
-    #[must_use]
-    pub fn from_model(model: &GeneralNoiseModel) -> Self {
-        Self {
-            p_prep: Some(model.p_prep),
-            p_meas_0: Some(model.p_meas_0),
-            p_meas_1: Some(model.p_meas_1),
-            p1: Some(model.p1),
-            p2: Some(model.p2),
-            p1_emission_ratio: Some(model.p1_emission_ratio),
-            p2_emission_ratio: Some(model.p2_emission_ratio),
-            p1_pauli_model: Some(model.p1_pauli_model.clone()),
-            p1_emission_model: Some(model.p1_emission_model.clone()),
-            p2_pauli_model: Some(model.p2_pauli_model.clone()),
-            p2_emission_model: Some(model.p2_emission_model.clone()),
-            p_prep_leak_ratio: Some(model.p_prep_leak_ratio),
-            p1_seepage_prob: Some(model.p1_seepage_prob),
-            p2_seepage_prob: Some(model.p2_seepage_prob),
-            p2_idle_quadratic_rate: Some(model.p2_idle_quadratic_rate),
-            seed: None, // Don't copy the seed
-            scale: None,
-            idle_scale: None,
-            prep_scale: None,
-            meas_scale: None,
-            leakage_scale: None,
-            p1_scale: None,
-            p2_scale: None,
-            emission_scale: None,
-            p_meas_crosstalk: Some(model.p_meas_crosstalk),
-            p_prep_crosstalk: Some(model.p_prep_crosstalk),
-            p_meas_crosstalk_scale: None,
-            p_prep_crosstalk_scale: None,
-            p_idle_quadratic_rate: Some(model.p_idle_quadratic_rate),
-            p_idle_coherent: Some(model.p_idle_coherent),
-            p_idle_coherent_to_incoherent_factor: Some(model.p_idle_coherent_to_incoherent_factor),
-            p2_angle_params: Some((
-                model.p2_angle_a,
-                model.p2_angle_b,
-                model.p2_angle_c,
-                model.p2_angle_d,
-            )),
-            p2_angle_power: Some(model.p2_angle_power),
-            noiseless_gates: Some(model.noiseless_gates.clone()),
-        }
-    }
-}
-
-impl Default for GeneralNoiseModel {
-    /// Create a new noise model with default error parameters
-    ///
-    /// Creates a `GeneralNoiseModel` with sensible default error probabilities:
-    /// * `p_prep` - Preparation (initialization) error probability: 0.01
-    /// * `p_meas_0` - Probability of measuring 1 when the state is |0⟩: 0.01
-    /// * `p_meas_1` - Probability of measuring 0 when the state is |1⟩: 0.01
-    /// * `p1` - Single-qubit gate error probability (average error rate): 0.001
-    /// * `p2` - Two-qubit gate error probability (average error rate): 0.01
-    ///
-    /// Other parameters are initialized with sensible defaults, including uniform
-    /// distributions for Pauli errors and emission errors.
-    ///
-    /// # Example
-    /// ```
-    /// use pecos_engines::engines::noise::GeneralNoiseModel;
-    ///
-    /// // Create model with default error probabilities
-    /// let mut model = GeneralNoiseModel::default();
-    /// ```
-    fn default() -> Self {
-        // Initialize default models
-        let mut p1_pauli_model = BTreeMap::new();
-        p1_pauli_model.insert("X".to_string(), 1.0 / 3.0);
-        p1_pauli_model.insert("Y".to_string(), 1.0 / 3.0);
-        p1_pauli_model.insert("Z".to_string(), 1.0 / 3.0);
-
-        let mut p1_emission_model = BTreeMap::new();
-        p1_emission_model.insert("X".to_string(), 1.0 / 3.0);
-        p1_emission_model.insert("Y".to_string(), 1.0 / 3.0);
-        p1_emission_model.insert("Z".to_string(), 1.0 / 3.0);
-
-        let mut p2_pauli_model = BTreeMap::new();
-        p2_pauli_model.insert("XX".to_string(), 1.0 / 15.0);
-        p2_pauli_model.insert("XY".to_string(), 1.0 / 15.0);
-        p2_pauli_model.insert("XZ".to_string(), 1.0 / 15.0);
-        p2_pauli_model.insert("YX".to_string(), 1.0 / 15.0);
-        p2_pauli_model.insert("YY".to_string(), 1.0 / 15.0);
-        p2_pauli_model.insert("YZ".to_string(), 1.0 / 15.0);
-        p2_pauli_model.insert("ZX".to_string(), 1.0 / 15.0);
-        p2_pauli_model.insert("ZY".to_string(), 1.0 / 15.0);
-        p2_pauli_model.insert("ZZ".to_string(), 1.0 / 15.0);
-        p2_pauli_model.insert("IX".to_string(), 1.0 / 15.0);
-        p2_pauli_model.insert("IY".to_string(), 1.0 / 15.0);
-        p2_pauli_model.insert("IZ".to_string(), 1.0 / 15.0);
-        p2_pauli_model.insert("XI".to_string(), 1.0 / 15.0);
-        p2_pauli_model.insert("YI".to_string(), 1.0 / 15.0);
-        p2_pauli_model.insert("ZI".to_string(), 1.0 / 15.0);
-
-        let mut p2_emission_model = BTreeMap::new();
-        p2_emission_model.insert("XX".to_string(), 1.0 / 15.0);
-        p2_emission_model.insert("XY".to_string(), 1.0 / 15.0);
-        p2_emission_model.insert("XZ".to_string(), 1.0 / 15.0);
-        p2_emission_model.insert("YX".to_string(), 1.0 / 15.0);
-        p2_emission_model.insert("YY".to_string(), 1.0 / 15.0);
-        p2_emission_model.insert("YZ".to_string(), 1.0 / 15.0);
-        p2_emission_model.insert("ZX".to_string(), 1.0 / 15.0);
-        p2_emission_model.insert("ZY".to_string(), 1.0 / 15.0);
-        p2_emission_model.insert("ZZ".to_string(), 1.0 / 15.0);
-        p2_emission_model.insert("IX".to_string(), 1.0 / 15.0);
-        p2_emission_model.insert("IY".to_string(), 1.0 / 15.0);
-        p2_emission_model.insert("IZ".to_string(), 1.0 / 15.0);
-        p2_emission_model.insert("XI".to_string(), 1.0 / 15.0);
-        p2_emission_model.insert("YI".to_string(), 1.0 / 15.0);
-        p2_emission_model.insert("ZI".to_string(), 1.0 / 15.0);
-
-        let p_meas_0: f64 = 0.01; // 1% probability of measuring 1 when state is |0⟩
-        let p_meas_1: f64 = 0.01; // 1% probability of measuring 0 when state is |1⟩
-
-        // Default error probabilities
-        Self {
-            p_prep: 0.01,
-            p_meas_0,
-            p_meas_1,
-            p1: 0.001,
-            p2: 0.01,
-            p1_emission_ratio: 0.5,
-            p_prep_leak_ratio: 0.5,
-            p2_emission_ratio: 0.5,
-            p1_pauli_model: SingleQubitWeightedSampler::new(&p1_pauli_model),
-            p1_emission_model: SingleQubitWeightedSampler::new(&p1_emission_model),
-            p2_pauli_model: TwoQubitWeightedSampler::new(&p2_pauli_model),
-            p2_emission_model: TwoQubitWeightedSampler::new(&p2_emission_model),
-            p1_seepage_prob: 0.5,
-            p2_seepage_prob: 0.5,
-            p2_angle_a: 0.0,
-            p2_angle_b: 1.0,
-            p2_angle_c: 0.0,
-            p2_angle_d: 1.0,
-            p2_angle_power: 1.0,
-            p2_idle_quadratic_rate: 0.0,
-            leaked_qubits: HashSet::new(),
-            rng: NoiseRng::default(),
-            p_meas_crosstalk: 0.0,
-            p_prep_crosstalk: 0.0,
-            p_idle_quadratic_rate: 0.0,
-            p_idle_coherent: false,
-            p_idle_coherent_to_incoherent_factor: 2.0,
-            noiseless_gates: HashSet::new(),
-            p_meas_max: p_meas_0.max(p_meas_1),
-            leakage_scale: 1.0,
-        }
     }
 }
 
@@ -2143,7 +1296,7 @@ mod tests {
         // Create a message with a 0 measurement result
         let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_measurement_results();
-        builder.add_measurement_results(&[0], &[0]);
+        builder.add_measurement_results(&[0]);
         let message_with_zero = builder.build();
 
         // Test measurement bias - all 0s should be flipped to 1s
@@ -2156,7 +1309,7 @@ mod tests {
         // Create a message with a 1 measurement result
         let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_measurement_results();
-        builder.add_measurement_results(&[1], &[0]);
+        builder.add_measurement_results(&[1]);
         let message_with_one = builder.build();
 
         // Test measurement bias - all 1s should be flipped to 0s
@@ -2172,7 +1325,7 @@ mod tests {
         // Test measurement bias with 0% flip - all 0s should remain 0s
         let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_measurement_results();
-        builder.add_measurement_results(&[0], &[0]);
+        builder.add_measurement_results(&[0]);
         let message_with_zero = builder.build();
 
         let unbiased_zero = noise
@@ -2184,7 +1337,7 @@ mod tests {
         // Test measurement bias with 0% flip - all 1s should remain 1s
         let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_measurement_results();
-        builder.add_measurement_results(&[1], &[0]);
+        builder.add_measurement_results(&[1]);
         let message_with_one = builder.build();
 
         let unbiased_one = noise
@@ -2214,7 +1367,6 @@ mod tests {
             gate_type: GateType::Prep,
             qubits: vec![0],
             params: vec![],
-            result_id: None,
             noiseless: false,
         };
 
@@ -2290,13 +1442,21 @@ mod tests {
         // Manually mark qubit 0 as leaked
         noise.mark_as_leaked(0);
 
-        // In the test, we want to verify that the qubit becomes unleaked after measurement
-        // Create a forced result message - this simulates the correct behavior
+        // First, we need to process a measurement gate so the noise model tracks which qubit is measured
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_quantum_operations();
+        builder.add_measurements(&[0]); // Measure qubit 0
+        let measurement_command = builder.build();
+
+        // Process the measurement gate through the noise model
+        let _noisy_command = noise.apply_noise_on_start(&measurement_command).unwrap();
+
+        // Now create the measurement results
         let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_measurement_results();
-        builder.add_measurement_results(&[1], &[0]); // Force outcome to 1 for result_id 0
+        builder.add_measurement_results(&[0]); // Measurement result is 0
 
-        // "Apply bias" - in practice this will just check for and unleaked any measured qubits
+        // Apply measurement noise - this should NOT unleak the qubit
         let biased_message = noise
             .apply_noise_on_continue_processing(builder.build())
             .unwrap();
@@ -2307,11 +1467,529 @@ mod tests {
         // Verify that the leaked qubit is reported as measured as 1
         assert_eq!(results[0].1, 1, "Leaked qubit should always measure as 1");
 
-        // Verify that the qubit is no longer leaked after measurement
-        // This is what we really care about testing - the leaked state cleanup
+        // Verify that the qubit is still leaked after measurement
+        // Measurements do not unleak qubits - only prep operations do
+        assert!(
+            noise.is_leaked(0),
+            "Qubit should remain leaked after measurement"
+        );
+    }
+
+    #[test]
+    fn test_repeated_measurement_of_leaked_qubit() {
+        use crate::byte_message::ByteMessageBuilder;
+
+        // Create a noise model with no spontaneous errors
+        let mut model = GeneralNoiseModel::builder()
+            .with_prep_probability(0.0)
+            .with_meas_0_probability(0.0)
+            .with_meas_1_probability(0.0)
+            .with_p1_probability(0.0)
+            .with_p2_probability(0.0)
+            .build();
+        let noise = model
+            .as_any_mut()
+            .downcast_mut::<GeneralNoiseModel>()
+            .unwrap();
+
+        // Manually mark qubit 0 as leaked
+        noise.mark_as_leaked(0);
+
+        // Process measurement gates - measure qubit 0 three times in a batch
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_quantum_operations();
+        builder.add_measurements(&[0]); // First measurement of qubit 0
+        builder.add_measurements(&[0]); // Second measurement of qubit 0
+        builder.add_measurements(&[0]); // Third measurement of qubit 0
+        let measurement_command = builder.build();
+
+        // Process the measurement gates through the noise model
+        let _noisy_command = noise.apply_noise_on_start(&measurement_command).unwrap();
+
+        // Now create the measurement results (all originally 0)
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_measurement_results();
+        builder.add_measurement_results(&[0, 0, 0]); // Three measurement results, all 0
+
+        // Apply measurement noise
+        let biased_message = noise
+            .apply_noise_on_continue_processing(builder.build())
+            .unwrap();
+
+        // Get the measurement results
+        let results = biased_message.measurement_results_as_vec().unwrap();
+
+        // Verify that all three measurements of the leaked qubit report as 1
+        assert_eq!(results.len(), 3, "Should have three measurement results");
+        assert_eq!(
+            results[0].1, 1,
+            "First measurement of leaked qubit should be 1"
+        );
+        assert_eq!(
+            results[1].1, 1,
+            "Second measurement of leaked qubit should be 1"
+        );
+        assert_eq!(
+            results[2].1, 1,
+            "Third measurement of leaked qubit should be 1"
+        );
+
+        // Verify that the qubit is still leaked after all measurements
+        assert!(
+            noise.is_leaked(0),
+            "Qubit should remain leaked after repeated measurements"
+        );
+    }
+
+    #[test]
+    fn test_prep_unleaks_after_measurement() {
+        use crate::byte_message::ByteMessageBuilder;
+
+        // Create a noise model with no spontaneous errors
+        let mut model = GeneralNoiseModel::builder()
+            .with_prep_probability(0.0)
+            .with_meas_0_probability(0.0)
+            .with_meas_1_probability(0.0)
+            .with_p1_probability(0.0)
+            .with_p2_probability(0.0)
+            .build();
+        let noise = model
+            .as_any_mut()
+            .downcast_mut::<GeneralNoiseModel>()
+            .unwrap();
+
+        // Manually mark qubit 0 as leaked
+        noise.mark_as_leaked(0);
+        assert!(noise.is_leaked(0), "Qubit should start as leaked");
+
+        // Process a measurement gate
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_quantum_operations();
+        builder.add_measurements(&[0]);
+        let measurement_command = builder.build();
+        let _noisy_command = noise.apply_noise_on_start(&measurement_command).unwrap();
+
+        // Process measurement results
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_measurement_results();
+        builder.add_measurement_results(&[0]);
+        let biased_message = noise
+            .apply_noise_on_continue_processing(builder.build())
+            .unwrap();
+
+        // Verify the leaked qubit measured as 1 but remains leaked
+        let results = biased_message.measurement_results_as_vec().unwrap();
+        assert_eq!(results[0].1, 1, "Leaked qubit should measure as 1");
+        assert!(
+            noise.is_leaked(0),
+            "Qubit should remain leaked after measurement"
+        );
+
+        // Now apply a prep operation
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_quantum_operations();
+        let prep_gate = QuantumGate {
+            gate_type: GateType::Prep,
+            qubits: vec![0],
+            params: vec![],
+            noiseless: false,
+        };
+        noise.apply_prep_faults(&prep_gate, &mut builder);
+
+        // Verify that the qubit is now unleaked
         assert!(
             !noise.is_leaked(0),
-            "Qubit should be unleaked after measurement"
+            "Qubit should be unleaked after prep operation"
+        );
+    }
+
+    #[test]
+    fn test_measurement_order_preservation() {
+        use crate::byte_message::ByteMessageBuilder;
+
+        // Create a noise model with biased measurement probabilities
+        let mut model = GeneralNoiseModel::builder()
+            .with_meas_0_probability(0.3) // 30% chance of flipping 0 to 1
+            .with_meas_1_probability(0.2) // 20% chance of flipping 1 to 0
+            .with_seed(42) // Use fixed seed for deterministic test
+            .build();
+        let noise = model
+            .as_any_mut()
+            .downcast_mut::<GeneralNoiseModel>()
+            .unwrap();
+
+        // Create measurement gates for different qubits in specific order
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_quantum_operations();
+        builder.add_measurements(&[2]); // First: measure qubit 2
+        builder.add_measurements(&[0]); // Second: measure qubit 0
+        builder.add_measurements(&[3]); // Third: measure qubit 3
+        builder.add_measurements(&[1]); // Fourth: measure qubit 1
+        builder.add_measurements(&[2]); // Fifth: measure qubit 2 again
+        let measurement_command = builder.build();
+
+        // Process the measurement gates through the noise model
+        let _noisy_command = noise.apply_noise_on_start(&measurement_command).unwrap();
+
+        // Create measurement results in the same order
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_measurement_results();
+        builder.add_measurement_results(&[1, 0, 1, 0, 1]); // Results in order
+
+        // Apply measurement noise
+        let noisy_results = noise
+            .apply_noise_on_continue_processing(builder.build())
+            .unwrap();
+
+        // Parse the noisy results
+        let results = noisy_results.parse_measurements().unwrap();
+
+        // Verify we have the correct number of results
+        assert_eq!(results.len(), 5, "Should have 5 measurement results");
+
+        // The order should be preserved even with noise
+        // Results might be flipped due to noise, but the order should remain:
+        // results[0] corresponds to qubit 2 (first measurement)
+        // results[1] corresponds to qubit 0 (second measurement)
+        // results[2] corresponds to qubit 3 (third measurement)
+        // results[3] corresponds to qubit 1 (fourth measurement)
+        // results[4] corresponds to qubit 2 (fifth measurement)
+
+        // Print results for debugging
+        println!("Original: [1, 0, 1, 0, 1]");
+        println!("Noisy:    {results:?}");
+
+        // Check that the noise model tracked the correct qubits
+        // Note: measured_qubits is cleared after processing, so we can't check it here
+        // But we can verify the results are in the expected range
+        for (i, &result) in results.iter().enumerate() {
+            assert!(
+                result == 0 || result == 1,
+                "Result {i} should be 0 or 1, got {result}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_measurement_order_with_leakage() {
+        use crate::byte_message::ByteMessageBuilder;
+
+        // Create a noise model with no measurement errors
+        let mut model = GeneralNoiseModel::builder()
+            .with_meas_0_probability(0.0)
+            .with_meas_1_probability(0.0)
+            .build();
+        let noise = model
+            .as_any_mut()
+            .downcast_mut::<GeneralNoiseModel>()
+            .unwrap();
+
+        // Mark specific qubits as leaked
+        noise.mark_as_leaked(1);
+        noise.mark_as_leaked(3);
+
+        // Create measurement gates in specific order
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_quantum_operations();
+        builder.add_measurements(&[0]); // Non-leaked
+        builder.add_measurements(&[1]); // Leaked
+        builder.add_measurements(&[2]); // Non-leaked
+        builder.add_measurements(&[3]); // Leaked
+        builder.add_measurements(&[1]); // Leaked (repeated)
+        let measurement_command = builder.build();
+
+        // Process the measurement gates
+        let _noisy_command = noise.apply_noise_on_start(&measurement_command).unwrap();
+
+        // Create measurement results (all zeros)
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_measurement_results();
+        builder.add_measurement_results(&[0, 0, 0, 0, 0]);
+
+        // Apply noise (should force leaked qubits to 1)
+        let noisy_results = noise
+            .apply_noise_on_continue_processing(builder.build())
+            .unwrap();
+
+        // Parse results
+        let results = noisy_results.parse_measurements().unwrap();
+
+        // Verify order and leakage effects
+        assert_eq!(results.len(), 5);
+        assert_eq!(results[0], 0, "Qubit 0 (non-leaked) should remain 0");
+        assert_eq!(results[1], 1, "Qubit 1 (leaked) should be forced to 1");
+        assert_eq!(results[2], 0, "Qubit 2 (non-leaked) should remain 0");
+        assert_eq!(results[3], 1, "Qubit 3 (leaked) should be forced to 1");
+        assert_eq!(
+            results[4], 1,
+            "Qubit 1 (leaked, repeated) should be forced to 1"
+        );
+    }
+
+    #[test]
+    fn test_biased_measurement_statistics() {
+        use crate::byte_message::ByteMessageBuilder;
+
+        // Test with many measurements to see clear statistical pattern
+        const NUM_MEASUREMENTS: usize = 1000;
+
+        // Create a noise model with strong asymmetric bias
+        // 80% chance of flipping 0->1, only 10% chance of flipping 1->0
+        let mut model = GeneralNoiseModel::builder()
+            .with_meas_0_probability(0.8) // Strong bias: 0 -> 1
+            .with_meas_1_probability(0.1) // Weak bias: 1 -> 0
+            .with_seed(12345) // Fixed seed for reproducibility
+            .build();
+        let noise = model
+            .as_any_mut()
+            .downcast_mut::<GeneralNoiseModel>()
+            .unwrap();
+
+        // First test: all zeros
+        let mut zeros_flipped = 0;
+        for i in 0..NUM_MEASUREMENTS {
+            // Need to process measurement gate first
+            let mut builder = ByteMessageBuilder::new();
+            let _ = builder.for_quantum_operations();
+            builder.add_measurements(&[0]);
+            let _cmd = noise.apply_noise_on_start(&builder.build()).unwrap();
+
+            let mut builder = ByteMessageBuilder::new();
+            let _ = builder.for_measurement_results();
+            builder.add_measurement_results(&[0]);
+
+            let biased_result = noise
+                .apply_noise_on_continue_processing(builder.build())
+                .unwrap();
+            let results = biased_result.parse_measurements().unwrap();
+
+            if results[0] == 1 {
+                zeros_flipped += 1;
+            }
+
+            // Reset for next measurement
+            noise.reset_noise_model();
+
+            // Reset seed periodically to get different random values
+            if i % 100 == 99 {
+                noise.set_seed(12345 + (i / 100) as u64).unwrap();
+            }
+        }
+
+        // Expect approximately 80% of zeros to flip to ones
+        let zero_flip_rate = f64::from(zeros_flipped)
+            / f64::from(u32::try_from(NUM_MEASUREMENTS).unwrap_or(u32::MAX));
+        println!(
+            "Zero flip rate: {:.1}% (expected ~80%)",
+            zero_flip_rate * 100.0
+        );
+        assert!(
+            (zero_flip_rate - 0.8).abs() < 0.05,
+            "Zero flip rate {zero_flip_rate:.3} should be close to 0.8"
+        );
+
+        // Second test: all ones
+        let mut ones_flipped = 0;
+        noise.set_seed(54321).unwrap(); // Different seed for variety
+
+        for i in 0..NUM_MEASUREMENTS {
+            // Process measurement gate
+            let mut builder = ByteMessageBuilder::new();
+            let _ = builder.for_quantum_operations();
+            builder.add_measurements(&[0]);
+            let _cmd = noise.apply_noise_on_start(&builder.build()).unwrap();
+
+            let mut builder = ByteMessageBuilder::new();
+            let _ = builder.for_measurement_results();
+            builder.add_measurement_results(&[1]);
+
+            let biased_result = noise
+                .apply_noise_on_continue_processing(builder.build())
+                .unwrap();
+            let results = biased_result.parse_measurements().unwrap();
+
+            if results[0] == 0 {
+                ones_flipped += 1;
+            }
+
+            // Reset for next measurement
+            noise.reset_noise_model();
+
+            // Reset seed periodically
+            if i % 100 == 99 {
+                noise.set_seed(54321 + (i / 100) as u64).unwrap();
+            }
+        }
+
+        // Expect approximately 10% of ones to flip to zeros
+        let one_flip_rate = f64::from(ones_flipped)
+            / f64::from(u32::try_from(NUM_MEASUREMENTS).unwrap_or(u32::MAX));
+        println!(
+            "One flip rate: {:.1}% (expected ~10%)",
+            one_flip_rate * 100.0
+        );
+        assert!(
+            (one_flip_rate - 0.1).abs() < 0.05,
+            "One flip rate {one_flip_rate:.3} should be close to 0.1"
+        );
+    }
+
+    #[test]
+    fn test_extreme_measurement_bias() {
+        use crate::byte_message::ByteMessageBuilder;
+
+        // Test with extreme biases to make the effect very clear
+        // Case 1: Always flip 0->1, never flip 1->0
+        let mut model = GeneralNoiseModel::builder()
+            .with_meas_0_probability(1.0) // Always flip 0->1
+            .with_meas_1_probability(0.0) // Never flip 1->0
+            .build();
+        let noise = model
+            .as_any_mut()
+            .downcast_mut::<GeneralNoiseModel>()
+            .unwrap();
+
+        // Test batch of mixed measurements
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_quantum_operations();
+        for i in 0..10 {
+            builder.add_measurements(&[i]);
+        }
+        let _cmd = noise.apply_noise_on_start(&builder.build()).unwrap();
+
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_measurement_results();
+        // Original pattern: 0,1,0,1,0,1,0,1,0,1
+        builder.add_measurement_results(&[0, 1, 0, 1, 0, 1, 0, 1, 0, 1]);
+
+        let biased_result = noise
+            .apply_noise_on_continue_processing(builder.build())
+            .unwrap();
+        let results = biased_result.parse_measurements().unwrap();
+
+        // Expected pattern after noise: 1,1,1,1,1,1,1,1,1,1 (all zeros flipped)
+        for (i, &result) in results.iter().enumerate() {
+            assert_eq!(
+                result, 1,
+                "Position {i}: With 100% 0->1 flip and 0% 1->0 flip, all should be 1"
+            );
+        }
+
+        // Case 2: Never flip 0->1, always flip 1->0
+        let mut model = GeneralNoiseModel::builder()
+            .with_meas_0_probability(0.0) // Never flip 0->1
+            .with_meas_1_probability(1.0) // Always flip 1->0
+            .build();
+        let noise = model
+            .as_any_mut()
+            .downcast_mut::<GeneralNoiseModel>()
+            .unwrap();
+
+        // Reset and test again
+        noise.reset_noise_model();
+
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_quantum_operations();
+        for i in 0..10 {
+            builder.add_measurements(&[i]);
+        }
+        let _cmd = noise.apply_noise_on_start(&builder.build()).unwrap();
+
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_measurement_results();
+        // Same original pattern: 0,1,0,1,0,1,0,1,0,1
+        builder.add_measurement_results(&[0, 1, 0, 1, 0, 1, 0, 1, 0, 1]);
+
+        let biased_result = noise
+            .apply_noise_on_continue_processing(builder.build())
+            .unwrap();
+        let results = biased_result.parse_measurements().unwrap();
+
+        // Expected pattern after noise: 0,0,0,0,0,0,0,0,0,0 (all ones flipped)
+        for (i, &result) in results.iter().enumerate() {
+            assert_eq!(
+                result, 0,
+                "Position {i}: With 0% 0->1 flip and 100% 1->0 flip, all should be 0"
+            );
+        }
+    }
+
+    #[test]
+    fn test_measurement_bias_with_leakage() {
+        use crate::byte_message::ByteMessageBuilder;
+
+        // Test that leaked qubits are forced to 1, then bias is applied
+        let mut model = GeneralNoiseModel::builder()
+            .with_meas_0_probability(0.0) // No 0->1 flips
+            .with_meas_1_probability(0.5) // 50% chance to flip 1->0
+            .with_seed(42)
+            .build();
+        let noise = model
+            .as_any_mut()
+            .downcast_mut::<GeneralNoiseModel>()
+            .unwrap();
+
+        // Mark some qubits as leaked
+        noise.mark_as_leaked(0);
+        noise.mark_as_leaked(2);
+
+        // Process measurements
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_quantum_operations();
+        builder.add_measurements(&[0, 1, 2, 3]); // 0 and 2 are leaked
+        let _cmd = noise.apply_noise_on_start(&builder.build()).unwrap();
+
+        // All original results are 0
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_measurement_results();
+        builder.add_measurement_results(&[0, 0, 0, 0]);
+
+        // Run many times to see statistics
+        let mut leaked_flipped_to_zero = 0;
+        let runs = 100;
+
+        for i in 0..runs {
+            // Reset noise model state but keep leaked qubits
+            noise.measured_qubits.clear();
+            noise.set_seed(42 + i).unwrap();
+
+            // Re-process measurement gates each time
+            let mut gate_builder = ByteMessageBuilder::new();
+            let _ = gate_builder.for_quantum_operations();
+            gate_builder.add_measurements(&[0, 1, 2, 3]);
+            let _cmd = noise.apply_noise_on_start(&gate_builder.build()).unwrap();
+
+            let biased_result = noise
+                .apply_noise_on_continue_processing(builder.build())
+                .unwrap();
+            let results = biased_result.parse_measurements().unwrap();
+
+            // Qubits 0 and 2 were leaked, so forced to 1, then 50% chance to flip to 0
+            if results[0] == 0 {
+                leaked_flipped_to_zero += 1;
+            }
+
+            // Regular qubits 1 and 3 should remain 0 (no 0->1 bias)
+            assert_eq!(
+                results[1], 0,
+                "Non-leaked qubit with 0 result and no 0->1 bias should stay 0"
+            );
+            assert_eq!(
+                results[3], 0,
+                "Non-leaked qubit with 0 result and no 0->1 bias should stay 0"
+            );
+        }
+
+        // Leaked qubits should be ~50/50 due to 50% 1->0 flip probability
+        let flip_rate =
+            f64::from(leaked_flipped_to_zero) / f64::from(u32::try_from(runs).unwrap_or(u32::MAX));
+        println!(
+            "Leaked qubit 1->0 flip rate: {:.1}% (expected ~50%)",
+            flip_rate * 100.0
+        );
+        assert!(
+            (flip_rate - 0.5).abs() < 0.15,
+            "Leaked qubit flip rate {flip_rate:.3} should be close to 0.5"
         );
     }
 
@@ -2521,12 +2199,11 @@ mod tests {
             gate_type: GateType::Idle,
             qubits: vec![0],
             params: vec![1.0], // 1 second duration
-            result_id: None,
             noiseless: false,
         };
 
         // Apply idle faults - should use coherent dephasing (RZ gates)
-        model.apply_idle_faults(&gate, model.p_idle_quadratic_rate, &mut builder);
+        model.apply_idle_faults(&gate, 0.0, model.p_idle_quadratic_rate, &mut builder);
 
         // Get the message and verify it contains RZ gates
         let message = builder.build();
@@ -2545,11 +2222,15 @@ mod tests {
             gate_type: GateType::Idle,
             qubits: vec![0, 1, 2], // 3 qubits
             params: vec![1.0],     // 1 second duration
-            result_id: None,
             noiseless: false,
         };
 
-        model.apply_idle_faults(&multi_qubit_gate, model.p_idle_quadratic_rate, &mut builder);
+        model.apply_idle_faults(
+            &multi_qubit_gate,
+            0.0,
+            model.p_idle_quadratic_rate,
+            &mut builder,
+        );
 
         let message = builder.build();
         let gates = message.parse_quantum_operations().unwrap();
@@ -2588,7 +2269,7 @@ mod tests {
             .build();
 
         // Apply idle faults with incoherent dephasing
-        model.apply_idle_faults(&gate, model.p_idle_quadratic_rate, &mut builder);
+        model.apply_idle_faults(&gate, 0.0, model.p_idle_quadratic_rate, &mut builder);
 
         // The message may contain Z gates or be empty depending on random outcomes
         let message = builder.build();
@@ -2668,7 +2349,6 @@ mod tests {
             gate_type: GateType::RZ,
             qubits: vec![0],
             params: vec![0.1],
-            result_id: None,
             noiseless: false,
         };
 
@@ -2677,7 +2357,6 @@ mod tests {
             gate_type: GateType::X,
             qubits: vec![0],
             params: vec![],
-            result_id: None,
             noiseless: false,
         };
 

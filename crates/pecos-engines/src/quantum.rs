@@ -1,6 +1,6 @@
+use crate::Engine;
 use crate::byte_message::ByteMessage;
 use crate::byte_message::GateType;
-use crate::engines::Engine;
 use dyn_clone::DynClone;
 use log::debug;
 use pecos_core::RngManageable;
@@ -187,15 +187,10 @@ impl Engine for StateVecEngine {
                 // TODO: Fix it so we have multiple result_ids or get rid of result ids...
                 GateType::Measure => {
                     for q in &cmd.qubits {
-                        if let Some(result_id) = cmd.result_id {
-                            debug!(
-                                "Processing measurement on qubit {:?} with result_id {:?}",
-                                q, result_id
-                            );
-                            let meas_result = self.simulator.mz(*q);
-                            let outcome = u32::from(meas_result.outcome);
-                            measurements.push((result_id, outcome));
-                        }
+                        debug!("Processing measurement on qubit {:?}", q);
+                        let meas_result = self.simulator.mz(*q);
+                        let outcome = u32::from(meas_result.outcome);
+                        measurements.push(outcome);
                     }
                 }
                 GateType::Prep => {
@@ -225,7 +220,10 @@ impl Engine for StateVecEngine {
         }
 
         // Create a message with the measurement results
-        let result_message = ByteMessage::record_measurement_results(&measurements);
+        // Convert Vec<u32> to Vec<(usize, u32)> with indices
+        let indexed_measurements: Vec<(usize, u32)> =
+            measurements.into_iter().enumerate().collect();
+        let result_message = ByteMessage::record_measurement_results(&indexed_measurements);
         Ok(result_message)
     }
 
@@ -375,18 +373,11 @@ impl Engine for SparseStabEngine {
                 }
                 GateType::Measure => {
                     for q in &cmd.qubits {
-                        // TODO: Fix the gate command to have multiple corresponding result_ids
-                        // TODO: Consider whether we even need result ids... or if sending back
-                        //       measurement results in the same order is sufficient...
-                        if let Some(result_id) = cmd.result_id {
-                            debug!(
-                                "Processing measurement on qubit {:?} with result_id {:?}",
-                                q, result_id
-                            );
-                            let meas_result = self.simulator.mz(*q);
-                            let outcome = u32::from(meas_result.outcome);
-                            measurements.push((result_id, outcome));
-                        }
+                        // Measurement results are now tracked in order
+                        debug!("Processing measurement on qubit {:?}", q);
+                        let meas_result = self.simulator.mz(*q);
+                        let outcome = u32::from(meas_result.outcome);
+                        measurements.push(outcome);
                     }
                 }
                 GateType::Prep => {
@@ -407,7 +398,10 @@ impl Engine for SparseStabEngine {
         }
 
         // Create a message with the measurement results
-        let result_message = ByteMessage::record_measurement_results(&measurements);
+        // Convert Vec<u32> to Vec<(usize, u32)> with indices
+        let indexed_measurements: Vec<(usize, u32)> =
+            measurements.into_iter().enumerate().collect();
+        let result_message = ByteMessage::record_measurement_results(&indexed_measurements);
         Ok(result_message)
     }
 

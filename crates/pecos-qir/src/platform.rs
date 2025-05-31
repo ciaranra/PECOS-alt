@@ -29,24 +29,48 @@ pub use macos::*;
 #[must_use]
 pub fn standard_llvm_paths() -> Vec<PathBuf> {
     #[cfg(target_os = "windows")]
-    return windows::WindowsCompiler::standard_llvm_paths();
+    {
+        vec![
+            // CI environment - GitHub Actions might install LLVM here
+            PathBuf::from("D:\\a\\_temp\\llvm\\bin"),
+            // Standard installation paths
+            PathBuf::from("C:\\Program Files\\LLVM\\bin"),
+            PathBuf::from("C:\\Program Files (x86)\\LLVM\\bin"),
+            // Common Windows package manager locations
+            PathBuf::from("C:\\msys64\\mingw64\\bin"),
+            PathBuf::from("C:\\msys64\\usr\\bin"),
+        ]
+    }
 
     #[cfg(target_os = "linux")]
-    return linux::LinuxCompiler::standard_llvm_paths();
+    {
+        vec![
+            PathBuf::from("/usr/bin"),
+            PathBuf::from("/usr/local/bin"),
+            PathBuf::from("/usr/lib/llvm/bin"),
+        ]
+    }
 
     #[cfg(target_os = "macos")]
-    return macos::MacOSCompiler::standard_llvm_paths();
+    {
+        vec![
+            PathBuf::from("/usr/bin"),
+            PathBuf::from("/usr/local/bin"),
+            PathBuf::from("/opt/homebrew/opt/llvm/bin"),
+        ]
+    }
 }
 
 /// Get platform-specific executable name
 #[must_use]
 pub fn executable_name(tool_name: &str) -> String {
     #[cfg(target_os = "windows")]
-    return windows::WindowsCompiler::executable_name(tool_name);
+    {
+        format!("{tool_name}.exe")
+    }
 
-    #[cfg(target_os = "linux")]
-    return linux::LinuxCompiler::executable_name(tool_name);
-
-    #[cfg(target_os = "macos")]
-    return macos::MacOSCompiler::executable_name(tool_name);
+    #[cfg(not(target_os = "windows"))]
+    {
+        tool_name.to_string()
+    }
 }

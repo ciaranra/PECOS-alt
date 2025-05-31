@@ -99,8 +99,9 @@ impl PyByteMessageBuilder {
 
     /// Add a measurement gate to the message
     #[pyo3(text_signature = "($self, qubit, result_id)")]
-    fn add_measurement(&mut self, qubit: usize, result_id: usize) {
-        self.inner.add_measurements(&[qubit], &[result_id]);
+    fn add_measurement(&mut self, qubit: usize, _result_id: usize) {
+        // result_id is no longer used, but kept in API for compatibility
+        self.inner.add_measurements(&[qubit]);
     }
 
     /// Add a qubit preparation gate to the message
@@ -215,9 +216,7 @@ impl PyByteMessage {
                 dict.set_item("params", op.params.clone())?;
             }
 
-            if let Some(result_id) = op.result_id {
-                dict.set_item("result_id", result_id)?;
-            }
+            // result_id no longer exists on QuantumGate
 
             results.push(dict.into());
         }

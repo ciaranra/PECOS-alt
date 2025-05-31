@@ -5,10 +5,10 @@ use crate::library::QirLibrary;
 use crate::measurement;
 use log::{debug, trace, warn};
 use pecos_core::errors::PecosError;
-use pecos_engines::byte_message::{ByteMessage, QuantumCmd, QuantumCommand};
+use pecos_engines::Engine;
+use pecos_engines::byte_message::{ByteMessage, QuantumCmd, QuantumCmdConverter};
 use pecos_engines::core::shot_results::ShotResult;
-use pecos_engines::engines::ClassicalEngine;
-use pecos_engines::engines::Engine;
+use pecos_engines::engine_system::ClassicalEngine;
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
@@ -237,6 +237,10 @@ impl QirEngine {
     /// # Returns
     ///
     /// `Ok(())` if successful, or an error if the operation fails
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the shots cannot be set.
     pub fn set_assigned_shots(&mut self, shots: usize) -> Result<(), PecosError> {
         debug!(
             "QIR: Setting assigned shots to {} (but limiting to 1 shot per run_shot call)",
@@ -419,6 +423,10 @@ impl QirEngine {
     }
 
     /// Compile the QIR program
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the QIR program cannot be compiled.
     pub fn compile(&self) -> Result<(), PecosError> {
         debug!("QIR: Compiling program");
         match QirCompiler::compile(&self.qir_file, None) {
@@ -438,6 +446,10 @@ impl QirEngine {
     }
 
     /// Pre-compile the QIR library to prepare for cloning
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the QIR library cannot be pre-compiled.
     pub fn pre_compile(&mut self) -> Result<(), PecosError> {
         // Get the current thread ID for logging
         let thread_id = get_thread_id();
@@ -472,8 +484,8 @@ impl QirEngine {
         Ok(())
     }
 
-    /// Convert a list of `QuantumCommands` to a `ByteMessage`
-    fn commands_to_byte_message(commands: &[QuantumCommand]) -> Result<ByteMessage, PecosError> {
+    /// Convert a list of `QuantumCmds` to a `ByteMessage`
+    fn commands_to_byte_message(commands: &[QuantumCmd]) -> Result<ByteMessage, PecosError> {
         command_generation::commands_to_byte_message(commands)
     }
 
@@ -595,14 +607,14 @@ impl QirEngine {
                 self.result_name_map.process_command(cmd);
             }
 
-            // Convert binary commands directly to QuantumCommand objects
+            // Convert binary commands directly (parse_binary_commands now just returns the same commands)
             // This avoids the string conversion step
             let commands = command_generation::parse_binary_commands(&runtime_commands);
 
             // Filter out unsupported command types
-            let filtered_commands: Vec<QuantumCommand> = commands
+            let filtered_commands: Vec<QuantumCmd> = commands
                 .into_iter()
-                .filter(QuantumCommand::is_supported)
+                .filter(QuantumCmdConverter::is_supported)
                 .collect();
 
             // Identify circuit boundaries by looking for measurement patterns
@@ -639,7 +651,7 @@ impl QirEngine {
     }
 
     /// Identify circuit boundaries by analyzing command patterns
-    fn identify_circuit_boundaries(commands: &[QuantumCommand]) -> Vec<QuantumCommand> {
+    fn identify_circuit_boundaries(commands: &[QuantumCmd]) -> Vec<QuantumCmd> {
         command_generation::identify_circuit_boundaries(commands)
     }
 

@@ -10,12 +10,11 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
+pub use crate::noise::general::GeneralNoiseModel;
+pub use crate::quantum::{SparseStabEngine, StateVecEngine, new_quantum_engine_arbitrary_qgate};
 pub use crate::{
     ByteMessage, ByteMessageBuilder, ClassicalEngine, ControlEngine, DepolarizingNoiseModel,
     Engine, EngineStage, EngineSystem, HybridEngine, MonteCarloEngine, NoiseModel,
     PassThroughNoiseModel, QuantumEngine, QuantumSystem, ShotResult, ShotResults,
-    byte_message::dump_batch,
-    core::shot_results::OutputFormat,
-    engines::noise::general::GeneralNoiseModel,
-    engines::quantum::{SparseStabEngine, StateVecEngine, new_quantum_engine_arbitrary_qgate},
+    byte_message::dump_batch, core::shot_results::OutputFormat,
 };

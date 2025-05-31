@@ -156,6 +156,9 @@ impl PHIREngine {
     ///
     /// # Returns
     /// - Returns a new `PHIREngine` initialized with the provided program.
+    ///
+    /// # Errors
+    /// - Returns an error if variable definitions cannot be processed.
     pub fn from_program(program: PHIRProgram) -> Result<Self, PecosError> {
         let mut processor = OperationProcessor::new();
 
@@ -810,12 +813,13 @@ impl ClassicalEngine for PHIREngine {
     }
 
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), PecosError> {
-        let measurements = message.parse_measurements()?;
+        let measurement_outcomes = message.parse_measurements()?;
         let ops = match &self.program {
             Some(program) => program.ops.clone(),
             None => vec![],
         };
-        self.processor.handle_measurements(&measurements, &ops)
+        self.processor
+            .handle_measurements(&measurement_outcomes, &ops)
     }
 
     #[allow(clippy::too_many_lines)]

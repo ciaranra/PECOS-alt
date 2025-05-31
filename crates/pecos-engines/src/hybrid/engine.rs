@@ -10,10 +10,11 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
+use crate::Engine;
 use crate::byte_message::ByteMessage;
 use crate::core::shot_results::ShotResult;
-use crate::engines::quantum_system::QuantumSystem;
-use crate::engines::{ClassicalEngine, ControlEngine, Engine, EngineStage, EngineSystem};
+use crate::engine_system::{ClassicalEngine, ControlEngine, EngineStage, EngineSystem};
+use crate::quantum_system::QuantumSystem;
 use dyn_clone;
 use log::debug;
 use pecos_core::errors::PecosError;
@@ -48,9 +49,9 @@ use pecos_core::rng::rng_manageable::derive_seed;
 /// # Example
 ///
 /// ```rust
-/// use pecos_engines::engines::hybrid::builder::HybridEngineBuilder;
-/// use pecos_engines::engines::monte_carlo::engine::ExternalClassicalEngine;
-/// use pecos_engines::engines::quantum::StateVecEngine;
+/// use pecos_engines::hybrid::builder::HybridEngineBuilder;
+/// use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
+/// use pecos_engines::quantum::StateVecEngine;
 ///
 /// // Create sample engines
 /// let classical_engine = Box::new(ExternalClassicalEngine::new());

@@ -1,10 +1,9 @@
 use log::debug;
 use pecos_core::errors::PecosError;
+use pecos_engines::noise::NoiseModel;
+use pecos_engines::quantum::{QuantumEngine, StateVecEngine};
 use pecos_engines::{
-    ClassicalEngine, MonteCarloEngine, PassThroughNoiseModel,
-    core::shot_results::ShotResults,
-    engines::noise::NoiseModel,
-    engines::quantum::{QuantumEngine, StateVecEngine},
+    ClassicalEngine, MonteCarloEngine, PassThroughNoiseModel, core::shot_results::ShotResults,
 };
 use std::path::Path;
 // Import the QirEngine from pecos-qir
@@ -131,6 +130,9 @@ pub fn setup_qir_engine(
 /// let program = QASMProgram::from_str(program_str).unwrap();
 /// let results2 = run_sim(program.into_engine_box(), 1000, Some(42), None, None, None).unwrap();
 /// ```
+///
+/// # Errors
+/// Returns an error if the hybrid engine creation or execution fails.
 pub fn run_sim(
     classical_engine: Box<dyn ClassicalEngine>,
     shots: usize,

@@ -171,15 +171,13 @@ impl ByteMessage {
         let mut builder = Self::measurement_results_builder();
 
         // Collect result_ids and outcomes into separate vectors
-        let mut result_ids = Vec::with_capacity(result_pairs.len());
         let mut outcomes = Vec::with_capacity(result_pairs.len());
 
-        for (result_id, outcome) in result_pairs {
-            result_ids.push(*result_id);
+        for (_index, outcome) in result_pairs {
             outcomes.push(*outcome as usize); // Convert u32 to usize
         }
 
-        builder.add_measurement_results(&outcomes, &result_ids);
+        builder.add_measurement_results(&outcomes);
         builder.build()
     }
 
@@ -313,14 +311,11 @@ impl ByteMessage {
                 }
             }
             Some(&"M") => {
-                if parts.len() >= 3 {
+                if parts.len() >= 2 {
                     let qubit = parts[1].parse::<usize>().map_err(|_| {
                         PecosError::Input(format!("Invalid qubit in M command: {}", parts[1]))
                     })?;
-                    let result_id = parts[2].parse::<usize>().map_err(|_| {
-                        PecosError::Input(format!("Invalid result_id in M command: {}", parts[2]))
-                    })?;
-                    builder.add_measurements(&[qubit], &[result_id]);
+                    builder.add_measurements(&[qubit]);
                 }
             }
             Some(&"P") => {
@@ -421,6 +416,10 @@ impl ByteMessage {
     }
 
     /// Parse quantum operations from this message
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the message is malformed or contains invalid quantum operations.
     pub fn parse_quantum_operations(&self) -> Result<Vec<QuantumGate>, PecosError> {
         if self.bytes.len() < size_of::<BatchHeader>() {
             return Err(PecosError::Input(
@@ -509,7 +508,11 @@ impl ByteMessage {
     }
 
     /// Parse measurements from this message
-    pub fn parse_measurements(&self) -> Result<Vec<(u32, u32)>, PecosError> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the message is malformed or contains invalid measurement data.
+    pub fn parse_measurements(&self) -> Result<Vec<u32>, PecosError> {
         if self.bytes.len() < size_of::<BatchHeader>() {
             return Err(PecosError::Input(
                 "Message too small for batch header".to_string(),
@@ -561,8 +564,8 @@ impl ByteMessage {
                         &payload[0..size_of::<MeasurementResultHeader>()],
                     );
 
-                    // Return result_id and outcome as a tuple
-                    measurements.push((result_header.result_id, result_header.outcome));
+                    // Return outcome
+                    measurements.push(result_header.outcome);
                 }
             }
 
@@ -577,23 +580,24 @@ impl ByteMessage {
         Ok(measurements)
     }
 
-    /// Get measurement results as a vector of (`result_id`: usize, measurement: u32) pairs
+    /// Get measurement results as a vector of outcomes
     ///
     /// This is a convenience method that parses the measurement results from the message
-    /// and returns them as a vector of tuples with the `result_id` converted to usize.
+    /// and returns them as a vector of measurement outcomes in order.
     ///
     /// # Returns
     ///
-    /// A Result containing a vector of (`result_id`, measurement) pairs if successful,
+    /// A Result containing a vector of measurement outcomes if successful,
     /// or a `PecosError` if there was an error parsing the message.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the message is malformed or contains invalid measurement data.
     pub fn measurement_results_as_vec(&self) -> Result<Vec<(usize, u32)>, PecosError> {
-        let measurements = self.parse_measurements()?;
+        let outcomes = self.parse_measurements()?;
 
-        // Convert result_ids from u32 to usize
-        let converted = measurements
-            .into_iter()
-            .map(|(result_id, outcome)| (result_id as usize, outcome))
-            .collect();
+        // Convert to indexed results (index, outcome) for compatibility
+        let converted = outcomes.into_iter().enumerate().collect();
 
         Ok(converted)
     }
@@ -617,14 +621,14 @@ impl ByteMessage {
         let qubits = Self::parse_qubit_indices(payload, qubits_offset, num_qubits);
 
         // Parse parameters if present
-        let (params, result_id) = if has_params {
+        let params = if has_params {
             let params_offset = qubits_offset + qubits_size;
             Self::parse_gate_parameters(payload, params_offset, gate_type)?
         } else {
-            (Vec::new(), None)
+            Vec::new()
         };
 
-        Ok(QuantumGate::new(gate_type, qubits, params, result_id))
+        Ok(QuantumGate::new(gate_type, qubits, params))
     }
 
     /// Validate if the payload has enough bytes for the gate header
@@ -673,9 +677,8 @@ impl ByteMessage {
         payload: &[u8],
         params_offset: usize,
         gate_type: GateType,
-    ) -> Result<(Vec<f64>, Option<usize>), PecosError> {
+    ) -> Result<Vec<f64>, PecosError> {
         let mut params = Vec::new();
-        let mut result_id = None;
 
         match gate_type {
             GateType::RZ => {
@@ -714,27 +717,22 @@ impl ByteMessage {
                 let theta = Self::parse_f64_param(payload, params_offset);
                 params.push(theta);
             }
-            GateType::Measure => {
-                Self::validate_params_size(
-                    payload,
-                    params_offset,
-                    size_of::<u32>(),
-                    "Measure parameters",
-                )?;
-
-                let result_id_bytes = &payload[params_offset..params_offset + size_of::<u32>()];
-                let result_id_value = u32::from_le_bytes([
-                    result_id_bytes[0],
-                    result_id_bytes[1],
-                    result_id_bytes[2],
-                    result_id_bytes[3],
-                ]) as usize;
-                result_id = Some(result_id_value);
+            GateType::Measure
+            | GateType::X
+            | GateType::Y
+            | GateType::Z
+            | GateType::H
+            | GateType::CX
+            | GateType::SZZ
+            | GateType::SZZdg
+            | GateType::Prep
+            | GateType::Idle
+            | GateType::U => {
+                // These gates have no parameters in the message format
             }
-            _ => {}
         }
 
-        Ok((params, result_id))
+        Ok(params)
     }
 
     /// Validate if the payload has enough bytes for parameters
@@ -774,9 +772,8 @@ impl ByteMessage {
 
         let header = *from_bytes::<MeasurementHeader>(&payload[0..size_of::<MeasurementHeader>()]);
         let qubit = header.qubit as usize;
-        let result_id = header.result_id as usize;
 
-        Ok(QuantumGate::measure(qubit, result_id))
+        Ok(QuantumGate::measure(qubit))
     }
 
     /// Creates an empty `ByteMessage`
@@ -849,12 +846,16 @@ impl ByteMessage {
     ///
     /// A Result containing a vector of qubit indices if successful,
     /// or a `PecosError` if there was an error parsing the message.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the message is malformed or contains invalid measurement data.
     pub fn parse_measured_qubits(&self) -> Result<Vec<u32>, PecosError> {
         if self.bytes.is_empty() {
             return Ok(Vec::new());
         }
 
-        let mut qubits = Vec::new();
+        let qubits = Vec::new();
         let mut offset = 0;
 
         while offset + size_of::<MessageHeader>() <= self.bytes.len() {
@@ -878,14 +879,13 @@ impl ByteMessage {
                     // Process measurement result
                     let payload = &self.bytes[offset..payload_end];
                     if payload.len() >= size_of::<MeasurementResultHeader>() {
-                        let result_header = *from_bytes::<MeasurementResultHeader>(
+                        let _result_header = *from_bytes::<MeasurementResultHeader>(
                             &payload[0..size_of::<MeasurementResultHeader>()],
                         );
 
                         // Since MeasurementResultHeader doesn't have a qubit field, we can't get it directly
-                        // For now, we'll use the result_id as a placeholder - this needs to be fixed properly
-                        // by tracking qubit-to-result mappings elsewhere
-                        qubits.push(result_header.result_id);
+                        // This information is no longer available in the result messages
+                        // The calling code needs to track which qubits were measured based on the order of measurement commands
                     }
                 }
             }
@@ -905,7 +905,8 @@ impl ByteMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engines::{Engine, quantum::StateVecEngine};
+    use crate::Engine;
+    use crate::quantum::StateVecEngine;
 
     #[test]
     fn test_bytemap_builder() {
@@ -941,7 +942,7 @@ mod tests {
 
         // Create a measurement results message
         let mut builder = ByteMessage::measurement_results_builder();
-        builder.add_measurement_results(&[0], &[1]);
+        builder.add_measurement_results(&[0]);
         let results_message = builder.build();
         assert_eq!(
             results_message.message_type().unwrap(),
@@ -953,24 +954,22 @@ mod tests {
     fn test_parse_measurements() {
         // Create a message with measurement results
         let mut builder = ByteMessage::measurement_results_builder();
-        builder.add_measurement_results(&[0, 1], &[0, 1]);
+        builder.add_measurement_results(&[0, 1]);
         let message = builder.build();
 
         // Parse the measurements
         let measurements = message.parse_measurements().unwrap();
         assert_eq!(measurements.len(), 2);
 
-        // The measurements are encoded as (result_id << 16) | outcome
-        // So for result_id=0, outcome=0, we get 0
-        // For result_id=1, outcome=1, we get 65537 (1 << 16 | 1)
-        assert_eq!(measurements[0], (0, 0));
-        assert_eq!(measurements[1], (1, 1));
+        // The measurements now just return outcomes
+        assert_eq!(measurements[0], 0);
+        assert_eq!(measurements[1], 1);
     }
 
     #[test]
     fn test_measurement_results_as_vec() {
         // Create a message with measurement results
-        let result_pairs = [(5, 0), (10, 1), (15, 0)];
+        let result_pairs = [(0, 0), (1, 1), (2, 0)];
         let message = ByteMessage::record_measurement_results(&result_pairs);
 
         // Get the results as a vector
@@ -978,9 +977,9 @@ mod tests {
 
         // Verify the results match the input
         assert_eq!(results.len(), 3);
-        assert_eq!(results[0], (5, 0));
-        assert_eq!(results[1], (10, 1));
-        assert_eq!(results[2], (15, 0));
+        assert_eq!(results[0], (0, 0));
+        assert_eq!(results[1], (1, 1));
+        assert_eq!(results[2], (2, 0));
 
         // Verify the types are correct (usize, u32) by checking if they can be assigned to variables of those types
         let (result_id, outcome) = results[0];
@@ -1000,10 +999,10 @@ mod tests {
         builder.add_cx(&[0], &[1]);
 
         // Measure qubit 0 with result_id 0
-        builder.add_measurements(&[0], &[0]);
+        builder.add_measurements(&[0]);
 
         // Measure qubit 1 with result_id 1
-        builder.add_measurements(&[1], &[1]);
+        builder.add_measurements(&[1]);
 
         let bell_circuit = builder.build();
 
@@ -1073,6 +1072,76 @@ mod tests {
         assert_eq!(operations[3].gate_type, GateType::Prep);
         assert_eq!(operations[3].qubits, vec![3]);
         assert!(operations[3].params.is_empty());
-        assert_eq!(operations[3].result_id, None);
+    }
+
+    #[test]
+    fn test_measurement_result_order_preservation() {
+        // Test that measurement results maintain their order through ByteMessage
+        let mut builder = ByteMessage::measurement_results_builder();
+
+        // Add measurement results in a specific order
+        builder.add_measurement_results(&[1]); // First result: 1
+        builder.add_measurement_results(&[0]); // Second result: 0
+        builder.add_measurement_results(&[1]); // Third result: 1
+        builder.add_measurement_results(&[1]); // Fourth result: 1
+        builder.add_measurement_results(&[0]); // Fifth result: 0
+
+        let message = builder.build();
+
+        // Parse the measurements back
+        let results = message.parse_measurements().unwrap();
+
+        // Verify order is preserved
+        assert_eq!(results.len(), 5);
+        assert_eq!(results[0], 1, "First result should be 1");
+        assert_eq!(results[1], 0, "Second result should be 0");
+        assert_eq!(results[2], 1, "Third result should be 1");
+        assert_eq!(results[3], 1, "Fourth result should be 1");
+        assert_eq!(results[4], 0, "Fifth result should be 0");
+
+        // Also test measurement_results_as_vec which adds indices
+        let indexed_results = message.measurement_results_as_vec().unwrap();
+        assert_eq!(indexed_results.len(), 5);
+        assert_eq!(indexed_results[0], (0, 1), "First indexed result");
+        assert_eq!(indexed_results[1], (1, 0), "Second indexed result");
+        assert_eq!(indexed_results[2], (2, 1), "Third indexed result");
+        assert_eq!(indexed_results[3], (3, 1), "Fourth indexed result");
+        assert_eq!(indexed_results[4], (4, 0), "Fifth indexed result");
+    }
+
+    #[test]
+    fn test_measurement_gate_order_preservation() {
+        // Test that measurement gate order is preserved
+        let mut builder = ByteMessage::quantum_operations_builder();
+
+        // Add measurements of different qubits in specific order
+        builder.add_measurements(&[3]); // First: measure qubit 3
+        builder.add_measurements(&[1]); // Second: measure qubit 1
+        builder.add_measurements(&[4]); // Third: measure qubit 4
+        builder.add_measurements(&[0]); // Fourth: measure qubit 0
+        builder.add_measurements(&[2]); // Fifth: measure qubit 2
+
+        let message = builder.build();
+
+        // Parse operations back
+        let operations = message.parse_quantum_operations().unwrap();
+
+        // Verify we have 5 measurement operations in the correct order
+        assert_eq!(operations.len(), 5);
+
+        assert_eq!(operations[0].gate_type, GateType::Measure);
+        assert_eq!(operations[0].qubits, vec![3]);
+
+        assert_eq!(operations[1].gate_type, GateType::Measure);
+        assert_eq!(operations[1].qubits, vec![1]);
+
+        assert_eq!(operations[2].gate_type, GateType::Measure);
+        assert_eq!(operations[2].qubits, vec![4]);
+
+        assert_eq!(operations[3].gate_type, GateType::Measure);
+        assert_eq!(operations[3].qubits, vec![0]);
+
+        assert_eq!(operations[4].gate_type, GateType::Measure);
+        assert_eq!(operations[4].qubits, vec![2]);
     }
 }

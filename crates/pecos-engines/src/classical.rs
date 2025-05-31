@@ -1,6 +1,7 @@
+use crate::Engine;
 use crate::byte_message::ByteMessage;
 use crate::core::shot_results::ShotResult;
-use crate::engines::{ControlEngine, Engine, EngineStage};
+use crate::engine_system::{ControlEngine, EngineStage};
 use dyn_clone::DynClone;
 use pecos_core::errors::PecosError;
 use std::any::Any;

@@ -1,10 +1,8 @@
 use crate::QASMEngine;
 use pecos_core::errors::PecosError;
-use pecos_engines::{
-    ClassicalEngine, MonteCarloEngine, PassThroughNoiseModel,
-    engines::noise::NoiseModel,
-    engines::quantum::{QuantumEngine, StateVecEngine},
-};
+use pecos_engines::noise::NoiseModel;
+use pecos_engines::quantum::{QuantumEngine, StateVecEngine};
+use pecos_engines::{ClassicalEngine, MonteCarloEngine, PassThroughNoiseModel};
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -20,6 +18,10 @@ use std::str::FromStr;
 /// * `workers` - Optional number of workers for parallelization (default: 1)
 /// * `noise_model` - Optional custom noise model to use (default: `PassThroughNoiseModel`)
 /// * `quantum_engine` - Optional custom quantum engine to use (default: `StateVecEngine`)
+///
+/// # Errors
+///
+/// Returns an error if QASM parsing or simulation fails.
 pub fn run_qasm_sim(
     qasm: &str,
     shots: usize,

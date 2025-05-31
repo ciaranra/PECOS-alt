@@ -53,6 +53,10 @@ impl Preprocessor {
     }
 
     /// Process QASM source
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if preprocessing fails.
     pub fn preprocess(&mut self, source: &str) -> Result<String, PecosError> {
         self.included.clear();
         self.preprocess_internal(source, None)
@@ -151,6 +155,10 @@ impl Preprocessor {
     }
 
     // For compatibility while transitioning
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if preprocessing fails.
     pub fn preprocess_str(&mut self, source: &str) -> Result<String, PecosError> {
         self.preprocess(source)
     }

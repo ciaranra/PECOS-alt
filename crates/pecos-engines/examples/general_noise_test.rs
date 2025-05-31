@@ -2,8 +2,8 @@
 
 use pecos_engines::Engine;
 use pecos_engines::byte_message::ByteMessage;
-use pecos_engines::engines::noise::{BiasedMeasurementNoiseModel, GeneralNoiseModel};
-use pecos_engines::engines::quantum::StateVecEngine;
+use pecos_engines::noise::{BiasedMeasurementNoiseModel, GeneralNoiseModel};
+use pecos_engines::quantum::StateVecEngine;
 use pecos_engines::{EngineSystem, QuantumSystem};
 use std::collections::HashMap;
 
@@ -11,7 +11,7 @@ fn main() {
     // Create a simple quantum circuit that prepares a superposition and measures it
     let circ = ByteMessage::quantum_operations_builder()
         .add_h(&[0])
-        .add_measurements(&[0], &[0])
+        .add_measurements(&[0])
         .build();
 
     // Create a quantum engine with 1 qubit
@@ -58,8 +58,8 @@ fn compare_biased_and_general(circ: &ByteMessage, quantum: &StateVecEngine) {
             .with_prep_probability(0.0)
             .with_meas_0_probability(p_flip_0)
             .with_meas_1_probability(p_flip_1)
-            .with_single_qubit_probability(0.0)
-            .with_two_qubit_probability(0.0)
+            .with_p1_probability(0.0)
+            .with_p2_probability(0.0)
             .with_seed(seed)
             .build();
         let mut general_system =
@@ -82,7 +82,7 @@ fn compare_biased_and_general(circ: &ByteMessage, quantum: &StateVecEngine) {
                 .expect("Failed to parse biased measurements");
             let biased_result = biased_measurements
                 .first()
-                .map_or("?", |&(_, value)| if value == 1 { "1" } else { "0" });
+                .map_or("?", |&value| if value == 1 { "1" } else { "0" });
             *biased_counts.entry(biased_result.to_string()).or_insert(0) += 1;
 
             // Run with general noise model
@@ -97,7 +97,7 @@ fn compare_biased_and_general(circ: &ByteMessage, quantum: &StateVecEngine) {
                 .expect("Failed to parse general measurements");
             let general_result = general_measurements
                 .first()
-                .map_or("?", |&(_, value)| if value == 1 { "1" } else { "0" });
+                .map_or("?", |&value| if value == 1 { "1" } else { "0" });
             *general_counts
                 .entry(general_result.to_string())
                 .or_insert(0) += 1;
@@ -134,8 +134,8 @@ fn bell_state_comparison() {
     let bell_circ = ByteMessage::quantum_operations_builder()
         .add_h(&[0])
         .add_cx(&[0], &[1])
-        .add_measurements(&[0], &[0])
-        .add_measurements(&[1], &[1])
+        .add_measurements(&[0])
+        .add_measurements(&[1])
         .build();
 
     // Parameters for the test
@@ -158,8 +158,8 @@ fn bell_state_comparison() {
         .with_prep_probability(0.0)
         .with_meas_0_probability(p_flip_0)
         .with_meas_1_probability(p_flip_1)
-        .with_single_qubit_probability(0.0)
-        .with_two_qubit_probability(0.0)
+        .with_p1_probability(0.0)
+        .with_p2_probability(0.0)
         .with_seed(seed)
         .build();
     let mut general_system = QuantumSystem::new(Box::new(general_noise), Box::new(quantum.clone()));
@@ -182,7 +182,7 @@ fn bell_state_comparison() {
 
         // Combine the measurement results into a string
         let mut biased_result = String::new();
-        for &(_, value) in &biased_measurements {
+        for &value in &biased_measurements {
             biased_result.push(if value == 1 { '1' } else { '0' });
         }
         *biased_counts.entry(biased_result).or_insert(0) += 1;
@@ -200,7 +200,7 @@ fn bell_state_comparison() {
 
         // Combine the measurement results into a string
         let mut general_result = String::new();
-        for &(_, value) in &general_measurements {
+        for &value in &general_measurements {
             general_result.push(if value == 1 { '1' } else { '0' });
         }
         *general_counts.entry(general_result).or_insert(0) += 1;

@@ -7,15 +7,24 @@ pub trait ForeignObject: Debug + Send + Sync {
     /// Clone the foreign object
     fn clone_box(&self) -> Box<dyn ForeignObject>;
     /// Initialize object before running a series of simulations
+    ///
+    /// # Errors
+    /// Returns an error if initialization fails.
     fn init(&mut self) -> Result<(), PecosError>;
 
     /// Create new instance/internal state
+    ///
+    /// # Errors
+    /// Returns an error if instance creation fails.
     fn new_instance(&mut self) -> Result<(), PecosError>;
 
     /// Get a list of function names available from the object
     fn get_funcs(&self) -> Vec<String>;
 
     /// Execute a function given a list of arguments
+    ///
+    /// # Errors
+    /// Returns an error if the function does not exist or execution fails.
     fn exec(&mut self, func_name: &str, args: &[i64]) -> Result<Vec<i64>, PecosError>;
 
     /// Cleanup resources

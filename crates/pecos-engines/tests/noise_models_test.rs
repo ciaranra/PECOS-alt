@@ -1,8 +1,8 @@
 use pecos_engines::byte_message::ByteMessage;
-use pecos_engines::engines::noise::{
+use pecos_engines::noise::{
     BiasedMeasurementNoiseModel, DepolarizingNoiseModel, NoiseModel, PassThroughNoiseModel,
 };
-use pecos_engines::engines::quantum::StateVecEngine;
+use pecos_engines::quantum::StateVecEngine;
 use pecos_engines::{Engine, EngineSystem, QuantumSystem};
 use std::collections::HashMap;
 
@@ -29,7 +29,7 @@ fn count_results(
 
         let result_str = measurements
             .iter()
-            .map(|&(_, value)| if value == 1 { '1' } else { '0' })
+            .map(|&value| if value == 1 { '1' } else { '0' })
             .collect::<String>();
 
         *counts.entry(result_str).or_insert(0) += 1;
@@ -43,7 +43,7 @@ fn test_biased_measurement_noise() {
     // Create a simple H-gate circuit with measurement
     let circ = ByteMessage::quantum_operations_builder()
         .add_h(&[0])
-        .add_measurements(&[0], &[0])
+        .add_measurements(&[0])
         .build();
 
     // Test with different bias probabilities
@@ -104,8 +104,8 @@ fn test_depolarizing_noise() {
     let bell_circ = ByteMessage::quantum_operations_builder()
         .add_h(&[0])
         .add_cx(&[0], &[1])
-        .add_measurements(&[0], &[0])
-        .add_measurements(&[1], &[1])
+        .add_measurements(&[0])
+        .add_measurements(&[1])
         .build();
 
     // Test with no noise - should get ideal Bell state (00 and 11)
@@ -154,7 +154,7 @@ fn test_pass_through_noise() {
     // Create a simple H-gate circuit with measurement
     let circ = ByteMessage::quantum_operations_builder()
         .add_h(&[0])
-        .add_measurements(&[0], &[0])
+        .add_measurements(&[0])
         .build();
 
     // Create pass-through noise model (no noise)

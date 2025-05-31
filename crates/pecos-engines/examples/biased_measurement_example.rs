@@ -2,8 +2,8 @@
 
 use pecos_engines::Engine;
 use pecos_engines::byte_message::ByteMessage;
-use pecos_engines::engines::noise::BiasedMeasurementNoiseModel;
-use pecos_engines::engines::quantum::StateVecEngine;
+use pecos_engines::noise::BiasedMeasurementNoiseModel;
+use pecos_engines::quantum::StateVecEngine;
 use pecos_engines::{EngineSystem, QuantumSystem};
 use std::collections::HashMap;
 
@@ -12,7 +12,7 @@ fn main() {
     // We expect a roughly 50/50 distribution of 0s and 1s in the ideal case
     let circ = ByteMessage::quantum_operations_builder()
         .add_h(&[0])
-        .add_measurements(&[0], &[0])
+        .add_measurements(&[0])
         .build();
 
     // Create a quantum engine with 1 qubit
@@ -68,10 +68,10 @@ fn example1_different_bias_levels(circ: &ByteMessage, quantum: &StateVecEngine) 
                 .parse_measurements()
                 .expect("Failed to parse measurements");
 
-            // Each measurement result is a tuple of (qubit_index, value)
+            // Each measurement result is a value
             let result = measurements
                 .first()
-                .map_or("?", |&(_, value)| if value == 1 { "1" } else { "0" });
+                .map_or("?", |&value| if value == 1 { "1" } else { "0" });
             *counts.entry(result.to_string()).or_insert(0) += 1;
         }
 
@@ -124,7 +124,7 @@ fn example2_with_seed(circ: &ByteMessage) {
 
         let result = measurements
             .first()
-            .map_or("?", |&(_, value)| if value == 1 { "1" } else { "0" });
+            .map_or("?", |&value| if value == 1 { "1" } else { "0" });
         *counts.entry(result.to_string()).or_insert(0) += 1;
     }
 
@@ -154,8 +154,8 @@ fn example3_bell_state() {
     let bell_circ = ByteMessage::quantum_operations_builder()
         .add_h(&[0])
         .add_cx(&[0], &[1])
-        .add_measurements(&[0], &[0])
-        .add_measurements(&[1], &[1])
+        .add_measurements(&[0])
+        .add_measurements(&[1])
         .build();
 
     // Create a new quantum system with 2 qubits
@@ -181,7 +181,7 @@ fn example3_bell_state() {
 
         // Combine the measurement results into a string
         let mut result = String::new();
-        for &(_, value) in &measurements {
+        for &value in &measurements {
             result.push(if value == 1 { '1' } else { '0' });
         }
 

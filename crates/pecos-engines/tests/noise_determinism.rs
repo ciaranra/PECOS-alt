@@ -11,12 +11,10 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use log::info;
+use pecos_engines::noise::general::GeneralNoiseModel;
+use pecos_engines::quantum::{QuantumEngine, StateVecEngine};
 use pecos_engines::{
-    Engine, QuantumSystem,
-    byte_message::ByteMessage,
-    engines::ControlEngine,
-    engines::noise::general::GeneralNoiseModel,
-    engines::quantum::{QuantumEngine, StateVecEngine},
+    Engine, QuantumSystem, byte_message::ByteMessage, engine_system::ControlEngine,
 };
 use std::collections::BTreeMap;
 
@@ -78,19 +76,19 @@ fn apply_noise(model: &mut GeneralNoiseModel, msg: &ByteMessage) -> ByteMessage 
         .start(msg.clone())
         .expect("Failed to start noise model processing")
     {
-        pecos_engines::engines::EngineStage::NeedsProcessing(noisy_msg) => {
+        pecos_engines::engine_system::EngineStage::NeedsProcessing(noisy_msg) => {
             info!("Processing noisy message");
             match model
                 .continue_processing(noisy_msg)
                 .expect("Failed to continue processing with noise model")
             {
-                pecos_engines::engines::EngineStage::Complete(result) => result,
-                pecos_engines::engines::EngineStage::NeedsProcessing(_) => {
+                pecos_engines::engine_system::EngineStage::Complete(result) => result,
+                pecos_engines::engine_system::EngineStage::NeedsProcessing(_) => {
                     panic!("Expected Complete stage")
                 }
             }
         }
-        pecos_engines::engines::EngineStage::Complete(_) => {
+        pecos_engines::engine_system::EngineStage::Complete(_) => {
             panic!("Expected NeedsProcessing stage")
         }
     }
@@ -265,8 +263,8 @@ fn test_measurement_determinism() {
     builder.add_h(&[0]);
     builder.add_h(&[1]);
     builder.add_cx(&[0], &[1]);
-    builder.add_measurements(&[0], &[0]);
-    builder.add_measurements(&[1], &[1]);
+    builder.add_measurements(&[0]);
+    builder.add_measurements(&[1]);
     let msg = builder.build();
 
     // Apply noise multiple times
@@ -380,7 +378,7 @@ fn test_complete_measurement_determinism() {
     builder.add_h(&[0]);
     builder.add_cx(&[0], &[1]);
     // Add measurements for both qubits
-    builder.add_measurements(&[0, 1], &[0, 1]);
+    builder.add_measurements(&[0]);
     let circuit = builder.build();
 
     // Create two identical quantum engines
@@ -439,7 +437,7 @@ fn test_deterministic_measurement() {
     // Create a circuit that puts a qubit in superposition and measures it
     let mut builder = ByteMessage::quantum_operations_builder();
     builder.add_h(&[0]); // Put qubit 0 in superposition
-    builder.add_measurements(&[0], &[0]); // Measure qubit 0
+    builder.add_measurements(&[0]); // Measure qubit 0
     let circuit = builder.build();
 
     info!("Running first measurement with seed {seed}");
@@ -604,7 +602,7 @@ fn test_comprehensive_noise_determinism() {
     builder.add_cx(&[2], &[0]); // Apply CNOT from qubit 2 to qubit 0
 
     // Add measurements for all qubits
-    builder.add_measurements(&[0, 1, 2], &[0, 1, 2]);
+    builder.add_measurements(&[0]);
 
     let circuit = builder.build();
 
@@ -745,7 +743,7 @@ fn test_long_running_determinism() {
     }
 
     // Add measurements for all qubits
-    builder.add_measurements(&[0, 1, 2, 3, 4], &[0, 1, 2, 3, 4]);
+    builder.add_measurements(&[0]);
 
     let circuit = builder.build();
 

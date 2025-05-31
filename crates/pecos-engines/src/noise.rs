@@ -37,7 +37,7 @@ pub use self::weighted_sampler::{
 };
 
 use crate::byte_message::ByteMessage;
-use crate::engines::{ControlEngine, EngineStage};
+use crate::engine_system::{ControlEngine, EngineStage};
 use dyn_clone::DynClone;
 use pecos_core::errors::PecosError;
 use rand_chacha::ChaCha8Rng;
@@ -221,7 +221,7 @@ mod base_tests {
 
         // Test with a message that has measurements
         let mut builder = ByteMessage::measurement_results_builder();
-        builder.add_measurement_results(&[0], &[0]);
+        builder.add_measurement_results(&[0]);
         let measure_msg = builder.build();
         assert!(model.has_measurements(&measure_msg));
     }
@@ -231,7 +231,7 @@ mod base_tests {
 mod tests {
     use super::*;
     use crate::byte_message::ByteMessageBuilder;
-    use crate::engines::noise::biased_measurement::BiasedMeasurementNoiseModel;
+    use crate::noise::biased_measurement::BiasedMeasurementNoiseModel;
 
     #[test]
     fn test_noise_model_biased_measurement() {
@@ -247,7 +247,7 @@ mod tests {
         // Create a measurement result message
         let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_measurement_results();
-        builder.add_measurement_results(&[0], &[0]);
+        builder.add_measurement_results(&[0]);
         let measurement_message = builder.build();
 
         // Operation should pass through unchanged
@@ -293,7 +293,7 @@ mod tests {
         // Create a measurement result message
         let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_measurement_results();
-        builder.add_measurement_results(&[0], &[0]);
+        builder.add_measurement_results(&[0]);
         let measurement_message = builder.build();
 
         // Operations should be modified

@@ -1,6 +1,6 @@
 use pecos_engines::byte_message::ByteMessage;
-use pecos_engines::engines::noise::GeneralNoiseModel;
-use pecos_engines::engines::quantum::StateVecEngine;
+use pecos_engines::noise::GeneralNoiseModel;
+use pecos_engines::quantum::StateVecEngine;
 use pecos_engines::{Engine, EngineSystem, QuantumSystem};
 use std::env;
 
@@ -21,8 +21,8 @@ fn main() {
     let circ = ByteMessage::quantum_operations_builder()
         .add_h(&[0])
         .add_cx(&[0], &[1])
-        .add_measurements(&[0], &[0])
-        .add_measurements(&[1], &[1])
+        .add_measurements(&[0])
+        .add_measurements(&[1])
         .build();
 
     let quantum = Box::new(StateVecEngine::new(2));
@@ -32,8 +32,8 @@ fn main() {
         .with_prep_probability(0.1)
         .with_meas_0_probability(0.1)
         .with_meas_1_probability(0.1)
-        .with_single_qubit_probability(0.1)
-        .with_two_qubit_probability(0.1);
+        .with_p1_probability(0.1)
+        .with_p2_probability(0.1);
 
     // Set seed if provided
     if let Some(seed) = seed_option {
@@ -59,7 +59,7 @@ fn main() {
             .expect("failed to parse measurements");
 
         print!("\"");
-        for &(_, value) in &meas {
+        for &value in &meas {
             print!("{value}");
         }
         print!("\", ");
