@@ -6,6 +6,9 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
+#[path = "windows_stub_gen.rs"]
+mod stub_gen;
+
 /// Handle Windows-specific QIR compilation
 pub struct WindowsCompiler;
 
@@ -108,11 +111,11 @@ impl WindowsCompiler {
         let stub_obj_path = parent_dir.join("qir_runtime_stub.o");
 
         // Write DEF file for exporting symbols
-        fs::write(&def_file_path, Self::generate_def_file())
+        fs::write(&def_file_path, &Self::generate_def_file())
             .map_err(|e| PecosError::Processing(format!("Failed to write DEF file: {e}")))?;
 
         // Write C stub implementation
-        fs::write(&stub_c_path, Self::generate_c_stub())
+        fs::write(&stub_c_path, &Self::generate_c_stub())
             .map_err(|e| PecosError::Processing(format!("Failed to write stub .c file: {e}")))?;
 
         // Compile the C stub
@@ -170,84 +173,14 @@ impl WindowsCompiler {
         Ok(())
     }
 
-    /// Generate DEF file content
-    fn generate_def_file() -> &'static str {
-        r"EXPORTS
-    qir_runtime_reset
-    qir_runtime_get_binary_commands
-    qir_runtime_free_binary_commands
-    __quantum__qis__rz__body
-    __quantum__qis__r1xy__body
-    __quantum__qis__h__body
-    __quantum__qis__x__body
-    __quantum__qis__y__body
-    __quantum__qis__z__body
-    __quantum__qis__cx__body
-    __quantum__qis__cz__body
-    __quantum__qis__szz__body
-    __quantum__qis__rzz__body
-    __quantum__qis__m__body
-    __quantum__qis__reset__body
-    __quantum__rt__qubit_allocate
-    __quantum__rt__result_allocate
-    __quantum__rt__qubit_release
-    __quantum__rt__result_release
-    __quantum__rt__message
-    __quantum__rt__record
-    __quantum__rt__result_record_output
-    main @1 NONAME ; Export main function from QIR program
-"
+    /// Generate DEF file content dynamically
+    fn generate_def_file() -> String {
+        stub_gen::generate_def_file()
     }
 
-    /// Generate C stub implementation
-    fn generate_c_stub() -> &'static str {
-        r"#include <stdlib.h>
-#include <stdint.h>
-
-// Define a minimal binary command structure
-typedef struct {
-    int command_count;
-    unsigned char* data;
-    size_t data_size;
-} BinaryCommands;
-
-// Static data for commands - empty but valid
-static unsigned char empty_data[] = {0};
-static BinaryCommands empty_commands = {0, empty_data, 1};
-
-// Required Windows DLL entry point
-__declspec(dllexport) int _DllMainCRTStartup(void* hinst, unsigned long reason, void* reserved) {
-    return 1;
-}
-
-// QIR runtime API stubs
-__declspec(dllexport) void qir_runtime_reset() {}
-__declspec(dllexport) void* qir_runtime_get_binary_commands() { return &empty_commands; }
-__declspec(dllexport) void qir_runtime_free_binary_commands(void* cmds) {}
-
-// QIR quantum instruction set stubs
-__declspec(dllexport) void __quantum__qis__rz__body(double angle, int qubit) {}
-__declspec(dllexport) void __quantum__qis__r1xy__body(double angle, int qubit) {}
-__declspec(dllexport) void __quantum__qis__h__body(int qubit) {}
-__declspec(dllexport) void __quantum__qis__x__body(int qubit) {}
-__declspec(dllexport) void __quantum__qis__y__body(int qubit) {}
-__declspec(dllexport) void __quantum__qis__z__body(int qubit) {}
-__declspec(dllexport) void __quantum__qis__cx__body(int control, int target) {}
-__declspec(dllexport) void __quantum__qis__cz__body(int control, int target) {}
-__declspec(dllexport) void __quantum__qis__szz__body(int q1, int q2) {}
-__declspec(dllexport) void __quantum__qis__rzz__body(double angle, int q1, int q2) {}
-__declspec(dllexport) int __quantum__qis__m__body(int qubit) { return 0; }
-__declspec(dllexport) void __quantum__qis__reset__body(int qubit) {}
-
-// QIR runtime stubs
-__declspec(dllexport) int __quantum__rt__qubit_allocate() { return 0; }
-__declspec(dllexport) int __quantum__rt__result_allocate() { return 0; }
-__declspec(dllexport) void __quantum__rt__qubit_release(int qubit) {}
-__declspec(dllexport) void __quantum__rt__result_release(int result) {}
-__declspec(dllexport) void __quantum__rt__message(const char* msg) {}
-__declspec(dllexport) void __quantum__rt__record(const char* msg) {}
-__declspec(dllexport) void __quantum__rt__result_record_output(int result) {}
-"
+    /// Generate C stub implementation dynamically
+    fn generate_c_stub() -> String {
+        stub_gen::generate_c_stub()
     }
 
     /// Get Windows system libraries for linking
