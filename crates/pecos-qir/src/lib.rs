@@ -9,4 +9,8 @@ pub mod prelude;
 pub mod runtime;
 pub mod state;
 
+// Internal modules for compilation
+mod qir_compiler;
+mod runtime_builder;
+
 pub use engine::QirEngine;
