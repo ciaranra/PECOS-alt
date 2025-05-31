@@ -82,7 +82,7 @@ where
 
     // Add the gate to the global message builder
     if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        add_to_builder(&mut *builder);
+        add_to_builder(&mut builder);
     } else {
         eprintln!("QIR Runtime: [Thread {thread_id}] Failed to lock message builder mutex");
     }
@@ -109,10 +109,9 @@ where
 /// undefined behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__rz__body(theta: f64, qubit: usize) {
-    store_gate_command(
-        &format!("RZ {} {}", theta, qubit),
-        |builder| { builder.add_rz(theta, &[qubit]); }
-    );
+    store_gate_command(&format!("RZ {theta} {qubit}"), |builder| {
+        builder.add_rz(theta, &[qubit]);
+    });
 }
 
 /// Applies a rotation around an axis in the ZY plane to the specified qubit.
@@ -130,10 +129,9 @@ pub unsafe extern "C" fn __quantum__qis__rz__body(theta: f64, qubit: usize) {
 /// undefined behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__r1xy__body(theta: f64, phi: f64, qubit: usize) {
-    store_gate_command(
-        &format!("R1XY {} {} {}", theta, phi, qubit),
-        |builder| { builder.add_r1xy(theta, phi, &[qubit]); }
-    );
+    store_gate_command(&format!("R1XY {theta} {phi} {qubit}"), |builder| {
+        builder.add_r1xy(theta, phi, &[qubit]);
+    });
 }
 
 /// Applies a Hadamard gate to the specified qubit.
@@ -149,10 +147,9 @@ pub unsafe extern "C" fn __quantum__qis__r1xy__body(theta: f64, phi: f64, qubit:
 /// undefined behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__h__body(qubit: usize) {
-    store_gate_command(
-        &format!("H {}", qubit),
-        |builder| { builder.add_h(&[qubit]); }
-    );
+    store_gate_command(&format!("H {qubit}"), |builder| {
+        builder.add_h(&[qubit]);
+    });
 }
 
 /// Applies an X gate to the specified qubit.
@@ -168,10 +165,9 @@ pub unsafe extern "C" fn __quantum__qis__h__body(qubit: usize) {
 /// undefined behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__x__body(qubit: usize) {
-    store_gate_command(
-        &format!("X {}", qubit),
-        |builder| { builder.add_x(&[qubit]); }
-    );
+    store_gate_command(&format!("X {qubit}"), |builder| {
+        builder.add_x(&[qubit]);
+    });
 }
 
 /// Applies a Y gate to the specified qubit.
@@ -187,10 +183,9 @@ pub unsafe extern "C" fn __quantum__qis__x__body(qubit: usize) {
 /// undefined behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__y__body(qubit: usize) {
-    store_gate_command(
-        &format!("Y {}", qubit),
-        |builder| { builder.add_y(&[qubit]); }
-    );
+    store_gate_command(&format!("Y {qubit}"), |builder| {
+        builder.add_y(&[qubit]);
+    });
 }
 
 /// Applies a Z gate to the specified qubit.
@@ -206,10 +201,9 @@ pub unsafe extern "C" fn __quantum__qis__y__body(qubit: usize) {
 /// undefined behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__z__body(qubit: usize) {
-    store_gate_command(
-        &format!("Z {}", qubit),
-        |builder| { builder.add_z(&[qubit]); }
-    );
+    store_gate_command(&format!("Z {qubit}"), |builder| {
+        builder.add_z(&[qubit]);
+    });
 }
 
 /// Applies a controlled-X gate to the specified qubits.
@@ -226,10 +220,9 @@ pub unsafe extern "C" fn __quantum__qis__z__body(qubit: usize) {
 /// undefined behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__cx__body(control: usize, target: usize) {
-    store_gate_command(
-        &format!("CX {} {}", control, target),
-        |builder| { builder.add_cx(&[control], &[target]); }
-    );
+    store_gate_command(&format!("CX {control} {target}"), |builder| {
+        builder.add_cx(&[control], &[target]);
+    });
 }
 
 /// Applies a controlled-Z gate to the specified qubits.
@@ -249,14 +242,11 @@ pub unsafe extern "C" fn __quantum__qis__cx__body(control: usize, target: usize)
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__cz__body(control: usize, target: usize) {
     // Implement CZ as a sequence of H, CX, H
-    store_gate_command(
-        &format!("CZ {} {} (as H-CX-H)", control, target),
-        |builder| { 
-            builder.add_h(&[target]); 
-            builder.add_cx(&[control], &[target]); 
-            builder.add_h(&[target]); 
-        }
-    );
+    store_gate_command(&format!("CZ {control} {target} (as H-CX-H)"), |builder| {
+        builder.add_h(&[target]);
+        builder.add_cx(&[control], &[target]);
+        builder.add_h(&[target]);
+    });
 }
 
 /// Applies a SZZ gate to the specified qubits.
@@ -273,10 +263,9 @@ pub unsafe extern "C" fn __quantum__qis__cz__body(control: usize, target: usize)
 /// undefined behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__szz__body(qubit1: usize, qubit2: usize) {
-    store_gate_command(
-        &format!("SZZ {} {}", qubit1, qubit2),
-        |builder| { builder.add_szz(&[qubit1], &[qubit2]); }
-    );
+    store_gate_command(&format!("SZZ {qubit1} {qubit2}"), |builder| {
+        builder.add_szz(&[qubit1], &[qubit2]);
+    });
 }
 
 /// Applies a RZZ gate to the specified qubits.
@@ -294,10 +283,9 @@ pub unsafe extern "C" fn __quantum__qis__szz__body(qubit1: usize, qubit2: usize)
 /// undefined behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__rzz__body(theta: f64, qubit1: usize, qubit2: usize) {
-    store_gate_command(
-        &format!("RZZ {} {} {}", theta, qubit1, qubit2),
-        |builder| { builder.add_rzz(theta, &[qubit1], &[qubit2]); }
-    );
+    store_gate_command(&format!("RZZ {theta} {qubit1} {qubit2}"), |builder| {
+        builder.add_rzz(theta, &[qubit1], &[qubit2]);
+    });
 }
 
 /// Measures a qubit and stores the result.
@@ -314,10 +302,9 @@ pub unsafe extern "C" fn __quantum__qis__rzz__body(theta: f64, qubit1: usize, qu
 /// undefined behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__m__body(qubit: usize, _result: usize) -> u32 {
-    store_gate_command(
-        &format!("M {}", qubit),
-        |builder| { builder.add_measurements(&[qubit]); }
-    );
+    store_gate_command(&format!("M {qubit}"), |builder| {
+        builder.add_measurements(&[qubit]);
+    });
     // In the real QIR runtime, this would return the actual measurement result
     // For this implementation, we just return 0
     0
@@ -336,10 +323,9 @@ pub unsafe extern "C" fn __quantum__qis__m__body(qubit: usize, _result: usize) -
 /// undefined behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__reset__body(qubit: usize) {
-    store_gate_command(
-        &format!("PREP {}", qubit),
-        |builder| { builder.add_prep(&[qubit]); }
-    );
+    store_gate_command(&format!("PREP {qubit}"), |builder| {
+        builder.add_prep(&[qubit]);
+    });
 }
 
 /// Allocates a new qubit.
@@ -476,18 +462,18 @@ pub unsafe extern "C" fn __quantum__rt__record(data: *const c_char) {
             } else {
                 None
             };
-            
+
             if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
                 builder.add_result_record(result_id, label);
             } else {
                 eprintln!("QIR Runtime: [Thread {thread_id}] Failed to lock message builder mutex");
             }
-            
+
             if should_print_commands() {
                 if let Some(label_str) = label {
-                    println!("QIR Runtime: [Thread {thread_id}] RECORD {} {}", result_id, label_str);
+                    println!("QIR Runtime: [Thread {thread_id}] RECORD {result_id} {label_str}");
                 } else {
-                    println!("QIR Runtime: [Thread {thread_id}] RECORD {}", result_id);
+                    println!("QIR Runtime: [Thread {thread_id}] RECORD {result_id}");
                 }
             }
         } else if parts.len() >= 3 {
@@ -496,22 +482,29 @@ pub unsafe extern "C" fn __quantum__rt__record(data: *const c_char) {
                 if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
                     builder.add_record_data(parts[1], value);
                 } else {
-                    eprintln!("QIR Runtime: [Thread {thread_id}] Failed to lock message builder mutex");
+                    eprintln!(
+                        "QIR Runtime: [Thread {thread_id}] Failed to lock message builder mutex"
+                    );
                 }
-                
+
                 if should_print_commands() {
-                    println!("QIR Runtime: [Thread {thread_id}] RECORD {} {}", parts[1], value);
+                    println!(
+                        "QIR Runtime: [Thread {thread_id}] RECORD {} {}",
+                        parts[1], value
+                    );
                 }
             } else {
                 // Fall back to debug message
                 if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
                     builder.add_debug_message(&data_str);
                 } else {
-                    eprintln!("QIR Runtime: [Thread {thread_id}] Failed to lock message builder mutex");
+                    eprintln!(
+                        "QIR Runtime: [Thread {thread_id}] Failed to lock message builder mutex"
+                    );
                 }
-                
+
                 if should_print_commands() {
-                    println!("QIR Runtime: [Thread {thread_id}] RECORD (raw): {}", data_str);
+                    println!("QIR Runtime: [Thread {thread_id}] RECORD (raw): {data_str}");
                 }
             }
         } else {
@@ -521,9 +514,9 @@ pub unsafe extern "C" fn __quantum__rt__record(data: *const c_char) {
             } else {
                 eprintln!("QIR Runtime: [Thread {thread_id}] Failed to lock message builder mutex");
             }
-            
+
             if should_print_commands() {
-                println!("QIR Runtime: [Thread {thread_id}] RECORD (raw): {}", data_str);
+                println!("QIR Runtime: [Thread {thread_id}] RECORD (raw): {data_str}");
             }
         }
     } else {
@@ -533,9 +526,9 @@ pub unsafe extern "C" fn __quantum__rt__record(data: *const c_char) {
         } else {
             eprintln!("QIR Runtime: [Thread {thread_id}] Failed to lock message builder mutex");
         }
-        
+
         if should_print_commands() {
-            println!("QIR Runtime: [Thread {thread_id}] RECORD (raw): {}", data_str);
+            println!("QIR Runtime: [Thread {thread_id}] RECORD (raw): {data_str}");
         }
     }
 }
@@ -563,7 +556,9 @@ pub unsafe extern "C" fn qir_runtime_reset() {
     } else {
         // If we can't lock the mutex, print an error
         if should_print_commands() {
-            eprintln!("[Thread {thread_id}] ERROR: Failed to lock message builder mutex during reset");
+            eprintln!(
+                "[Thread {thread_id}] ERROR: Failed to lock message builder mutex during reset"
+            );
             io::stderr().flush().unwrap_or_default();
         }
     }
@@ -577,12 +572,12 @@ pub unsafe extern "C" fn qir_runtime_reset() {
     }
 }
 
-/// Gets the binary commands generated by the QIR runtime as a ByteMessage.
+/// Gets the binary commands generated by the QIR runtime as a `ByteMessage`.
 ///
 /// # Returns
 ///
-/// A pointer to a ByteMessage containing the commands.
-/// The caller is responsible for freeing the ByteMessage using `qir_runtime_free_binary_commands`.
+/// A pointer to a `ByteMessage` containing the commands.
+/// The caller is responsible for freeing the `ByteMessage` using `qir_runtime_free_binary_commands`.
 ///
 /// # Safety
 ///
@@ -595,6 +590,11 @@ pub struct FFIByteData {
     pub byte_len: usize,
 }
 
+/// # Safety
+///
+/// This function is unsafe because it returns a raw pointer to allocated memory that must be
+/// properly freed by the caller using the appropriate deallocation function. The caller is
+/// responsible for ensuring the returned pointer is not used after being freed.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qir_runtime_get_binary_commands() -> *mut FFIByteData {
     let thread_id = get_thread_id();
@@ -618,22 +618,22 @@ pub unsafe extern "C" fn qir_runtime_get_binary_commands() -> *mut FFIByteData {
     let bytes = message.into_bytes();
     let byte_len = bytes.len();
 
-    // Transfer aligned u32 data across FFI boundary 
+    // Transfer aligned u32 data across FFI boundary
     let (data_ptr, word_count) = if byte_len > 0 {
         // Calculate word count (round up)
-        let word_count = (byte_len + 3) / 4;
-        
+        let word_count = byte_len.div_ceil(4);
+
         // Create aligned storage
         let mut aligned_data = vec![0u32; word_count];
-        
+
         // Copy bytes into aligned storage using bytemuck
         let aligned_bytes = bytemuck::cast_slice_mut::<u32, u8>(&mut aligned_data);
         aligned_bytes[..byte_len].copy_from_slice(&bytes);
-        
+
         // Convert to raw pointer
         let data_ptr = aligned_data.as_mut_ptr();
         std::mem::forget(aligned_data); // Don't drop, will be freed on other side
-        
+
         (data_ptr, word_count)
     } else {
         (std::ptr::null_mut(), 0)
@@ -651,17 +651,19 @@ pub unsafe extern "C" fn qir_runtime_get_binary_commands() -> *mut FFIByteData {
     let ptr = Box::into_raw(boxed_ffi);
 
     if should_print_commands() {
-        println!("[Thread {thread_id}] Got binary commands as {} bytes ({} words)", byte_len, word_count);
+        println!(
+            "[Thread {thread_id}] Got binary commands as {byte_len} bytes ({word_count} words)"
+        );
     }
 
     ptr
 }
 
-/// Frees a ByteMessage allocated by `qir_runtime_get_binary_commands`.
+/// Frees a `ByteMessage` allocated by `qir_runtime_get_binary_commands`.
 ///
 /// # Arguments
 ///
-/// * `ptr` - The pointer to the ByteMessage to free
+/// * `ptr` - The pointer to the `ByteMessage` to free
 ///
 /// # Safety
 ///
@@ -685,14 +687,16 @@ pub unsafe extern "C" fn qir_runtime_free_binary_commands(ptr: *mut FFIByteData)
     // Free the u32 data if it exists
     if !ffi_data.data.is_null() && ffi_data.word_count > 0 {
         // Reconstruct the Vec<u32> to properly deallocate
-        let _aligned_data = unsafe { 
-            Vec::from_raw_parts(ffi_data.data, ffi_data.word_count, ffi_data.word_count)
-        };
+        let _aligned_data =
+            unsafe { Vec::from_raw_parts(ffi_data.data, ffi_data.word_count, ffi_data.word_count) };
         // _aligned_data will be dropped here, properly deallocating the memory
     }
 
     if should_print_commands() {
-        println!("[Thread {thread_id}] Freed FFIByteData with {} bytes ({} words)", ffi_data.byte_len, ffi_data.word_count);
+        println!(
+            "[Thread {thread_id}] Freed FFIByteData with {} bytes ({} words)",
+            ffi_data.byte_len, ffi_data.word_count
+        );
     }
 }
 

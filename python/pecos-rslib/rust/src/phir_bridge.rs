@@ -229,7 +229,7 @@ impl PHIREngine {
                                         }
                                         #[allow(clippy::match_same_arms)]
                                         "Measure" => {
-                                            // result_id no longer exists on QuantumGate
+                                            // result_id no longer exists on GateCommand
                                             // Measurements are now tracked by order
                                         }
                                         _ => {
@@ -241,7 +241,7 @@ impl PHIREngine {
                                     // Create qubits list
                                     let qubits_list = PyList::empty(py);
                                     for qubit in op.qubits {
-                                        qubits_list.append(qubit)?;
+                                        qubits_list.append(*qubit)?;
                                     }
                                     py_dict.set_item("qubits", qubits_list)?;
 

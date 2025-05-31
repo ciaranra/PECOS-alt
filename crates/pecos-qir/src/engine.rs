@@ -484,7 +484,6 @@ impl QirEngine {
         Ok(())
     }
 
-
     /// Run the QIR program and get the commands
     ///
     /// This method runs the QIR program by calling the main function in the library
@@ -531,8 +530,11 @@ impl QirEngine {
             .map_err(|e| Self::log_error("Failed to get binary commands from QIR runtime", e))?;
 
         // Log message details for debugging
-        debug!("QIR: Binary message from runtime: {} bytes", runtime_message.as_bytes().len());
-        
+        debug!(
+            "QIR: Binary message from runtime: {} bytes",
+            runtime_message.as_bytes().len()
+        );
+
         // Try to parse and log quantum operations for debugging
         if let Ok(operations) = runtime_message.parse_quantum_operations() {
             debug!("QIR: Parsed {} quantum operations:", operations.len());
@@ -624,7 +626,6 @@ impl QirEngine {
             ))
         }
     }
-
 
     /// Reset the engine's state and resources
     ///

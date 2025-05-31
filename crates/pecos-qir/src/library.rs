@@ -301,6 +301,8 @@ impl QirLibrary {
     ///
     /// This function will panic if the internal mutex is poisoned.
     pub fn get_binary_commands(&self) -> Result<ByteMessage, PecosError> {
+        use crate::runtime::FFIByteData;
+
         let thread_id = get_thread_id();
 
         debug!(
@@ -309,9 +311,8 @@ impl QirLibrary {
         );
 
         // Import the FFI structure
-        use crate::runtime::FFIByteData;
 
-        // Get the get_binary_commands function  
+        // Get the get_binary_commands function
         let library_guard = self.library.lock().unwrap();
         let get_binary_commands: Symbol<unsafe extern "C" fn() -> *mut FFIByteData> = unsafe {
             library_guard
@@ -350,19 +351,19 @@ impl QirLibrary {
 
         // Get the FFI data
         let ffi_data = unsafe { &*ffi_ptr };
-        
+
         // Create ByteMessage from the aligned u32 data while preserving alignment
-        let message = if ffi_data.byte_len > 0 && !ffi_data.data.is_null() && ffi_data.word_count > 0 {
-            // Reconstruct aligned data from FFI
-            let aligned_data = unsafe { 
-                std::slice::from_raw_parts(ffi_data.data, ffi_data.word_count)
+        let message =
+            if ffi_data.byte_len > 0 && !ffi_data.data.is_null() && ffi_data.word_count > 0 {
+                // Reconstruct aligned data from FFI
+                let aligned_data =
+                    unsafe { std::slice::from_raw_parts(ffi_data.data, ffi_data.word_count) };
+
+                // Create ByteMessage directly from u32 data to maintain alignment
+                ByteMessage::from_aligned_u32_data(aligned_data.to_vec(), ffi_data.byte_len)
+            } else {
+                ByteMessage::create_flush()
             };
-            
-            // Create ByteMessage directly from u32 data to maintain alignment
-            ByteMessage::from_aligned_u32_data(aligned_data.to_vec(), ffi_data.byte_len)
-        } else {
-            ByteMessage::create_flush()
-        };
 
         // Free the FFI data
         unsafe { free_binary_commands(ffi_ptr) };

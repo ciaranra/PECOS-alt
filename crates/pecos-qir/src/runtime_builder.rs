@@ -223,7 +223,7 @@ pecos-qir = {{ path = {:?} }}
     }
 
     /// Check if we need to rebuild the static library
-    /// 
+    ///
     /// Returns true if:
     /// - The static library doesn't exist
     /// - The build wrapper doesn't exist (need to create it)
@@ -243,12 +243,14 @@ pecos-qir = {{ path = {:?} }}
         let lib_mtime = fs::metadata(lib_path)
             .map_err(|e| PecosError::Processing(format!("Failed to get library metadata: {e}")))?
             .modified()
-            .map_err(|e| PecosError::Processing(format!("Failed to get library modification time: {e}")))?;
+            .map_err(|e| {
+                PecosError::Processing(format!("Failed to get library modification time: {e}"))
+            })?;
 
         // Check if any source files in pecos-qir are newer than the library
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let src_dir = manifest_dir.join("src");
-        
+
         if Self::dir_newer_than(&src_dir, lib_mtime)? {
             return Ok(true);
         }
@@ -257,10 +259,16 @@ pecos-qir = {{ path = {:?} }}
         let cargo_toml = manifest_dir.join("Cargo.toml");
         if cargo_toml.exists() {
             let cargo_mtime = fs::metadata(&cargo_toml)
-                .map_err(|e| PecosError::Processing(format!("Failed to get Cargo.toml metadata: {e}")))?
+                .map_err(|e| {
+                    PecosError::Processing(format!("Failed to get Cargo.toml metadata: {e}"))
+                })?
                 .modified()
-                .map_err(|e| PecosError::Processing(format!("Failed to get Cargo.toml modification time: {e}")))?;
-            
+                .map_err(|e| {
+                    PecosError::Processing(format!(
+                        "Failed to get Cargo.toml modification time: {e}"
+                    ))
+                })?;
+
             if cargo_mtime > lib_mtime {
                 return Ok(true);
             }
@@ -270,19 +278,24 @@ pecos-qir = {{ path = {:?} }}
     }
 
     /// Check if any file in a directory tree is newer than the given time
-    fn dir_newer_than(dir: &Path, reference_time: std::time::SystemTime) -> Result<bool, PecosError> {
+    fn dir_newer_than(
+        dir: &Path,
+        reference_time: std::time::SystemTime,
+    ) -> Result<bool, PecosError> {
         if !dir.exists() {
             return Ok(false);
         }
 
-        let entries = fs::read_dir(dir)
-            .map_err(|e| PecosError::Processing(format!("Failed to read directory {}: {e}", dir.display())))?;
+        let entries = fs::read_dir(dir).map_err(|e| {
+            PecosError::Processing(format!("Failed to read directory {}: {e}", dir.display()))
+        })?;
 
         for entry in entries {
-            let entry = entry
-                .map_err(|e| PecosError::Processing(format!("Failed to read directory entry: {e}")))?;
+            let entry = entry.map_err(|e| {
+                PecosError::Processing(format!("Failed to read directory entry: {e}"))
+            })?;
             let path = entry.path();
-            
+
             if path.is_dir() {
                 // Recursively check subdirectories
                 if Self::dir_newer_than(&path, reference_time)? {
@@ -290,11 +303,19 @@ pecos-qir = {{ path = {:?} }}
                 }
             } else {
                 // Check if this file is newer
-                let metadata = fs::metadata(&path)
-                    .map_err(|e| PecosError::Processing(format!("Failed to get metadata for {}: {e}", path.display())))?;
-                let mtime = metadata.modified()
-                    .map_err(|e| PecosError::Processing(format!("Failed to get modification time for {}: {e}", path.display())))?;
-                
+                let metadata = fs::metadata(&path).map_err(|e| {
+                    PecosError::Processing(format!(
+                        "Failed to get metadata for {}: {e}",
+                        path.display()
+                    ))
+                })?;
+                let mtime = metadata.modified().map_err(|e| {
+                    PecosError::Processing(format!(
+                        "Failed to get modification time for {}: {e}",
+                        path.display()
+                    ))
+                })?;
+
                 if mtime > reference_time {
                     return Ok(true);
                 }

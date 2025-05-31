@@ -38,7 +38,7 @@ pub enum MessageType {
     Reset = 4,      // Reset state
 
     // Operation messages
-    QuantumGate = 10, // Quantum gate operation
+    GateCommand = 10, // Gate command operation
     Measurement = 11, // Measurement operation
 
     // Result messages
@@ -123,7 +123,7 @@ impl MessageHeader {
             2 => Ok(MessageType::EndBatch),
             3 => Ok(MessageType::Flush),
             4 => Ok(MessageType::Reset),
-            10 => Ok(MessageType::QuantumGate),
+            10 => Ok(MessageType::GateCommand),
             11 => Ok(MessageType::Measurement),
             20 => Ok(MessageType::MeasurementResult),
             30 => Ok(MessageType::RecordData),
@@ -143,10 +143,10 @@ impl MessageHeader {
     }
 }
 
-/// Quantum gate message payload header
+/// Gate command message payload header
 #[repr(C, align(4))]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
-pub struct QuantumGateHeader {
+pub struct GateCommandHeader {
     pub gate_type: u8,  // Gate type (using GateType enum values)
     pub num_qubits: u8, // Number of qubits
     pub has_params: u8, // Whether gate has parameters (1=yes, 0=no)

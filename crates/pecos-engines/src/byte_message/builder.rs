@@ -3,13 +3,15 @@
 //! This module provides utilities for constructing binary messages
 //! according to the byte protocol.
 
-use crate::byte_message::gate_type::{GateType, QuantumGate};
 use crate::byte_message::message::ByteMessage;
 use crate::byte_message::protocol::{
-    BatchHeader, MeasurementHeader, MeasurementResultHeader, MessageFlags, MessageHeader,
-    MessageType, QuantumGateHeader, calc_padding,
+    BatchHeader, GateCommandHeader, MeasurementHeader, MeasurementResultHeader, MessageFlags,
+    MessageHeader, MessageType, calc_padding,
 };
 use bytemuck::bytes_of;
+use pecos_core::QubitId;
+use pecos_core::gate_type::GateType;
+use pecos_core::gates::Gate;
 use std::mem::size_of;
 
 // ByteMessage guarantees 4-byte alignment by storing data in Vec<u32>
@@ -116,7 +118,7 @@ impl ByteMessageBuilder {
                 // These can be used with any mode
                 // In the future, we might want to add dedicated modes for these
             }
-            MessageType::QuantumGate | MessageType::Measurement => {
+            MessageType::GateCommand | MessageType::Measurement => {
                 assert!(
                     !(self.mode == BuilderMode::MeasurementResults),
                     "Cannot mix quantum operations and measurement results in the same message"
@@ -175,18 +177,20 @@ impl ByteMessageBuilder {
     ///
     /// This function will panic if the number of qubits in the gate exceeds 255,
     /// as the protocol uses a u8 to represent the qubit count.
-    pub fn add_quantum_gate(&mut self, gate: &QuantumGate) -> &mut Self {
+    pub fn add_gate_command(&mut self, gate: &Gate) -> &mut Self {
         // Handle measurement gates using the add_measurements method
         if gate.gate_type == GateType::Measure {
-            return self.add_measurements(&gate.qubits);
+            let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| usize::from(*q)).collect();
+            return self.add_measurements(&qubits_usize);
         }
 
         // Calculate total payload size
-        let header_size = size_of::<QuantumGateHeader>();
+        let header_size = size_of::<GateCommandHeader>();
         let qubits_size = gate.qubits.len() * size_of::<u32>();
         let params_size = match gate.gate_type {
-            GateType::RZ | GateType::RZZ => size_of::<f64>(),
             GateType::R1XY => 2 * size_of::<f64>(),
+            GateType::U => 3 * size_of::<f64>(),
+            GateType::Idle | GateType::RZ | GateType::RZZ => size_of::<f64>(),
             _ => 0,
         };
         let total_size = header_size + qubits_size + params_size;
@@ -198,7 +202,7 @@ impl ByteMessageBuilder {
         let has_params = !gate.params.is_empty();
 
         // Create gate header
-        let header = QuantumGateHeader {
+        let header = GateCommandHeader {
             gate_type: gate.gate_type as u8,
             num_qubits: u8::try_from(gate.qubits.len()).expect("Too many qubits for gate"),
             has_params: u8::from(has_params),
@@ -208,9 +212,9 @@ impl ByteMessageBuilder {
         // Add header to payload
         payload.extend_from_slice(bytes_of(&header));
 
-        // Add qubit indices to payload
+        // Add qubit indices to payload (convert QubitId to usize to u32)
         for qubit in &gate.qubits {
-            let qubit_u32 = u32::try_from(*qubit).expect("Qubit index too large");
+            let qubit_u32 = u32::try_from(usize::from(*qubit)).expect("Qubit index too large");
             payload.extend_from_slice(&qubit_u32.to_le_bytes());
         }
 
@@ -220,14 +224,14 @@ impl ByteMessageBuilder {
         }
 
         // Add the message to the buffer
-        self.add_message(MessageType::QuantumGate, &payload, MessageFlags::NONE);
+        self.add_message(MessageType::GateCommand, &payload, MessageFlags::NONE);
         self
     }
 
-    /// Add multiple quantum gates at once
-    pub fn add_quantum_gates(&mut self, gates: &[QuantumGate]) -> &mut Self {
+    /// Add multiple gate commands at once
+    pub fn add_gate_commands(&mut self, gates: &[Gate]) -> &mut Self {
         for gate in gates {
-            self.add_quantum_gate(gate);
+            self.add_gate_command(gate);
         }
         self
     }
@@ -261,33 +265,29 @@ impl ByteMessageBuilder {
 
     /// Add an X gate
     pub fn add_x(&mut self, qubits: &[usize]) -> &mut Self {
-        for &qubit in qubits {
-            self.add_quantum_gate(&QuantumGate::x(qubit));
-        }
+        let gate = Gate::x(qubits);
+        self.add_gate_command(&gate);
         self
     }
 
     /// Add a Y gate
     pub fn add_y(&mut self, qubits: &[usize]) -> &mut Self {
-        for &qubit in qubits {
-            self.add_quantum_gate(&QuantumGate::y(qubit));
-        }
+        let gate = Gate::y(qubits);
+        self.add_gate_command(&gate);
         self
     }
 
     /// Add a Z gate
     pub fn add_z(&mut self, qubits: &[usize]) -> &mut Self {
-        for &qubit in qubits {
-            self.add_quantum_gate(&QuantumGate::z(qubit));
-        }
+        let gate = Gate::z(qubits);
+        self.add_gate_command(&gate);
         self
     }
 
     /// Add an H gate
     pub fn add_h(&mut self, qubits: &[usize]) -> &mut Self {
-        for &qubit in qubits {
-            self.add_quantum_gate(&QuantumGate::h(qubit));
-        }
+        let gate = Gate::h(qubits);
+        self.add_gate_command(&gate);
         self
     }
 
@@ -302,9 +302,13 @@ impl ByteMessageBuilder {
             targets.len(),
             "Controls and targets arrays must have the same length"
         );
-        for (&control, &target) in controls.iter().zip(targets.iter()) {
-            self.add_quantum_gate(&QuantumGate::cx(control, target));
-        }
+        let pairs: Vec<(usize, usize)> = controls
+            .iter()
+            .zip(targets.iter())
+            .map(|(&c, &t)| (c, t))
+            .collect();
+        let gate = Gate::cx(&pairs);
+        self.add_gate_command(&gate);
         self
     }
 
@@ -319,9 +323,13 @@ impl ByteMessageBuilder {
             qubits2.len(),
             "Qubit1 and qubit2 arrays must have the same length"
         );
-        for (&qubit1, &qubit2) in qubits1.iter().zip(qubits2.iter()) {
-            self.add_quantum_gate(&QuantumGate::rzz(theta, qubit1, qubit2));
-        }
+        let pairs: Vec<(usize, usize)> = qubits1
+            .iter()
+            .zip(qubits2.iter())
+            .map(|(&q1, &q2)| (q1, q2))
+            .collect();
+        let gate = Gate::rzz(theta, &pairs);
+        self.add_gate_command(&gate);
         self
     }
 
@@ -336,9 +344,13 @@ impl ByteMessageBuilder {
             qubits2.len(),
             "Qubit1 and qubit2 arrays must have the same length"
         );
-        for (&qubit1, &qubit2) in qubits1.iter().zip(qubits2.iter()) {
-            self.add_quantum_gate(&QuantumGate::szz(qubit1, qubit2));
-        }
+        let pairs: Vec<(usize, usize)> = qubits1
+            .iter()
+            .zip(qubits2.iter())
+            .map(|(&q1, &q2)| (q1, q2))
+            .collect();
+        let gate = Gate::szz(&pairs);
+        self.add_gate_command(&gate);
         self
     }
 
@@ -362,33 +374,34 @@ impl ByteMessageBuilder {
             qubits2.len(),
             "Qubit1 and qubit2 arrays must have the same length"
         );
-        for (&qubit1, &qubit2) in qubits1.iter().zip(qubits2.iter()) {
-            self.add_quantum_gate(&QuantumGate::szzdg(qubit1, qubit2));
-        }
+        let pairs: Vec<(usize, usize)> = qubits1
+            .iter()
+            .zip(qubits2.iter())
+            .map(|(&q1, &q2)| (q1, q2))
+            .collect();
+        let gate = Gate::szzdg(&pairs);
+        self.add_gate_command(&gate);
         self
     }
 
     /// Add an RZ gate
     pub fn add_rz(&mut self, theta: f64, qubits: &[usize]) -> &mut Self {
-        for &qubit in qubits {
-            self.add_quantum_gate(&QuantumGate::rz(theta, qubit));
-        }
+        let gate = Gate::rz(theta, qubits);
+        self.add_gate_command(&gate);
         self
     }
 
     /// Add an R1XY gate
     pub fn add_r1xy(&mut self, theta: f64, phi: f64, qubits: &[usize]) -> &mut Self {
-        for &qubit in qubits {
-            self.add_quantum_gate(&QuantumGate::r1xy(theta, phi, qubit));
-        }
+        let gate = Gate::r1xy(theta, phi, qubits);
+        self.add_gate_command(&gate);
         self
     }
 
     /// Add a U gate
     pub fn add_u(&mut self, theta: f64, phi: f64, lambda: f64, qubits: &[usize]) -> &mut Self {
-        for &qubit in qubits {
-            self.add_quantum_gate(&QuantumGate::u(theta, phi, lambda, qubit));
-        }
+        let gate = Gate::u(theta, phi, lambda, qubits);
+        self.add_gate_command(&gate);
         self
     }
 
@@ -416,9 +429,8 @@ impl ByteMessageBuilder {
 
     /// Add a Prep gate
     pub fn add_prep(&mut self, qubits: &[usize]) -> &mut Self {
-        for &qubit in qubits {
-            self.add_quantum_gate(&QuantumGate::prep(qubit));
-        }
+        let gate = Gate::prep(qubits);
+        self.add_gate_command(&gate);
         self
     }
 
@@ -563,7 +575,7 @@ impl ByteMessageBuilder {
         self.buffer[0..size_of::<BatchHeader>()].copy_from_slice(bytes_of(&header));
 
         // Return a ByteMessage with the buffer
-        ByteMessage::new(self.buffer.clone())
+        ByteMessage::new(&self.buffer)
     }
 
     /// Build the message and return it
@@ -595,7 +607,7 @@ impl ByteMessageBuilder {
                     let header_offset = self.buffer.len() - size_of::<MessageHeader>();
                     let header_slice =
                         &self.buffer[header_offset..header_offset + size_of::<MessageHeader>()];
-                    // Unaligned read needed since message might not end on 4-byte boundary  
+                    // Unaligned read needed since message might not end on 4-byte boundary
                     let header = bytemuck::pod_read_unaligned::<MessageHeader>(header_slice);
                     header.msg_type == MessageType::EndBatch as u8
                 };
@@ -633,10 +645,10 @@ impl ByteMessageBuilder {
         }
 
         // Create and add the idle gate
-        let gate = QuantumGate::idle(duration, idle_qubits);
-        self.add_quantum_gate(&gate)
+        let idle_qubits_id: Vec<QubitId> = idle_qubits.into_iter().map(QubitId).collect();
+        let gate = Gate::idle(duration, idle_qubits_id);
+        self.add_gate_command(&gate)
     }
-
 }
 
 #[cfg(test)]
@@ -644,6 +656,28 @@ mod tests {
     use super::*;
     use crate::byte_message::GateType;
     use crate::byte_message::protocol::{BATCH_MAGIC, PROTOCOL_VERSION};
+    use pecos_core::QubitId;
+
+    #[test]
+    fn test_gate_command_interface() {
+        // Create a builder
+        let mut builder = ByteMessageBuilder::new();
+        let _ = builder.for_quantum_operations();
+
+        // Add gates using new GateCommand interface
+        let gate = Gate::h(&[0]);
+        builder.add_gate_command(&gate);
+        let gate = Gate::rz(0.5, &[1]);
+        builder.add_gate_command(&gate);
+
+        // Test multiple gates at once
+        let gates = vec![Gate::x(&[2]), Gate::cx(&[(0, 1)])];
+        builder.add_gate_commands(&gates);
+
+        // Build and verify basic structure
+        let message = builder.build();
+        assert!(!message.is_empty().unwrap());
+    }
 
     #[test]
     fn test_builder_basic() {
@@ -665,11 +699,11 @@ mod tests {
         // Verify the commands
         assert_eq!(commands.len(), 3);
         assert_eq!(commands[0].gate_type, GateType::H);
-        assert_eq!(commands[0].qubits, vec![0]);
+        assert_eq!(commands[0].qubits, vec![QubitId(0)]);
         assert_eq!(commands[1].gate_type, GateType::CX);
-        assert_eq!(commands[1].qubits, vec![0, 1]);
+        assert_eq!(commands[1].qubits, vec![QubitId(0), QubitId(1)]);
         assert_eq!(commands[2].gate_type, GateType::Measure);
-        assert_eq!(commands[2].qubits, vec![2]);
+        assert_eq!(commands[2].qubits, vec![QubitId(2)]);
     }
 
     #[test]
@@ -768,7 +802,7 @@ mod tests {
         assert_eq!(commands.len(), 3);
         for i in 0..3 {
             assert_eq!(commands[i].gate_type, GateType::Measure);
-            assert_eq!(commands[i].qubits, vec![qubits[i]]);
+            assert_eq!(commands[i].qubits, vec![QubitId(qubits[i])]);
         }
     }
 
@@ -789,7 +823,8 @@ mod tests {
         assert!(bytes.len() >= size_of::<BatchHeader>());
 
         // Parse the batch header - guaranteed aligned at offset 0
-        let batch_header = *bytemuck::from_bytes::<BatchHeader>(&bytes[0..size_of::<BatchHeader>()]);
+        let batch_header =
+            *bytemuck::from_bytes::<BatchHeader>(&bytes[0..size_of::<BatchHeader>()]);
         assert_eq!(batch_header.magic, BATCH_MAGIC);
         assert_eq!(batch_header.version, PROTOCOL_VERSION);
         assert_eq!(batch_header.msg_count, 3);

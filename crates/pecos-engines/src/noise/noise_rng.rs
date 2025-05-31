@@ -15,12 +15,11 @@
 //! This module provides a common interface for random number generation
 //! in noise models through the `NoiseRng` wrapper.
 
+use crate::Gate;
 use rand::prelude::Distribution;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use std::ops::Range;
-
-use crate::byte_message::QuantumGate;
 
 /// Wrapper for random number generator used by noise models
 ///
@@ -124,8 +123,8 @@ impl<R: Rng + Clone> NoiseRng<R> {
     ///
     /// # Returns
     ///
-    /// A `QuantumGate` representing the Pauli operation, or `None` if no operation
-    pub fn random_pauli_or_none(&mut self, qubit: usize) -> Option<QuantumGate> {
+    /// A `GateCommand` representing the Pauli operation, or `None` if no operation
+    pub fn random_pauli_or_none(&mut self, qubit: usize) -> Option<Gate> {
         // Generate a random int from 0 to 3
         // 0: No operation (identity)
         // 1: X gate
@@ -133,9 +132,9 @@ impl<R: Rng + Clone> NoiseRng<R> {
         // 3: Z gate
         match self.random_int(0..4) {
             0 => None,
-            1 => Some(QuantumGate::x(qubit)),
-            2 => Some(QuantumGate::y(qubit)),
-            3 => Some(QuantumGate::z(qubit)),
+            1 => Some(Gate::x(&[qubit])),
+            2 => Some(Gate::y(&[qubit])),
+            3 => Some(Gate::z(&[qubit])),
             _ => unreachable!(),
         }
     }

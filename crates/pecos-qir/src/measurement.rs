@@ -2,7 +2,7 @@ use crate::common::get_thread_id;
 use log::{debug, trace, warn};
 use pecos_core::errors::PecosError;
 use pecos_engines::byte_message::ByteMessage;
-use pecos_engines::byte_message::QuantumCmd;
+use pecos_engines::core::record_data::RecordData;
 use pecos_engines::core::shot_results::ShotResult;
 use std::collections::HashMap;
 
@@ -202,32 +202,30 @@ impl ResultNameMap {
         self.name_to_result_ids.keys().cloned().collect()
     }
 
-    /// Process a QIR command to extract result naming information
+    /// Process record data to extract result naming information
     ///
     /// # Arguments
     ///
-    /// * `cmd` - The QIR command to process
-    pub fn process_command(&mut self, cmd: &QuantumCmd) {
-        if let QuantumCmd::Record(record_data) = cmd {
-            // Handle different types of record data
-            match record_data {
-                pecos_engines::RecordData::ResultRecord(result_id, Some(label)) => {
-                    // This is a result record with a name
-                    self.register_named_result(*result_id, label.clone());
-                }
-                pecos_engines::RecordData::RawRecord(cmd_str) => {
-                    // Parse raw record commands to extract result naming information
-                    let parts: Vec<&str> = cmd_str.split_whitespace().collect();
-                    if parts.len() >= 3 && parts[0] == "RECORD" {
-                        if let Ok(result_id) = parts[1].parse::<usize>() {
-                            // This is a result record with a name
-                            let name = parts[2].to_string();
-                            self.register_named_result(result_id, name);
-                        }
+    /// * `record_data` - The record data to process
+    pub fn process_record_data(&mut self, record_data: &RecordData) {
+        // Handle different types of record data
+        match record_data {
+            RecordData::ResultRecord(result_id, Some(label)) => {
+                // This is a result record with a name
+                self.register_named_result(*result_id, label.clone());
+            }
+            RecordData::RawRecord(cmd_str) => {
+                // Parse raw record commands to extract result naming information
+                let parts: Vec<&str> = cmd_str.split_whitespace().collect();
+                if parts.len() >= 3 && parts[0] == "RECORD" {
+                    if let Ok(result_id) = parts[1].parse::<usize>() {
+                        // This is a result record with a name
+                        let name = parts[2].to_string();
+                        self.register_named_result(result_id, name);
                     }
                 }
-                _ => {}
             }
+            _ => {}
         }
     }
 }

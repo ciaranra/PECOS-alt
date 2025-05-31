@@ -11,7 +11,7 @@ pub mod quantum;
 pub mod quantum_system;
 
 // Re-exports for commonly used types
-pub use byte_message::{ByteMessage, ByteMessageBuilder, GateType, QuantumGate};
+pub use byte_message::{ByteMessage, ByteMessageBuilder, Gate, GateType};
 pub use core::record_data::RecordData;
 pub use core::shot_results::{ShotResult, ShotResults};
 pub use engine::Engine;

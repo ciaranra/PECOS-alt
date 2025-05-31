@@ -18,7 +18,8 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::missing_panics_doc)]
 
-use crate::byte_message::{ByteMessage, ByteMessageBuilder, QuantumGate};
+use crate::Gate;
+use crate::byte_message::{ByteMessage, ByteMessageBuilder};
 
 /// Helper trait for validating probability values
 pub trait ProbabilityValidator {
@@ -59,7 +60,7 @@ pub struct NoiseUtils;
 #[derive(Debug)]
 pub struct SingleQubitNoiseResult {
     /// Optional quantum gate to apply (None if only leakage)
-    pub gate: Option<QuantumGate>,
+    pub gate: Option<Gate>,
     /// Whether the qubit leaked
     pub qubit_leaked: bool,
 }
@@ -67,7 +68,7 @@ pub struct SingleQubitNoiseResult {
 impl SingleQubitNoiseResult {
     /// Creates a new `SingleQubitNoiseResult` with a Pauli gate and no leakage
     #[must_use]
-    pub fn with_gate(gate: QuantumGate) -> Self {
+    pub fn with_gate(gate: Gate) -> Self {
         Self {
             gate: Some(gate),
             qubit_leaked: false,
@@ -99,7 +100,7 @@ impl SingleQubitNoiseResult {
 #[derive(Debug)]
 pub struct TwoQubitNoiseResult {
     /// Quantum gates to apply (None if operations are just leakage or identity)
-    pub gates: Option<Vec<QuantumGate>>,
+    pub gates: Option<Vec<Gate>>,
     /// Whether the first qubit leaked
     pub qubit0_leaked: bool,
     /// Whether the second qubit leaked
@@ -112,7 +113,7 @@ impl TwoQubitNoiseResult {
     pub fn with_leakage(
         qubit0_leaked: bool,
         qubit1_leaked: bool,
-        gates: Option<Vec<QuantumGate>>,
+        gates: Option<Vec<Gate>>,
     ) -> Self {
         Self {
             gates,
@@ -123,7 +124,7 @@ impl TwoQubitNoiseResult {
 
     /// Creates a new `TwoQubitNoiseResult` with just gates and no leakage
     #[must_use]
-    pub fn with_gates(gates: Vec<QuantumGate>) -> Self {
+    pub fn with_gates(gates: Vec<Gate>) -> Self {
         Self {
             gates: Some(gates),
             qubit0_leaked: false,
@@ -169,58 +170,67 @@ impl NoiseUtils {
     /// Panics if:
     /// - `gate` is `None` when processing a measurement gate
     /// - The gate type is invalid or has insufficient parameters/qubits for the operation
-    pub fn add_gate_to_builder(builder: &mut ByteMessageBuilder, gate: &QuantumGate) {
+    pub fn add_gate_to_builder(builder: &mut ByteMessageBuilder, gate: &Gate) {
         use crate::byte_message::GateType;
 
         match gate.gate_type {
             // Single-qubit gates that operate directly on qubit lists
             GateType::X => {
-                builder.add_x(&gate.qubits);
+                let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| **q).collect();
+                builder.add_x(&qubits_usize);
             }
             GateType::Y => {
-                builder.add_y(&gate.qubits);
+                let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| **q).collect();
+                builder.add_y(&qubits_usize);
             }
             GateType::Z => {
-                builder.add_z(&gate.qubits);
+                let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| **q).collect();
+                builder.add_z(&qubits_usize);
             }
             GateType::H => {
-                builder.add_h(&gate.qubits);
+                let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| **q).collect();
+                builder.add_h(&qubits_usize);
             }
             GateType::Prep => {
-                builder.add_prep(&gate.qubits);
+                let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| **q).collect();
+                builder.add_prep(&qubits_usize);
             }
 
             // Two-qubit gates that need qubit validation
             GateType::CX if gate.qubits.len() >= 2 => {
-                builder.add_cx(&[gate.qubits[0]], &[gate.qubits[1]]);
+                builder.add_cx(&[*gate.qubits[0]], &[*gate.qubits[1]]);
             }
             GateType::SZZ if gate.qubits.len() >= 2 => {
-                builder.add_szz(&[gate.qubits[0]], &[gate.qubits[1]]);
+                builder.add_szz(&[*gate.qubits[0]], &[*gate.qubits[1]]);
             }
             GateType::SZZdg if gate.qubits.len() >= 2 => {
-                builder.add_szzdg(&[gate.qubits[0]], &[gate.qubits[1]]);
+                builder.add_szzdg(&[*gate.qubits[0]], &[*gate.qubits[1]]);
             }
 
             // Gates with parameters that need validation
             GateType::RZ if !gate.params.is_empty() => {
-                builder.add_rz(gate.params[0], &gate.qubits);
+                let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| **q).collect();
+                builder.add_rz(gate.params[0], &qubits_usize);
             }
             GateType::RZZ if gate.qubits.len() >= 2 && !gate.params.is_empty() => {
-                builder.add_rzz(gate.params[0], &[gate.qubits[0]], &[gate.qubits[1]]);
+                builder.add_rzz(gate.params[0], &[*gate.qubits[0]], &[*gate.qubits[1]]);
             }
             GateType::R1XY if gate.params.len() >= 2 => {
-                builder.add_r1xy(gate.params[0], gate.params[1], &gate.qubits);
+                let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| **q).collect();
+                builder.add_r1xy(gate.params[0], gate.params[1], &qubits_usize);
             }
 
             // Measurement gates
             GateType::Measure if !gate.qubits.is_empty() => {
-                builder.add_measurements(&gate.qubits);
+                let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| **q).collect();
+                builder.add_measurements(&qubits_usize);
             }
 
             // Idle gates need special handling for qubit lists
             GateType::Idle if !gate.params.is_empty() => {
                 // Use gate params for idle time
-                builder.add_idle(gate.params[0], &gate.qubits);
+                let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| **q).collect();
+                builder.add_idle(gate.params[0], &qubits_usize);
             }
 
             // Invalid cases (not enough qubits, missing parameters, etc.)
@@ -262,7 +272,7 @@ impl NoiseUtils {
     /// # Returns
     /// A `ByteMessage` containing the gates
     #[must_use]
-    pub fn create_gate_message(gates: &[QuantumGate]) -> ByteMessage {
+    pub fn create_gate_message(gates: &[Gate]) -> ByteMessage {
         let mut builder = Self::create_quantum_builder();
         gates
             .iter()
@@ -331,15 +341,15 @@ impl NoiseUtils {
     /// * `qubit` - The qubit to apply the gate to
     ///
     /// # Returns
-    /// A `Result` containing either the created `QuantumGate` or an error if an invalid Pauli is provided
+    /// A `Result` containing either the created `GateCommand` or an error if an invalid Pauli is provided
     ///
     /// # Errors
     /// Returns an error if the pauli string is not one of "X", "Y", or "Z"
-    pub fn create_pauli_gate(pauli: &str, qubit: usize) -> Result<QuantumGate, String> {
+    pub fn create_pauli_gate(pauli: &str, qubit: usize) -> Result<Gate, String> {
         match pauli {
-            "X" => Ok(QuantumGate::x(qubit)),
-            "Y" => Ok(QuantumGate::y(qubit)),
-            "Z" => Ok(QuantumGate::z(qubit)),
+            "X" => Ok(Gate::x(&[qubit])),
+            "Y" => Ok(Gate::y(&[qubit])),
+            "Z" => Ok(Gate::z(&[qubit])),
             _ => Err(format!("Invalid Pauli operator: {pauli}")),
         }
     }
@@ -384,23 +394,9 @@ mod tests {
 
     #[test]
     fn test_noise_utils_create_gate_message() {
-        use crate::byte_message::GateType;
-        use crate::byte_message::QuantumGate;
+        use crate::Gate;
 
-        let gates = vec![
-            QuantumGate {
-                gate_type: GateType::X,
-                qubits: vec![0],
-                params: vec![],
-                noiseless: false,
-            },
-            QuantumGate {
-                gate_type: GateType::Y,
-                qubits: vec![1],
-                params: vec![],
-                noiseless: false,
-            },
-        ];
+        let gates = vec![Gate::x(&[0]), Gate::y(&[1])];
 
         let message = NoiseUtils::create_gate_message(&gates);
         let parsed_gates = message.parse_quantum_operations().unwrap();
@@ -410,6 +406,7 @@ mod tests {
     #[test]
     fn test_prep_functions() {
         use crate::byte_message::GateType;
+        use pecos_core::QubitId;
 
         // Test preparation to |0⟩
         let mut builder = NoiseUtils::create_quantum_builder();
@@ -420,7 +417,7 @@ mod tests {
         // Should have one Prep gate
         assert_eq!(parsed_gates.len(), 1);
         assert_eq!(parsed_gates[0].gate_type, GateType::Prep);
-        assert_eq!(parsed_gates[0].qubits, vec![0]);
+        assert_eq!(parsed_gates[0].qubits, vec![QubitId(0)]);
 
         // Test preparation to |1⟩
         let mut builder = NoiseUtils::create_quantum_builder();
@@ -431,9 +428,9 @@ mod tests {
         // Should have two gates: Prep followed by X
         assert_eq!(parsed_gates.len(), 2);
         assert_eq!(parsed_gates[0].gate_type, GateType::Prep);
-        assert_eq!(parsed_gates[0].qubits, vec![1]);
+        assert_eq!(parsed_gates[0].qubits, vec![QubitId(1)]);
         assert_eq!(parsed_gates[1].gate_type, GateType::X);
-        assert_eq!(parsed_gates[1].qubits, vec![1]);
+        assert_eq!(parsed_gates[1].qubits, vec![QubitId(1)]);
     }
 
     #[test]

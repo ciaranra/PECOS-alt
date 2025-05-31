@@ -209,14 +209,15 @@ impl PyByteMessage {
 
             // Convert gate_type to a string
             dict.set_item("gate_type", op.gate_type.to_string())?;
-            dict.set_item("qubits", op.qubits.clone())?;
+            let qubits_as_usize: Vec<usize> = op.qubits.iter().map(|q| **q).collect();
+            dict.set_item("qubits", qubits_as_usize)?;
 
             // Handle params vector
             if !op.params.is_empty() {
                 dict.set_item("params", op.params.clone())?;
             }
 
-            // result_id no longer exists on QuantumGate
+            // result_id no longer exists on GateCommand
 
             results.push(dict.into());
         }

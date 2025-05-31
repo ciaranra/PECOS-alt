@@ -1,15 +1,17 @@
 use crate::byte_message::builder::ByteMessageBuilder;
-use crate::byte_message::gate_type::{GateType, QuantumGate};
 use crate::byte_message::protocol::{
-    BatchHeader, MeasurementHeader, MeasurementResultHeader, MessageHeader, MessageType,
-    QuantumGateHeader, calc_padding,
+    BatchHeader, GateCommandHeader, MeasurementHeader, MeasurementResultHeader, MessageHeader,
+    MessageType, calc_padding,
 };
 use log::trace;
+use pecos_core::QubitId;
 use pecos_core::errors::PecosError;
+use pecos_core::gate_type::GateType;
+use pecos_core::gates::Gate;
 use std::mem::size_of;
 
 /// A message encoded using the PECOS byte protocol
-/// 
+///
 /// Uses Vec<u32> for guaranteed 4-byte alignment matching our protocol design
 #[derive(Clone)]
 pub struct ByteMessage {
@@ -20,31 +22,31 @@ pub struct ByteMessage {
 impl ByteMessage {
     /// Create a new `ByteMessage` from raw bytes
     #[must_use]
-    pub fn new(bytes: Vec<u8>) -> Self {
+    pub fn new(bytes: &[u8]) -> Self {
         let byte_len = bytes.len();
-        
+
         if byte_len == 0 {
             return Self {
                 data: Vec::new(),
                 byte_len: 0,
             };
         }
-        
+
         // Calculate word count (round up to 4-byte boundary)
-        let word_count = (byte_len + 3) / 4;
-        
+        let word_count = byte_len.div_ceil(4);
+
         // Create aligned storage
         let mut data = vec![0u32; word_count];
-        
+
         // Copy bytes into aligned storage
         let data_bytes = bytemuck::cast_slice_mut::<u32, u8>(&mut data);
-        data_bytes[..byte_len].copy_from_slice(&bytes);
-        
+        data_bytes[..byte_len].copy_from_slice(bytes);
+
         Self { data, byte_len }
     }
 
     /// Create a new `ByteMessage` from already-aligned u32 data
-    /// 
+    ///
     /// This method is used when receiving data from FFI boundaries where
     /// the data is already guaranteed to be 4-byte aligned.
     #[must_use]
@@ -58,7 +60,7 @@ impl ByteMessage {
         if self.byte_len == 0 {
             return &[];
         }
-        
+
         let all_bytes = bytemuck::cast_slice::<u32, u8>(&self.data);
         &all_bytes[..self.byte_len]
     }
@@ -69,7 +71,7 @@ impl ByteMessage {
         if self.byte_len == 0 {
             return Vec::new();
         }
-        
+
         let all_bytes = bytemuck::cast_slice::<u32, u8>(&self.data);
         all_bytes[..self.byte_len].to_vec()
     }
@@ -132,7 +134,7 @@ impl ByteMessage {
     ///
     /// # Arguments
     ///
-    /// * `gates` - A slice of `QuantumGate` objects
+    /// * `gates` - A slice of `GateCommand` objects
     ///
     /// # Returns
     ///
@@ -148,19 +150,58 @@ impl ByteMessage {
     ///
     /// ```
     /// use pecos_engines::byte_message::ByteMessage;
-    /// use pecos_engines::byte_message::QuantumGate;
+    /// use pecos_engines::byte_message::Gate;
     ///
     /// // Create a circuit with H and CX gates
     /// let gates = vec![
-    ///     QuantumGate::h(0),
-    ///     QuantumGate::cx(0, 1),
+    ///     Gate::h(&[0]),
+    ///     Gate::cx(&[(0, 1)])
     /// ];
     ///
     /// let message = ByteMessage::create_circuit_from_quantum_gates(&gates).unwrap();
     /// ```
-    pub fn create_circuit_from_quantum_gates(gates: &[QuantumGate]) -> Result<Self, PecosError> {
+    pub fn create_circuit_from_quantum_gates(gates: &[Gate]) -> Result<Self, PecosError> {
         let mut builder = Self::quantum_operations_builder();
-        builder.add_quantum_gates(gates);
+        builder.add_gate_commands(gates);
+        Ok(builder.build())
+    }
+
+    /// Create a new message with a circuit of gate commands
+    ///
+    /// This is a convenience method that creates a new message with multiple gate commands
+    /// representing a quantum circuit using the new flat `GateCommand` structure.
+    ///
+    /// # Arguments
+    ///
+    /// * `gates` - A slice of `GateCommand` objects
+    ///
+    /// # Returns
+    ///
+    /// A Result containing a `ByteMessage` with the circuit if successful, or a `PecosError` if there was an error.
+    ///
+    /// # Errors
+    ///
+    /// This function may return a `PecosError` if:
+    /// - There is an error adding the gates to the builder
+    /// - There is an error building the message
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use pecos_engines::byte_message::ByteMessage;
+    /// use pecos_engines::byte_message::Gate;
+    ///
+    /// // Create a circuit with H and CX gates
+    /// let gates = vec![
+    ///     Gate::h(&[0]),
+    ///     Gate::cx(&[(0, 1)])
+    /// ];
+    ///
+    /// let message = ByteMessage::create_circuit_from_gate_commands(&gates).unwrap();
+    /// ```
+    pub fn create_circuit_from_gate_commands(gates: &[Gate]) -> Result<Self, PecosError> {
+        let mut builder = Self::quantum_operations_builder();
+        builder.add_gate_commands(gates);
         Ok(builder.build())
     }
 
@@ -237,16 +278,16 @@ impl ByteMessage {
     ///
     /// ```
     /// use pecos_engines::byte_message::ByteMessage;
-    /// use pecos_engines::byte_message::QuantumGate;
+    /// use pecos_engines::byte_message::Gate;
     ///
     /// // Create a message with an H gate on qubit 0
-    /// let gate = QuantumGate::h(0);
+    /// let gate = Gate::h(&[0]);
     /// let message = ByteMessage::create_with_quantum_gate(&gate);
     /// ```
     #[must_use]
-    pub fn create_with_quantum_gate(gate: &QuantumGate) -> Self {
+    pub fn create_with_quantum_gate(gate: &Gate) -> Self {
         let mut builder = Self::quantum_operations_builder();
-        builder.add_quantum_gate(gate);
+        builder.add_gate_command(gate);
         builder.build()
     }
 
@@ -401,7 +442,8 @@ impl ByteMessage {
         }
 
         // Parse batch header - guaranteed aligned at offset 0 due to Vec<u32> storage
-        let batch_header = *bytemuck::from_bytes::<BatchHeader>(&self.as_bytes()[0..size_of::<BatchHeader>()]);
+        let batch_header =
+            *bytemuck::from_bytes::<BatchHeader>(&self.as_bytes()[0..size_of::<BatchHeader>()]);
         if !batch_header.is_valid() {
             return Err(PecosError::Input("Invalid batch header".to_string()));
         }
@@ -460,7 +502,7 @@ impl ByteMessage {
     /// # Errors
     ///
     /// Returns an error if the message is malformed or contains invalid quantum operations.
-    pub fn parse_quantum_operations(&self) -> Result<Vec<QuantumGate>, PecosError> {
+    pub fn parse_quantum_operations(&self) -> Result<Vec<Gate>, PecosError> {
         if self.byte_len < size_of::<BatchHeader>() {
             return Err(PecosError::Input(
                 "Message too small for batch header".to_string(),
@@ -468,7 +510,8 @@ impl ByteMessage {
         }
 
         // Parse batch header - guaranteed aligned at offset 0 due to Vec<u32> storage
-        let batch_header = *bytemuck::from_bytes::<BatchHeader>(&self.as_bytes()[0..size_of::<BatchHeader>()]);
+        let batch_header =
+            *bytemuck::from_bytes::<BatchHeader>(&self.as_bytes()[0..size_of::<BatchHeader>()]);
         if !batch_header.is_valid() {
             return Err(PecosError::Input("Invalid batch header".to_string()));
         }
@@ -509,11 +552,11 @@ impl ByteMessage {
 
             // Process payload based on message type
             match msg_header.msg_type {
-                x if x == MessageType::QuantumGate as u8 => {
+                x if x == MessageType::GateCommand as u8 => {
                     if offset + msg_header.payload_size as usize <= self.byte_len {
                         let payload =
                             &self.as_bytes()[offset..offset + msg_header.payload_size as usize];
-                        match Self::parse_quantum_gate(payload) {
+                        match Self::parse_gate_command(payload) {
                             Ok(cmd) => commands.push(cmd),
                             Err(e) => {
                                 trace!("Error parsing quantum gate: {}", e);
@@ -525,7 +568,7 @@ impl ByteMessage {
                     if offset + msg_header.payload_size as usize <= self.byte_len {
                         let payload =
                             &self.as_bytes()[offset..offset + msg_header.payload_size as usize];
-                        match Self::parse_measurement(payload) {
+                        match Self::parse_measurement_command(payload) {
                             Ok(cmd) => commands.push(cmd),
                             Err(e) => {
                                 trace!("Error parsing measurement: {}", e);
@@ -534,6 +577,98 @@ impl ByteMessage {
                     }
                 }
                 _ => {}
+            }
+
+            // Move to next message
+            offset += msg_header.payload_size as usize;
+            let padding = calc_padding(msg_header.payload_size as usize, 4);
+            if padding > 0 {
+                offset += padding;
+            }
+        }
+
+        Ok(commands)
+    }
+
+    /// Parse gate commands from this message using the new flat `GateCommand` structure
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the message is malformed or contains invalid quantum operations.
+    pub fn parse_gate_commands(&self) -> Result<Vec<Gate>, PecosError> {
+        if self.byte_len < size_of::<BatchHeader>() {
+            return Err(PecosError::Input(
+                "Message too small for batch header".to_string(),
+            ));
+        }
+
+        // Parse batch header - guaranteed aligned at offset 0 due to Vec<u32> storage
+        let batch_header =
+            *bytemuck::from_bytes::<BatchHeader>(&self.as_bytes()[0..size_of::<BatchHeader>()]);
+        if !batch_header.is_valid() {
+            return Err(PecosError::Input("Invalid batch header".to_string()));
+        }
+
+        let mut commands = Vec::new();
+        let mut offset = size_of::<BatchHeader>();
+
+        for _ in 0..batch_header.msg_count {
+            if offset + size_of::<MessageHeader>() > self.byte_len {
+                break;
+            }
+
+            // Parse message header - guaranteed aligned due to padding
+            let msg_header = *bytemuck::from_bytes::<MessageHeader>(
+                &self.as_bytes()[offset..offset + size_of::<MessageHeader>()],
+            );
+            offset += size_of::<MessageHeader>();
+
+            // Handle batch control messages
+            if msg_header.msg_type == MessageType::BeginBatch as u8 {
+                continue;
+            }
+            if msg_header.msg_type == MessageType::EndBatch as u8 {
+                continue;
+            }
+
+            // Skip padding if needed
+            if msg_header.payload_size == 0 {
+                let padding = calc_padding(msg_header.payload_size as usize, 4);
+                if padding > 0 {
+                    offset += padding;
+                }
+                continue;
+            }
+
+            // Process payload based on message type
+            match msg_header.msg_type {
+                x if x == MessageType::GateCommand as u8 => {
+                    if offset + msg_header.payload_size as usize <= self.byte_len {
+                        let payload =
+                            &self.as_bytes()[offset..offset + msg_header.payload_size as usize];
+                        match Self::parse_gate_command(payload) {
+                            Ok(cmd) => commands.push(cmd),
+                            Err(e) => {
+                                trace!("Error parsing gate command: {}", e);
+                            }
+                        }
+                    }
+                }
+                x if x == MessageType::Measurement as u8 => {
+                    if offset + msg_header.payload_size as usize <= self.byte_len {
+                        let payload =
+                            &self.as_bytes()[offset..offset + msg_header.payload_size as usize];
+                        match Self::parse_measurement_command(payload) {
+                            Ok(cmd) => commands.push(cmd),
+                            Err(e) => {
+                                trace!("Error parsing measurement command: {}", e);
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    // Skip unknown message types
+                }
             }
 
             // Move to next message
@@ -560,7 +695,8 @@ impl ByteMessage {
         }
 
         // Parse batch header - guaranteed aligned at offset 0 due to Vec<u32> storage
-        let batch_header = *bytemuck::from_bytes::<BatchHeader>(&self.as_bytes()[0..size_of::<BatchHeader>()]);
+        let batch_header =
+            *bytemuck::from_bytes::<BatchHeader>(&self.as_bytes()[0..size_of::<BatchHeader>()]);
         if !batch_header.is_valid() {
             return Err(PecosError::Input("Invalid batch header".to_string()));
         }
@@ -590,9 +726,7 @@ impl ByteMessage {
             if payload_end > self.byte_len {
                 return Err(PecosError::Input(format!(
                     "Message payload extends beyond message bounds: offset={}, size={}, total_len={}",
-                    offset,
-                    payload_size,
-                    self.byte_len
+                    offset, payload_size, self.byte_len
                 )));
             }
 
@@ -643,39 +777,9 @@ impl ByteMessage {
         Ok(converted)
     }
 
-    /// Parse a quantum gate message payload
-    fn parse_quantum_gate(payload: &[u8]) -> Result<QuantumGate, PecosError> {
-        Self::validate_gate_payload_size(payload)?;
-
-        // Parse gate header - guaranteed aligned since payload starts at aligned boundary
-        let header = *bytemuck::from_bytes::<QuantumGateHeader>(&payload[0..size_of::<QuantumGateHeader>()]);
-        let num_qubits = header.num_qubits as usize;
-        let has_params = header.has_params != 0;
-        let gate_type = GateType::from(header.gate_type);
-
-        // Calculate sizes
-        let qubits_size = num_qubits * size_of::<u32>();
-        let qubits_offset = size_of::<QuantumGateHeader>();
-
-        Self::validate_qubit_indices_size(payload, qubits_offset, qubits_size)?;
-
-        // Parse qubit indices
-        let qubits = Self::parse_qubit_indices(payload, qubits_offset, num_qubits);
-
-        // Parse parameters if present
-        let params = if has_params {
-            let params_offset = qubits_offset + qubits_size;
-            Self::parse_gate_parameters(payload, params_offset, gate_type)?
-        } else {
-            Vec::new()
-        };
-
-        Ok(QuantumGate::new(gate_type, qubits, params))
-    }
-
     /// Validate if the payload has enough bytes for the gate header
     fn validate_gate_payload_size(payload: &[u8]) -> Result<(), PecosError> {
-        if payload.len() < size_of::<QuantumGateHeader>() {
+        if payload.len() < size_of::<GateCommandHeader>() {
             return Err(PecosError::Input(
                 "Quantum gate message payload too small".to_string(),
             ));
@@ -760,6 +864,7 @@ impl ByteMessage {
                 params.push(theta);
             }
             GateType::Measure
+            | GateType::I
             | GateType::X
             | GateType::Y
             | GateType::Z
@@ -804,8 +909,40 @@ impl ByteMessage {
         )
     }
 
-    /// Parse a measurement message payload
-    fn parse_measurement(payload: &[u8]) -> Result<QuantumGate, PecosError> {
+    /// Parse a quantum gate message payload to `GateCommand`
+    fn parse_gate_command(payload: &[u8]) -> Result<Gate, PecosError> {
+        Self::validate_gate_payload_size(payload)?;
+
+        // Parse gate header - guaranteed aligned since payload starts at aligned boundary
+        let header =
+            *bytemuck::from_bytes::<GateCommandHeader>(&payload[0..size_of::<GateCommandHeader>()]);
+        let num_qubits = header.num_qubits as usize;
+        let has_params = header.has_params != 0;
+        let gate_type = GateType::from(header.gate_type);
+
+        // Calculate sizes
+        let qubits_byte_size = num_qubits * size_of::<u32>();
+        let qubits_offset = size_of::<GateCommandHeader>();
+
+        Self::validate_qubit_indices_size(payload, qubits_offset, qubits_byte_size)?;
+
+        // Parse qubit indices and convert to QubitId
+        let qubits_usize = Self::parse_qubit_indices(payload, qubits_offset, num_qubits);
+        let qubits: Vec<QubitId> = qubits_usize.into_iter().map(QubitId::from).collect();
+
+        // Parse parameters if present
+        let params = if has_params {
+            let params_offset = qubits_offset + qubits_byte_size;
+            Self::parse_gate_parameters(payload, params_offset, gate_type)?
+        } else {
+            Vec::new()
+        };
+
+        Ok(Gate::new(gate_type, params, qubits))
+    }
+
+    /// Parse a measurement message payload to `GateCommand`
+    fn parse_measurement_command(payload: &[u8]) -> Result<Gate, PecosError> {
         if payload.len() < size_of::<MeasurementHeader>() {
             return Err(PecosError::Input(
                 "Measurement message payload too small".to_string(),
@@ -813,12 +950,12 @@ impl ByteMessage {
         }
 
         // Parse measurement header - guaranteed aligned since payload starts at aligned boundary
-        let header = *bytemuck::from_bytes::<MeasurementHeader>(&payload[0..size_of::<MeasurementHeader>()]);
+        let header =
+            *bytemuck::from_bytes::<MeasurementHeader>(&payload[0..size_of::<MeasurementHeader>()]);
         let qubit = header.qubit as usize;
 
-        Ok(QuantumGate::measure(qubit))
+        Ok(Gate::measure(&[qubit]))
     }
-
 
     /// Creates an empty `ByteMessage`
     ///
@@ -829,7 +966,10 @@ impl ByteMessage {
     /// A new empty `ByteMessage`
     #[must_use]
     pub fn create_empty() -> Self {
-        Self { data: Vec::new(), byte_len: 0 }
+        Self {
+            data: Vec::new(),
+            byte_len: 0,
+        }
     }
 
     /// Create a record data message with key-value pair
@@ -903,7 +1043,7 @@ impl ByteMessage {
         let mut offset = 0;
 
         while offset + size_of::<MessageHeader>() <= self.byte_len {
-            // Read message header - guaranteed aligned due to builder padding  
+            // Read message header - guaranteed aligned due to builder padding
             let msg_header = *bytemuck::from_bytes::<MessageHeader>(
                 &self.as_bytes()[offset..offset + size_of::<MessageHeader>()],
             );
@@ -952,6 +1092,7 @@ mod tests {
     use super::*;
     use crate::Engine;
     use crate::quantum::StateVecEngine;
+    use pecos_core::QubitId;
 
     #[test]
     fn test_bytemap_builder() {
@@ -965,9 +1106,35 @@ mod tests {
         let parsed_commands = message.parse_quantum_operations().unwrap();
         assert_eq!(parsed_commands.len(), 2);
         assert_eq!(parsed_commands[0].gate_type, GateType::H);
-        assert_eq!(parsed_commands[0].qubits, vec![0]);
+        assert_eq!(parsed_commands[0].qubits, vec![QubitId(0)]);
         assert_eq!(parsed_commands[1].gate_type, GateType::CX);
-        assert_eq!(parsed_commands[1].qubits, vec![0, 1]);
+        assert_eq!(parsed_commands[1].qubits, vec![QubitId(0), QubitId(1)]);
+    }
+
+    #[test]
+    fn test_gate_command_parsing() {
+        // Create a message with gate commands using the new interface
+        let gates = vec![Gate::h(&[0]), Gate::rz(0.5, &[1]), Gate::cx(&[(0, 1)])];
+        let message = ByteMessage::create_circuit_from_gate_commands(&gates).unwrap();
+
+        // Parse the message using the new gate command interface
+        let parsed_commands = message.parse_gate_commands().unwrap();
+        assert_eq!(parsed_commands.len(), 3);
+
+        // Verify H gate
+        assert_eq!(parsed_commands[0].gate_type, GateType::H);
+        assert_eq!(parsed_commands[0].qubits, vec![QubitId(0)]);
+        assert!(parsed_commands[0].params.is_empty());
+
+        // Verify RZ gate
+        assert_eq!(parsed_commands[1].gate_type, GateType::RZ);
+        assert_eq!(parsed_commands[1].qubits, vec![QubitId(1)]);
+        assert_eq!(parsed_commands[1].params, vec![0.5]);
+
+        // Verify CX gate
+        assert_eq!(parsed_commands[2].gate_type, GateType::CX);
+        assert_eq!(parsed_commands[2].qubits, vec![QubitId(0), QubitId(1)]);
+        assert!(parsed_commands[2].params.is_empty());
     }
 
     #[test]
@@ -1115,7 +1282,7 @@ mod tests {
 
         // Check the P command was correctly parsed
         assert_eq!(operations[3].gate_type, GateType::Prep);
-        assert_eq!(operations[3].qubits, vec![3]);
+        assert_eq!(operations[3].qubits, vec![QubitId(3)]);
         assert!(operations[3].params.is_empty());
     }
 
@@ -1158,13 +1325,17 @@ mod tests {
     fn test_alignment_guarantees() {
         // Test various buffer sizes to ensure alignment is guaranteed
         for size in [0, 1, 2, 3, 4, 5, 7, 8, 15, 16, 32, 1024] {
-            let test_data: Vec<u8> = (0..size).map(|i| (i % 256) as u8).collect();
-            let message = ByteMessage::new(test_data.clone());
+            let test_data: Vec<u8> = (0..size).map(|i| u8::try_from(i % 256).unwrap()).collect();
+            let message = ByteMessage::new(&test_data);
             let bytes = message.as_bytes();
-            
+
             // Verify data integrity
-            assert_eq!(bytes, &test_data[..], "Data integrity check failed for size {}", size);
-            
+            assert_eq!(
+                bytes,
+                &test_data[..],
+                "Data integrity check failed for size {size}"
+            );
+
             // Verify alignment - the internal buffer should be 4-byte aligned
             // We can't directly test the internal alignment, but we can test that
             // our bytemuck calls work without fallback by creating structures
@@ -1197,18 +1368,18 @@ mod tests {
         assert_eq!(operations.len(), 5);
 
         assert_eq!(operations[0].gate_type, GateType::Measure);
-        assert_eq!(operations[0].qubits, vec![3]);
+        assert_eq!(operations[0].qubits, vec![QubitId(3)]);
 
         assert_eq!(operations[1].gate_type, GateType::Measure);
-        assert_eq!(operations[1].qubits, vec![1]);
+        assert_eq!(operations[1].qubits, vec![QubitId(1)]);
 
         assert_eq!(operations[2].gate_type, GateType::Measure);
-        assert_eq!(operations[2].qubits, vec![4]);
+        assert_eq!(operations[2].qubits, vec![QubitId(4)]);
 
         assert_eq!(operations[3].gate_type, GateType::Measure);
-        assert_eq!(operations[3].qubits, vec![0]);
+        assert_eq!(operations[3].qubits, vec![QubitId(0)]);
 
         assert_eq!(operations[4].gate_type, GateType::Measure);
-        assert_eq!(operations[4].qubits, vec![2]);
+        assert_eq!(operations[4].qubits, vec![QubitId(2)]);
     }
 }
