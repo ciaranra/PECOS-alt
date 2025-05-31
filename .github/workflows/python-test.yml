@@ -9,20 +9,22 @@ env:
 on:
   push:
     branches: [ "master", "development", "dev" ]
-    paths:
-      - 'python/**'
-      - '.github/workflows/python-test.yml'
-      - '.typos.toml'
-      - 'ruff.toml'
-      - '.pre-commit-config.yaml'
+#    # Comment out paths to force run on all pushes
+#    paths:
+#      - 'python/**'
+#      - '.github/workflows/python-test.yml'
+#      - '.typos.toml'
+#      - 'ruff.toml'
+#      - '.pre-commit-config.yaml'
   pull_request:
     branches: [ "master", "development", "dev" ]
-    paths:
-      - 'python/**'
-      - '.github/workflows/python-test.yml'
-      - '.typos.toml'
-      - 'ruff.toml'
-      - '.pre-commit-config.yaml'
+#    # Comment out paths to force run on all PRs
+#    paths:
+#      - 'python/**'
+#      - '.github/workflows/python-test.yml'
+#      - '.typos.toml'
+#      - 'ruff.toml'
+#      - '.pre-commit-config.yaml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
