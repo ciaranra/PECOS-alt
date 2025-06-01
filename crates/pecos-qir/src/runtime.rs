@@ -327,6 +327,32 @@ pub unsafe extern "C" fn __quantum__qis__reset__body(qubit: usize) {
     });
 }
 
+/// Initialize the quantum runtime.
+///
+/// This function is called at the beginning of QIR programs to set up the runtime.
+///
+/// # Arguments
+///
+/// * `config` - Configuration string (currently unused, can be null)
+///
+/// # Safety
+///
+/// This function is called from C/C++ code. The config parameter can be null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__rt__initialize(_config: *const u8) {
+    // Reset global state for new program execution
+    NEXT_QUBIT_ID.store(0, Ordering::SeqCst);
+    NEXT_RESULT_ID.store(0, Ordering::SeqCst);
+    
+    // Clear any existing commands
+    let mut commands = COMMANDS.lock().unwrap();
+    commands.clear();
+    
+    if should_print_commands() {
+        println!("Quantum runtime initialized");
+    }
+}
+
 /// Allocates a new qubit.
 ///
 /// # Returns
