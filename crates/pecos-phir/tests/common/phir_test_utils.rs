@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use pecos_core::errors::PecosError;
-use pecos_engines::{MonteCarloEngine, NoiseModel, PassThroughNoiseModel, ShotResults};
+use pecos_engines::prelude::*;
 use pecos_phir::v0_1::ast::PHIRProgram;
 use pecos_phir::v0_1::engine::PHIREngine;
 

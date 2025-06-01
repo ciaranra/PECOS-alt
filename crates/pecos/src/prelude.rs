@@ -51,10 +51,17 @@ pub use pecos_qir::prelude::*;
 pub use pecos_qsim::prelude::*;
 
 // Re-export ShotResults directly from pecos_engines for easier access
-pub use pecos_engines::core::shot_results::ShotResults;
+pub use pecos_engines::shot_results::ShotResults;
 
 // Re-export crate-specific utilities
-pub use crate::{
-    engines::{run_sim, setup_qasm_engine, setup_qir_engine},
-    program::{ProgramType, detect_program_type, get_program_path, setup_engine_for_program},
+pub use crate::program::{
+    ProgramType, detect_program_type, get_program_path, setup_engine_for_program,
 };
+
+// Re-export setup functions from format-specific crates
+pub use pecos_phir::setup_phir_engine;
+pub use pecos_qasm::setup_qasm_engine;
+pub use pecos_qir::setup_qir_engine;
+
+// Re-export run_sim from pecos-engines
+pub use pecos_engines::run_sim;

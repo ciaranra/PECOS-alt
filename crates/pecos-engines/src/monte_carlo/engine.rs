@@ -12,11 +12,11 @@
 
 use crate::Engine;
 use crate::byte_message::ByteMessage;
-use crate::core::shot_results::{ShotResult, ShotResults};
 use crate::engine_system::{ClassicalEngine, ControlEngine, EngineStage, HybridEngine};
 use crate::hybrid::HybridEngineBuilder;
 use crate::noise::NoiseModel;
 use crate::quantum::{QuantumEngine, StateVecEngine};
+use crate::shot_results::{ShotResult, ShotResults};
 use log::debug;
 use pecos_core::errors::PecosError;
 use pecos_core::rng::RngManageable;

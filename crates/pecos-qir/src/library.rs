@@ -1,4 +1,3 @@
-use crate::common::get_thread_id;
 use libloading::{Library, Symbol};
 use log::{debug, warn};
 use pecos_core::errors::PecosError;
@@ -57,14 +56,10 @@ pub struct QirLibrary {
 
 impl Clone for QirLibrary {
     fn clone(&self) -> Self {
-        let thread_id = get_thread_id();
-        debug!(
-            "QIR Library: [Thread {}] Cloning library from {:?}",
-            thread_id, self.path
-        );
+        debug!("QIR Library: Cloning library from {:?}", self.path);
 
         // Load the library again from the same path with retries
-        match Self::load_library_with_retries(&self.path, 3, &thread_id) {
+        match Self::load_library_with_retries(&self.path, 3) {
             Ok(mut library) => {
                 // Copy the measurement results using clone_from for efficiency
                 library
@@ -106,35 +101,26 @@ impl QirLibrary {
     /// simultaneously.
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, PecosError> {
         let path = path.as_ref();
-        let thread_id = get_thread_id();
-
-        debug!(
-            "QIR: [Thread {}] Loading library from {:?}",
-            thread_id, path
-        );
+        debug!("QIR: Loading library from {:?}", path);
 
         // Check if the file exists
         if !path.exists() {
             return Err(Self::log_error(
                 "File not found",
                 format!("Path: {}", path.display()),
-                &thread_id,
             ));
         }
 
         // Try to load the library with retries
         let max_retries = 3;
-        Self::load_library_with_retries(path, max_retries, &thread_id)
+        Self::load_library_with_retries(path, max_retries)
     }
 
     /// Helper function to implement exponential backoff
-    fn sleep_with_backoff(retry_count: usize, thread_id: &str) {
+    fn sleep_with_backoff(retry_count: usize) {
         let sleep_duration =
             Duration::from_millis(100 * 2u64.pow(u32::try_from(retry_count).unwrap_or(0)));
-        debug!(
-            "QIR: [Thread {}] Sleeping for {:?} before retry",
-            thread_id, sleep_duration
-        );
+        debug!("QIR: Sleeping for {:?} before retry", sleep_duration);
         thread::sleep(sleep_duration);
     }
 
@@ -152,17 +138,12 @@ impl QirLibrary {
     /// # Returns
     ///
     /// * `Result<Self, PecosError>` - The loaded library if successful
-    fn load_library_with_retries(
-        path: &Path,
-        max_retries: usize,
-        thread_id: &str,
-    ) -> Result<Self, PecosError> {
+    fn load_library_with_retries(path: &Path, max_retries: usize) -> Result<Self, PecosError> {
         let mut retry_count = 0;
 
         while retry_count < max_retries {
             debug!(
-                "QIR: [Thread {}] Loading library attempt {}/{}",
-                thread_id,
+                "QIR: Loading library attempt {}/{}",
                 retry_count + 1,
                 max_retries
             );
@@ -170,10 +151,7 @@ impl QirLibrary {
             // Try to load the library using the path directly
             match unsafe { Library::new(path) } {
                 Ok(library) => {
-                    debug!(
-                        "QIR: [Thread {}] Successfully loaded library from {:?}",
-                        thread_id, path
-                    );
+                    debug!("QIR: Successfully loaded library from {:?}", path);
                     return Ok(Self {
                         library: Mutex::new(library),
                         path: path.to_path_buf(),
@@ -184,11 +162,10 @@ impl QirLibrary {
                     Self::log_error(
                         "Failed to load library",
                         format!("Attempt {}/{}: {}", retry_count + 1, max_retries, e),
-                        thread_id,
                     );
 
                     // Sleep before retrying, with exponential backoff
-                    Self::sleep_with_backoff(retry_count, thread_id);
+                    Self::sleep_with_backoff(retry_count);
                     retry_count += 1;
                 }
             }
@@ -198,7 +175,6 @@ impl QirLibrary {
         Err(Self::log_error(
             "Failed to load library after multiple attempts",
             format!("Max retries ({max_retries}) exceeded"),
-            thread_id,
         ))
     }
 
@@ -221,25 +197,18 @@ impl QirLibrary {
     ///
     /// This function will panic if the internal mutex is poisoned.
     pub fn call_function(&self, name: &[u8]) -> Result<i32, PecosError> {
-        let thread_id = get_thread_id();
-        debug!(
-            "QIR Library: [Thread {}] Calling function {:?}",
-            thread_id, name
-        );
+        debug!("QIR Library: Calling function {:?}", name);
 
         unsafe {
             // Get the function pointer
             let library_guard = self.library.lock().unwrap();
             let func: Symbol<unsafe extern "C" fn() -> i32> = library_guard
                 .get(name)
-                .map_err(|e| Self::log_error("Failed to get function", e, &thread_id))?;
+                .map_err(|e| Self::log_error("Failed to get function", e))?;
 
             // Call the function
             let result = func();
-            debug!(
-                "QIR Library: [Thread {}] Function call returned {}",
-                thread_id, result
-            );
+            debug!("QIR Library: Function call returned {}", result);
             Ok(result)
         }
     }
@@ -262,22 +231,18 @@ impl QirLibrary {
     ///
     /// This function will panic if the internal mutex is poisoned.
     pub fn reset(&self) -> Result<(), PecosError> {
-        let thread_id = get_thread_id();
-        debug!("QIR Library: [Thread {}] Resetting QIR runtime", thread_id);
+        debug!("QIR Library: Resetting QIR runtime");
 
         unsafe {
             // Get the function pointer
             let library_guard = self.library.lock().unwrap();
             let reset: Symbol<unsafe extern "C" fn()> = library_guard
                 .get(b"qir_runtime_reset")
-                .map_err(|e| Self::log_error("Failed to get reset function", e, &thread_id))?;
+                .map_err(|e| Self::log_error("Failed to get reset function", e))?;
 
             // Call the function
             reset();
-            debug!(
-                "QIR Library: [Thread {}] Successfully reset QIR runtime",
-                thread_id
-            );
+            debug!("QIR Library: Successfully reset QIR runtime");
         }
 
         Ok(())
@@ -303,14 +268,7 @@ impl QirLibrary {
     pub fn get_binary_commands(&self) -> Result<ByteMessage, PecosError> {
         use crate::runtime::FFIByteData;
 
-        let thread_id = get_thread_id();
-
-        debug!(
-            "QIR Library: [Thread {}] Getting binary commands",
-            thread_id
-        );
-
-        // Import the FFI structure
+        debug!("QIR Library: Getting binary commands");
 
         // Get the get_binary_commands function
         let library_guard = self.library.lock().unwrap();
@@ -318,11 +276,7 @@ impl QirLibrary {
             library_guard
                 .get(b"qir_runtime_get_binary_commands")
                 .map_err(|e| {
-                    Self::log_error(
-                        "Failed to get qir_runtime_get_binary_commands symbol",
-                        e,
-                        &thread_id,
-                    )
+                    Self::log_error("Failed to get qir_runtime_get_binary_commands symbol", e)
                 })?
         };
 
@@ -331,11 +285,7 @@ impl QirLibrary {
             library_guard
                 .get(b"qir_runtime_free_binary_commands")
                 .map_err(|e| {
-                    Self::log_error(
-                        "Failed to get qir_runtime_free_binary_commands symbol",
-                        e,
-                        &thread_id,
-                    )
+                    Self::log_error("Failed to get qir_runtime_free_binary_commands symbol", e)
                 })?
         };
 
@@ -345,7 +295,6 @@ impl QirLibrary {
             return Err(Self::log_error(
                 "Got null pointer from qir_runtime_get_binary_commands",
                 "Cannot retrieve commands",
-                &thread_id,
             ));
         }
 
@@ -372,17 +321,16 @@ impl QirLibrary {
     }
 
     /// Helper function to log errors with thread ID context
-    fn log_error<E: std::fmt::Display>(context: &str, error: E, thread_id: &str) -> PecosError {
+    fn log_error<E: std::fmt::Display>(context: &str, error: E) -> PecosError {
         let error_msg = format!("{context}: {error}");
-        warn!("QIR Library: [Thread {}] {}", thread_id, error_msg);
+        warn!("QIR Library: {}", error_msg);
         PecosError::Resource(error_msg.to_string())
     }
 }
 
 impl Drop for QirLibrary {
     fn drop(&mut self) {
-        let thread_id = get_thread_id();
-        debug!("QIR Library: [Thread {}] Dropping library", thread_id);
+        debug!("QIR Library: Dropping library");
     }
 }
 

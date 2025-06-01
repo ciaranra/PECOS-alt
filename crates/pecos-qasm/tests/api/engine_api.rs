@@ -1,5 +1,5 @@
 use pecos_core::errors::PecosError;
-use pecos_engines::{ClassicalEngine, Engine, ShotResult};
+use pecos_engines::prelude::*;
 use pecos_qasm::QASMEngine;
 use std::str::FromStr;
 

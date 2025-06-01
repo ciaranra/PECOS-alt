@@ -7,7 +7,7 @@ mod tests {
     use std::path::PathBuf;
 
     use pecos_engines::Engine;
-    use pecos_engines::core::shot_results::{ShotResult, ShotResults};
+    use pecos_engines::shot_results::{ShotResult, ShotResults};
     use pecos_phir::v0_1::ast::PHIRProgram;
     use pecos_phir::v0_1::engine::PHIREngine;
     use pecos_phir::v0_1::foreign_objects::ForeignObject;

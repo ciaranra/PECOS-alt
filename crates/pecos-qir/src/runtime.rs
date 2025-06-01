@@ -32,6 +32,12 @@ use std::thread;
 /// - Classical control operations
 /// - Logging and message output
 ///
+/// # Safety
+///
+/// All quantum gate functions are called from C/C++ code and assume that qubit IDs
+/// are valid and have been properly allocated. Calling with invalid qubit IDs may
+/// lead to undefined behavior.
+///
 /// Helper function to get the current thread ID as a string
 fn get_thread_id() -> String {
     format!("{:?}", thread::current().id())
@@ -93,6 +99,25 @@ where
     }
 }
 
+// Helper function for single-qubit gates
+fn apply_single_qubit_gate(
+    gate_name: &str,
+    qubit: usize,
+    apply_fn: impl FnOnce(&mut ByteMessageBuilder),
+) {
+    store_gate_command(&format!("{gate_name} {qubit}"), apply_fn);
+}
+
+// Helper function for two-qubit gates
+fn apply_two_qubit_gate(
+    gate_name: &str,
+    qubit1: usize,
+    qubit2: usize,
+    apply_fn: impl FnOnce(&mut ByteMessageBuilder),
+) {
+    store_gate_command(&format!("{gate_name} {qubit1} {qubit2}"), apply_fn);
+}
+
 // Quantum gate operations
 
 /// Applies a rotation around the Z-axis to the specified qubit.
@@ -136,82 +161,61 @@ pub unsafe extern "C" fn __quantum__qis__r1xy__body(theta: f64, phi: f64, qubit:
 
 /// Applies a Hadamard gate to the specified qubit.
 ///
-/// # Arguments
-///
-/// * `qubit` - The qubit index to apply the gate to
-///
 /// # Safety
 ///
 /// This function is called from C/C++ code and assumes that the qubit ID is valid
-/// and has been properly allocated. Calling with an invalid qubit ID may lead to
+/// and has been properly allocated. Calling with invalid qubit IDs may lead to
 /// undefined behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__h__body(qubit: usize) {
-    store_gate_command(&format!("H {qubit}"), |builder| {
+    apply_single_qubit_gate("H", qubit, |builder| {
         builder.add_h(&[qubit]);
     });
 }
 
 /// Applies an X gate to the specified qubit.
 ///
-/// # Arguments
-///
-/// * `qubit` - The qubit index to apply the gate to
-///
 /// # Safety
 ///
 /// This function is called from C/C++ code and assumes that the qubit ID is valid
-/// and has been properly allocated. Calling with an invalid qubit ID may lead to
+/// and has been properly allocated. Calling with invalid qubit IDs may lead to
 /// undefined behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__x__body(qubit: usize) {
-    store_gate_command(&format!("X {qubit}"), |builder| {
+    apply_single_qubit_gate("X", qubit, |builder| {
         builder.add_x(&[qubit]);
     });
 }
 
 /// Applies a Y gate to the specified qubit.
 ///
-/// # Arguments
-///
-/// * `qubit` - The qubit index to apply the gate to
-///
 /// # Safety
 ///
 /// This function is called from C/C++ code and assumes that the qubit ID is valid
-/// and has been properly allocated. Calling with an invalid qubit ID may lead to
+/// and has been properly allocated. Calling with invalid qubit IDs may lead to
 /// undefined behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__y__body(qubit: usize) {
-    store_gate_command(&format!("Y {qubit}"), |builder| {
+    apply_single_qubit_gate("Y", qubit, |builder| {
         builder.add_y(&[qubit]);
     });
 }
 
 /// Applies a Z gate to the specified qubit.
 ///
-/// # Arguments
-///
-/// * `qubit` - The qubit index to apply the gate to
-///
 /// # Safety
 ///
 /// This function is called from C/C++ code and assumes that the qubit ID is valid
-/// and has been properly allocated. Calling with an invalid qubit ID may lead to
+/// and has been properly allocated. Calling with invalid qubit IDs may lead to
 /// undefined behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__z__body(qubit: usize) {
-    store_gate_command(&format!("Z {qubit}"), |builder| {
+    apply_single_qubit_gate("Z", qubit, |builder| {
         builder.add_z(&[qubit]);
     });
 }
 
 /// Applies a controlled-X gate to the specified qubits.
-///
-/// # Arguments
-///
-/// * `control` - The control qubit index
-/// * `target` - The target qubit index
 ///
 /// # Safety
 ///
@@ -220,7 +224,7 @@ pub unsafe extern "C" fn __quantum__qis__z__body(qubit: usize) {
 /// undefined behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__cx__body(control: usize, target: usize) {
-    store_gate_command(&format!("CX {control} {target}"), |builder| {
+    apply_two_qubit_gate("CX", control, target, |builder| {
         builder.add_cx(&[control], &[target]);
     });
 }
@@ -251,11 +255,6 @@ pub unsafe extern "C" fn __quantum__qis__cz__body(control: usize, target: usize)
 
 /// Applies a SZZ gate to the specified qubits.
 ///
-/// # Arguments
-///
-/// * `qubit1` - The first qubit index
-/// * `qubit2` - The second qubit index
-///
 /// # Safety
 ///
 /// This function is called from C/C++ code and assumes that the qubit IDs are valid
@@ -263,7 +262,7 @@ pub unsafe extern "C" fn __quantum__qis__cz__body(control: usize, target: usize)
 /// undefined behavior.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__szz__body(qubit1: usize, qubit2: usize) {
-    store_gate_command(&format!("SZZ {qubit1} {qubit2}"), |builder| {
+    apply_two_qubit_gate("SZZ", qubit1, qubit2, |builder| {
         builder.add_szz(&[qubit1], &[qubit2]);
     });
 }
@@ -326,6 +325,38 @@ pub unsafe extern "C" fn __quantum__qis__reset__body(qubit: usize) {
     store_gate_command(&format!("PREP {qubit}"), |builder| {
         builder.add_prep(&[qubit]);
     });
+}
+
+/// Initialize the quantum runtime.
+///
+/// This function is called at the beginning of QIR programs to set up the runtime.
+///
+/// # Arguments
+///
+/// * `config` - Configuration string (currently unused, can be null)
+///
+/// # Safety
+///
+/// This function is called from C/C++ code. The config parameter can be null.
+///
+/// # Panics
+///
+/// This function will panic if the `MESSAGE_BUILDER` mutex is poisoned (i.e., if another
+/// thread panicked while holding the lock).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__rt__initialize(_config: *const u8) {
+    // Reset global state for new program execution
+    NEXT_QUBIT_ID.store(0, Ordering::SeqCst);
+    NEXT_RESULT_ID.store(0, Ordering::SeqCst);
+
+    // Reset the message builder to clear any existing commands
+    let mut builder = MESSAGE_BUILDER.lock().unwrap();
+    *builder = ByteMessageBuilder::new();
+    let _ = builder.for_quantum_operations();
+
+    if should_print_commands() {
+        println!("Quantum runtime initialized");
+    }
 }
 
 /// Allocates a new qubit.
