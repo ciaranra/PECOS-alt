@@ -338,16 +338,22 @@ pub unsafe extern "C" fn __quantum__qis__reset__body(qubit: usize) {
 /// # Safety
 ///
 /// This function is called from C/C++ code. The config parameter can be null.
+///
+/// # Panics
+///
+/// This function will panic if the `MESSAGE_BUILDER` mutex is poisoned (i.e., if another
+/// thread panicked while holding the lock).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__initialize(_config: *const u8) {
     // Reset global state for new program execution
     NEXT_QUBIT_ID.store(0, Ordering::SeqCst);
     NEXT_RESULT_ID.store(0, Ordering::SeqCst);
-    
-    // Clear any existing commands
-    let mut commands = COMMANDS.lock().unwrap();
-    commands.clear();
-    
+
+    // Reset the message builder to clear any existing commands
+    let mut builder = MESSAGE_BUILDER.lock().unwrap();
+    *builder = ByteMessageBuilder::new();
+    let _ = builder.for_quantum_operations();
+
     if should_print_commands() {
         println!("Quantum runtime initialized");
     }
