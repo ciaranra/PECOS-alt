@@ -18,7 +18,7 @@ fn test_bell_state_simulation() {
     "#;
 
     let results = run_qasm_sim(qasm, 1000, Some(42), Some(1), None, None).unwrap();
-    let c_values = results.get("c").unwrap();
+    let c_values = results.register_shots.get("c").unwrap();
 
     // Count occurrences of |00⟩ and |11⟩
     let mut count_00 = 0;
@@ -59,7 +59,7 @@ fn test_ghz_state_simulation() {
     "#;
 
     let results = run_qasm_sim(qasm, 1000, Some(42), Some(1), None, None).unwrap();
-    let c_values = results.get("c").unwrap();
+    let c_values = results.register_shots.get("c").unwrap();
 
     // Count occurrences of |000⟩ and |111⟩
     let mut count_000 = 0;
@@ -108,7 +108,7 @@ fn test_phase_kickback() {
     "#;
 
     let results = run_qasm_sim(qasm, 1000, Some(42), Some(1), None, None).unwrap();
-    let c_values = results.get("c").unwrap();
+    let c_values = results.register_shots.get("c").unwrap();
 
     // After phase kickback, control qubit should be |1⟩
     for &value in c_values {

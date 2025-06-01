@@ -70,13 +70,16 @@ fn test_x_gate_and_measure() {
         run_qasm_sim(qasm, 100, Some(42), Some(1), None, None).expect("Failed to run simulation");
 
     // Verify that qubit 10 is always measured as 1 (since X flips it)
-    let c_values = results.get("c").expect("Should have c register results");
+    let c_values = results
+        .register_shots
+        .get("c")
+        .expect("Should have c register results");
     assert_eq!(c_values.len(), 100, "Should have 100 shots");
 
     for shot in c_values {
         // Extract bit 10 from the result
-        let bit_10 = (shot >> 10) & 1;
-        assert_eq!(bit_10, 1, "Bit 10 should always be 1 after X gate");
+        let bit_10 = (shot >> 10) & 1u32;
+        assert_eq!(bit_10, 1u32, "Bit 10 should always be 1 after X gate");
     }
 }
 

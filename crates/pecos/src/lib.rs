@@ -84,3 +84,5 @@
 
 pub mod prelude;
 pub mod program;
+
+pub use pecos_qasm::run_qasm_sim;

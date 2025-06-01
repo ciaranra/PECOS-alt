@@ -15,7 +15,9 @@ fn test_bell_qasm() {
         measure q[1] -> c[1];
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
+    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None)
+        .unwrap()
+        .register_shots;
 
     assert!(results.contains_key("c"));
     assert_eq!(results["c"].len(), 10);
@@ -62,7 +64,9 @@ fn test_x_qasm() {
         measure w[0] -> d[0];
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
+    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None)
+        .unwrap()
+        .register_shots;
 
     assert!(
         results.contains_key("d"),
@@ -95,7 +99,9 @@ fn test_arbitrary_register_names() {
         measure bob[0] -> result[1];
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
+    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None)
+        .unwrap()
+        .register_shots;
 
     println!("Arbitrary register test results: {results:?}");
 
@@ -143,7 +149,9 @@ fn test_flips_multi_reg_qasm() {
         measure b -> d;
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
+    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None)
+        .unwrap()
+        .register_shots;
 
     assert!(
         results.contains_key("c"),
@@ -186,7 +194,9 @@ fn test_basic_arthmetic_qasm() {
         b = 0;
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
+    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None)
+        .unwrap()
+        .register_shots;
 
     println!("Arithmetic test results: {results:?}");
 
@@ -240,7 +250,9 @@ fn test_defaults_qasm() {
         measure q -> m;
     "#;
 
-    let results = run_qasm_sim(qasm, 5, Some(42), Some(1), None, None).unwrap();
+    let results = run_qasm_sim(qasm, 5, Some(42), Some(1), None, None)
+        .unwrap()
+        .register_shots;
 
     println!("Default test results: {results:?}");
 
@@ -281,7 +293,9 @@ fn test_basic_if_creg_statements_qasm() {
         if(b==0) a = 1 + 2;
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
+    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None)
+        .unwrap()
+        .register_shots;
 
     println!("If creg test results: {results:?}");
 
@@ -337,7 +351,9 @@ fn test_basic_if_qreg_statements_qasm() {
         measure q[0] -> a[1];
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
+    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None)
+        .unwrap()
+        .register_shots;
 
     println!("If creg test results: {results:?}");
 
@@ -390,7 +406,9 @@ fn test_cond_bell() {
         // c should be "10" == 2
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
+    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None)
+        .unwrap()
+        .register_shots;
 
     println!("Conditional test results: {results:?}");
 
@@ -430,7 +448,9 @@ fn test_classical_statement() {
 
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
+    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None)
+        .unwrap()
+        .register_shots;
 
     println!("Conditional test results: {results:?}");
 

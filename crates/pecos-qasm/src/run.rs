@@ -2,8 +2,7 @@ use crate::QASMEngine;
 use pecos_core::errors::PecosError;
 use pecos_engines::noise::NoiseModel;
 use pecos_engines::quantum::{QuantumEngine, StateVecEngine};
-use pecos_engines::{ClassicalEngine, MonteCarloEngine, PassThroughNoiseModel};
-use std::collections::HashMap;
+use pecos_engines::{ClassicalEngine, MonteCarloEngine, PassThroughNoiseModel, ShotResults};
 use std::str::FromStr;
 
 /// Run a QASM simulation with detailed control over noise model and quantum engine
@@ -29,7 +28,7 @@ pub fn run_qasm_sim(
     workers: Option<usize>,
     noise_model: Option<Box<dyn NoiseModel>>,
     quantum_engine: Option<Box<dyn QuantumEngine>>,
-) -> Result<HashMap<String, Vec<u32>>, PecosError> {
+) -> Result<ShotResults, PecosError> {
     let classical_engine = QASMEngine::from_str(qasm)?;
     let num_qubits = classical_engine.num_qubits();
 
@@ -40,15 +39,12 @@ pub fn run_qasm_sim(
     let quantum_engine =
         quantum_engine.unwrap_or_else(|| Box::new(StateVecEngine::new(num_qubits)));
 
-    let results = MonteCarloEngine::run_with_engines(
+    MonteCarloEngine::run_with_engines(
         Box::new(classical_engine),
         noise_model,
         quantum_engine,
         shots,
         workers.unwrap_or(1),
         seed,
-    )?
-    .register_shots;
-
-    Ok(results)
+    )
 }

@@ -53,6 +53,7 @@ pub mod program;
 pub mod run;
 pub mod util;
 
+pub use crate::run::run_qasm_sim;
 pub use ast::{Expression, GateOperation, Operation, OperationDisplay};
 pub use engine::QASMEngine;
 pub use engine_builder::QASMEngineBuilder;

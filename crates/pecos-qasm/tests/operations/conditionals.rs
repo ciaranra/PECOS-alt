@@ -31,7 +31,10 @@ fn test_conditional_execution() -> Result<(), Box<dyn Error>> {
 
     // Use the simulation helper instead of direct engine usage
     let results = run_qasm_sim(qasm, 100, Some(42), Some(1), None, None)?;
-    let c_values = results.get("c").expect("Should have c register results");
+    let c_values = results
+        .register_shots
+        .get("c")
+        .expect("Should have c register results");
 
     // Count different outcomes
     let mut both_ones = 0;
@@ -76,7 +79,10 @@ fn test_simple_if() {
     let results =
         run_qasm_sim(qasm, 100, Some(42), Some(1), None, None).expect("Failed to run simulation");
 
-    let c_values = results.get("c").expect("Should have c register results");
+    let c_values = results
+        .register_shots
+        .get("c")
+        .expect("Should have c register results");
 
     // Should always get c = 11 (binary) = 3 (decimal)
     for &value in c_values {
@@ -111,7 +117,7 @@ fn test_exact_issue() {
 
     // Verify we get results
     assert!(
-        results.contains_key("c"),
+        results.register_shots.contains_key("c"),
         "Should have classical register c"
     );
 }
@@ -140,7 +146,10 @@ fn test_conditional_classical_operations() {
 
     let results =
         run_qasm_sim(qasm, 100, Some(42), Some(1), None, None).expect("Failed to run simulation");
-    let c_values = results.get("c").expect("Should have c register results");
+    let c_values = results
+        .register_shots
+        .get("c")
+        .expect("Should have c register results");
 
     // c[0] should always be 1 (from x q[0])
     for &value in c_values {
@@ -171,7 +180,10 @@ fn test_conditional_comparison_operators() {
 
     let results =
         run_qasm_sim(qasm, 100, Some(42), Some(1), None, None).expect("Failed to run simulation");
-    let c_values = results.get("c").expect("Should have c register results");
+    let c_values = results
+        .register_shots
+        .get("c")
+        .expect("Should have c register results");
 
     // Only q[0] and q[2] should be flipped
     for &value in c_values {
@@ -197,7 +209,10 @@ fn test_nested_conditionals() {
 
     let results =
         run_qasm_sim(qasm, 100, Some(42), Some(1), None, None).expect("Failed to run simulation");
-    let c_values = results.get("c").expect("Should have c register results");
+    let c_values = results
+        .register_shots
+        .get("c")
+        .expect("Should have c register results");
 
     // q[0] should be flipped
     for &value in c_values {
@@ -225,7 +240,10 @@ fn test_conditional_with_barriers() {
 
     let results =
         run_qasm_sim(qasm, 100, Some(42), Some(1), None, None).expect("Failed to run simulation");
-    let c_values = results.get("c").expect("Should have c register results");
+    let c_values = results
+        .register_shots
+        .get("c")
+        .expect("Should have c register results");
 
     // When c[0] is 1, c[1] should also be 1
     for &value in c_values {
@@ -262,7 +280,7 @@ fn test_conditional_feature_flags() {
     let results =
         run_qasm_sim(qasm, 100, Some(42), Some(1), None, None).expect("Failed to run simulation");
     assert!(
-        results.contains_key("c"),
+        results.register_shots.contains_key("c"),
         "Should have classical register c"
     );
 }
@@ -287,7 +305,10 @@ fn test_if_with_multiple_statements() {
 
     let results =
         run_qasm_sim(qasm, 100, Some(42), Some(1), None, None).expect("Failed to run simulation");
-    let c_values = results.get("c").expect("Should have c register results");
+    let c_values = results
+        .register_shots
+        .get("c")
+        .expect("Should have c register results");
 
     // c[0] and c[1] should always be 1
     for &value in c_values {
