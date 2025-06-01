@@ -77,7 +77,8 @@
 mod builder;
 mod default;
 
-use crate::byte_message::{ByteMessage, ByteMessageBuilder, QuantumGate, gate_type::GateType};
+use crate::Gate;
+use crate::byte_message::{ByteMessage, ByteMessageBuilder, GateType};
 use crate::engine_system::{ControlEngine, EngineStage};
 use crate::noise::general::builder::GeneralNoiseModelBuilder;
 use crate::noise::noise_rng::NoiseRng;
@@ -86,6 +87,7 @@ use crate::noise::utils::ProbabilityValidator;
 use crate::noise::weighted_sampler::{SingleQubitWeightedSampler, TwoQubitWeightedSampler};
 use crate::noise::{NoiseModel, RngManageable};
 use log::trace;
+use pecos_core::QubitId;
 use pecos_core::errors::PecosError;
 use rand_chacha::ChaCha8Rng;
 use std::any::Any;
@@ -482,7 +484,7 @@ impl GeneralNoiseModel {
             if self.is_noiseless_gate(&gate.gate_type) {
                 // Just add the gate as-is, without any noise
                 // TODO: Still apply leakage rules
-                builder.add_quantum_gate(&gate);
+                builder.add_gate_command(&gate);
                 trace!("Skipping noise for noiseless gate: {:?}", gate.gate_type);
                 continue;
             }
@@ -503,18 +505,27 @@ impl GeneralNoiseModel {
 
                     // TODO: Implement prep crosstalk when needed
                 }
-                GateType::R1XY
-                | GateType::RZ
-                | GateType::H
-                | GateType::X
-                | GateType::Y
-                | GateType::Z
-                | GateType::U => {
+                GateType::Measure => {
+                    // Track which qubits are being measured for leakage handling
+                    self.measured_qubits
+                        .extend(gate.qubits.iter().map(|q| usize::from(*q)));
+                    // Measurement noise is handled in apply_noise_on_continue_processing
+                    // We still need to add the original gate here
+                    builder.add_gate_command(&gate);
+                }
+                GateType::I => {
+                    let err_msg = format!(
+                        "Identity is currently an unsupported gate type: {:?}",
+                        gate.gate_type
+                    );
+                    err = Some(err_msg);
+                }
+                _ if gate.is_single_qubit() => {
                     self.apply_sq_faults(&gate, &mut builder);
                 }
-                GateType::RZZ | GateType::SZZ | GateType::SZZdg | GateType::CX => {
-                    // For RZZ gates, use angle-dependent error rates
-                    let p2 = if gate.gate_type == GateType::RZZ {
+                _ if gate.is_two_qubit() => {
+                    // For angle-dependent error rates
+                    let p2 = if gate.classical_arity() == 1 {
                         let angle = gate.params[0];
                         self.p2_angle_error_rate(angle)
                     } else {
@@ -523,19 +534,9 @@ impl GeneralNoiseModel {
 
                     self.apply_tq_faults(&gate, p2, &mut builder);
                 }
-                GateType::Measure => {
-                    // Track which qubits are being measured for leakage handling
-                    self.measured_qubits.extend(&gate.qubits);
-                    // Measurement noise is handled in apply_noise_on_continue_processing
-                    // We still need to add the original gate here
-                    builder.add_quantum_gate(&gate);
-                }
-                // This wildcard pattern is currently unreachable since all existing gate types
-                // are handled in the cases above. We keep it as a safeguard for any future
-                // gate types that might be added to the GateType enum.
-                #[allow(unreachable_patterns)]
                 _ => {
-                    let err_msg = format!("Unsupported gate type: {:?}", gate.gate_type);
+                    // This should never happen since we've covered all cases above
+                    let err_msg = format!("Unhandled gate type: {:?}", gate.gate_type);
                     err = Some(err_msg);
                 }
             }
@@ -620,26 +621,28 @@ impl GeneralNoiseModel {
 
     pub fn apply_idle_faults(
         &mut self,
-        gate: &QuantumGate,
+        gate: &Gate,
         linear_rate: f64,
         quadratic_rate: f64,
         builder: &mut ByteMessageBuilder,
     ) {
         if linear_rate > f64::EPSILON {
+            let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| usize::from(*q)).collect();
             self.apply_idle_linear_stochastic_noise(
                 linear_rate,
                 gate.idle_duration(),
-                &gate.qubits,
+                &qubits_usize,
                 builder,
             );
         }
 
         if quadratic_rate.abs() > f64::EPSILON {
             // TODO: add test
+            let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| usize::from(*q)).collect();
             self.apply_idle_quadratic_dephasing(
                 quadratic_rate,
                 gate.idle_duration(),
-                &gate.qubits,
+                &qubits_usize,
                 builder,
             );
         }
@@ -661,10 +664,10 @@ impl GeneralNoiseModel {
 
                 if result.has_leakage() {
                     if let Some(gate) = self.leak(*qubit) {
-                        builder.add_quantum_gate(&gate);
+                        builder.add_gate_command(&gate);
                     }
                 } else if let Some(gate) = result.gate {
-                    builder.add_quantum_gate(&gate);
+                    builder.add_gate_command(&gate);
                 }
             }
         }
@@ -727,17 +730,18 @@ impl GeneralNoiseModel {
     ///
     /// In ion trap systems, this models imperfect optical pumping or errors in the initial
     /// state preparation process that fails to correctly initialize the qubit.
-    pub fn apply_prep_faults(&mut self, gate: &QuantumGate, builder: &mut ByteMessageBuilder) {
+    pub fn apply_prep_faults(&mut self, gate: &Gate, builder: &mut ByteMessageBuilder) {
         // unleaking qubits - preparation resets leaked qubits to the zero state
         for &qubit in &gate.qubits {
-            if self.is_leaked(qubit) {
-                self.mark_as_unleaked(qubit);
+            let qubit_usize = usize::from(qubit);
+            if self.is_leaked(qubit_usize) {
+                self.mark_as_unleaked(qubit_usize);
                 trace!("Qubit {} unleaked due to preparation", qubit);
             }
         }
 
         // Unlike SQ and TQ gates, state prep always occurs even if the qubit leaked
-        builder.add_quantum_gate(gate);
+        builder.add_gate_command(gate);
 
         // Skip if probability is zero
         if self.p_prep <= 0.0 {
@@ -750,12 +754,12 @@ impl GeneralNoiseModel {
             if self.rng.occurs(self.p_prep) {
                 // Determine if this error should cause leakage
                 if self.rng.occurs(self.p_prep_leak_ratio) {
-                    if let Some(gate) = self.leak(qubit) {
-                        builder.add_quantum_gate(&gate);
+                    if let Some(gate) = self.leak(usize::from(qubit)) {
+                        builder.add_gate_command(&gate);
                     }
                     trace!("Qubit {} leaked during preparation", qubit);
                 } else {
-                    builder.add_x(&[qubit]);
+                    builder.add_x(&[*qubit]);
                     trace!("Preparation error on qubit {}", qubit);
                 }
             }
@@ -775,7 +779,7 @@ impl GeneralNoiseModel {
     /// # Panics
     ///
     /// Panics if sampling from the Pauli model fails or if an invalid Pauli operator is encountered.
-    pub fn apply_sq_faults(&mut self, gate: &QuantumGate, builder: &mut ByteMessageBuilder) {
+    pub fn apply_sq_faults(&mut self, gate: &Gate, builder: &mut ByteMessageBuilder) {
         let mut noise = Vec::new();
         let mut removed_gates = false;
         let mut original_gate_qubits: Vec<usize> = Vec::new();
@@ -783,7 +787,7 @@ impl GeneralNoiseModel {
         for &qubit in &gate.qubits {
             // Track whether to add the original gate
             let mut add_original_gate = true;
-            let has_leakage = self.is_leaked(qubit);
+            let has_leakage = self.is_leaked(usize::from(qubit));
 
             if has_leakage {
                 add_original_gate = false;
@@ -794,17 +798,19 @@ impl GeneralNoiseModel {
                 if self.rng.occurs(self.p1_emission_ratio) {
                     // If qubit has leaked and spontaneous emission has occurred... seep the qubit
                     if has_leakage {
-                        if let Some(gates) = self.seep(qubit, self.p1_seepage_prob) {
+                        if let Some(gates) = self.seep(usize::from(qubit), self.p1_seepage_prob) {
                             noise.extend(gates);
                         }
                     } else {
                         add_original_gate = false;
 
-                        let result = self.p1_emission_model.sample_gates(&mut self.rng, qubit);
+                        let result = self
+                            .p1_emission_model
+                            .sample_gates(&mut self.rng, usize::from(qubit));
 
                         if result.has_leakage() {
                             // Handle leakage
-                            if let Some(gate) = self.leak(qubit) {
+                            if let Some(gate) = self.leak(usize::from(qubit)) {
                                 noise.push(gate);
                             }
                         } else if let Some(gate) = result.gate {
@@ -816,7 +822,9 @@ impl GeneralNoiseModel {
                 } else if !has_leakage {
                     // Pauli noise
                     // TODO: Check if there is any assurance that the model is only Pauli noise
-                    let result = self.p1_pauli_model.sample_gates(&mut self.rng, qubit);
+                    let result = self
+                        .p1_pauli_model
+                        .sample_gates(&mut self.rng, usize::from(qubit));
                     if let Some(gate) = result.gate {
                         noise.push(gate);
                         trace!("Applied Pauli error to qubit {}", qubit);
@@ -826,7 +834,7 @@ impl GeneralNoiseModel {
 
             // Add the original gate only if there were no leakage errors
             if add_original_gate {
-                original_gate_qubits.push(qubit);
+                original_gate_qubits.push(usize::from(qubit));
             } else {
                 removed_gates = true;
             }
@@ -835,16 +843,17 @@ impl GeneralNoiseModel {
         if removed_gates {
             // There are some gates left to add
             if !original_gate_qubits.is_empty() {
-                let new_gate =
-                    QuantumGate::new(gate.gate_type, original_gate_qubits, gate.params.clone());
-                builder.add_quantum_gate(&new_gate);
+                let qubits_qubit_id: Vec<QubitId> =
+                    original_gate_qubits.into_iter().map(QubitId).collect();
+                let new_gate = Gate::new(gate.gate_type, gate.params.clone(), qubits_qubit_id);
+                builder.add_gate_command(&new_gate);
             }
         } else {
-            builder.add_quantum_gate(gate);
+            builder.add_gate_command(gate);
         }
 
         if !noise.is_empty() {
-            builder.add_quantum_gates(&noise);
+            builder.add_gate_commands(&noise);
         }
     }
 
@@ -861,12 +870,7 @@ impl GeneralNoiseModel {
     /// # Panics
     ///
     /// Panics if sampling from the Pauli model fails or if an invalid Pauli operator is encountered.
-    pub fn apply_tq_faults(
-        &mut self,
-        gate: &QuantumGate,
-        p: f64,
-        builder: &mut ByteMessageBuilder,
-    ) {
+    pub fn apply_tq_faults(&mut self, gate: &Gate, p: f64, builder: &mut ByteMessageBuilder) {
         let mut noise = Vec::new();
         let mut removed_gates = false;
         let mut original_gate_qubits: Vec<usize> = Vec::new();
@@ -876,7 +880,10 @@ impl GeneralNoiseModel {
 
             // Check if the gate is acting on a leaked qubit in a way to
             let has_leakage = !self.leaked_qubits.is_empty()
-                && gate.qubits.iter().any(|&qubit| self.is_leaked(qubit));
+                && gate
+                    .qubits
+                    .iter()
+                    .any(|&qubit| self.is_leaked(usize::from(qubit)));
 
             if has_leakage {
                 add_original_gate = false;
@@ -887,8 +894,10 @@ impl GeneralNoiseModel {
                     if has_leakage {
                         // potentially seep qubits
                         for qubit in &gate.qubits {
-                            if self.is_leaked(*qubit) {
-                                if let Some(gates) = self.seep(*qubit, self.p2_seepage_prob) {
+                            if self.is_leaked(usize::from(*qubit)) {
+                                if let Some(gates) =
+                                    self.seep(usize::from(*qubit), self.p2_seepage_prob)
+                                {
                                     noise.extend(gates);
                                 }
                             }
@@ -899,14 +908,14 @@ impl GeneralNoiseModel {
 
                         let result = self.p2_emission_model.sample_gates(
                             &mut self.rng,
-                            qubits[0],
-                            qubits[1],
+                            usize::from(qubits[0]),
+                            usize::from(qubits[1]),
                         );
 
                         if result.has_leakage() {
                             for (qubit, leaked) in qubits.iter().zip(result.has_leakages().iter()) {
                                 if *leaked {
-                                    if let Some(gate) = self.leak(*qubit) {
+                                    if let Some(gate) = self.leak(usize::from(*qubit)) {
                                         noise.push(gate);
                                     }
                                 }
@@ -923,9 +932,11 @@ impl GeneralNoiseModel {
                     }
                 } else if !has_leakage {
                     // Pauli noise
-                    let result =
-                        self.p2_pauli_model
-                            .sample_gates(&mut self.rng, qubits[0], qubits[1]);
+                    let result = self.p2_pauli_model.sample_gates(
+                        &mut self.rng,
+                        usize::from(qubits[0]),
+                        usize::from(qubits[1]),
+                    );
                     if let Some(gates) = result.gates {
                         noise.extend(gates);
                         trace!(
@@ -937,7 +948,7 @@ impl GeneralNoiseModel {
             }
 
             if add_original_gate {
-                original_gate_qubits.extend(qubits);
+                original_gate_qubits.extend(qubits.iter().map(|q| usize::from(*q)));
             } else {
                 removed_gates = true;
             }
@@ -946,18 +957,16 @@ impl GeneralNoiseModel {
         if removed_gates {
             // There are some gates left to add
             if !original_gate_qubits.is_empty() {
-                let new_gate = QuantumGate::new(
-                    gate.gate_type,
-                    original_gate_qubits.clone(),
-                    gate.params.clone(),
-                );
-                builder.add_quantum_gate(&new_gate);
+                let qubits_qubit_id: Vec<QubitId> =
+                    original_gate_qubits.iter().map(|&q| QubitId(q)).collect();
+                let new_gate = Gate::new(gate.gate_type, gate.params.clone(), qubits_qubit_id);
+                builder.add_gate_command(&new_gate);
             }
         } else {
-            builder.add_quantum_gate(gate);
+            builder.add_gate_command(gate);
         }
 
-        builder.add_quantum_gates(&noise);
+        builder.add_gate_commands(&noise);
 
         // TODO: add test
         self.apply_idle_quadratic_dephasing(
@@ -975,12 +984,12 @@ impl GeneralNoiseModel {
     /// Here we have the chance to replace the leakage event with completely depolarizing noise...
     /// `self.leakage_scale` acts like the probability to apply leakage instead of completely
     /// depolarizing noise.
-    fn leak(&mut self, qubit: usize) -> Option<QuantumGate> {
+    fn leak(&mut self, qubit: usize) -> Option<Gate> {
         if self.leakage_scale >= 1.0 || self.rng.occurs(self.leakage_scale) {
             // Mark qubit as leaked
             trace!("Marking qubit {} as leaked", qubit);
             self.mark_as_leaked(qubit);
-            Some(QuantumGate::prep(qubit))
+            Some(Gate::prep(&[qubit]))
         } else {
             // Apply completely depolarizing noise instead of leakage
             trace!("Replaced leakage with Pauli error on qubit {}", qubit);
@@ -1006,7 +1015,7 @@ impl GeneralNoiseModel {
         self.leaked_qubits.remove(&qubit);
     }
 
-    fn unleak(&mut self, qubit: usize) -> Option<QuantumGate> {
+    fn unleak(&mut self, qubit: usize) -> Option<Gate> {
         trace!("Replaced leakage with Pauli error on qubit {}", qubit);
         if self.leakage_scale == 0.0 {
             // No leakage is being applied in the system
@@ -1014,11 +1023,11 @@ impl GeneralNoiseModel {
         } else {
             trace!("Marking qubit {} as unleaked", qubit);
             self.mark_as_unleaked(qubit);
-            Option::from(QuantumGate::prep(qubit))
+            Option::from(Gate::prep(&[qubit]))
         }
     }
 
-    fn unleak_random_bit(&mut self, qubit: usize) -> Vec<QuantumGate> {
+    fn unleak_random_bit(&mut self, qubit: usize) -> Vec<Gate> {
         let mut noise = vec![];
 
         if let Some(gate) = self.unleak(qubit) {
@@ -1032,7 +1041,7 @@ impl GeneralNoiseModel {
         noise
     }
 
-    fn seep(&mut self, qubit: usize, seepage_prob: f64) -> Option<Vec<QuantumGate>> {
+    fn seep(&mut self, qubit: usize, seepage_prob: f64) -> Option<Vec<Gate>> {
         if self.rng.occurs(seepage_prob) {
             Option::from(self.unleak_random_bit(qubit))
         } else {
@@ -1159,8 +1168,9 @@ impl GeneralNoiseModel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Gate;
     use crate::byte_message::ByteMessageBuilder;
-    use crate::byte_message::gate_type::{GateType, QuantumGate};
+    use crate::byte_message::GateType;
 
     #[test]
     fn test_default() {
@@ -1349,7 +1359,8 @@ mod tests {
 
     #[test]
     fn test_prep_leak_ratio() {
-        use crate::byte_message::{ByteMessageBuilder, GateType, QuantumGate};
+        use crate::Gate;
+        use crate::byte_message::{ByteMessageBuilder, GateType};
 
         // Create a noise model with 100% prep error probability and 100% leakage ratio
         // using the builder pattern
@@ -1363,11 +1374,10 @@ mod tests {
             .unwrap();
 
         // Create a quantum gate operation (Prep on qubit 0)
-        let gate = QuantumGate {
+        let gate = Gate {
             gate_type: GateType::Prep,
-            qubits: vec![0],
+            qubits: vec![QubitId(0)],
             params: vec![],
-            noiseless: false,
         };
 
         // Create a builder and apply noise
@@ -1588,11 +1598,10 @@ mod tests {
         // Now apply a prep operation
         let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_quantum_operations();
-        let prep_gate = QuantumGate {
+        let prep_gate = Gate {
             gate_type: GateType::Prep,
-            qubits: vec![0],
+            qubits: vec![QubitId(0)],
             params: vec![],
-            noiseless: false,
         };
         noise.apply_prep_faults(&prep_gate, &mut builder);
 
@@ -2195,11 +2204,10 @@ mod tests {
             .build();
 
         // Create an idle gate
-        let gate = QuantumGate {
+        let gate = Gate {
             gate_type: GateType::Idle,
-            qubits: vec![0],
+            qubits: vec![QubitId(0)],
             params: vec![1.0], // 1 second duration
-            noiseless: false,
         };
 
         // Apply idle faults - should use coherent dephasing (RZ gates)
@@ -2218,11 +2226,10 @@ mod tests {
 
         // Test multi-qubit idle gate
         let mut builder = ByteMessage::quantum_operations_builder();
-        let multi_qubit_gate = QuantumGate {
+        let multi_qubit_gate = Gate {
             gate_type: GateType::Idle,
-            qubits: vec![0, 1, 2], // 3 qubits
-            params: vec![1.0],     // 1 second duration
-            noiseless: false,
+            qubits: vec![QubitId(0), QubitId(1), QubitId(2)], // 3 qubits
+            params: vec![1.0],                                // 1 second duration
         };
 
         model.apply_idle_faults(
@@ -2235,7 +2242,7 @@ mod tests {
         let message = builder.build();
         let gates = message.parse_quantum_operations().unwrap();
 
-        // Should have RZ gates for each qubit in the idle gate
+        // Should have a single RZ gate operating on multiple qubits
         assert!(
             !gates.is_empty(),
             "Should have at least one gate for multi-qubit idle"
@@ -2246,13 +2253,22 @@ mod tests {
             .collect();
         assert_eq!(
             rz_gates.len(),
+            1,
+            "Should have 1 RZ gate for multi-qubit idle"
+        );
+        // The RZ gate should operate on all 3 qubits
+        assert_eq!(
+            rz_gates[0].qubits.len(),
             3,
-            "Should have 3 RZ gates for 3-qubit idle gate"
+            "RZ gate should operate on 3 qubits"
         );
 
         // Check that each qubit gets an RZ gate
-        let mut affected_qubits: Vec<usize> =
-            rz_gates.iter().flat_map(|g| &g.qubits).copied().collect();
+        let mut affected_qubits: Vec<usize> = rz_gates
+            .iter()
+            .flat_map(|g| &g.qubits)
+            .map(|&q| *q)
+            .collect();
         affected_qubits.sort_unstable();
         assert_eq!(
             affected_qubits,
@@ -2345,19 +2361,17 @@ mod tests {
         let _ = builder.for_quantum_operations();
 
         // Create an RZ gate (noiseless - should not have noise applied)
-        let rz_gate = QuantumGate {
+        let rz_gate = Gate {
             gate_type: GateType::RZ,
-            qubits: vec![0],
+            qubits: vec![QubitId(0)],
             params: vec![0.1],
-            noiseless: false,
         };
 
         // Create an X gate (not noiseless - should have noise applied)
-        let x_gate = QuantumGate {
+        let x_gate = Gate {
             gate_type: GateType::X,
-            qubits: vec![0],
+            qubits: vec![QubitId(0)],
             params: vec![],
-            noiseless: false,
         };
 
         // Make sure RZ is recognized as noiseless

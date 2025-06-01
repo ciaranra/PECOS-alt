@@ -1,24 +1,35 @@
 use crate::common::get_thread_id;
 use log::debug;
 use pecos_core::errors::PecosError;
-use pecos_engines::byte_message::{ByteMessage, QuantumCmd, QuantumCmdConverter};
+use pecos_engines::byte_message::{ByteMessage, Gate};
+use pecos_engines::core::record_data::RecordData;
 
-/// Parses binary commands from the QIR runtime into `QuantumCmd` objects
-///
-/// This function is no longer needed as conversion because we've merged
-/// `QuantumCommand` functionality into `QuantumCmd`. This is kept for backward
-/// compatibility and now just returns the input.
-///
-/// # Arguments
-///
-/// * `commands` - The binary commands from the QIR runtime
-///
-/// # Returns
-///
-/// * `Vec<QuantumCmd>` - The same quantum commands
-#[must_use]
-pub fn parse_binary_commands(commands: &[QuantumCmd]) -> Vec<QuantumCmd> {
-    commands.to_vec()
+/// QIR-specific command type for mixed collections
+#[derive(Debug, Clone, PartialEq)]
+pub enum QirCommand {
+    /// Quantum gate operation
+    Gate(Gate),
+    /// Record command with structured data
+    Record(RecordData),
+}
+
+impl QirCommand {
+    /// Check if this command is a gate operation
+    #[must_use]
+    pub fn is_gate(&self) -> bool {
+        matches!(self, QirCommand::Gate(_))
+    }
+
+    /// Check if this command is a measurement
+    #[must_use]
+    pub fn is_measurement(&self) -> bool {
+        match self {
+            QirCommand::Gate(gate_command) => {
+                gate_command.gate_type == pecos_engines::byte_message::GateType::Measure
+            }
+            QirCommand::Record(_) => false,
+        }
+    }
 }
 
 /// Identifies circuit boundaries by analyzing command patterns
@@ -33,9 +44,9 @@ pub fn parse_binary_commands(commands: &[QuantumCmd]) -> Vec<QuantumCmd> {
 ///
 /// # Returns
 ///
-/// * `Vec<QuantumCmd>` - The commands up to the identified circuit boundary
+/// * `Vec<QirCommand>` - The commands up to the identified circuit boundary
 #[must_use]
-pub fn identify_circuit_boundaries(commands: &[QuantumCmd]) -> Vec<QuantumCmd> {
+pub fn identify_circuit_boundaries(commands: &[QirCommand]) -> Vec<QirCommand> {
     // Identify circuit boundaries by looking for measurement patterns
     let mut measurement_indices = Vec::new();
     let mut gate_indices = Vec::new();
@@ -86,14 +97,14 @@ pub fn identify_circuit_boundaries(commands: &[QuantumCmd]) -> Vec<QuantumCmd> {
     }
 }
 
-/// Converts a list of `QuantumCmds` to a `ByteMessage`
+/// Converts a list of `QirCommand`s to a `ByteMessage`
 ///
-/// This function converts a list of `QuantumCmds` to a `ByteMessage` that can
+/// This function converts a list of `QirCommand`s to a `ByteMessage` that can
 /// be processed by the quantum system.
 ///
 /// # Arguments
 ///
-/// * `commands` - The quantum commands to convert
+/// * `commands` - The QIR commands to convert
 ///
 /// # Returns
 ///
@@ -102,7 +113,9 @@ pub fn identify_circuit_boundaries(commands: &[QuantumCmd]) -> Vec<QuantumCmd> {
 /// # Errors
 ///
 /// Returns an error if the commands cannot be converted to a `ByteMessage`.
-pub fn commands_to_byte_message(commands: &[QuantumCmd]) -> Result<ByteMessage, PecosError> {
+pub fn commands_to_byte_message(commands: &[QirCommand]) -> Result<ByteMessage, PecosError> {
+    use pecos_engines::ByteMessageBuilder;
+
     // Get the current thread ID for logging
     let thread_id = get_thread_id();
 
@@ -112,8 +125,33 @@ pub fn commands_to_byte_message(commands: &[QuantumCmd]) -> Result<ByteMessage, 
         commands.len()
     );
 
-    // Use the QuantumCmdConverter trait method to convert to ByteMessage
-    <QuantumCmd as QuantumCmdConverter>::commands_to_byte_message(commands).map_err(|e| {
-        PecosError::Processing(format!("Failed to convert commands to ByteMessage: {e}"))
-    })
+    // Convert QirCommands to ByteMessage
+
+    let mut builder = ByteMessageBuilder::new();
+    let _ = builder.for_quantum_operations();
+
+    for cmd in commands {
+        match cmd {
+            QirCommand::Gate(gate_command) => {
+                // Directly use the GateCommand
+                builder.add_gate_command(gate_command);
+            }
+            QirCommand::Record(record_data) => {
+                // Handle record data
+                match record_data {
+                    RecordData::ResultRecord(result_id, label) => {
+                        builder.add_result_record(*result_id, label.as_deref());
+                    }
+                    RecordData::KeyValueRecord(key, value) => {
+                        builder.add_record_data(key, *value);
+                    }
+                    RecordData::RawRecord(raw) => {
+                        builder.add_debug_message(raw);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(builder.build())
 }

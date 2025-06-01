@@ -7,7 +7,7 @@
     clippy::float_cmp
 )]
 
-use pecos_engines::byte_message::gate_type::GateType;
+use pecos_engines::byte_message::GateType;
 use pecos_engines::byte_message::{ByteMessage, ByteMessageBuilder};
 use pecos_engines::noise::RngManageable;
 use pecos_engines::noise::general::GeneralNoiseModel;
