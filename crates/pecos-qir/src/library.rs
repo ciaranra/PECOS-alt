@@ -1,10 +1,10 @@
 use crate::common::get_thread_id;
 use libloading::{Library, Symbol};
-use log::{debug, trace, warn};
+use log::{debug, warn};
 use pecos_core::errors::PecosError;
-use pecos_engines::byte_message::QuantumCmd;
+use pecos_engines::byte_message::ByteMessage;
 use std::collections::HashMap;
-use std::ffi::c_void;
+// FFI imports handled inline
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::thread;
@@ -290,7 +290,7 @@ impl QirLibrary {
     ///
     /// # Returns
     ///
-    /// * `Result<Vec<QuantumCmd>, PecosError>` - The binary commands if successful
+    /// * `Result<ByteMessage, PecosError>` - The binary commands if successful
     ///
     /// # Errors
     ///
@@ -300,7 +300,9 @@ impl QirLibrary {
     /// # Panics
     ///
     /// This function will panic if the internal mutex is poisoned.
-    pub fn get_binary_commands(&self) -> Result<Vec<QuantumCmd>, PecosError> {
+    pub fn get_binary_commands(&self) -> Result<ByteMessage, PecosError> {
+        use crate::runtime::FFIByteData;
+
         let thread_id = get_thread_id();
 
         debug!(
@@ -308,9 +310,11 @@ impl QirLibrary {
             thread_id
         );
 
+        // Import the FFI structure
+
         // Get the get_binary_commands function
         let library_guard = self.library.lock().unwrap();
-        let get_binary_commands: Symbol<unsafe extern "C" fn() -> *mut c_void> = unsafe {
+        let get_binary_commands: Symbol<unsafe extern "C" fn() -> *mut FFIByteData> = unsafe {
             library_guard
                 .get(b"qir_runtime_get_binary_commands")
                 .map_err(|e| {
@@ -323,7 +327,7 @@ impl QirLibrary {
         };
 
         // Get the free_binary_commands function
-        let free_binary_commands: Symbol<unsafe extern "C" fn(*mut c_void)> = unsafe {
+        let free_binary_commands: Symbol<unsafe extern "C" fn(*mut FFIByteData)> = unsafe {
             library_guard
                 .get(b"qir_runtime_free_binary_commands")
                 .map_err(|e| {
@@ -336,8 +340,8 @@ impl QirLibrary {
         };
 
         // Call the get_binary_commands function
-        let commands_ptr = unsafe { get_binary_commands() };
-        if commands_ptr.is_null() {
+        let ffi_ptr = unsafe { get_binary_commands() };
+        if ffi_ptr.is_null() {
             return Err(Self::log_error(
                 "Got null pointer from qir_runtime_get_binary_commands",
                 "Cannot retrieve commands",
@@ -345,13 +349,26 @@ impl QirLibrary {
             ));
         }
 
-        // Parse the binary commands
-        let commands = unsafe { parse_binary_commands(commands_ptr) };
+        // Get the FFI data
+        let ffi_data = unsafe { &*ffi_ptr };
 
-        // Free the commands
-        unsafe { free_binary_commands(commands_ptr) };
+        // Create ByteMessage from the aligned u32 data while preserving alignment
+        let message =
+            if ffi_data.byte_len > 0 && !ffi_data.data.is_null() && ffi_data.word_count > 0 {
+                // Reconstruct aligned data from FFI
+                let aligned_data =
+                    unsafe { std::slice::from_raw_parts(ffi_data.data, ffi_data.word_count) };
 
-        Ok(commands)
+                // Create ByteMessage directly from u32 data to maintain alignment
+                ByteMessage::from_aligned_u32_data(aligned_data.to_vec(), ffi_data.byte_len)
+            } else {
+                ByteMessage::create_flush()
+            };
+
+        // Free the FFI data
+        unsafe { free_binary_commands(ffi_ptr) };
+
+        Ok(message)
     }
 
     /// Helper function to log errors with thread ID context
@@ -369,55 +386,4 @@ impl Drop for QirLibrary {
     }
 }
 
-/// Parse binary commands from a raw pointer
-///
-/// # Safety
-///
-/// This function is unsafe because it dereferences a raw pointer.
-/// The pointer must be valid and point to a valid binary command structure.
-unsafe fn parse_binary_commands(commands_ptr: *mut c_void) -> Vec<QuantumCmd> {
-    let thread_id = get_thread_id();
-
-    // This implementation depends on the actual structure of the data
-    // For now, we'll assume it's a Vec<QuantumCmd> that we can clone
-    let commands = if let Ok(cmds) = std::panic::catch_unwind(|| {
-        let cmd_vec_ptr = commands_ptr.cast::<Vec<QuantumCmd>>();
-        unsafe { (*cmd_vec_ptr).clone() }
-    }) {
-        cmds
-    } else {
-        warn!(
-            "QIR Library: [Thread {}] Panic while parsing commands from runtime",
-            thread_id
-        );
-        Vec::new()
-    };
-
-    debug!(
-        "QIR Library: [Thread {}] Got {} binary commands",
-        thread_id,
-        commands.len()
-    );
-
-    // Log a sample of commands for debugging
-    if !commands.is_empty() && log::log_enabled!(log::Level::Trace) {
-        let sample_size = std::cmp::min(5, commands.len());
-        trace!(
-            "QIR Library: [Thread {}] First {} commands:",
-            thread_id, sample_size
-        );
-        for (i, cmd) in commands.iter().take(sample_size).enumerate() {
-            trace!("QIR Library: [Thread {}]   {}: {:?}", thread_id, i, cmd);
-        }
-
-        if commands.len() > sample_size {
-            trace!(
-                "QIR Library: [Thread {}]   ... and {} more",
-                thread_id,
-                commands.len() - sample_size
-            );
-        }
-    }
-
-    commands
-}
+// No longer needed - we now pass raw bytes across the FFI boundary

@@ -13,5 +13,8 @@
 pub use crate::{
     IndexableElement, Set, VecSet,
     errors::PecosError,
+    gate_type::GateType,
+    gates::Gate,
+    qubit_id::QubitId,
     rng::{RngManageable, rng_manageable::derive_seed},
 };

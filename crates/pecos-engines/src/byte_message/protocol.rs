@@ -38,7 +38,7 @@ pub enum MessageType {
     Reset = 4,      // Reset state
 
     // Operation messages
-    QuantumGate = 10, // Quantum gate operation
+    GateCommand = 10, // Gate command operation
     Measurement = 11, // Measurement operation
 
     // Result messages
@@ -58,7 +58,7 @@ pub enum MessageType {
 }
 
 /// Message batch header for framing multiple messages
-#[repr(C)]
+#[repr(C, align(4))]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 pub struct BatchHeader {
     pub magic: u32,      // Magic number 'PEQS'
@@ -91,7 +91,7 @@ impl BatchHeader {
 }
 
 /// Individual message header
-#[repr(C)]
+#[repr(C, align(4))]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 pub struct MessageHeader {
     pub msg_type: u8,      // Message type
@@ -123,7 +123,7 @@ impl MessageHeader {
             2 => Ok(MessageType::EndBatch),
             3 => Ok(MessageType::Flush),
             4 => Ok(MessageType::Reset),
-            10 => Ok(MessageType::QuantumGate),
+            10 => Ok(MessageType::GateCommand),
             11 => Ok(MessageType::Measurement),
             20 => Ok(MessageType::MeasurementResult),
             30 => Ok(MessageType::RecordData),
@@ -143,10 +143,10 @@ impl MessageHeader {
     }
 }
 
-/// Quantum gate message payload header
-#[repr(C)]
+/// Gate command message payload header
+#[repr(C, align(4))]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
-pub struct QuantumGateHeader {
+pub struct GateCommandHeader {
     pub gate_type: u8,  // Gate type (using GateType enum values)
     pub num_qubits: u8, // Number of qubits
     pub has_params: u8, // Whether gate has parameters (1=yes, 0=no)
@@ -157,14 +157,14 @@ pub struct QuantumGateHeader {
 }
 
 /// Measurement message payload header
-#[repr(C)]
+#[repr(C, align(4))]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 pub struct MeasurementHeader {
     pub qubit: u32, // Qubit index
 }
 
 /// Measurement result message payload header
-#[repr(C)]
+#[repr(C, align(4))]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 pub struct MeasurementResultHeader {
     pub outcome: u32, // Measurement outcome (0 or 1, but u32 for alignment)

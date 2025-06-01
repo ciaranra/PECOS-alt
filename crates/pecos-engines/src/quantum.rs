@@ -102,25 +102,25 @@ impl Engine for StateVecEngine {
                 GateType::X => {
                     for q in &cmd.qubits {
                         debug!("Processing X gate on qubit {:?}", q);
-                        self.simulator.x(*q);
+                        self.simulator.x(usize::from(*q));
                     }
                 }
                 GateType::Y => {
                     for q in &cmd.qubits {
                         debug!("Processing Y gate on qubit {:?}", q);
-                        self.simulator.y(*q);
+                        self.simulator.y(usize::from(*q));
                     }
                 }
                 GateType::Z => {
                     for q in &cmd.qubits {
                         debug!("Processing Z gate on qubit {:?}", q);
-                        self.simulator.z(*q);
+                        self.simulator.z(usize::from(*q));
                     }
                 }
                 GateType::H => {
                     for q in &cmd.qubits {
                         debug!("Processing H gate on qubit {:?}", q);
-                        self.simulator.h(*q);
+                        self.simulator.h(usize::from(*q));
                     }
                 }
                 GateType::CX => {
@@ -129,7 +129,7 @@ impl Engine for StateVecEngine {
                             "Processing CX gate with control {:?} and target {:?}",
                             qubits[0], qubits[1]
                         );
-                        self.simulator.cx(qubits[0], qubits[1]);
+                        self.simulator.cx(*qubits[0], *qubits[1]);
                     }
                 }
                 GateType::RZZ => {
@@ -138,7 +138,7 @@ impl Engine for StateVecEngine {
                             "Processing RZZ gate on qubits {:?} and {:?}",
                             qubits[0], qubits[1]
                         );
-                        self.simulator.rzz(cmd.params[0], qubits[0], qubits[1]);
+                        self.simulator.rzz(cmd.params[0], *qubits[0], *qubits[1]);
                     }
                 }
                 GateType::SZZ => {
@@ -147,7 +147,7 @@ impl Engine for StateVecEngine {
                             "Processing SZZ gate on qubits {:?} and {:?}",
                             qubits[0], qubits[1]
                         );
-                        self.simulator.szz(qubits[0], qubits[1]);
+                        self.simulator.szz(*qubits[0], *qubits[1]);
                     }
                 }
                 GateType::SZZdg => {
@@ -156,7 +156,7 @@ impl Engine for StateVecEngine {
                             "Processing SZZdg gate on qubits {:?} and {:?}",
                             qubits[0], qubits[1]
                         );
-                        self.simulator.szzdg(qubits[0], qubits[1]);
+                        self.simulator.szzdg(*qubits[0], *qubits[1]);
                     }
                 }
                 // TODO: Consider setting exact numbers of parameters
@@ -167,7 +167,7 @@ impl Engine for StateVecEngine {
                                 "Processing RZ gate with angle {:?} on qubit {:?}",
                                 cmd.params[0], q
                             );
-                            self.simulator.rz(cmd.params[0], *q);
+                            self.simulator.rz(cmd.params[0], **q);
                         }
                     }
                 }
@@ -179,7 +179,7 @@ impl Engine for StateVecEngine {
                                 "Processing R1XY gate with angles theta={:?}, phi={:?} on qubit {:?}",
                                 cmd.params[0], cmd.params[1], q
                             );
-                            self.simulator.r1xy(cmd.params[0], cmd.params[1], *q);
+                            self.simulator.r1xy(cmd.params[0], cmd.params[1], **q);
                         }
                     }
                 }
@@ -188,7 +188,7 @@ impl Engine for StateVecEngine {
                 GateType::Measure => {
                     for q in &cmd.qubits {
                         debug!("Processing measurement on qubit {:?}", q);
-                        let meas_result = self.simulator.mz(*q);
+                        let meas_result = self.simulator.mz(**q);
                         let outcome = u32::from(meas_result.outcome);
                         measurements.push(outcome);
                     }
@@ -196,11 +196,11 @@ impl Engine for StateVecEngine {
                 GateType::Prep => {
                     for q in &cmd.qubits {
                         debug!("Processing Y gate on qubit {:?}", q);
-                        self.simulator.pz(*q);
+                        self.simulator.pz(**q);
                     }
                 }
-                GateType::Idle => {
-                    // For idle gates, just let the system naturally evolve for the specified duration
+                GateType::Idle | GateType::I => {
+                    // For idle/identity gates, just let the system naturally evolve for the specified duration
                     // No active operation needed in the simulator
                 }
                 GateType::U => {
@@ -212,7 +212,7 @@ impl Engine for StateVecEngine {
                                 cmd.params[0], cmd.params[1], cmd.params[2], q
                             );
                             self.simulator
-                                .u(cmd.params[0], cmd.params[1], cmd.params[2], *q);
+                                .u(cmd.params[0], cmd.params[1], cmd.params[2], **q);
                         }
                     }
                 }
@@ -323,25 +323,25 @@ impl Engine for SparseStabEngine {
                 GateType::X => {
                     for q in &cmd.qubits {
                         debug!("Processing X gate on qubit {:?}", q);
-                        self.simulator.x(*q);
+                        self.simulator.x(usize::from(*q));
                     }
                 }
                 GateType::Y => {
                     for q in &cmd.qubits {
                         debug!("Processing Y gate on qubit {:?}", q);
-                        self.simulator.y(*q);
+                        self.simulator.y(usize::from(*q));
                     }
                 }
                 GateType::Z => {
                     for q in &cmd.qubits {
                         debug!("Processing Z gate on qubit {:?}", q);
-                        self.simulator.z(*q);
+                        self.simulator.z(usize::from(*q));
                     }
                 }
                 GateType::H => {
                     for q in &cmd.qubits {
                         debug!("Processing H gate on qubit {:?}", q);
-                        self.simulator.h(*q);
+                        self.simulator.h(usize::from(*q));
                     }
                 }
                 GateType::CX => {
@@ -350,7 +350,7 @@ impl Engine for SparseStabEngine {
                             "Processing CX gate with control {:?} and target {:?}",
                             qubits[0], qubits[1]
                         );
-                        self.simulator.cx(qubits[0], qubits[1]);
+                        self.simulator.cx(*qubits[0], *qubits[1]);
                     }
                 }
                 GateType::SZZ => {
@@ -359,7 +359,7 @@ impl Engine for SparseStabEngine {
                             "Processing SZZ gate on qubits {:?} and {:?}",
                             qubits[0], qubits[1]
                         );
-                        self.simulator.szz(qubits[0], qubits[1]);
+                        self.simulator.szz(*qubits[0], *qubits[1]);
                     }
                 }
                 GateType::SZZdg => {
@@ -368,14 +368,14 @@ impl Engine for SparseStabEngine {
                             "Processing SZZdg gate on qubits {:?} and {:?}",
                             qubits[0], qubits[1]
                         );
-                        self.simulator.szzdg(qubits[0], qubits[1]);
+                        self.simulator.szzdg(*qubits[0], *qubits[1]);
                     }
                 }
                 GateType::Measure => {
                     for q in &cmd.qubits {
                         // Measurement results are now tracked in order
                         debug!("Processing measurement on qubit {:?}", q);
-                        let meas_result = self.simulator.mz(*q);
+                        let meas_result = self.simulator.mz(**q);
                         let outcome = u32::from(meas_result.outcome);
                         measurements.push(outcome);
                     }
@@ -383,7 +383,7 @@ impl Engine for SparseStabEngine {
                 GateType::Prep => {
                     for q in &cmd.qubits {
                         debug!("Processing Y gate on qubit {:?}", q);
-                        self.simulator.pz(*q);
+                        self.simulator.pz(**q);
                     }
                 }
                 GateType::Idle => {

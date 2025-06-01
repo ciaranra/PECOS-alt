@@ -216,7 +216,7 @@ mod base_tests {
         let model = BaseNoiseModel::new();
 
         // Test with a message that has no measurements
-        let empty_msg = ByteMessage::new(Vec::new());
+        let empty_msg = ByteMessage::new(&[]);
         assert!(!model.has_measurements(&empty_msg));
 
         // Test with a message that has measurements

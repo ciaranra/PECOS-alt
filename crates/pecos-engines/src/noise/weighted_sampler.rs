@@ -12,7 +12,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::byte_message::QuantumGate;
+use crate::Gate;
 use crate::noise::noise_rng::NoiseRng;
 use crate::noise::utils::{SingleQubitNoiseResult, TwoQubitNoiseResult};
 use rand::distr::weighted::WeightedIndex;
@@ -141,11 +141,11 @@ impl<K: Clone + std::fmt::Debug + std::hash::Hash + Eq + Ord> WeightedSampler<K>
 
 /// Create a Pauli gate based on the Pauli operator character
 /// Returns None for identity ('I') operations
-fn create_pauli_gate(op: char, qubit: usize) -> Option<QuantumGate> {
+fn create_pauli_gate(op: char, qubit: usize) -> Option<Gate> {
     match op {
-        'X' => Some(QuantumGate::x(qubit)),
-        'Y' => Some(QuantumGate::y(qubit)),
-        'Z' => Some(QuantumGate::z(qubit)),
+        'X' => Some(Gate::x(&[qubit])),
+        'Y' => Some(Gate::y(&[qubit])),
+        'Z' => Some(Gate::z(&[qubit])),
         'I' => None, // Identity - no operation
         _ => panic!("Invalid Pauli operator '{op}'"),
     }
@@ -217,9 +217,9 @@ impl SingleQubitWeightedSampler {
 
         // For Pauli gates, create appropriate gate
         let gate = match key.as_str() {
-            "X" => QuantumGate::x(qubit),
-            "Y" => QuantumGate::y(qubit),
-            "Z" => QuantumGate::z(qubit),
+            "X" => Gate::x(&[qubit]),
+            "Y" => Gate::y(&[qubit]),
+            "Z" => Gate::z(&[qubit]),
             _ => panic!(
                 "SingleQubitWeightedSampler: invalid key '{key}' - must be one of \"X\", \"Y\", \"Z\", or \"L\""
             ),

@@ -10,7 +10,8 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-use crate::byte_message::{ByteMessage, ByteMessageBuilder, GateType, QuantumGate};
+use crate::Gate;
+use crate::byte_message::{ByteMessage, ByteMessageBuilder, GateType};
 use crate::engine_system::{ControlEngine, EngineStage};
 use crate::noise::{NoiseModel, NoiseRng, NoiseUtils, ProbabilityValidator, RngManageable};
 use log::trace;
@@ -150,7 +151,7 @@ impl BiasedDepolarizingNoiseModel {
     }
 
     /// Apply noise to a list of quantum gates
-    fn apply_noise_to_gates(&mut self, gates: &[QuantumGate]) -> ByteMessage {
+    fn apply_noise_to_gates(&mut self, gates: &[Gate]) -> ByteMessage {
         let mut builder = NoiseUtils::create_quantum_builder();
 
         for gate in gates {
@@ -182,7 +183,7 @@ impl BiasedDepolarizingNoiseModel {
                     trace!("Applying preparation with possible fault");
                     self.apply_prep_faults(&mut builder, gate);
                 }
-                GateType::Idle => {}
+                GateType::Idle | GateType::I => {}
             }
         }
 
@@ -254,14 +255,14 @@ impl BiasedDepolarizingNoiseModel {
         ))
     }
 
-    fn apply_prep_faults(&mut self, builder: &mut ByteMessageBuilder, gate: &QuantumGate) {
+    fn apply_prep_faults(&mut self, builder: &mut ByteMessageBuilder, gate: &Gate) {
         if self.rng.occurs(self.p_prep) {
             trace!("Applying prep fault on qubits {:?}", gate.qubits);
-            NoiseUtils::apply_x(builder, gate.qubits[0]);
+            NoiseUtils::apply_x(builder, *gate.qubits[0]);
         }
     }
 
-    fn apply_sq_faults(&mut self, builder: &mut ByteMessageBuilder, gate: &QuantumGate) {
+    fn apply_sq_faults(&mut self, builder: &mut ByteMessageBuilder, gate: &Gate) {
         if self.rng.occurs(self.p1) {
             let fault_type = self.rng.random_int(0..3);
             let qubit = gate.qubits[0];
@@ -269,21 +270,21 @@ impl BiasedDepolarizingNoiseModel {
             match fault_type {
                 0 => {
                     trace!("Applying X fault on qubit {}", qubit);
-                    NoiseUtils::apply_x(builder, qubit);
+                    NoiseUtils::apply_x(builder, *qubit);
                 }
                 1 => {
                     trace!("Applying Y fault on qubit {}", qubit);
-                    NoiseUtils::apply_y(builder, qubit);
+                    NoiseUtils::apply_y(builder, *qubit);
                 }
                 _ => {
                     trace!("Applying Z fault on qubit {}", qubit);
-                    NoiseUtils::apply_z(builder, qubit);
+                    NoiseUtils::apply_z(builder, *qubit);
                 }
             }
         }
     }
 
-    fn apply_tq_faults(&mut self, builder: &mut ByteMessageBuilder, gate: &QuantumGate) {
+    fn apply_tq_faults(&mut self, builder: &mut ByteMessageBuilder, gate: &Gate) {
         if self.rng.occurs(self.p2) {
             let fault_type = self.rng.random_int(0..15);
             let qubit0 = gate.qubits[0];
@@ -293,86 +294,86 @@ impl BiasedDepolarizingNoiseModel {
                 // IX
                 0 => {
                     trace!("Applying IX fault on qubits {:?}", gate.qubits);
-                    NoiseUtils::apply_x(builder, qubit1);
+                    NoiseUtils::apply_x(builder, *qubit1);
                 }
                 // IY
                 1 => {
                     trace!("Applying IY fault on qubits {:?}", gate.qubits);
-                    NoiseUtils::apply_y(builder, qubit1);
+                    NoiseUtils::apply_y(builder, *qubit1);
                 }
                 // IZ
                 2 => {
                     trace!("Applying IZ fault on qubits {:?}", gate.qubits);
-                    NoiseUtils::apply_z(builder, qubit1);
+                    NoiseUtils::apply_z(builder, *qubit1);
                 }
                 // XI
                 3 => {
                     trace!("Applying XI fault on qubits {:?}", gate.qubits);
-                    NoiseUtils::apply_x(builder, qubit0);
+                    NoiseUtils::apply_x(builder, *qubit0);
                 }
                 // XX
                 4 => {
                     trace!("Applying XX fault on qubits {:?}", gate.qubits);
-                    NoiseUtils::apply_x(builder, qubit0);
-                    NoiseUtils::apply_x(builder, qubit1);
+                    NoiseUtils::apply_x(builder, *qubit0);
+                    NoiseUtils::apply_x(builder, *qubit1);
                 }
                 // XY
                 5 => {
                     trace!("Applying XY fault on qubits {:?}", gate.qubits);
-                    NoiseUtils::apply_x(builder, qubit0);
-                    NoiseUtils::apply_y(builder, qubit1);
+                    NoiseUtils::apply_x(builder, *qubit0);
+                    NoiseUtils::apply_y(builder, *qubit1);
                 }
                 // XZ
                 6 => {
                     trace!("Applying XZ fault on qubits {:?}", gate.qubits);
-                    NoiseUtils::apply_x(builder, qubit0);
-                    NoiseUtils::apply_z(builder, qubit1);
+                    NoiseUtils::apply_x(builder, *qubit0);
+                    NoiseUtils::apply_z(builder, *qubit1);
                 }
                 // YI
                 7 => {
                     trace!("Applying YI fault on qubits {:?}", gate.qubits);
-                    NoiseUtils::apply_y(builder, qubit0);
+                    NoiseUtils::apply_y(builder, *qubit0);
                 }
                 // YX
                 8 => {
                     trace!("Applying YX fault on qubits {:?}", gate.qubits);
-                    NoiseUtils::apply_y(builder, qubit0);
-                    NoiseUtils::apply_x(builder, qubit1);
+                    NoiseUtils::apply_y(builder, *qubit0);
+                    NoiseUtils::apply_x(builder, *qubit1);
                 }
                 // YY
                 9 => {
                     trace!("Applying YY fault on qubits {:?}", gate.qubits);
-                    NoiseUtils::apply_y(builder, qubit0);
-                    NoiseUtils::apply_y(builder, qubit1);
+                    NoiseUtils::apply_y(builder, *qubit0);
+                    NoiseUtils::apply_y(builder, *qubit1);
                 }
                 // YZ
                 10 => {
                     trace!("Applying YZ fault on qubits {:?}", gate.qubits);
-                    NoiseUtils::apply_y(builder, qubit0);
-                    NoiseUtils::apply_z(builder, qubit1);
+                    NoiseUtils::apply_y(builder, *qubit0);
+                    NoiseUtils::apply_z(builder, *qubit1);
                 }
                 // ZI
                 11 => {
                     trace!("Applying ZI fault on qubits {:?}", gate.qubits);
-                    NoiseUtils::apply_z(builder, qubit0);
+                    NoiseUtils::apply_z(builder, *qubit0);
                 }
                 // ZX
                 12 => {
                     trace!("Applying ZX fault on qubits {:?}", gate.qubits);
-                    NoiseUtils::apply_z(builder, qubit0);
-                    NoiseUtils::apply_x(builder, qubit1);
+                    NoiseUtils::apply_z(builder, *qubit0);
+                    NoiseUtils::apply_x(builder, *qubit1);
                 }
                 // ZY
                 13 => {
                     trace!("Applying ZY fault on qubits {:?}", gate.qubits);
-                    NoiseUtils::apply_z(builder, qubit0);
-                    NoiseUtils::apply_y(builder, qubit1);
+                    NoiseUtils::apply_z(builder, *qubit0);
+                    NoiseUtils::apply_y(builder, *qubit1);
                 }
                 // ZZ
                 _ => {
                     trace!("Applying ZZ fault on qubits {:?}", gate.qubits);
-                    NoiseUtils::apply_z(builder, qubit0);
-                    NoiseUtils::apply_z(builder, qubit1);
+                    NoiseUtils::apply_z(builder, *qubit0);
+                    NoiseUtils::apply_z(builder, *qubit1);
                 }
             }
         }
@@ -393,7 +394,7 @@ impl ControlEngine for BiasedDepolarizingNoiseModel {
         trace!("BiasedDepolarizingNoise::start - applying noise to quantum operations");
 
         // Parse the input as quantum operations
-        let gates: Vec<crate::byte_message::QuantumGate> = input.parse_quantum_operations()?;
+        let gates: Vec<crate::Gate> = input.parse_quantum_operations()?;
 
         // Apply noise to the gates
         let noisy_gates = self.apply_noise_to_gates(&gates);
