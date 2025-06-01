@@ -129,6 +129,11 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
     },
     // Runtime management
     ExportedFunction {
+        name: "__quantum__rt__initialize",
+        return_type: "void",
+        params: &[("void*", "config")],
+    },
+    ExportedFunction {
         name: "__quantum__rt__qubit_allocate",
         return_type: "int",
         params: &[],
