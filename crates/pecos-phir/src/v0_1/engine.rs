@@ -4,7 +4,7 @@ use crate::v0_1::operations::OperationProcessor;
 use log::debug;
 use pecos_core::errors::PecosError;
 use pecos_engines::byte_message::{ByteMessage, builder::ByteMessageBuilder};
-use pecos_engines::core::shot_results::ShotResult;
+use pecos_engines::shot_results::ShotResult;
 use pecos_engines::{ClassicalEngine, ControlEngine, Engine, EngineStage};
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
@@ -637,12 +637,12 @@ impl PHIREngine {
     /// Returns an error if there was a problem getting the results
     pub fn get_formatted_results(
         &self,
-        format: pecos_engines::core::shot_results::OutputFormat,
+        format: pecos_engines::shot_results::OutputFormat,
     ) -> Result<String, PecosError> {
         let shot_result = self.get_results()?;
 
         // Convert single ShotResult to ShotResults for better formatting
-        let mut shot_results = pecos_engines::core::shot_results::ShotResults::new();
+        let mut shot_results = pecos_engines::shot_results::ShotResults::new();
 
         // Add each register to the ShotResults
         for (key, &value) in &shot_result.registers {

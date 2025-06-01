@@ -22,5 +22,9 @@ bytemuck.workspace = true
 [build-dependencies]
 # No specific build dependencies required
 
+[dev-dependencies]
+tempfile.workspace = true
+serial_test.workspace = true
+
 [lints]
 workspace = true

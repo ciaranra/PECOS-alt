@@ -1,4 +1,36 @@
-use crate::common::get_thread_id;
+//! QIR Linker Module
+//!
+//! This module is responsible for compiling QIR programs (.ll files) and linking them
+//! with the pre-built runtime library to create dynamically loadable libraries.
+//!
+//! The process involves:
+//! 1. Compiling the QIR file to an object file using LLVM tools
+//! 2. Getting the pre-built runtime library from `RuntimeBuilder`
+//! 3. Linking them together to create a shared library (.so/.dll/.dylib)
+//!
+//! # Rebuild Strategy
+//!
+//! The `QirLinker` serves as the central coordination point for determining when
+//! components need to be rebuilt. The strategy is:
+//!
+//! 1. **Runtime Library Check** - Always call `RuntimeBuilder::build_runtime()` first.
+//!    This leverages Cargo's incremental compilation to efficiently detect if the
+//!    runtime library needs rebuilding due to source or dependency changes.
+//!
+//! 2. **Cached QIR Library Check** - Check if a previously compiled QIR library exists
+//!    and is still valid by comparing timestamps against:
+//!    - The source QIR file (existing check)
+//!    - The runtime library (to catch runtime updates)
+//!
+//! 3. **Rebuild Decision** - A rebuild occurs if:
+//!    - The QIR library doesn't exist
+//!    - The QIR source file is newer than the cached library
+//!    - The runtime library is newer than the cached library
+//!    - Any runtime dependencies changed (handled by Cargo)
+//!
+//! This approach ensures correctness while maintaining good performance through
+//! caching and Cargo's incremental compilation.
+
 #[cfg(target_os = "macos")]
 use crate::platform::macos::MacOSCompiler;
 #[cfg(target_os = "windows")]
@@ -11,57 +43,75 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// Compiles QIR programs to dynamically loadable libraries
-pub struct QirCompiler;
+/// Links QIR programs with the runtime library to create dynamically loadable libraries
+pub struct QirLinker;
 
-impl QirCompiler {
-    /// Compile a QIR program to a dynamically loadable library
+impl QirLinker {
+    /// Compile and link a QIR program with the runtime to create a dynamically loadable library
     ///
-    /// This method compiles a QIR file into a shared library that can be loaded and executed.
+    /// This method compiles a QIR file to an object file, then links it with the
+    /// pre-built runtime library to create a shared library that can be loaded and executed.
     /// It uses caching to avoid recompiling unchanged files.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The QIR file does not exist or is empty
+    /// - LLVM tools are not installed or are the wrong version
+    /// - Compilation of the QIR file fails
+    /// - Linking the object file with the runtime library fails
+    /// - File system operations fail (creating directories, reading/writing files)
     pub fn compile<P: AsRef<Path>>(
         qir_file: P,
         output_dir: Option<P>,
     ) -> Result<PathBuf, PecosError> {
         let qir_file = qir_file.as_ref();
-        let thread_id = get_thread_id();
-
         // Validate the QIR file
         Self::validate_qir_file(qir_file)?;
 
         // Determine output directory
         let output_dir = Self::prepare_output_directory(qir_file, output_dir)?;
 
-        // Check for cached compilation
+        // First check for cached compilation before building runtime
+        // This avoids unnecessary runtime timestamp updates
         if let Some(cached_lib) = Self::find_cached_library(qir_file, &output_dir)? {
-            info!(
-                "[Thread {}] Using cached library: {:?}",
-                thread_id, cached_lib
-            );
-            return Ok(cached_lib);
+            // Now ensure the runtime library is up-to-date
+            // This will use cargo's incremental compilation to detect if rebuild is needed
+            let rust_runtime_lib = RuntimeBuilder::build_runtime()?;
+
+            // Check if the cached library is still valid after runtime check
+            let cached_metadata = fs::metadata(&cached_lib)?;
+            let cached_mtime = cached_metadata.modified().map_err(PecosError::IO)?;
+
+            let runtime_metadata = fs::metadata(&rust_runtime_lib)?;
+            let runtime_mtime = runtime_metadata.modified().map_err(PecosError::IO)?;
+
+            if cached_mtime >= runtime_mtime {
+                info!("Using cached library: {:?}", cached_lib);
+                return Ok(cached_lib);
+            }
+            info!("Cached library is older than runtime library, rebuilding...");
+            // Fall through to rebuild
+        } else {
+            // No cached library, so ensure runtime is built
+            RuntimeBuilder::build_runtime()?;
         }
 
-        info!(
-            "[Thread {}] Starting compilation: {:?}",
-            thread_id, qir_file
-        );
+        info!("Starting compilation: {:?}", qir_file);
+
+        // Get the runtime library path again (it's already built)
+        let rust_runtime_lib = RuntimeBuilder::build_runtime()?;
 
         // Generate file paths
         let (object_file, library_file) = Self::generate_file_paths(qir_file, &output_dir);
 
         // Compile QIR to object file
-        Self::compile_to_object_file(qir_file, &object_file, &thread_id)?;
-
-        // Get the runtime library
-        let rust_runtime_lib = RuntimeBuilder::build_runtime()?;
+        Self::compile_to_object_file(qir_file, &object_file)?;
 
         // Link into a shared library
-        Self::link_shared_library(&object_file, &rust_runtime_lib, &library_file, &thread_id)?;
+        Self::link_shared_library(&object_file, &rust_runtime_lib, &library_file)?;
 
-        info!(
-            "[Thread {}] Compilation successful: {:?}",
-            thread_id, library_file
-        );
+        info!("Compilation successful: {:?}", library_file);
 
         Ok(library_file)
     }
@@ -84,24 +134,29 @@ impl QirCompiler {
         let lib_suffix = format!(".{lib_extension}");
 
         // Look for existing libraries matching the pattern
-        let cached_lib = fs::read_dir(output_dir).ok().and_then(|entries| {
-            entries.filter_map(Result::ok).find_map(|entry| {
-                let path = entry.path();
-                let filename = path.file_name()?.to_str()?;
+        let Ok(entries) = fs::read_dir(output_dir) else {
+            return Ok(None);
+        };
 
-                if filename.starts_with(&lib_prefix) && filename.ends_with(&lib_suffix) {
-                    // Check if library is newer than QIR file
-                    let lib_metadata = fs::metadata(&path).ok()?;
-                    let lib_modified = lib_metadata.modified().ok()?;
+        for entry in entries.filter_map(Result::ok) {
+            let path = entry.path();
+            let Some(filename) = path.file_name().and_then(|f| f.to_str()) else {
+                continue;
+            };
 
-                    (lib_modified >= qir_modified).then_some(path)
-                } else {
-                    None
+            if filename.starts_with(&lib_prefix) && filename.ends_with(&lib_suffix) {
+                // Check if library is newer than QIR file
+                if let Ok(lib_metadata) = fs::metadata(&path) {
+                    if let Ok(lib_modified) = lib_metadata.modified() {
+                        if lib_modified >= qir_modified {
+                            return Ok(Some(path));
+                        }
+                    }
                 }
-            })
-        });
+            }
+        }
 
-        Ok(cached_lib)
+        Ok(None)
     }
 
     /// Validate that the QIR file exists and is not empty
@@ -263,15 +318,8 @@ impl QirCompiler {
     }
 
     /// Compile QIR file to object file using LLVM tools
-    fn compile_to_object_file(
-        qir_file: &Path,
-        object_file: &Path,
-        thread_id: &str,
-    ) -> Result<(), PecosError> {
-        debug!(
-            "[Thread {}] Compiling: {:?} -> {:?}",
-            thread_id, qir_file, object_file
-        );
+    fn compile_to_object_file(qir_file: &Path, object_file: &Path) -> Result<(), PecosError> {
+        debug!("Compiling: {:?} -> {:?}", qir_file, object_file);
 
         // Ensure the output directory exists
         if let Some(parent) = object_file.parent() {
@@ -289,13 +337,12 @@ impl QirCompiler {
             // Verify LLVM version
             Self::check_llvm_version(&clang).map_err(PecosError::Processing)?;
 
-            debug!("[Thread {}] Using clang: {:?}", thread_id, clang);
+            debug!("Using clang: {:?}", clang);
 
             WindowsCompiler::compile_to_object_file(
                 qir_file,
                 object_file,
                 &clang,
-                thread_id,
                 Self::handle_command_error,
                 Self::handle_command_status,
             )
@@ -315,13 +362,10 @@ impl QirCompiler {
                 .arg(qir_file)
                 .output();
 
-            let output = Self::handle_command_error(result, "Failed to run llc", thread_id)?;
-            Self::handle_command_status(&output, "llc", thread_id)?;
+            let output = Self::handle_command_error(result, "Failed to run llc")?;
+            Self::handle_command_status(&output, "llc")?;
 
-            debug!(
-                "[Thread {}] Successfully compiled QIR to object file",
-                thread_id
-            );
+            debug!("Successfully compiled QIR to object file");
             Ok(())
         }
     }
@@ -331,12 +375,8 @@ impl QirCompiler {
         object_file: &Path,
         rust_runtime_lib: &Path,
         library_file: &Path,
-        thread_id: &str,
     ) -> Result<(), PecosError> {
-        debug!(
-            "[Thread {}] Linking object file and runtime library...",
-            thread_id
-        );
+        debug!("Linking object file and runtime library...");
 
         // Ensure the output directory exists
         if let Some(parent) = library_file.parent() {
@@ -369,7 +409,6 @@ impl QirCompiler {
                 rust_runtime_lib,
                 library_file,
                 &clang,
-                thread_id,
                 Self::handle_command_error,
                 Self::handle_command_status,
             )
@@ -380,7 +419,6 @@ impl QirCompiler {
                 object_file,
                 rust_runtime_lib,
                 library_file,
-                thread_id,
                 Self::handle_command_error,
                 Self::handle_command_status,
             )
@@ -394,10 +432,10 @@ impl QirCompiler {
                 .arg(rust_runtime_lib)
                 .output();
 
-            let output = Self::handle_command_error(result, "Failed to execute gcc", thread_id)?;
-            Self::handle_command_status(&output, "gcc", thread_id)?;
+            let output = Self::handle_command_error(result, "Failed to execute gcc")?;
+            Self::handle_command_status(&output, "gcc")?;
 
-            debug!("[Thread {}] Linked: {:?}", thread_id, library_file);
+            debug!("Linked: {:?}", library_file);
             Ok(())
         }
     }
@@ -406,10 +444,9 @@ impl QirCompiler {
     fn handle_command_error<T>(
         result: std::io::Result<T>,
         error_msg: &str,
-        thread_id: &str,
     ) -> Result<T, PecosError> {
         result.map_err(|e| {
-            warn!("[Thread {}] {}: {}", thread_id, error_msg, e);
+            warn!("{}: {}", error_msg, e);
             PecosError::Processing(format!("QIR compilation failed: {error_msg}: {e}"))
         })
     }
@@ -418,7 +455,6 @@ impl QirCompiler {
     fn handle_command_status(
         output: &std::process::Output,
         command_name: &str,
-        thread_id: &str,
     ) -> Result<(), PecosError> {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -426,7 +462,7 @@ impl QirCompiler {
                 "QIR compilation failed: {command_name} failed with status: {} and error: {stderr}",
                 output.status
             ));
-            warn!("[Thread {}] {}", thread_id, error);
+            warn!("{}", error);
             return Err(error);
         }
         Ok(())

@@ -3,7 +3,7 @@ mod common;
 #[cfg(test)]
 mod tests {
     use pecos_core::errors::PecosError;
-    use pecos_engines::{PassThroughNoiseModel, ShotResults};
+    use pecos_engines::prelude::*;
     use std::collections::HashMap;
 
     // Import helpers from common module

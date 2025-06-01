@@ -12,9 +12,9 @@
 
 use crate::Engine;
 use crate::byte_message::ByteMessage;
-use crate::core::shot_results::ShotResult;
 use crate::engine_system::{ClassicalEngine, ControlEngine, EngineStage, EngineSystem};
 use crate::quantum_system::QuantumSystem;
+use crate::shot_results::ShotResult;
 use dyn_clone;
 use log::debug;
 use pecos_core::errors::PecosError;

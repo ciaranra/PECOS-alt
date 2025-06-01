@@ -38,12 +38,7 @@ pub fn setup_cli_engine(
         }
         ProgramType::QASM => {
             debug!("Setting up QASM engine");
-
-            // Create a new QASMEngine from the path
-            // Let MonteCarloEngine handle all seeding and randomness
-            let engine = QASMEngine::from_file(program_path)?;
-
-            Ok(Box::new(engine))
+            setup_qasm_engine(program_path, None)
         }
     }
 }

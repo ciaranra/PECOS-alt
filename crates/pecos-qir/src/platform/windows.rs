@@ -21,18 +21,13 @@ impl WindowsCompiler {
         qir_file: &Path,
         object_file: &Path,
         clang_path: &Path,
-        thread_id: &str,
         handle_command_error: impl Fn(
             std::io::Result<std::process::Output>,
             &str,
-            &str,
         ) -> Result<std::process::Output, PecosError>,
-        handle_command_status: impl Fn(&std::process::Output, &str, &str) -> Result<(), PecosError>,
+        handle_command_status: impl Fn(&std::process::Output, &str) -> Result<(), PecosError>,
     ) -> Result<(), PecosError> {
-        debug!(
-            "QIR Compiler: [Thread {}] Compiling QIR to object file with Windows-specific logic",
-            thread_id
-        );
+        debug!("QIR Compiler: Compiling QIR to object file with Windows-specific logic");
 
         // Read and modify QIR content to add Windows export attribute
         let mut qir_content = fs::read_to_string(qir_file).map_err(PecosError::IO)?;
@@ -50,8 +45,8 @@ impl WindowsCompiler {
         fs::write(&temp_qir_file, qir_content).map_err(PecosError::IO)?;
 
         debug!(
-            "QIR Compiler: [Thread {}] Using clang at {:?} to compile LLVM IR directly",
-            thread_id, clang_path
+            "QIR Compiler: Using clang at {:?} to compile LLVM IR directly",
+            clang_path
         );
 
         // Compile with clang - note we're using clang directly instead of llc
@@ -66,8 +61,8 @@ impl WindowsCompiler {
         let _ = fs::remove_file(temp_qir_file);
 
         // Check compilation result
-        let output = handle_command_error(result, "Failed to execute clang", thread_id)?;
-        handle_command_status(&output, "clang", thread_id)?;
+        let output = handle_command_error(result, "Failed to execute clang")?;
+        handle_command_status(&output, "clang")?;
 
         // Verify output file exists
         if !object_file.exists() {
@@ -77,8 +72,7 @@ impl WindowsCompiler {
         }
 
         debug!(
-            "QIR Compiler: [Thread {}] Successfully compiled QIR to object file with Windows-specific logic",
-            thread_id
+            "QIR Compiler: Successfully compiled QIR to object file with Windows-specific logic"
         );
 
         Ok(())
@@ -90,18 +84,13 @@ impl WindowsCompiler {
         _rust_runtime_lib: &Path, // Unused but kept for API compatibility
         library_file: &Path,
         clang_path: &Path,
-        thread_id: &str,
         handle_command_error: impl Fn(
             std::io::Result<std::process::Output>,
             &str,
-            &str,
         ) -> Result<std::process::Output, PecosError>,
-        handle_command_status: impl Fn(&std::process::Output, &str, &str) -> Result<(), PecosError>,
+        handle_command_status: impl Fn(&std::process::Output, &str) -> Result<(), PecosError>,
     ) -> Result<(), PecosError> {
-        debug!(
-            "QIR Compiler: [Thread {}] Linking with Windows-specific logic",
-            thread_id
-        );
+        debug!("QIR Compiler: Linking with Windows-specific logic");
 
         let parent_dir = library_file.parent().unwrap_or(Path::new("."));
 
@@ -119,10 +108,7 @@ impl WindowsCompiler {
             .map_err(|e| PecosError::Processing(format!("Failed to write stub .c file: {e}")))?;
 
         // Compile the C stub
-        debug!(
-            "QIR Compiler: [Thread {}] Compiling C stub file for QIR runtime on Windows",
-            thread_id
-        );
+        debug!("QIR Compiler: Compiling C stub file for QIR runtime on Windows");
 
         let result = Command::new(clang_path)
             .args(["-c", "-O2", "-fms-extensions", "-o"])
@@ -130,14 +116,11 @@ impl WindowsCompiler {
             .arg(&stub_c_path)
             .output();
 
-        let output = handle_command_error(result, "Failed to compile stub C file", thread_id)?;
-        handle_command_status(&output, "clang (stub compilation)", thread_id)?;
+        let output = handle_command_error(result, "Failed to compile stub C file")?;
+        handle_command_status(&output, "clang (stub compilation)")?;
 
         // Link everything together
-        debug!(
-            "QIR Compiler: [Thread {}] Linking QIR object file with C stubs and system libraries",
-            thread_id
-        );
+        debug!("QIR Compiler: Linking QIR object file with C stubs and system libraries");
 
         let result = Command::new(clang_path)
             .args(["-shared", "-o"])
@@ -155,8 +138,8 @@ impl WindowsCompiler {
         }
 
         // Check linking result
-        let output = handle_command_error(result, "Failed to link QIR shared library", thread_id)?;
-        handle_command_status(&output, "clang (linking)", thread_id)?;
+        let output = handle_command_error(result, "Failed to link QIR shared library")?;
+        handle_command_status(&output, "clang (linking)")?;
 
         // Verify the library exists
         if !library_file.exists() {
@@ -165,10 +148,7 @@ impl WindowsCompiler {
             )));
         }
 
-        debug!(
-            "QIR Compiler: [Thread {}] Successfully linked with Windows-specific logic",
-            thread_id
-        );
+        debug!("QIR Compiler: Successfully linked with Windows-specific logic");
 
         Ok(())
     }

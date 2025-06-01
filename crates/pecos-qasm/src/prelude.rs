@@ -53,6 +53,9 @@ pub use crate::program::QASMProgram;
 // Re-export run functions
 pub use crate::run::run_qasm_sim;
 
+// Re-export setup function
+pub use crate::setup_qasm_engine;
+
 // Re-export noise models from pecos-engines
 pub use pecos_engines::{MonteCarloEngine, PassThroughNoiseModel};
 

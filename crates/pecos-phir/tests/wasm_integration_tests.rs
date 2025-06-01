@@ -2,7 +2,7 @@
 mod tests {
     use pecos_core::errors::PecosError;
     use pecos_engines::Engine;
-    use pecos_engines::core::shot_results::OutputFormat;
+    use pecos_engines::shot_results::OutputFormat;
     use pecos_phir::v0_1::ast::PHIRProgram;
     use pecos_phir::v0_1::engine::PHIREngine;
     use pecos_phir::v0_1::foreign_objects::ForeignObject;

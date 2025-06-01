@@ -16,18 +16,13 @@ impl MacOSCompiler {
         object_file: &Path,
         rust_runtime_lib: &Path,
         library_file: &Path,
-        thread_id: &str,
         handle_command_error: impl Fn(
             std::io::Result<std::process::Output>,
             &str,
-            &str,
         ) -> Result<std::process::Output, PecosError>,
-        handle_command_status: impl Fn(&std::process::Output, &str, &str) -> Result<(), PecosError>,
+        handle_command_status: impl Fn(&std::process::Output, &str) -> Result<(), PecosError>,
     ) -> Result<(), PecosError> {
-        debug!(
-            "QIR Compiler: [Thread {}] Linking with macOS-specific logic",
-            thread_id
-        );
+        debug!("QIR Compiler: Linking with macOS-specific logic");
 
         // Use clang instead of ld directly on macOS as it handles the linking better
         let clang = Command::new("clang")
@@ -37,12 +32,12 @@ impl MacOSCompiler {
             .arg(rust_runtime_lib)
             .output();
 
-        let output = handle_command_error(clang, "Failed to execute clang for linking", thread_id)?;
-        handle_command_status(&output, "clang", thread_id)?;
+        let output = handle_command_error(clang, "Failed to execute clang for linking")?;
+        handle_command_status(&output, "clang")?;
 
         debug!(
-            "QIR Compiler: [Thread {}] Successfully linked shared library on macOS: {:?}",
-            thread_id, library_file
+            "QIR Compiler: Successfully linked shared library on macOS: {:?}",
+            library_file
         );
 
         Ok(())

@@ -1,14 +1,14 @@
-// Command generation is handled by ByteMessage now
-use crate::common::get_thread_id;
-use crate::compiler::QirCompiler;
+//! QIR Engine Module
+//!
+//! This module provides the QIR Engine for executing quantum programs compiled to QIR.
 use crate::library::QirLibrary;
-use crate::measurement;
+use crate::linker::QirLinker;
 use log::{debug, trace, warn};
 use pecos_core::errors::PecosError;
 use pecos_engines::Engine;
 use pecos_engines::byte_message::ByteMessage;
-use pecos_engines::core::shot_results::ShotResult;
 use pecos_engines::engine_system::ClassicalEngine;
+use pecos_engines::shot_results::ShotResult;
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
@@ -16,141 +16,38 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 
+/// Helper function to get the current thread ID as a string
+///
+/// This function returns the current thread ID formatted as a string.
+/// It's used for logging and debugging purposes.
+///
+/// # Returns
+///
+/// A string representation of the current thread ID
+#[must_use]
+pub fn get_thread_id() -> String {
+    format!("{:?}", thread::current().id())
+}
+
 /// Configuration options for the QIR engine
-///
-/// This struct encapsulates all configuration options for the QIR engine,
-/// making it easier to understand what options are available and how they
-/// affect the engine's behavior.
-///
-/// # Examples
-///
-/// ```
-/// use pecos_qir::engine::{QirEngineConfig, QirEngine};
-/// use std::path::PathBuf;
-///
-/// let config = QirEngineConfig::new()
-///     .with_assigned_shots(1000)
-///     .with_verbose(true);
-///
-/// let engine = QirEngine::with_config(PathBuf::from("path/to/qir_file.ll"), config);
-/// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct QirEngineConfig {
     /// Number of shots assigned to this engine
     pub assigned_shots: usize,
-
     /// Whether to show verbose command logs
     pub verbose: bool,
-
-    /// Maximum number of retries for library loading
-    pub max_load_retries: usize,
-
-    /// Timeout in milliseconds between retries
-    pub retry_timeout_ms: u64,
-}
-
-impl Default for QirEngineConfig {
-    fn default() -> Self {
-        Self {
-            assigned_shots: 0,
-            verbose: false,
-            max_load_retries: 3,
-            retry_timeout_ms: 500,
-        }
-    }
-}
-
-impl QirEngineConfig {
-    /// Create a new `QirEngineConfig` with default values
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Set the number of shots assigned to this engine
-    #[must_use]
-    pub fn with_assigned_shots(mut self, shots: usize) -> Self {
-        self.assigned_shots = shots;
-        self
-    }
-
-    /// Set whether to show verbose command logs
-    #[must_use]
-    pub fn with_verbose(mut self, verbose: bool) -> Self {
-        self.verbose = verbose;
-        self
-    }
-
-    /// Set the maximum number of retries for library loading
-    #[must_use]
-    pub fn with_max_load_retries(mut self, retries: usize) -> Self {
-        self.max_load_retries = retries;
-        self
-    }
-
-    /// Set the timeout in milliseconds between retries
-    #[must_use]
-    pub fn with_retry_timeout_ms(mut self, timeout: u64) -> Self {
-        self.retry_timeout_ms = timeout;
-        self
-    }
 }
 
 /// QIR Engine for executing quantum programs compiled to QIR
 ///
-/// The QIR Engine loads and executes quantum programs that have been compiled to the
-/// Quantum Intermediate Representation (QIR). It handles the interaction between the
-/// QIR runtime and the quantum system, processing measurement results, and generating
-/// quantum operations.
-///
-/// # Architecture
-///
-/// ```text
-///   ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-///   │  QIR File   │────▶│  QIR Library│────▶│ Quantum Cmds│
-///   └─────────────┘     └─────────────┘     └─────────────┘
-///                                                  │
-///                                                  ▼
-///   ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-///   │ Shot Results│◀────│ Measurements│◀────│Quantum System│
-///   └─────────────┘     └─────────────┘     └─────────────┘
-/// ```
-///
-/// # Thread Safety
-///
-/// The QIR Engine is designed to be thread-safe and can be cloned for use in multiple
-/// threads. Each thread gets its own copy of the QIR library to avoid conflicts.
-///
-/// # Error Handling
-///
-/// Errors are propagated through the Result type and logged at their source with
-/// appropriate context, including the thread ID.
-///
-/// # Examples
-///
-/// ```
-/// use pecos_qir::engine::{QirEngine, QirEngineConfig};
-/// use std::path::PathBuf;
-///
-/// // Create a QIR engine with default configuration
-/// let engine = QirEngine::new(PathBuf::from("path/to/qir_file.ll"));
-///
-/// // Create a QIR engine with custom configuration
-/// let config = QirEngineConfig::new()
-///     .with_assigned_shots(1000)
-///     .with_verbose(true);
-///
-/// let engine = QirEngine::with_config(PathBuf::from("path/to/qir_file.ll"), config);
-/// ```
+/// The engine loads and executes QIR programs, handling the interaction between
+/// the QIR runtime and the quantum system.
 pub struct QirEngine {
     /// The loaded QIR library for executing quantum programs
     library: Option<Box<QirLibrary>>,
 
     /// Map of measurement results by `result_id`
     measurement_results: HashMap<usize, u32>,
-
-    /// Map of result IDs to custom names (like "c")
-    result_name_map: measurement::ResultNameMap,
 
     /// Path to the QIR file to execute
     qir_file: PathBuf,
@@ -169,10 +66,9 @@ pub struct QirEngine {
 }
 
 impl QirEngine {
-    /// Helper function to log errors with thread ID context
+    /// Helper function to log errors
     fn log_error<E: std::fmt::Display>(context: &str, error: E) -> PecosError {
-        let thread_id = get_thread_id();
-        warn!("QIR Engine: [Thread {}] {}: {}", thread_id, context, error);
+        warn!("QIR Engine: {}: {}", context, error);
         PecosError::Processing(format!("QIR operation failed - {context}: {error}"))
     }
 
@@ -191,7 +87,6 @@ impl QirEngine {
         Self {
             library: None,
             measurement_results: HashMap::new(),
-            result_name_map: measurement::ResultNameMap::new(),
             qir_file,
             library_path: None,
             commands_generated: false,
@@ -219,7 +114,6 @@ impl QirEngine {
         Self {
             library: None,
             measurement_results: HashMap::new(),
-            result_name_map: measurement::ResultNameMap::new(),
             qir_file,
             library_path: None,
             commands_generated: false,
@@ -229,102 +123,45 @@ impl QirEngine {
     }
 
     /// Set the number of shots assigned to this engine
-    ///
-    /// # Arguments
-    ///
-    /// * `shots` - Number of shots to assign
-    ///
-    /// # Returns
-    ///
-    /// `Ok(())` if successful, or an error if the operation fails
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the shots cannot be set.
-    pub fn set_assigned_shots(&mut self, shots: usize) -> Result<(), PecosError> {
-        debug!(
-            "QIR: Setting assigned shots to {} (but limiting to 1 shot per run_shot call)",
-            shots
-        );
-
-        // Set the assigned_shots to the number of shots this worker should run
+    pub fn set_assigned_shots(&mut self, shots: usize) {
+        debug!("QIR: Setting assigned shots to {}", shots);
         self.config.assigned_shots = shots;
-
-        Ok(())
     }
 
     /// Set whether to show verbose command logs
-    ///
-    /// # Arguments
-    ///
-    /// * `verbose` - Whether to show verbose command logs
     pub fn set_verbose(&mut self, verbose: bool) {
         self.config.verbose = verbose;
     }
 
     /// Reset the internal state of the engine
     fn reset_internal_state(&mut self) {
-        // Get the current thread ID for logging
-        let thread_id = get_thread_id();
-
-        debug!("QIR: [Thread {}] Resetting internal state", thread_id);
-
-        // Reset shot count to 0
-        let old_shot_count = self.shot_count;
+        debug!("QIR: Resetting internal state");
         self.shot_count = 0;
-
-        debug!(
-            "QIR: [Thread {}] Reset shot count from {} to 0 (assigned_shots={})",
-            thread_id, old_shot_count, self.config.assigned_shots
-        );
-
-        // Clear measurement results
         self.measurement_results.clear();
-
-        // Reset result name mapping
-        self.result_name_map = measurement::ResultNameMap::new();
-
-        // Reset commands_generated flag
         self.commands_generated = false;
 
-        debug!(
-            "QIR: [Thread {}] Cleared measurement results and reset flags",
-            thread_id
-        );
-
-        // Reset the QIR runtime if we have a library
         if let Some(ref library) = self.library {
-            debug!("QIR: [Thread {}] Resetting QIR runtime", thread_id);
             if let Err(e) = library.reset() {
-                debug!(
-                    "QIR: [Thread {}] Failed to reset QIR runtime: {}",
-                    thread_id, e
-                );
-                // Continue despite error
+                debug!("QIR: Failed to reset QIR runtime: {}", e);
             }
         }
     }
 
     /// Set up the QIR library
     fn setup_library(&mut self) -> Result<(), PecosError> {
-        // Get the current thread ID for logging
-        let thread_id = get_thread_id();
-
         // If the library is already set up, don't recompile
         if self.library.is_some() {
-            trace!(
-                "QIR: [Thread {}] Library already set up, skipping compilation",
-                thread_id
-            );
+            trace!("QIR: Library already set up, skipping compilation");
             return Ok(());
         }
 
-        debug!("QIR: [Thread {}] Setting up library", thread_id);
+        debug!("QIR: Setting up library");
 
         // Clean up any existing library
         self.reset_internal_state();
 
         // Create a unique temporary directory for this thread
+        let thread_id = get_thread_id();
         let temp_dir =
             std::env::temp_dir().join(format!("qir_{}_{}", std::process::id(), thread_id));
         if !temp_dir.exists() {
@@ -335,8 +172,8 @@ impl QirEngine {
         // Check if we already have a library path from a previous compilation
         let library_path = if let Some(ref library_path) = self.library_path {
             debug!(
-                "QIR: [Thread {}] Using existing library at {:?} as template",
-                thread_id, library_path
+                "QIR: Using existing library at {:?} as template",
+                library_path
             );
 
             // Create a thread-specific copy of the library
@@ -344,11 +181,6 @@ impl QirEngine {
 
             // Copy the library to the thread-specific path
             if library_path.exists() {
-                debug!(
-                    "QIR: [Thread {}] Copying library to thread-specific path: {:?}",
-                    thread_id, thread_specific_path
-                );
-
                 std::fs::copy(library_path, &thread_specific_path).map_err(|e| {
                     Self::log_error("Failed to copy library to thread-specific path", e)
                 })?;
@@ -356,26 +188,17 @@ impl QirEngine {
                 thread_specific_path
             } else {
                 // If the library doesn't exist, compile it
-                debug!(
-                    "QIR: [Thread {}] Library template doesn't exist, compiling from source",
-                    thread_id
-                );
+                debug!("QIR: Library template doesn't exist, compiling from source");
                 self.compile_library(&temp_dir)?
             }
         } else {
             // If we don't have a library path, compile the QIR file
-            debug!(
-                "QIR: [Thread {}] No existing library, compiling from source",
-                thread_id
-            );
+            debug!("QIR: No existing library, compiling from source");
             self.compile_library(&temp_dir)?
         };
 
         // Load the library
-        debug!(
-            "QIR: [Thread {}] Loading library from {:?}",
-            thread_id, library_path
-        );
+        debug!("QIR: Loading library from {:?}", library_path);
 
         let library = QirLibrary::load(&library_path)
             .map_err(|e| Self::log_error("Failed to load QIR library", e))?;
@@ -384,31 +207,25 @@ impl QirEngine {
         self.library = Some(Box::new(library));
         self.library_path = Some(library_path);
 
-        debug!(
-            "QIR: [Thread {}] Successfully set up QIR library",
-            thread_id
-        );
+        debug!("QIR: Successfully set up QIR library");
 
         Ok(())
     }
 
     /// Process measurements from the quantum system
     fn process_measurements(&mut self, message: &ByteMessage) -> Result<(), PecosError> {
-        // Use the measurement module to process measurements
-        measurement::process_measurements(message, &mut self.measurement_results, self.shot_count)?;
+        let measurements = message.measurement_results_as_vec().map_err(|e| {
+            PecosError::Input(format!(
+                "Failed to extract measurements from ByteMessage: {e}"
+            ))
+        })?;
 
-        // Reset the commands_generated flag after processing measurements
+        self.measurement_results.clear();
+        self.measurement_results.extend(measurements);
         self.commands_generated = false;
-
-        // Increment the shot count
         self.shot_count += 1;
 
-        debug!(
-            "QIR: [Thread {}] Completed shot {}",
-            get_thread_id(),
-            self.shot_count
-        );
-
+        debug!("QIR: Completed shot {}", self.shot_count);
         Ok(())
     }
 
@@ -417,32 +234,18 @@ impl QirEngine {
     /// # Returns
     ///
     /// * `ShotResult` - The results of the quantum computation
-    fn get_results(&self) -> ShotResult {
-        // Use the measurement module to get results with custom result names
-        measurement::get_results_with_names(&self.measurement_results, &self.result_name_map)
-    }
+    fn get_results_impl(&self) -> ShotResult {
+        // Create shot result from measurements
+        let mut shot_result = ShotResult::default();
 
-    /// Compile the QIR program
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the QIR program cannot be compiled.
-    pub fn compile(&self) -> Result<(), PecosError> {
-        debug!("QIR: Compiling program");
-        match QirCompiler::compile(&self.qir_file, None) {
-            Ok(_path) => {
-                debug!("QIR: Compilation successful");
-                Ok(())
-            }
-            Err(e) => {
-                let err_str = format!(
-                    "QIR compilation failed for '{}': {}",
-                    self.qir_file.display(),
-                    e
-                );
-                Err(PecosError::Processing(err_str))
-            }
+        // Since ResultNameMap is never populated, we just use result IDs as names
+        for (&result_id, &value) in &self.measurement_results {
+            let name = format!("result_{result_id}");
+            shot_result.registers.insert(name.clone(), value);
+            shot_result.registers_u64.insert(name, u64::from(value));
         }
+
+        shot_result
     }
 
     /// Pre-compile the QIR library to prepare for cloning
@@ -469,7 +272,7 @@ impl QirEngine {
         }
 
         // Compile the QIR program to a library
-        let library_path = QirCompiler::compile(&self.qir_file, None)
+        let library_path = QirLinker::compile(&self.qir_file, None)
             .map_err(|e| PecosError::Processing(format!("Failed to compile QIR program: {e}")))?;
 
         // Store the library path
@@ -549,12 +352,9 @@ impl QirEngine {
         Ok(runtime_message)
     }
 
-    fn generate_commands(&mut self) -> Result<ByteMessage, PecosError> {
+    fn generate_commands_impl(&mut self) -> Result<ByteMessage, PecosError> {
         // Only log at trace level to reduce verbosity
         trace!("QIR: Generating commands (shot {})", self.shot_count + 1);
-
-        // Get the current thread ID for logging
-        let thread_id = get_thread_id();
 
         // If we've already generated commands for this shot, return an empty message
         if self.commands_generated {
@@ -565,8 +365,7 @@ impl QirEngine {
         // If we've already processed a shot in this run_shot call, return an empty message
         if self.shot_count > 0 {
             debug!(
-                "QIR: [Thread {}] Already processed one shot in this run_shot call, returning empty message",
-                thread_id
+                "QIR: Already processed one shot in this run_shot call, returning empty message"
             );
             return Ok(ByteMessage::create_flush());
         }
@@ -574,8 +373,7 @@ impl QirEngine {
         // Set up library if not already done
         if self.library.is_none() {
             debug!(
-                "QIR: [Thread {}] Setting up library before generating commands for shot {}",
-                thread_id,
+                "QIR: Setting up library before generating commands for shot {}",
                 self.shot_count + 1
             );
 
@@ -587,17 +385,11 @@ impl QirEngine {
                     thread::sleep(Duration::from_millis(500));
                     // Try to set up the library again
                     self.setup_library().map_err(|e| {
-                        warn!(
-                            "QIR: [Thread {}] Failed to set up library after retry: {}",
-                            thread_id, e
-                        );
+                        warn!("QIR: Failed to set up library after retry: {}", e);
                         e
                     })?;
                 } else {
-                    warn!(
-                        "QIR: [Thread {}] Failed to set up library: {}",
-                        thread_id, e
-                    );
+                    warn!("QIR: Failed to set up library: {}", e);
                     return Err(e);
                 }
             }
@@ -609,8 +401,7 @@ impl QirEngine {
             let runtime_message = self.run_qir_program(library)?;
 
             debug!(
-                "QIR: [Thread {}] Got ByteMessage for shot {} with {} bytes",
-                thread_id,
+                "QIR: Got ByteMessage for shot {} with {} bytes",
                 self.shot_count + 1,
                 runtime_message.as_bytes().len()
             );
@@ -620,28 +411,11 @@ impl QirEngine {
 
             Ok(runtime_message)
         } else {
-            warn!("QIR: [Thread {}] No QIR library loaded", thread_id);
+            warn!("QIR: No QIR library loaded");
             Err(PecosError::Processing(
                 "Cannot generate quantum commands: No QIR library loaded. Call compile() or setup_library() first.".to_string(),
             ))
         }
-    }
-
-    /// Reset the engine's state and resources
-    ///
-    /// This is a private implementation that both trait implementations can call.
-    /// It handles resetting the internal state and the quantum system if present.
-    fn reset_engine(&mut self) {
-        // Get the current thread ID for logging
-        let thread_id = get_thread_id();
-
-        debug!(
-            "QIR: [Thread {}] Resetting engine (ClassicalEngine trait)",
-            thread_id
-        );
-
-        // Clean up internal state
-        self.reset_internal_state();
     }
 
     /// Helper method to find qubit allocations in QIR content using regex patterns
@@ -689,11 +463,7 @@ impl QirEngine {
     }
 
     fn analyze_qir_file(&self) -> Result<usize, PecosError> {
-        let thread_id = get_thread_id();
-        debug!(
-            "QIR Engine: [Thread {}] Analyzing QIR file: {:?}",
-            thread_id, self.qir_file
-        );
+        debug!("QIR Engine: Analyzing QIR file: {:?}", self.qir_file);
 
         // Check if the file exists
         if !self.qir_file.exists() {
@@ -720,10 +490,7 @@ impl QirEngine {
         if found_allocation {
             // The number of qubits is the maximum index + 1
             let num_qubits = max_qubit_index + 1;
-            debug!(
-                "QIR Engine: [Thread {}] Found {} qubits in QIR file",
-                thread_id, num_qubits
-            );
+            debug!("QIR Engine: Found {} qubits in QIR file", num_qubits);
             Ok(num_qubits)
         } else {
             Err(PecosError::Input(format!(
@@ -735,15 +502,10 @@ impl QirEngine {
 
     /// Helper method to compile the QIR file to a library
     fn compile_library(&self, output_dir: &Path) -> Result<PathBuf, PecosError> {
-        let thread_id = get_thread_id();
-
-        debug!(
-            "QIR: [Thread {}] Compiling QIR program to library in {:?}",
-            thread_id, output_dir
-        );
+        debug!("QIR: Compiling QIR program to library in {:?}", output_dir);
 
         let output_dir_path = output_dir.to_path_buf();
-        QirCompiler::compile(&self.qir_file, Some(&output_dir_path))
+        QirLinker::compile(&self.qir_file, Some(&output_dir_path))
             .map_err(|e| PecosError::Processing(format!("Failed to compile QIR program: {e}")))
     }
 }
@@ -751,34 +513,16 @@ impl QirEngine {
 impl ClassicalEngine for QirEngine {
     /// Returns the number of qubits used in the quantum program
     ///
-    /// This method determines the number of qubits by:
-    /// 1. First checking if we have measurement results, and using the highest `result_id` + 1
-    /// 2. If no measurements are available, analyzing the QIR file to find qubit allocations
-    /// 3. If analysis fails, returning 0 to indicate an unknown qubit count
-    ///
-    /// # Return Value
-    ///
-    /// * If measurements are available: Returns the highest qubit index + 1
-    /// * If QIR file analysis succeeds: Returns the number of qubits found in the QIR file
-    /// * If both methods fail: Returns 0, indicating an unknown qubit count
-    ///
-    /// # Note
-    ///
-    /// A return value of 0 should be interpreted as "unknown qubit count" rather than
-    /// "zero qubits". Methods that depend on knowing the qubit count should handle
-    /// this special case appropriately, typically by skipping qubit-specific operations
-    /// or using alternative approaches.
+    /// Returns 0 if the qubit count cannot be determined.
     fn num_qubits(&self) -> usize {
-        let thread_id = get_thread_id();
-
         // First, check if we have measurement results
         // If we do, we can determine the number of qubits from the highest result ID
         if !self.measurement_results.is_empty() {
             let max_result_id = self.measurement_results.keys().max().unwrap_or(&0);
             let num_qubits = max_result_id + 1;
             debug!(
-                "QIR Engine: [Thread {}] Determined {} qubits from measurement results",
-                thread_id, num_qubits
+                "QIR Engine: Determined {} qubits from measurement results",
+                num_qubits
             );
             return num_qubits;
         }
@@ -787,72 +531,47 @@ impl ClassicalEngine for QirEngine {
         match self.analyze_qir_file() {
             Ok(num_qubits) => {
                 debug!(
-                    "QIR Engine: [Thread {}] Determined {} qubits from QIR file analysis",
-                    thread_id, num_qubits
+                    "QIR Engine: Determined {} qubits from QIR file analysis",
+                    num_qubits
                 );
                 num_qubits
             }
             Err(e) => {
-                // Log appropriate warning based on error type
-                let message = format!("{e}");
-
-                warn!(
-                    "QIR Engine: [Thread {}] Could not determine qubit count: {}",
-                    thread_id, message
-                );
-
+                warn!("QIR Engine: Could not determine qubit count: {}", e);
                 // Return 0 to indicate unknown qubit count
-                warn!(
-                    "QIR Engine: [Thread {}] Returning 0 to indicate unknown qubit count",
-                    thread_id
-                );
+                warn!("QIR Engine: Returning 0 to indicate unknown qubit count");
                 0
             }
         }
     }
 
     fn generate_commands(&mut self) -> Result<ByteMessage, PecosError> {
-        // Use the implementation from QirEngine to avoid code duplication
-        self.generate_commands()
+        self.generate_commands_impl()
     }
 
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), PecosError> {
-        // Use the process_measurements implementation
         self.process_measurements(&message)
     }
 
     fn get_results(&self) -> Result<ShotResult, PecosError> {
-        // Use the implementation from QirEngine
-        Ok(self.get_results())
+        Ok(self.get_results_impl())
     }
 
     fn compile(&self) -> Result<(), PecosError> {
-        // Get the current thread ID for logging
-        let thread_id = get_thread_id();
-
-        debug!("QIR: [Thread {}] Compiling program", thread_id);
-        match QirCompiler::compile(&self.qir_file, None) {
-            Ok(library_path) => {
-                debug!(
-                    "QIR: [Thread {}] Compilation successful, library at {:?}",
-                    thread_id, library_path
-                );
-                Ok(())
-            }
-            Err(e) => {
-                let err_str = format!(
+        debug!("QIR: Compiling program");
+        QirLinker::compile(&self.qir_file, None)
+            .map(|_| debug!("QIR: Compilation successful"))
+            .map_err(|e| {
+                PecosError::Processing(format!(
                     "QIR compilation failed for '{}': {}",
                     self.qir_file.display(),
                     e
-                );
-                Err(PecosError::Processing(err_str))
-            }
-        }
+                ))
+            })
     }
 
     fn reset(&mut self) -> Result<(), PecosError> {
-        // Call the common reset implementation
-        self.reset_engine();
+        self.reset_internal_state();
         Ok(())
     }
 
@@ -867,28 +586,18 @@ impl ClassicalEngine for QirEngine {
 
 impl Clone for QirEngine {
     fn clone(&self) -> Self {
-        // Get the current thread ID for logging
-        let thread_id = get_thread_id();
-        debug!("QIR: [Thread {}] Cloning engine", thread_id);
+        debug!("QIR: Cloning engine");
 
         // Create a new engine with a fresh state
-        let cloned = Self {
+        Self {
             library: None,                       // Start with no library, will be loaded on demand
             measurement_results: HashMap::new(), // Start with empty measurements
-            result_name_map: measurement::ResultNameMap::new(), // Start with empty result name mapping
             qir_file: self.qir_file.clone(),
             library_path: self.library_path.clone(),
             commands_generated: false,   // Reset commands_generated flag
             shot_count: 0,               // Reset shot count
             config: self.config.clone(), // Keep the configuration
-        };
-
-        debug!(
-            "QIR: [Thread {}] Created clone with fresh state (library will be loaded on demand)",
-            thread_id
-        );
-
-        cloned
+        }
     }
 }
 
@@ -904,18 +613,18 @@ impl Engine for QirEngine {
 
     fn process(&mut self, _input: Self::Input) -> Result<Self::Output, PecosError> {
         // Generate commands, process them, and return results
-        let commands = self.generate_commands()?;
+        let commands = self.generate_commands_impl()?;
         // ByteMessage::is_empty() should include context if it fails
         if !commands.is_empty()? {
             // In a real processing scenario, these commands would be sent to a quantum engine
             // Here we're just handling an empty processing case
             self.handle_measurements(ByteMessage::builder().build())?;
         }
-        Ok(self.get_results())
+        Ok(self.get_results_impl())
     }
 
     fn reset(&mut self) -> Result<(), PecosError> {
-        self.reset_engine();
+        self.reset_internal_state();
         Ok(())
     }
 }

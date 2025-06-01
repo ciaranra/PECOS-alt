@@ -60,3 +60,47 @@ pub use parser::{ParseConfig, QASMParser};
 pub use preprocessor::Preprocessor;
 pub use program::QASMProgram;
 pub use util::{count_qubits_in_file, count_qubits_in_str};
+
+use log::debug;
+use pecos_core::errors::PecosError;
+use pecos_engines::ClassicalEngine;
+use std::path::Path;
+
+/// Sets up a basic QASM engine.
+///
+/// This function creates a QASM engine from the provided path.
+///
+/// # Parameters
+///
+/// - `program_path`: A reference to the path of the QASM program file
+/// - `seed`: Optional seed value for deterministic execution
+///
+/// # Returns
+///
+/// Returns a `Box<dyn ClassicalEngine>` containing the QASM engine
+///
+/// # Errors
+///
+/// This function may return the following errors:
+/// - `PecosError::IO`: If the QASM file cannot be read
+/// - `PecosError::Processing`: If the QASM engine creation fails or if parsing fails
+pub fn setup_qasm_engine(
+    program_path: &Path,
+    seed: Option<u64>,
+) -> Result<Box<dyn ClassicalEngine>, PecosError> {
+    debug!("Setting up QASM engine for: {}", program_path.display());
+
+    // Note: The seed parameter is unused as QASMEngine doesn't handle randomness.
+    // Randomness is managed by the QuantumEngine in MonteCarloEngine.
+    // The seed parameter is kept for API consistency with other engines.
+    let _ = seed;
+
+    // Use the QASMEngine from the pecos-qasm crate
+    let engine = QASMEngine::from_file(program_path).map_err(|e| {
+        PecosError::Processing(format!(
+            "QASM engine setup failed: Could not create engine: {e}"
+        ))
+    })?;
+
+    Ok(Box::new(engine))
+}

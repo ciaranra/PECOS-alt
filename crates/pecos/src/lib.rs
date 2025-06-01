@@ -82,6 +82,5 @@
 //! PECOS supports a variety of noise models and quantum simulators. Check the documentation
 //! for `run_qasm_with_options` and `NoiseModelType` for more details on the available options.
 
-pub mod engines;
 pub mod prelude;
 pub mod program;

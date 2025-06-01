@@ -2,6 +2,8 @@ use log::debug;
 use pecos_core::errors::PecosError;
 use pecos_engines::ClassicalEngine;
 use pecos_phir::setup_phir_engine;
+use pecos_qasm::setup_qasm_engine;
+use pecos_qir::setup_qir_engine;
 use std::path::{Path, PathBuf};
 
 /// Represents the types of programs that PECOS can execute
@@ -150,8 +152,8 @@ pub fn setup_engine_for_program(
     );
 
     match program_type {
-        ProgramType::QIR => crate::engines::setup_qir_engine(program_path, None),
+        ProgramType::QIR => setup_qir_engine(program_path, None),
         ProgramType::PHIR => setup_phir_engine(program_path),
-        ProgramType::QASM => crate::engines::setup_qasm_engine(program_path, seed),
+        ProgramType::QASM => setup_qasm_engine(program_path, seed),
     }
 }

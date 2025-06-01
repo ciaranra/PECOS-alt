@@ -46,6 +46,7 @@ pest_derive = "2"
 tempfile = "3"
 assert_cmd = "2"
 wasmtime = "33"
+serial_test = "3"
 
 pecos-core = { version = "0.1.1", path = "crates/pecos-core" }
 pecos-qsim = { version = "0.1.1", path = "crates/pecos-qsim" }
