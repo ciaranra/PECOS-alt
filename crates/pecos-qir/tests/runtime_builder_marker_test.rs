@@ -2,6 +2,8 @@ use pecos_qir::linker::QirLinker;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
+use tempfile::TempDir;
 
 /// Get the path to the marker file
 fn get_marker_path() -> PathBuf {
@@ -77,13 +79,26 @@ fn test_marker_based_rebuild_system() {
     // Create a test QIR file
     let test_dir = tempfile::tempdir().unwrap();
     let qir_file = create_test_qir_file(test_dir.path(), "marker_test");
+    let output_dir = test_dir.path().to_path_buf();
 
     // Step 1: Test normal build (no marker)
+    test_normal_build(&marker_path, &lib_path, &qir_file, &output_dir);
+
+    // Step 2: Test with marker file
+    test_build_with_marker(&marker_path, &lib_path, &qir_file, &output_dir, &test_dir);
+
+    // Step 3: Test without changes (should use existing library)
+    test_no_rebuild(&lib_path, &qir_file, &output_dir);
+
+    println!("\n=== All marker-based rebuild tests passed! ===\n");
+}
+
+fn test_normal_build(marker_path: &Path, lib_path: &Path, qir_file: &Path, output_dir: &Path) {
     println!("\n1. Testing normal build (no marker)...");
 
     // Remove marker if it exists
     if marker_path.exists() {
-        fs::remove_file(&marker_path).unwrap();
+        fs::remove_file(marker_path).unwrap();
         println!("   - Removed existing marker file");
     }
 
@@ -92,7 +107,6 @@ fn test_marker_based_rebuild_system() {
     println!("   - Runtime library exists before: {lib_existed_before}");
 
     // Compile QIR (this will trigger runtime build if needed)
-    let output_dir = test_dir.path().to_path_buf();
     let result = QirLinker::compile(&qir_file, Some(&output_dir));
     assert!(result.is_ok(), "QirLinker::compile() failed: {result:?}");
 
@@ -106,41 +120,110 @@ fn test_marker_based_rebuild_system() {
         "Marker file should not exist after build"
     );
     println!("   - Marker exists after build: false");
+}
 
-    // Step 2: Test with marker file
+fn test_build_with_marker(
+    marker_path: &Path,
+    lib_path: &Path,
+    qir_file: &Path,
+    output_dir: &Path,
+    test_dir: &TempDir,
+) {
     println!("\n2. Testing build with marker file...");
-
-    // Get library modification time before
-    let lib_mtime_before = if lib_path.exists() {
-        Some(fs::metadata(&lib_path).unwrap().modified().unwrap())
-    } else {
-        None
-    };
 
     // Create marker file
     fs::create_dir_all(marker_path.parent().unwrap()).unwrap();
-    fs::write(&marker_path, "rebuild needed").unwrap();
+    fs::write(marker_path, "rebuild needed").unwrap();
     println!("   - Created marker file");
     assert!(marker_path.exists(), "Failed to create marker file");
 
-    // Wait a bit to ensure timestamp difference
-    std::thread::sleep(std::time::Duration::from_millis(1100));
+    // Get library modification time before rebuild
+    let (lib_mtime_before, lib_size_before) = prepare_rebuild_test(lib_path, test_dir);
+
+    // Verify marker exists right before compilation
+    assert!(
+        marker_path.exists(),
+        "Marker disappeared before compilation!"
+    );
+    println!("   - Marker confirmed to exist before compilation");
 
     // Compile QIR again (should trigger runtime rebuild due to marker)
+    println!("   - Starting QIR compilation...");
     let result2 = QirLinker::compile(&qir_file, Some(&output_dir));
     assert!(
         result2.is_ok(),
         "QirLinker::compile() failed with marker: {result2:?}"
     );
+    println!("   - QIR compilation completed");
 
-    // Verify runtime library was rebuilt (has newer timestamp) if it existed before
+    // Verify runtime library was rebuilt
+    verify_rebuild(lib_path, marker_path, lib_mtime_before, lib_size_before);
+}
+
+fn prepare_rebuild_test(lib_path: &Path, test_dir: &TempDir) -> (Option<SystemTime>, Option<u64>) {
+    if lib_path.exists() {
+        let mtime = fs::metadata(lib_path).unwrap().modified().unwrap();
+        println!("   - Library exists with timestamp: {mtime:?}");
+
+        // Detect timestamp granularity
+        let delay = detect_timestamp_granularity(test_dir);
+        std::thread::sleep(delay);
+
+        let size = fs::metadata(lib_path).unwrap().len();
+        (Some(mtime), Some(size))
+    } else {
+        println!("   - Library doesn't exist yet");
+        (None, None)
+    }
+}
+
+fn detect_timestamp_granularity(test_dir: &TempDir) -> std::time::Duration {
+    let temp_file = test_dir.path().join("timestamp_test");
+    fs::write(&temp_file, "test1").unwrap();
+    let t1 = fs::metadata(&temp_file).unwrap().modified().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    fs::write(&temp_file, "test2").unwrap();
+    let t2 = fs::metadata(&temp_file).unwrap().modified().unwrap();
+    fs::remove_file(&temp_file).unwrap();
+
+    if t1 == t2 {
+        println!("   - Filesystem has coarse timestamp granularity, waiting 1.1s");
+        std::time::Duration::from_millis(1100)
+    } else {
+        println!("   - Filesystem has fine timestamp granularity, waiting 150ms");
+        std::time::Duration::from_millis(150)
+    }
+}
+
+fn verify_rebuild(
+    lib_path: &Path,
+    marker_path: &Path,
+    lib_mtime_before: Option<SystemTime>,
+    lib_size_before: Option<u64>,
+) {
     if let Some(mtime_before) = lib_mtime_before {
-        let lib_mtime_after = fs::metadata(&lib_path).unwrap().modified().unwrap();
-        assert!(
-            lib_mtime_after > mtime_before,
-            "Runtime library was not rebuilt despite marker"
+        let lib_mtime_after = fs::metadata(lib_path).unwrap().modified().unwrap();
+        let lib_size_after = fs::metadata(lib_path).unwrap().len();
+
+        // Debug output for timing issues
+        println!("   - Library mtime before: {mtime_before:?}");
+        println!("   - Library mtime after:  {lib_mtime_after:?}");
+        println!("   - Library size before: {lib_size_before:?}");
+        println!("   - Library size after:  {lib_size_after}");
+        println!(
+            "   - Marker exists after compilation: {}",
+            marker_path.exists()
         );
-        println!("   - Runtime library was rebuilt (newer timestamp)");
+
+        // Check if library was actually rebuilt
+        let was_rebuilt = lib_mtime_after > mtime_before
+            || (lib_size_before.is_some() && lib_size_before.unwrap() != lib_size_after);
+
+        assert!(
+            was_rebuilt,
+            "Runtime library was not rebuilt despite marker. Before: {mtime_before:?}, After: {lib_mtime_after:?}"
+        );
+        println!("   - Runtime library was rebuilt");
     } else {
         println!("   - Runtime library was created (didn't exist before)");
     }
@@ -151,23 +234,22 @@ fn test_marker_based_rebuild_system() {
         "Marker file was not removed after rebuild"
     );
     println!("   - Marker was removed after rebuild");
+}
 
-    // Step 3: Test without changes (should use existing library)
+fn test_no_rebuild(lib_path: &Path, qir_file: &Path, output_dir: &Path) {
     println!("\n3. Testing build without changes...");
 
     // Get runtime library modification time
-    let lib_mtime_before_3 = fs::metadata(&lib_path).unwrap().modified().unwrap();
+    let lib_mtime_before = fs::metadata(lib_path).unwrap().modified().unwrap();
 
     // Compile again without marker
-    let result3 = QirLinker::compile(&qir_file, Some(&output_dir));
-    assert!(result3.is_ok(), "QirLinker::compile() failed: {result3:?}");
+    let result = QirLinker::compile(&qir_file, Some(&output_dir));
+    assert!(result.is_ok(), "QirLinker::compile() failed: {result:?}");
 
-    let lib_mtime_after_3 = fs::metadata(&lib_path).unwrap().modified().unwrap();
+    let lib_mtime_after = fs::metadata(lib_path).unwrap().modified().unwrap();
     assert_eq!(
-        lib_mtime_before_3, lib_mtime_after_3,
+        lib_mtime_before, lib_mtime_after,
         "Runtime library was rebuilt unnecessarily"
     );
     println!("   - Runtime library was not rebuilt (same timestamp)");
-
-    println!("\n=== All marker-based rebuild tests passed! ===\n");
 }

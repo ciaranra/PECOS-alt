@@ -141,6 +141,11 @@ impl RuntimeBuilder {
         fs::copy(&built_lib, lib_path)
             .map_err(|e| PecosError::Processing(format!("Failed to copy library: {e}")))?;
 
+        // Touch the file to update its modification time
+        // This is important because cargo's build cache might result in an older timestamp
+        // We do this by appending and truncating to force a metadata update
+        Self::touch_library_file(lib_path);
+
         Ok(())
     }
 
@@ -262,6 +267,25 @@ pecos-qir = {{ path = {:?} }}
         }
 
         Ok((version, edition))
+    }
+
+    /// Touch a file to update its modification time
+    fn touch_library_file(path: &Path) {
+        use std::fs::OpenOptions;
+        use std::io::Write;
+
+        if let Ok(mut file) = OpenOptions::new().append(true).open(path) {
+            // Get current size
+            if let Ok(metadata) = file.metadata() {
+                let original_size = metadata.len();
+                // Write a byte to force timestamp update
+                let _ = file.write_all(b"\0");
+                let _ = file.sync_all();
+                // Truncate back to original size
+                let _ = file.set_len(original_size);
+                debug!("Touched library file to update modification time");
+            }
+        }
     }
 
     /// Ensure a directory exists, creating it if necessary
