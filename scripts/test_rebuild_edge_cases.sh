@@ -42,7 +42,7 @@ log_error() {
 # Test concurrent marker file access
 test_concurrent_marker_access() {
     log_test "Concurrent Marker File Access"
-    
+
     # Create a test QIR file
     local QIR_FILE="$TEST_DIR/concurrent_test.ll"
     mkdir -p "$TEST_DIR"
@@ -51,24 +51,24 @@ define void @main() {
     ret void
 }
 EOF
-    
+
     # Remove existing marker and library to force rebuild
     rm -f "$MARKER_FILE"
     rm -f "$RUNTIME_LIB"
-    
+
     # Launch multiple QIR compilations simultaneously
     log_info "Launching 3 concurrent QIR compilations..."
-    
+
     for i in 1 2 3; do
         (
             cd "$PROJECT_ROOT"
             "$PROJECT_ROOT/target/debug/pecos" compile "$QIR_FILE" 2>&1 | sed "s/^/[Process $i] /"
         ) &
     done
-    
+
     # Wait for all to complete
     wait
-    
+
     # Check results
     if [[ -f "$RUNTIME_LIB" ]]; then
         log_info "Runtime library built successfully"
@@ -76,7 +76,7 @@ EOF
         log_error "Runtime library not built"
         return 1
     fi
-    
+
     if [[ -f "$MARKER_FILE" ]]; then
         log_error "Marker still exists after concurrent builds"
         return 1
@@ -89,23 +89,23 @@ EOF
 # Test rapid file modifications
 test_rapid_modifications() {
     log_test "Rapid File Modifications"
-    
+
     local QIR_FILE="$TEST_DIR/rapid.ll"
     mkdir -p "$TEST_DIR"
-    
+
     # Create initial QIR
     cat > "$QIR_FILE" << 'EOF'
 define void @main() {
     ret void
 }
 EOF
-    
+
     # Compile once
     "$PROJECT_ROOT/target/debug/pecos" compile "$QIR_FILE" || {
         log_error "Initial compilation failed"
         return 1
     }
-    
+
     # Rapid modifications without sleep
     log_info "Making rapid modifications..."
     for i in {1..5}; do
@@ -115,7 +115,7 @@ EOF
             return 1
         }
     done
-    
+
     log_info "System handled rapid modifications"
     return 0
 }
@@ -123,13 +123,13 @@ EOF
 # Test corrupted marker file
 test_corrupted_marker() {
     log_test "Corrupted Marker File"
-    
+
     # Create corrupted marker (binary data)
     mkdir -p "$(dirname "$MARKER_FILE")"
     dd if=/dev/urandom of="$MARKER_FILE" bs=1024 count=1 2>/dev/null
-    
+
     log_info "Created corrupted marker file"
-    
+
     # Try to build
     cd "$PROJECT_ROOT"
     if cargo build -p pecos-qir --quiet 2>/dev/null; then
@@ -138,7 +138,7 @@ test_corrupted_marker() {
         log_error "Build failed with corrupted marker"
         return 1
     fi
-    
+
     # The corrupted marker should be handled during QIR compilation
     # (RuntimeBuilder removes marker after successful build)
     local QIR_FILE="$TEST_DIR/corrupted_test.ll"
@@ -148,7 +148,7 @@ define void @main() {
     ret void
 }
 EOF
-    
+
     # Compile QIR - this should trigger runtime build and marker removal
     if "$PROJECT_ROOT/target/debug/pecos" compile "$QIR_FILE" 2>/dev/null; then
         if [[ -f "$MARKER_FILE" ]]; then
@@ -167,13 +167,13 @@ EOF
 # Test permission issues
 test_permission_issues() {
     log_test "Permission Issues"
-    
+
     # Skip if running as root
     if [[ $EUID -eq 0 ]]; then
         log_info "Skipping (running as root)"
         return 0
     fi
-    
+
     # Make marker directory read-only
     local MARKER_DIR="$(dirname "$MARKER_FILE")"
     mkdir -p "$MARKER_DIR"
@@ -181,9 +181,9 @@ test_permission_issues() {
         log_info "Cannot change permissions (skipping)"
         return 0
     }
-    
+
     log_info "Made marker directory read-only"
-    
+
     # Try to build (should handle gracefully)
     cd "$PROJECT_ROOT"
     if cargo build -p pecos-qir --quiet 2>&1 | grep -q "permission"; then
@@ -200,23 +200,23 @@ test_permission_issues() {
 # Test symlink scenarios
 test_symlink_handling() {
     log_test "Symlink Handling"
-    
+
     # Create a symlink for the runtime library
     local REAL_LIB="$TEST_DIR/real_runtime.a"
     mkdir -p "$TEST_DIR"
-    
+
     if [[ -f "$RUNTIME_LIB" ]]; then
         cp "$RUNTIME_LIB" "$REAL_LIB"
         rm -f "$RUNTIME_LIB"
         ln -s "$REAL_LIB" "$RUNTIME_LIB"
-        
+
         log_info "Created symlink: $RUNTIME_LIB -> $REAL_LIB"
-        
+
         # Run build
         cd "$PROJECT_ROOT"
         if cargo build -p pecos-qir --quiet; then
             log_info "Build works with symlinked runtime library"
-            
+
             # Check if marker was created (it shouldn't be if symlink is valid)
             if [[ -f "$MARKER_FILE" ]]; then
                 log_error "Marker created for valid symlink"
@@ -230,30 +230,30 @@ test_symlink_handling() {
             mv "$REAL_LIB" "$RUNTIME_LIB" 2>/dev/null || true
             return 1
         fi
-        
+
         # Restore
         rm -f "$RUNTIME_LIB"
         mv "$REAL_LIB" "$RUNTIME_LIB"
     else
         log_info "Runtime library not found (skipping symlink test)"
     fi
-    
+
     return 0
 }
 
 # Test CARGO_HOME variations
 test_cargo_home_variations() {
     log_test "CARGO_HOME Variations"
-    
+
     # Save original
     local ORIG_CARGO_HOME="$CARGO_HOME"
-    
+
     # Test with custom CARGO_HOME
     export CARGO_HOME="$TEST_DIR/custom_cargo"
     mkdir -p "$CARGO_HOME"
-    
+
     log_info "Testing with CARGO_HOME=$CARGO_HOME"
-    
+
     cd "$PROJECT_ROOT"
     if cargo build -p pecos-qir --quiet 2>&1; then
         # Check if marker path is created in custom location
@@ -268,7 +268,7 @@ test_cargo_home_variations() {
         export CARGO_HOME="$ORIG_CARGO_HOME"
         return 1
     fi
-    
+
     # Restore
     export CARGO_HOME="$ORIG_CARGO_HOME"
     return 0
@@ -277,38 +277,38 @@ test_cargo_home_variations() {
 # Test filesystem full scenario
 test_filesystem_full() {
     log_test "Filesystem Full Scenario"
-    
+
     # Create a small loopback filesystem
     local LOOP_FILE="$TEST_DIR/small_fs.img"
     local MOUNT_POINT="$TEST_DIR/mount"
-    
+
     mkdir -p "$TEST_DIR"
-    
+
     # Skip if not enough permissions
     if [[ $EUID -ne 0 ]]; then
         log_info "Skipping (requires root)"
         return 0
     fi
-    
+
     # Create 10MB filesystem
     dd if=/dev/zero of="$LOOP_FILE" bs=1M count=10 2>/dev/null
     mkfs.ext4 -F "$LOOP_FILE" 2>/dev/null
     mkdir -p "$MOUNT_POINT"
     mount -o loop "$LOOP_FILE" "$MOUNT_POINT"
-    
+
     # Fill it up
     dd if=/dev/zero of="$MOUNT_POINT/filler" bs=1M count=9 2>/dev/null
-    
+
     # Try to create marker there
     export CARGO_HOME="$MOUNT_POINT"
-    
+
     cd "$PROJECT_ROOT"
     if cargo build -p pecos-qir --quiet 2>&1 | grep -q "space"; then
         log_info "Filesystem full error handled"
     else
         log_info "Build handled full filesystem scenario"
     fi
-    
+
     # Cleanup
     umount "$MOUNT_POINT"
     export CARGO_HOME="$ORIG_CARGO_HOME"
@@ -320,7 +320,7 @@ main() {
     echo "======================================"
     echo "PECOS Rebuild System Edge Case Tests"
     echo "======================================"
-    
+
     # Build CLI first
     log_info "Building PECOS CLI..."
     cd "$PROJECT_ROOT"
@@ -328,9 +328,9 @@ main() {
         log_error "Failed to build PECOS CLI"
         exit 1
     }
-    
+
     mkdir -p "$TEST_DIR"
-    
+
     # Run tests
     local FAILED=0
     local TESTS=(
@@ -342,7 +342,7 @@ main() {
         test_cargo_home_variations
         test_filesystem_full
     )
-    
+
     for test in "${TESTS[@]}"; do
         if $test; then
             echo -e "${GREEN}PASSED${NC}"
@@ -351,10 +351,10 @@ main() {
             ((FAILED++))
         fi
     done
-    
+
     # Cleanup
     rm -rf "$TEST_DIR"
-    
+
     # Summary
     echo
     echo "======================================"

@@ -229,11 +229,11 @@ fn test_integration_with_actual_simulation() {
         qreg q[3];
         creg a[2];
         creg b[1];
-        
+
         // Create known values
         x q[0]; // Flip first qubit
         x q[2]; // Flip third qubit
-        
+
         measure q[0] -> a[0];
         measure q[1] -> a[1];
         measure q[2] -> b[0];
@@ -348,10 +348,10 @@ fn test_bell_state_formatting() {
         include "qelib1.inc";
         qreg q[2];
         creg c[2];
-        
+
         h q[0];
         cx q[0], q[1];
-        
+
         measure q -> c;
     "#;
 

@@ -10,26 +10,26 @@ impl ShotVec {
             .iter()
             .map(|shot| {
                 let mut obj = Map::new();
-                
+
                 for (key, data) in &shot.data {
                     // Skip metadata
                     if key.starts_with('_') {
                         continue;
                     }
-                    
+
                     // Use the natural serde serialization for each type
                     if let Ok(value) = serde_json::to_value(data) {
                         obj.insert(key.clone(), value);
                     }
                 }
-                
+
                 Value::Object(obj)
             })
             .collect();
-        
+
         Value::Array(shots)
     }
-    
+
     /// Alternative: Add a method to Data for "measurement value" conversion
     /// This separates the concern of "what is a measurement result" from JSON serialization
     pub fn to_measurement_json(&self) -> Value {
@@ -37,28 +37,28 @@ impl ShotVec {
             .iter()
             .map(|shot| {
                 let mut obj = Map::new();
-                
+
                 for (key, data) in &shot.data {
                     if key.starts_with('_') {
                         continue;
                     }
-                    
+
                     // Only include data that can be interpreted as measurement results
                     if let Some(value) = data.as_measurement_value() {
                         obj.insert(key.clone(), Value::Number(value.into()));
                     }
                 }
-                
+
                 Value::Object(obj)
             })
             .collect();
-        
+
         Value::Array(shots)
     }
 }
 
 impl Data {
-    /// Convert to a measurement value (decimal number) if this data type 
+    /// Convert to a measurement value (decimal number) if this data type
     /// represents a quantum measurement result
     pub fn as_measurement_value(&self) -> Option<u64> {
         match self {

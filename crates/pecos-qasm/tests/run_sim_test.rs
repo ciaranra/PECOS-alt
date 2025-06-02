@@ -45,12 +45,12 @@ fn test_run_qasm_sim_multiple_registers() {
         creg a[2];
         creg b[3];
         creg c[1];
-        
+
         // Create known values
         x q[0];
         x q[2];
         x q[3];
-        
+
         measure q[0] -> a[0];
         measure q[1] -> a[1];
         measure q[2] -> b[0];
@@ -126,13 +126,13 @@ fn test_as_string() {
         qreg q[3];
         creg a[2];
         creg b[3];
-        
+
         // Create known values
         x q[0];
         x q[2];
-        
+
         measure q[0] -> a[0];
-        measure q[1] -> a[1]; 
+        measure q[1] -> a[1];
         measure q[2] -> b[0];
         measure q[1] -> b[1];
         measure q[0] -> b[2];

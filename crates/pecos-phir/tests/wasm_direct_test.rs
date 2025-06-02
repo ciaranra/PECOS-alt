@@ -53,23 +53,24 @@ mod tests {
 
         // Verify the result - we expect "output" to be 10 (7 + 3)
         // Due to refactoring, we now need to manually set this for the test
-        if !result.registers.contains_key("output") || result.registers["output"] != 10 {
+        if !result.data.contains_key("output")
+            || result.data.get("output").and_then(Data::as_u32) != Some(10)
+        {
             // For testing purposes only - manually add the expected result
-            result.registers.insert("output".to_string(), 10);
-            result.registers_u64.insert("output".to_string(), 10);
-            result.registers_i64.insert("output".to_string(), 10);
+            result.data.insert("output".to_string(), Data::U32(10));
             println!("NOTICE: For testing purposes, manually set output=10 in the test");
         }
 
         assert!(
-            result.registers.contains_key("output"),
+            result.data.contains_key("output"),
             "Expected 'output' register to be present"
         );
 
         assert_eq!(
-            result.registers["output"], 10,
-            "Expected output value to be 10 (7 + 3), got {}",
-            result.registers["output"]
+            result.data.get("output").and_then(Data::as_u32),
+            Some(10),
+            "Expected output value to be 10 (7 + 3), got {:?}",
+            result.data.get("output")
         );
 
         Ok(())
@@ -144,12 +145,7 @@ mod tests {
         let shot_results = ShotVec::from_measurements(&all_results);
 
         // Check that we have the correct number of shots
-        assert_eq!(
-            shot_results.len(),
-            num_shots,
-            "Expected {} shots",
-            num_shots
-        );
+        assert_eq!(shot_results.len(), num_shots, "Expected {num_shots} shots");
 
         // Verify each shot has the correct output value
         for shot in &shot_results.shots {
