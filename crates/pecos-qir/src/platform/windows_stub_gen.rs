@@ -66,6 +66,26 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
         return_type: "void",
         params: &[("void*", "cmds")],
     },
+    ExportedFunction {
+        name: "qir_runtime_update_measurement_results",
+        return_type: "void",
+        params: &[("const u32*", "results_ptr"), ("usize", "results_len")],
+    },
+    ExportedFunction {
+        name: "qir_runtime_finalize_shot",
+        return_type: "void",
+        params: &[],
+    },
+    ExportedFunction {
+        name: "qir_runtime_get_shot_results",
+        return_type: "void*",
+        params: &[],
+    },
+    ExportedFunction {
+        name: "qir_runtime_free_shot_data",
+        return_type: "void",
+        params: &[("void*", "data")],
+    },
     // Quantum instruction set
     ExportedFunction {
         name: "__quantum__qis__rz__body",
@@ -74,6 +94,11 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
     },
     ExportedFunction {
         name: "__quantum__qis__r1xy__body",
+        return_type: "void",
+        params: &[("double", "theta"), ("double", "phi"), ("int", "qubit")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__rxy__body",
         return_type: "void",
         params: &[("double", "theta"), ("double", "phi"), ("int", "qubit")],
     },
@@ -109,6 +134,11 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
     },
     ExportedFunction {
         name: "__quantum__qis__szz__body",
+        return_type: "void",
+        params: &[("int", "q1"), ("int", "q2")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__zz__body",
         return_type: "void",
         params: &[("int", "q1"), ("int", "q2")],
     },
@@ -198,6 +228,10 @@ pub fn generate_c_stub() -> String {
     format!(
         r"#include <stdlib.h>
 #include <stdint.h>
+
+// Define type aliases
+typedef uint32_t u32;
+typedef size_t usize;
 
 // Define a minimal binary command structure
 typedef struct {{

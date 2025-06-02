@@ -15,19 +15,22 @@ fn test_bell_qasm() {
         measure q[1] -> c[1];
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None)
-        .unwrap()
-        .register_shots;
+    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
 
-    assert!(results.contains_key("c"));
-    assert_eq!(results["c"].len(), 10);
+    assert_eq!(results.len(), 10);
+    assert!(results.shots[0].data.contains_key("c"));
 
     // Check that all results are either 0 or 3 for Bell state
     // (either 00 or 11 in binary, which is 0 or 3 in decimal)
     let mut has_zero = false;
     let mut has_three = false;
 
-    for &value in &results["c"] {
+    for shot in &results.shots {
+        let value = shot
+            .data
+            .get("c")
+            .and_then(pecos_engines::prelude::Data::as_u32)
+            .expect("c register should be convertible to u32");
         println!("Checking value: {value}");
         assert!(
             value == 0 || value == 3,
@@ -64,21 +67,23 @@ fn test_x_qasm() {
         measure w[0] -> d[0];
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None)
-        .unwrap()
-        .register_shots;
+    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
 
     assert!(
-        results.contains_key("d"),
+        results.shots[0].data.contains_key("d"),
         "Results should contain 'd' register"
     );
-    assert_eq!(results["d"].len(), 10, "Expected 10 measurement results");
+    assert_eq!(results.len(), 10, "Expected 10 measurement results");
 
-    let expected = vec![1u32; 10];
-    assert_eq!(
-        results["d"], expected,
-        "Expected all measurement results to be 1"
-    );
+    // Check all shots have d register set to 1
+    for shot in &results.shots {
+        let value = shot
+            .data
+            .get("d")
+            .and_then(pecos_engines::prelude::Data::as_u32)
+            .expect("d register should be convertible to u32");
+        assert_eq!(value, 1, "Expected measurement result to be 1");
+    }
 }
 
 #[test]
@@ -99,28 +104,27 @@ fn test_arbitrary_register_names() {
         measure bob[0] -> result[1];
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None)
-        .unwrap()
-        .register_shots;
+    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
 
     println!("Arbitrary register test results: {results:?}");
 
     // Assert that arbitrary register name exists in results
     assert!(
-        results.contains_key("result"),
+        results.shots[0].data.contains_key("result"),
         "Results should contain 'result' register"
     );
 
-    // Assert that "result" has exactly 10 elements
-    assert_eq!(
-        results["result"].len(),
-        10,
-        "Expected 10 measurement results"
-    );
+    // Assert that we have exactly 10 shots
+    assert_eq!(results.len(), 10, "Expected 10 measurement results");
 
     // Check that all results are either 0 or 3 for Bell state
     // (either 00 or 11 in binary, which is 0 or 3 in decimal)
-    for &value in &results["result"] {
+    for shot in &results.shots {
+        let value = shot
+            .data
+            .get("result")
+            .and_then(pecos_engines::prelude::Data::as_u32)
+            .expect("result register should be convertible to u32");
         assert!(
             value == 0 || value == 3,
             "Expected value to be 0 or 3, but got {value}"
@@ -149,33 +153,34 @@ fn test_flips_multi_reg_qasm() {
         measure b -> d;
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None)
-        .unwrap()
-        .register_shots;
+    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
 
     assert!(
-        results.contains_key("c"),
+        results.shots[0].data.contains_key("c"),
         "Results should contain 'c' register"
     );
     assert!(
-        results.contains_key("d"),
+        results.shots[0].data.contains_key("d"),
         "Results should contain 'd' register"
     );
 
-    assert_eq!(results["c"].len(), 10, "Expected 10 measurement results");
-    assert_eq!(results["d"].len(), 10, "Expected 10 measurement results");
+    assert_eq!(results.len(), 10, "Expected 10 measurement results");
 
-    let expected = vec![3; 10];
-    assert_eq!(
-        results["c"], expected,
-        "Expected all measurement results to be 3"
-    );
-
-    let expected = vec![4; 10];
-    assert_eq!(
-        results["d"], expected,
-        "Expected all measurement results to be 4"
-    );
+    // Check all shots have expected values
+    for shot in &results.shots {
+        let c_value = shot
+            .data
+            .get("c")
+            .and_then(pecos_engines::prelude::Data::as_u32)
+            .expect("c register should be convertible to u32");
+        let d_value = shot
+            .data
+            .get("d")
+            .and_then(pecos_engines::prelude::Data::as_u32)
+            .expect("d register should be convertible to u32");
+        assert_eq!(c_value, 3, "Expected c measurement result to be 3");
+        assert_eq!(d_value, 4, "Expected d measurement result to be 4");
+    }
 }
 
 #[test]
@@ -194,45 +199,37 @@ fn test_basic_arthmetic_qasm() {
         b = 0;
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None)
-        .unwrap()
-        .register_shots;
+    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
 
     println!("Arithmetic test results: {results:?}");
 
     assert!(
-        results.contains_key("a"),
+        results.shots[0].data.contains_key("a"),
         "Results should contain 'a' register"
     );
     assert!(
-        results.contains_key("b"),
+        results.shots[0].data.contains_key("b"),
         "Results should contain 'b' register"
     );
 
-    assert_eq!(
-        results["a"].len(),
-        10,
-        "Expected 10 measurement results for 'a'"
-    );
-    assert_eq!(
-        results["b"].len(),
-        10,
-        "Expected 10 measurement results for 'b'"
-    );
+    assert_eq!(results.len(), 10, "Expected 10 shots");
 
     // Test that arithmetic worked correctly - all 'a' values should be 3 (1+2)
-    let expected_a = vec![3u32; 10]; // Vector of 10 elements, all set to 3u32
-    assert_eq!(
-        results["a"], expected_a,
-        "Expected all 'a' results to be 3 (1+2)"
-    );
-
-    // 'b' values should be 1 in bit 0 (from the x gate and measurement)
-    let expected_b = vec![0u32; 10]; // Vector of 10 elements, all set to 1u32
-    assert_eq!(
-        results["b"], expected_b,
-        "Expected all 'b' results to be 1 at bit 0"
-    );
+    // 'b' values should be 0
+    for shot in &results.shots {
+        let a_value = shot
+            .data
+            .get("a")
+            .and_then(pecos_engines::prelude::Data::as_u32)
+            .expect("a register should be convertible to u32");
+        let b_value = shot
+            .data
+            .get("b")
+            .and_then(pecos_engines::prelude::Data::as_u32)
+            .expect("b register should be convertible to u32");
+        assert_eq!(a_value, 3, "Expected all 'a' results to be 3 (1+2)");
+        assert_eq!(b_value, 0, "Expected all 'b' results to be 0");
+    }
 }
 
 #[test]
@@ -250,33 +247,46 @@ fn test_defaults_qasm() {
         measure q -> m;
     "#;
 
-    let results = run_qasm_sim(qasm, 5, Some(42), Some(1), None, None)
-        .unwrap()
-        .register_shots;
+    let results = run_qasm_sim(qasm, 5, Some(42), Some(1), None, None).unwrap();
 
     println!("Default test results: {results:?}");
 
     assert!(
-        results.contains_key("a"),
+        results.shots[0].data.contains_key("a"),
         "Results should contain 'a' register"
     );
     assert!(
-        results.contains_key("b"),
+        results.shots[0].data.contains_key("b"),
         "Results should contain 'b' register"
     );
     assert!(
-        results.contains_key("m"),
+        results.shots[0].data.contains_key("m"),
         "Results should contain 'm' register"
     );
 
-    assert_eq!(results["a"].len(), 5);
-    assert_eq!(results["b"].len(), 5);
-    assert_eq!(results["m"].len(), 5);
+    assert_eq!(results.len(), 5);
 
-    let expected = vec![0; 5];
-    assert_eq!(results["a"], expected);
-    assert_eq!(results["b"], expected);
-    assert_eq!(results["m"], expected);
+    // Check all shots have expected default values (0)
+    for shot in &results.shots {
+        let a_value = shot
+            .data
+            .get("a")
+            .and_then(pecos_engines::prelude::Data::as_u32)
+            .expect("a register should be convertible to u32");
+        let b_value = shot
+            .data
+            .get("b")
+            .and_then(pecos_engines::prelude::Data::as_u32)
+            .expect("b register should be convertible to u32");
+        let m_value = shot
+            .data
+            .get("m")
+            .and_then(pecos_engines::prelude::Data::as_u32)
+            .expect("m register should be convertible to u32");
+        assert_eq!(a_value, 0);
+        assert_eq!(b_value, 0);
+        assert_eq!(m_value, 0);
+    }
 }
 
 #[test]
@@ -293,45 +303,37 @@ fn test_basic_if_creg_statements_qasm() {
         if(b==0) a = 1 + 2;
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None)
-        .unwrap()
-        .register_shots;
+    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
 
     println!("If creg test results: {results:?}");
 
     assert!(
-        results.contains_key("a"),
+        results.shots[0].data.contains_key("a"),
         "Results should contain 'a' register"
     );
     assert!(
-        results.contains_key("b"),
+        results.shots[0].data.contains_key("b"),
         "Results should contain 'b' register"
     );
 
-    assert_eq!(
-        results["a"].len(),
-        10,
-        "Expected 10 measurement results for 'a'"
-    );
-    assert_eq!(
-        results["b"].len(),
-        10,
-        "Expected 10 measurement results for 'b'"
-    );
+    assert_eq!(results.len(), 10, "Expected 10 shots");
 
     // Test that arithmetic worked correctly - all 'a' values should be 3 (1+2)
-    let expected_a = vec![3u32; 10]; // Vector of 10 elements, all set to 3u32
-    assert_eq!(
-        results["a"], expected_a,
-        "Expected all 'a' results to be 3 (1+2)"
-    );
-
-    // 'b' values should be 1 in bit 0 (from the x gate and measurement)
-    let expected_b = vec![0u32; 10]; // Vector of 10 elements, all set to 1u32
-    assert_eq!(
-        results["b"], expected_b,
-        "Expected all 'b' results to be 1 at bit 0"
-    );
+    // 'b' values should be 0
+    for shot in &results.shots {
+        let a_value = shot
+            .data
+            .get("a")
+            .and_then(pecos_engines::prelude::Data::as_u32)
+            .expect("a register should be convertible to u32");
+        let b_value = shot
+            .data
+            .get("b")
+            .and_then(pecos_engines::prelude::Data::as_u32)
+            .expect("b register should be convertible to u32");
+        assert_eq!(a_value, 3, "Expected all 'a' results to be 3 (1+2)");
+        assert_eq!(b_value, 0, "Expected all 'b' results to be 0");
+    }
 }
 
 #[test]
@@ -351,37 +353,36 @@ fn test_basic_if_qreg_statements_qasm() {
         measure q[0] -> a[1];
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None)
-        .unwrap()
-        .register_shots;
+    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
 
     println!("If creg test results: {results:?}");
 
     assert!(
-        results.contains_key("a"),
+        results.shots[0].data.contains_key("a"),
         "Results should contain 'a' register"
     );
     assert!(
-        results.contains_key("b"),
+        results.shots[0].data.contains_key("b"),
         "Results should contain 'b' register"
     );
 
-    assert_eq!(
-        results["a"].len(),
-        10,
-        "Expected 10 measurement results for 'a'"
-    );
-    assert_eq!(
-        results["b"].len(),
-        10,
-        "Expected 10 measurement results for 'b'"
-    );
+    assert_eq!(results.len(), 10, "Expected 10 shots");
 
-    let expected_a = vec![2u32; 10]; // Value 2 = binary 10 (bit 1 = 1, bit 0 = 0)
-    assert_eq!(results["a"], expected_a);
-
-    let expected_b = vec![0u32; 10];
-    assert_eq!(results["b"], expected_b);
+    // Check all shots have expected values
+    for shot in &results.shots {
+        let a_value = shot
+            .data
+            .get("a")
+            .and_then(pecos_engines::prelude::Data::as_u32)
+            .expect("a register should be convertible to u32");
+        let b_value = shot
+            .data
+            .get("b")
+            .and_then(pecos_engines::prelude::Data::as_u32)
+            .expect("b register should be convertible to u32");
+        assert_eq!(a_value, 2); // Value 2 = binary 10 (bit 1 = 1, bit 0 = 0)
+        assert_eq!(b_value, 0);
+    }
 }
 
 #[test]
@@ -406,15 +407,21 @@ fn test_cond_bell() {
         // c should be "10" == 2
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None)
-        .unwrap()
-        .register_shots;
+    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
 
     println!("Conditional test results: {results:?}");
 
-    assert!(results.contains_key("one_0"));
-    let expected_b = vec![2u32; 10];
-    assert_eq!(results["one_0"], expected_b);
+    assert!(results.shots[0].data.contains_key("one_0"));
+
+    // Check all shots have one_0 register set to 2
+    for shot in &results.shots {
+        let value = shot
+            .data
+            .get("one_0")
+            .and_then(pecos_engines::prelude::Data::as_u32)
+            .expect("one_0 register should be convertible to u32");
+        assert_eq!(value, 2);
+    }
 }
 
 #[test]
@@ -448,13 +455,19 @@ fn test_classical_statement() {
 
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None)
-        .unwrap()
-        .register_shots;
+    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
 
     println!("Conditional test results: {results:?}");
 
-    assert!(results.contains_key("c"));
-    let expected = vec![2u32; 10];
-    assert_eq!(results["c"], expected);
+    assert!(results.shots[0].data.contains_key("c"));
+
+    // Check all shots have c register set to 2
+    for shot in &results.shots {
+        let value = shot
+            .data
+            .get("c")
+            .and_then(pecos_engines::prelude::Data::as_u32)
+            .expect("c register should be convertible to u32");
+        assert_eq!(value, 2);
+    }
 }

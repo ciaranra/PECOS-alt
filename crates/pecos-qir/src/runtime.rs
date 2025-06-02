@@ -1,7 +1,9 @@
 use log::info;
 use pecos_engines::byte_message::{ByteMessage, ByteMessageBuilder};
+use pecos_engines::shot_results::{Data, Shot};
+use std::collections::HashMap;
 use std::env;
-use std::ffi::{CStr, c_char};
+use std::ffi::{CStr, CString, c_char};
 use std::io::{self, Write};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -54,6 +56,84 @@ static MESSAGE_BUILDER: std::sync::LazyLock<Mutex<ByteMessageBuilder>> =
         let _ = builder.for_quantum_operations();
         Mutex::new(builder)
     });
+
+// Structure to hold runtime state for classical registers
+struct RuntimeState {
+    // Measurement results by result ID
+    measurement_results: HashMap<usize, bool>,
+    // Classical registers by name
+    classical_registers: HashMap<String, i64>,
+    // Track bit positions for each register (register_name -> next_bit_position)
+    register_bit_positions: HashMap<String, usize>,
+    // Mapping of result IDs to register assignments (result_id -> (register_name, bit_position))
+    result_mappings: HashMap<usize, (String, usize)>,
+}
+
+impl RuntimeState {
+    fn new() -> Self {
+        Self {
+            measurement_results: HashMap::new(),
+            classical_registers: HashMap::new(),
+            register_bit_positions: HashMap::new(),
+            result_mappings: HashMap::new(),
+        }
+    }
+
+    fn reset(&mut self) {
+        self.measurement_results.clear();
+        self.classical_registers.clear();
+        self.register_bit_positions.clear();
+        self.result_mappings.clear();
+    }
+
+    fn apply_mappings(&mut self) {
+        // Clear existing register values
+        self.classical_registers.clear();
+
+        // Apply all result mappings to build register values
+        for (result_id, (register_name, bit_position)) in &self.result_mappings {
+            // Get the measurement result
+            let measurement_value = self
+                .measurement_results
+                .get(result_id)
+                .copied()
+                .unwrap_or(false);
+
+            // Get or create the register
+            let register = self
+                .classical_registers
+                .entry(register_name.clone())
+                .or_insert(0);
+
+            // Set the bit
+            if measurement_value {
+                *register |= 1i64 << bit_position;
+            } else {
+                *register &= !(1i64 << bit_position);
+            }
+        }
+    }
+
+    fn export_shot(&self) -> Shot {
+        let mut shot = Shot::default();
+
+        // Export all classical registers to the shot
+        for (name, &value) in &self.classical_registers {
+            // Store all values as I64 for consistency with QIR standard
+            shot.data.insert(name.clone(), Data::I64(value));
+        }
+
+        shot
+    }
+}
+
+// Global runtime state
+static RUNTIME_STATE: std::sync::LazyLock<Mutex<RuntimeState>> =
+    std::sync::LazyLock::new(|| Mutex::new(RuntimeState::new()));
+
+// Global storage for the last exported shot
+static LAST_SHOT: std::sync::LazyLock<Mutex<Option<Shot>>> =
+    std::sync::LazyLock::new(|| Mutex::new(None));
 
 /// Helper function to check if we should print commands
 ///
@@ -157,6 +237,20 @@ pub unsafe extern "C" fn __quantum__qis__r1xy__body(theta: f64, phi: f64, qubit:
     store_gate_command(&format!("R1XY {theta} {phi} {qubit}"), |builder| {
         builder.add_r1xy(theta, phi, &[qubit]);
     });
+}
+
+/// Alias for r1xy to match QIR standard naming
+///
+/// # Safety
+///
+/// This function is called from C/C++ code and assumes that the qubit ID is valid
+/// and has been properly allocated. Calling with an invalid qubit ID may lead to
+/// undefined behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__rxy__body(theta: f64, phi: f64, qubit: usize) {
+    unsafe {
+        __quantum__qis__r1xy__body(theta, phi, qubit);
+    }
 }
 
 /// Applies a Hadamard gate to the specified qubit.
@@ -267,6 +361,20 @@ pub unsafe extern "C" fn __quantum__qis__szz__body(qubit1: usize, qubit2: usize)
     });
 }
 
+/// Alias for szz to match QIR standard naming
+///
+/// # Safety
+///
+/// This function is called from C/C++ code and assumes that the qubit IDs are valid
+/// and have been properly allocated. Calling with invalid qubit IDs may lead to
+/// undefined behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__zz__body(qubit1: usize, qubit2: usize) {
+    unsafe {
+        __quantum__qis__szz__body(qubit1, qubit2);
+    }
+}
+
 /// Applies a RZZ gate to the specified qubits.
 ///
 /// # Arguments
@@ -300,12 +408,22 @@ pub unsafe extern "C" fn __quantum__qis__rzz__body(theta: f64, qubit1: usize, qu
 /// are valid and have been properly allocated. Calling with invalid IDs may lead to
 /// undefined behavior.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__m__body(qubit: usize, _result: usize) -> u32 {
+pub unsafe extern "C" fn __quantum__qis__m__body(qubit: usize, result: usize) -> u32 {
     store_gate_command(&format!("M {qubit}"), |builder| {
         builder.add_measurements(&[qubit]);
     });
+
+    // Store a placeholder measurement result
+    // In a real implementation, this would be populated by the quantum engine
+    // For now, we'll set it when processing measurement results
+    if let Ok(mut state) = RUNTIME_STATE.lock() {
+        // Mark that this result ID is associated with a measurement
+        // The actual value will be populated later by process_measurement_results
+        state.measurement_results.insert(result, false);
+    }
+
     // In the real QIR runtime, this would return the actual measurement result
-    // For this implementation, we just return 0
+    // For this implementation, we return 0 (will be updated later)
     0
 }
 
@@ -598,6 +716,21 @@ pub unsafe extern "C" fn qir_runtime_reset() {
     NEXT_QUBIT_ID.store(0, Ordering::SeqCst);
     NEXT_RESULT_ID.store(0, Ordering::SeqCst);
 
+    // Reset runtime state
+    if let Ok(mut state) = RUNTIME_STATE.lock() {
+        state.reset();
+        if should_print_commands() {
+            println!("[Thread {thread_id}] Reset runtime state (classical registers cleared)");
+        }
+    } else if should_print_commands() {
+        eprintln!("[Thread {thread_id}] ERROR: Failed to lock runtime state mutex during reset");
+    }
+
+    // Clear the last shot
+    if let Ok(mut last_shot) = LAST_SHOT.lock() {
+        *last_shot = None;
+    }
+
     if should_print_commands() {
         println!("[Thread {thread_id}] Reset QIR runtime (reset counters)");
     }
@@ -760,9 +893,248 @@ pub unsafe extern "C" fn __quantum__rt__result_record_output(result: usize, name
         println!("[Thread {thread_id}] Recording result {result} as '{name_str}'");
     }
 
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        builder.add_result_record(result, Some(&name_str));
+    // Record the mapping of this result to a register and bit position
+    if let Ok(mut state) = RUNTIME_STATE.lock() {
+        // Get the next bit position for this register
+        let current_bit_position = {
+            let bit_position = state
+                .register_bit_positions
+                .entry(name_str.clone())
+                .or_insert(0);
+            let pos = *bit_position;
+            *bit_position += 1;
+            pos
+        };
+
+        // Store the mapping for when we get the actual measurement result
+        state
+            .result_mappings
+            .insert(result, (name_str.clone(), current_bit_position));
+
+        if should_print_commands() {
+            println!(
+                "[Thread {thread_id}] Mapped result {result} to register '{name_str}' bit {current_bit_position}"
+            );
+        }
     } else {
-        eprintln!("QIR Runtime: [Thread {thread_id}] Failed to lock message builder mutex");
+        eprintln!("QIR Runtime: [Thread {thread_id}] Failed to lock runtime state mutex");
+    }
+}
+
+/// Updates the measurement results in the runtime state.
+///
+/// This function should be called by the QIR engine after processing measurements
+/// from the quantum system.
+///
+/// # Arguments
+///
+/// * `results` - A slice of (`result_id`, `measurement_value`) pairs
+///
+/// # Safety
+///
+/// This function is called from C/C++ code. It is safe to call but marked as unsafe
+/// due to the FFI boundary.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qir_runtime_update_measurement_results(
+    results_ptr: *const u32,
+    results_len: usize,
+) {
+    let thread_id = get_thread_id();
+
+    if results_ptr.is_null() || results_len == 0 {
+        return;
+    }
+
+    // Convert the raw pointer to a slice (pairs of result_id, value)
+    let results = unsafe { std::slice::from_raw_parts(results_ptr, results_len * 2) };
+
+    if let Ok(mut state) = RUNTIME_STATE.lock() {
+        // Process pairs of (result_id, measurement_value)
+        for i in (0..results.len()).step_by(2) {
+            let result_id = results[i] as usize;
+            let measurement_value = results[i + 1] != 0;
+
+            state
+                .measurement_results
+                .insert(result_id, measurement_value);
+
+            if should_print_commands() {
+                println!(
+                    "[Thread {thread_id}] Updated measurement result {result_id} = {measurement_value}"
+                );
+            }
+        }
+    } else {
+        eprintln!("QIR Runtime: [Thread {thread_id}] Failed to lock runtime state mutex");
+    }
+}
+
+/// Finalizes the QIR program execution and exports the shot results.
+///
+/// This function should be called when the QIR program's main function returns.
+/// It exports the classical registers to a Shot and stores it for retrieval.
+///
+/// # Safety
+///
+/// This function is called from C/C++ code. It is safe to call but marked as unsafe
+/// due to the FFI boundary.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qir_runtime_finalize_shot() {
+    let thread_id = get_thread_id();
+
+    if let Ok(mut state) = RUNTIME_STATE.lock() {
+        // Apply the result mappings to build register values
+        state.apply_mappings();
+
+        let shot = state.export_shot();
+
+        if should_print_commands() {
+            println!(
+                "[Thread {thread_id}] Finalizing shot with {} registers",
+                state.classical_registers.len()
+            );
+            for (name, value) in &state.classical_registers {
+                println!("[Thread {thread_id}]   Register '{name}' = {value}");
+            }
+        }
+
+        // Store the shot for retrieval
+        if let Ok(mut last_shot) = LAST_SHOT.lock() {
+            *last_shot = Some(shot);
+        } else {
+            eprintln!("QIR Runtime: [Thread {thread_id}] Failed to lock last shot mutex");
+        }
+    } else {
+        eprintln!("QIR Runtime: [Thread {thread_id}] Failed to lock runtime state mutex");
+    }
+}
+
+/// Representation of a shot result for FFI
+#[repr(C)]
+pub struct FFIShotData {
+    /// Pointer to register names (null-terminated C strings)
+    names: *mut *mut c_char,
+    /// Pointer to register values
+    values: *mut i64,
+    /// Number of registers
+    count: usize,
+}
+
+/// Gets the shot results from the last finalized execution.
+///
+/// # Returns
+///
+/// A pointer to an `FFIShotData` structure containing the shot results,
+/// or null if no shot is available.
+///
+/// # Safety
+///
+/// This function allocates memory that must be freed by calling `qir_runtime_free_shot_data`.
+///
+/// # Panics
+///
+/// This function may panic if:
+/// - The array layout cannot be created (e.g., size overflow)
+/// - Creating a C string from the register name fails (e.g., contains null bytes)
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qir_runtime_get_shot_results() -> *mut FFIShotData {
+    let thread_id = get_thread_id();
+
+    if let Ok(last_shot) = LAST_SHOT.lock() {
+        if let Some(shot) = last_shot.as_ref() {
+            let count = shot.data.len();
+
+            // Allocate arrays using Vec to ensure proper alignment
+            let mut names_vec: Vec<*mut c_char> = Vec::with_capacity(count);
+            let names = names_vec.as_mut_ptr();
+            std::mem::forget(names_vec); // Prevent deallocation, we'll manage it manually
+
+            let mut values_vec: Vec<i64> = Vec::with_capacity(count);
+            let values = values_vec.as_mut_ptr();
+            std::mem::forget(values_vec); // Prevent deallocation, we'll manage it manually
+
+            // Populate the arrays
+            for (i, (name, data)) in shot.data.iter().enumerate() {
+                // Convert name to C string
+                let c_name = std::ffi::CString::new(name.as_str()).unwrap();
+                unsafe {
+                    *names.add(i) = c_name.into_raw();
+                }
+
+                // Extract value
+                let value = match data {
+                    Data::U32(v) => i64::from(*v),
+                    Data::I64(v) => *v,
+                    _ => 0, // Default for other types
+                };
+                unsafe {
+                    *values.add(i) = value;
+                }
+            }
+
+            // Create and return the FFI structure
+            let ffi_data = Box::new(FFIShotData {
+                names,
+                values,
+                count,
+            });
+
+            if should_print_commands() {
+                println!("[Thread {thread_id}] Exported shot with {count} registers");
+            }
+
+            Box::into_raw(ffi_data)
+        } else {
+            if should_print_commands() {
+                println!("[Thread {thread_id}] No shot results available");
+            }
+            std::ptr::null_mut()
+        }
+    } else {
+        eprintln!("QIR Runtime: [Thread {thread_id}] Failed to lock last shot mutex");
+        std::ptr::null_mut()
+    }
+}
+
+/// Frees the shot data allocated by `qir_runtime_get_shot_results`.
+///
+/// # Arguments
+///
+/// * `data` - The pointer to the `FFIShotData` to free
+///
+/// # Safety
+///
+/// This function should only be called with a valid pointer returned by
+/// `qir_runtime_get_shot_results`. Calling with an invalid pointer will
+/// result in undefined behavior.
+///
+/// # Panics
+///
+/// This function may panic if the array layout cannot be created (e.g., size overflow).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qir_runtime_free_shot_data(data: *mut FFIShotData) {
+    if data.is_null() {
+        return;
+    }
+
+    unsafe {
+        let ffi_data = Box::from_raw(data);
+
+        // Free the name strings
+        for i in 0..ffi_data.count {
+            let name_ptr = *ffi_data.names.add(i);
+            if !name_ptr.is_null() {
+                let _ = CString::from_raw(name_ptr);
+            }
+        }
+
+        // Free the arrays by reconstructing the Vecs
+        if ffi_data.count > 0 {
+            // Reconstruct Vec to properly deallocate
+            let _ = Vec::from_raw_parts(ffi_data.names, 0, ffi_data.count);
+            let _ = Vec::from_raw_parts(ffi_data.values, 0, ffi_data.count);
+        }
+
+        // Box automatically frees the FFIShotData
     }
 }

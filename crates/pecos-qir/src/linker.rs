@@ -3,33 +3,49 @@
 //! This module is responsible for compiling QIR programs (.ll files) and linking them
 //! with the pre-built runtime library to create dynamically loadable libraries.
 //!
-//! The process involves:
+//! # Overview
+//!
+//! The QIR compilation process involves:
 //! 1. Compiling the QIR file to an object file using LLVM tools
 //! 2. Getting the pre-built runtime library from `RuntimeBuilder`
 //! 3. Linking them together to create a shared library (.so/.dll/.dylib)
 //!
 //! # Rebuild Strategy
 //!
-//! The `QirLinker` serves as the central coordination point for determining when
-//! components need to be rebuilt. The strategy is:
+//! The system manages two types of artifacts that may need rebuilding:
 //!
-//! 1. **Runtime Library Check** - Always call `RuntimeBuilder::build_runtime()` first.
-//!    This leverages Cargo's incremental compilation to efficiently detect if the
-//!    runtime library needs rebuilding due to source or dependency changes.
+//! ## 1. Static Runtime Library (`~/.cargo/pecos-qir/libpecos_qir.a`)
 //!
-//! 2. **Cached QIR Library Check** - Check if a previously compiled QIR library exists
-//!    and is still valid by comparing timestamps against:
-//!    - The source QIR file (existing check)
-//!    - The runtime library (to catch runtime updates)
+//! The runtime library rebuild is triggered by:
+//! - **Missing library**: If the library doesn't exist at all
+//! - **Source changes**: When pecos-qir source files are newer than the library
+//! - **Dependency changes**: When Cargo.lock indicates dependency updates
 //!
-//! 3. **Rebuild Decision** - A rebuild occurs if:
-//!    - The QIR library doesn't exist
-//!    - The QIR source file is newer than the cached library
-//!    - The runtime library is newer than the cached library
-//!    - Any runtime dependencies changed (handled by Cargo)
+//! The detection happens in two phases:
+//! - **Detection phase** (build.rs during `cargo build/test/check`):
+//!   - Checks if runtime library exists and is up-to-date
+//!   - Creates marker file (`~/.cargo/pecos-qir/.needs_rebuild`) if rebuild needed
+//!   - Removes marker if everything is current
+//! - **Build phase** (`RuntimeBuilder` when compiling QIR):
+//!   - Checks for missing library OR marker file existence
+//!   - Builds the static library if needed
+//!   - Removes marker file after successful build
 //!
-//! This approach ensures correctness while maintaining good performance through
-//! caching and Cargo's incremental compilation.
+//! ## 2. QIR Executables (Compiled QIR linked with runtime)
+//!
+//! QIR executable rebuild is triggered by:
+//! - **Missing executable**: If the compiled library doesn't exist
+//! - **QIR source changes**: When the .ll file is newer than the executable
+//! - **Runtime library changes**: When the runtime library is newer than the executable
+//!
+//! The `QirLinker::compile` method handles this by:
+//! 1. Checking for cached QIR executable
+//! 2. Ensuring runtime library is built/current (via `RuntimeBuilder`)
+//! 3. Comparing timestamps: executable vs QIR source and runtime library
+//! 4. Rebuilding if any dependency is newer
+//!
+//! This design ensures seamless operation where rebuilds happen automatically
+//! when needed, while avoiding unnecessary recompilation through smart caching.
 
 #[cfg(target_os = "macos")]
 use crate::platform::macos::MacOSCompiler;
@@ -49,9 +65,29 @@ pub struct QirLinker;
 impl QirLinker {
     /// Compile and link a QIR program with the runtime to create a dynamically loadable library
     ///
-    /// This method compiles a QIR file to an object file, then links it with the
-    /// pre-built runtime library to create a shared library that can be loaded and executed.
-    /// It uses caching to avoid recompiling unchanged files.
+    /// This method orchestrates the complete QIR compilation process with intelligent
+    /// caching and rebuild detection.
+    ///
+    /// # Process Overview
+    ///
+    /// 1. **Validate** the QIR file exists and is not empty
+    /// 2. **Check cache** for existing compiled library
+    /// 3. **Ensure runtime** library is built and up-to-date
+    /// 4. **Validate cache** by comparing timestamps
+    /// 5. **Rebuild if needed** when:
+    ///    - No cached library exists
+    ///    - QIR source is newer than cached library
+    ///    - Runtime library is newer than cached library
+    /// 6. **Return** path to the compiled library
+    ///
+    /// # Arguments
+    ///
+    /// * `qir_file` - Path to the QIR (.ll) file to compile
+    /// * `output_dir` - Optional output directory (defaults to `<qir_dir>/build/`)
+    ///
+    /// # Returns
+    ///
+    /// Path to the compiled shared library (.so/.dll/.dylib)
     ///
     /// # Errors
     ///
@@ -60,7 +96,7 @@ impl QirLinker {
     /// - LLVM tools are not installed or are the wrong version
     /// - Compilation of the QIR file fails
     /// - Linking the object file with the runtime library fails
-    /// - File system operations fail (creating directories, reading/writing files)
+    /// - File system operations fail
     pub fn compile<P: AsRef<Path>>(
         qir_file: P,
         output_dir: Option<P>,
@@ -72,43 +108,48 @@ impl QirLinker {
         // Determine output directory
         let output_dir = Self::prepare_output_directory(qir_file, output_dir)?;
 
-        // First check for cached compilation before building runtime
-        // This avoids unnecessary runtime timestamp updates
+        // Step 1: Check for cached QIR executable
+        // We check cache first to avoid updating runtime timestamp unnecessarily
         if let Some(cached_lib) = Self::find_cached_library(qir_file, &output_dir)? {
-            // Now ensure the runtime library is up-to-date
-            // This will use cargo's incremental compilation to detect if rebuild is needed
+            // Step 2: Ensure runtime library is built/current
+            // RuntimeBuilder checks for missing library OR marker file
             let rust_runtime_lib = RuntimeBuilder::build_runtime()?;
 
-            // Check if the cached library is still valid after runtime check
+            // Step 3: Validate cached executable is still valid
+            // Compare modification times: cached library vs runtime library
             let cached_metadata = fs::metadata(&cached_lib)?;
             let cached_mtime = cached_metadata.modified().map_err(PecosError::IO)?;
 
             let runtime_metadata = fs::metadata(&rust_runtime_lib)?;
             let runtime_mtime = runtime_metadata.modified().map_err(PecosError::IO)?;
 
+            // If cached library is newer than (or same age as) runtime, use it
             if cached_mtime >= runtime_mtime {
-                info!("Using cached library: {:?}", cached_lib);
+                debug!("Using cached library: {:?}", cached_lib);
                 return Ok(cached_lib);
             }
+
+            // Runtime was updated, need to relink
             info!("Cached library is older than runtime library, rebuilding...");
             // Fall through to rebuild
         } else {
-            // No cached library, so ensure runtime is built
+            // No cached library exists, ensure runtime is built before we compile
             RuntimeBuilder::build_runtime()?;
         }
 
         info!("Starting compilation: {:?}", qir_file);
 
-        // Get the runtime library path again (it's already built)
+        // Step 4: Build QIR executable
+        // Get the runtime library path (already built in steps above)
         let rust_runtime_lib = RuntimeBuilder::build_runtime()?;
 
-        // Generate file paths
+        // Generate consistent file paths for caching
         let (object_file, library_file) = Self::generate_file_paths(qir_file, &output_dir);
 
-        // Compile QIR to object file
+        // Compile QIR to object file using LLVM
         Self::compile_to_object_file(qir_file, &object_file)?;
 
-        // Link into a shared library
+        // Link object file with runtime library to create final executable
         Self::link_shared_library(&object_file, &rust_runtime_lib, &library_file)?;
 
         info!("Compilation successful: {:?}", library_file);
@@ -130,27 +171,15 @@ impl QirLinker {
             .to_string_lossy();
 
         let lib_extension = Self::get_library_extension();
-        let lib_prefix = format!("lib{file_stem}_");
-        let lib_suffix = format!(".{lib_extension}");
+        let library_file = output_dir.join(format!("lib{file_stem}.{lib_extension}"));
 
-        // Look for existing libraries matching the pattern
-        let Ok(entries) = fs::read_dir(output_dir) else {
-            return Ok(None);
-        };
-
-        for entry in entries.filter_map(Result::ok) {
-            let path = entry.path();
-            let Some(filename) = path.file_name().and_then(|f| f.to_str()) else {
-                continue;
-            };
-
-            if filename.starts_with(&lib_prefix) && filename.ends_with(&lib_suffix) {
-                // Check if library is newer than QIR file
-                if let Ok(lib_metadata) = fs::metadata(&path) {
-                    if let Ok(lib_modified) = lib_metadata.modified() {
-                        if lib_modified >= qir_modified {
-                            return Ok(Some(path));
-                        }
+        // Check if the library file exists
+        if library_file.exists() {
+            // Check if library is newer than QIR file
+            if let Ok(lib_metadata) = fs::metadata(&library_file) {
+                if let Ok(lib_modified) = lib_metadata.modified() {
+                    if lib_modified >= qir_modified {
+                        return Ok(Some(library_file));
                     }
                 }
             }
@@ -201,17 +230,10 @@ impl QirLinker {
             .unwrap_or_else(|| "qir_program".as_ref())
             .to_string_lossy();
 
-        // Generate unique library name with timestamp
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-
+        // Use consistent filenames for proper caching
         let object_file = output_dir.join(format!("{file_stem}.o"));
-        let library_file = output_dir.join(format!(
-            "lib{file_stem}_{timestamp}.{}",
-            Self::get_library_extension()
-        ));
+        let library_file =
+            output_dir.join(format!("lib{file_stem}.{}", Self::get_library_extension()));
 
         (object_file, library_file)
     }

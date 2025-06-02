@@ -19,7 +19,7 @@ pub use noise::{DepolarizingNoiseModel, NoiseModel, PassThroughNoiseModel};
 pub use pecos_core::errors::PecosError;
 pub use quantum::QuantumEngine;
 pub use quantum_system::QuantumSystem;
-pub use shot_results::{ShotResult, ShotResults};
+pub use shot_results::{Shot, ShotVec};
 
 /// Run a quantum simulation.
 ///
@@ -36,13 +36,13 @@ pub use shot_results::{ShotResult, ShotResults};
 /// * `quantum_engine` - Optional quantum engine (default: `StateVecEngine`)
 ///
 /// # Returns
-/// The `ShotResults` structure containing measurement results for each shot
+/// The `ShotVec` structure containing measurement results for each shot
 ///
 /// # Examples
 ///
 /// ```
 /// use pecos_engines::{run_sim, ClassicalEngine, ByteMessage, Engine};
-/// use pecos_engines::shot_results::{ShotResult, ShotResults};
+/// use pecos_engines::shot_results::{Shot, ShotVec};
 /// use pecos_core::errors::PecosError;
 /// use std::any::Any;
 ///
@@ -52,10 +52,10 @@ pub use shot_results::{ShotResult, ShotResults};
 ///
 /// impl Engine for DummyEngine {
 ///     type Input = ();
-///     type Output = ShotResult;
+///     type Output = Shot;
 ///
 ///     fn process(&mut self, _input: Self::Input) -> Result<Self::Output, PecosError> {
-///         Ok(ShotResult::default())
+///         Ok(Shot::default())
 ///     }
 ///
 ///     fn reset(&mut self) -> Result<(), PecosError> {
@@ -75,8 +75,8 @@ pub use shot_results::{ShotResult, ShotResults};
 ///         Ok(())
 ///     }
 ///
-///     fn get_results(&self) -> Result<ShotResult, PecosError> {
-///         Ok(ShotResult::default())
+///     fn get_results(&self) -> Result<Shot, PecosError> {
+///         Ok(Shot::default())
 ///     }
 ///
 ///     fn compile(&self) -> Result<(), PecosError> {
@@ -100,7 +100,7 @@ pub fn run_sim(
     workers: Option<usize>,
     noise_model: Option<Box<dyn NoiseModel>>,
     quantum_engine: Option<Box<dyn QuantumEngine>>,
-) -> Result<ShotResults, PecosError> {
+) -> Result<ShotVec, PecosError> {
     // Get the number of qubits from the classical engine
     let num_qubits = classical_engine.num_qubits();
 

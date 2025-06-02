@@ -1,15 +1,13 @@
 use crate::Engine;
 use crate::byte_message::ByteMessage;
 use crate::engine_system::{ControlEngine, EngineStage};
-use crate::shot_results::ShotResult;
+use crate::shot_results::Shot;
 use dyn_clone::DynClone;
 use pecos_core::errors::PecosError;
 use std::any::Any;
 
 /// Classical engine that processes programs and handles measurements
-pub trait ClassicalEngine:
-    Engine<Input = (), Output = ShotResult> + DynClone + Send + Sync
-{
+pub trait ClassicalEngine: Engine<Input = (), Output = Shot> + DynClone + Send + Sync {
     fn num_qubits(&self) -> usize;
 
     /// Generate a `ByteMessage` containing the next batch of quantum commands to execute
@@ -43,7 +41,7 @@ pub trait ClassicalEngine:
     ///
     /// # Returns
     ///
-    /// Returns a `ShotResult` containing the measurements and results generated
+    /// Returns a `Shot` containing the measurements and results generated
     /// during the execution process.
     ///
     /// # Errors
@@ -51,7 +49,7 @@ pub trait ClassicalEngine:
     /// This function may return the following errors:
     /// - Operation error: If result retrieval fails or is unsupported.
     /// - Lock error: If a lock cannot be acquired to access required resources.
-    fn get_results(&self) -> Result<ShotResult, PecosError>;
+    fn get_results(&self) -> Result<Shot, PecosError>;
 
     /// Sets a specific seed for the classical engine
     ///
@@ -116,11 +114,11 @@ dyn_clone::clone_trait_object!(ClassicalEngine);
 
 impl ControlEngine for Box<dyn ClassicalEngine> {
     type Input = ();
-    type Output = ShotResult;
+    type Output = Shot;
     type EngineInput = ByteMessage;
     type EngineOutput = ByteMessage;
 
-    fn start(&mut self, _input: ()) -> Result<EngineStage<ByteMessage, ShotResult>, PecosError> {
+    fn start(&mut self, _input: ()) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
         // Build up first batch of commands until measurement needed
         let commands = self.generate_commands()?;
 
@@ -138,7 +136,7 @@ impl ControlEngine for Box<dyn ClassicalEngine> {
     fn continue_processing(
         &mut self,
         measurements: ByteMessage,
-    ) -> Result<EngineStage<ByteMessage, ShotResult>, PecosError> {
+    ) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
         // Handle measurements from quantum engine
         self.handle_measurements(measurements)?;
 
@@ -163,7 +161,7 @@ impl ControlEngine for Box<dyn ClassicalEngine> {
 
 impl Engine for Box<dyn ClassicalEngine> {
     type Input = ();
-    type Output = ShotResult;
+    type Output = Shot;
 
     fn process(&mut self, input: Self::Input) -> Result<Self::Output, PecosError> {
         let mut stage = self.start(input)?;

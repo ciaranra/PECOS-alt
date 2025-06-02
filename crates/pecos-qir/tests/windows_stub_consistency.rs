@@ -53,7 +53,7 @@ fn test_exports_match_runtime() {
         extra.join("\n  ")
     );
 
-    println!("✓ Windows stub exports are consistent with runtime.rs");
+    println!("Windows stub exports are consistent with runtime.rs");
 }
 
 fn extract_runtime_exports(content: &str) -> Vec<String> {

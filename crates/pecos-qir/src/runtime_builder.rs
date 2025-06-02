@@ -1,4 +1,40 @@
-use log::info;
+//! Runtime Builder Module
+//!
+//! This module handles building and managing the static pecos-qir runtime library
+//! that QIR programs link against.
+//!
+//! # Runtime Library Location
+//!
+//! The static library is stored at:
+//! - Linux/macOS: `~/.cargo/pecos-qir/libpecos_qir.a`
+//! - Windows: `~/.cargo/pecos-qir/pecos_qir.lib`
+//!
+//! # Rebuild Strategy
+//!
+//! The runtime library is rebuilt only when necessary:
+//!
+//! 1. **Missing Library**: If the library doesn't exist at the expected location
+//! 2. **Marker File**: If `~/.cargo/pecos-qir/.needs_rebuild` exists
+//!
+//! The marker file is created by the build.rs script when it detects:
+//! - Source files in pecos-qir have changed
+//! - Dependencies have been updated
+//! - The library is missing
+//!
+//! After a successful build, the marker file is removed to prevent unnecessary rebuilds.
+//!
+//! # Build Process
+//!
+//! The build process:
+//! 1. Creates a minimal wrapper crate that depends on pecos-qir
+//! 2. Builds it as a static library using cargo
+//! 3. Copies the result to the expected location
+//! 4. Removes the marker file
+//!
+//! This approach ensures the runtime library includes all necessary symbols
+//! while avoiding circular dependencies during the build.
+
+use log::{debug, info};
 use pecos_core::errors::PecosError;
 use std::env;
 use std::fs;
@@ -15,13 +51,47 @@ static BUILD_MUTEX: Mutex<()> = Mutex::new(());
 impl RuntimeBuilder {
     /// Build the Rust QIR runtime as a static library
     ///
-    /// This method ensures we have an up-to-date static library by leveraging
-    /// Cargo's built-in incremental compilation and dependency tracking.
+    /// This method ensures we have an up-to-date static library by checking
+    /// for the existence of the library and a marker file that indicates
+    /// a rebuild is needed.
+    ///
+    /// # Returns
+    /// - `Ok(PathBuf)`: Path to the runtime library
+    /// - `Err(PecosError)`: If building fails
+    ///
+    /// # Rebuild Conditions
+    /// The library is rebuilt if:
+    /// - The library file doesn't exist at `~/.cargo/pecos-qir/libpecos_qir.a`
+    /// - The marker file `~/.cargo/pecos-qir/.needs_rebuild` exists
+    ///
+    /// The marker file is created by build.rs when source changes are detected.
     pub fn build_runtime() -> Result<PathBuf, PecosError> {
         // Prevent concurrent builds
         let _lock = BUILD_MUTEX.lock().unwrap();
 
         let lib_path = Self::get_lib_path();
+        let marker_path = Self::get_marker_path();
+
+        // Check if we need to build (library missing or marker exists)
+        let needs_build = !lib_path.exists() || marker_path.exists();
+
+        if needs_build {
+            info!("Building runtime library...");
+            Self::build_static_library(&lib_path)?;
+
+            // Remove the marker file after successful build
+            let _ = fs::remove_file(&marker_path);
+
+            info!("Runtime library built: {:?}", lib_path);
+        } else {
+            debug!("Using existing runtime library: {:?}", lib_path);
+        }
+
+        Ok(lib_path)
+    }
+
+    /// Build the static library
+    fn build_static_library(lib_path: &Path) -> Result<(), PecosError> {
         let lib_dir = lib_path.parent().unwrap();
         Self::ensure_dir(lib_dir)?;
 
@@ -31,14 +101,13 @@ impl RuntimeBuilder {
             Self::create_wrapper_crate(&build_dir)?;
         }
 
-        // Always run cargo build - it will use its own incremental compilation
-        // and dependency tracking to decide if a rebuild is needed
-        info!("Checking runtime library...");
-
         // Use a separate target directory to avoid conflicts
         let target_dir = lib_dir.join("target");
 
-        let output = Command::new("cargo")
+        // Get cargo from environment or use default
+        let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+
+        let output = Command::new(&cargo)
             .args([
                 "build",
                 "--release",
@@ -46,7 +115,6 @@ impl RuntimeBuilder {
                 "--target-dir",
                 target_dir.to_str().unwrap(),
             ])
-            .env("CARGO_INCREMENTAL", "1")
             .current_dir(&build_dir)
             .output()
             .map_err(|e| PecosError::Processing(format!("Failed to run cargo: {e}")))?;
@@ -69,40 +137,11 @@ impl RuntimeBuilder {
             ));
         }
 
-        // Copy to final location if different
-        if built_lib != lib_path {
-            // Check if we need to copy (compare contents or just copy if dest doesn't exist)
-            let should_copy = if lib_path.exists() {
-                // Compare file sizes as a quick check
-                match (fs::metadata(&built_lib), fs::metadata(&lib_path)) {
-                    (Ok(built_meta), Ok(lib_meta)) => built_meta.len() != lib_meta.len(),
-                    _ => true, // If we can't compare, copy to be safe
-                }
-            } else {
-                true // Destination doesn't exist, so copy
-            };
+        // Copy to final location
+        fs::copy(&built_lib, lib_path)
+            .map_err(|e| PecosError::Processing(format!("Failed to copy library: {e}")))?;
 
-            if should_copy {
-                fs::copy(&built_lib, &lib_path)
-                    .map_err(|e| PecosError::Processing(format!("Failed to copy library: {e}")))?;
-            }
-        }
-
-        // Check if cargo actually rebuilt (by comparing timestamps)
-        if let (Ok(built_meta), Ok(lib_meta)) = (fs::metadata(&built_lib), fs::metadata(&lib_path))
-        {
-            if let (Ok(built_time), Ok(lib_time)) = (built_meta.modified(), lib_meta.modified()) {
-                if built_time == lib_time {
-                    info!("Runtime library is up to date: {:?}", lib_path);
-                } else {
-                    info!("Runtime library rebuilt: {:?}", lib_path);
-                }
-            }
-        } else {
-            info!("Runtime library ready: {:?}", lib_path);
-        }
-
-        Ok(lib_path)
+        Ok(())
     }
 
     /// Get the path to the library location
@@ -123,6 +162,21 @@ impl RuntimeBuilder {
             "libpecos_qir.a"
         };
         base_dir.join("pecos-qir").join(lib_name)
+    }
+
+    /// Get the path to the marker file
+    fn get_marker_path() -> PathBuf {
+        let base_dir = if let Ok(cargo_home) = env::var("CARGO_HOME") {
+            PathBuf::from(cargo_home)
+        } else if let Ok(home) = env::var("HOME") {
+            PathBuf::from(home).join(".cargo")
+        } else if let Ok(userprofile) = env::var("USERPROFILE") {
+            PathBuf::from(userprofile).join(".cargo")
+        } else {
+            PathBuf::from(".cargo")
+        };
+
+        base_dir.join("pecos-qir").join(".needs_rebuild")
     }
 
     /// Create the minimal wrapper crate for building the static library

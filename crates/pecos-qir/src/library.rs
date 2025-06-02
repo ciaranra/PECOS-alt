@@ -2,12 +2,21 @@ use libloading::{Library, Symbol};
 use log::{debug, warn};
 use pecos_core::errors::PecosError;
 use pecos_engines::byte_message::ByteMessage;
-use std::collections::HashMap;
+use pecos_engines::shot_results::{Data, Shot};
+use std::ffi::{CStr, c_char};
 // FFI imports handled inline
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
+
+// FFI struct for shot data (matches runtime.rs)
+#[repr(C)]
+struct FFIShotData {
+    names: *mut *mut c_char,
+    values: *mut i64,
+    count: usize,
+}
 
 /// QIR Library for executing quantum programs
 ///
@@ -49,9 +58,6 @@ pub struct QirLibrary {
 
     /// Path to the library file
     path: PathBuf,
-
-    /// Map of measurement results
-    measurement_results: HashMap<String, u32>,
 }
 
 impl Clone for QirLibrary {
@@ -60,13 +66,7 @@ impl Clone for QirLibrary {
 
         // Load the library again from the same path with retries
         match Self::load_library_with_retries(&self.path, 3) {
-            Ok(mut library) => {
-                // Copy the measurement results using clone_from for efficiency
-                library
-                    .measurement_results
-                    .clone_from(&self.measurement_results);
-                library
-            }
+            Ok(library) => library,
             Err(e) => {
                 // If we can't load the library, panic with a clear error message
                 panic!("Failed to clone QIR library: {e}");
@@ -155,7 +155,6 @@ impl QirLibrary {
                     return Ok(Self {
                         library: Mutex::new(library),
                         path: path.to_path_buf(),
-                        measurement_results: HashMap::new(),
                     });
                 }
                 Err(e) => {
@@ -209,6 +208,9 @@ impl QirLibrary {
             // Call the function
             let result = func();
             debug!("QIR Library: Function call returned {}", result);
+
+            // Don't finalize the shot here - we need to wait for measurement results
+
             Ok(result)
         }
     }
@@ -318,6 +320,181 @@ impl QirLibrary {
         unsafe { free_binary_commands(ffi_ptr) };
 
         Ok(message)
+    }
+
+    /// Gets the shot results from the QIR runtime
+    ///
+    /// This method calls the `qir_runtime_get_shot_results` function in the loaded library
+    /// to retrieve the classical register values as a Shot.
+    ///
+    /// # Returns
+    ///
+    /// * `Result<Option<Shot>, PecosError>` - The shot results if available, or None
+    ///
+    /// # Errors
+    ///
+    /// This method can return the following errors:
+    /// * `PecosError::Resource` - If the `get_shot_results` function is not found in the library
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the internal mutex is poisoned.
+    pub fn get_shot_results(&self) -> Result<Option<Shot>, PecosError> {
+        debug!("QIR Library: Getting shot results");
+
+        // Get the function pointers
+        let (get_shot_results_ptr, free_shot_data_ptr) = {
+            let library_guard = self.library.lock().unwrap();
+
+            // Get the get_shot_results function
+            let get_shot_results: Symbol<unsafe extern "C" fn() -> *mut FFIShotData> = unsafe {
+                library_guard
+                    .get(b"qir_runtime_get_shot_results")
+                    .map_err(|e| {
+                        Self::log_error("Failed to get qir_runtime_get_shot_results symbol", e)
+                    })?
+            };
+
+            // Get the free function
+            let free_shot_data: Symbol<unsafe extern "C" fn(*mut FFIShotData)> = unsafe {
+                library_guard
+                    .get(b"qir_runtime_free_shot_data")
+                    .map_err(|e| {
+                        Self::log_error("Failed to get qir_runtime_free_shot_data symbol", e)
+                    })?
+            };
+
+            // Return raw function pointers
+            unsafe {
+                (
+                    get_shot_results.into_raw().into_raw(),
+                    free_shot_data.into_raw().into_raw(),
+                )
+            }
+        };
+
+        // Convert back to function pointers
+        let get_shot_results: unsafe extern "C" fn() -> *mut FFIShotData =
+            unsafe { std::mem::transmute(get_shot_results_ptr) };
+        let free_shot_data: unsafe extern "C" fn(*mut FFIShotData) =
+            unsafe { std::mem::transmute(free_shot_data_ptr) };
+
+        // Call the get_shot_results function
+        let ffi_ptr = unsafe { get_shot_results() };
+
+        if ffi_ptr.is_null() {
+            debug!("QIR Library: No shot results available");
+            return Ok(None);
+        }
+
+        // Convert FFI data to Shot
+        let shot = unsafe {
+            let ffi_data = &*ffi_ptr;
+            let mut shot = Shot::default();
+
+            for i in 0..ffi_data.count {
+                // Get the name
+                let name_ptr = *ffi_data.names.add(i);
+                let name = CStr::from_ptr(name_ptr).to_string_lossy().into_owned();
+
+                // Get the value
+                let value = *ffi_data.values.add(i);
+
+                // Insert into shot - always use I64 for consistency with QIR standard
+                shot.data.insert(name, Data::I64(value));
+            }
+
+            shot
+        };
+
+        // Free the FFI data
+        unsafe { free_shot_data(ffi_ptr) };
+
+        debug!(
+            "QIR Library: Retrieved shot with {} registers",
+            shot.data.len()
+        );
+        Ok(Some(shot))
+    }
+
+    /// Updates the measurement results in the QIR runtime
+    ///
+    /// This method calls the `qir_runtime_update_measurement_results` function to
+    /// provide measurement results from the quantum system to the runtime.
+    ///
+    /// # Arguments
+    ///
+    /// * `results` - A slice of alternating `result_id` and `measurement_value` (0 or 1)
+    ///
+    /// # Returns
+    ///
+    /// * `Result<(), PecosError>` - Success or error
+    ///
+    /// # Errors
+    ///
+    /// This method can return the following errors:
+    /// * `PecosError::Resource` - If the update function is not found in the library
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the internal mutex is poisoned.
+    pub fn update_measurement_results(&self, results: &[u32]) -> Result<(), PecosError> {
+        debug!(
+            "QIR Library: Updating {} measurement results",
+            results.len() / 2
+        );
+
+        unsafe {
+            // Get the update function
+            let library_guard = self.library.lock().unwrap();
+            let update_fn: Symbol<unsafe extern "C" fn(*const u32, usize)> = library_guard
+                .get(b"qir_runtime_update_measurement_results")
+                .map_err(|e| {
+                    Self::log_error("Failed to get update_measurement_results function", e)
+                })?;
+
+            // Call the function with the results data
+            // The second parameter is the number of result pairs (not total array length)
+            update_fn(results.as_ptr(), results.len() / 2);
+
+            debug!("QIR Library: Measurement results updated");
+            Ok(())
+        }
+    }
+
+    /// Finalizes the shot after measurements have been processed
+    ///
+    /// This method should be called after measurement results have been updated
+    /// to finalize the classical register values.
+    ///
+    /// # Returns
+    ///
+    /// * `Result<(), PecosError>` - Success or error
+    ///
+    /// # Errors
+    ///
+    /// This method can return the following errors:
+    /// * `PecosError::Resource` - If the finalize function is not found in the library
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the internal mutex is poisoned.
+    pub fn finalize_shot(&self) -> Result<(), PecosError> {
+        debug!("QIR Library: Finalizing shot");
+
+        unsafe {
+            // Get the finalize function
+            let library_guard = self.library.lock().unwrap();
+            let finalize: Symbol<unsafe extern "C" fn()> = library_guard
+                .get(b"qir_runtime_finalize_shot")
+                .map_err(|e| Self::log_error("Failed to get finalize_shot function", e))?;
+
+            // Call the function
+            finalize();
+
+            debug!("QIR Library: Shot finalized");
+            Ok(())
+        }
     }
 
     /// Helper function to log errors with thread ID context

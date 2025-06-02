@@ -2,7 +2,6 @@
 mod tests {
     use pecos_core::errors::PecosError;
     use pecos_engines::Engine;
-    use pecos_engines::shot_results::OutputFormat;
     use pecos_phir::v0_1::ast::PHIRProgram;
     use pecos_phir::v0_1::engine::PHIREngine;
     use pecos_phir::v0_1::foreign_objects::ForeignObject;
@@ -320,28 +319,16 @@ mod tests {
             // The Result command and export mappings are tested in other contexts, such as the CLI
         }
 
-        // Test different format outputs - we don't verify the output, just that the methods don't error
-        let pretty_json = engine.get_formatted_results(OutputFormat::PrettyJson)?;
-        let compact_json = engine.get_formatted_results(OutputFormat::CompactJson)?;
-        let pretty_compact = engine.get_formatted_results(OutputFormat::PrettyCompactJson)?;
+        // Test formatted output - we don't verify the output, just that the method doesn't error
+        let compact_json = engine.get_formatted_results()?;
 
         // Debug the formatted results
-        println!("Pretty JSON: {pretty_json}");
         println!("Compact JSON: {compact_json}");
-        println!("Pretty Compact JSON: {pretty_compact}");
 
-        // Basic verification that the formatted outputs exist (even if they might be empty arrays)
-        assert!(
-            pretty_json.contains('['),
-            "Pretty JSON result should be valid JSON"
-        );
+        // Basic verification that the formatted output exists (even if it might be an empty array)
         assert!(
             compact_json.contains('['),
             "Compact JSON result should be valid JSON"
-        );
-        assert!(
-            pretty_compact.contains('['),
-            "Pretty Compact JSON result should be valid JSON"
         );
 
         Ok(())

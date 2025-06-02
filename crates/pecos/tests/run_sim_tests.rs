@@ -44,12 +44,19 @@ fn test_run_sim_with_qasm_engine() {
     )
     .unwrap();
 
-    // Verify results contain the 'c' register with 100 measurements
-    assert!(results.register_shots.contains_key("c"));
-    assert_eq!(results.register_shots["c"].len(), 100);
+    // Verify results contain 100 shots
+    assert_eq!(results.len(), 100);
+
+    // Extract 'c' register values from shots
+    let c_values: Vec<u32> = results
+        .shots
+        .iter()
+        .filter_map(|shot| shot.data.get("c").and_then(pecos::prelude::Data::as_u32))
+        .collect();
+    assert_eq!(c_values.len(), 100);
 
     // With the bell state and no noise, we should only see |00⟩ and |11⟩ states
-    for result in &results.register_shots["c"] {
+    for result in &c_values {
         // For a 2-qubit register, each shot result should be 0 or 3 (binary 00 or 11)
         assert!(*result == 0 || *result == 3);
     }
@@ -71,12 +78,19 @@ fn test_run_sim_with_qasm_program() {
     )
     .unwrap();
 
-    // Verify results contain the 'c' register with 100 measurements
-    assert!(results.register_shots.contains_key("c"));
-    assert_eq!(results.register_shots["c"].len(), 100);
+    // Verify results contain 100 shots
+    assert_eq!(results.len(), 100);
+
+    // Extract 'c' register values from shots
+    let c_values: Vec<u32> = results
+        .shots
+        .iter()
+        .filter_map(|shot| shot.data.get("c").and_then(pecos::prelude::Data::as_u32))
+        .collect();
+    assert_eq!(c_values.len(), 100);
 
     // With the bell state and no noise, we should only see |00⟩ and |11⟩ states
-    for result in &results.register_shots["c"] {
+    for result in &c_values {
         // For a 2-qubit register, each shot result should be 0 or 3 (binary 00 or 11)
         assert!(*result == 0 || *result == 3);
     }
@@ -99,8 +113,15 @@ fn test_run_sim_workers_parameter() {
     .unwrap();
 
     // Verify results are correct
-    assert!(results.register_shots.contains_key("c"));
-    assert_eq!(results.register_shots["c"].len(), 100);
+    assert_eq!(results.len(), 100);
+
+    // Extract 'c' register values from shots
+    let c_values: Vec<u32> = results
+        .shots
+        .iter()
+        .filter_map(|shot| shot.data.get("c").and_then(pecos::prelude::Data::as_u32))
+        .collect();
+    assert_eq!(c_values.len(), 100);
 }
 
 #[test]
@@ -123,8 +144,15 @@ fn test_run_sim_with_custom_noise_model() {
     .unwrap();
 
     // Verify results are correct
-    assert!(results.register_shots.contains_key("c"));
-    assert_eq!(results.register_shots["c"].len(), 100);
+    assert_eq!(results.len(), 100);
+
+    // Extract 'c' register values from shots
+    let c_values: Vec<u32> = results
+        .shots
+        .iter()
+        .filter_map(|shot| shot.data.get("c").and_then(pecos::prelude::Data::as_u32))
+        .collect();
+    assert_eq!(c_values.len(), 100);
 }
 
 #[test]
@@ -147,8 +175,15 @@ fn test_run_sim_with_custom_quantum_engine() {
     .unwrap();
 
     // Verify results are correct
-    assert!(results.register_shots.contains_key("c"));
-    assert_eq!(results.register_shots["c"].len(), 100);
+    assert_eq!(results.len(), 100);
+
+    // Extract 'c' register values from shots
+    let c_values: Vec<u32> = results
+        .shots
+        .iter()
+        .filter_map(|shot| shot.data.get("c").and_then(pecos::prelude::Data::as_u32))
+        .collect();
+    assert_eq!(c_values.len(), 100);
 }
 
 #[test]
@@ -219,6 +254,20 @@ fn test_run_sim_different_shots() {
     let results2 = run_sim(program.into_engine_box(), 200, Some(42), None, None, None).unwrap();
 
     // Verify shot count matches
-    assert_eq!(results1.register_shots["c"].len(), 50);
-    assert_eq!(results2.register_shots["c"].len(), 200);
+    assert_eq!(results1.len(), 50);
+    assert_eq!(results2.len(), 200);
+
+    // Extract 'c' register values from shots
+    let c_values1: Vec<u32> = results1
+        .shots
+        .iter()
+        .filter_map(|shot| shot.data.get("c").and_then(pecos::prelude::Data::as_u32))
+        .collect();
+    let c_values2: Vec<u32> = results2
+        .shots
+        .iter()
+        .filter_map(|shot| shot.data.get("c").and_then(pecos::prelude::Data::as_u32))
+        .collect();
+    assert_eq!(c_values1.len(), 50);
+    assert_eq!(c_values2.len(), 200);
 }

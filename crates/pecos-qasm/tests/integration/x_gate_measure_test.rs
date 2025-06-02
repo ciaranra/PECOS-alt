@@ -70,15 +70,16 @@ fn test_x_gate_and_measure() {
         run_qasm_sim(qasm, 100, Some(42), Some(1), None, None).expect("Failed to run simulation");
 
     // Verify that qubit 10 is always measured as 1 (since X flips it)
-    let c_values = results
-        .register_shots
-        .get("c")
-        .expect("Should have c register results");
-    assert_eq!(c_values.len(), 100, "Should have 100 shots");
+    assert_eq!(results.len(), 100, "Should have 100 shots");
 
-    for shot in c_values {
+    for shot in &results.shots {
+        let value = shot
+            .data
+            .get("c")
+            .and_then(pecos_engines::prelude::Data::as_u32)
+            .expect("c register should be convertible to u32");
         // Extract bit 10 from the result
-        let bit_10 = (shot >> 10) & 1u32;
+        let bit_10 = (value >> 10) & 1u32;
         assert_eq!(bit_10, 1u32, "Bit 10 should always be 1 after X gate");
     }
 }

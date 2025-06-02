@@ -8,7 +8,7 @@ use pecos_core::errors::PecosError;
 use pecos_engines::Engine;
 use pecos_engines::byte_message::ByteMessage;
 use pecos_engines::engine_system::ClassicalEngine;
-use pecos_engines::shot_results::ShotResult;
+use pecos_engines::shot_results::{Data, Shot};
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
@@ -47,7 +47,7 @@ pub struct QirEngine {
     library: Option<Box<QirLibrary>>,
 
     /// Map of measurement results by `result_id`
-    measurement_results: HashMap<usize, u32>,
+    measurement_results: HashMap<usize, i64>,
 
     /// Path to the QIR file to execute
     qir_file: PathBuf,
@@ -221,7 +221,40 @@ impl QirEngine {
         })?;
 
         self.measurement_results.clear();
-        self.measurement_results.extend(measurements);
+        // Convert u32 measurements to i64 for QIR standard
+        self.measurement_results.extend(
+            measurements
+                .iter()
+                .map(|(id, value)| (*id, i64::from(*value))),
+        );
+
+        // Update the runtime with measurement results
+        if let Some(library) = &self.library {
+            debug!(
+                "QIR: Updating runtime with {} measurement results",
+                measurements.len()
+            );
+
+            // Convert measurements to the format expected by the runtime
+            // The runtime expects pairs of (result_id, value)
+            let mut results_data = Vec::with_capacity(measurements.len() * 2);
+            for (result_id, value) in measurements {
+                debug!("QIR: Measurement result_id={} value={}", result_id, value);
+                results_data.push(u32::try_from(result_id).map_err(|_| {
+                    PecosError::Resource(format!(
+                        "Result ID {result_id} is too large to fit in u32"
+                    ))
+                })?);
+                results_data.push(value);
+            }
+
+            // Call the runtime update function
+            library.update_measurement_results(&results_data)?;
+
+            // Now finalize the shot with the measurement results
+            library.finalize_shot()?;
+        }
+
         self.commands_generated = false;
         self.shot_count += 1;
 
@@ -233,16 +266,28 @@ impl QirEngine {
     ///
     /// # Returns
     ///
-    /// * `ShotResult` - The results of the quantum computation
-    fn get_results_impl(&self) -> ShotResult {
-        // Create shot result from measurements
-        let mut shot_result = ShotResult::default();
+    /// * `Shot` - The results of the quantum computation
+    fn get_results_impl(&self) -> Shot {
+        // Try to get shot results from the runtime
+        if let Some(library) = &self.library {
+            if let Ok(Some(shot)) = library.get_shot_results() {
+                debug!(
+                    "QIR: Retrieved shot from runtime with {} registers",
+                    shot.data.len()
+                );
+                return shot;
+            }
+        }
 
-        // Since ResultNameMap is never populated, we just use result IDs as names
+        // Fallback: create shot result from raw measurements
+        // This should only happen if the runtime doesn't support shot export
+        debug!("QIR: Falling back to raw measurement results");
+        let mut shot_result = Shot::default();
+
         for (&result_id, &value) in &self.measurement_results {
             let name = format!("result_{result_id}");
-            shot_result.registers.insert(name.clone(), value);
-            shot_result.registers_u64.insert(name, u64::from(value));
+            // Store all values as I64 for consistency with QIR standard
+            shot_result.data.insert(name, Data::I64(value));
         }
 
         shot_result
@@ -553,7 +598,7 @@ impl ClassicalEngine for QirEngine {
         self.process_measurements(&message)
     }
 
-    fn get_results(&self) -> Result<ShotResult, PecosError> {
+    fn get_results(&self) -> Result<Shot, PecosError> {
         Ok(self.get_results_impl())
     }
 
@@ -609,7 +654,7 @@ impl Drop for QirEngine {
 
 impl Engine for QirEngine {
     type Input = ();
-    type Output = ShotResult;
+    type Output = Shot;
 
     fn process(&mut self, _input: Self::Input) -> Result<Self::Output, PecosError> {
         // Generate commands, process them, and return results

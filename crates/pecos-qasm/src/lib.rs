@@ -50,6 +50,8 @@ pub mod parser;
 pub mod prelude;
 pub mod preprocessor;
 pub mod program;
+pub mod qasm_results;
+pub mod result_formatter;
 pub mod run;
 pub mod util;
 
@@ -60,6 +62,7 @@ pub use engine_builder::QASMEngineBuilder;
 pub use parser::{ParseConfig, QASMParser};
 pub use preprocessor::Preprocessor;
 pub use program::QASMProgram;
+pub use qasm_results::QASMResults;
 pub use util::{count_qubits_in_file, count_qubits_in_str};
 
 use log::debug;

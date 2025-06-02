@@ -60,7 +60,7 @@ mod tests {
         // but we just want to ensure the program runs without errors
         let shot = &results.shots[0];
         assert!(
-            shot.contains_key("ret"),
+            shot.data.contains_key("ret"),
             "Expected 'output' register to be present"
         );
 

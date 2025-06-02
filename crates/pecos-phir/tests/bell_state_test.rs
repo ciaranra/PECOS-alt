@@ -2,7 +2,7 @@ mod common;
 
 use pecos_core::errors::PecosError;
 use pecos_core::rng::RngManageable;
-use pecos_engines::{DepolarizingNoiseModel, PassThroughNoiseModel};
+use pecos_engines::{DepolarizingNoiseModel, PassThroughNoiseModel, shot_results::Data};
 use std::collections::HashMap;
 
 // Import helpers from common module
@@ -51,10 +51,11 @@ fn test_bell_state_noiseless() -> Result<(), PecosError> {
 
     // Process results
     for shot in &results.shots {
-        // If there's no "c" key in the output, just count it as an empty result
+        // If there's no "v" key in the output, just count it as an empty result
         let result_str = shot
+            .data
             .get("v")
-            .map_or_else(String::new, std::clone::Clone::clone);
+            .map_or_else(String::new, pecos_engines::prelude::Data::to_string);
         *counts.entry(result_str).or_insert(0) += 1;
     }
 
@@ -118,36 +119,36 @@ fn test_bell_state_using_helper() -> Result<(), PecosError> {
     let shot = &results.shots[0];
 
     // First check for the "c" register which is specified in the Bell state JSON
-    if let Some(value) = shot.get("c") {
+    if let Some(data_value) = shot.data.get("c") {
         assert!(
-            value == "0" || value == "3",
-            "Expected Bell state result to be 0 or 3, got {value}"
+            *data_value == Data::U32(0) || *data_value == Data::U32(3),
+            "Expected Bell state result to be 0 or 3, got {data_value}"
         );
         return Ok(());
     }
 
     // Try fallback registers as well
-    if let Some(value) = shot.get("result") {
+    if let Some(data_value) = shot.data.get("result") {
         assert!(
-            value == "0" || value == "3",
-            "Expected Bell state result to be 0 or 3, got {value}"
+            *data_value == Data::U32(0) || *data_value == Data::U32(3),
+            "Expected Bell state result to be 0 or 3, got {data_value}"
         );
-    } else if let Some(value) = shot.get("output") {
+    } else if let Some(data_value) = shot.data.get("output") {
         assert!(
-            value == "0" || value == "3",
-            "Expected Bell state output to be 0 or 3, got {value}"
+            *data_value == Data::U32(0) || *data_value == Data::U32(3),
+            "Expected Bell state output to be 0 or 3, got {data_value}"
         );
-    } else if let Some(value) = shot.get("m") {
+    } else if let Some(data_value) = shot.data.get("m") {
         // The m register is the measurement register in bell.json
         assert!(
-            value == "0" || value == "3",
-            "Expected Bell state m register to be 0 or 3, got {value}"
+            *data_value == Data::U32(0) || *data_value == Data::U32(3),
+            "Expected Bell state m register to be 0 or 3, got {data_value}"
         );
     } else {
         // No known register found - print available registers
         println!(
             "Available registers in shot: {:?}",
-            shot.keys().collect::<Vec<_>>()
+            shot.data.keys().collect::<Vec<_>>()
         );
         panic!("Expected one of 'c', 'result', 'output', or 'm' registers to be present");
     }
@@ -215,8 +216,9 @@ fn test_bell_state_with_noise() -> Result<(), PecosError> {
         // Count all results, handling the case where "c" might not be present
         for shot in &results.shots {
             let result_str = shot
+                .data
                 .get("c")
-                .map_or_else(String::new, std::clone::Clone::clone);
+                .map_or_else(String::new, pecos_engines::prelude::Data::to_string);
             *counts.entry(result_str).or_insert(0) += 1;
         }
 

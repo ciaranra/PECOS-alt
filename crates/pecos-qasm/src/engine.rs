@@ -144,6 +144,14 @@ impl QASMEngine {
         None
     }
 
+    /// Get the classical register sizes (bit widths)
+    #[must_use]
+    pub fn classical_register_sizes(&self) -> Option<&std::collections::BTreeMap<String, usize>> {
+        self.program
+            .as_ref()
+            .map(|p| &p.program().classical_registers)
+    }
+
     /// Reset the engine's internal state
     fn reset_state(&mut self) {
         debug!("QASMEngine::reset_state()");
@@ -1069,25 +1077,38 @@ impl ClassicalEngine for QASMEngine {
         }
     }
 
-    fn get_results(&self) -> Result<ShotResult, PecosError> {
-        let mut result = ShotResult::default();
+    fn get_results(&self) -> Result<Shot, PecosError> {
+        use bitvec::prelude::*;
+
+        let mut result = Shot::default();
 
         let mut reg_names: Vec<_> = self.classical_registers.keys().collect();
         reg_names.sort();
 
         for reg_name in &reg_names {
             if let Some(values) = self.classical_registers.get(*reg_name) {
-                let reg_value = values.iter().enumerate().fold(0, |acc, (i, &v)| {
-                    if i >= 32 || v == 0 {
-                        acc
+                // Get the register width from the program
+                let reg_width = self
+                    .program
+                    .as_ref()
+                    .and_then(|p| p.program().classical_registers.get(*reg_name))
+                    .copied()
+                    .unwrap_or(values.len()); // Use actual length if not found
+
+                // Create a BitVec with the exact register width
+                let mut bitvec = BitVec::<u8, Lsb0>::with_capacity(reg_width);
+
+                // Copy bits from the values array
+                for i in 0..reg_width {
+                    if i < values.len() && values[i] != 0 {
+                        bitvec.push(true);
                     } else {
-                        acc | (v << i)
+                        bitvec.push(false);
                     }
-                });
+                }
 
                 let reg_name_str = (*reg_name).to_string();
-                result.registers.insert(reg_name_str.clone(), reg_value);
-                result.registers_u64.insert(reg_name_str, reg_value.into());
+                result.data.insert(reg_name_str, Data::BitVec(bitvec));
             }
         }
 
@@ -1136,11 +1157,11 @@ impl Clone for QASMEngine {
 
 impl ControlEngine for QASMEngine {
     type Input = ();
-    type Output = ShotResult;
+    type Output = Shot;
     type EngineInput = ByteMessage;
     type EngineOutput = ByteMessage;
 
-    fn start(&mut self, _input: ()) -> Result<EngineStage<ByteMessage, ShotResult>, PecosError> {
+    fn start(&mut self, _input: ()) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
         debug!("QASMEngine::start() called");
 
         debug!("Preparing engine for new shot");
@@ -1162,7 +1183,7 @@ impl ControlEngine for QASMEngine {
     fn continue_processing(
         &mut self,
         measurements: ByteMessage,
-    ) -> Result<EngineStage<ByteMessage, ShotResult>, PecosError> {
+    ) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
         debug!("QASMEngine::continue_processing() called");
 
         let measurement_count = measurements
@@ -1193,7 +1214,7 @@ impl ControlEngine for QASMEngine {
 
 impl Engine for QASMEngine {
     type Input = ();
-    type Output = ShotResult;
+    type Output = Shot;
 
     fn process(&mut self, input: Self::Input) -> Result<Self::Output, PecosError> {
         debug!("QASMEngine::process() called");

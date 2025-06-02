@@ -4,7 +4,7 @@ use crate::v0_1::operations::OperationProcessor;
 use log::debug;
 use pecos_core::errors::PecosError;
 use pecos_engines::byte_message::{ByteMessage, builder::ByteMessageBuilder};
-use pecos_engines::shot_results::ShotResult;
+use pecos_engines::shot_results::{Data, Shot};
 use pecos_engines::{ClassicalEngine, ControlEngine, Engine, EngineStage};
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
@@ -624,44 +624,22 @@ impl PHIREngine {
 
     /// Gets the results in a specific format
     ///
-    /// # Parameters
-    ///
-    /// * `format` - The output format to use (`PrettyJson`, `CompactJson`, or Tabular)
-    ///
     /// # Returns
     ///
-    /// A string containing the results in the specified format
+    /// A compact JSON string containing the results
     ///
     /// # Errors
     ///
     /// Returns an error if there was a problem getting the results
-    pub fn get_formatted_results(
-        &self,
-        format: pecos_engines::shot_results::OutputFormat,
-    ) -> Result<String, PecosError> {
+    pub fn get_formatted_results(&self) -> Result<String, PecosError> {
         let shot_result = self.get_results()?;
 
-        // Convert single ShotResult to ShotResults for better formatting
-        let mut shot_results = pecos_engines::shot_results::ShotResults::new();
+        // Convert single Shot to ShotVec for better formatting
+        let shot_results = pecos_engines::shot_results::ShotVec {
+            shots: vec![shot_result],
+        };
 
-        // Add each register to the ShotResults
-        for (key, &value) in &shot_result.registers {
-            shot_results.register_shots.insert(key.clone(), vec![value]);
-        }
-
-        for (key, &value) in &shot_result.registers_u64 {
-            shot_results
-                .register_shots_u64
-                .insert(key.clone(), vec![value]);
-        }
-
-        for (key, &value) in &shot_result.registers_i64 {
-            shot_results
-                .register_shots_i64
-                .insert(key.clone(), vec![value]);
-        }
-
-        Ok(shot_results.to_string_with_format(format))
+        Ok(shot_results.to_compact_json())
     }
 }
 
@@ -673,11 +651,11 @@ impl Default for PHIREngine {
 
 impl ControlEngine for PHIREngine {
     type Input = ();
-    type Output = ShotResult;
+    type Output = Shot;
     type EngineInput = ByteMessage;
     type EngineOutput = ByteMessage;
 
-    fn start(&mut self, _input: ()) -> Result<EngineStage<ByteMessage, ShotResult>, PecosError> {
+    fn start(&mut self, _input: ()) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
         debug!(
             "PHIR: start() called with current_op={}, beginning new shot",
             self.current_op
@@ -700,7 +678,7 @@ impl ControlEngine for PHIREngine {
     fn continue_processing(
         &mut self,
         measurements: ByteMessage,
-    ) -> Result<EngineStage<ByteMessage, ShotResult>, PecosError> {
+    ) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
         debug!(
             "continue_processing called with current_op={}",
             self.current_op
@@ -708,7 +686,7 @@ impl ControlEngine for PHIREngine {
 
         // Handle received measurements
         let measurement_results = measurements.parse_measurements()?;
-        log::info!(
+        log::debug!(
             "PHIREngine: Measurement results received: {:?}",
             measurement_results
         );
@@ -722,7 +700,7 @@ impl ControlEngine for PHIREngine {
                     false
                 }
             }) {
-                log::info!(
+                log::debug!(
                     "Bell state program detected - measurement results: {:?}",
                     measurement_results
                 );
@@ -823,8 +801,8 @@ impl ClassicalEngine for PHIREngine {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn get_results(&self) -> Result<ShotResult, PecosError> {
-        let mut results = ShotResult::default();
+    fn get_results(&self) -> Result<Shot, PecosError> {
+        let mut results = Shot::default();
 
         // First process all export mappings to get properly processed values
         let mut exported_values = self.processor.process_export_mappings();
@@ -833,7 +811,9 @@ impl ClassicalEngine for PHIREngine {
         let mappings = self.processor.environment.get_mappings();
         if mappings.is_empty() {
             // No explicit export mappings - include all environment variables
-            log::info!("PHIR: No explicit export mappings - adding all variables from environment");
+            log::debug!(
+                "PHIR: No explicit export mappings - adding all variables from environment"
+            );
 
             for info in self.processor.environment.get_all_variables() {
                 if let Some(value) = self.processor.environment.get(&info.name) {
@@ -842,7 +822,7 @@ impl ClassicalEngine for PHIREngine {
                         .entry(info.name.clone())
                         .or_insert(value.as_u32());
 
-                    log::info!(
+                    log::debug!(
                         "PHIR: Added direct variable from environment {} = {}",
                         info.name,
                         value
@@ -853,7 +833,7 @@ impl ClassicalEngine for PHIREngine {
                 }
             }
         } else {
-            log::info!("PHIR: Using environment mappings to determine which registers to include");
+            log::debug!("PHIR: Using environment mappings to determine which registers to include");
 
             // Keep only the registers that are explicitly mapped as destinations
             // This provides a general approach that works for all tests including Bell state tests
@@ -867,7 +847,7 @@ impl ClassicalEngine for PHIREngine {
                 for dest in destination_registers {
                     if exported_values.contains_key(&dest) {
                         let value = exported_values[&dest];
-                        log::info!(
+                        log::debug!(
                             "PHIR: Keeping explicitly mapped register: {} = {}",
                             dest,
                             value
@@ -882,87 +862,73 @@ impl ClassicalEngine for PHIREngine {
         }
 
         // Add the processed values to the results
-        log::info!(
+        log::debug!(
             "PHIR: Adding {} exported values to results",
             exported_values.len()
         );
 
         for (key, value) in &exported_values {
-            results.registers.insert(key.clone(), *value);
-            results.registers_u64.insert(key.clone(), u64::from(*value));
-            results.registers_i64.insert(key.clone(), i64::from(*value));
-            log::info!("PHIR: Adding mapped register {} = {}", key, value);
+            results.data.insert(key.clone(), Data::U32(*value));
+            log::debug!("PHIR: Adding mapped register {} = {}", key, value);
         }
 
         // If nothing has been exported so far, use all available variables
         // This general approach works for all types of programs
-        if results.registers.is_empty() {
-            log::info!("PHIR: No exported values found - using all available variables");
+        if results.data.is_empty() {
+            log::debug!("PHIR: No exported values found - using all available variables");
 
             // Add all variables from environment
             for info in self.processor.environment.get_all_variables() {
                 if let Some(value) = self.processor.environment.get(&info.name) {
-                    log::info!("PHIR: Adding variable {} = {} to results", info.name, value);
-                    results.registers.insert(info.name.clone(), value.as_u32());
+                    log::debug!("PHIR: Adding variable {} = {} to results", info.name, value);
                     results
-                        .registers_u64
-                        .insert(info.name.clone(), value.as_u64());
-                    results
-                        .registers_i64
-                        .insert(info.name.clone(), value.as_i64());
+                        .data
+                        .insert(info.name.clone(), Data::U32(value.as_u32()));
                 }
             }
 
             // Process all mappings from environment for any variables not previously handled
             for (source, dest) in self.processor.environment.get_mappings() {
                 // Skip if this destination is already in the results
-                if results.registers.contains_key(dest) {
+                if results.data.contains_key(dest) {
                     continue;
                 }
 
                 // Try to get the value from the environment
                 if let Some(value) = self.processor.environment.get(source) {
-                    log::info!("PHIR: Exporting {} -> {} = {}", source, dest, value);
-                    results.registers.insert(dest.clone(), value.as_u32());
-                    results.registers_u64.insert(dest.clone(), value.as_u64());
-                    results.registers_i64.insert(dest.clone(), value.as_i64());
+                    log::debug!("PHIR: Exporting {} -> {} = {}", source, dest, value);
+                    results.data.insert(dest.clone(), Data::U32(value.as_u32()));
                 } else {
                     // If not found in environment, try the exported_values directly
                     // Try to get the value directly from environment if not already found
                     if let Some(value) = self.processor.environment.get(source) {
-                        log::info!(
+                        log::debug!(
                             "PHIR: Exporting from environment {} -> {} = {}",
                             source,
                             dest,
                             value
                         );
-                        results.registers.insert(dest.clone(), value.as_u32());
-                        results.registers_u64.insert(dest.clone(), value.as_u64());
-                        results.registers_i64.insert(dest.clone(), value.as_i64());
+                        results.data.insert(dest.clone(), Data::U32(value.as_u32()));
                     }
                     // Note: We no longer fall back to measurement_results as primary source
                 }
             }
 
             // If there are no registers in the results, add all variables from environment
-            if results.registers.is_empty() {
+            if results.data.is_empty() {
                 for info in self.processor.environment.get_all_variables() {
                     if let Some(value) = self.processor.environment.get(&info.name) {
-                        log::info!("PHIR: Adding all variables: {} = {}", info.name, value);
-                        results.registers.insert(info.name.clone(), value.as_u32());
+                        log::debug!("PHIR: Adding all variables: {} = {}", info.name, value);
                         results
-                            .registers_u64
-                            .insert(info.name.clone(), value.as_u64());
-                        results
-                            .registers_i64
-                            .insert(info.name.clone(), value.as_i64());
+                            .data
+                            .insert(info.name.clone(), Data::U32(value.as_u32()));
                     }
                 }
             }
 
             // No legacy fallback needed anymore since the environment is the single source of truth
-            if results.registers.is_empty() {
-                log::info!(
+            if results.data.is_empty() {
+                log::debug!(
                     "PHIR: No register values found in environment, returning empty results"
                 );
             }
@@ -978,13 +944,13 @@ impl ClassicalEngine for PHIREngine {
         // 3. The environment handles all bit operations transparently
 
         // Just log the final state of the registers for debugging
-        log::info!("PHIR: Final register values from environment - no reconstruction needed");
-        for (key, value) in &results.registers {
-            log::debug!("PHIR: Register {} = {}", key, value);
+        log::debug!("PHIR: Final register values from environment - no reconstruction needed");
+        for (key, value) in &results.data {
+            log::debug!("PHIR: Register {} = {:?}", key, value);
         }
 
-        log::info!("PHIR: Exported {} registers", results.registers.len());
-        log::info!("PHIR: Final registers: {:?}", results.registers);
+        log::debug!("PHIR: Exported {} registers", results.data.len());
+        log::debug!("PHIR: Final registers: {:?}", results.data);
         Ok(results)
     }
 
@@ -1031,18 +997,18 @@ impl Clone for PHIREngine {
 
 impl Engine for PHIREngine {
     type Input = ();
-    type Output = ShotResult;
+    type Output = Shot;
 
     #[allow(clippy::too_many_lines)]
     fn process(&mut self, _input: Self::Input) -> Result<Self::Output, PecosError> {
         // Print out operations for debugging
         if let Some(program) = &self.program {
-            log::info!(
+            log::debug!(
                 "Process() called, processing {} operations",
                 program.ops.len()
             );
             for (i, op) in program.ops.iter().enumerate() {
-                log::info!("Process: Operation {}: {:?}", i, op);
+                log::debug!("Process: Operation {}: {:?}", i, op);
             }
         }
 
@@ -1056,11 +1022,11 @@ impl Engine for PHIREngine {
 
         // Process all operations sequentially as they would be in a real program
         if let Some(program) = &self.program {
-            log::info!("Process: processing all operations in order");
+            log::debug!("Process: processing all operations in order");
 
             // Process operations in order (like a real execution)
             for (i, op) in program.ops.iter().enumerate() {
-                log::info!("Processing operation {}: {:?}", i, op);
+                log::debug!("Processing operation {}: {:?}", i, op);
 
                 match op {
                     Operation::VariableDefinition {
@@ -1069,7 +1035,7 @@ impl Engine for PHIREngine {
                         variable,
                         size,
                     } => {
-                        log::info!("Processing variable definition: {} {}", data_type, variable);
+                        log::debug!("Processing variable definition: {} {}", data_type, variable);
                         let _ = self
                             .processor
                             .handle_variable_definition(data, data_type, variable, *size);
@@ -1081,7 +1047,7 @@ impl Engine for PHIREngine {
                         function: _,
                         metadata: _,
                     } => {
-                        log::info!("Processing classical operation {}: {}", i, cop);
+                        log::debug!("Processing classical operation {}: {}", i, cop);
                         if let Err(e) =
                             self.processor
                                 .handle_classical_op(cop, args, returns, &program.ops, i)
@@ -1091,7 +1057,7 @@ impl Engine for PHIREngine {
                         }
 
                         // Log state after each classical operation
-                        log::info!(
+                        log::debug!(
                             "After classical operation {}, environment: {:?}",
                             i,
                             self.processor.environment.get_all_variables()
@@ -1104,16 +1070,16 @@ impl Engine for PHIREngine {
                         angles: _,
                         metadata: _,
                     } => {
-                        log::info!("Processing quantum operation {}: {}", i, qop);
+                        log::debug!("Processing quantum operation {}: {}", i, qop);
 
                         // When using process() method directly, we DO NOT simulate quantum operations
                         // Quantum operations (including measurements) should be simulated by a quantum simulator
                         if qop == "Init" {
                             // For initialization, nothing needs to be done in simulation
-                            log::info!("Simulated initialization of qubits: {:?}", args);
+                            log::debug!("Simulated initialization of qubits: {:?}", args);
                         } else {
                             // For other gates, nothing needs to be done in simulation
-                            log::info!("Simulated quantum gate: {} on qubits: {:?}", qop, args);
+                            log::debug!("Simulated quantum gate: {} on qubits: {:?}", qop, args);
                         }
                     }
                     Operation::Block {
@@ -1124,7 +1090,7 @@ impl Engine for PHIREngine {
                         false_branch,
                         metadata: _,
                     } => {
-                        log::info!("Processing block operation {}: {}", i, block);
+                        log::debug!("Processing block operation {}: {}", i, block);
 
                         // For direct execution, recursively process operations in blocks
                         match block.as_str() {
@@ -1138,17 +1104,17 @@ impl Engine for PHIREngine {
 
                                         // Select branch based on condition
                                         let branch_ops = if condition_value {
-                                            log::info!(
+                                            log::debug!(
                                                 "Condition evaluated to true, executing true branch"
                                             );
                                             tb
                                         } else if let Some(fb_ops) = fb {
-                                            log::info!(
+                                            log::debug!(
                                                 "Condition evaluated to false, executing false branch"
                                             );
                                             fb_ops
                                         } else {
-                                            log::info!(
+                                            log::debug!(
                                                 "Condition evaluated to false, no false branch"
                                             );
                                             &Vec::new()
@@ -1157,7 +1123,7 @@ impl Engine for PHIREngine {
                                         // Process all operations in the selected branch
                                         for branch_op in branch_ops {
                                             // Recursively process this operation
-                                            log::info!(
+                                            log::debug!(
                                                 "Processing operation in branch: {:?}",
                                                 branch_op
                                             );
@@ -1167,14 +1133,14 @@ impl Engine for PHIREngine {
                                                 } => {
                                                     if qop == "Measure" && !returns.is_empty() {
                                                         // Quantum operations including measurements are handled by the quantum simulator
-                                                        log::info!("Processing quantum operation in branch: {}", qop);
+                                                        log::debug!("Processing quantum operation in branch: {}", qop);
                                                     }
                                                 }
                                                 Operation::ClassicalOp {
                                                     cop, args, returns, function: _, metadata: _
                                                 } => {
                                                     // Actually process the classical operation
-                                                    log::info!("Processing classical operation in branch: {}", cop);
+                                                    log::debug!("Processing classical operation in branch: {}", cop);
                                                     if let Err(e) = self.processor.handle_classical_op(
                                                         cop, args, returns, &program.ops, i
                                                     ) {
@@ -1197,7 +1163,7 @@ impl Engine for PHIREngine {
                                     } = parallel_op {
                                         if qop == "Measure" && !returns.is_empty() {
                                             // Quantum operations including measurements are handled by the quantum simulator
-                                            log::info!("Processing quantum operation in qparallel block: {}", qop);
+                                            log::debug!("Processing quantum operation in qparallel block: {}", qop);
                                         }
                                     }
                                 }
@@ -1211,7 +1177,7 @@ impl Engine for PHIREngine {
                                         } => {
                                             if qop == "Measure" && !returns.is_empty() {
                                                 // Quantum operations including measurements are handled by the quantum simulator
-                                                log::info!("Processing quantum operation in sequence block: {}", qop);
+                                                log::debug!("Processing quantum operation in sequence block: {}", qop);
                                             }
                                         }
                                         Operation::ClassicalOp {
@@ -1247,7 +1213,7 @@ impl Engine for PHIREngine {
                         duration,
                         metadata,
                     } => {
-                        log::info!("Processing machine operation {}: {}", i, mop);
+                        log::debug!("Processing machine operation {}: {}", i, mop);
 
                         // For machine operations, record that we're simulating them
                         match mop.as_str() {
@@ -1313,7 +1279,7 @@ impl Engine for PHIREngine {
                         args,
                         metadata: _,
                     } => {
-                        log::info!("Processing meta instruction {}: {}", i, meta);
+                        log::debug!("Processing meta instruction {}: {}", i, meta);
 
                         // For meta instructions, log that we're simulating them
                         if meta == "barrier" {
@@ -1335,18 +1301,18 @@ impl Engine for PHIREngine {
                         }
                     }
                     Operation::Comment { .. } => {
-                        log::info!("Skipping comment at index {}", i);
+                        log::debug!("Skipping comment at index {}", i);
                     }
                 }
             }
 
-            log::info!(
+            log::debug!(
                 "After processing all operations, environment: {:?}",
                 self.processor.environment.get_all_variables()
             );
 
             // Extra pass to specifically handle all Result commands again just to be sure
-            log::info!("Extra pass to handle Result commands");
+            log::debug!("Extra pass to handle Result commands");
 
             // First, explicitly look for Result commands
             let mut result_ops = Vec::new();
@@ -1362,60 +1328,53 @@ impl Engine for PHIREngine {
             }
 
             // Process all Result commands
-            log::info!("Found {} Result commands to process", result_ops.len());
+            log::debug!("Found {} Result commands to process", result_ops.len());
             for (i, args, returns) in result_ops {
-                log::info!("Re-processing Result operation at index {}", i);
+                log::debug!("Re-processing Result operation at index {}", i);
                 self.processor
                     .handle_classical_op("Result", &args, &returns, &program.ops, i)?;
             }
 
             // We no longer need special fallback mapping
             // All variables are now handled generally through the Environment API
-            log::info!("Ensuring all variables are available to export mappings");
+            log::debug!("Ensuring all variables are available to export mappings");
         }
 
-        // TEMPORARY DEBUGGING: Create a ShotResult directly from our current state
-        log::info!("TEMPORARY: Creating result directly from processor state");
-        let mut result = ShotResult::default();
+        // TEMPORARY DEBUGGING: Create a Shot directly from our current state
+        log::debug!("TEMPORARY: Creating result directly from processor state");
+        let mut result = Shot::default();
 
         // Process all export mappings to ensure we have values for exports
-        log::info!("Processing export mappings into results");
+        log::debug!("Processing export mappings into results");
         let exported_values = self.processor.process_export_mappings();
 
-        log::info!("Exported values from mappings: {:?}", exported_values);
+        log::debug!("Exported values from mappings: {:?}", exported_values);
 
         // Add all exported values from process_export_mappings to the results
         for (key, value) in &exported_values {
-            result.registers.insert(key.clone(), *value);
-            result.registers_u64.insert(key.clone(), u64::from(*value));
-            // Also add to i64 registers
-            result.registers_i64.insert(key.clone(), i64::from(*value));
-            log::info!("Adding exported register {} = {}", key, value);
+            result.data.insert(key.clone(), Data::U32(*value));
+            log::debug!("Adding exported register {} = {}", key, value);
         }
 
         // All exports come from environment and export_mappings now
 
         // If there are no registers in the results or registers are missing, add all variables
         // from the environment to ensure we have a comprehensive result
-        if result.registers.is_empty() {
-            log::info!("No registers in results, adding all available variables");
+        if result.data.is_empty() {
+            log::debug!("No registers in results, adding all available variables");
 
             // Add all variables from the environment
             for info in self.processor.environment.get_all_variables() {
                 if let Some(value) = self.processor.environment.get(&info.name) {
-                    log::info!("Adding variable {} = {} to results", info.name, value);
-                    result.registers.insert(info.name.clone(), value.as_u32());
+                    log::debug!("Adding variable {} = {} to results", info.name, value);
                     result
-                        .registers_u64
-                        .insert(info.name.clone(), value.as_u64());
-                    result
-                        .registers_i64
-                        .insert(info.name.clone(), value.as_i64());
+                        .data
+                        .insert(info.name.clone(), Data::U32(value.as_u32()));
                 }
             }
         }
 
-        log::info!("Returning ShotResult: {:?}", result);
+        log::debug!("Returning Shot: {:?}", result);
         Ok(result)
     }
 
