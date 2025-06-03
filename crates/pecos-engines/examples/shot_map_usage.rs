@@ -21,10 +21,8 @@
 
 use bitvec::prelude::*;
 use pecos_core::errors::PecosError;
-use pecos_engines::data_vec::DataVec;
-use pecos_engines::shot_map::ShotMap;
-use pecos_engines::shot_results::{Data, Shot, ShotVec};
-use std::collections::HashMap;
+use pecos_engines::{Data, DataVec, Shot, ShotMap, ShotVec};
+use std::collections::BTreeMap;
 
 fn main() -> Result<(), PecosError> {
     let shot_vec = create_sample_data();
@@ -159,7 +157,7 @@ fn demonstrate_analysis(shot_map: &ShotMap) {
 
     // Create measurement histogram
     if let Ok(measurements) = shot_map.try_bits_as_decimal("creg") {
-        let mut histogram = HashMap::new();
+        let mut histogram = BTreeMap::new();
         for value in &measurements {
             *histogram.entry(value.clone()).or_insert(0) += 1;
         }

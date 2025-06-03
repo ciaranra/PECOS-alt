@@ -1,6 +1,5 @@
 pub mod byte_message;
 pub mod classical;
-pub mod data_vec;
 pub mod engine;
 pub mod engine_system;
 pub mod hybrid;
@@ -9,12 +8,9 @@ pub mod noise;
 pub mod prelude;
 pub mod quantum;
 pub mod quantum_system;
-pub mod shot_map;
-pub mod shot_map_formatter;
 pub mod shot_results;
 
 pub use byte_message::{ByteMessage, ByteMessageBuilder, Gate, GateType};
-pub use data_vec::{DataVec, DataVecType};
 pub use engine::Engine;
 pub use engine_system::{ClassicalEngine, ControlEngine, EngineStage, EngineSystem};
 pub use hybrid::HybridEngine;
@@ -23,11 +19,11 @@ pub use noise::{DepolarizingNoiseModel, NoiseModel, PassThroughNoiseModel};
 pub use pecos_core::errors::PecosError;
 pub use quantum::QuantumEngine;
 pub use quantum_system::QuantumSystem;
-pub use shot_map::ShotMap;
-pub use shot_map_formatter::{
-    BitVecDisplayFormat, ShotMapDisplay, ShotMapDisplayExt, ShotMapDisplayOptions,
+pub use shot_results::data_vec::DataVecType;
+pub use shot_results::{
+    BitVecDisplayFormat, Data, DataVec, Shot, ShotMap, ShotMapDisplay, ShotMapDisplayExt,
+    ShotMapDisplayOptions, ShotVec,
 };
-pub use shot_results::{Shot, ShotVec};
 
 /// Run a quantum simulation.
 ///

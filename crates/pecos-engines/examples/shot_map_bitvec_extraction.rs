@@ -96,7 +96,7 @@ fn main() -> Result<(), PecosError> {
     println!("5. Measurement outcome histogram:");
     println!("---------------------------------");
     let measurements = shot_map.try_bits_as_u64("qubits")?;
-    let mut histogram = std::collections::HashMap::new();
+    let mut histogram = std::collections::BTreeMap::new();
 
     for value in &measurements {
         *histogram.entry(*value).or_insert(0) += 1;

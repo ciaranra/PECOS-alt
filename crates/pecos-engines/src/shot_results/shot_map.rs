@@ -12,8 +12,8 @@
 
 //! Columnar representation of shot data for efficient analysis.
 
-use crate::data_vec::DataVec;
-use crate::shot_results::Data;
+use super::data::Data;
+use super::data_vec::DataVec;
 use bitvec::prelude::*;
 use pecos_core::errors::PecosError;
 use serde::{Deserialize, Serialize};
@@ -163,8 +163,7 @@ impl ShotMap {
     ///
     /// # Example
     /// ```
-    /// # use pecos_engines::shot_results::{ShotVec, Shot, Data};
-    /// # use pecos_engines::shot_map::ShotMap;
+    /// # use pecos_engines::{ShotVec, Shot, Data, ShotMap};
     /// # use pecos_core::errors::PecosError;
     /// # fn main() -> Result<(), PecosError> {
     /// let mut shot_vec = ShotVec::new();

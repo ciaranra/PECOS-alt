@@ -1,7 +1,6 @@
 //! Formatter for displaying `ShotMap` data in various formats
 
-use crate::data_vec::DataVec;
-use crate::shot_map::ShotMap;
+use super::{DataVec, ShotMap};
 use bitvec::prelude::*;
 use std::fmt;
 

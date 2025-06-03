@@ -25,7 +25,7 @@ use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::any::Any;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use super::builder::MonteCarloEngineBuilder;
@@ -486,7 +486,7 @@ fn distribute_shots(num_shots: usize, num_workers: usize) -> Vec<usize> {
 /// for demonstration and testing purposes.
 #[derive(Debug, Clone)]
 pub struct ExternalClassicalEngine {
-    results: HashMap<String, i64>,
+    results: BTreeMap<String, i64>,
 }
 
 impl Default for ExternalClassicalEngine {
@@ -500,7 +500,7 @@ impl ExternalClassicalEngine {
     #[must_use]
     pub fn new() -> Self {
         // Initialize with a default results map
-        let mut results = HashMap::new();
+        let mut results = BTreeMap::new();
         results.insert("result".to_string(), 0);
 
         Self { results }

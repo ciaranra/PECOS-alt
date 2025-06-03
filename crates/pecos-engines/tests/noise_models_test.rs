@@ -4,7 +4,7 @@ use pecos_engines::noise::{
 };
 use pecos_engines::quantum::StateVecEngine;
 use pecos_engines::{Engine, EngineSystem, QuantumSystem};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 // Helper function to count measurement results from multiple shots
 fn count_results(
@@ -12,12 +12,12 @@ fn count_results(
     circ: &ByteMessage,
     num_shots: usize,
     num_qubits: usize,
-) -> HashMap<String, usize> {
+) -> BTreeMap<String, usize> {
     let quantum = Box::new(StateVecEngine::new(num_qubits));
     let mut system = QuantumSystem::new(noise_model, quantum);
     system.set_seed(42).expect("Failed to set seed");
 
-    let mut counts = HashMap::new();
+    let mut counts = BTreeMap::new();
     for _ in 0..num_shots {
         system.reset().expect("Failed to reset system");
         let results = system

@@ -1,6 +1,5 @@
 use bitvec::prelude::*;
-use pecos_engines::data_vec::{DataVec, DataVecType};
-use pecos_engines::shot_results::Data;
+use pecos_engines::{Data, DataVec, DataVecType};
 
 fn main() {
     // Example 1: Creating a DataVec from homogeneous Data values

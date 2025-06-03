@@ -12,7 +12,7 @@
 
 //! Vectorized representation of data for columnar operations.
 
-use crate::shot_results::Data;
+use super::data::Data;
 use bitvec::prelude::*;
 use num_bigint::BigInt;
 use pecos_core::errors::PecosError;
@@ -26,8 +26,7 @@ use serde_json::Value as JsonValue;
 ///
 /// # Example
 /// ```
-/// use pecos_engines::data_vec::DataVec;
-/// use pecos_engines::shot_results::Data;
+/// use pecos_engines::{DataVec, Data};
 ///
 /// // Create a DataVec from a vector of Data values
 /// let data_values = vec![Data::U32(1), Data::U32(2), Data::U32(3)];
@@ -278,7 +277,7 @@ impl DataVec {
     ///
     /// # Example
     /// ```
-    /// use pecos_engines::data_vec::{DataVec, DataVecType};
+    /// use pecos_engines::{DataVec, DataVecType};
     ///
     /// let vec = DataVec::new_empty(DataVecType::U32);
     /// assert!(vec.is_empty());
