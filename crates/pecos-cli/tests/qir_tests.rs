@@ -319,7 +319,7 @@ fn test_qir_shot_counts() -> Result<(), Box<dyn std::error::Error>> {
             "All outcomes should be |00⟩ (0) or |11⟩ (3) for a Bell state"
         );
 
-        println!("  ✓ Correctly produced {shots} shots with valid Bell state outcomes");
+        println!("  Correctly produced {shots} shots with valid Bell state outcomes");
     }
 
     Ok(())
@@ -366,7 +366,7 @@ fn test_qir_multiple_workers() -> Result<(), Box<dyn std::error::Error>> {
             "Distribution should be roughly balanced even with {workers} workers"
         );
 
-        println!("  ✓ {workers} workers: {state_00_count} |00⟩, {state_11_count} |11⟩ states");
+        println!("  {workers} workers: {state_00_count} |00⟩, {state_11_count} |11⟩ states");
     }
 
     Ok(())

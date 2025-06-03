@@ -1,4 +1,30 @@
+use pecos_core::prelude::GateType;
 use pecos_qasm::{Operation, parser::QASMParser};
+
+// Helper function to check if an operation is a specific gate type
+fn is_gate_type(op: &Operation, gate_name: &str) -> bool {
+    match op {
+        Operation::Gate { name, .. } => name.eq_ignore_ascii_case(gate_name),
+        Operation::NativeGate(gate) => {
+            let gate_type_str = format!("{:?}", gate.gate_type);
+            gate_type_str.eq_ignore_ascii_case(gate_name)
+                || (gate_name.eq_ignore_ascii_case("cx") && matches!(gate.gate_type, GateType::CX))
+                || (gate_name.eq_ignore_ascii_case("cnot")
+                    && matches!(gate.gate_type, GateType::CX))
+                || (gate_name.eq_ignore_ascii_case("h") && matches!(gate.gate_type, GateType::H))
+        }
+        _ => false,
+    }
+}
+
+// Helper function to get qubits from an operation
+fn get_operation_qubits(op: &Operation) -> Vec<usize> {
+    match op {
+        Operation::Gate { qubits, .. } => qubits.clone(),
+        Operation::NativeGate(gate) => gate.qubits.iter().map(|q| q.0).collect(),
+        _ => vec![],
+    }
+}
 
 #[test]
 #[allow(clippy::too_many_lines)]
@@ -451,12 +477,10 @@ fn test_nine_qubit_quantum_circuit() {
 
     for op in &program.operations {
         total_operations += 1;
-        if let Operation::Gate { name, .. } = op {
-            match name.as_str() {
-                "H" => h_count += 1,
-                "CX" => cx_count += 1,
-                _ => {}
-            }
+        if is_gate_type(op, "H") {
+            h_count += 1;
+        } else if is_gate_type(op, "CX") {
+            cx_count += 1;
         }
     }
 
@@ -484,10 +508,9 @@ fn test_nine_qubit_quantum_circuit() {
 
     // Check that all operations are on valid qubits
     for op in &program.operations {
-        if let Operation::Gate { qubits, .. } = op {
-            for &qubit in qubits {
-                assert!(qubit < 9, "Qubit index {qubit} is out of range");
-            }
+        let qubits = get_operation_qubits(op);
+        for qubit in qubits {
+            assert!(qubit < 9, "Qubit index {qubit} is out of range");
         }
     }
 }
@@ -516,11 +539,10 @@ fn test_cz_gate_connectivity() {
     let mut cx_pairs = Vec::new();
 
     for op in &program.operations {
-        if let Operation::Gate { name, qubits, .. } = op {
-            if name == "CX" {
-                assert_eq!(qubits.len(), 2, "CX gate should have exactly 2 qubits");
-                cx_pairs.push((qubits[0], qubits[1]));
-            }
+        if is_gate_type(op, "CX") {
+            let qubits = get_operation_qubits(op);
+            assert_eq!(qubits.len(), 2, "CX gate should have exactly 2 qubits");
+            cx_pairs.push((qubits[0], qubits[1]));
         }
     }
 
@@ -562,12 +584,10 @@ fn test_rx_half_pi_gates() {
 
     for op in &program.operations {
         total_ops += 1;
-        if let Operation::Gate { name, .. } = op {
-            match name.as_str() {
-                "H" => h_count += 1,
-                "RZ" => rz_count += 1,
-                _ => {}
-            }
+        if is_gate_type(op, "H") {
+            h_count += 1;
+        } else if is_gate_type(op, "RZ") {
+            rz_count += 1;
         }
     }
 
@@ -610,13 +630,12 @@ fn test_circuit_patterns() {
     let mut rz_gates = 0;
 
     for op in &program.operations {
-        if let Operation::Gate { name, .. } = op {
-            match name.as_str() {
-                "H" => h_gates += 1,
-                "CX" => cx_gates += 1,
-                "RZ" => rz_gates += 1,
-                _ => {}
-            }
+        if is_gate_type(op, "H") {
+            h_gates += 1;
+        } else if is_gate_type(op, "CX") {
+            cx_gates += 1;
+        } else if is_gate_type(op, "RZ") {
+            rz_gates += 1;
         }
     }
 

@@ -43,7 +43,21 @@ impl Gate {
         }
     }
 
-    /// Helper function to flatten qubit pairs into a vector of `QubitIds`
+    /// Total number of qubits being gated
+    #[inline]
+    #[must_use]
+    pub fn num_qubits(&self) -> usize {
+        self.qubits.len()
+    }
+
+    /// The number of individual gates represented by this `Gate`
+    #[inline]
+    #[must_use]
+    pub fn num_gates(&self) -> usize {
+        self.num_qubits() / self.quantum_arity()
+    }
+
+    /// Helper function to flatten qubit pairs into a vector of `QubitId`s
     fn flatten_qubit_pairs(
         qubit_pairs: &[(impl Into<QubitId> + Copy, impl Into<QubitId> + Copy)],
     ) -> Vec<QubitId> {

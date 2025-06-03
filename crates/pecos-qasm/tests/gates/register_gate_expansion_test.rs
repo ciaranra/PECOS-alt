@@ -1,5 +1,23 @@
 use pecos_qasm::{Operation, parser::QASMParser};
 
+// Helper function to check if an operation is a gate with a specific name
+fn is_gate_with_name(op: &Operation, gate_name: &str) -> bool {
+    match op {
+        Operation::Gate { name, .. } => {
+            name == gate_name || name.to_uppercase() == gate_name.to_uppercase()
+        }
+        Operation::NativeGate(gate) => {
+            let gate_type_name = format!("{:?}", gate.gate_type).to_lowercase();
+            let target_name = gate_name.to_lowercase();
+            gate_type_name == target_name
+                || (target_name == "cx" && gate_type_name == "cnot")
+                || (target_name == "cnot" && gate_type_name == "cnot")
+                || (target_name == "h" && gate_type_name == "hadamard")
+        }
+        _ => false,
+    }
+}
+
 #[test]
 fn test_measure_register_expansion() {
     // Test that measure q -> c expands to individual measurements
@@ -20,7 +38,7 @@ fn test_measure_register_expansion() {
     let measure_count = program
         .operations
         .iter()
-        .filter(|op| matches!(op, Operation::Measure { .. }))
+        .filter(|op| matches!(op, Operation::MeasureWithMapping { .. }))
         .count();
 
     // Should have 3 individual measurements
@@ -31,11 +49,14 @@ fn test_measure_register_expansion() {
         .operations
         .iter()
         .filter_map(|op| match op {
-            Operation::Measure {
-                qubit,
+            Operation::MeasureWithMapping {
+                gate,
                 c_reg,
                 c_index,
-            } => Some((*qubit, c_reg.clone(), *c_index)),
+            } => {
+                let qubit = gate.qubits.first().map_or(0, |q| q.0);
+                Some((qubit, c_reg.clone(), *c_index))
+            }
             _ => None,
         })
         .collect();
@@ -82,6 +103,12 @@ fn test_register_gate_expansion_should_work() {
                     Operation::Gate { name, qubits, .. } => {
                         println!("  [{i}] Gate: {name} on qubits: {qubits:?}");
                     }
+                    Operation::NativeGate(gate) => {
+                        println!(
+                            "  [{i}] NativeGate: {:?} on qubits: {:?}",
+                            gate.gate_type, gate.qubits
+                        );
+                    }
                     _ => {
                         println!("  [{i}] Other operation: {op:?}");
                     }
@@ -92,7 +119,7 @@ fn test_register_gate_expansion_should_work() {
             let h_count = program
                 .operations
                 .iter()
-                .filter(|op| matches!(op, Operation::Gate { name, .. } if name == "H"))
+                .filter(|op| is_gate_with_name(op, "H"))
                 .count();
 
             println!("H gate count: {h_count}");
@@ -131,7 +158,7 @@ fn test_two_qubit_register_gate_expansion() {
             let cx_count = program
                 .operations
                 .iter()
-                .filter(|op| matches!(op, Operation::Gate { name, .. } if name == "CX"))
+                .filter(|op| is_gate_with_name(op, "CX"))
                 .count();
 
             assert_eq!(cx_count, 2, "Should have expanded to 2 CX gates");
@@ -162,7 +189,7 @@ fn test_measurement_register_expansion_works() {
     let measure_count = program
         .operations
         .iter()
-        .filter(|op| matches!(op, Operation::Measure { .. }))
+        .filter(|op| matches!(op, Operation::MeasureWithMapping { .. }))
         .count();
 
     assert_eq!(
@@ -242,7 +269,7 @@ fn test_gate_with_params_on_register() {
             let rz_count = program
                 .operations
                 .iter()
-                .filter(|op| matches!(op, Operation::Gate { name, .. } if name == "RZ"))
+                .filter(|op| is_gate_with_name(op, "RZ"))
                 .count();
 
             assert_eq!(rz_count, 2, "Should have expanded to 2 RZ gates");

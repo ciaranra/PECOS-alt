@@ -1,5 +1,23 @@
 use pecos_qasm::{Operation, parser::QASMParser};
 
+// Helper function to extract gate name from operation
+fn get_gate_name(op: &Operation) -> Option<String> {
+    match op {
+        Operation::Gate { name, .. } => Some(name.clone()),
+        Operation::NativeGate(gate) => Some(format!("{:?}", gate.gate_type)),
+        _ => None,
+    }
+}
+
+// Helper function to extract qubits from operation
+fn get_gate_qubits(op: &Operation) -> Vec<usize> {
+    match op {
+        Operation::Gate { qubits, .. } => qubits.clone(),
+        Operation::NativeGate(gate) => gate.qubits.iter().map(|q| q.0).collect(),
+        _ => vec![],
+    }
+}
+
 #[test]
 fn test_mixed_gates_circuit() {
     let qasm = r#"
@@ -21,15 +39,15 @@ fn test_mixed_gates_circuit() {
 
     // Count gate types and track operations
     let mut gate_count = 0;
-    let mut gate_types = std::collections::HashMap::new();
-    let mut qubit_usage = std::collections::HashSet::new();
+    let mut gate_types = std::collections::BTreeMap::new();
+    let mut qubit_usage = std::collections::BTreeSet::new();
 
     for op in &program.operations {
-        if let Operation::Gate { name, qubits, .. } = op {
+        if let Some(name) = get_gate_name(op) {
             gate_count += 1;
             *gate_types.entry(name.to_lowercase()).or_insert(0) += 1;
 
-            for &qubit in qubits {
+            for qubit in get_gate_qubits(op) {
                 qubit_usage.insert(qubit);
             }
         }
@@ -87,15 +105,22 @@ fn test_angle_precision() {
     let mut rz_angles = Vec::new();
 
     for op in &program.operations {
-        if let Operation::Gate {
-            name, parameters, ..
-        } = op
-        {
-            if name == "RZ" {
+        match op {
+            Operation::Gate {
+                name, parameters, ..
+            } if name == "RZ" => {
                 if let Some(&angle) = parameters.first() {
                     rz_angles.push(angle);
                 }
             }
+            Operation::NativeGate(gate)
+                if matches!(gate.gate_type, pecos_core::gate_type::GateType::RZ) =>
+            {
+                if let Some(&angle) = gate.params.first() {
+                    rz_angles.push(angle);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -144,10 +169,18 @@ fn test_gate_sequence() {
     let mut q3_operations = Vec::new();
 
     for op in &program.operations {
-        if let Operation::Gate { name, qubits, .. } = op {
-            if qubits.contains(&3) {
-                q3_operations.push(name.clone());
+        match op {
+            Operation::Gate { name, qubits, .. } => {
+                if qubits.contains(&3) {
+                    q3_operations.push(name.clone());
+                }
             }
+            Operation::NativeGate(gate) => {
+                if gate.qubits.iter().any(|q| q.0 == 3) {
+                    q3_operations.push(format!("{:?}", gate.gate_type));
+                }
+            }
+            _ => {}
         }
     }
 
@@ -163,11 +196,11 @@ fn test_gate_sequence() {
         "Should have RZ gates on qubit 3"
     );
     assert!(
-        q3_operations.iter().any(|g| g == "CX"),
+        q3_operations.iter().any(|g| g == "CX" || g == "CNOT"),
         "Should have CX gates on qubit 3"
     );
     assert!(
-        q3_operations.iter().any(|g| g == "H"),
+        q3_operations.iter().any(|g| g == "H" || g == "Hadamard"),
         "Should have H gates from expansions"
     );
 }
@@ -189,10 +222,22 @@ fn test_two_qubit_gates() {
     let mut two_qubit_gates = Vec::new();
 
     for op in &program.operations {
-        if let Operation::Gate { name, qubits, .. } = op {
-            if qubits.len() == 2 {
-                two_qubit_gates.push((name.clone(), qubits[0], qubits[1]));
+        match op {
+            Operation::Gate { name, qubits, .. } => {
+                if qubits.len() == 2 {
+                    two_qubit_gates.push((name.clone(), qubits[0], qubits[1]));
+                }
             }
+            Operation::NativeGate(gate) => {
+                if gate.qubits.len() == 2 {
+                    two_qubit_gates.push((
+                        format!("{:?}", gate.gate_type),
+                        gate.qubits[0].0,
+                        gate.qubits[1].0,
+                    ));
+                }
+            }
+            _ => {}
         }
     }
 
@@ -201,7 +246,7 @@ fn test_two_qubit_gates() {
     // - CX from the cz expansion (cz -> H-CX-H)
     let cx_gates: Vec<_> = two_qubit_gates
         .iter()
-        .filter(|(name, _, _)| name == "CX")
+        .filter(|(name, _, _)| name == "CX" || name == "CNOT")
         .collect();
 
     assert_eq!(cx_gates.len(), 2, "Should have 2 CX gates");

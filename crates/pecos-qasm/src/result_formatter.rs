@@ -126,7 +126,7 @@ pub fn format_as_decimal_arrays(results: &ShotVec, register_names: Option<&[&str
     let all_keys: Vec<String> = if let Some(names) = register_names {
         names.iter().map(|&s| s.to_string()).collect()
     } else {
-        let mut keys = std::collections::HashSet::new();
+        let mut keys = std::collections::BTreeSet::new();
         for shot in &results.shots {
             for key in shot.data.keys() {
                 keys.insert(key.clone());

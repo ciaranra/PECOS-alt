@@ -60,7 +60,10 @@ fn test_sqrt_function() {
 
     // Verify all operations are gates
     for op in &program.operations {
-        assert!(matches!(op, Operation::Gate { .. }));
+        assert!(matches!(
+            op,
+            Operation::Gate { .. } | Operation::NativeGate(_)
+        ));
     }
 }
 
@@ -178,42 +181,42 @@ fn test_evaluation_accuracy() {
         name: "sin".to_string(),
         args: vec![Expression::Float(PI / 2.0)],
     };
-    assert!((expr.evaluate_with_context(None).unwrap() - 1.0).abs() < 1e-10);
+    assert!((expr.evaluate(None).unwrap() - 1.0).abs() < 1e-10);
 
     // Test cos
     let expr = Expression::FunctionCall {
         name: "cos".to_string(),
         args: vec![Expression::Float(0.0)],
     };
-    assert!((expr.evaluate_with_context(None).unwrap() - 1.0).abs() < 1e-10);
+    assert!((expr.evaluate(None).unwrap() - 1.0).abs() < 1e-10);
 
     // Test tan
     let expr = Expression::FunctionCall {
         name: "tan".to_string(),
         args: vec![Expression::Float(PI / 4.0)],
     };
-    assert!((expr.evaluate_with_context(None).unwrap() - 1.0).abs() < 1e-10);
+    assert!((expr.evaluate(None).unwrap() - 1.0).abs() < 1e-10);
 
     // Test exp
     let expr = Expression::FunctionCall {
         name: "exp".to_string(),
         args: vec![Expression::Float(0.0)],
     };
-    assert!((expr.evaluate_with_context(None).unwrap() - 1.0).abs() < 1e-10);
+    assert!((expr.evaluate(None).unwrap() - 1.0).abs() < 1e-10);
 
     // Test ln
     let expr = Expression::FunctionCall {
         name: "ln".to_string(),
         args: vec![Expression::Float(std::f64::consts::E)],
     };
-    assert!((expr.evaluate_with_context(None).unwrap() - 1.0).abs() < 1e-10);
+    assert!((expr.evaluate(None).unwrap() - 1.0).abs() < 1e-10);
 
     // Test sqrt
     let expr = Expression::FunctionCall {
         name: "sqrt".to_string(),
         args: vec![Expression::Float(4.0)],
     };
-    assert!((expr.evaluate_with_context(None).unwrap() - 2.0).abs() < 1e-10);
+    assert!((expr.evaluate(None).unwrap() - 2.0).abs() < 1e-10);
 }
 
 #[test]
@@ -394,6 +397,5 @@ fn test_trig_identity_exact_value() {
 fn evaluate_param_expr(expr: &Expression) -> f64 {
     // Since this is a test helper and we don't have parameters,
     // use evaluate_with_context() which handles basic evaluation
-    expr.evaluate_with_context(None)
-        .expect("Failed to evaluate expression")
+    expr.evaluate(None).expect("Failed to evaluate expression")
 }

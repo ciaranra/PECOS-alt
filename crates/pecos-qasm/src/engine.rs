@@ -1,15 +1,19 @@
 #![allow(clippy::similar_names)]
 
+use bitvec::prelude::*;
 use log::debug;
 use pecos_core::errors::PecosError;
 use pecos_engines::byte_message::ByteMessageBuilder;
 use pecos_engines::prelude::*;
 use std::any::Any;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::str::FromStr;
 
-use crate::ast::{EvaluationContext, Expression, Operation};
+use crate::ast::{Expression, Operation};
+use crate::bitvec_expression::{
+    BitVecExpressionContext, ExpressionValue, evaluate_expression_bitvec,
+};
 use crate::program::QASMProgram;
 
 /// Gate handler function type
@@ -33,11 +37,11 @@ pub struct QASMEngine {
     /// Each entry is (`register_name`, `bit_index`) mapped by the order of measurements
     register_result_mappings: Vec<(String, usize)>,
 
-    /// Classical register values
-    classical_registers: HashMap<String, Vec<u32>>,
+    /// Classical register values stored as `BitVecs`
+    classical_registers: BTreeMap<String, BitVec<u8, Lsb0>>,
 
     /// Raw measurement results (may include bits not in classical registers)
-    raw_measurements: HashMap<u32, u32>,
+    raw_measurements: BTreeMap<u32, u32>,
 
     /// Next available result ID to use for measurements
 
@@ -174,10 +178,10 @@ impl QASMEngine {
                 program.classical_registers.len()
             );
 
-            // Initialize classical registers to zero
+            // Initialize classical registers as BitVecs
             for (reg_name, size) in &program.classical_registers {
-                self.classical_registers
-                    .insert(reg_name.clone(), vec![0; *size]);
+                let bitvec = BitVec::<u8, Lsb0>::repeat(false, *size);
+                self.classical_registers.insert(reg_name.clone(), bitvec);
             }
 
             debug!(
@@ -211,19 +215,16 @@ impl QASMEngine {
             }
         }
 
-        // Get or create the register
+        // Get the register
         let register = self
             .classical_registers
-            .entry(register_name.to_string())
-            .or_default();
+            .get_mut(register_name)
+            .ok_or_else(|| {
+                PecosError::Input(format!("Classical register '{register_name}' not found"))
+            })?;
 
-        // Ensure the register has enough space
-        if register.len() <= bit_index {
-            register.resize(bit_index + 1, 0);
-        }
-
-        // Set the value
-        register[bit_index] = u32::from(value);
+        // Set the bit value
+        register.set(bit_index, value != 0);
         Ok(())
     }
 
@@ -411,6 +412,135 @@ impl QASMEngine {
         engine.message_builder.add_cx(&[qubits[1]], &[qubits[0]]);
         engine.message_builder.add_cx(&[qubits[0]], &[qubits[1]]);
         Ok(())
+    }
+
+    /// Process single-qubit gates
+    fn process_single_qubit_gate(
+        &mut self,
+        gate_type: pecos_core::prelude::GateType,
+        qubits: &[usize],
+    ) -> Result<(), PecosError> {
+        use pecos_core::prelude::GateType;
+
+        for &qubit in qubits {
+            match gate_type {
+                GateType::X => self.message_builder.add_x(&[qubit]),
+                GateType::Y => self.message_builder.add_y(&[qubit]),
+                GateType::Z => self.message_builder.add_z(&[qubit]),
+                GateType::H => self.message_builder.add_h(&[qubit]),
+                GateType::Prep => self.message_builder.add_prep(&[qubit]),
+                _ => {
+                    return Err(PecosError::Processing(format!(
+                        "Gate type {gate_type:?} is not a single-qubit gate"
+                    )));
+                }
+            };
+        }
+        Ok(())
+    }
+
+    /// Process two-qubit gates
+    fn process_two_qubit_gate(
+        &mut self,
+        gate_type: pecos_core::prelude::GateType,
+        qubits: &[usize],
+    ) -> Result<(), PecosError> {
+        use pecos_core::prelude::GateType;
+
+        for chunk in qubits.chunks(2) {
+            if chunk.len() == 2 {
+                match gate_type {
+                    GateType::CX => self.message_builder.add_cx(&[chunk[0]], &[chunk[1]]),
+                    GateType::SZZ => self.message_builder.add_szz(&[chunk[0]], &[chunk[1]]),
+                    GateType::SZZdg => self.message_builder.add_szzdg(&[chunk[0]], &[chunk[1]]),
+                    _ => {
+                        return Err(PecosError::Processing(format!(
+                            "Gate type {gate_type:?} is not a two-qubit gate"
+                        )));
+                    }
+                };
+            }
+        }
+        Ok(())
+    }
+
+    /// Process parameterized gates
+    fn process_parameterized_gate(
+        &mut self,
+        gate_type: pecos_core::prelude::GateType,
+        qubits: &[usize],
+        params: &[f64],
+    ) -> Result<(), PecosError> {
+        use pecos_core::prelude::GateType;
+
+        match gate_type {
+            GateType::RZ => {
+                if let Some(&angle) = params.first() {
+                    for &qubit in qubits {
+                        self.message_builder.add_rz(angle, &[qubit]);
+                    }
+                }
+            }
+            GateType::RZZ => {
+                if let Some(&angle) = params.first() {
+                    for chunk in qubits.chunks(2) {
+                        if chunk.len() == 2 {
+                            self.message_builder
+                                .add_rzz(angle, &[chunk[0]], &[chunk[1]]);
+                        }
+                    }
+                }
+            }
+            GateType::R1XY => {
+                if params.len() >= 2 {
+                    let theta = params[0];
+                    let phi = params[1];
+                    for &qubit in qubits {
+                        self.message_builder.add_r1xy(theta, phi, &[qubit]);
+                    }
+                }
+            }
+            GateType::U => {
+                if params.len() >= 3 {
+                    let theta = params[0];
+                    let phi = params[1];
+                    let lambda = params[2];
+                    for &qubit in qubits {
+                        self.message_builder.add_u(theta, phi, lambda, &[qubit]);
+                    }
+                }
+            }
+            _ => {
+                return Err(PecosError::Processing(format!(
+                    "Gate type {gate_type:?} is not a parameterized gate"
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Process a native gate directly
+    fn process_native_gate(&mut self, gate: &pecos_core::prelude::Gate) -> Result<(), PecosError> {
+        use pecos_core::prelude::GateType;
+
+        // Convert QubitIds to usize array
+        let qubits: Vec<usize> = gate.qubits.iter().map(|q| q.0).collect();
+
+        match gate.gate_type {
+            GateType::I | GateType::Idle => Ok(()), // No-op gates
+            GateType::X | GateType::Y | GateType::Z | GateType::H | GateType::Prep => {
+                self.process_single_qubit_gate(gate.gate_type, &qubits)
+            }
+            GateType::CX | GateType::SZZ | GateType::SZZdg => {
+                self.process_two_qubit_gate(gate.gate_type, &qubits)
+            }
+            GateType::RZ | GateType::RZZ | GateType::R1XY | GateType::U => {
+                self.process_parameterized_gate(gate.gate_type, &qubits, &gate.params)
+            }
+            GateType::Measure => Err(PecosError::Processing(
+                "Measure gate should be handled by MeasureWithMapping operation".to_string(),
+            )),
+        }
     }
 
     /// Get the gate table for table-driven processing
@@ -707,15 +837,23 @@ impl QASMEngine {
                         operation_count += 1;
                     }
                 }
-                Operation::Measure {
-                    qubit,
+                Operation::NativeGate(gate) => {
+                    // Process native gate directly
+                    self.process_native_gate(gate)?;
+                    operation_count += 1;
+                }
+                Operation::MeasureWithMapping {
+                    gate,
                     c_reg,
                     c_index,
                 } => {
-                    self.process_measurement(*qubit, c_reg, *c_index)?;
-                    self.current_op += 1;
-                    debug!("Breaking batch after measurement to wait for results");
-                    return Ok(self.message_builder.build());
+                    // Extract qubit from gate
+                    if let Some(qubit_id) = gate.qubits.first() {
+                        self.process_measurement(qubit_id.0, c_reg, *c_index)?;
+                        self.current_op += 1;
+                        debug!("Breaking batch after measurement to wait for results");
+                        return Ok(self.message_builder.build());
+                    }
                 }
                 Operation::RegMeasure { q_reg, c_reg } => {
                     let added_count = self.process_register_measurement(
@@ -759,7 +897,7 @@ impl QASMEngine {
                     }
 
                     debug!("Evaluating if condition: {:?}", condition);
-                    let condition_value = self.evaluate_expression_with_context(condition)?;
+                    let condition_value = self.evaluate_expression_bitvec(condition)?.as_i64();
                     debug!("Condition value: {}", condition_value);
 
                     if condition_value != 0 {
@@ -782,40 +920,43 @@ impl QASMEngine {
                                     operation_count += 1;
                                 }
                             }
+                            Operation::NativeGate(gate) => {
+                                debug!(
+                                    "Executing conditional native gate {:?} on qubits {:?}",
+                                    gate.gate_type, gate.qubits
+                                );
+                                self.process_native_gate(gate)?;
+                                operation_count += 1;
+                            }
                             Operation::ClassicalAssignment {
                                 target,
                                 is_indexed,
                                 index,
                                 expression,
                             } => {
-                                let value = self.evaluate_expression_with_context(expression)?;
+                                let value_expr = self.evaluate_expression_bitvec(expression)?;
 
                                 if *is_indexed {
                                     if let Some(idx) = *index {
-                                        self.update_register_bit(
-                                            target,
-                                            idx,
-                                            u8::from(value != 0),
-                                        )?;
+                                        let bit_value = value_expr.into_bool();
+                                        self.update_register_bit(target, idx, u8::from(bit_value))?;
                                     }
                                 } else if let Some(register_size) =
                                     program.classical_registers.get(target.as_str())
                                 {
-                                    let mut bits = vec![0u32; *register_size];
+                                    let mut result_bitvec = value_expr.into_bitvec();
 
-                                    for (i, bit) in bits.iter_mut().enumerate().take(*register_size)
-                                    {
-                                        if i < 32 {
-                                            *bit = ((value >> i) & 1) as u32;
-                                        }
-                                    }
+                                    // Resize to the exact register size
+                                    result_bitvec.resize(*register_size, false);
 
                                     debug!(
-                                        "Setting register {} to value {} (bits: {:?})",
-                                        target, value, bits
+                                        "Setting register {} with BitVec of length {}",
+                                        target,
+                                        result_bitvec.len()
                                     );
 
-                                    self.classical_registers.insert(target.clone(), bits);
+                                    self.classical_registers
+                                        .insert(target.clone(), result_bitvec);
                                 }
                                 operation_count += 1;
                             }
@@ -838,29 +979,29 @@ impl QASMEngine {
                         target, expression
                     );
 
-                    let value = self.evaluate_expression_with_context(expression)?;
+                    let value_expr = self.evaluate_expression_bitvec(expression)?;
 
                     if *is_indexed {
                         if let Some(idx) = *index {
-                            self.update_register_bit(target, idx, u8::from(value != 0))?;
+                            let bit_value = value_expr.into_bool();
+                            self.update_register_bit(target, idx, u8::from(bit_value))?;
                         }
                     } else if let Some(register_size) =
                         program.classical_registers.get(target.as_str())
                     {
-                        let mut bits = vec![0u32; *register_size];
+                        let mut result_bitvec = value_expr.into_bitvec();
 
-                        for (i, bit) in bits.iter_mut().enumerate().take(*register_size) {
-                            if i < 32 {
-                                *bit = ((value >> i) & 1) as u32;
-                            }
-                        }
+                        // Resize to the exact register size
+                        result_bitvec.resize(*register_size, false);
 
                         debug!(
-                            "Setting register {} to value {} (bits: {:?})",
-                            target, value, bits
+                            "Setting register {} with BitVec of length {}",
+                            target,
+                            result_bitvec.len()
                         );
 
-                        self.classical_registers.insert(target.clone(), bits);
+                        self.classical_registers
+                            .insert(target.clone(), result_bitvec);
                     }
 
                     operation_count += 1;
@@ -875,103 +1016,17 @@ impl QASMEngine {
         Ok(self.message_builder.build())
     }
 
-    /// Evaluate an expression with access to register values
-    #[allow(
-        clippy::too_many_lines,
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss
-    )]
-    fn evaluate_expression_with_context(&self, expr: &Expression) -> Result<i64, PecosError> {
-        match expr {
-            Expression::Integer(i) => Ok(*i),
-            Expression::Float(f) =>
-            {
-                #[allow(clippy::cast_possible_truncation)]
-                Ok(*f as i64)
-            }
-            Expression::Variable(name) => {
-                if let Some(bits) = self.classical_registers.get(name) {
-                    let mut value = 0i64;
-                    for (i, &bit) in bits.iter().enumerate() {
-                        if i < 32 {
-                            value |= i64::from(bit & 1) << i;
-                        }
-                    }
-                    Ok(value)
-                } else {
-                    debug!("Register {} not found", name);
-                    Ok(0)
-                }
-            }
-            Expression::BitId(reg_name, idx) => {
-                let bit_value = self
-                    .classical_registers
-                    .get(reg_name)
-                    .and_then(|reg| {
-                        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                        reg.get(*idx as usize)
-                    })
-                    .copied()
-                    .unwrap_or(0);
-                debug!("Evaluating bit {}.{} = {}", reg_name, idx, bit_value);
-                Ok(i64::from(bit_value))
-            }
-            Expression::BinaryOp { op, left, right } => {
-                let left_val = self.evaluate_expression_with_context(left)?;
-                let right_val = self.evaluate_expression_with_context(right)?;
-                debug!("Binary op: {} {} {} = ?", left_val, op, right_val);
+    /// Evaluate an expression with `BitVec` support
+    fn evaluate_expression_bitvec(&self, expr: &Expression) -> Result<ExpressionValue, PecosError> {
+        // Determine default width - use the largest register size or 64 bits
+        let default_width = self
+            .classical_registers
+            .values()
+            .map(bitvec::vec::BitVec::len)
+            .max()
+            .unwrap_or(64);
 
-                match op.as_str() {
-                    "+" => Ok(left_val + right_val),
-                    "-" => Ok(left_val - right_val),
-                    "*" => Ok(left_val * right_val),
-                    "/" => {
-                        if right_val != 0 {
-                            Ok(left_val / right_val)
-                        } else {
-                            debug!("Division by zero");
-                            Ok(0)
-                        }
-                    }
-                    "&" => Ok(left_val & right_val),
-                    "|" => Ok(left_val | right_val),
-                    "^" => Ok(left_val ^ right_val),
-                    "==" => Ok(i64::from(left_val == right_val)),
-                    "!=" => Ok(i64::from(left_val != right_val)),
-                    "<" => Ok(i64::from(left_val < right_val)),
-                    ">" => Ok(i64::from(left_val > right_val)),
-                    "<=" => Ok(i64::from(left_val <= right_val)),
-                    ">=" => Ok(i64::from(left_val >= right_val)),
-                    "<<" => Ok(left_val << right_val),
-                    ">>" => Ok(left_val >> right_val),
-                    _ => {
-                        debug!("Unsupported binary operation: {}", op);
-                        Err(PecosError::Processing(format!(
-                            "Unsupported operation: {op}"
-                        )))
-                    }
-                }
-            }
-            Expression::UnaryOp { op, expr } => {
-                let val = self.evaluate_expression_with_context(expr)?;
-                match op.as_str() {
-                    "-" => Ok(-val),
-                    "~" => Ok(!val),
-                    _ => {
-                        debug!("Unsupported unary operation: {}", op);
-                        Err(PecosError::Processing(format!(
-                            "Unsupported operation: {op}"
-                        )))
-                    }
-                }
-            }
-            _ => {
-                debug!("Unsupported expression type: {:?}", expr);
-                Err(PecosError::Processing(format!(
-                    "Unsupported expression: {expr:?}"
-                )))
-            }
-        }
+        evaluate_expression_bitvec(expr, self, default_width)
     }
 }
 
@@ -1078,37 +1133,18 @@ impl ClassicalEngine for QASMEngine {
     }
 
     fn get_results(&self) -> Result<Shot, PecosError> {
-        use bitvec::prelude::*;
-
         let mut result = Shot::default();
 
         let mut reg_names: Vec<_> = self.classical_registers.keys().collect();
         reg_names.sort();
 
         for reg_name in &reg_names {
-            if let Some(values) = self.classical_registers.get(*reg_name) {
-                // Get the register width from the program
-                let reg_width = self
-                    .program
-                    .as_ref()
-                    .and_then(|p| p.program().classical_registers.get(*reg_name))
-                    .copied()
-                    .unwrap_or(values.len()); // Use actual length if not found
-
-                // Create a BitVec with the exact register width
-                let mut bitvec = BitVec::<u8, Lsb0>::with_capacity(reg_width);
-
-                // Copy bits from the values array
-                for i in 0..reg_width {
-                    if i < values.len() && values[i] != 0 {
-                        bitvec.push(true);
-                    } else {
-                        bitvec.push(false);
-                    }
-                }
-
+            if let Some(bitvec) = self.classical_registers.get(*reg_name) {
+                // Clone the BitVec directly - it already has the correct width
                 let reg_name_str = (*reg_name).to_string();
-                result.data.insert(reg_name_str, Data::BitVec(bitvec));
+                result
+                    .data
+                    .insert(reg_name_str, Data::BitVec(bitvec.clone()));
             }
         }
 
@@ -1145,9 +1181,8 @@ impl Clone for QASMEngine {
         if let Some(qasm_program) = &engine.program {
             let program = qasm_program.program();
             for (reg_name, size) in &program.classical_registers {
-                engine
-                    .classical_registers
-                    .insert(reg_name.clone(), vec![0; *size]);
+                let bitvec = BitVec::<u8, Lsb0>::repeat(false, *size);
+                engine.classical_registers.insert(reg_name.clone(), bitvec);
             }
         }
 
@@ -1258,25 +1293,13 @@ impl Default for QASMEngine {
         Self {
             program: None,
             register_result_mappings: Vec::new(),
-            classical_registers: HashMap::new(),
-            raw_measurements: HashMap::new(),
+            classical_registers: BTreeMap::new(),
+            raw_measurements: BTreeMap::new(),
             current_op: 0,
             measurements_processed: 0,
             message_builder: ByteMessageBuilder::new(),
             allow_complex_conditionals: false,
         }
-    }
-}
-
-impl EvaluationContext for QASMEngine {
-    #[allow(clippy::cast_precision_loss)]
-    fn evaluate_float(&self, expr: &Expression) -> Result<f64, PecosError> {
-        self.evaluate_expression_with_context(expr)
-            .map(|i| i as f64)
-    }
-
-    fn evaluate_int(&self, expr: &Expression) -> Result<i64, PecosError> {
-        self.evaluate_expression_with_context(expr)
     }
 }
 
@@ -1292,5 +1315,17 @@ impl FromStr for QASMEngine {
 
         // Convert to engine
         Ok(program.into_engine())
+    }
+}
+
+impl BitVecExpressionContext for QASMEngine {
+    fn get_register(&self, name: &str) -> Option<&BitVec<u8, Lsb0>> {
+        self.classical_registers.get(name)
+    }
+
+    fn get_register_size(&self, name: &str) -> Option<usize> {
+        self.classical_register_sizes()
+            .and_then(|sizes| sizes.get(name))
+            .copied()
     }
 }

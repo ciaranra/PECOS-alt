@@ -1,5 +1,20 @@
+use pecos_core::prelude::GateType;
 use pecos_qasm::Operation;
 use pecos_qasm::parser::QASMParser;
+
+// Helper function to check if an operation is a specific gate
+fn is_gate_with_name(op: &Operation, gate_name: &str) -> bool {
+    match op {
+        Operation::Gate { name, .. } => name == gate_name,
+        Operation::NativeGate(gate) => match gate_name {
+            "H" => matches!(gate.gate_type, GateType::H),
+            "X" => matches!(gate.gate_type, GateType::X),
+            "CX" => matches!(gate.gate_type, GateType::CX),
+            _ => false,
+        },
+        _ => false,
+    }
+}
 
 #[test]
 fn test_gate_expansion_basic() {
@@ -20,11 +35,10 @@ fn test_gate_expansion_basic() {
     // The mygate operation should be expanded to H
     assert_eq!(program.operations.len(), 1);
 
-    if let Operation::Gate { name, .. } = &program.operations[0] {
-        assert_eq!(name, "H");
-    } else {
-        panic!("Expected gate operation");
-    }
+    assert!(
+        is_gate_with_name(&program.operations[0], "H"),
+        "Expected H gate"
+    );
 }
 
 #[test]
@@ -40,11 +54,10 @@ fn test_gate_expansion_native_gate() {
     // Native gate should not be expanded
     assert_eq!(program.operations.len(), 1);
 
-    if let Operation::Gate { name, .. } = &program.operations[0] {
-        assert_eq!(name, "H");
-    } else {
-        panic!("Expected gate operation");
-    }
+    assert!(
+        is_gate_with_name(&program.operations[0], "H"),
+        "Expected H gate"
+    );
 }
 
 #[test]
@@ -62,39 +75,62 @@ fn test_gate_expansion_rx() {
     assert_eq!(program.operations.len(), 3);
 
     // Check first operation is h
-    if let Operation::Gate { name, qubits, .. } = &program.operations[0] {
-        assert_eq!(name, "H");
-        assert_eq!(qubits, &[0]);
-    } else {
-        panic!("Expected h gate");
+    match &program.operations[0] {
+        Operation::Gate { name, qubits, .. } => {
+            assert_eq!(name, "H");
+            assert_eq!(qubits, &[0]);
+        }
+        Operation::NativeGate(gate) => {
+            assert_eq!(gate.gate_type, pecos_core::gate_type::GateType::H);
+            assert_eq!(gate.qubits.len(), 1);
+            assert_eq!({ gate.qubits[0].0 }, 0);
+        }
+        _ => panic!("Expected h gate"),
     }
 
     // Check second operation is rz
-    if let Operation::Gate {
-        name,
-        qubits,
-        parameters,
-        ..
-    } = &program.operations[1]
-    {
-        assert_eq!(name, "RZ");
-        assert_eq!(qubits, &[0]);
-        assert_eq!(parameters.len(), 1);
-        assert!(
-            (parameters[0] - std::f64::consts::FRAC_PI_2).abs() < 1e-6,
-            "Expected parameter PI/2, got {}",
-            parameters[0]
-        );
-    } else {
-        panic!("Expected rz gate");
+    match &program.operations[1] {
+        Operation::Gate {
+            name,
+            qubits,
+            parameters,
+            ..
+        } => {
+            assert_eq!(name, "RZ");
+            assert_eq!(qubits, &[0]);
+            assert_eq!(parameters.len(), 1);
+            assert!(
+                (parameters[0] - std::f64::consts::FRAC_PI_2).abs() < 1e-6,
+                "Expected parameter PI/2, got {}",
+                parameters[0]
+            );
+        }
+        Operation::NativeGate(gate) => {
+            assert_eq!(gate.gate_type, pecos_core::gate_type::GateType::RZ);
+            assert_eq!(gate.qubits.len(), 1);
+            assert_eq!({ gate.qubits[0].0 }, 0);
+            assert_eq!(gate.params.len(), 1);
+            assert!(
+                (gate.params[0] - std::f64::consts::FRAC_PI_2).abs() < 1e-6,
+                "Expected parameter PI/2, got {}",
+                gate.params[0]
+            );
+        }
+        _ => panic!("Expected rz gate"),
     }
 
     // Check third operation is h
-    if let Operation::Gate { name, qubits, .. } = &program.operations[2] {
-        assert_eq!(name, "H");
-        assert_eq!(qubits, &[0]);
-    } else {
-        panic!("Expected h gate");
+    match &program.operations[2] {
+        Operation::Gate { name, qubits, .. } => {
+            assert_eq!(name, "H");
+            assert_eq!(qubits, &[0]);
+        }
+        Operation::NativeGate(gate) => {
+            assert_eq!(gate.gate_type, pecos_core::gate_type::GateType::H);
+            assert_eq!(gate.qubits.len(), 1);
+            assert_eq!({ gate.qubits[0].0 }, 0);
+        }
+        _ => panic!("Expected h gate"),
     }
 }
 
@@ -113,27 +149,46 @@ fn test_gate_expansion_cz() {
     assert_eq!(program.operations.len(), 3);
 
     // Check first operation is h
-    if let Operation::Gate { name, qubits, .. } = &program.operations[0] {
-        assert_eq!(name, "H");
-        assert_eq!(qubits, &[1]);
-    } else {
-        panic!("Expected h gate");
+    match &program.operations[0] {
+        Operation::Gate { name, qubits, .. } => {
+            assert_eq!(name, "H");
+            assert_eq!(qubits, &[1]);
+        }
+        Operation::NativeGate(gate) => {
+            assert_eq!(gate.gate_type, pecos_core::gate_type::GateType::H);
+            assert_eq!(gate.qubits.len(), 1);
+            assert_eq!({ gate.qubits[0].0 }, 1);
+        }
+        _ => panic!("Expected h gate"),
     }
 
     // Check second operation is cx
-    if let Operation::Gate { name, qubits, .. } = &program.operations[1] {
-        assert_eq!(name, "CX");
-        assert_eq!(qubits, &[0, 1]);
-    } else {
-        panic!("Expected cx gate");
+    match &program.operations[1] {
+        Operation::Gate { name, qubits, .. } => {
+            assert_eq!(name, "CX");
+            assert_eq!(qubits, &[0, 1]);
+        }
+        Operation::NativeGate(gate) => {
+            assert_eq!(gate.gate_type, pecos_core::gate_type::GateType::CX);
+            assert_eq!(gate.qubits.len(), 2);
+            assert_eq!({ gate.qubits[0].0 }, 0);
+            assert_eq!({ gate.qubits[1].0 }, 1);
+        }
+        _ => panic!("Expected cx gate"),
     }
 
     // Check third operation is h
-    if let Operation::Gate { name, qubits, .. } = &program.operations[2] {
-        assert_eq!(name, "H");
-        assert_eq!(qubits, &[1]);
-    } else {
-        panic!("Expected h gate");
+    match &program.operations[2] {
+        Operation::Gate { name, qubits, .. } => {
+            assert_eq!(name, "H");
+            assert_eq!(qubits, &[1]);
+        }
+        Operation::NativeGate(gate) => {
+            assert_eq!(gate.gate_type, pecos_core::gate_type::GateType::H);
+            assert_eq!(gate.qubits.len(), 1);
+            assert_eq!({ gate.qubits[0].0 }, 1);
+        }
+        _ => panic!("Expected h gate"),
     }
 }
 

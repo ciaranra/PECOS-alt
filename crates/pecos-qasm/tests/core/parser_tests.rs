@@ -58,6 +58,9 @@ fn test_parse_conditional_program() -> Result<(), Box<dyn std::error::Error>> {
 
     // Check if the operations are correct
     match &program.operations[0] {
+        pecos_qasm::Operation::NativeGate(gate) => {
+            assert_eq!(gate.gate_type, pecos_core::gate_type::GateType::H);
+        }
         pecos_qasm::Operation::Gate { name, .. } => {
             assert_eq!(name, "H");
         }
@@ -65,7 +68,7 @@ fn test_parse_conditional_program() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     match &program.operations[1] {
-        pecos_qasm::Operation::Measure { .. } => {
+        pecos_qasm::Operation::MeasureWithMapping { .. } => {
             // Measurement parsed correctly
         }
         _ => panic!("Second operation should be a measure"),

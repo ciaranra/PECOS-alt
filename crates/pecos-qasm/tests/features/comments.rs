@@ -43,13 +43,13 @@ fn test_international_comments() {
             let gate_count = program
                 .operations
                 .iter()
-                .filter(|op| matches!(op, Operation::Gate { .. }))
+                .filter(|op| matches!(op, Operation::Gate { .. } | Operation::NativeGate(_)))
                 .count();
 
             let measure_count = program
                 .operations
                 .iter()
-                .filter(|op| matches!(op, Operation::Measure { .. }))
+                .filter(|op| matches!(op, Operation::MeasureWithMapping { .. }))
                 .count();
 
             // We expect: 3 H gates, 2 CX gates, 3 measure operations
@@ -103,6 +103,7 @@ fn test_inline_comments_with_emojis() {
                 .iter()
                 .filter_map(|op| match op {
                     Operation::Gate { name, .. } => Some(name.clone()),
+                    Operation::NativeGate(gate) => Some(format!("{}", gate.gate_type)),
                     _ => None,
                 })
                 .collect();

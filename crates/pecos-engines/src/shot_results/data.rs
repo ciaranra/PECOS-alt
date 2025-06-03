@@ -10,8 +10,9 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-use bitvec::prelude::*;
+use ::bitvec::prelude::*;
 use num_bigint::BigInt;
+use pecos_core::bitvec;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
@@ -67,15 +68,7 @@ impl Data {
     /// Returns None if the string contains non-binary characters
     #[must_use]
     pub fn from_bitstring(bitstring: &str) -> Option<Self> {
-        let mut bv = BitVec::<u8, Lsb0>::with_capacity(bitstring.len());
-        for ch in bitstring.chars() {
-            match ch {
-                '0' => bv.push(false),
-                '1' => bv.push(true),
-                _ => return None, // Invalid character
-            }
-        }
-        Some(Self::BitVec(bv))
+        bitvec::from_bitstring(bitstring).map(Self::BitVec)
     }
 
     /// Create a Bytes variant from a bitstring (for backward compatibility)
@@ -113,13 +106,7 @@ impl Data {
                 }
                 Some(result)
             }
-            Self::BitVec(bv) => {
-                let mut result = String::with_capacity(bv.len());
-                for bit in bv {
-                    result.push(if *bit { '1' } else { '0' });
-                }
-                Some(result)
-            }
+            Self::BitVec(bv) => Some(bitvec::to_bitstring(bv)),
             _ => None,
         }
     }
@@ -143,13 +130,7 @@ impl Data {
             Self::Bool(v) => if *v { "1" } else { "0" }.to_string(),
             Self::BitVec(bv) => {
                 // Convert BitVec to decimal string
-                let mut value = 0u128; // Use u128 for up to 128 bits
-                for (i, bit) in bv.iter().enumerate() {
-                    if *bit && i < 128 {
-                        value |= 1u128 << i;
-                    }
-                }
-                value.to_string()
+                bitvec::to_decimal_string(bv)
             }
             Self::BigInt(v) => v.to_string(),
             // Other types -> sensible string representation
@@ -186,17 +167,7 @@ impl Data {
             }
             Self::BitVec(v) => {
                 // Convert up to 32 bits to u32
-                if v.is_empty() {
-                    None
-                } else {
-                    let mut result = 0u32;
-                    for (i, bit) in v.iter().take(32).enumerate() {
-                        if *bit {
-                            result |= 1 << i;
-                        }
-                    }
-                    Some(result)
-                }
+                bitvec::to_u32(v)
             }
             _ => None,
         }
@@ -221,11 +192,7 @@ impl std::fmt::Display for Data {
             Self::Bool(v) => write!(f, "{v}"),
             Self::BigInt(v) => write!(f, "{v}"),
             Self::Bytes(v) => write!(f, "{v:?}"), // Could also use hex or base64
-            Self::BitVec(_) => write!(
-                f,
-                "{}",
-                self.to_bitstring().unwrap_or_else(|| format!("{self:?}"))
-            ),
+            Self::BitVec(bv) => write!(f, "{}", bitvec::to_bitstring(bv)),
             Self::Json(v) => write!(f, "{v}"),
         }
     }

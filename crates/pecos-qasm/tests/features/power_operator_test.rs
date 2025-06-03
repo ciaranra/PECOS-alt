@@ -116,7 +116,7 @@ fn test_power_evaluation_accuracy() {
         left: Box::new(Expression::Float(2.0)),
         right: Box::new(Expression::Float(3.0)),
     };
-    assert!((expr.evaluate_with_context(None).unwrap() - 8.0).abs() < 1e-10);
+    assert!((expr.evaluate(None).unwrap() - 8.0).abs() < 1e-10);
 
     // Test 4^0.5 (square root)
     let expr = Expression::BinaryOp {
@@ -124,7 +124,7 @@ fn test_power_evaluation_accuracy() {
         left: Box::new(Expression::Float(4.0)),
         right: Box::new(Expression::Float(0.5)),
     };
-    assert!((expr.evaluate_with_context(None).unwrap() - 2.0).abs() < 1e-10);
+    assert!((expr.evaluate(None).unwrap() - 2.0).abs() < 1e-10);
 
     // Test 10^0
     let expr = Expression::BinaryOp {
@@ -132,5 +132,5 @@ fn test_power_evaluation_accuracy() {
         left: Box::new(Expression::Float(10.0)),
         right: Box::new(Expression::Float(0.0)),
     };
-    assert!((expr.evaluate_with_context(None).unwrap() - 1.0).abs() < 1e-10);
+    assert!((expr.evaluate(None).unwrap() - 1.0).abs() < 1e-10);
 }

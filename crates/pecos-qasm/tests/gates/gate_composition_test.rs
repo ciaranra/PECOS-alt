@@ -1,4 +1,9 @@
-use pecos_qasm::QASMParser;
+use pecos_qasm::{Operation, QASMParser};
+
+// Helper function to check if an operation is a gate (either variant)
+fn is_gate_operation(op: &Operation) -> bool {
+    matches!(op, Operation::Gate { .. } | Operation::NativeGate(_))
+}
 
 #[test]
 fn test_gate_composition() {
@@ -49,7 +54,7 @@ fn test_gate_composition() {
             let gate_count = program
                 .operations
                 .iter()
-                .filter(|op| matches!(op, pecos_qasm::Operation::Gate { .. }))
+                .filter(|op| is_gate_operation(op))
                 .count();
 
             // bell_swap should expand to many basic gates
@@ -87,10 +92,9 @@ fn test_undefined_gate_in_definition() {
         Ok(program) => {
             // The undefined gate should remain in the expanded operations
             let has_undefined = program.operations.iter().any(|op| {
-                if let pecos_qasm::Operation::Gate { name, .. } = op {
-                    name == "undefined_gate"
-                } else {
-                    false
+                match op {
+                    Operation::Gate { name, .. } => name == "undefined_gate",
+                    _ => false, // Native gates and other operations are defined
                 }
             });
 

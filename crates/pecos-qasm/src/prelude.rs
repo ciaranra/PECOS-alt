@@ -44,7 +44,7 @@
 //! functionality.
 
 // Standard library imports
-pub use std::collections::HashMap;
+pub use std::collections::BTreeMap;
 pub use std::str::FromStr;
 
 // Re-export engine types

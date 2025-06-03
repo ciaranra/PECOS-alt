@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -7,13 +7,13 @@ use pecos_core::errors::PecosError;
 /// Simple preprocessor with unified includes
 pub struct Preprocessor {
     /// All includes - just name to content
-    content: HashMap<String, String>,
+    content: BTreeMap<String, String>,
 
     /// Paths to search for missing includes
     search_paths: Vec<PathBuf>,
 
     /// Track included files (circular dependency detection)
-    included: HashSet<String>,
+    included: BTreeSet<String>,
 }
 
 impl Default for Preprocessor {
@@ -27,9 +27,9 @@ impl Preprocessor {
     #[must_use]
     pub fn new() -> Self {
         let mut preprocessor = Self {
-            content: HashMap::new(),
+            content: BTreeMap::new(),
             search_paths: vec![],
-            included: HashSet::new(),
+            included: BTreeSet::new(),
         };
 
         // Add system includes
@@ -119,12 +119,18 @@ impl Preprocessor {
         source: &str,
         base_dir: Option<&Path>,
     ) -> Result<String, PecosError> {
-        let include_pattern = regex::Regex::new(r#"include\s+"([^"]+)"\s*;"#).unwrap();
+        let include_pattern = regex::Regex::new(r#"include\s+"([^"]+)"\s*;"#)
+            .map_err(|e| PecosError::Generic(format!("Invalid regex pattern: {e}")))?;
         let mut result = source.to_string();
 
         while let Some(captures) = include_pattern.captures(&result) {
-            let full_match = captures.get(0).unwrap();
-            let filename = captures.get(1).unwrap().as_str();
+            let full_match = captures.get(0).ok_or_else(|| {
+                PecosError::Generic("Regex match failed unexpectedly".to_string())
+            })?;
+            let filename = captures
+                .get(1)
+                .ok_or_else(|| PecosError::Generic("Include filename not found".to_string()))?
+                .as_str();
 
             let content = self.get_include(filename, base_dir)?;
 

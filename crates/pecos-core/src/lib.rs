@@ -11,6 +11,7 @@
 // the License.
 
 pub mod angle;
+pub mod bitvec;
 pub mod element;
 pub mod errors;
 pub mod gate_type;

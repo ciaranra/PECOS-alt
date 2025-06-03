@@ -1,7 +1,8 @@
 //! Formatter for displaying `ShotMap` data in various formats
 
 use super::{DataVec, ShotMap};
-use bitvec::prelude::*;
+use ::bitvec::prelude::*;
+use pecos_core::bitvec;
 use std::fmt;
 
 /// Display options for formatting `ShotMap` data
@@ -124,30 +125,13 @@ impl<'a> ShotMapDisplay<'a> {
     fn format_bitvec(&self, bitvec: &BitVec<u8>) -> String {
         match self.options.bitvec_format {
             BitVecDisplayFormat::Binary => {
-                let binary: String = bitvec.iter().map(|b| if *b { '1' } else { '0' }).collect();
-                format!("\"{binary}\"")
+                format!("\"{}\"", bitvec::to_bitstring(bitvec))
             }
-            BitVecDisplayFormat::Decimal => {
-                let mut value = 0u128;
-                for (i, bit) in bitvec.iter().enumerate() {
-                    if *bit && i < 128 {
-                        value |= 1u128 << i;
-                    }
-                }
-                value.to_string()
-            }
+            BitVecDisplayFormat::Decimal => bitvec::to_decimal_string(bitvec),
             BitVecDisplayFormat::Hexadecimal => {
-                let mut value = 0u128;
-                for (i, bit) in bitvec.iter().enumerate() {
-                    if *bit && i < 128 {
-                        value |= 1u128 << i;
-                    }
-                }
-                format!("\"0x{value:x}\"")
+                format!("\"{}\"", bitvec::to_hex_string(bitvec))
             }
-            BitVecDisplayFormat::BoolArray => {
-                format!("{:?}", bitvec.iter().map(|b| *b).collect::<Vec<bool>>())
-            }
+            BitVecDisplayFormat::BoolArray => bitvec::to_bool_array(bitvec),
         }
     }
 

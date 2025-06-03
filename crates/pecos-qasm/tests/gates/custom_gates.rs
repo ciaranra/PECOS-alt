@@ -1,5 +1,14 @@
 use pecos_qasm::{Operation, parser::QASMParser};
 
+// Helper function to extract gate name from operation
+fn get_gate_name(op: &Operation) -> Option<String> {
+    match op {
+        Operation::Gate { name, .. } => Some(name.clone()),
+        Operation::NativeGate(gate) => Some(format!("{:?}", gate.gate_type)),
+        _ => None,
+    }
+}
+
 #[test]
 fn test_custom_gate_definition() {
     let qasm = r#"
@@ -81,10 +90,10 @@ fn test_custom_gate_with_defined_params() {
     let mut found_rx_expansion = false;
 
     for op in &program.operations {
-        if let Operation::Gate { name, .. } = op {
-            match name.as_str() {
-                "RZ" | "rz" => found_rz = true,
-                "CX" | "cx" => found_cx = true,
+        if let Some(name) = get_gate_name(op) {
+            match name.to_uppercase().as_str() {
+                "RZ" => found_rz = true,
+                "CX" => found_cx = true,
                 "H" => found_rx_expansion = true, // rx expands to H-RZ-H
                 _ => {}
             }
@@ -133,8 +142,14 @@ fn test_nested_gate_definitions() {
     let mut operation_names = Vec::new();
 
     for op in &program.operations {
-        if let Operation::Gate { name, .. } = op {
-            operation_names.push(name.clone());
+        match op {
+            Operation::Gate { name, .. } => {
+                operation_names.push(name.clone());
+            }
+            Operation::NativeGate(gate) => {
+                operation_names.push(format!("{:?}", gate.gate_type));
+            }
+            _ => {}
         }
     }
 
@@ -236,8 +251,11 @@ fn test_gate_with_expression_parameters() {
     let mut gate_count = 0;
 
     for op in &program.operations {
-        if let Operation::Gate { .. } = op {
-            gate_count += 1;
+        match op {
+            Operation::Gate { .. } | Operation::NativeGate(_) => {
+                gate_count += 1;
+            }
+            _ => {}
         }
     }
 
