@@ -140,6 +140,13 @@ struct RunArgs {
     /// If not specified, results will be printed to stdout
     #[arg(short = 'o', long = "output")]
     output_file: Option<String>,
+
+    /// Format for displaying `BitVec` results (decimal, binary, hex)
+    /// - decimal: Display as decimal numbers (default)
+    /// - binary: Display as binary strings
+    /// - hex: Display as hexadecimal strings
+    #[arg(short = 'f', long = "format", default_value = "decimal")]
+    display_format: String,
 }
 
 /// Parse noise probability specification from command line argument
@@ -307,8 +314,22 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
         quantum_engine,
     )?;
 
-    // Format the results as compact JSON string
-    let results_str = results.to_compact_json();
+    // Convert to ShotMap for better display formatting
+    let shot_map = results.try_as_shot_map()?;
+
+    // Format the results using the new display system with the selected format
+    let results_str = match args.display_format.to_lowercase().as_str() {
+        "binary" | "bin" => format!("{}", shot_map.display().bitvec_binary()),
+        "hexadecimal" | "hex" => format!("{}", shot_map.display().bitvec_hex()),
+        "decimal" | "dec" => format!("{}", shot_map.display().bitvec_decimal()),
+        _ => {
+            eprintln!(
+                "Warning: Unknown display format '{}', using decimal",
+                args.display_format
+            );
+            format!("{}", shot_map.display().bitvec_decimal())
+        }
+    };
 
     // Either write to the specified output file or print to stdout
     match &args.output_file {
@@ -395,6 +416,7 @@ mod tests {
                 assert_eq!(args.noise_model, NoiseModelType::Depolarizing); // Default
                 assert_eq!(args.simulator, SimulatorType::StateVector); // Default
                 assert_eq!(args.output_file, None); // Default
+                assert_eq!(args.display_format, "decimal".to_string()); // Default
             }
             Commands::Compile(_) => panic!("Expected Run command"),
         }
@@ -412,6 +434,7 @@ mod tests {
                 assert_eq!(args.noise_model, NoiseModelType::Depolarizing); // Default
                 assert_eq!(args.simulator, SimulatorType::StateVector); // Default
                 assert_eq!(args.output_file, None); // Default
+                assert_eq!(args.display_format, "decimal".to_string()); // Default
             }
             Commands::Compile(_) => panic!("Expected Run command"),
         }
@@ -527,6 +550,33 @@ mod tests {
         let cmd = Cli::parse_from(["pecos", "run", "program.json", "--sim", "sv"]);
         if let Commands::Run(args) = cmd.command {
             assert_eq!(args.simulator, SimulatorType::StateVector);
+        } else {
+            panic!("Expected Run command");
+        }
+    }
+
+    #[test]
+    fn verify_cli_display_format_options() {
+        // Test with binary format
+        let cmd = Cli::parse_from(["pecos", "run", "program.json", "-f", "binary"]);
+        if let Commands::Run(args) = cmd.command {
+            assert_eq!(args.display_format, "binary");
+        } else {
+            panic!("Expected Run command");
+        }
+
+        // Test with hex format
+        let cmd = Cli::parse_from(["pecos", "run", "program.json", "--format", "hex"]);
+        if let Commands::Run(args) = cmd.command {
+            assert_eq!(args.display_format, "hex");
+        } else {
+            panic!("Expected Run command");
+        }
+
+        // Test default format
+        let cmd = Cli::parse_from(["pecos", "run", "program.json"]);
+        if let Commands::Run(args) = cmd.command {
+            assert_eq!(args.display_format, "decimal");
         } else {
             panic!("Expected Run command");
         }

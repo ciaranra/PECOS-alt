@@ -77,35 +77,21 @@ fn run_pecos(
 }
 
 /// Extract measurement results from JSON output
-/// Handles the new format: [{"c": 3}, {"c": 0}, ...]
+/// Handles the new columnar format: {"c": [3, 0, ...]}
 fn get_values(json_output: &str) -> Vec<String> {
     let mut register_values: std::collections::HashMap<String, Vec<String>> =
         std::collections::HashMap::new();
 
-    // Parse the JSON - expecting an array of shot objects
+    // Parse the JSON - expecting an object with register names as keys
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_output) {
-        if let Some(shots) = json.as_array() {
-            // Collect all register names first
-            let mut register_names = std::collections::HashSet::new();
-            for shot in shots {
-                if let Some(obj) = shot.as_object() {
-                    for key in obj.keys() {
-                        register_names.insert(key.clone());
-                    }
+        if let Some(obj) = json.as_object() {
+            // For each register, collect its values
+            for (reg_name, values) in obj {
+                if let Some(arr) = values.as_array() {
+                    let string_values: Vec<String> =
+                        arr.iter().map(|v| v.to_string().replace('"', "")).collect();
+                    register_values.insert(reg_name.clone(), string_values);
                 }
-            }
-
-            // For each register, collect values across all shots
-            for reg_name in register_names {
-                let mut values = Vec::new();
-                for shot in shots {
-                    if let Some(obj) = shot.as_object() {
-                        if let Some(val) = obj.get(&reg_name) {
-                            values.push(val.to_string().replace('"', ""));
-                        }
-                    }
-                }
-                register_values.insert(reg_name, values);
             }
         }
     }

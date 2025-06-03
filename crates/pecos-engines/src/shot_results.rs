@@ -23,7 +23,7 @@ use num_bigint::BigInt;
 use pecos_core::errors::PecosError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fmt;
 
 /// Represents a data value that can be stored in a shot result.
@@ -250,7 +250,7 @@ impl std::fmt::Display for Data {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Shot {
     /// Mapping of names to data values (measurements, calculations, complex data, etc.)
-    pub data: HashMap<String, Data>,
+    pub data: BTreeMap<String, Data>,
 }
 
 impl Shot {
@@ -333,7 +333,7 @@ impl Shot {
     /// Returns an error if the `ByteMessage` cannot be parsed or doesn't contain valid measurement results
     pub fn from_byte_message(
         message: &ByteMessage,
-        result_id_to_name: &HashMap<usize, String>,
+        result_id_to_name: &BTreeMap<usize, String>,
     ) -> Result<Self, PecosError> {
         // Extract the measurement results from the ByteMessage
         let measurements = message.measurement_results_as_vec()?;
@@ -425,6 +425,101 @@ impl ShotVec {
     pub fn is_empty(&self) -> bool {
         self.shots.is_empty()
     }
+
+    /// Try to convert the shot vector to a `ShotMap` (columnar format)
+    ///
+    /// This method transforms the row-based shot data into column-based data where:
+    /// - Keys are register names
+    /// - Values are vectors containing the `Data` value for each shot
+    ///
+    /// # Returns
+    /// - `Ok(ShotMap)` containing the columnar representation
+    /// - `Err(PecosError)` if not all shots have the same register keys
+    ///
+    /// # Errors
+    /// Returns a `PecosError` if:
+    /// - Not all shots have the same register keys
+    /// - A register is missing from any shot after the first
+    ///
+    /// # Example
+    /// ```
+    /// # use pecos_engines::shot_results::{ShotVec, Shot};
+    /// let mut shot_vec = ShotVec::new();
+    ///
+    /// // Add shots with consistent structure
+    /// for i in 0..3 {
+    ///     let mut shot = Shot::default();
+    ///     shot.add_register("a", i, 2);
+    ///     shot.add_register("b", i * 2, 3);
+    ///     shot_vec.shots.push(shot);
+    /// }
+    ///
+    /// // Convert to ShotMap
+    /// match shot_vec.try_as_shot_map() {
+    ///     Ok(shot_map) => {
+    ///         // Access all values for register "a"
+    ///         let a_values = shot_map.get("a").unwrap();
+    ///         assert_eq!(a_values.len(), 3);
+    ///     }
+    ///     Err(e) => {
+    ///         // Handle inconsistent shot structure
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// # Panics
+    /// This function should not panic under normal usage. The `unwrap()` call is protected
+    /// by prior validation that ensures the key exists in the `BTreeMap`.
+    pub fn try_as_shot_map(&self) -> Result<crate::shot_map::ShotMap, PecosError> {
+        if self.is_empty() {
+            return crate::shot_map::ShotMap::new(BTreeMap::new());
+        }
+
+        // Get register names from the first shot
+        let register_names = self.get_register_names();
+
+        // Initialize the columnar map with empty vectors
+        let mut columnar_map: BTreeMap<String, Vec<Data>> = BTreeMap::new();
+        for name in &register_names {
+            columnar_map.insert(name.clone(), Vec::with_capacity(self.len()));
+        }
+
+        // Iterate through all shots and populate the columnar data
+        for (shot_idx, shot) in self.shots.iter().enumerate() {
+            // Check that this shot has the same keys
+            let shot_keys: Vec<String> = shot
+                .data
+                .keys()
+                .filter(|k| !k.starts_with("_width_"))
+                .cloned()
+                .collect();
+
+            if shot_keys.len() != register_names.len() {
+                return Err(PecosError::Processing(format!(
+                    "Shot {} has {} registers, but expected {} based on first shot",
+                    shot_idx,
+                    shot_keys.len(),
+                    register_names.len()
+                )));
+            }
+
+            // Add each register's value to the appropriate column
+            for name in &register_names {
+                match shot.data.get(name) {
+                    Some(data) => {
+                        columnar_map.get_mut(name).unwrap().push(data.clone());
+                    }
+                    None => {
+                        return Err(PecosError::Processing(format!(
+                            "Shot {shot_idx} is missing register '{name}' which was present in the first shot"
+                        )));
+                    }
+                }
+            }
+        }
+
+        crate::shot_map::ShotMap::new(columnar_map)
+    }
 }
 
 impl ShotVec {
@@ -457,9 +552,9 @@ impl ShotVec {
     /// Returns a map where each register name maps to a vector of binary strings,
     /// one per shot. Each binary string is zero-padded to the register's width.
     #[must_use]
-    pub fn format_as_binary_strings(&self) -> HashMap<String, Vec<String>> {
+    pub fn format_as_binary_strings(&self) -> BTreeMap<String, Vec<String>> {
         let register_names = self.get_register_names();
-        let mut result = HashMap::new();
+        let mut result = BTreeMap::new();
 
         for name in register_names {
             let binary_strings: Vec<String> = self

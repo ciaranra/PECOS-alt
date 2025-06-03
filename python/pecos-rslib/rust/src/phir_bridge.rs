@@ -1,7 +1,7 @@
 use parking_lot::Mutex;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use pecos::prelude::{ByteMessage, ClassicalEngine, ControlEngine, Engine, PecosError, Shot};
 
@@ -1124,7 +1124,7 @@ impl ClassicalEngine for PHIREngine {
             }
 
             // Create a Shot with the new Data structure
-            let mut data_map = HashMap::new();
+            let mut data_map = BTreeMap::new();
 
             // Convert mapped registers to Data enum values
             for (key, value) in mapped_registers {

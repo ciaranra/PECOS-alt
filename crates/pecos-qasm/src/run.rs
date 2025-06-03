@@ -1,7 +1,8 @@
-use crate::{QASMEngine, QASMResults};
+use crate::QASMEngine;
 use pecos_core::errors::PecosError;
 use pecos_engines::noise::NoiseModel;
 use pecos_engines::quantum::{QuantumEngine, StateVecEngine};
+use pecos_engines::shot_results::ShotVec;
 use pecos_engines::{ClassicalEngine, MonteCarloEngine, PassThroughNoiseModel};
 use std::str::FromStr;
 
@@ -20,8 +21,8 @@ use std::str::FromStr;
 ///
 /// # Returns
 ///
-/// A [`QASMResults`] containing the simulation results with convenient formatting methods
-/// for binary and decimal output.
+/// A [`ShotVec`] containing the simulation results. This can be converted to
+/// [`ShotMap`] for columnar access via `try_as_shot_map()`
 ///
 /// # Errors
 ///
@@ -31,6 +32,7 @@ use std::str::FromStr;
 ///
 /// ```no_run
 /// # use pecos_qasm::run_qasm_sim;
+/// # use pecos_engines::ShotMapDisplayExt;
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let qasm = r#"
 ///     OPENQASM 2.0;
@@ -42,14 +44,19 @@ use std::str::FromStr;
 ///     measure q -> c;
 /// "#;
 ///
-/// let results = run_qasm_sim(qasm, 100, Some(42), None, None, None)?;
+/// let shot_vec = run_qasm_sim(qasm, 100, Some(42), None, None, None)?;
 ///
-/// // Direct access to formatting methods
-/// println!("{}", results.to_compact_json());
-/// println!("Outcome counts: {:?}", results.outcome_counts());
+/// // Convert to ShotMap for display and analysis
+/// let shot_map = shot_vec.try_as_shot_map()?;
+/// println!("{}", shot_map.display());
+/// println!("{}", shot_map.display().bitvec_binary());
 ///
-/// // Access the underlying ShotVec if needed
-/// println!("Number of shots: {}", results.len());
+/// // Access specific data
+/// if let Ok(measurements) = shot_map.try_bits_as_decimal("c") {
+///     println!("Measurements: {:?}", measurements);
+/// }
+///
+/// println!("Number of shots: {}", shot_vec.len());
 /// # Ok(())
 /// # }
 /// ```
@@ -60,7 +67,7 @@ pub fn run_qasm_sim(
     workers: Option<usize>,
     noise_model: Option<Box<dyn NoiseModel>>,
     quantum_engine: Option<Box<dyn QuantumEngine>>,
-) -> Result<QASMResults, PecosError> {
+) -> Result<ShotVec, PecosError> {
     // Parse QASM to get register information
     let engine = QASMEngine::from_str(qasm)?;
     let num_qubits = engine.num_qubits();
@@ -73,15 +80,12 @@ pub fn run_qasm_sim(
         quantum_engine.unwrap_or_else(|| Box::new(StateVecEngine::new(num_qubits)));
 
     // Run simulation
-    let shot_results = MonteCarloEngine::run_with_engines(
+    MonteCarloEngine::run_with_engines(
         Box::new(engine),
         noise_model,
         quantum_engine,
         shots,
         workers.unwrap_or(1),
         seed,
-    )?;
-
-    // Return results wrapped in QASMResults
-    Ok(QASMResults::new(shot_results))
+    )
 }

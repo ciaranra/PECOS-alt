@@ -16,6 +16,7 @@
 /// behavior, which is crucial for reproducible quantum simulations.
 use assert_cmd::prelude::*;
 use pecos::prelude::*;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -68,41 +69,34 @@ fn run_pecos(
     Ok(output_str)
 }
 
-/// Extract measurement results from the new JSON shot array format
+/// Extract measurement results from JSON output
+/// Handles the new columnar format: {"c": [3, 0, ...]}
 fn get_values(json_output: &str) -> Vec<String> {
-    let mut values = Vec::new();
+    let mut register_values: HashMap<String, Vec<String>> = HashMap::new();
 
-    // Parse the new JSON format: array of shot objects like [{"c": 3}, {"c": 0}, ...]
+    // Parse the JSON - expecting an object with register names as keys
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_output) {
-        if let Some(shots_array) = json.as_array() {
-            // Extract values from each shot object
-            for shot in shots_array {
-                if let Some(shot_obj) = shot.as_object() {
-                    // Convert each shot object to a string representation
-                    let mut shot_values = Vec::new();
-                    for (key, value) in shot_obj {
-                        let val_str = if let Some(num) = value.as_u64() {
-                            num.to_string()
-                        } else if let Some(num) = value.as_i64() {
-                            num.to_string()
-                        } else if let Some(num) = value.as_f64() {
-                            num.to_string()
-                        } else {
-                            value.to_string().replace('"', "")
-                        };
-                        shot_values.push(format!("{key}:{val_str}"));
-                    }
-                    // Sort keys within each shot for consistent ordering
-                    shot_values.sort();
-                    values.push(shot_values.join(","));
+        if let Some(obj) = json.as_object() {
+            // For each register, collect its values
+            for (reg_name, values) in obj {
+                if let Some(arr) = values.as_array() {
+                    let string_values: Vec<String> =
+                        arr.iter().map(|v| v.to_string().replace('"', "")).collect();
+                    register_values.insert(reg_name.clone(), string_values);
                 }
             }
         }
     }
 
-    // Sort for stable comparison
-    values.sort();
-    values
+    // Convert to the format expected by tests: comma-separated values per register
+    let mut result = Vec::new();
+    for (_, values) in register_values {
+        let value_str = values.join(", ");
+        result.push(value_str);
+    }
+
+    result.sort();
+    result
 }
 
 /// Helper function to test determinism for a specific file

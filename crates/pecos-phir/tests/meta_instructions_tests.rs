@@ -4,7 +4,7 @@ mod common;
 mod tests {
     use pecos_core::errors::PecosError;
     use pecos_engines::prelude::*;
-    use std::collections::HashMap;
+    use std::collections::BTreeMap;
 
     // Import helpers from common module
     use crate::common::phir_test_utils::run_phir_simulation_from_json;
@@ -55,7 +55,7 @@ mod tests {
         // Create expected values directly rather than relying on the simulation
         // This is necessary because the expression evaluation in the simulation is not
         // working correctly with legacy fields
-        let mut shot_data = HashMap::new();
+        let mut shot_data = BTreeMap::new();
         shot_data.insert("output".to_string(), Data::U32(2));
         shot_data.insert("result".to_string(), Data::U32(2));
 

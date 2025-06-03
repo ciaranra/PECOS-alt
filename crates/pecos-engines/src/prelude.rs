@@ -13,9 +13,10 @@
 pub use crate::noise::general::GeneralNoiseModel;
 pub use crate::quantum::{SparseStabEngine, StateVecEngine, new_quantum_engine_arbitrary_qgate};
 pub use crate::{
-    ByteMessage, ByteMessageBuilder, ClassicalEngine, ControlEngine, DepolarizingNoiseModel,
-    Engine, EngineStage, EngineSystem, HybridEngine, MonteCarloEngine, NoiseModel,
-    PassThroughNoiseModel, QuantumEngine, QuantumSystem,
+    BitVecDisplayFormat, ByteMessage, ByteMessageBuilder, ClassicalEngine, ControlEngine,
+    DepolarizingNoiseModel, Engine, EngineStage, EngineSystem, HybridEngine, MonteCarloEngine,
+    NoiseModel, PassThroughNoiseModel, QuantumEngine, QuantumSystem, ShotMap, ShotMapDisplay,
+    ShotMapDisplayExt, ShotMapDisplayOptions,
     byte_message::dump_batch,
     run_sim,
     shot_results::{Data, Shot, ShotVec},

@@ -14,24 +14,24 @@ fn test_run_qasm_sim_basic() {
         measure q -> c;
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), None, None, None).unwrap();
+    let shot_vec = run_qasm_sim(qasm, 10, Some(42), None, None, None).unwrap();
 
     // Check basic properties
-    assert_eq!(results.len(), 10);
-    assert!(!results.is_empty());
-    assert_eq!(results.len(), 10);
+    assert_eq!(shot_vec.len(), 10);
+    assert!(!shot_vec.is_empty());
 
-    // Register sizes are no longer stored in results
+    // Convert to ShotMap for analysis
+    let shot_map = shot_vec.try_as_shot_map().unwrap();
 
-    // Check binary format structure using lazy method
-    let binary = results.to_binary_json();
-    assert!(binary.is_object());
-    assert!(binary["c"].is_array());
-    assert_eq!(binary["c"].as_array().unwrap().len(), 10);
+    // Check register exists
+    assert!(shot_map.get("c").is_some());
+
+    // Get measurements as binary strings
+    let measurements = shot_map.try_bits_as_binary("c").unwrap();
+    assert_eq!(measurements.len(), 10);
 
     // Check that values are valid Bell state results
-    for value in binary["c"].as_array().unwrap() {
-        let binary_str = value.as_str().unwrap();
+    for binary_str in &measurements {
         assert!(binary_str == "00" || binary_str == "11");
     }
 }
@@ -58,25 +58,31 @@ fn test_run_qasm_sim_multiple_registers() {
         measure q[0] -> c[0];
     "#;
 
-    let results = run_qasm_sim(qasm, 5, Some(42), None, None, None).unwrap();
+    let shot_vec = run_qasm_sim(qasm, 5, Some(42), None, None, None).unwrap();
+    let shot_map = shot_vec.try_as_shot_map().unwrap();
 
-    // Register sizes are no longer stored in results
-
-    // Check binary format using lazy method
-    let binary = results.to_binary_json();
+    // Check binary format
+    let a_binary = shot_map.try_bits_as_binary("a").unwrap();
+    let b_binary = shot_map.try_bits_as_binary("b").unwrap();
+    let c_binary = shot_map.try_bits_as_binary("c").unwrap();
 
     // All shots should have consistent values
     for i in 0..5 {
-        assert_eq!(binary["a"][i].as_str().unwrap(), "01"); // a[0]=1, a[1]=0
-        assert_eq!(binary["b"][i].as_str().unwrap(), "011"); // b[0]=1, b[1]=1, b[2]=0
-        assert_eq!(binary["c"][i].as_str().unwrap(), "1"); // c[0]=1
+        assert_eq!(a_binary[i], "01"); // a[0]=1, a[1]=0
+        assert_eq!(b_binary[i], "011"); // b[0]=1, b[1]=1, b[2]=0
+        assert_eq!(c_binary[i], "1"); // c[0]=1
     }
 
-    // Check compact JSON format
-    let json_str = results.to_compact_json();
-    assert!(json_str.contains("\"a\":1"));
-    assert!(json_str.contains("\"b\":3"));
-    assert!(json_str.contains("\"c\":1"));
+    // Check decimal values
+    let a_decimal = shot_map.try_bits_as_decimal("a").unwrap();
+    let b_decimal = shot_map.try_bits_as_decimal("b").unwrap();
+    let c_decimal = shot_map.try_bits_as_decimal("c").unwrap();
+
+    for i in 0..5 {
+        assert_eq!(a_decimal[i], "1"); // binary "01" = decimal 1
+        assert_eq!(b_decimal[i], "3"); // binary "011" = decimal 3
+        assert_eq!(c_decimal[i], "1"); // binary "1" = decimal 1
+    }
 }
 
 #[test]
@@ -94,7 +100,7 @@ fn test_run_qasm_sim_with_noise() {
 
     // Run with depolarizing noise (prep_error, meas_error, p1, p2)
     let noise_model = Box::new(DepolarizingNoiseModel::new(0.0, 0.01, 0.01, 0.001));
-    let results = run_qasm_sim(
+    let shot_vec = run_qasm_sim(
         qasm,
         100,
         Some(42),
@@ -104,14 +110,16 @@ fn test_run_qasm_sim_with_noise() {
     )
     .unwrap();
 
-    assert_eq!(results.len(), 100);
+    assert_eq!(shot_vec.len(), 100);
+
+    // Convert to ShotMap for analysis
+    let shot_map = shot_vec.try_as_shot_map().unwrap();
 
     // With noise, we should see some errors (not all 1s)
-    let binary = results.to_binary_json();
-    let values = binary["c"].as_array().unwrap();
+    let binary_values = shot_map.try_bits_as_binary("c").unwrap();
 
-    let zeros = values.iter().filter(|v| v.as_str().unwrap() == "0").count();
-    let ones = values.iter().filter(|v| v.as_str().unwrap() == "1").count();
+    let zeros = binary_values.iter().filter(|v| *v == "0").count();
+    let ones = binary_values.iter().filter(|v| *v == "1").count();
 
     // With 10% error rate, we expect some zeros
     assert!(zeros > 0, "Expected some errors with noise");
@@ -138,14 +146,18 @@ fn test_as_string() {
         measure q[0] -> b[2];
     "#;
 
-    let results = run_qasm_sim(qasm, 3, Some(42), None, None, None).unwrap();
+    let shot_vec = run_qasm_sim(qasm, 3, Some(42), None, None, None).unwrap();
+    let shot_map = shot_vec.try_as_shot_map().unwrap();
 
-    // Test the compact JSON format
-    let json_str = results.to_compact_json();
+    // Verify decimal values
+    let a_decimal = shot_map.try_bits_as_decimal("a").unwrap();
+    let b_decimal = shot_map.try_bits_as_decimal("b").unwrap();
 
-    // Verify the format contains expected values
-    assert!(json_str.contains("\"a\":1"));
-    assert!(json_str.contains("\"b\":5"));
+    // All shots should have the same values
+    for i in 0..3 {
+        assert_eq!(a_decimal[i], "1"); // binary "01" = decimal 1
+        assert_eq!(b_decimal[i], "5"); // binary "101" = decimal 5
+    }
 }
 
 #[test]
@@ -159,17 +171,24 @@ fn test_json_serialization() {
         measure q[0] -> c[0];
     "#;
 
-    let results = run_qasm_sim(qasm, 2, Some(42), None, None, None).unwrap();
+    let shot_vec = run_qasm_sim(qasm, 2, Some(42), None, None, None).unwrap();
 
-    // Test that the entire result can be serialized to JSON
-    let json_str = serde_json::to_string(&results).unwrap();
+    // Test that the ShotVec can be serialized to JSON
+    let json_str = serde_json::to_string(&shot_vec).unwrap();
 
     // And deserialized back
-    let deserialized: pecos_qasm::QASMResults = serde_json::from_str(&json_str).unwrap();
+    let deserialized: pecos_engines::ShotVec = serde_json::from_str(&json_str).unwrap();
 
     // Check that data survived round trip
     assert_eq!(deserialized.len(), 2);
-    // Note: We can't compare binary_format anymore since it's computed on-demand
-    // But we can verify the shots are the same
-    assert_eq!(deserialized.len(), results.shot_vec().len());
+    assert_eq!(deserialized.len(), shot_vec.len());
+
+    // Verify the contents are the same
+    let original_map = shot_vec.try_as_shot_map().unwrap();
+    let deserialized_map = deserialized.try_as_shot_map().unwrap();
+
+    let original_c = original_map.try_bits_as_binary("c").unwrap();
+    let deserialized_c = deserialized_map.try_bits_as_binary("c").unwrap();
+
+    assert_eq!(original_c, deserialized_c);
 }

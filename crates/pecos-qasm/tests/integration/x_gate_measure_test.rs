@@ -66,13 +66,13 @@ fn test_x_gate_and_measure() {
     }
 
     // Now test actual simulation - X gate should flip the qubit from |0⟩ to |1⟩
-    let results =
+    let shot_vec =
         run_qasm_sim(qasm, 100, Some(42), Some(1), None, None).expect("Failed to run simulation");
 
     // Verify that qubit 10 is always measured as 1 (since X flips it)
-    assert_eq!(results.len(), 100, "Should have 100 shots");
+    assert_eq!(shot_vec.len(), 100, "Should have 100 shots");
 
-    for shot in &results.shots {
+    for shot in &shot_vec.shots {
         let value = shot
             .data
             .get("c")
