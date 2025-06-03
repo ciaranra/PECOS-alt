@@ -2,97 +2,59 @@ use assert_cmd::prelude::*;
 use std::path::PathBuf;
 use std::process::Command;
 
-// Helper function to extract keys from JSON output
+// Helper function to extract register keys from the new JSON shot array format
 fn get_keys(json_output: &str) -> Vec<String> {
-    let mut keys = Vec::new();
+    let mut keys = std::collections::HashSet::new();
 
-    // Try to parse the JSON using serde_json, which is the most reliable method
+    // Parse the new JSON format: array of shot objects like [{"c": 3}, {"c": 0}, ...]
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_output) {
-        if let Some(obj) = json.as_object() {
-            for key in obj.keys() {
-                keys.push(key.clone());
-            }
-            keys.sort();
-            return keys;
-        }
-    }
-
-    // Fallback to manual parsing if serde_json fails
-    for line in json_output.lines() {
-        if let Some(key_part) = line.trim().strip_prefix("\"") {
-            if let Some(end_idx) = key_part.find("\": ") {
-                keys.push(key_part[..end_idx].to_string());
+        if let Some(shots_array) = json.as_array() {
+            // Extract register names from all shot objects
+            for shot in shots_array {
+                if let Some(shot_obj) = shot.as_object() {
+                    for key in shot_obj.keys() {
+                        keys.insert(key.clone());
+                    }
+                }
             }
         }
     }
 
-    // Sort for stable comparison
-    keys.sort();
-    keys
+    // Convert to sorted vector
+    let mut result: Vec<String> = keys.into_iter().collect();
+    result.sort();
+    result
 }
 
-// Helper function to extract values from JSON output
+// Helper function to extract values from the new JSON shot array format
 fn get_values(json_output: &str) -> Vec<String> {
     let mut values = Vec::new();
 
-    // Try to parse the JSON using serde_json, which is the most reliable method
+    // Parse the new JSON format: array of shot objects like [{"c": 3}, {"c": 0}, ...]
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_output) {
-        if let Some(obj) = json.as_object() {
-            for (_, value) in obj {
-                if let Some(array) = value.as_array() {
-                    // Convert the array to a string representation
-                    let value_str = array
-                        .iter()
-                        .map(|v| v.to_string().replace('"', ""))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    values.push(value_str);
+        if let Some(shots_array) = json.as_array() {
+            // Extract values from each shot object
+            for shot in shots_array {
+                if let Some(shot_obj) = shot.as_object() {
+                    // Convert each shot object to a string representation
+                    let mut shot_values = Vec::new();
+                    for (key, value) in shot_obj {
+                        let val_str = if let Some(num) = value.as_u64() {
+                            num.to_string()
+                        } else if let Some(num) = value.as_i64() {
+                            num.to_string()
+                        } else if let Some(num) = value.as_f64() {
+                            num.to_string()
+                        } else {
+                            value.to_string().replace('"', "")
+                        };
+                        shot_values.push(format!("{key}:{val_str}"));
+                    }
+                    // Sort keys within each shot for consistent ordering
+                    shot_values.sort();
+                    values.push(shot_values.join(","));
                 }
             }
-            values.sort();
-            return values;
-        }
-    }
-
-    // Fallback to manual parsing if serde_json fails
-    // This is a simplified version that may not handle all JSON formats correctly
-    let mut in_array = false;
-    let mut current_array = String::new();
-
-    for line in json_output.lines() {
-        let trimmed = line.trim();
-
-        // Start of an array
-        if trimmed.contains('[') {
-            in_array = true;
-            current_array = trimmed
-                .chars()
-                .skip_while(|&c| c != '[')
-                .skip(1) // Skip the '['
-                .collect();
-            // If the array ends on the same line
-            if trimmed.contains(']') {
-                in_array = false;
-                current_array = current_array.chars().take_while(|&c| c != ']').collect();
-                values.push(current_array.trim().to_string());
-                current_array = String::new();
-            }
-        }
-        // End of an array
-        else if in_array && trimmed.contains(']') {
-            in_array = false;
-            current_array.push_str(
-                &trimmed
-                    .chars()
-                    .take_while(|&c| c != ']')
-                    .collect::<String>(),
-            );
-            values.push(current_array.trim().to_string());
-            current_array = String::new();
-        }
-        // Middle of an array
-        else if in_array {
-            current_array.push_str(trimmed);
         }
     }
 
@@ -119,8 +81,6 @@ fn test_seed_produces_consistent_results() -> Result<(), Box<dyn std::error::Err
         .arg("0.1")
         .arg("-d")
         .arg("42")
-        .arg("-f")
-        .arg("pretty-compact") // Force consistent format for test
         .output()?;
 
     let seed_42_run2 = Command::cargo_bin("pecos")?
@@ -135,8 +95,6 @@ fn test_seed_produces_consistent_results() -> Result<(), Box<dyn std::error::Err
         .arg("0.1")
         .arg("-d")
         .arg("42")
-        .arg("-f")
-        .arg("pretty-compact") // Force consistent format for test
         .output()?;
 
     // Run multiple times with seed 43
@@ -152,8 +110,6 @@ fn test_seed_produces_consistent_results() -> Result<(), Box<dyn std::error::Err
         .arg("0.1")
         .arg("-d")
         .arg("43")
-        .arg("-f")
-        .arg("pretty-compact") // Force consistent format for test
         .output()?;
 
     let seed_43_run2 = Command::cargo_bin("pecos")?
@@ -168,8 +124,6 @@ fn test_seed_produces_consistent_results() -> Result<(), Box<dyn std::error::Err
         .arg("0.1")
         .arg("-d")
         .arg("43")
-        .arg("-f")
-        .arg("pretty-compact") // Force consistent format for test
         .output()?;
 
     // Check that all commands ran successfully

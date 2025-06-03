@@ -3,7 +3,7 @@ mod common;
 #[cfg(test)]
 mod tests {
     use pecos_core::errors::PecosError;
-    use pecos_engines::PassThroughNoiseModel;
+    use pecos_engines::{PassThroughNoiseModel, shot_results::Data};
 
     // Import helpers from common module
     use crate::common::phir_test_utils::run_phir_simulation_from_json;
@@ -49,11 +49,11 @@ mod tests {
 
         // Check output if available
         let shot = &results.shots[0];
-        if shot.contains_key("output") {
-            let value = shot.get("output").unwrap();
+        if shot.data.contains_key("output") {
+            let data_value = shot.data.get("output").unwrap();
             assert!(
-                value == "0" || value == "1",
-                "Expected measurement value to be 0 or 1, got {value}"
+                *data_value == Data::U32(0) || *data_value == Data::U32(1),
+                "Expected measurement value to be 0 or 1, got {data_value}"
             );
         } else {
             println!("WARNING: 'output' register not found in simulation results.");
@@ -107,11 +107,11 @@ mod tests {
 
         // Check that we have an output measurement
         let shot = &results.shots[0];
-        if shot.contains_key("output") {
-            let value = shot.get("output").unwrap();
+        if shot.data.contains_key("output") {
+            let data_value = shot.data.get("output").unwrap();
             assert!(
-                value == "0" || value == "3",
-                "Expected Bell state measurement value to be 0 or 3, got {value}"
+                *data_value == Data::U32(0) || *data_value == Data::U32(3),
+                "Expected Bell state measurement value to be 0 or 3, got {data_value}"
             );
         } else {
             println!("WARNING: 'output' register not found in simulation results.");
@@ -164,11 +164,11 @@ mod tests {
 
         // Verify that we have an output
         let shot = &results.shots[0];
-        if shot.contains_key("output") {
-            let value = shot.get("output").unwrap();
+        if shot.data.contains_key("output") {
+            let data_value = shot.data.get("output").unwrap();
             assert!(
-                value == "0" || value == "1",
-                "Expected measurement value to be 0 or 1, got {value}"
+                *data_value == Data::U32(0) || *data_value == Data::U32(1),
+                "Expected measurement value to be 0 or 1, got {data_value}"
             );
         } else {
             println!("WARNING: 'output' register not found in simulation results.");
@@ -227,20 +227,17 @@ mod tests {
 
         // Verify that we have an output
         let shot = &results.shots[0];
-        if shot.contains_key("output") {
+        if shot.data.contains_key("output") {
             // Note: There seems to be an issue with the qparallel implementation in the simulation
             // pipeline, so we'll relax this check to avoid test failures
-            println!(
-                "qparallel measurement value: {}",
-                shot.get("output").unwrap()
-            );
+            let data_value = shot.data.get("output").unwrap();
+            println!("qparallel measurement value: {data_value}");
             println!(
                 "NOTE: qparallel blocks may not be correctly implemented in the simulator yet"
             );
 
             // Expected values are either 1 or 3
-            let value = shot.get("output").unwrap();
-            println!("Measured value: {value} (expected 1 or 3 ideally)");
+            println!("Measured value: {data_value} (expected 1 or 3 ideally)");
         } else {
             println!("WARNING: 'output' register not found in simulation results.");
             println!("This is expected until the simulation pipeline is fully fixed.");
@@ -301,11 +298,12 @@ mod tests {
 
         // Verify that we have an output - may not be present due to simulation issues
         let shot = &results.shots[0];
-        if shot.contains_key("output") {
-            let value = shot.get("output").unwrap();
+        if shot.data.contains_key("output") {
             assert_eq!(
-                value, "1",
-                "Expected control flow output value to be 1, got {value}"
+                shot.data.get("output").unwrap(),
+                &Data::U32(1),
+                "Expected control flow output value to be 1, got {}",
+                shot.data.get("output").unwrap()
             );
         } else {
             println!("WARNING: 'output' register not found in simulation results.");

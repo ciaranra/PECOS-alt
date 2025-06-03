@@ -62,8 +62,12 @@ fn test_measurement_order_tracking() -> Result<(), PecosError> {
     let shot_result = engine.get_results()?;
 
     // Verify results
-    let c_value = shot_result.registers.get("c").unwrap_or(&0);
-    let bit0 = *c_value & 1;
+    let c_value = shot_result
+        .data
+        .get("c")
+        .and_then(pecos_engines::prelude::Data::as_u32)
+        .unwrap_or(0);
+    let bit0 = c_value & 1;
     let bit1 = (c_value >> 1) & 1;
     let bit2 = (c_value >> 2) & 1;
 
@@ -115,8 +119,16 @@ fn test_measurement_order_with_batches() -> Result<(), PecosError> {
     let shot_result = engine.get_results()?;
 
     // Verify results
-    let c1_value = shot_result.registers.get("c1").unwrap_or(&0);
-    let c2_value = shot_result.registers.get("c2").unwrap_or(&0);
+    let c1_value = shot_result
+        .data
+        .get("c1")
+        .and_then(pecos_engines::prelude::Data::as_u32)
+        .unwrap_or(0);
+    let c2_value = shot_result
+        .data
+        .get("c2")
+        .and_then(pecos_engines::prelude::Data::as_u32)
+        .unwrap_or(0);
 
     assert_eq!(c1_value & 1, 1, "c1[0] should be 1");
     assert_eq!(c2_value & 1, 0, "c2[0] should be 0");

@@ -97,20 +97,27 @@ fn test_run_sim_with_qasm_direct() -> Result<(), PecosError> {
         None,     // quantum engine (default)
     )?;
 
-    // Verify results contain the 'c' register with 100 measurements
-    assert!(results.register_shots.contains_key("c"));
-    assert_eq!(results.register_shots["c"].len(), 100);
+    // Verify results contain 100 shots
+    assert_eq!(results.len(), 100);
+
+    // Extract 'c' register values from shots
+    let c_values: Vec<u32> = results
+        .shots
+        .iter()
+        .filter_map(|shot| shot.data.get("c").and_then(pecos::prelude::Data::as_u32))
+        .collect();
+    assert_eq!(c_values.len(), 100);
 
     // Print outcome distribution for debugging
     println!("QASM Direct Results:");
-    let counts = count_outcomes(&results.register_shots["c"]);
+    let counts = count_outcomes(&c_values);
     for (outcome, count) in &counts {
         println!(
             "  |{:03b}⟩ ({}): {} times ({}%)",
             outcome,
             outcome,
             count,
-            (count * 100) / results.register_shots["c"].len()
+            (count * 100) / c_values.len()
         );
     }
 
@@ -136,20 +143,27 @@ fn test_run_sim_with_phir_direct() -> Result<(), PecosError> {
         None,     // quantum engine (default)
     )?;
 
-    // Verify results contain the 'c' register with 100 measurements
-    assert!(results.register_shots.contains_key("c"));
-    assert_eq!(results.register_shots["c"].len(), 100);
+    // Verify results contain 100 shots
+    assert_eq!(results.len(), 100);
+
+    // Extract 'c' register values from shots
+    let c_values: Vec<u32> = results
+        .shots
+        .iter()
+        .filter_map(|shot| shot.data.get("c").and_then(pecos::prelude::Data::as_u32))
+        .collect();
+    assert_eq!(c_values.len(), 100);
 
     // Print outcome distribution for debugging
     println!("PHIR Direct Results:");
-    let counts = count_outcomes(&results.register_shots["c"]);
+    let counts = count_outcomes(&c_values);
     for (outcome, count) in &counts {
         println!(
             "  |{:03b}⟩ ({}): {} times ({}%)",
             outcome,
             outcome,
             count,
-            (count * 100) / results.register_shots["c"].len()
+            (count * 100) / c_values.len()
         );
     }
 
@@ -181,26 +195,32 @@ fn test_cross_format_consistency() -> Result<(), PecosError> {
         None,
     )?;
 
-    // Both formats should produce results for their register
-    assert!(qasm_results.register_shots.contains_key("c"));
-    assert!(phir_results.register_shots.contains_key("c"));
+    // Both formats should produce 100 shots
+    assert_eq!(qasm_results.len(), 100);
+    assert_eq!(phir_results.len(), 100);
+
+    // Extract 'c' register values from shots
+    let qasm_c_values: Vec<u32> = qasm_results
+        .shots
+        .iter()
+        .filter_map(|shot| shot.data.get("c").and_then(pecos::prelude::Data::as_u32))
+        .collect();
+    let phir_c_values: Vec<u32> = phir_results
+        .shots
+        .iter()
+        .filter_map(|shot| shot.data.get("c").and_then(pecos::prelude::Data::as_u32))
+        .collect();
 
     // Compare actual results - with the same seed, the results should be identical
     assert_eq!(
-        qasm_results.register_shots["c"], phir_results.register_shots["c"],
+        qasm_c_values, phir_c_values,
         "QASM and PHIR results should be identical with the same seed"
     );
 
     // Print comparison
     println!("Cross-Format Consistency Results:");
-    println!(
-        "  QASM: First 5 results = {:?}",
-        &qasm_results.register_shots["c"][0..5]
-    );
-    println!(
-        "  PHIR: First 5 results = {:?}",
-        &phir_results.register_shots["c"][0..5]
-    );
+    println!("  QASM: First 5 results = {:?}", &qasm_c_values[0..5]);
+    println!("  PHIR: First 5 results = {:?}", &phir_c_values[0..5]);
 
     Ok(())
 }
@@ -240,13 +260,25 @@ fn test_run_sim_from_files() -> Result<(), PecosError> {
     let qasm_results = run_sim(qasm_engine, 100, Some(42), None, None, None)?;
     let phir_results = run_sim(phir_engine, 100, Some(42), None, None, None)?;
 
-    // Verify results contain the expected register
-    assert!(qasm_results.register_shots.contains_key("c"));
-    assert!(phir_results.register_shots.contains_key("c"));
+    // Verify results contain 100 shots
+    assert_eq!(qasm_results.len(), 100);
+    assert_eq!(phir_results.len(), 100);
+
+    // Extract 'c' register values from shots
+    let qasm_c_values: Vec<u32> = qasm_results
+        .shots
+        .iter()
+        .filter_map(|shot| shot.data.get("c").and_then(pecos::prelude::Data::as_u32))
+        .collect();
+    let phir_c_values: Vec<u32> = phir_results
+        .shots
+        .iter()
+        .filter_map(|shot| shot.data.get("c").and_then(pecos::prelude::Data::as_u32))
+        .collect();
 
     // Compare results - should be identical with the same seed
     assert_eq!(
-        qasm_results.register_shots["c"], phir_results.register_shots["c"],
+        qasm_c_values, phir_c_values,
         "Results from file-based engines should match"
     );
 
@@ -283,15 +315,27 @@ fn test_noise_model_effects() -> Result<(), PecosError> {
         None,
     )?;
 
-    // Both should have 'c' register with 500 measurements
-    assert!(noiseless_results.register_shots.contains_key("c"));
-    assert!(noisy_results.register_shots.contains_key("c"));
-    assert_eq!(noiseless_results.register_shots["c"].len(), 500);
-    assert_eq!(noisy_results.register_shots["c"].len(), 500);
+    // Both should have 500 shots
+    assert_eq!(noiseless_results.len(), 500);
+    assert_eq!(noisy_results.len(), 500);
+
+    // Extract 'c' register values from shots
+    let noiseless_c_values: Vec<u32> = noiseless_results
+        .shots
+        .iter()
+        .filter_map(|shot| shot.data.get("c").and_then(pecos::prelude::Data::as_u32))
+        .collect();
+    let noisy_c_values: Vec<u32> = noisy_results
+        .shots
+        .iter()
+        .filter_map(|shot| shot.data.get("c").and_then(pecos::prelude::Data::as_u32))
+        .collect();
+    assert_eq!(noiseless_c_values.len(), 500);
+    assert_eq!(noisy_c_values.len(), 500);
 
     // Count outcome frequencies for both runs
-    let noiseless_counts = count_outcomes(&noiseless_results.register_shots["c"]);
-    let noisy_counts = count_outcomes(&noisy_results.register_shots["c"]);
+    let noiseless_counts = count_outcomes(&noiseless_c_values);
+    let noisy_counts = count_outcomes(&noisy_c_values);
 
     // Print noiseless distribution
     println!("Noiseless Results Distribution:");
@@ -301,7 +345,7 @@ fn test_noise_model_effects() -> Result<(), PecosError> {
             outcome,
             outcome,
             count,
-            (count * 100) / noiseless_results.register_shots["c"].len()
+            (count * 100) / noiseless_c_values.len()
         );
     }
 
@@ -313,7 +357,7 @@ fn test_noise_model_effects() -> Result<(), PecosError> {
             outcome,
             outcome,
             count,
-            (count * 100) / noisy_results.register_shots["c"].len()
+            (count * 100) / noisy_c_values.len()
         );
     }
 
@@ -341,11 +385,18 @@ fn test_deterministic_outcome_frequencies() -> Result<(), PecosError> {
     // Run with 1000 shots to get reliable statistics
     let results = run_sim(Box::new(engine), 1000, Some(42), None, None, None)?;
 
+    // Extract 'c' register values from shots
+    let c_values: Vec<u32> = results
+        .shots
+        .iter()
+        .filter_map(|shot| shot.data.get("c").and_then(pecos::prelude::Data::as_u32))
+        .collect();
+
     // Analyze the outcome distribution
-    let counts = count_outcomes(&results.register_shots["c"]);
+    let counts = count_outcomes(&c_values);
 
     // Count total measurements
-    let total_measurements = results.register_shots["c"].len();
+    let total_measurements = c_values.len();
 
     // Print detailed distribution
     println!("Outcome Distribution for 1000 shots:");

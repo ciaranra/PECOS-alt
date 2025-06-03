@@ -247,16 +247,20 @@ fn test_trig_identity_with_measurement() {
         1,
         Some(42), // Fixed seed for deterministic results
     )
-    .unwrap()
-    .register_shots;
+    .unwrap();
 
     // Assert we have results
-    assert!(results.contains_key("c"));
-    assert_eq!(results["c"].len(), 100);
+    assert_eq!(results.shots.len(), 100);
+    assert!(results.shots[0].data.contains_key("c"));
 
     // Since sin²(π/6) + cos²(π/6) = 1.0, and we're doing rx(1.0 * π) = rx(π)
     // The qubit should be in state |1⟩, so all measurements should be 1
-    for &value in &results["c"] {
+    for shot in &results.shots {
+        let value = shot
+            .data
+            .get("c")
+            .and_then(pecos_engines::prelude::Data::as_u32)
+            .expect("c register should be convertible to u32");
         assert_eq!(value, 1, "Expected all measurements to be 1 after rx(π)");
     }
 
@@ -298,15 +302,19 @@ fn test_trig_identity_various_angles() {
             1,
             Some(42), // Fixed seed for deterministic results
         )
-        .unwrap()
-        .register_shots;
+        .unwrap();
 
         // Assert we have results
-        assert!(results.contains_key("c"));
-        assert_eq!(results["c"].len(), 50);
+        assert_eq!(results.shots.len(), 50);
+        assert!(results.shots[0].data.contains_key("c"));
 
         // For rx(π), all measurements should be 1
-        for &value in &results["c"] {
+        for shot in &results.shots {
+            let value = shot
+                .data
+                .get("c")
+                .and_then(pecos_engines::prelude::Data::as_u32)
+                .expect("c register should be convertible to u32");
             assert_eq!(
                 value, 1,
                 "Expected all measurements to be 1 for angle {angle} after rx(π)"

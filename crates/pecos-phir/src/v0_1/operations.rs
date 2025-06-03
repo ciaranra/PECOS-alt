@@ -288,7 +288,7 @@ impl OperationProcessor {
     /// # Errors
     /// Returns an error if the expression cannot be evaluated (e.g., undefined variables).
     pub fn evaluate_expression(&self, expr: &Expression) -> Result<i64, PecosError> {
-        log::info!("Evaluating expression: {:?}", expr);
+        log::debug!("Evaluating expression: {:?}", expr);
 
         // Create an expression evaluator using our environment
         let mut evaluator = ExpressionEvaluator::new(&self.environment);
@@ -300,7 +300,7 @@ impl OperationProcessor {
 
     /// Evaluates an argument item (variable, literal, etc.)
     fn evaluate_arg_item(&self, arg: &ArgItem) -> Result<i64, PecosError> {
-        log::info!("Evaluating argument item: {:?}", arg);
+        log::debug!("Evaluating argument item: {:?}", arg);
 
         // Create an expression evaluator using our environment as the primary variable source
         let mut evaluator = ExpressionEvaluator::new(&self.environment);
@@ -1040,7 +1040,7 @@ impl OperationProcessor {
                             idx,
                             u64::try_from(bit_value).unwrap_or(0),
                         )?;
-                        log::info!("Set bit {}[{}] = {} in environment", var, idx, bit_value);
+                        log::debug!("Set bit {}[{}] = {} in environment", var, idx, bit_value);
                     }
 
                     // Calculate the new value and update exported_values
@@ -1067,14 +1067,14 @@ impl OperationProcessor {
                             );
                         }
                     }
-                    log::info!(
+                    log::debug!(
                         "Added bit-level value to environment: {} = {}",
                         var,
                         new_value
                     );
                 } else {
                     // For whole variable assignment, store in environment
-                    log::info!("Storing assignment value {} in variable {}", value, var);
+                    log::debug!("Storing assignment value {} in variable {}", value, var);
 
                     // Make sure variable exists in environment and update it
                     if !self.environment.has_variable(&var) {
@@ -1084,10 +1084,10 @@ impl OperationProcessor {
                     #[allow(clippy::cast_sign_loss)]
                     let value_u64 = u64::from_ne_bytes((value as u64).to_ne_bytes());
                     self.environment.set(&var, value_u64)?;
-                    log::info!("Updated variable {} = {} in environment", var, value);
+                    log::debug!("Updated variable {} = {} in environment", var, value);
 
                     // Values are stored in the environment and will be available for expression evaluation
-                    log::info!(
+                    log::debug!(
                         "Variable is now available in environment: {} = {}",
                         var,
                         value
@@ -1095,7 +1095,7 @@ impl OperationProcessor {
                 }
 
                 // Return true to indicate we've handled this operation
-                log::info!("Assignment operation handled successfully");
+                log::debug!("Assignment operation handled successfully");
                 return Ok(true);
             }
         } else {
@@ -1122,7 +1122,7 @@ impl OperationProcessor {
 
         if cop == "Result" {
             // Process Result operation with our improved implementation
-            log::info!(
+            log::debug!(
                 "Processing Result operation with {} sources and {} destinations",
                 args.len(),
                 returns.len()
@@ -1669,7 +1669,7 @@ impl OperationProcessor {
     ///
     /// The environment is the single source of truth for all variables.
     fn store_measurement_result(&mut self, var_name: &str, var_idx: usize, outcome: u32) {
-        log::info!(
+        log::debug!(
             "PHIR: Storing measurement result {}[{}] = {}",
             var_name,
             var_idx,
@@ -1729,11 +1729,11 @@ impl OperationProcessor {
         measurements: &[u32],
         ops: &[Operation],
     ) -> Result<(), PecosError> {
-        log::info!("PHIR: Handling {} measurement results", measurements.len());
+        log::debug!("PHIR: Handling {} measurement results", measurements.len());
 
         for (index, outcome) in measurements.iter().enumerate() {
             let result_id = u32::try_from(index).unwrap_or(u32::MAX);
-            log::info!(
+            log::debug!(
                 "PHIR: Received measurement index={}, outcome={}",
                 index,
                 outcome
@@ -1798,7 +1798,7 @@ impl OperationProcessor {
                 // Store in main "m" variable for test compatibility
                 let idx = result_id as usize;
                 self.store_measurement_result("m", idx, *outcome);
-                log::info!(
+                log::debug!(
                     "PHIR: Auto-mapped measurement result {} to m[{}] = {}",
                     result_id,
                     idx,
@@ -1998,13 +1998,13 @@ impl OperationProcessor {
     #[must_use]
     pub fn process_export_mappings(&self) -> HashMap<String, u32> {
         let mut exported_values = HashMap::new();
-        log::info!("Processing export mappings using environment as source of truth");
+        log::debug!("Processing export mappings using environment as source of truth");
 
         // Get all mappings from the environment
         let mappings = self.environment.get_mappings();
 
         if !mappings.is_empty() {
-            log::info!(
+            log::debug!(
                 "Processing {} explicit mappings from environment",
                 mappings.len()
             );
@@ -2017,7 +2017,7 @@ impl OperationProcessor {
                     continue;
                 }
 
-                log::info!(
+                log::debug!(
                     "Processing export mapping: {} -> {}",
                     source_register,
                     export_name
@@ -2026,7 +2026,7 @@ impl OperationProcessor {
                 // Primary approach: Direct lookup in environment
                 if self.environment.has_variable(source_register) {
                     if let Some(value) = self.environment.get(source_register) {
-                        log::info!(
+                        log::debug!(
                             "Using value from environment: {} = {}",
                             source_register,
                             value
@@ -2052,7 +2052,7 @@ impl OperationProcessor {
 
         // If no explicit mappings or we didn't find any values, include all variables with values
         if mappings.is_empty() || exported_values.is_empty() {
-            log::info!("Adding automatic mappings for all variables with values");
+            log::debug!("Adding automatic mappings for all variables with values");
 
             for var_info in self.environment.get_all_variables() {
                 // Skip variables we've already exported
@@ -2062,16 +2062,16 @@ impl OperationProcessor {
 
                 // Include any variable that has a value
                 if let Some(val) = self.environment.get(&var_info.name) {
-                    log::info!("Adding variable: {} = {}", var_info.name, val);
+                    log::debug!("Adding variable: {} = {}", var_info.name, val);
                     exported_values.insert(var_info.name.clone(), val.as_u32());
                 }
             }
         }
 
         // Log summary of what we're exporting
-        log::info!("Exporting {} values:", exported_values.len());
+        log::debug!("Exporting {} values:", exported_values.len());
         for (name, value) in &exported_values {
-            log::info!("  {} = {}", name, value);
+            log::debug!("  {} = {}", name, value);
         }
 
         exported_values

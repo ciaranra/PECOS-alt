@@ -55,7 +55,7 @@ pub fn run_phir_simulation_from_json<T: NoiseModel + 'static, P: AsRef<std::path
     seed: Option<u64>,
     noise_model: Option<T>,
     wasm_path: Option<P>,
-) -> Result<ShotResults, PecosError> {
+) -> Result<ShotVec, PecosError> {
     // Parse JSON into PHIRProgram
     let program: PHIRProgram = serde_json::from_str(json)
         .map_err(|e| PecosError::Input(format!("Failed to parse PHIR program: {e}")))?;
@@ -108,16 +108,17 @@ pub fn run_phir_simulation_from_json<T: NoiseModel + 'static, P: AsRef<std::path
         PecosError::with_context(e, "Failed to run Monte Carlo engine with noise model")
     })?;
 
-    // Debug: Print register information from results
+    // Debug: Print shot information from results
     println!("Debug - Results received: {results:?}");
-    println!("Debug - Registers (u32): {:?}", results.register_shots);
-    println!("Debug - Registers (u64): {:?}", results.register_shots_u64);
-    println!("Debug - Registers (i64): {:?}", results.register_shots_i64);
+    println!("Debug - Number of shots: {}", results.shots.len());
+    if !results.shots.is_empty() {
+        println!("Debug - First shot data: {:?}", results.shots[0].data);
+    }
 
     Ok(results)
 }
 
-/// Assert that a register has an expected value in a `ShotResults`
+/// Assert that a register has an expected value in a `ShotVec`
 ///
 /// # Arguments
 ///
@@ -129,75 +130,131 @@ pub fn run_phir_simulation_from_json<T: NoiseModel + 'static, P: AsRef<std::path
 ///
 /// * If the register does not exist
 /// * If the register value does not match the expected value
-pub fn assert_register_value(results: &ShotResults, register_name: &str, expected_value: i64) {
+#[allow(clippy::too_many_lines)]
+pub fn assert_register_value(results: &ShotVec, register_name: &str, expected_value: i64) {
+    assert!(!results.shots.is_empty(), "No shots in results");
+
+    let shot = &results.shots[0];
+
     // Special case for "output" and "result" - this is for backward compatibility with tests
     // after refactoring removed special case handling of these names
-    if register_name == "output" && !results.register_shots_i64.contains_key("output") {
+    if register_name == "output" && !shot.data.contains_key("output") {
         // Check if "result" exists instead, since our refactoring no longer does automatic mapping
-        if let Some(values) = results.register_shots_i64.get("result") {
-            assert!(
-                !values.is_empty(),
-                "Register 'result' (checked as fallback for '{register_name}') found but has no values"
-            );
+        if let Some(data_value) = shot.data.get("result") {
+            let actual_value = match data_value {
+                Data::U8(v) => i64::from(*v),
+                Data::U16(v) => i64::from(*v),
+                Data::U32(v) => i64::from(*v),
+                Data::U64(v) => i64::try_from(*v).expect("Value too large for i64"),
+                Data::I8(v) => i64::from(*v),
+                Data::I16(v) => i64::from(*v),
+                Data::I32(v) => i64::from(*v),
+                Data::I64(v) => *v,
+                Data::F32(v) => {
+                    #[allow(clippy::cast_possible_truncation)]
+                    {
+                        (*v).round() as i64
+                    }
+                }
+                Data::F64(v) => {
+                    #[allow(clippy::cast_possible_truncation)]
+                    {
+                        (*v).round() as i64
+                    }
+                }
+                Data::Bool(v) => i64::from(*v),
+                Data::String(v) => v.parse::<i64>().expect("String is not a valid i64"),
+                Data::Json(v) => {
+                    // Try to extract a number from JSON
+                    v.as_i64()
+                        .or_else(|| v.as_u64().and_then(|n| i64::try_from(n).ok()))
+                        .unwrap_or(0)
+                }
+                Data::BigInt(v) => i64::try_from(v).expect("BigInt value too large for i64"),
+                Data::Bytes(v) => {
+                    // Try to interpret first 8 bytes as little-endian i64
+                    if v.len() >= 8 {
+                        i64::from_le_bytes([v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]])
+                    } else {
+                        0
+                    }
+                }
+                Data::BitVec(v) => {
+                    // Convert up to 64 bits to i64
+                    let mut result = 0i64;
+                    for (i, bit) in v.iter().take(64).enumerate() {
+                        if *bit {
+                            result |= 1 << i;
+                        }
+                    }
+                    result
+                }
+            };
             assert_eq!(
-                values[0], expected_value,
-                "Register 'result' (checked as fallback for '{}') has i64 value {} but expected {}",
-                register_name, values[0], expected_value
+                actual_value, expected_value,
+                "Register 'result' (checked as fallback for '{register_name}') has value {actual_value} but expected {expected_value}"
             );
             println!("NOTICE: Test looked for 'output' but found 'result' with correct value");
             return;
         }
     }
 
-    // First check in i64 registers which is most accurate for our expected values
-    if let Some(values) = results.register_shots_i64.get(register_name) {
-        assert!(
-            !values.is_empty(),
-            "Register '{register_name}' found but has no values"
-        );
+    // Check if the register exists in the shot data
+    if let Some(data_value) = shot.data.get(register_name) {
+        let actual_value = match data_value {
+            Data::U8(v) => i64::from(*v),
+            Data::U16(v) => i64::from(*v),
+            Data::U32(v) => i64::from(*v),
+            Data::U64(v) => i64::try_from(*v).expect("Value too large for i64"),
+            Data::I8(v) => i64::from(*v),
+            Data::I16(v) => i64::from(*v),
+            Data::I32(v) => i64::from(*v),
+            Data::I64(v) => *v,
+            Data::F32(v) => {
+                #[allow(clippy::cast_possible_truncation)]
+                {
+                    (*v).round() as i64
+                }
+            }
+            Data::F64(v) => {
+                #[allow(clippy::cast_possible_truncation)]
+                {
+                    (*v).round() as i64
+                }
+            }
+            Data::Bool(v) => i64::from(*v),
+            Data::String(v) => v.parse::<i64>().expect("String is not a valid i64"),
+            Data::Json(v) => {
+                // Try to extract a number from JSON
+                v.as_i64()
+                    .or_else(|| v.as_u64().and_then(|n| i64::try_from(n).ok()))
+                    .unwrap_or(0)
+            }
+            Data::BigInt(v) => i64::try_from(v).expect("BigInt value too large for i64"),
+            Data::Bytes(v) => {
+                // Try to interpret first 8 bytes as little-endian i64
+                if v.len() >= 8 {
+                    i64::from_le_bytes([v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]])
+                } else {
+                    0
+                }
+            }
+            Data::BitVec(v) => {
+                // Convert up to 64 bits to i64
+                let mut result = 0i64;
+                for (i, bit) in v.iter().take(64).enumerate() {
+                    if *bit {
+                        result |= 1 << i;
+                    }
+                }
+                result
+            }
+        };
         assert_eq!(
-            values[0], expected_value,
-            "Register '{}' has i64 value {} but expected {}",
-            register_name, values[0], expected_value
+            actual_value, expected_value,
+            "Register '{register_name}' has value {actual_value} but expected {expected_value}"
         );
         return;
-    }
-
-    // Then check in the u32 registers
-    if let Some(values) = results.register_shots.get(register_name) {
-        assert!(
-            !values.is_empty(),
-            "Register '{register_name}' found but has no values"
-        );
-        // Convert to i64 for comparison
-        let value_i64 = i64::from(values[0]);
-        assert_eq!(
-            value_i64, expected_value,
-            "Register '{}' has u32 value {} but expected {} as i64",
-            register_name, values[0], expected_value
-        );
-        return;
-    }
-
-    // Finally check in u64 registers
-    if let Some(values) = results.register_shots_u64.get(register_name) {
-        assert!(
-            !values.is_empty(),
-            "Register '{register_name}' found but has no values"
-        );
-        // For large u64 values outside the i64 range, this could fail
-        if let Ok(value_i64) = i64::try_from(values[0]) {
-            assert_eq!(
-                value_i64, expected_value,
-                "Register '{}' has u64 value {} but expected {} as i64",
-                register_name, values[0], expected_value
-            );
-            return;
-        }
-        panic!(
-            "Register '{}' has u64 value {} which is too large to convert to i64 for comparison",
-            register_name, values[0]
-        );
     }
 
     // Fall back to checking "result" if "output" was requested but not found
@@ -207,13 +264,8 @@ pub fn assert_register_value(results: &ShotResults, register_name: &str, expecte
     }
 
     panic!(
-        "Register '{}' not found in any register types. Available registers: {:?}",
+        "Register '{}' not found. Available registers: {:?}",
         register_name,
-        results
-            .register_shots
-            .keys()
-            .chain(results.register_shots_u64.keys())
-            .chain(results.register_shots_i64.keys())
-            .collect::<std::collections::HashSet<_>>()
+        shot.data.keys().collect::<Vec<_>>()
     );
 }

@@ -18,17 +18,19 @@ fn test_bell_state_simulation() {
     "#;
 
     let results = run_qasm_sim(qasm, 1000, Some(42), Some(1), None, None).unwrap();
-    let c_values = results.get("c").unwrap();
 
     // Count occurrences of |00⟩ and |11⟩
     let mut count_00 = 0;
     let mut count_11 = 0;
 
-    for &value in c_values {
-        match value {
-            0b00 => count_00 += 1,
-            0b11 => count_11 += 1,
-            _ => panic!("Bell state should only produce |00⟩ or |11⟩"),
+    for shot in &results.shots {
+        if let Some(data) = shot.data.get("c") {
+            let Some(value) = data.as_u32() else { continue };
+            match value {
+                0b00 => count_00 += 1,
+                0b11 => count_11 += 1,
+                _ => panic!("Bell state should only produce |00⟩ or |11⟩"),
+            }
         }
     }
 
@@ -59,17 +61,19 @@ fn test_ghz_state_simulation() {
     "#;
 
     let results = run_qasm_sim(qasm, 1000, Some(42), Some(1), None, None).unwrap();
-    let c_values = results.get("c").unwrap();
 
     // Count occurrences of |000⟩ and |111⟩
     let mut count_000 = 0;
     let mut count_111 = 0;
 
-    for &value in c_values {
-        match value {
-            0b000 => count_000 += 1,
-            0b111 => count_111 += 1,
-            _ => panic!("GHZ state should only produce |000⟩ or |111⟩"),
+    for shot in &results.shots {
+        if let Some(data) = shot.data.get("c") {
+            let Some(value) = data.as_u32() else { continue };
+            match value {
+                0b000 => count_000 += 1,
+                0b111 => count_111 += 1,
+                _ => panic!("GHZ state should only produce |000⟩ or |111⟩"),
+            }
         }
     }
 
@@ -108,17 +112,19 @@ fn test_phase_kickback() {
     "#;
 
     let results = run_qasm_sim(qasm, 1000, Some(42), Some(1), None, None).unwrap();
-    let c_values = results.get("c").unwrap();
 
     // After phase kickback, control qubit should be |1⟩
-    for &value in c_values {
-        let control_bit = value & 1;
-        assert_eq!(
-            control_bit, 1,
-            "Control qubit should always be |1⟩ after phase kickback"
-        );
+    for shot in &results.shots {
+        if let Some(data) = shot.data.get("c") {
+            let Some(value) = data.as_u32() else { continue };
+            let control_bit = value & 1;
+            assert_eq!(
+                control_bit, 1,
+                "Control qubit should always be |1⟩ after phase kickback"
+            );
 
-        let target_bit = (value >> 1) & 1;
-        assert_eq!(target_bit, 1, "Target qubit should remain |1⟩");
+            let target_bit = (value >> 1) & 1;
+            assert_eq!(target_bit, 1, "Target qubit should remain |1⟩");
+        }
     }
 }

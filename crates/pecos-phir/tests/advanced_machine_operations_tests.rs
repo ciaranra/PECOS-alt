@@ -3,7 +3,7 @@ mod common;
 #[cfg(test)]
 mod tests {
     use pecos_core::errors::PecosError;
-    use pecos_engines::PassThroughNoiseModel;
+    use pecos_engines::{PassThroughNoiseModel, shot_results::Data};
     use pecos_phir::v0_1::operations::{MachineOperationResult, OperationProcessor};
     use std::collections::HashMap;
 
@@ -115,52 +115,30 @@ mod tests {
         // Print a clearer debugging message for troubleshooting
         println!(
             "Available keys in the shot: {:?}",
-            shot.keys().collect::<Vec<_>>()
+            shot.data.keys().collect::<Vec<_>>()
         );
         println!("Shot contents: {shot:?}");
-        println!("Register shots: {:?}", results.register_shots);
-        println!("Register shots u64: {:?}", results.register_shots_u64);
+        // Note: register_shots and register_shots_u64 fields have been removed
+        // All data is now accessed through shots[i].data
 
         // Since we've made the environment the single source of truth for all values,
         // we now have a standardized way of retrieving results.
-        // Let's check in register_shots_u64 first as it's the most reliable source
-        if results.register_shots_u64.contains_key("x") {
+        // Look in the shot map for string-based values
+        if shot.data.contains_key("x") {
             assert_eq!(
-                results.register_shots_u64["x"][0], 1,
-                "Expected x register value to be 1, got {}",
-                results.register_shots_u64["x"][0]
-            );
-        }
-        // Then check in register_shots
-        else if results.register_shots.contains_key("x") {
-            assert_eq!(
-                results.register_shots["x"][0], 1,
-                "Expected x register value to be 1, got {}",
-                results.register_shots["x"][0]
-            );
-        }
-        // Then look in the shot map for string-based values
-        else if shot.contains_key("x") {
-            assert_eq!(
-                shot.get("x").unwrap(),
-                "1",
+                shot.data.get("x").unwrap(),
+                &Data::U32(1),
                 "Expected output value to be 1, got {}",
-                shot.get("x").unwrap()
+                shot.data.get("x").unwrap()
             );
         }
         // Check if source variable was exposed directly
-        else if results.register_shots_u64.contains_key("var") {
+        else if shot.data.contains_key("var") {
             assert_eq!(
-                results.register_shots_u64["var"][0], 1,
-                "Expected var register value to be 1, got {}",
-                results.register_shots_u64["var"][0]
-            );
-        } else if shot.contains_key("var") {
-            assert_eq!(
-                shot.get("var").unwrap(),
-                "1",
+                shot.data.get("var").unwrap(),
+                &Data::U32(1),
                 "Expected var value to be 1, got {}",
-                shot.get("var").unwrap()
+                shot.data.get("var").unwrap()
             );
         } else {
             // Since we've moved to environment as the single source of truth,
@@ -209,9 +187,8 @@ mod tests {
 
         // Print all available results for debugging
         println!("ShotResults: {results:?}");
-        println!("Register shots: {:?}", results.register_shots);
-        println!("Register shots u64: {:?}", results.register_shots_u64);
-        println!("Register shots i64: {:?}", results.register_shots_i64);
+        // Note: register_shots fields have been removed
+        // All data is now accessed through shots[i].data
         println!("Shots: {:?}", results.shots);
 
         // Verify that the program executed successfully with machine operations
@@ -222,51 +199,30 @@ mod tests {
         let expected_value = 42;
         let mut value_found = false;
 
-        // Check primary location: register_shots_u64 - most reliable source from environment
-        if results.register_shots_u64.contains_key("a") {
-            let value = results.register_shots_u64["a"][0];
-            assert_eq!(
-                value,
-                u64::from(expected_value),
-                "Expected output value to be {expected_value}, got {value}"
-            );
-            value_found = true;
-        }
-        // Check secondary location: register_shots - alternative source
-        else if results.register_shots.contains_key("a") {
-            let value = results.register_shots["a"][0];
+        // Check string-based location: shots hashmap
+        if !results.shots.is_empty() && results.shots[0].data.contains_key("a") {
+            let value = results.shots[0]
+                .data
+                .get("a")
+                .unwrap()
+                .as_u32()
+                .unwrap_or(0);
             assert_eq!(
                 value, expected_value,
                 "Expected output value to be {expected_value}, got {value}"
             );
             value_found = true;
         }
-        // Check string-based location: shots hashmap
-        else if !results.shots.is_empty() && results.shots[0].contains_key("a") {
-            let value = results.shots[0]["a"].parse::<u64>().unwrap_or(0);
-            assert_eq!(
-                value,
-                u64::from(expected_value),
-                "Expected output value to be {expected_value}, got {value}"
-            );
-            value_found = true;
-        }
-        // Check direct source variable: "result" in register_shots_u64
-        else if results.register_shots_u64.contains_key("result") {
-            let value = results.register_shots_u64["result"][0];
-            assert_eq!(
-                value,
-                u64::from(expected_value),
-                "Expected result variable to be {expected_value}, got {value}"
-            );
-            value_found = true;
-        }
         // Check direct source variable: "result" in string-based shots
-        else if !results.shots.is_empty() && results.shots[0].contains_key("result") {
-            let value = results.shots[0]["result"].parse::<u64>().unwrap_or(0);
+        else if !results.shots.is_empty() && results.shots[0].data.contains_key("result") {
+            let value = results.shots[0]
+                .data
+                .get("result")
+                .unwrap()
+                .as_u32()
+                .unwrap_or(0);
             assert_eq!(
-                value,
-                u64::from(expected_value),
+                value, expected_value,
                 "Expected result variable to be {expected_value}, got {value}"
             );
             value_found = true;

@@ -32,6 +32,8 @@
 //! * Standard library types needed for QASM operations (`FromStr`, `HashMap`)
 //! * QASM engine types (`QASMEngine`, `QASMEngineBuilder`, `QASMProgram`)
 //! * QASM simulation function (`run_qasm_sim`)
+//! * Result types (`Shot`, `ShotVec`) and formatting trait (`QASMShotVecExt`)
+//! * Engine traits (`ClassicalEngine`) for accessing engine methods
 //! * Noise models and quantum engines from `pecos-engines`
 //! * Error types and random number generator traits
 //!
@@ -50,14 +52,15 @@ pub use crate::engine::QASMEngine;
 pub use crate::engine_builder::QASMEngineBuilder;
 pub use crate::program::QASMProgram;
 
-// Re-export run functions
+// Re-export run functions and results types
+pub use crate::qasm_results::QASMResults;
 pub use crate::run::run_qasm_sim;
 
 // Re-export setup function
 pub use crate::setup_qasm_engine;
 
-// Re-export noise models from pecos-engines
-pub use pecos_engines::{MonteCarloEngine, PassThroughNoiseModel};
+// Re-export engine traits and types from pecos-engines
+pub use pecos_engines::{ClassicalEngine, MonteCarloEngine, PassThroughNoiseModel, Shot, ShotVec};
 
 // Re-export core error type and traits
 pub use pecos_core::RngManageable;
@@ -71,4 +74,9 @@ pub use pecos_engines::noise::{
 pub use pecos_engines::quantum::{
     QuantumEngine, SparseStabEngine, StateVecEngine, new_stabilizer_engine,
     new_stabilizer_engine_with_seed,
+};
+
+// Re-export result formatting utilities
+pub use crate::result_formatter::{
+    QASMResultFormatter, format_as_binary_strings, format_as_decimal_arrays,
 };

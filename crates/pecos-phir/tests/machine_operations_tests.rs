@@ -3,7 +3,7 @@ mod common;
 #[cfg(test)]
 mod tests {
     use pecos_core::errors::PecosError;
-    use pecos_engines::PassThroughNoiseModel;
+    use pecos_engines::{PassThroughNoiseModel, shot_results::Data};
 
     // Import helpers from common module
     use crate::common::phir_test_utils::run_phir_simulation_from_json;
@@ -53,16 +53,16 @@ mod tests {
 
         let shot = &results.shots[0];
         assert!(
-            shot.contains_key("output"),
+            shot.data.contains_key("output"),
             "Expected 'output' register to be present"
         );
 
         // Check that the value is 2 (from the assignment in the JSON)
         assert_eq!(
-            shot.get("output").unwrap(),
-            "2",
+            shot.data.get("output").unwrap(),
+            &Data::U32(2),
             "Expected output to be 2, got {}",
-            shot.get("output").unwrap()
+            shot.data.get("output").unwrap()
         );
 
         Ok(())
@@ -112,16 +112,16 @@ mod tests {
 
         let shot = &results.shots[0];
         assert!(
-            shot.contains_key("output"),
+            shot.data.contains_key("output"),
             "Expected 'output' register to be present"
         );
 
         // Check that the value is 42 (from the assignment in the JSON file)
         assert_eq!(
-            shot.get("output").unwrap(),
-            "42",
+            shot.data.get("output").unwrap(),
+            &Data::U32(42),
             "Expected output to be 42, got {}",
-            shot.get("output").unwrap()
+            shot.data.get("output").unwrap()
         );
 
         Ok(())

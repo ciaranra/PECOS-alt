@@ -12,12 +12,13 @@
 
 pub use crate::noise::general::GeneralNoiseModel;
 pub use crate::quantum::{SparseStabEngine, StateVecEngine, new_quantum_engine_arbitrary_qgate};
-pub use crate::shot_results::OutputFormat;
 pub use crate::{
     ByteMessage, ByteMessageBuilder, ClassicalEngine, ControlEngine, DepolarizingNoiseModel,
     Engine, EngineStage, EngineSystem, HybridEngine, MonteCarloEngine, NoiseModel,
     PassThroughNoiseModel, QuantumEngine, QuantumSystem,
     byte_message::dump_batch,
     run_sim,
-    shot_results::{ShotResult, ShotResults},
+    shot_results::{Data, Shot, ShotVec},
 };
+
+pub use serde_json::Value;

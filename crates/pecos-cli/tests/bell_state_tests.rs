@@ -43,9 +43,7 @@ fn run_pecos(
         .arg("-p")
         .arg(noise_prob)
         .arg("-d")
-        .arg(seed.to_string())
-        .arg("-f")
-        .arg("pretty-compact"); // Force consistent format for test
+        .arg(seed.to_string());
 
     // Add simulator parameter if specified
     if let Some(sim) = simulator {
@@ -78,73 +76,49 @@ fn run_pecos(
     Ok(output_str)
 }
 
-/// Extract measurement results as arrays from JSON output
+/// Extract measurement results from JSON output
+/// Handles the new format: [{"c": 3}, {"c": 0}, ...]
 fn get_values(json_output: &str) -> Vec<String> {
-    let mut values = Vec::new();
+    let mut register_values: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
 
-    // Try to parse the JSON using serde_json, which is the most reliable method
+    // Parse the JSON - expecting an array of shot objects
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_output) {
-        if let Some(obj) = json.as_object() {
-            for (_, value) in obj {
-                if let Some(array) = value.as_array() {
-                    // Convert the array to a string representation
-                    let value_str = array
-                        .iter()
-                        .map(|v| v.to_string().replace('"', ""))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    values.push(value_str);
+        if let Some(shots) = json.as_array() {
+            // Collect all register names first
+            let mut register_names = std::collections::HashSet::new();
+            for shot in shots {
+                if let Some(obj) = shot.as_object() {
+                    for key in obj.keys() {
+                        register_names.insert(key.clone());
+                    }
                 }
             }
-            values.sort();
-            return values;
-        }
-    }
 
-    // Fallback to manual parsing if serde_json fails (simplified for test)
-    let mut in_array = false;
-    let mut current_array = String::new();
-
-    for line in json_output.lines() {
-        let trimmed = line.trim();
-
-        // Start of an array
-        if trimmed.contains('[') {
-            in_array = true;
-            current_array = trimmed
-                .chars()
-                .skip_while(|&c| c != '[')
-                .skip(1) // Skip the '['
-                .collect();
-            // If the array ends on the same line
-            if trimmed.contains(']') {
-                in_array = false;
-                current_array = current_array.chars().take_while(|&c| c != ']').collect();
-                values.push(current_array.trim().to_string());
-                current_array = String::new();
+            // For each register, collect values across all shots
+            for reg_name in register_names {
+                let mut values = Vec::new();
+                for shot in shots {
+                    if let Some(obj) = shot.as_object() {
+                        if let Some(val) = obj.get(&reg_name) {
+                            values.push(val.to_string().replace('"', ""));
+                        }
+                    }
+                }
+                register_values.insert(reg_name, values);
             }
         }
-        // End of an array
-        else if in_array && trimmed.contains(']') {
-            in_array = false;
-            current_array.push_str(
-                &trimmed
-                    .chars()
-                    .take_while(|&c| c != ']')
-                    .collect::<String>(),
-            );
-            values.push(current_array.trim().to_string());
-            current_array = String::new();
-        }
-        // Middle of an array
-        else if in_array {
-            current_array.push_str(trimmed);
-        }
     }
 
-    // Sort for stable comparison
-    values.sort();
-    values
+    // Convert to the format expected by tests: comma-separated values per register
+    let mut result = Vec::new();
+    for (_, values) in register_values {
+        let value_str = values.join(", ");
+        result.push(value_str);
+    }
+
+    result.sort();
+    result
 }
 
 /// Test that a perfect (noiseless) Bell state produces the expected 50/50 distribution
@@ -239,28 +213,32 @@ fn test_perfect_bell_state_distribution() -> Result<(), Box<dyn std::error::Erro
     Ok(())
 }
 
-/// Test that Bell state probabilities are consistent between PHIR and QASM implementations
+/// Test that Bell state probabilities are consistent between PHIR, QASM, and QIR implementations
 #[test]
 fn test_cross_implementation_validation() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let bell_json_path = manifest_dir.join("../../examples/phir/bell.json");
     let bell_qasm_path = manifest_dir.join("../../examples/qasm/bell.qasm");
+    let bell_qir_path = manifest_dir.join("../../examples/qir/bell.ll");
 
-    println!("BELL STATE CROSS-VALIDATION: Comparing PHIR and QASM implementations");
-    println!("------------------------------------------------------------------");
+    println!("BELL STATE CROSS-VALIDATION: Comparing PHIR, QASM, and QIR implementations");
+    println!("------------------------------------------------------------------------");
 
-    // Run both implementations with the same seed
+    // Run all three implementations with the same seed
     let phir_output = run_pecos(&bell_json_path, 100, 1, "depolarizing", "0.0", 42, None)?;
     let qasm_output = run_pecos(&bell_qasm_path, 100, 1, "depolarizing", "0.0", 42, None)?;
+    let qir_output = run_pecos(&bell_qir_path, 100, 1, "depolarizing", "0.0", 42, None)?;
 
     // Extract the values and compare
     let phir_values = get_values(&phir_output);
     let qasm_values = get_values(&qasm_output);
+    let qir_values = get_values(&qir_output);
 
     println!("PHIR results: {:.60}...", phir_output.trim());
     println!("QASM results: {:.60}...", qasm_output.trim());
+    println!("QIR results:  {:.60}...", qir_output.trim());
 
-    // Both implementations should produce valid quantum Bell state results
+    // All implementations should produce valid quantum Bell state results
     // Each should have a near 50/50 distribution of |00⟩ and |11⟩
 
     // Function to count |00⟩ and |11⟩ states
@@ -273,12 +251,14 @@ fn test_cross_implementation_validation() -> Result<(), Box<dyn std::error::Erro
         (state_00_count, state_11_count)
     };
 
-    // Check both implementations
+    // Check all implementations
     let (phir_00_count, phir_11_count) = count_bell_states(&phir_values);
     let (qasm_00_count, qasm_11_count) = count_bell_states(&qasm_values);
+    let (qir_00_count, qir_11_count) = count_bell_states(&qir_values);
 
     println!("PHIR Bell state distribution: {phir_00_count}% |00⟩, {phir_11_count}% |11⟩");
     println!("QASM Bell state distribution: {qasm_00_count}% |00⟩, {qasm_11_count}% |11⟩");
+    println!("QIR Bell state distribution:  {qir_00_count}% |00⟩, {qir_11_count}% |11⟩");
 
     // Verify PHIR implementation has balanced distribution
     assert!(
@@ -292,7 +272,13 @@ fn test_cross_implementation_validation() -> Result<(), Box<dyn std::error::Erro
         "QASM implementation should have between 40% and 60% |00⟩ states, but got {qasm_00_count}%"
     );
 
-    println!("PHIR and QASM Bell state implementations produce identical results");
+    // Verify QIR implementation has balanced distribution
+    assert!(
+        (40..=60).contains(&qir_00_count),
+        "QIR implementation should have between 40% and 60% |00⟩ states, but got {qir_00_count}%"
+    );
+
+    println!("PHIR, QASM, and QIR Bell state implementations all produce correct distributions");
 
     Ok(())
 }
@@ -451,6 +437,59 @@ fn test_bell_state_with_noise() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Test that with the same seed, all implementations produce deterministic results
+#[test]
+fn test_seed_determinism() -> Result<(), Box<dyn std::error::Error>> {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let bell_json_path = manifest_dir.join("../../examples/phir/bell.json");
+    let bell_qasm_path = manifest_dir.join("../../examples/qasm/bell.qasm");
+    let bell_qir_path = manifest_dir.join("../../examples/qir/bell.ll");
+
+    println!("SEED DETERMINISM: Verifying all implementations are deterministic with same seed");
+    println!("------------------------------------------------------------------------------");
+
+    // Test PHIR determinism
+    let phir_run1 = run_pecos(&bell_json_path, 50, 1, "depolarizing", "0.0", 42, None)?;
+    let phir_run2 = run_pecos(&bell_json_path, 50, 1, "depolarizing", "0.0", 42, None)?;
+
+    let phir_values1 = get_values(&phir_run1);
+    let phir_values2 = get_values(&phir_run2);
+
+    assert_eq!(
+        phir_values1, phir_values2,
+        "PHIR implementation should produce identical results with the same seed"
+    );
+    println!("PHIR implementation is deterministic with the same seed");
+
+    // Test QASM determinism
+    let qasm_run1 = run_pecos(&bell_qasm_path, 50, 1, "depolarizing", "0.0", 42, None)?;
+    let qasm_run2 = run_pecos(&bell_qasm_path, 50, 1, "depolarizing", "0.0", 42, None)?;
+
+    let qasm_values1 = get_values(&qasm_run1);
+    let qasm_values2 = get_values(&qasm_run2);
+
+    assert_eq!(
+        qasm_values1, qasm_values2,
+        "QASM implementation should produce identical results with the same seed"
+    );
+    println!("QASM implementation is deterministic with the same seed");
+
+    // Test QIR determinism
+    let qir_run1 = run_pecos(&bell_qir_path, 50, 1, "depolarizing", "0.0", 42, None)?;
+    let qir_run2 = run_pecos(&bell_qir_path, 50, 1, "depolarizing", "0.0", 42, None)?;
+
+    let qir_values1 = get_values(&qir_run1);
+    let qir_values2 = get_values(&qir_run2);
+
+    assert_eq!(
+        qir_values1, qir_values2,
+        "QIR implementation should produce identical results with the same seed"
+    );
+    println!("QIR implementation is deterministic with the same seed");
+
+    Ok(())
+}
+
 /// Test that with the same seed, both noise models produce deterministic results
 #[test]
 fn test_noise_model_determinism() -> Result<(), Box<dyn std::error::Error>> {
@@ -501,6 +540,40 @@ fn test_noise_model_determinism() -> Result<(), Box<dyn std::error::Error>> {
         "General noise model should produce identical results with the same seed"
     );
     println!("General noise model is deterministic with the same seed");
+
+    Ok(())
+}
+
+/// Test QIR implementation with noise models
+#[test]
+fn test_qir_with_noise() -> Result<(), Box<dyn std::error::Error>> {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let bell_qir_path = manifest_dir.join("../../examples/qir/bell.ll");
+
+    println!("QIR WITH NOISE: Testing QIR implementation with various noise models");
+    println!("------------------------------------------------------------------");
+
+    // Test with depolarizing noise
+    let qir_dep_output = run_pecos(&bell_qir_path, 500, 1, "depolarizing", "0.1", 42, None)?;
+
+    println!("\n1. Testing QIR with depolarizing noise model (p=0.1):");
+    analyze_noisy_bell_state(&qir_dep_output, "QIR Depolarizing")?;
+
+    // Test with general noise
+    let qir_gen_output = run_pecos(
+        &bell_qir_path,
+        500,
+        1,
+        "general",
+        "0.1,0.1,0.1,0.1,0.1",
+        42,
+        None,
+    )?;
+
+    println!("\n2. Testing QIR with general noise model (p=0.1 for all error types):");
+    analyze_noisy_bell_state(&qir_gen_output, "QIR General")?;
+
+    println!("\nQIR implementation correctly handles noise models");
 
     Ok(())
 }

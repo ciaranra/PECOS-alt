@@ -14,7 +14,7 @@ use crate::Engine;
 use crate::byte_message::ByteMessage;
 use crate::engine_system::{ClassicalEngine, ControlEngine, EngineStage, EngineSystem};
 use crate::quantum_system::QuantumSystem;
-use crate::shot_results::ShotResult;
+use crate::shot_results::Shot;
 use dyn_clone;
 use log::debug;
 use pecos_core::errors::PecosError;
@@ -126,7 +126,7 @@ impl HybridEngine {
     /// - Generating commands through the classical engine fails.
     /// - Processing commands through the quantum engine fails.
     /// - Handling measurements through the classical engine fails.
-    pub fn run_shot(&mut self) -> Result<ShotResult, PecosError> {
+    pub fn run_shot(&mut self) -> Result<Shot, PecosError> {
         debug!(
             "HybridEngine::run_shot() starting - Thread {:?}",
             std::thread::current().id()
@@ -167,7 +167,7 @@ impl HybridEngine {
 
 impl Engine for HybridEngine {
     type Input = ();
-    type Output = ShotResult;
+    type Output = Shot;
 
     fn process(&mut self, input: Self::Input) -> Result<Self::Output, PecosError> {
         // Delegate to process_as_system for standard implementation

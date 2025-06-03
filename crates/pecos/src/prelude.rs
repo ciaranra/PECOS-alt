@@ -50,8 +50,8 @@ pub use pecos_qasm::prelude::*;
 pub use pecos_qir::prelude::*;
 pub use pecos_qsim::prelude::*;
 
-// Re-export ShotResults directly from pecos_engines for easier access
-pub use pecos_engines::shot_results::ShotResults;
+// Re-export ShotVec directly from pecos_engines for easier access
+pub use pecos_engines::shot_results::ShotVec;
 
 // Re-export crate-specific utilities
 pub use crate::program::{

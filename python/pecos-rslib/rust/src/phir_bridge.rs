@@ -3,7 +3,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 use std::collections::HashMap;
 
-use pecos::prelude::{ByteMessage, ClassicalEngine, ControlEngine, Engine, PecosError, ShotResult};
+use pecos::prelude::{ByteMessage, ClassicalEngine, ControlEngine, Engine, PecosError, Shot};
 
 #[pyclass(module = "_pecos_rslib")]
 #[derive(Debug)]
@@ -397,8 +397,59 @@ impl PHIREngine {
                     Ok(shot_result) => {
                         // The Rust engine already properly handles the "Result" instruction
                         // which maps internal register names to user-facing ones.
-                        // Return the processed results directly.
-                        return Ok(shot_result.registers.clone());
+                        // Extract u32 values from the Data enum
+                        let mut u32_results = HashMap::new();
+                        for (key, data) in shot_result.data {
+                            // Convert Data to u32 if possible
+                            let value = match data {
+                                pecos::prelude::Data::U8(v) => u32::from(v),
+                                pecos::prelude::Data::U16(v) => u32::from(v),
+                                pecos::prelude::Data::U32(v) => v,
+                                #[allow(clippy::cast_possible_truncation)]
+                                pecos::prelude::Data::U64(v) => v as u32, // Truncate for compatibility
+                                #[allow(clippy::cast_sign_loss)]
+                                pecos::prelude::Data::I8(v) => v as u32,
+                                #[allow(clippy::cast_sign_loss)]
+                                pecos::prelude::Data::I16(v) => v as u32,
+                                #[allow(clippy::cast_sign_loss)]
+                                pecos::prelude::Data::I32(v) => v as u32,
+                                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                                pecos::prelude::Data::I64(v) => v as u32,
+                                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                                pecos::prelude::Data::F32(v) => v as u32,
+                                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                                pecos::prelude::Data::F64(v) => v as u32,
+                                pecos::prelude::Data::Bool(v) => u32::from(v),
+                                pecos::prelude::Data::String(ref s) => {
+                                    s.parse::<u32>().unwrap_or(0)
+                                }
+                                pecos::prelude::Data::Json(_) => 0, // Default to 0 for JSON data
+                                pecos::prelude::Data::BigInt(ref v) => {
+                                    // Try to convert BigInt to u32, default to 0 if it doesn't fit
+                                    u32::try_from(v).unwrap_or(0)
+                                }
+                                pecos::prelude::Data::Bytes(ref v) => {
+                                    // Try to interpret first 4 bytes as little-endian u32
+                                    if v.len() >= 4 {
+                                        u32::from_le_bytes([v[0], v[1], v[2], v[3]])
+                                    } else {
+                                        0
+                                    }
+                                }
+                                pecos::prelude::Data::BitVec(ref v) => {
+                                    // Convert up to 32 bits to u32
+                                    let mut result = 0u32;
+                                    for (i, bit) in v.iter().take(32).enumerate() {
+                                        if *bit {
+                                            result |= 1 << i;
+                                        }
+                                    }
+                                    result
+                                }
+                            };
+                            u32_results.insert(key, value);
+                        }
+                        return Ok(u32_results);
                     }
                     Err(e) => {
                         // Log the error and fall back to Python
@@ -1029,7 +1080,7 @@ impl ClassicalEngine for PHIREngine {
         })
     }
 
-    fn get_results(&self) -> Result<ShotResult, PecosError> {
+    fn get_results(&self) -> Result<Shot, PecosError> {
         Python::with_gil(|py| {
             let interpreter = self.interpreter.lock();
 
@@ -1044,14 +1095,12 @@ impl ClassicalEngine for PHIREngine {
             // Update our local results cache
             (*self.results.lock()).clone_from(&internal_registers);
 
-            // Create the registers maps that will be populated
+            // Create the registers map that will be populated
             let mut mapped_registers: HashMap<String, u32> = HashMap::new();
-            let mut mapped_registers_u64: HashMap<String, u64> = HashMap::new();
 
             // First, include all internal registers
             for (key, &value) in &internal_registers {
                 mapped_registers.insert(key.clone(), value);
-                mapped_registers_u64.insert(key.clone(), u64::from(value));
             }
 
             // Get result_id to register mappings from our stored state
@@ -1069,19 +1118,20 @@ impl ClassicalEngine for PHIREngine {
                 // use its value for the mapped register
                 if let Some(&value) = internal_registers.get(register_name) {
                     mapped_registers.insert(register_name.clone(), value);
-                    mapped_registers_u64.insert(register_name.clone(), u64::from(value));
                 } else if let Some(&value) = internal_registers.get(&orig_register) {
                     mapped_registers.insert(register_name.clone(), value);
-                    mapped_registers_u64.insert(register_name.clone(), u64::from(value));
                 }
             }
 
-            // Create a ShotResult with all required fields
-            Ok(ShotResult {
-                registers: mapped_registers,
-                registers_u64: mapped_registers_u64,
-                registers_i64: HashMap::new(), // No i64 values in PHIR currently
-            })
+            // Create a Shot with the new Data structure
+            let mut data_map = HashMap::new();
+
+            // Convert mapped registers to Data enum values
+            for (key, value) in mapped_registers {
+                data_map.insert(key, pecos::prelude::Data::U32(value));
+            }
+
+            Ok(Shot { data: data_map })
         })
     }
 
@@ -1113,7 +1163,7 @@ impl ClassicalEngine for PHIREngine {
 
 impl ControlEngine for PHIREngine {
     type Input = ();
-    type Output = ShotResult;
+    type Output = Shot;
     type EngineInput = ByteMessage;
     type EngineOutput = ByteMessage;
 
@@ -1124,7 +1174,7 @@ impl ControlEngine for PHIREngine {
     fn start(
         &mut self,
         _input: (),
-    ) -> Result<pecos::prelude::EngineStage<ByteMessage, ShotResult>, PecosError> {
+    ) -> Result<pecos::prelude::EngineStage<ByteMessage, Shot>, PecosError> {
         // Reset state to ensure clean start
         ClassicalEngine::reset(self)?;
 
@@ -1148,7 +1198,7 @@ impl ControlEngine for PHIREngine {
     fn continue_processing(
         &mut self,
         measurements: ByteMessage,
-    ) -> Result<pecos::prelude::EngineStage<ByteMessage, ShotResult>, PecosError> {
+    ) -> Result<pecos::prelude::EngineStage<ByteMessage, Shot>, PecosError> {
         // Handle received measurements
         self.handle_measurements(measurements)?;
 
@@ -1172,7 +1222,7 @@ impl ControlEngine for PHIREngine {
 
 impl Engine for PHIREngine {
     type Input = ();
-    type Output = ShotResult;
+    type Output = Shot;
 
     fn process(&mut self, _input: Self::Input) -> Result<Self::Output, PecosError> {
         // Reset the engine state using the Engine trait's reset method explicitly

@@ -96,35 +96,6 @@ impl std::str::FromStr for SimulatorType {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
-enum OutputFormatType {
-    /// Pretty-printed JSON with indentation
-    Json,
-    /// Compact JSON without extra whitespace
-    CompactJson,
-    /// Compact JSON with each register on a new line
-    #[default]
-    PrettyCompact,
-    /// Format showing frequencies of each outcome
-    Frequency,
-}
-
-impl std::str::FromStr for OutputFormatType {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "json" | "pretty" => Ok(OutputFormatType::Json),
-            "compact" => Ok(OutputFormatType::CompactJson),
-            "pretty-compact" | "prettycompact" | "line" => Ok(OutputFormatType::PrettyCompact),
-            "freq" | "frequency" => Ok(OutputFormatType::Frequency),
-            _ => Err(format!(
-                "Unknown output format: {s}. Valid options are 'json', 'compact', 'pretty-compact', or 'frequency'"
-            )),
-        }
-    }
-}
-
 #[derive(Args, Clone)]
 struct RunArgs {
     /// Path to the quantum program (LLVM IR, JSON, or QASM)
@@ -164,19 +135,6 @@ struct RunArgs {
     /// Seed for random number generation (for reproducible results)
     #[arg(short = 'd', long)]
     seed: Option<u64>,
-
-    /// Output format: pretty-compact, json, compact, or frequency
-    /// - pretty-compact: Compact JSON with each register on a new line (default)
-    /// - json: Pretty-printed JSON with full indentation
-    /// - compact: Compact JSON without any whitespace
-    /// - frequency: Format showing frequencies of each outcome
-    #[arg(
-        short = 'f',
-        long = "format",
-        value_parser,
-        default_value = "pretty-compact"
-    )]
-    output_format: OutputFormatType,
 
     /// Output file path to write results to
     /// If not specified, results will be printed to stdout
@@ -349,16 +307,8 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
         quantum_engine,
     )?;
 
-    // Convert CLI format to engine format
-    let format = match args.output_format {
-        OutputFormatType::Json => OutputFormat::PrettyJson,
-        OutputFormatType::CompactJson => OutputFormat::CompactJson,
-        OutputFormatType::PrettyCompact => OutputFormat::PrettyCompactJson,
-        OutputFormatType::Frequency => OutputFormat::Frequency,
-    };
-
-    // Format the results as a string
-    let results_str = results.to_string_with_format(format);
+    // Format the results as compact JSON string
+    let results_str = results.to_compact_json();
 
     // Either write to the specified output file or print to stdout
     match &args.output_file {
@@ -444,7 +394,6 @@ mod tests {
                 assert_eq!(args.workers, 2);
                 assert_eq!(args.noise_model, NoiseModelType::Depolarizing); // Default
                 assert_eq!(args.simulator, SimulatorType::StateVector); // Default
-                assert_eq!(args.output_format, OutputFormatType::PrettyCompact); // Default
                 assert_eq!(args.output_file, None); // Default
             }
             Commands::Compile(_) => panic!("Expected Run command"),
@@ -462,7 +411,6 @@ mod tests {
                 assert_eq!(args.workers, 2);
                 assert_eq!(args.noise_model, NoiseModelType::Depolarizing); // Default
                 assert_eq!(args.simulator, SimulatorType::StateVector); // Default
-                assert_eq!(args.output_format, OutputFormatType::PrettyCompact); // Default
                 assert_eq!(args.output_file, None); // Default
             }
             Commands::Compile(_) => panic!("Expected Run command"),
@@ -492,7 +440,6 @@ mod tests {
                     args.noise_probability,
                     Some("0.01,0.02,0.03,0.04,0.05".to_string())
                 );
-                assert_eq!(args.output_format, OutputFormatType::PrettyCompact); // Default
                 assert_eq!(args.output_file, None); // Default
             }
             Commands::Compile(_) => panic!("Expected Run command"),
@@ -521,51 +468,6 @@ mod tests {
                 );
             }
             Commands::Compile(_) => panic!("Expected Run command"),
-        }
-    }
-
-    #[test]
-    fn verify_cli_format_options() {
-        // Test each format option to ensure it parses correctly
-
-        // Pretty Compact (default)
-        let cmd = Cli::parse_from(["pecos", "run", "program.json", "-f", "pretty-compact"]);
-        if let Commands::Run(args) = cmd.command {
-            assert_eq!(args.output_format, OutputFormatType::PrettyCompact);
-        } else {
-            panic!("Expected Run command");
-        }
-
-        // Alternative aliases for Pretty Compact
-        let cmd = Cli::parse_from(["pecos", "run", "program.json", "-f", "line"]);
-        if let Commands::Run(args) = cmd.command {
-            assert_eq!(args.output_format, OutputFormatType::PrettyCompact);
-        } else {
-            panic!("Expected Run command");
-        }
-
-        // JSON
-        let cmd = Cli::parse_from(["pecos", "run", "program.json", "-f", "json"]);
-        if let Commands::Run(args) = cmd.command {
-            assert_eq!(args.output_format, OutputFormatType::Json);
-        } else {
-            panic!("Expected Run command");
-        }
-
-        // Compact JSON
-        let cmd = Cli::parse_from(["pecos", "run", "program.json", "-f", "compact"]);
-        if let Commands::Run(args) = cmd.command {
-            assert_eq!(args.output_format, OutputFormatType::CompactJson);
-        } else {
-            panic!("Expected Run command");
-        }
-
-        // Frequency format
-        let cmd = Cli::parse_from(["pecos", "run", "program.json", "-f", "freq"]);
-        if let Commands::Run(args) = cmd.command {
-            assert_eq!(args.output_format, OutputFormatType::Frequency);
-        } else {
-            panic!("Expected Run command");
         }
     }
 
