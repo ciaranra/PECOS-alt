@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import TypedDict
 
 # JSON-like types for gate parameters and metadata
-JSONValue = str | int | float | bool | None | dict[str, "JSONValue"] | list["JSONValue"]
+JSONValue = str | int | float | bool | dict[str, "JSONValue"] | list["JSONValue"] | None
 JSONDict = dict[str, JSONValue]
 
 # Gate parameter type - used for **params in various gate operations

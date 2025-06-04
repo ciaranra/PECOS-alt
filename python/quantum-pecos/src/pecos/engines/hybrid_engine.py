@@ -40,7 +40,7 @@ if TYPE_CHECKING:
         OpProcessorProtocol,
     )
     from pecos.reps.pypmir import PyPMIR
-    from pecos.type_defs import GateParams
+    from pecos.typing import GateParams
 
 
 class PHIRConvertible(Protocol):

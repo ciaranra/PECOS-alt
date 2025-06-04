@@ -59,7 +59,7 @@ class Block(Node):
                 yield op
 
     def iter(self):
-        yield from self.__iter__()
+        yield from iter(self)
 
     def gen(self, target: object | str, *, add_versions=True):
         if isinstance(target, str):

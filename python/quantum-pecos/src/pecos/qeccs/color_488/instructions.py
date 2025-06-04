@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 from pecos.circuits.quantum_circuit import QuantumCircuit
 from pecos.qeccs.default_logical_instruction import DefaultLogicalInstruction
 from pecos.qeccs.helper_functions import pos2qudit
-from pecos.type_defs import QECCInstrParams
+from pecos.typing import QECCInstrParams
 
 if TYPE_CHECKING:
     from pecos.protocols import QECCProtocol

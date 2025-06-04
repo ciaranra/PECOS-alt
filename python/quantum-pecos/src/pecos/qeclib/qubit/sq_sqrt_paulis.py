@@ -36,13 +36,11 @@ class SY(QGate):
     """
 
 
-
 class SZ(QGate):
     """Square root of Pauli Z gate (S gate).
 
     This gate performs a π/2 rotation around the Z-axis.
     """
-
 
 
 S = SZ
@@ -55,7 +53,6 @@ class SXdg(QGate):
     """
 
 
-
 class SYdg(QGate):
     """Inverse square root of Pauli Y gate.
 
@@ -63,13 +60,11 @@ class SYdg(QGate):
     """
 
 
-
 class SZdg(QGate):
     """Inverse square root of Pauli Z gate (S-dagger gate).
 
     This gate performs a -π/2 rotation around the Z-axis.
     """
-
 
 
 Sdg = SZdg

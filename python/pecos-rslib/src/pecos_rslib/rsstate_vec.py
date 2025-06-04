@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, List
 from pecos_rslib._pecos_rslib import RsStateVec as RustStateVec
 
 if TYPE_CHECKING:
-    from pecos.type_defs import SimulatorGateParams
+    from pecos.typing import SimulatorGateParams
 
 
 class StateVecRs:
@@ -34,6 +34,7 @@ class StateVecRs:
     A high-performance quantum state vector simulator implemented in Rust, providing efficient simulation of arbitrary
     quantum circuits with full quantum state representation and support for complex quantum operations.
     """
+
     def __init__(self, num_qubits: int):
         """
         Initializes the Rust-backed state vector simulator.
@@ -108,7 +109,9 @@ class StateVecRs:
 
                 # Convert list to tuple if needed (for Rust bindings compatibility)
                 if isinstance(location, list):
-                    location = tuple(location)  # noqa: PLW2901 # Necessary conversion for Rust bindings
+                    location = tuple(
+                        location
+                    )  # noqa: PLW2901 # Necessary conversion for Rust bindings
 
                 if symbol in self.bindings:
                     results = self.bindings[symbol](self, location, **params)

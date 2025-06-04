@@ -2,6 +2,7 @@
 
 This package provides a simulator that ignores quantum gates and uses coin tosses for measurements.
 """
+
 # Copyright 2023 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

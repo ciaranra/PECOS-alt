@@ -26,7 +26,7 @@ from pecos.simulators.qulacs.gates_one_qubit import SZ, H, SZdg
 
 if TYPE_CHECKING:
     from pecos.simulators.qulacs import Qulacs
-    from pecos.type_defs import SimulatorGateParams
+    from pecos.typing import SimulatorGateParams
 
 
 def CX(state: Qulacs, qubits: tuple[int, int], **_params: SimulatorGateParams) -> None:

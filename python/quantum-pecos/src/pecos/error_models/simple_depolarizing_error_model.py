@@ -123,7 +123,7 @@ class SimpleDepolarizingErrorModel:
 
             # ########################################
             # INITS WITH X NOISE
-            if op.name in ["init |0>", "Init", "Init +Z"]:
+            if op.name in {"init |0>", "Init", "Init +Z"}:
                 erroneous_ops = [op]
                 rand_nums = np.random.random(len(op.args)) <= self._eparams["p_init"]
 
@@ -168,7 +168,7 @@ class SimpleDepolarizingErrorModel:
 
             # ########################################
             # MEASURE X NOISE
-            elif op.name in ["measure Z", "Measure", "Measure +Z"]:
+            elif op.name in {"measure Z", "Measure", "Measure +Z"}:
                 erroneous_ops = []
                 rand_nums = np.random.random(len(op.args)) <= self._eparams["p_meas"]
 

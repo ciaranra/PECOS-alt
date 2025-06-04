@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, NoReturn
 from pecos_rslib._pecos_rslib import SparseSim as RustSparseSim
 
 if TYPE_CHECKING:
-    from pecos.type_defs import SimulatorGateParams
+    from pecos.typing import SimulatorGateParams
 
 
 class SparseSimRs:
@@ -34,6 +34,7 @@ class SparseSimRs:
     A high-performance sparse stabilizer simulator implemented in Rust, providing efficient simulation of quantum
     circuits that can be represented using the stabilizer formalism with reduced memory requirements.
     """
+
     def __init__(self, num_qubits: int):
         """Initialize the Rust-based sparse simulator.
 

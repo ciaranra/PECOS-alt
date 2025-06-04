@@ -93,7 +93,7 @@ class QGate(metaclass=ABCMeta):
         Args:
             *qargs: Variable number of qubits to add.
         """
-        self.__call__(qargs)
+        self(*qargs)
 
     def __call__(self, *qargs: Qubit) -> Self:
         """Create a new gate instance with specified qubits.

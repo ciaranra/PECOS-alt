@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 
 from pecos.qeccs.default_logical_gate import DefaultLogicalGate
 from pecos.qeccs.helper_functions import expected_params
-from pecos.type_defs import QECCGateParams
+from pecos.typing import QECCGateParams
 
 if TYPE_CHECKING:
     from pecos.protocols import QECCProtocol

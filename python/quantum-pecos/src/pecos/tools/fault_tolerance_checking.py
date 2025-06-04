@@ -29,7 +29,7 @@ from pecos.simulators import SparseSim
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Sequence
 
-    from pecos.type_defs import FaultDict, SpacetimeLocation
+    from pecos.typing import FaultDict, SpacetimeLocation
 
 
 def find_pauli_fault(

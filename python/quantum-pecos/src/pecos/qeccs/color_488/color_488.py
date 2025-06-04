@@ -26,7 +26,7 @@ from pecos.qeccs.color_488.instructions import (
     InstrSynExtraction,
 )
 from pecos.qeccs.default_qecc import DefaultQECC
-from pecos.type_defs import QECCParams
+from pecos.typing import QECCParams
 
 
 class Color488(DefaultQECC):

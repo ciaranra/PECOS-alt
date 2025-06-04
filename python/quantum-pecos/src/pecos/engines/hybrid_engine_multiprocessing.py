@@ -146,7 +146,6 @@ class MultisimError(Exception):
     """
 
 
-
 def worker_wrapper(
     args: tuple[SyncManager.Queue, Callable[..., dict], dict[str, Any], int],
 ) -> tuple[dict, dict]:

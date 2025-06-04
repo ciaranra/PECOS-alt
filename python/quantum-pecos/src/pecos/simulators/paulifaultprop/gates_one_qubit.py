@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pecos.simulators.paulifaultprop.state import PauliFaultProp
-    from pecos.type_defs import SimulatorGateParams
+    from pecos.typing import SimulatorGateParams
 
 
 def switch(

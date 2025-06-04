@@ -172,7 +172,7 @@ def sim_exec(
     func: str,
     runner: Runner,
     *args: Any,  # noqa: ANN401 - Dynamic dispatch requires Any
-) -> None | int | dict[str, Any]:
+) -> int | dict[str, Any] | None:
     """Execute a simulation function by name.
 
     Dispatches to the appropriate simulation function based on the function name,

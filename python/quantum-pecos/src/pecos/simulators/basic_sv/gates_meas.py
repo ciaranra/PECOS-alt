@@ -23,7 +23,7 @@ import numpy as np
 
 if TYPE_CHECKING:
     from pecos.simulators.basic_sv.state import BasicSV
-    from pecos.type_defs import SimulatorGateParams
+    from pecos.typing import SimulatorGateParams
 
 
 def meas_z(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> int:
@@ -88,8 +88,8 @@ def meas_z(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> int:
 
     # Normalise
     if result == 0:
-        state.internal_vector = state.internal_vector / np.sqrt(prob_0)
+        state.internal_vector /= np.sqrt(prob_0)
     else:
-        state.internal_vector = state.internal_vector / np.sqrt(1 - prob_0)
+        state.internal_vector /= np.sqrt(1 - prob_0)
 
     return result

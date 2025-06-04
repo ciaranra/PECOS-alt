@@ -31,7 +31,7 @@ def sim_name_resolver(qop: QOp) -> str:
 
     if qop.name == "RZZ":
         (theta,) = qop.angles
-        theta = theta % (2 * np.pi)
+        theta %= 2 * np.pi
 
         if np.isclose(theta, np.pi / 2, atol=1e-12):
             return "SZZ"

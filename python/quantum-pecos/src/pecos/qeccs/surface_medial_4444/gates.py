@@ -27,7 +27,7 @@ from pecos.qeccs.helper_functions import expected_params
 
 if TYPE_CHECKING:
     from pecos.protocols import QECCProtocol
-    from pecos.type_defs import QECCGateParams
+    from pecos.typing import QECCGateParams
 
 
 class GateIdentity(DefaultLogicalGate):

@@ -24,4 +24,3 @@ class CH(TQGate):
 
     This gate applies a Hadamard gate to the target qubit if the control qubit is in state |1⟩.
     """
-

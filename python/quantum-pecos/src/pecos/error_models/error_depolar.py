@@ -36,7 +36,7 @@ from pecos.error_models.noise_impl_old.tq_noise import (
 from pecos.error_models.parent_class_error_gen import ParentErrorModel
 
 if TYPE_CHECKING:
-    from pecos.type_defs import ErrorParams, GateParams, OutputDict
+    from pecos.typing import ErrorParams, GateParams, OutputDict
 
 
 class DepolarizingErrorModel(ParentErrorModel):

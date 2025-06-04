@@ -125,7 +125,7 @@ class QASMGenerator:
             stat = True
             op_str = self.process_set(op)
 
-        elif op_name in [
+        elif op_name in {
             "EQUIV",
             "NEQUIV",
             "LT",
@@ -141,19 +141,19 @@ class QASMGenerator:
             "MINUS",
             "RSHIFT",
             "LSHIFT",
-        ]:
+        }:
             op_str = self.process_general_binary_op(op)
 
-        elif op_name in ["NEG", "NOT"]:
+        elif op_name in {"NEG", "NOT"}:
             op_str = self.process_general_unary_op(op)
 
         elif op_name == "Vars":
             op_str = None
 
-        elif op_name in ["CReg", "QReg"]:
+        elif op_name in {"CReg", "QReg"}:
             op_str = str(op.sym)
 
-        elif op_name in ["Bit", "Qubit"]:
+        elif op_name in {"Bit", "Qubit"}:
             op_str = f"{op.reg.sym}[{op.index}]"
 
         elif isinstance(op, int):
@@ -181,10 +181,10 @@ class QASMGenerator:
             op_list = op_str.split("\n")
             op_new = []
             for o in op_list:
-                o = o.strip()  # noqa: PLW2901 - clean whitespace
+                o = o.strip()
                 if o != "" and not o.startswith("//"):
                     for qi in o.split(";"):
-                        qi = qi.strip()  # noqa: PLW2901 - clean whitespace
+                        qi = qi.strip()
                         if qi != "" and not qi.startswith("//"):
                             op_new.append(f"if({cond}) {qi};")
                 else:

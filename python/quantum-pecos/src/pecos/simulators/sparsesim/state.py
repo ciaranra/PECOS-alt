@@ -49,7 +49,7 @@ from pecos.simulators.sparsesim.refactor import refactor as refactor_generators
 
 if TYPE_CHECKING:
     from pecos.circuits import QuantumCircuit
-    from pecos.type_defs import SimulatorGateParams
+    from pecos.typing import SimulatorGateParams
 
 
 class SparseSim(Stabilizer):
