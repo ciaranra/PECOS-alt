@@ -2384,9 +2384,9 @@ mod tests {
             "X should not be a noiseless gate"
         );
 
-        let msg =
-            ByteMessage::create_circuit_from_quantum_gates(&[rz_gate.clone(), x_gate.clone()])
-                .expect("Something when wrong in the construction of a circuit");
+        let mut builder = ByteMessage::quantum_operations_builder();
+        builder.add_gate_commands(&[rz_gate.clone(), x_gate.clone()]);
+        let msg = builder.build();
 
         // Apply noise to the gates manually since we can't access apply_noise_to_gates directly
         let message = noise.apply_noise_on_start(&msg).unwrap();

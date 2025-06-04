@@ -263,6 +263,33 @@ impl ByteMessageBuilder {
         self
     }
 
+    /// Add idle operations for specified qubits for a given duration
+    ///
+    /// # Arguments
+    ///
+    /// * `duration` - The duration of the idle period in seconds
+    /// * `qubits` - The qubits that are idling
+    ///
+    /// # Returns
+    ///
+    /// A mutable reference to self for method chaining
+    pub fn add_idle(&mut self, duration: f64, qubits: &[usize]) -> &mut Self {
+        // Ensure we have qubits to work with
+        if qubits.is_empty() {
+            return self;
+        }
+
+        let mut idle_qubits = Vec::with_capacity(qubits.len());
+        for &q in qubits {
+            idle_qubits.push(q);
+        }
+
+        // Create and add the idle gate
+        let idle_qubits_id: Vec<QubitId> = idle_qubits.into_iter().map(QubitId).collect();
+        let gate = Gate::idle(duration, idle_qubits_id);
+        self.add_gate_command(&gate)
+    }
+
     /// Add an X gate
     pub fn add_x(&mut self, qubits: &[usize]) -> &mut Self {
         let gate = Gate::x(qubits);
@@ -460,29 +487,6 @@ impl ByteMessageBuilder {
         self.add_message(MessageType::RecordData, &payload, MessageFlags::NONE)
     }
 
-    /// Add an info message
-    pub fn add_info_message(&mut self, msg: &str) -> &mut Self {
-        self.add_message(MessageType::InfoMessage, msg.as_bytes(), MessageFlags::NONE)
-    }
-
-    /// Add a warning message
-    pub fn add_warning_message(&mut self, msg: &str) -> &mut Self {
-        self.add_message(
-            MessageType::WarningMessage,
-            msg.as_bytes(),
-            MessageFlags::NONE,
-        )
-    }
-
-    /// Add an error message
-    pub fn add_error_message(&mut self, msg: &str) -> &mut Self {
-        self.add_message(
-            MessageType::ErrorMessage,
-            msg.as_bytes(),
-            MessageFlags::ERROR,
-        )
-    }
-
     /// Add a debug message
     pub fn add_debug_message(&mut self, msg: &str) -> &mut Self {
         self.add_message(
@@ -621,33 +625,6 @@ impl ByteMessageBuilder {
         }
 
         self.build_unchecked()
-    }
-
-    /// Add idle operations for specified qubits for a given duration
-    ///
-    /// # Arguments
-    ///
-    /// * `duration` - The duration of the idle period in seconds
-    /// * `qubits` - The qubits that are idling
-    ///
-    /// # Returns
-    ///
-    /// A mutable reference to self for method chaining
-    pub fn add_idle(&mut self, duration: f64, qubits: &[usize]) -> &mut Self {
-        // Ensure we have qubits to work with
-        if qubits.is_empty() {
-            return self;
-        }
-
-        let mut idle_qubits = Vec::with_capacity(qubits.len());
-        for &q in qubits {
-            idle_qubits.push(q);
-        }
-
-        // Create and add the idle gate
-        let idle_qubits_id: Vec<QubitId> = idle_qubits.into_iter().map(QubitId).collect();
-        let gate = Gate::idle(duration, idle_qubits_id);
-        self.add_gate_command(&gate)
     }
 }
 
