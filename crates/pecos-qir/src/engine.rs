@@ -160,14 +160,34 @@ impl QirEngine {
         // Clean up any existing library
         self.reset_internal_state();
 
-        // Create a unique temporary directory for this thread
+        // Create a unique temporary directory for this thread with more randomness
         let thread_id = get_thread_id();
-        let temp_dir =
-            std::env::temp_dir().join(format!("qir_{}_{}", std::process::id(), thread_id));
-        if !temp_dir.exists() {
-            std::fs::create_dir_all(&temp_dir)
-                .map_err(|e| Self::log_error("Failed to create temp directory", e))?;
+        // Add timestamp for additional uniqueness across multiple test runs
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+
+        // Use timestamp as a unique identifier - no external dependencies needed
+        let temp_dir = std::env::temp_dir().join(format!(
+            "qir_{}_{}_{}",
+            std::process::id(),
+            thread_id,
+            timestamp
+        ));
+
+        debug!("QIR: Creating unique temporary directory at {:?}", temp_dir);
+
+        // Ensure the directory is clean by removing it if it exists
+        if temp_dir.exists() {
+            debug!("QIR: Temporary directory already exists, removing it first");
+            std::fs::remove_dir_all(&temp_dir)
+                .map_err(|e| Self::log_error("Failed to clean existing temp directory", e))?;
         }
+
+        // Create the directory
+        std::fs::create_dir_all(&temp_dir)
+            .map_err(|e| Self::log_error("Failed to create temp directory", e))?;
 
         // Check if we already have a library path from a previous compilation
         let library_path = if let Some(ref library_path) = self.library_path {
@@ -176,15 +196,69 @@ impl QirEngine {
                 library_path
             );
 
-            // Create a thread-specific copy of the library
-            let thread_specific_path = temp_dir.join(format!("lib_thread_{thread_id}.so"));
+            // Create a thread-specific copy of the library with platform-specific extension
+            let extension = if cfg!(target_os = "windows") {
+                "dll"
+            } else if cfg!(target_os = "macos") {
+                "dylib"
+            } else {
+                "so"
+            };
 
-            // Copy the library to the thread-specific path
+            let thread_specific_path = temp_dir.join(format!("lib_thread_{thread_id}.{extension}"));
+
+            debug!(
+                "QIR: Thread-specific library path: {:?}",
+                thread_specific_path
+            );
+
+            // Copy the library to the thread-specific path with verification
             if library_path.exists() {
+                // Verify source file is valid before copying
+                let metadata = std::fs::metadata(library_path)
+                    .map_err(|e| Self::log_error("Failed to get metadata for source library", e))?;
+
+                if !metadata.is_file() {
+                    return Err(Self::log_error(
+                        "Source library is not a regular file",
+                        format!("Path: {}", library_path.display()),
+                    ));
+                }
+
+                let file_size = metadata.len();
+                if file_size < 1024 {
+                    return Err(Self::log_error(
+                        "Source library file is too small to be valid",
+                        format!(
+                            "Path: {} (size: {} bytes)",
+                            library_path.display(),
+                            file_size
+                        ),
+                    ));
+                }
+
+                // Copy the file
+                debug!(
+                    "QIR: Copying library from {:?} to {:?}",
+                    library_path, thread_specific_path
+                );
                 std::fs::copy(library_path, &thread_specific_path).map_err(|e| {
                     Self::log_error("Failed to copy library to thread-specific path", e)
                 })?;
 
+                // Verify the copied file
+                let copied_metadata = std::fs::metadata(&thread_specific_path)
+                    .map_err(|e| Self::log_error("Failed to get metadata for copied library", e))?;
+
+                let copied_size = copied_metadata.len();
+                if copied_size != file_size {
+                    return Err(Self::log_error(
+                        "Copied library file size mismatch",
+                        format!("Expected: {file_size} bytes, Got: {copied_size} bytes"),
+                    ));
+                }
+
+                debug!("QIR: Successfully copied library ({} bytes)", copied_size);
                 thread_specific_path
             } else {
                 // If the library doesn't exist, compile it

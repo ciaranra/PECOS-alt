@@ -16,6 +16,51 @@ use pecos::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::Mutex;
+use std::sync::Once;
+use std::time::Duration;
+
+// Create a static mutex to ensure tests run sequentially
+// This prevents race conditions when multiple tests try to access shared resources
+static TEST_MUTEX: Mutex<()> = Mutex::new(());
+
+// Static variable for test initialization
+static INIT: Once = Once::new();
+
+// Setup function for cleaning up any leftover files from previous test runs
+fn setup() {
+    // Run this initialization only once, for all tests
+    INIT.call_once(|| {
+        println!("Initializing QIR test environment...");
+
+        // Clean up any temporary directories from previous test runs
+        let temp_dir = std::env::temp_dir();
+        let entries = match std::fs::read_dir(&temp_dir) {
+            Ok(entries) => entries,
+            Err(e) => {
+                println!("Warning: Could not read temporary directory: {e}");
+                return;
+            }
+        };
+
+        // Use flatten() to simplify the iterator chain and handle Result automatically
+        for entry in entries.flatten() {
+            let path = entry.path();
+            // Use and_then to chain Optional operations cleanly
+            if let Some(name) = path.file_name().and_then(|f| f.to_str()) {
+                // Only remove directories that match our QIR pattern
+                if name.starts_with("qir_") && path.is_dir() {
+                    println!("Cleaning up old temporary directory: {}", path.display());
+                    let _ = std::fs::remove_dir_all(path);
+                }
+            }
+        }
+
+        // Give file system operations time to complete
+        std::thread::sleep(Duration::from_millis(500));
+        println!("Test environment initialized");
+    });
+}
 
 /// Helper function to run PECOS CLI with given parameters
 fn run_pecos(
@@ -26,6 +71,8 @@ fn run_pecos(
     noise_prob: &str,
     seed: u64,
 ) -> Result<String, Box<dyn std::error::Error>> {
+    // Add a small delay between test executions to prevent potential file system races
+    std::thread::sleep(Duration::from_millis(100));
     let mut cmd = Command::cargo_bin("pecos")?;
     cmd.env("RUST_LOG", "info")
         .arg("run")
@@ -98,6 +145,10 @@ fn get_values(json_output: &str) -> Vec<String> {
 /// Test that QIR Bell state produces correct 50/50 distribution
 #[test]
 fn test_qir_bell_state_distribution() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize test environment and acquire lock to ensure sequential execution
+    setup();
+    let _lock = TEST_MUTEX.lock().unwrap();
+    println!("Running QIR Bell state distribution test (sequential execution)...");
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let bell_qir_path = manifest_dir.join("../../examples/qir/bell.ll");
 
@@ -189,6 +240,10 @@ fn test_qir_bell_state_distribution() -> Result<(), Box<dyn std::error::Error>> 
 /// Test that QIR produces deterministic results with the same seed
 #[test]
 fn test_qir_determinism() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize test environment and acquire lock to ensure sequential execution
+    setup();
+    let _lock = TEST_MUTEX.lock().unwrap();
+    println!("Running QIR determinism test (sequential execution)...");
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let bell_qir_path = manifest_dir.join("../../examples/qir/bell.ll");
 
@@ -226,6 +281,10 @@ fn test_qir_determinism() -> Result<(), Box<dyn std::error::Error>> {
 /// Test QIR compilation and execution
 #[test]
 fn test_qir_compile_and_run() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize test environment and acquire lock to ensure sequential execution
+    setup();
+    let _lock = TEST_MUTEX.lock().unwrap();
+    println!("Running QIR compilation and execution test (sequential execution)...");
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let test_file = manifest_dir.join("../../examples/qir/qprog.ll");
 
@@ -283,6 +342,10 @@ fn test_qir_compile_and_run() -> Result<(), Box<dyn std::error::Error>> {
 /// Test QIR with various shot counts
 #[test]
 fn test_qir_shot_counts() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize test environment and acquire lock to ensure sequential execution
+    setup();
+    let _lock = TEST_MUTEX.lock().unwrap();
+    println!("Running QIR shot counts test (sequential execution)...");
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let bell_qir_path = manifest_dir.join("../../examples/qir/bell.ll");
 
@@ -328,6 +391,10 @@ fn test_qir_shot_counts() -> Result<(), Box<dyn std::error::Error>> {
 /// Test QIR with multiple workers
 #[test]
 fn test_qir_multiple_workers() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize test environment and acquire lock to ensure sequential execution
+    setup();
+    let _lock = TEST_MUTEX.lock().unwrap();
+    println!("Running QIR multi-worker test (sequential execution)...");
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let bell_qir_path = manifest_dir.join("../../examples/qir/bell.ll");
 

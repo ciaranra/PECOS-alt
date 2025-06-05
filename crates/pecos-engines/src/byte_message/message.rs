@@ -45,6 +45,12 @@ impl ByteMessage {
         Self { data, byte_len }
     }
 
+    /// Create a new message builder
+    #[must_use]
+    pub fn builder() -> ByteMessageBuilder {
+        ByteMessageBuilder::new()
+    }
+
     /// Create a new `ByteMessage` from already-aligned u32 data
     ///
     /// This method is used when receiving data from FFI boundaries where
@@ -74,12 +80,6 @@ impl ByteMessage {
 
         let all_bytes = bytemuck::cast_slice::<u32, u8>(&self.data);
         all_bytes[..self.byte_len].to_vec()
-    }
-
-    /// Create a new message builder
-    #[must_use]
-    pub fn builder() -> ByteMessageBuilder {
-        ByteMessageBuilder::new()
     }
 
     /// Create a new message builder pre-configured for quantum operations
