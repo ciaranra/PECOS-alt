@@ -219,6 +219,44 @@ fn test_evaluation_accuracy() {
     assert!((expr.evaluate(None).unwrap() - 2.0).abs() < 1e-10);
 }
 
+
+#[test]
+fn test_simple_rx_pi() {
+    use pecos_engines::{MonteCarloEngine, PassThroughNoiseModel};
+    use pecos_qasm::QASMEngine;
+    use std::str::FromStr;
+
+    // Simple test: rx(pi) should flip the qubit
+    let qasm = r#"
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[1];
+        creg c[1];
+
+        rx(pi) q[0];
+        measure q[0] -> c[0];
+    "#;
+
+    let engine = QASMEngine::from_str(qasm).unwrap();
+    let results = MonteCarloEngine::run_with_noise_model(
+        Box::new(engine),
+        Box::new(PassThroughNoiseModel),
+        10,
+        1,
+        Some(42),
+    )
+    .unwrap();
+
+    for shot in &results.shots {
+        let value = shot
+            .data
+            .get("c")
+            .and_then(pecos_engines::prelude::Data::as_u32)
+            .expect("c register should be convertible to u32");
+        assert_eq!(value, 1, "rx(pi) should flip qubit to |1⟩");
+    }
+}
+
 #[test]
 fn test_trig_identity_with_measurement() {
     use pecos_engines::{MonteCarloEngine, PassThroughNoiseModel};
@@ -240,6 +278,10 @@ fn test_trig_identity_with_measurement() {
         measure q[0] -> c[0];
     "#;
 
+    // Parse and check the expression before running
+    let _program = QASMParser::parse_str(qasm).expect("Failed to parse QASM");
+    
+    
     // Run the simulation with multiple shots
     let engine = QASMEngine::from_str(qasm).unwrap();
 
@@ -323,8 +365,6 @@ fn test_trig_identity_various_angles() {
                 "Expected all measurements to be 1 for angle {angle} after rx(π)"
             );
         }
-
-        println!("Trigonometric identity verified for angle {angle}: all measurements are 1");
     }
 }
 
