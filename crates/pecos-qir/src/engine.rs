@@ -63,6 +63,9 @@ pub struct QirEngine {
 
     /// Configuration options for the engine
     config: QirEngineConfig,
+    
+    /// Entry point function name (detected from QIR file)
+    entry_point: Option<String>,
 }
 
 impl QirEngine {
@@ -92,6 +95,7 @@ impl QirEngine {
             commands_generated: false,
             shot_count: 0,
             config: QirEngineConfig::default(),
+            entry_point: None,
         }
     }
 
@@ -119,6 +123,7 @@ impl QirEngine {
             commands_generated: false,
             shot_count: 0,
             config,
+            entry_point: None,
         }
     }
 
@@ -394,6 +399,23 @@ impl QirEngine {
         let library_path = QirLinker::compile(&self.qir_file, None)
             .map_err(|e| PecosError::Processing(format!("Failed to compile QIR program: {e}")))?;
 
+        // Detect the entry point from the QIR file
+        use crate::qir_utils::find_entry_point;
+        match find_entry_point(&self.qir_file) {
+            Ok(Some(entry_point)) => {
+                debug!("QIR: Detected entry point function: {}", entry_point);
+                self.entry_point = Some(entry_point);
+            }
+            Ok(None) => {
+                debug!("QIR: No entry point found, will default to 'main'");
+                self.entry_point = None;
+            }
+            Err(e) => {
+                debug!("QIR: Failed to detect entry point: {}, will default to 'main'", e);
+                self.entry_point = None;
+            }
+        }
+
         // Store the library path
         self.library_path = Some(library_path.clone());
 
@@ -435,14 +457,32 @@ impl QirEngine {
             }
         }
 
-        // Call the main function in the library
-        library.call_function(b"main").map_err(|e| {
+        // Find and call the entry point function
+        // First check if we already know the entry point for this program
+        let entry_point = if let Some(ref ep) = self.entry_point {
+            ep.clone()
+        } else {
+            // Try common entry point names
+            debug!("QIR: Looking for entry point function");
+            
+            // Try bell_state first (for HUGR), then main (standard QIR)
+            if library.has_function(b"bell_state").unwrap_or(false) {
+                debug!("QIR: Found bell_state function");
+                "bell_state".to_string()
+            } else {
+                debug!("QIR: Defaulting to main function");
+                "main".to_string()
+            }
+        };
+        
+        debug!("QIR: Calling entry point function: {}", entry_point);
+        library.call_function(entry_point.as_bytes()).map_err(|e| {
             // Special case for removed library files
             if e.to_string().contains("No such file or directory") {
                 debug!("QIR: Library file was already removed, continuing");
                 PecosError::Processing("Library file was already removed".to_string())
             } else {
-                Self::log_error("Failed to call main function", e)
+                Self::log_error(&format!("Failed to call {} function", entry_point), e)
             }
         })?;
 
@@ -716,6 +756,7 @@ impl Clone for QirEngine {
             commands_generated: false,   // Reset commands_generated flag
             shot_count: 0,               // Reset shot count
             config: self.config.clone(), // Keep the configuration
+            entry_point: self.entry_point.clone(), // Keep the detected entry point
         }
     }
 }

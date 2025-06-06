@@ -212,6 +212,23 @@ impl QirLibrary {
         ))
     }
 
+    /// Check if a function exists in the loaded library
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the function to check as a byte slice
+    ///
+    /// # Returns
+    ///
+    /// * `Result<bool, PecosError>` - True if function exists, false otherwise
+    pub fn has_function(&self, name: &[u8]) -> Result<bool, PecosError> {
+        let library_guard = self.library.lock().unwrap();
+        let result: Result<Symbol<unsafe extern "C" fn() -> i32>, _> = unsafe {
+            library_guard.get(name)
+        };
+        Ok(result.is_ok())
+    }
+
     /// Calls a function in the loaded library
     ///
     /// # Arguments
@@ -236,17 +253,23 @@ impl QirLibrary {
         unsafe {
             // Get the function pointer
             let library_guard = self.library.lock().unwrap();
-            let func: Symbol<unsafe extern "C" fn() -> i32> = library_guard
-                .get(name)
-                .map_err(|e| Self::log_error("Failed to get function", e))?;
-
-            // Call the function
-            let result = func();
-            debug!("QIR Library: Function call returned {}", result);
-
-            // Don't finalize the shot here - we need to wait for measurement results
-
-            Ok(result)
+            
+            // Try different function signatures
+            // First try standard QIR signature (returns i32)
+            if let Ok(func) = library_guard.get::<Symbol<unsafe extern "C" fn() -> i32>>(name) {
+                let result = func();
+                debug!("QIR Library: Function call returned {}", result);
+                Ok(result)
+            } 
+            // Try HUGR signature (returns tuple, but we'll treat as void)
+            else if let Ok(func) = library_guard.get::<Symbol<unsafe extern "C" fn()>>(name) {
+                func();
+                debug!("QIR Library: Function call completed (void return)");
+                Ok(0)
+            }
+            else {
+                Err(Self::log_error("Failed to get function", format!("Function {} not found", String::from_utf8_lossy(name))))
+            }
         }
     }
 

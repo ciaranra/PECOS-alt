@@ -4,6 +4,8 @@ pub mod linker; // Links QIR programs with runtime library
 pub mod platform;
 pub mod prelude;
 pub mod runtime;
+// pub mod hugr_compat; // HUGR compatibility layer (disabled due to signature conflicts)
+pub mod qir_utils; // QIR utilities for entry point detection
 
 // Internal modules for compilation
 pub(crate) mod runtime_builder; // Builds the static runtime library
