@@ -934,7 +934,21 @@ impl QASMEngine {
                                 index,
                                 expression,
                             } => {
-                                let value_expr = self.evaluate_expression_bitvec(expression)?;
+                                // Get target register size for width hint
+                                let target_width = if *is_indexed {
+                                    1 // Single bit assignment
+                                } else {
+                                    program
+                                        .classical_registers
+                                        .get(target.as_str())
+                                        .copied()
+                                        .unwrap_or(64)
+                                };
+
+                                let value_expr = self.evaluate_expression_bitvec_with_width(
+                                    expression,
+                                    target_width,
+                                )?;
 
                                 if *is_indexed {
                                     if let Some(idx) = *index {
@@ -946,8 +960,15 @@ impl QASMEngine {
                                 {
                                     let mut result_bitvec = value_expr.into_bitvec();
 
-                                    // Resize to the exact register size
-                                    result_bitvec.resize(*register_size, false);
+                                    // Sign extend when resizing (use the MSB as the sign bit)
+                                    let sign_bit = if result_bitvec.is_empty() {
+                                        false
+                                    } else {
+                                        result_bitvec[result_bitvec.len() - 1]
+                                    };
+
+                                    // Resize to the exact register size with sign extension
+                                    result_bitvec.resize(*register_size, sign_bit);
 
                                     debug!(
                                         "Setting register {} with BitVec of length {}",
@@ -979,7 +1000,19 @@ impl QASMEngine {
                         target, expression
                     );
 
-                    let value_expr = self.evaluate_expression_bitvec(expression)?;
+                    // Get target register size for width hint
+                    let target_width = if *is_indexed {
+                        1 // Single bit assignment
+                    } else {
+                        program
+                            .classical_registers
+                            .get(target.as_str())
+                            .copied()
+                            .unwrap_or(64)
+                    };
+
+                    let value_expr =
+                        self.evaluate_expression_bitvec_with_width(expression, target_width)?;
 
                     if *is_indexed {
                         if let Some(idx) = *index {
@@ -991,8 +1024,15 @@ impl QASMEngine {
                     {
                         let mut result_bitvec = value_expr.into_bitvec();
 
-                        // Resize to the exact register size
-                        result_bitvec.resize(*register_size, false);
+                        // Sign extend when resizing (use the MSB as the sign bit)
+                        let sign_bit = if result_bitvec.is_empty() {
+                            false
+                        } else {
+                            result_bitvec[result_bitvec.len() - 1]
+                        };
+
+                        // Resize to the exact register size with sign extension
+                        result_bitvec.resize(*register_size, sign_bit);
 
                         debug!(
                             "Setting register {} with BitVec of length {}",
@@ -1018,15 +1058,18 @@ impl QASMEngine {
 
     /// Evaluate an expression with `BitVec` support
     fn evaluate_expression_bitvec(&self, expr: &Expression) -> Result<ExpressionValue, PecosError> {
-        // Determine default width - use the largest register size or 64 bits
-        let default_width = self
-            .classical_registers
-            .values()
-            .map(bitvec::vec::BitVec::len)
-            .max()
-            .unwrap_or(64);
+        // For non-assignment contexts (like conditionals), let operands determine width
+        // by using 0 as the minimum width hint
+        evaluate_expression_bitvec(expr, self, 0)
+    }
 
-        evaluate_expression_bitvec(expr, self, default_width)
+    fn evaluate_expression_bitvec_with_width(
+        &self,
+        expr: &Expression,
+        target_width: usize,
+    ) -> Result<ExpressionValue, PecosError> {
+        // Use target width as hint for expression evaluation
+        evaluate_expression_bitvec(expr, self, target_width)
     }
 }
 

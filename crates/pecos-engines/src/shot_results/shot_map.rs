@@ -19,6 +19,7 @@ use pecos_core::errors::PecosError;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
+use std::fmt;
 
 /// A columnar representation of shot data.
 ///
@@ -818,6 +819,16 @@ impl ShotMap {
     }
 }
 
+// Implement Display for ShotMap that delegates to the display() method
+impl fmt::Display for ShotMap {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Import the extension trait to get the display() method
+        use crate::shot_results::shot_map_formatter::ShotMapDisplayExt;
+        // Delegate to the display formatter
+        write!(f, "{}", self.display())
+    }
+}
+
 // Implement IntoIterator for owned ShotMap
 impl IntoIterator for ShotMap {
     type Item = (String, DataVec);
@@ -860,6 +871,29 @@ mod tests {
         assert_eq!(shot_map.num_registers(), 2);
         assert!(shot_map.contains_register("a"));
         assert!(shot_map.contains_register("b"));
+    }
+
+    #[test]
+    fn test_display_impl() {
+        use crate::shot_results::shot_map_formatter::ShotMapDisplayExt;
+
+        let mut shot_vec = ShotVec::new();
+
+        let mut shot = Shot::default();
+        shot.add_register("q", 5, 3); // 5 = "101" with 3 bits
+        shot.data.insert("count".to_string(), Data::U32(42));
+        shot_vec.shots.push(shot);
+
+        let shot_map = shot_vec.try_as_shot_map().unwrap();
+
+        // Test that Display is implemented and works
+        let display_str = format!("{shot_map}");
+        assert!(display_str.contains("\"q\""));
+        assert!(display_str.contains("\"count\""));
+
+        // Verify it matches the explicit display() call
+        let explicit_display = format!("{}", shot_map.display());
+        assert_eq!(display_str, explicit_display);
     }
 
     #[test]

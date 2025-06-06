@@ -1,7 +1,11 @@
 // BitVec-based expression evaluation for arbitrary-precision arithmetic
 
 use crate::ast::Expression;
+use crate::parser::comparison::{
+    ComparisonContext, ComparisonResult, analyze_comparison, is_comparison_op,
+};
 use ::bitvec::prelude::*;
+use pecos_core::bitvec::comparison::compare_unsigned;
 use pecos_core::{bitvec, errors::PecosError};
 use std::cmp::Ordering;
 
@@ -86,9 +90,10 @@ pub fn evaluate_expression_bitvec(
         Expression::Integer(bitvec) => {
             // Clone the BitVec and resize to default width if needed
             let mut result = bitvec.clone();
-            if result.len() < default_width {
-                // For positive integers parsed from literals, don't sign extend
-                // The parser only creates positive BitVecs, negatives are UnaryOp
+            if result.len() < default_width && default_width > 0 {
+                // Integer literals are always positive (parsed from decimal strings)
+                // Negative numbers remain as UnaryOp nodes and are handled separately
+                // So we always zero-extend integer literals
                 result.resize(default_width, false);
             }
             Ok(ExpressionValue::BitVec(result))
@@ -151,6 +156,24 @@ fn evaluate_binary_op(
     context: &dyn BitVecExpressionContext,
     default_width: usize,
 ) -> Result<ExpressionValue, PecosError> {
+    // For comparison operations, check if we can resolve immediately based on signs
+    if is_comparison_op(op) {
+        let comparison_context = ComparisonContext {
+            left_expr: left,
+            right_expr: right,
+            register_context: Some(context),
+        };
+
+        match analyze_comparison(op, &comparison_context) {
+            ComparisonResult::Immediate(result) => {
+                return Ok(ExpressionValue::Bool(result));
+            }
+            ComparisonResult::RequiresEvaluation => {
+                // Fall through to normal evaluation
+            }
+        }
+    }
+
     let left_val = evaluate_expression_bitvec(left, context, default_width)?;
     let right_val = evaluate_expression_bitvec(right, context, default_width)?;
 
@@ -208,26 +231,34 @@ fn evaluate_binary_op(
         }
         "<" => {
             let (left_bv, right_bv) = to_same_width_bitvecs(left_val, right_val, default_width);
+            // Use unsigned comparison for same-sign numbers
+            // (cross-sign cases are handled above)
             Ok(ExpressionValue::Bool(
-                bitvec::compare(&left_bv, &right_bv) == Ordering::Less,
+                compare_unsigned(&left_bv, &right_bv) == Ordering::Less,
             ))
         }
         ">" => {
             let (left_bv, right_bv) = to_same_width_bitvecs(left_val, right_val, default_width);
+            // Use unsigned comparison for same-sign numbers
+            // (cross-sign cases are handled above)
             Ok(ExpressionValue::Bool(
-                bitvec::compare(&left_bv, &right_bv) == Ordering::Greater,
+                compare_unsigned(&left_bv, &right_bv) == Ordering::Greater,
             ))
         }
         "<=" => {
             let (left_bv, right_bv) = to_same_width_bitvecs(left_val, right_val, default_width);
-            let cmp = bitvec::compare(&left_bv, &right_bv);
+            // Use unsigned comparison for same-sign numbers
+            // (cross-sign cases are handled above)
+            let cmp = compare_unsigned(&left_bv, &right_bv);
             Ok(ExpressionValue::Bool(
                 cmp == Ordering::Less || cmp == Ordering::Equal,
             ))
         }
         ">=" => {
             let (left_bv, right_bv) = to_same_width_bitvecs(left_val, right_val, default_width);
-            let cmp = bitvec::compare(&left_bv, &right_bv);
+            // Use unsigned comparison for same-sign numbers
+            // (cross-sign cases are handled above)
+            let cmp = compare_unsigned(&left_bv, &right_bv);
             Ok(ExpressionValue::Bool(
                 cmp == Ordering::Greater || cmp == Ordering::Equal,
             ))

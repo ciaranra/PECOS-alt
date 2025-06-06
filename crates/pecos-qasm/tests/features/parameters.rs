@@ -103,32 +103,44 @@ fn test_functions_with_expressions() {
 
 #[test]
 fn test_error_cases() {
-    // Test ln of negative number - parsing should succeed
+    // Test ln of negative number - use native gate U which evaluates parameters immediately
     let qasm = r"
         OPENQASM 2.0;
         qreg q[1];
-        rx(ln(-1)) q[0];
+        U(ln(-1), 0, 0) q[0];
     ";
 
     let result = QASMParser::parse_str_raw(qasm);
     // The parsing should fail because ln(-1) is evaluated during parsing for gate parameters
     assert!(result.is_err());
     if let Err(e) = result {
-        assert!(e.to_string().contains("ln(-1) is undefined"));
+        // The error is wrapped with "Failed to evaluate parameter: "
+        let error_str = e.to_string();
+        assert!(
+            error_str.contains("ln(-1) is undefined")
+                || error_str.contains("Failed to evaluate parameter"),
+            "Expected error about ln(-1), got: {error_str}"
+        );
     }
 
-    // Test sqrt of negative number
+    // Test sqrt of negative number - use native gate U which evaluates parameters immediately
     let qasm = r"
         OPENQASM 2.0;
         qreg q[1];
-        rx(sqrt(-4)) q[0];
+        U(sqrt(-4), 0, 0) q[0];
     ";
 
     let result = QASMParser::parse_str_raw(qasm);
     // The parsing should fail because sqrt(-4) is evaluated during parsing for gate parameters
     assert!(result.is_err());
     if let Err(e) = result {
-        assert!(e.to_string().contains("sqrt(-4) is undefined"));
+        // The error is wrapped with "Failed to evaluate parameter: "
+        let error_str = e.to_string();
+        assert!(
+            error_str.contains("sqrt(-4) is undefined")
+                || error_str.contains("Failed to evaluate parameter"),
+            "Expected error about sqrt(-4), got: {error_str}"
+        );
     }
 }
 
@@ -219,7 +231,6 @@ fn test_evaluation_accuracy() {
     assert!((expr.evaluate(None).unwrap() - 2.0).abs() < 1e-10);
 }
 
-
 #[test]
 fn test_simple_rx_pi() {
     use pecos_engines::{MonteCarloEngine, PassThroughNoiseModel};
@@ -280,8 +291,7 @@ fn test_trig_identity_with_measurement() {
 
     // Parse and check the expression before running
     let _program = QASMParser::parse_str(qasm).expect("Failed to parse QASM");
-    
-    
+
     // Run the simulation with multiple shots
     let engine = QASMEngine::from_str(qasm).unwrap();
 

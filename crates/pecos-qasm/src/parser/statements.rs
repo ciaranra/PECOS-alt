@@ -19,15 +19,22 @@ use crate::parser::{Program, QASMParser, Rule};
 /// Returns an error if the statement is invalid
 pub fn parse_statement(pair: Pair<Rule>, program: &mut Program) -> Result<(), PecosError> {
     let statement_str = pair.as_str();
-    let inner = pair.into_inner().next().ok_or_else(|| {
-        QASMParser::error("Empty statement")
-    })?;
-    
+    let inner = pair
+        .into_inner()
+        .next()
+        .ok_or_else(|| QASMParser::error("Empty statement"))?;
+
     // Match on the statement type and delegate to specific parsers
     match inner.as_rule() {
         Rule::register_decl => {
             parse_register(inner, program).map_err(|e| {
-                add_context(e, format!("In register declaration: {}", statement_str.lines().next().unwrap_or("")))
+                add_context(
+                    e,
+                    &format!(
+                        "In register declaration: {}",
+                        statement_str.lines().next().unwrap_or("")
+                    ),
+                )
             })?;
         }
         Rule::quantum_op => {
@@ -37,7 +44,7 @@ pub fn parse_statement(pair: Pair<Rule>, program: &mut Program) -> Result<(), Pe
             }
         }
         Rule::classical_op => {
-            let op = parse_classical_statement(inner)?;
+            let op = parse_classical_statement(inner, program)?;
             if let Some(operation) = op {
                 program.operations.push(operation);
             }
@@ -49,9 +56,8 @@ pub fn parse_statement(pair: Pair<Rule>, program: &mut Program) -> Result<(), Pe
             }
         }
         Rule::gate_def => {
-            parse_gate_definition(inner, program).map_err(|e| {
-                add_context(e, "In gate definition".to_string())
-            })?;
+            parse_gate_definition(inner, program)
+                .map_err(|e| add_context(e, "In gate definition"))?;
         }
         Rule::include => {
             return Err(PecosError::ParseSyntax {
@@ -68,7 +74,7 @@ pub fn parse_statement(pair: Pair<Rule>, program: &mut Program) -> Result<(), Pe
         _ => {
             // Unknown statement type - provide helpful error
             return Err(QASMParser::error(format!(
-                "Unknown statement type: {:?}", 
+                "Unknown statement type: {:?}",
                 inner.as_rule()
             )));
         }
@@ -77,12 +83,18 @@ pub fn parse_statement(pair: Pair<Rule>, program: &mut Program) -> Result<(), Pe
 }
 
 /// Wrapper functions with clearer names following recursive descent style
-fn parse_quantum_operation(pair: Pair<Rule>, program: &Program) -> Result<Option<Operation>, PecosError> {
+fn parse_quantum_operation(
+    pair: Pair<Rule>,
+    program: &Program,
+) -> Result<Option<Operation>, PecosError> {
     parse_quantum_op(pair, program)
 }
 
-fn parse_classical_statement(pair: Pair<Rule>) -> Result<Option<Operation>, PecosError> {
-    parse_classical_operation(pair)
+fn parse_classical_statement(
+    pair: Pair<Rule>,
+    program: &Program,
+) -> Result<Option<Operation>, PecosError> {
+    parse_classical_operation(pair, program)
 }
 
 fn parse_conditional(pair: Pair<Rule>, program: &Program) -> Result<Option<Operation>, PecosError> {
@@ -94,18 +106,16 @@ fn parse_opaque_declaration(pair: Pair<Rule>) -> Result<Option<Operation>, Pecos
 }
 
 /// Add context to error messages
-fn add_context(error: PecosError, context: String) -> PecosError {
+fn add_context(error: PecosError, context: &str) -> PecosError {
     match error {
-        PecosError::ParseSyntax { language, message } => {
-            PecosError::ParseSyntax {
-                language,
-                message: format!("{}: {}", context, message),
-            }
-        }
+        PecosError::ParseSyntax { language, message } => PecosError::ParseSyntax {
+            language,
+            message: format!("{context}: {message}"),
+        },
         PecosError::CompileInvalidOperation { operation, reason } => {
             PecosError::CompileInvalidOperation {
                 operation,
-                reason: format!("{}: {}", context, reason),
+                reason: format!("{context}: {reason}"),
             }
         }
         _ => error,

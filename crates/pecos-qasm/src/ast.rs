@@ -442,7 +442,7 @@ impl Expression {
                     "ln" => {
                         if arg_val <= 0.0 {
                             Err(PecosError::ParseInvalidExpression(format!(
-                                "ln({arg_val}) is undefined for non-positive values"
+                                "ln({arg_val}) is undefined"
                             )))
                         } else {
                             Ok(arg_val.ln())
@@ -451,7 +451,7 @@ impl Expression {
                     "sqrt" => {
                         if arg_val < 0.0 {
                             Err(PecosError::ParseInvalidExpression(format!(
-                                "sqrt({arg_val}) is undefined for negative values"
+                                "sqrt({arg_val}) is undefined"
                             )))
                         } else {
                             Ok(arg_val.sqrt())
