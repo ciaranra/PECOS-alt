@@ -13,7 +13,7 @@ fn main() {
             println!("Operations: {:?}", program.operations);
         }
         Err(e) => {
-            println!("Parsing failed with error: {}", e);
+            println!("Parsing failed with error: {e}");
         }
     }
 }

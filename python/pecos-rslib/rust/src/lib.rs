@@ -19,6 +19,7 @@
 mod byte_message_bindings;
 mod engine_bindings;
 pub mod phir_bridge;
+mod qasm_sim_bindings;
 mod sparse_sim;
 mod sparse_stab_bindings;
 mod sparse_stab_engine_bindings;
@@ -43,5 +44,9 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyByteMessageBuilder>()?;
     m.add_class::<PyStateVecEngine>()?;
     m.add_class::<PySparseStabEngine>()?;
+
+    // Register QASM simulation functions
+    qasm_sim_bindings::register_qasm_sim_module(m)?;
+
     Ok(())
 }

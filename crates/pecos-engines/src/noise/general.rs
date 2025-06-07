@@ -77,10 +77,11 @@
 mod builder;
 mod default;
 
+pub use self::builder::GeneralNoiseModelBuilder;
+
 use crate::Gate;
 use crate::byte_message::{ByteMessage, ByteMessageBuilder, GateType};
 use crate::engine_system::{ControlEngine, EngineStage};
-use crate::noise::general::builder::GeneralNoiseModelBuilder;
 use crate::noise::noise_rng::NoiseRng;
 use crate::noise::utils::NoiseUtils;
 use crate::noise::utils::ProbabilityValidator;

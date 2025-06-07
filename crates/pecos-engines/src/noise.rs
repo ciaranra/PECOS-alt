@@ -28,7 +28,7 @@ pub mod weighted_sampler;
 pub use self::biased_depolarizing::BiasedDepolarizingNoiseModel;
 pub use self::biased_measurement::BiasedMeasurementNoiseModel;
 pub use self::depolarizing::DepolarizingNoiseModel;
-pub use self::general::GeneralNoiseModel;
+pub use self::general::{GeneralNoiseModel, GeneralNoiseModelBuilder};
 pub use self::noise_rng::NoiseRng;
 pub use self::pass_through::PassThroughNoiseModel;
 pub use self::utils::{NoiseUtils, ProbabilityValidator};

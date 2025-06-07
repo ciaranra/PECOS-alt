@@ -45,7 +45,13 @@ impl Shot {
 
         // Set bits from the value
         for i in 0..width {
-            bv.push((value >> i) & 1 == 1);
+            if i < 32 {
+                // Only shift if within u32 bounds
+                bv.push((value >> i) & 1 == 1);
+            } else {
+                // For bits beyond u32, push zeros
+                bv.push(false);
+            }
         }
 
         // Store the BitVec

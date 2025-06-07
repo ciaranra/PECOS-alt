@@ -5,6 +5,7 @@ use crate::noise::{
 use std::collections::{BTreeMap, HashSet};
 
 /// Builder for creating general noise models
+#[derive(Debug, Clone)]
 pub struct GeneralNoiseModelBuilder {
     // global params
     noiseless_gates: Option<HashSet<GateType>>,

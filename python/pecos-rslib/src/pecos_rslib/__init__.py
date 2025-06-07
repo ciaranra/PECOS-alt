@@ -25,6 +25,13 @@ from pecos_rslib._pecos_rslib import ByteMessageBuilder
 from pecos_rslib._pecos_rslib import StateVecEngineRs
 from pecos_rslib._pecos_rslib import SparseStabEngineRs
 
+# QASM simulation exports
+from pecos_rslib._pecos_rslib import NoiseModel
+from pecos_rslib._pecos_rslib import QuantumEngine
+from pecos_rslib._pecos_rslib import run_qasm
+from pecos_rslib._pecos_rslib import get_noise_models
+from pecos_rslib._pecos_rslib import get_quantum_engines
+
 try:
     __version__ = version("pecos-rslib")
 except PackageNotFoundError:
@@ -37,4 +44,10 @@ __all__ = [
     "ByteMessageBuilder",
     "StateVecEngineRs",
     "SparseStabEngineRs",
+    # QASM simulation
+    "NoiseModel",
+    "QuantumEngine",
+    "run_qasm",
+    "get_noise_models",
+    "get_quantum_engines",
 ]

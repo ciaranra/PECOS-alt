@@ -53,16 +53,17 @@ use std::str::FromStr;
 ///
 /// Using with the PECOS simulation API:
 ///
-/// ```no_run
+/// ```
 /// use pecos_qasm::QASMProgram;
+/// use pecos_engines::ClassicalEngine;
 /// use std::str::FromStr;
 ///
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// // Parse a QASM program
 /// let qasm = r#"
 ///     OPENQASM 2.0;
 ///     include "qelib1.inc";
 ///     qreg q[2];
+///     creg c[2];
 ///     h q[0];
 ///     cx q[0], q[1];
 ///     measure q -> c;
@@ -70,14 +71,12 @@ use std::str::FromStr;
 ///
 /// let program = QASMProgram::from_str(qasm)?;
 ///
-/// // Convert directly to a boxed engine ready for simulation
-/// // This is more concise than `Box::new(program.into_engine())`
-/// let engine_box = program.into_engine_box();
+/// // Convert to engine and verify properties
+/// let engine = program.into_engine();
+/// assert_eq!(engine.num_qubits(), 2);
 ///
-/// // Use with pecos::run_sim (not actually run in this example)
-/// // let results = pecos::run_sim(engine_box, 1000, Some(42), None, None, None)?;
-/// # Ok(())
-/// # }
+/// // The engine is ready for simulation
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[derive(Debug, Clone)]
 pub struct QASMProgram {

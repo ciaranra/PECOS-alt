@@ -354,6 +354,68 @@ impl ShotMap {
         }
     }
 
+    /// Try to get `BitVec` values as `BigUint` integers
+    ///
+    /// Converts each `BitVec` to a `BigUint` value, supporting arbitrary precision
+    /// for `BitVecs` of any size.
+    ///
+    /// # Returns
+    /// - `Ok(Vec<BigUint>)` if the register exists and contains `BitVec` data
+    /// - `Err` if the register doesn't exist or contains a different data type
+    ///
+    /// # Example
+    /// ```
+    /// # use pecos_engines::shot_results::{ShotVec, Shot};
+    /// # use pecos_core::errors::PecosError;
+    /// # use num_bigint::BigUint;
+    /// # fn main() -> Result<(), PecosError> {
+    /// let mut shot_vec = ShotVec::new();
+    /// let mut shot = Shot::default();
+    /// shot.add_register("large_reg", 0, 100); // 100-bit register
+    /// shot_vec.shots.push(shot);
+    /// let shot_map = shot_vec.try_as_shot_map()?;
+    ///
+    /// // Extract values as BigUint for arbitrary precision
+    /// if let Ok(values) = shot_map.try_bits_as_biguint("large_reg") {
+    ///     for (i, val) in values.iter().enumerate() {
+    ///         println!("Shot {}: {}", i, val);
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Errors
+    /// Returns `PecosError::Processing` if:
+    /// - The register doesn't exist
+    /// - The register exists but contains a different data type
+    pub fn try_bits_as_biguint(
+        &self,
+        register: &str,
+    ) -> Result<Vec<num_bigint::BigUint>, PecosError> {
+        use num_bigint::BigUint;
+
+        match self.data.get(register) {
+            Some(DataVec::BitVec(vecs)) => Ok(vecs
+                .iter()
+                .map(|bv| {
+                    if bv.is_empty() {
+                        BigUint::from(0u32)
+                    } else {
+                        let bytes = bv.as_raw_slice();
+                        BigUint::from_bytes_le(bytes)
+                    }
+                })
+                .collect()),
+            Some(_) => Err(PecosError::Processing(format!(
+                "Register '{register}' exists but does not contain BitVec data"
+            ))),
+            None => Err(PecosError::Processing(format!(
+                "Register '{register}' not found"
+            ))),
+        }
+    }
+
     /// Try to get `BitVec` values as decimal strings
     ///
     /// Converts each `BitVec` to its decimal representation as a string.

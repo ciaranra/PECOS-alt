@@ -1,6 +1,9 @@
-# ByteMessage Python API Examples
+# PECOS Python API Examples
 
-This directory contains examples of using the PECOS ByteMessage API from Python. The ByteMessage API allows you to build quantum circuit messages that can be processed by PECOS engines.
+This directory contains examples of using various PECOS Python APIs:
+
+1. **ByteMessage API** - Low-level API for building quantum circuit messages
+2. **QASM Simulation API** - High-level API for running QASM quantum circuits with noise models
 
 ## Bell State Example
 
@@ -22,6 +25,18 @@ This directory contains examples of using the PECOS ByteMessage API from Python.
 4. Running multiple shots to analyze measurement correlations
 5. Running a GHZ state on three qubits
 
+## QASM Simulation Example
+
+`qasm_sim_example.py` demonstrates the QASM simulation API with comprehensive examples:
+
+1. Creating and measuring Bell states with various noise models
+2. GHZ state preparation with custom depolarizing noise
+3. Biased measurement noise demonstration
+4. Comparing different quantum engines (StateVector vs SparseStabilizer)
+5. Using the builder pattern for reusable simulations
+6. Handling large quantum registers (>64 qubits)
+7. Parallel execution with multiple workers
+
 ## Running the Examples
 
 To run the examples:
@@ -31,6 +46,7 @@ To run the examples:
 cd python/pecos-rslib
 python examples/bell_state_example.py
 python examples/bell_state_simulator.py
+python examples/qasm_sim_example.py
 ```
 
 ## API Overview
