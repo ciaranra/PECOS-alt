@@ -125,12 +125,7 @@ class TestQasmSimBuilder:
         assert all(val == 1 for val in results["c"])
 
         # Depolarizing
-        results = (
-            qasm_sim(qasm)
-            .seed(42)
-            .noise(DepolarizingNoise(p=0.1))
-            .run(1000)
-        )
+        results = qasm_sim(qasm).seed(42).noise(DepolarizingNoise(p=0.1)).run(1000)
         errors = sum(1 for val in results["c"] if val == 0)
         assert 50 < errors < 200
 
@@ -148,11 +143,7 @@ class TestQasmSimBuilder:
         results = (
             qasm_sim(qasm_bell)
             .seed(42)
-            .noise(
-                DepolarizingCustomNoise(
-                    p_prep=0.01, p_meas=0.01, p1=0.001, p2=0.1
-                )
-            )
+            .noise(DepolarizingCustomNoise(p_prep=0.01, p_meas=0.01, p1=0.001, p2=0.1))
             .run(1000)
         )
         counts = Counter(results["c"])
@@ -171,10 +162,7 @@ class TestQasmSimBuilder:
 
         # Biased depolarizing
         results = (
-            qasm_sim(qasm)
-            .seed(42)
-            .noise(BiasedDepolarizingNoise(p=0.05))
-            .run(1000)
+            qasm_sim(qasm).seed(42).noise(BiasedDepolarizingNoise(p=0.05)).run(1000)
         )
         errors = sum(1 for val in results["c"] if val == 0)
         assert errors > 0
@@ -198,12 +186,7 @@ class TestQasmSimBuilder:
 
         # Both engines should work for Clifford circuits
         for engine in [QuantumEngine.StateVector, QuantumEngine.SparseStabilizer]:
-            results = (
-                qasm_sim(qasm_clifford)
-                .seed(42)
-                .quantum_engine(engine)
-                .run(100)
-            )
+            results = qasm_sim(qasm_clifford).seed(42).quantum_engine(engine).run(100)
             assert len(results["c"]) == 100
 
         # Non-Clifford circuit (only StateVector works)
@@ -261,7 +244,7 @@ class TestQasmSimBuilder:
         sim = qasm_sim(qasm).seed(789).build()
         run1 = sim.run(50)
         run2 = sim.run(50)
-        
+
         # Different runs from same sim should have same distribution
         # but not necessarily same exact values
         counts1 = Counter(run1["c"])

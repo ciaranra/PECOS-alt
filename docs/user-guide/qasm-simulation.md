@@ -105,7 +105,7 @@ Real quantum computers are noisy. PECOS helps you understand how noise affects y
     }
 
     // Biased measurement
-    BiasedMeasurementNoise { 
+    BiasedMeasurementNoise {
         p0: 0.01,  // Probability of 0→1 flip
         p1: 0.02,  // Probability of 1→0 flip
     }
@@ -343,7 +343,7 @@ fn advanced_noise_example() -> Result<(), PecosError> {
 
     // Run simulation
     let results = run_qasm(qasm, 1000, noise, None, Some(4), Some(42))?;
-    
+
     let shot_map = results.try_as_shot_map()?;
     println!("GHZ state results with complex noise:");
     println!("{}", shot_map.display());
@@ -363,7 +363,7 @@ If you're running the same circuit with different parameters:
     ```rust
     // Parse once
     let sim = qasm_sim(qasm).build()?;
-    
+
     // Run many times
     for noise_level in [0.001, 0.01, 0.1] {
         let noisy_sim = sim.clone().noise(DepolarizingNoise { p: noise_level });
@@ -377,7 +377,7 @@ If you're running the same circuit with different parameters:
     ```python
     # Parse once
     sim = qasm_sim(qasm).build()
-    
+
     # Run many times
     for noise_level in [0.001, 0.01, 0.1]:
         results = sim.noise(DepolarizingNoise(p=noise_level)).run(1000)

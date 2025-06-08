@@ -82,7 +82,7 @@ qasm_sim(qasm).noise(DepolarizingCustomNoise {
 qasm_sim(qasm).noise(BiasedDepolarizingNoise { p: 0.01 })
 
 // Biased measurement (asymmetric bit flips)
-qasm_sim(qasm).noise(BiasedMeasurementNoise { 
+qasm_sim(qasm).noise(BiasedMeasurementNoise {
     p0: 0.01,  // Probability of 0→1 flip
     p1: 0.02,  // Probability of 1→0 flip
 })
@@ -195,7 +195,7 @@ fn run_bell_state_simulation() -> Result<(), PecosError> {
     for shots in [100, 1000, 10000] {
         let results = sim.run(shots)?;
         let shot_map = results.try_as_shot_map()?;
-        
+
         println!("Results for {} shots:", shots);
         println!("{}", shot_map.display());
     }
@@ -233,7 +233,7 @@ fn run_advanced_noise_simulation() -> Result<(), PecosError> {
 
     // Use with run_qasm
     let results = run_qasm(qasm, 1000, noise, None, Some(4), Some(42))?;
-    
+
     // Or with qasm_sim builder
     let results2 = qasm_sim(qasm)
         .noise(noise.clone())

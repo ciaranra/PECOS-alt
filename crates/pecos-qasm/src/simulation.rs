@@ -33,7 +33,7 @@ pub enum NoiseModelConfig {
     /// General noise model
     General(GeneralNoise),
     /// General noise model from builder
-    GeneralFromBuilder(GeneralNoiseModelBuilder),
+    GeneralFromBuilder(Box<GeneralNoiseModelBuilder>),
 }
 
 // Keep the old type alias for backward compatibility during migration
@@ -183,7 +183,7 @@ impl From<GeneralNoise> for NoiseModelType {
 
 impl From<GeneralNoiseModelBuilder> for NoiseModelType {
     fn from(builder: GeneralNoiseModelBuilder) -> Self {
-        NoiseModelType::GeneralFromBuilder(builder)
+        NoiseModelType::GeneralFromBuilder(Box::new(builder))
     }
 }
 

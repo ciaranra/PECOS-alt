@@ -151,16 +151,16 @@ def run_qasm(
 
 def qasm_sim(qasm: str) -> QasmSimulationBuilder:
     """Create a QASM simulation builder for flexible configuration.
-    
+
     This provides a builder pattern for QASM simulations, allowing you to
     build once and run multiple times with different shot counts.
-    
+
     Args:
         qasm: QASM code as a string
-    
+
     Returns:
         QasmSimulationBuilder that can be configured and run
-    
+
     Example:
         >>> from pecos_rslib.qasm_sim import qasm_sim, DepolarizingNoise, QuantumEngine
         >>> qasm = '''
@@ -173,18 +173,14 @@ def qasm_sim(qasm: str) -> QasmSimulationBuilder:
         ... measure q -> c;
         ... '''
         >>> # Build once, run multiple times
-        >>> sim = qasm_sim(qasm) \\
-        ...     .seed(42) \\
-        ...     .noise(DepolarizingNoise(p=0.01)) \\
-        ...     .build()
-        >>> 
+        >>> sim = qasm_sim(qasm).seed(42).noise(DepolarizingNoise(p=0.01)).build()
+        >>>
         >>> results_100 = sim.run(100)
         >>> results_1000 = sim.run(1000)
-        >>> 
+        >>>
         >>> # Or run directly without building
-        >>> results = qasm_sim(qasm) \\
-        ...     .noise(DepolarizingNoise(p=0.01)) \\
-        ...     .workers(4) \\
-        ...     .run(1000)
+        >>> results = (
+        ...     qasm_sim(qasm).noise(DepolarizingNoise(p=0.01)).workers(4).run(1000)
+        ... )
     """
     return _qasm_sim(qasm)

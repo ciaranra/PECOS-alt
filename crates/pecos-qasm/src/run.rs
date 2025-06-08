@@ -193,6 +193,13 @@ pub fn run_qasm_sim(
 /// # Ok(())
 /// # }
 /// ```
+///
+/// # Errors
+///
+/// Returns a [`PecosError`] if:
+/// - QASM parsing fails due to syntax errors or unsupported operations
+/// - Simulation fails due to invalid quantum operations
+/// - Memory allocation fails for large circuits
 pub fn run_qasm<N>(
     qasm: &str,
     shots: usize,
