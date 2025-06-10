@@ -15,7 +15,6 @@ This module provides convenient imports for all PyPMIR (Python PECOS Medium-leve
 including blocks, data types, instructions, and operations.
 """
 
-# ruff: noqa: A005
 
 # ruff: noqa: F401
 

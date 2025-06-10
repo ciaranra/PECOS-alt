@@ -31,7 +31,7 @@ from pecos.qeccs.surface_medial_4444.instructions import (
     InstrInitZero,
     InstrSynExtraction,
 )
-from pecos.type_defs import QECCParams
+from pecos.typing import QECCParams
 
 
 class SurfaceMedial4444(DefaultQECC):

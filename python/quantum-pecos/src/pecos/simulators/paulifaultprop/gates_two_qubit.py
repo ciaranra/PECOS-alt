@@ -23,7 +23,7 @@ from pecos.simulators.paulifaultprop.gates_one_qubit import SX, SY, SZ, H, SYdg,
 
 if TYPE_CHECKING:
     from pecos.simulators.paulifaultprop.state import PauliFaultProp
-    from pecos.type_defs import SimulatorGateParams
+    from pecos.typing import SimulatorGateParams
 
 
 def CX(state: PauliFaultProp, qubits: tuple[int, int]) -> None:

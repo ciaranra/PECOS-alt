@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from pecos.circuits import QuantumCircuit
     from pecos.error_models.parent_class_error_gen import ParentErrorModel
     from pecos.protocols import SimulatorProtocol
-    from pecos.type_defs import GateParams
+    from pecos.typing import GateParams
 
     class CircuitInspector(Protocol):
         """Protocol for circuit inspector objects."""

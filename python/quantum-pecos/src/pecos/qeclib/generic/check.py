@@ -71,7 +71,7 @@ class Check(Block):
             raise Exception(msg)
 
         for p in paulis:
-            if p not in ["X", "Y", "Z"]:
+            if p not in {"X", "Y", "Z"}:
                 msg = 'Only "X", "Y" and "Z" are accepted.'
                 raise Exception(msg)
 

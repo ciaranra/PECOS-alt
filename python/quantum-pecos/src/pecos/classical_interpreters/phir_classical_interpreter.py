@@ -105,7 +105,7 @@ class PHIRClassicalInterpreter:
             PHIRModel.model_validate(self.program)
 
         if isinstance(self.program, dict):
-            if self.program["format"] not in ["PHIR/JSON", "PHIR"]:
+            if self.program["format"] not in {"PHIR/JSON", "PHIR"}:
                 msg = f"Unsupported PHIR format: {self.program['format']}"
                 raise ValueError(msg)
             if version2tuple(self.program["version"]) >= (0, 2, 0):
@@ -203,7 +203,7 @@ class PHIRClassicalInterpreter:
             if isinstance(op, pt.opt.QOp):
                 op_buffer.append(op)
 
-                if op.name in ["measure Z", "Measure", "Measure +Z"]:
+                if op.name in {"measure Z", "Measure", "Measure +Z"}:
                     yield op_buffer
                     op_buffer.clear()
 
@@ -266,7 +266,7 @@ class PHIRClassicalInterpreter:
     def eval_expr(
         self,
         expr: int | str | list | pt.opt.COp,
-    ) -> None | int | integer:
+    ) -> int | integer | None:
         """Evaluates integer expressions."""
         match expr:
             case int():
@@ -442,5 +442,5 @@ class PHIRClassicalInterpreter:
                 i: int
                 if filter_private and m.startswith("__"):
                     continue
-                send_meas[(m, i)] = self.get_bit(m, i)
+                send_meas[m, i] = self.get_bit(m, i)
         return send_meas

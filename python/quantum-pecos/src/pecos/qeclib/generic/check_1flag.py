@@ -75,7 +75,7 @@ class Check1Flag(Block):
             raise Exception(msg)
 
         for o in ops:
-            if o not in ["X", "Y", "Z", "H"]:
+            if o not in {"X", "Y", "Z", "H"}:
                 msg = 'Only "X", "Y", "Z", and "H" are accepted.'
                 raise Exception(msg)
 

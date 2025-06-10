@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pecos.simulators.mps_pytket.state import MPS
-    from pecos.type_defs import SimulatorGateParams
+    from pecos.typing import SimulatorGateParams
 
 from pecos.simulators.mps_pytket.gates_meas import meas_z
 from pecos.simulators.mps_pytket.gates_one_qubit import X

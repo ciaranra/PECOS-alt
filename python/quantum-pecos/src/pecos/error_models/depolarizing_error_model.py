@@ -157,7 +157,7 @@ class DepolarizingErrorModel:
             if op.metadata.get("noiseless"):
                 pass
 
-            elif op.name in ["init |0>", "Init", "Init +Z"]:
+            elif op.name in {"init |0>", "Init", "Init +Z"}:
                 qops_after = noise_initz_bitflip(
                     op,
                     p=self._eparams["p_init"],
@@ -193,13 +193,13 @@ class DepolarizingErrorModel:
 
             # ########################################
             # MEASURE X NOISE
-            elif op.name in ["measure Z", "Measure", "Measure +Z"]:
+            elif op.name in {"measure Z", "Measure", "Measure +Z"}:
                 erroneous_ops = noise_meas_bitflip(
                     op,
                     p=self._eparams["p_meas"],
                 )
 
-            elif op.name in ["Transport", "Idle"]:
+            elif op.name in {"Transport", "Idle"}:
                 # TODO: Add optional noise model for transport and idle
                 erroneous_ops = []
 

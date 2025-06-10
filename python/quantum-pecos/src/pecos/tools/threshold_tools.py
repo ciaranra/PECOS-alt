@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from pecos.circuits import LogicalCircuit, QuantumCircuit
     from pecos.engines.circuit_runners import Standard
     from pecos.protocols import Decoder, ErrorGenerator, QECCProtocol, SimulatorProtocol
-    from pecos.type_defs import ErrorParams, LogicalOperator
+    from pecos.typing import ErrorParams, LogicalOperator
 
     ThresholdFitFunc = Callable[
         [
@@ -141,7 +141,7 @@ def threshold_code_capacity(
         if p0 is None:
             p0 = (0.1, 1.5, 1, 1, 1)
 
-    if basis not in [None, "zero", "plus", "both"]:
+    if basis not in {None, "zero", "plus", "both"}:
         msg = '`basis` can only be "None", "zero", "plus", "both"!'
         raise Exception(msg)
 

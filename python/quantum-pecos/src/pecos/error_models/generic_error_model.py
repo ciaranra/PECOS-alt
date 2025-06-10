@@ -163,7 +163,7 @@ class GenericErrorModel:
 
             # ########################################
             # INITS WITH X NOISE
-            if op.name in ["init |0>", "Init", "Init +Z"]:
+            if op.name in {"init |0>", "Init", "Init +Z"}:
                 qops_after = noise_initz_bitflip_leakage(
                     op,
                     p=self._eparams["p_init"],
@@ -203,7 +203,7 @@ class GenericErrorModel:
 
             # ########################################
             # MEASURE X NOISE
-            elif op.name in ["measure Z", "Measure", "Measure +Z"]:
+            elif op.name in {"measure Z", "Measure", "Measure +Z"}:
                 erroneous_ops = noise_meas_bitflip_leakage(
                     op,
                     p=self._eparams["p_meas"],

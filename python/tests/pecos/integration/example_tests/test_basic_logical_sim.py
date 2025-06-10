@@ -39,9 +39,9 @@ def test_surface() -> None:
 
     state = pc.simulators.SparseSimPy(surface.num_qudits)
 
-    output1, error_circuits1 = sim.run(state, logic)
+    _output1, _error_circuits1 = sim.run(state, logic)
 
-    output2, error_circuits2 = sim.run(
+    output2, _error_circuits2 = sim.run(
         state,
         logic2,
         error_gen=depolar,

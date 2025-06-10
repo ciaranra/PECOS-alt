@@ -25,7 +25,7 @@ import cupy as cp
 
 if TYPE_CHECKING:
     from pecos.simulators.custatevec.state import CuStateVec
-    from pecos.type_defs import SimulatorGateParams
+    from pecos.typing import SimulatorGateParams
 from cuquantum import custatevec as cusv
 
 from pecos.simulators.custatevec.gates_one_qubit import H

@@ -17,6 +17,14 @@ in quantum error correction simulations.
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Binary array implementation for the PECOS classical virtual machine.
+
+This module provides the BinArray class for efficient binary array operations
+within the classical virtual machine (CVM) framework. It supports various
+binary representations and operations needed for classical computations
+in quantum error correction simulations.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

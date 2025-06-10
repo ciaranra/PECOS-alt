@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, NoReturn
 from pecos_rslib._pecos_rslib import SparseSim as RustSparseSim
 
 if TYPE_CHECKING:
-    from pecos.type_defs import SimulatorGateParams
+    from pecos.typing import SimulatorGateParams
 
 
 class SparseSimRs:

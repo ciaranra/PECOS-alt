@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pecos.simulators.sparsesim.state import SparseSim
-    from pecos.type_defs import SimulatorGateParams
+    from pecos.typing import SimulatorGateParams
 
 
 def Identity(state: SparseSim, qubit: int, **_params: SimulatorGateParams) -> None:
