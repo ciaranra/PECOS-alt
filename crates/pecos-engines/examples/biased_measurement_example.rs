@@ -64,9 +64,7 @@ fn example1_different_bias_levels(circ: &ByteMessage, quantum: &StateVecEngine) 
             let results = system
                 .process_as_system(circ.clone())
                 .expect("Failed to process circuit");
-            let measurements = results
-                .parse_measurements()
-                .expect("Failed to parse measurements");
+            let measurements = results.outcomes().expect("Failed to parse measurements");
 
             // Each measurement result is a value
             let result = measurements
@@ -118,9 +116,7 @@ fn example2_with_seed(circ: &ByteMessage) {
         let results = system
             .process_as_system(circ.clone())
             .expect("Failed to process circuit");
-        let measurements = results
-            .parse_measurements()
-            .expect("Failed to parse measurements");
+        let measurements = results.outcomes().expect("Failed to parse measurements");
 
         let result = measurements
             .first()
@@ -175,9 +171,7 @@ fn example3_bell_state() {
         let results = system2
             .process_as_system(bell_circ.clone())
             .expect("Failed to process Bell circuit");
-        let measurements = results
-            .parse_measurements()
-            .expect("Failed to parse measurements");
+        let measurements = results.outcomes().expect("Failed to parse measurements");
 
         // Combine the measurement results into a string
         let mut result = String::new();

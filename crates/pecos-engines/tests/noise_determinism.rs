@@ -340,8 +340,9 @@ fn run_complete_simulation(
         .expect("Failed to process circuit");
 
     // Extract the measurement results
-    let measurements = output
-        .measurement_results_as_vec()
+    let measurements: Vec<(usize, u32)> = output
+        .outcomes()
+        .map(|outcomes| outcomes.into_iter().enumerate().collect())
         .expect("Failed to extract measurements");
 
     // Convert u32 values to i32 for the HashMap, handling potential overflow

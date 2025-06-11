@@ -61,7 +61,7 @@ The main class for working with byte-encoded quantum messages.
 
 - `ByteMessage.builder()`: Create a new `ByteMessageBuilder`
 - `ByteMessage.quantum_operations_builder()`: Create a builder pre-configured for quantum operations
-- `ByteMessage.measurement_results_builder()`: Create a builder pre-configured for measurement results
+- `ByteMessage.outcomes_builder()`: Create a builder pre-configured for measurement outcomes
 - `ByteMessage.create_bell_state()`: Create a pre-built Bell state circuit
 - `ByteMessage.create_flush()`: Create a flush message
 - `ByteMessage.create_empty()`: Create an empty message
@@ -85,7 +85,7 @@ Builder class for creating `ByteMessage` instances.
 #### Configuration Methods
 
 - `for_quantum_operations()`: Configure the builder for quantum operations
-- `for_measurement_results()`: Configure the builder for measurement results
+- `for_outcomes()`: Configure the builder for measurement outcomes
 
 #### Gate Methods
 

@@ -78,7 +78,7 @@ fn compare_biased_and_general(circ: &ByteMessage, quantum: &StateVecEngine) {
                 .process_as_system(circ.clone())
                 .expect("Failed to process circuit with biased noise");
             let biased_measurements = biased_results
-                .parse_measurements()
+                .outcomes()
                 .expect("Failed to parse biased measurements");
             let biased_result = biased_measurements
                 .first()
@@ -93,7 +93,7 @@ fn compare_biased_and_general(circ: &ByteMessage, quantum: &StateVecEngine) {
                 .process_as_system(circ.clone())
                 .expect("Failed to process circuit with general noise");
             let general_measurements = general_results
-                .parse_measurements()
+                .outcomes()
                 .expect("Failed to parse general measurements");
             let general_result = general_measurements
                 .first()
@@ -177,7 +177,7 @@ fn bell_state_comparison() {
             .process_as_system(bell_circ.clone())
             .expect("Failed to process bell circuit with biased noise");
         let biased_measurements = biased_results
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse biased measurements");
 
         // Combine the measurement results into a string
@@ -195,7 +195,7 @@ fn bell_state_comparison() {
             .process_as_system(bell_circ.clone())
             .expect("Failed to process bell circuit with general noise");
         let general_measurements = general_results
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse general measurements");
 
         // Combine the measurement results into a string

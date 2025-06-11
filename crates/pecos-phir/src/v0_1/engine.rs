@@ -685,7 +685,7 @@ impl ControlEngine for PHIREngine {
         );
 
         // Handle received measurements
-        let measurement_results = measurements.parse_measurements()?;
+        let measurement_results = measurements.outcomes()?;
         log::debug!(
             "PHIREngine: Measurement results received: {:?}",
             measurement_results
@@ -791,7 +791,7 @@ impl ClassicalEngine for PHIREngine {
     }
 
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), PecosError> {
-        let measurement_outcomes = message.parse_measurements()?;
+        let measurement_outcomes = message.outcomes()?;
         let ops = match &self.program {
             Some(program) => program.ops.clone(),
             None => vec![],

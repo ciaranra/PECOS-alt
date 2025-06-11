@@ -288,11 +288,15 @@ impl QirEngine {
 
     /// Process measurements from the quantum system
     fn process_measurements(&mut self, message: &ByteMessage) -> Result<(), PecosError> {
-        let measurements = message.measurement_results_as_vec().map_err(|e| {
+        // Extract raw measurement outcomes
+        let outcomes = message.outcomes().map_err(|e| {
             PecosError::Input(format!(
                 "Failed to extract measurements from ByteMessage: {e}"
             ))
         })?;
+
+        // Convert to indexed format for compatibility with existing code
+        let measurements: Vec<(usize, u32)> = outcomes.into_iter().enumerate().collect();
 
         self.measurement_results.clear();
         // Convert u32 measurements to i64 for QIR standard

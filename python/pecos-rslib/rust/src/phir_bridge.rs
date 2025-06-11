@@ -298,9 +298,9 @@ impl PHIREngine {
             if let Some(engine) = &self.engine {
                 // Create a ByteMessage with the measurement result and use the Rust engine
                 let handle_result = {
-                    let mut builder = ByteMessage::measurement_results_builder();
+                    let mut builder = ByteMessage::outcomes_builder();
                     // Convert outcome from u32 to usize
-                    builder.add_measurement_results(&[outcome as usize]);
+                    builder.add_outcomes(&[outcome as usize]);
                     let message = builder.build();
 
                     let mut engine_guard = engine.lock();
@@ -1001,7 +1001,7 @@ impl ClassicalEngine for PHIREngine {
     }
 
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), PecosError> {
-        let measurements = message.parse_measurements()?;
+        let measurements = message.outcomes()?;
 
         Python::with_gil(|py| -> Result<(), PecosError> {
             // Measurements are now just outcomes in order, with implicit result_ids
@@ -1243,7 +1243,7 @@ impl Engine for PHIREngine {
                 // used in tests or when not connected to a quantum backend
 
                 // Parse the measurement commands to see how many we need to handle
-                let measurement_count = match commands.parse_measurements() {
+                let measurement_count = match commands.outcomes() {
                     Ok(measurements) => measurements.len(),
                     Err(_) => 0,
                 };
@@ -1251,13 +1251,13 @@ impl Engine for PHIREngine {
                 // Create dummy measurement results
                 if measurement_count > 0 {
                     // Create a response ByteMessage with measurement results
-                    let mut builder = ByteMessage::measurement_results_builder();
+                    let mut builder = ByteMessage::outcomes_builder();
 
                     // Create arrays for results
                     let results = vec![0; measurement_count];
 
                     // Add all measurement results at once
-                    builder.add_measurement_results(&results);
+                    builder.add_outcomes(&results);
 
                     let response = builder.build();
 

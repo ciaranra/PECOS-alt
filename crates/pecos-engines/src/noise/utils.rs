@@ -250,7 +250,7 @@ impl NoiseUtils {
     /// true if the message contains measurement results, false otherwise
     #[must_use]
     pub fn has_measurements(message: &ByteMessage) -> bool {
-        message.parse_measurements().is_ok_and(|m| !m.is_empty())
+        message.outcomes().is_ok_and(|m| !m.is_empty())
     }
 
     /// Creates a new `ByteMessageBuilder` for quantum operations

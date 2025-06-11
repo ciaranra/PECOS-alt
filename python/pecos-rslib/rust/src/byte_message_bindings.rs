@@ -37,10 +37,16 @@ impl PyByteMessageBuilder {
         let _ = self.inner.for_quantum_operations();
     }
 
-    /// Configure the builder for measurement results
+    /// Configure the builder for measurement outcomes
+    #[pyo3(text_signature = "($self)")]
+    fn for_outcomes(&mut self) {
+        let _ = self.inner.for_outcomes();
+    }
+
+    /// Configure the builder for measurement results (deprecated, use for_outcomes instead)
     #[pyo3(text_signature = "($self)")]
     fn for_measurement_results(&mut self) {
-        let _ = self.inner.for_measurement_results();
+        let _ = self.inner.for_outcomes();
     }
 
     /// Add an X gate to the message
@@ -167,9 +173,9 @@ impl PyByteMessage {
         builder
     }
 
-    /// Create a ByteMessageBuilder configured for measurement results
+    /// Create a ByteMessageBuilder configured for measurement outcomes
     #[classmethod]
-    fn measurement_results_builder(_cls: &Bound<PyType>) -> PyByteMessageBuilder {
+    fn outcomes_builder(_cls: &Bound<PyType>) -> PyByteMessageBuilder {
         let mut builder = PyByteMessageBuilder::new();
         builder.for_measurement_results();
         builder
@@ -234,7 +240,8 @@ impl PyByteMessage {
     /// Get measurement results as a list of (result_id, outcome) tuples
     #[pyo3(text_signature = "($self)")]
     pub fn measurement_results(&self, py: Python<'_>) -> PyResult<PyObject> {
-        let results = self.inner.measurement_results_as_vec().map_err(|e| {
+        // Get raw outcomes
+        let outcomes = self.inner.outcomes().map_err(|e| {
             PyRuntimeError::new_err(format!(
                 "Failed to extract measurement results in Python bindings: {e}"
             ))
@@ -242,7 +249,7 @@ impl PyByteMessage {
 
         // Create a list of lists, where each inner list has two elements
         let result_list = PyList::empty(py);
-        for (result_id, outcome) in results {
+        for (result_id, outcome) in outcomes.into_iter().enumerate() {
             // For each measurement, create a small list with [result_id, outcome]
             let inner_list = PyList::empty(py);
             inner_list.append(result_id)?;

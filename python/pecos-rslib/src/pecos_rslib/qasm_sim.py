@@ -1,6 +1,10 @@
 """Python interface for QASM simulation with enhanced API.
 
-For detailed usage examples and documentation, see docs/qasm_sim_usage.md
+This module provides a clean Python interface for running quantum circuit simulations
+using OpenQASM 2.0. It supports various noise models, quantum engines, and parallel execution.
+
+For detailed usage examples, see the PECOS documentation:
+https://github.com/CQCL/PECOS/blob/master/docs/user-guide/qasm-simulation.md
 """
 
 from dataclasses import dataclass
@@ -12,8 +16,8 @@ from pecos_rslib._pecos_rslib import (
     QasmSimulationBuilder,
     run_qasm as _run_qasm,
     qasm_sim as _qasm_sim,
-    get_noise_models,
-    get_quantum_engines,
+    get_noise_models as _get_noise_models,
+    get_quantum_engines as _get_quantum_engines,
 )
 
 __all__ = [
@@ -184,3 +188,35 @@ def qasm_sim(qasm: str) -> QasmSimulationBuilder:
         ... )
     """
     return _qasm_sim(qasm)
+
+
+def get_noise_models() -> List[str]:
+    """Get a list of available noise model names.
+
+    Returns:
+        List of string names of available noise models, such as
+        'PassThrough', 'Depolarizing', 'DepolarizingCustom', etc.
+
+    Example:
+        >>> from pecos_rslib.qasm_sim import get_noise_models
+        >>> noise_models = get_noise_models()
+        >>> print(noise_models)
+        ['PassThrough', 'Depolarizing', 'DepolarizingCustom', ...]
+    """
+    return _get_noise_models()
+
+
+def get_quantum_engines() -> List[str]:
+    """Get a list of available quantum engine names.
+
+    Returns:
+        List of string names of available quantum engines, such as
+        'StateVector', 'SparseStabilizer', etc.
+
+    Example:
+        >>> from pecos_rslib.qasm_sim import get_quantum_engines
+        >>> engines = get_quantum_engines()
+        >>> print(engines)
+        ['StateVector', 'SparseStabilizer']
+    """
+    return _get_quantum_engines()

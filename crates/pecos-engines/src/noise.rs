@@ -220,8 +220,8 @@ mod base_tests {
         assert!(!model.has_measurements(&empty_msg));
 
         // Test with a message that has measurements
-        let mut builder = ByteMessage::measurement_results_builder();
-        builder.add_measurement_results(&[0]);
+        let mut builder = ByteMessage::outcomes_builder();
+        builder.add_outcomes(&[0]);
         let measure_msg = builder.build();
         assert!(model.has_measurements(&measure_msg));
     }
@@ -246,8 +246,8 @@ mod tests {
 
         // Create a measurement result message
         let mut builder = ByteMessageBuilder::new();
-        let _ = builder.for_measurement_results();
-        builder.add_measurement_results(&[0]);
+        let _ = builder.for_outcomes();
+        builder.add_outcomes(&[0]);
         let measurement_message = builder.build();
 
         // Operation should pass through unchanged
@@ -269,7 +269,7 @@ mod tests {
         if let EngineStage::Complete(output) = measurement_result {
             // We can't check for equality because the noise is random,
             // but we can at least verify the output is a valid measurement result
-            let measurements = output.parse_measurements().unwrap();
+            let measurements = output.outcomes().unwrap();
             assert!(
                 !measurements.is_empty(),
                 "Output should contain at least one measurement"
@@ -292,8 +292,8 @@ mod tests {
 
         // Create a measurement result message
         let mut builder = ByteMessageBuilder::new();
-        let _ = builder.for_measurement_results();
-        builder.add_measurement_results(&[0]);
+        let _ = builder.for_outcomes();
+        builder.add_outcomes(&[0]);
         let measurement_message = builder.build();
 
         // Operations should be modified

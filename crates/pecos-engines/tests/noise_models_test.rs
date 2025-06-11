@@ -23,9 +23,7 @@ fn count_results(
         let results = system
             .process_as_system(circ.clone())
             .expect("Failed to process circuit");
-        let measurements = results
-            .parse_measurements()
-            .expect("Failed to parse measurements");
+        let measurements = results.outcomes().expect("Failed to parse measurements");
 
         let result_str = measurements
             .iter()

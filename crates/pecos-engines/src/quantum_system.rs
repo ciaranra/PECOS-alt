@@ -367,10 +367,10 @@ mod tests {
 
         // Extract and compare measurement results
         let meas1 = result1
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse measurement results from system1");
         let meas2 = result2
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse measurement results from system2");
 
         assert_eq!(
@@ -402,10 +402,10 @@ mod tests {
 
         // Extract and compare measurement results
         let meas1 = result1
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse measurement results from system1");
         let meas3 = result3
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse measurement results from system3");
 
         assert_eq!(
@@ -443,7 +443,7 @@ mod tests {
             .expect("Failed to process input");
 
         // Verify the result contains measurements
-        assert!(result.parse_measurements().is_ok());
+        assert!(result.outcomes().is_ok());
     }
 
     /// Test that the `EngineSystem` pattern works correctly with direct access to
@@ -464,7 +464,7 @@ mod tests {
         let result = system
             .process(input.clone())
             .expect("Failed to process input");
-        assert!(result.parse_measurements().is_ok());
+        assert!(result.outcomes().is_ok());
 
         // Test that we can use controller and engine components directly
         {

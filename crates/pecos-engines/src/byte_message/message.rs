@@ -1,7 +1,7 @@
 use crate::byte_message::builder::ByteMessageBuilder;
 use crate::byte_message::protocol::{
-    BatchHeader, GateCommandHeader, MeasurementHeader, MeasurementResultHeader, MessageHeader,
-    MessageType, calc_padding,
+    BatchHeader, GateCommandHeader, MeasurementHeader, MessageHeader, MessageType, OutcomeHeader,
+    calc_padding,
 };
 use log::trace;
 use pecos_core::QubitId;
@@ -97,18 +97,18 @@ impl ByteMessage {
         builder
     }
 
-    /// Create a new message builder pre-configured for measurement results
+    /// Create a new message builder pre-configured for measurement outcomes
     ///
     /// This is a convenience method that creates a new builder and configures it
-    /// for measurement results.
+    /// for measurement outcomes.
     ///
     /// # Returns
     ///
-    /// A `MessageBuilder` configured for measurement results.
+    /// A `MessageBuilder` configured for measurement outcomes.
     #[must_use]
-    pub fn measurement_results_builder() -> ByteMessageBuilder {
+    pub fn outcomes_builder() -> ByteMessageBuilder {
         let mut builder = Self::builder();
-        let _ = builder.for_measurement_results();
+        let _ = builder.for_outcomes();
         builder
     }
 
@@ -125,35 +125,6 @@ impl ByteMessage {
     pub fn create_flush() -> Self {
         let mut builder = ByteMessageBuilder::new();
         builder.add_flush(true);
-        builder.build()
-    }
-
-    /// Record measurement results
-    ///
-    /// This is a convenience method that creates a new message with measurement results.
-    /// It's used to report measurement outcomes back to the classical controller.
-    ///
-    /// # Arguments
-    ///
-    /// * `result_pairs` - A slice of tuples containing (`result_id`, outcome)
-    ///   where `result_id` corresponds to the ID used when requesting the measurement
-    ///   and outcome is the measurement result (typically 0 or 1)
-    ///
-    /// # Returns
-    ///
-    /// A `ByteMessage` containing the measurement results.
-    #[must_use]
-    pub fn record_measurement_results(result_pairs: &[(usize, u32)]) -> Self {
-        let mut builder = Self::measurement_results_builder();
-
-        // Collect result_ids and outcomes into separate vectors
-        let mut outcomes = Vec::with_capacity(result_pairs.len());
-
-        for (_index, outcome) in result_pairs {
-            outcomes.push(*outcome as usize); // Convert u32 to usize
-        }
-
-        builder.add_measurement_results(&outcomes);
         builder.build()
     }
 
@@ -329,12 +300,12 @@ impl ByteMessage {
         Ok(commands)
     }
 
-    /// Parse measurements from this message
+    /// Parse measurement outcomes from this message
     ///
     /// # Errors
     ///
-    /// Returns an error if the message is malformed or contains invalid measurement data.
-    pub fn parse_measurements(&self) -> Result<Vec<u32>, PecosError> {
+    /// Returns an error if the message is malformed or contains invalid outcome data.
+    pub fn outcomes(&self) -> Result<Vec<u32>, PecosError> {
         if self.byte_len < size_of::<BatchHeader>() {
             return Err(PecosError::Input(
                 "Message too small for batch header".to_string(),
@@ -377,13 +348,13 @@ impl ByteMessage {
                 )));
             }
 
-            if msg_type == MessageType::MeasurementResult {
+            if msg_type == MessageType::Outcome {
                 // Process measurement result
                 let payload = &self.as_bytes()[offset..payload_end];
-                if payload.len() >= size_of::<MeasurementResultHeader>() {
-                    // MeasurementResultHeader at aligned payload start
-                    let result_header = *bytemuck::from_bytes::<MeasurementResultHeader>(
-                        &payload[0..size_of::<MeasurementResultHeader>()],
+                if payload.len() >= size_of::<OutcomeHeader>() {
+                    // OutcomeHeader at aligned payload start
+                    let result_header = *bytemuck::from_bytes::<OutcomeHeader>(
+                        &payload[0..size_of::<OutcomeHeader>()],
                     );
 
                     // Return outcome
@@ -400,28 +371,6 @@ impl ByteMessage {
         }
 
         Ok(measurements)
-    }
-
-    /// Get measurement results as a vector of outcomes
-    ///
-    /// This is a convenience method that parses the measurement results from the message
-    /// and returns them as a vector of measurement outcomes in order.
-    ///
-    /// # Returns
-    ///
-    /// A Result containing a vector of measurement outcomes if successful,
-    /// or a `PecosError` if there was an error parsing the message.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the message is malformed or contains invalid measurement data.
-    pub fn measurement_results_as_vec(&self) -> Result<Vec<(usize, u32)>, PecosError> {
-        let outcomes = self.parse_measurements()?;
-
-        // Convert to indexed results (index, outcome) for compatibility
-        let converted = outcomes.into_iter().enumerate().collect();
-
-        Ok(converted)
     }
 
     /// Validate if the payload has enough bytes for the gate header
@@ -660,8 +609,8 @@ mod tests {
         );
 
         // Create a measurement results message
-        let mut builder = ByteMessage::measurement_results_builder();
-        builder.add_measurement_results(&[0]);
+        let mut builder = ByteMessage::outcomes_builder();
+        builder.add_outcomes(&[0]);
         let results_message = builder.build();
         assert_eq!(
             results_message.message_type().unwrap(),
@@ -672,12 +621,12 @@ mod tests {
     #[test]
     fn test_parse_measurements() {
         // Create a message with measurement results
-        let mut builder = ByteMessage::measurement_results_builder();
-        builder.add_measurement_results(&[0, 1]);
+        let mut builder = ByteMessage::outcomes_builder();
+        builder.add_outcomes(&[0, 1]);
         let message = builder.build();
 
         // Parse the measurements
-        let measurements = message.parse_measurements().unwrap();
+        let measurements = message.outcomes().unwrap();
         assert_eq!(measurements.len(), 2);
 
         // The measurements now just return outcomes
@@ -686,24 +635,32 @@ mod tests {
     }
 
     #[test]
-    fn test_measurement_results_as_vec() {
+    fn test_parse_measurements_with_indexing() {
         // Create a message with measurement results
-        let result_pairs = [(0, 0), (1, 1), (2, 0)];
-        let message = ByteMessage::record_measurement_results(&result_pairs);
+        let mut builder = ByteMessage::outcomes_builder();
+        builder.add_outcomes(&[0, 1, 0]);
+        let message = builder.build();
 
-        // Get the results as a vector
-        let results = message.measurement_results_as_vec().unwrap();
+        // Get the raw measurement results
+        let outcomes = message.outcomes().unwrap();
 
-        // Verify the results match the input
+        // Verify the outcomes match the input
+        assert_eq!(outcomes.len(), 3);
+        assert_eq!(outcomes[0], 0);
+        assert_eq!(outcomes[1], 1);
+        assert_eq!(outcomes[2], 0);
+
+        // Convert raw outcomes to indexed results for easier assertions
+        let results: Vec<(usize, u32)> = outcomes.into_iter().enumerate().collect();
         assert_eq!(results.len(), 3);
         assert_eq!(results[0], (0, 0));
         assert_eq!(results[1], (1, 1));
         assert_eq!(results[2], (2, 0));
 
-        // Verify the types are correct (usize, u32) by checking if they can be assigned to variables of those types
+        // Verify the types are correct
         let (result_id, outcome) = results[0];
-        let _: usize = result_id; // This will fail to compile if result_id is not usize
-        let _: u32 = outcome; // This will fail to compile if outcome is not u32
+        let _: usize = result_id;
+        let _: u32 = outcome;
     }
 
     #[test]
@@ -735,20 +692,15 @@ mod tests {
             // Process the circuit
             let result_message = engine.process(bell_circuit.clone()).unwrap();
 
-            // Get the measurement results as a vector
-            let results = result_message.measurement_results_as_vec().unwrap();
+            // Get the raw measurement results
+            let outcomes = result_message.outcomes().unwrap();
 
-            // Convert to booleans (0 -> false, 1 -> true)
-            let q0_result = results
-                .iter()
-                .find(|(id, _)| *id == 0)
-                .map(|(_, val)| *val != 0)
-                .unwrap();
-            let q1_result = results
-                .iter()
-                .find(|(id, _)| *id == 1)
-                .map(|(_, val)| *val != 0)
-                .unwrap();
+            // We know the measurement order: qubit 0 was measured first, then qubit 1
+            assert_eq!(outcomes.len(), 2, "Expected exactly 2 measurement results");
+
+            // The outcomes are now indexed by measurement order
+            let q0_result = outcomes[0] != 0; // First measurement was qubit 0
+            let q1_result = outcomes[1] != 0; // Second measurement was qubit 1
 
             // In a Bell state, the qubits should always have the same measurement outcome
             assert_eq!(
@@ -774,19 +726,19 @@ mod tests {
     #[test]
     fn test_measurement_result_order_preservation() {
         // Test that measurement results maintain their order through ByteMessage
-        let mut builder = ByteMessage::measurement_results_builder();
+        let mut builder = ByteMessage::outcomes_builder();
 
         // Add measurement results in a specific order
-        builder.add_measurement_results(&[1]); // First result: 1
-        builder.add_measurement_results(&[0]); // Second result: 0
-        builder.add_measurement_results(&[1]); // Third result: 1
-        builder.add_measurement_results(&[1]); // Fourth result: 1
-        builder.add_measurement_results(&[0]); // Fifth result: 0
+        builder.add_outcomes(&[1]); // First result: 1
+        builder.add_outcomes(&[0]); // Second result: 0
+        builder.add_outcomes(&[1]); // Third result: 1
+        builder.add_outcomes(&[1]); // Fourth result: 1
+        builder.add_outcomes(&[0]); // Fifth result: 0
 
         let message = builder.build();
 
         // Parse the measurements back
-        let results = message.parse_measurements().unwrap();
+        let results = message.outcomes().unwrap();
 
         // Verify order is preserved
         assert_eq!(results.len(), 5);
@@ -796,8 +748,9 @@ mod tests {
         assert_eq!(results[3], 1, "Fourth result should be 1");
         assert_eq!(results[4], 0, "Fifth result should be 0");
 
-        // Also test measurement_results_as_vec which adds indices
-        let indexed_results = message.measurement_results_as_vec().unwrap();
+        // Also convert raw outcomes to indexed results
+        let outcomes2 = message.outcomes().unwrap();
+        let indexed_results: Vec<(usize, u32)> = outcomes2.into_iter().enumerate().collect();
         assert_eq!(indexed_results.len(), 5);
         assert_eq!(indexed_results[0], (0, 1), "First indexed result");
         assert_eq!(indexed_results[1], (1, 0), "Second indexed result");

@@ -5,8 +5,8 @@
 
 use crate::byte_message::message::ByteMessage;
 use crate::byte_message::protocol::{
-    BatchHeader, GateCommandHeader, MeasurementHeader, MeasurementResultHeader, MessageFlags,
-    MessageHeader, MessageType, calc_padding,
+    BatchHeader, GateCommandHeader, MeasurementHeader, MessageFlags, MessageHeader, MessageType,
+    OutcomeHeader, calc_padding,
 };
 use bytemuck::bytes_of;
 use pecos_core::QubitId;
@@ -21,10 +21,10 @@ use std::mem::size_of;
 /// Enum to track what kind of message is being built
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum BuilderMode {
-    Empty,              // No operations added yet
-    QuantumOperations,  // Contains quantum operations
-    MeasurementResults, // Contains measurement results
-    ControlMessage,     // Contains control messages like Flush
+    Empty,               // No operations added yet
+    QuantumOperations,   // Contains quantum operations
+    MeasurementOutcomes, // Contains measurement outcomes
+    ControlMessage,      // Contains control messages like Flush
 }
 
 /// Helper for building binary messages
@@ -77,10 +77,10 @@ impl ByteMessageBuilder {
         self
     }
 
-    /// Create a builder pre-configured for measurement results
+    /// Create a builder pre-configured for measurement outcomes
     #[must_use]
-    pub fn for_measurement_results(&mut self) -> &mut Self {
-        self.mode = BuilderMode::MeasurementResults;
+    pub fn for_outcomes(&mut self) -> &mut Self {
+        self.mode = BuilderMode::MeasurementOutcomes;
         self.add_message(MessageType::BeginBatch, &[], MessageFlags::NONE);
         self
     }
@@ -98,7 +98,7 @@ impl ByteMessageBuilder {
     /// # Panics
     ///
     /// This function will panic if:
-    /// - Attempting to mix quantum operations and measurement results in the same message
+    /// - Attempting to mix quantum operations and measurement outcomes in the same message
     /// - Attempting to mix control messages with other message types
     pub fn add_message(
         &mut self,
@@ -120,19 +120,19 @@ impl ByteMessageBuilder {
             }
             MessageType::GateCommand | MessageType::Measurement => {
                 assert!(
-                    !(self.mode == BuilderMode::MeasurementResults),
-                    "Cannot mix quantum operations and measurement results in the same message"
+                    !(self.mode == BuilderMode::MeasurementOutcomes),
+                    "Cannot mix quantum operations and measurement outcomes in the same message"
                 );
                 if self.mode == BuilderMode::Empty {
                     self.mode = BuilderMode::QuantumOperations;
                 }
             }
-            MessageType::MeasurementResult => {
+            MessageType::Outcome => {
                 assert!(
                     !(self.mode == BuilderMode::QuantumOperations),
-                    "Cannot mix quantum operations and measurement results in the same message"
+                    "Cannot mix quantum operations and measurement outcomes in the same message"
                 );
-                self.mode = BuilderMode::MeasurementResults;
+                self.mode = BuilderMode::MeasurementOutcomes;
             }
             MessageType::Flush | MessageType::Reset | MessageType::Error => {
                 assert!(
@@ -236,29 +236,25 @@ impl ByteMessageBuilder {
         self
     }
 
-    /// Add multiple measurement results at once
+    /// Add multiple measurement outcomes at once
     ///
     /// # Panics
     ///
     /// Panics if any result outcome is too large to fit in a u32.
-    pub fn add_measurement_results(&mut self, results: &[usize]) -> &mut Self {
-        for (i, &result) in results.iter().enumerate() {
-            let is_last = i == results.len() - 1;
+    pub fn add_outcomes(&mut self, outcomes: &[usize]) -> &mut Self {
+        for (i, &result) in outcomes.iter().enumerate() {
+            let is_last = i == outcomes.len() - 1;
             let flags = if is_last {
                 MessageFlags::LAST_MESSAGE
             } else {
                 MessageFlags::NONE
             };
 
-            let result_header = MeasurementResultHeader {
+            let result_header = OutcomeHeader {
                 outcome: u32::try_from(result).expect("Result outcome too large"),
             };
 
-            self.add_message(
-                MessageType::MeasurementResult,
-                bytes_of(&result_header),
-                flags,
-            );
+            self.add_message(MessageType::Outcome, bytes_of(&result_header), flags);
         }
         self
     }
@@ -518,7 +514,7 @@ impl ByteMessageBuilder {
     /// consider using `reset()` instead, which preserves memory allocation.
     ///
     /// After clearing, you'll need to configure the builder for the desired message type
-    /// by calling `for_quantum_operations()` or `for_measurement_results()`.
+    /// by calling `for_quantum_operations()` or `for_outcomes()`.
     pub fn clear(&mut self) -> &mut Self {
         *self = Self::new();
         self
@@ -532,7 +528,7 @@ impl ByteMessageBuilder {
     /// especially when creating many messages in sequence.
     ///
     /// After resetting, you'll need to configure the builder for the desired message type
-    /// by calling `for_quantum_operations()` or `for_measurement_results()`:
+    /// by calling `for_quantum_operations()` or `for_outcomes()`:
     ///
     /// ```
     /// # use pecos_engines::byte_message::ByteMessageBuilder;
@@ -593,7 +589,7 @@ impl ByteMessageBuilder {
         // Validate that a mode was explicitly set if operations were added
         assert!(
             !(self.msg_count > 0 && self.mode == BuilderMode::Empty),
-            "Builder mode not specified. Call for_quantum_operations() or for_measurement_results() before adding operations."
+            "Builder mode not specified. Call for_quantum_operations() or for_outcomes() before adding operations."
         );
 
         // Add validation based on the builder's current mode
@@ -604,8 +600,8 @@ impl ByteMessageBuilder {
                     self.add_flush(true);
                 }
             }
-            BuilderMode::QuantumOperations | BuilderMode::MeasurementResults => {
-                // For quantum operations and measurement results, ensure we have both BeginBatch and EndBatch
+            BuilderMode::QuantumOperations | BuilderMode::MeasurementOutcomes => {
+                // For quantum operations and measurement outcomes, ensure we have both BeginBatch and EndBatch
                 // Check if the last message is already an EndBatch
                 let has_end_batch = self.buffer.len() >= size_of::<MessageHeader>() && {
                     let header_offset = self.buffer.len() - size_of::<MessageHeader>();
@@ -685,12 +681,12 @@ mod tests {
 
     #[test]
     fn test_builder_measurement_message() {
-        // Create a builder for measurement results
+        // Create a builder for measurement outcomes
         let mut builder = ByteMessageBuilder::new();
-        let _ = builder.for_measurement_results();
+        let _ = builder.for_outcomes();
 
-        // Add some measurement results
-        builder.add_measurement_results(&[0]);
+        // Add some measurement outcomes
+        builder.add_outcomes(&[0]);
 
         // Build the message
         let message = builder.build();
@@ -735,12 +731,12 @@ mod tests {
 
     #[test]
     #[should_panic(
-        expected = "Cannot mix quantum operations and measurement results in the same message"
+        expected = "Cannot mix quantum operations and measurement outcomes in the same message"
     )]
     fn test_builder_type_checking() {
-        // Create a builder for measurement results
+        // Create a builder for measurement outcomes
         let mut builder = ByteMessageBuilder::new();
-        let _ = builder.for_measurement_results();
+        let _ = builder.for_outcomes();
 
         // Try to add a gate (should panic)
         builder.add_h(&[0]);

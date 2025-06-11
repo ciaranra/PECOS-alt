@@ -220,11 +220,13 @@ impl Engine for StateVecEngine {
         }
 
         // Create a message with the measurement results
-        // Convert Vec<u32> to Vec<(usize, u32)> with indices
-        let indexed_measurements: Vec<(usize, u32)> =
-            measurements.into_iter().enumerate().collect();
-        let result_message = ByteMessage::record_measurement_results(&indexed_measurements);
-        Ok(result_message)
+        let mut builder = ByteMessage::outcomes_builder();
+
+        // Convert measurements from u32 to usize and add to builder
+        let outcomes: Vec<usize> = measurements.iter().map(|&m| m as usize).collect();
+        builder.add_outcomes(&outcomes);
+
+        Ok(builder.build())
     }
 
     fn reset(&mut self) -> Result<(), PecosError> {
@@ -398,11 +400,13 @@ impl Engine for SparseStabEngine {
         }
 
         // Create a message with the measurement results
-        // Convert Vec<u32> to Vec<(usize, u32)> with indices
-        let indexed_measurements: Vec<(usize, u32)> =
-            measurements.into_iter().enumerate().collect();
-        let result_message = ByteMessage::record_measurement_results(&indexed_measurements);
-        Ok(result_message)
+        let mut builder = ByteMessage::outcomes_builder();
+
+        // Convert measurements from u32 to usize and add to builder
+        let outcomes: Vec<usize> = measurements.iter().map(|&m| m as usize).collect();
+        builder.add_outcomes(&outcomes);
+
+        Ok(builder.build())
     }
 
     fn reset(&mut self) -> Result<(), PecosError> {

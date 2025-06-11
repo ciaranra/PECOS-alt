@@ -42,7 +42,7 @@ pub enum MessageType {
     Measurement = 11, // Measurement operation
 
     // Result messages
-    MeasurementResult = 20, // Measurement result
+    Outcome = 20, // Measurement result
 
     // Record messages
     RecordData = 30, // Record data (key-value or result)
@@ -125,7 +125,7 @@ impl MessageHeader {
             4 => Ok(MessageType::Reset),
             10 => Ok(MessageType::GateCommand),
             11 => Ok(MessageType::Measurement),
-            20 => Ok(MessageType::MeasurementResult),
+            20 => Ok(MessageType::Outcome),
             30 => Ok(MessageType::RecordData),
             40 => Ok(MessageType::InfoMessage),
             41 => Ok(MessageType::WarningMessage),
@@ -166,7 +166,7 @@ pub struct MeasurementHeader {
 /// Measurement result message payload header
 #[repr(C, align(4))]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
-pub struct MeasurementResultHeader {
+pub struct OutcomeHeader {
     pub outcome: u32, // Measurement outcome (0 or 1, but u32 for alignment)
 }
 

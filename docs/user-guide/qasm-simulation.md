@@ -12,27 +12,72 @@ This guide will walk you through running quantum circuit simulations using PECOS
 
 ## Getting Started: Your First Simulation
 
-Let's start with a simple example - creating and measuring a Bell state:
+Let's start with a simple example - creating and measuring a Bell state. First, we'll define our QASM code, which creates a Bell state by applying a Hadamard gate to the first qubit and then a CNOT gate to entangle both qubits:
+
+```qasm
+OPENQASM 2.0;
+include "qelib1.inc";
+qreg q[2];
+creg c[2];
+h q[0];
+cx q[0], q[1];
+measure q -> c;
+```
+
+Now, let's run this code using PECOS's simple `run_qasm` function:
 
 === "Rust"
 
     ```rust
     use pecos_qasm::prelude::*;
 
-    // Simple simulation
-    let results = qasm_sim(qasm_code).run(1000)?;
+    // Define the Bell state QASM code
+    let qasm_code = r#"
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[2];
+        creg c[2];
+        h q[0];
+        cx q[0], q[1];
+        measure q -> c;
+    "#;
 
-    // With configuration
-    let results = qasm_sim(qasm_code)
-        .seed(42)
-        .noise(DepolarizingNoise { p: 0.01 })
-        .run(1000)?;
+    // Simple simulation with just shots count
+    let num_shots = 1000;
+    let results = run_qasm(qasm_code, num_shots, None, None, None, None)?;
+
+    // With configuration using named variables for clarity
+    let num_shots = 1000;
+    let noise_model = Some(DepolarizingNoise { p: 0.01 });
+    let engine_type = None;  // Use default (SparseStabilizer for this circuit)
+    let worker_count = None; // Use default (1 thread) or Some(4) for 4 threads
+    let random_seed = Some(42);
+
+    let results = run_qasm(
+        qasm_code,
+        num_shots,
+        noise_model,
+        engine_type,
+        worker_count,
+        random_seed
+    )?;
     ```
 
 === "Python"
 
     ```python
     from pecos_rslib.qasm_sim import run_qasm, DepolarizingNoise
+
+    # Define the Bell state QASM code
+    qasm_code = '''
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[2];
+        creg c[2];
+        h q[0];
+        cx q[0], q[1];
+        measure q -> c;
+    '''
 
     # Simple simulation
     results = run_qasm(qasm_code, shots=1000)
@@ -46,9 +91,70 @@ Let's start with a simple example - creating and measuring a Bell state:
     )
     ```
 
+## Using the Builder API
+
+For more complex simulations or when you need finer control, you can use the builder-style API. This approach offers more flexibility, including the ability to automatically use all available CPU cores with `auto_workers()`, which isn't available in the simple `run_qasm` function:
+
+=== "Rust"
+
+    ```rust
+    use pecos_qasm::prelude::*;
+
+    // Define the Bell state QASM code (as above)
+    let qasm_code = r#"
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[2];
+        creg c[2];
+        h q[0];
+        cx q[0], q[1];
+        measure q -> c;
+    "#;
+
+    // Simple simulation with builder pattern
+    let results = qasm_sim(qasm_code).run(1000)?;
+
+    // With more configuration options
+    let results = qasm_sim(qasm_code)
+        .seed(42)
+        .noise(DepolarizingNoise { p: 0.01 })
+        .workers(4)        // Explicitly set number of threads
+        // .auto_workers() // Or use all available CPU cores
+        .run(1000)?;
+    ```
+
+=== "Python"
+
+    ```python
+    from pecos_rslib.qasm_sim import qasm_sim, DepolarizingNoise
+
+    # Define the Bell state QASM code (as above)
+    qasm_code = '''
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[2];
+        creg c[2];
+        h q[0];
+        cx q[0], q[1];
+        measure q -> c;
+    '''
+
+    # Simple simulation with builder pattern
+    results = qasm_sim(qasm_code).run(1000)
+
+    # With more configuration options
+    results = qasm_sim(qasm_code) \
+        .seed(42) \
+        .noise(DepolarizingNoise(p=0.01)) \
+        .workers(4) \             # Explicitly set number of threads
+        # .auto_workers() \       # Or use all available CPU cores
+        .run(1000)
+    ```
+
 ## Running Multiple Shots
 
-Real quantum computers run circuits multiple times ("shots") to build up statistics. PECOS simulates this behavior:
+Real quantum computers run circuits multiple times ("shots") to build up statistics. PECOS simulates this behavior and
+lets you build the experiment once and rerun it multiple times:
 
 === "Rust"
 
@@ -104,7 +210,10 @@ Real quantum computers are noisy. PECOS helps you understand how noise affects y
         p2: 0.004,      // Two-qubit gate error
     }
 
-    // Biased measurement
+    // Biased depolarizing (asymmetric error distribution)
+    BiasedDepolarizingNoise { p: 0.01 }
+
+    // Biased measurement (asymmetric bit flips)
     BiasedMeasurementNoise {
         p0: 0.01,  // Probability of 0→1 flip
         p1: 0.02,  // Probability of 1→0 flip
@@ -128,7 +237,10 @@ Real quantum computers are noisy. PECOS helps you understand how noise affects y
         p2=0.004       # Two-qubit gate error
     )
 
-    # Biased measurement
+    # Biased depolarizing (asymmetric error distribution)
+    BiasedDepolarizingNoise(p=0.01)
+
+    # Biased measurement (asymmetric bit flips)
     BiasedMeasurementNoise(
         p0=0.01,  # Probability of 0→1 flip
         p1=0.02   # Probability of 1→0 flip
@@ -210,7 +322,7 @@ PECOS provides different engines optimized for different types of circuits:
 
 ## Understanding Your Results
 
-Simulation results come back as measurement outcomes for each shot:
+Simulation results come back as measurement outcomes for each shot. These can be processed in different ways depending on your needs:
 
 === "Rust"
 
@@ -230,15 +342,25 @@ Simulation results come back as measurement outcomes for each shot:
     ```python
     results = run_qasm(qasm, shots=1000)
 
-    # Returns columnar format directly
+    # Returns a dictionary with register names as keys and measurement lists as values
+    print(results)
     # {"c": [0, 3, 0, 3, ...]}  # List of measurement outcomes
 
-    # Each value is the decimal encoding:
+    # Each value is the decimal encoding of the binary string:
     # 0 = 00 (both qubits in |0⟩)
     # 1 = 01
     # 2 = 10
     # 3 = 11 (both qubits in |1⟩)
+
+    # Count the occurrences of each measurement outcome
+    from collections import Counter
+    counts = Counter(results["c"])
+    print(counts)  # {0: 492, 3: 508} for an ideal Bell state
     ```
+
+    The Python API returns results in columnar format, with each register name mapping to a list of integer values. For a Bell state measurement, you expect to see roughly equal counts of 0 (both qubits in |0⟩) and 3 (both qubits in |1⟩).
+
+    For large registers (>64 qubits), the results are automatically converted to Python's arbitrary-precision integers.
 
 ## Practical Examples
 
@@ -386,11 +508,17 @@ If you're running the same circuit with different parameters:
 
 ### Parallel Execution
 
-For many shots, use multiple CPU cores:
+For many shots, you can use multiple CPU cores to speed up simulation:
 
 === "Rust"
 
     ```rust
+    // Single threaded (default for run_qasm)
+    let results = qasm_sim(qasm).workers(1).run(100000)?;
+
+    // Explicit thread count
+    let results = qasm_sim(qasm).workers(4).run(100000)?;
+
     // Automatically use all available cores
     let results = qasm_sim(qasm).auto_workers().run(100000)?;
     ```
@@ -398,15 +526,21 @@ For many shots, use multiple CPU cores:
 === "Python"
 
     ```python
+    # Default is single-threaded for run_qasm
+    results = run_qasm(qasm, shots=100000)
+
     # Use 4 worker threads
     results = run_qasm(qasm, shots=100000, workers=4)
+
+    # For auto-detection, use the builder API
+    results = qasm_sim(qasm).auto_workers().run(100000)
     ```
 
 ### Choosing the Right Engine
 
 - **For Clifford circuits** (H, S, CNOT, measurements): Use `SparseStabilizer` - it's exponentially faster
 - **For circuits with T gates or rotations**: Use `StateVector`
-- **Not sure?** The default auto-selection will choose for you
+- **Not sure?** The engine will be chosen based on the gates in your circuit
 
 ## Common Issues and Solutions
 
@@ -415,6 +549,7 @@ For many shots, use multiple CPU cores:
 === "Rust"
 
     All methods return `Result<T, PecosError>`:
+
     - `build()` - Can fail during QASM parsing
     - `run()` - Can fail during simulation execution
     - `try_as_shot_map()` - Can fail during result conversion
@@ -428,6 +563,24 @@ For many shots, use multiple CPU cores:
     except RuntimeError as e:
         print(f"Error: {e}")
     ```
+
+### Additional Python Utilities
+
+Python provides some additional utility functions for working with the QASM simulator:
+
+```python
+from pecos_rslib.qasm_sim import get_noise_models, get_quantum_engines
+
+# Get list of available noise model names
+noise_models = get_noise_models()
+print(noise_models)  # ['PassThrough', 'Depolarizing', 'DepolarizingCustom', ...]
+
+# Get list of available quantum engine names
+engines = get_quantum_engines()
+print(engines)  # ['StateVector', 'SparseStabilizer']
+```
+
+These functions are useful for dynamically listing available options in applications or for validating user input.
 
 ## Working with Large Circuits
 

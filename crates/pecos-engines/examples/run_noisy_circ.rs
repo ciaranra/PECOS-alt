@@ -48,9 +48,7 @@ fn main() {
         let results = system
             .process_as_system(circ.clone())
             .expect("failed to process circ");
-        let meas = results
-            .parse_measurements()
-            .expect("failed to parse measurements");
+        let meas = results.outcomes().expect("failed to parse measurements");
 
         print!("\"");
         for &value in &meas {

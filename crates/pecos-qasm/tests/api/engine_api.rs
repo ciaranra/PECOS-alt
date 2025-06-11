@@ -207,7 +207,7 @@ fn test_deterministic_3qubit_circuit() -> Result<(), PecosError> {
 
     // Handle the first measurement (qubit 0)
     let message1 = pecos_engines::byte_message::ByteMessage::builder()
-        .add_measurement_results(&[1])
+        .add_outcomes(&[1])
         .build();
 
     engine
@@ -231,7 +231,7 @@ fn test_deterministic_3qubit_circuit() -> Result<(), PecosError> {
 
     // Handle the second measurement (qubit 1)
     let message2 = pecos_engines::byte_message::ByteMessage::builder()
-        .add_measurement_results(&[1])
+        .add_outcomes(&[1])
         .build();
 
     engine
@@ -252,7 +252,7 @@ fn test_deterministic_3qubit_circuit() -> Result<(), PecosError> {
 
     // Handle the third measurement (qubit 2)
     let message3 = pecos_engines::byte_message::ByteMessage::builder()
-        .add_measurement_results(&[1])
+        .add_outcomes(&[1])
         .build();
 
     engine
@@ -460,7 +460,7 @@ fn test_multiple_measurement_operations() -> Result<(), PecosError> {
     println!("Simulating first measurement...");
     // Simulate the first measurement (after X gate, qubit is in |1⟩ state)
     let measurement1 = pecos_engines::byte_message::ByteMessage::builder()
-        .add_measurement_results(&[1])
+        .add_outcomes(&[1])
         .build();
 
     // Handle the first measurement results
@@ -515,7 +515,7 @@ fn test_multiple_measurement_operations() -> Result<(), PecosError> {
         // Since measurements are tracked by order, the first measurement maps to c1[0]
         // and the second measurement maps to c2[0]
         let all_measurements = pecos_engines::byte_message::ByteMessage::builder()
-            .add_measurement_results(&[1, 1]) // Both measurements return 1
+            .add_outcomes(&[1, 1]) // Both measurements return 1
             .build();
 
         // Handle the measurements
@@ -570,7 +570,7 @@ fn test_multiple_measurement_operations() -> Result<(), PecosError> {
     println!("Simulating second measurement...");
     // Simulate the second measurement (after two X gates, qubit is still in |1⟩ state)
     let measurement2 = pecos_engines::byte_message::ByteMessage::builder()
-        .add_measurement_results(&[1])
+        .add_outcomes(&[1])
         .build();
 
     // Handle the second measurement results

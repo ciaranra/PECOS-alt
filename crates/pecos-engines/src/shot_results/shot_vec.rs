@@ -295,7 +295,11 @@ impl ShotVec {
     /// or if there are issues with creating the `ShotVec` instance.
     pub fn from_byte_message(message: &ByteMessage) -> Result<Self, PecosError> {
         // Extract the measurement results from the ByteMessage
-        let measurements = message.measurement_results_as_vec()?;
+        // Extract raw measurement outcomes
+        let outcomes = message.outcomes()?;
+
+        // Convert to indexed measurements
+        let measurements: Vec<(usize, u32)> = outcomes.into_iter().enumerate().collect();
 
         let mut shot_result = Shot::default();
 

@@ -1123,18 +1123,18 @@ impl ClassicalEngine for QASMEngine {
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), PecosError> {
         debug!("Handling measurements from ByteMessage");
 
-        match message.measurement_results_as_vec() {
-            Ok(results) => {
+        match message.outcomes() {
+            Ok(outcomes) => {
                 let mappings = self.register_result_mappings.clone();
 
-                debug!("Processing {} measurement results", results.len());
+                debug!("Processing {} measurement results", outcomes.len());
                 debug!(
                     "Starting from global measurement index {}",
                     self.measurements_processed
                 );
 
-                let num_results = results.len();
-                for (local_index, value) in results {
+                let num_results = outcomes.len();
+                for (local_index, value) in outcomes.into_iter().enumerate() {
                     // Calculate the global index for this measurement
                     let global_index = self.measurements_processed + local_index;
                     debug!(
@@ -1265,8 +1265,8 @@ impl ControlEngine for QASMEngine {
         debug!("QASMEngine::continue_processing() called");
 
         let measurement_count = measurements
-            .measurement_results_as_vec()
-            .map(|results| results.len())
+            .outcomes()
+            .map(|outcomes| outcomes.len())
             .unwrap_or(0);
         debug!("Received {} measurements", measurement_count);
 

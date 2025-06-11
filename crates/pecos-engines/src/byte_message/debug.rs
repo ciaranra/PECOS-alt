@@ -59,7 +59,7 @@ pub fn dump_batch(data: &[u8]) -> String {
     }
 
     // Try to parse measurements
-    match message.parse_measurements() {
+    match message.outcomes() {
         Ok(measurements) => {
             if !measurements.is_empty() {
                 writeln!(
@@ -282,7 +282,7 @@ pub fn dump_batch_raw(data: &[u8]) -> String {
                 20 => {
                     // MeasurementResult - use modern structured parsing
                     let message = ByteMessage::new(data);
-                    match message.parse_measurements() {
+                    match message.outcomes() {
                         Ok(measurements) => {
                             output.push_str("  Measurement Results:\n");
                             for (i, measurement) in measurements.iter().enumerate() {

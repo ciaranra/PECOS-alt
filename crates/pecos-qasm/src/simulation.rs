@@ -378,6 +378,17 @@ impl<'a> QasmSimulationBuilder<'a> {
 ///     println!("Got {} results", results.len());
 /// }
 /// ```
+///
+/// # Performance Tips
+///
+/// 1. **Build once, run multiple times**: Parse QASM once and reuse the simulation
+///    for multiple runs or parameter sweeps.
+/// 2. **Use `auto_workers()`** for CPU-bound simulations with many shots to utilize all available cores.
+/// 3. **Choose the right engine**:
+///    - `SparseStabilizer` for Clifford-only circuits (exponentially faster)
+///    - `StateVector` for circuits with non-Clifford gates
+/// 4. **Batch similar simulations**: Use the same noise model and engine settings when possible
+///    to reduce overhead.
 #[must_use]
 pub fn qasm_sim(qasm: &str) -> QasmSimulationBuilder {
     QasmSimulationBuilder::new(qasm)

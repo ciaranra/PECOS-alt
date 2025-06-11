@@ -116,8 +116,11 @@ impl Shot {
         message: &ByteMessage,
         result_id_to_name: &BTreeMap<usize, String>,
     ) -> Result<Self, PecosError> {
-        // Extract the measurement results from the ByteMessage
-        let measurements = message.measurement_results_as_vec()?;
+        // Extract the raw measurement results from the ByteMessage
+        let outcomes = message.outcomes()?;
+
+        // Convert raw outcomes to indexed results
+        let measurements: Vec<(usize, u32)> = outcomes.into_iter().enumerate().collect();
 
         let mut result = Self::default();
 
