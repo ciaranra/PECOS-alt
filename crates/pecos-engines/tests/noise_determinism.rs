@@ -99,8 +99,8 @@ fn apply_noise(model: &mut GeneralNoiseModel, msg: &ByteMessage) -> ByteMessage 
 /// This function extracts and compares the quantum operations from two messages
 /// to determine if they represent the same quantum circuit.
 fn compare_messages(msg1: &ByteMessage, msg2: &ByteMessage) -> bool {
-    let ops1 = msg1.parse_quantum_operations().unwrap_or_default();
-    let ops2 = msg2.parse_quantum_operations().unwrap_or_default();
+    let ops1 = msg1.quantum_ops().unwrap_or_default();
+    let ops2 = msg2.quantum_ops().unwrap_or_default();
 
     // For determinism tests, we just need to know if they're equal
     ops1 == ops2

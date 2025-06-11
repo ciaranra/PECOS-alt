@@ -194,7 +194,7 @@ fn test_deterministic_3qubit_circuit() -> Result<(), PecosError> {
         .generate_commands()
         .map_err(|e| PecosError::Processing(format!("Failed to generate commands: {e}")))?;
     let operations1 = command_message1
-        .parse_quantum_operations()
+        .quantum_ops()
         .map_err(|e| PecosError::Processing(format!("Failed to parse quantum operations: {e}")))?;
 
     // Print the actual number of operations in first batch
@@ -219,7 +219,7 @@ fn test_deterministic_3qubit_circuit() -> Result<(), PecosError> {
         .generate_commands()
         .map_err(|e| PecosError::Processing(format!("Failed to generate second batch: {e}")))?;
 
-    let operations2 = command_message2.parse_quantum_operations().map_err(|e| {
+    let operations2 = command_message2.quantum_ops().map_err(|e| {
         PecosError::Processing(format!("Failed to parse second batch operations: {e}"))
     })?;
 
@@ -243,7 +243,7 @@ fn test_deterministic_3qubit_circuit() -> Result<(), PecosError> {
         .generate_commands()
         .map_err(|e| PecosError::Processing(format!("Failed to generate third batch: {e}")))?;
 
-    let operations3 = command_message3.parse_quantum_operations().map_err(|e| {
+    let operations3 = command_message3.quantum_ops().map_err(|e| {
         PecosError::Processing(format!("Failed to parse third batch operations: {e}"))
     })?;
 
@@ -449,7 +449,7 @@ fn test_multiple_measurement_operations() -> Result<(), PecosError> {
 
     // Verify the first batch has the expected operations
     let operations1 = command_message1
-        .parse_quantum_operations()
+        .quantum_ops()
         .map_err(|e| PecosError::Processing(format!("Failed to parse quantum operations: {e}")))?;
     println!("First batch operations: {operations1:?}");
     assert!(
@@ -484,7 +484,7 @@ fn test_multiple_measurement_operations() -> Result<(), PecosError> {
     );
 
     // Verify the second batch has the expected operations
-    let operations2 = match command_message2.parse_quantum_operations() {
+    let operations2 = match command_message2.quantum_ops() {
         Ok(ops) => {
             println!("Second batch operations: {ops:?}");
             ops

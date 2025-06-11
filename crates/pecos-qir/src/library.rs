@@ -348,7 +348,7 @@ impl QirLibrary {
                 // Create ByteMessage directly from u32 data to maintain alignment
                 ByteMessage::from_aligned_u32_data(aligned_data.to_vec(), ffi_data.byte_len)
             } else {
-                ByteMessage::create_flush()
+                ByteMessage::create_empty()
             };
 
         // Free the FFI data

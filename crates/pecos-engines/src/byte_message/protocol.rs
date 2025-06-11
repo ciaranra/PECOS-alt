@@ -16,14 +16,14 @@ bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct MessageFlags: u8 {
         const NONE          = 0b0000_0000;
-        const LAST_MESSAGE  = 0b0000_0001; // Indicates last message in a sequence
-        const ERROR         = 0b0000_0010; // Indicates error condition
-        const RESERVED_1    = 0b0000_0100;
-        const RESERVED_2    = 0b0000_1000;
-        const RESERVED_3    = 0b0001_0000;
-        const RESERVED_4    = 0b0010_0000;
-        const RESERVED_5    = 0b0100_0000;
-        const RESERVED_6    = 0b1000_0000;
+        const RESERVED_0    = 0b0000_0001; // Reserved for future use
+        const RESERVED_1    = 0b0000_0010; // Reserved for future use
+        const RESERVED_2    = 0b0000_0100; // Reserved for future use
+        const RESERVED_3    = 0b0000_1000; // Reserved for future use
+        const RESERVED_4    = 0b0001_0000; // Reserved for future use
+        const RESERVED_5    = 0b0010_0000; // Reserved for future use
+        const RESERVED_6    = 0b0100_0000; // Reserved for future use
+        const RESERVED_7    = 0b1000_0000; // Reserved for future use
     }
 }
 
@@ -31,30 +31,11 @@ bitflags! {
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum MessageType {
-    // Control messages
-    BeginBatch = 1, // Start of command batch
-    EndBatch = 2,   // End of command batch
-    Flush = 3,      // Flush all pending operations
-    Reset = 4,      // Reset state
-
     // Operation messages
-    GateCommand = 10, // Gate command operation
-    Measurement = 11, // Measurement operation
+    Gate = 10, // All gate operations (including measurements)
 
     // Result messages
     Outcome = 20, // Measurement result
-
-    // Record messages
-    RecordData = 30, // Record data (key-value or result)
-
-    // Info messages
-    InfoMessage = 40,    // Informational message
-    WarningMessage = 41, // Warning message
-    ErrorMessage = 42,   // Error message
-    DebugMessage = 43,   // Debug message
-
-    // Error messages
-    Error = 100, // Error condition
 }
 
 /// Message batch header for framing multiple messages
@@ -119,19 +100,8 @@ impl MessageHeader {
     /// Returns an error if the message type is unknown or invalid.
     pub fn get_type(&self) -> Result<MessageType, &'static str> {
         match self.msg_type {
-            1 => Ok(MessageType::BeginBatch),
-            2 => Ok(MessageType::EndBatch),
-            3 => Ok(MessageType::Flush),
-            4 => Ok(MessageType::Reset),
-            10 => Ok(MessageType::GateCommand),
-            11 => Ok(MessageType::Measurement),
+            10 => Ok(MessageType::Gate),
             20 => Ok(MessageType::Outcome),
-            30 => Ok(MessageType::RecordData),
-            40 => Ok(MessageType::InfoMessage),
-            41 => Ok(MessageType::WarningMessage),
-            42 => Ok(MessageType::ErrorMessage),
-            43 => Ok(MessageType::DebugMessage),
-            100 => Ok(MessageType::Error),
             _ => Err("Unknown message type"),
         }
     }
@@ -143,10 +113,10 @@ impl MessageHeader {
     }
 }
 
-/// Gate command message payload header
+/// Gate message payload header
 #[repr(C, align(4))]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
-pub struct GateCommandHeader {
+pub struct GateHeader {
     pub gate_type: u8,  // Gate type (using GateType enum values)
     pub num_qubits: u8, // Number of qubits
     pub has_params: u8, // Whether gate has parameters (1=yes, 0=no)
@@ -156,12 +126,7 @@ pub struct GateCommandHeader {
                         // - parameters: depends on gate type (if has_params=1)
 }
 
-/// Measurement message payload header
-#[repr(C, align(4))]
-#[derive(Debug, Copy, Clone, Pod, Zeroable)]
-pub struct MeasurementHeader {
-    pub qubit: u32, // Qubit index
-}
+// MeasurementHeader removed - measurements now use regular gate structure
 
 /// Measurement result message payload header
 #[repr(C, align(4))]

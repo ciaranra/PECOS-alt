@@ -30,7 +30,7 @@ fn test_measurement_order_tracking() -> Result<(), PecosError> {
     // Process all measurements - the engine breaks after each measurement
     // First batch: X gates + first measurement
     let commands1 = engine.generate_commands()?;
-    let operations1 = commands1.parse_quantum_operations()?;
+    let operations1 = commands1.quantum_ops()?;
     println!("First batch operations: {operations1:?}");
 
     // Handle first measurement
@@ -40,7 +40,7 @@ fn test_measurement_order_tracking() -> Result<(), PecosError> {
 
     // Second batch: second measurement
     let commands2 = engine.generate_commands()?;
-    let operations2 = commands2.parse_quantum_operations()?;
+    let operations2 = commands2.quantum_ops()?;
     println!("Second batch operations: {operations2:?}");
 
     // Handle second measurement
@@ -50,7 +50,7 @@ fn test_measurement_order_tracking() -> Result<(), PecosError> {
 
     // Third batch: third measurement
     let commands3 = engine.generate_commands()?;
-    let operations3 = commands3.parse_quantum_operations()?;
+    let operations3 = commands3.quantum_ops()?;
     println!("Third batch operations: {operations3:?}");
 
     // Handle third measurement

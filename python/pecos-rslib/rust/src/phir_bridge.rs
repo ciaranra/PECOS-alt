@@ -198,7 +198,7 @@ impl PHIREngine {
                 match process_result {
                     Ok(byte_message) => {
                         // Convert ByteMessage to Python objects
-                        match byte_message.parse_quantum_operations() {
+                        match byte_message.quantum_ops() {
                             Ok(ops) => {
                                 // Create a Python list of commands
                                 let mut py_commands = Vec::new();

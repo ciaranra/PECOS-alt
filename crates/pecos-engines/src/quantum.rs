@@ -94,7 +94,7 @@ impl Engine for StateVecEngine {
     #[allow(clippy::too_many_lines)]
     fn process(&mut self, message: Self::Input) -> Result<Self::Output, PecosError> {
         // Parse commands from the message
-        let batch = message.parse_quantum_operations()?;
+        let batch = message.quantum_ops()?;
         let mut measurements = Vec::new();
 
         for cmd in &batch {
@@ -317,7 +317,7 @@ impl Engine for SparseStabEngine {
 
     fn process(&mut self, message: Self::Input) -> Result<Self::Output, PecosError> {
         // Parse commands from the message
-        let batch = message.parse_quantum_operations()?;
+        let batch = message.quantum_ops()?;
         let mut measurements = Vec::new();
 
         for cmd in &batch {

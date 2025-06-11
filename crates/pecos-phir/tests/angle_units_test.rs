@@ -3,9 +3,9 @@ mod common;
 #[cfg(test)]
 mod tests {
     use pecos_core::errors::PecosError;
-
-    // Import helpers from common module
-    use crate::common::phir_test_utils::run_phir_simulation_from_json;
+    use pecos_engines::{Engine, ShotVec};
+    use pecos_phir::v0_1::ast::PHIRProgram;
+    use pecos_phir::v0_1::engine::PHIREngine;
 
     #[test]
     fn test_angle_units_conversion() -> Result<(), PecosError> {
@@ -37,15 +37,19 @@ mod tests {
           ]
         }"#;
 
-        // Run the test using our helper function - using single shot with no noise
-        let results = run_phir_simulation_from_json(
-            phir_json,
-            1,
-            1,
-            None,
-            None::<pecos_engines::PassThroughNoiseModel>,
-            None::<&std::path::Path>,
-        )?;
+        // Parse JSON into PHIRProgram
+        let program: PHIRProgram = serde_json::from_str(phir_json)
+            .map_err(|e| PecosError::Input(format!("Failed to parse PHIR program: {e}")))?;
+
+        // Create engine directly
+        let mut engine = PHIREngine::from_program(program.clone())?;
+
+        // Execute directly
+        let shot = engine.process(())?;
+
+        // Create a shotVec for compatibility with the rest of the test
+        let mut results = ShotVec::default();
+        results.shots.push(shot);
 
         // Print all information about the result for debugging
         println!("ShotResults: {results:?}");

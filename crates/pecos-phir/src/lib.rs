@@ -122,7 +122,7 @@ mod tests {
         let command_message = engine.generate_commands()?;
 
         // Parse the message back to confirm it has the correct operations
-        let parsed_commands = command_message.parse_quantum_operations().map_err(|e| {
+        let parsed_commands = command_message.quantum_ops().map_err(|e| {
             PecosError::Input(format!(
                 "PHIR test failed: Unable to validate generated quantum operations: {e}"
             ))

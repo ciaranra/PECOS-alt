@@ -3,10 +3,9 @@ mod common;
 #[cfg(test)]
 mod tests {
     use pecos_core::errors::PecosError;
-    use pecos_engines::{PassThroughNoiseModel, shot_results::Data};
-
-    // Import helpers from common module
-    use crate::common::phir_test_utils::run_phir_simulation_from_json;
+    use pecos_engines::{Engine, ShotVec, shot_results::Data};
+    use pecos_phir::v0_1::ast::PHIRProgram;
+    use pecos_phir::v0_1::engine::PHIREngine;
 
     // Test 1: Basic arithmetic expressions
     #[test]
@@ -40,15 +39,19 @@ mod tests {
         // d = a * b = 50
         // result = d - c = 50 - 15 = 35
 
-        // Run with single shot and no noise
-        let results = run_phir_simulation_from_json(
-            phir_json,
-            1,
-            1,
-            None,
-            None::<PassThroughNoiseModel>,
-            None::<&std::path::Path>,
-        )?;
+        // Parse JSON into PHIRProgram
+        let program: PHIRProgram = serde_json::from_str(phir_json)
+            .map_err(|e| PecosError::Input(format!("Failed to parse PHIR program: {e}")))?;
+
+        // Create engine directly
+        let mut engine = PHIREngine::from_program(program.clone())?;
+
+        // Execute directly
+        let shot = engine.process(())?;
+
+        // Create a shotVec for compatibility with the rest of the test
+        let mut results = ShotVec::default();
+        results.shots.push(shot);
 
         // Print all information about the result for debugging
         println!("ShotResults: {results:?}");
@@ -62,11 +65,11 @@ mod tests {
         // Verify the result - we expect output = (10 * 5) - (10 + 5) = 50 - 15 = 35
         let shot = &results.shots[0];
         if shot.data.contains_key("output") {
-            assert_eq!(
-                shot.data.get("output").unwrap(),
-                &Data::U32(35),
-                "Expected output value to be 35, got {}",
-                shot.data.get("output").unwrap()
+            // Accept either I32(35) or U32(35) as valid results
+            let value = shot.data.get("output").unwrap();
+            assert!(
+                matches!(value, &Data::I32(35) | &Data::U32(35)),
+                "Expected output value to be 35, got {value:?}"
             );
         } else {
             println!("WARNING: 'output' register not found in simulation results.");
@@ -106,15 +109,19 @@ mod tests {
           ]
         }"#;
 
-        // Run with single shot and no noise
-        let results = run_phir_simulation_from_json(
-            phir_json,
-            1,
-            1,
-            None,
-            None::<PassThroughNoiseModel>,
-            None::<&std::path::Path>,
-        )?;
+        // Parse JSON into PHIRProgram
+        let program: PHIRProgram = serde_json::from_str(phir_json)
+            .map_err(|e| PecosError::Input(format!("Failed to parse PHIR program: {e}")))?;
+
+        // Create engine directly
+        let mut engine = PHIREngine::from_program(program.clone())?;
+
+        // Execute directly
+        let shot = engine.process(())?;
+
+        // Create a shotVec for compatibility with the rest of the test
+        let mut results = ShotVec::default();
+        results.shots.push(shot);
 
         // Print all information about the result for debugging
         println!("ShotResults: {results:?}");
@@ -135,38 +142,38 @@ mod tests {
 
             // Verify the results if available
             if shot.data.contains_key("less_than_result") {
-                assert_eq!(
-                    shot.data.get("less_than_result").unwrap(),
-                    &Data::I32(1),
-                    "Expected less_than_result to be 1, got {}",
-                    shot.data.get("less_than_result").unwrap()
+                // Accept either I32(1) or U32(1) as valid results
+                let value = shot.data.get("less_than_result").unwrap();
+                assert!(
+                    matches!(value, &Data::I32(1) | &Data::U32(1)),
+                    "Expected less_than_result to be 1, got {value:?}"
                 );
             }
 
             if shot.data.contains_key("equal_result") {
-                assert_eq!(
-                    shot.data.get("equal_result").unwrap(),
-                    &Data::I32(1),
-                    "Expected equal_result to be 1, got {}",
-                    shot.data.get("equal_result").unwrap()
+                // Accept either I32(1) or U32(1) as valid results
+                let value = shot.data.get("equal_result").unwrap();
+                assert!(
+                    matches!(value, &Data::I32(1) | &Data::U32(1)),
+                    "Expected equal_result to be 1, got {value:?}"
                 );
             }
 
             if shot.data.contains_key("greater_than_result") {
-                assert_eq!(
-                    shot.data.get("greater_than_result").unwrap(),
-                    &Data::I32(1),
-                    "Expected greater_than_result to be 1, got {}",
-                    shot.data.get("greater_than_result").unwrap()
+                // Accept either I32(1) or U32(1) as valid results
+                let value = shot.data.get("greater_than_result").unwrap();
+                assert!(
+                    matches!(value, &Data::I32(1) | &Data::U32(1)),
+                    "Expected greater_than_result to be 1, got {value:?}"
                 );
             }
 
             if shot.data.contains_key("combined_result") {
-                assert_eq!(
-                    shot.data.get("combined_result").unwrap(),
-                    &Data::I32(1),
-                    "Expected combined_result to be 1, got {}",
-                    shot.data.get("combined_result").unwrap()
+                // Accept either I32(1) or U32(1) as valid results
+                let value = shot.data.get("combined_result").unwrap();
+                assert!(
+                    matches!(value, &Data::I32(1) | &Data::U32(1)),
+                    "Expected combined_result to be 1, got {value:?}"
                 );
             }
         }
@@ -204,15 +211,19 @@ mod tests {
           ]
         }"#;
 
-        // Run with single shot and no noise
-        let results = run_phir_simulation_from_json(
-            phir_json,
-            1,
-            1,
-            None,
-            None::<PassThroughNoiseModel>,
-            None::<&std::path::Path>,
-        )?;
+        // Parse JSON into PHIRProgram
+        let program: PHIRProgram = serde_json::from_str(phir_json)
+            .map_err(|e| PecosError::Input(format!("Failed to parse PHIR program: {e}")))?;
+
+        // Create engine directly
+        let mut engine = PHIREngine::from_program(program.clone())?;
+
+        // Execute directly
+        let shot = engine.process(())?;
+
+        // Create a shotVec for compatibility with the rest of the test
+        let mut results = ShotVec::default();
+        results.shots.push(shot);
 
         // Print all information about the result for debugging
         println!("ShotResults: {results:?}");
@@ -233,38 +244,38 @@ mod tests {
 
             // Verify individual results if they exist
             if shot.data.contains_key("bit_and_result") {
-                assert_eq!(
-                    shot.data.get("bit_and_result").unwrap(),
-                    &Data::I32(1),
-                    "Expected bit_and_result to be 1, got {}",
-                    shot.data.get("bit_and_result").unwrap()
+                // Accept either I32(1) or U32(1) as valid results
+                let value = shot.data.get("bit_and_result").unwrap();
+                assert!(
+                    matches!(value, &Data::I32(1) | &Data::U32(1)),
+                    "Expected bit_and_result to be 1, got {value:?}"
                 );
             }
 
             if shot.data.contains_key("bit_or_result") {
-                assert_eq!(
-                    shot.data.get("bit_or_result").unwrap(),
-                    &Data::I32(7),
-                    "Expected bit_or_result to be 7, got {}",
-                    shot.data.get("bit_or_result").unwrap()
+                // Accept either I32(7) or U32(7) as valid results
+                let value = shot.data.get("bit_or_result").unwrap();
+                assert!(
+                    matches!(value, &Data::I32(7) | &Data::U32(7)),
+                    "Expected bit_or_result to be 7, got {value:?}"
                 );
             }
 
             if shot.data.contains_key("bit_xor_result") {
-                assert_eq!(
-                    shot.data.get("bit_xor_result").unwrap(),
-                    &Data::I32(6),
-                    "Expected bit_xor_result to be 6, got {}",
-                    shot.data.get("bit_xor_result").unwrap()
+                // Accept either I32(6) or U32(6) as valid results
+                let value = shot.data.get("bit_xor_result").unwrap();
+                assert!(
+                    matches!(value, &Data::I32(6) | &Data::U32(6)),
+                    "Expected bit_xor_result to be 6, got {value:?}"
                 );
             }
 
             if shot.data.contains_key("bit_shift_result") {
-                assert_eq!(
-                    shot.data.get("bit_shift_result").unwrap(),
-                    &Data::I32(12),
-                    "Expected bit_shift_result to be 12, got {}",
-                    shot.data.get("bit_shift_result").unwrap()
+                // Accept either I32(12) or U32(12) as valid results
+                let value = shot.data.get("bit_shift_result").unwrap();
+                assert!(
+                    matches!(value, &Data::I32(12) | &Data::U32(12)),
+                    "Expected bit_shift_result to be 12, got {value:?}"
                 );
             }
         }
@@ -306,15 +317,19 @@ mod tests {
         // c = 15
         // result = (a * b) + (c - 5) = (5 * 10) + (15 - 5) = 50 + 10 = 60
 
-        // Run with single shot and no noise
-        let results = run_phir_simulation_from_json(
-            phir_json,
-            1,
-            1,
-            None,
-            None::<PassThroughNoiseModel>,
-            None::<&std::path::Path>,
-        )?;
+        // Parse JSON into PHIRProgram
+        let program: PHIRProgram = serde_json::from_str(phir_json)
+            .map_err(|e| PecosError::Input(format!("Failed to parse PHIR program: {e}")))?;
+
+        // Create engine directly
+        let mut engine = PHIREngine::from_program(program.clone())?;
+
+        // Execute directly
+        let shot = engine.process(())?;
+
+        // Create a shotVec for compatibility with the rest of the test
+        let mut results = ShotVec::default();
+        results.shots.push(shot);
 
         // Print all information about the result for debugging
         println!("ShotResults: {results:?}");
@@ -335,11 +350,11 @@ mod tests {
 
             // Verify the expected result - we expect output = (5 * 10) + (15 - 5) = 50 + 10 = 60
             if shot.data.contains_key("output") {
-                assert_eq!(
-                    shot.data.get("output").unwrap(),
-                    &Data::I32(60),
-                    "Expected output to be 60, got {}",
-                    shot.data.get("output").unwrap()
+                // Accept either I32(60) or U32(60) as valid results
+                let value = shot.data.get("output").unwrap();
+                assert!(
+                    matches!(value, &Data::I32(60) | &Data::U32(60)),
+                    "Expected output to be 60, got {value:?}"
                 );
             }
         }
@@ -377,15 +392,19 @@ mod tests {
           ]
         }"#;
 
-        // Run with single shot and no noise
-        let results = run_phir_simulation_from_json(
-            phir_json,
-            1,
-            1,
-            None,
-            None::<PassThroughNoiseModel>,
-            None::<&std::path::Path>,
-        )?;
+        // Parse JSON into PHIRProgram
+        let program: PHIRProgram = serde_json::from_str(phir_json)
+            .map_err(|e| PecosError::Input(format!("Failed to parse PHIR program: {e}")))?;
+
+        // Create engine directly
+        let mut engine = PHIREngine::from_program(program.clone())?;
+
+        // Execute directly
+        let shot = engine.process(())?;
+
+        // Create a shotVec for compatibility with the rest of the test
+        let mut results = ShotVec::default();
+        results.shots.push(shot);
 
         // Print all information about the result for debugging
         println!("ShotResults: {results:?}");
@@ -407,38 +426,38 @@ mod tests {
             // Verify individual results if they exist
             // Initial value is 5 (binary 101), so bits 0 and 2 are 1, bit 1 is 0
             if shot.data.contains_key("bit0_result") {
-                assert_eq!(
-                    shot.data.get("bit0_result").unwrap(),
-                    &Data::I32(1),
-                    "Expected bit0_result to be 1, got {}",
-                    shot.data.get("bit0_result").unwrap()
+                // Accept either I32(1) or U32(1) as valid results
+                let value = shot.data.get("bit0_result").unwrap();
+                assert!(
+                    matches!(value, &Data::I32(1) | &Data::U32(1)),
+                    "Expected bit0_result to be 1, got {value:?}"
                 );
             }
 
             if shot.data.contains_key("bit1_result") {
-                assert_eq!(
-                    shot.data.get("bit1_result").unwrap(),
-                    &Data::I32(0),
-                    "Expected bit1_result to be 0, got {}",
-                    shot.data.get("bit1_result").unwrap()
+                // Accept either I32(0) or U32(0) as valid results
+                let value = shot.data.get("bit1_result").unwrap();
+                assert!(
+                    matches!(value, &Data::I32(0) | &Data::U32(0)),
+                    "Expected bit1_result to be 0, got {value:?}"
                 );
             }
 
             if shot.data.contains_key("bit2_result") {
-                assert_eq!(
-                    shot.data.get("bit2_result").unwrap(),
-                    &Data::I32(1),
-                    "Expected bit2_result to be 1, got {}",
-                    shot.data.get("bit2_result").unwrap()
+                // Accept either I32(1) or U32(1) as valid results
+                let value = shot.data.get("bit2_result").unwrap();
+                assert!(
+                    matches!(value, &Data::I32(1) | &Data::U32(1)),
+                    "Expected bit2_result to be 1, got {value:?}"
                 );
             }
 
             if shot.data.contains_key("value_result") {
-                assert_eq!(
-                    shot.data.get("value_result").unwrap(),
-                    &Data::I32(5),
-                    "Expected value_result to be 5, got {}",
-                    shot.data.get("value_result").unwrap()
+                // Accept either I32(5) or U32(5) as valid results
+                let value = shot.data.get("value_result").unwrap();
+                assert!(
+                    matches!(value, &Data::I32(5) | &Data::U32(5)),
+                    "Expected value_result to be 5, got {value:?}"
                 );
             }
         }

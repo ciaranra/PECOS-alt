@@ -388,7 +388,7 @@ mod tests {
     fn test_noise_utils_create_quantum_builder() {
         let mut builder = NoiseUtils::create_quantum_builder();
         let message = builder.build();
-        let result = message.parse_quantum_operations();
+        let result = message.quantum_ops();
         assert!(result.is_ok());
     }
 
@@ -399,7 +399,7 @@ mod tests {
         let gates = vec![Gate::x(&[0]), Gate::y(&[1])];
 
         let message = NoiseUtils::create_gate_message(&gates);
-        let parsed_gates = message.parse_quantum_operations().unwrap();
+        let parsed_gates = message.quantum_ops().unwrap();
         assert_eq!(parsed_gates.len(), 2);
     }
 
@@ -412,7 +412,7 @@ mod tests {
         let mut builder = NoiseUtils::create_quantum_builder();
         NoiseUtils::apply_prep_0(&mut builder, 0);
         let message = builder.build();
-        let parsed_gates = message.parse_quantum_operations().unwrap();
+        let parsed_gates = message.quantum_ops().unwrap();
 
         // Should have one Prep gate
         assert_eq!(parsed_gates.len(), 1);
@@ -423,7 +423,7 @@ mod tests {
         let mut builder = NoiseUtils::create_quantum_builder();
         NoiseUtils::apply_prep_1(&mut builder, 1);
         let message = builder.build();
-        let parsed_gates = message.parse_quantum_operations().unwrap();
+        let parsed_gates = message.quantum_ops().unwrap();
 
         // Should have two gates: Prep followed by X
         assert_eq!(parsed_gates.len(), 2);

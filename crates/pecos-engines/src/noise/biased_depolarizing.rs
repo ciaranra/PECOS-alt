@@ -400,7 +400,7 @@ impl ControlEngine for BiasedDepolarizingNoiseModel {
         trace!("BiasedDepolarizingNoise::start - applying noise to quantum operations");
 
         // Parse the input as quantum operations
-        let gates: Vec<crate::Gate> = input.parse_quantum_operations()?;
+        let gates: Vec<crate::Gate> = input.quantum_ops()?;
 
         // Apply noise to the gates
         let noisy_gates = self.apply_noise_to_gates(&gates);

@@ -116,11 +116,7 @@ impl PyByteMessageBuilder {
         self.inner.add_prep(&[qubit]);
     }
 
-    /// Add a flush command to the message
-    #[pyo3(text_signature = "($self, is_last=False)")]
-    fn add_flush(&mut self, is_last: Option<bool>) {
-        self.inner.add_flush(is_last.unwrap_or(false));
-    }
+    // Removed add_flush since it's no longer needed
 
     /// Build the message and return a PyByteMessage
     #[pyo3(text_signature = "($self)")]
@@ -151,14 +147,6 @@ pub struct PyByteMessage {
 
 #[pymethods]
 impl PyByteMessage {
-    /// Create a new empty ByteMessage
-    #[classmethod]
-    fn create_empty(_cls: &Bound<PyType>) -> Self {
-        Self {
-            inner: ByteMessage::create_empty(),
-        }
-    }
-
     /// Create a new ByteMessageBuilder
     #[classmethod]
     fn builder(_cls: &Bound<PyType>) -> PyByteMessageBuilder {
@@ -181,11 +169,11 @@ impl PyByteMessage {
         builder
     }
 
-    /// Create a flush message
+    /// Create an empty message
     #[classmethod]
-    fn create_flush(_cls: &Bound<PyType>) -> Self {
+    fn create_empty(_cls: &Bound<PyType>) -> Self {
         Self {
-            inner: ByteMessage::create_flush(),
+            inner: ByteMessage::create_empty(),
         }
     }
 
@@ -206,7 +194,7 @@ impl PyByteMessage {
     fn parse_quantum_operations(&self, py: Python<'_>) -> PyResult<Vec<PyObject>> {
         let mut results = Vec::new();
 
-        for op in self.inner.parse_quantum_operations().map_err(|e| {
+        for op in self.inner.quantum_ops().map_err(|e| {
             PyRuntimeError::new_err(format!(
                 "Failed to parse quantum operations in Python bindings: {e}"
             ))

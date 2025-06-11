@@ -300,7 +300,7 @@ mod tests {
         let operation_result = noise_model.start(quantum_message.clone()).unwrap();
         if let EngineStage::NeedsProcessing(output) = operation_result {
             // Can't check for exact output due to randomness
-            let gates = output.parse_quantum_operations().unwrap();
+            let gates = output.quantum_ops().unwrap();
             assert!(!gates.is_empty(), "Output should contain at least one gate");
         } else {
             panic!("Expected NeedsProcessing stage");

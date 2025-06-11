@@ -477,7 +477,7 @@ impl GeneralNoiseModel {
 
         // Parse the input as quantum operations
         let gates = input
-            .parse_quantum_operations()
+            .quantum_ops()
             .expect("Failed to parse input as quantum operations");
 
         for gate in gates {
@@ -2223,7 +2223,7 @@ mod tests {
 
         // Get the message and verify it contains RZ gates
         let message = builder.build();
-        let gates = message.parse_quantum_operations().unwrap();
+        let gates = message.quantum_ops().unwrap();
 
         // At least one gate should be an RZ gate
         assert!(!gates.is_empty(), "Should have at least one gate");
@@ -2248,7 +2248,7 @@ mod tests {
         );
 
         let message = builder.build();
-        let gates = message.parse_quantum_operations().unwrap();
+        let gates = message.quantum_ops().unwrap();
 
         // Should have a single RZ gate operating on multiple qubits
         assert!(
@@ -2297,7 +2297,7 @@ mod tests {
 
         // The message may contain Z gates or be empty depending on random outcomes
         let message = builder.build();
-        let _gates = message.parse_quantum_operations().unwrap();
+        let _gates = message.quantum_ops().unwrap();
 
         // We can't assert specific outcomes due to randomness, but the code should run without errors
     }
@@ -2398,7 +2398,7 @@ mod tests {
 
         // Apply noise to the gates manually since we can't access apply_noise_to_gates directly
         let message = noise.apply_noise_on_start(&msg).unwrap();
-        let gates = message.parse_quantum_operations().unwrap();
+        let gates = message.quantum_ops().unwrap();
 
         // We expect the RZ gate to be unchanged, and the X gate might have errors applied
         // (can't verify exact count due to randomness, but we know we should have at least one)

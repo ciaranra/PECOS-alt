@@ -188,7 +188,7 @@ fn test_rotation_gate_with_different_angles() {
         println!("======= Testing {desc}: angle={angle} =======");
 
         // Print out the quantum operations in the circuit
-        if let Ok(ops) = circ.parse_quantum_operations() {
+        if let Ok(ops) = circ.quantum_ops() {
             println!("Circuit operations:");
             for (i, op) in ops.iter().enumerate() {
                 println!("  Op {i}: {op:?}");
@@ -262,7 +262,7 @@ fn test_rotation_gate_with_different_angles() {
     let circ = builder.build();
 
     println!("======= Testing X gate =======");
-    if let Ok(ops) = circ.parse_quantum_operations() {
+    if let Ok(ops) = circ.quantum_ops() {
         println!("X gate circuit operations:");
         for (i, op) in ops.iter().enumerate() {
             println!("  Op {i}: {op:?}");

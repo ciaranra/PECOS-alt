@@ -5,8 +5,7 @@
 
 use crate::byte_message::message::ByteMessage;
 use crate::byte_message::protocol::{
-    BatchHeader, GateCommandHeader, MeasurementHeader, MessageFlags, MessageHeader, MessageType,
-    OutcomeHeader, calc_padding,
+    BatchHeader, GateHeader, MessageFlags, MessageHeader, MessageType, OutcomeHeader, calc_padding,
 };
 use bytemuck::bytes_of;
 use pecos_core::QubitId;
@@ -24,7 +23,6 @@ pub enum BuilderMode {
     Empty,               // No operations added yet
     QuantumOperations,   // Contains quantum operations
     MeasurementOutcomes, // Contains measurement outcomes
-    ControlMessage,      // Contains control messages like Flush
 }
 
 /// Helper for building binary messages
@@ -70,18 +68,30 @@ impl ByteMessageBuilder {
     }
 
     /// Create a builder pre-configured for quantum operations
+    ///
+    /// Sets the builder mode to `QuantumOperations` to build a message
+    /// containing quantum gates and operations.
+    ///
+    /// # Returns
+    ///
+    /// Returns `self` for method chaining.
     #[must_use]
     pub fn for_quantum_operations(&mut self) -> &mut Self {
         self.mode = BuilderMode::QuantumOperations;
-        self.add_message(MessageType::BeginBatch, &[], MessageFlags::NONE);
         self
     }
 
     /// Create a builder pre-configured for measurement outcomes
+    ///
+    /// Sets the builder mode to `MeasurementOutcomes` to build a message
+    /// containing measurement outcomes.
+    ///
+    /// # Returns
+    ///
+    /// Returns `self` for method chaining.
     #[must_use]
     pub fn for_outcomes(&mut self) -> &mut Self {
         self.mode = BuilderMode::MeasurementOutcomes;
-        self.add_message(MessageType::BeginBatch, &[], MessageFlags::NONE);
         self
     }
 
@@ -95,51 +105,52 @@ impl ByteMessageBuilder {
 
     /// Add a message with a header and payload
     ///
+    /// This method adds a new message to the builder with the specified type, payload,
+    /// and flags. It ensures proper alignment and maintains the builder's mode.
+    ///
+    /// # Arguments
+    ///
+    /// * `msg_type` - The type of message to add (`MessageType::Gate` or `MessageType::Outcome`)
+    /// * `payload` - The binary payload for the message
+    /// * `flags` - Optional flags to set on the message
+    ///
+    /// # Returns
+    ///
+    /// Returns `self` for method chaining.
+    ///
     /// # Panics
     ///
     /// This function will panic if:
     /// - Attempting to mix quantum operations and measurement outcomes in the same message
-    /// - Attempting to mix control messages with other message types
     pub fn add_message(
         &mut self,
         msg_type: MessageType,
         payload: &[u8],
         flags: MessageFlags,
     ) -> &mut Self {
-        // Update mode based on message type
+        // Validate message type compatibility with current mode
         match msg_type {
-            MessageType::RecordData
-            | MessageType::InfoMessage
-            | MessageType::WarningMessage
-            | MessageType::ErrorMessage
-            | MessageType::DebugMessage
-            | MessageType::BeginBatch
-            | MessageType::EndBatch => {
-                // These can be used with any mode
-                // In the future, we might want to add dedicated modes for these
-            }
-            MessageType::GateCommand | MessageType::Measurement => {
+            MessageType::Gate => {
+                // Gates require QuantumOperations mode
                 assert!(
                     !(self.mode == BuilderMode::MeasurementOutcomes),
                     "Cannot mix quantum operations and measurement outcomes in the same message"
                 );
+
+                // Auto-set mode if not already set
                 if self.mode == BuilderMode::Empty {
                     self.mode = BuilderMode::QuantumOperations;
                 }
             }
             MessageType::Outcome => {
+                // Outcomes require MeasurementOutcomes mode
                 assert!(
                     !(self.mode == BuilderMode::QuantumOperations),
                     "Cannot mix quantum operations and measurement outcomes in the same message"
                 );
+
+                // Always set the mode (even if already in Empty state)
                 self.mode = BuilderMode::MeasurementOutcomes;
-            }
-            MessageType::Flush | MessageType::Reset | MessageType::Error => {
-                assert!(
-                    !(self.mode != BuilderMode::Empty && self.mode != BuilderMode::ControlMessage),
-                    "Control messages should be sent separately from other message types"
-                );
-                self.mode = BuilderMode::ControlMessage;
             }
         }
 
@@ -147,17 +158,22 @@ impl ByteMessageBuilder {
         self.add_padding(4);
 
         // Create and write message header
-        let header = MessageHeader::new(
-            msg_type,
-            u32::try_from(payload.len()).unwrap_or(u32::MAX),
-            flags,
-        );
+        let payload_size = u32::try_from(payload.len()).unwrap_or_else(|_| {
+            // This is a very unlikely case, but we handle it gracefully
+            eprintln!("Warning: Payload size exceeds u32::MAX, using maximum value");
+            u32::MAX
+        });
+
+        let header = MessageHeader::new(msg_type, payload_size, flags);
         self.buffer.extend_from_slice(bytes_of(&header));
 
         // Write payload
         self.buffer.extend_from_slice(payload);
 
+        // Increment message count
         self.msg_count += 1;
+
+        // Return self for method chaining
         self
     }
 
@@ -178,14 +194,8 @@ impl ByteMessageBuilder {
     /// This function will panic if the number of qubits in the gate exceeds 255,
     /// as the protocol uses a u8 to represent the qubit count.
     pub fn add_gate_command(&mut self, gate: &Gate) -> &mut Self {
-        // Handle measurement gates using the add_measurements method
-        if gate.gate_type == GateType::Measure {
-            let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| usize::from(*q)).collect();
-            return self.add_measurements(&qubits_usize);
-        }
-
         // Calculate total payload size
-        let header_size = size_of::<GateCommandHeader>();
+        let header_size = size_of::<GateHeader>();
         let qubits_size = gate.qubits.len() * size_of::<u32>();
         let params_size = match gate.gate_type {
             GateType::R1XY => 2 * size_of::<f64>(),
@@ -202,7 +212,7 @@ impl ByteMessageBuilder {
         let has_params = !gate.params.is_empty();
 
         // Create gate header
-        let header = GateCommandHeader {
+        let header = GateHeader {
             gate_type: gate.gate_type as u8,
             num_qubits: u8::try_from(gate.qubits.len()).expect("Too many qubits for gate"),
             has_params: u8::from(has_params),
@@ -224,7 +234,7 @@ impl ByteMessageBuilder {
         }
 
         // Add the message to the buffer
-        self.add_message(MessageType::GateCommand, &payload, MessageFlags::NONE);
+        self.add_message(MessageType::Gate, &payload, MessageFlags::NONE);
         self
     }
 
@@ -242,19 +252,16 @@ impl ByteMessageBuilder {
     ///
     /// Panics if any result outcome is too large to fit in a u32.
     pub fn add_outcomes(&mut self, outcomes: &[usize]) -> &mut Self {
-        for (i, &result) in outcomes.iter().enumerate() {
-            let is_last = i == outcomes.len() - 1;
-            let flags = if is_last {
-                MessageFlags::LAST_MESSAGE
-            } else {
-                MessageFlags::NONE
-            };
-
+        for &result in outcomes {
             let result_header = OutcomeHeader {
                 outcome: u32::try_from(result).expect("Result outcome too large"),
             };
 
-            self.add_message(MessageType::Outcome, bytes_of(&result_header), flags);
+            self.add_message(
+                MessageType::Outcome,
+                bytes_of(&result_header),
+                MessageFlags::NONE,
+            );
         }
         self
     }
@@ -435,17 +442,9 @@ impl ByteMessageBuilder {
     /// Panics if any qubit ID is too large to fit in a u32.
     pub fn add_measurements(&mut self, qubit_ids: &[usize]) -> &mut Self {
         for &qubit in qubit_ids {
-            // Create measurement header directly
-            let meas_header = MeasurementHeader {
-                qubit: u32::try_from(qubit).unwrap(),
-            };
-
-            // Add measurement message
-            self.add_message(
-                MessageType::Measurement,
-                bytes_of(&meas_header),
-                MessageFlags::NONE,
-            );
+            // Add a measurement as a regular gate command
+            let gate = Gate::measure(&[qubit]);
+            self.add_gate_command(&gate);
         }
         self
     }
@@ -457,51 +456,10 @@ impl ByteMessageBuilder {
         self
     }
 
-    /// Add a flush command
-    pub fn add_flush(&mut self, is_last: bool) -> &mut Self {
-        let flags = if is_last {
-            MessageFlags::LAST_MESSAGE
-        } else {
-            MessageFlags::NONE
-        };
-        self.add_message(MessageType::Flush, &[], flags)
-    }
-
-    /// Add a record data message with key-value pair
-    pub fn add_record_data(&mut self, key: &str, value: f64) -> &mut Self {
-        let payload = format!("{key} {value}").into_bytes();
-        self.add_message(MessageType::RecordData, &payload, MessageFlags::NONE)
-    }
-
-    /// Add a result record message
-    pub fn add_result_record(&mut self, result_id: usize, label: Option<&str>) -> &mut Self {
-        let payload = if let Some(label_str) = label {
-            format!("{result_id} {label_str}").into_bytes()
-        } else {
-            format!("{result_id}").into_bytes()
-        };
-        self.add_message(MessageType::RecordData, &payload, MessageFlags::NONE)
-    }
-
-    /// Add a debug message
-    pub fn add_debug_message(&mut self, msg: &str) -> &mut Self {
-        self.add_message(
-            MessageType::DebugMessage,
-            msg.as_bytes(),
-            MessageFlags::NONE,
-        )
-    }
-
     /// Check how many messages have been added
     #[must_use]
     pub fn message_count(&self) -> u32 {
         self.msg_count
-    }
-
-    /// Check what mode the builder is in
-    #[must_use]
-    pub fn mode(&self) -> BuilderMode {
-        self.mode
     }
 
     /// Clear the builder and start fresh
@@ -564,13 +522,27 @@ impl ByteMessageBuilder {
     }
 
     /// Build the final message batch without type checking
+    ///
+    /// This creates a message without validating the builder's state, which is useful
+    /// for internal usage or when you're confident the message is correctly constructed.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `ByteMessage` containing the constructed binary message.
+    #[must_use]
     pub fn build_unchecked(&mut self) -> ByteMessage {
         // Calculate total size and update batch header
         let total_size = self.buffer.len();
+
+        // Create a batch header with proper message count and size
         let header = BatchHeader::new(
             self.msg_count,
-            u32::try_from(total_size).unwrap_or(u32::MAX),
+            u32::try_from(total_size).unwrap_or_else(|_| {
+                eprintln!("Warning: Message size exceeds u32::MAX, using maximum value");
+                u32::MAX
+            }),
         );
+
         // Write header to the start of the buffer
         self.buffer[0..size_of::<BatchHeader>()].copy_from_slice(bytes_of(&header));
 
@@ -580,11 +552,19 @@ impl ByteMessageBuilder {
 
     /// Build the message and return it
     ///
+    /// Validates the builder state and constructs a final `ByteMessage` containing
+    /// all added operations or outcomes.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `ByteMessage` containing the constructed binary message.
+    ///
     /// # Panics
     ///
     /// This function will panic if:
-    /// - The builder mode is not specified (still Empty) but messages have been added
-    /// - The builder mode is `QuantumOperations` but no quantum operations were added
+    /// - Messages have been added but the builder mode was not explicitly set
+    ///   (call `for_quantum_operations()` or `for_outcomes()` before adding operations)
+    #[must_use]
     pub fn build(&mut self) -> ByteMessage {
         // Validate that a mode was explicitly set if operations were added
         assert!(
@@ -592,34 +572,7 @@ impl ByteMessageBuilder {
             "Builder mode not specified. Call for_quantum_operations() or for_outcomes() before adding operations."
         );
 
-        // Add validation based on the builder's current mode
-        match self.mode {
-            BuilderMode::Empty => {
-                // Create a minimal empty message if nothing was added
-                if self.msg_count == 0 {
-                    self.add_flush(true);
-                }
-            }
-            BuilderMode::QuantumOperations | BuilderMode::MeasurementOutcomes => {
-                // For quantum operations and measurement outcomes, ensure we have both BeginBatch and EndBatch
-                // Check if the last message is already an EndBatch
-                let has_end_batch = self.buffer.len() >= size_of::<MessageHeader>() && {
-                    let header_offset = self.buffer.len() - size_of::<MessageHeader>();
-                    let header_slice =
-                        &self.buffer[header_offset..header_offset + size_of::<MessageHeader>()];
-                    // Unaligned read needed since message might not end on 4-byte boundary
-                    let header = bytemuck::pod_read_unaligned::<MessageHeader>(header_slice);
-                    header.msg_type == MessageType::EndBatch as u8
-                };
-
-                if !has_end_batch {
-                    self.add_message(MessageType::EndBatch, &[], MessageFlags::NONE);
-                }
-            }
-            // Other modes don't need special handling
-            BuilderMode::ControlMessage => {}
-        }
-
+        // Complete the message by building the batch header
         self.build_unchecked()
     }
 }
@@ -667,7 +620,7 @@ mod tests {
         let message = builder.build();
 
         // Parse the message
-        let commands = message.parse_quantum_operations().unwrap();
+        let commands = message.quantum_ops().unwrap();
 
         // Verify the commands
         assert_eq!(commands.len(), 3);
@@ -691,8 +644,8 @@ mod tests {
         // Build the message
         let message = builder.build();
 
-        // Verify the message type
-        assert_eq!(message.message_type().unwrap(), MessageType::BeginBatch);
+        // No need to verify a specific message type anymore, just ensure it's valid
+        assert!(message.is_empty().is_ok());
     }
 
     #[test]
@@ -714,7 +667,7 @@ mod tests {
         let message = builder.build();
 
         // Parse the message
-        let commands = message.parse_quantum_operations().unwrap();
+        let commands = message.quantum_ops().unwrap();
 
         // Verify the commands
         assert_eq!(commands.len(), 7);
@@ -769,7 +722,7 @@ mod tests {
         let message = builder.build();
 
         // Parse the message
-        let commands = message.parse_quantum_operations().unwrap();
+        let commands = message.quantum_ops().unwrap();
 
         // Verify the commands
         assert_eq!(commands.len(), 3);
@@ -800,7 +753,7 @@ mod tests {
             *bytemuck::from_bytes::<BatchHeader>(&bytes[0..size_of::<BatchHeader>()]);
         assert_eq!(batch_header.magic, BATCH_MAGIC);
         assert_eq!(batch_header.version, PROTOCOL_VERSION);
-        assert_eq!(batch_header.msg_count, 3);
+        assert_eq!(batch_header.msg_count, 1);
     }
 
     #[test]
@@ -816,7 +769,7 @@ mod tests {
         let message = builder.build();
 
         // Parse the message
-        let commands = message.parse_quantum_operations().unwrap();
+        let commands = message.quantum_ops().unwrap();
 
         // Verify the commands
         assert_eq!(commands.len(), 1);
@@ -834,7 +787,7 @@ mod tests {
         builder.add_cx(&[0], &[1]);
 
         // Check the message count
-        assert_eq!(builder.message_count(), 3);
+        assert_eq!(builder.message_count(), 2);
 
         // Clear the builder
         builder.clear();
@@ -860,7 +813,7 @@ mod tests {
         builder.add_cx(&[0], &[1]);
 
         // Check the message count
-        assert_eq!(builder.message_count(), 3);
+        assert_eq!(builder.message_count(), 2);
 
         // Get the buffer capacity before reset
         let capacity_before = builder.buffer.capacity();
@@ -870,7 +823,6 @@ mod tests {
 
         // Check the message count after reset
         assert_eq!(builder.message_count(), 0);
-        assert_eq!(builder.mode(), BuilderMode::Empty);
 
         // Verify the buffer capacity is preserved
         assert_eq!(builder.buffer.capacity(), capacity_before);
@@ -882,11 +834,11 @@ mod tests {
         builder.add_h(&[0]);
 
         // Check the message count again
-        assert_eq!(builder.message_count(), 2);
+        assert_eq!(builder.message_count(), 1);
 
         // Build the message and verify it's valid
         let message = builder.build();
-        let commands = message.parse_quantum_operations().unwrap();
+        let commands = message.quantum_ops().unwrap();
         assert_eq!(commands.len(), 1);
         assert_eq!(commands[0].gate_type, GateType::H);
     }

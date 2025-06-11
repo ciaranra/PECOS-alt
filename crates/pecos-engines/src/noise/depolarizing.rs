@@ -461,7 +461,7 @@ impl ControlEngine for DepolarizingNoiseModel {
 
         // Parse the input as quantum operations
         let gates: Vec<crate::Gate> = input
-            .parse_quantum_operations()
+            .quantum_ops()
             .map_err(|e| PecosError::Input(format!("Failed to parse quantum operations: {e}")))?;
 
         // Apply noise to the gates
