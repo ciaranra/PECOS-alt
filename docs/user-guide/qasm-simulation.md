@@ -66,7 +66,7 @@ Now, let's run this code using PECOS's simple `run_qasm` function:
 === "Python"
 
     ```python
-    from pecos_rslib.qasm_sim import run_qasm, DepolarizingNoise
+    from pecos.rslib import run_qasm, DepolarizingNoise
 
     # Define the Bell state QASM code
     qasm_code = '''
@@ -126,7 +126,7 @@ For more complex simulations or when you need finer control, you can use the bui
 === "Python"
 
     ```python
-    from pecos_rslib.qasm_sim import qasm_sim, DepolarizingNoise
+    from pecos.rslib import qasm_sim, DepolarizingNoise
 
     # Define the Bell state QASM code (as above)
     qasm_code = '''
@@ -212,12 +212,6 @@ Real quantum computers are noisy. PECOS helps you understand how noise affects y
 
     // Biased depolarizing (asymmetric error distribution)
     BiasedDepolarizingNoise { p: 0.01 }
-
-    // Biased measurement (asymmetric bit flips)
-    BiasedMeasurementNoise {
-        p0: 0.01,  // Probability of 0→1 flip
-        p1: 0.02,  // Probability of 1→0 flip
-    }
     ```
 
 === "Python"
@@ -239,12 +233,6 @@ Real quantum computers are noisy. PECOS helps you understand how noise affects y
 
     # Biased depolarizing (asymmetric error distribution)
     BiasedDepolarizingNoise(p=0.01)
-
-    # Biased measurement (asymmetric bit flips)
-    BiasedMeasurementNoise(
-        p0=0.01,  # Probability of 0→1 flip
-        p1=0.02   # Probability of 1→0 flip
-    )
     ```
 
 ### Creating Custom Noise Models
@@ -311,7 +299,7 @@ PECOS provides different engines optimized for different types of circuits:
 === "Python"
 
     ```python
-    from pecos_rslib.qasm_sim import QuantumEngine
+    from pecos.rslib import QuantumEngine
 
     # Sparse stabilizer (default, efficient for Clifford circuits)
     QuantumEngine.SparseStabilizer
@@ -335,6 +323,14 @@ Simulation results come back as measurement outcomes for each shot. These can be
     // Access measurement results by register name
     let c_values = shot_map.try_bits_as_u64("c")?;
     // Returns Vec<u64> where each value is the decimal encoding
+
+    // Or get results as binary strings
+    let results = qasm_sim(qasm)
+        .with_binary_string_format()
+        .run(1000)?;
+    let shot_map = results.try_as_shot_map()?;
+    let binary_values = shot_map.try_bits_as_binary("c")?;
+    // Returns Vec<String> where each string is like "00", "11", etc.
     ```
 
 === "Python"
@@ -356,11 +352,22 @@ Simulation results come back as measurement outcomes for each shot. These can be
     from collections import Counter
     counts = Counter(results["c"])
     print(counts)  # {0: 492, 3: 508} for an ideal Bell state
+
+    # Or get results as binary strings
+    results = qasm_sim(qasm)
+        .with_binary_string_format()
+        .run(1000)
+    print(results)
+    # {"c": ["00", "11", "00", "11", ...]}  # Binary string format
+
+    # Count binary string outcomes
+    counts = Counter(results["c"])
+    print(counts)  # {"00": 492, "11": 508} for an ideal Bell state
     ```
 
-    The Python API returns results in columnar format, with each register name mapping to a list of integer values. For a Bell state measurement, you expect to see roughly equal counts of 0 (both qubits in |0⟩) and 3 (both qubits in |1⟩).
+    The Python API returns results in columnar format, with each register name mapping to a list of values. By default, these are integer values (decimal encoding of the binary strings). With `.with_binary_string_format()`, you get the binary strings directly.
 
-    For large registers (>64 qubits), the results are automatically converted to Python's arbitrary-precision integers.
+    For large registers (>64 qubits), integer results are automatically converted to Python's arbitrary-precision integers.
 
 ## Practical Examples
 
@@ -406,7 +413,7 @@ This example shows how noise affects quantum entanglement:
 === "Python"
 
     ```python
-    from pecos_rslib.qasm_sim import run_qasm, qasm_sim, DepolarizingNoise
+    from pecos.rslib import run_qasm, qasm_sim, DepolarizingNoise
     from collections import Counter
 
     qasm = '''
@@ -569,7 +576,7 @@ For many shots, you can use multiple CPU cores to speed up simulation:
 Python provides some additional utility functions for working with the QASM simulator:
 
 ```python
-from pecos_rslib.qasm_sim import get_noise_models, get_quantum_engines
+from pecos.rslib import get_noise_models, get_quantum_engines
 
 # Get list of available noise model names
 noise_models = get_noise_models()

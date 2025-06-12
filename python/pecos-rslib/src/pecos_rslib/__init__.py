@@ -32,8 +32,17 @@ from pecos_rslib._pecos_rslib import run_qasm
 from pecos_rslib._pecos_rslib import get_noise_models
 from pecos_rslib._pecos_rslib import get_quantum_engines
 
-# Import the qasm_sim module to make it accessible
-from pecos_rslib import qasm_sim
+# Import the qasm_sim function and noise models for easy access
+from pecos_rslib.qasm_sim import qasm_sim
+
+# Also import the noise model dataclasses for convenience
+from pecos_rslib.qasm_sim import (
+    PassThroughNoise,
+    DepolarizingNoise,
+    DepolarizingCustomNoise,
+    BiasedDepolarizingNoise,
+    GeneralNoise,
+)
 
 try:
     __version__ = version("pecos-rslib")
@@ -54,4 +63,10 @@ __all__ = [
     "get_noise_models",
     "get_quantum_engines",
     "qasm_sim",
+    # Noise model dataclasses
+    "PassThroughNoise",
+    "DepolarizingNoise",
+    "DepolarizingCustomNoise",
+    "BiasedDepolarizingNoise",
+    "GeneralNoise",
 ]
