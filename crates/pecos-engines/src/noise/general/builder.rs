@@ -329,7 +329,7 @@ impl GeneralNoiseModelBuilder {
     /// Set the idling noise error rate for the linear term
     #[must_use]
     pub fn with_p_idle_linear_rate(mut self, rate: f64) -> Self {
-        self.p_idle_linear_rate = Some(Self::validate_positive(rate, "linear idling rate"));
+        self.p_idle_linear_rate = Some(Self::validate_non_negative(rate, "linear idling rate"));
         self
     }
 
@@ -367,7 +367,7 @@ impl GeneralNoiseModelBuilder {
     /// Set the coherent-to-incoherent conversion factor
     ///
     /// # Parameters
-    /// * `factor` - The conversion factor between coherent and incoherent dephasing rates
+    /// * `factor` - The conversion factor between coherent and incoherent noise
     #[must_use]
     pub fn with_p_idle_coherent_to_incoherent_factor(mut self, factor: f64) -> Self {
         self.p_idle_coherent_to_incoherent_factor = Some(Self::validate_positive(
@@ -749,6 +749,7 @@ impl GeneralNoiseModelBuilder {
 
         model.p_idle_quadratic_rate *= (idle_scale * scale).sqrt();
 
+        // If we need to do incoherent noise instead of coherent
         if !model.p_idle_coherent {
             // 0.5 to deal with the 0.5 in sin(rate x duration x 0.5)^2
             let factor = model.p_idle_coherent_to_incoherent_factor * 0.5;
