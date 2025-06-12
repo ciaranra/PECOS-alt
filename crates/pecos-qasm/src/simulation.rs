@@ -6,7 +6,7 @@
 use crate::QASMEngine;
 use pecos_core::errors::PecosError;
 use pecos_engines::noise::{
-    BiasedDepolarizingNoiseModel, BiasedMeasurementNoiseModel, DepolarizingNoiseModel,
+    BiasedDepolarizingNoiseModel, DepolarizingNoiseModel,
     GeneralNoiseModel, GeneralNoiseModelBuilder, NoiseModel, PassThroughNoiseModel,
 };
 use pecos_engines::quantum::{QuantumEngine, SparseStabEngine, StateVecEngine};
@@ -28,8 +28,6 @@ pub enum NoiseModelConfig {
     DepolarizingCustom(DepolarizingCustomNoise),
     /// Biased depolarizing noise
     BiasedDepolarizing(BiasedDepolarizingNoise),
-    /// Biased measurement noise
-    BiasedMeasurement(BiasedMeasurementNoise),
     /// General noise model
     General(GeneralNoise),
     /// General noise model from builder
@@ -54,9 +52,6 @@ impl NoiseModelType {
             )),
             Self::BiasedDepolarizing(config) => {
                 Box::new(BiasedDepolarizingNoiseModel::new_uniform(config.p))
-            }
-            Self::BiasedMeasurement(config) => {
-                Box::new(BiasedMeasurementNoiseModel::new(config.p0, config.p1))
             }
             Self::General(_) => Box::new(GeneralNoiseModel::default()),
             Self::GeneralFromBuilder(builder) => Box::new(builder.build()),
@@ -130,14 +125,6 @@ pub struct BiasedDepolarizingNoise {
     pub p: f64,
 }
 
-/// Biased measurement noise configuration
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct BiasedMeasurementNoise {
-    /// Probability of measuring 1 when the true state is 0
-    pub p0: f64,
-    /// Probability of measuring 0 when the true state is 1
-    pub p1: f64,
-}
 
 /// General noise configuration
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -169,11 +156,6 @@ impl From<BiasedDepolarizingNoise> for NoiseModelType {
     }
 }
 
-impl From<BiasedMeasurementNoise> for NoiseModelType {
-    fn from(noise: BiasedMeasurementNoise) -> Self {
-        NoiseModelType::BiasedMeasurement(noise)
-    }
-}
 
 impl From<GeneralNoise> for NoiseModelType {
     fn from(noise: GeneralNoise) -> Self {
@@ -362,13 +344,13 @@ impl<'a> QasmSimulationBuilder<'a> {
 ///
 /// ## Full configuration
 /// ```
-/// # use pecos_qasm::simulation::{qasm_sim, BiasedMeasurementNoise, QuantumEngineType};
+/// # use pecos_qasm::simulation::{qasm_sim, BiasedDepolarizingNoise, QuantumEngineType};
 /// # let qasm = "OPENQASM 2.0; include \"qelib1.inc\"; qreg q[2]; creg c[2]; h q[0]; cx q[0], q[1]; measure q -> c;";
 /// let sim = qasm_sim(qasm)
 ///     .seed(42)
 ///     .auto_workers()
 ///     .quantum_engine(QuantumEngineType::StateVector)
-///     .noise(BiasedMeasurementNoise { p0: 0.01, p1: 0.02 })
+///     .noise(BiasedDepolarizingNoise { p: 0.01 })
 ///     .build()
 ///     .unwrap();
 ///
@@ -414,9 +396,6 @@ mod tests {
         .create_noise_model();
         let _biased_depolarizing =
             NoiseModelType::BiasedDepolarizing(BiasedDepolarizingNoise { p: 0.01 })
-                .create_noise_model();
-        let _biased_measurement =
-            NoiseModelType::BiasedMeasurement(BiasedMeasurementNoise { p0: 0.01, p1: 0.02 })
                 .create_noise_model();
         let _general = NoiseModelType::General(GeneralNoise).create_noise_model();
     }
@@ -500,7 +479,7 @@ mod tests {
             .seed(123)
             .workers(2)
             .quantum_engine(QuantumEngineType::StateVector)
-            .noise(BiasedMeasurementNoise { p0: 0.01, p1: 0.02 })
+            .noise(BiasedDepolarizingNoise { p: 0.01 })
             .build()
             .unwrap();
 

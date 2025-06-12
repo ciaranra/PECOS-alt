@@ -13,7 +13,6 @@ from pecos_rslib.qasm_sim import (
     DepolarizingNoise,
     DepolarizingCustomNoise,
     BiasedDepolarizingNoise,
-    BiasedMeasurementNoise,
 )
 
 
@@ -87,9 +86,9 @@ def example_ghz_state():
         print(f"  |{outcome:03b}⟩: {count} times")
 
 
-def example_biased_measurement():
-    """Example: Demonstrate biased measurement noise."""
-    print("\n=== Biased Measurement Example ===")
+def example_biased_depolarizing():
+    """Example: Demonstrate biased depolarizing noise."""
+    print("\n=== Biased Depolarizing Example ===")
 
     qasm = """
     OPENQASM 2.0;
@@ -105,10 +104,9 @@ def example_biased_measurement():
     results_ideal = run_qasm(qasm, shots=1000)
     ideal_counts = Counter(results_ideal["c"])
 
-    # Biased measurements: 0→1 errors more likely than 1→0
-    noise = BiasedMeasurementNoise(
-        p0=0.15,  # 15% chance of measuring 1 when true state is 0
-        p1=0.02,  # 2% chance of measuring 0 when true state is 1
+    # Biased depolarizing noise
+    noise = BiasedDepolarizingNoise(
+        p=0.1,  # 10% error probability
     )
 
     results_biased = run_qasm(qasm, shots=1000, noise_model=noise, seed=42)
@@ -116,8 +114,8 @@ def example_biased_measurement():
 
     print("Preparing |11⟩ state:")
     print(f"  Ideal: {ideal_counts}")
-    print(f"  Biased measurement: {biased_counts}")
-    print("  (Notice the asymmetric errors due to biased measurement)")
+    print(f"  Biased depolarizing: {biased_counts}")
+    print("  (Notice the errors introduced by biased depolarizing noise)")
 
 
 def example_quantum_engines():
@@ -287,7 +285,7 @@ if __name__ == "__main__":
 
     example_bell_state()
     example_ghz_state()
-    example_biased_measurement()
+    example_biased_depolarizing()
     example_quantum_engines()
     example_builder_pattern()
     example_large_register()

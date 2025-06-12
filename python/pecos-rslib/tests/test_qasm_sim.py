@@ -20,7 +20,6 @@ class TestQASMSimBindings:
         assert str(NoiseModel("Depolarizing")) == "Depolarizing"
         assert str(NoiseModel("DepolarizingCustom")) == "DepolarizingCustom"
         assert str(NoiseModel("BiasedDepolarizing")) == "BiasedDepolarizing"
-        assert str(NoiseModel("BiasedMeasurement")) == "BiasedMeasurement"
         assert str(NoiseModel("General")) == "General"
 
         # Test case insensitive
@@ -76,7 +75,7 @@ class TestQASMSimBindings:
         noise_models = get_noise_models()
         assert "PassThrough" in noise_models
         assert "Depolarizing" in noise_models
-        assert len(noise_models) >= 6
+        assert len(noise_models) >= 5
 
         engines = get_quantum_engines()
         assert "StateVector" in engines

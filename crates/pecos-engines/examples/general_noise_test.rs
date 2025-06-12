@@ -2,7 +2,7 @@
 
 use pecos_engines::Engine;
 use pecos_engines::byte_message::ByteMessage;
-use pecos_engines::noise::{BiasedMeasurementNoiseModel, GeneralNoiseModel};
+use pecos_engines::noise::{BiasedDepolarizingNoiseModel, GeneralNoiseModel};
 use pecos_engines::quantum::StateVecEngine;
 use pecos_engines::{EngineSystem, QuantumSystem};
 use std::collections::HashMap;
@@ -17,7 +17,7 @@ fn main() {
     // Create a quantum engine with 1 qubit
     let quantum = Box::new(StateVecEngine::new(1));
 
-    // Compare BiasedMeasurementNoise with equivalent GeneralNoise
+    // Compare BiasedDepolarizingNoise with equivalent GeneralNoise
     compare_biased_and_general(&circ, quantum.as_ref());
 
     // Test Bell state with both noise models
@@ -25,11 +25,11 @@ fn main() {
 }
 
 fn compare_biased_and_general(circ: &ByteMessage, quantum: &StateVecEngine) {
-    println!("Comparing BiasedMeasurementNoise and GeneralNoise");
+    println!("Comparing BiasedDepolarizingNoise and GeneralNoise");
     println!("{:-^100}", "");
     println!(
         "{:<30} | {:<10} | {:<20} | {:<20}",
-        "Configuration", "Expected", "BiasedMeasurementNoise", "GeneralNoise"
+        "Configuration", "Expected", "BiasedDepolarizingNoise", "GeneralNoise"
     );
     println!("{:-^100}", "");
 
@@ -47,10 +47,15 @@ fn compare_biased_and_general(circ: &ByteMessage, quantum: &StateVecEngine) {
     let seed = 42;
 
     for (p_flip_0, p_flip_1, desc) in configs {
-        // Create biased measurement noise model
-        let biased_noise = Box::new(BiasedMeasurementNoiseModel::with_seed(
-            p_flip_0, p_flip_1, seed,
-        ));
+        // Create biased depolarizing noise model with custom settings
+        let biased_noise = BiasedDepolarizingNoiseModel::builder()
+            .with_prep_probability(0.0)
+            .with_meas_0_probability(p_flip_0) // Probability of flipping 0 to 1
+            .with_meas_1_probability(p_flip_1) // Probability of flipping 1 to 0
+            .with_p1_probability(0.0)
+            .with_p2_probability(0.0)
+            .with_seed(seed)
+            .build();
         let mut biased_system = QuantumSystem::new(biased_noise, Box::new(quantum.clone()));
 
         // Create equivalent general noise model (with gate noise set to 0)
@@ -147,10 +152,15 @@ fn bell_state_comparison() {
     // Create quantum engine with 2 qubits
     let quantum = StateVecEngine::new(2);
 
-    // Create biased measurement noise model
-    let biased_noise = Box::new(BiasedMeasurementNoiseModel::with_seed(
-        p_flip_0, p_flip_1, seed,
-    ));
+    // Create biased depolarizing noise model with custom settings
+    let biased_noise = BiasedDepolarizingNoiseModel::builder()
+        .with_prep_probability(0.0)
+        .with_meas_0_probability(p_flip_0) // Probability of flipping 0 to 1
+        .with_meas_1_probability(p_flip_1) // Probability of flipping 1 to 0
+        .with_p1_probability(0.0)
+        .with_p2_probability(0.0)
+        .with_seed(seed)
+        .build();
     let mut biased_system = QuantumSystem::new(biased_noise, Box::new(quantum.clone()));
 
     // Create equivalent general noise model
@@ -210,12 +220,12 @@ fn bell_state_comparison() {
     let patterns = ["00", "01", "10", "11"];
 
     println!(
-        "Bell state with biased measurement noise: p_flip_0 = {p_flip_0}, p_flip_1 = {p_flip_1}"
+        "Bell state with biased noise: p_flip_0 = {p_flip_0}, p_flip_1 = {p_flip_1}"
     );
     println!("{:-^80}", "");
     println!(
         "{:<10} | {:<30} | {:<30}",
-        "Pattern", "BiasedMeasurementNoise", "GeneralNoise"
+        "Pattern", "BiasedDepolarizingNoise", "GeneralNoise"
     );
     println!("{:-^80}", "");
 

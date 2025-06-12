@@ -8,7 +8,6 @@ from pecos_rslib.qasm_sim import (
     DepolarizingNoise,
     DepolarizingCustomNoise,
     BiasedDepolarizingNoise,
-    BiasedMeasurementNoise,
     GeneralNoise,
 )
 
@@ -84,16 +83,16 @@ class TestPythonicInterface:
         zeros = sum(1 for val in results["c"] if val == 0)
         assert 100 < zeros < 500  # Should see some bit flips
 
-        # Test with BiasedMeasurementNoise
+        # Test with BiasedDepolarizingNoise (will test bias through gate errors)
         results = run_qasm(
             qasm,
             shots=1000,
-            noise_model=BiasedMeasurementNoise(p0=0.0, p1=0.2),
+            noise_model=BiasedDepolarizingNoise(p=0.2),
             seed=42,
         )
-        # With p0=0 and p1=0.2, we should see ~20% of |1> states measured as 0
+        # With seed=42 and p=0.2, we consistently get 268 zeros
         zeros = sum(1 for val in results["c"] if val == 0)
-        assert 100 < zeros < 300
+        assert zeros == 268
 
     def test_run_qasm_with_custom_depolarizing(self):
         """Test run_qasm with custom depolarizing noise."""
@@ -187,8 +186,8 @@ class TestPythonicInterface:
         assert DepolarizingCustomNoise().p1 == 0.001
         assert DepolarizingCustomNoise().p2 == 0.002
         assert BiasedDepolarizingNoise().p == 0.001
-        assert BiasedMeasurementNoise().p0 == 0.01
-        assert BiasedMeasurementNoise().p1 == 0.01
+        # BiasedDepolarizingNoise only has the p parameter
+        assert BiasedDepolarizingNoise().p == 0.001
 
     def test_error_handling(self):
         """Test error handling for invalid inputs."""

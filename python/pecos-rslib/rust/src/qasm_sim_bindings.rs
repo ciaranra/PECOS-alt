@@ -2,7 +2,7 @@
 
 use pecos::prelude::*;
 use pecos_qasm::simulation::{
-    BiasedDepolarizingNoise, BiasedMeasurementNoise, DepolarizingCustomNoise, DepolarizingNoise,
+    BiasedDepolarizingNoise, DepolarizingCustomNoise, DepolarizingNoise,
     GeneralNoise, PassThroughNoise,
 };
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
@@ -26,8 +26,6 @@ pub enum PyNoiseModelType {
     DepolarizingCustom,
     /// Biased depolarizing noise
     BiasedDepolarizing,
-    /// Biased measurement noise
-    BiasedMeasurement,
     /// General noise model
     General,
 }
@@ -41,7 +39,6 @@ impl PyNoiseModelType {
             "depolarizing" => Ok(Self::Depolarizing),
             "depolarizingcustom" => Ok(Self::DepolarizingCustom),
             "biaseddepolarizing" => Ok(Self::BiasedDepolarizing),
-            "biasedmeasurement" => Ok(Self::BiasedMeasurement),
             "general" => Ok(Self::General),
             _ => Err(PyValueError::new_err(format!(
                 "Unknown noise model type: {model_type}"
@@ -56,7 +53,6 @@ impl PyNoiseModelType {
             Self::Depolarizing => "Depolarizing",
             Self::DepolarizingCustom => "DepolarizingCustom",
             Self::BiasedDepolarizing => "BiasedDepolarizing",
-            Self::BiasedMeasurement => "BiasedMeasurement",
             Self::General => "General",
         }
     }
@@ -219,7 +215,6 @@ pub fn py_get_noise_models() -> Vec<&'static str> {
         "Depolarizing",
         "DepolarizingCustom",
         "BiasedDepolarizing",
-        "BiasedMeasurement",
         "General",
     ]
 }
@@ -381,15 +376,7 @@ fn parse_noise_model(nm: &Bound<'_, PyAny>) -> PyResult<NoiseModelType> {
                     BiasedDepolarizingNoise { p },
                 ))
             }
-            "BiasedMeasurementNoise" => {
-                let p0: f64 = nm.getattr("p0")?.extract()?;
-                let p1: f64 = nm.getattr("p1")?.extract()?;
-                Ok(NoiseModelType::BiasedMeasurement(BiasedMeasurementNoise {
-                    p0,
-                    p1,
-                }))
-            }
-            "GeneralNoise" => Ok(NoiseModelType::General(GeneralNoise)),
+                        "GeneralNoise" => Ok(NoiseModelType::General(GeneralNoise)),
             _ => Err(PyValueError::new_err(format!(
                 "Unknown noise model type: {class_name}"
             ))),

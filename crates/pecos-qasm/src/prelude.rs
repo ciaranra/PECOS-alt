@@ -58,7 +58,6 @@ pub use crate::run::{run_qasm, run_qasm_sim};
 // Re-export simulation module types and functions
 pub use crate::simulation::{
     BiasedDepolarizingNoise,
-    BiasedMeasurementNoise,
     DepolarizingCustomNoise,
     DepolarizingNoise,
     GeneralNoise,
@@ -85,7 +84,7 @@ pub use pecos_core::RngManageable;
 pub use pecos_core::errors::PecosError;
 // Re-export noise models from pecos-engines
 pub use pecos_engines::noise::{
-    BiasedDepolarizingNoiseModel, BiasedMeasurementNoiseModel, DepolarizingNoiseModel,
+    BiasedDepolarizingNoiseModel, DepolarizingNoiseModel,
     GeneralNoiseModel, NoiseModel,
 };
 // Re-export noise models from pecos-engines

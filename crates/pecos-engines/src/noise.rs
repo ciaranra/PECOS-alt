@@ -17,7 +17,6 @@
 //! the `NoiseModel` trait and can be used with the quantum engines.
 
 pub mod biased_depolarizing;
-pub mod biased_measurement;
 pub mod depolarizing;
 pub mod general;
 pub mod noise_rng;
@@ -26,7 +25,6 @@ pub mod utils;
 pub mod weighted_sampler;
 
 pub use self::biased_depolarizing::BiasedDepolarizingNoiseModel;
-pub use self::biased_measurement::BiasedMeasurementNoiseModel;
 pub use self::depolarizing::DepolarizingNoiseModel;
 pub use self::general::{GeneralNoiseModel, GeneralNoiseModelBuilder};
 pub use self::noise_rng::NoiseRng;
@@ -231,12 +229,11 @@ mod base_tests {
 mod tests {
     use super::*;
     use crate::byte_message::ByteMessageBuilder;
-    use crate::noise::biased_measurement::BiasedMeasurementNoiseModel;
 
     #[test]
-    fn test_noise_model_biased_measurement() {
-        // Create a biased measurement noise model
-        let mut noise_model = BiasedMeasurementNoiseModel::new(0.1, 0.2);
+    fn test_noise_model_biased_depolarizing() {
+        // Create a biased depolarizing noise model
+        let mut noise_model = BiasedDepolarizingNoiseModel::new_uniform(0.1);
 
         // Create a quantum operation message
         let mut builder = ByteMessageBuilder::new();
@@ -250,29 +247,23 @@ mod tests {
         builder.add_outcomes(&[0]);
         let measurement_message = builder.build();
 
-        // Operation should pass through unchanged
+        // Operations may be modified
         let operation_result = noise_model.start(quantum_message.clone()).unwrap();
-        if let EngineStage::NeedsProcessing(output) = operation_result {
-            assert_eq!(
-                output.as_bytes(),
-                quantum_message.as_bytes(),
-                "Quantum operations should pass through biased measurement noise unchanged"
-            );
+        if let EngineStage::NeedsProcessing(_) = operation_result {
+            // Expected - operations should be processed
         } else {
             panic!("Expected NeedsProcessing stage");
         }
 
-        // Measurements should be potentially modified
+        // Measurements should pass through unchanged
         let measurement_result = noise_model
             .continue_processing(measurement_message.clone())
             .unwrap();
         if let EngineStage::Complete(output) = measurement_result {
-            // We can't check for equality because the noise is random,
-            // but we can at least verify the output is a valid measurement result
-            let measurements = output.outcomes().unwrap();
-            assert!(
-                !measurements.is_empty(),
-                "Output should contain at least one measurement"
+            assert_eq!(
+                output.as_bytes(),
+                measurement_message.as_bytes(),
+                "Measurement results should pass through biased depolarizing noise unchanged"
             );
         } else {
             panic!("Expected Complete stage");

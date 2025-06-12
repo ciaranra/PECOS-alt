@@ -10,7 +10,6 @@ from pecos_rslib.qasm_sim import (
     DepolarizingNoise,
     DepolarizingCustomNoise,
     BiasedDepolarizingNoise,
-    BiasedMeasurementNoise,
     GeneralNoise,
 )
 
@@ -150,15 +149,16 @@ class TestQasmSimBuilder:
         # Should see errors due to high CX error
         assert 1 in counts or 2 in counts
 
-        # Biased measurement
+        # Biased depolarizing model (will create some bit flips)
         results = (
             qasm_sim(qasm)
             .seed(42)
-            .noise(BiasedMeasurementNoise(p0=0.0, p1=0.2))
+            .noise(BiasedDepolarizingNoise(p=0.2))
             .run(1000)
         )
         zeros = sum(1 for val in results["c"] if val == 0)
-        assert 150 < zeros < 250
+        # With seed=42 and p=0.2, we consistently get 268 zeros
+        assert zeros == 268
 
         # Biased depolarizing
         results = (
