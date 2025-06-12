@@ -23,7 +23,7 @@ import numpy as np
 
 if TYPE_CHECKING:
     from pecos.simulators.cointoss.state import CoinToss
-    from pecos.type_defs import SimulatorGateParams
+    from pecos.typing import SimulatorGateParams
 
 
 def ignore_gate(state: CoinToss, _qubits: int, **_params: SimulatorGateParams) -> None:

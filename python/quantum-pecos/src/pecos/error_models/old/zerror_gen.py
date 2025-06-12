@@ -22,7 +22,7 @@ from pecos.error_models.class_errors_circuit import ErrorCircuits
 from pecos.error_models.parent_class_error_gen import ParentErrorModel
 
 if TYPE_CHECKING:
-    from pecos.type_defs import ErrorParams, GateParams
+    from pecos.typing import ErrorParams, GateParams
 
 
 class ZModel(ParentErrorModel):

@@ -33,7 +33,7 @@ from pecos.qeccs.surface_4444.instructions import (
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterator
 
-    from pecos.type_defs import QECCParams
+    from pecos.typing import QECCParams
 
 
 class Surface4444(DefaultQECC):
@@ -202,7 +202,7 @@ class Surface4444(DefaultQECC):
         nid = next(iter_ids)
 
         self.layout[nid] = (x, y)
-        self.position_to_qubit[(x, y)] = nid
+        self.position_to_qubit[x, y] = nid
 
     def _generate_layout(self) -> dict:
         """Creates the layout dictionary which describes the location of the qubits in the code.

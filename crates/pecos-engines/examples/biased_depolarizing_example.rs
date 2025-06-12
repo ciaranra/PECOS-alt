@@ -2,7 +2,7 @@
 
 use pecos_engines::Engine;
 use pecos_engines::byte_message::ByteMessage;
-use pecos_engines::noise::BiasedMeasurementNoiseModel;
+use pecos_engines::noise::BiasedDepolarizingNoiseModel;
 use pecos_engines::quantum::StateVecEngine;
 use pecos_engines::{EngineSystem, QuantumSystem};
 use std::collections::HashMap;
@@ -49,8 +49,14 @@ fn example1_different_bias_levels(circ: &ByteMessage, quantum: &StateVecEngine) 
     let num_shots = 10000;
 
     for (p_flip_0, p_flip_1, desc) in configs {
-        // Create the biased measurement noise model
-        let noise = Box::new(BiasedMeasurementNoiseModel::new(p_flip_0, p_flip_1));
+        // Create the biased depolarizing noise model
+        let noise = BiasedDepolarizingNoiseModel::builder()
+            .with_prep_probability(0.0)
+            .with_meas_0_probability(p_flip_0) // Probability of flipping 0 to 1
+            .with_meas_1_probability(p_flip_1) // Probability of flipping 1 to 0
+            .with_p1_probability(0.0)
+            .with_p2_probability(0.0)
+            .build();
         let mut system = QuantumSystem::new(noise, Box::new(quantum.clone()));
 
         // For deterministic testing, set a fixed seed
@@ -64,9 +70,7 @@ fn example1_different_bias_levels(circ: &ByteMessage, quantum: &StateVecEngine) 
             let results = system
                 .process_as_system(circ.clone())
                 .expect("Failed to process circuit");
-            let measurements = results
-                .parse_measurements()
-                .expect("Failed to parse measurements");
+            let measurements = results.outcomes().expect("Failed to parse measurements");
 
             // Each measurement result is a value
             let result = measurements
@@ -105,7 +109,14 @@ fn example2_with_seed(circ: &ByteMessage) {
     // === EXAMPLE 2: Using direct constructor with seed ===
     println!("Example 2: Using direct constructor with seed");
 
-    let noise = Box::new(BiasedMeasurementNoiseModel::with_seed(0.4, 0.1, 123));
+    let noise = BiasedDepolarizingNoiseModel::builder()
+        .with_prep_probability(0.0)
+        .with_meas_0_probability(0.4) // Probability of flipping 0 to 1
+        .with_meas_1_probability(0.1) // Probability of flipping 1 to 0
+        .with_p1_probability(0.0)
+        .with_p2_probability(0.0)
+        .with_seed(123)
+        .build();
     let quantum = Box::new(StateVecEngine::new(1));
     let mut system = QuantumSystem::new(noise, quantum);
 
@@ -118,9 +129,7 @@ fn example2_with_seed(circ: &ByteMessage) {
         let results = system
             .process_as_system(circ.clone())
             .expect("Failed to process circuit");
-        let measurements = results
-            .parse_measurements()
-            .expect("Failed to parse measurements");
+        let measurements = results.outcomes().expect("Failed to parse measurements");
 
         let result = measurements
             .first()
@@ -147,8 +156,8 @@ fn example2_with_seed(circ: &ByteMessage) {
 }
 
 fn example3_bell_state() {
-    // === EXAMPLE 3: Bell state with biased measurement ===
-    println!("Example 3: Bell state with biased measurement");
+    // === EXAMPLE 3: Bell state with biased depolarizing noise ===
+    println!("Example 3: Bell state with biased depolarizing noise");
 
     // Create a Bell state circuit
     let bell_circ = ByteMessage::quantum_operations_builder()
@@ -160,7 +169,13 @@ fn example3_bell_state() {
 
     // Create a new quantum system with 2 qubits
     let quantum2 = Box::new(StateVecEngine::new(2));
-    let noise2 = Box::new(BiasedMeasurementNoiseModel::new(0.2, 0.3));
+    let noise2 = BiasedDepolarizingNoiseModel::builder()
+        .with_prep_probability(0.0)
+        .with_meas_0_probability(0.2) // Probability of flipping 0 to 1
+        .with_meas_1_probability(0.3) // Probability of flipping 1 to 0
+        .with_p1_probability(0.0)
+        .with_p2_probability(0.0)
+        .build();
     let mut system2 = QuantumSystem::new(noise2, quantum2);
 
     // Set a fixed seed for deterministic results
@@ -175,9 +190,7 @@ fn example3_bell_state() {
         let results = system2
             .process_as_system(bell_circ.clone())
             .expect("Failed to process Bell circuit");
-        let measurements = results
-            .parse_measurements()
-            .expect("Failed to parse measurements");
+        let measurements = results.outcomes().expect("Failed to parse measurements");
 
         // Combine the measurement results into a string
         let mut result = String::new();
@@ -188,7 +201,7 @@ fn example3_bell_state() {
         *bell_counts.entry(result).or_insert(0) += 1;
     }
 
-    println!("Bell state with biased measurement noise:");
+    println!("Bell state with biased depolarizing noise (measurement bias only):");
     println!("  p_flip_0 = 0.2, p_flip_1 = 0.3");
 
     // Calculate expected probabilities for Bell state results with biased measurement

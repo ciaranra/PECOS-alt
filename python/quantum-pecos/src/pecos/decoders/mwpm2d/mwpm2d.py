@@ -140,7 +140,7 @@ class MWPM2D:
             matching.update(dict(matching_edges))
 
             nodes_paired = set()
-            ## for n1 in real_graph.nodes():
+            # for n1 in real_graph.nodes():
             real_syn = set(real_graph.nodes())
             for n1 in syndromes & real_syn:
                 n2 = matching[n1]

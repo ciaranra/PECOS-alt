@@ -70,7 +70,7 @@ fn compare_depolarizing_with_general(circ: &ByteMessage) {
             .process_as_system(circ.clone())
             .expect("Failed to process with depolarizing noise");
         let measurements = results
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse depolarizing measurements");
 
         // Format result string
@@ -89,7 +89,7 @@ fn compare_depolarizing_with_general(circ: &ByteMessage) {
             .process_as_system(circ.clone())
             .expect("Failed to process with general noise");
         let measurements = results
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse general measurements");
 
         // Format result string
@@ -215,7 +215,7 @@ fn test_asymmetric_measurements() {
             .process_as_system(circ.clone())
             .expect("Failed to process with general noise");
         let measurements = results
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse general measurements");
         let result = measurements
             .first()
@@ -230,7 +230,7 @@ fn test_asymmetric_measurements() {
             .process_as_system(circ.clone())
             .expect("Failed to process with depolarizing noise");
         let measurements = results
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse depolarizing measurements");
         let result = measurements
             .first()

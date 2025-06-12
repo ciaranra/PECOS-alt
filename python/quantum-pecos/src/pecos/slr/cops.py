@@ -13,8 +13,6 @@ from __future__ import annotations
 
 from pecos.slr.fund import Expression
 
-# ruff: noqa: F811
-
 
 class PyCOp:
     def __isub__(self, other):

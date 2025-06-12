@@ -1,4 +1,6 @@
+pub mod comparison;
 pub mod config;
+pub mod constant_folding;
 pub mod errors;
 pub mod expressions;
 pub mod gates;
@@ -13,6 +15,7 @@ pub mod utils;
 pub use config::ParseConfig;
 
 use pecos_core::errors::PecosError;
+use pest::iterators::Pair;
 use pest_derive::Parser;
 use std::collections::BTreeMap;
 use std::fmt::Write;
@@ -230,7 +233,7 @@ impl QASMParser {
                                 }
                             }
                             Rule::classical_op => {
-                                if let Some(op) = parse_classical_operation(inner_pair)? {
+                                if let Some(op) = parse_classical_operation(inner_pair, &program)? {
                                     program.operations.push(op);
                                 }
                             }
@@ -306,44 +309,81 @@ impl QASMParser {
 
     /// Parse QASM source string without preprocessing includes
     ///
+    /// This follows recursive descent principles:
+    /// - Clear top-down parsing structure
+    /// - Each grammar rule has a corresponding parse function
+    /// - Direct AST construction
+    ///
     /// # Errors
     ///
     /// Returns an error if parsing fails.
     pub fn parse_str_raw(source: &str) -> Result<Program, PecosError> {
-        let mut program = Program::default();
-        let mut pairs =
-            <Self as pest::Parser<Rule>>::parse(Rule::program, source).map_err(|e| {
-                PecosError::ParseSyntax {
-                    language: "QASM".to_string(),
-                    message: e.to_string(),
-                }
-            })?;
+        // Parse with Pest
+        let mut pairs = Self::parse_pest(Rule::program, source)?;
         let program_pair = pairs.next().ok_or_else(|| Self::error("Empty program"))?;
+
+        // Build program using recursive descent style
+        let mut program = Self::build_program(program_pair)?;
+
+        // Post-processing: expand gates
+        expand_gates(&mut program)?;
+        Ok(program)
+    }
+
+    /// Parse using Pest and convert errors
+    fn parse_pest(rule: Rule, source: &str) -> Result<pest::iterators::Pairs<Rule>, PecosError> {
+        <Self as pest::Parser<Rule>>::parse(rule, source).map_err(|e| {
+            // Extract line/column information if available
+            let (line, col) = match e.line_col {
+                pest::error::LineColLocation::Pos((l, c)) => (Some(l), Some(c)),
+                pest::error::LineColLocation::Span((l1, _), _) => (Some(l1), None),
+            };
+
+            let mut message = e.to_string();
+            if let (Some(l), Some(c)) = (line, col) {
+                message = format!("at line {l}, column {c}: {message}");
+            }
+
+            PecosError::ParseSyntax {
+                language: "QASM".to_string(),
+                message,
+            }
+        })
+    }
+
+    /// Build program from parsed pairs (recursive descent style)
+    fn build_program(program_pair: Pair<Rule>) -> Result<Program, PecosError> {
+        let mut program = Program::default();
 
         for pair in program_pair.into_inner() {
             match pair.as_rule() {
-                Rule::oqasm => {
-                    for inner in pair.into_inner() {
-                        if inner.as_rule() == Rule::version_num {
-                            let version = inner.as_str();
-                            if version != "2.0" {
-                                return Err(PecosError::ParseInvalidVersion {
-                                    language: "QASM".to_string(),
-                                    version: format!("Unsupported version: {version}"),
-                                });
-                            }
-                            program.version = version.to_string();
-                        }
-                    }
-                }
+                Rule::oqasm => Self::parse_version_declaration(pair, &mut program)?,
                 Rule::statement => parse_statement(pair, &mut program)?,
                 Rule::EOI => break,
-                _ => {}
+                _ => {} // Skip other rules
             }
         }
 
-        // After parsing, expand all gates using their definitions
-        expand_gates(&mut program)?;
         Ok(program)
+    }
+
+    /// Parse OPENQASM version declaration
+    fn parse_version_declaration(
+        pair: Pair<Rule>,
+        program: &mut Program,
+    ) -> Result<(), PecosError> {
+        for inner in pair.into_inner() {
+            if inner.as_rule() == Rule::version_num {
+                let version = inner.as_str();
+                if version != "2.0" {
+                    return Err(PecosError::ParseInvalidVersion {
+                        language: "QASM".to_string(),
+                        version: format!("Unsupported version: {version} (only 2.0 is supported)"),
+                    });
+                }
+                program.version = version.to_string();
+            }
+        }
+        Ok(())
     }
 }

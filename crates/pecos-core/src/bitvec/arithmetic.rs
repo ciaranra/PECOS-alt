@@ -17,6 +17,7 @@ use std::cmp::Ordering;
 
 use super::bitwise::shift_left;
 use super::comparison::compare_unsigned;
+use super::utils::resize_to_same_width;
 
 /// Add two `BitVecs` (two's complement addition with wraparound)
 ///
@@ -28,19 +29,43 @@ use super::comparison::compare_unsigned;
 /// A new `BitVec` containing `a + b` with the same length as `a`
 #[must_use]
 pub fn add(a: &BitVec<u8, Lsb0>, b: &BitVec<u8, Lsb0>) -> BitVec<u8, Lsb0> {
-    let mut result = BitVec::with_capacity(a.len());
-    let mut carry = false;
+    // If operands have different widths, resize them temporarily for correct arithmetic
+    if a.len() == b.len() {
+        // Same width - use original implementation for efficiency
+        let mut result = BitVec::with_capacity(a.len());
+        let mut carry = false;
 
-    for i in 0..a.len() {
-        let a_bit = a.get(i).as_deref().copied().unwrap_or(false);
-        let b_bit = b.get(i).as_deref().copied().unwrap_or(false);
+        for i in 0..a.len() {
+            let a_bit = a[i];
+            let b_bit = b[i];
 
-        let sum = u8::from(a_bit) + u8::from(b_bit) + u8::from(carry);
-        result.push((sum & 1) != 0);
-        carry = sum > 1;
+            let sum = u8::from(a_bit) + u8::from(b_bit) + u8::from(carry);
+            result.push((sum & 1) != 0);
+            carry = sum > 1;
+        }
+
+        result
+    } else {
+        let mut a_temp = a.clone();
+        let mut b_temp = b.clone();
+        resize_to_same_width(&mut a_temp, &mut b_temp, 0);
+
+        let mut result = BitVec::with_capacity(a_temp.len());
+        let mut carry = false;
+
+        for i in 0..a_temp.len() {
+            let a_bit = a_temp[i];
+            let b_bit = b_temp[i];
+
+            let sum = u8::from(a_bit) + u8::from(b_bit) + u8::from(carry);
+            result.push((sum & 1) != 0);
+            carry = sum > 1;
+        }
+
+        // Truncate result back to original 'a' length
+        result.truncate(a.len());
+        result
     }
-
-    result
 }
 
 /// Subtract two `BitVecs` (two's complement subtraction with wraparound)
@@ -77,16 +102,28 @@ pub fn subtract(a: &BitVec<u8, Lsb0>, b: &BitVec<u8, Lsb0>) -> BitVec<u8, Lsb0> 
 /// A new `BitVec` containing `a * b` with the same length as `a`
 #[must_use]
 pub fn multiply(a: &BitVec<u8, Lsb0>, b: &BitVec<u8, Lsb0>) -> BitVec<u8, Lsb0> {
+    let original_a_len = a.len();
+
+    // If operands have different widths, resize them temporarily
+    let (work_a, work_b) = if a.len() == b.len() {
+        (a.clone(), b.clone())
+    } else {
+        let mut a_temp = a.clone();
+        let mut b_temp = b.clone();
+        resize_to_same_width(&mut a_temp, &mut b_temp, 0);
+        (a_temp, b_temp)
+    };
+
     // Check signs
-    let a_negative = a.last().as_deref().copied().unwrap_or(false);
-    let b_negative = b.last().as_deref().copied().unwrap_or(false);
+    let a_negative = work_a.last().as_deref().copied().unwrap_or(false);
+    let b_negative = work_b.last().as_deref().copied().unwrap_or(false);
 
     // Get absolute values
-    let abs_a = if a_negative { negate(a) } else { a.clone() };
-    let abs_b = if b_negative { negate(b) } else { b.clone() };
+    let abs_a = if a_negative { negate(&work_a) } else { work_a };
+    let abs_b = if b_negative { negate(&work_b) } else { work_b };
 
     // Perform unsigned multiplication on absolute values
-    let mut result = BitVec::repeat(false, a.len());
+    let mut result = BitVec::repeat(false, abs_a.len());
 
     for (i, bit) in abs_b.iter().enumerate() {
         if *bit {
@@ -97,14 +134,13 @@ pub fn multiply(a: &BitVec<u8, Lsb0>, b: &BitVec<u8, Lsb0>) -> BitVec<u8, Lsb0> 
         }
     }
 
-    // Truncate to original width
-    result.truncate(a.len());
-
     // Apply sign to result (negative if signs differ)
     if a_negative != b_negative {
         result = negate(&result);
     }
 
+    // Truncate to original 'a' width
+    result.truncate(original_a_len);
     result
 }
 
@@ -124,26 +160,39 @@ pub fn divide(a: &BitVec<u8, Lsb0>, b: &BitVec<u8, Lsb0>) -> BitVec<u8, Lsb0> {
         return BitVec::repeat(false, a.len()); // Return 0 on division by zero
     }
 
+    let original_a_len = a.len();
+
+    // If operands have different widths, resize them temporarily
+    let (work_a, work_b) = if a.len() == b.len() {
+        (a.clone(), b.clone())
+    } else {
+        let mut a_temp = a.clone();
+        let mut b_temp = b.clone();
+        resize_to_same_width(&mut a_temp, &mut b_temp, 0);
+        (a_temp, b_temp)
+    };
+
     // Check signs
-    let a_negative = a.last().as_deref().copied().unwrap_or(false);
-    let b_negative = b.last().as_deref().copied().unwrap_or(false);
+    let a_negative = work_a.last().as_deref().copied().unwrap_or(false);
+    let b_negative = work_b.last().as_deref().copied().unwrap_or(false);
 
     // Get absolute values
-    let abs_a = if a_negative { negate(a) } else { a.clone() };
-    let abs_b = if b_negative { negate(b) } else { b.clone() };
+    let abs_a = if a_negative { negate(&work_a) } else { work_a };
+    let abs_b = if b_negative { negate(&work_b) } else { work_b };
 
     // Perform unsigned division on absolute values
-    let mut quotient = BitVec::repeat(false, a.len());
-    let mut remainder = abs_a;
+    let mut quotient = BitVec::repeat(false, abs_a.len());
+    let mut remainder = abs_a.clone();
 
     // Find highest set bit in divisor
     let divisor_bits = abs_b.len() - abs_b.trailing_zeros();
     if divisor_bits == 0 {
+        quotient.truncate(original_a_len);
         return quotient; // b is zero
     }
 
     // Perform long division
-    for i in (0..a.len()).rev() {
+    for i in (0..abs_a.len()).rev() {
         if i + 1 >= divisor_bits {
             let shift_amount = i + 1 - divisor_bits;
             let shifted_b = shift_left(&abs_b, shift_amount);
@@ -161,6 +210,8 @@ pub fn divide(a: &BitVec<u8, Lsb0>, b: &BitVec<u8, Lsb0>) -> BitVec<u8, Lsb0> {
         quotient = negate(&quotient);
     }
 
+    // Truncate to original 'a' width
+    quotient.truncate(original_a_len);
     quotient
 }
 

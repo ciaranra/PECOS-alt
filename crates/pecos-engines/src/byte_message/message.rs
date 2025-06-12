@@ -1,7 +1,6 @@
 use crate::byte_message::builder::ByteMessageBuilder;
 use crate::byte_message::protocol::{
-    BatchHeader, GateCommandHeader, MeasurementHeader, MeasurementResultHeader, MessageHeader,
-    MessageType, calc_padding,
+    BatchHeader, GateHeader, MessageHeader, MessageType, OutcomeHeader, calc_padding,
 };
 use log::trace;
 use pecos_core::QubitId;
@@ -97,63 +96,32 @@ impl ByteMessage {
         builder
     }
 
-    /// Create a new message builder pre-configured for measurement results
+    /// Create a new message builder pre-configured for measurement outcomes
     ///
     /// This is a convenience method that creates a new builder and configures it
-    /// for measurement results.
+    /// for measurement outcomes.
     ///
     /// # Returns
     ///
-    /// A `MessageBuilder` configured for measurement results.
+    /// A `MessageBuilder` configured for measurement outcomes.
     #[must_use]
-    pub fn measurement_results_builder() -> ByteMessageBuilder {
+    pub fn outcomes_builder() -> ByteMessageBuilder {
         let mut builder = Self::builder();
-        let _ = builder.for_measurement_results();
+        let _ = builder.for_outcomes();
         builder
     }
 
-    // TODO: get rid of flushes... The system handles when to flush by building and sending the message
-    /// Create a new flush message
+    /// Create a new empty message
     ///
-    /// This is a convenience method that creates a new message with a flush command.
-    /// Flush messages are used to signal the end of a batch of commands.
+    /// This is a convenience method that creates a new empty message.
+    /// Empty messages are used when no quantum operations are needed.
     ///
     /// # Returns
     ///
-    /// A `ByteMessage` containing a flush command.
+    /// A `ByteMessage` containing an empty batch.
     #[must_use]
-    pub fn create_flush() -> Self {
+    pub fn create_empty() -> Self {
         let mut builder = ByteMessageBuilder::new();
-        builder.add_flush(true);
-        builder.build()
-    }
-
-    /// Record measurement results
-    ///
-    /// This is a convenience method that creates a new message with measurement results.
-    /// It's used to report measurement outcomes back to the classical controller.
-    ///
-    /// # Arguments
-    ///
-    /// * `result_pairs` - A slice of tuples containing (`result_id`, outcome)
-    ///   where `result_id` corresponds to the ID used when requesting the measurement
-    ///   and outcome is the measurement result (typically 0 or 1)
-    ///
-    /// # Returns
-    ///
-    /// A `ByteMessage` containing the measurement results.
-    #[must_use]
-    pub fn record_measurement_results(result_pairs: &[(usize, u32)]) -> Self {
-        let mut builder = Self::measurement_results_builder();
-
-        // Collect result_ids and outcomes into separate vectors
-        let mut outcomes = Vec::with_capacity(result_pairs.len());
-
-        for (_index, outcome) in result_pairs {
-            outcomes.push(*outcome as usize); // Convert u32 to usize
-        }
-
-        builder.add_measurement_results(&outcomes);
         builder.build()
     }
 
@@ -174,6 +142,32 @@ impl ByteMessage {
     /// - The message is too small to contain a message header
     /// - The message header contains an invalid message type
     pub fn message_type(&self) -> Result<MessageType, PecosError> {
+        // Parse and validate the batch header
+        let batch_header = self.parse_batch_header()?;
+
+        // Need at least one message to determine type
+        if batch_header.msg_count == 0 {
+            return Err(PecosError::Input("Batch contains no messages".to_string()));
+        }
+
+        // Parse the first message header
+        let (msg_header, _) = self.parse_message_header(size_of::<BatchHeader>())?;
+
+        msg_header
+            .get_type()
+            .map_err(|e| PecosError::Input(format!("Failed to determine message type: {e}")))
+    }
+
+    // Private helper methods
+
+    // Helper function to check if the message has no data.
+    // Returns true if either the byte length is 0 or the data vector is empty.
+    fn has_no_data(&self) -> bool {
+        self.byte_len == 0 || self.data.is_empty()
+    }
+
+    /// Parse and validate the batch header
+    fn parse_batch_header(&self) -> Result<BatchHeader, PecosError> {
         if self.byte_len < size_of::<BatchHeader>() {
             return Err(PecosError::Input(
                 "Message too small for batch header".to_string(),
@@ -183,18 +177,17 @@ impl ByteMessage {
         // Parse batch header - guaranteed aligned at offset 0 due to Vec<u32> storage
         let batch_header =
             *bytemuck::from_bytes::<BatchHeader>(&self.as_bytes()[0..size_of::<BatchHeader>()]);
+
         if !batch_header.is_valid() {
             return Err(PecosError::Input("Invalid batch header".to_string()));
         }
 
-        // Need at least one message to determine type
-        if batch_header.msg_count == 0 {
-            return Err(PecosError::Input("Batch contains no messages".to_string()));
-        }
+        Ok(batch_header)
+    }
 
-        // Skip to first message header (after batch header)
-        let msg_offset = size_of::<BatchHeader>();
-        if self.byte_len < msg_offset + size_of::<MessageHeader>() {
+    /// Parse a message header at the given offset
+    fn parse_message_header(&self, offset: usize) -> Result<(MessageHeader, usize), PecosError> {
+        if offset + size_of::<MessageHeader>() > self.byte_len {
             return Err(PecosError::Input(
                 "Message too small for message header".to_string(),
             ));
@@ -202,38 +195,188 @@ impl ByteMessage {
 
         // Parse message header - guaranteed aligned due to builder padding
         let msg_header = *bytemuck::from_bytes::<MessageHeader>(
-            &self.as_bytes()[msg_offset..msg_offset + size_of::<MessageHeader>()],
+            &self.as_bytes()[offset..offset + size_of::<MessageHeader>()],
         );
-        msg_header
-            .get_type()
-            .map_err(|e| PecosError::Input(format!("Failed to determine message type: {e}")))
+
+        // Return the header and the new offset after the header
+        Ok((msg_header, offset + size_of::<MessageHeader>()))
     }
 
-    /// Check if this message is empty (contains no operations)
+    /// Process a single message from the buffer, returning a gate
     ///
-    /// This function checks if the message is empty, meaning it either contains a flush command
-    /// or a batch with no operations.
+    /// This is a helper method used by `quantum_ops` to process gate messages.
+    ///
+    /// # Arguments
+    ///
+    /// * `offset` - The offset in the buffer to start processing from
     ///
     /// # Returns
     ///
-    /// Returns a `Result` containing a boolean indicating whether the message is empty if successful,
-    /// or a `PecosError` if there was an error.
+    /// Returns a tuple of:
+    /// - The new offset after processing this message
+    /// - An Option containing a Gate operation if one was found
     ///
     /// # Errors
     ///
-    /// This function may return a `PecosError` if:
-    /// - There is an error determining the message type
-    /// - There is an error parsing the quantum operations in the message
-    pub fn is_empty(&self) -> Result<bool, PecosError> {
-        match self.message_type()? {
-            MessageType::Flush => Ok(true),
-            MessageType::BeginBatch => {
-                // Check if this is a batch with no operations
-                let commands = self.parse_quantum_operations()?;
-                Ok(commands.is_empty())
-            }
-            _ => Ok(false),
+    /// Returns an error if the message is malformed.
+    fn process_gate_message(&self, offset: usize) -> Result<(usize, Option<Gate>), PecosError> {
+        // Parse message header
+        let Ok((msg_header, new_offset)) = self.parse_message_header(offset) else {
+            // If we can't parse the header, just return the current offset with no gate
+            return Ok((offset, None));
+        };
+        let offset = new_offset;
+
+        // Get message type
+        let Ok(msg_type) = msg_header.get_type() else {
+            // Skip invalid message types
+            trace!("Skipping message with invalid type");
+
+            // Calculate the new offset after this message
+            let payload_size = msg_header.payload_size as usize;
+            let payload_end = offset + payload_size;
+            let padding = calc_padding(payload_size, 4);
+            let new_offset = payload_end + (if padding > 0 { padding } else { 0 });
+
+            return Ok((new_offset, None));
+        };
+
+        // Check payload bounds
+        let payload_size = msg_header.payload_size as usize;
+        let payload_end = offset + payload_size;
+
+        // Make sure the payload fits within the buffer
+        if payload_end > self.byte_len {
+            return Err(PecosError::Input(format!(
+                "Message payload extends beyond message bounds: offset={}, size={}, total_len={}",
+                offset, payload_size, self.byte_len
+            )));
         }
+
+        // Extract the payload
+        let payload = &self.as_bytes()[offset..payload_end];
+
+        // Process based on message type - we only care about Gate messages here
+        let result = if msg_type == MessageType::Gate {
+            match Self::parse_gate_command(payload) {
+                Ok(cmd) => Some(cmd),
+                Err(e) => {
+                    trace!("Error parsing gate: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        // Calculate the new offset after this message
+        let padding = calc_padding(payload_size, 4);
+        let new_offset = payload_end + (if padding > 0 { padding } else { 0 });
+
+        Ok((new_offset, result))
+    }
+
+    /// Process a single message from the buffer, returning an outcome value
+    ///
+    /// This is a helper method used by outcomes to process outcome messages.
+    ///
+    /// # Arguments
+    ///
+    /// * `offset` - The offset in the buffer to start processing from
+    ///
+    /// # Returns
+    ///
+    /// Returns a tuple of:
+    /// - The new offset after processing this message
+    /// - An Option containing a measurement outcome if one was found
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the message is malformed.
+    fn process_outcome_message(&self, offset: usize) -> Result<(usize, Option<u32>), PecosError> {
+        // Parse message header
+        let Ok((msg_header, new_offset)) = self.parse_message_header(offset) else {
+            // If we can't parse the header, just return the current offset with no outcome
+            return Ok((offset, None));
+        };
+        let offset = new_offset;
+
+        // Get message type
+        let Ok(msg_type) = msg_header.get_type() else {
+            // Skip invalid message types
+            trace!("Skipping message with invalid type");
+
+            // Calculate the new offset after this message
+            let payload_size = msg_header.payload_size as usize;
+            let payload_end = offset + payload_size;
+            let padding = calc_padding(payload_size, 4);
+            let new_offset = payload_end + (if padding > 0 { padding } else { 0 });
+
+            return Ok((new_offset, None));
+        };
+
+        // Check payload bounds
+        let payload_size = msg_header.payload_size as usize;
+        let payload_end = offset + payload_size;
+
+        // Make sure the payload fits within the buffer
+        if payload_end > self.byte_len {
+            return Err(PecosError::Input(format!(
+                "Message payload extends beyond message bounds: offset={}, size={}, total_len={}",
+                offset, payload_size, self.byte_len
+            )));
+        }
+
+        // Extract the payload
+        let payload = &self.as_bytes()[offset..payload_end];
+
+        // Process based on message type - we only care about Outcome messages here
+        let result = if msg_type == MessageType::Outcome {
+            if payload.len() >= size_of::<OutcomeHeader>() {
+                // OutcomeHeader at aligned payload start
+                let result_header =
+                    *bytemuck::from_bytes::<OutcomeHeader>(&payload[0..size_of::<OutcomeHeader>()]);
+                Some(result_header.outcome)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Calculate the new offset after this message
+        let padding = calc_padding(payload_size, 4);
+        let new_offset = payload_end + (if padding > 0 { padding } else { 0 });
+
+        Ok((new_offset, result))
+    }
+
+    /// Check if this message is empty (contains no operations).
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(true)` if the message is empty, `Ok(false)` if it contains operations.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `PecosError` if there was an error parsing the message structure.
+    pub fn is_empty(&self) -> Result<bool, PecosError> {
+        // First check if this is an empty message with no data
+        if self.has_no_data() {
+            return Ok(true);
+        }
+
+        // Parse and validate the batch header
+        let batch_header = self.parse_batch_header()?;
+
+        // Message is empty if it has no messages
+        if batch_header.msg_count == 0 {
+            return Ok(true);
+        }
+
+        // Otherwise, check if there are any actual operations
+        let commands = self.quantum_ops()?;
+        Ok(commands.is_empty())
     }
 
     /// Parse quantum operations from this message
@@ -241,192 +384,58 @@ impl ByteMessage {
     /// # Errors
     ///
     /// Returns an error if the message is malformed or contains invalid quantum operations.
-    pub fn parse_quantum_operations(&self) -> Result<Vec<Gate>, PecosError> {
-        if self.byte_len < size_of::<BatchHeader>() {
-            return Err(PecosError::Input(
-                "Message too small for batch header".to_string(),
-            ));
-        }
-
-        // Parse batch header - guaranteed aligned at offset 0 due to Vec<u32> storage
-        let batch_header =
-            *bytemuck::from_bytes::<BatchHeader>(&self.as_bytes()[0..size_of::<BatchHeader>()]);
-        if !batch_header.is_valid() {
-            return Err(PecosError::Input("Invalid batch header".to_string()));
-        }
+    pub fn quantum_ops(&self) -> Result<Vec<Gate>, PecosError> {
+        // Parse and validate the batch header
+        let batch_header = self.parse_batch_header()?;
 
         let mut commands = Vec::new();
         let mut offset = size_of::<BatchHeader>();
-        let mut in_command_batch = false;
 
         // Process each message
         for _ in 0..batch_header.msg_count {
-            if offset + size_of::<MessageHeader>() > self.byte_len {
-                break;
-            }
+            // Try to process this message
+            let (new_offset, maybe_gate) = self.process_gate_message(offset)?;
+            offset = new_offset;
 
-            // Parse message header - guaranteed aligned due to builder padding
-            let msg_header = *bytemuck::from_bytes::<MessageHeader>(
-                &self.as_bytes()[offset..offset + size_of::<MessageHeader>()],
-            );
-            offset += size_of::<MessageHeader>();
-
-            // Check if this is a quantum operations message
-            if msg_header.msg_type == MessageType::BeginBatch as u8 {
-                in_command_batch = true;
-            } else if msg_header.msg_type == MessageType::EndBatch as u8 {
-                // End of batch
-                break;
-            }
-
-            // Skip to next message if not in a command batch
-            if !in_command_batch {
-                offset += msg_header.payload_size as usize;
-                let padding = calc_padding(msg_header.payload_size as usize, 4);
-                if padding > 0 {
-                    offset += padding;
-                }
-                continue;
-            }
-
-            // Process payload based on message type
-            match msg_header.msg_type {
-                x if x == MessageType::GateCommand as u8 => {
-                    if offset + msg_header.payload_size as usize <= self.byte_len {
-                        let payload =
-                            &self.as_bytes()[offset..offset + msg_header.payload_size as usize];
-                        match Self::parse_gate_command(payload) {
-                            Ok(cmd) => commands.push(cmd),
-                            Err(e) => {
-                                trace!("Error parsing quantum gate: {}", e);
-                            }
-                        }
-                    }
-                }
-                x if x == MessageType::Measurement as u8 => {
-                    if offset + msg_header.payload_size as usize <= self.byte_len {
-                        let payload =
-                            &self.as_bytes()[offset..offset + msg_header.payload_size as usize];
-                        match Self::parse_measurement_command(payload) {
-                            Ok(cmd) => commands.push(cmd),
-                            Err(e) => {
-                                trace!("Error parsing measurement: {}", e);
-                            }
-                        }
-                    }
-                }
-                _ => {}
-            }
-
-            // Move to next message
-            offset += msg_header.payload_size as usize;
-            let padding = calc_padding(msg_header.payload_size as usize, 4);
-            if padding > 0 {
-                offset += padding;
+            // Add any gate we found to our commands list
+            if let Some(gate) = maybe_gate {
+                commands.push(gate);
             }
         }
 
         Ok(commands)
     }
 
-    /// Parse measurements from this message
+    /// Parse measurement outcomes from this message
     ///
     /// # Errors
     ///
-    /// Returns an error if the message is malformed or contains invalid measurement data.
-    pub fn parse_measurements(&self) -> Result<Vec<u32>, PecosError> {
-        if self.byte_len < size_of::<BatchHeader>() {
-            return Err(PecosError::Input(
-                "Message too small for batch header".to_string(),
-            ));
-        }
-
-        // Parse batch header - guaranteed aligned at offset 0 due to Vec<u32> storage
-        let batch_header =
-            *bytemuck::from_bytes::<BatchHeader>(&self.as_bytes()[0..size_of::<BatchHeader>()]);
-        if !batch_header.is_valid() {
-            return Err(PecosError::Input("Invalid batch header".to_string()));
-        }
+    /// Returns an error if the message is malformed or contains invalid outcome data.
+    pub fn outcomes(&self) -> Result<Vec<u32>, PecosError> {
+        // Parse and validate the batch header
+        let batch_header = self.parse_batch_header()?;
 
         let mut measurements = Vec::new();
         let mut offset = size_of::<BatchHeader>();
 
         // Process each message
         for _ in 0..batch_header.msg_count {
-            if offset + size_of::<MessageHeader>() > self.byte_len {
-                break;
-            }
+            // Try to process this message directly for outcomes
+            let (new_offset, maybe_outcome) = self.process_outcome_message(offset)?;
+            offset = new_offset;
 
-            // Parse message header - guaranteed aligned due to builder padding
-            let msg_header = *bytemuck::from_bytes::<MessageHeader>(
-                &self.as_bytes()[offset..offset + size_of::<MessageHeader>()],
-            );
-            offset += size_of::<MessageHeader>();
-
-            let msg_type = msg_header
-                .get_type()
-                .map_err(|e| PecosError::Input(e.to_string()))?;
-
-            let payload_size = msg_header.payload_size as usize;
-            let payload_end = offset + payload_size;
-
-            if payload_end > self.byte_len {
-                return Err(PecosError::Input(format!(
-                    "Message payload extends beyond message bounds: offset={}, size={}, total_len={}",
-                    offset, payload_size, self.byte_len
-                )));
-            }
-
-            if msg_type == MessageType::MeasurementResult {
-                // Process measurement result
-                let payload = &self.as_bytes()[offset..payload_end];
-                if payload.len() >= size_of::<MeasurementResultHeader>() {
-                    // MeasurementResultHeader at aligned payload start
-                    let result_header = *bytemuck::from_bytes::<MeasurementResultHeader>(
-                        &payload[0..size_of::<MeasurementResultHeader>()],
-                    );
-
-                    // Return outcome
-                    measurements.push(result_header.outcome);
-                }
-            }
-
-            // Move offset to next message, accounting for padding
-            offset = payload_end;
-            let padding = calc_padding(payload_size, 4);
-            if padding > 0 {
-                offset += padding;
+            // Add any outcome we found to our measurements list
+            if let Some(outcome) = maybe_outcome {
+                measurements.push(outcome);
             }
         }
 
         Ok(measurements)
     }
 
-    /// Get measurement results as a vector of outcomes
-    ///
-    /// This is a convenience method that parses the measurement results from the message
-    /// and returns them as a vector of measurement outcomes in order.
-    ///
-    /// # Returns
-    ///
-    /// A Result containing a vector of measurement outcomes if successful,
-    /// or a `PecosError` if there was an error parsing the message.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the message is malformed or contains invalid measurement data.
-    pub fn measurement_results_as_vec(&self) -> Result<Vec<(usize, u32)>, PecosError> {
-        let outcomes = self.parse_measurements()?;
-
-        // Convert to indexed results (index, outcome) for compatibility
-        let converted = outcomes.into_iter().enumerate().collect();
-
-        Ok(converted)
-    }
-
     /// Validate if the payload has enough bytes for the gate header
     fn validate_gate_payload_size(payload: &[u8]) -> Result<(), PecosError> {
-        if payload.len() < size_of::<GateCommandHeader>() {
+        if payload.len() < size_of::<GateHeader>() {
             return Err(PecosError::Input(
                 "Quantum gate message payload too small".to_string(),
             ));
@@ -449,8 +458,12 @@ impl ByteMessage {
         Ok(())
     }
 
-    /// Parse qubit indices from the payload
-    fn parse_qubit_indices(payload: &[u8], qubits_offset: usize, num_qubits: usize) -> Vec<usize> {
+    /// Parse qubit indices from the payload and convert to `QubitIds` directly
+    fn parse_qubit_indices(
+        payload: &[u8],
+        qubits_offset: usize,
+        num_qubits: usize,
+    ) -> Vec<QubitId> {
         let mut qubits = Vec::with_capacity(num_qubits);
         for i in 0..num_qubits {
             let qubit_offset = qubits_offset + i * size_of::<u32>();
@@ -460,7 +473,7 @@ impl ByteMessage {
                 payload[qubit_offset + 2],
                 payload[qubit_offset + 3],
             ]) as usize;
-            qubits.push(qubit);
+            qubits.push(QubitId::from(qubit));
         }
         qubits
     }
@@ -471,59 +484,27 @@ impl ByteMessage {
         params_offset: usize,
         gate_type: GateType,
     ) -> Result<Vec<f64>, PecosError> {
-        let mut params = Vec::new();
+        // Get the number of parameters this gate type requires
+        let param_count = gate_type.classical_arity();
+        if param_count == 0 {
+            return Ok(Vec::new());
+        }
 
-        match gate_type {
-            GateType::RZ => {
-                Self::validate_params_size(
-                    payload,
-                    params_offset,
-                    size_of::<f64>(),
-                    "RZ parameters",
-                )?;
+        // Validate the parameter size
+        let required_size = param_count * size_of::<f64>();
+        Self::validate_params_size(
+            payload,
+            params_offset,
+            required_size,
+            &format!("{gate_type:?} parameters"),
+        )?;
 
-                let theta = Self::parse_f64_param(payload, params_offset);
-                params.push(theta);
-            }
-            GateType::R1XY => {
-                Self::validate_params_size(
-                    payload,
-                    params_offset,
-                    2 * size_of::<f64>(),
-                    "R1XY parameters",
-                )?;
-
-                let theta = Self::parse_f64_param(payload, params_offset);
-                params.push(theta);
-
-                let phi = Self::parse_f64_param(payload, params_offset + size_of::<f64>());
-                params.push(phi);
-            }
-            GateType::RZZ => {
-                Self::validate_params_size(
-                    payload,
-                    params_offset,
-                    size_of::<f64>(),
-                    "RZZ parameters",
-                )?;
-
-                let theta = Self::parse_f64_param(payload, params_offset);
-                params.push(theta);
-            }
-            GateType::Measure
-            | GateType::I
-            | GateType::X
-            | GateType::Y
-            | GateType::Z
-            | GateType::H
-            | GateType::CX
-            | GateType::SZZ
-            | GateType::SZZdg
-            | GateType::Prep
-            | GateType::Idle
-            | GateType::U => {
-                // These gates have no parameters in the message format
-            }
+        // Parse all parameters
+        let mut params = Vec::with_capacity(param_count);
+        for i in 0..param_count {
+            let param_offset = params_offset + i * size_of::<f64>();
+            let param = Self::parse_f64_param(payload, param_offset);
+            params.push(param);
         }
 
         Ok(params)
@@ -556,26 +537,24 @@ impl ByteMessage {
         )
     }
 
-    /// Parse a quantum gate message payload to `GateCommand`
+    /// Parse a quantum gate message payload to `Gate`
     fn parse_gate_command(payload: &[u8]) -> Result<Gate, PecosError> {
         Self::validate_gate_payload_size(payload)?;
 
         // Parse gate header - guaranteed aligned since payload starts at aligned boundary
-        let header =
-            *bytemuck::from_bytes::<GateCommandHeader>(&payload[0..size_of::<GateCommandHeader>()]);
+        let header = *bytemuck::from_bytes::<GateHeader>(&payload[0..size_of::<GateHeader>()]);
         let num_qubits = header.num_qubits as usize;
         let has_params = header.has_params != 0;
         let gate_type = GateType::from(header.gate_type);
 
         // Calculate sizes
         let qubits_byte_size = num_qubits * size_of::<u32>();
-        let qubits_offset = size_of::<GateCommandHeader>();
+        let qubits_offset = size_of::<GateHeader>();
 
         Self::validate_qubit_indices_size(payload, qubits_offset, qubits_byte_size)?;
 
-        // Parse qubit indices and convert to QubitId
-        let qubits_usize = Self::parse_qubit_indices(payload, qubits_offset, num_qubits);
-        let qubits: Vec<QubitId> = qubits_usize.into_iter().map(QubitId::from).collect();
+        // Parse qubit indices directly to QubitId
+        let qubits = Self::parse_qubit_indices(payload, qubits_offset, num_qubits);
 
         // Parse parameters if present
         let params = if has_params {
@@ -588,36 +567,8 @@ impl ByteMessage {
         Ok(Gate::new(gate_type, params, qubits))
     }
 
-    /// Parse a measurement message payload to `GateCommand`
-    fn parse_measurement_command(payload: &[u8]) -> Result<Gate, PecosError> {
-        if payload.len() < size_of::<MeasurementHeader>() {
-            return Err(PecosError::Input(
-                "Measurement message payload too small".to_string(),
-            ));
-        }
-
-        // Parse measurement header - guaranteed aligned since payload starts at aligned boundary
-        let header =
-            *bytemuck::from_bytes::<MeasurementHeader>(&payload[0..size_of::<MeasurementHeader>()]);
-        let qubit = header.qubit as usize;
-
-        Ok(Gate::measure(&[qubit]))
-    }
-
-    /// Creates an empty `ByteMessage`
-    ///
-    /// This method creates a minimal valid `ByteMessage` with no content.
-    /// It's useful as a fallback when processing operations fails.
-    ///
-    /// # Returns
-    /// A new empty `ByteMessage`
-    #[must_use]
-    pub fn create_empty() -> Self {
-        Self {
-            data: Vec::new(),
-            byte_len: 0,
-        }
-    }
+    // The parse_simple_measurement method has been removed as part of simplifying the protocol.
+    // All measurements are now handled as regular gates through parse_gate_command.
 }
 
 #[cfg(test)]
@@ -636,7 +587,7 @@ mod tests {
         let message = builder.build();
 
         // Parse the message
-        let parsed_commands = message.parse_quantum_operations().unwrap();
+        let parsed_commands = message.quantum_ops().unwrap();
         assert_eq!(parsed_commands.len(), 2);
         assert_eq!(parsed_commands[0].gate_type, GateType::H);
         assert_eq!(parsed_commands[0].qubits, vec![QubitId(0)]);
@@ -646,38 +597,40 @@ mod tests {
 
     #[test]
     fn test_message_type() {
-        // Create a flush message
-        let flush_message = ByteMessage::create_flush();
-        assert_eq!(flush_message.message_type().unwrap(), MessageType::Flush);
+        // Create an empty message
+        let empty_message = ByteMessage::create_empty();
+
+        // Empty message should be parseable
+        assert!(empty_message.is_empty().unwrap());
 
         // Create a quantum operations message
         let mut builder = ByteMessage::quantum_operations_builder();
         builder.add_h(&[0]);
         let quantum_message = builder.build();
-        assert_eq!(
-            quantum_message.message_type().unwrap(),
-            MessageType::BeginBatch
-        );
+
+        // Check that we can parse the gates
+        let ops = quantum_message.quantum_ops().unwrap();
+        assert_eq!(ops.len(), 1);
 
         // Create a measurement results message
-        let mut builder = ByteMessage::measurement_results_builder();
-        builder.add_measurement_results(&[0]);
+        let mut builder = ByteMessage::outcomes_builder();
+        builder.add_outcomes(&[0]);
         let results_message = builder.build();
-        assert_eq!(
-            results_message.message_type().unwrap(),
-            MessageType::BeginBatch
-        );
+
+        // Check that we can parse the outcomes
+        let outcomes = results_message.outcomes().unwrap();
+        assert_eq!(outcomes.len(), 1);
     }
 
     #[test]
     fn test_parse_measurements() {
         // Create a message with measurement results
-        let mut builder = ByteMessage::measurement_results_builder();
-        builder.add_measurement_results(&[0, 1]);
+        let mut builder = ByteMessage::outcomes_builder();
+        builder.add_outcomes(&[0, 1]);
         let message = builder.build();
 
         // Parse the measurements
-        let measurements = message.parse_measurements().unwrap();
+        let measurements = message.outcomes().unwrap();
         assert_eq!(measurements.len(), 2);
 
         // The measurements now just return outcomes
@@ -686,24 +639,32 @@ mod tests {
     }
 
     #[test]
-    fn test_measurement_results_as_vec() {
+    fn test_parse_measurements_with_indexing() {
         // Create a message with measurement results
-        let result_pairs = [(0, 0), (1, 1), (2, 0)];
-        let message = ByteMessage::record_measurement_results(&result_pairs);
+        let mut builder = ByteMessage::outcomes_builder();
+        builder.add_outcomes(&[0, 1, 0]);
+        let message = builder.build();
 
-        // Get the results as a vector
-        let results = message.measurement_results_as_vec().unwrap();
+        // Get the raw measurement results
+        let outcomes = message.outcomes().unwrap();
 
-        // Verify the results match the input
+        // Verify the outcomes match the input
+        assert_eq!(outcomes.len(), 3);
+        assert_eq!(outcomes[0], 0);
+        assert_eq!(outcomes[1], 1);
+        assert_eq!(outcomes[2], 0);
+
+        // Convert raw outcomes to indexed results for easier assertions
+        let results: Vec<(usize, u32)> = outcomes.into_iter().enumerate().collect();
         assert_eq!(results.len(), 3);
         assert_eq!(results[0], (0, 0));
         assert_eq!(results[1], (1, 1));
         assert_eq!(results[2], (2, 0));
 
-        // Verify the types are correct (usize, u32) by checking if they can be assigned to variables of those types
+        // Verify the types are correct
         let (result_id, outcome) = results[0];
-        let _: usize = result_id; // This will fail to compile if result_id is not usize
-        let _: u32 = outcome; // This will fail to compile if outcome is not u32
+        let _: usize = result_id;
+        let _: u32 = outcome;
     }
 
     #[test]
@@ -735,20 +696,15 @@ mod tests {
             // Process the circuit
             let result_message = engine.process(bell_circuit.clone()).unwrap();
 
-            // Get the measurement results as a vector
-            let results = result_message.measurement_results_as_vec().unwrap();
+            // Get the raw measurement results
+            let outcomes = result_message.outcomes().unwrap();
 
-            // Convert to booleans (0 -> false, 1 -> true)
-            let q0_result = results
-                .iter()
-                .find(|(id, _)| *id == 0)
-                .map(|(_, val)| *val != 0)
-                .unwrap();
-            let q1_result = results
-                .iter()
-                .find(|(id, _)| *id == 1)
-                .map(|(_, val)| *val != 0)
-                .unwrap();
+            // We know the measurement order: qubit 0 was measured first, then qubit 1
+            assert_eq!(outcomes.len(), 2, "Expected exactly 2 measurement results");
+
+            // The outcomes are now indexed by measurement order
+            let q0_result = outcomes[0] != 0; // First measurement was qubit 0
+            let q1_result = outcomes[1] != 0; // Second measurement was qubit 1
 
             // In a Bell state, the qubits should always have the same measurement outcome
             assert_eq!(
@@ -761,7 +717,7 @@ mod tests {
     #[test]
     fn test_is_empty() {
         // Create an empty message
-        let empty_message = ByteMessage::builder().build();
+        let empty_message = ByteMessage::create_empty();
         assert!(empty_message.is_empty().unwrap());
 
         // Create a non-empty message
@@ -774,19 +730,19 @@ mod tests {
     #[test]
     fn test_measurement_result_order_preservation() {
         // Test that measurement results maintain their order through ByteMessage
-        let mut builder = ByteMessage::measurement_results_builder();
+        let mut builder = ByteMessage::outcomes_builder();
 
         // Add measurement results in a specific order
-        builder.add_measurement_results(&[1]); // First result: 1
-        builder.add_measurement_results(&[0]); // Second result: 0
-        builder.add_measurement_results(&[1]); // Third result: 1
-        builder.add_measurement_results(&[1]); // Fourth result: 1
-        builder.add_measurement_results(&[0]); // Fifth result: 0
+        builder.add_outcomes(&[1]); // First result: 1
+        builder.add_outcomes(&[0]); // Second result: 0
+        builder.add_outcomes(&[1]); // Third result: 1
+        builder.add_outcomes(&[1]); // Fourth result: 1
+        builder.add_outcomes(&[0]); // Fifth result: 0
 
         let message = builder.build();
 
         // Parse the measurements back
-        let results = message.parse_measurements().unwrap();
+        let results = message.outcomes().unwrap();
 
         // Verify order is preserved
         assert_eq!(results.len(), 5);
@@ -796,8 +752,9 @@ mod tests {
         assert_eq!(results[3], 1, "Fourth result should be 1");
         assert_eq!(results[4], 0, "Fifth result should be 0");
 
-        // Also test measurement_results_as_vec which adds indices
-        let indexed_results = message.measurement_results_as_vec().unwrap();
+        // Also convert raw outcomes to indexed results
+        let outcomes2 = message.outcomes().unwrap();
+        let indexed_results: Vec<(usize, u32)> = outcomes2.into_iter().enumerate().collect();
         assert_eq!(indexed_results.len(), 5);
         assert_eq!(indexed_results[0], (0, 1), "First indexed result");
         assert_eq!(indexed_results[1], (1, 0), "Second indexed result");
@@ -847,7 +804,7 @@ mod tests {
         let message = builder.build();
 
         // Parse operations back
-        let operations = message.parse_quantum_operations().unwrap();
+        let operations = message.quantum_ops().unwrap();
 
         // Verify we have 5 measurement operations in the correct order
         assert_eq!(operations.len(), 5);

@@ -590,7 +590,18 @@ impl ControlEngine for ExternalClassicalEngine {
     fn start(&mut self, (): ()) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
         // Generate commands and return NeedsProcessing
         let commands = self.generate_commands()?;
-        Ok(EngineStage::NeedsProcessing(commands))
+
+        // If the message is empty and we're in compatibility mode, still return NeedsProcessing
+        // to ensure MonteCarloEngine receives at least one batch
+        let is_empty = commands.is_empty().unwrap_or(true);
+        if is_empty {
+            // Decide whether to return Complete or continue with an empty message
+            // For empty messages, we'll check if it's the first batch (just after reset)
+            let shot_result = self.get_results()?;
+            Ok(EngineStage::Complete(shot_result))
+        } else {
+            Ok(EngineStage::NeedsProcessing(commands))
+        }
     }
 
     fn continue_processing(

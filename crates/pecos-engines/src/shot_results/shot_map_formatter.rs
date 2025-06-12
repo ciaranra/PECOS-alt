@@ -21,7 +21,7 @@ pub struct ShotMapDisplayOptions {
 impl Default for ShotMapDisplayOptions {
     fn default() -> Self {
         Self {
-            bitvec_format: BitVecDisplayFormat::Decimal,
+            bitvec_format: BitVecDisplayFormat::BinaryPrefixed,
             max_shots: None,
             sort_registers: true,
             indent: "  ".to_string(),
@@ -32,7 +32,9 @@ impl Default for ShotMapDisplayOptions {
 /// Format options for displaying `BitVec` data
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BitVecDisplayFormat {
-    /// Display as binary strings (e.g., "101")
+    /// Display as binary strings with prefix (e.g., "0b101")
+    BinaryPrefixed,
+    /// Display as binary strings without prefix (e.g., "101")
     Binary,
     /// Display as decimal values (e.g., 5)
     Decimal,
@@ -65,7 +67,14 @@ impl<'a> ShotMapDisplay<'a> {
         self
     }
 
-    /// Display `BitVecs` as binary strings (e.g., "101")
+    /// Display `BitVecs` as binary strings with prefix (e.g., "0b101")
+    #[must_use]
+    pub fn bitvec_binary_prefixed(mut self) -> Self {
+        self.options.bitvec_format = BitVecDisplayFormat::BinaryPrefixed;
+        self
+    }
+
+    /// Display `BitVecs` as binary strings without prefix (e.g., "101")
     #[must_use]
     pub fn bitvec_binary(mut self) -> Self {
         self.options.bitvec_format = BitVecDisplayFormat::Binary;
@@ -124,12 +133,15 @@ impl<'a> ShotMapDisplay<'a> {
     /// Format a `BitVec` according to the current options
     fn format_bitvec(&self, bitvec: &BitVec<u8>) -> String {
         match self.options.bitvec_format {
+            BitVecDisplayFormat::BinaryPrefixed => {
+                format!("0b{}", bitvec::to_bitstring(bitvec))
+            }
             BitVecDisplayFormat::Binary => {
                 format!("\"{}\"", bitvec::to_bitstring(bitvec))
             }
             BitVecDisplayFormat::Decimal => bitvec::to_decimal_string(bitvec),
             BitVecDisplayFormat::Hexadecimal => {
-                format!("\"{}\"", bitvec::to_hex_string(bitvec))
+                bitvec::to_hex_string(bitvec) // Already includes "0x" prefix
             }
             BitVecDisplayFormat::BoolArray => bitvec::to_bool_array(bitvec),
         }
@@ -245,15 +257,19 @@ mod tests {
 
         let shot_map = shot_vec.try_as_shot_map().unwrap();
 
-        // Test default display (decimal)
+        // Test default display (binary with prefix, no quotes)
         let display = format!("{}", shot_map.display());
         assert!(display.starts_with('{'));
         assert!(display.ends_with('}'));
-        assert!(display.contains(": [0, 1, 2]")); // decimal by default
+        assert!(display.contains("0b000")); // Value 0 with prefix, no quotes
+        assert!(display.contains("0b001")); // Value 1 with prefix, no quotes
+        assert!(display.contains("0b010")); // Value 2 with prefix, no quotes
 
-        // Test with binary format
+        // Test with binary format (no prefix, with quotes)
         let display_binary = format!("{}", shot_map.display().bitvec_binary());
-        assert!(display_binary.contains("\"000\""));
+        assert!(display_binary.contains("\"000\"")); // Value 0 with quotes
+        assert!(display_binary.contains("\"001\"")); // Value 1 with quotes
+        assert!(display_binary.contains("\"010\"")); // Value 2 with quotes
 
         // Test with decimal format
         let display_decimal = format!(
@@ -264,9 +280,11 @@ mod tests {
         );
         assert!(display_decimal.contains(": [0, 1, 2]"));
 
-        // Test with hex format
+        // Test with hex format (no quotes)
         let display_hex = format!("{}", shot_map.display().bitvec_hex());
-        assert!(display_hex.contains("\"0x"));
+        assert!(display_hex.contains("0x0")); // Value 0 as hex, no quotes
+        assert!(display_hex.contains("0x1")); // Value 1 as hex, no quotes
+        assert!(display_hex.contains("0x2")); // Value 2 as hex, no quotes
 
         // Test JSON-like format
         let display_json = format!("{}", shot_map.display());

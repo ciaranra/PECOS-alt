@@ -52,8 +52,23 @@ pub use crate::engine::QASMEngine;
 pub use crate::engine_builder::QASMEngineBuilder;
 pub use crate::program::QASMProgram;
 
-// Re-export run function
-pub use crate::run::run_qasm_sim;
+// Re-export run functions
+pub use crate::run::{run_qasm, run_qasm_sim};
+
+// Re-export simulation module types and functions
+pub use crate::simulation::{
+    BiasedDepolarizingNoise,
+    DepolarizingCustomNoise,
+    DepolarizingNoise,
+    GeneralNoise,
+    NoiseModelType,
+    // Noise config structs
+    PassThroughNoise,
+    QasmSimulation,
+    QasmSimulationBuilder,
+    QuantumEngineType,
+    qasm_sim,
+};
 
 // Re-export setup function
 pub use crate::setup_qasm_engine;
@@ -69,7 +84,7 @@ pub use pecos_core::RngManageable;
 pub use pecos_core::errors::PecosError;
 // Re-export noise models from pecos-engines
 pub use pecos_engines::noise::{
-    BiasedDepolarizingNoiseModel, BiasedMeasurementNoiseModel, DepolarizingNoiseModel,
+    BiasedDepolarizingNoiseModel, DepolarizingNoiseModel,
     GeneralNoiseModel, NoiseModel,
 };
 // Re-export noise models from pecos-engines

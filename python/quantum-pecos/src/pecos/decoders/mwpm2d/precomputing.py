@@ -221,13 +221,13 @@ def surface4444_identity(instr: LogicalInstructionProtocol) -> dict[str, Any]:
             virt_node = "v" + str(vi)
 
             # X virtual nodes (sides left and right)
-            if side_label in ["left", "right"]:  # 1 for i = 1 and 3 => left and right
+            if side_label in {"left", "right"}:  # 1 for i = 1 and 3 => left and right
                 syn_list = d2edge_x.setdefault(data, [])
                 syn_list.append(virt_node)
                 virt_x.add(virt_node)
 
             # Z virtual nodes (sides top and bottom)
-            elif side_label in ["top", "bottom"]:  # 0 for i = 0 and 2 => top and bottom
+            elif side_label in {"top", "bottom"}:  # 0 for i = 0 and 2 => top and bottom
                 syn_list = d2edge_z.setdefault(data, [])
                 syn_list.append(virt_node)
                 virt_z.add(virt_node)
@@ -255,7 +255,7 @@ def surface4444_identity(instr: LogicalInstructionProtocol) -> dict[str, Any]:
                 raise Exception(msg)
 
             edges[tuple(edge)] = data
-            edges[(edge[1], edge[0])] = data
+            edges[edge[1], edge[0]] = data
             temp_graph.add_edge(edge[0], edge[1])
 
     # Create distance graph
@@ -288,7 +288,7 @@ def surface4444_identity(instr: LogicalInstructionProtocol) -> dict[str, Any]:
                     data_path = []
                     s1 = syn_path[0]
                     for s2 in syn_path[1:]:
-                        data = edge2d[(s1, s2)]
+                        data = edge2d[s1, s2]
                         data_path.append(data)
                         s1 = s2
 
@@ -323,7 +323,7 @@ def surface4444_identity(instr: LogicalInstructionProtocol) -> dict[str, Any]:
             data_path = []
             s1 = syn_path[0]
             for s2 in syn_path[1:]:
-                data = edge2d[(s1, s2)]
+                data = edge2d[s1, s2]
                 data_path.append(data)
                 s1 = s2
 
@@ -510,7 +510,7 @@ def surface4444medial_identity(instr: LogicalInstructionProtocol) -> dict[str, A
                 raise Exception(msg)
 
             edges[tuple(edge)] = data
-            edges[(edge[1], edge[0])] = data
+            edges[edge[1], edge[0]] = data
             temp_graph.add_edge(edge[0], edge[1])
 
     # Create distance graph
@@ -543,7 +543,7 @@ def surface4444medial_identity(instr: LogicalInstructionProtocol) -> dict[str, A
                     data_path = []
                     s1 = syn_path[0]
                     for s2 in syn_path[1:]:
-                        data = edge2d[(s1, s2)]
+                        data = edge2d[s1, s2]
                         data_path.append(data)
                         s1 = s2
 
@@ -578,7 +578,7 @@ def surface4444medial_identity(instr: LogicalInstructionProtocol) -> dict[str, A
             data_path = []
             s1 = syn_path[0]
             for s2 in syn_path[1:]:
-                data = edge2d[(s1, s2)]
+                data = edge2d[s1, s2]
                 data_path.append(data)
                 s1 = s2
 

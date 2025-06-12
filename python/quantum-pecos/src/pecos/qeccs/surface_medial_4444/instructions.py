@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from pecos.protocols import QECCProtocol
-    from pecos.type_defs import QECCInstrParams
+    from pecos.typing import QECCInstrParams
 
 
 class InstrSynExtraction(DefaultLogicalInstruction):
@@ -379,13 +379,13 @@ class InstrSynExtraction(DefaultLogicalInstruction):
 
             # Find the associated ancilla location
             x, y = d[-1]
-            a = relayout[(2 * x + 1 + 1, 2 * y + 1 - 1)]
+            a = relayout[2 * x + 1 + 1, 2 * y + 1 - 1]
 
             if a in self.ancilla_x_check:
-                a = relayout[(2 * x - 1 + 1, 2 * y + 1 - 1)]
+                a = relayout[2 * x - 1 + 1, 2 * y + 1 - 1]
 
             for x, y in d:
-                row.add(relayout[(2 * x + 1, 2 * y + 1)])
+                row.add(relayout[2 * x + 1, 2 * y + 1])
             set_destabs[a] = set(row)
 
         return set_destabs
@@ -466,13 +466,13 @@ class InstrSynExtraction(DefaultLogicalInstruction):
 
             # Find the associated ancilla location
             x, y = d[-1]
-            a = relayout[(2 * x + 1 - 1, 2 * y + 1 + 1)]
+            a = relayout[2 * x + 1 - 1, 2 * y + 1 + 1]
 
             if a in self.ancilla_z_check:
-                a = relayout[(2 * x + 1 - 1, 2 * y + 1 - 1)]
+                a = relayout[2 * x + 1 - 1, 2 * y + 1 - 1]
 
             for x, y in d:
-                row.add(relayout[(2 * x + 1, 2 * y + 1)])
+                row.add(relayout[2 * x + 1, 2 * y + 1])
             set_destabs[a] = row
 
         return set_destabs

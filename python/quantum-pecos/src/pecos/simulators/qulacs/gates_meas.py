@@ -23,7 +23,7 @@ from qulacs.gate import Measurement
 
 if TYPE_CHECKING:
     from pecos.simulators.qulacs.state import Qulacs
-    from pecos.type_defs import SimulatorGateParams
+    from pecos.typing import SimulatorGateParams
 
 
 def meas_z(state: Qulacs, qubit: int, **_params: SimulatorGateParams) -> int:

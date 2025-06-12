@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pecos.simulators.paulifaultprop.state import PauliFaultProp
-    from pecos.type_defs import SimulatorGateParams
+    from pecos.typing import SimulatorGateParams
 
 
 def meas_x(state: PauliFaultProp, qubit: int, **_params: SimulatorGateParams) -> int:
@@ -86,12 +86,12 @@ def meas_pauli(
     """
     pauli = params["Pauli"]
 
-    if isinstance(qubits, int) and pauli not in ["X", "Y", "Z"]:
+    if isinstance(qubits, int) and pauli not in {"X", "Y", "Z"}:
         msg = "Pauli for a single qubit measurement must be 'X', 'Y' or 'Z'!"
         raise Exception(msg)
 
-    if pauli in ["X", "Y", "Z"]:
-        pauli = pauli * len(qubits)
+    if pauli in {"X", "Y", "Z"}:
+        pauli *= len(qubits)
     elif len(pauli) == len(qubits) + 1:
         # last qubit is considered the syndrome ancilla
         qubits = qubits[:-1]

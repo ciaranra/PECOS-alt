@@ -45,7 +45,13 @@ impl Shot {
 
         // Set bits from the value
         for i in 0..width {
-            bv.push((value >> i) & 1 == 1);
+            if i < 32 {
+                // Only shift if within u32 bounds
+                bv.push((value >> i) & 1 == 1);
+            } else {
+                // For bits beyond u32, push zeros
+                bv.push(false);
+            }
         }
 
         // Store the BitVec
@@ -110,8 +116,11 @@ impl Shot {
         message: &ByteMessage,
         result_id_to_name: &BTreeMap<usize, String>,
     ) -> Result<Self, PecosError> {
-        // Extract the measurement results from the ByteMessage
-        let measurements = message.measurement_results_as_vec()?;
+        // Extract the raw measurement results from the ByteMessage
+        let outcomes = message.outcomes()?;
+
+        // Convert raw outcomes to indexed results
+        let measurements: Vec<(usize, u32)> = outcomes.into_iter().enumerate().collect();
 
         let mut result = Self::default();
 

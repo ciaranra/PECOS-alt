@@ -13,12 +13,13 @@
 //!
 //! # Example: Using the Simplified API
 //!
-//! ```no_run
+//! ## Parsing from a string
+//!
+//! ```
 //! use pecos_qasm::QASMEngine;
+//! use pecos_engines::ClassicalEngine;
 //! use std::str::FromStr;
 //!
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! // Simple case - parse from string or file
 //! let qasm = r#"
 //!     OPENQASM 2.0;
 //!     include "qelib1.inc";
@@ -26,20 +27,30 @@
 //!     h q[0];
 //! "#;
 //!
-//! // From string
-//! let engine1 = QASMEngine::from_str(qasm)?;
+//! let engine = QASMEngine::from_str(qasm)?;
+//! assert_eq!(engine.num_qubits(), 2);
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
 //!
-//! // From file
-//! let engine2 = QASMEngine::from_file("circuit.qasm")?;
+//! ## Using the builder API
 //!
-//! // Complex case - use builder for virtual includes and custom paths
-//! let engine3 = QASMEngine::builder()
+//! ```
+//! use pecos_qasm::QASMEngine;
+//! use pecos_engines::ClassicalEngine;
+//!
+//! let qasm = r#"
+//!     OPENQASM 2.0;
+//!     include "custom.inc";
+//!     qreg q[1];
+//!     my_gate q[0];
+//! "#;
+//!
+//! let engine = QASMEngine::builder()
 //!     .with_virtual_include("custom.inc", "gate my_gate a { h a; }")
-//!     .with_include_path("/custom/includes")
 //!     .allow_complex_conditionals(true)
 //!     .build_from_str(qasm)?;
-//! # Ok(())
-//! # }
+//! assert_eq!(engine.num_qubits(), 1);
+//! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
 pub mod ast;
@@ -53,9 +64,10 @@ pub mod preprocessor;
 pub mod program;
 pub mod result_formatter;
 pub mod run;
+pub mod simulation;
 pub mod util;
 
-pub use crate::run::run_qasm_sim;
+pub use crate::run::{run_qasm, run_qasm_sim};
 pub use ast::{Expression, GateOperation, Operation, OperationDisplay};
 pub use engine::QASMEngine;
 pub use engine_builder::QASMEngineBuilder;

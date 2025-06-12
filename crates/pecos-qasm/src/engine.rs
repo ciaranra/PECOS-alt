@@ -797,7 +797,7 @@ impl QASMEngine {
 
     /// Process the QASM program and generate `ByteMessage`
     #[allow(clippy::cast_sign_loss, clippy::too_many_lines)]
-    fn process_program(&mut self) -> Result<ByteMessage, PecosError> {
+    fn process_program_impl(&mut self) -> Result<Option<ByteMessage>, PecosError> {
         self.message_builder.reset();
         let _ = self.message_builder.for_quantum_operations();
 
@@ -818,8 +818,12 @@ impl QASMEngine {
         );
 
         if self.current_op >= total_ops {
-            debug!("End of program reached, sending flush");
-            return Ok(ByteMessage::create_flush());
+            debug!("End of program reached, no more commands to generate");
+
+            // With our updated HybridEngine and ControlEngine implementations,
+            // we can now consistently return None when there are no more commands,
+            // even for the first batch.
+            return Ok(None);
         }
 
         let mut operation_count = 0;
@@ -852,7 +856,7 @@ impl QASMEngine {
                         self.process_measurement(qubit_id.0, c_reg, *c_index)?;
                         self.current_op += 1;
                         debug!("Breaking batch after measurement to wait for results");
-                        return Ok(self.message_builder.build());
+                        return Ok(Some(self.message_builder.build()));
                     }
                 }
                 Operation::RegMeasure { q_reg, c_reg } => {
@@ -866,7 +870,7 @@ impl QASMEngine {
                     if let Some(count) = added_count {
                         operation_count += count;
                     } else {
-                        return Ok(self.message_builder.build());
+                        return Ok(Some(self.message_builder.build()));
                     }
                 }
                 Operation::If {
@@ -934,7 +938,21 @@ impl QASMEngine {
                                 index,
                                 expression,
                             } => {
-                                let value_expr = self.evaluate_expression_bitvec(expression)?;
+                                // Get target register size for width hint
+                                let target_width = if *is_indexed {
+                                    1 // Single bit assignment
+                                } else {
+                                    program
+                                        .classical_registers
+                                        .get(target.as_str())
+                                        .copied()
+                                        .unwrap_or(64)
+                                };
+
+                                let value_expr = self.evaluate_expression_bitvec_with_width(
+                                    expression,
+                                    target_width,
+                                )?;
 
                                 if *is_indexed {
                                     if let Some(idx) = *index {
@@ -946,8 +964,15 @@ impl QASMEngine {
                                 {
                                     let mut result_bitvec = value_expr.into_bitvec();
 
-                                    // Resize to the exact register size
-                                    result_bitvec.resize(*register_size, false);
+                                    // Sign extend when resizing (use the MSB as the sign bit)
+                                    let sign_bit = if result_bitvec.is_empty() {
+                                        false
+                                    } else {
+                                        result_bitvec[result_bitvec.len() - 1]
+                                    };
+
+                                    // Resize to the exact register size with sign extension
+                                    result_bitvec.resize(*register_size, sign_bit);
 
                                     debug!(
                                         "Setting register {} with BitVec of length {}",
@@ -979,7 +1004,19 @@ impl QASMEngine {
                         target, expression
                     );
 
-                    let value_expr = self.evaluate_expression_bitvec(expression)?;
+                    // Get target register size for width hint
+                    let target_width = if *is_indexed {
+                        1 // Single bit assignment
+                    } else {
+                        program
+                            .classical_registers
+                            .get(target.as_str())
+                            .copied()
+                            .unwrap_or(64)
+                    };
+
+                    let value_expr =
+                        self.evaluate_expression_bitvec_with_width(expression, target_width)?;
 
                     if *is_indexed {
                         if let Some(idx) = *index {
@@ -991,8 +1028,15 @@ impl QASMEngine {
                     {
                         let mut result_bitvec = value_expr.into_bitvec();
 
-                        // Resize to the exact register size
-                        result_bitvec.resize(*register_size, false);
+                        // Sign extend when resizing (use the MSB as the sign bit)
+                        let sign_bit = if result_bitvec.is_empty() {
+                            false
+                        } else {
+                            result_bitvec[result_bitvec.len() - 1]
+                        };
+
+                        // Resize to the exact register size with sign extension
+                        result_bitvec.resize(*register_size, sign_bit);
 
                         debug!(
                             "Setting register {} with BitVec of length {}",
@@ -1013,20 +1057,23 @@ impl QASMEngine {
             self.current_op += 1;
         }
 
-        Ok(self.message_builder.build())
+        Ok(Some(self.message_builder.build()))
     }
 
     /// Evaluate an expression with `BitVec` support
     fn evaluate_expression_bitvec(&self, expr: &Expression) -> Result<ExpressionValue, PecosError> {
-        // Determine default width - use the largest register size or 64 bits
-        let default_width = self
-            .classical_registers
-            .values()
-            .map(bitvec::vec::BitVec::len)
-            .max()
-            .unwrap_or(64);
+        // For non-assignment contexts (like conditionals), let operands determine width
+        // by using 0 as the minimum width hint
+        evaluate_expression_bitvec(expr, self, 0)
+    }
 
-        evaluate_expression_bitvec(expr, self, default_width)
+    fn evaluate_expression_bitvec_with_width(
+        &self,
+        expr: &Expression,
+        target_width: usize,
+    ) -> Result<ExpressionValue, PecosError> {
+        // Use target width as hint for expression evaluation
+        evaluate_expression_bitvec(expr, self, target_width)
     }
 }
 
@@ -1042,56 +1089,64 @@ impl ClassicalEngine for QASMEngine {
     fn generate_commands(&mut self) -> Result<ByteMessage, PecosError> {
         debug!("QASMEngine::generate_commands() called");
 
-        if self.program.is_none() {
-            debug!("No program loaded, returning empty message");
-            self.message_builder.reset();
-            let _ = self.message_builder.for_quantum_operations();
-            return Ok(self.message_builder.build());
-        }
-
-        if let Some(qasm_program) = &self.program {
-            let program = qasm_program.program();
-            debug!(
-                "Current operation: {}/{}",
-                self.current_op,
-                program.operations.len()
-            );
-
-            if self.current_op >= program.operations.len() {
-                debug!("End of program detected, returning flush message");
-                return Ok(ByteMessage::create_flush());
+        // Check if we have a program and if we've reached the end
+        let has_more_ops = match &self.program {
+            None => {
+                debug!("No program loaded, returning empty message");
+                return Ok(ByteMessage::create_empty());
             }
-        }
+            Some(qasm_program) => {
+                let program = qasm_program.program();
+                debug!(
+                    "Current operation: {}/{}",
+                    self.current_op,
+                    program.operations.len()
+                );
 
-        if self.current_op == 0 {
+                if self.current_op >= program.operations.len() {
+                    debug!("End of program detected, returning empty message");
+                    return Ok(ByteMessage::create_empty());
+                }
+                true
+            }
+        };
+
+        // Initialize if at the beginning of a shot
+        if has_more_ops && self.current_op == 0 {
             debug!("Starting a new shot (current_op=0)");
             self.message_builder.reset();
             let _ = self.message_builder.for_quantum_operations();
         }
 
         debug!("Processing program from operation {}", self.current_op);
-        let result = self.process_program();
+
+        // Process program and map the Option<ByteMessage> to ByteMessage
+        let result = self
+            .process_program_impl()
+            .map(|maybe_message| maybe_message.unwrap_or_else(ByteMessage::create_empty))
+            .map_err(|e| {
+                PecosError::Processing(format!("QASM engine failed to process program: {e}"))
+            });
+
         debug!("Program processing complete");
-        result.map_err(|e| {
-            PecosError::Processing(format!("QASM engine failed to process program: {e}"))
-        })
+        result
     }
 
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), PecosError> {
         debug!("Handling measurements from ByteMessage");
 
-        match message.measurement_results_as_vec() {
-            Ok(results) => {
+        match message.outcomes() {
+            Ok(outcomes) => {
                 let mappings = self.register_result_mappings.clone();
 
-                debug!("Processing {} measurement results", results.len());
+                debug!("Processing {} measurement results", outcomes.len());
                 debug!(
                     "Starting from global measurement index {}",
                     self.measurements_processed
                 );
 
-                let num_results = results.len();
-                for (local_index, value) in results {
+                let num_results = outcomes.len();
+                for (local_index, value) in outcomes.into_iter().enumerate() {
                     // Calculate the global index for this measurement
                     let global_index = self.measurements_processed + local_index;
                     debug!(
@@ -1204,14 +1259,12 @@ impl ControlEngine for QASMEngine {
         self.current_op = 0;
 
         debug!("Generating initial commands for simulation");
-        let commands = self.generate_commands()?;
-
-        if commands.is_empty()? {
-            debug!("No commands to process, returning Complete");
-            Ok(EngineStage::Complete(self.get_results()?))
-        } else {
+        if let Some(commands) = self.process_program_impl()? {
             debug!("Commands generated, returning NeedsProcessing");
             Ok(EngineStage::NeedsProcessing(commands))
+        } else {
+            debug!("No commands to process, returning Complete");
+            Ok(EngineStage::Complete(self.get_results()?))
         }
     }
 
@@ -1222,8 +1275,8 @@ impl ControlEngine for QASMEngine {
         debug!("QASMEngine::continue_processing() called");
 
         let measurement_count = measurements
-            .measurement_results_as_vec()
-            .map(|results| results.len())
+            .outcomes()
+            .map(|outcomes| outcomes.len())
             .unwrap_or(0);
         debug!("Received {} measurements", measurement_count);
 
@@ -1231,14 +1284,12 @@ impl ControlEngine for QASMEngine {
         self.handle_measurements(measurements)?;
 
         debug!("Generating next batch of commands");
-        let commands = self.generate_commands()?;
-
-        if commands.is_empty()? {
+        if let Some(commands) = self.process_program_impl()? {
+            debug!("Additional commands generated, returning NeedsProcessing");
+            Ok(EngineStage::NeedsProcessing(commands))
+        } else {
             debug!("No more commands, returning Complete");
             Ok(EngineStage::Complete(self.get_results()?))
-        } else {
-            debug!("Unexpected additional commands generated");
-            Ok(EngineStage::NeedsProcessing(commands))
         }
     }
 
@@ -1266,18 +1317,10 @@ impl Engine for QASMEngine {
                 debug!("Shot completed directly in start()");
                 Ok(result)
             }
-            EngineStage::NeedsProcessing(cmds) => {
-                debug!("Processing commands from start()");
-
-                if cmds.is_empty().map_err(|e| {
-                    PecosError::Processing(format!("Failed to check if commands are empty: {e}"))
-                })? {
-                    debug!("Received empty commands, treating as completion");
-                    Ok(self.get_results()?)
-                } else {
-                    debug!("QASMEngine cannot process quantum operations directly");
-                    Ok(self.get_results()?)
-                }
+            EngineStage::NeedsProcessing(_cmds) => {
+                debug!("QASMEngine cannot process quantum operations directly");
+                debug!("Returning best-effort results");
+                Ok(self.get_results()?)
             }
         }
     }

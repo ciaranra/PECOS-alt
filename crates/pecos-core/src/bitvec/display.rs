@@ -118,11 +118,12 @@ pub fn to_hex_string(bitvec: &BitVec<u8, Lsb0>) -> String {
 /// * `bitvec` - The `BitVec` to convert
 ///
 /// # Returns
-/// A string of '0' and '1' characters representing the bits (LSB first)
+/// A string of '0' and '1' characters representing the bits (MSB first)
 #[must_use]
 pub fn to_bitstring(bitvec: &BitVec<u8, Lsb0>) -> String {
     let mut result = String::with_capacity(bitvec.len());
-    for bit in bitvec {
+    // Iterate in reverse to put MSB first (like conventional binary notation)
+    for bit in bitvec.iter().rev() {
         result.push(if *bit { '1' } else { '0' });
     }
     result
@@ -155,14 +156,15 @@ pub fn to_bool_array(bitvec: &BitVec<u8, Lsb0>) -> String {
 /// Create a `BitVec` from a bitstring (e.g., "1010")
 ///
 /// # Arguments
-/// * `bitstring` - String of '0' and '1' characters
+/// * `bitstring` - String of '0' and '1' characters (MSB first)
 ///
 /// # Returns
 /// `Some(BitVec)` if parsing succeeds, `None` if invalid characters found
 #[must_use]
 pub fn from_bitstring(bitstring: &str) -> Option<BitVec<u8, Lsb0>> {
     let mut bv = BitVec::<u8, Lsb0>::with_capacity(bitstring.len());
-    for ch in bitstring.chars() {
+    // Parse in reverse order to convert MSB-first string to LSB-first storage
+    for ch in bitstring.chars().rev() {
         match ch {
             '0' => bv.push(false),
             '1' => bv.push(true),
@@ -186,11 +188,14 @@ mod tests {
 
     #[test]
     fn test_from_bitstring() {
-        let bv = from_bitstring("101").unwrap(); // LSB first
+        let bv = from_bitstring("101").unwrap(); // MSB first input
         assert_eq!(bv.len(), 3);
-        assert!(bv[0]); // LSB
-        assert!(!bv[1]);
-        assert!(bv[2]); // MSB
+        assert!(bv[0]); // LSB (rightmost bit of "101")
+        assert!(!bv[1]); // middle bit
+        assert!(bv[2]); // MSB (leftmost bit of "101")
+
+        // Verify round-trip conversion
+        assert_eq!(to_bitstring(&bv), "101");
     }
 
     #[test]
@@ -204,10 +209,10 @@ mod tests {
         // Test hex string
         assert_eq!(to_hex_string(&bv), "0x5");
 
-        // Test bool array
+        // Test bool array (LSB first)
         assert_eq!(to_bool_array(&bv), "[true, false, true]");
 
-        // Test bitstring (LSB first)
+        // Test bitstring (MSB first)
         assert_eq!(to_bitstring(&bv), "101");
     }
 }

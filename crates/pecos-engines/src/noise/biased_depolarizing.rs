@@ -229,30 +229,36 @@ impl BiasedDepolarizingNoiseModel {
     /// Returns a `PecosError` if applying bias fails
     fn apply_bias_to_message(&mut self, message: ByteMessage) -> Result<ByteMessage, PecosError> {
         // Parse the message to extract the measurement results
-        let measurement_outcomes = message.parse_measurements()?;
-        let measurements: Vec<(usize, u32)> =
-            measurement_outcomes.into_iter().enumerate().collect();
+        let outcomes = message.outcomes()?;
 
         // If the message doesn't contain measurements, return it unchanged
-        if measurements.is_empty() {
+        if outcomes.is_empty() {
             return Ok(message);
         }
 
         // Apply bias to each measurement
-        let biased_measurements: Vec<(usize, u32)> = measurements
+        let biased_outcomes: Vec<u32> = outcomes
             .into_iter()
+            .enumerate()
             .map(|(index, outcome)| {
                 let index_u32 = u32::try_from(index).unwrap_or(u32::MAX);
                 let (_biased_index, biased_outcome) =
                     self.apply_bias_to_measurement(index_u32, outcome);
-                (index, biased_outcome)
+                biased_outcome
             })
             .collect();
 
-        // Create a new ByteMessage with the biased measurements
-        Ok(ByteMessage::record_measurement_results(
-            &biased_measurements,
-        ))
+        // Create a new ByteMessage with the biased measurements using the builder
+        let mut builder = ByteMessage::outcomes_builder();
+
+        // Convert outcomes to usize for the builder
+        let outcomes_usize: Vec<usize> = biased_outcomes
+            .iter()
+            .map(|&outcome| outcome as usize)
+            .collect();
+        builder.add_outcomes(&outcomes_usize);
+
+        Ok(builder.build())
     }
 
     fn apply_prep_faults(&mut self, builder: &mut ByteMessageBuilder, gate: &Gate) {
@@ -394,7 +400,7 @@ impl ControlEngine for BiasedDepolarizingNoiseModel {
         trace!("BiasedDepolarizingNoise::start - applying noise to quantum operations");
 
         // Parse the input as quantum operations
-        let gates: Vec<crate::Gate> = input.parse_quantum_operations()?;
+        let gates: Vec<crate::Gate> = input.quantum_ops()?;
 
         // Apply noise to the gates
         let noisy_gates = self.apply_noise_to_gates(&gates);

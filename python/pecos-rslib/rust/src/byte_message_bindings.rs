@@ -37,10 +37,16 @@ impl PyByteMessageBuilder {
         let _ = self.inner.for_quantum_operations();
     }
 
-    /// Configure the builder for measurement results
+    /// Configure the builder for measurement outcomes
+    #[pyo3(text_signature = "($self)")]
+    fn for_outcomes(&mut self) {
+        let _ = self.inner.for_outcomes();
+    }
+
+    /// Configure the builder for measurement results (deprecated, use for_outcomes instead)
     #[pyo3(text_signature = "($self)")]
     fn for_measurement_results(&mut self) {
-        let _ = self.inner.for_measurement_results();
+        let _ = self.inner.for_outcomes();
     }
 
     /// Add an X gate to the message
@@ -110,11 +116,7 @@ impl PyByteMessageBuilder {
         self.inner.add_prep(&[qubit]);
     }
 
-    /// Add a flush command to the message
-    #[pyo3(text_signature = "($self, is_last=False)")]
-    fn add_flush(&mut self, is_last: Option<bool>) {
-        self.inner.add_flush(is_last.unwrap_or(false));
-    }
+    // Removed add_flush since it's no longer needed
 
     /// Build the message and return a PyByteMessage
     #[pyo3(text_signature = "($self)")]
@@ -145,14 +147,6 @@ pub struct PyByteMessage {
 
 #[pymethods]
 impl PyByteMessage {
-    /// Create a new empty ByteMessage
-    #[classmethod]
-    fn create_empty(_cls: &Bound<PyType>) -> Self {
-        Self {
-            inner: ByteMessage::create_empty(),
-        }
-    }
-
     /// Create a new ByteMessageBuilder
     #[classmethod]
     fn builder(_cls: &Bound<PyType>) -> PyByteMessageBuilder {
@@ -167,19 +161,19 @@ impl PyByteMessage {
         builder
     }
 
-    /// Create a ByteMessageBuilder configured for measurement results
+    /// Create a ByteMessageBuilder configured for measurement outcomes
     #[classmethod]
-    fn measurement_results_builder(_cls: &Bound<PyType>) -> PyByteMessageBuilder {
+    fn outcomes_builder(_cls: &Bound<PyType>) -> PyByteMessageBuilder {
         let mut builder = PyByteMessageBuilder::new();
         builder.for_measurement_results();
         builder
     }
 
-    /// Create a flush message
+    /// Create an empty message
     #[classmethod]
-    fn create_flush(_cls: &Bound<PyType>) -> Self {
+    fn create_empty(_cls: &Bound<PyType>) -> Self {
         Self {
-            inner: ByteMessage::create_flush(),
+            inner: ByteMessage::create_empty(),
         }
     }
 
@@ -200,7 +194,7 @@ impl PyByteMessage {
     fn parse_quantum_operations(&self, py: Python<'_>) -> PyResult<Vec<PyObject>> {
         let mut results = Vec::new();
 
-        for op in self.inner.parse_quantum_operations().map_err(|e| {
+        for op in self.inner.quantum_ops().map_err(|e| {
             PyRuntimeError::new_err(format!(
                 "Failed to parse quantum operations in Python bindings: {e}"
             ))
@@ -234,7 +228,8 @@ impl PyByteMessage {
     /// Get measurement results as a list of (result_id, outcome) tuples
     #[pyo3(text_signature = "($self)")]
     pub fn measurement_results(&self, py: Python<'_>) -> PyResult<PyObject> {
-        let results = self.inner.measurement_results_as_vec().map_err(|e| {
+        // Get raw outcomes
+        let outcomes = self.inner.outcomes().map_err(|e| {
             PyRuntimeError::new_err(format!(
                 "Failed to extract measurement results in Python bindings: {e}"
             ))
@@ -242,7 +237,7 @@ impl PyByteMessage {
 
         // Create a list of lists, where each inner list has two elements
         let result_list = PyList::empty(py);
-        for (result_id, outcome) in results {
+        for (result_id, outcome) in outcomes.into_iter().enumerate() {
             // For each measurement, create a small list with [result_id, outcome]
             let inner_list = PyList::empty(py);
             inner_list.append(result_id)?;

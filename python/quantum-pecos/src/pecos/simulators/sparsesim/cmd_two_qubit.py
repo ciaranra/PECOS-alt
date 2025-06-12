@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pecos.simulators.sparsesim.state import SparseSim
-    from pecos.type_defs import SimulatorGateParams
+    from pecos.typing import SimulatorGateParams
 
 from pecos.simulators.sparsesim.cmd_one_qubit import SX, SY, SZ, SYdg, SZdg, X
 

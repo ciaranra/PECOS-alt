@@ -308,12 +308,16 @@ mod tests {
         match shot.data.get("bitvec").unwrap() {
             Data::BitVec(bv) => {
                 assert_eq!(bv.len(), bitstring.len());
-                // Test individual bit access
-                assert!(bv[0]); // '1'
-                assert!(!bv[1]); // '0'
+                // Test individual bit access - bitstring is parsed MSB-first
+                // "101100111010110100101110" rightmost bits are "...0101110"
+                assert!(!bv[0]); // LSB is rightmost bit: '0'
+                assert!(bv[1]); // '1'
                 assert!(bv[2]); // '1'
                 assert!(bv[3]); // '1'
                 assert!(!bv[4]); // '0'
+                assert!(bv[5]); // '1'
+                // Verify leftmost bit (MSB) is '1'
+                assert!(bv[bitstring.len() - 1]);
             }
             _ => panic!("Expected BitVec variant"),
         }
@@ -333,16 +337,19 @@ mod tests {
         assert!(u32_val.is_some());
 
         // Create BitVec directly and modify it
+        // "01011010" MSB-first = LSB [0,1,0,1,1,0,1,0]
         let mut bv = BitVec::<u8, Lsb0>::from_bitslice(bits![u8, Lsb0; 0, 1, 0, 1, 1, 0, 1, 0]);
         bv.set(2, true); // Change bit 2 from 0 to 1
         shot.data.insert("modified".to_string(), Data::BitVec(bv));
 
         match shot.data.get("modified").unwrap() {
             Data::BitVec(bv) => {
-                assert!(bv[2]); // We changed this
-                // Use our to_bitstring method instead
+                assert!(bv[2]); // We changed this (was 0, now 1)
+                // Use our to_bitstring method which returns MSB-first
                 let bitstring = shot.data.get("modified").unwrap().to_bitstring().unwrap();
-                assert_eq!(bitstring, "01111010");
+                // Original: "01011010" with bit 2 (LSB-indexed) changed from 0 to 1
+                // Results in: "01011110" (MSB-first display)
+                assert_eq!(bitstring, "01011110");
             }
             _ => panic!("Expected BitVec variant"),
         }

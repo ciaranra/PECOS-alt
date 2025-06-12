@@ -276,14 +276,14 @@ def to_phir_dict(qc: pecos.QuantumCircuit) -> dict:
                 }
                 del metadata["export"]
 
-            elif metadata.get("cop_type") in ["Idle", "idle"]:
+            elif metadata.get("cop_type") in {"Idle", "idle"}:
                 del metadata["cop_type"]
                 op = {
                     "mop": "Idle",
                     "args": find_qid2qsym(qubits),
                 }
 
-            elif metadata.get("cop_type") in ["Transport", "transport"]:
+            elif metadata.get("cop_type") in {"Transport", "transport"}:
                 del metadata["cop_type"]
                 op = {
                     "mop": "Transport",

@@ -4,7 +4,7 @@ use pest::iterators::Pair;
 
 use crate::ast::Operation;
 use crate::parser::errors::{index_out_of_bounds, register_size_mismatch, unknown_register};
-use crate::parser::expressions::parse_expr;
+use crate::parser::expressions::{parse_expr, parse_expr_with_width, parse_gate_param_expr};
 use crate::parser::registers::parse_indexed_id;
 use crate::parser::{Program, QASMParser, Rule};
 use pecos_core::prelude::{Gate, GateType, QubitId};
@@ -116,7 +116,7 @@ pub fn parse_quantum_op(
                     Rule::param_values => {
                         for param_expr in pair.into_inner() {
                             if param_expr.as_rule() == Rule::expr {
-                                let expr = parse_expr(param_expr)?;
+                                let expr = parse_gate_param_expr(param_expr)?;
                                 let value = expr.evaluate(None).map_err(|e| {
                                     PecosError::ParseInvalidExpression(format!(
                                         "Failed to evaluate parameter: {e}"
@@ -364,7 +364,7 @@ pub fn parse_if_statement(
             }
         }
         Rule::classical_op => {
-            if let Some(op) = parse_classical_operation(operation_pair.clone())? {
+            if let Some(op) = parse_classical_operation(operation_pair.clone(), program)? {
                 op
             } else {
                 return Err(PecosError::CompileInvalidOperation {
@@ -395,7 +395,10 @@ pub fn parse_if_statement(
 /// # Errors
 ///
 /// Returns an error if the classical operation syntax is invalid
-pub fn parse_classical_operation(pair: Pair<Rule>) -> Result<Option<Operation>, PecosError> {
+pub fn parse_classical_operation(
+    pair: Pair<Rule>,
+    program: &Program,
+) -> Result<Option<Operation>, PecosError> {
     let inner_parts: Vec<_> = pair.into_inner().collect();
 
     if inner_parts.len() >= 2 {
@@ -428,7 +431,23 @@ pub fn parse_classical_operation(pair: Pair<Rule>) -> Result<Option<Operation>, 
         }
 
         let expr_pair = &inner_parts[1];
-        let expression = parse_expr(expr_pair.clone())?;
+
+        // Get the target register size for width-aware constant folding
+        let target_width = program
+            .classical_registers
+            .get(&target)
+            .copied()
+            .unwrap_or(0);
+
+        // For width-aware constant folding, we need to determine the maximum width
+        // This includes the target register width and any operand widths in the expression
+        let default_width = target_width;
+
+        let expression = if default_width > 0 {
+            parse_expr_with_width(expr_pair.clone(), default_width)?
+        } else {
+            parse_expr(expr_pair.clone())?
+        };
 
         return Ok(Some(Operation::ClassicalAssignment {
             target,

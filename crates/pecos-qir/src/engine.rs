@@ -7,7 +7,7 @@ use log::{debug, trace, warn};
 use pecos_core::errors::PecosError;
 use pecos_engines::Engine;
 use pecos_engines::byte_message::ByteMessage;
-use pecos_engines::engine_system::ClassicalEngine;
+use pecos_engines::engine_system::{ClassicalEngine, ControlEngine, EngineStage};
 use pecos_engines::shot_results::{Data, Shot};
 use regex::Regex;
 use std::collections::HashMap;
@@ -293,11 +293,15 @@ impl QirEngine {
 
     /// Process measurements from the quantum system
     fn process_measurements(&mut self, message: &ByteMessage) -> Result<(), PecosError> {
-        let measurements = message.measurement_results_as_vec().map_err(|e| {
+        // Extract raw measurement outcomes
+        let outcomes = message.outcomes().map_err(|e| {
             PecosError::Input(format!(
                 "Failed to extract measurements from ByteMessage: {e}"
             ))
         })?;
+
+        // Convert to indexed format for compatibility with existing code
+        let measurements: Vec<(usize, u32)> = outcomes.into_iter().enumerate().collect();
 
         self.measurement_results.clear();
         // Convert u32 measurements to i64 for QIR standard
@@ -498,7 +502,7 @@ impl QirEngine {
         );
 
         // Try to parse and log quantum operations for debugging
-        if let Ok(operations) = runtime_message.parse_quantum_operations() {
+        if let Ok(operations) = runtime_message.quantum_ops() {
             debug!("QIR: Parsed {} quantum operations:", operations.len());
             for (i, op) in operations.iter().enumerate().take(10) {
                 debug!("QIR:   [{}] {:?}", i, op);
@@ -511,22 +515,20 @@ impl QirEngine {
         Ok(runtime_message)
     }
 
-    fn generate_commands_impl(&mut self) -> Result<ByteMessage, PecosError> {
+    fn generate_commands_impl(&mut self) -> Result<Option<ByteMessage>, PecosError> {
         // Only log at trace level to reduce verbosity
         trace!("QIR: Generating commands (shot {})", self.shot_count + 1);
 
-        // If we've already generated commands for this shot, return an empty message
+        // If we've already generated commands for this shot, return None
         if self.commands_generated {
-            trace!("QIR: Commands already generated for this shot, returning empty message");
-            return Ok(ByteMessage::create_flush());
+            trace!("QIR: Commands already generated for this shot, returning None");
+            return Ok(None);
         }
 
-        // If we've already processed a shot in this run_shot call, return an empty message
+        // If we've already processed a shot in this run_shot call, return None
         if self.shot_count > 0 {
-            debug!(
-                "QIR: Already processed one shot in this run_shot call, returning empty message"
-            );
-            return Ok(ByteMessage::create_flush());
+            debug!("QIR: Already processed one shot in this run_shot call, returning None");
+            return Ok(None);
         }
 
         // Set up library if not already done
@@ -568,7 +570,8 @@ impl QirEngine {
             // Mark that we've generated commands for this shot
             self.commands_generated = true;
 
-            Ok(runtime_message)
+            // Return the ByteMessage
+            Ok(Some(runtime_message))
         } else {
             warn!("QIR: No QIR library loaded");
             Err(PecosError::Processing(
@@ -705,7 +708,11 @@ impl ClassicalEngine for QirEngine {
     }
 
     fn generate_commands(&mut self) -> Result<ByteMessage, PecosError> {
-        self.generate_commands_impl()
+        // When no commands are left to generate, create an empty message
+        // instead of returning an error, to be consistent with other engines
+        Ok(self
+            .generate_commands_impl()?
+            .unwrap_or_else(ByteMessage::create_empty))
     }
 
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), PecosError> {
@@ -767,20 +774,59 @@ impl Drop for QirEngine {
     }
 }
 
+impl ControlEngine for QirEngine {
+    type Input = ();
+    type Output = Shot;
+    type EngineInput = ByteMessage;
+    type EngineOutput = ByteMessage;
+
+    fn start(&mut self, _input: ()) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
+        match self.generate_commands_impl()? {
+            Some(commands) => Ok(EngineStage::NeedsProcessing(commands)),
+            None => Ok(EngineStage::Complete(self.get_results()?)),
+        }
+    }
+
+    fn continue_processing(
+        &mut self,
+        measurements: ByteMessage,
+    ) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
+        // Handle measurements from quantum engine
+        self.handle_measurements(measurements)?;
+
+        // Check if we have more commands to process
+        match self.generate_commands_impl()? {
+            Some(commands) => Ok(EngineStage::NeedsProcessing(commands)),
+            None => Ok(EngineStage::Complete(self.get_results()?)),
+        }
+    }
+
+    fn reset(&mut self) -> Result<(), PecosError> {
+        self.reset_internal_state();
+        Ok(())
+    }
+}
+
 impl Engine for QirEngine {
     type Input = ();
     type Output = Shot;
 
-    fn process(&mut self, _input: Self::Input) -> Result<Self::Output, PecosError> {
-        // Generate commands, process them, and return results
-        let commands = self.generate_commands_impl()?;
-        // ByteMessage::is_empty() should include context if it fails
-        if !commands.is_empty()? {
+    fn process(&mut self, input: Self::Input) -> Result<Self::Output, PecosError> {
+        // Use the EngineStage pattern for processing
+        let mut stage = self.start(input)?;
+
+        while let EngineStage::NeedsProcessing(_commands) = stage {
             // In a real processing scenario, these commands would be sent to a quantum engine
             // Here we're just handling an empty processing case
-            self.handle_measurements(ByteMessage::builder().build())?;
+            let measurements = ByteMessage::builder().build();
+            stage = self.continue_processing(measurements)?;
         }
-        Ok(self.get_results_impl())
+
+        // Extract the final result
+        match stage {
+            EngineStage::Complete(output) => Ok(output),
+            EngineStage::NeedsProcessing(_) => unreachable!(),
+        }
     }
 
     fn reset(&mut self) -> Result<(), PecosError> {

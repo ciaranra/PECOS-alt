@@ -5,7 +5,7 @@
 
 use crate::byte_message::message::ByteMessage;
 use crate::byte_message::protocol::{
-    BATCH_MAGIC, BatchHeader, GateCommandHeader, MeasurementHeader, MessageHeader, calc_padding,
+    BATCH_MAGIC, BatchHeader, GateHeader, MessageHeader, calc_padding,
 };
 use bytemuck;
 use std::fmt::Write;
@@ -34,7 +34,7 @@ pub fn dump_batch(data: &[u8]) -> String {
     }
 
     // Try to parse quantum operations
-    match message.parse_quantum_operations() {
+    match message.quantum_ops() {
         Ok(operations) => {
             writeln!(output, "Quantum Operations ({} total):", operations.len()).unwrap();
             for (i, op) in operations.iter().enumerate() {
@@ -59,7 +59,7 @@ pub fn dump_batch(data: &[u8]) -> String {
     }
 
     // Try to parse measurements
-    match message.parse_measurements() {
+    match message.outcomes() {
         Ok(measurements) => {
             if !measurements.is_empty() {
                 writeln!(
@@ -136,14 +136,8 @@ pub fn dump_batch_raw(data: &[u8]) -> String {
 
         // Get message type
         let msg_type = match msg_header.msg_type {
-            1 => "BeginBatch",
-            2 => "EndBatch",
-            3 => "Flush",
-            4 => "Reset",
-            10 => "GateCommand",
-            11 => "Measurement",
-            20 => "MeasurementResult",
-            100 => "Error",
+            10 => "Gate",
+            20 => "Outcome",
             _ => "Unknown",
         };
 
@@ -164,10 +158,10 @@ pub fn dump_batch_raw(data: &[u8]) -> String {
 
             match msg_header.msg_type {
                 10 => {
-                    // GateCommand
-                    if payload.len() >= size_of::<GateCommandHeader>() {
-                        let gate_header = bytemuck::pod_read_unaligned::<GateCommandHeader>(
-                            &payload[0..size_of::<GateCommandHeader>()],
+                    // Gate (includes all gate operations including measurements)
+                    if payload.len() >= size_of::<GateHeader>() {
+                        let gate_header = bytemuck::pod_read_unaligned::<GateHeader>(
+                            &payload[0..size_of::<GateHeader>()],
                         );
 
                         let gate_type = match std::panic::catch_unwind(|| {
@@ -193,7 +187,7 @@ pub fn dump_batch_raw(data: &[u8]) -> String {
                         .unwrap();
 
                         // Dump qubit indices
-                        let qubits_offset = size_of::<GateCommandHeader>();
+                        let qubits_offset = size_of::<GateHeader>();
                         let mut qubits = Vec::new();
 
                         for i in 0..gate_header.num_qubits as usize {
@@ -268,21 +262,10 @@ pub fn dump_batch_raw(data: &[u8]) -> String {
                         }
                     }
                 }
-                104 => {
-                    // Measurement
-                    if payload.len() >= size_of::<MeasurementHeader>() {
-                        let meas_header = bytemuck::pod_read_unaligned::<MeasurementHeader>(
-                            &payload[0..size_of::<MeasurementHeader>()],
-                        );
-
-                        output.push_str("  Measurement:\n");
-                        writeln!(output, "    Qubit: {}", meas_header.qubit).unwrap();
-                    }
-                }
                 20 => {
                     // MeasurementResult - use modern structured parsing
                     let message = ByteMessage::new(data);
-                    match message.parse_measurements() {
+                    match message.outcomes() {
                         Ok(measurements) => {
                             output.push_str("  Measurement Results:\n");
                             for (i, measurement) in measurements.iter().enumerate() {
@@ -369,7 +352,7 @@ mod tests {
         // Verify dump contains expected information
         assert!(dump.contains("Batch Header"));
         assert!(dump.contains("Magic: 0x5045"));
-        assert!(dump.contains("Type: GateCommand"));
+        assert!(dump.contains("Type: Gate"));
         assert!(dump.contains("Type: H"));
         assert!(dump.contains("Type: RZ"));
         assert!(dump.contains("Theta: 0.5"));

@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 from collections import defaultdict
 from collections.abc import MutableSequence
@@ -26,13 +27,13 @@ from pecos.circuits import qc2phir
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from pecos.type_defs import JSONDict, JSONValue
+    from pecos.typing import JSONDict, JSONValue
 
 # Type aliases
 Location = int | tuple[int, ...]
 LocationSet = set[Location] | list[Location] | tuple[Location, ...]
 GateDict = dict[str, LocationSet]
-CircuitSetup = None | int | list[GateDict]
+CircuitSetup = int | list[GateDict] | None
 
 
 class QuantumCircuit(MutableSequence):
@@ -353,7 +354,7 @@ class QuantumCircuit(MutableSequence):
 
     def copy(self) -> QuantumCircuit:
         """Create a shallow copy of the circuit."""
-        return self.__copy__()
+        return copy.copy(self)
 
     def __iter__(self) -> Iterator[tuple[str, LocationSet, JSONDict]]:
         """Iterate over all gates in the circuit."""

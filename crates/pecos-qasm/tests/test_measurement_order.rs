@@ -30,32 +30,32 @@ fn test_measurement_order_tracking() -> Result<(), PecosError> {
     // Process all measurements - the engine breaks after each measurement
     // First batch: X gates + first measurement
     let commands1 = engine.generate_commands()?;
-    let operations1 = commands1.parse_quantum_operations()?;
+    let operations1 = commands1.quantum_ops()?;
     println!("First batch operations: {operations1:?}");
 
     // Handle first measurement
-    let mut results_builder = ByteMessage::measurement_results_builder();
-    results_builder.add_measurement_results(&[1]); // q0=1
+    let mut results_builder = ByteMessage::outcomes_builder();
+    results_builder.add_outcomes(&[1]); // q0=1
     engine.handle_measurements(results_builder.build())?;
 
     // Second batch: second measurement
     let commands2 = engine.generate_commands()?;
-    let operations2 = commands2.parse_quantum_operations()?;
+    let operations2 = commands2.quantum_ops()?;
     println!("Second batch operations: {operations2:?}");
 
     // Handle second measurement
-    let mut results_builder = ByteMessage::measurement_results_builder();
-    results_builder.add_measurement_results(&[0]); // q1=0
+    let mut results_builder = ByteMessage::outcomes_builder();
+    results_builder.add_outcomes(&[0]); // q1=0
     engine.handle_measurements(results_builder.build())?;
 
     // Third batch: third measurement
     let commands3 = engine.generate_commands()?;
-    let operations3 = commands3.parse_quantum_operations()?;
+    let operations3 = commands3.quantum_ops()?;
     println!("Third batch operations: {operations3:?}");
 
     // Handle third measurement
-    let mut results_builder = ByteMessage::measurement_results_builder();
-    results_builder.add_measurement_results(&[1]); // q2=1
+    let mut results_builder = ByteMessage::outcomes_builder();
+    results_builder.add_outcomes(&[1]); // q2=1
     engine.handle_measurements(results_builder.build())?;
 
     // Get final results
@@ -103,16 +103,16 @@ fn test_measurement_order_with_batches() -> Result<(), PecosError> {
     let _commands1 = engine.generate_commands()?;
 
     // Handle first measurement
-    let mut results_builder = ByteMessage::measurement_results_builder();
-    results_builder.add_measurement_results(&[1]); // First measurement result
+    let mut results_builder = ByteMessage::outcomes_builder();
+    results_builder.add_outcomes(&[1]); // First measurement result
     engine.handle_measurements(results_builder.build())?;
 
     // Second batch
     let _commands2 = engine.generate_commands()?;
 
     // Handle second measurement
-    let mut results_builder = ByteMessage::measurement_results_builder();
-    results_builder.add_measurement_results(&[0]); // Second measurement result
+    let mut results_builder = ByteMessage::outcomes_builder();
+    results_builder.add_outcomes(&[0]); // Second measurement result
     engine.handle_measurements(results_builder.build())?;
 
     // Get final results

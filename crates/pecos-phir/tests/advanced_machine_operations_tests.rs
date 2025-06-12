@@ -3,12 +3,11 @@ mod common;
 #[cfg(test)]
 mod tests {
     use pecos_core::errors::PecosError;
-    use pecos_engines::{PassThroughNoiseModel, shot_results::Data};
+    use pecos_engines::{Engine, ShotVec, shot_results::Data};
+    use pecos_phir::v0_1::ast::PHIRProgram;
+    use pecos_phir::v0_1::engine::PHIREngine;
     use pecos_phir::v0_1::operations::{MachineOperationResult, OperationProcessor};
     use std::collections::HashMap;
-
-    // Import helpers from common module
-    use crate::common::phir_test_utils::run_phir_simulation_from_json;
 
     // Test direct machine operation processing
     #[test]
@@ -82,6 +81,7 @@ mod tests {
           "ops": [
             {"data": "qvar_define", "data_type": "qubits", "variable": "q", "size": 2},
             {"data": "cvar_define", "data_type": "i32", "variable": "var", "size": 32},
+            {"qop": "H", "args": [["q", 0]]},
             {"mop": "Idle", "args": [["q", 0], ["q", 1]], "duration": [5.0, "ms"]},
             {"mop": "Delay", "args": [["q", 0]], "duration": [2.0, "us"]},
             {"mop": "Skip"},
@@ -90,15 +90,19 @@ mod tests {
           ]
         }"#;
 
-        // Run with the simulation pipeline
-        let results = run_phir_simulation_from_json(
-            phir_json,
-            1,
-            1,
-            None,
-            None::<PassThroughNoiseModel>,
-            None::<&std::path::Path>,
-        )?;
+        // Parse JSON into PHIRProgram
+        let program: PHIRProgram = serde_json::from_str(phir_json)
+            .map_err(|e| PecosError::Input(format!("Failed to parse PHIR program: {e}")))?;
+
+        // Create engine directly
+        let mut engine = PHIREngine::from_program(program.clone())?;
+
+        // Execute directly
+        let shot = engine.process(())?;
+
+        // Create a shotVec for compatibility with the rest of the test
+        let mut results = ShotVec::default();
+        results.shots.push(shot);
 
         // Print results for debugging
         println!("ShotResults: {results:?}");
@@ -175,15 +179,19 @@ mod tests {
           ]
         }"#;
 
-        // Run with simulation pipeline
-        let results = run_phir_simulation_from_json(
-            phir_json,
-            1,
-            1,
-            None,
-            None::<PassThroughNoiseModel>,
-            None::<&std::path::Path>,
-        )?;
+        // Parse JSON into PHIRProgram
+        let program: PHIRProgram = serde_json::from_str(phir_json)
+            .map_err(|e| PecosError::Input(format!("Failed to parse PHIR program: {e}")))?;
+
+        // Create engine directly
+        let mut engine = PHIREngine::from_program(program.clone())?;
+
+        // Execute directly
+        let shot = engine.process(())?;
+
+        // Create a shotVec for compatibility with the rest of the test
+        let mut results = ShotVec::default();
+        results.shots.push(shot);
 
         // Print all available results for debugging
         println!("ShotResults: {results:?}");

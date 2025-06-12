@@ -23,7 +23,9 @@ test = false
 [dependencies]
 pyo3 = { workspace=true, features = ["extension-module", "abi3-py310", "generate-import-lib"] }
 pecos = { workspace = true }
-# Removing pecos-engines dependency, using pecos prelude instead
+pecos-core = { workspace = true }
+pecos-qasm = { workspace = true }
+pecos-engines = { workspace = true }
 parking_lot = { workspace = true}
 
 [lints]
