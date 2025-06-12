@@ -32,6 +32,9 @@ from pecos_rslib._pecos_rslib import run_qasm
 from pecos_rslib._pecos_rslib import get_noise_models
 from pecos_rslib._pecos_rslib import get_quantum_engines
 
+# Import the qasm_sim module to make it accessible
+from pecos_rslib import qasm_sim
+
 try:
     __version__ = version("pecos-rslib")
 except PackageNotFoundError:
@@ -50,4 +53,5 @@ __all__ = [
     "run_qasm",
     "get_noise_models",
     "get_quantum_engines",
+    "qasm_sim",
 ]

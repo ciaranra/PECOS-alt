@@ -84,8 +84,7 @@ pub use pecos_core::RngManageable;
 pub use pecos_core::errors::PecosError;
 // Re-export noise models from pecos-engines
 pub use pecos_engines::noise::{
-    BiasedDepolarizingNoiseModel, DepolarizingNoiseModel,
-    GeneralNoiseModel, NoiseModel,
+    BiasedDepolarizingNoiseModel, DepolarizingNoiseModel, GeneralNoiseModel, NoiseModel,
 };
 // Re-export noise models from pecos-engines
 pub use pecos_engines::quantum::{

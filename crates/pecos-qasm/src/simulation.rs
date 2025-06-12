@@ -6,8 +6,8 @@
 use crate::QASMEngine;
 use pecos_core::errors::PecosError;
 use pecos_engines::noise::{
-    BiasedDepolarizingNoiseModel, DepolarizingNoiseModel,
-    GeneralNoiseModel, GeneralNoiseModelBuilder, NoiseModel, PassThroughNoiseModel,
+    BiasedDepolarizingNoiseModel, DepolarizingNoiseModel, GeneralNoiseModel,
+    GeneralNoiseModelBuilder, NoiseModel, PassThroughNoiseModel,
 };
 use pecos_engines::quantum::{QuantumEngine, SparseStabEngine, StateVecEngine};
 use pecos_engines::shot_results::ShotVec;
@@ -125,7 +125,6 @@ pub struct BiasedDepolarizingNoise {
     pub p: f64,
 }
 
-
 /// General noise configuration
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GeneralNoise;
@@ -156,7 +155,6 @@ impl From<BiasedDepolarizingNoise> for NoiseModelType {
     }
 }
 
-
 impl From<GeneralNoise> for NoiseModelType {
     fn from(noise: GeneralNoise) -> Self {
         NoiseModelType::General(noise)
@@ -176,9 +174,16 @@ pub struct QasmSimulation {
     workers: usize,
     noise_model: NoiseModelType,
     quantum_engine_type: QuantumEngineType,
+    bit_format: BitVecFormat,
 }
 
 impl QasmSimulation {
+    /// Get the configured bit vector format
+    #[must_use]
+    pub fn bit_format(&self) -> BitVecFormat {
+        self.bit_format
+    }
+
     /// Run the simulation with the specified number of shots
     ///
     /// This can be called multiple times to run the same simulation
@@ -216,6 +221,15 @@ impl QasmSimulation {
     }
 }
 
+/// Output format for bit vectors
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BitVecFormat {
+    /// Default format as BigInt/integers
+    BigInt,
+    /// Binary string format (e.g., "0101")
+    BinaryString,
+}
+
 /// Builder for QASM simulation
 pub struct QasmSimulationBuilder<'a> {
     qasm: &'a str,
@@ -223,6 +237,7 @@ pub struct QasmSimulationBuilder<'a> {
     workers: usize,
     noise_model: NoiseModelType,
     quantum_engine: QuantumEngineType,
+    bit_format: BitVecFormat,
 }
 
 impl<'a> QasmSimulationBuilder<'a> {
@@ -234,6 +249,7 @@ impl<'a> QasmSimulationBuilder<'a> {
             workers: 1,
             noise_model: NoiseModelType::PassThrough(PassThroughNoise),
             quantum_engine: QuantumEngineType::SparseStabilizer,
+            bit_format: BitVecFormat::BigInt,
         }
     }
 
@@ -274,6 +290,13 @@ impl<'a> QasmSimulationBuilder<'a> {
         self
     }
 
+    /// Set the output format to binary strings
+    #[must_use]
+    pub fn with_binary_string_format(mut self) -> Self {
+        self.bit_format = BitVecFormat::BinaryString;
+        self
+    }
+
     /// Build the simulation for repeated execution
     ///
     /// This parses the QASM code and prepares the simulation
@@ -291,6 +314,7 @@ impl<'a> QasmSimulationBuilder<'a> {
             workers: self.workers,
             noise_model: self.noise_model,
             quantum_engine_type: self.quantum_engine,
+            bit_format: self.bit_format,
         })
     }
 
