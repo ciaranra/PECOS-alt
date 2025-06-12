@@ -143,12 +143,12 @@ For more complex simulations or when you need finer control, you can use the bui
     results = qasm_sim(qasm_code).run(1000)
 
     # With more configuration options
-    results = qasm_sim(qasm_code) \
-        .seed(42) \
-        .noise(DepolarizingNoise(p=0.01)) \
-        .workers(4) \             # Explicitly set number of threads
-        # .auto_workers() \       # Or use all available CPU cores
-        .run(1000)
+    results = (qasm_sim(qasm_code)
+        .seed(42)
+        .noise(DepolarizingNoise(p=0.01))
+        .workers(4)             # Explicitly set number of threads
+        # .auto_workers()       # Or use all available CPU cores
+        .run(1000))
     ```
 
 ## Running Multiple Shots
@@ -176,11 +176,11 @@ lets you build the experiment once and rerun it multiple times:
 
     ```python
     # Build once, run multiple times
-    sim = qasm_sim(qasm) \
-        .seed(42) \
-        .noise(DepolarizingNoise(p=0.01)) \
-        .workers(4) \
-        .build()
+    sim = (qasm_sim(qasm)
+        .seed(42)
+        .noise(DepolarizingNoise(p=0.01))
+        .workers(4)
+        .build())
 
     # Run with different shot counts
     results_100 = sim.run(100)
@@ -277,13 +277,13 @@ For research or to match specific hardware characteristics, you can create detai
     # Currently, use the dataclasses above or the Rust API for advanced configurations
 
     # Future API (not yet available):
-    # noise = GeneralNoiseModelBuilder() \
-    #     .with_prep_probability(0.001) \
-    #     .with_meas_0_probability(0.005) \
-    #     .with_meas_1_probability(0.01) \
-    #     .with_p1_probability(0.0001) \
-    #     .with_p2_probability(0.01) \
-    #     .build()
+    # noise = (GeneralNoiseModelBuilder()
+    #     .with_prep_probability(0.001)
+    #     .with_meas_0_probability(0.005)
+    #     .with_meas_1_probability(0.01)
+    #     .with_p1_probability(0.0001)
+    #     .with_p2_probability(0.01)
+    #     .build())
     ```
 
 The builder provides many configuration options:
