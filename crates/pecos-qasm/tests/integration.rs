@@ -31,3 +31,9 @@ pub mod comprehensive_qasm_examples;
 
 #[path = "integration/simulation_validation_test.rs"]
 pub mod simulation_validation_test;
+
+#[path = "integration/hqslib1_comprehensive_test.rs"]
+pub mod hqslib1_comprehensive_test;
+
+#[path = "integration/pecos_inc_comprehensive_test.rs"]
+pub mod pecos_inc_comprehensive_test;
