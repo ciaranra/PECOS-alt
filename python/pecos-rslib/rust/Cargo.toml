@@ -27,6 +27,7 @@ pecos-core = { workspace = true }
 pecos-qasm = { workspace = true }
 pecos-engines = { workspace = true }
 parking_lot = { workspace = true}
+serde_json = { workspace = true }
 
 [lints]
 workspace = true

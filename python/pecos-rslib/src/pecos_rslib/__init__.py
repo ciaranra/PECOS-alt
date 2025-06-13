@@ -33,7 +33,7 @@ from pecos_rslib._pecos_rslib import get_noise_models
 from pecos_rslib._pecos_rslib import get_quantum_engines
 
 # Import the qasm_sim function and noise models for easy access
-from pecos_rslib.qasm_sim import qasm_sim
+from pecos_rslib.qasm_sim import qasm_sim, register_noise_model
 
 # Also import the noise model dataclasses for convenience
 from pecos_rslib.qasm_sim import (
@@ -63,6 +63,7 @@ __all__ = [
     "get_noise_models",
     "get_quantum_engines",
     "qasm_sim",
+    "register_noise_model",
     # Noise model dataclasses
     "PassThroughNoise",
     "DepolarizingNoise",

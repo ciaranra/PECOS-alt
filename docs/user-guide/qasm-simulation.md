@@ -589,6 +589,111 @@ print(engines)  # ['StateVector', 'SparseStabilizer']
 
 These functions are useful for dynamically listing available options in applications or for validating user input.
 
+## Configuration-Based Simulations
+
+For applications that need to store or share simulation configurations, the builder pattern supports loading settings from dictionaries:
+
+=== "Python"
+
+    ```python
+    from pecos.rslib import qasm_sim
+    import json
+
+    # Define QASM code
+    qasm = '''
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[2];
+        creg c[2];
+        h q[0];
+        cx q[0], q[1];
+        measure q -> c;
+    '''
+
+    # Define configuration as a dictionary
+    config = {
+        "seed": 42,
+        "workers": 4,  # or "auto" for all CPUs
+        "noise": {
+            "type": "DepolarizingNoise",
+            "p": 0.01
+        },
+        "quantum_engine": "SparseStabilizer",
+        "binary_string_format": True
+    }
+
+    # Create and run simulation using config method
+    sim = qasm_sim(qasm).config(config).build()
+    results = sim.run(1000)
+
+    # Save configuration to file for reuse
+    with open("simulation_config.json", "w") as f:
+        json.dump(config, f)
+
+    # Load and run from file with different QASM
+    with open("simulation_config.json", "r") as f:
+        loaded_config = json.load(f)
+
+    # Can reuse config with different circuits
+    sim = qasm_sim(qasm).config(loaded_config).build()
+    results = sim.run(1000)
+
+    # Can also combine config with other builder methods
+    sim = (
+        qasm_sim(qasm)
+        .config(loaded_config)     # Apply config first
+        .workers(8)                # Override workers
+        .seed(123)                 # Override seed
+        .build()
+    )
+    ```
+
+### Configuration Options
+
+The `config()` method accepts a dictionary with the following fields:
+
+- **seed** (optional): Random seed for reproducibility (defaults to non-deterministic)
+- **workers** (optional): Number of worker threads, or `"auto"` for all CPUs (defaults to 1)
+- **noise** (optional): Noise model configuration (defaults to PassThroughNoise - no noise)
+  - **type**: Noise model type (e.g., `"DepolarizingNoise"`)
+  - Additional parameters depend on the noise type
+- **quantum_engine** (optional): `"StateVector"` or `"SparseStabilizer"` (defaults to SparseStabilizer)
+- **binary_string_format** (optional): Whether to output binary strings (defaults to false - integers)
+
+### Noise Configuration Examples
+
+```python
+# No noise (PassThroughNoise is the default when noise is omitted)
+config = {}
+sim = qasm_sim(qasm_code).config(config).build()
+
+# Simple depolarizing noise
+config = {
+    "noise": {"type": "DepolarizingNoise", "p": 0.01}
+}
+sim = qasm_sim(qasm_code).config(config).build()
+
+# Custom depolarizing noise
+config = {
+    "noise": {
+        "type": "DepolarizingCustomNoise",
+        "p_prep": 0.001,
+        "p_meas": 0.002,
+        "p1": 0.003,
+        "p2": 0.004
+    }
+}
+
+# Biased depolarizing noise
+config = {
+    "noise": {
+        "type": "BiasedDepolarizingNoise",
+        "p": 0.01
+    }
+}
+sim = qasm_sim(qasm_code).config(config).build()
+```
+
 ## Working with Large Circuits
 
 ### Circuits with Many Qubits

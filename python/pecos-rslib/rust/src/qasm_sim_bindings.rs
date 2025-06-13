@@ -1,6 +1,7 @@
 //! `PyO3` bindings for QASM simulation with enhanced API
 
 use pecos::prelude::*;
+use pecos_qasm::config::NoiseConfig;
 use pecos_qasm::simulation::{
     BiasedDepolarizingNoise, BitVecFormat, DepolarizingCustomNoise, DepolarizingNoise,
     GeneralNoise, PassThroughNoise,
@@ -309,6 +310,91 @@ impl PyQasmSimulationBuilder {
         let mut new = self.clone();
         new.bit_format = BitVecFormat::BinaryString;
         new
+    }
+
+    /// Apply configuration from a dictionary
+    pub fn config(&self, py: Python<'_>, config: &Bound<'_, PyDict>) -> PyResult<Self> {
+        let mut new = self.clone();
+
+        // Convert Python dict to JSON for Rust processing
+        let json_str = py
+            .import("json")?
+            .getattr("dumps")?
+            .call1((config,))?
+            .extract::<String>()?;
+        let json_val: serde_json::Value = serde_json::from_str(&json_str)
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to parse config as JSON: {e}")))?;
+
+        // Apply each configuration field
+        if let Some(seed_val) = json_val.get("seed") {
+            if let Some(seed) = seed_val.as_u64() {
+                new.seed = Some(seed);
+            } else {
+                return Err(PyValueError::new_err("Invalid seed value"));
+            }
+        }
+
+        if let Some(workers_val) = json_val.get("workers") {
+            if let Some(workers_str) = workers_val.as_str() {
+                if workers_str == "auto" {
+                    new.workers = std::thread::available_parallelism()
+                        .map(std::num::NonZero::get)
+                        .unwrap_or(4);
+                } else {
+                    return Err(PyValueError::new_err(format!(
+                        "Invalid worker config '{workers_str}', expected 'auto' or a number"
+                    )));
+                }
+            } else if let Some(workers) = workers_val.as_u64() {
+                new.workers = usize::try_from(workers)
+                    .map_err(|_| PyValueError::new_err("Workers value too large"))?;
+            } else {
+                return Err(PyValueError::new_err("Invalid workers value"));
+            }
+        }
+
+        if let Some(noise_val) = json_val.get("noise") {
+            // Skip if noise is explicitly null
+            if !noise_val.is_null() {
+                // Parse noise from JSON config
+                let noise_config: NoiseConfig =
+                    serde_json::from_value(noise_val.clone()).map_err(|e| {
+                        PyValueError::new_err(format!("Invalid noise configuration: {e}"))
+                    })?;
+                new.noise_model = noise_config.into();
+            }
+        }
+
+        if let Some(engine_val) = json_val.get("quantum_engine") {
+            if let Some(engine_str) = engine_val.as_str() {
+                new.quantum_engine = match engine_str {
+                    "StateVector" | "state_vector" => PyQuantumEngineType::StateVector,
+                    "SparseStabilizer" | "sparse_stabilizer" => {
+                        PyQuantumEngineType::SparseStabilizer
+                    }
+                    _ => {
+                        return Err(PyValueError::new_err(format!(
+                            "Unknown quantum engine: {engine_str}"
+                        )));
+                    }
+                }
+                .into();
+            } else {
+                return Err(PyValueError::new_err("Invalid quantum_engine value"));
+            }
+        }
+
+        if let Some(binary_val) = json_val.get("binary_string_format") {
+            if let Some(binary) = binary_val.as_bool() {
+                if binary {
+                    new.bit_format = BitVecFormat::BinaryString;
+                }
+            } else {
+                return Err(PyValueError::new_err("Invalid binary_string_format value"));
+            }
+        }
+
+        Ok(new)
     }
 
     /// Build the simulation for repeated execution

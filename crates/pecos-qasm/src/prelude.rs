@@ -70,6 +70,9 @@ pub use crate::simulation::{
     qasm_sim,
 };
 
+// Re-export config module types
+pub use crate::config::{NoiseConfig, QuantumEngineConfig};
+
 // Re-export setup function
 pub use crate::setup_qasm_engine;
 
