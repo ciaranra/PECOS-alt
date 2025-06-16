@@ -6,8 +6,8 @@
 use crate::QASMEngine;
 use pecos_core::errors::PecosError;
 use pecos_engines::noise::{
-    BiasedDepolarizingNoiseModel, DepolarizingNoiseModel,
-    GeneralNoiseModel, GeneralNoiseModelBuilder, NoiseModel, PassThroughNoiseModel,
+    BiasedDepolarizingNoiseModel, DepolarizingNoiseModel, GeneralNoiseModel,
+    GeneralNoiseModelBuilder, NoiseModel, PassThroughNoiseModel,
 };
 use pecos_engines::quantum::{QuantumEngine, SparseStabEngine, StateVecEngine};
 use pecos_engines::shot_results::ShotVec;
@@ -125,7 +125,6 @@ pub struct BiasedDepolarizingNoise {
     pub p: f64,
 }
 
-
 /// General noise configuration
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GeneralNoise;
@@ -156,7 +155,6 @@ impl From<BiasedDepolarizingNoise> for NoiseModelType {
     }
 }
 
-
 impl From<GeneralNoise> for NoiseModelType {
     fn from(noise: GeneralNoise) -> Self {
         NoiseModelType::General(noise)
@@ -176,9 +174,16 @@ pub struct QasmSimulation {
     workers: usize,
     noise_model: NoiseModelType,
     quantum_engine_type: QuantumEngineType,
+    bit_format: BitVecFormat,
 }
 
 impl QasmSimulation {
+    /// Get the configured bit vector format
+    #[must_use]
+    pub fn bit_format(&self) -> BitVecFormat {
+        self.bit_format
+    }
+
     /// Run the simulation with the specified number of shots
     ///
     /// This can be called multiple times to run the same simulation
@@ -216,6 +221,15 @@ impl QasmSimulation {
     }
 }
 
+/// Output format for bit vectors
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BitVecFormat {
+    /// Default format as BigInt/integers
+    BigInt,
+    /// Binary string format (e.g., "0101")
+    BinaryString,
+}
+
 /// Builder for QASM simulation
 pub struct QasmSimulationBuilder<'a> {
     qasm: &'a str,
@@ -223,6 +237,7 @@ pub struct QasmSimulationBuilder<'a> {
     workers: usize,
     noise_model: NoiseModelType,
     quantum_engine: QuantumEngineType,
+    bit_format: BitVecFormat,
 }
 
 impl<'a> QasmSimulationBuilder<'a> {
@@ -234,6 +249,7 @@ impl<'a> QasmSimulationBuilder<'a> {
             workers: 1,
             noise_model: NoiseModelType::PassThrough(PassThroughNoise),
             quantum_engine: QuantumEngineType::SparseStabilizer,
+            bit_format: BitVecFormat::BigInt,
         }
     }
 
@@ -274,6 +290,108 @@ impl<'a> QasmSimulationBuilder<'a> {
         self
     }
 
+    /// Set the output format to binary strings
+    #[must_use]
+    pub fn with_binary_string_format(mut self) -> Self {
+        self.bit_format = BitVecFormat::BinaryString;
+        self
+    }
+
+    /// Apply configuration from a JSON object
+    ///
+    /// This method allows you to configure the builder using a JSON configuration
+    /// object, which is useful for loading settings from files or APIs.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - A JSON value containing configuration settings
+    ///
+    /// # Configuration fields
+    ///
+    /// - `seed` (u64): Random seed for reproducibility
+    /// - `workers` (usize or "auto"): Number of worker threads
+    /// - `noise` (object): Noise model configuration
+    /// - `quantum_engine` (string): "`StateVector`" or "`SparseStabilizer`"
+    /// - `binary_string_format` (bool): Whether to output binary strings
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the configuration is invalid or contains unknown fields.
+    pub fn config(mut self, config: &serde_json::Value) -> Result<Self, PecosError> {
+        use crate::config::{NoiseConfig, QuantumEngineConfig};
+
+        // Parse seed
+        if let Some(seed_val) = config.get("seed") {
+            if let Some(seed) = seed_val.as_u64() {
+                self = self.seed(seed);
+            } else {
+                return Err(PecosError::Processing("Invalid seed value".to_string()));
+            }
+        }
+
+        // Parse workers
+        if let Some(workers_val) = config.get("workers") {
+            if let Some(workers_str) = workers_val.as_str() {
+                if workers_str == "auto" {
+                    self = self.auto_workers();
+                } else {
+                    return Err(PecosError::Processing(format!(
+                        "Invalid worker config '{workers_str}', expected 'auto' or a number"
+                    )));
+                }
+            } else if let Some(workers) = workers_val.as_u64() {
+                let workers_usize = usize::try_from(workers)
+                    .map_err(|_| PecosError::Processing("Workers value too large".to_string()))?;
+                self = self.workers(workers_usize);
+            } else {
+                return Err(PecosError::Processing("Invalid workers value".to_string()));
+            }
+        }
+
+        // Parse noise model
+        if let Some(noise_val) = config.get("noise") {
+            // Skip if noise is explicitly null
+            if !noise_val.is_null() {
+                let noise_config: NoiseConfig =
+                    serde_json::from_value(noise_val.clone()).map_err(|e| {
+                        PecosError::Processing(format!("Invalid noise configuration: {e}"))
+                    })?;
+                self.noise_model = noise_config.into();
+            }
+        }
+
+        // Parse quantum engine
+        if let Some(engine_val) = config.get("quantum_engine") {
+            if let Some(engine_str) = engine_val.as_str() {
+                let engine_config: QuantumEngineConfig =
+                    serde_json::from_value(serde_json::Value::String(engine_str.to_string()))
+                        .map_err(|e| {
+                            PecosError::Processing(format!("Invalid quantum engine: {e}"))
+                        })?;
+                self.quantum_engine = engine_config.into();
+            } else {
+                return Err(PecosError::Processing(
+                    "Invalid quantum_engine value".to_string(),
+                ));
+            }
+        }
+
+        // Parse binary string format
+        if let Some(binary_val) = config.get("binary_string_format") {
+            if let Some(binary) = binary_val.as_bool() {
+                if binary {
+                    self = self.with_binary_string_format();
+                }
+            } else {
+                return Err(PecosError::Processing(
+                    "Invalid binary_string_format value".to_string(),
+                ));
+            }
+        }
+
+        Ok(self)
+    }
+
     /// Build the simulation for repeated execution
     ///
     /// This parses the QASM code and prepares the simulation
@@ -291,6 +409,7 @@ impl<'a> QasmSimulationBuilder<'a> {
             workers: self.workers,
             noise_model: self.noise_model,
             quantum_engine_type: self.quantum_engine,
+            bit_format: self.bit_format,
         })
     }
 

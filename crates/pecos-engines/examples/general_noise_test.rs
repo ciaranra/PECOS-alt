@@ -219,9 +219,7 @@ fn bell_state_comparison() {
     // Sort both expected and actual by the pattern (00, 01, 10, 11) for easier comparison
     let patterns = ["00", "01", "10", "11"];
 
-    println!(
-        "Bell state with biased noise: p_flip_0 = {p_flip_0}, p_flip_1 = {p_flip_1}"
-    );
+    println!("Bell state with biased noise: p_flip_0 = {p_flip_0}, p_flip_1 = {p_flip_1}");
     println!("{:-^80}", "");
     println!(
         "{:<10} | {:<30} | {:<30}",

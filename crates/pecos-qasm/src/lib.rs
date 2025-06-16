@@ -55,6 +55,7 @@
 
 pub mod ast;
 pub mod bitvec_expression;
+pub mod config;
 pub mod engine;
 pub mod engine_builder;
 pub mod includes;
