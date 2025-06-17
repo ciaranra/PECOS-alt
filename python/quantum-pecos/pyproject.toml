@@ -65,6 +65,9 @@ wasmtime = [
 visualization = [
     "plotly~=5.9.0",
 ]
+guppy = [  # Guppy quantum programming language integration
+    "guppylang>=0.19.0",
+]
 simulators = [
     "quantum-pecos[projectq]",
     "quantum-pecos[qulacs]; python_version < '3.13'",
@@ -77,6 +80,7 @@ all = [
     "quantum-pecos[simulators]",
     "quantum-pecos[wasm-all]",
     "quantum-pecos[visualization]",
+    "quantum-pecos[guppy]",
 ]
 # The following only work for some environments/Python versions:
 qulacs = [  # State-vector sims using Qulacs

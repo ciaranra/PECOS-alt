@@ -20,14 +20,20 @@ doctest = false
 # Skip unit tests as well - all testing should be done through Python
 test = false
 
+[features]
+default = ["hugr-support"]
+hugr-support = ["pecos-qir/hugr-support"]
+
 [dependencies]
 pyo3 = { workspace=true, features = ["extension-module", "abi3-py310", "generate-import-lib"] }
 pecos = { workspace = true }
 pecos-core = { workspace = true }
 pecos-qasm = { workspace = true }
 pecos-engines = { workspace = true }
+pecos-qir = { workspace = true, features = ["hugr-support"] }
 parking_lot = { workspace = true}
 serde_json = { workspace = true }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

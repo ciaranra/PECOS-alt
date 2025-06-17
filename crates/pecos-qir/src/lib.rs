@@ -4,13 +4,33 @@ pub mod linker; // Links QIR programs with runtime library
 pub mod platform;
 pub mod prelude;
 pub mod runtime;
-// pub mod hugr_compat; // HUGR compatibility layer (disabled due to signature conflicts)
+pub mod qir_compat; // QIR compatibility layer (alternative naming conventions)
 pub mod qir_utils; // QIR utilities for entry point detection
+pub mod python_api; // Python-friendly API functions
+
+// HUGR-specific functionality
+pub mod hugr; // HUGR frontend (compiler, engine, etc.)
+
+// Quantum extension modules for quantum IR→LLVM compilation
+#[cfg(feature = "hugr-support")]
+pub mod quantum_extension; // Quantum operation extensions
 
 // Internal modules for compilation
 pub(crate) mod runtime_builder; // Builds the static runtime library
 
 pub use engine::QirEngine;
+
+// HUGR re-exports (only available with hugr-support feature)
+#[cfg(feature = "hugr-support")]
+pub use hugr::{Compiler as HugrCompiler, CompilerConfig as HugrCompilerConfig, QuantumNamingConvention};
+#[cfg(feature = "hugr-support")]
+pub use hugr::{create_hugr_qir_engine, setup_hugr_qir_engine, compile_hugr_to_qir};
+
+// Provide stubs when hugr-support is not enabled
+#[cfg(not(feature = "hugr-support"))]
+pub use hugr::compiler::{HugrCompiler, HugrCompilerConfig, QuantumNamingConvention};
+#[cfg(not(feature = "hugr-support"))]
+pub use hugr::engine::{create_hugr_qir_engine, setup_hugr_qir_engine, compile_hugr_to_qir};
 
 use log::debug;
 use pecos_core::errors::PecosError;

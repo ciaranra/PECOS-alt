@@ -17,6 +17,14 @@ rand_chacha.workspace = true
 num-traits.workspace = true
 num-complex.workspace = true
 thiserror.workspace = true
+# Optional dependencies for error conversions
+anyhow = { version = "1.0", optional = true }
+hugr-llvm = { version = "0.20.1", optional = true }
+
+[features]
+default = []
+anyhow = ["dep:anyhow"]
+hugr-support = ["dep:hugr-llvm", "anyhow"]
 
 [lints]
 workspace = true

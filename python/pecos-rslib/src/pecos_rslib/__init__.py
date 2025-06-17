@@ -44,6 +44,35 @@ from pecos_rslib.qasm_sim import (
     GeneralNoise,
 )
 
+# Import HUGR/QIR functionality (with graceful fallback)
+try:
+    from pecos_rslib.hugr_qir import (
+        RustHugrCompiler,
+        RustHugrQirEngine,
+        compile_hugr_to_qir_rust,
+        create_qir_engine_from_hugr_rust,
+        check_rust_hugr_availability,
+        RUST_HUGR_AVAILABLE,
+    )
+except ImportError:
+    # Provide stub implementations for graceful degradation
+    RUST_HUGR_AVAILABLE = False
+    
+    def check_rust_hugr_availability():
+        return False, "HUGR Rust backend not available"
+    
+    def RustHugrCompiler(*args, **kwargs):
+        raise ImportError("HUGR Rust backend not available")
+    
+    def RustHugrQirEngine(*args, **kwargs):
+        raise ImportError("HUGR Rust backend not available")
+    
+    def compile_hugr_to_qir_rust(*args, **kwargs):
+        raise ImportError("HUGR Rust backend not available")
+    
+    def create_qir_engine_from_hugr_rust(*args, **kwargs):
+        raise ImportError("HUGR Rust backend not available")
+
 try:
     __version__ = version("pecos-rslib")
 except PackageNotFoundError:
@@ -70,4 +99,11 @@ __all__ = [
     "DepolarizingCustomNoise",
     "BiasedDepolarizingNoise",
     "GeneralNoise",
+    # HUGR/QIR functionality
+    "RustHugrCompiler",
+    "RustHugrQirEngine",
+    "compile_hugr_to_qir_rust",
+    "create_qir_engine_from_hugr_rust",
+    "check_rust_hugr_availability",
+    "RUST_HUGR_AVAILABLE",
 ]

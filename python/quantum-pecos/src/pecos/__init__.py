@@ -33,6 +33,7 @@ from pecos import (
     decoders,
     engines,
     error_models,
+    frontends,
     misc,
     protocols,
     qeccs,
@@ -45,6 +46,25 @@ from pecos.engines import circuit_runners
 from pecos.engines.cvm.binarray import BinArray
 from pecos.engines.hybrid_engine_old import HybridEngine
 
+# Import Guppy functionality (with graceful fallback)
+try:
+    from pecos.frontends import run_guppy, guppy_sim, run_guppy_batch, get_guppy_backends
+    GUPPY_INTEGRATION_AVAILABLE = True
+except ImportError:
+    GUPPY_INTEGRATION_AVAILABLE = False
+    
+    def run_guppy(*args, **kwargs):
+        raise ImportError("Guppy integration not available. Install with: pip install quantum-pecos[guppy]")
+    
+    def guppy_sim(*args, **kwargs):
+        raise ImportError("Guppy integration not available. Install with: pip install quantum-pecos[guppy]")
+    
+    def run_guppy_batch(*args, **kwargs):
+        raise ImportError("Guppy integration not available. Install with: pip install quantum-pecos[guppy]")
+    
+    def get_guppy_backends():
+        return {"guppy_available": False, "error": "Guppy integration not available"}
+
 __all__ = [
     "BinArray",
     "HybridEngine",
@@ -56,10 +76,17 @@ __all__ = [
     "decoders",
     "engines",
     "error_models",
+    "frontends",
     "misc",
     "protocols",
     "qeccs",
     "rslib",
     "simulators",
     "tools",
+    # Guppy integration
+    "run_guppy",
+    "guppy_sim", 
+    "run_guppy_batch",
+    "get_guppy_backends",
+    "GUPPY_INTEGRATION_AVAILABLE",
 ]

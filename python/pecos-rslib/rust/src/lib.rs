@@ -25,6 +25,7 @@ mod sparse_stab_bindings;
 mod sparse_stab_engine_bindings;
 mod state_vec_bindings;
 mod state_vec_engine_bindings;
+mod hugr_bindings;
 
 use byte_message_bindings::{PyByteMessage, PyByteMessageBuilder};
 use sparse_stab_bindings::SparseSim;
@@ -47,6 +48,9 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Register QASM simulation functions
     qasm_sim_bindings::register_qasm_sim_module(m)?;
+
+    // Register HUGR/QIR functions
+    hugr_bindings::register_hugr_module(m)?;
 
     Ok(())
 }
