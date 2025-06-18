@@ -712,10 +712,12 @@ impl GeneralNoiseModel {
                     noisy_qubits.push(*qubit);
                 }
             }
-            if self.p_idle_coherent {
-                builder.add_rz(angle, &noisy_qubits);
-            } else {
-                builder.add_z(&noisy_qubits);
+            if !noisy_qubits.is_empty() {
+                if self.p_idle_coherent {
+                    builder.add_rz(angle, &noisy_qubits);
+                } else {
+                    builder.add_z(&noisy_qubits);
+                }
             }
         }
     }
