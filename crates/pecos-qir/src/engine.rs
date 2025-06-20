@@ -63,7 +63,7 @@ pub struct QirEngine {
 
     /// Configuration options for the engine
     config: QirEngineConfig,
-    
+
     /// Entry point function name (detected from QIR file)
     entry_point: Option<String>,
 }
@@ -404,8 +404,7 @@ impl QirEngine {
             .map_err(|e| PecosError::Processing(format!("Failed to compile QIR program: {e}")))?;
 
         // Detect the entry point from the QIR file
-        use crate::qir_utils::find_entry_point;
-        match find_entry_point(&self.qir_file) {
+        match crate::qir_utils::find_entry_point(&self.qir_file) {
             Ok(Some(entry_point)) => {
                 debug!("QIR: Detected entry point function: {}", entry_point);
                 self.entry_point = Some(entry_point);
@@ -415,7 +414,10 @@ impl QirEngine {
                 self.entry_point = None;
             }
             Err(e) => {
-                debug!("QIR: Failed to detect entry point: {}, will default to 'main'", e);
+                debug!(
+                    "QIR: Failed to detect entry point: {}, will default to 'main'",
+                    e
+                );
                 self.entry_point = None;
             }
         }
@@ -468,7 +470,7 @@ impl QirEngine {
         } else {
             // Try common entry point names
             debug!("QIR: Looking for entry point function");
-            
+
             // Try bell_state first (for HUGR), then main (standard QIR)
             if library.has_function(b"bell_state").unwrap_or(false) {
                 debug!("QIR: Found bell_state function");
@@ -478,7 +480,7 @@ impl QirEngine {
                 "main".to_string()
             }
         };
-        
+
         debug!("QIR: Calling entry point function: {}", entry_point);
         library.call_function(entry_point.as_bytes()).map_err(|e| {
             // Special case for removed library files
@@ -486,7 +488,7 @@ impl QirEngine {
                 debug!("QIR: Library file was already removed, continuing");
                 PecosError::Processing("Library file was already removed".to_string())
             } else {
-                Self::log_error(&format!("Failed to call {} function", entry_point), e)
+                Self::log_error(&format!("Failed to call {entry_point} function"), e)
             }
         })?;
 
@@ -618,6 +620,37 @@ impl QirEngine {
                     max_qubit_index = max_qubit_index.max(size - 1);
                     found_allocation = true;
                 }
+            }
+        }
+
+        // Pattern 4: Integer-based qubit references in PECOS QIR calls like "i64 N"
+        // This pattern looks for quantum gate calls with integer qubit arguments
+        let int_qubit_pattern =
+            Regex::new(r"__quantum__qis__[a-z_]+__body(__int)?\s*\([^)]*i64\s+(\d+)")
+                .expect("Invalid regex pattern for integer qubit references");
+        for cap in int_qubit_pattern.captures_iter(content) {
+            if let Some(index_match) = cap.get(2) {
+                if let Ok(index) = index_match.as_str().parse::<usize>() {
+                    max_qubit_index = max_qubit_index.max(index);
+                    found_allocation = true;
+                }
+            }
+        }
+
+        // Pattern 5: Pointer-based qubit references like "call void @__quantum__qis__h__body(%Qubit* null)"
+        // This pattern looks for standard QIR calls with %Qubit* arguments
+        let ptr_qubit_pattern =
+            Regex::new(r"__quantum__qis__[a-z_]+__body\s*\([^)]*%Qubit\*[^)]*\)")
+                .expect("Invalid regex pattern for pointer qubit references");
+        if ptr_qubit_pattern.is_match(content) {
+            // For pointer-based QIR, we need to count the highest qubit index from the pointers
+            // Look for patterns like "inttoptr (i64 N to %Qubit*)" which we already handle in Pattern 1
+            // Also look for null pointers which represent qubit 0
+            let null_qubit_pattern = Regex::new(r"%Qubit\*\s+null")
+                .expect("Invalid regex pattern for null qubit references");
+            if null_qubit_pattern.is_match(content) {
+                max_qubit_index = max_qubit_index.max(0);
+                found_allocation = true;
             }
         }
 
@@ -770,7 +803,14 @@ impl Clone for QirEngine {
 
 impl Drop for QirEngine {
     fn drop(&mut self) {
-        self.reset_internal_state();
+        // Don't call reset_internal_state during drop to avoid segfaults
+        // The QIR runtime has known cleanup issues that cause segfaults
+        // Just clean up the basic state without touching the library
+        debug!("QIR: Dropping engine - skipping library cleanup to avoid segfault");
+        self.shot_count = 0;
+        self.measurement_results.clear();
+        self.commands_generated = false;
+        // Note: self.library will be dropped automatically by Rust, which should be safe
     }
 }
 

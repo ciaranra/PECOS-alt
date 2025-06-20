@@ -23,7 +23,10 @@ use pecos_core::rng::RngManageable;
 use pecos_core::rng::rng_manageable::derive_seed;
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use rayon::{
+    ThreadPoolBuilder,
+    iter::{IntoParallelIterator, ParallelIterator},
+};
 use std::any::Any;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -240,10 +243,18 @@ impl MonteCarloEngine {
         let shots_per_worker = distribute_shots(num_shots, num_workers);
         let base_seed = self.rng.next_u64();
 
-        // Run shots in parallel across workers
-        (0..num_workers)
-            .into_par_iter()
-            .map(|worker_idx| {
+        // Create a dedicated thread pool for this simulation to avoid contention
+        // with global Rayon thread pool when multiple simulations run concurrently
+        let thread_pool = ThreadPoolBuilder::new()
+            .num_threads(num_workers)
+            .build()
+            .map_err(|e| PecosError::Processing(format!("Failed to create thread pool: {e}")))?;
+
+        // Run shots in parallel across workers using dedicated thread pool
+        thread_pool.install(|| {
+            (0..num_workers)
+                .into_par_iter()
+                .map(|worker_idx| {
                 let shots_this_worker = shots_per_worker[worker_idx];
                 if shots_this_worker == 0 {
                     return Ok(());
@@ -276,8 +287,9 @@ impl MonteCarloEngine {
                 }
 
                 Ok(())
-            })
-            .collect::<Result<Vec<()>, PecosError>>()?;
+                })
+                .collect::<Result<Vec<()>, PecosError>>()
+        })?;
 
         // Ensure deterministic ordering of results
         let mut results = results_vec.lock().unwrap();

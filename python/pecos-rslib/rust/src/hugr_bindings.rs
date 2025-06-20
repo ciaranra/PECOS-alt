@@ -1,5 +1,5 @@
 /*!
-PyO3 bindings for HUGR/QIR functionality
+`PyO3` bindings for HUGR/QIR functionality
 
 This module exposes HUGR compilation and QIR engine functionality to Python.
 */
@@ -8,10 +8,11 @@ use pecos_qir::python_api;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyType};
 use std::collections::HashMap;
-use std::sync::{Mutex, LazyLock};
+use std::sync::{LazyLock, Mutex};
 
 /// Global storage for QIR engines (in a real implementation, this would be more sophisticated)
-static QIR_ENGINES: LazyLock<Mutex<HashMap<usize, Box<dyn pecos_engines::ClassicalEngine>>>> = 
+#[allow(dead_code)]
+static QIR_ENGINES: LazyLock<Mutex<HashMap<usize, Box<dyn pecos_engines::ClassicalEngine>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 static mut NEXT_ENGINE_ID: usize = 1;
 
@@ -54,13 +55,13 @@ impl PyHugrCompiler {
     /// # Returns
     /// QIR as a string
     fn compile_bytes_to_qir(&self, hugr_bytes: &Bound<'_, PyBytes>) -> PyResult<String> {
-        let bytes = hugr_bytes.as_bytes().to_vec();
+        let bytes = hugr_bytes.as_bytes();
         python_api::compile_hugr_bytes_to_qir_string(
             bytes,
             self.debug_info,
             &self.naming_convention,
         )
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
+        .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
     }
 
     /// Compile HUGR file to QIR file
@@ -75,7 +76,7 @@ impl PyHugrCompiler {
             self.debug_info,
             &self.naming_convention,
         )
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
+        .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
     }
 
     /// Set debug information flag
@@ -87,9 +88,9 @@ impl PyHugrCompiler {
     fn set_naming_convention(&mut self, naming_convention: String) -> PyResult<()> {
         let supported = python_api::get_supported_naming_conventions();
         if !supported.contains(&naming_convention) {
-            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                format!("Unsupported naming convention: {}. Supported: {:?}", naming_convention, supported)
-            ));
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Unsupported naming convention: {naming_convention}. Supported: {supported:?}"
+            )));
         }
         self.naming_convention = naming_convention;
         Ok(())
@@ -130,7 +131,7 @@ impl PyHugrQirEngine {
         debug_info: Option<bool>,
         naming_convention: Option<String>,
     ) -> PyResult<Self> {
-        let bytes = hugr_bytes.as_bytes().to_vec();
+        let bytes = hugr_bytes.as_bytes();
         let shots = shots.unwrap_or(1000);
         let debug_info = debug_info.unwrap_or(false);
         let naming_convention = naming_convention.unwrap_or_else(|| "standard".to_string());
@@ -140,13 +141,8 @@ impl PyHugrQirEngine {
         let engine_id = get_next_engine_id();
 
         // Validate by attempting compilation
-        python_api::create_qir_engine_from_hugr_bytes(
-            bytes,
-            shots,
-            debug_info,
-            &naming_convention,
-        )
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))?;
+        python_api::create_qir_engine_from_hugr_bytes(bytes, shots, debug_info, &naming_convention)
+            .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)?;
 
         Ok(Self { engine_id, shots })
     }
@@ -180,7 +176,7 @@ impl PyHugrQirEngine {
             debug_info,
             &naming_convention,
         )
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))?;
+        .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)?;
 
         Ok(Self { engine_id, shots })
     }
@@ -201,12 +197,19 @@ impl PyHugrQirEngine {
     }
 
     /// Run the quantum program (placeholder implementation)
+    #[allow(clippy::unnecessary_wraps)] // PyO3 requires PyResult even for infallible methods
     fn run(&self) -> PyResult<Vec<u8>> {
         // This is a placeholder - in a full implementation, we'd:
         // 1. Get the engine from the global storage
         // 2. Execute it for the specified number of shots
         // 3. Return the results
-        Ok(vec![0, 1, 0, 1]) // Dummy results
+
+        // Use self.shots to generate dummy results
+        let mut results = Vec::with_capacity(self.shots);
+        for i in 0..self.shots {
+            results.push(u8::try_from(i % 2).unwrap_or(0)); // Alternate 0 and 1
+        }
+        Ok(results)
     }
 
     /// Get string representation
@@ -234,12 +237,12 @@ fn compile_hugr_bytes_to_qir(
     debug_info: Option<bool>,
     naming_convention: Option<String>,
 ) -> PyResult<String> {
-    let bytes = hugr_bytes.as_bytes().to_vec();
+    let bytes = hugr_bytes.as_bytes();
     let debug_info = debug_info.unwrap_or(false);
     let naming_convention = naming_convention.unwrap_or_else(|| "standard".to_string());
 
     python_api::compile_hugr_bytes_to_qir_string(bytes, debug_info, &naming_convention)
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
+        .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
 }
 
 /// Compile HUGR file to QIR file (standalone function)
@@ -254,7 +257,7 @@ fn compile_hugr_file_to_qir(
     let naming_convention = naming_convention.unwrap_or_else(|| "standard".to_string());
 
     python_api::compile_hugr_file_to_qir_file(hugr_path, qir_path, debug_info, &naming_convention)
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
+        .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
 }
 
 /// Register HUGR-related functions and classes with the Python module

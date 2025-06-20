@@ -92,13 +92,13 @@ class GuppyFrontend:
         # 1. Compile Guppy → HUGR
         compiled = guppy.compile(guppy_func)
         hugr_bytes = compiled.package.to_bytes()
-        
+
         # 2. Compile HUGR → QIR (via Rust)
         qir_string = compile_hugr_to_qir(hugr_bytes)
-        
+
         # 3. Create execution engine
         engine = create_qir_engine_from_hugr(hugr_bytes)
-        
+
         return qir_string, engine
 ```
 
@@ -113,7 +113,7 @@ fn compile_hugr_to_qir(hugr_bytes: &[u8]) -> PyResult<String> {
     Ok(qir)
 }
 
-#[pyfunction] 
+#[pyfunction]
 fn create_qir_engine_from_hugr(hugr_bytes: &[u8]) -> PyResult<QirEngineWrapper> {
     let engine = QirEngine::from_hugr_bytes(hugr_bytes)?;
     Ok(QirEngineWrapper::new(engine))
@@ -153,7 +153,7 @@ pub extern "C" fn __quantum__qis__rx__body(angle: f64, qubit: *mut Qubit) {
     // Implement RX rotation
 }
 
-#[no_mangle] 
+#[no_mangle]
 pub extern "C" fn __quantum__qis__ry__body(angle: f64, qubit: *mut Qubit) {
     // Implement RY rotation
 }
@@ -166,7 +166,7 @@ pub extern "C" fn __quantum__qis__ry__body(angle: f64, qubit: *mut Qubit) {
 - Update test suite
 
 ### 2. Parameterized Circuits
-**Priority**: High  
+**Priority**: High
 **Effort**: High
 
 **Current Gap**: Static circuit compilation only
@@ -193,7 +193,7 @@ def parameterized_circuit(theta: float) -> None:
 
 **Extensions Needed**:
 - Multi-controlled gates
-- Quantum arithmetic operations  
+- Quantum arithmetic operations
 - Quantum Fourier transforms
 - Error correction primitives
 

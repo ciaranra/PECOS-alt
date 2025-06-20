@@ -24,7 +24,7 @@ hugr-llvm = { version = "0.20.1", optional = true }
 [features]
 default = []
 anyhow = ["dep:anyhow"]
-hugr-support = ["dep:hugr-llvm", "anyhow"]
+hugr-llvm = ["dep:hugr-llvm", "anyhow"]
 
 [lints]
 workspace = true

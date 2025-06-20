@@ -2,23 +2,35 @@
 Python API for HUGR/QIR functionality
 
 This module provides Python-friendly functions for HUGR compilation and QIR engine creation.
-These functions are designed to be easily wrapped with PyO3.
+These functions are designed to be easily wrapped with `PyO3`.
 */
 
+#[cfg(feature = "hugr-llvm-pipeline")]
 use crate::hugr::compiler::{HugrCompiler, HugrCompilerConfig, QuantumNamingConvention};
+#[cfg(feature = "hugr-llvm-pipeline")]
 use crate::QirEngine;
+#[cfg(feature = "hugr-llvm-pipeline")]
 use pecos_core::errors::PecosError;
-use std::path::PathBuf;
+#[cfg(feature = "hugr-llvm-pipeline")]
 use tempfile::TempDir;
+#[cfg(feature = "hugr-llvm-pipeline")]
+use std::path::PathBuf;
 
 /// Result type for Python API functions
 pub type PyResult<T> = Result<T, String>;
 
-/// Convert PecosError to String for Python compatibility
-fn convert_error(err: PecosError) -> String {
+/// Convert `PecosError` to String for Python compatibility
+#[cfg(feature = "hugr-llvm-pipeline")]
+fn convert_error(err: &PecosError) -> String {
     err.to_string()
 }
 
+//
+// HUGR-LLVM Pipeline Functions
+// These functions are only available when the hugr-llvm-pipeline feature is enabled
+//
+
+#[cfg(feature = "hugr-llvm-pipeline")]
 /// Compile HUGR bytes to QIR string
 ///
 /// # Arguments
@@ -28,8 +40,15 @@ fn convert_error(err: PecosError) -> String {
 ///
 /// # Returns
 /// QIR as a string
+///
+/// # Errors
+/// Returns an error if:
+/// - Unknown naming convention is provided
+/// - Failed to create temporary directory
+/// - HUGR compilation fails
+/// - Failed to read the generated QIR file
 pub fn compile_hugr_bytes_to_qir_string(
-    hugr_bytes: Vec<u8>,
+    hugr_bytes: &[u8],
     debug_info: bool,
     naming_convention: &str,
 ) -> PyResult<String> {
@@ -38,17 +57,12 @@ pub fn compile_hugr_bytes_to_qir_string(
         "standard" | "qir" => QuantumNamingConvention::StandardQir,
         "hugr" => QuantumNamingConvention::Hugr,
         "pecos" => QuantumNamingConvention::Pecos,
-        _ => return Err(format!("Unknown naming convention: {}", naming_convention)),
+        _ => return Err(format!("Unknown naming convention: {naming_convention}")),
     };
 
-    // Create temporary file for HUGR
-    let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
-    let hugr_path = temp_dir.path().join("input.hugr");
+    // Create temporary output file for QIR
+    let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {e}"))?;
     let qir_path = temp_dir.path().join("output.ll");
-
-    // Write HUGR bytes to file
-    std::fs::write(&hugr_path, hugr_bytes)
-        .map_err(|e| format!("Failed to write HUGR file: {}", e))?;
 
     // Set up compiler configuration
     let config = HugrCompilerConfig {
@@ -57,13 +71,14 @@ pub fn compile_hugr_bytes_to_qir_string(
         quantum_naming: naming,
     };
 
-    // Compile HUGR to QIR
+    // Compile HUGR bytes to QIR (this will use our transformation)
     let compiler = HugrCompiler::with_config(config);
-    compiler.compile_hugr(&hugr_path).map_err(convert_error)?;
+    compiler
+        .compile_hugr_bytes(hugr_bytes, &qir_path)
+        .map_err(|e| convert_error(&e))?;
 
     // Read QIR as string
-    std::fs::read_to_string(&qir_path)
-        .map_err(|e| format!("Failed to read QIR file: {}", e))
+    std::fs::read_to_string(&qir_path).map_err(|e| format!("Failed to read QIR file: {e}"))
 }
 
 /// Compile HUGR file to QIR file
@@ -76,6 +91,12 @@ pub fn compile_hugr_bytes_to_qir_string(
 ///
 /// # Returns
 /// Success indicator
+///
+/// # Errors
+/// Returns an error if:
+/// - Unknown naming convention is provided
+/// - HUGR compilation fails
+#[cfg(feature = "hugr-llvm-pipeline")]
 pub fn compile_hugr_file_to_qir_file(
     hugr_path: &str,
     qir_path: &str,
@@ -87,7 +108,7 @@ pub fn compile_hugr_file_to_qir_file(
         "standard" | "qir" => QuantumNamingConvention::StandardQir,
         "hugr" => QuantumNamingConvention::Hugr,
         "pecos" => QuantumNamingConvention::Pecos,
-        _ => return Err(format!("Unknown naming convention: {}", naming_convention)),
+        _ => return Err(format!("Unknown naming convention: {naming_convention}")),
     };
 
     // Set up compiler configuration
@@ -99,7 +120,9 @@ pub fn compile_hugr_file_to_qir_file(
 
     // Compile HUGR to QIR
     let compiler = HugrCompiler::with_config(config);
-    compiler.compile_hugr(hugr_path).map_err(convert_error)?;
+    compiler
+        .compile_hugr(hugr_path)
+        .map_err(|e| convert_error(&e))?;
 
     Ok(())
 }
@@ -114,8 +137,17 @@ pub fn compile_hugr_file_to_qir_file(
 ///
 /// # Returns
 /// Opaque handle to the QIR engine
+///
+/// # Errors
+/// Returns an error if:
+/// - Unknown naming convention is provided
+/// - Failed to create temporary directory
+/// - Failed to write HUGR file
+/// - HUGR compilation fails
+/// - QIR engine pre-compilation fails
+#[cfg(feature = "hugr-llvm-pipeline")]
 pub fn create_qir_engine_from_hugr_bytes(
-    hugr_bytes: Vec<u8>,
+    hugr_bytes: &[u8],
     shots: usize,
     debug_info: bool,
     naming_convention: &str,
@@ -125,17 +157,17 @@ pub fn create_qir_engine_from_hugr_bytes(
         "standard" | "qir" => QuantumNamingConvention::StandardQir,
         "hugr" => QuantumNamingConvention::Hugr,
         "pecos" => QuantumNamingConvention::Pecos,
-        _ => return Err(format!("Unknown naming convention: {}", naming_convention)),
+        _ => return Err(format!("Unknown naming convention: {naming_convention}")),
     };
 
     // Create temporary file for HUGR
-    let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
+    let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {e}"))?;
     let hugr_path = temp_dir.path().join("input.hugr");
     let qir_path = temp_dir.path().join("output.ll");
 
     // Write HUGR bytes to file
     std::fs::write(&hugr_path, hugr_bytes)
-        .map_err(|e| format!("Failed to write HUGR file: {}", e))?;
+        .map_err(|e| format!("Failed to write HUGR file: {e}"))?;
 
     // Set up compiler configuration
     let config = HugrCompilerConfig {
@@ -144,14 +176,16 @@ pub fn create_qir_engine_from_hugr_bytes(
         quantum_naming: naming,
     };
 
-    // Compile HUGR to QIR
+    // Compile HUGR bytes to QIR (this will use our transformation)
     let compiler = HugrCompiler::with_config(config);
-    compiler.compile_hugr(&hugr_path).map_err(convert_error)?;
+    compiler
+        .compile_hugr_bytes(hugr_bytes, &qir_path)
+        .map_err(|e| convert_error(&e))?;
 
     // Create QIR engine
     let mut qir_engine = QirEngine::new(qir_path);
     qir_engine.set_assigned_shots(shots);
-    qir_engine.pre_compile().map_err(convert_error)?;
+    qir_engine.pre_compile().map_err(|e| convert_error(&e))?;
 
     // For now, return a dummy handle - in a full implementation,
     // we'd store the engine in a global map with a unique ID
@@ -168,6 +202,14 @@ pub fn create_qir_engine_from_hugr_bytes(
 ///
 /// # Returns
 /// Opaque handle to the QIR engine
+///
+/// # Errors
+/// Returns an error if:
+/// - Unknown naming convention is provided
+/// - Failed to create temporary directory
+/// - HUGR compilation fails
+/// - QIR engine pre-compilation fails
+#[cfg(feature = "hugr-llvm-pipeline")]
 pub fn create_qir_engine_from_hugr_file(
     hugr_path: &str,
     shots: usize,
@@ -179,11 +221,11 @@ pub fn create_qir_engine_from_hugr_file(
         "standard" | "qir" => QuantumNamingConvention::StandardQir,
         "hugr" => QuantumNamingConvention::Hugr,
         "pecos" => QuantumNamingConvention::Pecos,
-        _ => return Err(format!("Unknown naming convention: {}", naming_convention)),
+        _ => return Err(format!("Unknown naming convention: {naming_convention}")),
     };
 
     // Create temporary directory for compilation
-    let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
+    let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {e}"))?;
     let qir_path = temp_dir.path().join("output.ll");
 
     // Set up compiler configuration
@@ -195,12 +237,14 @@ pub fn create_qir_engine_from_hugr_file(
 
     // Compile HUGR to QIR
     let compiler = HugrCompiler::with_config(config);
-    compiler.compile_hugr(hugr_path).map_err(convert_error)?;
+    compiler
+        .compile_hugr(hugr_path)
+        .map_err(|e| convert_error(&e))?;
 
     // Create QIR engine
     let mut qir_engine = QirEngine::new(qir_path);
     qir_engine.set_assigned_shots(shots);
-    qir_engine.pre_compile().map_err(convert_error)?;
+    qir_engine.pre_compile().map_err(|e| convert_error(&e))?;
 
     // For now, return a dummy handle - in a full implementation,
     // we'd store the engine in a global map with a unique ID
@@ -208,6 +252,8 @@ pub fn create_qir_engine_from_hugr_file(
 }
 
 /// Get the supported quantum operation naming conventions
+#[cfg(feature = "hugr-llvm-pipeline")]
+#[must_use]
 pub fn get_supported_naming_conventions() -> Vec<String> {
     vec![
         "standard".to_string(),
@@ -218,8 +264,57 @@ pub fn get_supported_naming_conventions() -> Vec<String> {
 }
 
 /// Check if HUGR support is compiled in
+#[must_use]
 pub fn is_hugr_support_available() -> bool {
-    cfg!(feature = "hugr-support")
+    cfg!(feature = "hugr-llvm-pipeline")
+}
+
+//
+// Stub functions when hugr-llvm-pipeline is not available
+//
+
+#[cfg(not(feature = "hugr-llvm-pipeline"))]
+pub fn compile_hugr_bytes_to_qir_string(
+    _hugr_bytes: &[u8],
+    _debug_info: bool,
+    _naming_convention: &str,
+) -> PyResult<String> {
+    Err("HUGR-LLVM pipeline not available".to_string())
+}
+
+#[cfg(not(feature = "hugr-llvm-pipeline"))]
+pub fn compile_hugr_file_to_qir_file(
+    _hugr_path: &str,
+    _qir_path: &str,
+    _debug_info: bool,
+    _naming_convention: &str,
+) -> PyResult<()> {
+    Err("HUGR-LLVM pipeline not available".to_string())
+}
+
+#[cfg(not(feature = "hugr-llvm-pipeline"))]
+pub fn create_qir_engine_from_hugr_bytes(
+    _hugr_bytes: &[u8],
+    _shots: usize,
+    _debug_info: bool,
+    _naming_convention: &str,
+) -> PyResult<usize> {
+    Err("HUGR-LLVM pipeline not available".to_string())
+}
+
+#[cfg(not(feature = "hugr-llvm-pipeline"))]
+pub fn create_qir_engine_from_hugr_file(
+    _hugr_path: &str,
+    _shots: usize,
+    _debug_info: bool,
+    _naming_convention: &str,
+) -> PyResult<usize> {
+    Err("HUGR-LLVM pipeline not available".to_string())
+}
+
+#[cfg(not(feature = "hugr-llvm-pipeline"))]
+pub fn get_supported_naming_conventions() -> Vec<String> {
+    vec![]
 }
 
 #[cfg(test)]
@@ -229,9 +324,16 @@ mod tests {
     #[test]
     fn test_naming_conventions() {
         let conventions = get_supported_naming_conventions();
-        assert!(conventions.contains(&"standard".to_string()));
-        assert!(conventions.contains(&"hugr".to_string()));
-        assert!(conventions.contains(&"pecos".to_string()));
+        #[cfg(feature = "hugr-llvm-pipeline")]
+        {
+            assert!(conventions.contains(&"standard".to_string()));
+            assert!(conventions.contains(&"hugr".to_string()));
+            assert!(conventions.contains(&"pecos".to_string()));
+        }
+        #[cfg(not(feature = "hugr-llvm-pipeline"))]
+        {
+            assert!(conventions.is_empty());
+        }
     }
 
     #[test]
@@ -240,15 +342,11 @@ mod tests {
         let _available = is_hugr_support_available();
     }
 
-    #[cfg(not(feature = "hugr-support"))]
+    #[cfg(not(feature = "hugr-llvm-pipeline"))]
     #[test]
     fn test_hugr_compilation_fails_without_feature() {
-        let result = compile_hugr_bytes_to_qir_string(
-            vec![0, 1, 2, 3],
-            false,
-            "standard"
-        );
+        let result = compile_hugr_bytes_to_qir_string(&[0, 1, 2, 3], false, "standard");
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("HUGR support not compiled"));
+        assert!(result.unwrap_err().contains("HUGR-LLVM pipeline not available"));
     }
 }

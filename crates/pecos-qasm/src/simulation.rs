@@ -474,7 +474,7 @@ impl<'a> QasmSimulationBuilder<'a> {
 ///     .unwrap();
 ///
 /// // Run multiple simulations
-/// for shots in [100, 1000, 10000] {
+/// for shots in [100, 500, 1000] {
 ///     let results = sim.run(shots).unwrap();
 ///     println!("Got {} results", results.len());
 /// }

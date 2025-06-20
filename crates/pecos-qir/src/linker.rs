@@ -56,8 +56,11 @@ use crate::runtime_builder::RuntimeBuilder;
 use log::{debug, info, warn};
 use pecos_core::errors::PecosError;
 use std::fs;
+use std::fs::{File, OpenOptions};
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{Duration, SystemTime};
 
 /// Links QIR programs with the runtime library to create dynamically loadable libraries
 pub struct QirLinker;
@@ -145,6 +148,27 @@ impl QirLinker {
 
         // Generate consistent file paths for caching
         let (object_file, library_file) = Self::generate_file_paths(qir_file, &output_dir);
+
+        // Acquire exclusive lock on the output library to prevent concurrent compilation
+        let lock_file = library_file.with_extension("lock");
+        let _lock = Self::acquire_file_lock(&lock_file)?;
+
+        // Double-check if another process completed the compilation while we were waiting for the lock
+        if let Some(cached_lib) = Self::find_cached_library(qir_file, &output_dir)? {
+            let cached_metadata = fs::metadata(&cached_lib)?;
+            let cached_mtime = cached_metadata.modified().map_err(PecosError::IO)?;
+
+            let runtime_metadata = fs::metadata(&rust_runtime_lib)?;
+            let runtime_mtime = runtime_metadata.modified().map_err(PecosError::IO)?;
+
+            if cached_mtime >= runtime_mtime {
+                debug!(
+                    "Another process compiled the library while waiting for lock: {:?}",
+                    cached_lib
+                );
+                return Ok(cached_lib);
+            }
+        }
 
         // Compile QIR to object file using LLVM
         Self::compile_to_object_file(qir_file, &object_file)?;
@@ -452,6 +476,7 @@ impl QirLinker {
                 .arg(library_file)
                 .arg(object_file)
                 .arg(rust_runtime_lib)
+                .args(["-lstdc++", "-lm", "-lffi"]) // Link C++, math, and FFI libraries
                 .output();
 
             let output = Self::handle_command_error(result, "Failed to execute gcc")?;
@@ -497,5 +522,80 @@ impl QirLinker {
                 .map_err(|e| PecosError::Processing(format!("Failed to create directory: {e}")))?;
         }
         Ok(())
+    }
+
+    /// Acquire an exclusive file lock to prevent concurrent compilation
+    fn acquire_file_lock(lock_path: &Path) -> Result<FileLock, PecosError> {
+        const MAX_RETRIES: u32 = 200; // Increased for stability under test load
+        const RETRY_DELAY_MS: u64 = 50;
+
+        // Ensure the directory exists
+        if let Some(parent) = lock_path.parent() {
+            Self::ensure_dir(parent)?;
+        }
+
+        // Try to acquire lock with retries
+        for attempt in 0..MAX_RETRIES {
+            match OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(lock_path)
+            {
+                Ok(file) => {
+                    debug!("Acquired compilation lock: {:?}", lock_path);
+                    return Ok(FileLock {
+                        file,
+                        path: lock_path.to_path_buf(),
+                    });
+                }
+                Err(e) if e.kind() == ErrorKind::AlreadyExists => {
+                    // Check if lock file is stale (older than 5 minutes)
+                    if let Ok(metadata) = fs::metadata(lock_path) {
+                        if let Ok(modified) = metadata.modified() {
+                            if let Ok(elapsed) = SystemTime::now().duration_since(modified) {
+                                if elapsed > Duration::from_secs(300) {
+                                    // Stale lock, try to remove it
+                                    warn!("Removing stale lock file: {:?}", lock_path);
+                                    let _ = fs::remove_file(lock_path);
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+
+                    if attempt < MAX_RETRIES - 1 {
+                        debug!(
+                            "Lock file exists, waiting... (attempt {}/{})",
+                            attempt + 1,
+                            MAX_RETRIES
+                        );
+                        std::thread::sleep(Duration::from_millis(RETRY_DELAY_MS));
+                    }
+                }
+                Err(e) => {
+                    return Err(PecosError::Processing(format!(
+                        "Failed to create lock file: {e}"
+                    )));
+                }
+            }
+        }
+
+        Err(PecosError::Processing(
+            "Failed to acquire compilation lock after maximum retries".to_string(),
+        ))
+    }
+}
+
+/// RAII guard for file-based locking
+struct FileLock {
+    #[allow(dead_code)]
+    file: File,
+    path: PathBuf,
+}
+
+impl Drop for FileLock {
+    fn drop(&mut self) {
+        debug!("Releasing compilation lock: {:?}", self.path);
+        let _ = fs::remove_file(&self.path);
     }
 }

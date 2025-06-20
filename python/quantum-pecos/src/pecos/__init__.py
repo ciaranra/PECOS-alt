@@ -27,6 +27,8 @@ except PackageNotFoundError:
     __version__ = "0.0.0"
 
 # PECOS namespaces
+from typing import NoReturn
+
 from pecos import (
     circuit_converters,
     circuits,
@@ -48,24 +50,48 @@ from pecos.engines.hybrid_engine_old import HybridEngine
 
 # Import Guppy functionality (with graceful fallback)
 try:
-    from pecos.frontends import run_guppy, guppy_sim, run_guppy_batch, get_guppy_backends
+    from pecos.frontends import (
+        get_guppy_backends,
+        guppy_sim,
+        run_guppy,
+        run_guppy_batch,
+    )
+
     GUPPY_INTEGRATION_AVAILABLE = True
 except ImportError:
     GUPPY_INTEGRATION_AVAILABLE = False
-    
-    def run_guppy(*args, **kwargs):
-        raise ImportError("Guppy integration not available. Install with: pip install quantum-pecos[guppy]")
-    
-    def guppy_sim(*args, **kwargs):
-        raise ImportError("Guppy integration not available. Install with: pip install quantum-pecos[guppy]")
-    
-    def run_guppy_batch(*args, **kwargs):
-        raise ImportError("Guppy integration not available. Install with: pip install quantum-pecos[guppy]")
-    
-    def get_guppy_backends():
+
+    def run_guppy(*args: object, **kwargs: object) -> NoReturn:
+        """Stub for run_guppy when Guppy integration is not available."""
+        del args, kwargs  # Unused
+        msg = "Guppy integration not available. Install with: pip install quantum-pecos[guppy]"
+        raise ImportError(
+            msg,
+        )
+
+    def guppy_sim(*args: object, **kwargs: object) -> NoReturn:
+        """Stub for guppy_sim when Guppy integration is not available."""
+        del args, kwargs  # Unused
+        msg = "Guppy integration not available. Install with: pip install quantum-pecos[guppy]"
+        raise ImportError(
+            msg,
+        )
+
+    def run_guppy_batch(*args: object, **kwargs: object) -> NoReturn:
+        """Stub for run_guppy_batch when Guppy integration is not available."""
+        del args, kwargs  # Unused
+        msg = "Guppy integration not available. Install with: pip install quantum-pecos[guppy]"
+        raise ImportError(
+            msg,
+        )
+
+    def get_guppy_backends() -> dict[str, object]:
+        """Stub for get_guppy_backends when Guppy integration is not available."""
         return {"guppy_available": False, "error": "Guppy integration not available"}
 
+
 __all__ = [
+    "GUPPY_INTEGRATION_AVAILABLE",
     "BinArray",
     "HybridEngine",
     "QuantumCircuit",
@@ -77,16 +103,15 @@ __all__ = [
     "engines",
     "error_models",
     "frontends",
+    "get_guppy_backends",
+    "guppy_sim",
     "misc",
     "protocols",
     "qeccs",
     "rslib",
-    "simulators",
-    "tools",
     # Guppy integration
     "run_guppy",
-    "guppy_sim", 
     "run_guppy_batch",
-    "get_guppy_backends",
-    "GUPPY_INTEGRATION_AVAILABLE",
+    "simulators",
+    "tools",
 ]

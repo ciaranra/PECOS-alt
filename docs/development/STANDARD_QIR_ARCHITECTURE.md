@@ -125,7 +125,7 @@ result = wrapper.execute_qir_file(qir_file, shots)
 
 ### Current Extensions:
 1. **Result Name Mapping**: Extract measurement result names from HUGR graphs
-2. **Type Conversions**: HUGR i16 qubits ↔ QIR %Qubit* pointers  
+2. **Type Conversions**: HUGR i16 qubits ↔ QIR %Qubit* pointers
 3. **Function Entry Point**: Rename functions to `@main()` for QirEngine
 
 ### Potential Future Extensions:
@@ -137,7 +137,7 @@ result = wrapper.execute_qir_file(qir_file, shots)
 
 ### Completed:
 1. **Standard QIR generator** with opaque types
-2. **HUGR compiler** producing QIR-compatible output  
+2. **HUGR compiler** producing QIR-compatible output
 3. **QIR engine wrapper** for proper execution
 4. **Python integration** using QirEngine pipeline
 5. **Function renaming** to `@main()` for compatibility
@@ -157,7 +157,7 @@ result = wrapper.execute_qir_file(qir_file, shots)
 def bell_state() -> tuple[bool, bool]:
     q0, q1 = qubit(), qubit()
     h(q0)
-    cx(q0, q1)  
+    cx(q0, q1)
     return measure(q0), measure(q1)
 ```
 

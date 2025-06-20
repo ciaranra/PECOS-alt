@@ -20,6 +20,10 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
 
+#[path = "qir_test_lock.rs"]
+mod qir_test_lock;
+use qir_test_lock::QirTestLock;
+
 /// Helper function to run PECOS CLI with given parameters
 fn run_pecos(
     file_path: &PathBuf,
@@ -216,6 +220,9 @@ fn test_basic_determinism_qasm() -> Result<(), Box<dyn std::error::Error>> {
 /// Test basic determinism with QIR files, gracefully skipping if LLVM tools are unavailable
 #[test]
 fn test_basic_determinism_qir() {
+    // Acquire global lock for QIR testing
+    let _lock = QirTestLock::acquire();
+
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let bell_ll_path = manifest_dir.join("../../examples/qir/bell.ll");
 

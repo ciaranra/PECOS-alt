@@ -20,7 +20,7 @@ use tempfile::TempDir;
 /// * `shots` - Optional number of shots to assign to the engine
 ///
 /// # Returns
-/// A boxed ClassicalEngine instance ready for execution
+/// A boxed `ClassicalEngine` instance ready for execution
 ///
 /// # Errors
 /// Returns `PecosError` if compilation or engine creation fails
@@ -32,8 +32,8 @@ pub fn create_hugr_qir_engine<P: AsRef<Path>>(
     info!("Creating QIR engine from HUGR: {}", hugr_path.display());
 
     // Create temporary directory for compilation output
-    let temp_dir = TempDir::new()
-        .map_err(|e| PecosError::with_context(e, "Failed to create temp dir"))?;
+    let temp_dir =
+        TempDir::new().map_err(|e| PecosError::with_context(e, "Failed to create temp dir"))?;
 
     // Set up compiler configuration
     let output_path = temp_dir.path().join("compiled.ll");
@@ -95,7 +95,13 @@ pub fn compile_hugr_to_qir<P: AsRef<Path>, Q: AsRef<Path>>(
 /// * `shots` - Optional number of shots
 ///
 /// # Returns
-/// A boxed ClassicalEngine instance
+/// A boxed `ClassicalEngine` instance
+///
+/// # Errors
+/// Returns `PecosError` if:
+/// - The HUGR file cannot be read
+/// - Compilation fails
+/// - Engine creation fails
 pub fn setup_hugr_qir_engine<P: AsRef<Path>>(
     hugr_path: P,
     shots: Option<usize>,
@@ -105,24 +111,30 @@ pub fn setup_hugr_qir_engine<P: AsRef<Path>>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    #[cfg(not(feature = "hugr-llvm-pipeline"))]
+    use super::compile_hugr_to_qir;
+    #[cfg(not(feature = "hugr-llvm-pipeline"))]
     use tempfile::NamedTempFile;
 
     #[test]
     fn test_hugr_engine_interface() {
         // This test ensures the module compiles and the functions exist
         // Actual testing would require valid HUGR files
-        assert!(true);
     }
 
-    #[cfg(not(feature = "hugr-support"))]
+    #[cfg(not(feature = "hugr-llvm-pipeline"))]
     #[test]
     fn test_hugr_compilation_without_feature() {
         let temp_file = NamedTempFile::new().unwrap();
         let output_file = NamedTempFile::new().unwrap();
-        
+
         let result = compile_hugr_to_qir(temp_file.path(), output_file.path());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("HUGR support not compiled"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("HUGR support not compiled")
+        );
     }
 }

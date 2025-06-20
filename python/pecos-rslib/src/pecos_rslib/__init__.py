@@ -44,7 +44,7 @@ from pecos_rslib.qasm_sim import (
     GeneralNoise,
 )
 
-# Import HUGR/QIR functionality (with graceful fallback)
+# Import HUGR-LLVM pipeline functionality (with graceful fallback)
 try:
     from pecos_rslib.hugr_qir import (
         RustHugrCompiler,
@@ -54,24 +54,91 @@ try:
         check_rust_hugr_availability,
         RUST_HUGR_AVAILABLE,
     )
+    HUGR_LLVM_PIPELINE_AVAILABLE = True
 except ImportError:
     # Provide stub implementations for graceful degradation
     RUST_HUGR_AVAILABLE = False
-    
+    HUGR_LLVM_PIPELINE_AVAILABLE = False
+
     def check_rust_hugr_availability():
-        return False, "HUGR Rust backend not available"
-    
+        return False, "HUGR-LLVM pipeline not available"
+
     def RustHugrCompiler(*args, **kwargs):
-        raise ImportError("HUGR Rust backend not available")
-    
+        raise ImportError("HUGR-LLVM pipeline not available")
+
     def RustHugrQirEngine(*args, **kwargs):
-        raise ImportError("HUGR Rust backend not available")
-    
+        raise ImportError("HUGR-LLVM pipeline not available")
+
     def compile_hugr_to_qir_rust(*args, **kwargs):
-        raise ImportError("HUGR Rust backend not available")
-    
+        raise ImportError("HUGR-LLVM pipeline not available")
+
     def create_qir_engine_from_hugr_rust(*args, **kwargs):
-        raise ImportError("HUGR Rust backend not available")
+        raise ImportError("HUGR-LLVM pipeline not available")
+
+# Import PMIR pipeline functionality (with graceful fallback)
+try:
+    from pecos_rslib.pmir import (
+        hugr_to_past_ron,
+        hugr_to_pmir_mlir,
+        past_ron_to_pmir_mlir,
+        past_ron_to_llvm_ir,
+        compile_hugr_via_pmir,
+        compile_and_execute_via_pmir,
+        PMIRCompiler,
+    )
+    PMIR_PIPELINE_AVAILABLE = True
+except ImportError:
+    # Provide stub implementations for graceful degradation
+    PMIR_PIPELINE_AVAILABLE = False
+    
+    def hugr_to_past_ron(*args, **kwargs):
+        raise ImportError("PMIR pipeline not available")
+    
+    def hugr_to_pmir_mlir(*args, **kwargs):
+        raise ImportError("PMIR pipeline not available")
+    
+    def past_ron_to_pmir_mlir(*args, **kwargs):
+        raise ImportError("PMIR pipeline not available")
+    
+    def past_ron_to_llvm_ir(*args, **kwargs):
+        raise ImportError("PMIR pipeline not available")
+    
+    def compile_hugr_via_pmir(*args, **kwargs):
+        raise ImportError("PMIR pipeline not available")
+    
+    def compile_and_execute_via_pmir(*args, **kwargs):
+        raise ImportError("PMIR pipeline not available")
+    
+    def PMIRCompiler(*args, **kwargs):
+        raise ImportError("PMIR pipeline not available")
+
+# Legacy compatibility
+PMIR_AVAILABLE = PMIR_PIPELINE_AVAILABLE
+
+def get_compilation_backends():
+    """Get information about available compilation backends.
+    
+    Returns:
+        dict: Dictionary with backend availability information
+    """
+    return {
+        "pmir_pipeline_available": PMIR_PIPELINE_AVAILABLE,
+        "hugr_llvm_pipeline_available": HUGR_LLVM_PIPELINE_AVAILABLE,
+        "default_backend": "pmir" if PMIR_PIPELINE_AVAILABLE else ("hugr-llvm" if HUGR_LLVM_PIPELINE_AVAILABLE else "none"),
+        "backends": {
+            "pmir": {
+                "available": PMIR_PIPELINE_AVAILABLE,
+                "description": "PMIR pipeline: HUGR → PAST → PMIR (MLIR) → LLVM IR",
+                "dependencies": ["MLIR tools"]
+            },
+            "hugr-llvm": {
+                "available": HUGR_LLVM_PIPELINE_AVAILABLE,
+                "description": "HUGR-LLVM pipeline: HUGR → QIR (via hugr-llvm)",
+                "dependencies": ["hugr-llvm"]
+            }
+        }
+    }
+
 
 try:
     __version__ = version("pecos-rslib")
@@ -99,11 +166,25 @@ __all__ = [
     "DepolarizingCustomNoise",
     "BiasedDepolarizingNoise",
     "GeneralNoise",
-    # HUGR/QIR functionality
+    # HUGR-LLVM pipeline functionality
     "RustHugrCompiler",
-    "RustHugrQirEngine",
+    "RustHugrQirEngine", 
     "compile_hugr_to_qir_rust",
     "create_qir_engine_from_hugr_rust",
     "check_rust_hugr_availability",
     "RUST_HUGR_AVAILABLE",
+    "HUGR_LLVM_PIPELINE_AVAILABLE",
+    # PMIR pipeline functionality
+    "hugr_to_past_ron",
+    "hugr_to_pmir_mlir",
+    "past_ron_to_pmir_mlir",
+    "past_ron_to_llvm_ir",
+    "compile_hugr_via_pmir",
+    "compile_and_execute_via_pmir",
+    "PMIRCompiler",
+    "PMIR_PIPELINE_AVAILABLE",
+    # Legacy compatibility
+    "PMIR_AVAILABLE",
+    # Backend information
+    "get_compilation_backends",
 ]

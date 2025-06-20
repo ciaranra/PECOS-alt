@@ -22,6 +22,12 @@ clap.workspace = true
 env_logger.workspace = true
 log.workspace = true
 
+[features]
+default = ["pmir-pipeline"]
+pmir-pipeline = []
+hugr-llvm-pipeline = []
+all-pipelines = ["pmir-pipeline", "hugr-llvm-pipeline"]
+
 [dev-dependencies]
 assert_cmd.workspace = true
 serde_json.workspace = true

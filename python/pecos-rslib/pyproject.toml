@@ -18,7 +18,7 @@ requires = ["maturin>=1.2,<2.0"]
 build-backend = "maturin"
 
 [tool.maturin]
-features = ["pyo3/extension-module"]
+features = ["pyo3/extension-module", "hugr-llvm-pipeline", "pmir-pipeline"]
 python-source = "src"
 module-name = "pecos_rslib._pecos_rslib"
 manifest-path = "rust/Cargo.toml"

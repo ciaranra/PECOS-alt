@@ -75,6 +75,10 @@ pub enum PecosError {
     ParseInvalidExpression(String),
 
     // Compilation errors
+    /// General compilation error
+    #[error("Compilation error: {0}")]
+    Compilation(String),
+
     /// Invalid operation during compilation
     #[error("Invalid {operation}: {reason}")]
     CompileInvalidOperation { operation: String, reason: String },
@@ -146,7 +150,7 @@ impl From<anyhow::Error> for PecosError {
 }
 
 // For compatibility with HUGR-LLVM which uses inkwell BuilderError
-#[cfg(feature = "hugr-support")]
+#[cfg(feature = "hugr-llvm")]
 impl From<hugr_llvm::inkwell::builder::BuilderError> for PecosError {
     fn from(error: hugr_llvm::inkwell::builder::BuilderError) -> Self {
         Self::External(Box::new(error))

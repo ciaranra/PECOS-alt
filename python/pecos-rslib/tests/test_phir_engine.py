@@ -200,16 +200,26 @@ def test_phir_full() -> None:
 
 
 def test_register_mapping_simulation() -> None:
-    """Test the register mapping behavior that will be supported by the Result instruction.
+    """Test the register mapping behavior that requires the Result instruction.
 
-    Since we can't directly test the Result instruction yet due to validation constraints,
-    this test simulates its behavior by manually setting both 'm' and 'output' registers.
+    The Result instruction is part of the PHIR specification but has different
+    support levels across implementations:
+
+    1. Rust PHIREngine - Requires Result instruction to be present but may not
+       actually implement the mapping logic yet
+    2. Python PHIRClassicalInterpreter - Doesn't support Result instruction
+       even with validation disabled (no implementation of the cop "=" logic)
+
+    Since neither implementation fully supports Result instruction functionality,
+    we skip this test but document what it would verify once support is added.
     """
-    # Skip this test for now since we need to develop proper validation-free test infrastructure
-    # We'll revisit this later when the validator is updated to support more PHIR features
-    pytest.skip("Skipping test that requires bypassing PHIR validation")
+    pytest.skip(
+        "Result instruction not fully implemented in either Rust or Python PHIR interpreters. "
+        "Rust requires it but doesn't implement mapping; Python doesn't support it at all."
+    )
 
-    # The test would verify that:
-    # 1. Measurements populate the "m" register
-    # 2. The "Result" instruction would map "m" to "output" register
-    # 3. Both registers would contain the same value (3 or binary 11 for two qubits measured as 1)
+    # Document what the test would verify once Result instruction is supported:
+    # 1. Measurements populate the "m" register with measurement outcomes
+    # 2. Result instructions (cop "=") copy values from "m" to "output" register
+    # 3. Both registers contain the same values after execution
+    # 4. For a Bell state, the values would be correlated (00 or 11)

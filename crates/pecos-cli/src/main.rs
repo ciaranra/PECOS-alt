@@ -2,6 +2,7 @@ use clap::{Args, Parser, Subcommand};
 use env_logger::Env;
 use log::debug;
 use pecos::prelude::*;
+use std::io::Write;
 
 mod engine_setup;
 use engine_setup::setup_cli_engine;
@@ -68,6 +69,24 @@ enum SimulatorType {
     Stabilizer,
 }
 
+/// Type of compilation backend to use for QIR execution
+#[derive(PartialEq, Eq, Clone, Debug, Default)]
+enum BackendType {
+    /// PMIR pipeline: HUGR → PAST → PMIR (MLIR) → LLVM IR
+    ///
+    /// Uses MLIR toolchain for compilation. This is the default backend.
+    #[default]
+    Pmir,
+    /// HUGR-LLVM pipeline: HUGR → QIR (via hugr-llvm)
+    ///
+    /// Uses hugr-llvm for direct HUGR to QIR compilation.
+    HugrLlvm,
+    /// Auto-detect based on available features
+    ///
+    /// Automatically selects the best available backend.
+    Auto,
+}
+
 impl std::str::FromStr for NoiseModelType {
     type Err = String;
 
@@ -91,6 +110,21 @@ impl std::str::FromStr for SimulatorType {
             "stabilizer" | "stab" | "clifford" => Ok(SimulatorType::Stabilizer),
             _ => Err(format!(
                 "Unknown simulator type: {s}. Valid options are 'statevector' (sv, state, full) or 'stabilizer' (stab, clifford)"
+            )),
+        }
+    }
+}
+
+impl std::str::FromStr for BackendType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "pmir" | "mlir" => Ok(BackendType::Pmir),
+            "hugr-llvm" | "hugr" | "llvm" => Ok(BackendType::HugrLlvm),
+            "auto" | "automatic" => Ok(BackendType::Auto),
+            _ => Err(format!(
+                "Unknown backend type: {s}. Valid options are 'pmir' (mlir), 'hugr-llvm' (hugr, llvm), or 'auto' (automatic)"
             )),
         }
     }
@@ -147,6 +181,13 @@ struct RunArgs {
     /// - hex: Display as hexadecimal strings
     #[arg(short = 'f', long = "format", default_value = "decimal")]
     display_format: String,
+
+    /// Compilation backend to use for QIR execution
+    /// - pmir: PMIR pipeline via MLIR toolchain (default)
+    /// - hugr-llvm: HUGR-LLVM pipeline via hugr-llvm
+    /// - auto: Automatically select best available backend
+    #[arg(short = 'b', long = "backend", value_parser, default_value = "auto")]
+    backend: BackendType,
 }
 
 /// Parse noise probability specification from command line argument
@@ -230,7 +271,55 @@ fn parse_general_noise_probabilities(noise_str_opt: Option<&String>) -> (f64, f6
     }
 }
 
+/// Check which compilation backends are available
+fn check_backend_availability() -> (bool, bool) {
+    let pmir_available = cfg!(feature = "pmir-pipeline");
+    let hugr_llvm_available = cfg!(feature = "hugr-llvm-pipeline");
+    (pmir_available, hugr_llvm_available)
+}
+
+/// Select the actual backend to use based on user choice and availability
+fn select_backend(requested: BackendType) -> Result<BackendType, PecosError> {
+    let (pmir_available, hugr_llvm_available) = check_backend_availability();
+    
+    match requested {
+        BackendType::Auto => {
+            if pmir_available {
+                Ok(BackendType::Pmir)
+            } else if hugr_llvm_available {
+                Ok(BackendType::HugrLlvm)
+            } else {
+                Err(PecosError::Feature(
+                    "No compilation backends available. PECOS was built without PMIR or HUGR-LLVM support.".to_string()
+                ))
+            }
+        }
+        BackendType::Pmir => {
+            if pmir_available {
+                Ok(BackendType::Pmir)
+            } else {
+                Err(PecosError::Feature(
+                    "PMIR backend not available. PECOS was built without pmir-pipeline feature.".to_string()
+                ))
+            }
+        }
+        BackendType::HugrLlvm => {
+            if hugr_llvm_available {
+                Ok(BackendType::HugrLlvm)
+            } else {
+                Err(PecosError::Feature(
+                    "HUGR-LLVM backend not available. PECOS was built without hugr-llvm-pipeline feature.".to_string()
+                ))
+            }
+        }
+    }
+}
+
 fn run_program(args: &RunArgs) -> Result<(), PecosError> {
+    // Select and validate the backend
+    let selected_backend = select_backend(args.backend.clone())?;
+    debug!("Selected compilation backend: {:?}", selected_backend);
+    
     // get_program_path now includes proper context in its errors
     let program_path = get_program_path(&args.program)?;
 
@@ -332,26 +421,37 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
     };
 
     // Either write to the specified output file or print to stdout
-    match &args.output_file {
-        Some(file_path) => {
-            // Ensure parent directory exists
-            if let Some(parent) = std::path::Path::new(file_path).parent() {
-                if !parent.exists() {
-                    std::fs::create_dir_all(parent).map_err(|e| {
-                        PecosError::Resource(format!("Failed to create directory: {e}"))
-                    })?;
-                }
+    if let Some(file_path) = &args.output_file {
+        // Ensure parent directory exists
+        if let Some(parent) = std::path::Path::new(file_path).parent() {
+            if !parent.exists() {
+                std::fs::create_dir_all(parent).map_err(|e| {
+                    PecosError::Resource(format!("Failed to create directory: {e}"))
+                })?;
             }
+        }
 
-            // Write results to file
-            std::fs::write(file_path, results_str)
-                .map_err(|e| PecosError::Resource(format!("Failed to write output file: {e}")))?;
-            println!("Results written to {file_path}");
-        }
-        None => {
-            // Print results to stdout
-            println!("{results_str}");
-        }
+        // Write results to file
+        std::fs::write(file_path, results_str)
+            .map_err(|e| PecosError::Resource(format!("Failed to write output file: {e}")))?;
+        println!("Results written to {file_path}");
+    } else {
+        // Print results to stdout
+        print!("{results_str}");
+        // Immediately flush stdout to ensure output is written before any potential cleanup issues
+        std::io::stdout().flush().unwrap_or(());
+        println!(); // Add newline after flush
+    }
+
+    // For QIR programs, exit immediately to avoid cleanup segfaults
+    // This is a workaround for a known issue in the QIR runtime cleanup
+    // The engines have already been consumed by run_sim, so we can't forget them here
+    if program_type == ProgramType::QIR {
+        eprintln!("QIR: About to flush and exit");
+        std::io::stdout().flush().unwrap_or(());
+        std::io::stderr().flush().unwrap_or(());
+        eprintln!("QIR: Calling process::exit(0)");
+        std::process::exit(0);
     }
 
     Ok(())

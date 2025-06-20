@@ -22,7 +22,8 @@ impl ExportedFunction {
         };
 
         let body = match self.return_type {
-            "int" | "usize" | "u32" => "{ return 0; }",
+            "int" | "usize" | "u32" | "i32" | "i1" => "{ return 0; }",
+            "i64" => "{ return 0LL; }",
             "void*" => "{ return &empty_commands; }",
             _ => "{}",
         };
@@ -204,6 +205,79 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
         return_type: "void",
         params: &[],
     },
+    // Pointer-based wrapper functions for standard QIR format
+    ExportedFunction {
+        name: "__quantum__qis__h__body__ptr",
+        return_type: "void",
+        params: &[("const unsigned char*", "qubit")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__x__body__ptr",
+        return_type: "void",
+        params: &[("const unsigned char*", "qubit")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__y__body__ptr",
+        return_type: "void",
+        params: &[("const unsigned char*", "qubit")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__z__body__ptr",
+        return_type: "void",
+        params: &[("const unsigned char*", "qubit")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__rz__body__ptr",
+        return_type: "void",
+        params: &[("double", "theta"), ("const unsigned char*", "qubit")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__rxy__body__ptr",
+        return_type: "void",
+        params: &[
+            ("double", "theta"),
+            ("double", "phi"),
+            ("const unsigned char*", "qubit"),
+        ],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__cx__body__ptr",
+        return_type: "void",
+        params: &[
+            ("const unsigned char*", "control"),
+            ("const unsigned char*", "target"),
+        ],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__cz__body__ptr",
+        return_type: "void",
+        params: &[
+            ("const unsigned char*", "control"),
+            ("const unsigned char*", "target"),
+        ],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__zz__body__ptr",
+        return_type: "void",
+        params: &[
+            ("double", "theta"),
+            ("const unsigned char*", "q1"),
+            ("const unsigned char*", "q2"),
+        ],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__m__body__ptr",
+        return_type: "void*",
+        params: &[
+            ("const unsigned char*", "qubit"),
+            ("const unsigned char*", "result"),
+        ],
+    },
+    ExportedFunction {
+        name: "__quantum__rt__result_record_output__ptr",
+        return_type: "void",
+        params: &[("const unsigned char*", "result"), ("const char*", "name")],
+    },
 ];
 
 /// Generate Windows DEF file content
@@ -232,6 +306,9 @@ pub fn generate_c_stub() -> String {
 // Define type aliases
 typedef uint32_t u32;
 typedef size_t usize;
+typedef int32_t i32;
+typedef int64_t i64;
+typedef unsigned char i1;
 
 // Define a minimal binary command structure
 typedef struct {{

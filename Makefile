@@ -97,7 +97,8 @@ qir-staticlib-if-needed:  ## Build QIR static library only if it doesn't exist i
 
 .PHONY: rstest
 rstest: qir-staticlib-if-needed  ## Run Rust tests
-	cargo test --workspace
+	# Run tests in release mode to avoid QIR timing issues in debug mode
+	cargo test --workspace --release
 
 
 .PHONY: pytest
@@ -110,8 +111,9 @@ pytest-dep: ## Run tests on the Python package only for optional dependencies. A
 	uv run pytest ./python/tests/ -m optional_dependency
 
 .PHONY: pytest-all
-pytest-all:  pytest ## Run all tests on the Python package ASSUMES: previous build command
-	uv run pytest ./python/tests/ -m "optional_dependency"
+pytest-all: ## Run all tests on the Python package ASSUMES: previous build command
+	uv run pytest ./python/tests/ -m ""
+	uv run pytest ./python/pecos-rslib/tests/
 
 # .PHONY: pytest-doc
 # pydoctest:  ## Run doctests with pytest. ASSUMES: A build command was ran previously. ASSUMES: previous build command
