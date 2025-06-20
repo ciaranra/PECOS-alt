@@ -106,7 +106,7 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
     ExportedFunction {
         name: "__quantum__qis__h__body",
         return_type: "void",
-        params: &[("int", "qubit")],
+        params: &[("const unsigned char*", "qubit")],
     },
     ExportedFunction {
         name: "__quantum__qis__x__body",
@@ -124,12 +124,52 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
         params: &[("int", "qubit")],
     },
     ExportedFunction {
+        name: "__quantum__qis__s__body",
+        return_type: "void",
+        params: &[("int", "qubit")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__sdg__body",
+        return_type: "void",
+        params: &[("int", "qubit")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__t__body",
+        return_type: "void",
+        params: &[("int", "qubit")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__tdg__body",
+        return_type: "void",
+        params: &[("int", "qubit")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__rx__body",
+        return_type: "void",
+        params: &[("double", "theta"), ("int", "qubit")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__ry__body",
+        return_type: "void",
+        params: &[("double", "theta"), ("int", "qubit")],
+    },
+    ExportedFunction {
         name: "__quantum__qis__cx__body",
+        return_type: "void",
+        params: &[("const unsigned char*", "control"), ("const unsigned char*", "target")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__cz__body",
         return_type: "void",
         params: &[("int", "control"), ("int", "target")],
     },
     ExportedFunction {
-        name: "__quantum__qis__cz__body",
+        name: "__quantum__qis__cy__body",
+        return_type: "void",
+        params: &[("int", "control"), ("int", "target")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__ch__body",
         return_type: "void",
         params: &[("int", "control"), ("int", "target")],
     },
@@ -149,9 +189,19 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
         params: &[("double", "theta"), ("int", "q1"), ("int", "q2")],
     },
     ExportedFunction {
+        name: "__quantum__qis__crz__body",
+        return_type: "void",
+        params: &[("double", "theta"), ("int", "control"), ("int", "target")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__ccx__body",
+        return_type: "void",
+        params: &[("int", "control1"), ("int", "control2"), ("int", "target")],
+    },
+    ExportedFunction {
         name: "__quantum__qis__m__body",
-        return_type: "int",
-        params: &[("int", "qubit"), ("int", "result")],
+        return_type: "void",
+        params: &[("const unsigned char*", "qubit"), ("const unsigned char*", "result")],
     },
     ExportedFunction {
         name: "__quantum__qis__reset__body",
@@ -197,13 +247,44 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
     ExportedFunction {
         name: "__quantum__rt__result_record_output",
         return_type: "void",
-        params: &[("int", "result"), ("const char*", "name")],
+        params: &[("const unsigned char*", "result"), ("const char*", "name")],
     },
     // Main function (exported from QIR program, not runtime)
     ExportedFunction {
         name: "main",
         return_type: "void",
         params: &[],
+    },
+    // Integer-based HUGR variants
+    ExportedFunction {
+        name: "__quantum__qis__h__body_i64",
+        return_type: "void",
+        params: &[("i64", "qubit")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__x__body_i64",
+        return_type: "void",
+        params: &[("i64", "qubit")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__y__body_i64",
+        return_type: "void",
+        params: &[("i64", "qubit")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__z__body_i64",
+        return_type: "void",
+        params: &[("i64", "qubit")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__cx__body_i64",
+        return_type: "void",
+        params: &[("i64", "control"), ("i64", "target")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__m__body_i64",
+        return_type: "u32",
+        params: &[("i64", "qubit"), ("i64", "result")],
     },
     // Pointer-based wrapper functions for standard QIR format
     ExportedFunction {

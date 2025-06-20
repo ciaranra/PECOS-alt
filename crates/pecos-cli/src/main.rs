@@ -432,26 +432,49 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
         }
 
         // Write results to file
-        std::fs::write(file_path, results_str)
+        std::fs::write(file_path, &results_str)
             .map_err(|e| PecosError::Resource(format!("Failed to write output file: {e}")))?;
+        
+        // For QIR, ensure file is fully written before potential segfault
+        if program_type == ProgramType::QIR {
+            // Force sync to disk
+            if let Ok(file) = std::fs::OpenOptions::new().write(true).open(file_path) {
+                let _ = file.sync_all();
+            }
+        }
+        
         println!("Results written to {file_path}");
     } else {
         // Print results to stdout
-        print!("{results_str}");
-        // Immediately flush stdout to ensure output is written before any potential cleanup issues
-        std::io::stdout().flush().unwrap_or(());
-        println!(); // Add newline after flush
+        // For QIR, we need to ensure output is written immediately
+        if program_type == ProgramType::QIR {
+            // Write directly to stdout with immediate flush
+            use std::io::Write;
+            let stdout = std::io::stdout();
+            let mut handle = stdout.lock();
+            let _ = handle.write_all(results_str.as_bytes());
+            let _ = handle.write_all(b"\n");
+            let _ = handle.flush();
+            drop(handle); // Explicitly drop to ensure flush
+        } else {
+            print!("{results_str}");
+            // Immediately flush stdout to ensure output is written before any potential cleanup issues
+            std::io::stdout().flush().unwrap_or(());
+            println!(); // Add newline after flush
+        }
     }
 
-    // For QIR programs, exit immediately to avoid cleanup segfaults
-    // This is a workaround for a known issue in the QIR runtime cleanup
-    // The engines have already been consumed by run_sim, so we can't forget them here
+    // For QIR programs, we used to exit immediately to avoid cleanup segfaults
+    // but this prevents test harnesses from capturing output.
+    // The library leak in Drop should prevent most issues.
+    
+    // Force all output to be written
+    let _ = std::io::stdout().flush();
+    let _ = std::io::stderr().flush();
+
+    // For debugging: add a small delay for QIR programs to test timing hypothesis
     if program_type == ProgramType::QIR {
-        eprintln!("QIR: About to flush and exit");
-        std::io::stdout().flush().unwrap_or(());
-        std::io::stderr().flush().unwrap_or(());
-        eprintln!("QIR: Calling process::exit(0)");
-        std::process::exit(0);
+        std::thread::sleep(std::time::Duration::from_millis(100));
     }
 
     Ok(())
@@ -460,6 +483,14 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
 fn main() -> Result<(), PecosError> {
     // Initialize logger with default "info" level if not specified
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+    
+    // Note: We let Rayon use its default global thread pool configuration
+    // The real fix for TLS segfaults is in the QirLibrary Drop implementation
+    // and proper thread pool management in MonteCarloEngine
+    
+    // For QIR programs, disable stdout buffering to ensure output is captured before segfault
+    use std::io::{self, Write};
+    let _ = io::stdout().flush();
 
     let cli = Cli::parse();
 

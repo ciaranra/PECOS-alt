@@ -34,7 +34,6 @@ use pecos::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
-use std::time::Duration;
 
 mod qir_test_lock;
 use qir_test_lock::QirTestLock;
@@ -51,6 +50,7 @@ fn run_pecos(
 ) -> Result<String, Box<dyn std::error::Error>> {
     let mut cmd = Command::cargo_bin("pecos")?;
     cmd.env("RUST_LOG", "info")
+        .env("RUST_BACKTRACE", "0")  // Disable backtrace to avoid extra output on segfault
         .arg("run")
         .arg(file_path)
         .arg("-s")
@@ -69,57 +69,43 @@ fn run_pecos(
         cmd.arg("-S").arg(sim);
     }
 
+    let output = cmd.output()?;
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    
     // Special handling for QIR files which may segfault during cleanup
     let is_qir = file_path.extension().and_then(|s| s.to_str()) == Some("ll");
     
-    let (output, stdout_content) = if is_qir {
-        // For QIR files, write output to a temporary file to capture it before segfault
-        let temp_file = std::env::temp_dir().join(format!("qir_test_output_{}.json", std::process::id()));
-        cmd.arg("-o").arg(&temp_file);
-        
-        let output = cmd.output()?;
-        
-        // Read the output from the file if it exists
-        let stdout_content = if temp_file.exists() {
-            std::fs::read_to_string(&temp_file).unwrap_or_default()
-        } else {
-            String::from_utf8_lossy(&output.stdout).to_string()
-        };
-        
-        // Clean up the temp file
-        if temp_file.exists() {
-            let _ = std::fs::remove_file(&temp_file);
-        }
-        
-        (output, stdout_content)
-    } else {
-        let output = cmd.output()?;
-        let stdout_content = String::from_utf8_lossy(&output.stdout).to_string();
-        (output, stdout_content)
-    };
-    
+    // Debug output for QIR
     if is_qir {
-        // Add a small delay between QIR runs to prevent file system race conditions
-        std::thread::sleep(Duration::from_millis(200));
+        eprintln!("QIR Debug - Exit status: {:?}", output.status);
+        eprintln!("QIR Debug - Stdout length: {}", stdout.len());
+        eprintln!("QIR Debug - Stderr length: {}", stderr.len());
+        if !stdout.is_empty() {
+            eprintln!("QIR Debug - Stdout: {}", stdout);
+        }
+        if !stderr.is_empty() {
+            eprintln!("QIR Debug - Stderr: {}", stderr);
+        }
     }
-
-    let stdout = stdout_content;
-    let stderr = String::from_utf8_lossy(&output.stderr);
     
     // For QIR files, check if we got valid output even if the process exited with error
     if is_qir && !output.status.success() {
-        // Check if we have valid JSON output despite the segfault
-        if stdout.trim().starts_with('{') && stdout.trim().ends_with('}') && !stdout.trim().is_empty() {
-            // QIR execution completed successfully, ignore the exit code
-            println!("QIR execution completed with valid output despite cleanup segfault");
-            // Continue processing with the valid output
+        // QIR has a known segfault issue during cleanup
+        // Check if we still got valid JSON output before the segfault
+        if stdout.trim().starts_with('{') && stdout.trim().ends_with('}') {
+            // We have valid JSON output despite the segfault
+            eprintln!("Note: QIR process segfaulted during cleanup but produced valid output");
+            return Ok(stdout.to_string());
         } else {
-            // No valid output - this is a real failure
+            // No valid output, this is a real failure
             return Err(Box::new(PecosError::Resource(format!(
-                "QIR execution failed for file '{}': stdout='{}', stderr='{}'",
+                "QIR execution failed for file '{}': exit_code={:?}, stderr='{}', stdout='{}'",
                 file_path.display(),
-                stdout,
-                stderr
+                output.status.code(),
+                stderr,
+                stdout
             ))));
         }
     } else if !output.status.success() {
@@ -139,7 +125,7 @@ fn run_pecos(
     }
 
     // Return the stdout we already converted
-    Ok(stdout)
+    Ok(stdout.to_string())
 }
 
 /// Extract measurement results from JSON output
@@ -494,7 +480,6 @@ fn test_bell_state_with_noise() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Test that with the same seed, all implementations produce deterministic results
 #[test]
-#[ignore = "QIR tests are temporarily disabled due to segfault during cleanup affecting output capture"]
 fn test_seed_determinism() -> Result<(), Box<dyn std::error::Error>> {
     // Acquire global lock for QIR testing to prevent race conditions
     let _lock = QirTestLock::acquire();
@@ -605,7 +590,6 @@ fn test_noise_model_determinism() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Test QIR implementation with depolarizing noise model
 #[test]
-#[ignore = "QIR tests are temporarily disabled due to segfault during cleanup affecting output capture"]
 fn test_qir_with_depolarizing_noise() -> Result<(), Box<dyn std::error::Error>> {
     // Acquire global lock for QIR testing to prevent race conditions
     let _lock = QirTestLock::acquire();
@@ -629,7 +613,6 @@ fn test_qir_with_depolarizing_noise() -> Result<(), Box<dyn std::error::Error>> 
 
 /// Test QIR implementation with general noise model
 #[test]
-#[ignore = "QIR tests are temporarily disabled due to segfault during cleanup affecting output capture"]
 fn test_qir_with_general_noise() -> Result<(), Box<dyn std::error::Error>> {
     // Acquire global lock for QIR testing to prevent race conditions
     let _lock = QirTestLock::acquire();

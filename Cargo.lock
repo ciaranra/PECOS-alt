@@ -1635,6 +1635,7 @@ dependencies = [
  "env_logger",
  "log",
  "pecos",
+ "rayon",
  "serde_json",
 ]
 
@@ -1711,8 +1712,10 @@ version = "0.1.1"
 dependencies = [
  "anyhow",
  "bytemuck",
+ "env_logger",
  "hugr-core",
  "hugr-llvm",
+ "libc",
  "libloading",
  "log",
  "pecos-core",

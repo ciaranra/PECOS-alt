@@ -456,6 +456,74 @@ impl ByteMessageBuilder {
         self
     }
 
+    /// Add an SZ (S) gate
+    pub fn add_sz(&mut self, qubits: &[usize]) -> &mut Self {
+        // S gate is RZ(π/2)
+        self.add_rz(std::f64::consts::FRAC_PI_2, qubits)
+    }
+
+    /// Add an SZdg (S†) gate
+    pub fn add_szdg(&mut self, qubits: &[usize]) -> &mut Self {
+        // S† gate is RZ(-π/2)
+        self.add_rz(-std::f64::consts::FRAC_PI_2, qubits)
+    }
+
+    /// Add a T gate
+    pub fn add_t(&mut self, qubits: &[usize]) -> &mut Self {
+        // T gate is RZ(π/4)
+        self.add_rz(std::f64::consts::FRAC_PI_4, qubits)
+    }
+
+    /// Add a Tdg (T†) gate
+    pub fn add_tdg(&mut self, qubits: &[usize]) -> &mut Self {
+        // T† gate is RZ(-π/4)
+        self.add_rz(-std::f64::consts::FRAC_PI_4, qubits)
+    }
+
+    /// Add an RX gate
+    pub fn add_rx(&mut self, theta: f64, qubits: &[usize]) -> &mut Self {
+        // RX = H RZ H decomposition
+        for &q in qubits {
+            self.add_h(&[q]);
+            self.add_rz(theta, &[q]);
+            self.add_h(&[q]);
+        }
+        self
+    }
+
+    /// Add an RY gate
+    pub fn add_ry(&mut self, theta: f64, qubits: &[usize]) -> &mut Self {
+        // RY using R1XY gate (rotation in XY plane)
+        // RY(θ) = R1XY(θ, π/2)
+        let gate = Gate::r1xy(theta, std::f64::consts::FRAC_PI_2, qubits);
+        self.add_gate_command(&gate);
+        self
+    }
+
+    /// Add a CY gate
+    pub fn add_cy(&mut self, controls: &[usize], targets: &[usize]) -> &mut Self {
+        // CY = (I ⊗ Sdg) CX (I ⊗ S)
+        assert_eq!(controls.len(), targets.len(), "Controls and targets must have same length");
+        for (&c, &t) in controls.iter().zip(targets.iter()) {
+            self.add_szdg(&[t]);
+            self.add_cx(&[c], &[t]);
+            self.add_sz(&[t]);
+        }
+        self
+    }
+
+    /// Add a CZ gate
+    pub fn add_cz(&mut self, controls: &[usize], targets: &[usize]) -> &mut Self {
+        // CZ = H CX H
+        assert_eq!(controls.len(), targets.len(), "Controls and targets must have same length");
+        for (&c, &t) in controls.iter().zip(targets.iter()) {
+            self.add_h(&[t]);
+            self.add_cx(&[c], &[t]);
+            self.add_h(&[t]);
+        }
+        self
+    }
+
     /// Check how many messages have been added
     #[must_use]
     pub fn message_count(&self) -> u32 {

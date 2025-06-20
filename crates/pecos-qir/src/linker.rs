@@ -476,7 +476,7 @@ impl QirLinker {
                 .arg(library_file)
                 .arg(object_file)
                 .arg(rust_runtime_lib)
-                .args(["-lstdc++", "-lm", "-lffi"]) // Link C++, math, and FFI libraries
+                .args(["-lstdc++", "-lm", "-lffi", "-lncurses", "-lz"]) // Link C++, math, FFI, ncurses, and zlib libraries
                 .output();
 
             let output = Self::handle_command_error(result, "Failed to execute gcc")?;

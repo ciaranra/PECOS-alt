@@ -46,37 +46,33 @@ fn get_thread_id() -> String {
 }
 
 /// Helper function to convert i64 to usize for qubit/result IDs
-///
-/// In QIR, IDs are typically non-negative, but the interface uses i64.
-/// This function performs the conversion with appropriate handling.
 #[inline]
 fn i64_to_usize(value: i64) -> usize {
-    // In practice, qubit/result IDs should never be negative in QIR
-    // If they are, it indicates a bug in the calling code
-    debug_assert!(
-        value >= 0,
-        "Qubit/result ID should not be negative: {value}"
-    );
-
-    // For release builds, clamp negative values to 0 to avoid crashes
-    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-    if value < 0 { 0 } else { value as usize }
+    value as usize
 }
 
 // Global counters for qubit and result allocation
 static NEXT_QUBIT_ID: AtomicUsize = AtomicUsize::new(0);
 static NEXT_RESULT_ID: AtomicUsize = AtomicUsize::new(0);
 
-// Global cleanup coordination mutex to prevent race conditions during cleanup
-static CLEANUP_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+// Removed global cleanup coordination mutex as it causes segfaults during library unload
+// The static destructor order is non-deterministic and can cause issues
 
 // Global message builder for quantum operations
-static MESSAGE_BUILDER: std::sync::LazyLock<Mutex<ByteMessageBuilder>> =
-    std::sync::LazyLock::new(|| {
+use std::sync::LazyLock;
+
+static MESSAGE_BUILDER: LazyLock<Mutex<ByteMessageBuilder>> =
+    LazyLock::new(|| {
         let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_quantum_operations();
         Mutex::new(builder)
     });
+
+static RUNTIME_STATE: LazyLock<Mutex<RuntimeState>> =
+    LazyLock::new(|| Mutex::new(RuntimeState::new()));
+
+static LAST_SHOT: LazyLock<Mutex<Option<Shot>>> =
+    LazyLock::new(|| Mutex::new(None));
 
 // Structure to hold runtime state for classical registers
 struct RuntimeState {
@@ -148,13 +144,6 @@ impl RuntimeState {
     }
 }
 
-// Global runtime state
-static RUNTIME_STATE: std::sync::LazyLock<Mutex<RuntimeState>> =
-    std::sync::LazyLock::new(|| Mutex::new(RuntimeState::new()));
-
-// Global storage for the last exported shot
-static LAST_SHOT: std::sync::LazyLock<Mutex<Option<Shot>>> =
-    std::sync::LazyLock::new(|| Mutex::new(None));
 
 /// Helper function to check if we should print commands
 ///
@@ -274,6 +263,14 @@ pub unsafe extern "C" fn __quantum__qis__rxy__body(theta: f64, phi: f64, qubit: 
     }
 }
 
+/// Internal helper for Hadamard gate
+#[inline]
+fn h_gate_internal(qubit_id: usize) {
+    apply_single_qubit_gate("H", qubit_id, |builder| {
+        builder.add_h(&[qubit_id]);
+    });
+}
+
 /// Applies a Hadamard gate to the specified qubit.
 ///
 /// # Safety
@@ -282,10 +279,23 @@ pub unsafe extern "C" fn __quantum__qis__rxy__body(theta: f64, phi: f64, qubit: 
 /// and has been properly allocated. Calling with invalid qubit IDs may lead to
 /// undefined behavior.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__h__body(qubit: i64) {
+pub unsafe extern "C" fn __quantum__qis__h__body(qubit: *const u8) {
+    let qubit_id = qubit as usize;
+    h_gate_internal(qubit_id);
+}
+
+/// Integer-based Hadamard gate for internal use
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__h__body_i64(qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
-    apply_single_qubit_gate("H", qubit_id, |builder| {
-        builder.add_h(&[qubit_id]);
+    h_gate_internal(qubit_id);
+}
+
+/// Internal helper for X gate
+#[inline]
+fn x_gate_internal(qubit_id: usize) {
+    apply_single_qubit_gate("X", qubit_id, |builder| {
+        builder.add_x(&[qubit_id]);
     });
 }
 
@@ -297,10 +307,23 @@ pub unsafe extern "C" fn __quantum__qis__h__body(qubit: i64) {
 /// and has been properly allocated. Calling with invalid qubit IDs may lead to
 /// undefined behavior.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__x__body(qubit: i64) {
+pub unsafe extern "C" fn __quantum__qis__x__body(qubit: *const u8) {
+    let qubit_id = qubit as usize;
+    x_gate_internal(qubit_id);
+}
+
+/// Integer-based X gate for internal use
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__x__body_i64(qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
-    apply_single_qubit_gate("X", qubit_id, |builder| {
-        builder.add_x(&[qubit_id]);
+    x_gate_internal(qubit_id);
+}
+
+/// Internal helper for Y gate
+#[inline]
+fn y_gate_internal(qubit_id: usize) {
+    apply_single_qubit_gate("Y", qubit_id, |builder| {
+        builder.add_y(&[qubit_id]);
     });
 }
 
@@ -312,10 +335,22 @@ pub unsafe extern "C" fn __quantum__qis__x__body(qubit: i64) {
 /// and has been properly allocated. Calling with invalid qubit IDs may lead to
 /// undefined behavior.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__y__body(qubit: i64) {
+pub unsafe extern "C" fn __quantum__qis__y__body(qubit: usize) {
+    y_gate_internal(qubit);
+}
+
+/// Integer-based Y gate for internal use
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__y__body_i64(qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
-    apply_single_qubit_gate("Y", qubit_id, |builder| {
-        builder.add_y(&[qubit_id]);
+    y_gate_internal(qubit_id);
+}
+
+/// Internal helper for Z gate
+#[inline]
+fn z_gate_internal(qubit_id: usize) {
+    apply_single_qubit_gate("Z", qubit_id, |builder| {
+        builder.add_z(&[qubit_id]);
     });
 }
 
@@ -327,10 +362,22 @@ pub unsafe extern "C" fn __quantum__qis__y__body(qubit: i64) {
 /// and has been properly allocated. Calling with invalid qubit IDs may lead to
 /// undefined behavior.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__z__body(qubit: i64) {
+pub unsafe extern "C" fn __quantum__qis__z__body(qubit: usize) {
+    z_gate_internal(qubit);
+}
+
+/// Integer-based Z gate for internal use
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__z__body_i64(qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
-    apply_single_qubit_gate("Z", qubit_id, |builder| {
-        builder.add_z(&[qubit_id]);
+    z_gate_internal(qubit_id);
+}
+
+/// Internal helper for CX gate
+#[inline]
+fn cx_gate_internal(control_id: usize, target_id: usize) {
+    apply_two_qubit_gate("CX", control_id, target_id, |builder| {
+        builder.add_cx(&[control_id], &[target_id]);
     });
 }
 
@@ -342,11 +389,33 @@ pub unsafe extern "C" fn __quantum__qis__z__body(qubit: i64) {
 /// and have been properly allocated. Calling with invalid qubit IDs may lead to
 /// undefined behavior.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__cx__body(control: i64, target: i64) {
+pub unsafe extern "C" fn __quantum__qis__cx__body(control: *const u8, target: *const u8) {
+    let control_id = control as usize;
+    let target_id = target as usize;
+    cx_gate_internal(control_id, target_id);
+}
+
+/// Integer-based CX gate for internal use
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__cx__body_i64(control: i64, target: i64) {
     let control_id = i64_to_usize(control);
     let target_id = i64_to_usize(target);
-    apply_two_qubit_gate("CX", control_id, target_id, |builder| {
-        builder.add_cx(&[control_id], &[target_id]);
+    cx_gate_internal(control_id, target_id);
+}
+
+/// Applies a controlled-Y gate to the specified qubits.
+///
+/// # Safety
+///
+/// This function is called from C/C++ code and assumes that the qubit IDs are valid
+/// and have been properly allocated. Calling with invalid qubit IDs may lead to
+/// undefined behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__cy__body(control: i64, target: i64) {
+    let control_id = i64_to_usize(control);
+    let target_id = i64_to_usize(target);
+    apply_two_qubit_gate("CY", control_id, target_id, |builder| {
+        builder.add_cy(&[control_id], &[target_id]);
     });
 }
 
@@ -375,6 +444,174 @@ pub unsafe extern "C" fn __quantum__qis__cz__body(control: i64, target: i64) {
             builder.add_h(&[target_id]);
             builder.add_cx(&[control_id], &[target_id]);
             builder.add_h(&[target_id]);
+        },
+    );
+}
+
+/// Applies a controlled-H gate to the specified qubits.
+///
+/// # Safety
+///
+/// This function is called from C/C++ code and assumes that the qubit IDs are valid
+/// and have been properly allocated. Calling with invalid qubit IDs may lead to
+/// undefined behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__ch__body(control: i64, target: i64) {
+    let control_id = i64_to_usize(control);
+    let target_id = i64_to_usize(target);
+    apply_two_qubit_gate("CH", control_id, target_id, |builder| {
+        // CH implementation - may need custom implementation in ByteMessageBuilder
+        // For now, decompose as Ry(-pi/4) CZ Ry(pi/4)
+        builder.add_ry(-std::f64::consts::FRAC_PI_4, &[target_id]);
+        builder.add_cz(&[control_id], &[target_id]);
+        builder.add_ry(std::f64::consts::FRAC_PI_4, &[target_id]);
+    });
+}
+
+/// Applies an S gate (phase gate) to the specified qubit.
+///
+/// # Safety
+///
+/// This function is called from C/C++ code and assumes that the qubit ID is valid
+/// and has been properly allocated. Calling with invalid qubit ID may lead to
+/// undefined behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__s__body(qubit: i64) {
+    let qubit_id = i64_to_usize(qubit);
+    apply_single_qubit_gate("S", qubit_id, |builder| {
+        builder.add_sz(&[qubit_id]);
+    });
+}
+
+/// Applies an S† gate (inverse phase gate) to the specified qubit.
+///
+/// # Safety
+///
+/// This function is called from C/C++ code and assumes that the qubit ID is valid
+/// and has been properly allocated. Calling with invalid qubit ID may lead to
+/// undefined behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__sdg__body(qubit: i64) {
+    let qubit_id = i64_to_usize(qubit);
+    apply_single_qubit_gate("Sdg", qubit_id, |builder| {
+        builder.add_szdg(&[qubit_id]);
+    });
+}
+
+/// Applies a T gate (π/8 gate) to the specified qubit.
+///
+/// # Safety
+///
+/// This function is called from C/C++ code and assumes that the qubit ID is valid
+/// and has been properly allocated. Calling with invalid qubit ID may lead to
+/// undefined behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__t__body(qubit: i64) {
+    let qubit_id = i64_to_usize(qubit);
+    apply_single_qubit_gate("T", qubit_id, |builder| {
+        // T gate is RZ(π/4)
+        builder.add_rz(std::f64::consts::FRAC_PI_4, &[qubit_id]);
+    });
+}
+
+/// Applies a T† gate (inverse π/8 gate) to the specified qubit.
+///
+/// # Safety
+///
+/// This function is called from C/C++ code and assumes that the qubit ID is valid
+/// and has been properly allocated. Calling with invalid qubit ID may lead to
+/// undefined behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__tdg__body(qubit: i64) {
+    let qubit_id = i64_to_usize(qubit);
+    apply_single_qubit_gate("Tdg", qubit_id, |builder| {
+        // T† gate is RZ(-π/4)
+        builder.add_rz(-std::f64::consts::FRAC_PI_4, &[qubit_id]);
+    });
+}
+
+/// Applies an RX gate to the specified qubit.
+///
+/// # Safety
+///
+/// This function is called from C/C++ code and assumes that the qubit ID is valid
+/// and has been properly allocated. Calling with invalid qubit ID may lead to
+/// undefined behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__rx__body(theta: f64, qubit: i64) {
+    let qubit_id = i64_to_usize(qubit);
+    store_gate_command(&format!("RX {theta} {qubit_id}"), |builder| {
+        builder.add_rx(theta, &[qubit_id]);
+    });
+}
+
+/// Applies an RY gate to the specified qubit.
+///
+/// # Safety
+///
+/// This function is called from C/C++ code and assumes that the qubit ID is valid
+/// and has been properly allocated. Calling with invalid qubit ID may lead to
+/// undefined behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__ry__body(theta: f64, qubit: i64) {
+    let qubit_id = i64_to_usize(qubit);
+    store_gate_command(&format!("RY {theta} {qubit_id}"), |builder| {
+        builder.add_ry(theta, &[qubit_id]);
+    });
+}
+
+/// Applies a controlled-RZ gate to the specified qubits.
+///
+/// # Safety
+///
+/// This function is called from C/C++ code and assumes that the qubit IDs are valid
+/// and have been properly allocated. Calling with invalid qubit IDs may lead to
+/// undefined behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__crz__body(theta: f64, control: i64, target: i64) {
+    let control_id = i64_to_usize(control);
+    let target_id = i64_to_usize(target);
+    store_gate_command(&format!("CRZ {theta} {control_id} {target_id}"), |builder| {
+        // CRZ implementation - decompose as CX RZ CX RZ
+        builder.add_rz(theta / 2.0, &[target_id]);
+        builder.add_cx(&[control_id], &[target_id]);
+        builder.add_rz(-theta / 2.0, &[target_id]);
+        builder.add_cx(&[control_id], &[target_id]);
+    });
+}
+
+/// Applies a Toffoli (CCX) gate to the specified qubits.
+///
+/// # Safety
+///
+/// This function is called from C/C++ code and assumes that the qubit IDs are valid
+/// and have been properly allocated. Calling with invalid qubit IDs may lead to
+/// undefined behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__ccx__body(control1: i64, control2: i64, target: i64) {
+    let control1_id = i64_to_usize(control1);
+    let control2_id = i64_to_usize(control2);
+    let target_id = i64_to_usize(target);
+    store_gate_command(
+        &format!("CCX {control1_id} {control2_id} {target_id}"),
+        |builder| {
+            // Toffoli gate decomposition using CNOT and single-qubit gates
+            // This is a standard decomposition into 6 CNOTs and single-qubit gates
+            builder.add_h(&[target_id]);
+            builder.add_cx(&[control2_id], &[target_id]);
+            builder.add_tdg(&[target_id]);
+            builder.add_cx(&[control1_id], &[target_id]);
+            builder.add_t(&[target_id]);
+            builder.add_cx(&[control2_id], &[target_id]);
+            builder.add_tdg(&[target_id]);
+            builder.add_cx(&[control1_id], &[target_id]);
+            builder.add_t(&[control2_id]);
+            builder.add_t(&[target_id]);
+            builder.add_h(&[target_id]);
+            builder.add_cx(&[control1_id], &[control2_id]);
+            builder.add_t(&[control1_id]);
+            builder.add_tdg(&[control2_id]);
+            builder.add_cx(&[control1_id], &[control2_id]);
         },
     );
 }
@@ -427,22 +664,9 @@ pub unsafe extern "C" fn __quantum__qis__rzz__body(theta: f64, qubit1: usize, qu
     });
 }
 
-/// Measures a qubit and stores the result.
-///
-/// # Arguments
-///
-/// * `qubit` - The qubit index to measure
-/// * `result` - The result ID to store the measurement result
-///
-/// # Safety
-///
-/// This function is called from C/C++ code and assumes that the qubit ID and result ID
-/// are valid and have been properly allocated. Calling with invalid IDs may lead to
-/// undefined behavior.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__m__body(qubit: i64, result: i64) -> u32 {
-    let qubit_id = i64_to_usize(qubit);
-    let result_id = i64_to_usize(result);
+/// Internal helper for measurement
+#[inline]
+fn measure_internal(qubit_id: usize, result_id: usize) -> u32 {
     store_gate_command(&format!("M {qubit_id}"), |builder| {
         builder.add_measurements(&[qubit_id]);
     });
@@ -459,6 +683,42 @@ pub unsafe extern "C" fn __quantum__qis__m__body(qubit: i64, result: i64) -> u32
     // In the real QIR runtime, this would return the actual measurement result
     // For this implementation, we return 0 (will be updated later)
     0
+}
+
+/// Measures a qubit and stores the result (Standard QIR - void return).
+///
+/// # Arguments
+///
+/// * `qubit` - The qubit pointer to measure  
+/// * `result` - The result pointer to store the measurement result
+///
+/// # Safety
+///
+/// This function is called from C/C++ code and assumes that the qubit ID and result ID
+/// are valid and have been properly allocated. Calling with invalid IDs may lead to
+/// undefined behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__m__body(qubit: *const u8, result: *const u8) {
+    let qubit_id = qubit as usize;
+    let result_id = result as usize;
+    let _ = measure_internal(qubit_id, result_id);
+    // Standard QIR expects void return, not the measurement result
+}
+
+/// Integer-based measurement for HUGR use
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__m__body_i64(qubit: i64, result: i64) -> u32 {
+    let qubit_id = i64_to_usize(qubit);
+    let result_id = i64_to_usize(result);
+    measure_internal(qubit_id, result_id)
+}
+
+/// HUGR-specific measurement that returns void (for compatibility)
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __hugr__quantum__qis__m__body(qubit: i64, result: i64) {
+    let qubit_id = i64_to_usize(qubit);
+    let result_id = i64_to_usize(result);
+    let _ = measure_internal(qubit_id, result_id);
 }
 
 /// Prepares a qubit in the |0⟩ state.
@@ -497,6 +757,11 @@ pub unsafe extern "C" fn __quantum__qis__reset__body(qubit: usize) {
 /// thread panicked while holding the lock).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__initialize(_config: *const u8) {
+    // Force initialization of all LazyLock statics early to avoid destructor ordering issues
+    let _ = &*MESSAGE_BUILDER;
+    let _ = &*RUNTIME_STATE;
+    let _ = &*LAST_SHOT;
+
     // Reset global state for new program execution
     NEXT_QUBIT_ID.store(0, Ordering::SeqCst);
     NEXT_RESULT_ID.store(0, Ordering::SeqCst);
@@ -653,15 +918,6 @@ pub unsafe extern "C" fn __quantum__rt__record(data: *const c_char) {
 /// due to the FFI boundary.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qir_runtime_reset() {
-    // Acquire cleanup coordination lock to prevent race conditions
-    let _cleanup_guard = match CLEANUP_MUTEX.lock() {
-        Ok(guard) => guard,
-        Err(_) => {
-            eprintln!("QIR: Failed to acquire cleanup mutex during reset");
-            return;
-        }
-    };
-    
     let thread_id = get_thread_id();
 
     // Reset the message builder
@@ -838,7 +1094,7 @@ pub unsafe extern "C" fn qir_runtime_free_binary_commands(ptr: *mut FFIByteData)
 ///
 /// # Arguments
 ///
-/// * `result` - The result ID to record
+/// * `result` - The result pointer to record
 /// * `name` - The name to record the result as, or null for default naming
 ///
 /// # Safety
@@ -846,13 +1102,15 @@ pub unsafe extern "C" fn qir_runtime_free_binary_commands(ptr: *mut FFIByteData)
 /// This function is called from C/C++ code. It is safe to call but marked as unsafe
 /// due to the FFI boundary.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__rt__result_record_output(result: i64, name: *const c_char) {
+pub unsafe extern "C" fn __quantum__rt__result_record_output(result: *const u8, name: *const c_char) {
     let thread_id = get_thread_id();
 
+    let result_id = result as usize;
+    
     // Generate a name for the result
     let name_str = if name.is_null() {
         // If name is null, use a default name based on the result ID
-        format!("result_{result}")
+        format!("result_{result_id}")
     } else {
         // Convert C string to Rust string
         let c_str = unsafe { CStr::from_ptr(name) };
@@ -860,7 +1118,7 @@ pub unsafe extern "C" fn __quantum__rt__result_record_output(result: i64, name: 
     };
 
     if should_print_commands() {
-        println!("[Thread {thread_id}] Recording result {result} as '{name_str}'");
+        println!("[Thread {thread_id}] Recording result {result_id} as '{name_str}'");
     }
 
     // Record the mapping of this result to a register and bit position
@@ -877,14 +1135,13 @@ pub unsafe extern "C" fn __quantum__rt__result_record_output(result: i64, name: 
         };
 
         // Store the mapping for when we get the actual measurement result
-        let result_id = i64_to_usize(result);
         state
             .result_mappings
             .insert(result_id, (name_str.clone(), current_bit_position));
 
         if should_print_commands() {
             println!(
-                "[Thread {thread_id}] Mapped result {result} to register '{name_str}' bit {current_bit_position}"
+                "[Thread {thread_id}] Mapped result {result_id} to register '{name_str}' bit {current_bit_position}"
             );
         }
     } else {
@@ -1119,11 +1376,13 @@ pub unsafe extern "C" fn qir_runtime_free_shot_data(data: *mut FFIShotData) {
 //
 
 /// Convert a qubit pointer to an integer ID
+#[allow(dead_code)]
 fn qubit_ptr_to_id(qubit_ptr: *const u8) -> i64 {
     qubit_ptr as i64
 }
 
 /// Convert a result pointer to an integer ID
+#[allow(dead_code)]
 fn result_ptr_to_id(result_ptr: *const u8) -> i64 {
     result_ptr as i64
 }
@@ -1139,7 +1398,7 @@ fn result_ptr_to_id(result_ptr: *const u8) -> i64 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__h__body__ptr(qubit: *const u8) {
     unsafe {
-        __quantum__qis__h__body(qubit_ptr_to_id(qubit));
+        __quantum__qis__h__body(qubit);
     }
 }
 
@@ -1151,7 +1410,7 @@ pub unsafe extern "C" fn __quantum__qis__h__body__ptr(qubit: *const u8) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__x__body__ptr(qubit: *const u8) {
     unsafe {
-        __quantum__qis__x__body(qubit_ptr_to_id(qubit));
+        __quantum__qis__x__body(qubit);
     }
 }
 
@@ -1163,7 +1422,7 @@ pub unsafe extern "C" fn __quantum__qis__x__body__ptr(qubit: *const u8) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__y__body__ptr(qubit: *const u8) {
     unsafe {
-        __quantum__qis__y__body(qubit_ptr_to_id(qubit));
+        __quantum__qis__y__body(qubit as usize);
     }
 }
 
@@ -1175,7 +1434,7 @@ pub unsafe extern "C" fn __quantum__qis__y__body__ptr(qubit: *const u8) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__z__body__ptr(qubit: *const u8) {
     unsafe {
-        __quantum__qis__z__body(qubit_ptr_to_id(qubit));
+        __quantum__qis__z__body(qubit as usize);
     }
 }
 
@@ -1211,7 +1470,7 @@ pub unsafe extern "C" fn __quantum__qis__rxy__body__ptr(theta: f64, phi: f64, qu
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__cx__body__ptr(control: *const u8, target: *const u8) {
     unsafe {
-        __quantum__qis__cx__body(qubit_ptr_to_id(control), qubit_ptr_to_id(target));
+        __quantum__qis__cx__body(control, target);
     }
 }
 
@@ -1249,8 +1508,9 @@ pub unsafe extern "C" fn __quantum__qis__zz__body__ptr(qubit1: *const u8, qubit2
 /// and result pointers must be valid references from QIR.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__m__body__ptr(qubit: *const u8, result: *const u8) {
-    let _measurement_result =
-        unsafe { __quantum__qis__m__body(qubit_ptr_to_id(qubit), result_ptr_to_id(result)) };
+    unsafe {
+        __quantum__qis__m__body(qubit, result);
+    }
     // Standard QIR measurement functions return void, not the measurement result
     // The result is stored internally and accessed via result_record_output
 }
@@ -1266,7 +1526,7 @@ pub unsafe extern "C" fn __quantum__rt__result_record_output__ptr(
     name: *const c_char,
 ) {
     unsafe {
-        __quantum__rt__result_record_output(result_ptr_to_id(result), name);
+        __quantum__rt__result_record_output(result, name);
     }
 }
 

@@ -49,7 +49,6 @@ fn skip_if_llc_missing(test_name: &str) -> bool {
 }
 
 #[test]
-#[ignore = "QIR tests may segfault during cleanup - see CLI tests for proper handling"]
 fn test_qir_bell_state_noiseless() {
     // Skip if LLVM is not available
     if skip_if_llc_missing("test_qir_bell_state_noiseless") {
@@ -111,7 +110,6 @@ fn test_qir_bell_state_noiseless() {
 }
 
 #[test]
-#[ignore = "QIR tests may segfault during cleanup - see CLI tests for proper handling"]
 #[allow(clippy::missing_panics_doc)]
 #[allow(clippy::cast_precision_loss)]
 pub fn test_qir_bell_state_with_noise() {

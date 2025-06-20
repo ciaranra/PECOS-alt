@@ -244,14 +244,18 @@ impl MonteCarloEngine {
         let base_seed = self.rng.next_u64();
 
         // Create a dedicated thread pool for this simulation to avoid contention
-        // with global Rayon thread pool when multiple simulations run concurrently
+        // with global Rayon thread pool when multiple simulations run concurrently.
+        // CRITICAL: For QIR operations, we need to ensure each test gets its own
+        // isolated thread pool to prevent TLS conflicts during library cleanup.
         let thread_pool = ThreadPoolBuilder::new()
             .num_threads(num_workers)
+            .thread_name(|index| format!("pecos-mc-worker-{}", index))
             .build()
             .map_err(|e| PecosError::Processing(format!("Failed to create thread pool: {e}")))?;
 
         // Run shots in parallel across workers using dedicated thread pool
-        thread_pool.install(|| {
+        // CRITICAL: Use install() to ensure all work completes before thread pool cleanup
+        let parallel_result = thread_pool.install(|| {
             (0..num_workers)
                 .into_par_iter()
                 .map(|worker_idx| {
@@ -289,7 +293,14 @@ impl MonteCarloEngine {
                 Ok(())
                 })
                 .collect::<Result<Vec<()>, PecosError>>()
-        })?;
+        });
+        
+        // Handle the parallel execution result
+        parallel_result?;
+        
+        // CRITICAL: Explicitly drop the thread pool to ensure clean shutdown
+        // This helps prevent TLS issues during test cleanup
+        drop(thread_pool);
 
         // Ensure deterministic ordering of results
         let mut results = results_vec.lock().unwrap();

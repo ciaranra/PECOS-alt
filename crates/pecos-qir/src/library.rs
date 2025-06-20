@@ -1,13 +1,13 @@
 use libloading::{Library, Symbol};
+#[cfg(unix)]
+use libloading::os::unix::Library as UnixLibrary;
 use log::{debug, warn};
 use pecos_core::errors::PecosError;
 use pecos_engines::byte_message::ByteMessage;
 use pecos_engines::shot_results::{Data, Shot};
 use std::ffi::{CStr, c_char};
-// FFI imports handled inline
-use std::mem::MaybeUninit;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -54,8 +54,8 @@ struct FFIShotData {
 /// library.reset().unwrap();
 /// ```
 pub struct QirLibrary {
-    /// The loaded dynamic library
-    library: Mutex<Library>,
+    /// The loaded dynamic library wrapped in Arc for safe sharing
+    library: Arc<Mutex<Library>>,
 
     /// Path to the library file
     path: PathBuf,
@@ -65,13 +65,10 @@ impl Clone for QirLibrary {
     fn clone(&self) -> Self {
         debug!("QIR Library: Cloning library from {:?}", self.path);
 
-        // Load the library again from the same path with retries
-        match Self::load_library_with_retries(&self.path, 3) {
-            Ok(library) => library,
-            Err(e) => {
-                // If we can't load the library, panic with a clear error message
-                panic!("Failed to clone QIR library: {e}");
-            }
+        // Share the same library instance via Arc - no need to reload
+        Self {
+            library: Arc::clone(&self.library),
+            path: self.path.clone(),
         }
     }
 }
@@ -184,12 +181,28 @@ impl QirLibrary {
                 max_retries
             );
 
-            // Try to load the library using the path directly
-            match unsafe { Library::new(path) } {
+            // RTLD_NODELETE approach: Prevent library unloading to avoid TLS segfaults
+            let library_result = if cfg!(unix) {
+                #[cfg(unix)]
+                {
+                    unsafe {
+                        UnixLibrary::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW)
+                            .map(Library::from)
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    unsafe { Library::new(path) }
+                }
+            } else {
+                unsafe { Library::new(path) }
+            };
+            
+            match library_result {
                 Ok(library) => {
                     debug!("QIR: Successfully loaded library from {:?}", path);
                     return Ok(Self {
-                        library: Mutex::new(library),
+                        library: Arc::new(Mutex::new(library)),
                         path: path.to_path_buf(),
                     });
                 }
@@ -575,28 +588,13 @@ impl QirLibrary {
 
 impl Drop for QirLibrary {
     fn drop(&mut self) {
-        debug!("QIR Library: Dropping library (preventing unload to avoid segfault)");
-
-        // Reset the runtime state to clean up most resources
-        let _ = self.reset();
+        let strong_count = Arc::strong_count(&self.library);
+        debug!("QIR Library: Dropping library reference (remaining references: {})", strong_count - 1);
         
-        // Add a small delay to ensure all threads finish accessing the library
-        std::thread::sleep(std::time::Duration::from_millis(10));
-        
-        // Prevent library unloading by taking ownership and forgetting it
-        // This avoids segfaults at the cost of slightly increased memory usage
-        // The library will remain loaded until process termination
-        match self.library.try_lock() {
-            Ok(library_guard) => {
-                // We can't easily replace the Library inside the Mutex without causing issues
-                // Just let it drop naturally but don't call any cleanup functions
-                drop(library_guard);
-                debug!("QIR Library: Allowing natural cleanup (may segfault but is unavoidable)");
-            }
-            Err(_) => {
-                debug!("QIR Library: Could not acquire lock during cleanup");
-            }
-        }
+        // With RTLD_NODELETE, dlclose() is essentially a no-op, so we can let
+        // the normal Drop behavior occur without worrying about TLS segfaults.
+        // The library memory is retained but this prevents crashes.
+        debug!("QIR Library: RTLD_NODELETE ensures safe cleanup without segfaults");
     }
 }
 
