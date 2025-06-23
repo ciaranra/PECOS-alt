@@ -79,7 +79,6 @@ def test_bell():
     qasm = (
         "OPENQASM 2.0;\n"
         'include "hqslib1.inc";\n'
-        f"// Generated using: PECOS version {__version__}\n"
         "qreg q[2];\n"
         "creg m[2];\n"
         "h q[0];\n"
@@ -145,7 +144,6 @@ def test_if_bell():
     qasm = (
         "OPENQASM 2.0;\n"
         'include "hqslib1.inc";\n'
-        f"// Generated using: PECOS version {__version__}\n"
         "qreg q[2];\n"
         "creg m[2];\n"
         "creg c[4];\n"
@@ -178,7 +176,6 @@ def test_strange_program() -> None:
     qasm = (
         "OPENQASM 2.0;\n"
         'include "hqslib1.inc";\n'
-        f"// Generated using: PECOS version {__version__}\n"
         "qreg q[2];\n"
         "creg c[4];\n"
         "creg b[4];\n"
@@ -187,7 +184,7 @@ def test_strange_program() -> None:
         "c = 3;\n"
         "// Here is some injected QASM:\n"
         "c = b & 1;\n"
-        "// Permuting: q[1] -> q[0], q[0] -> q[1]\n"
+        "// Permutation: q[0] -> q[1], q[1] -> q[0]\n"
         "h q[1];"
     )
 
@@ -223,7 +220,7 @@ def test_control_flow_qir():
         ),
         Barrier(q[0], q[1]),
         p.F4dg(q[1]),
-        p.Sdg(q[0]),
+        p.SZdg(q[0]),
         p.CX(q[0], q[1]),
         Barrier(q[1], q[0]),
         p.RX[0.3](q[0]),

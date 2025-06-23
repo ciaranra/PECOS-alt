@@ -33,7 +33,7 @@ class SlrConverter:
         add_versions: bool = False,
     ) -> str:
         if target == Language.QASM:
-            generator = QASMGenerator(skip_headers=skip_headers)
+            generator = QASMGenerator(skip_headers=skip_headers, add_versions=add_versions)
         elif target in [Language.QIR, Language.QIRBC]:
             self._check_qir_imported()
             generator = QIRGenerator()

@@ -125,8 +125,12 @@ class QASMGenerator(Generator):
         if len(block.ops) == 0:
             self.write("")
         else:
-            # Save the current permutation map
-            saved_permutation_map = self.permutation_map.copy()
+            # Check if this block contains a Permute operation
+            # If so, we don't want to restore the permutation map
+            contains_permute = any(type(op).__name__ == "Permute" for op in block.ops if hasattr(op, '__class__'))
+            
+            # Save the current permutation map if needed
+            saved_permutation_map = None if contains_permute else self.permutation_map.copy()
 
             for op in block.ops:
                 # TODO: figure out how to identify Block types without using isinstance
@@ -135,8 +139,9 @@ class QASMGenerator(Generator):
                 else:
                     self.write(self.generate_op(op))
 
-            # Restore the permutation map
-            self.permutation_map = saved_permutation_map
+            # Restore the permutation map if we saved it
+            if saved_permutation_map is not None:
+                self.permutation_map = saved_permutation_map
 
     def generate_op(self, op):
         op_name = type(op).__name__
@@ -145,12 +150,28 @@ class QASMGenerator(Generator):
 
         if op_name == "Barrier":
             stat = True
-            qubits = (
-                ", ".join(str(q) for q in op.qregs)
-                if isinstance(op.qregs, list | tuple | set)
-                else op.qregs
-            )
-
+            # Process barrier operands
+            barrier_parts = []
+            for qreg in op.qregs:
+                if hasattr(qreg, 'sym') and hasattr(qreg, 'elems'):  # It's a register
+                    # Check if we need to apply permutation to any qubit in this register
+                    has_permutation = any(
+                        (qreg.sym, i) in self.permutation_map 
+                        for i in range(len(qreg.elems))
+                    )
+                    if not has_permutation:
+                        # No permutation, use compact register notation
+                        barrier_parts.append(qreg.sym)
+                    else:
+                        # Has permutation, list individual qubits
+                        for qubit in qreg.elems:
+                            barrier_parts.append(self.apply_permutation(qubit))
+                elif hasattr(qreg, 'reg') and hasattr(qreg, 'index'):  # It's a single qubit
+                    barrier_parts.append(self.apply_permutation(qreg))
+                else:
+                    barrier_parts.append(str(qreg))
+            
+            qubits = ", ".join(barrier_parts)
             op_str = f"barrier {qubits};"
         elif op_name == "Comment":
             txt = op.txt.split("\n")
@@ -595,8 +616,10 @@ class QASMGenerator(Generator):
 
         for q in op.qargs:
             if type(q).__name__ == "QReg":
-                lines = [f"{repr_str} {qubit};" for qubit in q]
-                str_list.extend(lines)
+                # Apply permutation to each qubit in the register
+                for qubit in q:
+                    q_str = self.apply_permutation(qubit)
+                    str_list.append(f"{repr_str} {q_str};")
 
             elif isinstance(q, tuple):
                 if len(q) != op.qsize:
