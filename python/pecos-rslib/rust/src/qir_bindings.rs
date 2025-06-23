@@ -19,7 +19,7 @@ use pecos_qir::{setup_qir_engine};
 use pecos_qir::error_handling::{init_qir_context, clear_qir_context, get_qir_diagnostic_report};
 use pecos_qir::panic_handler::{init_qir_panic_handler, with_qir_error_context};
 use pecos_qir::qir_utils::validate_qir_format;
-use pecos_engines::{run_sim, NoiseModel};
+use pecos_engines::NoiseModel;
 use pecos_engines::noise::DepolarizingNoiseModel;
 use pecos_engines::shot_results;
 use pecos_core::rng::RngManageable;
@@ -124,6 +124,12 @@ fn execute_qir_safe(
     noise_probability: Option<f64>,
     workers: Option<usize>,
 ) -> Result<shot_results::ShotVec, pecos_core::errors::PecosError> {
+    use crate::qir_execution_guard::QirExecutionGuard;
+    
+    // Create execution guard to prevent cleanup issues
+    let _guard = QirExecutionGuard::new()
+        .map_err(|e| pecos_core::errors::PecosError::Input(e.to_string()))?;
+    
     // Simple reset - no complex context system
     unsafe {
         pecos_qir::runtime::qir_runtime_reset();
@@ -143,15 +149,27 @@ fn execute_qir_safe(
         Box::new(pecos_engines::noise::PassThroughNoiseModel)
     };
     
-    // Execute simulation
-    let results = run_sim(
-        classical_engine,
-        shots,
-        seed,
-        workers,
-        Some(noise_model),
-        None, // Use default quantum engine
-    )?;
+    // Execute simulation with validated parameters
+    let mut params = crate::safe_calls::SimParams::new(classical_engine, shots);
+    
+    if let Some(s) = seed {
+        params = params.with_seed(s);
+    }
+    if let Some(w) = workers {
+        params = params.with_workers(w);
+    }
+    params = params.with_noise_model(noise_model);
+    
+    let results = params.run()?;
+    
+    // Force another reset after execution
+    unsafe {
+        pecos_qir::runtime::qir_runtime_reset();
+    }
+    
+    // Give the runtime a moment to clean up thread-local storage
+    // This prevents segfaults when running in pytest environments
+    std::thread::sleep(std::time::Duration::from_millis(1));
     
     Ok(results)
 }
@@ -298,10 +316,18 @@ pub fn py_get_qir_diagnostic_report() -> PyResult<String> {
 #[pyfunction]
 #[pyo3(name = "reset_qir_runtime")]
 pub fn py_reset_qir_runtime() -> PyResult<()> {
+    use std::thread;
+    use std::time::Duration;
+    
     // Simple reset - no aggressive cleanup
     unsafe {
         pecos_qir::runtime::qir_runtime_reset();
     }
+    
+    // Give the runtime a moment to clean up
+    // This helps prevent segfaults in pytest environments
+    thread::sleep(Duration::from_millis(1));
+    
     Ok(())
 }
 

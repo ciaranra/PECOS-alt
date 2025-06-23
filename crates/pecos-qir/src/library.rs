@@ -185,23 +185,12 @@ impl QirLibrary {
             let library_result = if cfg!(unix) {
                 #[cfg(unix)]
                 {
-                    // Check if we're in a Python test environment
-                    let is_python_test = std::env::var("PYTEST_CURRENT_TEST").is_ok() 
-                        || std::env::var("PYTHON_TEST_MODE").is_ok();
-                    
-                    if is_python_test {
-                        // In test environments, use RTLD_LOCAL to isolate global state
-                        // and avoid RTLD_NODELETE to allow proper cleanup
-                        unsafe {
-                            UnixLibrary::open(Some(path), libc::RTLD_NOW | libc::RTLD_LOCAL)
-                                .map(Library::from)
-                        }
-                    } else {
-                        // In production, use RTLD_NODELETE to prevent crashes
-                        unsafe {
-                            UnixLibrary::open(Some(path), libc::RTLD_NODELETE | libc::RTLD_NOW)
-                                .map(Library::from)
-                        }
+                    // Always use RTLD_LOCAL in Python environments to prevent symbol conflicts
+                    // This is a conservative approach that sacrifices some performance for stability
+                    debug!("QIR: Using RTLD_LOCAL for symbol isolation (Python environment)");
+                    unsafe {
+                        UnixLibrary::open(Some(path), libc::RTLD_NOW | libc::RTLD_LOCAL)
+                            .map(Library::from)
                     }
                 }
                 #[cfg(not(unix))]

@@ -25,12 +25,14 @@ pub mod phir_bridge;
 mod pmir_bindings;
 mod qasm_sim_bindings;
 mod qir_bindings;
+mod qir_context_bindings;
 mod qir_execution_guard;
 mod sparse_sim;
 mod sparse_stab_bindings;
 mod sparse_stab_engine_bindings;
 mod state_vec_bindings;
 mod state_vec_engine_bindings;
+mod safe_calls;
 
 use byte_message_bindings::{PyByteMessage, PyByteMessageBuilder};
 use sparse_stab_bindings::SparseSim;

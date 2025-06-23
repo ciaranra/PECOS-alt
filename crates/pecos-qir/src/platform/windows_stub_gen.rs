@@ -164,6 +164,11 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
         params: &[("i64", "control"), ("i64", "target")],
     },
     ExportedFunction {
+        name: "__quantum__qis__cz__body_usize",
+        return_type: "void",
+        params: &[("usize", "control"), ("usize", "target")],
+    },
+    ExportedFunction {
         name: "__quantum__qis__cy__body",
         return_type: "void",
         params: &[("i64", "control"), ("i64", "target")],
@@ -216,21 +221,11 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
     },
     ExportedFunction {
         name: "__quantum__rt__qubit_allocate",
-        return_type: "usize",
-        params: &[],
-    },
-    ExportedFunction {
-        name: "__quantum__rt__result_allocate",
-        return_type: "usize",
-        params: &[],
-    },
-    ExportedFunction {
-        name: "__quantum__rt__qubit_allocate_ptr",
         return_type: "const unsigned char*",
         params: &[],
     },
     ExportedFunction {
-        name: "__quantum__rt__result_allocate_ptr",
+        name: "__quantum__rt__result_allocate",
         return_type: "const unsigned char*",
         params: &[],
     },

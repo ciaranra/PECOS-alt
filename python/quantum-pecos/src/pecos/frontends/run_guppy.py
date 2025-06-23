@@ -172,6 +172,11 @@ def run_guppy(
         import logging
         logging.getLogger(__name__).warning(f"QIR runtime reset failed: {e}")
     
+    # Check if we're running in pytest
+    in_pytest = "pytest" in sys.modules
+    if in_pytest and verbose:
+        print("[INFO] Running in pytest environment - using defensive execution")
+    
     if verbose:
         print("[OK] Using PECOS QIR PyO3 bindings for execution")
     
@@ -311,6 +316,7 @@ def get_guppy_backends() -> dict[str, bool]:
     backends["external_tools"] = True  # Assume available if binaries are provided
 
     return backends
+
 
 
 # Convenience aliases for consistency with existing PECOS APIs

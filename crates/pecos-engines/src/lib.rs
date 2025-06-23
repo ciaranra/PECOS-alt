@@ -9,6 +9,10 @@ pub mod prelude;
 pub mod quantum;
 pub mod quantum_system;
 pub mod shot_results;
+pub mod simulation_builder;
+
+#[cfg(test)]
+mod tests;
 
 pub use byte_message::{ByteMessage, ByteMessageBuilder, Gate, GateType};
 pub use engine::Engine;
@@ -24,6 +28,7 @@ pub use shot_results::{
     BitVecDisplayFormat, Data, DataVec, Shot, ShotMap, ShotMapDisplay, ShotMapDisplayExt,
     ShotMapDisplayOptions, ShotVec,
 };
+pub use simulation_builder::{SimulationBuilder, run_sim_safe};
 
 /// Run a quantum simulation.
 ///
@@ -105,6 +110,13 @@ pub fn run_sim(
     noise_model: Option<Box<dyn NoiseModel>>,
     quantum_engine: Option<Box<dyn QuantumEngine>>,
 ) -> Result<ShotVec, PecosError> {
+    // Runtime validation
+    debug_assert!(shots > 0, "Number of shots must be positive");
+    debug_assert!(
+        workers.map_or(true, |w| w > 0),
+        "Number of workers must be positive if specified"
+    );
+    
     // Get the number of qubits from the classical engine
     let num_qubits = classical_engine.num_qubits();
 

@@ -14,13 +14,11 @@
 
 use pyo3::prelude::*;
 use pyo3::exceptions::PyRuntimeError;
-use pecos_qir::{setup_qir_engine, engine::QirEngine};
-use pecos_engines::{run_sim, NoiseModel, ClassicalEngine};
+use pecos_qir::{engine::QirEngine};
+use pecos_engines::{NoiseModel, ClassicalEngine};
 use pecos_engines::noise::DepolarizingNoiseModel;
 use pecos_engines::shot_results;
 use pecos_core::rng::RngManageable;
-use std::path::PathBuf;
-use std::sync::Arc;
 
 /// Execute QIR with proper context isolation
 /// 
@@ -54,15 +52,18 @@ pub fn execute_qir_isolated(
     };
     
     // Execute simulation - each execution is fully isolated
-    run_sim(
-        classical_engine,
-        shots,
-        noise_model,
-        workers,
-        seed,
-        1,
-        false,
-    )
+    // Use the safer parameter builder
+    let mut params = crate::safe_calls::SimParams::new(classical_engine, shots);
+    
+    if let Some(s) = seed {
+        params = params.with_seed(s);
+    }
+    if let Some(w) = workers {
+        params = params.with_workers(w);
+    }
+    params = params.with_noise_model(noise_model);
+    
+    params.run()
 }
 
 /// Python binding for isolated QIR execution
@@ -91,27 +92,37 @@ pub fn py_execute_qir_isolated(
     
     // Convert results to Python format
     use pyo3::types::{PyDict, PyList};
-    let py_results = PyList::empty_bound(py);
+    let py_results = PyList::empty(py);
     
-    for result in results.iter() {
-        let shot_dict = PyDict::new_bound(py);
+    for shot in results.shots.iter() {
+        let shot_dict = PyDict::new(py);
         
-        // Handle different result types
-        match result {
-            shot_results::ShotResult::ClassicalResult(shot) => {
-                for (key, value) in &shot.data {
-                    match value {
-                        shot_results::Data::I64(v) => {
-                            shot_dict.set_item(key, v)?;
-                        }
-                        shot_results::Data::Bool(v) => {
-                            shot_dict.set_item(key, *v)?;
+        // Add each register from the shot data
+        for (key, value) in &shot.data {
+            match value {
+                shot_results::Data::U32(v) => {
+                    shot_dict.set_item(key, *v)?;
+                }
+                shot_results::Data::U64(v) => {
+                    shot_dict.set_item(key, *v)?;
+                }
+                shot_results::Data::I64(v) => {
+                    shot_dict.set_item(key, *v)?;
+                }
+                shot_results::Data::F64(v) => {
+                    shot_dict.set_item(key, *v)?;
+                }
+                shot_results::Data::BitVec(bv) => {
+                    // Convert BitVec to an integer
+                    let mut value: u64 = 0;
+                    for (i, bit) in bv.iter().enumerate() {
+                        if *bit && i < 64 {
+                            value |= 1u64 << i;
                         }
                     }
+                    shot_dict.set_item(key, value)?;
                 }
-            }
-            shot_results::ShotResult::Counts(counts) => {
-                shot_dict.set_item("counts", counts)?;
+                _ => {} // Skip other data types for now
             }
         }
         
@@ -119,7 +130,7 @@ pub fn py_execute_qir_isolated(
     }
     
     // Create metadata
-    let result_dict = PyDict::new_bound(py);
+    let result_dict = PyDict::new(py);
     result_dict.set_item("results", py_results)?;
     result_dict.set_item("shots", shots)?;
     result_dict.set_item("execution_type", "isolated")?;

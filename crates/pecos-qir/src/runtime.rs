@@ -110,23 +110,23 @@ impl RuntimeState {
     }
 }
 
-/// Helper function to check if command printing is enabled
+/// Helper function to check if we should print commands
+///
+/// This function checks the `QIR_RUNTIME_QUIET` environment variable
+/// to determine if commands should be printed to stdout.
+///
+/// # Returns
+///
+/// * `true` - If commands should be printed
+/// * `false` - If commands should not be printed
 fn should_print_commands() -> bool {
-    env::var("QIR_PRINT_COMMANDS").unwrap_or_default() == "1"
+    match env::var("QIR_RUNTIME_QUIET") {
+        Ok(val) => val != "1",
+        Err(_) => true,
+    }
 }
 
-/// Pointer conversion functions for QIR convention
-fn qubit_ptr_to_id(qubit_ptr: *const u8) -> Result<usize, String> {
-    // In proper QIR, pointers are used as direct qubit indices via inttoptr
-    let qubit_id = qubit_ptr as usize;
-    Ok(qubit_id)
-}
-
-fn result_ptr_to_id(result_ptr: *const u8) -> Result<usize, String> {
-    // Similar to qubit pointers
-    let result_id = result_ptr as usize;
-    Ok(result_id)
-}
+/// Removed pointer conversion functions - no longer needed with direct usize parameters
 
 // =============================================================================
 // QIR Runtime API Functions
@@ -153,6 +153,20 @@ pub unsafe extern "C" fn qir_runtime_reset() {
             );
         }
     }
+
+    // Reset qubit and result counters
+    NEXT_QUBIT_ID.store(0, Ordering::SeqCst);
+    NEXT_RESULT_ID.store(0, Ordering::SeqCst);
+
+    // Reset runtime state
+    if let Ok(mut state) = RUNTIME_STATE.lock() {
+        state.reset();
+        if should_print_commands() {
+            println!("[Thread {thread_id}] Reset runtime state (classical registers cleared)");
+        }
+    } else if should_print_commands() {
+        eprintln!("[Thread {thread_id}] ERROR: Failed to lock runtime state mutex during reset");
+    }
 }
 
 /// Initialize the QIR runtime
@@ -168,19 +182,15 @@ pub unsafe extern "C" fn __quantum__rt__initialize(_config: *const u8) {
         let _ = builder.for_quantum_operations();
     }
 
-    // Reset runtime state between shots
-    if let Ok(mut state) = RUNTIME_STATE.lock() {
-        state.reset();
-    }
-
     if should_print_commands() {
         println!("Quantum runtime initialized");
     }
 }
 
-/// Allocate a new qubit (integer version for HUGR)
+
+/// Standard QIR qubit allocation - returns pointer
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__rt__qubit_allocate() -> usize {
+pub unsafe extern "C" fn __quantum__rt__qubit_allocate() -> *const u8 {
     let id = NEXT_QUBIT_ID.fetch_add(1, Ordering::SeqCst);
     
     if should_print_commands() {
@@ -188,12 +198,12 @@ pub unsafe extern "C" fn __quantum__rt__qubit_allocate() -> usize {
         println!("[Thread {thread_id}] Allocated qubit {id}");
     }
     
-    id
+    id as *const u8
 }
 
-/// Allocate a new result (integer version for HUGR)
+/// Standard QIR result allocation - returns pointer  
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__rt__result_allocate() -> usize {
+pub unsafe extern "C" fn __quantum__rt__result_allocate() -> *const u8 {
     let id = NEXT_RESULT_ID.fetch_add(1, Ordering::SeqCst);
     
     if should_print_commands() {
@@ -201,50 +211,26 @@ pub unsafe extern "C" fn __quantum__rt__result_allocate() -> usize {
         println!("[Thread {thread_id}] Allocated result {id}");
     }
     
-    id
-}
-
-/// Allocate a new qubit (pointer version for QIR)
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__rt__qubit_allocate_ptr() -> *const u8 {
-    let id = NEXT_QUBIT_ID.fetch_add(1, Ordering::SeqCst);
-    
-    if should_print_commands() {
-        let thread_id = get_thread_id();
-        println!("[Thread {thread_id}] Allocated qubit pointer {id}");
-    }
-    
     id as *const u8
 }
 
-/// Allocate a new result (pointer version for QIR)
+/// Release a qubit (pointer version)
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__rt__result_allocate_ptr() -> *const u8 {
-    let id = NEXT_RESULT_ID.fetch_add(1, Ordering::SeqCst);
-    
+pub unsafe extern "C" fn __quantum__rt__qubit_release(qubit_ptr: *const u8) {
+    let qubit_id = qubit_ptr as usize;
     if should_print_commands() {
         let thread_id = get_thread_id();
-        println!("[Thread {thread_id}] Allocated result pointer {id}");
-    }
-    
-    id as *const u8
-}
-
-/// Release a qubit (integer version)
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__rt__qubit_release(qubit: usize) {
-    if should_print_commands() {
-        let thread_id = get_thread_id();
-        println!("[Thread {thread_id}] Released qubit {qubit}");
+        println!("[Thread {thread_id}] Released qubit {qubit_id}");
     }
 }
 
-/// Release a result (integer version)
+/// Release a result (pointer version)
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__rt__result_release(result: usize) {
+pub unsafe extern "C" fn __quantum__rt__result_release(result_ptr: *const u8) {
+    let result_id = result_ptr as usize;
     if should_print_commands() {
         let thread_id = get_thread_id();
-        println!("[Thread {thread_id}] Released result {result}");
+        println!("[Thread {thread_id}] Released result {result_id}");
     }
 }
 
@@ -256,22 +242,14 @@ pub unsafe extern "C" fn __quantum__rt__result_release(result: usize) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__h__body(qubit_ptr: *const u8) {
     let thread_id = get_thread_id();
+    let qubit_id = qubit_ptr as usize;
     
-    match qubit_ptr_to_id(qubit_ptr) {
-        Ok(qubit_id) => {
-            if should_print_commands() {
-                println!("[Thread {thread_id}] H gate on qubit {qubit_id}");
-            }
-            
-            if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-                let _ = builder.add_h(&[qubit_id]);
-            }
-        }
-        Err(e) => {
-            if should_print_commands() {
-                eprintln!("[Thread {thread_id}] ERROR: H gate failed: {e}");
-            }
-        }
+    if should_print_commands() {
+        println!("[Thread {thread_id}] H gate on qubit {qubit_id}");
+    }
+    
+    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
+        let _ = builder.add_h(&[qubit_id]);
     }
 }
 
@@ -294,22 +272,14 @@ pub unsafe extern "C" fn __quantum__qis__h__body__hugr(qubit: i64) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__x__body(qubit_ptr: *const u8) {
     let thread_id = get_thread_id();
+    let qubit_id = qubit_ptr as usize;
     
-    match qubit_ptr_to_id(qubit_ptr) {
-        Ok(qubit_id) => {
-            if should_print_commands() {
-                println!("[Thread {thread_id}] X gate on qubit {qubit_id}");
-            }
-            
-            if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-                let _ = builder.add_x(&[qubit_id]);
-            }
-        }
-        Err(e) => {
-            if should_print_commands() {
-                eprintln!("[Thread {thread_id}] ERROR: X gate failed: {e}");
-            }
-        }
+    if should_print_commands() {
+        println!("[Thread {thread_id}] X gate on qubit {qubit_id}");
+    }
+    
+    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
+        let _ = builder.add_x(&[qubit_id]);
     }
 }
 
@@ -328,16 +298,11 @@ pub unsafe extern "C" fn __quantum__qis__x__body__hugr(qubit: i64) {
     }
 }
 
-/// Y gate (QIR pointer version)
+/// Y gate (QIR standard version)
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__y__body(qubit_ptr: *const u8) {
-    match qubit_ptr_to_id(qubit_ptr) {
-        Ok(qubit_id) => {
-            if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-                let _ = builder.add_y(&[qubit_id]);
-            }
-        }
-        Err(_) => {}
+pub unsafe extern "C" fn __quantum__qis__y__body(qubit: usize) {
+    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
+        let _ = builder.add_y(&[qubit]);
     }
 }
 
@@ -350,16 +315,11 @@ pub unsafe extern "C" fn __quantum__qis__y__body__hugr(qubit: i64) {
     }
 }
 
-/// Z gate (QIR pointer version)
+/// Z gate (QIR standard version)
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__z__body(qubit_ptr: *const u8) {
-    match qubit_ptr_to_id(qubit_ptr) {
-        Ok(qubit_id) => {
-            if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-                let _ = builder.add_z(&[qubit_id]);
-            }
-        }
-        Err(_) => {}
+pub unsafe extern "C" fn __quantum__qis__z__body(qubit: usize) {
+    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
+        let _ = builder.add_z(&[qubit]);
     }
 }
 
@@ -375,13 +335,11 @@ pub unsafe extern "C" fn __quantum__qis__z__body__hugr(qubit: i64) {
 /// CX gate (QIR pointer version)
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__cx__body(control_ptr: *const u8, target_ptr: *const u8) {
-    match (qubit_ptr_to_id(control_ptr), qubit_ptr_to_id(target_ptr)) {
-        (Ok(control_id), Ok(target_id)) => {
-            if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-                let _ = builder.add_cx(&[control_id], &[target_id]);
-            }
-        }
-        _ => {}
+    let control_id = control_ptr as usize;
+    let target_id = target_ptr as usize;
+    
+    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
+        let _ = builder.add_cx(&[control_id], &[target_id]);
     }
 }
 
@@ -403,16 +361,11 @@ pub unsafe extern "C" fn __quantum__qis__cz__body_usize(control: usize, target: 
     }
 }
 
-/// RZ gate (QIR pointer version)
+/// RZ gate (QIR standard version)
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__rz__body(theta: f64, qubit_ptr: *const u8) {
-    match qubit_ptr_to_id(qubit_ptr) {
-        Ok(qubit_id) => {
-            if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-                let _ = builder.add_rz(theta, &[qubit_id]);
-            }
-        }
-        Err(_) => {}
+pub unsafe extern "C" fn __quantum__qis__rz__body(theta: f64, qubit: usize) {
+    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
+        let _ = builder.add_rz(theta, &[qubit]);
     }
 }
 
@@ -425,16 +378,11 @@ pub unsafe extern "C" fn __quantum__qis__rz__body__hugr(theta: f64, qubit: i64) 
     }
 }
 
-/// R1XY gate (QIR pointer version)
+/// R1XY gate (QIR standard version)
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__r1xy__body(theta: f64, phi: f64, qubit_ptr: *const u8) {
-    match qubit_ptr_to_id(qubit_ptr) {
-        Ok(qubit_id) => {
-            if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-                let _ = builder.add_r1xy(theta, phi, &[qubit_id]);
-            }
-        }
-        Err(_) => {}
+pub unsafe extern "C" fn __quantum__qis__r1xy__body(theta: f64, phi: f64, qubit: usize) {
+    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
+        let _ = builder.add_r1xy(theta, phi, &[qubit]);
     }
 }
 
@@ -447,16 +395,11 @@ pub unsafe extern "C" fn __quantum__qis__r1xy__body__hugr(theta: f64, phi: f64, 
     }
 }
 
-/// RXY gate (QIR pointer version)
+/// RXY gate (QIR standard version)
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__rxy__body(theta: f64, phi: f64, qubit_ptr: *const u8) {
-    match qubit_ptr_to_id(qubit_ptr) {
-        Ok(qubit_id) => {
-            if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-                let _ = builder.add_r1xy(theta, phi, &[qubit_id]);
-            }
-        }
-        Err(_) => {}
+pub unsafe extern "C" fn __quantum__qis__rxy__body(theta: f64, phi: f64, qubit: usize) {
+    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
+        let _ = builder.add_r1xy(theta, phi, &[qubit]);
     }
 }
 
@@ -632,27 +575,40 @@ pub unsafe extern "C" fn __hugr__quantum__qis__m__body(qubit: i64, result: i64) 
     }
 }
 
-/// Measurement (QIR pointer version)
+/// Measurement (QIR pointer version) - DEPRECATED: kept for legacy compatibility
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__m__body(qubit: *const u8, result: *const u8) {
+pub unsafe extern "C" fn __quantum__qis__m__body_ptr(qubit_ptr: *const u8, result_ptr: *const u8) {
     let thread_id = get_thread_id();
+    let qubit_id = qubit_ptr as usize;
+    let _result_id = result_ptr as usize;
     
-    match (qubit_ptr_to_id(qubit), result_ptr_to_id(result)) {
-        (Ok(qubit_id), Ok(_result_id)) => {
-            if should_print_commands() {
-                println!("[Thread {thread_id}] Measuring qubit {qubit_id}");
-            }
-            
-            if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-                let _ = builder.add_measurements(&[qubit_id]);
-            }
-        }
-        (Err(e), _) | (_, Err(e)) => {
-            if should_print_commands() {
-                eprintln!("[Thread {thread_id}] ERROR: Measurement failed: {e}");
-            }
-        }
+    if should_print_commands() {
+        println!("[Thread {thread_id}] Measuring qubit {qubit_id}");
     }
+    
+    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
+        let _ = builder.add_measurements(&[qubit_id]);
+    }
+}
+
+/// Measurement (HUGR convention with integer parameters) - Primary implementation
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__m__body(qubit: i64, result: i64) -> i32 {
+    let thread_id = get_thread_id();
+    let qubit_id = qubit as usize;
+    let _result_id = result as usize;
+    
+    if should_print_commands() {
+        println!("[Thread {thread_id}] Measuring qubit {qubit_id} (HUGR convention)");
+    }
+    
+    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
+        let _ = builder.add_measurements(&[qubit_id]);
+    }
+    
+    // Return 0 for |0⟩ state, 1 for |1⟩ state (simulated)
+    // In a real implementation, this would be the actual measurement result
+    0
 }
 
 /// Get binary commands for execution
@@ -734,9 +690,9 @@ pub unsafe extern "C" fn qir_runtime_free_binary_commands(ptr: *mut FFIByteData)
 
 /// Record a result output
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__rt__result_record_output(result: *const u8, name: *const c_char) {
+pub unsafe extern "C" fn __quantum__rt__result_record_output(result_ptr: *const u8, name: *const c_char) {
     let thread_id = get_thread_id();
-    let result_id = result as usize;
+    let result_id = result_ptr as usize;
     
     let name_str = if name.is_null() {
         format!("result_{result_id}")
@@ -750,14 +706,27 @@ pub unsafe extern "C" fn __quantum__rt__result_record_output(result: *const u8, 
     }
 
     if let Ok(mut state) = RUNTIME_STATE.lock() {
-        // Simulate measurement result
-        let measurement_value = result_id % 2 == 0;
-        state.measurement_results.insert(result_id, measurement_value);
-        
-        let bit_position = *state.register_bit_positions.entry(name_str.clone()).or_insert(0);
-        *state.register_bit_positions.get_mut(&name_str).unwrap() += 1;
-        
-        state.result_mappings.insert(result_id, (name_str.clone(), bit_position));
+        // Get the next bit position for this register
+        let current_bit_position = {
+            let bit_position = state
+                .register_bit_positions
+                .entry(name_str.clone())
+                .or_insert(0);
+            let pos = *bit_position;
+            *bit_position += 1;
+            pos
+        };
+
+        // Store the mapping for when we get the actual measurement result
+        state
+            .result_mappings
+            .insert(result_id, (name_str.clone(), current_bit_position));
+
+        if should_print_commands() {
+            println!(
+                "[Thread {thread_id}] Mapped result {result_id} to register '{name_str}' bit {current_bit_position}"
+            );
+        }
     }
 }
 
@@ -857,48 +826,72 @@ pub unsafe extern "C" fn qir_runtime_finalize_shot() {
 /// Get shot results
 #[repr(C)]
 pub struct FFIShotData {
-    pub data: *mut c_char,
-    pub len: usize,
+    pub names: *mut *mut c_char,
+    pub values: *mut i64,
+    pub count: usize,
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qir_runtime_get_shot_results() -> *mut FFIShotData {
     let thread_id = get_thread_id();
-    
-    let json_string = if let Ok(last_shot) = LAST_SHOT.lock() {
-        if let Some(ref shot) = *last_shot {
-            match serde_json::to_string(shot) {
-                Ok(json) => json,
-                Err(_) => "{}".to_string(),
+
+    if let Ok(last_shot) = LAST_SHOT.lock() {
+        if let Some(shot) = last_shot.as_ref() {
+            let count = shot.data.len();
+
+            if count == 0 {
+                // Return null for empty shots
+                return std::ptr::null_mut();
             }
-        } else {
-            "{}".to_string()
+
+            // Allocate arrays using Vec to ensure proper alignment
+            let mut names_vec: Vec<*mut c_char> = Vec::with_capacity(count);
+            let names = names_vec.as_mut_ptr();
+            std::mem::forget(names_vec); // Prevent deallocation, we'll manage it manually
+
+            let mut values_vec: Vec<i64> = Vec::with_capacity(count);
+            let values = values_vec.as_mut_ptr();
+            std::mem::forget(values_vec); // Prevent deallocation, we'll manage it manually
+
+            // Populate the arrays
+            for (i, (name, data)) in shot.data.iter().enumerate() {
+                // Convert name to C string
+                let c_name = std::ffi::CString::new(name.as_str()).unwrap();
+                unsafe {
+                    *names.add(i) = c_name.into_raw();
+                }
+
+                // Extract value
+                let value = match data {
+                    Data::U32(v) => i64::from(*v),
+                    Data::I64(v) => *v,
+                    _ => 0, // Default for other types
+                };
+                unsafe {
+                    *values.add(i) = value;
+                }
+            }
+
+            // Create and return the FFI struct
+            let ffi_data = FFIShotData {
+                names,
+                values,
+                count,
+            };
+
+            let boxed_ffi = Box::new(ffi_data);
+            let ptr = Box::into_raw(boxed_ffi);
+
+            if should_print_commands() {
+                println!("[Thread {thread_id}] Got shot results: {count} registers");
+            }
+
+            return ptr;
         }
-    } else {
-        "{}".to_string()
-    };
-
-    let c_string = match CString::new(json_string) {
-        Ok(s) => s,
-        Err(_) => CString::new("{}").unwrap(),
-    };
-
-    let raw_ptr = c_string.into_raw();
-    let len = unsafe { libc::strlen(raw_ptr) };
-
-    let ffi_data = FFIShotData {
-        data: raw_ptr,
-        len,
-    };
-
-    let boxed_ffi = Box::new(ffi_data);
-    let ptr = Box::into_raw(boxed_ffi);
-
-    if should_print_commands() {
-        println!("[Thread {thread_id}] Got shot results: {len} bytes");
     }
 
-    ptr
+    // Return null if no shot available
+    std::ptr::null_mut()
 }
 
 /// Free shot data
@@ -913,13 +906,28 @@ pub unsafe extern "C" fn qir_runtime_free_shot_data(data: *mut FFIShotData) {
         return;
     }
 
-    let ffi_data = unsafe { Box::from_raw(data) };
+    unsafe {
+        let ffi_data = Box::from_raw(data);
 
-    if !ffi_data.data.is_null() {
-        let _ = unsafe { CString::from_raw(ffi_data.data) };
-    }
+        // Free the name strings
+        for i in 0..ffi_data.count {
+            let name_ptr = *ffi_data.names.add(i);
+            if !name_ptr.is_null() {
+                let _ = CString::from_raw(name_ptr);
+            }
+        }
 
-    if should_print_commands() {
-        println!("[Thread {thread_id}] Freed FFIShotData");
+        // Free the arrays by reconstructing the Vecs
+        if ffi_data.count > 0 {
+            // Reconstruct Vec to properly deallocate
+            let _ = Vec::from_raw_parts(ffi_data.names, 0, ffi_data.count);
+            let _ = Vec::from_raw_parts(ffi_data.values, 0, ffi_data.count);
+        }
+
+        if should_print_commands() {
+            println!("[Thread {thread_id}] Freed FFIShotData");
+        }
+
+        // Box automatically frees the FFIShotData
     }
 }
