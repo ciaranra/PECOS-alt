@@ -29,7 +29,7 @@ fn get_next_engine_id() -> usize {
 #[pyclass(name = "HugrCompiler")]
 pub struct PyHugrCompiler {
     debug_info: bool,
-    naming_convention: String,
+    llvm_convention: String,
 }
 
 #[pymethods]
@@ -38,12 +38,12 @@ impl PyHugrCompiler {
     ///
     /// # Arguments
     /// * `debug_info` - Whether to include debug information
-    /// * `naming_convention` - Quantum operation naming convention ("standard", "hugr", "pecos")
+    /// * `llvm_convention` - LLVM-IR convention ("hugr" or "qir")
     #[new]
-    fn new(debug_info: Option<bool>, naming_convention: Option<String>) -> Self {
+    fn new(debug_info: Option<bool>, llvm_convention: Option<String>) -> Self {
         Self {
             debug_info: debug_info.unwrap_or(false),
-            naming_convention: naming_convention.unwrap_or_else(|| "standard".to_string()),
+            llvm_convention: llvm_convention.unwrap_or_else(|| "hugr".to_string()),
         }
     }
 
@@ -59,7 +59,7 @@ impl PyHugrCompiler {
         python_api::compile_hugr_bytes_to_qir_string(
             bytes,
             self.debug_info,
-            &self.naming_convention,
+            &self.llvm_convention,
         )
         .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
     }
@@ -74,7 +74,7 @@ impl PyHugrCompiler {
             hugr_path,
             qir_path,
             self.debug_info,
-            &self.naming_convention,
+            &self.llvm_convention,
         )
         .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
     }
@@ -85,26 +85,26 @@ impl PyHugrCompiler {
     }
 
     /// Set quantum operation naming convention
-    fn set_naming_convention(&mut self, naming_convention: String) -> PyResult<()> {
-        let supported = python_api::get_supported_naming_conventions();
-        if !supported.contains(&naming_convention) {
+    fn set_llvm_convention(&mut self, llvm_convention: String) -> PyResult<()> {
+        let supported = python_api::get_supported_llvm_conventions();
+        if !supported.contains(&llvm_convention) {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Unsupported naming convention: {naming_convention}. Supported: {supported:?}"
+                "Unsupported naming convention: {llvm_convention}. Supported: {supported:?}"
             )));
         }
-        self.naming_convention = naming_convention;
+        self.llvm_convention = llvm_convention;
         Ok(())
     }
 
     /// Get current naming convention
-    fn get_naming_convention(&self) -> String {
-        self.naming_convention.clone()
+    fn get_llvm_convention(&self) -> String {
+        self.llvm_convention.clone()
     }
 
     /// Get supported naming conventions
     #[staticmethod]
-    fn get_supported_naming_conventions() -> Vec<String> {
-        python_api::get_supported_naming_conventions()
+    fn get_supported_llvm_conventions() -> Vec<String> {
+        python_api::get_supported_llvm_conventions()
     }
 }
 
@@ -123,25 +123,25 @@ impl PyHugrQirEngine {
     /// * `hugr_bytes` - HUGR data as bytes
     /// * `shots` - Number of shots to assign to the engine
     /// * `debug_info` - Whether to include debug information
-    /// * `naming_convention` - Quantum operation naming convention
+    /// * `llvm_convention` - Quantum operation naming convention
     #[new]
     fn new(
         hugr_bytes: &Bound<'_, PyBytes>,
         shots: Option<usize>,
         debug_info: Option<bool>,
-        naming_convention: Option<String>,
+        llvm_convention: Option<String>,
     ) -> PyResult<Self> {
         let bytes = hugr_bytes.as_bytes();
         let shots = shots.unwrap_or(1000);
         let debug_info = debug_info.unwrap_or(false);
-        let naming_convention = naming_convention.unwrap_or_else(|| "standard".to_string());
+        let llvm_convention = llvm_convention.unwrap_or_else(|| "hugr".to_string());
 
         // For now, just return a dummy engine ID
         // In a full implementation, we'd actually create the engine and store it
         let engine_id = get_next_engine_id();
 
         // Validate by attempting compilation
-        python_api::create_qir_engine_from_hugr_bytes(bytes, shots, debug_info, &naming_convention)
+        python_api::create_qir_engine_from_hugr_bytes(bytes, shots, debug_info, &llvm_convention)
             .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)?;
 
         Ok(Self { engine_id, shots })
@@ -153,18 +153,18 @@ impl PyHugrQirEngine {
     /// * `hugr_path` - Path to HUGR file
     /// * `shots` - Number of shots to assign to the engine
     /// * `debug_info` - Whether to include debug information
-    /// * `naming_convention` - Quantum operation naming convention
+    /// * `llvm_convention` - Quantum operation naming convention
     #[classmethod]
     fn from_file(
         _cls: &Bound<'_, PyType>,
         hugr_path: &str,
         shots: Option<usize>,
         debug_info: Option<bool>,
-        naming_convention: Option<String>,
+        llvm_convention: Option<String>,
     ) -> PyResult<Self> {
         let shots = shots.unwrap_or(1000);
         let debug_info = debug_info.unwrap_or(false);
-        let naming_convention = naming_convention.unwrap_or_else(|| "standard".to_string());
+        let llvm_convention = llvm_convention.unwrap_or_else(|| "hugr".to_string());
 
         // For now, just return a dummy engine ID
         let engine_id = get_next_engine_id();
@@ -174,7 +174,7 @@ impl PyHugrQirEngine {
             hugr_path,
             shots,
             debug_info,
-            &naming_convention,
+            &llvm_convention,
         )
         .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)?;
 
@@ -226,8 +226,8 @@ fn is_hugr_support_available() -> bool {
 
 /// Get supported quantum operation naming conventions
 #[pyfunction]
-fn get_supported_naming_conventions() -> Vec<String> {
-    python_api::get_supported_naming_conventions()
+fn get_supported_llvm_conventions() -> Vec<String> {
+    python_api::get_supported_llvm_conventions()
 }
 
 /// Compile HUGR bytes to QIR string (standalone function)
@@ -235,13 +235,13 @@ fn get_supported_naming_conventions() -> Vec<String> {
 fn compile_hugr_bytes_to_qir(
     hugr_bytes: &Bound<'_, PyBytes>,
     debug_info: Option<bool>,
-    naming_convention: Option<String>,
+    llvm_convention: Option<String>,
 ) -> PyResult<String> {
     let bytes = hugr_bytes.as_bytes();
     let debug_info = debug_info.unwrap_or(false);
-    let naming_convention = naming_convention.unwrap_or_else(|| "standard".to_string());
+    let llvm_convention = llvm_convention.unwrap_or_else(|| "hugr".to_string());
 
-    python_api::compile_hugr_bytes_to_qir_string(bytes, debug_info, &naming_convention)
+    python_api::compile_hugr_bytes_to_qir_string(bytes, debug_info, &llvm_convention)
         .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
 }
 
@@ -251,12 +251,12 @@ fn compile_hugr_file_to_qir(
     hugr_path: &str,
     qir_path: &str,
     debug_info: Option<bool>,
-    naming_convention: Option<String>,
+    llvm_convention: Option<String>,
 ) -> PyResult<()> {
     let debug_info = debug_info.unwrap_or(false);
-    let naming_convention = naming_convention.unwrap_or_else(|| "standard".to_string());
+    let llvm_convention = llvm_convention.unwrap_or_else(|| "hugr".to_string());
 
-    python_api::compile_hugr_file_to_qir_file(hugr_path, qir_path, debug_info, &naming_convention)
+    python_api::compile_hugr_file_to_qir_file(hugr_path, qir_path, debug_info, &llvm_convention)
         .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
 }
 
@@ -268,7 +268,7 @@ pub fn register_hugr_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Add standalone functions
     m.add_function(wrap_pyfunction!(is_hugr_support_available, m)?)?;
-    m.add_function(wrap_pyfunction!(get_supported_naming_conventions, m)?)?;
+    m.add_function(wrap_pyfunction!(get_supported_llvm_conventions, m)?)?;
     m.add_function(wrap_pyfunction!(compile_hugr_bytes_to_qir, m)?)?;
     m.add_function(wrap_pyfunction!(compile_hugr_file_to_qir, m)?)?;
 

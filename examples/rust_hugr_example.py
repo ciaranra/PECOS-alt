@@ -76,9 +76,9 @@ def example_rust_backend_usage() -> None:
 
     try:
         # Use Rust compiler directly
-        compiler = RustHugrCompiler(debug_info=False, naming_convention="standard")
+        compiler = RustHugrCompiler(debug_info=False, llvm_convention="qir")
         print(
-            f"[OK] Created Rust compiler with naming: {compiler.get_naming_convention()}",
+            f"[OK] Created Rust compiler with LLVM convention: {compiler.get_llvm_convention()}",
         )
 
         # Compile HUGR to QIR

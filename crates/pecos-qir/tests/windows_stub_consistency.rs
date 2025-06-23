@@ -105,6 +105,6 @@ fn test_def_and_stub_generation() {
     let c_content = windows_stub_gen::generate_c_stub();
     assert!(c_content.contains("BinaryCommands"));
     assert!(c_content.contains("_DllMainCRTStartup"));
-    assert!(c_content.contains("__quantum__qis__h__body(int qubit)"));
+    assert!(c_content.contains("__quantum__qis__h__body(const unsigned char* qubit)"));
     assert!(!c_content.contains("main()")); // main should not be in stub
 }

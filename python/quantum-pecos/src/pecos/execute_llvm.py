@@ -30,7 +30,7 @@ def compile_module_to_string(hugr_bytes: bytes) -> str:
             hugr_bytes,
             None,  # output_path
             False,  # debug_info  # noqa: FBT003
-            "standard",  # naming_convention
+            "hugr",  # llvm_convention
         )
 
     except ImportError:

@@ -24,6 +24,8 @@ pub mod phir_bridge;
 #[cfg(feature = "pmir-pipeline")]
 mod pmir_bindings;
 mod qasm_sim_bindings;
+mod qir_bindings;
+mod qir_execution_guard;
 mod sparse_sim;
 mod sparse_stab_bindings;
 mod sparse_stab_engine_bindings;
@@ -59,6 +61,9 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Register PMIR functions (only if pmir-pipeline feature is enabled)
     #[cfg(feature = "pmir-pipeline")]
     pmir_bindings::register_pmir_module(m)?;
+
+    // Register QIR execution functions
+    qir_bindings::register_qir_module(m)?;
 
     Ok(())
 }

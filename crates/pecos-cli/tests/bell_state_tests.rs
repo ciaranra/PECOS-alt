@@ -130,12 +130,20 @@ fn run_pecos(
 
 /// Extract measurement results from JSON output
 /// Handles the new columnar format: {"c": [3, 0, ...]}
+/// Also handles output that may contain non-JSON text before the JSON
 fn get_values(json_output: &str) -> Vec<String> {
     let mut register_values: std::collections::HashMap<String, Vec<String>> =
         std::collections::HashMap::new();
 
+    // Extract JSON part from output (may have other text like "Quantum runtime initialized")
+    let json_part = json_output
+        .lines()
+        .find(|line| line.trim().starts_with('{') && line.trim().ends_with('}'))
+        .map(|line| line.trim())
+        .unwrap_or(json_output.trim());
+
     // Parse the JSON - expecting an object with register names as keys
-    if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_output) {
+    if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_part) {
         if let Some(obj) = json.as_object() {
             // For each register, collect its values
             for (reg_name, values) in obj {

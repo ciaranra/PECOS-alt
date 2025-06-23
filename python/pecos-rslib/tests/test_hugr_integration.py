@@ -32,33 +32,36 @@ def test_hugr_compiler_creation() -> None:
 
         # Test default creation
         compiler = RustHugrCompiler()
-        assert compiler.get_naming_convention() == "standard"
+        assert compiler.get_llvm_convention() == "hugr"
 
         # Test with parameters
-        compiler = RustHugrCompiler(debug_info=True, naming_convention="hugr")
-        assert compiler.get_naming_convention() == "hugr"
+        compiler = RustHugrCompiler(debug_info=True, llvm_convention="hugr")
+        assert compiler.get_llvm_convention() == "hugr"
 
         # Test setting naming convention
-        compiler.set_naming_convention("pecos")
-        assert compiler.get_naming_convention() == "pecos"
+        # Test that invalid convention raises error
+        with pytest.raises(Exception):
+            compiler.set_llvm_convention("invalid")
 
         # Test invalid naming convention
         with pytest.raises(ValueError, match="invalid"):
-            compiler.set_naming_convention("invalid")
+            compiler.set_llvm_convention("invalid")
 
     except ImportError:
         pytest.skip("Rust HUGR backend not available")
 
 
-def test_supported_naming_conventions() -> None:
+def test_supported_llvm_conventions() -> None:
     """Test getting supported naming conventions."""
     try:
         from pecos_rslib import RustHugrCompiler
 
-        conventions = RustHugrCompiler.get_supported_naming_conventions()
+        conventions = RustHugrCompiler.get_supported_llvm_conventions()
         assert isinstance(conventions, list)
         assert len(conventions) > 0
-        assert "standard" in conventions
+        assert "qir" in conventions
+        assert "hugr" in conventions
+        assert len(conventions) == 2
 
     except ImportError:
         pytest.skip("Rust HUGR backend not available")

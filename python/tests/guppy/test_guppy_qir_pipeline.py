@@ -40,11 +40,11 @@ def test_guppy_frontend() -> None:
     print("=== Testing GuppyFrontend ===")
 
     try:
-        frontend = GuppyFrontend(naming_convention="standard")
+        frontend = GuppyFrontend(llvm_convention="qir")
         info = frontend.get_backend_info()
         print(f"Frontend backend info: {info}")
         print(f"[OK] Using backend: {info['backend']}")
-        print(f"[OK] Naming convention: {info['naming_convention']}")
+        print(f"[OK] LLVM convention: {info['llvm_convention']}")
         print()
         # Test passed
     except (ImportError, RuntimeError) as e:

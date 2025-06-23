@@ -127,10 +127,26 @@ pub enum PastOp {
     Y,
     /// Pauli Z gate
     Z,
+    /// S gate (phase gate)
+    S,
+    /// T gate (pi/8 gate)
+    T,
+    /// S-dagger gate
+    Sdg,
+    /// T-dagger gate
+    Tdg,
     /// Controlled-X gate
     CX,
+    /// Controlled-Y gate
+    CY,
     /// Controlled-Z gate
     CZ,
+    /// Controlled-H gate
+    CH,
+    /// Controlled rotation around Z axis
+    CRZ(f64),
+    /// Toffoli gate (CCX)
+    Toffoli,
     /// Rotation around X axis
     RX(f64),
     /// Rotation around Y axis
@@ -141,6 +157,8 @@ pub enum PastOp {
     Measure,
     /// Reset qubit to |0⟩
     Reset,
+    /// Allocate qubit
+    QAlloc,
     
     // Classical operations
     /// Integer addition

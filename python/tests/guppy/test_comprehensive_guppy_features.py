@@ -41,14 +41,14 @@ class GuppyPipelineTest:
     def __init__(self):
         self.backends = get_guppy_backends() if PECOS_FRONTEND_AVAILABLE else {}
         
-    def test_function_on_both_pipelines(self, func, shots: int = 10, **kwargs) -> Dict[str, Any]:
+    def test_function_on_both_pipelines(self, func, shots: int = 10, seed: int = 42, **kwargs) -> Dict[str, Any]:
         """Test a Guppy function on both HUGR-LLVM and PMIR pipelines."""
         results = {}
         
         # Test HUGR-LLVM pipeline (rust backend)
         if self.backends.get("rust_backend", False):
             try:
-                result = run_guppy(func, shots=shots, backend="rust", verbose=False, **kwargs)
+                result = run_guppy(func, shots=shots, backend="rust", verbose=False, seed=seed, **kwargs)
                 results["hugr_llvm"] = {
                     "success": True,
                     "result": result,
@@ -65,7 +65,7 @@ class GuppyPipelineTest:
         
         # Test PMIR pipeline (external backend)
         try:
-            result = run_guppy(func, shots=shots, backend="external", verbose=False, **kwargs)
+            result = run_guppy(func, shots=shots, backend="external", verbose=False, seed=seed, **kwargs)
             results["pmir"] = {
                 "success": True,
                 "result": result,
@@ -134,23 +134,26 @@ class TestBasicQuantumOperations:
             z(q)  # Should leave |0⟩ unchanged
             return measure(q)
         
-        # Test X gate - should measure |1⟩ with high probability
-        results_x = pipeline_tester.test_function_on_both_pipelines(pauli_x_test, shots=20)
+        # Test X gate - should measure |1⟩ deterministically with fixed seed
+        results_x = pipeline_tester.test_function_on_both_pipelines(pauli_x_test, shots=100, seed=42)
         if results_x.get("hugr_llvm", {}).get("success"):
             ones_count = sum(results_x["hugr_llvm"]["result"]["results"])
-            assert ones_count > 15, f"X gate should produce mostly 1s, got {ones_count}/20"
+            # X gate should flip |0⟩ to |1⟩, expect 100% ones
+            assert ones_count == 100, f"X gate should produce all 1s, got {ones_count}/100"
         
-        # Test Y gate - should measure |1⟩ with high probability  
-        results_y = pipeline_tester.test_function_on_both_pipelines(pauli_y_test, shots=20)
+        # Test Y gate - should measure |1⟩ deterministically  
+        results_y = pipeline_tester.test_function_on_both_pipelines(pauli_y_test, shots=100, seed=42)
         if results_y.get("hugr_llvm", {}).get("success"):
             ones_count = sum(results_y["hugr_llvm"]["result"]["results"])
-            assert ones_count > 15, f"Y gate should produce mostly 1s, got {ones_count}/20"
+            # Y gate should flip |0⟩ to |1⟩ with phase, expect 100% ones
+            assert ones_count == 100, f"Y gate should produce all 1s, got {ones_count}/100"
         
-        # Test Z gate - should measure |0⟩ with high probability
-        results_z = pipeline_tester.test_function_on_both_pipelines(pauli_z_test, shots=20)
+        # Test Z gate - should measure |0⟩ deterministically
+        results_z = pipeline_tester.test_function_on_both_pipelines(pauli_z_test, shots=100, seed=42)
         if results_z.get("hugr_llvm", {}).get("success"):
             ones_count = sum(results_z["hugr_llvm"]["result"]["results"])
-            assert ones_count < 5, f"Z gate should produce mostly 0s, got {ones_count}/20"
+            # Z gate should leave |0⟩ unchanged, expect 0% ones
+            assert ones_count == 0, f"Z gate should produce all 0s, got {ones_count}/100"
     
     def test_bell_state_entanglement(self, pipeline_tester):
         """Test Bell state creation and entanglement."""

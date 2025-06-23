@@ -78,19 +78,26 @@ def test_guppy_pmir_execute_pipeline() -> None:
         # Note: This is a simplified approach - in reality, we'd need to
         # properly serialize the HUGR to JSON format
         hugr_json = json.dumps({
-            "version": "0.1.0",
-            "name": "random_bit",
-            "nodes": [
-                {"op": {"type": "AllocQubit"}},
-                {"op": {"type": "H"}},
-                {"op": {"type": "Measure"}},
-                {"op": {"type": "Output", "port": 0}}
-            ],
-            "edges": [
-                {"src": [0, 0], "dst": [1, 0]},
-                {"src": [1, 0], "dst": [2, 0]},
-                {"src": [2, 0], "dst": [3, 0]}
-            ]
+            "modules": [{
+                "version": "live",
+                "metadata": {"name": "random_bit"},
+                "nodes": [
+                    {"parent": 0, "op": "Module"},
+                    {"parent": 0, "op": "FuncDefn", "name": "main"},
+                    {"parent": 1, "op": "Input"},
+                    {"parent": 1, "op": "Output"},
+                    {"parent": 1, "op": "Extension", "name": "QAlloc"},
+                    {"parent": 1, "op": "Extension", "name": "H"},
+                    {"parent": 1, "op": "Extension", "name": "MeasureFree"}
+                ],
+                "edges": [
+                    [[2, 0], [4, 0]],
+                    [[4, 0], [5, 0]],
+                    [[5, 0], [6, 0]],
+                    [[6, 0], [3, 0]]
+                ]
+            }],
+            "extensions": []
         })
         print("[INFO] Using simplified HUGR JSON for PMIR testing")
         

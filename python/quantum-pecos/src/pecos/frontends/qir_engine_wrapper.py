@@ -34,7 +34,7 @@ class QirEngineWrapper:
         self.engine = None
         self._temp_dir = None
 
-    def load_qir_file(self, qir_file_path: Path, shots: int = 1000) -> None:
+    def load_qir_file(self, qir_file_path: Path, shots: int = 1) -> None:
         """Load a QIR file into the engine.
 
         Args:
@@ -82,18 +82,21 @@ class QirEngineWrapper:
     def execute_qir_file(
         self,
         qir_file_path: Path,
-        shots: int = 1000,
+        shots: int = 1,
+        seed: int | None = None,
     ) -> dict[str, Any]:
         """Convenience method to load and execute a QIR file in one call.
 
         Args:
             qir_file_path: Path to the standard QIR file
             shots: Number of shots for execution
+            seed: Random seed for reproducible results (default: None)
 
         Returns:
             Dictionary containing execution results
         """
         self.load_qir_file(qir_file_path, shots)
+        # TODO: Pass seed to the actual QIR execution when implemented
         return self.execute()
 
     def cleanup(self) -> None:
@@ -111,7 +114,7 @@ class QirEngineWrapper:
         self.cleanup()
 
 
-def execute_standard_qir(qir_content: str, shots: int = 1000) -> dict[str, Any]:
+def execute_standard_qir(qir_content: str, shots: int = 1) -> dict[str, Any]:
     """Execute standard QIR content using the PECOS QIR engine.
 
     Args:

@@ -1718,6 +1718,7 @@ dependencies = [
  "libc",
  "libloading",
  "log",
+ "parking_lot",
  "pecos-core",
  "pecos-engines",
  "pest",

@@ -41,7 +41,7 @@ pecos = { workspace = true }
 pecos-core = { workspace = true }
 pecos-qasm = { workspace = true }
 pecos-engines = { workspace = true }
-pecos-qir = { workspace = true, features = ["pmir-pipeline"] }
+pecos-qir = { workspace = true, features = ["pmir-pipeline", "hugr-llvm-pipeline"] }
 parking_lot = { workspace = true}
 serde_json = { workspace = true }
 tempfile = { workspace = true }

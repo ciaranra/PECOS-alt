@@ -4,21 +4,28 @@ use pecos_qir::pmir::{compile_hugr_via_pmir, PmirConfig};
 
 #[test]
 fn test_simple_hadamard_measure() {
-    // Sample HUGR JSON (simplified for testing)
+    // Sample HUGR JSON (new format with modules array)
     let hugr_json = r#"{
-        "version": "0.1.0",
-        "name": "hadamard_test",
-        "nodes": [
-            {"op": {"type": "AllocQubit"}},
-            {"op": {"type": "H"}},
-            {"op": {"type": "Measure"}},
-            {"op": {"type": "Output", "port": 0}}
-        ],
-        "edges": [
-            {"src": [0, 0], "dst": [1, 0]},
-            {"src": [1, 0], "dst": [2, 0]},
-            {"src": [2, 0], "dst": [3, 0]}
-        ]
+        "modules": [{
+            "version": "live",
+            "metadata": {"name": "hadamard_test"},
+            "nodes": [
+                {"parent": 0, "op": "Module"},
+                {"parent": 0, "op": "FuncDefn", "name": "main"},
+                {"parent": 1, "op": "Input"},
+                {"parent": 1, "op": "Output"},
+                {"parent": 1, "op": "Extension", "name": "QAlloc"},
+                {"parent": 1, "op": "Extension", "name": "H"},
+                {"parent": 1, "op": "Extension", "name": "MeasureFree"}
+            ],
+            "edges": [
+                [[2, 0], [4, 0]],
+                [[4, 0], [5, 0]],
+                [[5, 0], [6, 0]],
+                [[6, 0], [3, 0]]
+            ]
+        }],
+        "extensions": []
     }"#;
     
     let config = PmirConfig {
@@ -48,27 +55,34 @@ fn test_simple_hadamard_measure() {
 #[test]
 fn test_bell_state_circuit() {
     let hugr_json = r#"{
-        "version": "0.1.0",
-        "name": "bell_state",
-        "nodes": [
-            {"op": {"type": "AllocQubit"}},
-            {"op": {"type": "AllocQubit"}},
-            {"op": {"type": "H"}},
-            {"op": {"type": "CX"}},
-            {"op": {"type": "Measure"}},
-            {"op": {"type": "Measure"}},
-            {"op": {"type": "Output", "port": 0}},
-            {"op": {"type": "Output", "port": 1}}
-        ],
-        "edges": [
-            {"src": [0, 0], "dst": [2, 0]},
-            {"src": [2, 0], "dst": [3, 0]},
-            {"src": [1, 0], "dst": [3, 1]},
-            {"src": [3, 0], "dst": [4, 0]},
-            {"src": [3, 1], "dst": [5, 0]},
-            {"src": [4, 0], "dst": [6, 0]},
-            {"src": [5, 0], "dst": [7, 0]}
-        ]
+        "modules": [{
+            "version": "live",
+            "metadata": {"name": "bell_state"},
+            "nodes": [
+                {"parent": 0, "op": "Module"},
+                {"parent": 0, "op": "FuncDefn", "name": "main"},
+                {"parent": 1, "op": "Input"},
+                {"parent": 1, "op": "Output"},
+                {"parent": 1, "op": "Extension", "name": "QAlloc"},
+                {"parent": 1, "op": "Extension", "name": "QAlloc"},
+                {"parent": 1, "op": "Extension", "name": "H"},
+                {"parent": 1, "op": "Extension", "name": "CX"},
+                {"parent": 1, "op": "Extension", "name": "MeasureFree"},
+                {"parent": 1, "op": "Extension", "name": "MeasureFree"}
+            ],
+            "edges": [
+                [[2, 0], [4, 0]],
+                [[2, 0], [5, 0]],
+                [[4, 0], [6, 0]],
+                [[6, 0], [7, 0]],
+                [[5, 0], [7, 1]],
+                [[7, 0], [8, 0]],
+                [[7, 1], [9, 0]],
+                [[8, 0], [3, 0]],
+                [[9, 0], [3, 1]]
+            ]
+        }],
+        "extensions": []
     }"#;
     
     let config = PmirConfig::default();

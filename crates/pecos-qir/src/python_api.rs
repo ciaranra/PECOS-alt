@@ -6,7 +6,7 @@ These functions are designed to be easily wrapped with `PyO3`.
 */
 
 #[cfg(feature = "hugr-llvm-pipeline")]
-use crate::hugr::compiler::{HugrCompiler, HugrCompilerConfig, QuantumNamingConvention};
+use crate::hugr::compiler::{HugrCompiler, HugrCompilerConfig, QuantumLlvmConvention};
 #[cfg(feature = "hugr-llvm-pipeline")]
 use crate::QirEngine;
 #[cfg(feature = "hugr-llvm-pipeline")]
@@ -36,7 +36,7 @@ fn convert_error(err: &PecosError) -> String {
 /// # Arguments
 /// * `hugr_bytes` - HUGR data as bytes
 /// * `debug_info` - Whether to include debug information
-/// * `naming_convention` - Quantum operation naming convention ("standard", "hugr", "pecos")
+/// * `llvm_convention` - LLVM-IR convention ("hugr" or "qir")
 ///
 /// # Returns
 /// QIR as a string
@@ -50,14 +50,13 @@ fn convert_error(err: &PecosError) -> String {
 pub fn compile_hugr_bytes_to_qir_string(
     hugr_bytes: &[u8],
     debug_info: bool,
-    naming_convention: &str,
+    llvm_convention: &str,
 ) -> PyResult<String> {
     // Parse naming convention
-    let naming = match naming_convention {
-        "standard" | "qir" => QuantumNamingConvention::StandardQir,
-        "hugr" => QuantumNamingConvention::Hugr,
-        "pecos" => QuantumNamingConvention::Pecos,
-        _ => return Err(format!("Unknown naming convention: {naming_convention}")),
+    let naming = match llvm_convention {
+        "qir" => QuantumLlvmConvention::Qir,
+        "hugr" => QuantumLlvmConvention::Hugr,
+        _ => return Err(format!("Unknown LLVM convention: {llvm_convention}. Supported: 'hugr', 'qir'")),
     };
 
     // Create temporary output file for QIR
@@ -87,7 +86,7 @@ pub fn compile_hugr_bytes_to_qir_string(
 /// * `hugr_path` - Path to HUGR file
 /// * `qir_path` - Path for output QIR file
 /// * `debug_info` - Whether to include debug information
-/// * `naming_convention` - Quantum operation naming convention
+/// * `llvm_convention` - Quantum operation naming convention
 ///
 /// # Returns
 /// Success indicator
@@ -101,14 +100,13 @@ pub fn compile_hugr_file_to_qir_file(
     hugr_path: &str,
     qir_path: &str,
     debug_info: bool,
-    naming_convention: &str,
+    llvm_convention: &str,
 ) -> PyResult<()> {
     // Parse naming convention
-    let naming = match naming_convention {
-        "standard" | "qir" => QuantumNamingConvention::StandardQir,
-        "hugr" => QuantumNamingConvention::Hugr,
-        "pecos" => QuantumNamingConvention::Pecos,
-        _ => return Err(format!("Unknown naming convention: {naming_convention}")),
+    let naming = match llvm_convention {
+        "qir" => QuantumLlvmConvention::Qir,
+        "hugr" => QuantumLlvmConvention::Hugr,
+        _ => return Err(format!("Unknown LLVM convention: {llvm_convention}. Supported: 'hugr', 'qir'")),
     };
 
     // Set up compiler configuration
@@ -133,7 +131,7 @@ pub fn compile_hugr_file_to_qir_file(
 /// * `hugr_bytes` - HUGR data as bytes
 /// * `shots` - Number of shots to assign to the engine
 /// * `debug_info` - Whether to include debug information
-/// * `naming_convention` - Quantum operation naming convention
+/// * `llvm_convention` - Quantum operation naming convention
 ///
 /// # Returns
 /// Opaque handle to the QIR engine
@@ -150,14 +148,13 @@ pub fn create_qir_engine_from_hugr_bytes(
     hugr_bytes: &[u8],
     shots: usize,
     debug_info: bool,
-    naming_convention: &str,
+    llvm_convention: &str,
 ) -> PyResult<usize> {
     // Parse naming convention
-    let naming = match naming_convention {
-        "standard" | "qir" => QuantumNamingConvention::StandardQir,
-        "hugr" => QuantumNamingConvention::Hugr,
-        "pecos" => QuantumNamingConvention::Pecos,
-        _ => return Err(format!("Unknown naming convention: {naming_convention}")),
+    let naming = match llvm_convention {
+        "qir" => QuantumLlvmConvention::Qir,
+        "hugr" => QuantumLlvmConvention::Hugr,
+        _ => return Err(format!("Unknown LLVM convention: {llvm_convention}. Supported: 'hugr', 'qir'")),
     };
 
     // Create temporary file for HUGR
@@ -198,7 +195,7 @@ pub fn create_qir_engine_from_hugr_bytes(
 /// * `hugr_path` - Path to HUGR file
 /// * `shots` - Number of shots to assign to the engine
 /// * `debug_info` - Whether to include debug information
-/// * `naming_convention` - Quantum operation naming convention
+/// * `llvm_convention` - Quantum operation naming convention
 ///
 /// # Returns
 /// Opaque handle to the QIR engine
@@ -214,14 +211,13 @@ pub fn create_qir_engine_from_hugr_file(
     hugr_path: &str,
     shots: usize,
     debug_info: bool,
-    naming_convention: &str,
+    llvm_convention: &str,
 ) -> PyResult<usize> {
     // Parse naming convention
-    let naming = match naming_convention {
-        "standard" | "qir" => QuantumNamingConvention::StandardQir,
-        "hugr" => QuantumNamingConvention::Hugr,
-        "pecos" => QuantumNamingConvention::Pecos,
-        _ => return Err(format!("Unknown naming convention: {naming_convention}")),
+    let naming = match llvm_convention {
+        "qir" => QuantumLlvmConvention::Qir,
+        "hugr" => QuantumLlvmConvention::Hugr,
+        _ => return Err(format!("Unknown LLVM convention: {llvm_convention}. Supported: 'hugr', 'qir'")),
     };
 
     // Create temporary directory for compilation
@@ -254,12 +250,10 @@ pub fn create_qir_engine_from_hugr_file(
 /// Get the supported quantum operation naming conventions
 #[cfg(feature = "hugr-llvm-pipeline")]
 #[must_use]
-pub fn get_supported_naming_conventions() -> Vec<String> {
+pub fn get_supported_llvm_conventions() -> Vec<String> {
     vec![
-        "standard".to_string(),
         "qir".to_string(),
         "hugr".to_string(),
-        "pecos".to_string(),
     ]
 }
 
@@ -277,7 +271,7 @@ pub fn is_hugr_support_available() -> bool {
 pub fn compile_hugr_bytes_to_qir_string(
     _hugr_bytes: &[u8],
     _debug_info: bool,
-    _naming_convention: &str,
+    _llvm_convention: &str,
 ) -> PyResult<String> {
     Err("HUGR-LLVM pipeline not available".to_string())
 }
@@ -287,7 +281,7 @@ pub fn compile_hugr_file_to_qir_file(
     _hugr_path: &str,
     _qir_path: &str,
     _debug_info: bool,
-    _naming_convention: &str,
+    _llvm_convention: &str,
 ) -> PyResult<()> {
     Err("HUGR-LLVM pipeline not available".to_string())
 }
@@ -297,7 +291,7 @@ pub fn create_qir_engine_from_hugr_bytes(
     _hugr_bytes: &[u8],
     _shots: usize,
     _debug_info: bool,
-    _naming_convention: &str,
+    _llvm_convention: &str,
 ) -> PyResult<usize> {
     Err("HUGR-LLVM pipeline not available".to_string())
 }
@@ -307,13 +301,13 @@ pub fn create_qir_engine_from_hugr_file(
     _hugr_path: &str,
     _shots: usize,
     _debug_info: bool,
-    _naming_convention: &str,
+    _llvm_convention: &str,
 ) -> PyResult<usize> {
     Err("HUGR-LLVM pipeline not available".to_string())
 }
 
 #[cfg(not(feature = "hugr-llvm-pipeline"))]
-pub fn get_supported_naming_conventions() -> Vec<String> {
+pub fn get_supported_llvm_conventions() -> Vec<String> {
     vec![]
 }
 
@@ -322,13 +316,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_naming_conventions() {
-        let conventions = get_supported_naming_conventions();
+    fn test_llvm_conventions() {
+        let conventions = get_supported_llvm_conventions();
         #[cfg(feature = "hugr-llvm-pipeline")]
         {
-            assert!(conventions.contains(&"standard".to_string()));
+            assert!(conventions.contains(&"qir".to_string()));
             assert!(conventions.contains(&"hugr".to_string()));
-            assert!(conventions.contains(&"pecos".to_string()));
+            assert_eq!(conventions.len(), 2);
         }
         #[cfg(not(feature = "hugr-llvm-pipeline"))]
         {
@@ -345,7 +339,7 @@ mod tests {
     #[cfg(not(feature = "hugr-llvm-pipeline"))]
     #[test]
     fn test_hugr_compilation_fails_without_feature() {
-        let result = compile_hugr_bytes_to_qir_string(&[0, 1, 2, 3], false, "standard");
+        let result = compile_hugr_bytes_to_qir_string(&[0, 1, 2, 3], false, "qir");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("HUGR-LLVM pipeline not available"));
     }

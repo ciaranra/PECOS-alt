@@ -59,7 +59,7 @@ class GuppyFrontend:
         hugr_to_llvm_binary: Path | None = None,
         format_converter: Path | None = None,
         use_rust_backend: bool | None = None,
-        naming_convention: str = "standard",
+        llvm_convention: str = "hugr",
     ) -> None:
         """Initialize the Guppy frontend.
 
@@ -68,7 +68,7 @@ class GuppyFrontend:
             format_converter: Path to the HUGR format converter script (for external mode)
             use_rust_backend: Force use of Rust backend (True) or external tools (False).
                              If None, auto-detect best available option.
-            naming_convention: Quantum operation naming convention ("standard", "hugr", "pecos")
+            llvm_convention: LLVM-IR convention ("hugr" or "qir")
         """
         # Initialize attributes first to avoid AttributeError in cleanup
         self._temp_dir = None
@@ -92,8 +92,9 @@ class GuppyFrontend:
         self.hugr_to_llvm_binary = hugr_to_llvm_binary
         self.format_converter = format_converter
 
-        # Rust backend configuration
-        self.naming_convention = naming_convention
+        # Rust backend configuration  
+        # Use the specified LLVM convention (defaults to "hugr" for PECOS compatibility)
+        self.llvm_convention = llvm_convention
         if self.use_rust_backend:
             # Verify Rust backend is working
             available, message = check_rust_hugr_availability()
@@ -110,7 +111,7 @@ class GuppyFrontend:
             "backend": "rust" if self.use_rust_backend else "external",
             "rust_available": RUST_BACKEND_AVAILABLE,
             "guppy_available": GUPPY_AVAILABLE,
-            "naming_convention": self.naming_convention,
+            "llvm_convention": self.llvm_convention,
             "external_tools": {
                 "hugr_to_llvm_binary": (
                     str(self.hugr_to_llvm_binary) if self.hugr_to_llvm_binary else None
@@ -172,11 +173,12 @@ class GuppyFrontend:
             qir_file = temp_path / f"{func_name}.ll"
 
             # Compile HUGR to QIR using Rust backend
+            # Use the configured naming convention
             qir_content = compile_hugr_to_qir_rust(
                 hugr_bytes,
                 None,  # output_path
                 debug_info=False,  # debug_info
-                naming_convention=self.naming_convention,  # naming_convention
+                llvm_convention=self.llvm_convention,  # Use configured LLVM convention
             )
 
             # Write QIR to file
@@ -257,7 +259,7 @@ class GuppyFrontend:
                     # Use the external hugr_quantum_llvm binary
                     llvm_ir = compiler.compile_hugr_to_llvm(
                         hugr_bytes,
-                        self.naming_convention,
+                        self.llvm_convention,
                     )
 
                     qir_file = temp_path / f"{func_name}.ll"

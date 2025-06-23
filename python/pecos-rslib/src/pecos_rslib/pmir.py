@@ -84,12 +84,13 @@ class PMIRCompiler:
             self.target_triple,
         )
     
-    def execute(self, hugr_json: str, shots: int = 1) -> list:
+    def execute(self, hugr_json: str, shots: int = 1, seed: int | None = None) -> list:
         """Compile and execute HUGR via the PMIR pipeline.
         
         Args:
             hugr_json: HUGR circuit in JSON format
             shots: Number of shots to execute
+            seed: Random seed for reproducible results (optional)
             
         Returns:
             List of execution results
@@ -97,6 +98,7 @@ class PMIRCompiler:
         return compile_and_execute_via_pmir(
             hugr_json,
             shots,
+            seed,
             self.debug_output,
             self.optimization_level,
         )

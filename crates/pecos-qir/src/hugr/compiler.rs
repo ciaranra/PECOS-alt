@@ -19,6 +19,8 @@ use hugr_llvm::emit::EmitHugr;
 #[cfg(feature = "hugr-llvm-pipeline")]
 use hugr_llvm::inkwell::context::Context;
 #[cfg(feature = "hugr-llvm-pipeline")]
+use hugr_llvm::extension::{int::IntCodegenExtension, prelude::DefaultPreludeCodegen};
+#[cfg(feature = "hugr-llvm-pipeline")]
 use hugr_llvm::utils::fat::FatExt;
 #[cfg(feature = "hugr-llvm-pipeline")]
 use log::{debug, info};
@@ -33,12 +35,16 @@ use std::rc::Rc;
 
 #[cfg(feature = "hugr-llvm-pipeline")]
 use super::result_extractor::ResultNameExtractor;
-#[cfg(feature = "hugr-llvm-pipeline")]
-use super::simple_llvm_fallback::{can_handle_simple, generate_simple_llvm};
+// Removed simple fallback - we should fix the actual issues instead
 #[cfg(feature = "hugr-llvm-pipeline")]
 use super::standard_qir_generator::StandardQirExtension;
 #[cfg(feature = "hugr-llvm-pipeline")]
-use super::version_translator::translate_hugr_versions;
+use super::true_standard_qir_generator::TrueStandardQirExtension;
+#[cfg(feature = "hugr-llvm-pipeline")]
+use super::tket2_bool_extension::Tket2BoolExtension;
+#[cfg(feature = "hugr-llvm-pipeline")]
+use super::tket2_rotation_extension::Tket2RotationExtension;
+// Version translator no longer needed - Guppy 0.20.0 and PECOS use same HUGR version
 
 // Imports for non-hugr builds
 #[cfg(not(feature = "hugr-llvm-pipeline"))]
@@ -54,7 +60,7 @@ pub struct HugrCompilerConfig {
     /// Whether to include debug information in the output
     pub debug_info: bool,
     /// Quantum operation naming convention to use
-    pub quantum_naming: QuantumNamingConvention,
+    pub quantum_naming: QuantumLlvmConvention,
 }
 
 impl Default for HugrCompilerConfig {
@@ -62,20 +68,18 @@ impl Default for HugrCompilerConfig {
         Self {
             output_path: None,
             debug_info: false,
-            quantum_naming: QuantumNamingConvention::StandardQir,
+            quantum_naming: QuantumLlvmConvention::Qir,
         }
     }
 }
 
-/// Quantum operation naming conventions
+/// Quantum operation LLVM-IR conventions
 #[derive(Debug, Clone, PartialEq)]
-pub enum QuantumNamingConvention {
-    /// Standard QIR naming: __`quantum__qis__h__body`, etc.
-    StandardQir,
-    /// HUGR naming: __`hugr__quantum__h`, etc.
+pub enum QuantumLlvmConvention {
+    /// Microsoft QIR convention: __quantum__qis__h__body, etc.
+    Qir,
+    /// HUGR convention: integer-based operations for PECOS runtime
     Hugr,
-    /// PECOS naming: custom mappings for PECOS runtime
-    Pecos,
 }
 
 /// HUGR to QIR compiler
@@ -114,7 +118,7 @@ impl HugrCompiler {
 
     /// Set the quantum operation naming convention
     #[must_use]
-    pub fn with_quantum_naming(mut self, naming: QuantumNamingConvention) -> Self {
+    pub fn with_quantum_naming(mut self, naming: QuantumLlvmConvention) -> Self {
         self.config.quantum_naming = naming;
         self
     }
@@ -179,27 +183,37 @@ impl HugrCompiler {
         let hugr_json: serde_json::Value = serde_json::from_str(json_str)
             .map_err(|e| PecosError::with_context(e, "Failed to parse HUGR JSON"))?;
 
-        // Check if we can use simple fallback
-        if can_handle_simple(&hugr_json) {
-            info!("Using simple LLVM fallback for basic Guppy function");
-            let llvm_ir = generate_simple_llvm(&hugr_json)?;
-            std::fs::write(output_path, llvm_ir).map_err(|e| {
-                PecosError::with_context(
-                    e,
-                    format!("Failed to write LLVM IR to {}", output_path.display()),
-                )
-            })?;
-            return Ok(output_path.to_path_buf());
-        }
+        // No fallbacks - we'll fix the actual compilation issues
+        debug!("Proceeding with full HUGR compilation");
 
-        // Otherwise, use normal compilation path
-        debug!("Translating HUGR versions for compatibility");
-        let transformed_bytes = translate_hugr_versions(hugr_bytes)?;
+        // Since both Guppy and PECOS use hugr 0.20.1, no translation needed
+        debug!("Using HUGR directly without version translation");
+        let transformed_bytes = hugr_bytes.to_vec();
+        
+        // Fix duplicate function names in HUGR
+        let transformed_bytes = fix_duplicate_functions(transformed_bytes)?;
 
         // Load HUGR package with transformed types
-        let reader = std::io::Cursor::new(transformed_bytes);
-        let mut package = Package::load(reader, Some(&std_extensions::std_reg()))
-            .map_err(|e| PecosError::with_context(e, "Failed to parse HUGR"))?;
+        let reader = std::io::Cursor::new(transformed_bytes.clone());
+        let mut package = match Package::load(reader, Some(&std_extensions::std_reg())) {
+            Ok(pkg) => pkg,
+            Err(e) => {
+                // Log the error details
+                let err_str = e.to_string();
+                if err_str.contains("missing field") {
+                    // Try to debug what's happening
+                    let json_start = transformed_bytes
+                        .iter()
+                        .position(|&b| b == b'{')
+                        .unwrap_or(0);
+                    let json_bytes = &transformed_bytes[json_start..];
+                    if let Ok(json_str) = std::str::from_utf8(json_bytes) {
+                        debug!("Failed HUGR JSON preview: {}", &json_str[..json_str.len().min(500)]);
+                    }
+                }
+                return Err(PecosError::with_context(e, "Failed to parse HUGR"));
+            }
+        };
 
         let hugr = std::mem::take(&mut package.modules[0]);
 
@@ -220,20 +234,39 @@ impl HugrCompiler {
         let context = Context::create();
         let module = context.create_module("quantum_module");
 
-        // Create extensions with standard QIR quantum support
+        // Create extensions with appropriate QIR quantum support based on naming convention
         let mut builder = hugr_llvm::CodegenExtsBuilder::<Hugr>::default();
+
+        // Add our custom extensions FIRST (before standard extensions)
+        // This ensures our tket2.bool handler takes precedence
+        builder = builder.add_extension(Tket2BoolExtension::new());
+        builder = builder.add_extension(Tket2RotationExtension::new());
+        
+        // Choose the appropriate quantum extension based on naming convention
+        match self.config.quantum_naming {
+            QuantumLlvmConvention::Qir => {
+                // Use true standard QIR format with opaque pointer types
+                builder = builder.add_extension(TrueStandardQirExtension::new(result_names));
+            }
+            QuantumLlvmConvention::Hugr => {
+                // Use HUGR-style format with integer types (current QirExtension)
+                builder = builder.add_extension(StandardQirExtension::new(result_names));
+            }
+        }
 
         // Add all standard extensions
         builder = builder.add_default_prelude_extensions();
         builder = builder.add_logic_extensions();
-
-        // Add our custom quantum extensions
-        builder = builder.add_extension(StandardQirExtension::new(result_names));
+        
+        // Add arithmetic extensions for int(6) and float64 support
+        builder = builder.add_extension(IntCodegenExtension::new(DefaultPreludeCodegen));
+        builder = builder.add_float_extensions();
+        builder = builder.add_conversion_extensions();
 
         let extensions = builder.finish();
 
         // Create a namer that doesn't add prefixes for cleaner function names
-        let namer = hugr_llvm::emit::Namer::new("", false);
+        let namer = hugr_llvm::emit::Namer::new("_hugr_", false);
 
         // Create emitter
         let emit_hugr = EmitHugr::new(&context, module, Rc::new(namer), Rc::new(extensions));
@@ -268,8 +301,9 @@ impl HugrCompiler {
         // Generate LLVM IR string
         let llvm_ir = llvm_module.to_string();
 
-        // Add standard QIR prologue (type definitions and function declarations)
-        let standard_qir = add_standard_qir_prologue(&llvm_ir);
+        // Add standard QIR prologue and fix entry point signature
+        let standard_qir = add_standard_qir_prologue(&llvm_ir, &self.config.quantum_naming);
+        let standard_qir = fix_entry_point_signature(&standard_qir, &self.config.quantum_naming);
 
         // Write to output file
         fs::write(output_path, standard_qir).map_err(|e| {
@@ -318,65 +352,120 @@ impl HugrCompiler {
 }
 
 #[cfg(feature = "hugr-llvm-pipeline")]
-/// Add standard QIR prologue and rename functions to make the generated IR compatible with `QirEngine`
-fn add_standard_qir_prologue(llvm_ir: &str) -> String {
-    // PECOS QIR prologue with integer-based function signatures
-    let prologue = r"
-declare void @__quantum__qis__h__body(i64)
-declare void @__quantum__qis__x__body(i64)
-declare void @__quantum__qis__y__body(i64)
-declare void @__quantum__qis__z__body(i64)
-declare void @__quantum__qis__cx__body(i64, i64)
-declare void @__quantum__qis__cz__body(i64, i64)
-declare i32 @__quantum__qis__m__body(i64, i64)
-
-";
-
-    // Process the LLVM IR line by line
-    let lines: Vec<&str> = llvm_ir.lines().collect();
-    let mut result = String::new();
-    let mut prologue_added = false;
-    let mut main_function_found = false;
-
-    for line in lines {
-        let trimmed = line.trim();
-
-        // Add prologue before the first substantial line (not comments, not empty)
-        if !prologue_added && !trimmed.is_empty() && !trimmed.starts_with(';') {
-            result.push_str(prologue);
-            prologue_added = true;
-        }
-
-        // Rename the first user-defined function to "main"
-        if !main_function_found
-            && line.starts_with("define ")
-            && !line.contains("@llvm.")
-            && !line.contains("@__")
-        {
-            // Extract function signature and rename to @main
-            if let Some(at_pos) = line.find('@') {
-                if let Some(paren_pos) = line.find('(') {
-                    let before_name = &line[..=at_pos];
-                    let after_name = &line[paren_pos..];
-                    let new_line = format!("{before_name}main{after_name}");
-                    result.push_str(&new_line);
-                    result.push('\n');
-                    main_function_found = true;
-                    continue;
+/// Fix duplicate function names in HUGR JSON
+fn fix_duplicate_functions(hugr_bytes: Vec<u8>) -> Result<Vec<u8>, PecosError> {
+    // Find JSON start
+    let json_start = hugr_bytes.iter().position(|&b| b == b'{').unwrap_or(0);
+    let prefix = &hugr_bytes[..json_start];
+    let json_bytes = &hugr_bytes[json_start..];
+    
+    // Parse JSON
+    let json_str = std::str::from_utf8(json_bytes)
+        .map_err(|e| PecosError::Generic(format!("Invalid UTF-8 in HUGR: {}", e)))?;
+    let mut json_data: serde_json::Value = serde_json::from_str(json_str)
+        .map_err(|e| PecosError::Generic(format!("Failed to parse HUGR JSON: {}", e)))?;
+    
+    // Track seen function names and rename duplicates
+    let mut seen_functions = std::collections::HashSet::new();
+    let mut duplicate_count = 0;
+    
+    if let Some(modules) = json_data.get_mut("modules").and_then(|m| m.as_array_mut()) {
+        for module in modules {
+            if let Some(nodes) = module.get_mut("nodes").and_then(|n| n.as_array_mut()) {
+                for node in nodes {
+                    if let Some(op) = node.get("op").and_then(|o| o.as_str()) {
+                        if op == "FuncDefn" {
+                            if let Some(name) = node.get_mut("name").and_then(|n| n.as_str()) {
+                                if !seen_functions.insert(name.to_string()) {
+                                    // Duplicate found
+                                    duplicate_count += 1;
+                                    let new_name = format!("{}_duplicate{}", name, duplicate_count);
+                                    debug!("Renaming duplicate function '{}' to '{}'", name, new_name);
+                                    *node.get_mut("name").unwrap() = serde_json::Value::String(new_name);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
+    }
+    
+    // Convert back to bytes
+    let fixed_json = serde_json::to_string(&json_data)
+        .map_err(|e| PecosError::Generic(format!("Failed to serialize fixed HUGR: {}", e)))?;
+    
+    let mut result = prefix.to_vec();
+    result.extend_from_slice(fixed_json.as_bytes());
+    
+    Ok(result)
+}
 
-        result.push_str(line);
+/// Process LLVM IR to ensure compatibility with QirEngine
+fn add_standard_qir_prologue(llvm_ir: &str, llvm_convention: &QuantumLlvmConvention) -> String {
+    match llvm_convention {
+        QuantumLlvmConvention::Qir => {
+            // Add proper opaque type declarations for true standard QIR
+            let prologue = r#"%Result = type opaque
+%Qubit = type opaque
+
+"#;
+            
+            // Insert the type declarations at the beginning, after any existing declarations
+            if llvm_ir.contains("source_filename") {
+                // Find where to insert - after the source_filename line
+                let lines: Vec<&str> = llvm_ir.lines().collect();
+                let mut result = String::new();
+                let mut inserted = false;
+                
+                for line in lines {
+                    result.push_str(line);
+                    result.push('\n');
+                    
+                    if !inserted && line.starts_with("source_filename") {
+                        result.push('\n');
+                        result.push_str(prologue);
+                        inserted = true;
+                    }
+                }
+                
+                result
+            } else {
+                // Just prepend the prologue
+                format!("{}{}", prologue, llvm_ir)
+            }
+        }
+        QuantumLlvmConvention::Hugr => {
+            // For HUGR convention, no modifications needed
+            llvm_ir.to_string()
+        }
+    }
+}
+
+/// Fix entry point function signature for standard QIR compatibility
+fn fix_entry_point_signature(llvm_ir: &str, llvm_convention: &QuantumLlvmConvention) -> String {
+    // Both conventions need void return type for entry points to work with QIR runtime
+    let lines: Vec<&str> = llvm_ir.lines().collect();
+    let mut result = String::new();
+    
+    for line in lines {
+        if (line.contains("define i1 @") || line.contains("define i16 @") || line.contains("define i32 @")) && line.contains("#0") {
+            // This is the entry point function definition, change return type to void
+            let modified_line = line
+                .replace("define i1 @", "define void @")
+                .replace("define i16 @", "define void @")
+                .replace("define i32 @", "define void @");
+            result.push_str(&modified_line);
+        } else if line.trim().starts_with("ret i1 ") || line.trim().starts_with("ret i16 ") || line.trim().starts_with("ret i32 ") {
+            // Replace the return statement with just "ret void"
+            result.push_str("  ret void");
+        } else {
+            result.push_str(line);
+        }
         result.push('\n');
     }
-
-    // If we didn't find a good place to insert, just prepend
-    if prologue_added {
-        result
-    } else {
-        format!("{prologue}{llvm_ir}")
-    }
+    
+    result
 }
 
 impl Default for HugrCompiler {
@@ -425,7 +514,7 @@ mod tests {
         assert!(!compiler.config.debug_info);
         assert_eq!(
             compiler.config.quantum_naming,
-            QuantumNamingConvention::StandardQir
+            QuantumLlvmConvention::Qir
         );
     }
 
@@ -433,13 +522,13 @@ mod tests {
     fn test_hugr_compiler_configuration() {
         let compiler = HugrCompiler::new()
             .with_debug_info(true)
-            .with_quantum_naming(QuantumNamingConvention::Hugr)
+            .with_quantum_naming(QuantumLlvmConvention::Hugr)
             .with_output_path("/tmp/test.ll");
 
         assert!(compiler.config.debug_info);
         assert_eq!(
             compiler.config.quantum_naming,
-            QuantumNamingConvention::Hugr
+            QuantumLlvmConvention::Hugr
         );
         assert_eq!(
             compiler.config.output_path,

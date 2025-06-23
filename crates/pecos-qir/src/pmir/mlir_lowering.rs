@@ -140,9 +140,14 @@ impl fmt::Display for MlirOperation {
                 write!(f, " : {}", ty)?;
             }
         } else if !self.args.is_empty() {
-            // For return, we need to add the type based on the returned value
-            // For now, assume i1 for single return value
-            write!(f, " : i1")?;
+            // For return, we need to add the type based on the returned values
+            if self.args.len() == 1 {
+                write!(f, " : i1")?;
+            } else {
+                // Multiple return values - each is i1 for now
+                let types = vec!["i1"; self.args.len()].join(", ");
+                write!(f, " : {}", types)?;
+            }
         }
         
         Ok(())
@@ -201,6 +206,26 @@ fn collect_external_functions() -> Vec<ExternalFunc> {
             return_type: None,
             arg_types: vec!["!llvm.ptr<i8>".to_string()],
         },
+        ExternalFunc {
+            name: "__quantum__qis__s__body".to_string(),
+            return_type: None,
+            arg_types: vec!["!llvm.ptr<i8>".to_string()],
+        },
+        ExternalFunc {
+            name: "__quantum__qis__t__body".to_string(),
+            return_type: None,
+            arg_types: vec!["!llvm.ptr<i8>".to_string()],
+        },
+        ExternalFunc {
+            name: "__quantum__qis__sadj__body".to_string(),
+            return_type: None,
+            arg_types: vec!["!llvm.ptr<i8>".to_string()],
+        },
+        ExternalFunc {
+            name: "__quantum__qis__tadj__body".to_string(),
+            return_type: None,
+            arg_types: vec!["!llvm.ptr<i8>".to_string()],
+        },
         // Two qubit gates
         ExternalFunc {
             name: "__quantum__qis__cnot__body".to_string(),
@@ -211,6 +236,43 @@ fn collect_external_functions() -> Vec<ExternalFunc> {
             name: "__quantum__qis__cz__body".to_string(),
             return_type: None,
             arg_types: vec!["!llvm.ptr<i8>".to_string(), "!llvm.ptr<i8>".to_string()],
+        },
+        ExternalFunc {
+            name: "__quantum__qis__cy__body".to_string(),
+            return_type: None,
+            arg_types: vec!["!llvm.ptr<i8>".to_string(), "!llvm.ptr<i8>".to_string()],
+        },
+        ExternalFunc {
+            name: "__quantum__qis__ch__body".to_string(),
+            return_type: None,
+            arg_types: vec!["!llvm.ptr<i8>".to_string(), "!llvm.ptr<i8>".to_string()],
+        },
+        // Three qubit gates
+        ExternalFunc {
+            name: "__quantum__qis__ccx__body".to_string(),
+            return_type: None,
+            arg_types: vec!["!llvm.ptr<i8>".to_string(), "!llvm.ptr<i8>".to_string(), "!llvm.ptr<i8>".to_string()],
+        },
+        // Rotation gates
+        ExternalFunc {
+            name: "__quantum__qis__rx__body".to_string(),
+            return_type: None,
+            arg_types: vec!["f64".to_string(), "!llvm.ptr<i8>".to_string()],
+        },
+        ExternalFunc {
+            name: "__quantum__qis__ry__body".to_string(),
+            return_type: None,
+            arg_types: vec!["f64".to_string(), "!llvm.ptr<i8>".to_string()],
+        },
+        ExternalFunc {
+            name: "__quantum__qis__rz__body".to_string(),
+            return_type: None,
+            arg_types: vec!["f64".to_string(), "!llvm.ptr<i8>".to_string()],
+        },
+        ExternalFunc {
+            name: "__quantum__qis__crz__body".to_string(),
+            return_type: None,
+            arg_types: vec!["f64".to_string(), "!llvm.ptr<i8>".to_string(), "!llvm.ptr<i8>".to_string()],
         },
         // Measurement
         ExternalFunc {
@@ -268,6 +330,8 @@ fn lower_function(func: &PastFunction, _config: &PmirConfig) -> Result<MlirFunct
     } else if func.outputs.len() == 1 {
         format!("@{}({}) -> {}", func.name, input_types, output_types)
     } else {
+        // For multiple outputs, we need to return them as separate values, not a tuple
+        // MLIR's func dialect doesn't use parentheses for multiple returns
         format!("@{}({}) -> ({})", func.name, input_types, output_types)
     };
     
@@ -300,7 +364,7 @@ fn lower_graph(graph: &PastGraph) -> Result<Vec<MlirBlock>, PecosError> {
         
         // For quantum gates that operate in-place, we need to track the qubit flow
         match &node.op {
-            PastOp::H | PastOp::X | PastOp::Y | PastOp::Z => {
+            PastOp::H | PastOp::X | PastOp::Y | PastOp::Z | PastOp::S | PastOp::T | PastOp::Sdg | PastOp::Tdg => {
                 // These gates operate in-place, so output qubit is same as input
                 if let Some(&(src_node, src_port)) = edge_map.get(&(node.id, 0)) {
                     if let Some(val) = value_map.get(&(src_node, src_port)) {
@@ -308,9 +372,19 @@ fn lower_graph(graph: &PastGraph) -> Result<Vec<MlirBlock>, PecosError> {
                     }
                 }
             }
-            PastOp::CX | PastOp::CZ => {
+            PastOp::CX | PastOp::CZ | PastOp::CY | PastOp::CH => {
                 // Two-qubit gates pass through both qubits
                 for i in 0..2 {
+                    if let Some(&(src_node, src_port)) = edge_map.get(&(node.id, i)) {
+                        if let Some(val) = value_map.get(&(src_node, src_port)) {
+                            value_map.insert((node.id, i), val.clone());
+                        }
+                    }
+                }
+            }
+            PastOp::Toffoli => {
+                // Three-qubit gate passes through all qubits
+                for i in 0..3 {
                     if let Some(&(src_node, src_port)) = edge_map.get(&(node.id, i)) {
                         if let Some(val) = value_map.get(&(src_node, src_port)) {
                             value_map.insert((node.id, i), val.clone());
@@ -436,6 +510,50 @@ fn lower_node_to_operations(
             }])
         },
         
+        PastOp::S => {
+            Ok(vec![MlirOperation {
+                results: vec![],
+                op_name: "call".to_string(),
+                args: vec![
+                    format!("@__quantum__qis__s__body({})", get_input_arg(0))
+                ],
+                attrs: vec![("type".to_string(), "(!llvm.ptr<i8>) -> ()".to_string())],
+            }])
+        },
+        
+        PastOp::T => {
+            Ok(vec![MlirOperation {
+                results: vec![],
+                op_name: "call".to_string(),
+                args: vec![
+                    format!("@__quantum__qis__t__body({})", get_input_arg(0))
+                ],
+                attrs: vec![("type".to_string(), "(!llvm.ptr<i8>) -> ()".to_string())],
+            }])
+        },
+        
+        PastOp::Sdg => {
+            Ok(vec![MlirOperation {
+                results: vec![],
+                op_name: "call".to_string(),
+                args: vec![
+                    format!("@__quantum__qis__sadj__body({})", get_input_arg(0))
+                ],
+                attrs: vec![("type".to_string(), "(!llvm.ptr<i8>) -> ()".to_string())],
+            }])
+        },
+        
+        PastOp::Tdg => {
+            Ok(vec![MlirOperation {
+                results: vec![],
+                op_name: "call".to_string(),
+                args: vec![
+                    format!("@__quantum__qis__tadj__body({})", get_input_arg(0))
+                ],
+                attrs: vec![("type".to_string(), "(!llvm.ptr<i8>) -> ()".to_string())],
+            }])
+        },
+        
         PastOp::CX => {
             Ok(vec![MlirOperation {
                 results: vec![],
@@ -457,6 +575,88 @@ fn lower_node_to_operations(
                             get_input_arg(0), get_input_arg(1))
                 ],
                 attrs: vec![("type".to_string(), "(!llvm.ptr<i8>, !llvm.ptr<i8>) -> ()".to_string())],
+            }])
+        },
+        
+        PastOp::CY => {
+            Ok(vec![MlirOperation {
+                results: vec![],
+                op_name: "call".to_string(),
+                args: vec![
+                    format!("@__quantum__qis__cy__body({}, {})", 
+                            get_input_arg(0), get_input_arg(1))
+                ],
+                attrs: vec![("type".to_string(), "(!llvm.ptr<i8>, !llvm.ptr<i8>) -> ()".to_string())],
+            }])
+        },
+        
+        PastOp::CH => {
+            Ok(vec![MlirOperation {
+                results: vec![],
+                op_name: "call".to_string(),
+                args: vec![
+                    format!("@__quantum__qis__ch__body({}, {})", 
+                            get_input_arg(0), get_input_arg(1))
+                ],
+                attrs: vec![("type".to_string(), "(!llvm.ptr<i8>, !llvm.ptr<i8>) -> ()".to_string())],
+            }])
+        },
+        
+        PastOp::Toffoli => {
+            Ok(vec![MlirOperation {
+                results: vec![],
+                op_name: "call".to_string(),
+                args: vec![
+                    format!("@__quantum__qis__ccx__body({}, {}, {})", 
+                            get_input_arg(0), get_input_arg(1), get_input_arg(2))
+                ],
+                attrs: vec![("type".to_string(), "(!llvm.ptr<i8>, !llvm.ptr<i8>, !llvm.ptr<i8>) -> ()".to_string())],
+            }])
+        },
+        
+        // Rotation gates
+        PastOp::RX(angle) => {
+            Ok(vec![MlirOperation {
+                results: vec![],
+                op_name: "call".to_string(),
+                args: vec![
+                    format!("@__quantum__qis__rx__body({}, {})", angle, get_input_arg(0))
+                ],
+                attrs: vec![("type".to_string(), "(f64, !llvm.ptr<i8>) -> ()".to_string())],
+            }])
+        },
+        
+        PastOp::RY(angle) => {
+            Ok(vec![MlirOperation {
+                results: vec![],
+                op_name: "call".to_string(),
+                args: vec![
+                    format!("@__quantum__qis__ry__body({}, {})", angle, get_input_arg(0))
+                ],
+                attrs: vec![("type".to_string(), "(f64, !llvm.ptr<i8>) -> ()".to_string())],
+            }])
+        },
+        
+        PastOp::RZ(angle) => {
+            Ok(vec![MlirOperation {
+                results: vec![],
+                op_name: "call".to_string(),
+                args: vec![
+                    format!("@__quantum__qis__rz__body({}, {})", angle, get_input_arg(0))
+                ],
+                attrs: vec![("type".to_string(), "(f64, !llvm.ptr<i8>) -> ()".to_string())],
+            }])
+        },
+        
+        PastOp::CRZ(angle) => {
+            Ok(vec![MlirOperation {
+                results: vec![],
+                op_name: "call".to_string(),
+                args: vec![
+                    format!("@__quantum__qis__crz__body({}, {}, {})", 
+                            angle, get_input_arg(0), get_input_arg(1))
+                ],
+                attrs: vec![("type".to_string(), "(f64, !llvm.ptr<i8>, !llvm.ptr<i8>) -> ()".to_string())],
             }])
         },
         
@@ -497,7 +697,7 @@ fn lower_node_to_operations(
             Ok(vec![alloc_result, measure, read_result])
         },
         
-        PastOp::AllocQubit => {
+        PastOp::AllocQubit | PastOp::QAlloc => {
             let qubit_var = format!("%{}", node.id);
             allocated_qubits.push(qubit_var.clone());
             

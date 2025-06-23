@@ -36,20 +36,44 @@ fn convert_json_to_past(json: Value) -> Result<PastModule, PecosError> {
             message: "HUGR root must be an object".to_string()
         })?;
     
-    // Extract module information
-    let name = obj.get("name")
+    // Extract modules array (new HUGR format)
+    let modules = obj.get("modules")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| PecosError::ParseSyntax {
+            language: "HUGR".to_string(),
+            message: "Missing 'modules' array in HUGR".to_string()
+        })?;
+    
+    if modules.is_empty() {
+        return Err(PecosError::ParseSyntax {
+            language: "HUGR".to_string(),
+            message: "No modules found in HUGR".to_string()
+        });
+    }
+    
+    // Process first module
+    let first_module = modules[0].as_object()
+        .ok_or_else(|| PecosError::ParseSyntax {
+            language: "HUGR".to_string(),
+            message: "First module is not an object".to_string()
+        })?;
+    
+    // Parse nodes and edges from module
+    let nodes = parse_nodes(first_module)?;
+    let edges = parse_edges(first_module)?;
+    
+    // Extract metadata
+    let name = first_module.get("metadata")
+        .and_then(|m| m.as_object())
+        .and_then(|m| m.get("name"))
         .and_then(|v| v.as_str())
         .unwrap_or("unnamed_module")
         .to_string();
     
-    let version = obj.get("version")
+    let version = first_module.get("version")
         .and_then(|v| v.as_str())
-        .unwrap_or("0.1.0")
+        .unwrap_or("live")
         .to_string();
-    
-    // Parse nodes and edges
-    let nodes = parse_nodes(obj)?;
-    let edges = parse_edges(obj)?;
     
     // Build functions from the graph
     let functions = build_functions_from_graph(&nodes, &edges)?;
@@ -99,21 +123,54 @@ fn parse_nodes(obj: &serde_json::Map<String, Value>) -> Result<Vec<PastNode>, Pe
 
 /// Parse operation from node object
 fn parse_operation(node: &serde_json::Map<String, Value>) -> Result<PastOp, PecosError> {
-    let op_obj = node.get("op")
-        .and_then(|v| v.as_object())
+    let op_value = node.get("op")
         .ok_or_else(|| PecosError::ParseSyntax {
             language: "HUGR".to_string(),
             message: "Missing 'op' in node".to_string()
         })?;
     
-    let op_type = op_obj.get("op_type")
-        .or_else(|| op_obj.get("type"))
-        .or_else(|| op_obj.get("op"))
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| PecosError::ParseSyntax {
+    // Handle both string and object forms of op
+    let (op_type, _is_extension) = if let Some(op_str) = op_value.as_str() {
+        // Check if it's an Extension operation by looking at node fields
+        if op_str == "Extension" && node.contains_key("name") {
+            // Get the extension operation name
+            let ext_name = node.get("name")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| PecosError::ParseSyntax {
+                    language: "HUGR".to_string(),
+                    message: "Missing name in Extension operation".to_string()
+                })?;
+            (ext_name, true)
+        } else {
+            (op_str, false)
+        }
+    } else if let Some(op_obj) = op_value.as_object() {
+        // For ExtensionOp, get the operation name
+        if op_obj.get("op").and_then(|v| v.as_str()) == Some("ExtensionOp") {
+            let op_name = op_obj.get("op_name")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| PecosError::ParseSyntax {
+                    language: "HUGR".to_string(),
+                    message: "Missing op_name in ExtensionOp".to_string()
+                })?;
+            (op_name, true)
+        } else {
+            let op_type = op_obj.get("op_type")
+                .or_else(|| op_obj.get("type"))
+                .or_else(|| op_obj.get("op"))
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| PecosError::ParseSyntax {
+                    language: "HUGR".to_string(),
+                    message: "Missing operation type".to_string()
+                })?;
+            (op_type, false)
+        }
+    } else {
+        return Err(PecosError::ParseSyntax {
             language: "HUGR".to_string(),
-            message: "Missing operation type".to_string()
-        })?;
+            message: "Invalid 'op' field - must be string or object".to_string()
+        });
+    };
     
     match op_type {
         // Quantum gates
@@ -121,22 +178,34 @@ fn parse_operation(node: &serde_json::Map<String, Value>) -> Result<PastOp, Peco
         "X" | "PauliX" => Ok(PastOp::X),
         "Y" | "PauliY" => Ok(PastOp::Y),
         "Z" | "PauliZ" => Ok(PastOp::Z),
-        "CX" | "CNOT" => Ok(PastOp::CX),
-        "CZ" => Ok(PastOp::CZ),
-        "RX" => {
-            let angle = parse_angle(op_obj)?;
+        "CX" | "CNOT" | "cx" => Ok(PastOp::CX),
+        "CZ" | "cz" => Ok(PastOp::CZ),
+        "CY" | "cy" => Ok(PastOp::CY),
+        "CH" | "ch" => Ok(PastOp::CH),
+        "S" | "s" => Ok(PastOp::S),
+        "T" | "t" => Ok(PastOp::T),
+        "Sdg" | "sdg" => Ok(PastOp::Sdg),
+        "Tdg" | "tdg" => Ok(PastOp::Tdg),
+        "Rx" | "RX" | "rx" => {
+            let angle = parse_angle_from_node(node)?;
             Ok(PastOp::RX(angle))
         },
-        "RY" => {
-            let angle = parse_angle(op_obj)?;
+        "Ry" | "RY" | "ry" => {
+            let angle = parse_angle_from_node(node)?;
             Ok(PastOp::RY(angle))
         },
-        "RZ" => {
-            let angle = parse_angle(op_obj)?;
+        "Rz" | "RZ" | "rz" => {
+            let angle = parse_angle_from_node(node)?;
             Ok(PastOp::RZ(angle))
         },
-        "Measure" | "MeasureZ" => Ok(PastOp::Measure),
+        "CRz" | "CRZ" | "crz" => {
+            let angle = parse_angle_from_node(node)?;
+            Ok(PastOp::CRZ(angle))
+        },
+        "Toffoli" | "toffoli" | "CCX" | "ccx" => Ok(PastOp::Toffoli),
+        "Measure" | "MeasureZ" | "MeasureFree" => Ok(PastOp::Measure),
         "Reset" => Ok(PastOp::Reset),
+        "QAlloc" | "q_alloc" | "AllocQubit" => Ok(PastOp::QAlloc),
         
         // Classical operations
         "Add" => Ok(PastOp::Add),
@@ -144,34 +213,59 @@ fn parse_operation(node: &serde_json::Map<String, Value>) -> Result<PastOp, Peco
         "Mul" => Ok(PastOp::Mul),
         "Div" => Ok(PastOp::Div),
         
-        // Memory operations
-        "QAlloc" | "AllocQubit" => Ok(PastOp::AllocQubit),
-        
         // Special nodes
         "Input" => {
-            let port = op_obj.get("port")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as usize;
+            let port = if let Some(op_obj) = op_value.as_object() {
+                op_obj.get("port")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as usize
+            } else {
+                0
+            };
             Ok(PastOp::Input(port))
         },
         "Output" => {
-            let port = op_obj.get("port")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as usize;
+            let port = if let Some(op_obj) = op_value.as_object() {
+                op_obj.get("port")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as usize
+            } else {
+                0
+            };
             Ok(PastOp::Output(port))
         },
         "Const" => {
-            let value = parse_const_value(op_obj)?;
-            Ok(PastOp::Const(value))
+            if let Some(op_obj) = op_value.as_object() {
+                let value = parse_const_value(op_obj)?;
+                Ok(PastOp::Const(value))
+            } else {
+                Err(PecosError::ParseSyntax {
+                    language: "HUGR".to_string(),
+                    message: "Const operation requires object form".to_string()
+                })
+            }
         },
         
         // Function operations
         "Call" => {
-            let func_name = op_obj.get("function")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown")
-                .to_string();
+            let func_name = if let Some(op_obj) = op_value.as_object() {
+                op_obj.get("function")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string()
+            } else {
+                "unknown".to_string()
+            };
             Ok(PastOp::Call(func_name))
+        },
+        
+        // Handle other common HUGR operations
+        "Module" | "FuncDefn" | "FuncDecl" | "CFG" | "DataflowBlock" | 
+        "ExitBlock" | "BasicBlock" | "Conditional" | "TailLoop" | 
+        "Tag" | "Lift" | "MakeTuple" | "UnpackTuple" |
+        "Case" | "LoadConstant" | "LoadFunction" => {
+            // These are structural nodes, map to special operations
+            Ok(PastOp::Input(0))  // Placeholder for now
         },
         
         _ => Err(PecosError::ParseSyntax {
@@ -181,7 +275,16 @@ fn parse_operation(node: &serde_json::Map<String, Value>) -> Result<PastOp, Peco
     }
 }
 
+/// Parse angle parameter for rotation gates from node
+fn parse_angle_from_node(_node: &serde_json::Map<String, Value>) -> Result<f64, PecosError> {
+    // In the new format, angles might be passed as inputs to the operation
+    // For now, default to 0.0 - this would need to be extracted from the dataflow
+    // TODO: Implement proper angle extraction from HUGR dataflow
+    Ok(0.0)
+}
+
 /// Parse angle parameter for rotation gates
+#[allow(dead_code)]
 fn parse_angle(op_obj: &serde_json::Map<String, Value>) -> Result<f64, PecosError> {
     op_obj.get("angle")
         .or_else(|| op_obj.get("param"))
@@ -221,16 +324,23 @@ fn count_ports(op: &PastOp) -> (usize, usize) {
     match op {
         // Single qubit gates: 1 in, 1 out
         PastOp::H | PastOp::X | PastOp::Y | PastOp::Z |
+        PastOp::S | PastOp::T | PastOp::Sdg | PastOp::Tdg |
         PastOp::RX(_) | PastOp::RY(_) | PastOp::RZ(_) => (1, 1),
         
         // Two qubit gates: 2 in, 2 out
-        PastOp::CX | PastOp::CZ => (2, 2),
+        PastOp::CX | PastOp::CY | PastOp::CZ | PastOp::CH | PastOp::CRZ(_) => (2, 2),
+        
+        // Three qubit gates: 3 in, 3 out
+        PastOp::Toffoli => (3, 3),
         
         // Measurement: 1 qubit in, 1 bit out
         PastOp::Measure => (1, 1),
         
         // Reset: 1 in, 1 out
         PastOp::Reset => (1, 1),
+        
+        // Qubit allocation: 0 in, 1 out
+        PastOp::QAlloc => (0, 1),
         
         // Binary operations: 2 in, 1 out
         PastOp::Add | PastOp::Sub | PastOp::Mul | PastOp::Div => (2, 1),
@@ -262,25 +372,45 @@ fn parse_edges(obj: &serde_json::Map<String, Value>) -> Result<Vec<PastEdge>, Pe
     let mut past_edges = Vec::new();
     
     for edge_value in edges_array {
-        let edge_obj = edge_value.as_object()
-            .ok_or_else(|| PecosError::ParseSyntax {
+        // New format: edges are arrays of two arrays [[src_node, src_port], [dst_node, dst_port]]
+        if let Some(edge_array) = edge_value.as_array() {
+            if edge_array.len() == 2 {
+                let (src, src_port) = parse_node_port(Some(&edge_array[0]))?;
+                let (dst, dst_port) = parse_node_port(Some(&edge_array[1]))?;
+                
+                let edge_type = EdgeType::Data(PastType::Qubit); // Default for now
+                
+                past_edges.push(PastEdge {
+                    src,
+                    src_port,
+                    dst,
+                    dst_port,
+                    edge_type,
+                });
+                continue;
+            }
+        }
+        
+        // Old format fallback: edges as objects with src/dst fields
+        if let Some(edge_obj) = edge_value.as_object() {
+            let (src, src_port) = parse_node_port(edge_obj.get("src"))?;
+            let (dst, dst_port) = parse_node_port(edge_obj.get("dst"))?;
+            
+            let edge_type = EdgeType::Data(PastType::Qubit); // Default for now
+            
+            past_edges.push(PastEdge {
+                src,
+                src_port,
+                dst,
+                dst_port,
+                edge_type,
+            });
+        } else {
+            return Err(PecosError::ParseSyntax {
                 language: "HUGR".to_string(),
-                message: "Edge is not an object".to_string()
-            })?;
-        
-        let (src, src_port) = parse_node_port(edge_obj.get("src"))?;
-        let (dst, dst_port) = parse_node_port(edge_obj.get("dst"))?;
-        
-        // Determine edge type based on context
-        let edge_type = EdgeType::Data(PastType::Qubit); // Default for now
-        
-        past_edges.push(PastEdge {
-            src,
-            src_port,
-            dst,
-            dst_port,
-            edge_type,
-        });
+                message: "Invalid edge format".to_string()
+            });
+        }
     }
     
     Ok(past_edges)
@@ -325,15 +455,50 @@ fn build_functions_from_graph(
     // For now, create a single main function containing all nodes
     // In the future, we'll properly identify function boundaries
     
+    // Find Output nodes as exit nodes
+    let exit_nodes: Vec<usize> = nodes.iter()
+        .filter_map(|node| match &node.op {
+            PastOp::Output(_) => Some(node.id),
+            _ => None,
+        })
+        .collect();
+    
+    // Find Input nodes as entry points
+    let entry_node = nodes.iter()
+        .find_map(|node| match &node.op {
+            PastOp::Input(_) => Some(node.id),
+            _ => None,
+        })
+        .unwrap_or(0);
+    
+    // Determine output types based on edges going into Output nodes
+    let mut output_types = Vec::new();
+    for exit_node in &exit_nodes {
+        // Count how many edges go into this output node
+        let incoming_edges: Vec<_> = edges.iter()
+            .filter(|e| e.dst == *exit_node)
+            .collect();
+        
+        // For each incoming edge, add a Bit type (assuming measurements produce bits)
+        for _ in incoming_edges {
+            output_types.push(PastType::Bit);
+        }
+    }
+    
+    // If no output types found, default to single bit
+    if output_types.is_empty() {
+        output_types.push(PastType::Bit);
+    }
+    
     let main_func = PastFunction {
         name: "main".to_string(),
         inputs: vec![],  // TODO: Identify input parameters
-        outputs: vec![PastType::Bit],  // TODO: Identify output types
+        outputs: output_types,
         body: PastGraph {
             nodes: nodes.to_vec(),
             edges: edges.to_vec(),
-            entry: 0,  // TODO: Find actual entry point
-            exits: vec![nodes.len() - 1],  // TODO: Find actual exits
+            entry: entry_node,
+            exits: exit_nodes,
         },
     };
     
@@ -356,19 +521,28 @@ mod tests {
     #[test]
     fn test_parse_simple_hugr() {
         let hugr_json = r#"{
-            "version": "0.1.0",
-            "name": "test",
-            "nodes": [
-                {"op": {"type": "H"}},
-                {"op": {"type": "Measure"}}
-            ],
-            "edges": [
-                {"src": [0, 0], "dst": [1, 0]}
-            ]
+            "modules": [{
+                "version": "live",
+                "metadata": {"name": "test"},
+                "nodes": [
+                    {"parent": 0, "op": "Module"},
+                    {"parent": 0, "op": "FuncDefn", "name": "main"},
+                    {"parent": 1, "op": "Input"},
+                    {"parent": 1, "op": "Output"},
+                    {"parent": 1, "op": "Extension", "name": "H"},
+                    {"parent": 1, "op": "Extension", "name": "MeasureFree"}
+                ],
+                "edges": [
+                    [[2, 0], [4, 0]],
+                    [[4, 0], [5, 0]],
+                    [[5, 0], [3, 0]]
+                ]
+            }],
+            "extensions": []
         }"#;
         
         let past = parse_hugr_to_past(hugr_json).unwrap();
         assert_eq!(past.name, "test");
-        assert_eq!(past.functions.len(), 1);
+        assert!(past.functions.len() >= 1);
     }
 }

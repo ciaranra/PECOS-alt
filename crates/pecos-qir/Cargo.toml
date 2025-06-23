@@ -21,6 +21,7 @@ libc.workspace = true
 bytemuck.workspace = true
 tempfile.workspace = true
 env_logger.workspace = true
+parking_lot.workspace = true
 # Pest parser dependencies
 pest = "2.7"
 pest_derive = "2.7"

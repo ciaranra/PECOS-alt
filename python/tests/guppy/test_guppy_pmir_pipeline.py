@@ -40,21 +40,28 @@ except ImportError:
 @pytest.mark.skipif(not PMIR_AVAILABLE, reason="PMIR not available")
 def test_guppy_like_hugr_to_pmir_pipeline():
     """Test a Guppy-like HUGR through the PMIR pipeline."""
-    # Create a HUGR that looks like what Guppy would generate
+    # Create a HUGR that looks like what Guppy would generate (new format)
     hugr = {
-        "version": "0.1.0",
-        "name": "random_bit",
-        "nodes": [
-            {"op": {"type": "AllocQubit"}},
-            {"op": {"type": "H"}},
-            {"op": {"type": "Measure"}},
-            {"op": {"type": "Output", "port": 0}}
-        ],
-        "edges": [
-            {"src": [0, 0], "dst": [1, 0]},
-            {"src": [1, 0], "dst": [2, 0]},
-            {"src": [2, 0], "dst": [3, 0]}
-        ]
+        "modules": [{
+            "version": "live",
+            "metadata": {"name": "random_bit"},
+            "nodes": [
+                {"parent": 0, "op": "Module"},
+                {"parent": 0, "op": "FuncDefn", "name": "main"},
+                {"parent": 1, "op": "Input"},
+                {"parent": 1, "op": "Output"},
+                {"parent": 1, "op": "Extension", "name": "QAlloc"},
+                {"parent": 1, "op": "Extension", "name": "H"},
+                {"parent": 1, "op": "Extension", "name": "MeasureFree"}
+            ],
+            "edges": [
+                [[2, 0], [4, 0]],
+                [[4, 0], [5, 0]],
+                [[5, 0], [6, 0]],
+                [[6, 0], [3, 0]]
+            ]
+        }],
+        "extensions": []
     }
     
     hugr_json = json.dumps(hugr)
@@ -62,7 +69,7 @@ def test_guppy_like_hugr_to_pmir_pipeline():
     # Convert HUGR to PAST (PECOS AST)
     past_ron = hugr_to_past_ron(hugr_json)
     assert past_ron.startswith("(")
-    assert "AllocQubit" in past_ron
+    assert "QAlloc" in past_ron
     assert "H" in past_ron
     assert "Measure" in past_ron
     
@@ -94,29 +101,36 @@ def test_guppy_like_hugr_to_pmir_pipeline():
 @pytest.mark.skipif(not PMIR_AVAILABLE, reason="PMIR not available")
 def test_bell_state_hugr_via_pmir():
     """Test a Bell state HUGR through the PMIR pipeline."""
-    # Create a Bell state HUGR
+    # Create a Bell state HUGR (new format)
     hugr = {
-        "version": "0.1.0",
-        "name": "bell_state",
-        "nodes": [
-            {"op": {"type": "AllocQubit"}},  # Node 0
-            {"op": {"type": "AllocQubit"}},  # Node 1
-            {"op": {"type": "H"}},           # Node 2
-            {"op": {"type": "CX"}},          # Node 3
-            {"op": {"type": "Measure"}},     # Node 4
-            {"op": {"type": "Measure"}},     # Node 5
-            {"op": {"type": "Output", "port": 0}},  # Node 6
-            {"op": {"type": "Output", "port": 1}}   # Node 7
-        ],
-        "edges": [
-            {"src": [0, 0], "dst": [2, 0]},  # Qubit 0 -> H
-            {"src": [2, 0], "dst": [3, 0]},  # H -> CX control
-            {"src": [1, 0], "dst": [3, 1]},  # Qubit 1 -> CX target
-            {"src": [3, 0], "dst": [4, 0]},  # CX control -> Measure
-            {"src": [3, 1], "dst": [5, 0]},  # CX target -> Measure
-            {"src": [4, 0], "dst": [6, 0]},  # Measure -> Output
-            {"src": [5, 0], "dst": [7, 0]}   # Measure -> Output
-        ]
+        "modules": [{
+            "version": "live",
+            "metadata": {"name": "bell_state"},
+            "nodes": [
+                {"parent": 0, "op": "Module"},
+                {"parent": 0, "op": "FuncDefn", "name": "main"},
+                {"parent": 1, "op": "Input"},
+                {"parent": 1, "op": "Output"},
+                {"parent": 1, "op": "Extension", "name": "QAlloc"},
+                {"parent": 1, "op": "Extension", "name": "QAlloc"},
+                {"parent": 1, "op": "Extension", "name": "H"},
+                {"parent": 1, "op": "Extension", "name": "CX"},
+                {"parent": 1, "op": "Extension", "name": "MeasureFree"},
+                {"parent": 1, "op": "Extension", "name": "MeasureFree"}
+            ],
+            "edges": [
+                [[2, 0], [4, 0]],
+                [[2, 0], [5, 0]],
+                [[4, 0], [6, 0]],
+                [[6, 0], [7, 0]],
+                [[5, 0], [7, 1]],
+                [[7, 0], [8, 0]],
+                [[7, 1], [9, 0]],
+                [[8, 0], [3, 0]],
+                [[9, 0], [3, 1]]
+            ]
+        }],
+        "extensions": []
     }
     
     hugr_json = json.dumps(hugr)
@@ -136,21 +150,28 @@ def test_bell_state_hugr_via_pmir():
 @pytest.mark.skipif(not PMIR_AVAILABLE, reason="PMIR not available")
 def test_pmir_with_manual_hugr():
     """Test PMIR with a manually created HUGR (no Guppy dependency)."""
-    # Create a simple HUGR manually
+    # Create a simple HUGR manually (new format)
     hugr = {
-        "version": "0.1.0",
-        "name": "hadamard_test",
-        "nodes": [
-            {"op": {"type": "AllocQubit"}},
-            {"op": {"type": "H"}},
-            {"op": {"type": "Measure"}},
-            {"op": {"type": "Output", "port": 0}}
-        ],
-        "edges": [
-            {"src": [0, 0], "dst": [1, 0]},
-            {"src": [1, 0], "dst": [2, 0]},
-            {"src": [2, 0], "dst": [3, 0]}
-        ]
+        "modules": [{
+            "version": "live",
+            "metadata": {"name": "hadamard_test"},
+            "nodes": [
+                {"parent": 0, "op": "Module"},
+                {"parent": 0, "op": "FuncDefn", "name": "main"},
+                {"parent": 1, "op": "Input"},
+                {"parent": 1, "op": "Output"},
+                {"parent": 1, "op": "Extension", "name": "QAlloc"},
+                {"parent": 1, "op": "Extension", "name": "H"},
+                {"parent": 1, "op": "Extension", "name": "MeasureFree"}
+            ],
+            "edges": [
+                [[2, 0], [4, 0]],
+                [[4, 0], [5, 0]],
+                [[5, 0], [6, 0]],
+                [[6, 0], [3, 0]]
+            ]
+        }],
+        "extensions": []
     }
     
     hugr_json = json.dumps(hugr)

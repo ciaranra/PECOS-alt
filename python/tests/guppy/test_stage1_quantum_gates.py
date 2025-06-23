@@ -21,7 +21,6 @@ try:
     from guppylang import guppy
     from guppylang.std.quantum import qubit, measure
     from guppylang.std.angles import angle, pi
-    from guppylang.std.builtins import py
     GUPPY_AVAILABLE = True
 except ImportError:
     GUPPY_AVAILABLE = False
@@ -58,20 +57,20 @@ class TestStage1QuantumGates:
         @guppy
         def test_rx() -> bool:
             q = qubit()
-            q = rx(q, angle(py(pi/2)))
+            q = rx(q, pi/2)  # pi/2 radians = pi/2 halfturns = 0.5 halfturns
             return measure(q)
         
         @guppy
         def test_ry() -> bool:
             q = qubit()
-            q = ry(q, angle(py(pi/2)))
+            q = ry(q, pi/2)
             return measure(q)
         
         @guppy
         def test_rz() -> bool:
             q = qubit()
             q = h(q)  # Put in superposition first
-            q = rz(q, angle(py(pi/2)))
+            q = rz(q, pi/2)
             q = h(q)
             return measure(q)
         
@@ -166,7 +165,14 @@ class TestStage1QuantumGates:
             try:
                 llvm_ir = compile_guppy_to_llvm(func)
                 assert llvm_ir is not None
-                assert f"__quantum__qis__{gate.lower()}__body" in llvm_ir
+                
+                # CH is a composite gate, check for its components
+                if gate == "CH":
+                    assert "__quantum__qis__ry__body" in llvm_ir
+                    assert "__quantum__qis__cz__body" in llvm_ir
+                else:
+                    assert f"__quantum__qis__{gate.lower()}__body" in llvm_ir
+                    
                 print(f"✓ {gate} gate compiled successfully")
             except Exception as e:
                 pytest.fail(f"{gate} gate compilation failed: {e}")
@@ -180,7 +186,7 @@ class TestStage1QuantumGates:
             q2 = qubit()
             q1 = x(q1)  # Set control to |1>
             q2 = h(q2)
-            q1, q2 = crz(q1, q2, angle(py(pi/4)))
+            q1, q2 = crz(q1, q2, pi/4)
             q2 = h(q2)
             return measure(q1), measure(q2)
         
@@ -223,8 +229,8 @@ class TestStage1QuantumGates:
             q2 = qubit()
             
             # Apply rotation gates
-            q1 = rx(q1, angle(py(pi/3)))
-            q1 = ry(q1, angle(py(pi/4)))
+            q1 = rx(q1, pi/3)
+            q1 = ry(q1, pi/4)
             
             # Apply Pauli gates
             q1 = s(q1)
@@ -232,7 +238,7 @@ class TestStage1QuantumGates:
             
             # Apply controlled gates
             q1, q2 = cy(q1, q2)
-            q1, q2 = crz(q1, q2, angle(py(pi/6)))
+            q1, q2 = crz(q1, q2, pi/6)
             
             # Final rotations
             q1 = sdg(q1)

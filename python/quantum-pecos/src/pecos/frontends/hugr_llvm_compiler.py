@@ -52,15 +52,14 @@ class HugrLlvmCompiler:
     def compile_hugr_to_llvm(
         self,
         hugr_bytes: bytes,
-        naming_convention: str = "pecos",
+        llvm_convention: str = "hugr",
         output_file: Path | None = None,
     ) -> str:
         """Compile HUGR bytes to LLVM IR.
 
         Args:
             hugr_bytes: HUGR package as bytes
-            naming_convention: Quantum operation naming convention
-                             ("qir", "pecos", "pecos-alt", or custom prefix)
+            llvm_convention: LLVM-IR convention ("hugr" or "qir")
             output_file: Optional output file path
 
         Returns:
@@ -98,7 +97,7 @@ class HugrLlvmCompiler:
                 str(self.hugr_llvm_binary),
                 str(hugr_file),
                 str(llvm_file),
-                naming_convention,
+                llvm_convention,
             ]
 
             subprocess.run(  # noqa: S603
@@ -145,20 +144,20 @@ class HugrLlvmCompiler:
 
 def compile_hugr_bytes_to_llvm(
     hugr_bytes: bytes,
-    naming_convention: str = "pecos",
+    llvm_convention: str = "pecos",
 ) -> str:
     """Convenience function to compile HUGR bytes to LLVM IR.
 
     Args:
         hugr_bytes: HUGR package as bytes
-        naming_convention: Quantum operation naming convention
+        llvm_convention: LLVM-IR convention ("hugr", "qir", "pecos")
 
     Returns:
         LLVM IR as string
     """
     compiler = HugrLlvmCompiler()
     try:
-        return compiler.compile_hugr_to_llvm(hugr_bytes, naming_convention)
+        return compiler.compile_hugr_to_llvm(hugr_bytes, llvm_convention)
     finally:
         compiler.cleanup()
 

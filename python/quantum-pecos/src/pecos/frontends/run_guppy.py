@@ -3,7 +3,7 @@
 This module provides a simple, qasm_sim-like interface for running Guppy quantum programs.
 """
 
-import secrets
+import sys
 from collections.abc import Callable
 from typing import Any, TypeVar
 
@@ -19,14 +19,15 @@ except ImportError:
     GUPPY_AVAILABLE = False
     guppy = None
 
-
+# TODO: Remove backend stuff... there is only one backend... Rust
 def run_guppy(
     guppy_function: Callable[..., T],
-    shots: int = 1000,
+    shots: int = 1,
     backend: str | None = None,
-    naming_convention: str = "standard",
+    llvm_convention: str = "hugr",
     *,
     verbose: bool = False,
+    seed: int | None = None,
     **kwargs: Any,  # noqa: ANN401
 ) -> dict[str, Any]:
     """Run a Guppy quantum function on PECOS - simple API similar to run_qasm().
@@ -35,8 +36,9 @@ def run_guppy(
         guppy_function: A function decorated with @guppy
         shots: Number of shots to execute (default: 1000)
         backend: Backend to use ("rust", "external", or None for auto-detect)
-        naming_convention: Quantum operation naming ("standard", "hugr", "pecos")
+        llvm_convention: LLVM-IR convention ("hugr" for integer-based, "qir" for Microsoft QIR pointer-based)
         verbose: Enable verbose output
+        seed: Random seed for reproducible results (default: None for random)
         **kwargs: Additional arguments passed to GuppyFrontend
 
     Returns:
@@ -120,7 +122,7 @@ def run_guppy(
     try:
         frontend = GuppyFrontend(
             use_rust_backend=use_rust_backend,
-            naming_convention=naming_convention,
+            llvm_convention=llvm_convention,
             **kwargs,
         )
     except Exception as e:
@@ -152,105 +154,70 @@ def run_guppy(
         msg = f"Compilation failed: {e}"
         raise RuntimeError(msg) from e
 
-    # Execute using QIR Engine (proper pipeline)
+    # Execute using QIR Engine PyO3 bindings
     execution_start = time.time()
+    
+    from pecos_rslib import execute_qir, reset_qir_runtime
+    import os
+    
+    # IMPORTANT: Reset QIR runtime state before execution to prevent
+    # global state accumulation that causes aborts in Python test suites
     try:
-        from pecos.frontends.qir_engine_wrapper import (
-            QirEngineWrapper,
-            is_qir_engine_available,
-        )
-
-        if not is_qir_engine_available():
-            if verbose:
-                print(
-                    "[WARNING] PECOS QIR engine not available, falling back to simulated results",
-                )
-
-            # Generate simulated results for demonstration
-            import inspect
-
-            if hasattr(guppy_function, "wrapped") and hasattr(
-                guppy_function.wrapped,
-                "python_func",
-            ):
-                sig = inspect.signature(guppy_function.wrapped.python_func)
-            else:
-                sig = inspect.signature(guppy_function)
-
-            return_annotation = sig.return_annotation
-            results = []
-
-            for _ in range(shots):
-                if return_annotation is bool:
-                    results.append(secrets.choice([True, False]))
-                elif (
-                    hasattr(return_annotation, "__origin__")
-                    and return_annotation.__origin__ is tuple
-                ):
-                    args = getattr(return_annotation, "__args__", ())
-                    if all(arg is bool for arg in args) and len(args) == 2:
-                        # Bell state - perfect correlation
-                        bit = secrets.choice([True, False])
-                        results.append((bit, bit))
-                    elif all(arg is bool for arg in args):
-                        results.append(
-                            tuple(secrets.choice([True, False]) for _ in args),
-                        )
-                    else:
-                        results.append(tuple(0 for _ in args))
-                else:
-                    results.append(0)
-
-            execution_time = time.time() - execution_start
-
-        else:
-            # Use the proper QIR engine pipeline
-            if verbose:
-                print("[OK] Using PECOS QIR engine for execution")
-
-            wrapper = QirEngineWrapper()
-            try:
-                engine_result = wrapper.execute_qir_file(qir_file, shots)
-
-                if not engine_result.get("execution_successful", False):
-                    error_msg = engine_result.get("error", "Unknown QIR engine error")
-                    msg = f"QIR engine execution failed: {error_msg}"
-                    raise RuntimeError(msg)
-
-                results = engine_result.get("measurements", [])
-                execution_time = time.time() - execution_start
-
-                if verbose:
-                    print(
-                        f"[PASS] QIR engine execution completed in {execution_time:.4f}s",
-                    )
-                    print(f"Got {len(results)} results from QIR engine")
-
-                # If we didn't get enough results, this might indicate a QIR engine issue
-                # For now, we'll note it but not fail
-                if len(results) < shots and verbose:
-                    print(
-                        f"[WARNING] QIR engine returned {len(results)} results, expected {shots}",
-                    )
-
-            finally:
-                wrapper.cleanup()
-
+        reset_qir_runtime()
     except Exception as e:
-        msg = f"Execution failed: {e}"
-        raise RuntimeError(msg) from e
-
-    # Return results in qasm_sim-like format
-    return {
-        "results": results,
-        "shots": shots,
-        "function_name": function_name,
-        "backend_used": backend_used,
-        "compilation_time": compilation_time,
-        "execution_time": execution_time,
-        "qir_file": str(qir_file),
-        "backend_info": backend_info,
-    }
+        # Log the error but don't fail - reset errors may indicate deeper issues
+        # but shouldn't prevent execution entirely
+        if verbose:
+            print(f"[WARNING] QIR runtime reset failed: {e}")
+        import logging
+        logging.getLogger(__name__).warning(f"QIR runtime reset failed: {e}")
+    
+    if verbose:
+        print("[OK] Using PECOS QIR PyO3 bindings for execution")
+    
+    # Determine the actual LLVM convention used based on backend
+    # PMIR always uses pointer-based convention (similar to QIR)
+    actual_convention = llvm_convention
+    if backend_used == "external":
+        # PMIR pipeline always generates pointer-based LLVM-IR
+        actual_convention = "qir"
+        if verbose and llvm_convention != "qir":
+            print(f"[INFO] PMIR backend always uses pointer-based convention, overriding to 'qir'")
+    
+    # Execute the QIR file with the PyO3 bindings
+    qir_result = execute_qir(
+        str(qir_file),
+        shots,
+        seed,
+        None,  # noise_probability
+        None,  # workers
+        llvm_convention=actual_convention  # Use the actual convention
+    )
+    
+    # Extract results from the returned dictionary
+    if qir_result.get("execution_successful", False):
+        results = qir_result.get("results", [])
+        execution_time = time.time() - execution_start
+        
+        if verbose:
+            print(f"[PASS] QIR execution completed in {execution_time:.4f}s")
+            print(f"Got {len(results)} results from QIR engine")
+        
+        # Return the results
+        return {
+            "results": results,
+            "shots": shots,
+            "function_name": function_name,
+            "backend_used": backend_used,
+            "compilation_time": compilation_time,
+            "execution_time": execution_time,
+            "qir_file": str(qir_file),
+            "backend_info": backend_info,
+        }
+    else:
+        error_details = qir_result.get("error", "Unknown error")
+        msg = f"QIR execution failed: {error_details}"
+        raise RuntimeError(msg)
 
 
 def run_guppy_batch(

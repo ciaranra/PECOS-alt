@@ -28,7 +28,7 @@ pub unsafe extern "C" fn __hugr__rt__qubit_allocate() -> i16 {
 /// parameter must be a valid allocated qubit ID.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __hugr__quantum__h(qubit: i16) {
-    unsafe { runtime::__quantum__qis__h__body_i64(i64::from(qubit)) };
+    unsafe { runtime::__quantum__qis__h__body__hugr(i64::from(qubit)) };
 }
 
 /// HUGR-specific X gate with i16 parameter
@@ -38,7 +38,7 @@ pub unsafe extern "C" fn __hugr__quantum__h(qubit: i16) {
 /// parameter must be a valid allocated qubit ID.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __hugr__quantum__x(qubit: i16) {
-    unsafe { runtime::__quantum__qis__x__body_i64(i64::from(qubit)) };
+    unsafe { runtime::__quantum__qis__x__body__hugr(i64::from(qubit)) };
 }
 
 /// HUGR-specific Y gate with i16 parameter
@@ -48,7 +48,7 @@ pub unsafe extern "C" fn __hugr__quantum__x(qubit: i16) {
 /// parameter must be a valid allocated qubit ID.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __hugr__quantum__y(qubit: i16) {
-    unsafe { runtime::__quantum__qis__y__body_i64(i64::from(qubit)) };
+    unsafe { runtime::__quantum__qis__y__body__hugr(i64::from(qubit)) };
 }
 
 /// HUGR-specific Z gate with i16 parameter
@@ -58,7 +58,7 @@ pub unsafe extern "C" fn __hugr__quantum__y(qubit: i16) {
 /// parameter must be a valid allocated qubit ID.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __hugr__quantum__z(qubit: i16) {
-    unsafe { runtime::__quantum__qis__z__body_i64(i64::from(qubit)) };
+    unsafe { runtime::__quantum__qis__z__body__hugr(i64::from(qubit)) };
 }
 
 /// HUGR-specific CNOT gate with i16 parameters
@@ -68,7 +68,7 @@ pub unsafe extern "C" fn __hugr__quantum__z(qubit: i16) {
 /// and target parameters must be valid allocated qubit IDs.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __hugr__quantum__cnot(control: i16, target: i16) {
-    unsafe { runtime::__quantum__qis__cx__body_i64(i64::from(control), i64::from(target)) };
+    unsafe { runtime::__quantum__qis__cx__body__hugr(i64::from(control), i64::from(target)) };
 }
 
 /// HUGR-specific CX gate with i16 parameters (alias for cnot)
@@ -78,7 +78,7 @@ pub unsafe extern "C" fn __hugr__quantum__cnot(control: i16, target: i16) {
 /// and target parameters must be valid allocated qubit IDs.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __hugr__quantum__cx(control: i16, target: i16) {
-    unsafe { runtime::__quantum__qis__cx__body_i64(i64::from(control), i64::from(target)) };
+    unsafe { runtime::__quantum__qis__cx__body__hugr(i64::from(control), i64::from(target)) };
 }
 
 /// HUGR-specific CY gate with i16 parameters
@@ -89,9 +89,9 @@ pub unsafe extern "C" fn __hugr__quantum__cx(control: i16, target: i16) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __hugr__quantum__cy(control: i16, target: i16) {
     unsafe {
-        runtime::__quantum__qis__y__body_i64(i64::from(target));
-        runtime::__quantum__qis__cx__body_i64(i64::from(control), i64::from(target));
-        runtime::__quantum__qis__y__body_i64(i64::from(target));
+        runtime::__quantum__qis__y__body__hugr(i64::from(target));
+        runtime::__quantum__qis__cx__body__hugr(i64::from(control), i64::from(target));
+        runtime::__quantum__qis__y__body__hugr(i64::from(target));
     }
 }
 
@@ -105,18 +105,14 @@ pub unsafe extern "C" fn __hugr__quantum__cz(control: i16, target: i16) {
     unsafe { runtime::__quantum__qis__cz__body(i64::from(control), i64::from(target)) };
 }
 
-/// HUGR-specific measurement with i16 parameter and bool return
+/// HUGR-specific measurement with i16 parameter
 ///
 /// # Safety
 /// This function is unsafe because it operates on quantum state, allocates result
 /// resources, and the qubit parameter must be a valid allocated qubit ID.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __hugr__quantum__measure(qubit: i16) -> bool {
+pub unsafe extern "C" fn __hugr__quantum__measure(qubit: i16) {
     let result_id = unsafe { runtime::__quantum__rt__result_allocate() };
     #[allow(clippy::cast_possible_wrap)]
-    let measurement =
-        unsafe { runtime::__quantum__qis__m__body_i64(i64::from(qubit), result_id as i64) };
-
-    // PECOS returns 0 or 1 as u32, convert to bool
-    measurement != 0
+    unsafe { runtime::__hugr__quantum__qis__m__body(i64::from(qubit), result_id as i64) };
 }

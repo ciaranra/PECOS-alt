@@ -33,7 +33,7 @@ use std::path::PathBuf;
 let config = CompilerConfig {
     output_path: Some(PathBuf::from("output.ll")),
     debug_info: false,
-    quantum_naming: pecos_qir::hugr::QuantumNamingConvention::StandardQir,
+    quantum_naming: pecos_qir::hugr::QuantumLlvmConvention::Qir,
 };
 
 let compiler = Compiler::with_config(config);
@@ -53,19 +53,23 @@ pub mod compiler;
 pub mod engine;
 #[cfg(feature = "hugr-llvm-pipeline")]
 pub mod result_extractor;
-#[cfg(feature = "hugr-llvm-pipeline")]
-pub mod simple_llvm_fallback;
+// Removed simple_llvm_fallback - no fallbacks, only proper solutions
 #[cfg(feature = "hugr-llvm-pipeline")]
 pub mod standard_qir_generator;
 #[cfg(feature = "hugr-llvm-pipeline")]
-pub mod type_transformer;
+pub mod true_standard_qir_generator;
 #[cfg(feature = "hugr-llvm-pipeline")]
-pub mod version_translator;
+pub mod tket2_bool_extension;
+#[cfg(feature = "hugr-llvm-pipeline")]
+pub mod tket2_rotation_extension;
+#[cfg(feature = "hugr-llvm-pipeline")]
+pub mod type_transformer;
+// Version translator removed - using same HUGR version as Guppy 0.20.0
 
 // Re-export main types for convenience
 #[cfg(feature = "hugr-llvm-pipeline")]
 pub use compiler::{
-    HugrCompiler as Compiler, HugrCompilerConfig as CompilerConfig, QuantumNamingConvention,
+    HugrCompiler as Compiler, HugrCompilerConfig as CompilerConfig, QuantumLlvmConvention,
 };
 #[cfg(feature = "hugr-llvm-pipeline")]
 pub use engine::{compile_hugr_to_qir, create_hugr_qir_engine, setup_hugr_qir_engine};
@@ -84,14 +88,13 @@ pub mod compiler {
     pub struct HugrCompilerConfig {
         pub output_path: Option<PathBuf>,
         pub debug_info: bool,
-        pub quantum_naming: QuantumNamingConvention,
+        pub quantum_naming: QuantumLlvmConvention,
     }
 
     #[derive(Debug, Clone, PartialEq)]
-    pub enum QuantumNamingConvention {
-        StandardQir,
+    pub enum QuantumLlvmConvention {
+        Qir,
         Hugr,
-        Pecos,
     }
 
     impl Default for HugrCompilerConfig {
@@ -99,7 +102,7 @@ pub mod compiler {
             Self {
                 output_path: None,
                 debug_info: false,
-                quantum_naming: QuantumNamingConvention::StandardQir,
+                quantum_naming: QuantumLlvmConvention::Qir,
             }
         }
     }

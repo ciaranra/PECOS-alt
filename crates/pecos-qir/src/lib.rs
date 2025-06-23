@@ -1,12 +1,15 @@
 pub mod engine;
+pub mod error_handling; // Enhanced error handling and debugging for QIR execution
 pub mod library;
 pub mod linker; // Links QIR programs with runtime library
+pub mod panic_handler; // QIR-aware panic handler for better diagnostics
 pub mod platform;
 pub mod prelude;
 pub mod python_api;
 pub mod qir_compat; // QIR compatibility layer (alternative naming conventions)
 pub mod qir_utils; // QIR utilities for entry point detection
 pub mod runtime; // Python-friendly API functions
+pub mod runtime_context; // Thread-local runtime context for isolation
 
 // HUGR-LLVM pipeline functionality
 #[cfg(feature = "hugr-llvm-pipeline")]
@@ -28,7 +31,7 @@ pub use engine::QirEngine;
 // HUGR-LLVM pipeline re-exports (only available with hugr-llvm-pipeline feature)
 #[cfg(feature = "hugr-llvm-pipeline")]
 pub use hugr::compiler::{
-    HugrCompiler, HugrCompilerConfig, QuantumNamingConvention,
+    HugrCompiler, HugrCompilerConfig, QuantumLlvmConvention,
 };
 #[cfg(feature = "hugr-llvm-pipeline")]
 pub use hugr::engine::{compile_hugr_to_qir, create_hugr_qir_engine, setup_hugr_qir_engine};
@@ -47,7 +50,7 @@ pub mod hugr_stubs {
     
     pub struct HugrCompiler;
     pub struct HugrCompilerConfig;
-    pub struct QuantumNamingConvention;
+    pub struct QuantumLlvmConvention;
     
     impl HugrCompiler {
         pub fn new(_config: HugrCompilerConfig) -> Result<Self, PecosError> {
@@ -69,7 +72,7 @@ pub mod hugr_stubs {
 }
 
 #[cfg(not(feature = "hugr-llvm-pipeline"))]
-pub use hugr_stubs::{HugrCompiler, HugrCompilerConfig, QuantumNamingConvention, compile_hugr_to_qir, create_hugr_qir_engine, setup_hugr_qir_engine};
+pub use hugr_stubs::{HugrCompiler, HugrCompilerConfig, QuantumLlvmConvention, compile_hugr_to_qir, create_hugr_qir_engine, setup_hugr_qir_engine};
 
 // Provide stubs when pmir-pipeline is not enabled
 #[cfg(not(feature = "pmir-pipeline"))]

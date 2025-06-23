@@ -32,6 +32,10 @@ from pecos_rslib._pecos_rslib import run_qasm
 from pecos_rslib._pecos_rslib import get_noise_models
 from pecos_rslib._pecos_rslib import get_quantum_engines
 
+# QIR execution exports
+from pecos_rslib._pecos_rslib import execute_qir
+from pecos_rslib._pecos_rslib import reset_qir_runtime
+
 # Import the qasm_sim function and noise models for easy access
 from pecos_rslib.qasm_sim import qasm_sim, register_noise_model
 
@@ -160,6 +164,9 @@ __all__ = [
     "get_quantum_engines",
     "qasm_sim",
     "register_noise_model",
+    # QIR execution
+    "execute_qir",
+    "reset_qir_runtime",
     # Noise model dataclasses
     "PassThroughNoise",
     "DepolarizingNoise",

@@ -284,7 +284,26 @@ impl QirEngine {
 
         // Store the library and path
         self.library = Some(Box::new(library));
-        self.library_path = Some(library_path);
+        self.library_path = Some(library_path.clone());
+
+        // Try to detect the entry point from the QIR file
+        if self.entry_point.is_none() {
+            match crate::qir_utils::find_entry_point(&self.qir_file) {
+                Ok(Some(entry_point)) => {
+                    debug!("QIR: Detected entry point function: {}", entry_point);
+                    self.entry_point = Some(entry_point);
+                }
+                Ok(None) => {
+                    // No entry point found - log warning but don't fail yet
+                    // The error will be caught in run_qir_program
+                    debug!("QIR: No entry point detected from LLVM IR attributes");
+                }
+                Err(e) => {
+                    // Failed to detect entry point - log warning but don't fail yet
+                    debug!("QIR: Failed to detect entry point: {}", e);
+                }
+            }
+        }
 
         debug!("QIR: Successfully set up QIR library");
 
@@ -410,14 +429,14 @@ impl QirEngine {
                 self.entry_point = Some(entry_point);
             }
             Ok(None) => {
-                debug!("QIR: No entry point found, will default to 'main'");
+                // No entry point found - log but don't fail during pre-compile
+                // The actual error will be thrown when trying to run the program
+                debug!("QIR: No entry point found in QIR file during pre-compile");
                 self.entry_point = None;
             }
             Err(e) => {
-                debug!(
-                    "QIR: Failed to detect entry point: {}, will default to 'main'",
-                    e
-                );
+                // Failed to parse QIR file - log but don't fail during pre-compile
+                debug!("QIR: Failed to detect entry point during pre-compile: {}", e);
                 self.entry_point = None;
             }
         }
@@ -452,6 +471,7 @@ impl QirEngine {
     /// Errors are propagated through the Result type and logged at their source with
     /// appropriate context, including the thread ID.
     fn run_qir_program(&self, library: &QirLibrary) -> Result<ByteMessage, PecosError> {
+        
         // Configure verbosity through environment variable
         if self.config.verbose {
             unsafe {
@@ -468,18 +488,26 @@ impl QirEngine {
         let entry_point = if let Some(ref ep) = self.entry_point {
             ep.clone()
         } else {
-            // Try common entry point names
-            debug!("QIR: Looking for entry point function");
-
-            // Try bell_state first (for HUGR), then main (standard QIR)
-            if library.has_function(b"bell_state").unwrap_or(false) {
-                debug!("QIR: Found bell_state function");
-                "bell_state".to_string()
-            } else {
-                debug!("QIR: Defaulting to main function");
-                "main".to_string()
-            }
+            // No entry point was detected - this is an error
+            return Err(PecosError::Input(
+                "No entry point found in QIR program. The program must have a function \
+                 marked with the 'EntryPoint' attribute. Example:\n\
+                 define void @my_function() #0 {\n\
+                   ...\n\
+                 }\n\
+                 attributes #0 = { \"EntryPoint\" }".to_string()
+            ));
         };
+
+        // Check if the entry point function exists in the library
+        if !library.has_function(entry_point.as_bytes()).unwrap_or(false) {
+            return Err(PecosError::Input(format!(
+                "Entry point function '{}' was marked with EntryPoint attribute but was not found \
+                 in the compiled library. This may indicate a compilation error or that the function \
+                 was optimized away. Ensure the function has a body and is not marked as internal.",
+                entry_point
+            )));
+        }
 
         debug!("QIR: Calling entry point function: {}", entry_point);
         library.call_function(entry_point.as_bytes()).map_err(|e| {
@@ -625,11 +653,12 @@ impl QirEngine {
 
         // Pattern 4: Integer-based qubit references in PECOS QIR calls like "i64 N"
         // This pattern looks for quantum gate calls with integer qubit arguments
+        // Handles both __body and __body_i64 variants
         let int_qubit_pattern =
-            Regex::new(r"__quantum__qis__[a-z_]+__body(__int)?\s*\([^)]*i64\s+(\d+)")
+            Regex::new(r"__quantum__qis__[a-z_]+__body[a-z0-9_]*\s*\([^)]*?i64\s+(\d+)")
                 .expect("Invalid regex pattern for integer qubit references");
         for cap in int_qubit_pattern.captures_iter(content) {
-            if let Some(index_match) = cap.get(2) {
+            if let Some(index_match) = cap.get(1) {
                 if let Ok(index) = index_match.as_str().parse::<usize>() {
                     max_qubit_index = max_qubit_index.max(index);
                     found_allocation = true;
@@ -710,19 +739,8 @@ impl ClassicalEngine for QirEngine {
     ///
     /// Returns 0 if the qubit count cannot be determined.
     fn num_qubits(&self) -> usize {
-        // First, check if we have measurement results
-        // If we do, we can determine the number of qubits from the highest result ID
-        if !self.measurement_results.is_empty() {
-            let max_result_id = self.measurement_results.keys().max().unwrap_or(&0);
-            let num_qubits = max_result_id + 1;
-            debug!(
-                "QIR Engine: Determined {} qubits from measurement results",
-                num_qubits
-            );
-            return num_qubits;
-        }
-
-        // If we don't have measurement results, analyze the QIR file
+        // Always analyze the QIR file to determine qubit count
+        // Don't rely on measurement results from previous executions as they could be stale
         match self.analyze_qir_file() {
             Ok(num_qubits) => {
                 debug!(
@@ -733,6 +751,16 @@ impl ClassicalEngine for QirEngine {
             }
             Err(e) => {
                 warn!("QIR Engine: Could not determine qubit count: {}", e);
+                // Fallback: check if we have measurement results from current execution
+                if !self.measurement_results.is_empty() {
+                    let max_result_id = self.measurement_results.keys().max().unwrap_or(&0);
+                    let num_qubits = max_result_id + 1;
+                    debug!(
+                        "QIR Engine: Fallback to {} qubits from measurement results",
+                        num_qubits
+                    );
+                    return num_qubits;
+                }
                 // Return 0 to indicate unknown qubit count
                 warn!("QIR Engine: Returning 0 to indicate unknown qubit count");
                 0

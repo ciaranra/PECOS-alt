@@ -22,7 +22,8 @@ impl ResultNameExtractor {
     /// This function:
     /// 1. Finds all tket2.result operations and extracts their string argument (result name)
     /// 2. Traces the dataflow backwards to find the corresponding measurement operations
-    /// 3. Returns a mapping from measurement node IDs to result names
+    /// 3. If no explicit result operations found, generates default names for all measurements
+    /// 4. Returns a mapping from measurement node IDs to result names
     ///
     /// # Errors
     /// Returns `PecosError` if the HUGR traversal fails or if connected measurements cannot be found
@@ -52,6 +53,24 @@ impl ResultNameExtractor {
         for (result_node, result_name) in result_nodes_with_names {
             if let Some(measurement_node) = Self::find_connected_measurement(hugr, result_node) {
                 result_mapping.insert(measurement_node, result_name);
+            }
+        }
+
+        // If no explicit result operations were found, create default names for all measurements
+        if result_mapping.is_empty() {
+            let mut measurement_count = 0;
+            for node in hugr.nodes() {
+                if let Some(op) = hugr.get_optype(node).as_extension_op() {
+                    if op.def().name() == "MeasureFree" {
+                        let default_name = if measurement_count == 0 {
+                            "c".to_string()
+                        } else {
+                            format!("c{}", measurement_count)
+                        };
+                        result_mapping.insert(node, default_name);
+                        measurement_count += 1;
+                    }
+                }
             }
         }
 

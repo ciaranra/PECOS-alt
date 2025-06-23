@@ -33,21 +33,28 @@ except ImportError:
 @pytest.mark.skipif(not PECOS_AVAILABLE, reason="PECOS not available")
 def test_pmir_compilation_and_execution():
     """Test compiling via PMIR and executing with PECOS."""
-    # Create a simple quantum circuit HUGR
+    # Create a simple quantum circuit HUGR (new format)
     hugr = {
-        "version": "0.1.0",
-        "name": "random_bit",
-        "nodes": [
-            {"op": {"type": "AllocQubit"}},
-            {"op": {"type": "H"}},
-            {"op": {"type": "Measure"}},
-            {"op": {"type": "Output", "port": 0}}
-        ],
-        "edges": [
-            {"src": [0, 0], "dst": [1, 0]},
-            {"src": [1, 0], "dst": [2, 0]},
-            {"src": [2, 0], "dst": [3, 0]}
-        ]
+        "modules": [{
+            "version": "live",
+            "metadata": {"name": "random_bit"},
+            "nodes": [
+                {"parent": 0, "op": "Module"},
+                {"parent": 0, "op": "FuncDefn", "name": "main"},
+                {"parent": 1, "op": "Input"},
+                {"parent": 1, "op": "Output"},
+                {"parent": 1, "op": "Extension", "name": "QAlloc"},
+                {"parent": 1, "op": "Extension", "name": "H"},
+                {"parent": 1, "op": "Extension", "name": "MeasureFree"}
+            ],
+            "edges": [
+                [[2, 0], [4, 0]],
+                [[4, 0], [5, 0]],
+                [[5, 0], [6, 0]],
+                [[6, 0], [3, 0]]
+            ]
+        }],
+        "extensions": []
     }
     
     hugr_json = json.dumps(hugr)
@@ -110,27 +117,34 @@ def test_pmir_compilation_and_execution():
 def test_bell_state_pmir_analysis():
     """Analyze a Bell state circuit compiled via PMIR."""
     hugr = {
-        "version": "0.1.0",
-        "name": "bell_state",
-        "nodes": [
-            {"op": {"type": "AllocQubit"}},
-            {"op": {"type": "AllocQubit"}},
-            {"op": {"type": "H"}},
-            {"op": {"type": "CX"}},
-            {"op": {"type": "Measure"}},
-            {"op": {"type": "Measure"}},
-            {"op": {"type": "Output", "port": 0}},
-            {"op": {"type": "Output", "port": 1}}
-        ],
-        "edges": [
-            {"src": [0, 0], "dst": [2, 0]},
-            {"src": [2, 0], "dst": [3, 0]},
-            {"src": [1, 0], "dst": [3, 1]},
-            {"src": [3, 0], "dst": [4, 0]},
-            {"src": [3, 1], "dst": [5, 0]},
-            {"src": [4, 0], "dst": [6, 0]},
-            {"src": [5, 0], "dst": [7, 0]}
-        ]
+        "modules": [{
+            "version": "live",
+            "metadata": {"name": "bell_state"},
+            "nodes": [
+                {"parent": 0, "op": "Module"},
+                {"parent": 0, "op": "FuncDefn", "name": "main"},
+                {"parent": 1, "op": "Input"},
+                {"parent": 1, "op": "Output"},
+                {"parent": 1, "op": "Extension", "name": "QAlloc"},
+                {"parent": 1, "op": "Extension", "name": "QAlloc"},
+                {"parent": 1, "op": "Extension", "name": "H"},
+                {"parent": 1, "op": "Extension", "name": "CX"},
+                {"parent": 1, "op": "Extension", "name": "MeasureFree"},
+                {"parent": 1, "op": "Extension", "name": "MeasureFree"}
+            ],
+            "edges": [
+                [[2, 0], [4, 0]],
+                [[2, 0], [5, 0]],
+                [[4, 0], [6, 0]],
+                [[6, 0], [7, 0]],
+                [[5, 0], [7, 1]],
+                [[7, 0], [8, 0]],
+                [[7, 1], [9, 0]],
+                [[8, 0], [3, 0]],
+                [[9, 0], [3, 1]]
+            ]
+        }],
+        "extensions": []
     }
     
     hugr_json = json.dumps(hugr)

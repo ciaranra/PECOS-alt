@@ -82,6 +82,7 @@ fn test_qir_bell_state_noiseless() {
             .get("c")
             .map(|data| match data {
                 pecos_engines::shot_results::Data::U32(v) => v.to_string(),
+                pecos_engines::shot_results::Data::I64(v) => v.to_string(),
                 _ => String::new(),
             })
             .unwrap_or_default();
@@ -152,7 +153,8 @@ pub fn test_qir_bell_state_with_noise() {
             let data = &shot.data;
             let value = match data.get("c") {
                 Some(pecos_engines::shot_results::Data::U32(v)) => *v,
-                _ => panic!("Expected U32 data in 'c' register"),
+                Some(pecos_engines::shot_results::Data::I64(v)) => *v as u32,
+                other => panic!("Expected U32 or I64 data in 'c' register, got: {:?}", other),
             };
             *counts.entry(value).or_insert(0) += 1;
         }

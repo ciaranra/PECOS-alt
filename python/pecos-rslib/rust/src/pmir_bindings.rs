@@ -130,6 +130,7 @@ pub fn py_past_ron_to_llvm_ir(
 pub struct PyPMIRQirEngine {
     llvm_ir_content: String,
     shots: Option<usize>,
+    seed: Option<u64>,
 }
 
 #[pymethods]
@@ -142,12 +143,18 @@ impl PyPMIRQirEngine {
         Ok(Self {
             llvm_ir_content: llvm_ir.to_string(),
             shots: None,
+            seed: None,
         })
     }
     
     /// Set the number of shots for execution
     pub fn set_shots(&mut self, shots: usize) {
         self.shots = Some(shots);
+    }
+    
+    /// Set the random seed for execution
+    pub fn set_seed(&mut self, seed: u64) {
+        self.seed = Some(seed);
     }
     
     /// Get the LLVM IR content (for inspection)
@@ -179,15 +186,20 @@ impl PyPMIRQirEngine {
             // Try to find PECOS binary in various locations
             let pecos_binary = find_pecos_binary().unwrap_or_else(|| std::path::PathBuf::from("pecos"));
                 
-            let output = Command::new(pecos_binary)
-                .args(&[
-                    "run", 
-                    &qir_file_path.to_string_lossy(),
-                    "--shots", &shots.to_string(),
-                    "--seed", "42",
-                    "--format", "decimal"
-                ])
-                .output();
+            let mut cmd = Command::new(pecos_binary);
+            cmd.args(&[
+                "run", 
+                &qir_file_path.to_string_lossy(),
+                "--shots", &shots.to_string(),
+                "--format", "decimal"
+            ]);
+            
+            // Add seed if provided
+            if let Some(seed) = self.seed {
+                cmd.args(&["--seed", &seed.to_string()]);
+            }
+            
+            let output = cmd.output();
             
             match output {
                 Ok(result) if result.status.success() => {
@@ -234,6 +246,7 @@ pub fn py_compile_and_execute_via_pmir(
     py: Python<'_>,
     hugr_json: &str,
     shots: u32,
+    seed: Option<u64>,
     debug_output: bool,
     optimization_level: u8,
 ) -> PyResult<PyObject> {
@@ -250,6 +263,9 @@ pub fn py_compile_and_execute_via_pmir(
     // Step 2: Create PMIR QIR engine and execute
     let mut engine = PyPMIRQirEngine::new(&llvm_ir)?;
     engine.set_shots(shots as usize);
+    if let Some(s) = seed {
+        engine.set_seed(s);
+    }
     engine.run()
 }
 
