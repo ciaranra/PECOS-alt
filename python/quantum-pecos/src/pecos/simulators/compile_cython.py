@@ -11,12 +11,19 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Cython compilation utilities for PECOS simulators.
+
+This module provides functionality to compile Cython extensions for
+high-performance PECOS quantum simulators.
+"""
+
 import subprocess
 import sys
 from pathlib import Path
 
 
-def main():
+def main() -> None:
+    """Compile Cython extensions for PECOS simulators."""
     # See if Cython has been installed...
 
     current_location = Path.parent(Path.resolve(__file__))
@@ -59,7 +66,7 @@ if __name__ == "__main__":
 
         for f, error in failed.items():
             print("--------------")
-            print('Cython package "%s" failed to compile!' % f)
+            print(f'Cython package "{f}" failed to compile!')
 
             print("\nError:\n")
             print(error.decode())

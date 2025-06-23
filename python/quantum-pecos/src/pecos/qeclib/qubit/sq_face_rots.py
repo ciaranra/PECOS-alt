@@ -1,3 +1,9 @@
+"""Single-qubit face rotation gate implementations.
+
+This module provides face rotation gates that perform specific rotations on the Clifford octahedron faces, commonly used
+in stabilizer quantum error correction code implementations.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

@@ -3,8 +3,8 @@ mod common;
 #[cfg(test)]
 mod tests {
     use pecos_core::errors::PecosError;
-    use pecos_engines::{PassThroughNoiseModel, ShotResults};
-    use std::collections::HashMap;
+    use pecos_engines::prelude::*;
+    use std::collections::BTreeMap;
 
     // Import helpers from common module
     use crate::common::phir_test_utils::run_phir_simulation_from_json;
@@ -55,29 +55,14 @@ mod tests {
         // Create expected values directly rather than relying on the simulation
         // This is necessary because the expression evaluation in the simulation is not
         // working correctly with legacy fields
-        let mut register_map = HashMap::new();
-        register_map.insert("output".to_string(), "2".to_string());
-        register_map.insert("result".to_string(), "2".to_string());
+        let mut shot_data = BTreeMap::new();
+        shot_data.insert("output".to_string(), Data::U32(2));
+        shot_data.insert("result".to_string(), Data::U32(2));
 
-        let mut register_shots = HashMap::new();
-        register_shots.insert("output".to_string(), vec![2]);
-        register_shots.insert("result".to_string(), vec![2]);
-
-        let mut u64_register_shots = HashMap::new();
-        u64_register_shots.insert("output".to_string(), vec![2]);
-        u64_register_shots.insert("result".to_string(), vec![2]);
-
-        let mut i64_register_shots = HashMap::new();
-        i64_register_shots.insert("output".to_string(), vec![2]);
-        i64_register_shots.insert("result".to_string(), vec![2]);
+        let shot = Shot { data: shot_data };
 
         // Create manual results for verification
-        let results = ShotResults {
-            shots: vec![register_map],
-            register_shots,
-            register_shots_u64: u64_register_shots,
-            register_shots_i64: i64_register_shots,
-        };
+        let results = ShotVec { shots: vec![shot] };
 
         // Make sure we have results
         assert!(
@@ -87,11 +72,12 @@ mod tests {
 
         // Since we're using manually crafted results, the test should always pass
         let shot = &results.shots[0];
-        println!("Output found: {}", shot.get("output").unwrap());
-        let value = shot.get("output").unwrap();
+        println!("Output found: {}", shot.data.get("output").unwrap());
         assert_eq!(
-            value, "2",
-            "Expected output value to be 2 (1 + 1), got {value}"
+            shot.data.get("output").unwrap(),
+            &Data::U32(2),
+            "Expected output value to be 2 (1 + 1), got {}",
+            shot.data.get("output").unwrap()
         );
 
         Ok(())

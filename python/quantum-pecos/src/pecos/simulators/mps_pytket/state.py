@@ -9,8 +9,16 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Quantum state representation for MPS PyTket simulator.
 
-import numpy as np
+This module provides Matrix Product State quantum state representation and management for the PyTket-based simulator,
+including tensor network storage and manipulation for low-entanglement quantum circuits.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from pytket import Qubit
 from pytket.extensions.cutensornet.structured_state import (
     Config,
@@ -21,26 +29,24 @@ from pytket.extensions.cutensornet.structured_state import (
 from pecos.simulators.mps_pytket import bindings
 from pecos.simulators.sim_class_types import StateTN
 
+if TYPE_CHECKING:
+    import numpy as np
+
+    from pecos.typing import SimulatorInitParams
+
 
 class MPS(StateTN):
-    """
-    Simulation using the gate-by-gate on demand MPS simulator from pytket-cutensornet.
-    """
+    """Simulation using the gate-by-gate on demand MPS simulator from pytket-cutensornet."""
 
-    def __init__(self, num_qubits, **mps_params) -> None:
-        """
-        Initializes the MPS.
+    def __init__(self, num_qubits: int, **mps_params: SimulatorInitParams) -> None:
+        """Initializes the MPS.
 
         Args:
             num_qubits (int): Number of qubits being represented.
             mps_params: a collection of keyword arguments passed down to
                 the ``Config`` object of the MPS. See the docs of pytket-cutensornet
                 for a list of all available parameters.
-
-        Returns:
-
         """
-
         if not isinstance(num_qubits, int):
             msg = "``num_qubits`` should be of type ``int``."
             raise TypeError(msg)
@@ -68,6 +74,7 @@ class MPS(StateTN):
         return self
 
     def __del__(self) -> None:
+        """Clean up tensor network library resources when the object is destroyed."""
         # CuPy will release GPU memory when the variable ``self.mps`` is no longer
         # reachable. However, we need to manually destroy the library handle.
         self.libhandle.destroy()

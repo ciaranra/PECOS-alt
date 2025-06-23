@@ -9,3 +9,6 @@ pub mod grammar_tests;
 
 #[path = "core/error_tests.rs"]
 pub mod error_tests;
+
+#[path = "core/engine_tests.rs"]
+pub mod engine_tests;

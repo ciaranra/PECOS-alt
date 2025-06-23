@@ -92,11 +92,17 @@ impl PHIRImplementation for EnhancedV0_1 {
 }
 
 /// Shorthand function to set up a v0.1 PHIR engine from a file path
+///
+/// # Errors
+/// Returns an error if the file cannot be read or parsed.
 pub fn setup_phir_v0_1_engine(program_path: &Path) -> Result<Box<dyn ClassicalEngine>, PecosError> {
     V0_1::setup_engine(program_path)
 }
 
 /// Shorthand function to set up an enhanced v0.1 PHIR engine from a file path
+///
+/// # Errors
+/// Returns an error if the file cannot be read or parsed.
 pub fn setup_enhanced_phir_v0_1_engine(
     program_path: &Path,
 ) -> Result<Box<dyn ClassicalEngine>, PecosError> {
@@ -104,6 +110,9 @@ pub fn setup_enhanced_phir_v0_1_engine(
 }
 
 /// Shorthand function to set up an enhanced v0.1 PHIR engine from a file path with WebAssembly support
+///
+/// # Errors
+/// Returns an error if the files cannot be read, parsed, or WebAssembly initialization fails.
 #[cfg(feature = "wasm")]
 pub fn setup_enhanced_phir_v0_1_engine_with_wasm(
     program_path: &Path,
@@ -127,6 +136,9 @@ pub fn setup_enhanced_phir_v0_1_engine_with_wasm(
 }
 
 /// Fallback function when WebAssembly support is disabled
+///
+/// # Errors
+/// Always returns an error indicating WebAssembly support is not enabled.
 #[cfg(not(feature = "wasm"))]
 pub fn setup_enhanced_phir_v0_1_engine_with_wasm(
     _program_path: &Path,
@@ -139,6 +151,9 @@ pub fn setup_enhanced_phir_v0_1_engine_with_wasm(
 }
 
 /// Shorthand function to set up a v0.1 PHIR engine from a file path with WebAssembly support
+///
+/// # Errors
+/// Returns an error if the files cannot be read, parsed, or WebAssembly initialization fails.
 #[cfg(feature = "wasm")]
 pub fn setup_phir_v0_1_engine_with_wasm(
     program_path: &Path,
@@ -161,6 +176,10 @@ pub fn setup_phir_v0_1_engine_with_wasm(
     Ok(Box::new(engine))
 }
 
+/// Fallback function when WebAssembly support is disabled
+///
+/// # Errors
+/// Always returns an error indicating WebAssembly support is not enabled.
 #[cfg(not(feature = "wasm"))]
 pub fn setup_phir_v0_1_engine_with_wasm(
     _program_path: &Path,

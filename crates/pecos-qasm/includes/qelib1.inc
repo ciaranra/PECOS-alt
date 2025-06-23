@@ -27,6 +27,7 @@ gate t a { rz(pi/4) a; }
 gate tdg a { rz(-pi/4) a; }
 
 // X-axis rotation using decomposition
+// Note: H · RZ(θ) · H = RX(θ)
 gate rx(theta) a {
   h a;
   rz(theta) a;

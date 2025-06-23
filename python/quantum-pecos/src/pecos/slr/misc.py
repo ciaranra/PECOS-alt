@@ -19,14 +19,14 @@ from pecos.slr.fund import Statement
 
 
 class Barrier(Statement):
-    def __init__(self, *qregs: QReg | tuple[QReg] | Qubit):
+    def __init__(self, *qregs: QReg | tuple[QReg] | Qubit) -> None:
         self.qregs = qregs
 
 
 class Comment(Statement):
     """A comment for human readability of output qasm."""
 
-    def __init__(self, *txt, space: bool = True, newline: bool = True):
+    def __init__(self, *txt, space: bool = True, newline: bool = True) -> None:
         self.space = space
         self.newline = newline
         self.txt = "\n".join(txt)
@@ -41,7 +41,7 @@ class Permute(Statement):
         elems_f: list[Elem] | Reg,
         *,
         comment: bool = True,
-    ):
+    ) -> None:
         self.elems_i = elems_i
         self.elems_f = elems_f
         self.comment = comment

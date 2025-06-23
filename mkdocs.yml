@@ -50,6 +50,7 @@ nav:
 - User Guide:
   - Introduction: README.md
   - user-guide/getting-started.md
+  - user-guide/qasm-simulation.md
 - API:
   - api/api-reference.md
 - Development:

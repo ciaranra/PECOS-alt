@@ -16,7 +16,7 @@
 from pecos_rslib import ByteMessage, ByteMessageBuilder
 
 
-def test_byte_message_builder_basic():
+def test_byte_message_builder_basic() -> None:
     """Test basic ByteMessageBuilder functionality."""
     # Create a new builder
     builder = ByteMessageBuilder()
@@ -40,7 +40,7 @@ def test_byte_message_builder_basic():
     assert ops[1]["qubits"] == [0, 1]
 
 
-def test_byte_message_bell_state():
+def test_byte_message_bell_state() -> None:
     """Test creating a Bell state circuit with ByteMessage."""
     # Create a Bell state using the convenience class method
     # message = ByteMessage.create_bell_state()
@@ -63,10 +63,10 @@ def test_byte_message_bell_state():
     assert ops[1]["qubits"] == [0, 1]
     assert ops[2]["gate_type"] == "Measure"
     assert ops[2]["qubits"] == [0]
-    assert ops[2]["result_id"] == 0
+    # result_id is no longer included in parsed operations (measurements tracked by order)
     assert ops[3]["gate_type"] == "Measure"
     assert ops[3]["qubits"] == [1]
-    assert ops[3]["result_id"] == 1
+    # result_id is no longer included in parsed operations (measurements tracked by order)
 
     # Dump the batch for debugging
     batch_dump = message.dump_batch()
@@ -75,7 +75,7 @@ def test_byte_message_bell_state():
     assert "Measure" in batch_dump
 
 
-def test_byte_message_parameterized_gates():
+def test_byte_message_parameterized_gates() -> None:
     """Test working with parameterized gates in ByteMessage."""
     # Create a new builder
     builder = ByteMessage.quantum_operations_builder()
@@ -106,7 +106,7 @@ def test_byte_message_parameterized_gates():
     assert ops[2]["params"] == [0.3, 0.4]
 
 
-def test_byte_message_builder_reuse():
+def test_byte_message_builder_reuse() -> None:
     """Test reusing a ByteMessageBuilder."""
     # Create a new builder
     builder = ByteMessage.quantum_operations_builder()
@@ -144,7 +144,7 @@ def test_byte_message_builder_reuse():
     assert ops2[1]["gate_type"] == "Y"
 
 
-def test_byte_message_with_measurements():
+def test_byte_message_with_measurements() -> None:
     """Test ByteMessage with measurements."""
     # Create a new builder
     builder = ByteMessage.quantum_operations_builder()
@@ -164,10 +164,10 @@ def test_byte_message_with_measurements():
     assert ops[0]["gate_type"] == "H"
     assert ops[1]["gate_type"] == "Measure"
     assert ops[1]["qubits"] == [0]
-    assert ops[1]["result_id"] == 42
+    # result_id is no longer included in parsed operations (measurements tracked by order)
 
 
-def example_bell_state_experiment():
+def example_bell_state_experiment() -> None:
     """Example of using ByteMessage to create a Bell state experiment.
 
     This is a standalone example that demonstrates:

@@ -16,13 +16,13 @@
 from pecos_rslib import ByteMessage, StateVecEngineRs
 
 
-def test_simulator_creation():
+def test_simulator_creation() -> None:
     """Test creating a StateVecEngineRs."""
     simulator = StateVecEngineRs(2)
     assert simulator is not None
 
 
-def test_bell_state_correlations():
+def test_bell_state_correlations() -> None:
     """Test that measurements in a Bell state are correlated."""
     # Create a Bell state circuit
     builder = ByteMessage.quantum_operations_builder()
@@ -68,7 +68,7 @@ def test_bell_state_correlations():
     ), f"Expected high correlation in Bell state, but got {non_correlated_count}/{num_shots} non-correlated results"
 
 
-def test_simulator_reset():
+def test_simulator_reset() -> None:
     """Test resetting the simulator state."""
     # Create a simple circuit: X on qubit 0, measure qubit 0
     builder = ByteMessage.quantum_operations_builder()

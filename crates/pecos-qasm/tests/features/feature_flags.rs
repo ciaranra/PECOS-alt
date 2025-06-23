@@ -1,4 +1,4 @@
-use pecos_engines::engines::classical::ClassicalEngine;
+use pecos_engines::classical::ClassicalEngine;
 use pecos_qasm::engine::QASMEngine;
 use std::str::FromStr;
 

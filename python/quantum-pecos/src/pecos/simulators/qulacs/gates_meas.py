@@ -9,12 +9,24 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from typing import Any
+"""Quantum measurement operations for Qulacs simulator.
+
+This module provides quantum measurement operations for the Qulacs simulator, including projective measurements
+with proper state collapse using Qulacs quantum simulation framework.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from qulacs.gate import Measurement
 
+if TYPE_CHECKING:
+    from pecos.simulators.qulacs.state import Qulacs
+    from pecos.typing import SimulatorGateParams
 
-def meas_z(state, qubit: int, **params: Any) -> int:
+
+def meas_z(state: Qulacs, qubit: int, **_params: SimulatorGateParams) -> int:
     """Measure in the Z-basis, collapse and normalise.
 
     Notes:

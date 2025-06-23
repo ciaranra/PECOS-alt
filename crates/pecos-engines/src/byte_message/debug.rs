@@ -5,17 +5,90 @@
 
 use crate::byte_message::message::ByteMessage;
 use crate::byte_message::protocol::{
-    BATCH_MAGIC, BatchHeader, MeasurementHeader, MeasurementResultHeader, MessageHeader,
-    QuantumGateHeader, calc_padding,
+    BATCH_MAGIC, BatchHeader, GateHeader, MessageHeader, calc_padding,
 };
+use bytemuck;
 use std::fmt::Write;
 use std::io::Write as IoWrite;
 use std::mem::size_of;
 
-/// Dump a binary message batch to a string for debugging
-#[allow(clippy::too_many_lines)]
+// ByteMessage guarantees 4-byte alignment by storing data in Vec<u32>
+
+/// Dump a binary message batch to a string for debugging using modern structured parsing
 #[must_use]
 pub fn dump_batch(data: &[u8]) -> String {
+    let mut output = String::new();
+
+    // Try to parse as a structured ByteMessage first
+    let message = ByteMessage::new(data);
+    output.push_str("=== Structured ByteMessage Debug ===\n");
+
+    // Determine message type
+    match message.message_type() {
+        Ok(msg_type) => {
+            writeln!(output, "Message Type: {msg_type:?}").unwrap();
+        }
+        Err(e) => {
+            writeln!(output, "Error determining message type: {e}").unwrap();
+        }
+    }
+
+    // Try to parse quantum operations
+    match message.quantum_ops() {
+        Ok(operations) => {
+            writeln!(output, "Quantum Operations ({} total):", operations.len()).unwrap();
+            for (i, op) in operations.iter().enumerate() {
+                writeln!(
+                    output,
+                    "  {i}: {} on qubits {:?} with params {:?}",
+                    op.gate_type, op.qubits, op.params
+                )
+                .unwrap();
+                writeln!(
+                    output,
+                    "      Classical arity: {}, Quantum arity: {}",
+                    op.classical_arity(),
+                    op.quantum_arity()
+                )
+                .unwrap();
+            }
+        }
+        Err(e) => {
+            writeln!(output, "No quantum operations (or error): {e}").unwrap();
+        }
+    }
+
+    // Try to parse measurements
+    match message.outcomes() {
+        Ok(measurements) => {
+            if !measurements.is_empty() {
+                writeln!(
+                    output,
+                    "Measurement Results ({} total):",
+                    measurements.len()
+                )
+                .unwrap();
+                for (i, result) in measurements.iter().enumerate() {
+                    writeln!(output, "  {i}: {result}").unwrap();
+                }
+            }
+        }
+        Err(e) => {
+            writeln!(output, "No measurements (or error): {e}").unwrap();
+        }
+    }
+
+    output.push_str("\n=== Raw Byte Analysis ===\n");
+
+    // Append the original raw byte analysis for completeness
+    output.push_str(&dump_batch_raw(data));
+    output
+}
+
+/// Original raw byte dumping function for low-level debugging
+#[allow(clippy::too_many_lines)]
+#[must_use]
+pub fn dump_batch_raw(data: &[u8]) -> String {
     let mut output = String::new();
 
     // Check if we have enough bytes for a batch header
@@ -24,8 +97,8 @@ pub fn dump_batch(data: &[u8]) -> String {
         return output;
     }
 
-    // Parse batch header
-    let header = *bytemuck::from_bytes::<BatchHeader>(&data[0..size_of::<BatchHeader>()]);
+    // Parse batch header - unaligned read for external data compatibility
+    let header = bytemuck::pod_read_unaligned::<BatchHeader>(&data[0..size_of::<BatchHeader>()]);
 
     if header.magic != BATCH_MAGIC {
         writeln!(
@@ -55,7 +128,7 @@ pub fn dump_batch(data: &[u8]) -> String {
         }
 
         // Parse message header
-        let msg_header = *bytemuck::from_bytes::<MessageHeader>(
+        let msg_header = bytemuck::pod_read_unaligned::<MessageHeader>(
             &data[offset..offset + size_of::<MessageHeader>()],
         );
 
@@ -63,14 +136,8 @@ pub fn dump_batch(data: &[u8]) -> String {
 
         // Get message type
         let msg_type = match msg_header.msg_type {
-            1 => "BeginBatch",
-            2 => "EndBatch",
-            3 => "Flush",
-            4 => "Reset",
-            10 => "QuantumGate",
-            11 => "Measurement",
-            20 => "MeasurementResult",
-            100 => "Error",
+            10 => "Gate",
+            20 => "Outcome",
             _ => "Unknown",
         };
 
@@ -91,22 +158,17 @@ pub fn dump_batch(data: &[u8]) -> String {
 
             match msg_header.msg_type {
                 10 => {
-                    // QuantumGate
-                    if payload.len() >= size_of::<QuantumGateHeader>() {
-                        let gate_header = *bytemuck::from_bytes::<QuantumGateHeader>(
-                            &payload[0..size_of::<QuantumGateHeader>()],
+                    // Gate (includes all gate operations including measurements)
+                    if payload.len() >= size_of::<GateHeader>() {
+                        let gate_header = bytemuck::pod_read_unaligned::<GateHeader>(
+                            &payload[0..size_of::<GateHeader>()],
                         );
 
-                        let gate_type = match gate_header.gate_type {
-                            1 => "X",
-                            2 => "Y",
-                            3 => "Z",
-                            4 => "H",
-                            5 => "CX",
-                            6 => "SZZ",
-                            7 => "RZ",
-                            8 => "R1XY",
-                            _ => "Unknown",
+                        let gate_type = match std::panic::catch_unwind(|| {
+                            pecos_core::gate_type::GateType::from(gate_header.gate_type)
+                        }) {
+                            Ok(gt) => format!("{gt}"),
+                            Err(_) => format!("Unknown({})", gate_header.gate_type),
                         };
 
                         output.push_str("  Quantum Gate:\n");
@@ -125,7 +187,7 @@ pub fn dump_batch(data: &[u8]) -> String {
                         .unwrap();
 
                         // Dump qubit indices
-                        let qubits_offset = size_of::<QuantumGateHeader>();
+                        let qubits_offset = size_of::<GateHeader>();
                         let mut qubits = Vec::new();
 
                         for i in 0..gate_header.num_qubits as usize {
@@ -149,7 +211,7 @@ pub fn dump_batch(data: &[u8]) -> String {
                                 qubits_offset + gate_header.num_qubits as usize * size_of::<u32>();
 
                             match gate_header.gate_type {
-                                7 => {
+                                32 => {
                                     // RZ
                                     if params_offset + size_of::<f64>() <= payload.len() {
                                         let theta = f64::from_le_bytes([
@@ -166,7 +228,7 @@ pub fn dump_batch(data: &[u8]) -> String {
                                         writeln!(output, "    Theta: {theta}").unwrap();
                                     }
                                 }
-                                8 => {
+                                36 => {
                                     // R1XY
                                     if params_offset + 2 * size_of::<f64>() <= payload.len() {
                                         let phi = f64::from_le_bytes([
@@ -200,28 +262,19 @@ pub fn dump_batch(data: &[u8]) -> String {
                         }
                     }
                 }
-                11 => {
-                    // Measurement
-                    if payload.len() >= size_of::<MeasurementHeader>() {
-                        let meas_header = *bytemuck::from_bytes::<MeasurementHeader>(
-                            &payload[0..size_of::<MeasurementHeader>()],
-                        );
-
-                        output.push_str("  Measurement:\n");
-                        writeln!(output, "    Qubit: {}", meas_header.qubit).unwrap();
-                        writeln!(output, "    Result ID: {}", meas_header.result_id).unwrap();
-                    }
-                }
                 20 => {
-                    // MeasurementResult
-                    if payload.len() >= size_of::<MeasurementResultHeader>() {
-                        let result_header = *bytemuck::from_bytes::<MeasurementResultHeader>(
-                            &payload[0..size_of::<MeasurementResultHeader>()],
-                        );
-
-                        output.push_str("  Measurement Result:\n");
-                        writeln!(output, "    Result ID: {}", result_header.result_id).unwrap();
-                        writeln!(output, "    Outcome: {}", result_header.outcome).unwrap();
+                    // MeasurementResult - use modern structured parsing
+                    let message = ByteMessage::new(data);
+                    match message.outcomes() {
+                        Ok(measurements) => {
+                            output.push_str("  Measurement Results:\n");
+                            for (i, measurement) in measurements.iter().enumerate() {
+                                writeln!(output, "    Result {i}: {measurement}").unwrap();
+                            }
+                        }
+                        Err(e) => {
+                            writeln!(output, "  Error parsing measurements: {e}").unwrap();
+                        }
                     }
                 }
                 _ => {
@@ -252,6 +305,10 @@ pub fn dump_message(message: &ByteMessage) -> String {
 }
 
 /// Utility function to write a `ByteMessage` to a file for debugging
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be created or written to.
 pub fn write_message_to_file(message: &ByteMessage, filename: &str) -> std::io::Result<()> {
     let mut file = std::fs::File::create(filename)?;
     file.write_all(message.as_bytes())?;
@@ -261,16 +318,16 @@ pub fn write_message_to_file(message: &ByteMessage, filename: &str) -> std::io::
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Gate;
     use crate::byte_message::ByteMessage;
-    use crate::byte_message::QuantumGate;
 
     #[test]
     fn test_bytemap_dump() {
         // Create commands
-        let commands = vec![QuantumGate::h(0), QuantumGate::cx(0, 1)];
+        let commands = vec![Gate::h(&[0]), Gate::cx(&[(0, 1)])];
 
         // Create ByteMessage using the builder pattern
-        let message = ByteMessage::builder().add_quantum_gates(&commands).build();
+        let message = ByteMessage::builder().add_gate_commands(&commands).build();
 
         // Dump the message
         let dump = dump_message(&message);
@@ -284,10 +341,10 @@ mod tests {
     #[test]
     fn test_dump_batch() {
         // Create a ByteMessage with different gate types
-        let commands = vec![QuantumGate::h(0), QuantumGate::rz(0.5, 1)];
+        let commands = vec![Gate::h(&[0]), Gate::rz(0.5, &[1])];
 
         // Create a ByteMessage using the builder
-        let message = ByteMessage::builder().add_quantum_gates(&commands).build();
+        let message = ByteMessage::builder().add_gate_commands(&commands).build();
 
         // Dump batch
         let dump = dump_batch(message.as_bytes());
@@ -295,7 +352,7 @@ mod tests {
         // Verify dump contains expected information
         assert!(dump.contains("Batch Header"));
         assert!(dump.contains("Magic: 0x5045"));
-        assert!(dump.contains("Type: QuantumGate"));
+        assert!(dump.contains("Type: Gate"));
         assert!(dump.contains("Type: H"));
         assert!(dump.contains("Type: RZ"));
         assert!(dump.contains("Theta: 0.5"));

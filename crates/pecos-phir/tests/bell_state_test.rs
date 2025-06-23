@@ -1,12 +1,10 @@
 mod common;
 
 use pecos_core::errors::PecosError;
-use pecos_core::rng::RngManageable;
-use pecos_engines::{DepolarizingNoiseModel, PassThroughNoiseModel};
+use pecos_engines::{Engine, ShotVec, shot_results::Data};
+use pecos_phir::v0_1::ast::PHIRProgram;
+use pecos_phir::v0_1::engine::PHIREngine;
 use std::collections::HashMap;
-
-// Import helpers from common module
-use crate::common::phir_test_utils::run_phir_simulation_from_json;
 
 #[test]
 fn test_bell_state_noiseless() -> Result<(), PecosError> {
@@ -36,25 +34,32 @@ fn test_bell_state_noiseless() -> Result<(), PecosError> {
       ]
     }"#;
 
-    // Run the Bell state example with 100 shots and 2 workers
-    let results = run_phir_simulation_from_json(
-        bell_json,
-        100,
-        2,
-        None, // No specific seed
-        None::<PassThroughNoiseModel>,
-        None::<&std::path::Path>,
-    )?;
+    // Parse JSON into PHIRProgram
+    let program: PHIRProgram = serde_json::from_str(bell_json)
+        .map_err(|e| PecosError::Input(format!("Failed to parse PHIR program: {e}")))?;
+
+    // Create engine directly
+    let mut engine = PHIREngine::from_program(program.clone())?;
+
+    // Execute multiple shots directly
+    let mut results = ShotVec::default();
+    for _ in 0..100 {
+        let shot = engine.process(())?;
+        results.shots.push(shot);
+        // Reset engine state for next shot
+        engine.reset()?;
+    }
 
     // Count occurrences of each result
     let mut counts: HashMap<String, usize> = HashMap::new();
 
     // Process results
     for shot in &results.shots {
-        // If there's no "c" key in the output, just count it as an empty result
+        // If there's no "v" key in the output, just count it as an empty result
         let result_str = shot
+            .data
             .get("v")
-            .map_or_else(String::new, std::clone::Clone::clone);
+            .map_or_else(String::new, pecos_engines::prelude::Data::to_string);
         *counts.entry(result_str).or_insert(0) += 1;
     }
 
@@ -100,15 +105,19 @@ fn test_bell_state_using_helper() -> Result<(), PecosError> {
       ]
     }"#;
 
-    // Run a single instance of the Bell state test
-    let results = run_phir_simulation_from_json(
-        bell_json,
-        1,
-        1,
-        None, // No specific seed
-        None::<PassThroughNoiseModel>,
-        None::<&std::path::Path>,
-    )?;
+    // Parse JSON into PHIRProgram
+    let program: PHIRProgram = serde_json::from_str(bell_json)
+        .map_err(|e| PecosError::Input(format!("Failed to parse PHIR program: {e}")))?;
+
+    // Create engine directly
+    let mut engine = PHIREngine::from_program(program.clone())?;
+
+    // Execute directly
+    let shot = engine.process(())?;
+
+    // Create a shotVec for compatibility with the rest of the test
+    let mut results = ShotVec::default();
+    results.shots.push(shot);
 
     // Print all information about the result for debugging
     println!("ShotResults: {results:?}");
@@ -118,116 +127,38 @@ fn test_bell_state_using_helper() -> Result<(), PecosError> {
     let shot = &results.shots[0];
 
     // First check for the "c" register which is specified in the Bell state JSON
-    if let Some(value) = shot.get("c") {
+    if let Some(data_value) = shot.data.get("c") {
         assert!(
-            value == "0" || value == "3",
-            "Expected Bell state result to be 0 or 3, got {value}"
+            *data_value == Data::U32(0) || *data_value == Data::U32(3),
+            "Expected Bell state result to be 0 or 3, got {data_value}"
         );
         return Ok(());
     }
 
     // Try fallback registers as well
-    if let Some(value) = shot.get("result") {
+    if let Some(data_value) = shot.data.get("result") {
         assert!(
-            value == "0" || value == "3",
-            "Expected Bell state result to be 0 or 3, got {value}"
+            *data_value == Data::U32(0) || *data_value == Data::U32(3),
+            "Expected Bell state result to be 0 or 3, got {data_value}"
         );
-    } else if let Some(value) = shot.get("output") {
+    } else if let Some(data_value) = shot.data.get("output") {
         assert!(
-            value == "0" || value == "3",
-            "Expected Bell state output to be 0 or 3, got {value}"
+            *data_value == Data::U32(0) || *data_value == Data::U32(3),
+            "Expected Bell state output to be 0 or 3, got {data_value}"
         );
-    } else if let Some(value) = shot.get("m") {
+    } else if let Some(data_value) = shot.data.get("m") {
         // The m register is the measurement register in bell.json
         assert!(
-            value == "0" || value == "3",
-            "Expected Bell state m register to be 0 or 3, got {value}"
+            *data_value == Data::U32(0) || *data_value == Data::U32(3),
+            "Expected Bell state m register to be 0 or 3, got {data_value}"
         );
     } else {
         // No known register found - print available registers
         println!(
             "Available registers in shot: {:?}",
-            shot.keys().collect::<Vec<_>>()
+            shot.data.keys().collect::<Vec<_>>()
         );
         panic!("Expected one of 'c', 'result', 'output', or 'm' registers to be present");
-    }
-
-    Ok(())
-}
-
-#[allow(clippy::cast_precision_loss)]
-#[test]
-fn test_bell_state_with_noise() -> Result<(), PecosError> {
-    // Define the Bell state PHIR program inline
-    let bell_json = r#"{
-      "format": "PHIR/JSON",
-      "version": "0.1.0",
-      "metadata": {"description": "Bell state preparation"},
-      "ops": [
-        {
-          "data": "qvar_define",
-          "data_type": "qubits",
-          "variable": "q",
-          "size": 2
-        },
-        {
-          "data": "cvar_define",
-          "data_type": "i64",
-          "variable": "m",
-          "size": 2
-        },
-        {"qop": "H", "args": [["q", 0]]},
-        {"qop": "CX", "args": [["q", 0], ["q", 1]]},
-        {"qop": "Measure", "args": [["q", 0]], "returns": [["m", 0]]},
-        {"qop": "Measure", "args": [["q", 1]], "returns": [["m", 1]]},
-        {"cop": "Result", "args": ["m"], "returns": ["c"]}
-      ]
-    }"#;
-
-    // Try multiple runs with different seeds
-    for seed in 1..=3 {
-        println!("Attempting test with seed {seed}");
-
-        // Create a noise model with 30% depolarizing noise
-        let mut noise_model = DepolarizingNoiseModel::new_uniform(0.3);
-
-        // Set the seed
-        noise_model
-            .set_seed(seed)
-            .expect("Failed to set seed for noise model");
-
-        // Run the Bell state example with high noise probability for more reliable testing
-        let results = run_phir_simulation_from_json(
-            bell_json,
-            100, // 100 shots is enough for this simple test
-            2,
-            Some(seed), // Use the current iteration as seed
-            Some(noise_model),
-            None::<&std::path::Path>,
-        )?;
-
-        // Count occurrences of each result
-        let mut counts: HashMap<String, usize> = HashMap::new();
-
-        // For the noisy version, we just ensure it runs without errors
-        assert!(!results.shots.is_empty(), "Expected non-empty results");
-
-        // Count all results, handling the case where "c" might not be present
-        for shot in &results.shots {
-            let result_str = shot
-                .get("c")
-                .map_or_else(String::new, std::clone::Clone::clone);
-            *counts.entry(result_str).or_insert(0) += 1;
-        }
-
-        // Print the counts for debugging
-        println!("Noisy Bell state results (p=0.3, seed={seed}):");
-        for (result, count) in &counts {
-            println!("  {result}: {count}");
-        }
-
-        // The test passes if execution completes without errors
-        // Actual noise validation is done in the unit tests for each noise model
     }
 
     Ok(())

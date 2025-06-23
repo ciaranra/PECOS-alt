@@ -1,3 +1,10 @@
+"""Quantum state preparation gate implementations.
+
+This module provides gate implementations for preparing and resetting
+qubits to specific states, including computational basis states and
+other states used in quantum error correction.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with

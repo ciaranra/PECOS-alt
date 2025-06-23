@@ -9,6 +9,13 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Type-safe list implementation with runtime type checking.
+
+This module provides a TypedList class that enforces type constraints on list
+elements at runtime, ensuring all items conform to a specified type throughout
+the list's lifetime.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -61,7 +68,7 @@ class TypedList(list[T], Generic[T]):
             msg = f"Item must be of type {self.type.__name__}, got type {type(__object).__name__} instead"
             raise TypeError(msg)
 
-    def append(self, /, __object: T):
+    def append(self, /, __object: T) -> None:
         """Appends an item to the end of the list, checking its type.
 
         Args:
@@ -82,7 +89,6 @@ class TypedList(list[T], Generic[T]):
         Raises:
             TypeError: If any item in the iterable is not of the correct type.
         """
-
         for i in __iterable:
             self._check_type(i)
         super().extend(__iterable)
@@ -94,7 +100,6 @@ class TypedList(list[T], Generic[T]):
             __index (int): The pto insert the .
             __object (T): The item to insert.
         """
-
         self._check_type(__object)
         super().insert(__index, __object)
 
@@ -108,7 +113,6 @@ class TypedList(list[T], Generic[T]):
         Raises:
             TypeError: If the item or any item in the slice is not of the correct type.
         """
-
         if isinstance(value, slice):
             if isinstance(value, Iterable):
                 for i in value:

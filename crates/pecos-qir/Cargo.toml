@@ -17,9 +17,14 @@ pecos-core.workspace = true
 pecos-engines.workspace = true
 regex.workspace = true
 libloading.workspace = true
+bytemuck.workspace = true
 
 [build-dependencies]
 # No specific build dependencies required
+
+[dev-dependencies]
+tempfile.workspace = true
+serial_test.workspace = true
 
 [lints]
 workspace = true

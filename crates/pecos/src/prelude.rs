@@ -10,53 +10,58 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-// re-exporting pecos-core
-pub use pecos_core::{IndexableElement, Set, VecSet, errors::PecosError};
+//! A prelude for PECOS users.
+//!
+//! This prelude re-exports the most commonly used types, traits, and functions
+//! from all PECOS component crates. By importing this prelude with
+//! `use pecos::prelude::*;`, you get access to the complete PECOS API without
+//! having to manually import from each component crate.
+//!
+//! ## Contents
+//!
+//! This prelude includes re-exports from:
+//!
+//! * `pecos_core`: Core types, traits, and error handling
+//! * `pecos_engines`: Simulation engines for quantum and classical processing
+//! * `pecos_phir`: PECOS High-level Intermediate Representation
+//! * `pecos_qasm`: `OpenQASM` language support
+//! * `pecos_qir`: Quantum Intermediate Representation support
+//! * `pecos_qsim`: Quantum simulation implementations
+//!
+//! It also includes key functionality from the top-level PECOS crate:
+//!
+//! * Simulation functions (`run_sim`)
+//! * Engine setup functions (`setup_qasm_engine`, `setup_qir_engine`)
+//! * Program type detection and handling
+//!
+//! ## Usage
+//!
+//! ```rust
+//! use pecos::prelude::*;
+//!
+//! // Now you can use all common PECOS types and functions without additional imports
+//! ```
 
-// re-exporting pecos-engines
-pub use pecos_engines::{
-    ByteMessage, ByteMessageBuilder, ClassicalEngine, ControlEngine, DepolarizingNoiseModel,
-    Engine, EngineStage, EngineSystem, HybridEngine, MonteCarloEngine, NoiseModel, QuantumEngine,
-    QuantumSystem, ShotResult, ShotResults,
-};
+// Re-export preludes from component crates
+pub use pecos_core::prelude::*;
+pub use pecos_engines::prelude::*;
+pub use pecos_phir::prelude::*;
+pub use pecos_qasm::prelude::*;
+pub use pecos_qir::prelude::*;
+pub use pecos_qsim::prelude::*;
 
-// re-exporting pecos-phir
-pub use pecos_phir::PHIREngine;
+// Re-export ShotVec directly from pecos_engines for easier access
+pub use pecos_engines::shot_results::ShotVec;
 
-// re-exporting OutputFormat enum
-pub use pecos_engines::core::shot_results::OutputFormat;
-
-// Re-exporting noise models
-pub use pecos_core::rng::RngManageable;
-pub use pecos_core::rng::rng_manageable::derive_seed;
-pub use pecos_engines::engines::noise::general::GeneralNoiseModel;
-
-// Re-exporting specific implementations that aren't at the crate root
-pub use pecos_engines::engines::quantum::{
-    SparseStabEngine, StateVecEngine, new_quantum_engine_arbitrary_qgate,
-};
-
-// Re-exporting byte_message functions
-pub use pecos_engines::byte_message::dump_batch;
-
-// re-exporting pecos-qsim
-pub use pecos_qsim::{
-    ArbitraryRotationGateable, CliffordGateable, QuantumSimulator, SparseStab, StateVec,
-};
-
-// re-exporting pecos-qasm
-pub use pecos_qasm::QASMEngine;
-
-// re-exporting pecos-qir
-pub use pecos_qir::QirEngine;
-
-// re-exporting program detection and setup
+// Re-export crate-specific utilities
 pub use crate::program::{
     ProgramType, detect_program_type, get_program_path, setup_engine_for_program,
 };
 
-// re-exporting engine setup functions
-pub use crate::engines::{setup_qasm_engine, setup_qir_engine};
-
-// re-exporting pecos-phir setup function
+// Re-export setup functions from format-specific crates
 pub use pecos_phir::setup_phir_engine;
+pub use pecos_qasm::setup_qasm_engine;
+pub use pecos_qir::setup_qir_engine;
+
+// Re-export run_sim from pecos-engines
+pub use pecos_engines::run_sim;

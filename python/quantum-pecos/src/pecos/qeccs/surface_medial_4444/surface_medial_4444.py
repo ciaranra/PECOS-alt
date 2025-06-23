@@ -11,14 +11,16 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-"""repetition_z
-~~~~~~~~~~~~.
+"""Medial Surface 4.4.4.4 quantum error correcting code implementation.
 
-Generates circuits for the repetition code in the Z-Basis.
+This module provides the Medial Surface code on a 4.4.4.4 lattice structure,
+a topological quantum error correcting code with a medial layout.
 """
 
+from collections.abc import Generator
+
 from pecos.circuit_converters.checks2circuit import Check2Circuits
-from pecos.qeccs.qecc_parent_class import QECC
+from pecos.qeccs.default_qecc import DefaultQECC
 from pecos.qeccs.surface_medial_4444.gates import (
     GateIdentity,
     GateInitPlus,
@@ -29,19 +31,28 @@ from pecos.qeccs.surface_medial_4444.instructions import (
     InstrInitZero,
     InstrSynExtraction,
 )
+from pecos.typing import QECCParams
 
 
-class SurfaceMedial4444(QECC):
+class SurfaceMedial4444(DefaultQECC):
     """Medial Surface code on 4.4.4.4 lattice."""
 
-    def __init__(self, distance=None, height=None, width=None, **qecc_params) -> None:
-        """Args:
+    def __init__(
+        self,
+        distance: int | None = None,
+        height: int | None = None,
+        width: int | None = None,
+        **qecc_params: QECCParams,
+    ) -> None:
+        """Initialize the SurfaceMedial4444 code with the given parameters.
+
+        Args:
         ----
             distance: The distance of the code. If specified a square code of height and width equaled to the distance
             will be returned.
             height: The height of the code block. This is the size of the minimum logical X.
             width: The width of the code block. This is the size of the minimum logical Z.
-            **qecc_params:
+            **qecc_params: Additional keyword arguments for QECC configuration
         """
         qecc_params["distance"] = distance
         qecc_params["height"] = height
@@ -100,7 +111,7 @@ class SurfaceMedial4444(QECC):
         self.sides = self._determine_sides()
 
     @staticmethod
-    def _set_symbols():
+    def _set_symbols() -> tuple[dict, dict]:
         # gate and instruction symbol bindings
         # ------------------------------------
         # gate symbol => gate class
@@ -119,7 +130,7 @@ class SurfaceMedial4444(QECC):
 
         return sym2gate_class, sym2instruction_class
 
-    def _get_distance(self):
+    def _get_distance(self) -> tuple[int, int, int]:
         """Sets the distances based on the `qecc_params` `distance`, `height`, and `width`.
 
         This will modify the `gate_params`.
@@ -156,7 +167,7 @@ class SurfaceMedial4444(QECC):
 
         return distance, height, width
 
-    def _generate_layout(self):
+    def _generate_layout(self) -> dict:
         """Creates the layout dictionary which describes the location of the qubits in the code.
 
         :param qudit_ids:
@@ -204,12 +215,10 @@ class SurfaceMedial4444(QECC):
                     if x != 0 and x % 4 == 0:
                         self._add_node(x, y, ancilla_ids)
 
-                elif x == 0:
+                elif x == 0 and (y - 2) % 4 == 0:
                     # Left column
                     # X checks
-
-                    if (y - 2) % 4 == 0:
-                        self._add_node(x, y, ancilla_ids)
+                    self._add_node(x, y, ancilla_ids)
 
                 if y == lattice_height:
                     # Bottom: X checks
@@ -218,9 +227,8 @@ class SurfaceMedial4444(QECC):
                         if x != 0 and x % 4 == 0:
                             self._add_node(x, y, ancilla_ids)
 
-                    else:
-                        if (x - 2) % 4 == 0:
-                            self._add_node(x, y, ancilla_ids)
+                    elif (x - 2) % 4 == 0:
+                        self._add_node(x, y, ancilla_ids)
 
                 elif x == lattice_width:
                     # Right column
@@ -229,23 +237,22 @@ class SurfaceMedial4444(QECC):
                     if width % 2 == 1:
                         if y != 0 and y % 4 == 0:
                             self._add_node(x, y, ancilla_ids)
-                    else:
-                        if (y - 2) % 4 == 0:
-                            self._add_node(x, y, ancilla_ids)
+                    elif (y - 2) % 4 == 0:
+                        self._add_node(x, y, ancilla_ids)
 
         return self.layout
 
-    def _norm_orientaition(self):
+    def _norm_orientaition(self) -> Generator[tuple[int, int], None, None]:
         for y in range(self.lattice_height + 1):
             for x in range(self.lattice_width + 1):
                 yield x, y
 
-    def _rotated_orientaition(self):
+    def _rotated_orientaition(self) -> Generator[tuple[int, int], None, None]:
         for x in range(self.lattice_width + 1):
             for y in range(self.lattice_height + 1):
                 yield x, y
 
-    def _determine_sides(self):
+    def _determine_sides(self) -> dict[str, list]:
         """Outputs a dictionary that describes the sides of the code.
 
         The repetition code is essentially a line.

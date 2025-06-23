@@ -1,8 +1,24 @@
+# Copyright 2025 The PECOS Developers
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
+# the License.You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+# specific language governing permissions and limitations under the License.
+
+"""Regression tests for logical Steane code teleportation programs."""
+
+from collections.abc import Callable
+
 from pecos.qeclib.steane.steane_class import Steane
 from pecos.slr import Barrier, CReg, If, Main
 
 
 def telep(prep_basis: str, meas_basis: str) -> Main:
+    """Generate teleportation program for logical Steane code."""
     return Main(
         m_bell := CReg("m_bell", size=2),
         m_out := CReg("m_out", size=1),
@@ -35,7 +51,8 @@ def telep(prep_basis: str, meas_basis: str) -> Main:
     )
 
 
-def test_telep(compare_qasm):
+def test_telep(compare_qasm: Callable[..., None]) -> None:
+    """Test teleportation regression with different prep and measurement bases."""
     for prep_basis in ["-X", "+X", "+Y", "-Y", "+Z", "-Z"]:
         for meas_basis in ["X", "Y", "Z"]:
             prog = telep(prep_basis, meas_basis)
@@ -57,9 +74,9 @@ def t_gate(prep_basis: str, meas_basis: str) -> Main:
             include: "X", "Y", and "Z".
 
     Returns:
-        A logical program written in extended OpenQASM 2.0"""
-
-    prog = Main(
+        A logical program written in extended OpenQASM 2.0
+    """
+    return Main(
         m_reject := CReg("m_reject", size=2),
         m_t := CReg("m_t", 1),
         m_out := CReg("m_out", size=2),
@@ -85,10 +102,9 @@ def t_gate(prep_basis: str, meas_basis: str) -> Main:
         sin.m(meas_basis, m_out[1]),
     )
 
-    return prog
 
-
-def test_t_gate(compare_qasm):
+def test_t_gate(compare_qasm: Callable[..., None]) -> None:
+    """Test T-gate teleportation regression with different prep and measurement bases."""
     for prep_basis in ["-X", "+X", "+Y", "-Y", "+Z", "-Z"]:
         for meas_basis in ["X", "Y", "Z"]:
             prog = t_gate(prep_basis, meas_basis)

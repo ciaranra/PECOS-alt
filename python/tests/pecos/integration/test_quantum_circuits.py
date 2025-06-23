@@ -10,12 +10,14 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Integration tests for quantum circuit operations."""
 from __future__ import annotations
 
 from pecos.circuits import QuantumCircuit
 
 
-def test_quantum_circuits():
+def test_quantum_circuits() -> None:
+    """Test quantum circuit operations and validation."""
     # Check the method append with check_overlap == True
     # ---------------------------------------------------
     qc = QuantumCircuit()

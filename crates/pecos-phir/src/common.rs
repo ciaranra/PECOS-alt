@@ -9,6 +9,10 @@ pub enum PHIRVersion {
 }
 
 /// Detects which version of PHIR is being used by examining the "version" field in the input JSON
+///
+/// # Errors
+///
+/// Returns an error if the JSON cannot be parsed or the version is unsupported.
 pub fn detect_version(json: &str) -> Result<PHIRVersion, PecosError> {
     let value: serde_json::Value = serde_json::from_str(json).map_err(|e| {
         PecosError::Input(format!(

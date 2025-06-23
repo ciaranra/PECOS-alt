@@ -9,16 +9,27 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Single-qubit gate operations for basic state vector simulator.
+
+This module provides single-qubit quantum gate operations for the basic state vector simulator, including Pauli
+gates, rotation gates, Hadamard gates, and other fundamental single-qubit quantum operations.
+"""
+
+from __future__ import annotations
+
 import cmath
 import math
-from typing import Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 
+if TYPE_CHECKING:
+    from pecos.simulators.basic_sv.state import BasicSV
+    from pecos.typing import SimulatorGateParams
 
-def _apply_one_qubit_matrix(state, qubit: int, matrix: np.ndarray) -> None:
-    """
-    Apply the matrix to the state.
+
+def _apply_one_qubit_matrix(state: BasicSV, qubit: int, matrix: np.ndarray) -> None:
+    """Apply the matrix to the state.
 
     Args:
         state: An instance of BasicSV
@@ -47,9 +58,8 @@ def _apply_one_qubit_matrix(state, qubit: int, matrix: np.ndarray) -> None:
     state.internal_vector = np.einsum(subscripts, state.internal_vector, matrix)
 
 
-def identity(state, qubit: int, **params: Any) -> None:
-    """
-    Identity gate.
+def identity(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Identity gate.
 
     Args:
         state: An instance of BasicSV
@@ -57,9 +67,8 @@ def identity(state, qubit: int, **params: Any) -> None:
     """
 
 
-def X(state, qubit: int, **params: Any) -> None:
-    """
-    Pauli X gate.
+def X(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Pauli X gate.
 
     Args:
         state: An instance of BasicSV
@@ -74,9 +83,8 @@ def X(state, qubit: int, **params: Any) -> None:
     _apply_one_qubit_matrix(state, qubit, matrix)
 
 
-def Y(state, qubit: int, **params: Any) -> None:
-    """
-    Pauli Y gate.
+def Y(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Pauli Y gate.
 
     Args:
         state: An instance of BasicSV
@@ -91,9 +99,8 @@ def Y(state, qubit: int, **params: Any) -> None:
     _apply_one_qubit_matrix(state, qubit, matrix)
 
 
-def Z(state, qubit: int, **params: Any) -> None:
-    """
-    Pauli Z gate.
+def Z(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Pauli Z gate.
 
     Args:
         state: An instance of BasicSV
@@ -108,9 +115,13 @@ def Z(state, qubit: int, **params: Any) -> None:
     _apply_one_qubit_matrix(state, qubit, matrix)
 
 
-def RX(state, qubit: int, angles: tuple[float], **params: Any) -> None:
-    """
-    Apply an RX gate.
+def RX(
+    state: BasicSV,
+    qubit: int,
+    angles: tuple[float],
+    **_params: SimulatorGateParams,
+) -> None:
+    """Apply an RX gate.
 
     Args:
         state: An instance of BasicSV
@@ -131,9 +142,13 @@ def RX(state, qubit: int, angles: tuple[float], **params: Any) -> None:
     _apply_one_qubit_matrix(state, qubit, matrix)
 
 
-def RY(state, qubit: int, angles: tuple[float], **params: Any) -> None:
-    """
-    Apply an RY gate.
+def RY(
+    state: BasicSV,
+    qubit: int,
+    angles: tuple[float],
+    **_params: SimulatorGateParams,
+) -> None:
+    """Apply an RY gate.
 
     Args:
         state: An instance of BasicSV
@@ -154,9 +169,13 @@ def RY(state, qubit: int, angles: tuple[float], **params: Any) -> None:
     _apply_one_qubit_matrix(state, qubit, matrix)
 
 
-def RZ(state, qubit: int, angles: tuple[float], **params: Any) -> None:
-    """
-    Apply an RZ gate.
+def RZ(
+    state: BasicSV,
+    qubit: int,
+    angles: tuple[float],
+    **_params: SimulatorGateParams,
+) -> None:
+    """Apply an RZ gate.
 
     Args:
         state: An instance of BasicSV
@@ -177,9 +196,13 @@ def RZ(state, qubit: int, angles: tuple[float], **params: Any) -> None:
     _apply_one_qubit_matrix(state, qubit, matrix)
 
 
-def R1XY(state, qubit: int, angles: tuple[float, float], **params: Any) -> None:
-    """
-    Apply an R1XY gate.
+def R1XY(
+    state: BasicSV,
+    qubit: int,
+    angles: tuple[float, float],
+    **_params: SimulatorGateParams,
+) -> None:
+    """Apply an R1XY gate.
 
     Args:
         state: An instance of BasicSV
@@ -198,9 +221,8 @@ def R1XY(state, qubit: int, angles: tuple[float, float], **params: Any) -> None:
     RZ(state, qubit, angles=(phi - math.pi / 2,))
 
 
-def SX(state, qubit: int, **params: Any) -> None:
-    """
-    Apply a square-root of X.
+def SX(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Apply a square-root of X.
 
     Args:
         state: An instance of BasicSV
@@ -209,9 +231,8 @@ def SX(state, qubit: int, **params: Any) -> None:
     RX(state, qubit, angles=(math.pi / 2,))
 
 
-def SXdg(state, qubit: int, **params: Any) -> None:
-    """
-    Apply adjoint of the square-root of X.
+def SXdg(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Apply adjoint of the square-root of X.
 
     Args:
         state: An instance of BasicSV
@@ -220,9 +241,8 @@ def SXdg(state, qubit: int, **params: Any) -> None:
     RX(state, qubit, angles=(-math.pi / 2,))
 
 
-def SY(state, qubit: int, **params: Any) -> None:
-    """
-    Apply a square-root of Y.
+def SY(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Apply a square-root of Y.
 
     Args:
         state: An instance of BasicSV
@@ -231,9 +251,8 @@ def SY(state, qubit: int, **params: Any) -> None:
     RY(state, qubit, angles=(math.pi / 2,))
 
 
-def SYdg(state, qubit: int, **params: Any) -> None:
-    """
-    Apply adjoint of the square-root of Y.
+def SYdg(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Apply adjoint of the square-root of Y.
 
     Args:
         state: An instance of BasicSV
@@ -242,9 +261,8 @@ def SYdg(state, qubit: int, **params: Any) -> None:
     RY(state, qubit, angles=(-math.pi / 2,))
 
 
-def SZ(state, qubit: int, **params: Any) -> None:
-    """
-    Apply a square-root of Z.
+def SZ(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Apply a square-root of Z.
 
     Args:
         state: An instance of BasicSV
@@ -253,9 +271,8 @@ def SZ(state, qubit: int, **params: Any) -> None:
     RZ(state, qubit, angles=(math.pi / 2,))
 
 
-def SZdg(state, qubit: int, **params: Any) -> None:
-    """
-    Apply adjoint of the square-root of Z.
+def SZdg(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Apply adjoint of the square-root of Z.
 
     Args:
         state: An instance of BasicSV
@@ -264,9 +281,8 @@ def SZdg(state, qubit: int, **params: Any) -> None:
     RZ(state, qubit, angles=(-math.pi / 2,))
 
 
-def H(state, qubit: int, **params: Any) -> None:
-    """
-    Apply Hadamard gate.
+def H(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Apply Hadamard gate.
 
     Args:
         state: An instance of BasicSV
@@ -285,9 +301,8 @@ def H(state, qubit: int, **params: Any) -> None:
     _apply_one_qubit_matrix(state, qubit, matrix)
 
 
-def F(state, qubit: int, **params: Any) -> None:
-    """
-    Apply face rotation of an octahedron #1 (X->Y->Z->X).
+def F(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Apply face rotation of an octahedron #1 (X->Y->Z->X).
 
     Args:
         state: An instance of BasicSV
@@ -297,9 +312,8 @@ def F(state, qubit: int, **params: Any) -> None:
     RZ(state, qubit, angles=(math.pi / 2,))
 
 
-def Fdg(state, qubit: int, **params: Any) -> None:
-    """
-    Apply adjoint of face rotation of an octahedron #1 (X<-Y<-Z<-X).
+def Fdg(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Apply adjoint of face rotation of an octahedron #1 (X<-Y<-Z<-X).
 
     Args:
         state: An instance of BasicSV
@@ -309,9 +323,8 @@ def Fdg(state, qubit: int, **params: Any) -> None:
     RX(state, qubit, angles=(-math.pi / 2,))
 
 
-def T(state, qubit: int, **params: Any) -> None:
-    """
-    Apply a T gate.
+def T(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Apply a T gate.
 
     Args:
         state: An instance of BasicSV
@@ -320,9 +333,8 @@ def T(state, qubit: int, **params: Any) -> None:
     RZ(state, qubit, angles=(math.pi / 4,))
 
 
-def Tdg(state, qubit: int, **params: Any) -> None:
-    """
-    Apply adjoint of a T gate.
+def Tdg(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """Apply adjoint of a T gate.
 
     Args:
         state: An instance of BasicSV
@@ -331,76 +343,74 @@ def Tdg(state, qubit: int, **params: Any) -> None:
     RZ(state, qubit, angles=(-math.pi / 4,))
 
 
-# The definition of the extra Clifford gates added below come from
-# circuit_converters/std2chs.py
-def H2(state, qubit: int, **params: Any) -> None:
-    """'H2': ('S', 'S', 'H', 'S', 'S')"""
+def H2(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """'H2': ('S', 'S', 'H', 'S', 'S')."""
     Z(state, qubit)
     H(state, qubit)
     Z(state, qubit)
 
 
-def H3(state, qubit: int, **params: Any) -> None:
-    """'H3': ('H', 'S', 'S', 'H', 'S',)"""
+def H3(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """'H3': ('H', 'S', 'S', 'H', 'S',)."""
     X(state, qubit)
     SZ(state, qubit)
 
 
-def H4(state, qubit: int, **params: Any) -> None:
-    """'H4': ('H', 'S', 'S', 'H', 'S', 'S', 'S',)"""
+def H4(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """'H4': ('H', 'S', 'S', 'H', 'S', 'S', 'S',)."""
     X(state, qubit)
     SZdg(state, qubit)
 
 
-def H5(state, qubit: int, **params: Any) -> None:
-    """'H5': ('S', 'S', 'S', 'H', 'S')"""
+def H5(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """'H5': ('S', 'S', 'S', 'H', 'S')."""
     SZdg(state, qubit)
     H(state, qubit)
     SZ(state, qubit)
 
 
-def H6(state, qubit: int, **params: Any) -> None:
-    """'H6': ('S', 'H', 'S', 'S', 'S',)"""
+def H6(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """'H6': ('S', 'H', 'S', 'S', 'S',)."""
     SZ(state, qubit)
     H(state, qubit)
     SZdg(state, qubit)
 
 
-def F2(state, qubit: int, **params: Any) -> None:
-    """'F2': ('S', 'S', 'H', 'S')"""
+def F2(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """'F2': ('S', 'S', 'H', 'S')."""
     Z(state, qubit)
     H(state, qubit)
     SZ(state, qubit)
 
 
-def F2d(state, qubit: int, **params: Any) -> None:
-    """'F2d': ('S', 'S', 'S', 'H', 'S', 'S')"""
+def F2d(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """'F2d': ('S', 'S', 'S', 'H', 'S', 'S')."""
     SZdg(state, qubit)
     H(state, qubit)
     Z(state, qubit)
 
 
-def F3(state, qubit: int, **params: Any) -> None:
-    """'F3': ('S', 'H', 'S', 'S')"""
+def F3(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """'F3': ('S', 'H', 'S', 'S')."""
     SZ(state, qubit)
     H(state, qubit)
     Z(state, qubit)
 
 
-def F3d(state, qubit: int, **params: Any) -> None:
-    """'F3d': ('S', 'S', 'H', 'S', 'S', 'S')"""
+def F3d(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """'F3d': ('S', 'S', 'H', 'S', 'S', 'S')."""
     Z(state, qubit)
     H(state, qubit)
     SZdg(state, qubit)
 
 
-def F4(state, qubit: int, **params: Any) -> None:
-    """'F4': ('H', 'S', 'S', 'S')"""
+def F4(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """'F4': ('H', 'S', 'S', 'S')."""
     H(state, qubit)
     SZdg(state, qubit)
 
 
-def F4d(state, qubit: int, **params: Any) -> None:
-    """'F4d': ('S', 'H')"""
+def F4d(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:
+    """'F4d': ('S', 'H')."""
     SZ(state, qubit)
     H(state, qubit)

@@ -1,3 +1,10 @@
+"""Bitflip noise with leakage for measurement operations.
+
+This module provides noise models for quantum measurement operations that
+include both bitflip errors and leakage effects, providing comprehensive
+error modeling for measurement processes.
+"""
+
 # Copyright 2023 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -9,18 +16,30 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from pecos.reps.pypmir.op_types import QOp
 
+if TYPE_CHECKING:
+    from pecos.protocols import MachineProtocol
 
-def noise_meas_bitflip_leakage(op: QOp, p: float, machine):
+
+def noise_meas_bitflip_leakage(
+    op: QOp,
+    p: float,
+    machine: MachineProtocol,
+) -> list[QOp] | None:
     """Bit-flip noise model for measurements.
 
     Args:
     ----
         op: Ideal quantum operation.
         p: measurement error rate.
+        machine: Machine protocol instance containing leakage state information.
     """
     # Bit flip noise
     # --------------
@@ -35,7 +54,7 @@ def noise_meas_bitflip_leakage(op: QOp, p: float, machine):
 
     if np.any(rand_nums):
         bitflips = []
-        for r, loc in zip(rand_nums, op.args):
+        for r, loc in zip(rand_nums, op.args, strict=False):
             if r:
                 bitflips.append(loc)
 
@@ -50,8 +69,6 @@ def noise_meas_bitflip_leakage(op: QOp, p: float, machine):
 
         return noise
 
-    else:
-        if noise:
-            return noise
-        else:
-            return None
+    if noise:
+        return noise
+    return None

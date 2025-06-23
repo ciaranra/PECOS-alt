@@ -51,6 +51,23 @@ enum NoiseModelType {
     General,
 }
 
+/// Type of quantum simulator to use for simulation
+#[derive(PartialEq, Eq, Clone, Debug, Default)]
+enum SimulatorType {
+    /// State vector simulator (full quantum state representation)
+    ///
+    /// This simulator can handle all quantum gates including arbitrary rotations.
+    /// Best for small to medium circuits with non-Clifford gates.
+    #[default]
+    StateVector,
+    /// Stabilizer simulator (Clifford circuit optimization)
+    ///
+    /// This simulator is optimized for Clifford circuits and can efficiently
+    /// simulate larger qubit counts for circuits limited to Clifford gates
+    /// (H, S, CNOT, Pauli gates, etc.)
+    Stabilizer,
+}
+
 impl std::str::FromStr for NoiseModelType {
     type Err = String;
 
@@ -65,30 +82,15 @@ impl std::str::FromStr for NoiseModelType {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
-enum OutputFormatType {
-    /// Pretty-printed JSON with indentation
-    Json,
-    /// Compact JSON without extra whitespace
-    CompactJson,
-    /// Compact JSON with each register on a new line
-    #[default]
-    PrettyCompact,
-    /// Format showing frequencies of each outcome
-    Frequency,
-}
-
-impl std::str::FromStr for OutputFormatType {
+impl std::str::FromStr for SimulatorType {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "json" | "pretty" => Ok(OutputFormatType::Json),
-            "compact" => Ok(OutputFormatType::CompactJson),
-            "pretty-compact" | "prettycompact" | "line" => Ok(OutputFormatType::PrettyCompact),
-            "freq" | "frequency" => Ok(OutputFormatType::Frequency),
+            "statevector" | "state" | "sv" | "full" => Ok(SimulatorType::StateVector),
+            "stabilizer" | "stab" | "clifford" => Ok(SimulatorType::Stabilizer),
             _ => Err(format!(
-                "Unknown output format: {s}. Valid options are 'json', 'compact', 'pretty-compact', or 'frequency'"
+                "Unknown simulator type: {s}. Valid options are 'statevector' (sv, state, full) or 'stabilizer' (stab, clifford)"
             )),
         }
     }
@@ -116,6 +118,12 @@ struct RunArgs {
     )]
     noise_model: NoiseModelType,
 
+    /// Type of quantum simulator to use (statevector or stabilizer)
+    /// - statevector: Full quantum state simulator (handles all gates, default)
+    /// - stabilizer: Clifford circuit simulator (faster for Clifford circuits)
+    #[arg(short = 'S', long = "sim", value_parser, default_value = "statevector")]
+    simulator: SimulatorType,
+
     /// Noise probability (between 0 and 1)
     /// For depolarizing model: uniform error probability
     /// For general model: comma-separated probabilities in order:
@@ -128,23 +136,17 @@ struct RunArgs {
     #[arg(short = 'd', long)]
     seed: Option<u64>,
 
-    /// Output format: pretty-compact, json, compact, or frequency
-    /// - pretty-compact: Compact JSON with each register on a new line (default)
-    /// - json: Pretty-printed JSON with full indentation
-    /// - compact: Compact JSON without any whitespace
-    /// - frequency: Format showing frequencies of each outcome
-    #[arg(
-        short = 'f',
-        long = "format",
-        value_parser,
-        default_value = "pretty-compact"
-    )]
-    output_format: OutputFormatType,
-
     /// Output file path to write results to
     /// If not specified, results will be printed to stdout
     #[arg(short = 'o', long = "output")]
     output_file: Option<String>,
+
+    /// Format for displaying `BitVec` results (decimal, binary, hex)
+    /// - decimal: Display as decimal numbers (default)
+    /// - binary: Display as binary strings
+    /// - hex: Display as hexadecimal strings
+    #[arg(short = 'f', long = "format", default_value = "decimal")]
+    display_format: String,
 }
 
 /// Parse noise probability specification from command line argument
@@ -272,29 +274,62 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
                 builder = builder.with_seed(noise_seed);
             }
 
-            builder.build()
+            Box::new(builder.build())
         }
     };
 
-    // Use the generic approach with the selected noise model
-    let results = MonteCarloEngine::run_with_noise_model(
-        classical_engine,
-        noise_model,
-        args.shots,
-        args.workers,
-        args.seed,
-    )?;
-
-    // Convert CLI format to engine format
-    let format = match args.output_format {
-        OutputFormatType::Json => OutputFormat::PrettyJson,
-        OutputFormatType::CompactJson => OutputFormat::CompactJson,
-        OutputFormatType::PrettyCompact => OutputFormat::PrettyCompactJson,
-        OutputFormatType::Frequency => OutputFormat::Frequency,
+    // Create the appropriate quantum engine based on user selection
+    let quantum_engine: Option<Box<dyn QuantumEngine>> = match args.simulator {
+        SimulatorType::StateVector => {
+            // Use StateVecEngine - full quantum state simulator
+            let num_qubits = classical_engine.num_qubits();
+            let engine = if let Some(seed) = args.seed {
+                let engine_seed = derive_seed(seed, "quantum_engine");
+                Box::new(StateVecEngine::with_seed(num_qubits, engine_seed))
+            } else {
+                Box::new(StateVecEngine::new(num_qubits))
+            };
+            Some(engine)
+        }
+        SimulatorType::Stabilizer => {
+            // Use SparseStabEngine - Clifford circuit optimizer
+            let num_qubits = classical_engine.num_qubits();
+            let engine = if let Some(seed) = args.seed {
+                let engine_seed = derive_seed(seed, "quantum_engine");
+                Box::new(SparseStabEngine::with_seed(num_qubits, engine_seed))
+            } else {
+                Box::new(SparseStabEngine::new(num_qubits))
+            };
+            Some(engine)
+        }
     };
 
-    // Format the results as a string
-    let results_str = results.to_string_with_format(format);
+    // Run the simulation with the selected engine and noise model
+    let results = run_sim(
+        classical_engine,
+        args.shots,
+        args.seed,
+        Some(args.workers),
+        Some(noise_model),
+        quantum_engine,
+    )?;
+
+    // Convert to ShotMap for better display formatting
+    let shot_map = results.try_as_shot_map()?;
+
+    // Format the results using the new display system with the selected format
+    let results_str = match args.display_format.to_lowercase().as_str() {
+        "binary" | "bin" => format!("{}", shot_map.display().bitvec_binary()),
+        "hexadecimal" | "hex" => format!("{}", shot_map.display().bitvec_hex()),
+        "decimal" | "dec" => format!("{}", shot_map.display().bitvec_decimal()),
+        _ => {
+            eprintln!(
+                "Warning: Unknown display format '{}', using decimal",
+                args.display_format
+            );
+            format!("{}", shot_map.display().bitvec_decimal())
+        }
+    };
 
     // Either write to the specified output file or print to stdout
     match &args.output_file {
@@ -379,8 +414,9 @@ mod tests {
                 assert_eq!(args.shots, 100);
                 assert_eq!(args.workers, 2);
                 assert_eq!(args.noise_model, NoiseModelType::Depolarizing); // Default
-                assert_eq!(args.output_format, OutputFormatType::PrettyCompact); // Default
+                assert_eq!(args.simulator, SimulatorType::StateVector); // Default
                 assert_eq!(args.output_file, None); // Default
+                assert_eq!(args.display_format, "decimal".to_string()); // Default
             }
             Commands::Compile(_) => panic!("Expected Run command"),
         }
@@ -396,8 +432,9 @@ mod tests {
                 assert_eq!(args.shots, 100);
                 assert_eq!(args.workers, 2);
                 assert_eq!(args.noise_model, NoiseModelType::Depolarizing); // Default
-                assert_eq!(args.output_format, OutputFormatType::PrettyCompact); // Default
+                assert_eq!(args.simulator, SimulatorType::StateVector); // Default
                 assert_eq!(args.output_file, None); // Default
+                assert_eq!(args.display_format, "decimal".to_string()); // Default
             }
             Commands::Compile(_) => panic!("Expected Run command"),
         }
@@ -426,7 +463,6 @@ mod tests {
                     args.noise_probability,
                     Some("0.01,0.02,0.03,0.04,0.05".to_string())
                 );
-                assert_eq!(args.output_format, OutputFormatType::PrettyCompact); // Default
                 assert_eq!(args.output_file, None); // Default
             }
             Commands::Compile(_) => panic!("Expected Run command"),
@@ -459,51 +495,6 @@ mod tests {
     }
 
     #[test]
-    fn verify_cli_format_options() {
-        // Test each format option to ensure it parses correctly
-
-        // Pretty Compact (default)
-        let cmd = Cli::parse_from(["pecos", "run", "program.json", "-f", "pretty-compact"]);
-        if let Commands::Run(args) = cmd.command {
-            assert_eq!(args.output_format, OutputFormatType::PrettyCompact);
-        } else {
-            panic!("Expected Run command");
-        }
-
-        // Alternative aliases for Pretty Compact
-        let cmd = Cli::parse_from(["pecos", "run", "program.json", "-f", "line"]);
-        if let Commands::Run(args) = cmd.command {
-            assert_eq!(args.output_format, OutputFormatType::PrettyCompact);
-        } else {
-            panic!("Expected Run command");
-        }
-
-        // JSON
-        let cmd = Cli::parse_from(["pecos", "run", "program.json", "-f", "json"]);
-        if let Commands::Run(args) = cmd.command {
-            assert_eq!(args.output_format, OutputFormatType::Json);
-        } else {
-            panic!("Expected Run command");
-        }
-
-        // Compact JSON
-        let cmd = Cli::parse_from(["pecos", "run", "program.json", "-f", "compact"]);
-        if let Commands::Run(args) = cmd.command {
-            assert_eq!(args.output_format, OutputFormatType::CompactJson);
-        } else {
-            panic!("Expected Run command");
-        }
-
-        // Frequency format
-        let cmd = Cli::parse_from(["pecos", "run", "program.json", "-f", "freq"]);
-        if let Commands::Run(args) = cmd.command {
-            assert_eq!(args.output_format, OutputFormatType::Frequency);
-        } else {
-            panic!("Expected Run command");
-        }
-    }
-
-    #[test]
     fn verify_cli_output_file_option() {
         // Test with output file specified using short flag
         let cmd = Cli::parse_from(["pecos", "run", "program.json", "-o", "results.json"]);
@@ -525,6 +516,67 @@ mod tests {
 
         if let Commands::Run(args) = cmd.command {
             assert_eq!(args.output_file, Some("path/to/results.json".to_string()));
+        } else {
+            panic!("Expected Run command");
+        }
+    }
+
+    #[test]
+    fn verify_cli_simulator_options() {
+        // Test with statevector simulator (explicitly specified)
+        let cmd = Cli::parse_from(["pecos", "run", "program.json", "-S", "statevector"]);
+        if let Commands::Run(args) = cmd.command {
+            assert_eq!(args.simulator, SimulatorType::StateVector);
+        } else {
+            panic!("Expected Run command");
+        }
+
+        // Test with stabilizer simulator
+        let cmd = Cli::parse_from(["pecos", "run", "program.json", "-S", "stabilizer"]);
+        if let Commands::Run(args) = cmd.command {
+            assert_eq!(args.simulator, SimulatorType::Stabilizer);
+        } else {
+            panic!("Expected Run command");
+        }
+
+        // Test with aliases
+        let cmd = Cli::parse_from(["pecos", "run", "program.json", "--sim", "stab"]);
+        if let Commands::Run(args) = cmd.command {
+            assert_eq!(args.simulator, SimulatorType::Stabilizer);
+        } else {
+            panic!("Expected Run command");
+        }
+
+        let cmd = Cli::parse_from(["pecos", "run", "program.json", "--sim", "sv"]);
+        if let Commands::Run(args) = cmd.command {
+            assert_eq!(args.simulator, SimulatorType::StateVector);
+        } else {
+            panic!("Expected Run command");
+        }
+    }
+
+    #[test]
+    fn verify_cli_display_format_options() {
+        // Test with binary format
+        let cmd = Cli::parse_from(["pecos", "run", "program.json", "-f", "binary"]);
+        if let Commands::Run(args) = cmd.command {
+            assert_eq!(args.display_format, "binary");
+        } else {
+            panic!("Expected Run command");
+        }
+
+        // Test with hex format
+        let cmd = Cli::parse_from(["pecos", "run", "program.json", "--format", "hex"]);
+        if let Commands::Run(args) = cmd.command {
+            assert_eq!(args.display_format, "hex");
+        } else {
+            panic!("Expected Run command");
+        }
+
+        // Test default format
+        let cmd = Cli::parse_from(["pecos", "run", "program.json"]);
+        if let Commands::Run(args) = cmd.command {
+            assert_eq!(args.display_format, "decimal");
         } else {
             panic!("Expected Run command");
         }

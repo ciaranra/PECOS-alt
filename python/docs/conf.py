@@ -1,4 +1,12 @@
-#  =========================================================================  #  # noqa: INP001
+"""Sphinx documentation configuration for PECOS quantum error correction framework.
+
+This module configures Sphinx for generating the PECOS documentation, including
+API reference, user guides, and examples for the quantum error correction library.
+"""
+
+# ruff: noqa: INP001
+
+#  =========================================================================  #
 #   Copyright 2023 The PECOS Developers
 #   Copyright 2018 National Technology & Engineering Solutions of Sandia,
 #   LLC (NTESS). Under the terms of Contract DE-NA0003525 with NTESS,
@@ -33,7 +41,7 @@ sys.path.insert(0, str(Path("../quantum-pecos/src").resolve()))
 # -- Project information -----------------------------------------------------
 
 project = "PECOS"
-copyright = (
+copyright = (  # noqa: A001
     "2018-2023, The PECOS Developers. "
     "\xa9 Copyright 2018, National Technology & Engineering Solutions of Sandia, LLC (NTESS)"
 )

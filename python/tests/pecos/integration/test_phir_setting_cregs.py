@@ -1,7 +1,21 @@
+# Copyright 2023 The PECOS Developers
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
+# the License.You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+# specific language governing permissions and limitations under the License.
+
+"""Integration tests for PHIR classical register setting."""
+
 from pecos.engines.hybrid_engine import HybridEngine
 
 
-def test_setting_bits():
+def test_setting_bits() -> None:
+    """Test setting individual bits in classical registers."""
     phir = {
         "format": "PHIR/JSON",
         "version": "0.1.0",
@@ -17,7 +31,8 @@ def test_setting_bits():
     assert results["c"].count("101") == len(results["c"])
 
 
-def test_setting_cvar():
+def test_setting_cvar() -> None:
+    """Test setting classical variables in PHIR."""
     phir = {
         "format": "PHIR/JSON",
         "version": "0.1.0",
@@ -37,7 +52,8 @@ def test_setting_cvar():
     assert results["c"].count("010") == len(results["c"])
 
 
-def test_setting_expr():
+def test_setting_expr() -> None:
+    """Test setting expressions in classical registers."""
     phir = {
         "format": "PHIR/JSON",
         "version": "0.1.0",
@@ -65,7 +81,8 @@ def test_setting_expr():
     assert results["c"].count("010") == len(results["c"])
 
 
-def test_setting_mixed():
+def test_setting_mixed() -> None:
+    """Test setting mixed types in classical registers."""
     phir = {
         "format": "PHIR/JSON",
         "version": "0.1.0",

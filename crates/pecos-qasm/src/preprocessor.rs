@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -7,13 +7,13 @@ use pecos_core::errors::PecosError;
 /// Simple preprocessor with unified includes
 pub struct Preprocessor {
     /// All includes - just name to content
-    content: HashMap<String, String>,
+    content: BTreeMap<String, String>,
 
     /// Paths to search for missing includes
     search_paths: Vec<PathBuf>,
 
     /// Track included files (circular dependency detection)
-    included: HashSet<String>,
+    included: BTreeSet<String>,
 }
 
 impl Default for Preprocessor {
@@ -27,9 +27,9 @@ impl Preprocessor {
     #[must_use]
     pub fn new() -> Self {
         let mut preprocessor = Self {
-            content: HashMap::new(),
+            content: BTreeMap::new(),
             search_paths: vec![],
-            included: HashSet::new(),
+            included: BTreeSet::new(),
         };
 
         // Add system includes
@@ -53,6 +53,10 @@ impl Preprocessor {
     }
 
     /// Process QASM source
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if preprocessing fails.
     pub fn preprocess(&mut self, source: &str) -> Result<String, PecosError> {
         self.included.clear();
         self.preprocess_internal(source, None)
@@ -115,27 +119,57 @@ impl Preprocessor {
         source: &str,
         base_dir: Option<&Path>,
     ) -> Result<String, PecosError> {
-        let include_pattern = regex::Regex::new(r#"include\s+"([^"]+)"\s*;"#).unwrap();
+        let include_pattern = regex::Regex::new(r#"include\s+"([^"]+)"\s*;"#)
+            .map_err(|e| PecosError::Generic(format!("Invalid regex pattern: {e}")))?;
+
+        // First, remove single-line comments (//...) but preserve the content for final output
+        let comment_pattern = regex::Regex::new(r"//[^\n]*")
+            .map_err(|e| PecosError::Generic(format!("Invalid comment regex pattern: {e}")))?;
+
+        // Create a version with comments removed for include detection
+        let source_without_comments = comment_pattern.replace_all(source, "");
+
         let mut result = source.to_string();
 
-        while let Some(captures) = include_pattern.captures(&result) {
-            let full_match = captures.get(0).unwrap();
-            let filename = captures.get(1).unwrap().as_str();
+        // Find all includes in the comment-free version
+        let mut includes_to_process = Vec::new();
+        for captures in include_pattern.captures_iter(&source_without_comments) {
+            let full_match = captures.get(0).ok_or_else(|| {
+                PecosError::Generic("Regex match failed unexpectedly".to_string())
+            })?;
+            let filename = captures
+                .get(1)
+                .ok_or_else(|| PecosError::Generic("Include filename not found".to_string()))?
+                .as_str();
 
-            let content = self.get_include(filename, base_dir)?;
+            // Check if this include also exists in the original source (not in a comment)
+            if let Some(pos) = source.find(full_match.as_str()) {
+                // Verify it's not in a comment by checking if there's a // before it on the same line
+                let line_start = source[..pos].rfind('\n').map_or(0, |p| p + 1);
+                let line_before_include = &source[line_start..pos];
+                if !line_before_include.contains("//") {
+                    includes_to_process
+                        .push((full_match.as_str().to_string(), filename.to_string()));
+                }
+            }
+        }
+
+        // Process each include
+        for (full_match, filename) in includes_to_process {
+            let content = self.get_include(&filename, base_dir)?;
 
             // Process recursively
-            let processed = if Path::new(filename)
+            let processed = if Path::new(&filename)
                 .extension()
                 .and_then(std::ffi::OsStr::to_str)
                 == Some("inc")
             {
                 let new_base = if let Some(base) = base_dir {
-                    base.join(filename)
+                    base.join(&filename)
                         .parent()
                         .map(std::path::Path::to_path_buf)
                 } else {
-                    Path::new(filename)
+                    Path::new(&filename)
                         .parent()
                         .map(std::path::Path::to_path_buf)
                 };
@@ -144,13 +178,17 @@ impl Preprocessor {
                 content
             };
 
-            result = result.replace(full_match.as_str(), &processed);
+            result = result.replace(&full_match, &processed);
         }
 
         Ok(result)
     }
 
     // For compatibility while transitioning
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if preprocessing fails.
     pub fn preprocess_str(&mut self, source: &str) -> Result<String, PecosError> {
         self.preprocess(source)
     }

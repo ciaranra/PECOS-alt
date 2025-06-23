@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""PECOS Rust library Python bindings.
+
+This package provides Python bindings for high-performance Rust implementations of quantum simulators and computational
+components within the PECOS framework, enabling efficient quantum circuit simulation and error correction computations.
+"""
+
 # ruff: noqa: TID252
 from importlib.metadata import PackageNotFoundError, version
 
@@ -18,6 +24,25 @@ from pecos_rslib._pecos_rslib import ByteMessage
 from pecos_rslib._pecos_rslib import ByteMessageBuilder
 from pecos_rslib._pecos_rslib import StateVecEngineRs
 from pecos_rslib._pecos_rslib import SparseStabEngineRs
+
+# QASM simulation exports
+from pecos_rslib._pecos_rslib import NoiseModel
+from pecos_rslib._pecos_rslib import QuantumEngine
+from pecos_rslib._pecos_rslib import run_qasm
+from pecos_rslib._pecos_rslib import get_noise_models
+from pecos_rslib._pecos_rslib import get_quantum_engines
+
+# Import the qasm_sim function and noise models for easy access
+from pecos_rslib.qasm_sim import qasm_sim, register_noise_model
+
+# Also import the noise model dataclasses for convenience
+from pecos_rslib.qasm_sim import (
+    PassThroughNoise,
+    DepolarizingNoise,
+    DepolarizingCustomNoise,
+    BiasedDepolarizingNoise,
+    GeneralNoise,
+)
 
 try:
     __version__ = version("pecos-rslib")
@@ -31,4 +56,18 @@ __all__ = [
     "ByteMessageBuilder",
     "StateVecEngineRs",
     "SparseStabEngineRs",
+    # QASM simulation
+    "NoiseModel",
+    "QuantumEngine",
+    "run_qasm",
+    "get_noise_models",
+    "get_quantum_engines",
+    "qasm_sim",
+    "register_noise_model",
+    # Noise model dataclasses
+    "PassThroughNoise",
+    "DepolarizingNoise",
+    "DepolarizingCustomNoise",
+    "BiasedDepolarizingNoise",
+    "GeneralNoise",
 ]

@@ -99,6 +99,9 @@ impl ExprValue {
     /// Converts an `ExprValue` to a `TypedValue` with a specific data type
     ///
     /// Returns an error if the value cannot be safely converted to the target type
+    ///
+    /// # Errors
+    /// Returns an error if the value is out of range for the target data type.
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn to_typed_value(&self, data_type: &DataType) -> Result<TypedValue, PecosError> {
         match data_type {
@@ -205,6 +208,12 @@ impl<'a> ExpressionEvaluator<'a> {
     }
 
     /// Evaluates an expression to an `ExprValue` with caching
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Variables referenced in the expression don't exist
+    /// - Binary/unary operations are unsupported
+    /// - Arguments to operations are invalid
     pub fn eval_expr(&mut self, expr: &Expression) -> Result<ExprValue, PecosError> {
         // For simple expressions, don't bother with caching
         match expr {
@@ -337,6 +346,12 @@ impl<'a> ExpressionEvaluator<'a> {
     }
 
     /// Evaluates an argument to an `ExprValue`
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Variable referenced doesn't exist
+    /// - Bit access is invalid
+    /// - Nested expression evaluation fails
     pub fn eval_arg(&mut self, arg: &ArgItem) -> Result<ExprValue, PecosError> {
         match arg {
             ArgItem::Simple(name) => {

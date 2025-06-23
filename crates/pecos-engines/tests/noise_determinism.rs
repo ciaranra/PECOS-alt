@@ -11,33 +11,26 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use log::info;
+use pecos_engines::noise::general::GeneralNoiseModel;
+use pecos_engines::quantum::{QuantumEngine, StateVecEngine};
 use pecos_engines::{
-    Engine, QuantumSystem,
-    byte_message::ByteMessage,
-    engines::ControlEngine,
-    engines::noise::{NoiseModel, general::GeneralNoiseModel},
-    engines::quantum::{QuantumEngine, StateVecEngine},
+    Engine, QuantumSystem, byte_message::ByteMessage, engine_system::ControlEngine,
 };
 use std::collections::BTreeMap;
 
 /// Reset a noise model and set its seed in one operation
 ///
-/// This function works with boxed noise models and takes care of
-/// downcasting to `GeneralNoiseModel` to use the `reset_with_seed` method.
+/// This function applies the `reset_with_seed` method to a `GeneralNoiseModel`
 fn reset_model_with_seed(
-    model: &mut Box<dyn NoiseModel>,
+    model: &mut GeneralNoiseModel,
     seed: u64,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let general_noise = model
-        .as_any_mut()
-        .downcast_mut::<GeneralNoiseModel>()
-        .expect("Failed to downcast noise model to GeneralNoiseModel");
-    general_noise
+    model
         .reset_with_seed(seed)
         .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
 }
 
-fn create_noise_model() -> Box<dyn NoiseModel> {
+fn create_noise_model() -> GeneralNoiseModel {
     info!("Creating noise model with moderate error rates");
 
     // Create a noise model with moderate error rates using the builder pattern
@@ -77,25 +70,25 @@ fn create_noise_model() -> Box<dyn NoiseModel> {
     model
 }
 
-fn apply_noise(model: &mut Box<dyn NoiseModel>, msg: &ByteMessage) -> ByteMessage {
+fn apply_noise(model: &mut GeneralNoiseModel, msg: &ByteMessage) -> ByteMessage {
     info!("Applying noise to message");
     match model
         .start(msg.clone())
         .expect("Failed to start noise model processing")
     {
-        pecos_engines::engines::EngineStage::NeedsProcessing(noisy_msg) => {
+        pecos_engines::engine_system::EngineStage::NeedsProcessing(noisy_msg) => {
             info!("Processing noisy message");
             match model
                 .continue_processing(noisy_msg)
                 .expect("Failed to continue processing with noise model")
             {
-                pecos_engines::engines::EngineStage::Complete(result) => result,
-                pecos_engines::engines::EngineStage::NeedsProcessing(_) => {
+                pecos_engines::engine_system::EngineStage::Complete(result) => result,
+                pecos_engines::engine_system::EngineStage::NeedsProcessing(_) => {
                     panic!("Expected Complete stage")
                 }
             }
         }
-        pecos_engines::engines::EngineStage::Complete(_) => {
+        pecos_engines::engine_system::EngineStage::Complete(_) => {
             panic!("Expected NeedsProcessing stage")
         }
     }
@@ -106,8 +99,8 @@ fn apply_noise(model: &mut Box<dyn NoiseModel>, msg: &ByteMessage) -> ByteMessag
 /// This function extracts and compares the quantum operations from two messages
 /// to determine if they represent the same quantum circuit.
 fn compare_messages(msg1: &ByteMessage, msg2: &ByteMessage) -> bool {
-    let ops1 = msg1.parse_quantum_operations().unwrap_or_default();
-    let ops2 = msg2.parse_quantum_operations().unwrap_or_default();
+    let ops1 = msg1.quantum_ops().unwrap_or_default();
+    let ops2 = msg2.quantum_ops().unwrap_or_default();
 
     // For determinism tests, we just need to know if they're equal
     ops1 == ops2
@@ -270,8 +263,8 @@ fn test_measurement_determinism() {
     builder.add_h(&[0]);
     builder.add_h(&[1]);
     builder.add_cx(&[0], &[1]);
-    builder.add_measurements(&[0], &[0]);
-    builder.add_measurements(&[1], &[1]);
+    builder.add_measurements(&[0]);
+    builder.add_measurements(&[1]);
     let msg = builder.build();
 
     // Apply noise multiple times
@@ -327,13 +320,13 @@ fn test_different_seeds_produce_different_results() {
 /// 3. Runs the circuit and collects the actual measurement outcomes
 /// 4. Returns the measurement results as a `BTreeMap` of result IDs to values
 fn run_complete_simulation(
-    noise_model: &mut Box<dyn NoiseModel>,
+    noise_model: &mut GeneralNoiseModel,
     quantum_engine: Box<dyn QuantumEngine>,
     circuit: &ByteMessage,
     seed: u64,
 ) -> BTreeMap<usize, i32> {
     // Create a quantum system with the noise model and quantum engine
-    let mut system = QuantumSystem::new(noise_model.clone(), quantum_engine);
+    let mut system = QuantumSystem::new(Box::new(noise_model.clone()), quantum_engine);
 
     // Set the seed for deterministic behavior
     system.set_seed(seed).expect("Failed to set seed");
@@ -347,8 +340,9 @@ fn run_complete_simulation(
         .expect("Failed to process circuit");
 
     // Extract the measurement results
-    let measurements = output
-        .measurement_results_as_vec()
+    let measurements: Vec<(usize, u32)> = output
+        .outcomes()
+        .map(|outcomes| outcomes.into_iter().enumerate().collect())
         .expect("Failed to extract measurements");
 
     // Convert u32 values to i32 for the HashMap, handling potential overflow
@@ -385,7 +379,7 @@ fn test_complete_measurement_determinism() {
     builder.add_h(&[0]);
     builder.add_cx(&[0], &[1]);
     // Add measurements for both qubits
-    builder.add_measurements(&[0, 1], &[0, 1]);
+    builder.add_measurements(&[0]);
     let circuit = builder.build();
 
     // Create two identical quantum engines
@@ -430,20 +424,21 @@ fn test_deterministic_measurement() {
     info!("Testing deterministic measurement with seed {seed}");
 
     // Create a noise model with significant measurement error
-    let mut model = Box::new(
-        GeneralNoiseModel::builder()
-            .with_prep_probability(0.01)
-            .with_meas_0_probability(0.2)
-            .with_meas_1_probability(0.2)
-            .with_average_p1_probability(0.1)
-            .with_average_p2_probability(0.1)
-            .build(),
-    );
+    let model = GeneralNoiseModel::builder()
+        .with_prep_probability(0.01)
+        .with_meas_0_probability(0.2)
+        .with_meas_1_probability(0.2)
+        .with_average_p1_probability(0.1)
+        .with_average_p2_probability(0.1)
+        .build();
+
+    // Box the model for use with the NoiseModel trait
+    let mut model = Box::new(model);
 
     // Create a circuit that puts a qubit in superposition and measures it
     let mut builder = ByteMessage::quantum_operations_builder();
     builder.add_h(&[0]); // Put qubit 0 in superposition
-    builder.add_measurements(&[0], &[0]); // Measure qubit 0
+    builder.add_measurements(&[0]); // Measure qubit 0
     let circuit = builder.build();
 
     info!("Running first measurement with seed {seed}");
@@ -556,22 +551,23 @@ fn test_comprehensive_noise_determinism() {
     info!("Testing comprehensive noise determinism (all noise types)");
 
     // Create a noise model with all types of noise
-    let mut model = Box::new(
-        GeneralNoiseModel::builder()
-            // Preparation errors
-            .with_prep_probability(0.05)
-            .with_prep_leak_ratio(0.2)
-            // Measurement errors
-            .with_meas_0_probability(0.1)
-            .with_meas_1_probability(0.15)
-            // Gate errors
-            .with_average_p1_probability(0.2)
-            .with_average_p2_probability(0.1)
-            // Leakage and emission errors
-            .with_p1_emission_ratio(0.3)
-            .with_p2_emission_ratio(0.3)
-            .build(),
-    );
+    let model = GeneralNoiseModel::builder()
+        // Preparation errors
+        .with_prep_probability(0.05)
+        .with_prep_leak_ratio(0.2)
+        // Measurement errors
+        .with_meas_0_probability(0.1)
+        .with_meas_1_probability(0.15)
+        // Gate errors
+        .with_average_p1_probability(0.2)
+        .with_average_p2_probability(0.1)
+        // Leakage and emission errors
+        .with_p1_emission_ratio(0.3)
+        .with_p2_emission_ratio(0.3)
+        .build();
+
+    // Box the model
+    let mut model = Box::new(model);
 
     // Create a complex circuit with all types of operations:
     // 1. Preparation (implicit at start)
@@ -607,7 +603,7 @@ fn test_comprehensive_noise_determinism() {
     builder.add_cx(&[2], &[0]); // Apply CNOT from qubit 2 to qubit 0
 
     // Add measurements for all qubits
-    builder.add_measurements(&[0, 1, 2], &[0, 1, 2]);
+    builder.add_measurements(&[0]);
 
     let circuit = builder.build();
 
@@ -692,15 +688,16 @@ fn test_long_running_determinism() {
     info!("Testing long-running determinism with many operations");
 
     // Create a noise model with moderate error rates
-    let mut model = Box::new(
-        GeneralNoiseModel::builder()
-            .with_prep_probability(0.01)
-            .with_meas_0_probability(0.02)
-            .with_meas_1_probability(0.02)
-            .with_average_p1_probability(0.1)
-            .with_average_p2_probability(0.05)
-            .build(),
-    );
+    let model = GeneralNoiseModel::builder()
+        .with_prep_probability(0.01)
+        .with_meas_0_probability(0.02)
+        .with_meas_1_probability(0.02)
+        .with_average_p1_probability(0.1)
+        .with_average_p2_probability(0.05)
+        .build();
+
+    // Box the model
+    let mut model = Box::new(model);
 
     // Create a circuit with a very large number of operations
     let mut builder = ByteMessage::quantum_operations_builder();
@@ -747,7 +744,7 @@ fn test_long_running_determinism() {
     }
 
     // Add measurements for all qubits
-    builder.add_measurements(&[0, 1, 2, 3, 4], &[0, 1, 2, 3, 4]);
+    builder.add_measurements(&[0]);
 
     let circuit = builder.build();
 

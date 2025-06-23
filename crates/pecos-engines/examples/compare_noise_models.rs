@@ -1,6 +1,6 @@
 use pecos_engines::byte_message::ByteMessage;
-use pecos_engines::engines::noise::{DepolarizingNoiseModel, GeneralNoiseModel};
-use pecos_engines::engines::quantum::StateVecEngine;
+use pecos_engines::noise::{DepolarizingNoiseModel, GeneralNoiseModel};
+use pecos_engines::quantum::StateVecEngine;
 use pecos_engines::{Engine, EngineSystem, QuantumSystem};
 use std::collections::HashMap;
 
@@ -9,8 +9,8 @@ fn main() {
     let circ = ByteMessage::quantum_operations_builder()
         .add_h(&[0])
         .add_cx(&[0], &[1])
-        .add_measurements(&[0], &[0])
-        .add_measurements(&[1], &[1])
+        .add_measurements(&[0])
+        .add_measurements(&[1])
         .build();
 
     // Test that GeneralNoise can reproduce DepolarizingNoise behavior
@@ -43,11 +43,11 @@ fn compare_depolarizing_with_general(circ: &ByteMessage) {
         .with_prep_probability(p_noise)
         .with_meas_0_probability(p_noise)
         .with_meas_1_probability(p_noise)
-        .with_single_qubit_probability(p_noise)
-        .with_two_qubit_probability(p_noise)
+        .with_p1_probability(p_noise)
+        .with_p2_probability(p_noise)
         .with_seed(seed)
         .build();
-    let mut general_system = QuantumSystem::new(general_noise, Box::new(quantum.clone()));
+    let mut general_system = QuantumSystem::new(Box::new(general_noise), Box::new(quantum.clone()));
 
     println!("Comparing DepolarizingNoise vs GeneralNoise with p = {p_noise}");
     println!("{:-^80}", "");
@@ -70,13 +70,13 @@ fn compare_depolarizing_with_general(circ: &ByteMessage) {
             .process_as_system(circ.clone())
             .expect("Failed to process with depolarizing noise");
         let measurements = results
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse depolarizing measurements");
 
         // Format result string
         let result_str = measurements
             .iter()
-            .map(|&(_, value)| value.to_string())
+            .map(|&value| value.to_string())
             .collect::<String>();
 
         depolarizing_results.push(result_str);
@@ -89,13 +89,13 @@ fn compare_depolarizing_with_general(circ: &ByteMessage) {
             .process_as_system(circ.clone())
             .expect("Failed to process with general noise");
         let measurements = results
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse general measurements");
 
         // Format result string
         let result_str = measurements
             .iter()
-            .map(|&(_, value)| value.to_string())
+            .map(|&value| value.to_string())
             .collect::<String>();
 
         general_results.push(result_str);
@@ -165,7 +165,7 @@ fn test_asymmetric_measurements() {
     // Create a simple circuit with H-gate and measurement
     let circ = ByteMessage::quantum_operations_builder()
         .add_h(&[0])
-        .add_measurements(&[0], &[0])
+        .add_measurements(&[0])
         .build();
 
     // Create quantum engine
@@ -185,11 +185,11 @@ fn test_asymmetric_measurements() {
         .with_prep_probability(p_prep)
         .with_meas_0_probability(p_meas_0)
         .with_meas_1_probability(p_meas_1)
-        .with_single_qubit_probability(p1)
-        .with_two_qubit_probability(0.0) // Not used in this circuit
+        .with_p1_probability(p1)
+        .with_p2_probability(0.0) // Not used in this circuit
         .with_seed(seed)
         .build();
-    let mut general_system = QuantumSystem::new(general_noise, Box::new(quantum.clone()));
+    let mut general_system = QuantumSystem::new(Box::new(general_noise), Box::new(quantum.clone()));
 
     // For comparison, a depolarizing model with symmetric errors
     let p_depolarizing = f64::midpoint(p_meas_0, p_meas_1); // Average of the asymmetric errors
@@ -215,11 +215,11 @@ fn test_asymmetric_measurements() {
             .process_as_system(circ.clone())
             .expect("Failed to process with general noise");
         let measurements = results
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse general measurements");
         let result = measurements
             .first()
-            .map_or("?", |&(_, v)| if v == 1 { "1" } else { "0" });
+            .map_or("?", |&v| if v == 1 { "1" } else { "0" });
         *general_counts.entry(result.to_string()).or_insert(0) += 1;
 
         // Run with depolarizing noise
@@ -230,11 +230,11 @@ fn test_asymmetric_measurements() {
             .process_as_system(circ.clone())
             .expect("Failed to process with depolarizing noise");
         let measurements = results
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse depolarizing measurements");
         let result = measurements
             .first()
-            .map_or("?", |&(_, v)| if v == 1 { "1" } else { "0" });
+            .map_or("?", |&v| if v == 1 { "1" } else { "0" });
         *depolarizing_counts.entry(result.to_string()).or_insert(0) += 1;
     }
 

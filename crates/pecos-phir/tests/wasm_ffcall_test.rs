@@ -7,6 +7,7 @@ mod tests {
 
     use crate::common::phir_test_utils::{assert_register_value, run_phir_simulation_from_json};
     use pecos_engines::PassThroughNoiseModel;
+    use pecos_engines::shot_results::Data;
 
     #[test]
     fn test_wasm_add_function_in_phir() -> Result<(), PecosError> {
@@ -119,46 +120,30 @@ mod tests {
             Some(wasm_path.clone()),       // WebAssembly file path
         )?;
 
-        // Following our refactoring, we need to check either "output" or "result"
-        // First try "output" (the expected register from the original test)
-        if let Some(output_values) = results.register_shots_i64.get("output") {
-            // Should have exactly 5 shots
-            assert_eq!(
-                output_values.len(),
-                5,
-                "Expected 5 shots for 'output' register"
-            );
+        // Following our refactoring, we need to check the shots field
+        // Should have exactly 5 shots
+        assert_eq!(results.shots.len(), 5, "Expected 5 shots");
 
-            // All shots should have the value 15
-            for (i, &value) in output_values.iter().enumerate() {
-                assert_eq!(
-                    value, 15,
-                    "Shot {i} of 'output' register has incorrect value"
+        // All shots should have the "result" register with value 15
+        // Note: The PHIR engine stores the value as "result", not "output"
+        for (i, shot) in results.shots.iter().enumerate() {
+            // Check for "result" first, then fall back to "output"
+            let (register_name, value) = if shot.data.contains_key("result") {
+                ("result", shot.data.get("result").and_then(Data::as_u32))
+            } else if shot.data.contains_key("output") {
+                ("output", shot.data.get("output").and_then(Data::as_u32))
+            } else {
+                panic!(
+                    "Shot {i} does not contain 'result' or 'output' register. Available registers: {:?}",
+                    shot.data.keys().collect::<Vec<_>>()
                 );
-            }
-        }
-        // If "output" is not found, fall back to "result" which should have the same value
-        else if let Some(result_values) = results.register_shots_i64.get("result") {
-            println!("NOTICE: 'output' register not found, using 'result' register instead");
+            };
 
-            // Should have exactly 5 shots
             assert_eq!(
-                result_values.len(),
-                5,
-                "Expected 5 shots for 'result' register"
+                value,
+                Some(15),
+                "Shot {i} of '{register_name}' register has incorrect value: {value:?}"
             );
-
-            // All shots should have the value 15
-            for (i, &value) in result_values.iter().enumerate() {
-                assert_eq!(
-                    value, 15,
-                    "Shot {i} of 'result' register has incorrect value"
-                );
-            }
-        }
-        // If neither are found, fail the test
-        else {
-            panic!("Neither 'output' nor 'result' registers were found in the results");
         }
 
         Ok(())

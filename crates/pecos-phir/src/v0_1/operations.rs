@@ -248,6 +248,9 @@ impl OperationProcessor {
 
     /// Set a variable value in the environment
     /// Environment is the single source of truth for all variables
+    ///
+    /// # Errors
+    /// Returns an error if the variable cannot be created or updated.
     pub fn set_variable_value(&mut self, name: &str, value: u64) -> Result<(), PecosError> {
         // Create the variable if it doesn't exist
         if !self.environment.has_variable(name) {
@@ -281,8 +284,11 @@ impl OperationProcessor {
     }
 
     /// Evaluates a classical expression
+    ///
+    /// # Errors
+    /// Returns an error if the expression cannot be evaluated (e.g., undefined variables).
     pub fn evaluate_expression(&self, expr: &Expression) -> Result<i64, PecosError> {
-        log::info!("Evaluating expression: {:?}", expr);
+        log::debug!("Evaluating expression: {:?}", expr);
 
         // Create an expression evaluator using our environment
         let mut evaluator = ExpressionEvaluator::new(&self.environment);
@@ -294,7 +300,7 @@ impl OperationProcessor {
 
     /// Evaluates an argument item (variable, literal, etc.)
     fn evaluate_arg_item(&self, arg: &ArgItem) -> Result<i64, PecosError> {
-        log::info!("Evaluating argument item: {:?}", arg);
+        log::debug!("Evaluating argument item: {:?}", arg);
 
         // Create an expression evaluator using our environment as the primary variable source
         let mut evaluator = ExpressionEvaluator::new(&self.environment);
@@ -307,6 +313,9 @@ impl OperationProcessor {
     // Removed get_variable_value method as it's no longer needed
 
     /// Process a block operation with improved validation and handling
+    ///
+    /// # Errors
+    /// Returns an error if the block type is unknown or invalid.
     pub fn process_block(
         &self,
         block_type: &str,
@@ -408,6 +417,9 @@ impl OperationProcessor {
     }
 
     /// Process a conditional (if/else) block with improved evaluation
+    ///
+    /// # Errors
+    /// Returns an error if the condition expression cannot be evaluated.
     pub fn process_conditional_block(
         &self,
         condition: &Expression,
@@ -450,6 +462,9 @@ impl OperationProcessor {
     }
 
     /// Process a meta instruction
+    ///
+    /// # Errors
+    /// Returns an error if the meta instruction type is unsupported or arguments are invalid.
     pub fn process_meta_instruction(
         &self,
         meta_type: &str,
@@ -478,6 +493,9 @@ impl OperationProcessor {
     }
 
     /// Add a meta instruction to the byte message builder
+    ///
+    /// # Errors
+    /// Currently never returns an error, but may in future implementations.
     pub fn add_meta_instruction_to_builder(
         &self,
         _builder: &mut ByteMessageBuilder,
@@ -515,6 +533,13 @@ impl OperationProcessor {
     ///
     /// * `Ok(MachineOperationResult)` - A structured result object representing the machine operation
     /// * `Err(PecosError)` - If the operation parameters are invalid
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - The duration is negative
+    /// - The time unit is not supported
+    /// - The duration value would overflow when converted to nanoseconds
+    /// - The machine operation type is not supported
     ///
     /// # Examples
     ///
@@ -712,6 +737,9 @@ impl OperationProcessor {
     /// * `Ok(())` - If the operation was successfully added to the builder
     /// * `Err(PecosError)` - If the operation could not be added
     ///
+    /// # Errors
+    /// Currently never returns an error, but may in future implementations.
+    ///
     /// # Notes
     ///
     /// Some machine operations may not be directly supported by all hardware backends. In these cases,
@@ -802,6 +830,9 @@ impl OperationProcessor {
 
     /// Add a quantum variable to the environment
     /// Uses the environment as the single source of truth
+    ///
+    /// # Errors
+    /// Returns an error if the variable already exists or cannot be added.
     pub fn add_quantum_variable(&mut self, variable: &str, size: usize) -> Result<(), PecosError> {
         // Store in the environment (single source of truth)
         self.environment
@@ -812,6 +843,9 @@ impl OperationProcessor {
 
     /// Add a classical variable to the environment
     /// Uses the environment as the single source of truth
+    ///
+    /// # Errors
+    /// Returns an error if the data type is invalid.
     pub fn add_classical_variable(
         &mut self,
         variable: &str,
@@ -848,6 +882,9 @@ impl OperationProcessor {
     }
 
     /// Handle variable definition operations
+    ///
+    /// # Errors
+    /// Returns an error if the variable definition type is unknown.
     pub fn handle_variable_definition(
         &mut self,
         data: &str,
@@ -883,6 +920,9 @@ impl OperationProcessor {
     /// This method ensures the variable exists and the index is within bounds.
     /// It no longer auto-creates missing variables as that's inconsistent with
     /// using the environment as a single source of truth.
+    ///
+    /// # Errors
+    /// Returns an error if the variable doesn't exist or the index is out of bounds.
     pub fn validate_variable_access(&self, var: &str, idx: usize) -> Result<(), PecosError> {
         // Check in environment (single source of truth)
         if self.environment.has_variable(var) {
@@ -906,6 +946,9 @@ impl OperationProcessor {
     /// Ensure all variables in the environment have consistent values
     /// This method is now much simpler since the environment is the single source of truth.
     /// It's primarily kept for compatibility with code that expects this method to exist.
+    ///
+    /// # Errors
+    /// Currently never returns an error.
     pub fn update_expression_results(&mut self) -> Result<(), PecosError> {
         log::debug!("Variables from environment are already the single source of truth");
         // No need to do anything - the environment already has all the values
@@ -913,6 +956,13 @@ impl OperationProcessor {
     }
 
     /// Handle classical operations
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Variable references are invalid
+    /// - Expressions cannot be evaluated
+    /// - Foreign function calls fail
+    /// - Assignment operations fail
     #[allow(clippy::too_many_lines)]
     pub fn handle_classical_op(
         &mut self,
@@ -990,7 +1040,7 @@ impl OperationProcessor {
                             idx,
                             u64::try_from(bit_value).unwrap_or(0),
                         )?;
-                        log::info!("Set bit {}[{}] = {} in environment", var, idx, bit_value);
+                        log::debug!("Set bit {}[{}] = {} in environment", var, idx, bit_value);
                     }
 
                     // Calculate the new value and update exported_values
@@ -1017,14 +1067,14 @@ impl OperationProcessor {
                             );
                         }
                     }
-                    log::info!(
+                    log::debug!(
                         "Added bit-level value to environment: {} = {}",
                         var,
                         new_value
                     );
                 } else {
                     // For whole variable assignment, store in environment
-                    log::info!("Storing assignment value {} in variable {}", value, var);
+                    log::debug!("Storing assignment value {} in variable {}", value, var);
 
                     // Make sure variable exists in environment and update it
                     if !self.environment.has_variable(&var) {
@@ -1034,10 +1084,10 @@ impl OperationProcessor {
                     #[allow(clippy::cast_sign_loss)]
                     let value_u64 = u64::from_ne_bytes((value as u64).to_ne_bytes());
                     self.environment.set(&var, value_u64)?;
-                    log::info!("Updated variable {} = {} in environment", var, value);
+                    log::debug!("Updated variable {} = {} in environment", var, value);
 
                     // Values are stored in the environment and will be available for expression evaluation
-                    log::info!(
+                    log::debug!(
                         "Variable is now available in environment: {} = {}",
                         var,
                         value
@@ -1045,7 +1095,7 @@ impl OperationProcessor {
                 }
 
                 // Return true to indicate we've handled this operation
-                log::info!("Assignment operation handled successfully");
+                log::debug!("Assignment operation handled successfully");
                 return Ok(true);
             }
         } else {
@@ -1072,7 +1122,7 @@ impl OperationProcessor {
 
         if cop == "Result" {
             // Process Result operation with our improved implementation
-            log::info!(
+            log::debug!(
                 "Processing Result operation with {} sources and {} destinations",
                 args.len(),
                 returns.len()
@@ -1450,6 +1500,13 @@ impl OperationProcessor {
     }
 
     /// Process a quantum operation and return the gate type, qubit arguments, and angle arguments
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - No qubit arguments are provided
+    /// - Required angle parameters are missing
+    /// - The quantum gate type is not supported
+    /// - Qubit variables are invalid
     pub fn process_quantum_op(
         &self,
         qop: &str,
@@ -1551,6 +1608,9 @@ impl OperationProcessor {
     }
 
     /// Add quantum operation to byte message builder
+    ///
+    /// # Errors
+    /// Returns an error if the gate type is not supported.
     pub fn add_quantum_operation_to_builder(
         &self,
         builder: &mut ByteMessageBuilder,
@@ -1584,7 +1644,7 @@ impl OperationProcessor {
                 builder.add_z(&[qubit_args[0]]);
             }
             "Measure" => {
-                builder.add_measurements(&[qubit_args[0]], &[qubit_args[0]]);
+                builder.add_measurements(&[qubit_args[0]]);
             }
             "Init" => {
                 // Initialize qubit to |0⟩ state using the Prep gate
@@ -1609,7 +1669,7 @@ impl OperationProcessor {
     ///
     /// The environment is the single source of truth for all variables.
     fn store_measurement_result(&mut self, var_name: &str, var_idx: usize, outcome: u32) {
-        log::info!(
+        log::debug!(
             "PHIR: Storing measurement result {}[{}] = {}",
             var_name,
             var_idx,
@@ -1661,17 +1721,21 @@ impl OperationProcessor {
     /// 1. The environment (single source of truth for all variables)
     /// 2. Standard measurement variables (e.g., "`measurement_0`")
     /// 3. Named variables from the program (e.g., "m")
+    ///
+    /// # Errors
+    /// Returns an error if variable creation or value setting fails.
     pub fn handle_measurements(
         &mut self,
-        measurements: &[(u32, u32)],
+        measurements: &[u32],
         ops: &[Operation],
     ) -> Result<(), PecosError> {
-        log::info!("PHIR: Handling {} measurement results", measurements.len());
+        log::debug!("PHIR: Handling {} measurement results", measurements.len());
 
-        for (result_id, outcome) in measurements {
-            log::info!(
-                "PHIR: Received measurement result_id={}, outcome={}",
-                result_id,
+        for (index, outcome) in measurements.iter().enumerate() {
+            let result_id = u32::try_from(index).unwrap_or(u32::MAX);
+            log::debug!(
+                "PHIR: Received measurement index={}, outcome={}",
+                index,
                 outcome
             );
 
@@ -1719,7 +1783,7 @@ impl OperationProcessor {
                         let (var_name, var_idx) = &returns[0];
 
                         // Check if this is the right measurement result
-                        if *var_idx == *result_id as usize {
+                        if *var_idx == result_id as usize {
                             // Store the result in the specific bit of the variable
                             self.store_measurement_result(var_name, *var_idx, *outcome);
                             found_mapping = true;
@@ -1732,9 +1796,9 @@ impl OperationProcessor {
             // This helps with tests and interoperability, particularly Bell state tests
             if !found_mapping && self.environment.has_variable("m") {
                 // Store in main "m" variable for test compatibility
-                let idx = *result_id as usize;
+                let idx = result_id as usize;
                 self.store_measurement_result("m", idx, *outcome);
-                log::info!(
+                log::debug!(
                     "PHIR: Auto-mapped measurement result {} to m[{}] = {}",
                     result_id,
                     idx,
@@ -1934,13 +1998,13 @@ impl OperationProcessor {
     #[must_use]
     pub fn process_export_mappings(&self) -> HashMap<String, u32> {
         let mut exported_values = HashMap::new();
-        log::info!("Processing export mappings using environment as source of truth");
+        log::debug!("Processing export mappings using environment as source of truth");
 
         // Get all mappings from the environment
         let mappings = self.environment.get_mappings();
 
         if !mappings.is_empty() {
-            log::info!(
+            log::debug!(
                 "Processing {} explicit mappings from environment",
                 mappings.len()
             );
@@ -1953,7 +2017,7 @@ impl OperationProcessor {
                     continue;
                 }
 
-                log::info!(
+                log::debug!(
                     "Processing export mapping: {} -> {}",
                     source_register,
                     export_name
@@ -1962,7 +2026,7 @@ impl OperationProcessor {
                 // Primary approach: Direct lookup in environment
                 if self.environment.has_variable(source_register) {
                     if let Some(value) = self.environment.get(source_register) {
-                        log::info!(
+                        log::debug!(
                             "Using value from environment: {} = {}",
                             source_register,
                             value
@@ -1988,7 +2052,7 @@ impl OperationProcessor {
 
         // If no explicit mappings or we didn't find any values, include all variables with values
         if mappings.is_empty() || exported_values.is_empty() {
-            log::info!("Adding automatic mappings for all variables with values");
+            log::debug!("Adding automatic mappings for all variables with values");
 
             for var_info in self.environment.get_all_variables() {
                 // Skip variables we've already exported
@@ -1998,16 +2062,16 @@ impl OperationProcessor {
 
                 // Include any variable that has a value
                 if let Some(val) = self.environment.get(&var_info.name) {
-                    log::info!("Adding variable: {} = {}", var_info.name, val);
+                    log::debug!("Adding variable: {} = {}", var_info.name, val);
                     exported_values.insert(var_info.name.clone(), val.as_u32());
                 }
             }
         }
 
         // Log summary of what we're exporting
-        log::info!("Exporting {} values:", exported_values.len());
+        log::debug!("Exporting {} values:", exported_values.len());
         for (name, value) in &exported_values {
-            log::info!("  {} = {}", name, value);
+            log::debug!("  {} = {}", name, value);
         }
 
         exported_values

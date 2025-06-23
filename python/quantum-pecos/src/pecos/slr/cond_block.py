@@ -10,11 +10,13 @@
 # specific language governing permissions and limitations under the License.
 
 
+from typing import NoReturn
+
 from pecos.slr.block import Block
 
 
 class CondBlock(Block):
-    def __init__(self, *args, cond=None, ops=None):
+    def __init__(self, *args, cond=None, ops=None) -> None:
         if cond is None and args:
             if len(args) > 1:
                 msg = "Expected a single condition."
@@ -25,7 +27,7 @@ class CondBlock(Block):
         super().__init__(*args, ops=ops, vargs=None, allow_no_ops=True)
         self.cond = cond
 
-    def extend(self, *ops):
+    def extend(self, *ops) -> NoReturn:
         raise NotImplementedError
 
     def _extend(self, *ops):
@@ -38,7 +40,7 @@ class If(CondBlock):
         super().__init__(*args, cond=cond)
         self.else_block = None
 
-    def Then(self, *args):
+    def Then(self, *args):  # noqa: N802
         self._extend(*args)
         return self
 
@@ -48,7 +50,7 @@ class If(CondBlock):
 
 
 class Repeat(CondBlock):
-    def __init__(self, cond=None):
+    def __init__(self, cond=None) -> None:
         if not isinstance(cond, int):
             msg = f"Condition for Repeat block must be an int! Got type: {type(cond)}"
             raise TypeError(msg)

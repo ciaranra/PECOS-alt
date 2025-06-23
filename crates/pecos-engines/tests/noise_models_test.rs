@@ -1,10 +1,10 @@
 use pecos_engines::byte_message::ByteMessage;
-use pecos_engines::engines::noise::{
-    BiasedMeasurementNoiseModel, DepolarizingNoiseModel, NoiseModel, PassThroughNoiseModel,
+use pecos_engines::noise::{
+    BiasedDepolarizingNoiseModel, DepolarizingNoiseModel, NoiseModel, PassThroughNoiseModel,
 };
-use pecos_engines::engines::quantum::StateVecEngine;
+use pecos_engines::quantum::StateVecEngine;
 use pecos_engines::{Engine, EngineSystem, QuantumSystem};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 // Helper function to count measurement results from multiple shots
 fn count_results(
@@ -12,24 +12,22 @@ fn count_results(
     circ: &ByteMessage,
     num_shots: usize,
     num_qubits: usize,
-) -> HashMap<String, usize> {
+) -> BTreeMap<String, usize> {
     let quantum = Box::new(StateVecEngine::new(num_qubits));
     let mut system = QuantumSystem::new(noise_model, quantum);
     system.set_seed(42).expect("Failed to set seed");
 
-    let mut counts = HashMap::new();
+    let mut counts = BTreeMap::new();
     for _ in 0..num_shots {
         system.reset().expect("Failed to reset system");
         let results = system
             .process_as_system(circ.clone())
             .expect("Failed to process circuit");
-        let measurements = results
-            .parse_measurements()
-            .expect("Failed to parse measurements");
+        let measurements = results.outcomes().expect("Failed to parse measurements");
 
         let result_str = measurements
             .iter()
-            .map(|&(_, value)| if value == 1 { '1' } else { '0' })
+            .map(|&value| if value == 1 { '1' } else { '0' })
             .collect::<String>();
 
         *counts.entry(result_str).or_insert(0) += 1;
@@ -39,63 +37,33 @@ fn count_results(
 }
 
 #[test]
-fn test_biased_measurement_noise() {
+fn test_biased_depolarizing_noise() {
     // Create a simple H-gate circuit with measurement
     let circ = ByteMessage::quantum_operations_builder()
         .add_h(&[0])
-        .add_measurements(&[0], &[0])
+        .add_measurements(&[0])
         .build();
 
-    // Test with different bias probabilities
-    let configs = [
-        (0.0, 0.0, "No bias"),     // Should be approximately 50-50
-        (0.2, 0.0, "0->1 only"),   // Should bias toward 1
-        (0.0, 0.2, "1->0 only"),   // Should bias toward 0
-        (1.0, 0.0, "Always 0->1"), // Should always output 1
-        (0.0, 1.0, "Always 1->0"), // Should always output 0
-    ];
+    // Test with uniform depolarizing probability
+    let uniform_noise = BiasedDepolarizingNoiseModel::builder()
+        .with_uniform_probability(0.1)
+        .with_seed(42)
+        .build();
 
-    for (p_flip_0, p_flip_1, desc) in configs {
-        // Create biased measurement noise model
-        let noise = BiasedMeasurementNoiseModel::builder()
-            .with_prob_flip_from_0(p_flip_0)
-            .with_prob_flip_from_1(p_flip_1)
-            .with_seed(42)
-            .build();
+    // Get distribution after 1000 shots
+    let counts = count_results(uniform_noise, &circ, 1000, 1);
 
-        // Get distribution after 1000 shots
-        let counts = count_results(noise, &circ, 1000, 1);
+    // With Hadamard, we expect roughly 50% 0s and 50% 1s
+    let count_0 = *counts.get("0").unwrap_or(&0);
+    let count_1 = *counts.get("1").unwrap_or(&0);
 
-        // Calculate percentages
-        let count_0 = *counts.get("0").unwrap_or(&0);
-        let count_1 = *counts.get("1").unwrap_or(&0);
-        let pct_0 = count_0 * 100 / 1000;
-        let pct_1 = count_1 * 100 / 1000;
-
-        // Calculate expected percentages - with Hadamard, ideally 50% each
-        // For a 50/50 input with H gate:
-        // Expected 0s = 50% * (1-p_flip_0) + 50% * p_flip_1
-        // Expected 1s = 50% * p_flip_0 + 50% * (1-p_flip_1)
-        let expected_pct_0 = (0.5 * (1.0 - p_flip_0) + 0.5 * p_flip_1) * 100.0;
-        let expected_pct_1 = (0.5 * p_flip_0 + 0.5 * (1.0 - p_flip_1)) * 100.0;
-
-        // Allow for some statistical variance (±5%)
-        let margin = 5;
-
-        #[allow(clippy::cast_precision_loss)]
-        let diff_0 = (pct_0 as f64 - expected_pct_0).abs();
-        #[allow(clippy::cast_precision_loss)]
-        let diff_1 = (pct_1 as f64 - expected_pct_1).abs();
-
-        assert!(
-            diff_0 <= f64::from(margin),
-            "{desc}: Expected {expected_pct_0}% zeros, got {pct_0}%"
-        );
-        assert!(
-            diff_1 <= f64::from(margin),
-            "{desc}: Expected {expected_pct_1}% ones, got {pct_1}%"
-        );
-    }
+    // Allow for some statistical variance (±10%)
+    #[allow(clippy::cast_precision_loss)]
+    let diff = (count_0 as f64 - count_1 as f64).abs() / 1000.0;
+    assert!(
+        diff <= 0.1,
+        "Expected approximately even distribution, got {count_0} zeros and {count_1} ones"
+    );
 }
 
 #[test]
@@ -104,8 +72,8 @@ fn test_depolarizing_noise() {
     let bell_circ = ByteMessage::quantum_operations_builder()
         .add_h(&[0])
         .add_cx(&[0], &[1])
-        .add_measurements(&[0], &[0])
-        .add_measurements(&[1], &[1])
+        .add_measurements(&[0])
+        .add_measurements(&[1])
         .build();
 
     // Test with no noise - should get ideal Bell state (00 and 11)
@@ -154,7 +122,7 @@ fn test_pass_through_noise() {
     // Create a simple H-gate circuit with measurement
     let circ = ByteMessage::quantum_operations_builder()
         .add_h(&[0])
-        .add_measurements(&[0], &[0])
+        .add_measurements(&[0])
         .build();
 
     // Create pass-through noise model (no noise)

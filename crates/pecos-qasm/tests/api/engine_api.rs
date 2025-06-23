@@ -1,5 +1,5 @@
 use pecos_core::errors::PecosError;
-use pecos_engines::{ClassicalEngine, Engine, ShotResult};
+use pecos_engines::prelude::*;
 use pecos_qasm::QASMEngine;
 use std::str::FromStr;
 
@@ -17,11 +17,11 @@ fn extract_bit(register_value: u32, bit_index: usize) -> u32 {
     (register_value >> bit_index) & 1
 }
 
-/// Helper function to get a bit value from a register in the `ShotResult`
+/// Helper function to get a bit value from a register in the `Shot`
 ///
 /// # Parameters
 ///
-/// * `result` - The `ShotResult` containing register values
+/// * `result` - The `Shot` containing register values
 /// * `register_name` - The name of the register (e.g., "c")
 /// * `bit_index` - The bit index to extract
 ///
@@ -29,9 +29,9 @@ fn extract_bit(register_value: u32, bit_index: usize) -> u32 {
 ///
 /// * `Some(u32)` - The bit value (0 or 1)
 /// * `None` - If the register doesn't exist
-fn get_bit_value(result: &ShotResult, register_name: &str, bit_index: usize) -> Option<u32> {
+fn get_bit_value(result: &Shot, register_name: &str, bit_index: usize) -> Option<u32> {
     // Get the register value
-    let reg_value = *result.registers.get(register_name)?;
+    let reg_value = result.data.get(register_name)?.as_u32()?;
 
     // Extract the bit
     Some(extract_bit(reg_value, bit_index))
@@ -74,7 +74,7 @@ fn test_multiple_qubit_registers() -> Result<(), PecosError> {
     let result = engine.process(())?;
 
     // Verify that all 5 classical register bits are present
-    assert!(result.registers.contains_key("c"));
+    assert!(result.data.contains_key("c"));
 
     Ok(())
 }
@@ -106,7 +106,7 @@ fn test_engine_execution() -> Result<(), PecosError> {
         .map_err(|e| PecosError::Processing(format!("Failed to process program: {e}")))?;
 
     // Verify results - check that the register exists
-    assert!(results.registers.contains_key("c"));
+    assert!(results.data.contains_key("c"));
 
     // Extract bit values using our helper function
     let bit0 = get_bit_value(&results, "c", 0).expect("Bit 0 should be accessible");
@@ -150,7 +150,7 @@ fn test_deterministic_bell_state() -> Result<(), PecosError> {
         .map_err(|e| PecosError::Processing(format!("Failed to process program: {e}")))?;
 
     // Check that the register exists
-    assert!(results.registers.contains_key("c"));
+    assert!(results.data.contains_key("c"));
 
     // Extract bit values using our helper function
     let bit0 = get_bit_value(&results, "c", 0).expect("Bit 0 should be accessible");
@@ -158,9 +158,6 @@ fn test_deterministic_bell_state() -> Result<(), PecosError> {
 
     // With Bell state, both qubits should have the same value due to entanglement
     assert_eq!(bit0, bit1);
-
-    // Check that values are available in u64 registers too
-    assert!(results.registers_u64.contains_key("c"));
 
     Ok(())
 }
@@ -197,7 +194,7 @@ fn test_deterministic_3qubit_circuit() -> Result<(), PecosError> {
         .generate_commands()
         .map_err(|e| PecosError::Processing(format!("Failed to generate commands: {e}")))?;
     let operations1 = command_message1
-        .parse_quantum_operations()
+        .quantum_ops()
         .map_err(|e| PecosError::Processing(format!("Failed to parse quantum operations: {e}")))?;
 
     // Print the actual number of operations in first batch
@@ -210,7 +207,7 @@ fn test_deterministic_3qubit_circuit() -> Result<(), PecosError> {
 
     // Handle the first measurement (qubit 0)
     let message1 = pecos_engines::byte_message::ByteMessage::builder()
-        .add_measurement_results(&[1], &[0])
+        .add_outcomes(&[1])
         .build();
 
     engine
@@ -222,7 +219,7 @@ fn test_deterministic_3qubit_circuit() -> Result<(), PecosError> {
         .generate_commands()
         .map_err(|e| PecosError::Processing(format!("Failed to generate second batch: {e}")))?;
 
-    let operations2 = command_message2.parse_quantum_operations().map_err(|e| {
+    let operations2 = command_message2.quantum_ops().map_err(|e| {
         PecosError::Processing(format!("Failed to parse second batch operations: {e}"))
     })?;
 
@@ -234,7 +231,7 @@ fn test_deterministic_3qubit_circuit() -> Result<(), PecosError> {
 
     // Handle the second measurement (qubit 1)
     let message2 = pecos_engines::byte_message::ByteMessage::builder()
-        .add_measurement_results(&[1], &[1])
+        .add_outcomes(&[1])
         .build();
 
     engine
@@ -246,7 +243,7 @@ fn test_deterministic_3qubit_circuit() -> Result<(), PecosError> {
         .generate_commands()
         .map_err(|e| PecosError::Processing(format!("Failed to generate third batch: {e}")))?;
 
-    let operations3 = command_message3.parse_quantum_operations().map_err(|e| {
+    let operations3 = command_message3.quantum_ops().map_err(|e| {
         PecosError::Processing(format!("Failed to parse third batch operations: {e}"))
     })?;
 
@@ -255,7 +252,7 @@ fn test_deterministic_3qubit_circuit() -> Result<(), PecosError> {
 
     // Handle the third measurement (qubit 2)
     let message3 = pecos_engines::byte_message::ByteMessage::builder()
-        .add_measurement_results(&[1], &[2])
+        .add_outcomes(&[1])
         .build();
 
     engine
@@ -292,10 +289,12 @@ fn test_deterministic_3qubit_circuit() -> Result<(), PecosError> {
     assert_eq!(bit2, 1, "Bit 2 should be 1");
 
     // Full register value (binary "111" = decimal 7)
-    assert_eq!(results.registers["c"], 7);
-
-    // Value in 64-bit registers
-    assert_eq!(results.registers_u64["c"], 7);
+    let c_value = results
+        .data
+        .get("c")
+        .and_then(pecos_engines::prelude::Data::as_u32)
+        .expect("c register should be convertible to u32");
+    assert_eq!(c_value, 7);
 
     Ok(())
 }
@@ -338,17 +337,18 @@ fn test_multi_register_operation() -> Result<(), PecosError> {
 
     // Print all register values for debugging
     println!("Available register keys:");
-    for key in results.registers.keys() {
-        println!("  {}: {}", key, results.registers[key]);
+    for (key, data) in &results.data {
+        let Some(value) = data.as_u32() else { continue };
+        println!("  {key}: {value}");
     }
 
     // Check that registers exist
     assert!(
-        results.registers.contains_key("c1"),
+        results.data.contains_key("c1"),
         "c1 register should be present"
     );
     assert!(
-        results.registers.contains_key("c2"),
+        results.data.contains_key("c2"),
         "c2 register should be present"
     );
 
@@ -366,12 +366,6 @@ fn test_multi_register_operation() -> Result<(), PecosError> {
     assert!(c1_bit0.is_some(), "c1[0] should be accessible");
     assert!(c1_bit1.is_some(), "c1[1] should be accessible");
     assert!(c2_bit0.is_some(), "c2[0] should be accessible");
-
-    // Also verify in 64-bit registers
-    assert!(
-        results.registers_u64.contains_key("c1"),
-        "c1 should be present in u64 registers"
-    );
 
     Ok(())
 }
@@ -401,8 +395,7 @@ fn test_engine_conditional() -> Result<(), PecosError> {
         .map_err(|e| PecosError::Processing(format!("Failed to process program: {e}")))?;
 
     // Verify results - check that register exists
-    assert!(results.registers.contains_key("c"));
-    assert!(results.registers_u64.contains_key("c"));
+    assert!(results.data.contains_key("c"));
 
     // Get bit value
     let bit0 = get_bit_value(&results, "c", 0);
@@ -456,7 +449,7 @@ fn test_multiple_measurement_operations() -> Result<(), PecosError> {
 
     // Verify the first batch has the expected operations
     let operations1 = command_message1
-        .parse_quantum_operations()
+        .quantum_ops()
         .map_err(|e| PecosError::Processing(format!("Failed to parse quantum operations: {e}")))?;
     println!("First batch operations: {operations1:?}");
     assert!(
@@ -467,7 +460,7 @@ fn test_multiple_measurement_operations() -> Result<(), PecosError> {
     println!("Simulating first measurement...");
     // Simulate the first measurement (after X gate, qubit is in |1⟩ state)
     let measurement1 = pecos_engines::byte_message::ByteMessage::builder()
-        .add_measurement_results(&[1], &[0])
+        .add_outcomes(&[1])
         .build();
 
     // Handle the first measurement results
@@ -491,7 +484,7 @@ fn test_multiple_measurement_operations() -> Result<(), PecosError> {
     );
 
     // Verify the second batch has the expected operations
-    let operations2 = match command_message2.parse_quantum_operations() {
+    let operations2 = match command_message2.quantum_ops() {
         Ok(ops) => {
             println!("Second batch operations: {ops:?}");
             ops
@@ -519,9 +512,10 @@ fn test_multiple_measurement_operations() -> Result<(), PecosError> {
             .map_err(|e| PecosError::Processing(format!("Failed to generate commands: {e}")))?;
 
         // Create measurement results for both measurements at once
-        // Using result IDs 0 and 1 which will map to c1[0] and c2[0]
+        // Since measurements are tracked by order, the first measurement maps to c1[0]
+        // and the second measurement maps to c2[0]
         let all_measurements = pecos_engines::byte_message::ByteMessage::builder()
-            .add_measurement_results(&[1, 1], &[0, 1])
+            .add_outcomes(&[1, 1]) // Both measurements return 1
             .build();
 
         // Handle the measurements
@@ -549,8 +543,12 @@ fn test_multiple_measurement_operations() -> Result<(), PecosError> {
 
         // Verify results
         println!("Available register keys:");
-        for key in results.registers.keys() {
-            println!("  {}: {}", key, results.registers[key]);
+        for (key, data) in &results.data {
+            let value = match data {
+                pecos_engines::shot_results::Data::U32(v) => *v,
+                _ => continue,
+            };
+            println!("  {key}: {value}");
         }
 
         // Verify both measurements are 1
@@ -572,7 +570,7 @@ fn test_multiple_measurement_operations() -> Result<(), PecosError> {
     println!("Simulating second measurement...");
     // Simulate the second measurement (after two X gates, qubit is still in |1⟩ state)
     let measurement2 = pecos_engines::byte_message::ByteMessage::builder()
-        .add_measurement_results(&[1], &[1])
+        .add_outcomes(&[1])
         .build();
 
     // Handle the second measurement results
@@ -601,8 +599,9 @@ fn test_multiple_measurement_operations() -> Result<(), PecosError> {
 
     // Print all registers for debugging
     println!("Available register keys:");
-    for key in results.registers.keys() {
-        println!("  {}: {}", key, results.registers[key]);
+    for (key, data) in &results.data {
+        let Some(value) = data.as_u32() else { continue };
+        println!("  {key}: {value}");
     }
 
     // Since we simulated X gates setting qubit to |1⟩, both measurements should be 1
@@ -611,12 +610,6 @@ fn test_multiple_measurement_operations() -> Result<(), PecosError> {
 
     assert_eq!(c1_bit0, 1, "c1[0] should be 1");
     assert_eq!(c2_bit0, 1, "c2[0] should be 1");
-
-    // Verify 64-bit registers too
-    assert!(
-        results.registers_u64.contains_key("c1"),
-        "c1 should be present in u64 registers"
-    );
 
     Ok(())
 }

@@ -30,7 +30,7 @@ class QASMGenerator(Generator):
         self.add_versions = add_versions
         self.permutation_map = {}  # Maps (reg_name, index) to (new_reg_name, new_index)
 
-    def write(self, line):
+    def write(self, line) -> None:
         self.output.append(line)
 
     def enter_block(self, block):
@@ -44,7 +44,7 @@ class QASMGenerator(Generator):
             self.write("OPENQASM 2.0;")
             if self.includes:
                 for inc in self.includes:
-                    self.write(f'include "{str(inc)}";')
+                    self.write(f'include "{inc!s}";')
             else:
                 # TODO: dump definitions in for things that are used instead of using includes
                 self.write('include "hqslib1.inc";')
@@ -62,11 +62,11 @@ class QASMGenerator(Generator):
                         self.write(var_def)
         return previous_scope
 
-    def process_var_def(self, var):
+    def process_var_def(self, var) -> str:
         var_type = type(var).__name__
         return f"{var_type.lower()} {var.sym}[{var.size}];"
 
-    def exit_block(self, block):
+    def exit_block(self, block) -> None:
         # self.output.append("# Exiting block")
         pass
 
@@ -121,7 +121,7 @@ class QASMGenerator(Generator):
         self.exit_block(block)
         self.current_scope = previous_scope
 
-    def block_op_loop(self, block):
+    def block_op_loop(self, block) -> None:
         if len(block.ops) == 0:
             self.write("")
         else:
@@ -145,13 +145,11 @@ class QASMGenerator(Generator):
 
         if op_name == "Barrier":
             stat = True
-            if isinstance(op.qregs, list | tuple | set):
-                qubits = []
-                for q in op.qregs:
-                    qubits.append(str(q))
-                qubits = ", ".join(qubits)
-            else:
-                qubits = op.qregs
+            qubits = (
+                ", ".join(str(q) for q in op.qregs)
+                if isinstance(op.qregs, list | tuple | set)
+                else op.qregs
+            )
 
             op_str = f"barrier {qubits};"
         elif op_name == "Comment":
@@ -347,7 +345,7 @@ class QASMGenerator(Generator):
             stat = True
             op_str = self.process_set(op)
 
-        elif op_name in [
+        elif op_name in {
             "EQUIV",
             "NEQUIV",
             "LT",
@@ -363,19 +361,19 @@ class QASMGenerator(Generator):
             "MINUS",
             "RSHIFT",
             "LSHIFT",
-        ]:
+        }:
             op_str = self.process_general_binary_op(op)
 
-        elif op_name in ["NEG", "NOT"]:
+        elif op_name in {"NEG", "NOT"}:
             op_str = self.process_general_unary_op(op)
 
         elif op_name == "Vars":
             op_str = None
 
-        elif op_name in ["CReg", "QReg"]:
+        elif op_name in {"CReg", "QReg"}:
             op_str = str(op.sym)
 
-        elif op_name in ["Bit", "Qubit"]:
+        elif op_name in {"Bit", "Qubit"}:
             op_str = f"{op.reg.sym}[{op.index}]"
 
         elif isinstance(op, int):

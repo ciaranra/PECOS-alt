@@ -1,6 +1,8 @@
 pub mod common;
 pub mod version_traits;
 
+pub mod prelude;
+
 // Version-specific implementations
 #[cfg(feature = "v0_1")]
 pub mod v0_1;
@@ -120,7 +122,7 @@ mod tests {
         let command_message = engine.generate_commands()?;
 
         // Parse the message back to confirm it has the correct operations
-        let parsed_commands = command_message.parse_quantum_operations().map_err(|e| {
+        let parsed_commands = command_message.quantum_ops().map_err(|e| {
             PecosError::Input(format!(
                 "PHIR test failed: Unable to validate generated quantum operations: {e}"
             ))
@@ -129,9 +131,7 @@ mod tests {
 
         // Create a measurement message and test handling
         // result_id=0, outcome=1
-        let message = ByteMessage::builder()
-            .add_measurement_results(&[1], &[0])
-            .build();
+        let message = ByteMessage::builder().add_outcomes(&[1]).build();
 
         // Wrap in a try-catch to be more resilient to variable naming issues in tests
         match engine.handle_measurements(message) {
@@ -146,7 +146,7 @@ mod tests {
         let results = engine.get_results()?;
 
         // Print the actual results for debugging
-        eprintln!("Test results: {:?}", results.registers);
+        eprintln!("Test results: {:?}", results.data);
 
         // Check engine internals directly for debugging - with immutable reference first
         {
@@ -197,7 +197,7 @@ mod tests {
             let updated_results = engine.get_results()?;
             eprintln!(
                 "Updated test results after manual fix: {:?}",
-                updated_results.registers
+                updated_results.data
             );
 
             // Use the updated results for the test
@@ -206,26 +206,29 @@ mod tests {
 
         // The Result operation maps "m" to "result", so "result" should be in the output
         assert!(
-            results.registers.contains_key("result"),
+            results.data.contains_key("result"),
             "result register should be in results"
         );
-        assert_eq!(
-            results.registers["result"], 1,
-            "result register should have value 1"
-        );
+
+        let result_value = match results.data.get("result") {
+            Some(pecos_engines::shot_results::Data::U32(v)) => *v,
+            _ => panic!("Expected U32 value for 'result'"),
+        };
+
+        assert_eq!(result_value, 1, "result register should have value 1");
 
         // With our new approach, we also get other variables in the results - keep the single register check
         // for backward compatibility but expect the whole environment to be exported
         // Used to be: assert_eq!(results.registers.len(), 1, "There should be exactly one register in the results");
         eprintln!(
             "Results have {} registers: {:?}",
-            results.registers.len(),
-            results.registers.keys().collect::<Vec<_>>()
+            results.data.len(),
+            results.data.keys().collect::<Vec<_>>()
         );
 
         // Make sure result is at least there
         assert!(
-            results.registers.contains_key("result"),
+            results.data.contains_key("result"),
             "Results must contain 'result' register"
         );
 

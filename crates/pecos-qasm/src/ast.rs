@@ -1,43 +1,20 @@
-use pecos_core::errors::PecosError;
-use std::collections::HashMap;
+use ::bitvec::prelude::*;
+use pecos_core::prelude::{Gate, GateType};
+use pecos_core::{bitvec, errors::PecosError};
+use std::collections::BTreeMap;
 use std::fmt;
 
-// Helper functions for formatting QASM output
-fn format_list<T: fmt::Display>(
-    f: &mut fmt::Formatter<'_>,
-    items: &[T],
-    separator: &str,
-    prefix: &str,
-    suffix: &str,
-) -> fmt::Result {
-    if !items.is_empty() {
-        write!(f, "{prefix}")?;
-        for (i, item) in items.iter().enumerate() {
-            if i > 0 {
-                write!(f, "{separator}")?;
-            }
-            write!(f, "{item}")?;
-        }
-        write!(f, "{suffix}")?;
-    }
-    Ok(())
-}
-
+// Helper function for formatting parameters
 fn format_params<T: fmt::Display>(f: &mut fmt::Formatter<'_>, params: &[T]) -> fmt::Result {
-    format_list(f, params, ", ", "(", ")")
-}
-
-fn format_qubits(
-    f: &mut fmt::Formatter<'_>,
-    qubits: &[String],
-    first_separator: &str,
-) -> fmt::Result {
-    for (i, qubit) in qubits.iter().enumerate() {
-        if i == 0 {
-            write!(f, "{first_separator}{qubit}")?;
-        } else {
-            write!(f, ", {qubit}")?;
+    if !params.is_empty() {
+        write!(f, "(")?;
+        for (i, param) in params.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{param}")?;
         }
+        write!(f, ")")?;
     }
     Ok(())
 }
@@ -71,7 +48,9 @@ impl fmt::Display for GateOperation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.name)?;
         format_params(f, &self.params)?;
-        format_qubits(f, &self.qargs, " ")?;
+        for (i, qarg) in self.qargs.iter().enumerate() {
+            write!(f, "{}{qarg}", if i == 0 { " " } else { ", " })?;
+        }
         Ok(())
     }
 }
@@ -79,36 +58,44 @@ impl fmt::Display for GateOperation {
 /// Represents different types of operations in a QASM program
 #[derive(Debug, Clone)]
 pub enum Operation {
+    /// Gate operation (before expansion - string-based)
     Gate {
         name: String,
         parameters: Vec<f64>,
         qubits: Vec<usize>,
     },
-    Measure {
-        qubit: usize,
+
+    /// Native gate operations (after expansion - typed)
+    NativeGate(Gate),
+
+    /// Measurement with classical register mapping
+    MeasureWithMapping {
+        gate: Gate, // Gate with GateType::Measure
         c_reg: String,
         c_index: usize,
     },
-    RegMeasure {
-        q_reg: String,
-        c_reg: String,
-    },
-    If {
-        condition: Expression,
-        operation: Box<Operation>,
-    },
-    Reset {
-        qubit: usize,
-    },
-    Barrier {
-        qubits: Vec<usize>,
-    },
+
+    /// Register-level measurement (needs expansion)
+    RegMeasure { q_reg: String, c_reg: String },
+
+    /// Barrier operation
+    Barrier { qubits: Vec<usize> },
+
+    /// Classical assignment operation
     ClassicalAssignment {
         target: String,
         is_indexed: bool,
         index: Option<usize>,
         expression: Expression,
     },
+
+    /// Conditional operation
+    If {
+        condition: Expression,
+        operation: Box<Operation>,
+    },
+
+    /// Opaque gate declaration (not yet implemented)
     OpaqueGate {
         name: String,
         params: Vec<String>,
@@ -126,40 +113,38 @@ impl fmt::Display for Operation {
             } => {
                 write!(f, "{name}")?;
                 format_params(f, parameters)?;
-
                 for (i, qubit) in qubits.iter().enumerate() {
-                    if i == 0 {
-                        write!(f, " gid[{qubit}]")?;
-                    } else {
-                        write!(f, ", gid[{qubit}]")?;
-                    }
+                    write!(f, "{} gid[{qubit}]", if i == 0 { " " } else { ", " })?;
                 }
                 Ok(())
             }
-            Operation::Measure {
-                qubit,
+            Operation::NativeGate(gate) => {
+                write!(f, "{}", gate.gate_type)?;
+                format_params(f, &gate.params)?;
+                for (i, qubit) in gate.qubits.iter().enumerate() {
+                    write!(f, "{} gid[{}]", if i == 0 { " " } else { ", " }, qubit.0)?;
+                }
+                Ok(())
+            }
+            Operation::MeasureWithMapping {
+                gate,
                 c_reg,
                 c_index,
             } => {
-                write!(f, "measure gid[{qubit}] -> {c_reg}[{c_index}]")
+                if let Some(qubit) = gate.qubits.first() {
+                    write!(f, "measure gid[{}] -> {c_reg}[{c_index}]", qubit.0)
+                } else {
+                    write!(f, "measure <invalid> -> {c_reg}[{c_index}]")
+                }
             }
             Operation::If {
                 condition,
                 operation,
-            } => {
-                write!(f, "if ({condition}) {operation}")
-            }
-            Operation::Reset { qubit } => {
-                write!(f, "reset gid[{qubit}]")
-            }
+            } => write!(f, "if ({condition}) {operation}"),
             Operation::Barrier { qubits } => {
                 write!(f, "barrier")?;
                 for (i, qubit) in qubits.iter().enumerate() {
-                    if i == 0 {
-                        write!(f, " gid[{qubit}]")?;
-                    } else {
-                        write!(f, ", gid[{qubit}]")?;
-                    }
+                    write!(f, "{} gid[{qubit}]", if i == 0 { " " } else { ", " })?;
                 }
                 Ok(())
             }
@@ -171,39 +156,19 @@ impl fmt::Display for Operation {
                 is_indexed,
                 index,
                 expression,
-            } => {
-                if *is_indexed {
-                    if let Some(idx) = index {
-                        write!(f, "{target}[{idx}] = {expression}")
-                    } else {
-                        write!(f, "{target} = {expression}")
-                    }
-                } else {
-                    write!(f, "{target} = {expression}")
-                }
-            }
+            } => match (*is_indexed, index) {
+                (true, Some(idx)) => write!(f, "{target}[{idx}] = {expression}"),
+                _ => write!(f, "{target} = {expression}"),
+            },
             Operation::OpaqueGate {
                 name,
                 params,
                 qargs,
             } => {
                 write!(f, "opaque {name}")?;
-                if !params.is_empty() {
-                    write!(f, "(")?;
-                    for (i, param) in params.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ", ")?;
-                        }
-                        write!(f, "{param}")?;
-                    }
-                    write!(f, ")")?;
-                }
-                write!(f, " ")?;
+                format_params(f, params)?;
                 for (i, qarg) in qargs.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{qarg}")?;
+                    write!(f, "{} {qarg}", if i == 0 { " " } else { ", " })?;
                 }
                 Ok(())
             }
@@ -214,7 +179,7 @@ impl fmt::Display for Operation {
 /// Display wrapper for Operation that includes qubit mapping context
 pub struct OperationDisplay<'a> {
     pub operation: &'a Operation,
-    pub qubit_map: &'a HashMap<usize, (String, usize)>,
+    pub qubit_map: &'a BTreeMap<usize, (String, usize)>,
 }
 
 impl fmt::Display for OperationDisplay<'_> {
@@ -238,28 +203,54 @@ impl fmt::Display for OperationDisplay<'_> {
                     let (reg_name, index) = self
                         .qubit_map
                         .get(&qubit_id)
-                        .expect("Global qubit ID must exist in qubit_map");
+                        .unwrap_or_else(|| panic!("BUG: Qubit ID {qubit_id} not found in qubit_map. This indicates a bug in the QASM parser."));
                     write!(f, "{reg_name}[{index}]")?;
                 }
                 Ok(())
             }
-            Operation::Measure {
-                qubit,
+            Operation::NativeGate(gate) => {
+                // Display gate type in QASM format
+                let gate_name = if gate.gate_type == GateType::Prep {
+                    "reset".to_string() // PECOS Prep -> QASM reset
+                } else {
+                    // Use lowercase for QASM display
+                    let name = format!("{}", gate.gate_type);
+                    name.to_lowercase()
+                };
+                write!(f, "{gate_name}")?;
+                format_params(f, &gate.params)?;
+
+                for (i, qubit) in gate.qubits.iter().enumerate() {
+                    if i == 0 {
+                        write!(f, " ")?;
+                    } else {
+                        write!(f, ", ")?;
+                    }
+
+                    let qubit_id = qubit.0;
+                    let (reg_name, index) = self
+                        .qubit_map
+                        .get(&qubit_id)
+                        .unwrap_or_else(|| panic!("BUG: Qubit ID {qubit_id} not found in qubit_map. This indicates a bug in the QASM parser."));
+                    write!(f, "{reg_name}[{index}]")?;
+                }
+                Ok(())
+            }
+            Operation::MeasureWithMapping {
+                gate,
                 c_reg,
                 c_index,
             } => {
-                let (q_reg, q_index) = self
-                    .qubit_map
-                    .get(qubit)
-                    .expect("Global qubit ID must exist in qubit_map");
-                write!(f, "measure {q_reg}[{q_index}] -> {c_reg}[{c_index}]")
-            }
-            Operation::Reset { qubit } => {
-                let (q_reg, q_index) = self
-                    .qubit_map
-                    .get(qubit)
-                    .expect("Global qubit ID must exist in qubit_map");
-                write!(f, "reset {q_reg}[{q_index}]")
+                if let Some(qubit) = gate.qubits.first() {
+                    let qubit_id = qubit.0;
+                    let (q_reg, q_index) = self
+                        .qubit_map
+                        .get(&qubit_id)
+                        .unwrap_or_else(|| panic!("BUG: Qubit ID {qubit_id} not found in qubit_map. This indicates a bug in the QASM parser."));
+                    write!(f, "measure {q_reg}[{q_index}] -> {c_reg}[{c_index}]")
+                } else {
+                    write!(f, "measure <invalid> -> {c_reg}[{c_index}]")
+                }
             }
             Operation::Barrier { qubits } => {
                 write!(f, "barrier")?;
@@ -272,7 +263,7 @@ impl fmt::Display for OperationDisplay<'_> {
                     let (reg_name, index) = self
                         .qubit_map
                         .get(&qubit_id)
-                        .expect("Global qubit ID must exist in qubit_map");
+                        .unwrap_or_else(|| panic!("BUG: Qubit ID {qubit_id} not found in qubit_map. This indicates a bug in the QASM parser."));
                     write!(f, "{reg_name}[{index}]")?;
                 }
                 Ok(())
@@ -285,11 +276,11 @@ impl fmt::Display for OperationDisplay<'_> {
 /// Represents expressions in classical operations
 #[derive(Debug, Clone)]
 pub enum Expression {
-    Integer(i64),
+    Integer(BitVec<u8, Lsb0>),
     Float(f64),
     Pi,
     Variable(String),
-    BitId(String, i64),
+    BitId(String, usize),
     BinaryOp {
         op: String,
         left: Box<Expression>,
@@ -308,7 +299,9 @@ pub enum Expression {
 impl fmt::Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Expression::Integer(val) => write!(f, "{val}"),
+            Expression::Integer(bitvec) => {
+                write!(f, "{}", bitvec::to_decimal_string(bitvec))
+            }
             Expression::Float(val) => write!(f, "{val}"),
             Expression::Pi => write!(f, "pi"),
             Expression::Variable(name) => write!(f, "{name}"),
@@ -331,18 +324,53 @@ impl fmt::Display for Expression {
 
 /// Simplified evaluation context - merged trait and implementation
 pub struct EvaluationCtx<'a> {
-    pub params: Option<&'a HashMap<String, f64>>,
+    pub params: Option<&'a BTreeMap<String, f64>>,
 }
 
 impl Expression {
-    /// Evaluate expression with an optional parameter context
+    /// Evaluate expression as a floating-point value for gate parameters
+    ///
+    /// This method is used to evaluate expressions that appear as gate parameters,
+    /// such as `rx(pi/2, q[0])`. It supports:
+    /// - Basic arithmetic: +, -, *, /, ** (power)
+    /// - Mathematical functions: sin, cos, tan, exp, ln, sqrt
+    /// - Constants: pi
+    /// - Variables (from parameter context)
+    ///
+    /// It does NOT support:
+    /// - Bitwise operations (&, |, ^, ~)
+    /// - Comparisons (==, !=, <, >, <=, >=)
+    /// - Shift operations (<<, >>)
+    /// - Bit references (reg[idx])
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the expression cannot be evaluated (e.g., undefined variables,
+    /// unsupported operations, or operations that don't make sense for floating-point values).
     #[allow(clippy::too_many_lines)]
     pub fn evaluate(&self, context: Option<&EvaluationCtx>) -> Result<f64, PecosError> {
         match self {
-            Expression::Integer(i) =>
-            {
-                #[allow(clippy::cast_precision_loss)]
-                Ok(*i as f64)
+            Expression::Integer(bitvec) => {
+                // Convert BitVec to f64 (limited to 53 bits of precision)
+                let mut value = 0.0;
+                for (i, bit) in bitvec.iter().enumerate() {
+                    if i < 53 && *bit {
+                        // Use f64::from for smaller values to avoid precision loss warning
+                        if i < 32 {
+                            value += f64::from(1u32 << i);
+                        } else {
+                            // For larger values, we accept the precision limitation of f64
+                            // Use i32::try_from to handle potential truncation on 64-bit systems
+                            if let Ok(i_i32) = i32::try_from(i) {
+                                value += 2.0_f64.powi(i_i32);
+                            } else {
+                                // If i is too large for i32, the bit position is beyond f64's precision anyway
+                                break;
+                            }
+                        }
+                    }
+                }
+                Ok(value)
             }
             Expression::Float(f) => Ok(*f),
             Expression::Pi => Ok(std::f64::consts::PI),
@@ -373,63 +401,13 @@ impl Expression {
                     "*" => Ok(left_val * right_val),
                     "/" => Ok(left_val / right_val),
                     "**" => Ok(left_val.powf(right_val)),
-                    "&" =>
-                    {
-                        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-                        Ok((left_val as i64 & right_val as i64) as f64)
-                    }
-                    "|" =>
-                    {
-                        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-                        Ok((left_val as i64 | right_val as i64) as f64)
-                    }
-                    "^" =>
-                    {
-                        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-                        Ok((left_val as i64 ^ right_val as i64) as f64)
-                    }
-                    "==" =>
-                    {
-                        #[allow(clippy::cast_precision_loss)]
-                        Ok(i64::from((left_val - right_val).abs() < f64::EPSILON) as f64)
-                    }
-                    "!=" =>
-                    {
-                        #[allow(clippy::cast_precision_loss)]
-                        Ok(i64::from((left_val - right_val).abs() >= f64::EPSILON) as f64)
-                    }
-                    "<" =>
-                    {
-                        #[allow(clippy::cast_precision_loss)]
-                        Ok(i64::from(left_val < right_val) as f64)
-                    }
-                    ">" =>
-                    {
-                        #[allow(clippy::cast_precision_loss)]
-                        Ok(i64::from(left_val > right_val) as f64)
-                    }
-                    "<=" =>
-                    {
-                        #[allow(clippy::cast_precision_loss)]
-                        Ok(i64::from(left_val <= right_val) as f64)
-                    }
-                    ">=" =>
-                    {
-                        #[allow(clippy::cast_precision_loss)]
-                        Ok(i64::from(left_val >= right_val) as f64)
-                    }
-                    "<<" =>
-                    {
-                        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-                        Ok(((left_val as i64) << (right_val as i64)) as f64)
-                    }
-                    ">>" =>
-                    {
-                        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-                        Ok(((left_val as i64) >> (right_val as i64)) as f64)
+                    "&" | "|" | "^" | "<<" | ">>" => {
+                        Err(PecosError::ParseInvalidExpression(format!(
+                            "Bitwise operation '{op}' is not supported in gate parameter expressions. Gate parameters must be floating-point values."
+                        )))
                     }
                     _ => Err(PecosError::ParseInvalidExpression(format!(
-                        "Unsupported binary operation: {op}"
+                        "Operation '{op}' is not supported in gate parameter expressions. Only +, -, *, /, ** are allowed."
                     ))),
                 }
             }
@@ -437,22 +415,14 @@ impl Expression {
                 let val = expr.evaluate(context)?;
                 match op.as_str() {
                     "-" => Ok(-val),
-                    "~" =>
-                    {
-                        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-                        Ok((!(val as i64)) as f64)
-                    }
                     _ => Err(PecosError::ParseInvalidExpression(format!(
-                        "Unsupported unary operation: {op}"
+                        "Operation '{op}' is not supported in gate parameter expressions. Only unary minus (-) is allowed."
                     ))),
                 }
             }
-            Expression::BitId(reg_name, idx) => {
-                // BitId requires special handling - for now just return an error
-                Err(PecosError::ParseInvalidExpression(format!(
-                    "Cannot evaluate BitId({reg_name}, {idx}) without register context"
-                )))
-            }
+            Expression::BitId(reg_name, idx) => Err(PecosError::ParseInvalidExpression(format!(
+                "Bit reference {reg_name}[{idx}] is not allowed in gate parameter expressions."
+            ))),
             Expression::FunctionCall { name, args } => {
                 if args.len() != 1 {
                     return Err(PecosError::ParseInvalidExpression(format!(
@@ -472,7 +442,7 @@ impl Expression {
                     "ln" => {
                         if arg_val <= 0.0 {
                             Err(PecosError::ParseInvalidExpression(format!(
-                                "ln({arg_val}) is undefined for non-positive values"
+                                "ln({arg_val}) is undefined"
                             )))
                         } else {
                             Ok(arg_val.ln())
@@ -481,7 +451,7 @@ impl Expression {
                     "sqrt" => {
                         if arg_val < 0.0 {
                             Err(PecosError::ParseInvalidExpression(format!(
-                                "sqrt({arg_val}) is undefined for negative values"
+                                "sqrt({arg_val}) is undefined"
                             )))
                         } else {
                             Ok(arg_val.sqrt())
@@ -494,43 +464,4 @@ impl Expression {
             }
         }
     }
-
-    /// Compatibility method for existing code
-    pub fn evaluate_with_context(
-        &self,
-        context: Option<&dyn crate::ast::EvaluationContext>,
-    ) -> Result<f64, PecosError> {
-        if let Some(ctx) = context {
-            // Use the trait's evaluate_float method
-            ctx.evaluate_float(self)
-        } else {
-            // Evaluate without context
-            self.evaluate(None)
-        }
-    }
 }
-
-// For compatibility with existing code, we keep the trait
-pub trait EvaluationContext {
-    fn evaluate_float(&self, expr: &Expression) -> Result<f64, PecosError>;
-    fn evaluate_int(&self, expr: &Expression) -> Result<i64, PecosError> {
-        #[allow(clippy::cast_possible_truncation)]
-        self.evaluate_float(expr).map(|f| f as i64)
-    }
-}
-
-// Simple implementation for compatibility
-pub struct EvaluationContextImpl<'a> {
-    pub params: Option<&'a HashMap<String, f64>>,
-}
-
-impl EvaluationContext for EvaluationContextImpl<'_> {
-    fn evaluate_float(&self, expr: &Expression) -> Result<f64, PecosError> {
-        let ctx = EvaluationCtx {
-            params: self.params,
-        };
-        expr.evaluate(Some(&ctx))
-    }
-}
-
-pub type ParameterContext<'a> = EvaluationContextImpl<'a>;

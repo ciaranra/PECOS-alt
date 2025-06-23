@@ -1,8 +1,24 @@
+use pecos_core::prelude::GateType;
 use pecos_qasm::{Operation, parser::QASMParser};
 
-#[path = "../helper.rs"]
-mod helper;
-use helper::run_qasm_sim;
+// Helper function to check if an operation is a specific gate
+fn is_gate_with_name(op: &Operation, gate_name: &str) -> bool {
+    match op {
+        Operation::Gate { name, .. } => name.eq_ignore_ascii_case(gate_name),
+        Operation::NativeGate(gate) => {
+            let gate_type_str = format!("{:?}", gate.gate_type);
+            gate_type_str.eq_ignore_ascii_case(gate_name)
+                || (gate_name.eq_ignore_ascii_case("cx") && matches!(gate.gate_type, GateType::CX))
+                || (gate_name.eq_ignore_ascii_case("cnot")
+                    && matches!(gate.gate_type, GateType::CX))
+                || (gate_name.eq_ignore_ascii_case("h") && matches!(gate.gate_type, GateType::H))
+                || (gate_name.eq_ignore_ascii_case("x") && matches!(gate.gate_type, GateType::X))
+        }
+        _ => false,
+    }
+}
+
+use pecos_qasm::run::run_qasm_sim;
 
 #[test]
 fn test_x_gate_and_measure() {
@@ -27,12 +43,18 @@ fn test_x_gate_and_measure() {
             Operation::Gate { name, qubits, .. } => {
                 operation_types.push(("gate", name.clone(), qubits.clone()));
             }
-            Operation::Measure {
-                qubit,
+            Operation::NativeGate(gate) => {
+                let gate_name = format!("{:?}", gate.gate_type);
+                let qubits = gate.qubits.iter().map(|q| q.0).collect();
+                operation_types.push(("gate", gate_name, qubits));
+            }
+            Operation::MeasureWithMapping {
+                gate,
                 c_reg,
                 c_index,
             } => {
-                operation_types.push(("measure", format!("{c_reg}[{c_index}]"), vec![*qubit]));
+                let qubit = gate.qubits.first().map_or(0, |q| q.0);
+                operation_types.push(("measure", format!("{c_reg}[{c_index}]"), vec![qubit]));
             }
             _ => {}
         }
@@ -45,9 +67,10 @@ fn test_x_gate_and_measure() {
     );
 
     // Check for X gate (or its expansion)
-    let has_x = operation_types
+    let has_x = program
+        .operations
         .iter()
-        .any(|(_, name, _)| name == "X" || name == "x");
+        .any(|op| is_gate_with_name(op, "X"));
     assert!(has_x, "Should have X gate");
 
     // Check for measurement
@@ -68,16 +91,21 @@ fn test_x_gate_and_measure() {
     }
 
     // Now test actual simulation - X gate should flip the qubit from |0⟩ to |1⟩
-    let results = run_qasm_sim(qasm, 100, Some(42)).expect("Failed to run simulation");
+    let shot_vec =
+        run_qasm_sim(qasm, 100, Some(42), Some(1), None, None).expect("Failed to run simulation");
 
     // Verify that qubit 10 is always measured as 1 (since X flips it)
-    let c_values = results.get("c").expect("Should have c register results");
-    assert_eq!(c_values.len(), 100, "Should have 100 shots");
+    assert_eq!(shot_vec.len(), 100, "Should have 100 shots");
 
-    for shot in c_values {
+    for shot in &shot_vec.shots {
+        let value = shot
+            .data
+            .get("c")
+            .and_then(pecos_engines::prelude::Data::as_u32)
+            .expect("c register should be convertible to u32");
         // Extract bit 10 from the result
-        let bit_10 = (shot >> 10) & 1;
-        assert_eq!(bit_10, 1, "Bit 10 should always be 1 after X gate");
+        let bit_10 = (value >> 10) & 1u32;
+        assert_eq!(bit_10, 1u32, "Bit 10 should always be 1 after X gate");
     }
 }
 
@@ -106,13 +134,14 @@ fn test_multiple_measurements() {
     let mut measurements = Vec::new();
 
     for op in &program.operations {
-        if let Operation::Measure {
-            qubit,
+        if let Operation::MeasureWithMapping {
+            gate,
             c_reg,
             c_index,
         } = op
         {
-            measurements.push((*qubit, c_reg.clone(), *c_index));
+            let qubit = gate.qubits.first().map_or(0, |q| q.0);
+            measurements.push((qubit, c_reg.clone(), *c_index));
         }
     }
 
@@ -149,13 +178,14 @@ fn test_measure_syntax_variations() {
     let mut measurements = Vec::new();
 
     for op in &program.operations {
-        if let Operation::Measure {
-            qubit,
+        if let Operation::MeasureWithMapping {
+            gate,
             c_reg,
             c_index,
         } = op
         {
-            measurements.push((*qubit, c_reg.clone(), *c_index));
+            let qubit = gate.qubits.first().map_or(0, |q| q.0);
+            measurements.push((qubit, c_reg.clone(), *c_index));
         }
     }
 
@@ -204,7 +234,12 @@ fn test_measure_after_gates() {
             Operation::Gate { name, .. } => {
                 operation_sequence.push(format!("gate:{name}"));
             }
-            Operation::Measure { qubit, .. } => {
+            Operation::NativeGate(gate) => {
+                let gate_name = format!("{:?}", gate.gate_type);
+                operation_sequence.push(format!("gate:{gate_name}"));
+            }
+            Operation::MeasureWithMapping { gate, .. } => {
+                let qubit = gate.qubits.first().map_or(0, |q| q.0);
                 operation_sequence.push(format!("measure:q[{qubit}]"));
             }
             _ => {}

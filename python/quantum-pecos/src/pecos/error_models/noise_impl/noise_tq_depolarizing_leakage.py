@@ -1,3 +1,10 @@
+"""Two-qubit depolarizing noise with leakage.
+
+This module provides depolarizing noise models for two-qubit operations
+that include leakage to states outside the computational subspace,
+providing comprehensive error modeling for two-qubit quantum gates.
+"""
+
 # Copyright 2023 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -9,12 +16,24 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from pecos.reps.pypmir.op_types import QOp
 
+if TYPE_CHECKING:
+    from pecos.protocols import MachineProtocol
 
-def noise_tq_depolarizing_leakage(op: QOp, p: float, noise_dict: dict, machine):
+
+def noise_tq_depolarizing_leakage(
+    op: QOp,
+    p: float,
+    noise_dict: dict,
+    machine: MachineProtocol,
+) -> list[QOp] | None:
     """Two-qubit gate depolarizing noise plus leakage."""
     # TODO: precompute, in PyPMIR, a flattened version of args
     args = set()
@@ -39,7 +58,7 @@ def noise_tq_depolarizing_leakage(op: QOp, p: float, noise_dict: dict, machine):
 
     if np.any(rand_nums):
         noise = {}
-        for r, loc in zip(rand_nums, op.args):
+        for r, loc in zip(rand_nums, op.args, strict=False):
             if r:
                 rand = np.random.random()
                 p_tot = 0.0

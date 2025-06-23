@@ -1,3 +1,16 @@
+# Copyright 2025 The PECOS Developers
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
+# the License.You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+# specific language governing permissions and limitations under the License.
+
+"""Tests for PHIR classical interpreter functionality."""
+
 import numpy as np
 import pytest
 from pecos.classical_interpreters.phir_classical_interpreter import (
@@ -9,7 +22,7 @@ from pecos.classical_interpreters.phir_classical_interpreter import (
 
 
 @pytest.fixture
-def interpreter():
+def interpreter() -> PHIRClassicalInterpreter:
     """Create and initialize a PHIRClassicalInterpreter with essential test data."""
     interpreter = PHIRClassicalInterpreter()
 
@@ -33,7 +46,7 @@ def interpreter():
     return interpreter
 
 
-def test_get_bit_basic_functionality(interpreter):
+def test_get_bit_basic_functionality(interpreter: PHIRClassicalInterpreter) -> None:
     """Test basic bit retrieval functionality."""
     # Test alternating 0s and 1s in the 8-bit variable
     assert interpreter.get_bit("u8_var", 0) == 0
@@ -41,7 +54,7 @@ def test_get_bit_basic_functionality(interpreter):
     assert interpreter.get_bit("u8_var", 7) == 1
 
 
-def test_get_bit_highest_bit(interpreter):
+def test_get_bit_highest_bit(interpreter: PHIRClassicalInterpreter) -> None:
     """Test accessing the highest bit of a 64-bit value, which is most likely to cause issues."""
     # This is the critical test for the potential overflow issue
     assert interpreter.get_bit("u64_var", 63) == 1
@@ -51,7 +64,7 @@ def test_get_bit_highest_bit(interpreter):
     assert interpreter.get_bit("u64_var", 62) == 0
 
 
-def test_get_bit_out_of_bounds(interpreter):
+def test_get_bit_out_of_bounds(interpreter: PHIRClassicalInterpreter) -> None:
     """Test that attempting to access bits beyond the data type width raises an error."""
     # Test with specific error message patterns matching the implementation
     with pytest.raises(

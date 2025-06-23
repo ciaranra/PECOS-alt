@@ -1,3 +1,10 @@
+"""Logical gate implementations for the 4.8.8 color code.
+
+This module provides logical gate implementations for the 4.8.8 color code,
+including transversal gates and other logical operations that preserve
+the color code's error correction properties.
+"""
+
 # Copyright 2018 The PECOS Developers
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
@@ -11,21 +18,34 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from pecos.qeccs.gate_parent_class import LogicalGate
+from typing import TYPE_CHECKING
+
+from pecos.qeccs.default_logical_gate import DefaultLogicalGate
 from pecos.qeccs.helper_functions import expected_params
+from pecos.typing import QECCGateParams
+
+if TYPE_CHECKING:
+    from pecos.protocols import QECCProtocol
 
 
-class GateIdentity(LogicalGate):
+class GateIdentity(DefaultLogicalGate):
     """Logical Identity.
 
     This is equivalent to ``distance`` number of syndrome of extraction rounds.
     """
 
-    def __init__(self, qecc, symbol, **gate_params) -> None:
-        """Args:
+    def __init__(
+        self,
+        qecc: "QECCProtocol",
+        symbol: str,
+        **gate_params: QECCGateParams,
+    ) -> None:
+        """Initialize the GateSynExtract with the given parameters.
+
+        Args:
         ----
-            qecc(QECC):
-            symbol(str):
+            qecc(QECC): The quantum error correcting code instance
+            symbol(str): Symbol identifier for the gate
             **gate_params(dict): kwargs including keys: 'num_syn_extract' (default: qecc.distance).
         """
         super().__init__(qecc, symbol, **gate_params)
@@ -41,14 +61,21 @@ class GateIdentity(LogicalGate):
         self.instr_symbols = ["instr_syn_extract"] * self.num_syn_extract
 
 
-class GateInitZero(LogicalGate):
+class GateInitZero(DefaultLogicalGate):
     """Initialize logical state zero."""
 
-    def __init__(self, qecc, symbol, **gate_params) -> None:
-        """Args:
+    def __init__(
+        self,
+        qecc: "QECCProtocol",
+        symbol: str,
+        **gate_params: QECCGateParams,
+    ) -> None:
+        """Initialize the GateInitZero with the given parameters.
+
+        Args:
         ----
-            qecc(QECC):
-            symbol(str):
+            qecc(QECC): The quantum error correcting code instance
+            symbol(str): Symbol identifier for the gate
             **gate_params(dict): kwargs including keys: 'num_syn_extract' (default: 0).
         """
         super().__init__(qecc, symbol, **gate_params)
@@ -66,14 +93,21 @@ class GateInitZero(LogicalGate):
         self.instr_symbols.extend(syn_extract)
 
 
-class GateInitPlus(LogicalGate):
+class GateInitPlus(DefaultLogicalGate):
     """Initialize logical state plus."""
 
-    def __init__(self, qecc, symbol, **gate_params) -> None:
-        """Args:
+    def __init__(
+        self,
+        qecc: "QECCProtocol",
+        symbol: str,
+        **gate_params: QECCGateParams,
+    ) -> None:
+        """Initialize the GateInitPlus with the given parameters.
+
+        Args:
         ----
-            qecc(QECC):
-            symbol(str):
+            qecc(QECC): The quantum error correcting code instance
+            symbol(str): Symbol identifier for the gate
             **gate_params(dict): kwargs including keys: 'num_syn_extract' (default: 0).
         """
         super().__init__(qecc, symbol, **gate_params)

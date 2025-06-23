@@ -1,4 +1,10 @@
 # PECOS/python/pecos-rslib/tests/test_phir_engine.py
+"""Tests for PHIR engine integration with Rust-based simulators.
+
+This module contains test cases for verifying the integration between PHIR (PECOS High-level Intermediate
+Representation) and the Rust-based quantum simulators, ensuring proper execution of quantum programs and
+correct simulation results.
+"""
 import json
 
 import pytest
@@ -6,7 +12,7 @@ from pecos_rslib._pecos_rslib import PHIREngine
 
 
 # Helper function to create a PHIREngine instance with a simple test program
-def create_test_bell_program():
+def create_test_bell_program() -> str:
     """Create a simple PHIR program for testing register mapping.
 
     This function returns a PHIR JSON program that creates a Bell state,
@@ -40,7 +46,7 @@ def create_test_bell_program():
     )
 
 
-def test_phir_minimal():
+def test_phir_minimal() -> None:
     """Test with a minimal PHIR program to verify basic functionality."""
     phir_json = json.dumps(
         {
@@ -96,7 +102,8 @@ def test_phir_minimal():
     assert results[measurement_key] == 0, f"Expected {measurement_key} to have value 0"
 
 
-def test_phir_invalid_json():
+def test_phir_invalid_json() -> None:
+    """Test PHIR engine handling of invalid JSON input."""
     invalid_json = '{"format": "PHIR/JSON", "invalid": }'
     with pytest.raises(
         json.decoder.JSONDecodeError,
@@ -105,7 +112,8 @@ def test_phir_invalid_json():
         PHIREngine(invalid_json)
 
 
-def test_phir_empty_program():
+def test_phir_empty_program() -> None:
+    """Test PHIR engine processing of empty program."""
     phir = json.dumps(
         {
             "format": "PHIR/JSON",
@@ -120,7 +128,8 @@ def test_phir_empty_program():
     assert len(commands) == 0, "Expected empty command list"
 
 
-def test_phir_full_circuit():
+def test_phir_full_circuit() -> None:
+    """Test PHIR engine processing of complete quantum circuit."""
     phir = json.dumps(
         {
             "format": "PHIR/JSON",
@@ -157,7 +166,7 @@ def test_phir_full_circuit():
     assert len(results) > 0, "Expected measurement results"
 
 
-def test_phir_full():
+def test_phir_full() -> None:
     """Test with a full PHIR program."""
     phir = {
         "format": "PHIR/JSON",
@@ -190,7 +199,7 @@ def test_phir_full():
     assert isinstance(results, dict)
 
 
-def test_register_mapping_simulation():
+def test_register_mapping_simulation() -> None:
     """Test the register mapping behavior that will be supported by the Result instruction.
 
     Since we can't directly test the Result instruction yet due to validation constraints,

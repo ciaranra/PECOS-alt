@@ -84,9 +84,21 @@ lint: check fmt clippy
 # Testing
 # -------
 
+.PHONY: qir-staticlib
+qir-staticlib:  ## Build the QIR static library (needed for QIR compilation)
+	cargo rustc -p pecos-qir --lib --crate-type=staticlib
+
+.PHONY: qir-staticlib-if-needed
+qir-staticlib-if-needed:  ## Build QIR static library only if it doesn't exist in persistent location
+	@if [ ! -f ~/.cargo/pecos-qir/libpecos_qir.a ] && [ ! -f ~/.cargo/pecos-qir/pecos_qir.lib ]; then \
+		echo "Building QIR static library..."; \
+		$(MAKE) qir-staticlib; \
+	fi
+
 .PHONY: rstest
-rstest:  ## Run Rust tests
+rstest: qir-staticlib-if-needed  ## Run Rust tests
 	cargo test --workspace
+
 
 .PHONY: pytest
 pytest:  ## Run tests on the Python package (not including optional dependencies). ASSUMES: previous build command
@@ -139,6 +151,8 @@ clean-unix:
 	@find python -type d -name "target" -exec rm -rf {} +
 	@# Clean the root workspace target directory
 	@cargo clean
+	@# Clean the persistent QIR library directory
+	@rm -rf ~/.cargo/pecos-qir/
 
 .PHONY: clean-windows-ps
 clean-windows-ps:
@@ -157,6 +171,8 @@ clean-windows-ps:
 	@powershell -Command "Get-ChildItem -Path crates -Recurse -Directory -Filter 'target' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 	@powershell -Command "Get-ChildItem -Path python -Recurse -Directory -Filter 'target' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 	@cargo clean
+	@# Clean the persistent QIR library directory
+	@powershell -Command "if (Test-Path '$env:USERPROFILE\.cargo\pecos-qir') { Remove-Item -Recurse -Force $env:USERPROFILE\.cargo\pecos-qir }"
 
 .PHONY: clean-windows-cmd
 clean-windows-cmd:
@@ -175,6 +191,8 @@ clean-windows-cmd:
 	-@for /f "delims=" %%d in ('dir /s /b /ad crates\target 2^>nul') do @rd /s /q "%%d" 2>nul
 	-@for /f "delims=" %%d in ('dir /s /b /ad python\target 2^>nul') do @rd /s /q "%%d" 2>nul
 	-@cargo clean
+	-@REM Clean the persistent QIR library directory
+	-@if exist %USERPROFILE%\.cargo\pecos-qir rd /s /q %USERPROFILE%\.cargo\pecos-qir
 
 .PHONY: pip-install-uv
 pip-install-uv:  ## Install uv using pip and create a venv. (Recommended to instead follow: https://docs.astral.sh/uv/getting-started/installation/
@@ -182,6 +200,12 @@ pip-install-uv:  ## Install uv using pip and create a venv. (Recommended to inst
 	$(PYTHONPATH) -m pip install --upgrade uv
 	@echo "Creating venv and installing dependencies..."
 	uv sync
+
+.PONY: dev
+dev: clean build test  ## Run the typical sequence of commands to check everything is running correctly
+
+.PONY: devl  ## Run the commands to make sure everything runs + lint
+devl: dev lint
 
 # Help
 # ----

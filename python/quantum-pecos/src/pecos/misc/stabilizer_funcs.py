@@ -10,8 +10,35 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Stabilizer manipulation and analysis functions for PECOS.
 
-def circ2set(circuit):
+This module provides utility functions for working with quantum stabilizer
+formalism, including stabilizer group operations and Pauli string manipulations.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from typing import Any
+
+    from pecos.simulators.sparsesim.state import Gens, SparseSim
+
+
+def circ2set(circuit: Iterable[tuple[str, Any]]) -> tuple[set, set]:
+    """Convert a circuit to sets of X and Z operator locations.
+
+    Args:
+        circuit: Iterable of (gate_type, qubits) tuples.
+
+    Returns:
+        Tuple of (X_qubits_set, Z_qubits_set).
+
+    Raises:
+        Exception: If gate type is not 'X' or 'Z'.
+    """
     qudit_xs = set()
     qudit_zs = set()
     for gate, qubits in circuit:
@@ -20,12 +47,23 @@ def circ2set(circuit):
         elif gate == "Z":
             qudit_zs = qubits
         else:
-            raise Exception('Operator "%s" not handled for logical ops!' % gate)
+            msg = f'Operator "{gate}" not handled for logical ops!'
+            raise Exception(msg)
 
     return qudit_xs, qudit_zs
 
 
-def op_commutes(stab_xs, stab_zs, commute_with):
+def op_commutes(stab_xs: set[int], stab_zs: set[int], commute_with: Gens) -> bool:
+    """Check if a stabilizer commutes with generators in a stabilizer state.
+
+    Args:
+        stab_xs: Set of qubit indices with X operators.
+        stab_zs: Set of qubit indices with Z operators.
+        commute_with: Generator state to check commutation with.
+
+    Returns:
+        True if the operator commutes with all generators, False otherwise.
+    """
     # Does the stabilizer anti-commute with any of the stabilizers in the stabilizer state?
 
     anticom_stabs = set()
@@ -39,20 +77,16 @@ def op_commutes(stab_xs, stab_zs, commute_with):
     return not len(anticom_stabs)
 
 
-def find_stab(state, stab_xs, stab_zs):
+def find_stab(state: SparseSim, stab_xs: set[int], stab_zs: set[int]) -> bool:
     """Find the sign of the logical operator.
 
     Args:
     ----
-        state:
-        stab_xs:
-        stab_zs:
-
-    Returns:
-    -------
+        state: The stabilizer state containing stabilizers and destabilizers.
+        stab_xs: Set of qubit indices where the stabilizer has X operators.
+        stab_zs: Set of qubit indices where the stabilizer has Z operators.
 
     """
-
     if len(stab_xs) == 0 and len(stab_zs) == 0:
         return True
 
@@ -83,7 +117,22 @@ def find_stab(state, stab_xs, stab_zs):
     return not (len(built_up_xs) != 0 or len(built_up_zs) != 0)
 
 
-def remove_stab(state, stab_xs, stab_zs, destab_xs, destab_zs):
+def remove_stab(
+    state: SparseSim,
+    stab_xs: set[int],
+    stab_zs: set[int],
+    destab_xs: set[int],
+    destab_zs: set[int],
+) -> None:
+    """Remove a stabilizer from the stabilizer state.
+
+    Args:
+        state: Sparse stabilizer simulator state.
+        stab_xs: Set of qubit indices with X operators in stabilizer.
+        stab_zs: Set of qubit indices with Z operators in stabilizer.
+        destab_xs: Set of qubit indices with X operators in destabilizer.
+        destab_zs: Set of qubit indices with Z operators in destabilizer.
+    """
     # make sure stabs and destabs anti-commute
     # ----------------------------------------
     if (len(stab_xs & destab_zs) + len(stab_zs & destab_xs)) % 2 == 0:
@@ -271,7 +320,17 @@ def remove_stab(state, stab_xs, stab_zs, destab_xs, destab_zs):
         stabs.signs_i ^= delog_anticom
 
 
-def is_not_stabilizer(state, qubits_x, qubits_z):
+def is_not_stabilizer(state: SparseSim, qubits_x: set[int], qubits_z: set[int]) -> int:
+    """Check if an operator is not a stabilizer and return classification.
+
+    Args:
+        state: Sparse stabilizer simulator state.
+        qubits_x: Set of qubit indices with X operators.
+        qubits_z: Set of qubit indices with Z operators.
+
+    Returns:
+        Integer classification: 0=stabilizer, 1=logical, 2=error.
+    """
     stabs = state.stabs
     destabs = state.destabs
 
@@ -324,5 +383,5 @@ def is_not_stabilizer(state, qubits_x, qubits_z):
         # (But did commute)
         return 2  # Not in the stabilizers group
 
-    else:  # Was able to get supplied Paulis from the stabilizers
-        return 0  # In the stabilizer group
+    # Was able to get supplied Paulis from the stabilizers
+    return 0  # In the stabilizer group

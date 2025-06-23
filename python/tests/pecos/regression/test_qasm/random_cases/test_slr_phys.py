@@ -124,7 +124,7 @@ def test_if_bell():
     """Test that a more complex Bell prep and measure circuit with if statements can be created."""
 
     class Bell(Block):
-        def __init__(self, q0: Qubit, q1: Qubit, m0: Bit, m1: Bit):
+        def __init__(self, q0: Qubit, q1: Qubit, m0: Bit, m1: Bit) -> None:
             super().__init__()
             self.extend(
                 p.Prep(q0),
@@ -160,9 +160,8 @@ def test_if_bell():
     assert SlrConverter(prog).qasm() == qasm
 
 
-def test_strange_program():
+def test_strange_program() -> None:
     """Test a weird program to verify we get what is expected for various other SLR objects."""
-
     prog = Main(
         q := QReg("q", 2),
         c := CReg("c", 4),

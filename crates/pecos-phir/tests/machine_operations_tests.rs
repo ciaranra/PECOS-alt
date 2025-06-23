@@ -3,14 +3,18 @@ mod common;
 #[cfg(test)]
 mod tests {
     use pecos_core::errors::PecosError;
-    use pecos_engines::PassThroughNoiseModel;
+    use pecos_engines::shot_results::Data;
 
     // Import helpers from common module
-    use crate::common::phir_test_utils::run_phir_simulation_from_json;
 
     // Test machine operations
     #[test]
     fn test_machine_operations() -> Result<(), PecosError> {
+        use pecos_engines::Engine;
+        use pecos_engines::ShotVec;
+        use pecos_phir::v0_1::ast::PHIRProgram;
+        use pecos_phir::v0_1::engine::PHIREngine;
+
         // Define the PHIR program inline
         let phir_json = r#"{
           "format": "PHIR/JSON",
@@ -33,15 +37,19 @@ mod tests {
           ]
         }"#;
 
-        // Run the simulation with single shot
-        let results = run_phir_simulation_from_json(
-            phir_json,
-            1,
-            1,
-            None,
-            None::<PassThroughNoiseModel>,
-            None::<&std::path::Path>,
-        )?;
+        // Parse JSON into PHIRProgram
+        let program: PHIRProgram = serde_json::from_str(phir_json)
+            .map_err(|e| PecosError::Input(format!("Failed to parse PHIR program: {e}")))?;
+
+        // Create engine directly
+        let mut engine = PHIREngine::from_program(program.clone())?;
+
+        // Execute directly
+        let shot = engine.process(())?;
+
+        // Create a shotVec for compatibility with the rest of the test
+        let mut results = ShotVec::default();
+        results.shots.push(shot);
 
         // Print results information for debugging
         println!("ShotResults: {results:?}");
@@ -53,16 +61,16 @@ mod tests {
 
         let shot = &results.shots[0];
         assert!(
-            shot.contains_key("output"),
+            shot.data.contains_key("output"),
             "Expected 'output' register to be present"
         );
 
         // Check that the value is 2 (from the assignment in the JSON)
-        assert_eq!(
-            shot.get("output").unwrap(),
-            "2",
-            "Expected output to be 2, got {}",
-            shot.get("output").unwrap()
+        // Accept either I32(2) or U32(2) as valid results
+        let value = shot.data.get("output").unwrap();
+        assert!(
+            matches!(value, &Data::I32(2) | &Data::U32(2)),
+            "Expected output to be 2, got {value:?}"
         );
 
         Ok(())
@@ -71,6 +79,11 @@ mod tests {
     // Test simple machine operations
     #[test]
     fn test_simple_machine_operations() -> Result<(), PecosError> {
+        use pecos_engines::Engine;
+        use pecos_engines::ShotVec;
+        use pecos_phir::v0_1::ast::PHIRProgram;
+        use pecos_phir::v0_1::engine::PHIREngine;
+
         // Define the PHIR program inline
         let phir_json = r#"{
           "format": "PHIR/JSON",
@@ -92,15 +105,19 @@ mod tests {
           ]
         }"#;
 
-        // Run the simulation with single shot
-        let results = run_phir_simulation_from_json(
-            phir_json,
-            1,
-            1,
-            None,
-            None::<PassThroughNoiseModel>,
-            None::<&std::path::Path>,
-        )?;
+        // Parse JSON into PHIRProgram
+        let program: PHIRProgram = serde_json::from_str(phir_json)
+            .map_err(|e| PecosError::Input(format!("Failed to parse PHIR program: {e}")))?;
+
+        // Create engine directly
+        let mut engine = PHIREngine::from_program(program.clone())?;
+
+        // Execute directly
+        let shot = engine.process(())?;
+
+        // Create a shotVec for compatibility with the rest of the test
+        let mut results = ShotVec::default();
+        results.shots.push(shot);
 
         // Print results information for debugging
         println!("ShotResults: {results:?}");
@@ -112,16 +129,16 @@ mod tests {
 
         let shot = &results.shots[0];
         assert!(
-            shot.contains_key("output"),
+            shot.data.contains_key("output"),
             "Expected 'output' register to be present"
         );
 
         // Check that the value is 42 (from the assignment in the JSON file)
-        assert_eq!(
-            shot.get("output").unwrap(),
-            "42",
-            "Expected output to be 42, got {}",
-            shot.get("output").unwrap()
+        // Accept either I32(42) or U32(42) as valid results
+        let value = shot.data.get("output").unwrap();
+        assert!(
+            matches!(value, &Data::I32(42) | &Data::U32(42)),
+            "Expected output to be 42, got {value:?}"
         );
 
         Ok(())

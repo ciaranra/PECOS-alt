@@ -11,15 +11,17 @@
 // the License.
 
 pub mod angle;
+pub mod bitvec;
 pub mod element;
 pub mod errors;
-pub mod gate;
+pub mod gate_type;
+pub mod gates;
 pub mod pauli;
 pub mod phase;
+pub mod prelude;
 pub mod qubit_id;
 pub mod rng;
 pub mod sets;
-pub mod struct_metadata;
 
 pub use angle::{Angle, Angle8, Angle16, Angle32, Angle64, Angle128, LossyInto};
 pub use element::{Element, IndexableElement};
@@ -36,7 +38,7 @@ pub use rng::{choose_weighted, coin_flip, gen_bools};
 // Random utilities struct for improved RNG API
 pub use rng::RandomUtils;
 
-pub use gate::Gate;
+pub use gates::Gate;
 pub use pauli::pauli_bitmap::PauliBitmap;
 pub use pauli::pauli_sparse::PauliSparse;
 pub use pauli::pauli_string::PauliString;

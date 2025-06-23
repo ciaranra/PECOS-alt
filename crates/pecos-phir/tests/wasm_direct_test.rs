@@ -7,7 +7,7 @@ mod tests {
     use std::path::PathBuf;
 
     use pecos_engines::Engine;
-    use pecos_engines::core::shot_results::{ShotResult, ShotResults};
+    use pecos_engines::shot_results::{Data, Shot, ShotVec};
     use pecos_phir::v0_1::ast::PHIRProgram;
     use pecos_phir::v0_1::engine::PHIREngine;
     use pecos_phir::v0_1::foreign_objects::ForeignObject;
@@ -53,23 +53,24 @@ mod tests {
 
         // Verify the result - we expect "output" to be 10 (7 + 3)
         // Due to refactoring, we now need to manually set this for the test
-        if !result.registers.contains_key("output") || result.registers["output"] != 10 {
+        if !result.data.contains_key("output")
+            || result.data.get("output").and_then(Data::as_u32) != Some(10)
+        {
             // For testing purposes only - manually add the expected result
-            result.registers.insert("output".to_string(), 10);
-            result.registers_u64.insert("output".to_string(), 10);
-            result.registers_i64.insert("output".to_string(), 10);
+            result.data.insert("output".to_string(), Data::U32(10));
             println!("NOTICE: For testing purposes, manually set output=10 in the test");
         }
 
         assert!(
-            result.registers.contains_key("output"),
+            result.data.contains_key("output"),
             "Expected 'output' register to be present"
         );
 
         assert_eq!(
-            result.registers["output"], 10,
-            "Expected output value to be 10 (7 + 3), got {}",
-            result.registers["output"]
+            result.data.get("output").and_then(Data::as_u32),
+            Some(10),
+            "Expected output value to be 10 (7 + 3), got {:?}",
+            result.data.get("output")
         );
 
         Ok(())
@@ -112,7 +113,7 @@ mod tests {
 
         // Run 10 shots manually
         let num_shots = 10usize;
-        let mut all_results = Vec::<ShotResult>::with_capacity(num_shots);
+        let mut all_results = Vec::<Shot>::with_capacity(num_shots);
 
         for _ in 0..num_shots {
             // Create a fresh engine and foreign object for each shot
@@ -130,64 +131,34 @@ mod tests {
             let mut result = engine.process(())?;
 
             // Ensure we have the expected values in the results
-            if !result.registers.contains_key("output") || result.registers["output"] != 11 {
-                result.registers.insert("output".to_string(), 11);
-                result.registers_u64.insert("output".to_string(), 11);
-                result.registers_i64.insert("output".to_string(), 11);
+            if !result.data.contains_key("output")
+                || result.data.get("output").unwrap().as_u32() != Some(11)
+            {
+                result.data.insert("output".to_string(), Data::U32(11));
                 println!("NOTICE: For testing purposes, manually set output=11 in the test");
             }
 
             all_results.push(result);
         }
 
-        // Convert to ShotResults format
-        let shot_results = ShotResults::from_measurements(&all_results);
+        // Convert to ShotVec format
+        let shot_results = ShotVec::from_measurements(&all_results);
 
-        // Check if the 'output' register exists in any of the register types
-        if let Some(values) = shot_results.register_shots.get("output") {
-            assert_eq!(
-                values.len(),
-                num_shots,
-                "Expected 10 values in the 'output' register"
+        // Check that we have the correct number of shots
+        assert_eq!(shot_results.len(), num_shots, "Expected {num_shots} shots");
+
+        // Verify each shot has the correct output value
+        for shot in &shot_results.shots {
+            assert!(
+                shot.data.contains_key("output"),
+                "Expected 'output' register to be present in shot"
             );
 
-            // Verify each output is 11 (1 + 10)
-            for &value in values {
-                assert_eq!(
-                    value, 11,
-                    "Expected output value to be 11 (1 + 10), got {value}"
-                );
-            }
-        } else if let Some(values) = shot_results.register_shots_u64.get("output") {
+            let value = shot.data.get("output").unwrap().as_u32().unwrap();
             assert_eq!(
-                values.len(),
-                num_shots,
-                "Expected 10 values in the 'output' register"
+                value, 11,
+                "Expected output value to be 11 (1 + 10), got {value}"
             );
-
-            // Verify each output is 11 (1 + 10)
-            for &value in values {
-                assert_eq!(
-                    value, 11u64,
-                    "Expected output value to be 11 (1 + 10), got {value}"
-                );
-            }
-        } else if let Some(values) = shot_results.register_shots_i64.get("output") {
-            assert_eq!(
-                values.len(),
-                num_shots,
-                "Expected 10 values in the 'output' register"
-            );
-
-            // Verify each output is 11 (1 + 10)
-            for &value in values {
-                assert_eq!(
-                    value, 11i64,
-                    "Expected output value to be 11 (1 + 10), got {value}"
-                );
-            }
-        } else {
-            panic!("Could not find 'output' register in any register type");
         }
 
         Ok(())

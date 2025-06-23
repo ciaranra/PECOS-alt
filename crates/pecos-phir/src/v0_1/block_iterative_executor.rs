@@ -57,6 +57,9 @@ impl<'a> BlockIterativeExecutor<'a> {
     }
 
     /// Process operations iteratively
+    ///
+    /// # Errors
+    /// Returns an error if any operation fails to process.
     pub fn process(&mut self) -> Result<(), PecosError> {
         while let Some(flattened_op) = self.operation_stack.pop_front() {
             match flattened_op {

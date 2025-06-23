@@ -13,17 +13,22 @@
 
 """These functions build distance graphs for logical gates of qeccs."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
 import networkx as nx
 
+if TYPE_CHECKING:
+    from pecos.protocols import LogicalInstructionProtocol
 
-def precompute(instr):
-    """Args:
+
+def precompute(instr: LogicalInstructionProtocol) -> dict[str, Any]:
+    """Precompute decoder information for the given instruction.
+
+    Args:
     ----
-        instr:
-
-    Returns:
-    -------
-
+        instr: The logical instruction to precompute decoder information for.
     """
     qecc = instr.qecc
 
@@ -46,7 +51,7 @@ def precompute(instr):
     return precomputed_data
 
 
-def code_surface4444(instr):
+def code_surface4444(instr: LogicalInstructionProtocol) -> dict[str, Any]:
     """Pre-computing for surface4444 class.
 
     This decoder is for 2D slices. It is assumed that it can decode logical instruction by logical instruction.
@@ -66,7 +71,7 @@ def code_surface4444(instr):
     return decoder_data
 
 
-def code_surface4444medial(instr):
+def code_surface4444medial(instr: LogicalInstructionProtocol) -> dict[str, Any]:
     """Pre-computing for surface4444 class.
 
     This decoder is for 2D slices. It is assumed that it can decode logical instruction by logical instruction.
@@ -86,9 +91,8 @@ def code_surface4444medial(instr):
     return decoder_data
 
 
-def compute_all_shortest_paths(graph):
-    """
-    Compute all shortest paths in a graph, handling NetworkX API changes.
+def compute_all_shortest_paths(graph: nx.Graph) -> dict[Any, dict[Any, list[Any]]]:
+    """Compute all shortest paths in a graph, handling NetworkX API changes.
 
     This function will explicitly generate the all-pairs shortest paths
     to be compatible with different NetworkX versions.
@@ -109,8 +113,10 @@ def compute_all_shortest_paths(graph):
     return all_paths
 
 
-def surface4444_identity(instr):
-    """For X and Z decoding separately:
+def surface4444_identity(instr: LogicalInstructionProtocol) -> dict[str, Any]:
+    """Compute decoder information for Surface 4444 identity gate.
+
+    For X and Z decoding separately:
 
     - Create dictionary:
 
@@ -188,9 +194,9 @@ def surface4444_identity(instr):
             elif gate_symbol == "Z check":
                 edges = d2edge_z
             else:
+                msg = f"This decoder can only handle check of purely X or Z type rather than {gate_symbol}!"
                 raise Exception(
-                    "This decoder can only handle check of purely X or Z type rather than %s!"
-                    % gate_symbol,
+                    msg,
                 )
 
             syn_list = edges.setdefault(data, [])
@@ -215,18 +221,19 @@ def surface4444_identity(instr):
             virt_node = "v" + str(vi)
 
             # X virtual nodes (sides left and right)
-            if side_label in ["left", "right"]:  # 1 for i = 1 and 3 => left and right
+            if side_label in {"left", "right"}:  # 1 for i = 1 and 3 => left and right
                 syn_list = d2edge_x.setdefault(data, [])
                 syn_list.append(virt_node)
                 virt_x.add(virt_node)
 
             # Z virtual nodes (sides top and bottom)
-            elif side_label in ["top", "bottom"]:  # 0 for i = 0 and 2 => top and bottom
+            elif side_label in {"top", "bottom"}:  # 0 for i = 0 and 2 => top and bottom
                 syn_list = d2edge_z.setdefault(data, [])
                 syn_list.append(virt_node)
                 virt_z.add(virt_node)
             else:
-                raise Exception('side_label "%s" not understood!' % side_label)
+                msg = f'side_label "{side_label}" not understood!'
+                raise Exception(msg)
 
     # invert data -> edge and make sure len(edge) = 2
     for check_type in ["X", "Z"]:
@@ -248,7 +255,7 @@ def surface4444_identity(instr):
                 raise Exception(msg)
 
             edges[tuple(edge)] = data
-            edges[(edge[1], edge[0])] = data
+            edges[edge[1], edge[0]] = data
             temp_graph.add_edge(edge[0], edge[1])
 
     # Create distance graph
@@ -281,7 +288,7 @@ def surface4444_identity(instr):
                     data_path = []
                     s1 = syn_path[0]
                     for s2 in syn_path[1:]:
-                        data = edge2d[(s1, s2)]
+                        data = edge2d[s1, s2]
                         data_path.append(data)
                         s1 = s2
 
@@ -316,7 +323,7 @@ def surface4444_identity(instr):
             data_path = []
             s1 = syn_path[0]
             for s2 in syn_path[1:]:
-                data = edge2d[(s1, s2)]
+                data = edge2d[s1, s2]
                 data_path.append(data)
                 s1 = s2
 
@@ -330,8 +337,10 @@ def surface4444_identity(instr):
     return info
 
 
-def surface4444medial_identity(instr):
-    """For X and Z decoding separately:
+def surface4444medial_identity(instr: LogicalInstructionProtocol) -> dict[str, Any]:
+    """Compute decoder information for Surface 4444 medial identity gate.
+
+    For X and Z decoding separately:
 
     - Create dictionary:
 
@@ -409,9 +418,9 @@ def surface4444medial_identity(instr):
             elif gate_symbol == "Z check":
                 edges = d2edge_z
             else:
+                msg = f"This decoder can only handle check of purely X or Z type rather than {gate_symbol}!"
                 raise Exception(
-                    "This decoder can only handle check of purely X or Z type rather than %s!"
-                    % gate_symbol,
+                    msg,
                 )
 
             syn_list = edges.setdefault(data, [])
@@ -439,10 +448,9 @@ def surface4444medial_identity(instr):
                         vi += 1
                         virt_node = "v" + str(vi)
 
-                else:  # even
-                    if i % 2 == 0:
-                        vi += 1
-                        virt_node = "v" + str(vi)
+                elif i % 2 == 0:
+                    vi += 1
+                    virt_node = "v" + str(vi)
 
                 syn_list = d2edge_z.setdefault(data, [])
                 syn_list.append(virt_node)
@@ -471,16 +479,16 @@ def surface4444medial_identity(instr):
                     if i == 0 or i % 2 == 1:
                         vi += 1
                         virt_node = "v" + str(vi)
-                else:
-                    if i % 2 == 0:
-                        vi += 1
-                        virt_node = "v" + str(vi)
+                elif i % 2 == 0:
+                    vi += 1
+                    virt_node = "v" + str(vi)
 
                 syn_list = d2edge_x.setdefault(data, [])
                 syn_list.append(virt_node)
                 virt_x.add(virt_node)
             else:
-                raise Exception('side_label "%s" not understood!' % side_label)
+                msg = f'side_label "{side_label}" not understood!'
+                raise Exception(msg)
 
     # invert data -> edge and make sure len(edge) = 2
     for check_type in ["X", "Z"]:
@@ -502,7 +510,7 @@ def surface4444medial_identity(instr):
                 raise Exception(msg)
 
             edges[tuple(edge)] = data
-            edges[(edge[1], edge[0])] = data
+            edges[edge[1], edge[0]] = data
             temp_graph.add_edge(edge[0], edge[1])
 
     # Create distance graph
@@ -535,7 +543,7 @@ def surface4444medial_identity(instr):
                     data_path = []
                     s1 = syn_path[0]
                     for s2 in syn_path[1:]:
-                        data = edge2d[(s1, s2)]
+                        data = edge2d[s1, s2]
                         data_path.append(data)
                         s1 = s2
 
@@ -570,7 +578,7 @@ def surface4444medial_identity(instr):
             data_path = []
             s1 = syn_path[0]
             for s2 in syn_path[1:]:
-                data = edge2d[(s1, s2)]
+                data = edge2d[s1, s2]
                 data_path.append(data)
                 s1 = s2
 

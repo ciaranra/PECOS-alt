@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::engine::QASMEngine;
 use crate::parser::{ParseConfig, QASMParser};
+use crate::program::QASMProgram;
 use pecos_core::errors::PecosError;
 
 /// Builder for creating and configuring a `QASMEngine`
@@ -66,6 +67,10 @@ impl QASMEngineBuilder {
     }
 
     /// Build a `QASMEngine` from a QASM string
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the QASM string cannot be parsed.
     pub fn build_from_str(self, qasm: &str) -> Result<QASMEngine, PecosError> {
         // Parse with configuration
         let parse_config = ParseConfig {
@@ -78,10 +83,11 @@ impl QASMEngineBuilder {
             ..Default::default()
         };
 
-        let program = QASMParser::parse_with_config(qasm, &parse_config)?;
+        let ast_program = QASMParser::parse_with_config(qasm, &parse_config)?;
+        let qasm_program = QASMProgram::new(ast_program, qasm.to_string());
 
         let mut engine = QASMEngine::default();
-        engine.load_program(program);
+        engine.load_program(qasm_program);
 
         // Apply configuration
         if self.allow_complex_conditionals {
@@ -92,6 +98,10 @@ impl QASMEngineBuilder {
     }
 
     /// Build a `QASMEngine` from a file
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read or parsed.
     pub fn build_from_file(self, path: impl AsRef<Path>) -> Result<QASMEngine, PecosError> {
         let content = std::fs::read_to_string(path)?;
         self.build_from_str(&content)

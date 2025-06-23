@@ -1,3 +1,10 @@
+"""Single-qubit depolarizing noise with leakage.
+
+This module provides depolarizing noise models for single-qubit operations
+that include leakage to states outside the computational subspace,
+providing more realistic error modeling for quantum systems.
+"""
+
 # Copyright 2023 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -9,12 +16,40 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from pecos.reps.pypmir.op_types import QOp
 
+if TYPE_CHECKING:
+    from pecos.protocols import MachineProtocol
 
-def noise_sq_depolarizing_leakage(op: QOp, p: float, noise_dict: dict, machine):
+
+def noise_sq_depolarizing_leakage(
+    op: QOp,
+    p: float,
+    noise_dict: dict,
+    machine: MachineProtocol,
+) -> list[QOp] | None:
+    """Apply single-qubit depolarizing noise with leakage support.
+
+    Applies depolarizing noise to quantum operations while handling
+    leaked qubits through the machine protocol. Leaked qubits are
+    excluded from noise application.
+
+    Args:
+        op: Quantum operation to apply noise to.
+        p: Probability of noise occurring on each non-leaked qubit.
+        noise_dict: Dictionary mapping fault types to their probabilities.
+        machine: Machine protocol handling qubit leakage states.
+
+    Returns:
+        List of quantum operations including modified operation and noise,
+        or None if no noise or leakage occurs.
+    """
     args = set(op.args)
     leaked = machine.leaked_qubits & args
 
@@ -28,7 +63,7 @@ def noise_sq_depolarizing_leakage(op: QOp, p: float, noise_dict: dict, machine):
 
     noise = {}
     if np.any(rand_nums):
-        for r, loc in zip(rand_nums, noisy_op.args):
+        for r, loc in zip(rand_nums, noisy_op.args, strict=False):
             if r:
                 rand = np.random.random()
                 p_tot = 0.0

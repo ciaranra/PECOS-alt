@@ -29,6 +29,9 @@ pub enum DataType {
 
 impl DataType {
     /// Creates a `DataType` from a string representation
+    ///
+    /// # Errors
+    /// Returns an error if the string doesn't match a supported data type.
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Result<Self, PecosError> {
         match s {
@@ -486,6 +489,9 @@ impl TypedValue {
     }
 
     /// Gets a specific bit from the value
+    ///
+    /// # Errors
+    /// Returns an error if the bit index is out of range for the data type.
     pub fn get_bit(&self, idx: usize) -> Result<bool, PecosError> {
         // Check that idx is within the bit width of the type
         let bit_width = self.get_type().bit_width();
@@ -501,6 +507,9 @@ impl TypedValue {
     }
 
     /// Sets a specific bit in the value
+    ///
+    /// # Errors
+    /// Returns an error if the bit index is out of range for the data type.
     pub fn with_bit_set(&self, idx: usize, bit_value: bool) -> Result<TypedValue, PecosError> {
         // Check that idx is within the bit width of the type
         let bit_width = self.get_type().bit_width();
@@ -571,6 +580,9 @@ impl Environment {
     }
 
     /// Adds a new variable to the environment
+    ///
+    /// # Errors
+    /// Returns an error if a variable with the same name already exists.
     pub fn add_variable(
         &mut self,
         name: &str,
@@ -581,6 +593,9 @@ impl Environment {
     }
 
     /// Adds a new variable to the environment with metadata
+    ///
+    /// # Errors
+    /// Returns an error if a variable with the same name already exists.
     pub fn add_variable_with_metadata(
         &mut self,
         name: &str,
@@ -631,6 +646,9 @@ impl Environment {
     /// Sets the value of a variable with type checking
     ///
     /// Accepts any type that can be converted to `TypedValue`
+    ///
+    /// # Errors
+    /// Returns an error if the variable doesn't exist.
     pub fn set<T: Into<TypedValue>>(&mut self, name: &str, value: T) -> Result<(), PecosError> {
         let typed_value = value.into();
         if let Some(&idx) = self.name_to_index.get(name) {
@@ -651,6 +669,9 @@ impl Environment {
     }
 
     /// Sets the value of a variable using a raw u64 (for backward compatibility)
+    ///
+    /// # Errors
+    /// Returns an error if the variable doesn't exist.
     pub fn set_raw(&mut self, name: &str, value: u64) -> Result<(), PecosError> {
         if let Some(&idx) = self.name_to_index.get(name) {
             // Apply constraints based on data type
@@ -666,6 +687,9 @@ impl Environment {
     }
 
     /// Gets metadata for a variable
+    ///
+    /// # Errors
+    /// Returns an error if the variable doesn't exist.
     pub fn get_variable_info(&self, name: &str) -> Result<&VariableInfo, PecosError> {
         if let Some(&idx) = self.name_to_index.get(name) {
             Ok(&self.metadata[idx])
@@ -681,6 +705,9 @@ impl Environment {
     }
 
     /// Gets a specific bit from a variable
+    ///
+    /// # Errors
+    /// Returns an error if the variable doesn't exist or the bit index is out of range.
     pub fn get_bit(&self, var_name: &str, bit_index: usize) -> Result<BoolBit, PecosError> {
         if let Some(&idx) = self.name_to_index.get(var_name) {
             // Check bit index is in range
@@ -701,6 +728,9 @@ impl Environment {
     }
 
     /// Sets a specific bit in a variable
+    ///
+    /// # Errors
+    /// Returns an error if the variable doesn't exist or the bit index is out of range.
     pub fn set_bit<T: Into<BoolBit>>(
         &mut self,
         var_name: &str,
@@ -799,6 +829,9 @@ impl Environment {
 
     /// Adds a mapping from source variable to destination name
     /// This is used for tracking variable mappings for program outputs
+    ///
+    /// # Errors
+    /// Returns an error if the source variable doesn't exist.
     pub fn add_mapping(&mut self, source: &str, destination: &str) -> Result<(), PecosError> {
         // Check if source variable exists
         if !self.has_variable(source) {
@@ -852,6 +885,9 @@ impl Environment {
 
     /// Copy a variable value to another variable
     /// Used for Result operation in Python implementation
+    ///
+    /// # Errors
+    /// Returns an error if the source variable doesn't exist.
     pub fn copy_variable(&mut self, src_name: &str, dst_name: &str) -> Result<(), PecosError> {
         // Check if source exists
         if let Some(src_idx) = self.name_to_index.get(src_name) {

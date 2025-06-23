@@ -1,14 +1,22 @@
-use crate::common::get_thread_id;
 use libloading::{Library, Symbol};
-use log::{debug, trace, warn};
+use log::{debug, warn};
 use pecos_core::errors::PecosError;
-use pecos_engines::byte_message::QuantumCmd;
-use std::collections::HashMap;
-use std::ffi::c_void;
+use pecos_engines::byte_message::ByteMessage;
+use pecos_engines::shot_results::{Data, Shot};
+use std::ffi::{CStr, c_char};
+// FFI imports handled inline
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
+
+// FFI struct for shot data (matches runtime.rs)
+#[repr(C)]
+struct FFIShotData {
+    names: *mut *mut c_char,
+    values: *mut i64,
+    count: usize,
+}
 
 /// QIR Library for executing quantum programs
 ///
@@ -50,28 +58,15 @@ pub struct QirLibrary {
 
     /// Path to the library file
     path: PathBuf,
-
-    /// Map of measurement results
-    measurement_results: HashMap<String, u32>,
 }
 
 impl Clone for QirLibrary {
     fn clone(&self) -> Self {
-        let thread_id = get_thread_id();
-        debug!(
-            "QIR Library: [Thread {}] Cloning library from {:?}",
-            thread_id, self.path
-        );
+        debug!("QIR Library: Cloning library from {:?}", self.path);
 
         // Load the library again from the same path with retries
-        match Self::load_library_with_retries(&self.path, 3, &thread_id) {
-            Ok(mut library) => {
-                // Copy the measurement results using clone_from for efficiency
-                library
-                    .measurement_results
-                    .clone_from(&self.measurement_results);
-                library
-            }
+        match Self::load_library_with_retries(&self.path, 3) {
+            Ok(library) => library,
             Err(e) => {
                 // If we can't load the library, panic with a clear error message
                 panic!("Failed to clone QIR library: {e}");
@@ -106,35 +101,61 @@ impl QirLibrary {
     /// simultaneously.
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, PecosError> {
         let path = path.as_ref();
-        let thread_id = get_thread_id();
+        debug!("QIR: Loading library from {:?}", path);
 
-        debug!(
-            "QIR: [Thread {}] Loading library from {:?}",
-            thread_id, path
-        );
-
-        // Check if the file exists
+        // Perform thorough file verification before loading
         if !path.exists() {
             return Err(Self::log_error(
                 "File not found",
                 format!("Path: {}", path.display()),
-                &thread_id,
             ));
+        }
+
+        // Check if the file is readable and has valid content
+        match std::fs::metadata(path) {
+            Ok(metadata) => {
+                // Check if the file is a regular file
+                if !metadata.is_file() {
+                    return Err(Self::log_error(
+                        "Not a regular file",
+                        format!("Path: {}", path.display()),
+                    ));
+                }
+
+                // Check if the file has reasonable size (at least 1KB for a valid library)
+                let file_size = metadata.len();
+                if file_size < 1024 {
+                    return Err(Self::log_error(
+                        "File too small to be a valid library",
+                        format!("Path: {} (size: {} bytes)", path.display(), file_size),
+                    ));
+                }
+
+                // Log file details for debugging
+                debug!(
+                    "QIR: Verified file {} (size: {} bytes)",
+                    path.display(),
+                    file_size
+                );
+            }
+            Err(e) => {
+                return Err(Self::log_error(
+                    "Failed to get file metadata",
+                    format!("Path: {}, Error: {}", path.display(), e),
+                ));
+            }
         }
 
         // Try to load the library with retries
         let max_retries = 3;
-        Self::load_library_with_retries(path, max_retries, &thread_id)
+        Self::load_library_with_retries(path, max_retries)
     }
 
     /// Helper function to implement exponential backoff
-    fn sleep_with_backoff(retry_count: usize, thread_id: &str) {
+    fn sleep_with_backoff(retry_count: usize) {
         let sleep_duration =
             Duration::from_millis(100 * 2u64.pow(u32::try_from(retry_count).unwrap_or(0)));
-        debug!(
-            "QIR: [Thread {}] Sleeping for {:?} before retry",
-            thread_id, sleep_duration
-        );
+        debug!("QIR: Sleeping for {:?} before retry", sleep_duration);
         thread::sleep(sleep_duration);
     }
 
@@ -152,17 +173,12 @@ impl QirLibrary {
     /// # Returns
     ///
     /// * `Result<Self, PecosError>` - The loaded library if successful
-    fn load_library_with_retries(
-        path: &Path,
-        max_retries: usize,
-        thread_id: &str,
-    ) -> Result<Self, PecosError> {
+    fn load_library_with_retries(path: &Path, max_retries: usize) -> Result<Self, PecosError> {
         let mut retry_count = 0;
 
         while retry_count < max_retries {
             debug!(
-                "QIR: [Thread {}] Loading library attempt {}/{}",
-                thread_id,
+                "QIR: Loading library attempt {}/{}",
                 retry_count + 1,
                 max_retries
             );
@@ -170,25 +186,20 @@ impl QirLibrary {
             // Try to load the library using the path directly
             match unsafe { Library::new(path) } {
                 Ok(library) => {
-                    debug!(
-                        "QIR: [Thread {}] Successfully loaded library from {:?}",
-                        thread_id, path
-                    );
+                    debug!("QIR: Successfully loaded library from {:?}", path);
                     return Ok(Self {
                         library: Mutex::new(library),
                         path: path.to_path_buf(),
-                        measurement_results: HashMap::new(),
                     });
                 }
                 Err(e) => {
                     Self::log_error(
                         "Failed to load library",
                         format!("Attempt {}/{}: {}", retry_count + 1, max_retries, e),
-                        thread_id,
                     );
 
                     // Sleep before retrying, with exponential backoff
-                    Self::sleep_with_backoff(retry_count, thread_id);
+                    Self::sleep_with_backoff(retry_count);
                     retry_count += 1;
                 }
             }
@@ -198,7 +209,6 @@ impl QirLibrary {
         Err(Self::log_error(
             "Failed to load library after multiple attempts",
             format!("Max retries ({max_retries}) exceeded"),
-            thread_id,
         ))
     }
 
@@ -221,25 +231,21 @@ impl QirLibrary {
     ///
     /// This function will panic if the internal mutex is poisoned.
     pub fn call_function(&self, name: &[u8]) -> Result<i32, PecosError> {
-        let thread_id = get_thread_id();
-        debug!(
-            "QIR Library: [Thread {}] Calling function {:?}",
-            thread_id, name
-        );
+        debug!("QIR Library: Calling function {:?}", name);
 
         unsafe {
             // Get the function pointer
             let library_guard = self.library.lock().unwrap();
             let func: Symbol<unsafe extern "C" fn() -> i32> = library_guard
                 .get(name)
-                .map_err(|e| Self::log_error("Failed to get function", e, &thread_id))?;
+                .map_err(|e| Self::log_error("Failed to get function", e))?;
 
             // Call the function
             let result = func();
-            debug!(
-                "QIR Library: [Thread {}] Function call returned {}",
-                thread_id, result
-            );
+            debug!("QIR Library: Function call returned {}", result);
+
+            // Don't finalize the shot here - we need to wait for measurement results
+
             Ok(result)
         }
     }
@@ -262,22 +268,18 @@ impl QirLibrary {
     ///
     /// This function will panic if the internal mutex is poisoned.
     pub fn reset(&self) -> Result<(), PecosError> {
-        let thread_id = get_thread_id();
-        debug!("QIR Library: [Thread {}] Resetting QIR runtime", thread_id);
+        debug!("QIR Library: Resetting QIR runtime");
 
         unsafe {
             // Get the function pointer
             let library_guard = self.library.lock().unwrap();
             let reset: Symbol<unsafe extern "C" fn()> = library_guard
                 .get(b"qir_runtime_reset")
-                .map_err(|e| Self::log_error("Failed to get reset function", e, &thread_id))?;
+                .map_err(|e| Self::log_error("Failed to get reset function", e))?;
 
             // Call the function
             reset();
-            debug!(
-                "QIR Library: [Thread {}] Successfully reset QIR runtime",
-                thread_id
-            );
+            debug!("QIR Library: Successfully reset QIR runtime");
         }
 
         Ok(())
@@ -290,7 +292,7 @@ impl QirLibrary {
     ///
     /// # Returns
     ///
-    /// * `Result<Vec<QuantumCmd>, PecosError>` - The binary commands if successful
+    /// * `Result<ByteMessage, PecosError>` - The binary commands if successful
     ///
     /// # Errors
     ///
@@ -300,124 +302,248 @@ impl QirLibrary {
     /// # Panics
     ///
     /// This function will panic if the internal mutex is poisoned.
-    pub fn get_binary_commands(&self) -> Result<Vec<QuantumCmd>, PecosError> {
-        let thread_id = get_thread_id();
+    pub fn get_binary_commands(&self) -> Result<ByteMessage, PecosError> {
+        use crate::runtime::FFIByteData;
 
-        debug!(
-            "QIR Library: [Thread {}] Getting binary commands",
-            thread_id
-        );
+        debug!("QIR Library: Getting binary commands");
 
         // Get the get_binary_commands function
         let library_guard = self.library.lock().unwrap();
-        let get_binary_commands: Symbol<unsafe extern "C" fn() -> *mut c_void> = unsafe {
+        let get_binary_commands: Symbol<unsafe extern "C" fn() -> *mut FFIByteData> = unsafe {
             library_guard
                 .get(b"qir_runtime_get_binary_commands")
                 .map_err(|e| {
-                    Self::log_error(
-                        "Failed to get qir_runtime_get_binary_commands symbol",
-                        e,
-                        &thread_id,
-                    )
+                    Self::log_error("Failed to get qir_runtime_get_binary_commands symbol", e)
                 })?
         };
 
         // Get the free_binary_commands function
-        let free_binary_commands: Symbol<unsafe extern "C" fn(*mut c_void)> = unsafe {
+        let free_binary_commands: Symbol<unsafe extern "C" fn(*mut FFIByteData)> = unsafe {
             library_guard
                 .get(b"qir_runtime_free_binary_commands")
                 .map_err(|e| {
-                    Self::log_error(
-                        "Failed to get qir_runtime_free_binary_commands symbol",
-                        e,
-                        &thread_id,
-                    )
+                    Self::log_error("Failed to get qir_runtime_free_binary_commands symbol", e)
                 })?
         };
 
         // Call the get_binary_commands function
-        let commands_ptr = unsafe { get_binary_commands() };
-        if commands_ptr.is_null() {
+        let ffi_ptr = unsafe { get_binary_commands() };
+        if ffi_ptr.is_null() {
             return Err(Self::log_error(
                 "Got null pointer from qir_runtime_get_binary_commands",
                 "Cannot retrieve commands",
-                &thread_id,
             ));
         }
 
-        // Parse the binary commands
-        let commands = unsafe { parse_binary_commands(commands_ptr) };
+        // Get the FFI data
+        let ffi_data = unsafe { &*ffi_ptr };
 
-        // Free the commands
-        unsafe { free_binary_commands(commands_ptr) };
+        // Create ByteMessage from the aligned u32 data while preserving alignment
+        let message =
+            if ffi_data.byte_len > 0 && !ffi_data.data.is_null() && ffi_data.word_count > 0 {
+                // Reconstruct aligned data from FFI
+                let aligned_data =
+                    unsafe { std::slice::from_raw_parts(ffi_data.data, ffi_data.word_count) };
 
-        Ok(commands)
+                // Create ByteMessage directly from u32 data to maintain alignment
+                ByteMessage::from_aligned_u32_data(aligned_data.to_vec(), ffi_data.byte_len)
+            } else {
+                ByteMessage::create_empty()
+            };
+
+        // Free the FFI data
+        unsafe { free_binary_commands(ffi_ptr) };
+
+        Ok(message)
+    }
+
+    /// Gets the shot results from the QIR runtime
+    ///
+    /// This method calls the `qir_runtime_get_shot_results` function in the loaded library
+    /// to retrieve the classical register values as a Shot.
+    ///
+    /// # Returns
+    ///
+    /// * `Result<Option<Shot>, PecosError>` - The shot results if available, or None
+    ///
+    /// # Errors
+    ///
+    /// This method can return the following errors:
+    /// * `PecosError::Resource` - If the `get_shot_results` function is not found in the library
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the internal mutex is poisoned.
+    pub fn get_shot_results(&self) -> Result<Option<Shot>, PecosError> {
+        debug!("QIR Library: Getting shot results");
+
+        // Get the function pointers
+        let (get_shot_results_ptr, free_shot_data_ptr) = {
+            let library_guard = self.library.lock().unwrap();
+
+            // Get the get_shot_results function
+            let get_shot_results: Symbol<unsafe extern "C" fn() -> *mut FFIShotData> = unsafe {
+                library_guard
+                    .get(b"qir_runtime_get_shot_results")
+                    .map_err(|e| {
+                        Self::log_error("Failed to get qir_runtime_get_shot_results symbol", e)
+                    })?
+            };
+
+            // Get the free function
+            let free_shot_data: Symbol<unsafe extern "C" fn(*mut FFIShotData)> = unsafe {
+                library_guard
+                    .get(b"qir_runtime_free_shot_data")
+                    .map_err(|e| {
+                        Self::log_error("Failed to get qir_runtime_free_shot_data symbol", e)
+                    })?
+            };
+
+            // Return raw function pointers
+            unsafe {
+                (
+                    get_shot_results.into_raw().into_raw(),
+                    free_shot_data.into_raw().into_raw(),
+                )
+            }
+        };
+
+        // Convert back to function pointers
+        let get_shot_results: unsafe extern "C" fn() -> *mut FFIShotData =
+            unsafe { std::mem::transmute(get_shot_results_ptr) };
+        let free_shot_data: unsafe extern "C" fn(*mut FFIShotData) =
+            unsafe { std::mem::transmute(free_shot_data_ptr) };
+
+        // Call the get_shot_results function
+        let ffi_ptr = unsafe { get_shot_results() };
+
+        if ffi_ptr.is_null() {
+            debug!("QIR Library: No shot results available");
+            return Ok(None);
+        }
+
+        // Convert FFI data to Shot
+        let shot = unsafe {
+            let ffi_data = &*ffi_ptr;
+            let mut shot = Shot::default();
+
+            for i in 0..ffi_data.count {
+                // Get the name
+                let name_ptr = *ffi_data.names.add(i);
+                let name = CStr::from_ptr(name_ptr).to_string_lossy().into_owned();
+
+                // Get the value
+                let value = *ffi_data.values.add(i);
+
+                // Insert into shot - always use I64 for consistency with QIR standard
+                shot.data.insert(name, Data::I64(value));
+            }
+
+            shot
+        };
+
+        // Free the FFI data
+        unsafe { free_shot_data(ffi_ptr) };
+
+        debug!(
+            "QIR Library: Retrieved shot with {} registers",
+            shot.data.len()
+        );
+        Ok(Some(shot))
+    }
+
+    /// Updates the measurement results in the QIR runtime
+    ///
+    /// This method calls the `qir_runtime_update_measurement_results` function to
+    /// provide measurement results from the quantum system to the runtime.
+    ///
+    /// # Arguments
+    ///
+    /// * `results` - A slice of alternating `result_id` and `measurement_value` (0 or 1)
+    ///
+    /// # Returns
+    ///
+    /// * `Result<(), PecosError>` - Success or error
+    ///
+    /// # Errors
+    ///
+    /// This method can return the following errors:
+    /// * `PecosError::Resource` - If the update function is not found in the library
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the internal mutex is poisoned.
+    pub fn update_measurement_results(&self, results: &[u32]) -> Result<(), PecosError> {
+        debug!(
+            "QIR Library: Updating {} measurement results",
+            results.len() / 2
+        );
+
+        unsafe {
+            // Get the update function
+            let library_guard = self.library.lock().unwrap();
+            let update_fn: Symbol<unsafe extern "C" fn(*const u32, usize)> = library_guard
+                .get(b"qir_runtime_update_measurement_results")
+                .map_err(|e| {
+                    Self::log_error("Failed to get update_measurement_results function", e)
+                })?;
+
+            // Call the function with the results data
+            // The second parameter is the number of result pairs (not total array length)
+            update_fn(results.as_ptr(), results.len() / 2);
+
+            debug!("QIR Library: Measurement results updated");
+            Ok(())
+        }
+    }
+
+    /// Finalizes the shot after measurements have been processed
+    ///
+    /// This method should be called after measurement results have been updated
+    /// to finalize the classical register values.
+    ///
+    /// # Returns
+    ///
+    /// * `Result<(), PecosError>` - Success or error
+    ///
+    /// # Errors
+    ///
+    /// This method can return the following errors:
+    /// * `PecosError::Resource` - If the finalize function is not found in the library
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the internal mutex is poisoned.
+    pub fn finalize_shot(&self) -> Result<(), PecosError> {
+        debug!("QIR Library: Finalizing shot");
+
+        unsafe {
+            // Get the finalize function
+            let library_guard = self.library.lock().unwrap();
+            let finalize: Symbol<unsafe extern "C" fn()> = library_guard
+                .get(b"qir_runtime_finalize_shot")
+                .map_err(|e| Self::log_error("Failed to get finalize_shot function", e))?;
+
+            // Call the function
+            finalize();
+
+            debug!("QIR Library: Shot finalized");
+            Ok(())
+        }
     }
 
     /// Helper function to log errors with thread ID context
-    fn log_error<E: std::fmt::Display>(context: &str, error: E, thread_id: &str) -> PecosError {
+    fn log_error<E: std::fmt::Display>(context: &str, error: E) -> PecosError {
         let error_msg = format!("{context}: {error}");
-        warn!("QIR Library: [Thread {}] {}", thread_id, error_msg);
+        warn!("QIR Library: {}", error_msg);
         PecosError::Resource(error_msg.to_string())
     }
 }
 
 impl Drop for QirLibrary {
     fn drop(&mut self) {
-        let thread_id = get_thread_id();
-        debug!("QIR Library: [Thread {}] Dropping library", thread_id);
+        debug!("QIR Library: Dropping library");
     }
 }
 
-/// Parse binary commands from a raw pointer
-///
-/// # Safety
-///
-/// This function is unsafe because it dereferences a raw pointer.
-/// The pointer must be valid and point to a valid binary command structure.
-unsafe fn parse_binary_commands(commands_ptr: *mut c_void) -> Vec<QuantumCmd> {
-    let thread_id = get_thread_id();
-
-    // This implementation depends on the actual structure of the data
-    // For now, we'll assume it's a Vec<QuantumCmd> that we can clone
-    let commands = if let Ok(cmds) = std::panic::catch_unwind(|| {
-        let cmd_vec_ptr = commands_ptr.cast::<Vec<QuantumCmd>>();
-        unsafe { (*cmd_vec_ptr).clone() }
-    }) {
-        cmds
-    } else {
-        warn!(
-            "QIR Library: [Thread {}] Panic while parsing commands from runtime",
-            thread_id
-        );
-        Vec::new()
-    };
-
-    debug!(
-        "QIR Library: [Thread {}] Got {} binary commands",
-        thread_id,
-        commands.len()
-    );
-
-    // Log a sample of commands for debugging
-    if !commands.is_empty() && log::log_enabled!(log::Level::Trace) {
-        let sample_size = std::cmp::min(5, commands.len());
-        trace!(
-            "QIR Library: [Thread {}] First {} commands:",
-            thread_id, sample_size
-        );
-        for (i, cmd) in commands.iter().take(sample_size).enumerate() {
-            trace!("QIR Library: [Thread {}]   {}: {:?}", thread_id, i, cmd);
-        }
-
-        if commands.len() > sample_size {
-            trace!(
-                "QIR Library: [Thread {}]   ... and {} more",
-                thread_id,
-                commands.len() - sample_size
-            );
-        }
-    }
-
-    commands
-}
+// No longer needed - we now pass raw bytes across the FFI boundary

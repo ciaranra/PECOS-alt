@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use pecos_core::rng::RngManageable;
-use pecos_engines::engines::MonteCarloEngine;
-use pecos_engines::engines::noise::DepolarizingNoiseModel;
+use pecos_engines::engine_system::MonteCarloEngine;
+use pecos_engines::noise::DepolarizingNoiseModel;
 use pecos_qir::QirEngine;
 
 /// Get the path to the QIR Bell state example
@@ -78,8 +78,13 @@ fn test_qir_bell_state_noiseless() {
     for shot in &results.shots {
         // We expect a "c" register in the output (matching PHIR and QASM)
         let result_str = shot
+            .data
             .get("c")
-            .map_or_else(String::new, std::clone::Clone::clone);
+            .map(|data| match data {
+                pecos_engines::shot_results::Data::U32(v) => v.to_string(),
+                _ => String::new(),
+            })
+            .unwrap_or_default();
         *counts.entry(result_str).or_insert(0) += 1;
     }
 
@@ -150,8 +155,13 @@ pub fn test_qir_bell_state_with_noise() {
         // Count all results, checking for the "c" register that matches PHIR and QASM naming
         for shot in &results.shots {
             let result_str = shot
+                .data
                 .get("c")
-                .map_or_else(String::new, std::clone::Clone::clone);
+                .map(|data| match data {
+                    pecos_engines::shot_results::Data::U32(v) => v.to_string(),
+                    _ => String::new(),
+                })
+                .unwrap_or_default();
             *counts.entry(result_str).or_insert(0) += 1;
         }
 

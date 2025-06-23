@@ -13,12 +13,13 @@
 //!
 //! # Example: Using the Simplified API
 //!
-//! ```no_run
+//! ## Parsing from a string
+//!
+//! ```
 //! use pecos_qasm::QASMEngine;
+//! use pecos_engines::ClassicalEngine;
 //! use std::str::FromStr;
 //!
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! // Simple case - parse from string or file
 //! let qasm = r#"
 //!     OPENQASM 2.0;
 //!     include "qelib1.inc";
@@ -26,33 +27,96 @@
 //!     h q[0];
 //! "#;
 //!
-//! // From string
-//! let engine1 = QASMEngine::from_str(qasm)?;
+//! let engine = QASMEngine::from_str(qasm)?;
+//! assert_eq!(engine.num_qubits(), 2);
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
 //!
-//! // From file
-//! let engine2 = QASMEngine::from_file("circuit.qasm")?;
+//! ## Using the builder API
 //!
-//! // Complex case - use builder for virtual includes and custom paths
-//! let engine3 = QASMEngine::builder()
+//! ```
+//! use pecos_qasm::QASMEngine;
+//! use pecos_engines::ClassicalEngine;
+//!
+//! let qasm = r#"
+//!     OPENQASM 2.0;
+//!     include "custom.inc";
+//!     qreg q[1];
+//!     my_gate q[0];
+//! "#;
+//!
+//! let engine = QASMEngine::builder()
 //!     .with_virtual_include("custom.inc", "gate my_gate a { h a; }")
-//!     .with_include_path("/custom/includes")
 //!     .allow_complex_conditionals(true)
 //!     .build_from_str(qasm)?;
-//! # Ok(())
-//! # }
+//! assert_eq!(engine.num_qubits(), 1);
+//! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
 pub mod ast;
+pub mod bitvec_expression;
+pub mod config;
 pub mod engine;
 pub mod engine_builder;
 pub mod includes;
 pub mod parser;
+pub mod prelude;
 pub mod preprocessor;
+pub mod program;
+pub mod result_formatter;
+pub mod run;
+pub mod simulation;
 pub mod util;
 
+pub use crate::run::{run_qasm, run_qasm_sim};
 pub use ast::{Expression, GateOperation, Operation, OperationDisplay};
 pub use engine::QASMEngine;
 pub use engine_builder::QASMEngineBuilder;
 pub use parser::{ParseConfig, QASMParser};
 pub use preprocessor::Preprocessor;
+pub use program::QASMProgram;
 pub use util::{count_qubits_in_file, count_qubits_in_str};
+
+use log::debug;
+use pecos_core::errors::PecosError;
+use pecos_engines::ClassicalEngine;
+use std::path::Path;
+
+/// Sets up a basic QASM engine.
+///
+/// This function creates a QASM engine from the provided path.
+///
+/// # Parameters
+///
+/// - `program_path`: A reference to the path of the QASM program file
+/// - `seed`: Optional seed value for deterministic execution
+///
+/// # Returns
+///
+/// Returns a `Box<dyn ClassicalEngine>` containing the QASM engine
+///
+/// # Errors
+///
+/// This function may return the following errors:
+/// - `PecosError::IO`: If the QASM file cannot be read
+/// - `PecosError::Processing`: If the QASM engine creation fails or if parsing fails
+pub fn setup_qasm_engine(
+    program_path: &Path,
+    seed: Option<u64>,
+) -> Result<Box<dyn ClassicalEngine>, PecosError> {
+    debug!("Setting up QASM engine for: {}", program_path.display());
+
+    // Note: The seed parameter is unused as QASMEngine doesn't handle randomness.
+    // Randomness is managed by the QuantumEngine in MonteCarloEngine.
+    // The seed parameter is kept for API consistency with other engines.
+    let _ = seed;
+
+    // Use the QASMEngine from the pecos-qasm crate
+    let engine = QASMEngine::from_file(program_path).map_err(|e| {
+        PecosError::Processing(format!(
+            "QASM engine setup failed: Could not create engine: {e}"
+        ))
+    })?;
+
+    Ok(Box::new(engine))
+}

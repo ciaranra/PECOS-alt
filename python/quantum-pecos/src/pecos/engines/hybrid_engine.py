@@ -9,10 +9,16 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Hybrid quantum-classical engine for PECOS.
+
+This module provides the main hybrid engine implementation for executing
+quantum-classical algorithms with integrated classical computation support.
+"""
+
 from __future__ import annotations
 
 import random
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol, Union
 
 import numpy as np
 
@@ -26,13 +32,26 @@ from pecos.op_processors.generic_op_processor import GenericOpProc
 from pecos.simulators.quantum_simulator import QuantumSimulator
 
 if TYPE_CHECKING:
-    from pecos.classical_interpreters.phir_classical_interpreter import (
-        ClassicalInterpreter,
+    from pecos.protocols import (
+        ClassicalInterpreterProtocol,
+        ErrorModelProtocol,
+        ForeignObjectProtocol,
+        MachineProtocol,
+        OpProcessorProtocol,
     )
-    from pecos.error_models.error_model import ErrorModel
-    from pecos.foreign_objects.foreign_object_abc import ForeignObject
-    from pecos.machines.generic_machine import Machine
-    from pecos.op_processors.generic_op_processor import OpProcessor
+    from pecos.reps.pypmir import PyPMIR
+    from pecos.typing import GateParams
+
+
+class PHIRConvertible(Protocol):
+    """Protocol for objects that can be converted to PHIR dictionary format."""
+
+    def to_phir_dict(self) -> dict[str, Any]:
+        """Convert to PHIR dictionary format."""
+        ...
+
+
+PHIRProgram = Union[str, dict[str, Any], "PyPMIR", PHIRConvertible]
 
 
 class HybridEngine:
@@ -45,20 +64,38 @@ class HybridEngine:
 
     def __init__(
         self,
-        cinterp: ClassicalInterpreter | None = None,
+        cinterp: ClassicalInterpreterProtocol | None = None,
         qsim: QuantumSimulator | str | None = None,
-        machine: Machine | None = None,
-        error_model: ErrorModel | None = None,
-        op_processor: OpProcessor | None = None,
-        **params,
+        machine: MachineProtocol | None = None,
+        error_model: ErrorModelProtocol | None = None,
+        op_processor: OpProcessorProtocol | None = None,
+        **params: GateParams,
     ) -> None:
+        """Initialize the hybrid engine with simulation components.
+
+        Args:
+            cinterp: Classical interpreter for executing classical operations.
+                Defaults to PHIRClassicalInterpreter if None.
+            qsim: Quantum simulator for executing quantum operations. Can be a
+                QuantumSimulator instance or a string specifying the simulator type.
+                Defaults to QuantumSimulator if None.
+            machine: Machine model defining the quantum hardware constraints.
+                Defaults to GenericMachine if None.
+            error_model: Error model for simulating noise in quantum operations.
+                Defaults to NoErrorModel if None.
+            op_processor: Operation processor for handling and transforming operations.
+                Defaults to GenericOpProc if None.
+            **params: Additional parameters passed to the QuantumSimulator constructor.
+        """
         self.seed = None
 
-        self.cinterp: ClassicalInterpreter | None = cinterp
+        self.cinterp: ClassicalInterpreterProtocol | None = cinterp
         if self.cinterp is None:
-            self.cinterp: ClassicalInterpreter = PHIRClassicalInterpreter()
+            self.cinterp: ClassicalInterpreterProtocol = PHIRClassicalInterpreter()
 
-        self._internal_cinterp: ClassicalInterpreter = PHIRClassicalInterpreter()
+        self._internal_cinterp: ClassicalInterpreterProtocol = (
+            PHIRClassicalInterpreter()
+        )
         self._internal_cinterp.phir_validate = self.cinterp.phir_validate
 
         self.qsim: QuantumSimulator | None = qsim
@@ -71,13 +108,13 @@ class HybridEngine:
         if machine is None:
             self.machine: GenericMachine = GenericMachine()
 
-        self.error_model: ErrorModel | None = error_model
+        self.error_model: ErrorModelProtocol | None = error_model
         if self.error_model is None:
-            self.error_model: ErrorModel = NoErrorModel()
+            self.error_model: ErrorModelProtocol = NoErrorModel()
 
-        self.op_processor: OpProcessor | None = op_processor
+        self.op_processor: OpProcessorProtocol | None = op_processor
         if self.op_processor is None:
-            self.op_processor: OpProcessor = GenericOpProc()
+            self.op_processor: OpProcessorProtocol = GenericOpProc()
 
         if self.machine:
             self.op_processor.attach_machine(self.machine)
@@ -88,12 +125,12 @@ class HybridEngine:
         self.results = {}
         self.multisim_process_info = {}
 
-    def init(self):
+    def init(self) -> None:
         """Reset the state of `Engine` before a simulation run."""
         self.results = {}
         self.multisim_process_info = {}
 
-    def reset_all(self):
+    def reset_all(self) -> None:
         """Reset to the state of initialization."""
         self.cinterp.reset()
         self._internal_cinterp.reset()
@@ -105,8 +142,8 @@ class HybridEngine:
 
     def initialize_sim_components(
         self,
-        program: Any,
-        foreign_object: ForeignObject | None = None,
+        program: PHIRProgram,
+        foreign_object: ForeignObjectProtocol | None = None,
     ) -> None:
         """Get objects to initialize before potentially running many simulations."""
         self.init()
@@ -120,8 +157,10 @@ class HybridEngine:
         self.qsim.init(num_qubits)
 
     def shot_reinit_components(self) -> None:
-        """Tells components that a new shot is starting and to run any tasks necessary, such as resetting their
-        states.
+        """Reinitialize components for a new shot.
+
+        Tells components that a new shot is starting and to run any tasks necessary,
+        such as resetting their states.
         """
         self.cinterp.shot_reinit()
         self._internal_cinterp.shot_reinit()
@@ -133,7 +172,7 @@ class HybridEngine:
         self.qsim.shot_reinit()
 
     @staticmethod
-    def use_seed(seed=None) -> int:
+    def use_seed(seed: int | None = None) -> int:
         """Use a seed to set random number generators."""
         if seed is None:
             seed = np.random.randint(np.iinfo(np.int32).max)
@@ -148,30 +187,26 @@ class HybridEngine:
 
     def run(
         self,
-        program,
-        foreign_object: ForeignObject | None = None,
+        program: PHIRProgram,
+        foreign_object: ForeignObjectProtocol | None = None,
         *,
         shots: int = 1,
         seed: int | None = None,
         initialize: bool = True,
-        return_int=False,
+        return_int: bool = False,
     ) -> dict:
         """Main method to run simulations.
 
         Args:
         ----
-            program:
-            foreign_object:
-            shots:
-            seed:
-            initialize:
-            return_int:
-
-        Returns:
-        -------
+            program: The quantum program to execute.
+            foreign_object: Optional foreign object for external function calls.
+            shots: Number of times to run the simulation.
+            seed: Random seed for reproducibility.
+            initialize: Whether to initialize the quantum state before running.
+            return_int: Whether to return measurement results as integers.
 
         """
-
         measurements = MeasData()
 
         if initialize:
@@ -195,14 +230,14 @@ class HybridEngine:
                 transmit_meas = self._internal_cinterp.result_bits(measurements)
                 self.cinterp.receive_results([transmit_meas])
 
-            self.results_accumulator(self.cinterp.results(return_int))
+            self.results_accumulator(self.cinterp.results(return_int=return_int))
 
         return self.results
 
     def run_multisim(
         self,
-        program,
-        foreign_object: ForeignObject | None = None,
+        program: PHIRProgram,
+        foreign_object: ForeignObjectProtocol | None = None,
         shots: int = 1,
         seed: int | None = None,
         pool_size: int = 1,

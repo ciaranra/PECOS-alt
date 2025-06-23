@@ -22,7 +22,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pecos_rslib import ByteMessage
 
 
-def bell_state_example():
+def bell_state_example() -> None:
     """Demonstrate how to create a Bell state experiment using ByteMessage."""
     print("==== Bell State Experiment Example ====")
 
@@ -64,7 +64,7 @@ def bell_state_example():
     return message
 
 
-def build_custom_message():
+def build_custom_message() -> None:
     """Build a custom quantum circuit using ByteMessage."""
     print("\n==== Custom Circuit Example ====")
 

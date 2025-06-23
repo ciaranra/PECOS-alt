@@ -10,10 +10,13 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-pub use crate::arbitrary_rotation_gateable::ArbitraryRotationGateable;
-pub use crate::clifford_gateable::CliffordGateable;
-pub use crate::pauli_prop::{PauliProp, StdPauliProp};
-pub use crate::quantum_simulator::QuantumSimulator;
-pub use crate::sparse_stab::SparseStab;
-pub use crate::state_vec::StateVec;
 pub use pecos_core::{IndexableElement, VecSet};
+
+pub use crate::{
+    arbitrary_rotation_gateable::ArbitraryRotationGateable,
+    clifford_gateable::CliffordGateable,
+    pauli_prop::{PauliProp, StdPauliProp},
+    quantum_simulator::QuantumSimulator,
+    sparse_stab::{SparseStab, StdSparseStab},
+    state_vec::StateVec,
+};

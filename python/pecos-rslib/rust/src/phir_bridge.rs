@@ -1,9 +1,9 @@
 use parking_lot::Mutex;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
-use pecos::prelude::{ByteMessage, ClassicalEngine, ControlEngine, Engine, PecosError, ShotResult};
+use pecos::prelude::{ByteMessage, ClassicalEngine, ControlEngine, Engine, PecosError, Shot};
 
 #[pyclass(module = "_pecos_rslib")]
 #[derive(Debug)]
@@ -102,6 +102,9 @@ impl PHIREngine {
     /// Creates a new `PHIREngine` with validation disabled.
     /// This is useful for testing experimental features like the "Result" instruction
     /// that aren't in the current PHIR validator.
+    ///
+    /// # Errors
+    /// Returns an error if the engine cannot be created or Python imports fail.
     #[staticmethod]
     pub fn create_with_validation_disabled(phir_json: &str) -> PyResult<Self> {
         Python::with_gil(|py| {
@@ -169,6 +172,9 @@ impl PHIREngine {
 
     /// Processes the quantum program and returns commands as Python objects
     /// This is a Python-facing method used primarily for testing
+    ///
+    /// # Errors
+    /// Returns an error if command generation or conversion fails.
     pub fn process_program(&mut self) -> PyResult<Vec<PyObject>> {
         Python::with_gil(|py| {
             // If we don't have a Rust engine, this is a test program
@@ -192,7 +198,7 @@ impl PHIREngine {
                 match process_result {
                     Ok(byte_message) => {
                         // Convert ByteMessage to Python objects
-                        match byte_message.parse_quantum_operations() {
+                        match byte_message.quantum_ops() {
                             Ok(ops) => {
                                 // Create a Python list of commands
                                 let mut py_commands = Vec::new();
@@ -208,23 +214,6 @@ impl PHIREngine {
                                     let params_dict = PyDict::new(py);
                                     // Use string matching instead of GateType enum
                                     match op.gate_type.to_string().as_str() {
-                                        "Measure" => {
-                                            if let Some(result_id) = op.result_id {
-                                                // Convert usize to u32 using try_from to avoid truncation
-                                                // This is safe for our expected use cases as result_id
-                                                // is typically a small integer (<1000)
-                                                if let Ok(id) = u32::try_from(result_id) {
-                                                    params_dict.set_item("result_id", id)?;
-                                                } else {
-                                                    // Handle extremely large values (unlikely in practice)
-                                                    // by using the largest u32 value as a fallback
-                                                    eprintln!(
-                                                        "Warning: result_id {result_id} is too large for u32, using max value"
-                                                    );
-                                                    params_dict.set_item("result_id", u32::MAX)?;
-                                                }
-                                            }
-                                        }
                                         "RZ" => {
                                             if !op.params.is_empty() {
                                                 params_dict.set_item("theta", op.params[0])?;
@@ -238,14 +227,21 @@ impl PHIREngine {
                                                 )?;
                                             }
                                         }
-                                        _ => {}
+                                        #[allow(clippy::match_same_arms)]
+                                        "Measure" => {
+                                            // result_id no longer exists on GateCommand
+                                            // Measurements are now tracked by order
+                                        }
+                                        _ => {
+                                            // Other gates have no parameters
+                                        }
                                     }
                                     py_dict.set_item("params", params_dict)?;
 
                                     // Create qubits list
                                     let qubits_list = PyList::empty(py);
                                     for qubit in op.qubits {
-                                        qubits_list.append(qubit)?;
+                                        qubits_list.append(*qubit)?;
                                     }
                                     py_dict.set_item("qubits", qubits_list)?;
 
@@ -289,6 +285,9 @@ impl PHIREngine {
 
     /// Handles a measurement and updates the Python interpreter
     /// This is a Python-facing method used primarily for testing
+    ///
+    /// # Errors
+    /// Returns an error if the measurement cannot be handled.
     pub fn handle_measurement(&mut self, outcome: u32) -> PyResult<()> {
         // For compatibility with existing code, always use result_id 0
         let result_id = 0;
@@ -299,9 +298,9 @@ impl PHIREngine {
             if let Some(engine) = &self.engine {
                 // Create a ByteMessage with the measurement result and use the Rust engine
                 let handle_result = {
-                    let mut builder = ByteMessage::measurement_results_builder();
+                    let mut builder = ByteMessage::outcomes_builder();
                     // Convert outcome from u32 to usize
-                    builder.add_measurement_results(&[outcome as usize], &[result_id as usize]);
+                    builder.add_outcomes(&[outcome as usize]);
                     let message = builder.build();
 
                     let mut engine_guard = engine.lock();
@@ -386,6 +385,9 @@ impl PHIREngine {
 
     /// Gets the current results from the engine
     /// This is a Python-facing method used primarily for testing
+    ///
+    /// # Errors
+    /// Returns an error if results cannot be retrieved.
     pub fn get_results(&self) -> PyResult<HashMap<String, u32>> {
         Python::with_gil(|py| {
             // First try to use the Rust engine if available
@@ -395,8 +397,59 @@ impl PHIREngine {
                     Ok(shot_result) => {
                         // The Rust engine already properly handles the "Result" instruction
                         // which maps internal register names to user-facing ones.
-                        // Return the processed results directly.
-                        return Ok(shot_result.registers.clone());
+                        // Extract u32 values from the Data enum
+                        let mut u32_results = HashMap::new();
+                        for (key, data) in shot_result.data {
+                            // Convert Data to u32 if possible
+                            let value = match data {
+                                pecos::prelude::Data::U8(v) => u32::from(v),
+                                pecos::prelude::Data::U16(v) => u32::from(v),
+                                pecos::prelude::Data::U32(v) => v,
+                                #[allow(clippy::cast_possible_truncation)]
+                                pecos::prelude::Data::U64(v) => v as u32, // Truncate for compatibility
+                                #[allow(clippy::cast_sign_loss)]
+                                pecos::prelude::Data::I8(v) => v as u32,
+                                #[allow(clippy::cast_sign_loss)]
+                                pecos::prelude::Data::I16(v) => v as u32,
+                                #[allow(clippy::cast_sign_loss)]
+                                pecos::prelude::Data::I32(v) => v as u32,
+                                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                                pecos::prelude::Data::I64(v) => v as u32,
+                                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                                pecos::prelude::Data::F32(v) => v as u32,
+                                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                                pecos::prelude::Data::F64(v) => v as u32,
+                                pecos::prelude::Data::Bool(v) => u32::from(v),
+                                pecos::prelude::Data::String(ref s) => {
+                                    s.parse::<u32>().unwrap_or(0)
+                                }
+                                pecos::prelude::Data::Json(_) => 0, // Default to 0 for JSON data
+                                pecos::prelude::Data::BigInt(ref v) => {
+                                    // Try to convert BigInt to u32, default to 0 if it doesn't fit
+                                    u32::try_from(v).unwrap_or(0)
+                                }
+                                pecos::prelude::Data::Bytes(ref v) => {
+                                    // Try to interpret first 4 bytes as little-endian u32
+                                    if v.len() >= 4 {
+                                        u32::from_le_bytes([v[0], v[1], v[2], v[3]])
+                                    } else {
+                                        0
+                                    }
+                                }
+                                pecos::prelude::Data::BitVec(ref v) => {
+                                    // Convert up to 32 bits to u32
+                                    let mut result = 0u32;
+                                    for (i, bit) in v.iter().take(32).enumerate() {
+                                        if *bit {
+                                            result |= 1 << i;
+                                        }
+                                    }
+                                    result
+                                }
+                            };
+                            u32_results.insert(key, value);
+                        }
+                        return Ok(u32_results);
                     }
                     Err(e) => {
                         // Log the error and fall back to Python
@@ -915,15 +968,12 @@ impl ClassicalEngine for PHIREngine {
                             let result_id_f64 = params[0];
                             if result_id_f64 < 0.0 || result_id_f64 > f64::from(u32::MAX) {
                                 eprintln!("Warning: Invalid result_id {result_id_f64}, using 0");
-                                builder.add_measurements(&qubits, &[0]);
+                                builder.add_measurements(&qubits);
                             } else {
                                 // Safe to convert to u32 and then usize
                                 // We've already checked the bounds, so we can safely convert
-                                // We must truncate to u32 first (as we validated against MAX),
-                                // then convert to usize (which is always larger than u32)
-                                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                                let result_id = result_id_f64 as u32 as usize;
-                                builder.add_measurements(&qubits, &[result_id]);
+                                // result_id is no longer needed for measurements, just add the measurement
+                                builder.add_measurements(&qubits);
                             }
                         }
                     }
@@ -951,10 +1001,12 @@ impl ClassicalEngine for PHIREngine {
     }
 
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), PecosError> {
-        let measurements = message.parse_measurements()?;
+        let measurements = message.outcomes()?;
 
         Python::with_gil(|py| -> Result<(), PecosError> {
-            for (result_id, outcome) in measurements {
+            // Measurements are now just outcomes in order, with implicit result_ids
+            for (result_id, outcome) in measurements.into_iter().enumerate() {
+                let result_id = u32::try_from(result_id).unwrap_or(u32::MAX);
                 // Create a dictionary with just the outcome (no result_id)
                 let measurement = PyDict::new(py);
 
@@ -1028,7 +1080,7 @@ impl ClassicalEngine for PHIREngine {
         })
     }
 
-    fn get_results(&self) -> Result<ShotResult, PecosError> {
+    fn get_results(&self) -> Result<Shot, PecosError> {
         Python::with_gil(|py| {
             let interpreter = self.interpreter.lock();
 
@@ -1043,14 +1095,12 @@ impl ClassicalEngine for PHIREngine {
             // Update our local results cache
             (*self.results.lock()).clone_from(&internal_registers);
 
-            // Create the registers maps that will be populated
+            // Create the registers map that will be populated
             let mut mapped_registers: HashMap<String, u32> = HashMap::new();
-            let mut mapped_registers_u64: HashMap<String, u64> = HashMap::new();
 
             // First, include all internal registers
             for (key, &value) in &internal_registers {
                 mapped_registers.insert(key.clone(), value);
-                mapped_registers_u64.insert(key.clone(), u64::from(value));
             }
 
             // Get result_id to register mappings from our stored state
@@ -1068,19 +1118,20 @@ impl ClassicalEngine for PHIREngine {
                 // use its value for the mapped register
                 if let Some(&value) = internal_registers.get(register_name) {
                     mapped_registers.insert(register_name.clone(), value);
-                    mapped_registers_u64.insert(register_name.clone(), u64::from(value));
                 } else if let Some(&value) = internal_registers.get(&orig_register) {
                     mapped_registers.insert(register_name.clone(), value);
-                    mapped_registers_u64.insert(register_name.clone(), u64::from(value));
                 }
             }
 
-            // Create a ShotResult with all required fields
-            Ok(ShotResult {
-                registers: mapped_registers,
-                registers_u64: mapped_registers_u64,
-                registers_i64: HashMap::new(), // No i64 values in PHIR currently
-            })
+            // Create a Shot with the new Data structure
+            let mut data_map = BTreeMap::new();
+
+            // Convert mapped registers to Data enum values
+            for (key, value) in mapped_registers {
+                data_map.insert(key, pecos::prelude::Data::U32(value));
+            }
+
+            Ok(Shot { data: data_map })
         })
     }
 
@@ -1112,7 +1163,7 @@ impl ClassicalEngine for PHIREngine {
 
 impl ControlEngine for PHIREngine {
     type Input = ();
-    type Output = ShotResult;
+    type Output = Shot;
     type EngineInput = ByteMessage;
     type EngineOutput = ByteMessage;
 
@@ -1123,7 +1174,7 @@ impl ControlEngine for PHIREngine {
     fn start(
         &mut self,
         _input: (),
-    ) -> Result<pecos::prelude::EngineStage<ByteMessage, ShotResult>, PecosError> {
+    ) -> Result<pecos::prelude::EngineStage<ByteMessage, Shot>, PecosError> {
         // Reset state to ensure clean start
         ClassicalEngine::reset(self)?;
 
@@ -1147,7 +1198,7 @@ impl ControlEngine for PHIREngine {
     fn continue_processing(
         &mut self,
         measurements: ByteMessage,
-    ) -> Result<pecos::prelude::EngineStage<ByteMessage, ShotResult>, PecosError> {
+    ) -> Result<pecos::prelude::EngineStage<ByteMessage, Shot>, PecosError> {
         // Handle received measurements
         self.handle_measurements(measurements)?;
 
@@ -1171,7 +1222,7 @@ impl ControlEngine for PHIREngine {
 
 impl Engine for PHIREngine {
     type Input = ();
-    type Output = ShotResult;
+    type Output = Shot;
 
     fn process(&mut self, _input: Self::Input) -> Result<Self::Output, PecosError> {
         // Reset the engine state using the Engine trait's reset method explicitly
@@ -1192,7 +1243,7 @@ impl Engine for PHIREngine {
                 // used in tests or when not connected to a quantum backend
 
                 // Parse the measurement commands to see how many we need to handle
-                let measurement_count = match commands.parse_measurements() {
+                let measurement_count = match commands.outcomes() {
                     Ok(measurements) => measurements.len(),
                     Err(_) => 0,
                 };
@@ -1200,14 +1251,13 @@ impl Engine for PHIREngine {
                 // Create dummy measurement results
                 if measurement_count > 0 {
                     // Create a response ByteMessage with measurement results
-                    let mut builder = ByteMessage::measurement_results_builder();
+                    let mut builder = ByteMessage::outcomes_builder();
 
-                    // Create arrays for results and result_ids
+                    // Create arrays for results
                     let results = vec![0; measurement_count];
-                    let result_ids: Vec<usize> = (0..measurement_count).collect();
 
                     // Add all measurement results at once
-                    builder.add_measurement_results(&results, &result_ids);
+                    builder.add_outcomes(&results);
 
                     let response = builder.build();
 

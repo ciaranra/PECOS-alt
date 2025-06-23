@@ -1,3 +1,10 @@
+"""Single-qubit depolarizing noise implementation.
+
+This module provides depolarizing noise models for single-qubit operations,
+applying random Pauli errors (X, Y, Z) to individual qubits with equal
+probability during quantum gate operations.
+"""
+
 # Copyright 2023 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -14,12 +21,26 @@ import numpy as np
 from pecos.reps.pypmir.op_types import QOp
 
 
-def noise_sq_depolarizing(op: QOp, p: float, noise_dict: dict):
+def noise_sq_depolarizing(op: QOp, p: float, noise_dict: dict) -> list[QOp] | None:
+    """Apply single-qubit depolarizing noise to quantum operation.
+
+    Applies depolarizing noise to each qubit in the operation independently
+    based on the provided noise probability and noise model dictionary.
+
+    Args:
+        op: Quantum operation to apply noise to.
+        p: Probability of noise occurring on each qubit.
+        noise_dict: Dictionary mapping fault types to their probabilities.
+
+    Returns:
+        List of quantum operations including original operation and noise,
+        or None if no noise is applied.
+    """
     rand_nums = np.random.random(len(op.args)) <= p
 
     noise = {}
     if np.any(rand_nums):
-        for r, loc in zip(rand_nums, op.args):
+        for r, loc in zip(rand_nums, op.args, strict=False):
             if r:
                 rand = np.random.random()
                 p_tot = 0.0

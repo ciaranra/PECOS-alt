@@ -16,6 +16,7 @@
 /// behavior regardless of the parallelization configuration.
 use assert_cmd::prelude::*;
 use pecos::prelude::*;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -42,8 +43,6 @@ fn run_pecos(
         .arg(noise_prob)
         .arg("-d")
         .arg(seed.to_string())
-        .arg("-f")
-        .arg("pretty-compact") // Force consistent format for test
         .output()?;
 
     if !output.status.success() {
@@ -70,73 +69,34 @@ fn run_pecos(
     Ok(output_str)
 }
 
-/// Extract measurement results as arrays from JSON output
+/// Extract measurement results from JSON output
+/// Handles the new columnar format: {"c": [3, 0, ...]}
 fn get_values(json_output: &str) -> Vec<String> {
-    let mut values = Vec::new();
+    let mut register_values: HashMap<String, Vec<String>> = HashMap::new();
 
-    // Try to parse the JSON using serde_json, which is the most reliable method
+    // Parse the JSON - expecting an object with register names as keys
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_output) {
         if let Some(obj) = json.as_object() {
-            for (_, value) in obj {
-                if let Some(array) = value.as_array() {
-                    // Convert the array to a string representation
-                    let value_str = array
-                        .iter()
-                        .map(|v| v.to_string().replace('"', ""))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    values.push(value_str);
+            // For each register, collect its values
+            for (reg_name, values) in obj {
+                if let Some(arr) = values.as_array() {
+                    let string_values: Vec<String> =
+                        arr.iter().map(|v| v.to_string().replace('"', "")).collect();
+                    register_values.insert(reg_name.clone(), string_values);
                 }
             }
-            values.sort();
-            return values;
         }
     }
 
-    // Fallback to manual parsing if serde_json fails
-    let mut in_array = false;
-    let mut current_array = String::new();
-
-    for line in json_output.lines() {
-        let trimmed = line.trim();
-
-        // Start of an array
-        if trimmed.contains('[') {
-            in_array = true;
-            current_array = trimmed
-                .chars()
-                .skip_while(|&c| c != '[')
-                .skip(1) // Skip the '['
-                .collect();
-            // If the array ends on the same line
-            if trimmed.contains(']') {
-                in_array = false;
-                current_array = current_array.chars().take_while(|&c| c != ']').collect();
-                values.push(current_array.trim().to_string());
-                current_array = String::new();
-            }
-        }
-        // End of an array
-        else if in_array && trimmed.contains(']') {
-            in_array = false;
-            current_array.push_str(
-                &trimmed
-                    .chars()
-                    .take_while(|&c| c != ']')
-                    .collect::<String>(),
-            );
-            values.push(current_array.trim().to_string());
-            current_array = String::new();
-        }
-        // Middle of an array
-        else if in_array {
-            current_array.push_str(trimmed);
-        }
+    // Convert to the format expected by tests: comma-separated values per register
+    let mut result = Vec::new();
+    for (_, values) in register_values {
+        let value_str = values.join(", ");
+        result.push(value_str);
     }
 
-    // Sort for stable comparison
-    values.sort();
-    values
+    result.sort();
+    result
 }
 
 /// Test that each worker count configuration is deterministic with itself

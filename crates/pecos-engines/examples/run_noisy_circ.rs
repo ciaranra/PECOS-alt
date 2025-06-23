@@ -1,5 +1,5 @@
 use pecos_engines::byte_message::ByteMessage;
-use pecos_engines::engines::quantum::StateVecEngine;
+use pecos_engines::quantum::StateVecEngine;
 use pecos_engines::{DepolarizingNoiseModel, Engine};
 use pecos_engines::{EngineSystem, QuantumSystem};
 use std::env;
@@ -21,8 +21,8 @@ fn main() {
     let circ = ByteMessage::quantum_operations_builder()
         .add_h(&[0])
         .add_cx(&[0], &[1])
-        .add_measurements(&[0], &[0])
-        .add_measurements(&[1], &[1])
+        .add_measurements(&[0])
+        .add_measurements(&[1])
         .build();
 
     let quantum = Box::new(StateVecEngine::new(2));
@@ -48,12 +48,10 @@ fn main() {
         let results = system
             .process_as_system(circ.clone())
             .expect("failed to process circ");
-        let meas = results
-            .parse_measurements()
-            .expect("failed to parse measurements");
+        let meas = results.outcomes().expect("failed to parse measurements");
 
         print!("\"");
-        for &(_, value) in &meas {
+        for &value in &meas {
             print!("{value}");
         }
         print!("\", ");

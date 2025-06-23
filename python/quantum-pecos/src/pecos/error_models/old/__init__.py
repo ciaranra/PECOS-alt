@@ -1,3 +1,8 @@
+"""Legacy error model implementations.
+
+This package provides legacy error model implementations for backward compatibility.
+"""
+
 # Copyright 2018 The PECOS Developers
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.

@@ -9,32 +9,44 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""State representation for coin toss quantum simulator.
+
+This module provides the quantum state representation for the coin toss simulator, implementing a minimal state
+model that tracks qubit count without maintaining actual quantum state information for rapid simulation.
+"""
+
+from __future__ import annotations
+
 import random
+from typing import TYPE_CHECKING
 
 from pecos.simulators.cointoss import bindings
-from pecos.simulators.parent_sim_classes import Simulator
+from pecos.simulators.default_simulator import DefaultSimulator
+
+if TYPE_CHECKING:
+    from typing import Self
 
 
-class CoinToss(Simulator):
-    """
-    Ignore all quantum operations and toss a coin to decide measurement outcomes.
+class CoinToss(DefaultSimulator):
+    """Ignore all quantum operations and toss a coin to decide measurement outcomes.
+
     Meant for stochastical debugging of the classical branches.
     """
 
-    def __init__(self, num_qubits, prob=0.5, seed=None):
-        """
-        Initialization is trivial, since there is no state.
+    def __init__(
+        self,
+        num_qubits: int,
+        prob: float = 0.5,
+        seed: int | None = None,
+    ) -> None:
+        """Initialization is trivial, since there is no state.
 
         Args:
             num_qubits (int): Number of qubits being represented.
             prob (float): Probability of measurements returning |1>.
                 Default value is 0.5.
             seed (int): Seed for randomness.
-
-        Returns:
-
         """
-
         if not isinstance(num_qubits, int):
             msg = "``num_qubits`` should be of type ``int``."
             raise TypeError(msg)
@@ -49,7 +61,7 @@ class CoinToss(Simulator):
         self.num_qubits = num_qubits
         self.prob = prob
 
-    def reset(self):
+    def reset(self) -> Self:
         """Reset the quantum state for another run without reinitializing."""
         # Do nothing, this simulator does not keep a state!
         return self

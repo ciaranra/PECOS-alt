@@ -10,7 +10,8 @@
 # Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
-"""Performance Estimator of Codes On Surfaces (PECOS)
+"""Performance Estimator of Codes On Surfaces (PECOS).
+
 ==================================================
 A framework for developing, studying, and evaluating quantum error-correcting codes.
 """
@@ -33,6 +34,7 @@ from pecos import (
     engines,
     error_models,
     misc,
+    protocols,
     qeccs,
     rslib,
     simulators,
@@ -40,7 +42,7 @@ from pecos import (
 )
 from pecos.circuits.quantum_circuit import QuantumCircuit
 from pecos.engines import circuit_runners
-from pecos.engines.cvm.binarray2 import BinArray2 as BinArray
+from pecos.engines.cvm.binarray import BinArray
 from pecos.engines.hybrid_engine_old import HybridEngine
 
 __all__ = [
@@ -48,18 +50,16 @@ __all__ = [
     "HybridEngine",
     "QuantumCircuit",
     "__version__",
+    "circuit_converters",
     "circuit_runners",
-    "circuits",
     "circuits",
     "decoders",
     "engines",
     "error_models",
-    "error_models",
     "misc",
-    "qeccs",
+    "protocols",
     "qeccs",
     "rslib",
-    "simulators",
     "simulators",
     "tools",
 ]

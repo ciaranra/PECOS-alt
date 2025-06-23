@@ -16,8 +16,27 @@
 The main use case for this is to determine if an ideal recovery operator would change a logical sign or not.
 """
 
+from __future__ import annotations
 
-def qubit_pauli(first_circuit, second_circuit):
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pecos.circuits import QuantumCircuit
+
+
+def qubit_pauli(first_circuit: QuantumCircuit, second_circuit: QuantumCircuit) -> bool:
+    """Check if two single-tick Pauli circuits commute.
+
+    Args:
+        first_circuit: First quantum circuit containing Pauli operations.
+        second_circuit: Second quantum circuit containing Pauli operations.
+
+    Returns:
+        True if the circuits commute, False if they anticommute.
+
+    Raises:
+        Exception: If either circuit contains more than one tick.
+    """
     if len(first_circuit) != 1 or len(second_circuit) != 1:
         msg = "Circuits are expected to only have one tick."
         raise Exception(msg)
@@ -33,9 +52,9 @@ def qubit_pauli(first_circuit, second_circuit):
             first_xs.update(gate_locations)
             first_zs.update(gate_locations)
         else:
+            msg = f'Can not currently handle logical operator with operator "{symbol}"!'
             raise Exception(
-                'Can not currently handle logical operator with operator "%s"!'
-                % symbol,
+                msg,
             )
 
     second_xs = set()
@@ -49,9 +68,9 @@ def qubit_pauli(first_circuit, second_circuit):
             second_xs.update(gate_locations)
             second_zs.update(gate_locations)
         else:
+            msg = f'Can not currently handle logical operator with operator "{symbol}"!'
             raise Exception(
-                'Can not currently handle logical operator with operator "%s"!'
-                % symbol,
+                msg,
             )
 
     return not (len(first_xs & second_zs) + len(first_zs & second_xs)) % 2

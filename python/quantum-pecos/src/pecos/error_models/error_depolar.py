@@ -1,3 +1,10 @@
+"""Depolarizing error generation and application.
+
+This module provides utilities for generating and applying depolarizing
+errors to quantum circuits, including error rate calculations and
+conditional error application based on circuit structure.
+"""
+
 # Copyright 2021 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -8,6 +15,10 @@
 # Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -24,11 +35,19 @@ from pecos.error_models.noise_impl_old.tq_noise import (
 )
 from pecos.error_models.parent_class_error_gen import ParentErrorModel
 
+if TYPE_CHECKING:
+    from pecos.typing import ErrorParams, GateParams, OutputDict
+
 
 class DepolarizingErrorModel(ParentErrorModel):
     """Parameterized error model for Beta and ARC1."""
 
     def __init__(self) -> None:
+        """Initialize a depolarizing error model.
+
+        Sets up the error model with empty state for tracking qubits,
+        error circuits, error parameters, and the quantum circuit.
+        """
         super().__init__()
 
         self.qubit_set = set()
@@ -37,8 +56,8 @@ class DepolarizingErrorModel(ParentErrorModel):
         self.error_params = None
         self.circuit = None
 
-    def scaling(self):
-
+    def scaling(self) -> None:
+        """Apply scaling factors to error parameters."""
         if "p2_mem" not in self.error_params:
             self.error_params["p2_mem"] = None
 
@@ -56,7 +75,23 @@ class DepolarizingErrorModel(ParentErrorModel):
         self.error_params["p_meas"] *= scale
         self.error_params["p_init"] *= scale
 
-    def start(self, circuit, error_params, reset_leakage=True):
+    def start(
+        self,
+        circuit: QuantumCircuit,
+        error_params: ErrorParams,
+        *,
+        _reset_leakage: bool = True,  # Reserved for future leakage handling
+    ) -> ErrorCircuits:
+        """Initialize error generation for a quantum circuit.
+
+        Args:
+            circuit: Quantum circuit to generate errors for.
+            error_params: Error parameters dictionary.
+            _reset_leakage: Reserved for future leakage handling.
+
+        Returns:
+            Error circuits object containing generated errors.
+        """
         self.qubit_set = set(range(circuit.metadata["num_qubits"]))
 
         self.error_circuits = ErrorCircuits()
@@ -81,17 +116,23 @@ class DepolarizingErrorModel(ParentErrorModel):
 
         return self.error_circuits
 
-    def reset(self):
+    def reset(self) -> DepolarizingErrorModel:
+        """Reset the error model to its initial state.
+
+        Returns:
+            New instance of DepolarizingErrorModel.
+        """
         return DepolarizingErrorModel()
 
     def generate_tick_errors(
         self,
-        tick_circuit,
-        time,
-        output=None,
-        reset_leakage=False,
-        **params,
-    ):
+        tick_circuit: QuantumCircuit,
+        time: int | tuple[int, ...],
+        output: OutputDict | None = None,
+        *,
+        _reset_leakage: bool = False,  # Reserved for future leakage handling
+        **_params: GateParams,  # Reserved for additional parameters
+    ) -> ErrorCircuits:
         """The method that gets called each circuit tick to generate circuit noise for that tick."""
         # Get the tick
         tick_index = time[-1] if isinstance(time, tuple) else time
@@ -151,7 +192,8 @@ class DepolarizingErrorModel(ParentErrorModel):
                 pass
 
             else:
-                raise Exception("This error model doesn't handle gate: %s!" % symbol)
+                msg = f"This error model doesn't handle gate: {symbol}!"
+                raise Exception(msg)
 
         self.error_circuits.add_circuits(time, before, after, remove_locations)
 

@@ -17,7 +17,7 @@ from pecos.slr.vars import Var, Vars
 class Block(Node):
     """A collection of other operations and blocks."""
 
-    def __init__(self, *args, ops=None, vargs=None, allow_no_ops=True):
+    def __init__(self, *args, ops=None, vargs=None, allow_no_ops=True) -> None:
         self.ops = []
         self.vars = Vars()
 
@@ -25,7 +25,7 @@ class Block(Node):
             msg = "Can not use both *args for ops and the ops keyword argument."
             raise Exception(msg)
 
-        elif args:
+        if args:
             ops = args
 
         if vargs is not None:
@@ -40,7 +40,6 @@ class Block(Node):
 
     def extend(self, *stmts):
         """Adds more ops to the Block."""
-
         for s in stmts:
             if isinstance(s, Var):
                 self.vars.append(s)
@@ -59,4 +58,4 @@ class Block(Node):
                 yield op
 
     def iter(self):
-        yield from self.__iter__()
+        yield from iter(self)
