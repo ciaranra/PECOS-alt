@@ -207,9 +207,8 @@ class MzToBit(QIRFunc):
 class QIRGenerator(Generator):
     """Class to generate QIR from SLR. This should enable better compilation of conditional programs."""
 
-    def __init__(self, includes: list[str] | None = None):
-        # NOTE: Include files don't exist in QIR, should we just remove
-        # the parameter to init
+    def __init__(self):
+        # NOTE: Include files don't exist in QIR
         self.current_block: Block = None
         self.setup_module()
         # Create a field qreg_list
@@ -402,7 +401,7 @@ class QIRGenerator(Generator):
     def _convert_cond_to_pred(self, cond: CompOp):
         """Converts an SLR expression into a QIR condition."""
 
-        if not isinstance(cond.left, (Reg, Bit)):
+        if not isinstance(cond.left, Reg | Bit):
             msg = "Left side of condition must be a register"
             raise TypeError(msg)
         if isinstance(cond.left, Reg):
@@ -435,7 +434,7 @@ class QIRGenerator(Generator):
             rhs = ir.Constant(self._types.int_type, cond.right)
         else:
             # Apply permutation to the right side if it's a register or bit
-            if isinstance(cond.right, (Reg, Bit)):
+            if isinstance(cond.right, Reg | Bit):
                 reg_sym, _ = self.apply_permutation(cond.right)
                 rhs_reg_fetch = self._creg_dict[reg_sym][0]
             else:
@@ -462,7 +461,9 @@ class QIRGenerator(Generator):
                 if op.right in (0, 1):
                     rhs = ir.Constant(self._types.bool_type, op.right)
                 else:
-                    msg = f"SET operation for bit must have rhs of 0 or 1, got {op.right}"
+                    msg = (
+                        f"SET operation for bit must have rhs of 0 or 1, got {op.right}"
+                    )
                     raise ValueError(msg)
             elif isinstance(op.right, BinOp):
                 rhs = self._convert_binary_op(op.right)
@@ -496,7 +497,7 @@ class QIRGenerator(Generator):
                 [reg_ptr, l_index, rhs],
                 "",
             )
-        elif isinstance(op.left, CReg):
+        if isinstance(op.left, CReg):
             # Apply permutation to the register
             reg_sym, _ = self.apply_permutation(op.left)
 
@@ -541,9 +542,8 @@ class QIRGenerator(Generator):
                 [reg_ptr, rhs],
                 "",
             )
-        else:
-            msg = f"SET operation not implemented for {op.left} (type: {type(op.left)})"
-            raise NotImplementedError(msg)
+        msg = f"SET operation not implemented for {op.left} (type: {type(op.left)})"
+        raise NotImplementedError(msg)
 
     def _convert_binary_op(self, op):
         """Converts an SLR binary operation to a QIR arithmetic instruction"""
@@ -678,13 +678,11 @@ class QIRGenerator(Generator):
 
                 case QReg():
                     length += item.size
-                    for qubit in item.elems:
-                        qubits.append(qubit)
+                    qubits.extend(item.elems)
                 case _:  # assume tuple[QReg]
                     for qreg in item:
                         length += qreg.size
-                        for qubit in qreg.elems:
-                            qubits.append(qubit)
+                        qubits.extend(qreg.elems)
                 # TODO: tuple[QReg]
 
         if length not in self._barrier_cache:
@@ -759,7 +757,7 @@ class QIRGenerator(Generator):
                 new_gate.qargs = [qubit]
                 self._create_qgate_call(new_gate)
             return
-        elif (
+        if (
             isinstance(gate.qargs, tuple)
             and len(gate.qargs) != gate.qsize
             and all(isinstance(q, Qubit) for q in gate.qargs)
@@ -769,7 +767,9 @@ class QIRGenerator(Generator):
                 new_gate.qargs = [qubit]
                 self._create_qgate_call(new_gate)
             return
-        elif isinstance(gate.qargs, tuple) and all(isinstance(e, tuple) for e in gate.qargs):
+        if isinstance(gate.qargs, tuple) and all(
+            isinstance(e, tuple) for e in gate.qargs
+        ):
             for pair in gate.qargs:
                 new_gate = gate.copy()
                 new_gate.qargs = pair
@@ -798,7 +798,9 @@ class QIRGenerator(Generator):
         gate_declaration = self._gate_declaration_cache[gate.sym]
         gate_args = []
         if gate.has_parameters:
-            gate_args = [ir.Constant(self._types.double_type, param) for param in gate.params]
+            gate_args = [
+                ir.Constant(self._types.double_type, param) for param in gate.params
+            ]
         gate_args.extend([self._qarg_to_qubit_ptr(qarg) for qarg in qargs])
 
         # Create the actual invocation on the builder using the args passed in
@@ -840,7 +842,10 @@ class QIRGenerator(Generator):
 
             # Check if registers have the same size
             if reg_i.size != reg_f.size:
-                msg = f"Cannot permute registers of different sizes: {reg_i.sym}[{reg_i.size}] and {reg_f.sym}[{reg_f.size}]"
+                msg = (
+                    f"Cannot permute registers of different sizes: "
+                    f"{reg_i.sym}[{reg_i.size}] and {reg_f.sym}[{reg_f.size}]"
+                )
                 raise ValueError(msg)
 
             # Create a permutation map for each element in the registers
@@ -865,7 +870,10 @@ class QIRGenerator(Generator):
 
             # Check if registers have the same size
             if reg_i.size != reg_f.size:
-                msg = f"Cannot permute registers of different sizes: {reg_i.sym}[{reg_i.size}] and {reg_f.sym}[{reg_f.size}]"
+                msg = (
+                    f"Cannot permute registers of different sizes: "
+                    f"{reg_i.sym}[{reg_i.size}] and {reg_f.sym}[{reg_f.size}]"
+                )
                 raise ValueError(msg)
 
             # Get the register pointers
@@ -951,14 +959,20 @@ class QIRGenerator(Generator):
                 # Create a new permutation map for this permutation
                 new_perm_map = {}
                 for ei, ef in zip(elems_i, elems_f, strict=True):
-                    if hasattr(ei.reg, "sym") and hasattr(ef.reg, "sym") and isinstance(ei.reg, QReg):
+                    if (
+                        hasattr(ei.reg, "sym")
+                        and hasattr(ef.reg, "sym")
+                        and isinstance(ei.reg, QReg)
+                    ):
                         # Create a key from the input element's register sym and index
                         key = (ei.reg.sym, ei.index)
                         # Map it to the output element's register sym and index
                         new_perm_map[key] = (ef.reg.sym, ef.index)
 
                 # Add a comment to describe the permutation
-                perm_str = ", ".join([f"{ei} -> {ef}" for ei, ef in zip(elems_i, elems_f)])
+                perm_str = ", ".join(
+                    [f"{ei} -> {ef}" for ei, ef in zip(elems_i, elems_f)],
+                )
                 self._builder.comment(f"; Permutation: {perm_str}")
 
                 # Compose the new permutation with the existing one
@@ -1040,7 +1054,10 @@ class QIRGenerator(Generator):
 
                         next_val = self._creg_funcs.get_creg_bit_func.create_call(
                             self._builder,
-                            [next_ptr, ir.Constant(self._types.int_type, next_elem.index)],
+                            [
+                                next_ptr,
+                                ir.Constant(self._types.int_type, next_elem.index),
+                            ],
                             "",
                         )
                         self._creg_funcs.set_creg_bit_func.create_call(
@@ -1063,12 +1080,18 @@ class QIRGenerator(Generator):
                     )
                     self._creg_funcs.set_creg_bit_func.create_call(
                         self._builder,
-                        [last_ptr, ir.Constant(self._types.int_type, last.index), temp_val],
+                        [
+                            last_ptr,
+                            ir.Constant(self._types.int_type, last.index),
+                            temp_val,
+                        ],
                         "",
                     )
 
                 # Add a comment to describe the permutation
-                perm_str = ", ".join([f"{ei} -> {ef}" for ei, ef in zip(elems_i, elems_f)])
+                perm_str = ", ".join(
+                    [f"{ei} -> {ef}" for ei, ef in zip(elems_i, elems_f)],
+                )
                 self._builder.comment(f"; Permutation: {perm_str}")
 
                 # For classical bit permutations, we're physically moving the values,
@@ -1105,9 +1128,13 @@ class QIRGenerator(Generator):
                 composed_map[src] = intermediate
 
         # Add new mappings from the new permutation map
-        for src, dst in new_perm_map.items():
-            if src not in self.permutation_map:
-                composed_map[src] = dst
+        composed_map.update(
+            {
+                src: dst
+                for src, dst in new_perm_map.items()
+                if src not in self.permutation_map
+            },
+        )
 
         return composed_map
 
@@ -1127,7 +1154,7 @@ class QIRGenerator(Generator):
                 return self.permutation_map[key]
             return (qarg.reg.sym, qarg.index)
         # Handle QReg/CReg objects which are registers themselves
-        elif hasattr(qarg, "sym"):
+        if hasattr(qarg, "sym"):
             # For a register, we return the symbol and index 0 (whole register)
             return (qarg.sym, 0)
         # Fallback for other types

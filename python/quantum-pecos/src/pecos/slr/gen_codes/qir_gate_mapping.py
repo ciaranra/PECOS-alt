@@ -9,9 +9,10 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -29,7 +30,7 @@ class QG:
 
     @classmethod
     def decompose(cls, decomposer: Callable[["QGate"], list["QGate"]]):
-        return cls("", False, decomposer)
+        return cls("", adjoint=False, decomposer=decomposer)
 
 
 class QIRGateMetadata(Enum):
@@ -111,7 +112,7 @@ class QIRGateMetadata(Enum):
     F4dg = QG.decompose(
         lambda f4dg: [
             q.SXdg(f4dg.qargs[0]),
-            #q.SZdg(f4dg.qargs[0]),
+            # q.SZdg(f4dg.qargs[0]),
             q.RZ[-np.pi / 2](f4dg.qargs[0]),
         ],
     )

@@ -1,46 +1,44 @@
 """Tests for measurement unrolling with permutations in both QASM and QIR generation."""
 
 import pytest
-from pecos.qeclib import qubit as Q
+from pecos.qeclib import qubit
 from pecos.slr import CReg, Main, Permute, QReg, SlrConverter
 
 
-def create_measurement_unrolling_program():
+def create_measurement_unrolling_program() -> tuple:
     """Create a program with permutations and register-wide measurements."""
     a = QReg("a", 3)
     b = QReg("b", 3)
     c = QReg("c", 3)
     m = CReg("m", 3)
 
-    prog = Main(
+    return Main(
         a,
         b,
         c,
         m,
         # Initial gates
-        Q.H(a),
-        Q.X(b[1]),
+        qubit.H(a),
+        qubit.X(b[1]),
         # First permutation
         Permute(
             [a[0], b[1], c[2]],
             [c[2], a[0], b[1]],
         ),
         # Gates after first permutation
-        Q.CX(a[0], b[0]),  # Should be CX(c[2], b[0])
-        Q.Z(b[1]),  # Should be Z(a[0])
+        qubit.CX(a[0], b[0]),  # Should be CX(c[2], b[0])
+        qubit.Z(b[1]),  # Should be Z(a[0])
         # Second permutation
         Permute(a, c),
         # Gates after second permutation
-        Q.H(a[1]),  # Should be H(c[1])
-        Q.CX(c[0], b[2]),  # Should be CX(a[0], b[2])
+        qubit.H(a[1]),  # Should be H(c[1])
+        qubit.CX(c[0], b[2]),  # Should be CX(a[0], b[2])
         # Register-wide measurement - should be unrolled correctly
-        Q.Measure(a) > m,
+        qubit.Measure(a) > m,
     )
 
-    return prog
 
-
-def test_measurement_unrolling_qasm():
+def test_measurement_unrolling_qasm() -> None:
     """Test measurement unrolling with permutations in QASM generation."""
     prog = create_measurement_unrolling_program()
 
@@ -82,7 +80,7 @@ def test_measurement_unrolling_qasm():
 
 
 @pytest.mark.optional_dependency
-def test_measurement_unrolling_qir():
+def test_measurement_unrolling_qir() -> None:
     """Test measurement unrolling with permutations in QIR generation."""
     prog = create_measurement_unrolling_program()
     qir = SlrConverter(prog).qir()
@@ -119,7 +117,8 @@ def test_measurement_unrolling_qir():
     # After first permutation:
     # CNOT gate should be applied to c[2] (qubit 8) and b[0] (qubit 3)
     assert (
-        "call void @__quantum__qis__cnot__body(%Qubit* inttoptr (i64 8 to %Qubit*), %Qubit* inttoptr (i64 3 to %Qubit*))"
+        "call void @__quantum__qis__cnot__body("
+        "%Qubit* inttoptr (i64 8 to %Qubit*), %Qubit* inttoptr (i64 3 to %Qubit*))"
         in qir
     ), f"Expected CNOT gate on permuted qubits not found in QIR:\n{qir}"
 
@@ -136,7 +135,8 @@ def test_measurement_unrolling_qir():
 
     # CNOT gate should be applied to a[0] (qubit 0) and b[2] (qubit 5) after both permutations
     assert (
-        "call void @__quantum__qis__cnot__body(%Qubit* inttoptr (i64 0 to %Qubit*), %Qubit* inttoptr (i64 5 to %Qubit*))"
+        "call void @__quantum__qis__cnot__body("
+        "%Qubit* inttoptr (i64 0 to %Qubit*), %Qubit* inttoptr (i64 5 to %Qubit*))"
         in qir
     ), f"Expected CNOT gate on permuted qubits not found in QIR:\n{qir}"
 

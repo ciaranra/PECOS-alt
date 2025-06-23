@@ -1,3 +1,5 @@
+"""Tests for classical register permutation functionality."""
+
 import re
 
 import pecos.slr
@@ -5,12 +7,12 @@ import pytest
 from pecos.slr.slr_converter import SlrConverter
 
 
-def create_creg_permutation_program():
+def create_creg_permutation_program() -> tuple:
     """Create a program with permutation of whole classical registers followed by both bit and register operations."""
     a = pecos.slr.CReg("a", size=1)
     b = pecos.slr.CReg("b", size=1)
 
-    prog = pecos.slr.Main(
+    return pecos.slr.Main(
         a,
         b,
         pecos.slr.Permute(a, b),
@@ -18,10 +20,8 @@ def create_creg_permutation_program():
         a.set(1),  # Register-level operation
     )
 
-    return prog
 
-
-def test_creg_permutation_qasm():
+def test_creg_permutation_qasm() -> None:
     """Test permutation of whole classical registers followed by both bit and register operations in QASM."""
     prog = create_creg_permutation_program()
     qasm = SlrConverter(prog).qasm()
@@ -58,7 +58,7 @@ def test_creg_permutation_qasm():
 
 
 @pytest.mark.optional_dependency
-def test_creg_permutation_qir():
+def test_creg_permutation_qir() -> None:
     """Test permutation of whole classical registers followed by both bit and register operations in QIR."""
     prog = create_creg_permutation_program()
     qir = SlrConverter(prog).qir()

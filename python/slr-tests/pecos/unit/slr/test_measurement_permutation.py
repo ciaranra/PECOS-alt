@@ -8,7 +8,9 @@ from pecos.slr import SlrConverter
 # QASM Tests
 
 
-def test_individual_measurement_permutation_qasm(individual_measurement_program):
+def test_individual_measurement_permutation_qasm(
+    individual_measurement_program: tuple,
+) -> None:
     """Test individual measurements with permutations in QASM generation."""
     prog, _, _, _, _ = individual_measurement_program
 
@@ -38,7 +40,9 @@ def test_individual_measurement_permutation_qasm(individual_measurement_program)
     assert qasm == qasm2, "QASM generation is not deterministic"
 
 
-def test_register_measurement_permutation_qasm(register_measurement_program):
+def test_register_measurement_permutation_qasm(
+    register_measurement_program: tuple,
+) -> None:
     """Test register-wide measurements with permutations in QASM generation."""
     prog, _, _, _, _ = register_measurement_program
 
@@ -67,7 +71,9 @@ def test_register_measurement_permutation_qasm(register_measurement_program):
 
 
 @pytest.mark.optional_dependency
-def test_individual_measurement_permutation_qir(individual_measurement_program):
+def test_individual_measurement_permutation_qir(
+    individual_measurement_program: tuple,
+) -> None:
     """Test individual measurements with permutations in QIR generation."""
     prog, _, _, _, _ = individual_measurement_program
 
@@ -98,13 +104,21 @@ def test_individual_measurement_permutation_qir(individual_measurement_program):
     assert len(h_gates) >= 1, f"Expected at least one H gate, found {len(h_gates)}"
 
     # CX gate should be applied to b[0] and a[0] after permutation
-    cx_gate_pattern = r"call void @__quantum__qis__cnot__body\(%Qubit\* inttoptr \(i64 (\d+) to %Qubit\*\), %Qubit\* inttoptr \(i64 (\d+) to %Qubit\*\)\)"
+    cx_gate_pattern = (
+        r"call void @__quantum__qis__cnot__body\("
+        r"%Qubit\* inttoptr \(i64 (\d+) to %Qubit\*\), "
+        r"%Qubit\* inttoptr \(i64 (\d+) to %Qubit\*\)\)"
+    )
     cx_gates = re.findall(cx_gate_pattern, qir)
     assert len(cx_gates) >= 1, f"Expected at least one CX gate, found {len(cx_gates)}"
 
     # Extract the measurement operations
     # In QIR, measurements are done with mz_to_creg_bit
-    mz_to_creg_pattern = r"call void @mz_to_creg_bit\(%Qubit\* inttoptr \(i64 (\d+) to %Qubit\*\), i1\* %(\w+), i64 (\d+)\)"
+    mz_to_creg_pattern = (
+        r"call void @mz_to_creg_bit\("
+        r"%Qubit\* inttoptr \(i64 (\d+) to %Qubit\*\), "
+        r"i1\* %(\w+), i64 (\d+)\)"
+    )
     mz_to_creg_calls = re.findall(mz_to_creg_pattern, qir)
 
     # We should have at least two measurement calls (one for each qubit in register a)
@@ -138,7 +152,9 @@ def test_individual_measurement_permutation_qir(individual_measurement_program):
 
 
 @pytest.mark.optional_dependency
-def test_register_measurement_permutation_qir(register_measurement_program):
+def test_register_measurement_permutation_qir(
+    register_measurement_program: tuple,
+) -> None:
     """Test register-wide measurements with permutations in QIR generation."""
     prog, _, _, _, _ = register_measurement_program
 
@@ -179,7 +195,8 @@ def test_register_measurement_permutation_qir(register_measurement_program):
 
     # CNOT gate should be applied to b[0] (qubit 2) and a[0] (qubit 0) after permutation
     assert (
-        "call void @__quantum__qis__cnot__body(%Qubit* inttoptr (i64 2 to %Qubit*), %Qubit* inttoptr (i64 0 to %Qubit*))"
+        "call void @__quantum__qis__cnot__body("
+        "%Qubit* inttoptr (i64 2 to %Qubit*), %Qubit* inttoptr (i64 0 to %Qubit*))"
         in qir
     ), f"Expected CNOT gate on permuted qubits not found in QIR:\n{qir}"
 

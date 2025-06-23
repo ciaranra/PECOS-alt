@@ -44,7 +44,7 @@ class If(CondBlock):
         self._extend(*args)
         return self
 
-    def Else(self, *args):
+    def Else(self, *args):  # noqa: N802
         self.else_block = Block(*args)
         return self
 

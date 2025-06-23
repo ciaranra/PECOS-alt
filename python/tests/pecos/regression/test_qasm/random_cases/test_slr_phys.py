@@ -1,5 +1,6 @@
+"""Test SLR to physical quantum circuit compilation for various cases."""
+
 import pytest
-from pecos import __version__
 from pecos.qeclib import qubit as p
 from pecos.qeclib.steane.steane_class import Steane
 from pecos.slr import (
@@ -24,15 +25,15 @@ def telep(prep_basis: str, meas_basis: str) -> str:
     """A simple example of creating a logical teleportation circuit.
 
     Args:
-        prep_basis (str):  A string indicating what Pauli basis to prepare the state in. Acceptable inputs include:
+        prep_basis (str): A string indicating what Pauli basis to prepare the state in. Acceptable inputs include:
             "+X"/"X", "-X", "+Y"/"Y", "-Y", "+Z"/"Z", and "-Z".
         meas_basis (str): A string indicating what Pauli basis the measure out the logical qubit in. Acceptable inputs
             include: "X", "Y", and "Z".
 
     Returns:
-        A logical program written in extended OpenQASM 2.0"""
-
-    prog = Main(
+        A logical program written in extended OpenQASM 2.0
+    """
+    return Main(
         m_bell := CReg("m_bell", size=2),
         m_out := CReg("m_out", size=1),
         # Input state:
@@ -63,10 +64,8 @@ def telep(prep_basis: str, meas_basis: str) -> str:
         sout.m(meas_basis, m_out[0]),
     )
 
-    return prog
 
-
-def test_bell():
+def test_bell() -> None:
     """Test that a simple Bell prep and measure circuit can be created."""
     prog = Main(
         q := QReg("q", 2),
@@ -90,7 +89,7 @@ def test_bell():
 
 
 @pytest.mark.optional_dependency
-def test_bell_qir():
+def test_bell_qir() -> None:
     """Test that a simple Bell prep and measure circuit can be created."""
     prog: Main = Main(
         q := QReg("q", 2),
@@ -105,7 +104,7 @@ def test_bell_qir():
 
 
 @pytest.mark.optional_dependency
-def test_bell_qreg_qir():
+def test_bell_qreg_qir() -> None:
     """Test that a simple Bell prep and measure circuit can be created."""
     prog: Main = Main(
         q := QReg("q", 2),
@@ -119,7 +118,7 @@ def test_bell_qreg_qir():
     assert "__quantum__qis__h__body" in qir
 
 
-def test_if_bell():
+def test_if_bell() -> None:
     """Test that a more complex Bell prep and measure circuit with if statements can be created."""
 
     class Bell(Block):
@@ -194,9 +193,8 @@ def test_strange_program() -> None:
 
 
 @pytest.mark.optional_dependency
-def test_control_flow_qir():
+def test_control_flow_qir() -> None:
     """Test a program with control flow into QIR."""
-
     prog = Main(
         q := QReg("q", 2),
         m := CReg("m", 2),
@@ -231,9 +229,8 @@ def test_control_flow_qir():
 
 
 @pytest.mark.optional_dependency
-def test_plus_qir():
+def test_plus_qir() -> None:
     """Test a program with addition compiling into QIR."""
-
     prog = Main(
         _q := QReg("q", 2),
         m := CReg("m", 2),
@@ -248,9 +245,8 @@ def test_plus_qir():
 
 
 @pytest.mark.optional_dependency
-def test_nested_xor_qir():
+def test_nested_xor_qir() -> None:
     """Test a program with addition compiling into QIR."""
-
     prog = Main(
         _q := QReg("q", 2),
         m := CReg("m", 2),
@@ -267,9 +263,8 @@ def test_nested_xor_qir():
 
 
 @pytest.mark.optional_dependency
-def test_minus_qir():
+def test_minus_qir() -> None:
     """Test a program with addition compiling into QIR."""
-
     prog = Main(
         _q := QReg("q", 2),
         m := CReg("m", 2),
@@ -284,6 +279,6 @@ def test_minus_qir():
 
 
 @pytest.mark.optional_dependency
-def test_steane_qir():
+def test_steane_qir() -> None:
     """Test the teleportation program using the Steane code."""
     print(SlrConverter(telep("X", "X")).qir())

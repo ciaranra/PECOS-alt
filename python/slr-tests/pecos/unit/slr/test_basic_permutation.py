@@ -8,7 +8,7 @@ from pecos.slr import CReg, Main, Permute, SlrConverter
 # Test fixtures
 
 
-def create_basic_permutation_program():
+def create_basic_permutation_program() -> tuple:
     """Create a basic program with permutation of classical registers."""
     a = CReg("a", 2)
     b = CReg("b", 2)
@@ -26,7 +26,7 @@ def create_basic_permutation_program():
     return prog, a, b
 
 
-def create_same_register_permutation_program():
+def create_same_register_permutation_program() -> tuple:
     """Create a program with permutation within the same register."""
     a = CReg("a", 3)
 
@@ -47,7 +47,7 @@ def create_same_register_permutation_program():
 # QASM Tests
 
 
-def test_permutation_consistency_for_bits_in_qasm():
+def test_permutation_consistency_for_bits_in_qasm() -> None:
     """Test that permutation is consistent across multiple QASM generations."""
     prog = Main(
         a := CReg("a", 2),
@@ -77,7 +77,7 @@ def test_permutation_consistency_for_bits_in_qasm():
     assert "a[0] = a[0] ^ b[1];" not in qasm1  # Make sure XOR swap is not used
 
 
-def test_basic_permutation_qasm(basic_permutation_program):
+def test_basic_permutation_qasm(basic_permutation_program: tuple) -> None:
     """Test basic permutation functionality in QASM generation."""
     prog, _, _ = basic_permutation_program
 
@@ -114,7 +114,9 @@ def test_basic_permutation_qasm(basic_permutation_program):
     assert qasm == qasm2, "QASM generation is not deterministic"
 
 
-def test_same_register_permutation_qasm(same_register_permutation_program):
+def test_same_register_permutation_qasm(
+    same_register_permutation_program: tuple,
+) -> None:
     """Test permutation of elements within the same register in QASM."""
     prog, _ = same_register_permutation_program
 
@@ -142,7 +144,7 @@ def test_same_register_permutation_qasm(same_register_permutation_program):
 
 
 @pytest.mark.optional_dependency
-def test_basic_permutation_qir(basic_permutation_program):
+def test_basic_permutation_qir(basic_permutation_program: tuple) -> None:
     """Test basic permutation functionality in QIR generation."""
     prog, _, _ = basic_permutation_program
 
@@ -181,7 +183,9 @@ def test_basic_permutation_qir(basic_permutation_program):
 
 
 @pytest.mark.optional_dependency
-def test_same_register_permutation_qir(same_register_permutation_program):
+def test_same_register_permutation_qir(
+    same_register_permutation_program: tuple,
+) -> None:
     """Test permutation of elements within the same register in QIR."""
     prog, _ = same_register_permutation_program
 

@@ -3,18 +3,18 @@
 import re
 
 import pytest
-from pecos.qeclib import qubit as Q
+from pecos.qeclib import qubit
 from pecos.slr import CReg, Main, Permute, QReg, SlrConverter
 
 # Test fixtures
 
 
-def create_whole_register_permutation_program():
+def create_whole_register_permutation_program() -> tuple:
     """Create a program with permutation of whole registers."""
     a = CReg("a", 5)
     b = CReg("b", 5)
 
-    prog = Main(
+    return Main(
         a,
         b,
         Permute(
@@ -25,16 +25,14 @@ def create_whole_register_permutation_program():
         a[3].set(0),  # After permutation, this still refers to a[3]
     )
 
-    return prog
 
-
-def create_mixed_permutation_program():
+def create_mixed_permutation_program() -> tuple:
     """Create a program with both whole register and element permutations."""
     a = QReg("a", 3)
     b = QReg("b", 3)
     c = QReg("c", 3)
 
-    prog = Main(
+    return Main(
         a,
         b,
         c,
@@ -49,18 +47,16 @@ def create_mixed_permutation_program():
             b,
         ),
         # Apply gates to see the effect of permutations
-        Q.H(a[0]),  # Should apply to c[1] after both permutations
-        Q.X(b[1]),  # Should apply to a[1] after the whole register permutation
-        Q.Z(c[2]),  # Should apply to c[2] since it's not permuted
+        qubit.H(a[0]),  # Should apply to c[1] after both permutations
+        qubit.X(b[1]),  # Should apply to a[1] after the whole register permutation
+        qubit.Z(c[2]),  # Should apply to c[2] since it's not permuted
     )
-
-    return prog
 
 
 # QASM Tests
 
 
-def test_whole_register_permutation_qasm():
+def test_whole_register_permutation_qasm() -> None:
     """Test permutation of whole registers in QASM generation."""
     prog = create_whole_register_permutation_program()
     qasm = SlrConverter(prog).qasm()
@@ -91,7 +87,7 @@ def test_whole_register_permutation_qasm():
     assert "a[3] = 0;" in qasm, f"Expected 'a[3] = 0;' not found in QASM:\n{qasm}"
 
 
-def test_mixed_permutation_qasm():
+def test_mixed_permutation_qasm() -> None:
     """Test mixed whole register and element permutations in QASM generation."""
     prog = create_mixed_permutation_program()
     qasm = SlrConverter(prog).qasm()
@@ -122,7 +118,7 @@ def test_mixed_permutation_qasm():
 
 
 @pytest.mark.optional_dependency
-def test_whole_register_permutation_qir():
+def test_whole_register_permutation_qir() -> None:
     """Test permutation of whole registers in QIR generation."""
     prog = create_whole_register_permutation_program()
     qir = SlrConverter(prog).qir()
@@ -162,7 +158,7 @@ def test_whole_register_permutation_qir():
 
 
 @pytest.mark.optional_dependency
-def test_mixed_permutation_qir():
+def test_mixed_permutation_qir() -> None:
     """Test mixed whole register and element permutations in QIR generation."""
     prog = create_mixed_permutation_program()
     qir = SlrConverter(prog).qir()

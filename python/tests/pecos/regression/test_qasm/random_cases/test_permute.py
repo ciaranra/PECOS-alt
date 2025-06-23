@@ -11,20 +11,18 @@
 
 """Testing SLR->QASM permute cases."""
 
-from pecos.qeclib import qubit as p
-from pecos.slr import Bit, Block, Comment, CReg, If, Main, Permute, QReg, Qubit, Repeat, SlrConverter
-
 from pecos.qeclib.steane.steane_class import Steane
+from pecos.slr import Block, CReg, Main, Permute, SlrConverter
 
-def test_permute1():
+
+def test_permute1() -> None:
+    """Test basic permutation functionality with Steane codes."""
     prog = Main(
         a := Steane("a"),
         b := Steane("b"),
         meas := CReg("meas", 2),
-        Permute(a.d,
-                b.d),
-        Permute(a.a,
-                b.a),
+        Permute(a.d, b.d),
+        Permute(a.a, b.a),
         a.mx(meas[0]),
         b.my(meas[1]),
     )
@@ -39,13 +37,15 @@ def test_permute1():
     assert "rx(-pi/2) a_d[0];" in qasm.lower()
     assert "measure a_d[0] -> b_raw_meas[0];" in qasm.lower()
 
-def test_permute2():
-    def my_permute(a: Steane, b: Steane):
-        block = Block(
-            Permute(a.d,b.d),
+
+def test_permute2() -> None:
+    """Test permutation functionality using block structure."""
+
+    def my_permute(a: Steane, b: Steane) -> Block:
+        return Block(
+            Permute(a.d, b.d),
             Permute(a.a, b.a),
         )
-        return block
 
     prog = Main(
         a := Steane("a"),
