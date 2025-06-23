@@ -219,6 +219,12 @@ pub fn py_execute_qir(
         }
     }
     
+    // Check for pytest environment and warn about potential segfaults
+    if std::env::var("PYTEST_CURRENT_TEST").is_ok() {
+        // We're running in pytest - execution works but may segfault during cleanup
+        eprintln!("Warning: QIR execution in pytest may segfault during cleanup (output will be produced first)");
+    }
+    
     // Initialize QIR execution context
     init_qir_context(Some(path.file_stem()
         .and_then(|s| s.to_str())
@@ -304,6 +310,7 @@ pub fn py_validate_qir_format(qir_path: &str) -> PyResult<PyObject> {
         Ok(result.into())
     })
 }
+
 
 /// Get QIR execution diagnostic report
 #[pyfunction]

@@ -53,6 +53,11 @@ path = "src/bin/test_segfault_stress.rs"
 [features]
 default = ["pmir-pipeline"]
 
+# LLVM JIT execution: QIR file execution via LLVM JIT compilation
+# TEMPORARILY DISABLED due to pytest environment conflicts and segfaults
+# TODO: Re-implement with proper isolation or alternative execution strategy
+llvm-jit = []
+
 # PMIR pipeline: HUGR → PAST → PMIR (MLIR) → LLVM IR
 # Uses MLIR toolchain for compilation
 pmir-pipeline = ["hugr-core", "anyhow"]
@@ -63,6 +68,9 @@ hugr-llvm-pipeline = ["hugr-core", "hugr-llvm", "anyhow"]
 
 # All compilation pipelines available
 all-pipelines = ["pmir-pipeline", "hugr-llvm-pipeline"]
+
+# All features including LLVM JIT (for advanced users)
+all-features = ["all-pipelines", "llvm-jit"]
 
 [lints]
 workspace = true

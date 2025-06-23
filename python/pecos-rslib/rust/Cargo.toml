@@ -23,6 +23,10 @@ test = false
 [features]
 default = ["pmir-pipeline"]
 
+# LLVM JIT execution: QIR file execution via LLVM JIT compilation
+# TEMPORARILY DISABLED due to pytest environment conflicts and segfaults
+llvm-jit = ["pecos-qir/llvm-jit"]
+
 # PMIR pipeline: HUGR → PAST → PMIR (MLIR) → LLVM IR
 pmir-pipeline = ["pecos-qir/pmir-pipeline"]
 
@@ -31,6 +35,9 @@ hugr-llvm-pipeline = ["pecos-qir/hugr-llvm-pipeline"]
 
 # All compilation pipelines
 all-pipelines = ["pmir-pipeline", "hugr-llvm-pipeline"]
+
+# All features including LLVM JIT (for testing/advanced use)
+all-features = ["all-pipelines", "llvm-jit"]
 
 # Legacy feature for backward compatibility
 hugr = ["hugr-llvm-pipeline"]
