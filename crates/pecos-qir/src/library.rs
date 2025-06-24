@@ -185,11 +185,11 @@ impl QirLibrary {
             let library_result = if cfg!(unix) {
                 #[cfg(unix)]
                 {
-                    // Always use RTLD_LOCAL in Python environments to prevent symbol conflicts
-                    // This is a conservative approach that sacrifices some performance for stability
-                    debug!("QIR: Using RTLD_LOCAL for symbol isolation (Python environment)");
+                    // Use RTLD_LOCAL for symbol isolation and RTLD_NODELETE to prevent segfaults
+                    // RTLD_NODELETE prevents the library from being unloaded during cleanup
+                    debug!("QIR: Using RTLD_LOCAL | RTLD_NODELETE for library loading");
                     unsafe {
-                        UnixLibrary::open(Some(path), libc::RTLD_NOW | libc::RTLD_LOCAL)
+                        UnixLibrary::open(Some(path), libc::RTLD_NOW | libc::RTLD_LOCAL | libc::RTLD_NODELETE)
                             .map(Library::from)
                     }
                 }
@@ -598,12 +598,13 @@ impl Drop for QirLibrary {
         let is_python_test = std::env::var("PYTEST_CURRENT_TEST").is_ok() 
             || std::env::var("PYTHON_TEST_MODE").is_ok();
         
-        if is_python_test && strong_count == 1 {
-            // In test environments, try to properly reset before dropping
-            debug!("QIR Library: Test environment - attempting cleanup reset");
-            if let Err(e) = self.reset() {
-                debug!("QIR Library: Reset during drop failed: {}", e);
-            }
+        // If this is the last reference, set shutdown flag to prevent runtime re-initialization
+        if strong_count == 1 {
+            crate::runtime_registry::set_shutting_down();
+            
+            // Skip reset entirely during drop to avoid segfaults
+            // The runtime will be cleaned up when the library is unloaded
+            debug!("QIR Library: Skipping reset during drop to avoid segfaults");
         }
         
         if is_python_test {

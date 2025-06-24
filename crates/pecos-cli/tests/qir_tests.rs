@@ -153,7 +153,6 @@ fn get_values(json_output: &str) -> Vec<String> {
 
 /// Test that QIR Bell state produces correct 50/50 distribution
 #[test]
-#[ignore = "QIR tests are temporarily disabled due to segfault during cleanup affecting output capture"]
 fn test_qir_bell_state_distribution() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize test environment and acquire global lock to ensure sequential execution
     setup();
@@ -249,7 +248,6 @@ fn test_qir_bell_state_distribution() -> Result<(), Box<dyn std::error::Error>> 
 
 /// Test that QIR produces deterministic results with the same seed
 #[test]
-#[ignore = "QIR tests are temporarily disabled due to segfault during cleanup affecting output capture"]
 fn test_qir_determinism() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize test environment and acquire global lock to ensure sequential execution
     setup();
@@ -291,7 +289,6 @@ fn test_qir_determinism() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Test QIR compilation and execution
 #[test]
-#[ignore = "QIR tests are temporarily disabled due to segfault during cleanup affecting output capture"]
 fn test_qir_compile_and_run() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize test environment and acquire global lock to ensure sequential execution
     setup();
@@ -358,7 +355,6 @@ fn test_qir_compile_and_run() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Test QIR with various shot counts
 #[test]
-#[ignore = "QIR tests are temporarily disabled due to segfault during cleanup affecting output capture"]
 fn test_qir_shot_counts() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize test environment and acquire lock to ensure sequential execution
     setup();
@@ -408,7 +404,6 @@ fn test_qir_shot_counts() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Test QIR with multiple workers
 #[test]
-#[ignore = "QIR tests are temporarily disabled due to segfault during cleanup affecting output capture"]
 fn test_qir_multiple_workers() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize test environment and acquire lock to ensure sequential execution
     setup();

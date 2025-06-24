@@ -10,6 +10,8 @@ pub mod qir_compat; // QIR compatibility layer (alternative naming conventions)
 pub mod qir_utils; // QIR utilities for entry point detection
 pub mod runtime; // Python-friendly API functions
 pub mod runtime_context; // Thread-local runtime context for isolation
+pub mod runtime_state; // Instance-based runtime state
+pub mod runtime_registry; // Runtime registry for thread isolation
 
 // HUGR-LLVM pipeline functionality
 #[cfg(feature = "hugr-llvm-pipeline")]

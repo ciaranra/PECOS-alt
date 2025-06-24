@@ -302,8 +302,10 @@ impl HugrCompiler {
         let llvm_ir = llvm_module.to_string();
 
         // Add standard QIR prologue and fix entry point signature
+        println!("DEBUG: HUGR Compiler quantum_naming: {:?}", self.config.quantum_naming);
         let standard_qir = add_standard_qir_prologue(&llvm_ir, &self.config.quantum_naming);
         let standard_qir = fix_entry_point_signature(&standard_qir, &self.config.quantum_naming);
+        let standard_qir = convert_immediate_to_deferred_measurements(&standard_qir, &self.config.quantum_naming);
 
         // Write to output file
         fs::write(output_path, standard_qir).map_err(|e| {
@@ -466,6 +468,78 @@ fn fix_entry_point_signature(llvm_ir: &str, llvm_convention: &QuantumLlvmConvent
     }
     
     result
+}
+
+/// Convert immediate measurements to deferred measurements using convention adapters
+fn convert_immediate_to_deferred_measurements(llvm_ir: &str, llvm_convention: &QuantumLlvmConvention) -> String {
+    match llvm_convention {
+        QuantumLlvmConvention::Hugr => {
+            // For HUGR convention, convert immediate measurement calls to deferred ones
+            println!("DEBUG: Converting immediate measurements for HUGR convention");
+            let lines: Vec<&str> = llvm_ir.lines().collect();
+            let mut result = String::new();
+            let mut conversions_made = 0;
+            
+            for line in lines {
+                if line.contains("call i32 @__quantum__qis__m__body(") {
+                    // Convert: %result = call i32 @__quantum__qis__m__body(i64 %qubit, i64 %result_id)
+                    // To:      call void @__hugr__quantum__qis__m__body(i64 %qubit, i64 %result_id)
+                    println!("DEBUG: Found immediate measurement call: {}", line);
+                    conversions_made += 1;
+                    
+                    // First replace the function call
+                    let modified_line = line.replace("call i32 @__quantum__qis__m__body(", "call void @__hugr__quantum__qis__m__body(");
+                    
+                    // Remove assignment part if present
+                    if modified_line.contains(" = call") {
+                        let parts: Vec<&str> = modified_line.splitn(2, " = call").collect();
+                        if parts.len() == 2 {
+                            // Get the indentation from the original line
+                            let indent = parts[0].len() - parts[0].trim_start().len();
+                            result.push_str(&" ".repeat(indent));
+                            result.push_str("call");
+                            result.push_str(parts[1]);
+                        } else {
+                            result.push_str(&modified_line);
+                        }
+                    } else {
+                        result.push_str(&modified_line);
+                    }
+                    println!("DEBUG: Converted to: {}", result.lines().last().unwrap_or(""));
+                } else if line.contains("call i32 @__quantum__qis__m__body_i64(") {
+                    // Convert i64 variant as well
+                    let modified_line = line
+                        .replace("call i32 @__quantum__qis__m__body_i64(", "call void @__hugr__quantum__qis__m__body(")
+                        .replace("call u32 @__quantum__qis__m__body_i64(", "call void @__hugr__quantum__qis__m__body(");
+                    
+                    // Remove any assignment to the result variable
+                    let parts: Vec<&str> = modified_line.split(" = call").collect();
+                    if parts.len() > 1 {
+                        result.push_str("  call");
+                        result.push_str(parts[1]);
+                    } else {
+                        result.push_str(&modified_line);
+                    }
+                } else if line.contains("declare i32 @__quantum__qis__m__body(") {
+                    // Convert function declarations
+                    result.push_str("declare void @__hugr__quantum__qis__m__body(i64, i64)");
+                } else if line.contains("declare i32 @__quantum__qis__m__body_i64(") || line.contains("declare u32 @__quantum__qis__m__body_i64(") {
+                    // Convert i64 function declarations
+                    result.push_str("declare void @__hugr__quantum__qis__m__body(i64, i64)");
+                } else {
+                    result.push_str(line);
+                }
+                result.push('\n');
+            }
+            
+            println!("DEBUG: Made {} measurement conversions", conversions_made);
+            result
+        }
+        QuantumLlvmConvention::Qir => {
+            // For QIR convention, no conversion needed - already uses deferred measurements
+            llvm_ir.to_string()
+        }
+    }
 }
 
 impl Default for HugrCompiler {

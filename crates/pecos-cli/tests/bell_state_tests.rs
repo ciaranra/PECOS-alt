@@ -14,21 +14,6 @@
 ///
 /// These tests help verify that the quantum simulator correctly implements
 /// quantum entanglement, superposition, and noise models.
-///
-/// ## Known Issues
-///
-/// QIR tests are currently disabled due to a segmentation fault that occurs during
-/// cleanup after successful QIR execution. The QIR programs execute correctly and
-/// produce valid output, but the segfault during cleanup prevents the test harness
-/// from properly capturing the output in some environments.
-///
-/// When run directly from the command line (e.g., `cargo run -p pecos-cli -- run examples/qir/bell.ll`),
-/// QIR execution works correctly and produces the expected output. The issue only
-/// affects the test environment's ability to capture output when the process exits
-/// with a segfault.
-///
-/// To re-enable these tests once the segfault issue is resolved, remove the
-/// `#[ignore]` attributes from the affected tests.
 use assert_cmd::prelude::*;
 use pecos::prelude::*;
 use std::collections::HashMap;

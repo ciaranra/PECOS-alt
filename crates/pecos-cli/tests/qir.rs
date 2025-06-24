@@ -2,19 +2,11 @@
 ///
 /// This test verifies that QIR files can be compiled and executed correctly.
 /// Note: This test requires LLVM tools and GCC toolchain to be available.
-///
-/// ## Known Issues
-///
-/// This test is currently disabled due to a segmentation fault that occurs during
-/// cleanup after successful QIR execution. The QIR programs execute correctly and
-/// produce valid output, but the segfault during cleanup prevents the test harness
-/// from properly capturing the output in some environments.
 use assert_cmd::prelude::*;
 use std::path::PathBuf;
 use std::process::Command;
 
 #[test]
-#[ignore = "QIR tests are temporarily disabled due to segfault during cleanup affecting output capture"]
 fn test_pecos_compile_and_run() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let test_file = manifest_dir.join("../../examples/qir/qprog.ll");

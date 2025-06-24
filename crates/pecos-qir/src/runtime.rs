@@ -1,17 +1,31 @@
-use pecos_engines::byte_message::{ByteMessage, ByteMessageBuilder};
-use pecos_engines::shot_results::{Data, Shot};
-use std::collections::HashMap;
+/// Instance-based QIR Runtime Implementation with Convention Adapters
+///
+/// This runtime eliminates global state by using RuntimeRegistry to map
+/// threads to their own isolated runtime states. Each worker/thread operates
+/// independently without sharing state until results are combined.
+///
+/// The runtime is organized into three layers:
+/// 1. Core runtime implementation (convention-agnostic)
+/// 2. QIR convention adapter (pointer-based)
+/// 3. HUGR convention adapter (integer-based)
+
+use crate::runtime_registry::{RuntimeRegistry, initialize_registry};
 use std::env;
 use std::ffi::{CStr, CString, c_char};
-use std::io::{self, Write};
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
+use std::sync::Once;
 
-/// Simplified QIR Runtime Implementation
-///
-/// This is a simplified version that removes the complex context system
-/// and should have much better performance.
+// Ensure the runtime registry is initialized exactly once
+static INIT: Once = Once::new();
+
+fn ensure_runtime_initialized() {
+    INIT.call_once(|| {
+        initialize_registry();
+    });
+    // Always clear shutdown flag when ensuring runtime is initialized
+    // This handles cases where Python keeps the process alive between tests
+    crate::runtime_registry::clear_shutting_down();
+}
 
 /// Helper function to get the current thread ID as a string
 fn get_thread_id() -> String {
@@ -24,101 +38,7 @@ fn i64_to_usize(value: i64) -> usize {
     value as usize
 }
 
-// Simple global counters for qubit and result allocation
-static NEXT_QUBIT_ID: AtomicUsize = AtomicUsize::new(0);
-static NEXT_RESULT_ID: AtomicUsize = AtomicUsize::new(0);
-
-// Simple global state
-use std::sync::LazyLock;
-
-static MESSAGE_BUILDER: LazyLock<Mutex<ByteMessageBuilder>> =
-    LazyLock::new(|| {
-        let mut builder = ByteMessageBuilder::new();
-        let _ = builder.for_quantum_operations();
-        Mutex::new(builder)
-    });
-
-static RUNTIME_STATE: LazyLock<Mutex<RuntimeState>> =
-    LazyLock::new(|| Mutex::new(RuntimeState::new()));
-
-static LAST_SHOT: LazyLock<Mutex<Option<Shot>>> =
-    LazyLock::new(|| Mutex::new(None));
-
-// Simple structure to hold runtime state
-struct RuntimeState {
-    measurement_results: HashMap<usize, bool>,
-    classical_registers: HashMap<String, i64>,
-    register_bit_positions: HashMap<String, usize>,
-    result_mappings: HashMap<usize, (String, usize)>,
-}
-
-impl RuntimeState {
-    fn new() -> Self {
-        Self {
-            measurement_results: HashMap::new(),
-            classical_registers: HashMap::new(),
-            register_bit_positions: HashMap::new(),
-            result_mappings: HashMap::new(),
-        }
-    }
-
-    fn reset(&mut self) {
-        self.measurement_results.clear();
-        self.classical_registers.clear();
-        self.register_bit_positions.clear();
-        self.result_mappings.clear();
-    }
-    
-    fn apply_mappings(&mut self) {
-        // Clear existing register values
-        self.classical_registers.clear();
-
-        // Apply all result mappings to build register values
-        for (result_id, (register_name, bit_position)) in &self.result_mappings {
-            // Get the measurement result
-            let measurement_value = self
-                .measurement_results
-                .get(result_id)
-                .copied()
-                .unwrap_or(false);
-
-            // Get or create the register
-            let register = self
-                .classical_registers
-                .entry(register_name.clone())
-                .or_insert(0);
-
-            // Set the bit
-            if measurement_value {
-                *register |= 1i64 << bit_position;
-            } else {
-                *register &= !(1i64 << bit_position);
-            }
-        }
-    }
-
-    fn export_shot(&self) -> Shot {
-        let mut shot = Shot::default();
-
-        // Export all classical registers to the shot
-        for (name, &value) in &self.classical_registers {
-            // Store all values as I64 for consistency with QIR standard
-            shot.data.insert(name.clone(), Data::I64(value));
-        }
-
-        shot
-    }
-}
-
 /// Helper function to check if we should print commands
-///
-/// This function checks the `QIR_RUNTIME_QUIET` environment variable
-/// to determine if commands should be printed to stdout.
-///
-/// # Returns
-///
-/// * `true` - If commands should be printed
-/// * `false` - If commands should not be printed
 fn should_print_commands() -> bool {
     match env::var("QIR_RUNTIME_QUIET") {
         Ok(val) => val != "1",
@@ -126,373 +46,576 @@ fn should_print_commands() -> bool {
     }
 }
 
-/// Removed pointer conversion functions - no longer needed with direct usize parameters
+// =============================================================================
+// Core Runtime Implementation (Convention-Agnostic)
+// =============================================================================
+
+mod core_runtime {
+    use super::*;
+    
+    /// Reset the QIR runtime state for the current thread
+    pub fn reset() {
+        ensure_runtime_initialized();
+        let thread_id = get_thread_id();
+
+        // Use try_with_current_runtime to avoid auto-initialization during cleanup
+        if let Some(()) = RuntimeRegistry::try_with_current_runtime(|state| {
+            state.reset();
+            if should_print_commands() {
+                println!("[Thread {thread_id}] Reset QIR runtime state");
+            }
+        }) {
+            // Successfully reset
+        } else {
+            // No runtime to reset - this is fine during cleanup
+            if should_print_commands() {
+                println!("[Thread {thread_id}] No runtime state to reset (already cleaned up)");
+            }
+        }
+    }
+    
+    /// Initialize the runtime
+    pub fn initialize() {
+        ensure_runtime_initialized();
+        
+        RuntimeRegistry::with_current_runtime(|state| {
+            state.reset();
+        });
+
+        if should_print_commands() {
+            println!("Quantum runtime initialized");
+        }
+    }
+    
+    /// Allocate a qubit
+    pub fn allocate_qubit() -> usize {
+        RuntimeRegistry::with_current_runtime(|state| {
+            let id = state.allocate_qubit();
+            
+            if should_print_commands() {
+                let thread_id = get_thread_id();
+                println!("[Thread {thread_id}] Allocated qubit {id}");
+            }
+            
+            id
+        }).unwrap_or(0)
+    }
+    
+    /// Allocate a result
+    pub fn allocate_result() -> usize {
+        RuntimeRegistry::with_current_runtime(|state| {
+            let id = state.allocate_result();
+            
+            if should_print_commands() {
+                let thread_id = get_thread_id();
+                println!("[Thread {thread_id}] Allocated result {id}");
+            }
+            
+            id
+        }).unwrap_or(0)
+    }
+    
+    /// Release a qubit
+    pub fn release_qubit(qubit_id: usize) {
+        if should_print_commands() {
+            let thread_id = get_thread_id();
+            println!("[Thread {thread_id}] Released qubit {qubit_id}");
+        }
+    }
+    
+    /// Release a result
+    pub fn release_result(result_id: usize) {
+        if should_print_commands() {
+            let thread_id = get_thread_id();
+            println!("[Thread {thread_id}] Released result {result_id}");
+        }
+    }
+    
+    // Quantum Gate Operations
+    
+    pub fn h_gate(qubit_id: usize) {
+        if should_print_commands() {
+            let thread_id = get_thread_id();
+            println!("[Thread {thread_id}] H gate on qubit {qubit_id}");
+        }
+        
+        RuntimeRegistry::with_current_runtime(|state| {
+            let _ = state.message_builder_mut().add_h(&[qubit_id]);
+        });
+    }
+    
+    pub fn x_gate(qubit_id: usize) {
+        if should_print_commands() {
+            let thread_id = get_thread_id();
+            println!("[Thread {thread_id}] X gate on qubit {qubit_id}");
+        }
+        
+        RuntimeRegistry::with_current_runtime(|state| {
+            let _ = state.message_builder_mut().add_x(&[qubit_id]);
+        });
+    }
+    
+    pub fn y_gate(qubit_id: usize) {
+        RuntimeRegistry::with_current_runtime(|state| {
+            let _ = state.message_builder_mut().add_y(&[qubit_id]);
+        });
+    }
+    
+    pub fn z_gate(qubit_id: usize) {
+        RuntimeRegistry::with_current_runtime(|state| {
+            let _ = state.message_builder_mut().add_z(&[qubit_id]);
+        });
+    }
+    
+    pub fn cx_gate(control_id: usize, target_id: usize) {
+        if should_print_commands() {
+            let thread_id = get_thread_id();
+            println!("[Thread {thread_id}] CX gate: control={control_id}, target={target_id}");
+        }
+        
+        RuntimeRegistry::with_current_runtime(|state| {
+            let _ = state.message_builder_mut().add_cx(&[control_id], &[target_id]);
+        });
+    }
+    
+    pub fn cy_gate(control_id: usize, target_id: usize) {
+        RuntimeRegistry::with_current_runtime(|state| {
+            let _ = state.message_builder_mut().add_cy(&[control_id], &[target_id]);
+        });
+    }
+    
+    pub fn cz_gate(control_id: usize, target_id: usize) {
+        RuntimeRegistry::with_current_runtime(|state| {
+            let _ = state.message_builder_mut().add_cz(&[control_id], &[target_id]);
+        });
+    }
+    
+    pub fn ch_gate(control_id: usize, target_id: usize) {
+        RuntimeRegistry::with_current_runtime(|state| {
+            // CH implemented as H on target, then CX
+            let _ = state.message_builder_mut().add_h(&[target_id]);
+            let _ = state.message_builder_mut().add_cx(&[control_id], &[target_id]);
+            let _ = state.message_builder_mut().add_h(&[target_id]);
+        });
+    }
+    
+    pub fn s_gate(qubit_id: usize) {
+        RuntimeRegistry::with_current_runtime(|state| {
+            let _ = state.message_builder_mut().add_sz(&[qubit_id]);
+        });
+    }
+    
+    pub fn sdg_gate(qubit_id: usize) {
+        RuntimeRegistry::with_current_runtime(|state| {
+            let _ = state.message_builder_mut().add_szdg(&[qubit_id]);
+        });
+    }
+    
+    pub fn t_gate(qubit_id: usize) {
+        RuntimeRegistry::with_current_runtime(|state| {
+            let _ = state.message_builder_mut().add_t(&[qubit_id]);
+        });
+    }
+    
+    pub fn tdg_gate(qubit_id: usize) {
+        RuntimeRegistry::with_current_runtime(|state| {
+            let _ = state.message_builder_mut().add_tdg(&[qubit_id]);
+        });
+    }
+    
+    pub fn rx_gate(theta: f64, qubit_id: usize) {
+        RuntimeRegistry::with_current_runtime(|state| {
+            let _ = state.message_builder_mut().add_rx(theta, &[qubit_id]);
+        });
+    }
+    
+    pub fn ry_gate(theta: f64, qubit_id: usize) {
+        RuntimeRegistry::with_current_runtime(|state| {
+            let _ = state.message_builder_mut().add_ry(theta, &[qubit_id]);
+        });
+    }
+    
+    pub fn rz_gate(theta: f64, qubit_id: usize) {
+        RuntimeRegistry::with_current_runtime(|state| {
+            let _ = state.message_builder_mut().add_rz(theta, &[qubit_id]);
+        });
+    }
+    
+    pub fn r1xy_gate(theta: f64, phi: f64, qubit_id: usize) {
+        RuntimeRegistry::with_current_runtime(|state| {
+            let _ = state.message_builder_mut().add_r1xy(theta, phi, &[qubit_id]);
+        });
+    }
+    
+    pub fn crz_gate(theta: f64, control_id: usize, target_id: usize) {
+        RuntimeRegistry::with_current_runtime(|state| {
+            // CRZ implemented as CX-RZ-CX sequence
+            let _ = state.message_builder_mut().add_cx(&[control_id], &[target_id]);
+            let _ = state.message_builder_mut().add_rz(theta / 2.0, &[target_id]);
+            let _ = state.message_builder_mut().add_cx(&[control_id], &[target_id]);
+            let _ = state.message_builder_mut().add_rz(-theta / 2.0, &[target_id]);
+        });
+    }
+    
+    pub fn ccx_gate(control1_id: usize, control2_id: usize, target_id: usize) {
+        RuntimeRegistry::with_current_runtime(|state| {
+            // CCX (Toffoli) - simplified implementation
+            let _ = state.message_builder_mut().add_h(&[target_id]);
+            let _ = state.message_builder_mut().add_cx(&[control2_id], &[target_id]);
+            let _ = state.message_builder_mut().add_tdg(&[target_id]);
+            let _ = state.message_builder_mut().add_cx(&[control1_id], &[target_id]);
+            let _ = state.message_builder_mut().add_t(&[target_id]);
+            let _ = state.message_builder_mut().add_cx(&[control2_id], &[target_id]);
+            let _ = state.message_builder_mut().add_tdg(&[target_id]);
+            let _ = state.message_builder_mut().add_cx(&[control1_id], &[target_id]);
+            let _ = state.message_builder_mut().add_t(&[control2_id]);
+            let _ = state.message_builder_mut().add_t(&[target_id]);
+            let _ = state.message_builder_mut().add_cx(&[control1_id], &[control2_id]);
+            let _ = state.message_builder_mut().add_t(&[control1_id]);
+            let _ = state.message_builder_mut().add_tdg(&[control2_id]);
+            let _ = state.message_builder_mut().add_cx(&[control1_id], &[control2_id]);
+            let _ = state.message_builder_mut().add_h(&[target_id]);
+        });
+    }
+    
+    pub fn szz_gate(qubit1_id: usize, qubit2_id: usize) {
+        RuntimeRegistry::with_current_runtime(|state| {
+            let _ = state.message_builder_mut().add_szz(&[qubit1_id], &[qubit2_id]);
+        });
+    }
+    
+    pub fn zz_gate(qubit1_id: usize, qubit2_id: usize) {
+        RuntimeRegistry::with_current_runtime(|state| {
+            // ZZ gate implementation using CZ
+            let _ = state.message_builder_mut().add_cz(&[qubit1_id], &[qubit2_id]);
+        });
+    }
+    
+    pub fn rzz_gate(theta: f64, qubit1_id: usize, qubit2_id: usize) {
+        RuntimeRegistry::with_current_runtime(|state| {
+            let _ = state.message_builder_mut().add_rzz(theta, &[qubit1_id], &[qubit2_id]);
+        });
+    }
+    
+    pub fn reset_qubit(qubit_id: usize) {
+        RuntimeRegistry::with_current_runtime(|state| {
+            // Reset implemented as preparation
+            let _ = state.message_builder_mut().add_prep(&[qubit_id]);
+        });
+    }
+    
+    pub fn measure(qubit_id: usize, _result_id: usize) {
+        if should_print_commands() {
+            let thread_id = get_thread_id();
+            println!("[Thread {thread_id}] Measuring qubit {qubit_id}");
+        }
+        
+        RuntimeRegistry::with_current_runtime(|state| {
+            let _ = state.message_builder_mut().add_measurements(&[qubit_id]);
+        });
+    }
+    
+    pub fn record_result_output(result_id: usize, name: &str) {
+        if should_print_commands() {
+            let thread_id = get_thread_id();
+            println!("[Thread {thread_id}] Recording result {result_id} as '{name}'");
+        }
+
+        RuntimeRegistry::with_current_runtime(|state| {
+            // Get the next bit position for this register
+            let current_bit_position = state.get_register_bit_width(name);
+            
+            // Store the mapping for when we get the actual measurement result
+            state.map_result_to_register(result_id, name.to_string(), current_bit_position);
+
+            if should_print_commands() {
+                let thread_id = get_thread_id();
+                println!(
+                    "[Thread {thread_id}] Mapped result {result_id} to register '{name}' bit {current_bit_position}"
+                );
+            }
+        });
+    }
+    
+    
+    pub fn update_measurement_results(results: &[u32]) {
+        let thread_id = get_thread_id();
+        
+        if should_print_commands() {
+            println!("[Thread {thread_id}] Updating {} measurement results", results.len() / 2);
+        }
+
+        RuntimeRegistry::with_current_runtime(|state| {
+            state.update_measurement_results(results);
+            
+            if should_print_commands() {
+                for i in (0..results.len()).step_by(2) {
+                    let result_id = results[i] as usize;
+                    let measurement_value = results[i + 1] != 0;
+                    println!(
+                        "[Thread {thread_id}] Updated measurement result {result_id} = {measurement_value}"
+                    );
+                }
+            }
+        });
+    }
+    
+    pub fn finalize_shot() {
+        let thread_id = get_thread_id();
+        
+        RuntimeRegistry::with_current_runtime(|state| {
+            state.finalize_shot();
+            
+            if should_print_commands() {
+                println!("[Thread {thread_id}] Finalized shot");
+            }
+        });
+    }
+}
 
 // =============================================================================
-// QIR Runtime API Functions
+// QIR Convention Adapter (Pointer-based)
 // =============================================================================
 
 /// Reset the QIR runtime state
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qir_runtime_reset() {
-    let thread_id = get_thread_id();
-
-    // Reset the message builder
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        builder.reset();
-        let _ = builder.for_quantum_operations();
-
-        if should_print_commands() {
-            println!("[Thread {thread_id}] Reset QIR runtime (reset message builder)");
-        }
-    } else {
-        // If we can't lock the mutex, print an error
-        if should_print_commands() {
-            eprintln!(
-                "[Thread {thread_id}] ERROR: Failed to lock message builder mutex during reset"
-            );
-        }
-    }
-
-    // Reset qubit and result counters
-    NEXT_QUBIT_ID.store(0, Ordering::SeqCst);
-    NEXT_RESULT_ID.store(0, Ordering::SeqCst);
-
-    // Reset runtime state
-    if let Ok(mut state) = RUNTIME_STATE.lock() {
-        state.reset();
-        if should_print_commands() {
-            println!("[Thread {thread_id}] Reset runtime state (classical registers cleared)");
-        }
-    } else if should_print_commands() {
-        eprintln!("[Thread {thread_id}] ERROR: Failed to lock runtime state mutex during reset");
-    }
+    core_runtime::reset();
 }
 
 /// Initialize the QIR runtime
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__initialize(_config: *const u8) {
-    // Reset global state for new program execution
-    NEXT_QUBIT_ID.store(0, Ordering::SeqCst);
-    NEXT_RESULT_ID.store(0, Ordering::SeqCst);
-
-    // Reset the message builder to clear any existing commands
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        *builder = ByteMessageBuilder::new();
-        let _ = builder.for_quantum_operations();
-    }
-
-    if should_print_commands() {
-        println!("Quantum runtime initialized");
-    }
+    core_runtime::initialize();
 }
-
 
 /// Standard QIR qubit allocation - returns pointer
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__qubit_allocate() -> *const u8 {
-    let id = NEXT_QUBIT_ID.fetch_add(1, Ordering::SeqCst);
-    
-    if should_print_commands() {
-        let thread_id = get_thread_id();
-        println!("[Thread {thread_id}] Allocated qubit {id}");
-    }
-    
-    id as *const u8
+    core_runtime::allocate_qubit() as *const u8
 }
 
 /// Standard QIR result allocation - returns pointer  
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__result_allocate() -> *const u8 {
-    let id = NEXT_RESULT_ID.fetch_add(1, Ordering::SeqCst);
-    
-    if should_print_commands() {
-        let thread_id = get_thread_id();
-        println!("[Thread {thread_id}] Allocated result {id}");
-    }
-    
-    id as *const u8
+    core_runtime::allocate_result() as *const u8
 }
 
 /// Release a qubit (pointer version)
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__qubit_release(qubit_ptr: *const u8) {
     let qubit_id = qubit_ptr as usize;
-    if should_print_commands() {
-        let thread_id = get_thread_id();
-        println!("[Thread {thread_id}] Released qubit {qubit_id}");
-    }
+    core_runtime::release_qubit(qubit_id);
 }
 
 /// Release a result (pointer version)
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__result_release(result_ptr: *const u8) {
     let result_id = result_ptr as usize;
-    if should_print_commands() {
-        let thread_id = get_thread_id();
-        println!("[Thread {thread_id}] Released result {result_id}");
-    }
+    core_runtime::release_result(result_id);
 }
 
-// =============================================================================
-// Quantum Gate Operations (Dual Convention Support)
-// =============================================================================
+// QIR Gate Operations (Pointer Convention)
 
-/// Hadamard gate (QIR pointer version)
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__h__body(qubit_ptr: *const u8) {
-    let thread_id = get_thread_id();
     let qubit_id = qubit_ptr as usize;
-    
-    if should_print_commands() {
-        println!("[Thread {thread_id}] H gate on qubit {qubit_id}");
-    }
-    
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_h(&[qubit_id]);
-    }
+    core_runtime::h_gate(qubit_id);
 }
 
-/// Hadamard gate (HUGR integer version)
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__h__body__hugr(qubit: i64) {
-    let thread_id = get_thread_id();
-    let qubit_id = i64_to_usize(qubit);
-    
-    if should_print_commands() {
-        println!("[Thread {thread_id}] H gate (HUGR) on qubit {qubit_id}");
-    }
-    
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_h(&[qubit_id]);
-    }
-}
-
-/// X gate (QIR pointer version)
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__x__body(qubit_ptr: *const u8) {
-    let thread_id = get_thread_id();
     let qubit_id = qubit_ptr as usize;
-    
-    if should_print_commands() {
-        println!("[Thread {thread_id}] X gate on qubit {qubit_id}");
-    }
-    
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_x(&[qubit_id]);
-    }
+    core_runtime::x_gate(qubit_id);
 }
 
-/// X gate (HUGR integer version)
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__x__body__hugr(qubit: i64) {
-    let thread_id = get_thread_id();
-    let qubit_id = i64_to_usize(qubit);
-    
-    if should_print_commands() {
-        println!("[Thread {thread_id}] X gate (HUGR) on qubit {qubit_id}");
-    }
-    
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_x(&[qubit_id]);
-    }
-}
-
-/// Y gate (QIR standard version)
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__y__body(qubit: usize) {
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_y(&[qubit]);
-    }
+    core_runtime::y_gate(qubit);
 }
 
-/// Y gate (HUGR integer version)
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__y__body__hugr(qubit: i64) {
-    let qubit_id = i64_to_usize(qubit);
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_y(&[qubit_id]);
-    }
-}
-
-/// Z gate (QIR standard version)
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__z__body(qubit: usize) {
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_z(&[qubit]);
-    }
+    core_runtime::z_gate(qubit);
 }
 
-/// Z gate (HUGR integer version)
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__z__body__hugr(qubit: i64) {
-    let qubit_id = i64_to_usize(qubit);
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_z(&[qubit_id]);
-    }
-}
-
-/// CX gate (QIR pointer version)
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__cx__body(control_ptr: *const u8, target_ptr: *const u8) {
     let control_id = control_ptr as usize;
     let target_id = target_ptr as usize;
-    
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_cx(&[control_id], &[target_id]);
-    }
+    core_runtime::cx_gate(control_id, target_id);
 }
 
-/// CX gate (HUGR integer version)
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__cnot__body(control_ptr: *const u8, target_ptr: *const u8) {
+    let control_id = control_ptr as usize;
+    let target_id = target_ptr as usize;
+    core_runtime::cx_gate(control_id, target_id);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__cz__body_usize(control: usize, target: usize) {
+    core_runtime::cz_gate(control, target);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__rz__body(theta: f64, qubit: usize) {
+    core_runtime::rz_gate(theta, qubit);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__r1xy__body(theta: f64, phi: f64, qubit: usize) {
+    core_runtime::r1xy_gate(theta, phi, qubit);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__rxy__body(theta: f64, phi: f64, qubit: usize) {
+    core_runtime::r1xy_gate(theta, phi, qubit);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__szz__body(qubit1: usize, qubit2: usize) {
+    core_runtime::szz_gate(qubit1, qubit2);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__zz__body(qubit1: usize, qubit2: usize) {
+    core_runtime::zz_gate(qubit1, qubit2);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__rzz__body(theta: f64, qubit1: usize, qubit2: usize) {
+    core_runtime::rzz_gate(theta, qubit1, qubit2);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__reset__body(qubit: usize) {
+    core_runtime::reset_qubit(qubit);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__m__body_ptr(qubit_ptr: *const u8, result_ptr: *const u8) {
+    let qubit_id = qubit_ptr as usize;
+    let result_id = result_ptr as usize;
+    core_runtime::measure(qubit_id, result_id);
+}
+
+// =============================================================================
+// HUGR Convention Adapter (Integer-based)
+// =============================================================================
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__h__body__hugr(qubit: i64) {
+    let qubit_id = i64_to_usize(qubit);
+    core_runtime::h_gate(qubit_id);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__x__body__hugr(qubit: i64) {
+    let qubit_id = i64_to_usize(qubit);
+    core_runtime::x_gate(qubit_id);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__y__body__hugr(qubit: i64) {
+    let qubit_id = i64_to_usize(qubit);
+    core_runtime::y_gate(qubit_id);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__z__body__hugr(qubit: i64) {
+    let qubit_id = i64_to_usize(qubit);
+    core_runtime::z_gate(qubit_id);
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__cx__body__hugr(control: i64, target: i64) {
     let control_id = i64_to_usize(control);
     let target_id = i64_to_usize(target);
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_cx(&[control_id], &[target_id]);
-    }
+    core_runtime::cx_gate(control_id, target_id);
 }
 
-/// CZ gate (QIR version with usize parameters)
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__cz__body_usize(control: usize, target: usize) {
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_cz(&[control], &[target]);
-    }
+pub unsafe extern "C" fn __quantum__qis__cnot__body__hugr(control: i64, target: i64) {
+    let control_id = i64_to_usize(control);
+    let target_id = i64_to_usize(target);
+    core_runtime::cx_gate(control_id, target_id);
 }
 
-/// RZ gate (QIR standard version)
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__rz__body(theta: f64, qubit: usize) {
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_rz(theta, &[qubit]);
-    }
-}
-
-/// RZ gate (HUGR integer version)
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__rz__body__hugr(theta: f64, qubit: i64) {
-    let qubit_id = i64_to_usize(qubit);
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_rz(theta, &[qubit_id]);
-    }
-}
-
-/// R1XY gate (QIR standard version)
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__r1xy__body(theta: f64, phi: f64, qubit: usize) {
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_r1xy(theta, phi, &[qubit]);
-    }
-}
-
-/// R1XY gate (HUGR integer version)
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__r1xy__body__hugr(theta: f64, phi: f64, qubit: i64) {
-    let qubit_id = i64_to_usize(qubit);
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_r1xy(theta, phi, &[qubit_id]);
-    }
-}
-
-/// RXY gate (QIR standard version)
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__rxy__body(theta: f64, phi: f64, qubit: usize) {
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_r1xy(theta, phi, &[qubit]);
-    }
-}
-
-/// Additional gates for integer types
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__cy__body(control: i64, target: i64) {
     let control_id = i64_to_usize(control);
     let target_id = i64_to_usize(target);
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_cy(&[control_id], &[target_id]);
-    }
+    core_runtime::cy_gate(control_id, target_id);
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__cz__body(control: i64, target: i64) {
     let control_id = i64_to_usize(control);
     let target_id = i64_to_usize(target);
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_cz(&[control_id], &[target_id]);
-    }
+    core_runtime::cz_gate(control_id, target_id);
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__ch__body(control: i64, target: i64) {
     let control_id = i64_to_usize(control);
     let target_id = i64_to_usize(target);
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        // CH implemented as H on target, then CX
-        let _ = builder.add_h(&[target_id]);
-        let _ = builder.add_cx(&[control_id], &[target_id]);
-        let _ = builder.add_h(&[target_id]);
-    }
+    core_runtime::ch_gate(control_id, target_id);
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__s__body(qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_sz(&[qubit_id]);
-    }
+    core_runtime::s_gate(qubit_id);
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__sdg__body(qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_szdg(&[qubit_id]);
-    }
+    core_runtime::sdg_gate(qubit_id);
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__t__body(qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_t(&[qubit_id]);
-    }
+    core_runtime::t_gate(qubit_id);
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__tdg__body(qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_tdg(&[qubit_id]);
-    }
+    core_runtime::tdg_gate(qubit_id);
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__rx__body(theta: f64, qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_rx(theta, &[qubit_id]);
-    }
+    core_runtime::rx_gate(theta, qubit_id);
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__ry__body(theta: f64, qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_ry(theta, &[qubit_id]);
-    }
+    core_runtime::ry_gate(theta, qubit_id);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__rz__body__hugr(theta: f64, qubit: i64) {
+    let qubit_id = i64_to_usize(qubit);
+    core_runtime::rz_gate(theta, qubit_id);
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__r1xy__body__hugr(theta: f64, phi: f64, qubit: i64) {
+    let qubit_id = i64_to_usize(qubit);
+    core_runtime::r1xy_gate(theta, phi, qubit_id);
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__crz__body(theta: f64, control: i64, target: i64) {
     let control_id = i64_to_usize(control);
     let target_id = i64_to_usize(target);
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        // CRZ implemented as CX-RZ-CX sequence
-        let _ = builder.add_cx(&[control_id], &[target_id]);
-        let _ = builder.add_rz(theta / 2.0, &[target_id]);
-        let _ = builder.add_cx(&[control_id], &[target_id]);
-        let _ = builder.add_rz(-theta / 2.0, &[target_id]);
-    }
+    core_runtime::crz_gate(theta, control_id, target_id);
 }
 
 #[unsafe(no_mangle)]
@@ -500,116 +623,111 @@ pub unsafe extern "C" fn __quantum__qis__ccx__body(control1: i64, control2: i64,
     let control1_id = i64_to_usize(control1);
     let control2_id = i64_to_usize(control2);
     let target_id = i64_to_usize(target);
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        // CCX (Toffoli) - simplified implementation
-        let _ = builder.add_h(&[target_id]);
-        let _ = builder.add_cx(&[control2_id], &[target_id]);
-        let _ = builder.add_tdg(&[target_id]);
-        let _ = builder.add_cx(&[control1_id], &[target_id]);
-        let _ = builder.add_t(&[target_id]);
-        let _ = builder.add_cx(&[control2_id], &[target_id]);
-        let _ = builder.add_tdg(&[target_id]);
-        let _ = builder.add_cx(&[control1_id], &[target_id]);
-        let _ = builder.add_t(&[control2_id]);
-        let _ = builder.add_t(&[target_id]);
-        let _ = builder.add_cx(&[control1_id], &[control2_id]);
-        let _ = builder.add_t(&[control1_id]);
-        let _ = builder.add_tdg(&[control2_id]);
-        let _ = builder.add_cx(&[control1_id], &[control2_id]);
-        let _ = builder.add_h(&[target_id]);
-    }
+    core_runtime::ccx_gate(control1_id, control2_id, target_id);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__szz__body(qubit1: usize, qubit2: usize) {
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_szz(&[qubit1], &[qubit2]);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__zz__body(qubit1: usize, qubit2: usize) {
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        // ZZ gate implementation using CZ
-        let _ = builder.add_cz(&[qubit1], &[qubit2]);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__rzz__body(theta: f64, qubit1: usize, qubit2: usize) {
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_rzz(theta, &[qubit1], &[qubit2]);
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__reset__body(qubit: usize) {
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        // Reset implemented as preparation
-        let _ = builder.add_prep(&[qubit]);
-    }
-}
-
-/// Measurement (HUGR integer version)
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__m__body_i64(qubit: i64, result: i64) -> u32 {
     let qubit_id = i64_to_usize(qubit);
-    let _result_id = i64_to_usize(result);
+    let result_id = i64_to_usize(result);
+    core_runtime::measure(qubit_id, result_id);
     
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_measurements(&[qubit_id]);
-    }
-    
-    // Return a dummy measurement result
+    // NOTE: This function shouldn't be called directly in the new deferred model.
+    // The LLVM-IR post-processor converts immediate calls to deferred calls.
+    // Return 0 as fallback for any remaining immediate calls.
     0
 }
 
-/// Measurement (HUGR convention)
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __hugr__quantum__qis__m__body(qubit: i64, result: i64) {
     let qubit_id = i64_to_usize(qubit);
-    let _result_id = i64_to_usize(result);
-    
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_measurements(&[qubit_id]);
-    }
+    let result_id = i64_to_usize(result);
+    core_runtime::measure(qubit_id, result_id);
 }
 
-/// Measurement (QIR pointer version) - DEPRECATED: kept for legacy compatibility
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__m__body_ptr(qubit_ptr: *const u8, result_ptr: *const u8) {
-    let thread_id = get_thread_id();
-    let qubit_id = qubit_ptr as usize;
-    let _result_id = result_ptr as usize;
-    
-    if should_print_commands() {
-        println!("[Thread {thread_id}] Measuring qubit {qubit_id}");
-    }
-    
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_measurements(&[qubit_id]);
-    }
-}
-
-/// Measurement (HUGR convention with integer parameters) - Primary implementation
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__m__body(qubit: i64, result: i64) -> i32 {
-    let thread_id = get_thread_id();
-    let qubit_id = qubit as usize;
-    let _result_id = result as usize;
+    let qubit_id = i64_to_usize(qubit);
+    let result_id = i64_to_usize(result);
+    core_runtime::measure(qubit_id, result_id);
     
-    if should_print_commands() {
-        println!("[Thread {thread_id}] Measuring qubit {qubit_id} (HUGR convention)");
-    }
-    
-    if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        let _ = builder.add_measurements(&[qubit_id]);
-    }
-    
-    // Return 0 for |0⟩ state, 1 for |1⟩ state (simulated)
-    // In a real implementation, this would be the actual measurement result
+    // NOTE: This function shouldn't be called directly in the new deferred model.
+    // The LLVM-IR post-processor converts immediate calls to deferred calls.
+    // Return 0 as fallback for any remaining immediate calls.
     0
 }
+
+// =============================================================================
+// Common Runtime Functions (Used by both conventions)
+// =============================================================================
+
+/// Message printing
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__rt__message(msg: *const c_char) {
+    if !msg.is_null() {
+        let c_str = unsafe { CStr::from_ptr(msg) };
+        if let Ok(rust_str) = c_str.to_str() {
+            println!("QIR Message: {rust_str}");
+        }
+    }
+}
+
+/// Record data
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__rt__record(data: *const c_char) {
+    if !data.is_null() {
+        let c_str = unsafe { CStr::from_ptr(data) };
+        if let Ok(rust_str) = c_str.to_str() {
+            if should_print_commands() {
+                println!("QIR Record: {rust_str}");
+            }
+        }
+    }
+}
+
+/// Record a result output
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__rt__result_record_output(result_ptr: *const u8, name: *const c_char) {
+    let result_id = result_ptr as usize;
+    
+    let name_str = if name.is_null() {
+        format!("result_{result_id}")
+    } else {
+        let c_str = unsafe { CStr::from_ptr(name) };
+        c_str.to_string_lossy().into_owned()
+    };
+
+    core_runtime::record_result_output(result_id, &name_str);
+}
+
+/// Update measurement results
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qir_runtime_update_measurement_results(
+    results_ptr: *const u32,
+    results_len: usize,
+) {
+    if results_ptr.is_null() || results_len == 0 {
+        if should_print_commands() {
+            let thread_id = get_thread_id();
+            println!("[Thread {thread_id}] No measurement results to update");
+        }
+        return;
+    }
+
+    // Convert the raw pointer to a slice (pairs of result_id, value)
+    let results = unsafe { std::slice::from_raw_parts(results_ptr, results_len * 2) };
+    core_runtime::update_measurement_results(results);
+}
+
+/// Finalize shot
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn qir_runtime_finalize_shot() {
+    core_runtime::finalize_shot();
+}
+
+// =============================================================================
+// FFI Data Structures and Functions
+// =============================================================================
 
 /// Get binary commands for execution
 #[repr(C)]
@@ -623,14 +741,15 @@ pub struct FFIByteData {
 pub unsafe extern "C" fn qir_runtime_get_binary_commands() -> *mut FFIByteData {
     let thread_id = get_thread_id();
 
-    let message = if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-        builder.build()
-    } else {
+    // Use try_with_current_runtime to avoid auto-initialization during cleanup
+    let message = RuntimeRegistry::try_with_current_runtime(|state| {
+        state.build_message()
+    }).unwrap_or_else(|| {
         if should_print_commands() {
-            eprintln!("[Thread {thread_id}] ERROR: Failed to lock message builder");
+            eprintln!("[Thread {thread_id}] WARNING: No runtime state available - returning empty message");
         }
-        ByteMessage::create_empty()
-    };
+        pecos_engines::byte_message::ByteMessage::create_empty()
+    });
 
     let bytes = message.into_bytes();
     let byte_len = bytes.len();
@@ -688,141 +807,6 @@ pub unsafe extern "C" fn qir_runtime_free_binary_commands(ptr: *mut FFIByteData)
     }
 }
 
-/// Record a result output
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__rt__result_record_output(result_ptr: *const u8, name: *const c_char) {
-    let thread_id = get_thread_id();
-    let result_id = result_ptr as usize;
-    
-    let name_str = if name.is_null() {
-        format!("result_{result_id}")
-    } else {
-        let c_str = unsafe { CStr::from_ptr(name) };
-        c_str.to_string_lossy().into_owned()
-    };
-
-    if should_print_commands() {
-        println!("[Thread {thread_id}] Recording result {result_id} as '{name_str}'");
-    }
-
-    if let Ok(mut state) = RUNTIME_STATE.lock() {
-        // Get the next bit position for this register
-        let current_bit_position = {
-            let bit_position = state
-                .register_bit_positions
-                .entry(name_str.clone())
-                .or_insert(0);
-            let pos = *bit_position;
-            *bit_position += 1;
-            pos
-        };
-
-        // Store the mapping for when we get the actual measurement result
-        state
-            .result_mappings
-            .insert(result_id, (name_str.clone(), current_bit_position));
-
-        if should_print_commands() {
-            println!(
-                "[Thread {thread_id}] Mapped result {result_id} to register '{name_str}' bit {current_bit_position}"
-            );
-        }
-    }
-}
-
-/// Message printing
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__rt__message(msg: *const c_char) {
-    if !msg.is_null() {
-        let c_str = unsafe { CStr::from_ptr(msg) };
-        if let Ok(rust_str) = c_str.to_str() {
-            println!("QIR Message: {rust_str}");
-        }
-    }
-}
-
-/// Record data
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__rt__record(data: *const c_char) {
-    if !data.is_null() {
-        let c_str = unsafe { CStr::from_ptr(data) };
-        if let Ok(rust_str) = c_str.to_str() {
-            if should_print_commands() {
-                println!("QIR Record: {rust_str}");
-            }
-        }
-    }
-}
-
-/// Update measurement results
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn qir_runtime_update_measurement_results(
-    results_ptr: *const u32,
-    results_len: usize,
-) {
-    let thread_id = get_thread_id();
-    
-    if results_ptr.is_null() || results_len == 0 {
-        if should_print_commands() {
-            println!("[Thread {thread_id}] No measurement results to update");
-        }
-        return;
-    }
-
-    // Convert the raw pointer to a slice (pairs of result_id, value)
-    // results_len is already the number of pairs, so total length is results_len * 2
-    let results = unsafe { std::slice::from_raw_parts(results_ptr, results_len * 2) };
-    
-    if should_print_commands() {
-        println!("[Thread {thread_id}] Updating {results_len} measurement results");
-    }
-
-    if let Ok(mut state) = RUNTIME_STATE.lock() {
-        // Process pairs of (result_id, measurement_value)
-        for i in (0..results.len()).step_by(2) {
-            let result_id = results[i] as usize;
-            let measurement_value = results[i + 1] != 0;
-
-            state
-                .measurement_results
-                .insert(result_id, measurement_value);
-
-            if should_print_commands() {
-                println!(
-                    "[Thread {thread_id}] Updated measurement result {result_id} = {measurement_value}"
-                );
-            }
-        }
-    }
-}
-
-/// Finalize shot
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn qir_runtime_finalize_shot() {
-    let thread_id = get_thread_id();
-    
-    if let Ok(mut state) = RUNTIME_STATE.lock() {
-        // Apply mappings to calculate final register values
-        state.apply_mappings();
-        
-        // Create shot using the original working approach
-        let shot = state.export_shot();
-        
-        if should_print_commands() {
-            println!("[Thread {thread_id}] Finalized shot with {} registers", state.classical_registers.len());
-        }
-        
-        // Store the shot for retrieval
-        if let Ok(mut last_shot) = LAST_SHOT.lock() {
-            *last_shot = Some(shot);
-        } else {
-            eprintln!("QIR Runtime: [Thread {thread_id}] Failed to lock last shot mutex");
-        }
-    } else {
-        eprintln!("QIR Runtime: [Thread {thread_id}] Failed to lock runtime state mutex");
-    }
-}
-
 /// Get shot results
 #[repr(C)]
 pub struct FFIShotData {
@@ -835,59 +819,61 @@ pub struct FFIShotData {
 pub unsafe extern "C" fn qir_runtime_get_shot_results() -> *mut FFIShotData {
     let thread_id = get_thread_id();
 
-    if let Ok(last_shot) = LAST_SHOT.lock() {
-        if let Some(shot) = last_shot.as_ref() {
-            let count = shot.data.len();
+    // Use try_with_current_runtime to avoid auto-initialization during cleanup
+    let shot_opt = RuntimeRegistry::try_with_current_runtime(|state| {
+        state.get_last_shot().cloned()
+    }).flatten();
 
-            if count == 0 {
-                // Return null for empty shots
-                return std::ptr::null_mut();
-            }
+    if let Some(shot) = shot_opt {
+        let count = shot.data.len();
 
-            // Allocate arrays using Vec to ensure proper alignment
-            let mut names_vec: Vec<*mut c_char> = Vec::with_capacity(count);
-            let names = names_vec.as_mut_ptr();
-            std::mem::forget(names_vec); // Prevent deallocation, we'll manage it manually
-
-            let mut values_vec: Vec<i64> = Vec::with_capacity(count);
-            let values = values_vec.as_mut_ptr();
-            std::mem::forget(values_vec); // Prevent deallocation, we'll manage it manually
-
-            // Populate the arrays
-            for (i, (name, data)) in shot.data.iter().enumerate() {
-                // Convert name to C string
-                let c_name = std::ffi::CString::new(name.as_str()).unwrap();
-                unsafe {
-                    *names.add(i) = c_name.into_raw();
-                }
-
-                // Extract value
-                let value = match data {
-                    Data::U32(v) => i64::from(*v),
-                    Data::I64(v) => *v,
-                    _ => 0, // Default for other types
-                };
-                unsafe {
-                    *values.add(i) = value;
-                }
-            }
-
-            // Create and return the FFI struct
-            let ffi_data = FFIShotData {
-                names,
-                values,
-                count,
-            };
-
-            let boxed_ffi = Box::new(ffi_data);
-            let ptr = Box::into_raw(boxed_ffi);
-
-            if should_print_commands() {
-                println!("[Thread {thread_id}] Got shot results: {count} registers");
-            }
-
-            return ptr;
+        if count == 0 {
+            return std::ptr::null_mut();
         }
+
+        // Allocate arrays using Vec to ensure proper alignment
+        let mut names_vec: Vec<*mut c_char> = Vec::with_capacity(count);
+        let names = names_vec.as_mut_ptr();
+        std::mem::forget(names_vec);
+
+        let mut values_vec: Vec<i64> = Vec::with_capacity(count);
+        let values = values_vec.as_mut_ptr();
+        std::mem::forget(values_vec);
+
+        // Populate the arrays
+        for (i, (name, data)) in shot.data.iter().enumerate() {
+            // Convert name to C string
+            let c_name = std::ffi::CString::new(name.as_str()).unwrap();
+            unsafe {
+                *names.add(i) = c_name.into_raw();
+            }
+
+            // Extract value
+            let value = match data {
+                pecos_engines::shot_results::Data::U32(v) => i64::from(*v),
+                pecos_engines::shot_results::Data::I64(v) => *v,
+                _ => 0, // Default for other types
+            };
+            unsafe {
+                *values.add(i) = value;
+            }
+        }
+
+        // Create and return the FFI struct
+        let ffi_data = FFIShotData {
+            names,
+            values,
+            count,
+        };
+
+        let boxed_ffi = Box::new(ffi_data);
+        let ptr = Box::into_raw(boxed_ffi);
+
+        if should_print_commands() {
+            println!("[Thread {thread_id}] Got shot results: {count} registers");
+        }
+
+        return ptr;
     }
 
     // Return null if no shot available
@@ -919,15 +905,12 @@ pub unsafe extern "C" fn qir_runtime_free_shot_data(data: *mut FFIShotData) {
 
         // Free the arrays by reconstructing the Vecs
         if ffi_data.count > 0 {
-            // Reconstruct Vec to properly deallocate
-            let _ = Vec::from_raw_parts(ffi_data.names, 0, ffi_data.count);
-            let _ = Vec::from_raw_parts(ffi_data.values, 0, ffi_data.count);
+            let _ = Vec::from_raw_parts(ffi_data.names, ffi_data.count, ffi_data.count);
+            let _ = Vec::from_raw_parts(ffi_data.values, ffi_data.count, ffi_data.count);
         }
 
         if should_print_commands() {
             println!("[Thread {thread_id}] Freed FFIShotData");
         }
-
-        // Box automatically frees the FFIShotData
     }
 }

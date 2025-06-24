@@ -159,6 +159,11 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
         params: &[("const unsigned char*", "control"), ("const unsigned char*", "target")],
     },
     ExportedFunction {
+        name: "__quantum__qis__cnot__body",
+        return_type: "void",
+        params: &[("const unsigned char*", "control"), ("const unsigned char*", "target")],
+    },
+    ExportedFunction {
         name: "__quantum__qis__cz__body",
         return_type: "void",
         params: &[("i64", "control"), ("i64", "target")],
@@ -205,6 +210,11 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
     },
     ExportedFunction {
         name: "__quantum__qis__m__body",
+        return_type: "void",
+        params: &[("const unsigned char*", "qubit"), ("const unsigned char*", "result")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__m__body_ptr",
         return_type: "void",
         params: &[("const unsigned char*", "qubit"), ("const unsigned char*", "result")],
     },
@@ -283,6 +293,11 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
     },
     ExportedFunction {
         name: "__quantum__qis__cx__body__hugr",
+        return_type: "void",
+        params: &[("i64", "control"), ("i64", "target")],
+    },
+    ExportedFunction {
+        name: "__quantum__qis__cnot__body__hugr",
         return_type: "void",
         params: &[("i64", "control"), ("i64", "target")],
     },
