@@ -181,13 +181,13 @@ def run_guppy(
         print("[OK] Using PECOS QIR PyO3 bindings for execution")
     
     # Determine the actual LLVM convention used based on backend
-    # PMIR always uses pointer-based convention (similar to QIR)
+    # Both Rust HUGR and PMIR backends generate HUGR-style LLVM-IR
     actual_convention = llvm_convention
     if backend_used == "external":
-        # PMIR pipeline always generates pointer-based LLVM-IR
-        actual_convention = "qir"
-        if verbose and llvm_convention != "qir":
-            print(f"[INFO] PMIR backend always uses pointer-based convention, overriding to 'qir'")
+        # PMIR pipeline generates HUGR-style LLVM-IR (not standard QIR)
+        actual_convention = "hugr"
+        if verbose and llvm_convention != "hugr":
+            print(f"[INFO] PMIR backend generates HUGR-style LLVM-IR, overriding to 'hugr'")
     
     # Execute the QIR file with the PyO3 bindings
     qir_result = execute_qir(

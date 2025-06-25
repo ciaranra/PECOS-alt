@@ -10,13 +10,21 @@
 /// 3. HUGR convention adapter (integer-based)
 
 use crate::runtime_registry::{RuntimeRegistry, initialize_registry};
+use pecos_engines::byte_message::ByteMessage;
+use pecos_core::errors::PecosError;
 use std::env;
 use std::ffi::{CStr, CString, c_char};
 use std::thread;
-use std::sync::Once;
+use std::sync::{Once, Mutex, LazyLock};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 // Ensure the runtime registry is initialized exactly once
 static INIT: Once = Once::new();
+
+// Circuit breaker for preventing infinite callback loops
+thread_local! {
+    static CALLBACK_DEPTH: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
 fn ensure_runtime_initialized() {
     INIT.call_once(|| {
@@ -50,8 +58,39 @@ fn should_print_commands() -> bool {
 // Core Runtime Implementation (Convention-Agnostic)
 // =============================================================================
 
-mod core_runtime {
+pub mod core_runtime {
     use super::*;
+    
+    /// Type alias for the interactive execution callback
+    /// Takes a ByteMessage of quantum operations and returns measurement results
+    pub type InteractiveCallback = Box<dyn Fn(ByteMessage) -> Result<Vec<u32>, PecosError> + Send + Sync>;
+    
+    /// Global callback for interactive execution
+    static INTERACTIVE_CALLBACK: LazyLock<Mutex<Option<InteractiveCallback>>> = 
+        LazyLock::new(|| Mutex::new(None));
+    
+    /// Set the interactive execution callback
+    pub fn set_interactive_callback(callback: InteractiveCallback) {
+        if let Ok(mut cb) = INTERACTIVE_CALLBACK.lock() {
+            *cb = Some(callback);
+        }
+    }
+    
+    /// Execute with the interactive execution callback if available
+    pub fn execute_with_callback<T>(f: impl FnOnce(&InteractiveCallback) -> T) -> Option<T> {
+        if let Ok(cb) = INTERACTIVE_CALLBACK.lock() {
+            cb.as_ref().map(|callback| f(callback))
+        } else {
+            None
+        }
+    }
+    
+    /// Clear the interactive execution callback
+    pub fn clear_interactive_callback() {
+        if let Ok(mut cb) = INTERACTIVE_CALLBACK.lock() {
+            *cb = None;
+        }
+    }
     
     /// Reset the QIR runtime state for the current thread
     pub fn reset() {
@@ -72,6 +111,9 @@ mod core_runtime {
                 println!("[Thread {thread_id}] No runtime state to reset (already cleaned up)");
             }
         }
+        
+        // Also clear the interactive callback to ensure clean state
+        clear_interactive_callback();
     }
     
     /// Initialize the runtime
@@ -380,7 +422,15 @@ mod core_runtime {
 /// Reset the QIR runtime state
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qir_runtime_reset() {
+    // Clear the interactive callback first
+    core_runtime::clear_interactive_callback();
+    
+    // Reset the core runtime (this only resets the current thread's state)
     core_runtime::reset();
+    
+    // Note: We DON'T call cleanup_all_runtimes() here because that would
+    // interfere with other worker threads in multi-threaded execution.
+    // Each thread should only reset its own runtime state.
 }
 
 /// Initialize the QIR runtime
@@ -626,6 +676,12 @@ pub unsafe extern "C" fn __quantum__qis__ccx__body(control1: i64, control2: i64,
     core_runtime::ccx_gate(control1_id, control2_id, target_id);
 }
 
+/// HUGR result allocation - returns i64 ID
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__rt__result_allocate_hugr() -> i64 {
+    core_runtime::allocate_result() as i64
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__m__body_i64(qubit: i64, result: i64) -> u32 {
     let qubit_id = i64_to_usize(qubit);
@@ -655,6 +711,139 @@ pub unsafe extern "C" fn __quantum__qis__m__body(qubit: i64, result: i64) -> i32
     // The LLVM-IR post-processor converts immediate calls to deferred calls.
     // Return 0 as fallback for any remaining immediate calls.
     0
+}
+
+/// Get measurement result as integer (0 or 1) for deferred measurement model
+/// For HUGR's immediate measurement model, this function triggers interactive execution
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__rt__result_get_one(result: i64) -> i32 {
+    use std::time::{Duration, Instant};
+    
+    let result_id = i64_to_usize(result);
+    let start_time = Instant::now();
+    
+    if should_print_commands() {
+        let thread_id = get_thread_id();
+        println!("[Thread {thread_id}] ENTER __quantum__rt__result_get_one(result_id={result_id})");
+    }
+    
+    // Circuit breaker: prevent recursive callback loops
+    let current_depth = CALLBACK_DEPTH.with(|d| d.get());
+    if current_depth > 5 {
+        eprintln!("[Thread {}] CIRCUIT_BREAKER: Callback depth {} exceeded for result {result_id}", get_thread_id(), current_depth);
+        return 0;
+    }
+    
+    // Add a timeout to prevent infinite hangs
+    let timeout = Duration::from_secs(30); // 30 second timeout
+    
+    let result = RuntimeRegistry::with_current_runtime(|state| {
+        // Check for timeout
+        if start_time.elapsed() > timeout {
+            eprintln!("[Thread {}] TIMEOUT: __quantum__rt__result_get_one exceeded 30s", get_thread_id());
+            return 0;
+        }
+        
+        // Try to get the measurement result first
+        if let Some(measurement_value) = state.get_measurement_result(result_id) {
+            if should_print_commands() {
+                println!("[Thread {}] CACHED: Found cached result {result_id} = {measurement_value}", get_thread_id());
+            }
+            if measurement_value { 1 } else { 0 }
+        } else {
+            // HUGR immediate measurement: trigger interactive execution
+            if should_print_commands() {
+                let thread_id = get_thread_id();
+                println!("[Thread {thread_id}] INTERACTIVE: Triggering execution for result {result_id}");
+            }
+            
+            // Check if we have accumulated operations to execute
+            let has_operations = state.message_builder_mut().message_count() > 0;
+            
+            if !has_operations {
+                if should_print_commands() {
+                    println!("[Thread {}] NO_OPS: No quantum operations for result {result_id}", get_thread_id());
+                }
+                0
+            } else {
+                if should_print_commands() {
+                    println!("[Thread {}] BUILDING: Building message with {} operations", get_thread_id(), state.message_builder_mut().message_count());
+                }
+                
+                // Build the message with accumulated quantum operations
+                let message = state.build_message();
+                
+                if should_print_commands() {
+                    println!("[Thread {}] CALLBACK: Calling interactive callback", get_thread_id());
+                }
+                
+                // Trigger interactive execution by calling the global callback
+                // The QirEngine will handle this through its ControlEngine implementation
+                
+                // Increment callback depth to detect recursion
+                CALLBACK_DEPTH.with(|d| d.set(d.get() + 1));
+                
+                let callback_result = core_runtime::execute_with_callback(|callback| {
+                    if should_print_commands() {
+                        println!("[Thread {}] EXECUTING: Starting quantum execution", get_thread_id());
+                    }
+                    let exec_result = callback(message);
+                    if should_print_commands() {
+                        println!("[Thread {}] EXECUTED: Quantum execution completed", get_thread_id());
+                    }
+                    exec_result
+                });
+                
+                // Decrement callback depth after execution
+                CALLBACK_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+                
+                if let Some(callback_result) = callback_result {
+                    match callback_result {
+                        Ok(measurement_results) => {
+                            if should_print_commands() {
+                                println!("[Thread {}] SUCCESS: Got {} measurement results", get_thread_id(), measurement_results.len());
+                            }
+                            
+                            // Update the runtime state with the measurement results
+                            state.update_measurement_results(&measurement_results);
+                            
+                            // Now try to get the result again
+                            if let Some(measurement_value) = state.get_measurement_result(result_id) {
+                                if should_print_commands() {
+                                    println!("[Thread {}] FOUND: Result {result_id} = {measurement_value}", get_thread_id());
+                                }
+                                if measurement_value { 1 } else { 0 }
+                            } else {
+                                if should_print_commands() {
+                                    println!("[Thread {}] MISSING: Result {result_id} still not available after execution", get_thread_id());
+                                }
+                                0
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("[Thread {}] ERROR: Interactive execution failed for result {result_id}: {:?}", get_thread_id(), e);
+                            0
+                        }
+                    }
+                } else {
+                    if should_print_commands() {
+                        println!("[Thread {}] NO_CALLBACK: No interactive callback registered for result {result_id}", get_thread_id());
+                    }
+                    0
+                }
+            }
+        }
+    }).unwrap_or_else(|| {
+        eprintln!("[Thread {}] FATAL: No runtime state available for result {result_id}", get_thread_id());
+        0
+    });
+    
+    if should_print_commands() {
+        let elapsed = start_time.elapsed();
+        println!("[Thread {}] EXIT __quantum__rt__result_get_one(result_id={result_id}) = {result} in {elapsed:?}", get_thread_id());
+    }
+    
+    result
 }
 
 // =============================================================================

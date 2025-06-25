@@ -300,11 +300,38 @@ impl HugrCompiler {
 
         // Generate LLVM IR string
         let llvm_ir = llvm_module.to_string();
+        
+        // Debug: Check if we have proper result pointers before transformations
+        if llvm_ir.contains("__quantum__rt__result_record_output") {
+            for line in llvm_ir.lines() {
+                if line.contains("__quantum__rt__result_record_output") {
+                    println!("DEBUG: Original result_record_output call: {}", line);
+                }
+            }
+        }
 
         // Add standard QIR prologue and fix entry point signature
         println!("DEBUG: HUGR Compiler quantum_naming: {:?}", self.config.quantum_naming);
         let standard_qir = add_standard_qir_prologue(&llvm_ir, &self.config.quantum_naming);
         let standard_qir = fix_entry_point_signature(&standard_qir, &self.config.quantum_naming);
+        
+        // Debug: Check if we have measurement calls before conversion
+        if standard_qir.contains("__quantum__qis__m__body") {
+            println!("DEBUG: LLVM IR contains measurement calls before conversion");
+            // Find and print the measurement lines
+            for line in standard_qir.lines() {
+                if line.contains("__quantum__qis__m__body") {
+                    println!("DEBUG: Measurement line: {}", line);
+                    // Test the pattern explicitly
+                    if line.contains("call i32 @__quantum__qis__m__body(") {
+                        println!("DEBUG: This line SHOULD match the conversion pattern!");
+                    }
+                }
+            }
+        }
+        
+        println!("DEBUG: About to call convert_immediate_to_deferred_measurements with convention: {:?}", self.config.quantum_naming);
+        
         let standard_qir = convert_immediate_to_deferred_measurements(&standard_qir, &self.config.quantum_naming);
 
         // Write to output file
@@ -445,26 +472,65 @@ fn add_standard_qir_prologue(llvm_ir: &str, llvm_convention: &QuantumLlvmConvent
 }
 
 /// Fix entry point function signature for standard QIR compatibility
-fn fix_entry_point_signature(llvm_ir: &str, llvm_convention: &QuantumLlvmConvention) -> String {
+fn fix_entry_point_signature(llvm_ir: &str, _llvm_convention: &QuantumLlvmConvention) -> String {
     // Both conventions need void return type for entry points to work with QIR runtime
     let lines: Vec<&str> = llvm_ir.lines().collect();
     let mut result = String::new();
+    let mut found_entry_point = false;
+    let mut attribute_number = "#0";
     
     for line in lines {
-        if (line.contains("define i1 @") || line.contains("define i16 @") || line.contains("define i32 @")) && line.contains("#0") {
-            // This is the entry point function definition, change return type to void
-            let modified_line = line
-                .replace("define i1 @", "define void @")
-                .replace("define i16 @", "define void @")
-                .replace("define i32 @", "define void @");
-            result.push_str(&modified_line);
+        if (line.contains("define i1 @") || line.contains("define i16 @") || line.contains("define i32 @") || line.contains("define void @")) {
+            // Check if this is a user-defined function (entry point candidate)
+            if let Some(func_name_start) = line.find('@') {
+                let func_name_end = line[func_name_start+1..].find('(').unwrap_or(0) + func_name_start + 1;
+                let func_name = &line[func_name_start+1..func_name_end];
+                
+                // Skip LLVM intrinsics and runtime functions
+                if !func_name.starts_with("llvm.") && !func_name.starts_with("__") {
+                    found_entry_point = true;
+                    // Check if line already has an attribute
+                    if line.contains(" #") {
+                        // Extract existing attribute number
+                        if let Some(attr_start) = line.rfind(" #") {
+                            let attr_end = line[attr_start+2..].find(|c: char| !c.is_numeric()).unwrap_or(line.len() - attr_start - 2) + attr_start + 2;
+                            attribute_number = &line[attr_start+1..attr_end];
+                        }
+                    } else {
+                        // Add #0 attribute to the function definition
+                        let insertion_point = line.rfind('{').unwrap_or(line.len() - 1);
+                        let modified_line = format!("{} #0 {{", &line[..insertion_point].trim_end());
+                        result.push_str(&modified_line);
+                        result.push('\n');
+                        continue;
+                    }
+                    
+                    // Change return type to void if needed
+                    if line.contains("define i1 @") || line.contains("define i16 @") || line.contains("define i32 @") {
+                        let modified_line = line
+                            .replace("define i1 @", "define void @")
+                            .replace("define i16 @", "define void @")
+                            .replace("define i32 @", "define void @");
+                        result.push_str(&modified_line);
+                        result.push('\n');
+                        continue;
+                    }
+                }
+            }
         } else if line.trim().starts_with("ret i1 ") || line.trim().starts_with("ret i16 ") || line.trim().starts_with("ret i32 ") {
             // Replace the return statement with just "ret void"
             result.push_str("  ret void");
-        } else {
-            result.push_str(line);
+            result.push('\n');
+            continue;
         }
+        
+        result.push_str(line);
         result.push('\n');
+    }
+    
+    // Add the EntryPoint attribute definition if we found an entry point
+    if found_entry_point && !llvm_ir.contains("attributes #0 = {") {
+        result.push_str(&format!("\nattributes {} = {{ \"EntryPoint\" }}\n", attribute_number));
     }
     
     result
@@ -480,52 +546,96 @@ fn convert_immediate_to_deferred_measurements(llvm_ir: &str, llvm_convention: &Q
             let mut result = String::new();
             let mut conversions_made = 0;
             
-            for line in lines {
-                if line.contains("call i32 @__quantum__qis__m__body(") {
+            for (line_num, line) in lines.iter().enumerate() {
+                let line_str = *line;
+                if line_str.contains("@__quantum__qis__m__body") {
+                    println!("DEBUG: Line {} contains measurement: {}", line_num, line_str);
+                    println!("DEBUG: Testing pattern match: {}", line_str.contains("call i32 @__quantum__qis__m__body("));
+                    
+                    // Check each character to see why pattern might not match
+                    if line_str.contains("call") && line_str.contains("i32") && line_str.contains("@__quantum__qis__m__body(") {
+                        println!("DEBUG: All parts present separately");
+                        // Print the exact indices
+                        if let Some(idx) = line_str.find("call i32 @__quantum__qis__m__body(") {
+                            println!("DEBUG: Pattern found at index {}", idx);
+                        } else {
+                            println!("DEBUG: Pattern NOT found - checking spacing");
+                            // Check with different spacing
+                            if line_str.contains("call  i32") || line_str.contains("call\ti32") {
+                                println!("DEBUG: Extra whitespace detected");
+                            }
+                        }
+                    }
+                }
+                if line_str.contains("call i32 @__quantum__qis__m__body(") {
                     // Convert: %result = call i32 @__quantum__qis__m__body(i64 %qubit, i64 %result_id)
                     // To:      call void @__hugr__quantum__qis__m__body(i64 %qubit, i64 %result_id)
+                    //          %result = call i32 @__quantum__rt__result_get_one(i64 %result_id)
                     println!("DEBUG: Found immediate measurement call: {}", line);
                     conversions_made += 1;
                     
-                    // First replace the function call
-                    let modified_line = line.replace("call i32 @__quantum__qis__m__body(", "call void @__hugr__quantum__qis__m__body(");
-                    
-                    // Remove assignment part if present
-                    if modified_line.contains(" = call") {
-                        let parts: Vec<&str> = modified_line.splitn(2, " = call").collect();
+                    if line.contains(" = call") {
+                        let parts: Vec<&str> = line.splitn(2, " = call").collect();
                         if parts.len() == 2 {
-                            // Get the indentation from the original line
-                            let indent = parts[0].len() - parts[0].trim_start().len();
-                            result.push_str(&" ".repeat(indent));
-                            result.push_str("call");
-                            result.push_str(parts[1]);
+                            let variable_assignment = parts[0].trim();
+                            let call_part = parts[1];
+                            
+                            // Extract result_id from the call
+                            let result_id = if let Some(start) = call_part.rfind(", i64 ") {
+                                let id_part = &call_part[start + 6..];
+                                if let Some(end) = id_part.find(')') {
+                                    &id_part[..end]
+                                } else {
+                                    "0" // fallback
+                                }
+                            } else {
+                                "0" // fallback
+                            };
+                            
+                            // Get indentation
+                            let indent = variable_assignment.len() - variable_assignment.trim_start().len();
+                            let indent_str = " ".repeat(indent);
+                            
+                            // First: the deferred measurement call
+                            result.push_str(&indent_str);
+                            result.push_str("call void @__hugr__quantum__qis__m__body");
+                            result.push_str(&call_part[call_part.find('(').unwrap_or(0)..]);
+                            result.push('\n');
+                            
+                            // Second: get the result
+                            result.push_str(&indent_str);
+                            result.push_str(variable_assignment.trim());
+                            result.push_str(" = call i32 @__quantum__rt__result_get_one(i64 ");
+                            result.push_str(result_id);
+                            result.push_str(")");
+                            
+                            println!("DEBUG: Converted to deferred measurement + result retrieval");
                         } else {
-                            result.push_str(&modified_line);
+                            // Fallback - just convert the function name
+                            result.push_str(&line.replace("call i32 @__quantum__qis__m__body(", "call void @__hugr__quantum__qis__m__body("));
                         }
                     } else {
-                        result.push_str(&modified_line);
+                        // No assignment, just convert the function call
+                        result.push_str(&line.replace("call i32 @__quantum__qis__m__body(", "call void @__hugr__quantum__qis__m__body("));
                     }
-                    println!("DEBUG: Converted to: {}", result.lines().last().unwrap_or(""));
                 } else if line.contains("call i32 @__quantum__qis__m__body_i64(") {
                     // Convert i64 variant as well
                     let modified_line = line
                         .replace("call i32 @__quantum__qis__m__body_i64(", "call void @__hugr__quantum__qis__m__body(")
                         .replace("call u32 @__quantum__qis__m__body_i64(", "call void @__hugr__quantum__qis__m__body(");
                     
-                    // Remove any assignment to the result variable
-                    let parts: Vec<&str> = modified_line.split(" = call").collect();
-                    if parts.len() > 1 {
-                        result.push_str("  call");
-                        result.push_str(parts[1]);
-                    } else {
-                        result.push_str(&modified_line);
-                    }
+                    // TODO: Handle assignment for i64 variant too if needed
+                    result.push_str(&modified_line);
                 } else if line.contains("declare i32 @__quantum__qis__m__body(") {
-                    // Convert function declarations
+                    // Convert function declarations - add both the deferred measurement and result getter
                     result.push_str("declare void @__hugr__quantum__qis__m__body(i64, i64)");
+                    result.push('\n');
+                    result.push_str("declare i32 @__quantum__rt__result_get_one(i64)");
                 } else if line.contains("declare i32 @__quantum__qis__m__body_i64(") || line.contains("declare u32 @__quantum__qis__m__body_i64(") {
                     // Convert i64 function declarations
                     result.push_str("declare void @__hugr__quantum__qis__m__body(i64, i64)");
+                    result.push('\n');
+                    result.push_str("declare i32 @__quantum__rt__result_get_one(i64)");
                 } else {
                     result.push_str(line);
                 }

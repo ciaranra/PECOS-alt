@@ -3,7 +3,7 @@ source_filename = "quantum_module"
 
 @str_c = constant [2 x i8] c"c\00"
 
-define void @_hugr_simple_quantum() #0 {
+define void @_hugr_simple() #0 {
 alloca_block:
   %"0" = alloca i1, align 1
   %"4_0" = alloca i1, align 1
@@ -30,8 +30,9 @@ entry_block:                                      ; preds = %alloca_block
   store i16 %"9_02", i16* %"10_0", align 2
   %"10_03" = load i16, i16* %"10_0", align 2
   %qubit_i644 = zext i16 %"10_03" to i64
-  %measurement_result = call i32 @__quantum__qis__m__body(i64 %qubit_i644, i64 25)
-  call void @__quantum__rt__result_record_output(i8* inttoptr (i64 25 to i8*), i8* getelementptr inbounds ([2 x i8], [2 x i8]* @str_c, i32 0, i32 0))
+call void @__hugr__quantum__qis__m__body(i64 %qubit_i644, i64 0)
+%measurement_result = call i32 @__quantum__rt__result_get_one(i64 0)
+  call void @__quantum__rt__result_record_output(i8* null, i8* getelementptr inbounds ([2 x i8], [2 x i8]* @str_c, i32 0, i32 0))
   %is_one = icmp ne i32 %measurement_result, 0
   store i1 %is_one, i1* %"12_0", align 1
   %"13_05" = load {}, {}* %"13_0", align 1
@@ -60,7 +61,8 @@ declare i64 @__quantum__rt__qubit_allocate()
 
 declare void @__quantum__qis__h__body__hugr(i64)
 
-declare i32 @__quantum__qis__m__body(i64, i64)
+declare void @__hugr__quantum__qis__m__body(i64, i64)
+declare i32 @__quantum__rt__result_get_one(i64)
 
 declare void @__quantum__rt__result_record_output(i8*, i8*)
 

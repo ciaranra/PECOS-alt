@@ -207,8 +207,7 @@ impl CodegenExtension for StandardQirExtension {
     }
 }
 
-// Static counter for qubit allocation
-static mut NEXT_QUBIT_ID: i64 = 0;
+// Removed static counter - using runtime allocation instead
 
 fn emit_qalloc_standard<'c, H: HugrView<Node = Node>>(
     context: &mut EmitFuncContext<'c, '_, H>,
@@ -285,8 +284,7 @@ fn emit_two_qubit_gate_standard<'c, H: HugrView<Node = Node>>(
     Ok(())
 }
 
-// Static counter for result allocation
-static mut NEXT_RESULT_ID: u64 = 0;
+// Removed static counter - using runtime allocation instead
 
 fn emit_rotation_gate_standard<'c, H: HugrView<Node = Node>>(
     context: &mut EmitFuncContext<'c, '_, H>,
@@ -428,14 +426,13 @@ fn emit_measure_standard<'c, H: HugrView<Node = Node>>(
     let qubit_i64 =
         builder.build_int_z_extend(args.inputs[0].into_int_value(), i64_type, "qubit_i64")?;
 
-    // Allocate result ID (for now, use static allocation like qubits)
-    let result_id = unsafe {
-        let id = NEXT_RESULT_ID;
-        NEXT_RESULT_ID += 1;
-        id
-    };
-
-    let result_id_val = i64_type.const_int(result_id, false);
+    // Allocate result ID using HUGR runtime allocation
+    // Call __quantum__rt__result_allocate_hugr() which returns i64
+    let allocate_result_func_type = i64_type.fn_type(&[], false);
+    let allocate_result_func = context.get_extern_func("__quantum__rt__result_allocate_hugr", allocate_result_func_type)?;
+    
+    let result_call = builder.build_call(allocate_result_func, &[], "result_id")?;
+    let result_id_val = result_call.try_as_basic_value().left().unwrap().into_int_value();
 
     // PECOS QIR measurement: i32 @__quantum__qis__m__body(i64, i64)
     let i32_type = llvm_context.i32_type();

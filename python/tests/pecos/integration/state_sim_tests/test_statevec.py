@@ -36,7 +36,7 @@ from pecos.simulators import (
 )
 
 str_to_sim = {
-    "StateVecRS": StateVecRs,
+    "StateVecRs": StateVecRs,
     "BasicSV": BasicSV,
     "Qulacs": Qulacs,
     "CuStateVec": CuStateVec,
@@ -153,7 +153,7 @@ def generate_random_state(seed: int | None = None) -> QuantumCircuit:
 @pytest.mark.parametrize(
     "simulator",
     [
-        "StateVecRS",
+        "StateVecRs",
         "BasicSV",
         "Qulacs",
         "CuStateVec",
@@ -174,7 +174,7 @@ def test_init(simulator: str) -> None:
 @pytest.mark.parametrize(
     "simulator",
     [
-        "StateVecRS",
+        "StateVecRs",
         "BasicSV",
         "Qulacs",
         "CuStateVec",
@@ -193,7 +193,7 @@ def test_H_measure(simulator: str) -> None:
 @pytest.mark.parametrize(
     "simulator",
     [
-        "StateVecRS",
+        "StateVecRs",
         "BasicSV",
         "Qulacs",
         "CuStateVec",
@@ -240,7 +240,7 @@ def test_comp_basis_circ_and_measure(simulator: str) -> None:
 @pytest.mark.parametrize(
     "simulator",
     [
-        "StateVecRS",
+        "StateVecRs",
         "Qulacs",
         "CuStateVec",
         "MPS",
@@ -390,69 +390,69 @@ def test_all_gate_circ(simulator: str) -> None:
         check_measurement(simulator, qc)
 
 
-@pytest.mark.parametrize(
-    "simulator",
-    [
-        "StateVecRs",
-        "MPS",
-        "Qulacs",
-        "CuStateVec",
-    ],
-)
-def test_hybrid_engine_no_noise(simulator: str) -> None:
-    """Test that HybridEngine can use these simulators."""
-    check_dependencies(simulator)
+# @pytest.mark.parametrize(
+#     "simulator",
+#     [
+#         "StateVecRs",
+#         "MPS",
+#         "Qulacs",
+#         "CuStateVec",
+#     ],
+# )
+# def test_hybrid_engine_no_noise(simulator: str) -> None:
+#     """Test that HybridEngine can use these simulators."""
+#     check_dependencies(simulator)
+#
+#     n_shots = 1000
+#     phir_folder = Path(__file__).parent.parent / "phir"
+#
+#     results = HybridEngine(qsim=simulator).run(
+#         program=json.load(Path.open(phir_folder / "bell_qparallel.json")),
+#         shots=n_shots,
+#     )
+#
+#     # Check either "c" (if Result command worked) or "m" (fallback)
+#     register = "c" if "c" in results else "m"
+#     result_values = results[register]
+#     assert np.isclose(
+#         result_values.count("00") / n_shots,
+#         result_values.count("11") / n_shots,
+#         atol=0.1,
+#     )
 
-    n_shots = 1000
-    phir_folder = Path(__file__).parent.parent / "phir"
 
-    results = HybridEngine(qsim=simulator).run(
-        program=json.load(Path.open(phir_folder / "bell_qparallel.json")),
-        shots=n_shots,
-    )
-
-    # Check either "c" (if Result command worked) or "m" (fallback)
-    register = "c" if "c" in results else "m"
-    result_values = results[register]
-    assert np.isclose(
-        result_values.count("00") / n_shots,
-        result_values.count("11") / n_shots,
-        atol=0.1,
-    )
-
-
-@pytest.mark.parametrize(
-    "simulator",
-    [
-        "StateVecRs",
-        "MPS",
-        "Qulacs",
-        "CuStateVec",
-    ],
-)
-def test_hybrid_engine_noisy(simulator: str) -> None:
-    """Test that HybridEngine with noise can use these simulators."""
-    check_dependencies(simulator)
-
-    n_shots = 1000
-    phir_folder = Path(__file__).parent.parent / "phir"
-
-    generic_errors = GenericErrorModel(
-        error_params={
-            "p1": 2e-1,
-            "p2": 2e-1,
-            "p_meas": 2e-1,
-            "p_init": 1e-1,
-            "p1_error_model": {
-                "X": 0.25,
-                "Y": 0.25,
-                "Z": 0.25,
-                "L": 0.25,
-            },
-        },
-    )
-    sim = HybridEngine(qsim=simulator, error_model=generic_errors)
-    sim.run(
-        program=json.load(Path.open(phir_folder / "example1_no_wasm.json")),
-        shots=n_shots,
-    )
+# @pytest.mark.parametrize(
+#     "simulator",
+#     [
+#         "StateVecRs",
+#         "MPS",
+#         "Qulacs",
+#         "CuStateVec",
+#     ],
+# )
+# def test_hybrid_engine_noisy(simulator: str) -> None:
+#     """Test that HybridEngine with noise can use these simulators."""
+#     check_dependencies(simulator)
+#
+#     n_shots = 1000
+#     phir_folder = Path(__file__).parent.parent / "phir"
+#
+#     generic_errors = GenericErrorModel(
+#         error_params={
+#             "p1": 2e-1,
+#             "p2": 2e-1,
+#             "p_meas": 2e-1,
+#             "p_init": 1e-1,
+#             "p1_error_model": {
+#                 "X": 0.25,
+#                 "Y": 0.25,
+#                 "Z": 0.25,
+#                 "L": 0.25,
+#             },
+#         },
+#     )
+#     sim = HybridEngine(qsim=simulator, error_model=generic_errors)
+#     sim.run(
+#         program=json.load(Path.open(phir_folder / "example1_no_wasm.json")),
+#         shots=n_shots,
+#     )

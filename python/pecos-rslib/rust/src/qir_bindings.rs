@@ -167,6 +167,17 @@ fn execute_qir_safe(
         pecos_qir::runtime::qir_runtime_reset();
     }
     
+    // Clear any stored engines
+    #[cfg(feature = "hugr-llvm-pipeline")]
+    {
+        if let Ok(mut engines) = pecos_qir::python_api::get_stored_engine_mut(0) {
+            engines.clear();
+        }
+    }
+    
+    // Clean up runtime registry
+    pecos_qir::runtime_registry::cleanup_all_runtimes();
+    
     // Give the runtime a moment to clean up thread-local storage
     // This prevents segfaults when running in pytest environments
     std::thread::sleep(std::time::Duration::from_millis(1));
@@ -223,6 +234,13 @@ pub fn py_execute_qir(
     if std::env::var("PYTEST_CURRENT_TEST").is_ok() {
         // We're running in pytest - execution works but may segfault during cleanup
         eprintln!("Warning: QIR execution in pytest may segfault during cleanup (output will be produced first)");
+        
+        // Force clear any lingering runtime state from previous tests
+        unsafe {
+            pecos_qir::runtime::qir_runtime_reset();
+        }
+        // Clear any interactive callbacks
+        pecos_qir::runtime::core_runtime::clear_interactive_callback();
     }
     
     // Initialize QIR execution context
@@ -326,14 +344,25 @@ pub fn py_reset_qir_runtime() -> PyResult<()> {
     use std::thread;
     use std::time::Duration;
     
+    // Clear all stored engines first
+    #[cfg(feature = "hugr-llvm-pipeline")]
+    {
+        if let Ok(mut engines) = pecos_qir::python_api::get_stored_engine_mut(0) {
+            engines.clear();
+        }
+    }
+    
     // Simple reset - no aggressive cleanup
     unsafe {
         pecos_qir::runtime::qir_runtime_reset();
     }
     
+    // Clean up all runtime registry states
+    pecos_qir::runtime_registry::cleanup_all_runtimes();
+    
     // Give the runtime a moment to clean up
     // This helps prevent segfaults in pytest environments
-    thread::sleep(Duration::from_millis(1));
+    thread::sleep(Duration::from_millis(10));
     
     Ok(())
 }

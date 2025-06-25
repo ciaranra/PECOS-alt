@@ -79,13 +79,26 @@ impl QirExecutionGuard {
         state.shutting_down.store(true, Ordering::Release);
     }
     
-    /// Wait for all executions to complete
+    /// Wait for all executions to complete with timeout
     pub fn wait_for_completion() {
         let state = ExecutionState::get();
+        
+        // Add timeout to prevent infinite hanging during pytest cleanup
+        let start_time = std::time::Instant::now();
+        let timeout = std::time::Duration::from_secs(10); // 10 second timeout
         
         // Busy wait with exponential backoff
         let mut sleep_ms = 1;
         while state.active_executions.load(Ordering::Acquire) > 0 {
+            // Check for timeout
+            if start_time.elapsed() > timeout {
+                eprintln!("Warning: QirExecutionGuard timeout waiting for {} active executions to complete", 
+                         state.active_executions.load(Ordering::Acquire));
+                // Force reset the counter to prevent infinite hanging
+                state.active_executions.store(0, Ordering::Release);
+                break;
+            }
+            
             std::thread::sleep(std::time::Duration::from_millis(sleep_ms));
             sleep_ms = (sleep_ms * 2).min(100);
         }
@@ -96,7 +109,15 @@ impl Drop for QirExecutionGuard {
     fn drop(&mut self) {
         if self.active {
             let state = ExecutionState::get();
-            state.active_executions.fetch_sub(1, Ordering::AcqRel);
+            let prev_count = state.active_executions.fetch_sub(1, Ordering::AcqRel);
+            
+            // Defensive check - prevent underflow
+            if prev_count == 0 {
+                eprintln!("Warning: QirExecutionGuard underflow detected - execution counter was already 0");
+                // Reset to 0 to be safe
+                state.active_executions.store(0, Ordering::Release);
+            }
+            
             self.active = false;
         }
     }
@@ -104,46 +125,9 @@ impl Drop for QirExecutionGuard {
 
 /// Python module cleanup handler to prevent abort during shutdown
 pub fn register_cleanup_handler() {
-    // Use std::panic::catch_unwind to prevent any panics during registration
-    let _ = std::panic::catch_unwind(|| {
-        Python::with_gil(|py| {
-            // Register atexit handler to coordinate cleanup  
-            let cleanup_code = r#"
-def _pecos_qir_cleanup():
-    try:
-        import pecos_rslib
-        # Signal shutdown and wait for active executions
-        if hasattr(pecos_rslib, '_mark_qir_shutting_down'):
-            pecos_rslib._mark_qir_shutting_down()
-        if hasattr(pecos_rslib, '_wait_for_qir_completion'):
-            pecos_rslib._wait_for_qir_completion()
-    except:
-        # Silently ignore errors during cleanup
-        pass
-
-try:
-    import atexit
-    atexit.register(_pecos_qir_cleanup)
-except:
-    pass
-"#;
-            
-            // Use PyModule::from_code with proper CStr
-            use std::ffi::CString;
-            if let (Ok(code), Ok(filename), Ok(module)) = (
-                CString::new(cleanup_code),
-                CString::new("cleanup.py"),
-                CString::new("cleanup")
-            ) {
-                let _ = pyo3::types::PyModule::from_code(
-                    py, 
-                    code.as_c_str(), 
-                    filename.as_c_str(), 
-                    module.as_c_str()
-                );
-            }
-        });
-    });
+    // Disabled: atexit handlers can cause hangs during pytest
+    // The timeout in wait_for_completion should prevent infinite hangs
+    // and QIR execution guard will clean up on drop
 }
 
 /// Mark QIR as shutting down (called from Python atexit)

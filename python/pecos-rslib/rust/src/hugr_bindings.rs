@@ -7,13 +7,7 @@ This module exposes HUGR compilation and QIR engine functionality to Python.
 use pecos_qir::python_api;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyType};
-use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex};
 
-/// Global storage for QIR engines (in a real implementation, this would be more sophisticated)
-#[allow(dead_code)]
-static QIR_ENGINES: LazyLock<Mutex<HashMap<usize, Box<dyn pecos_engines::ClassicalEngine>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
 static mut NEXT_ENGINE_ID: usize = 1;
 
 /// Get the next available engine ID
@@ -136,13 +130,17 @@ impl PyHugrQirEngine {
         let debug_info = debug_info.unwrap_or(false);
         let llvm_convention = llvm_convention.unwrap_or_else(|| "hugr".to_string());
 
-        // For now, just return a dummy engine ID
-        // In a full implementation, we'd actually create the engine and store it
+        // Create the QIR engine and store it
         let engine_id = get_next_engine_id();
-
-        // Validate by attempting compilation
-        python_api::create_qir_engine_from_hugr_bytes(bytes, shots, debug_info, &llvm_convention)
-            .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)?;
+        
+        let engine_result = python_api::create_qir_engine_from_hugr_bytes_with_storage(
+            bytes, 
+            shots, 
+            debug_info, 
+            &llvm_convention,
+            engine_id
+        )
+        .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)?;
 
         Ok(Self { engine_id, shots })
     }
@@ -166,15 +164,15 @@ impl PyHugrQirEngine {
         let debug_info = debug_info.unwrap_or(false);
         let llvm_convention = llvm_convention.unwrap_or_else(|| "hugr".to_string());
 
-        // For now, just return a dummy engine ID
+        // Create the QIR engine and store it
         let engine_id = get_next_engine_id();
-
-        // Validate by attempting compilation
-        python_api::create_qir_engine_from_hugr_file(
+        
+        let engine_result = python_api::create_qir_engine_from_hugr_file_with_storage(
             hugr_path,
             shots,
             debug_info,
             &llvm_convention,
+            engine_id
         )
         .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)?;
 
@@ -196,19 +194,30 @@ impl PyHugrQirEngine {
         self.engine_id
     }
 
-    /// Run the quantum program (placeholder implementation)
-    #[allow(clippy::unnecessary_wraps)] // PyO3 requires PyResult even for infallible methods
+    /// Run the quantum program
     fn run(&self) -> PyResult<Vec<u8>> {
-        // This is a placeholder - in a full implementation, we'd:
-        // 1. Get the engine from the global storage
-        // 2. Execute it for the specified number of shots
-        // 3. Return the results
-
-        // Use self.shots to generate dummy results
-        let mut results = Vec::with_capacity(self.shots);
-        for i in 0..self.shots {
-            results.push(u8::try_from(i % 2).unwrap_or(0)); // Alternate 0 and 1
-        }
+        // Get the engine from global storage and execute it
+        let mut engines = python_api::get_stored_engine_mut(self.engine_id)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))?;
+        
+        let entry = engines.get_mut(&self.engine_id).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                format!("Engine {} not found", self.engine_id)
+            )
+        })?;
+        
+        let engine = &mut entry.engine;
+        
+        // Update shots if they've changed
+        engine.set_assigned_shots(self.shots);
+        
+        // Execute the quantum program
+        let results = engine.run().map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                format!("Quantum execution failed: {e}")
+            )
+        })?;
+        
         Ok(results)
     }
 

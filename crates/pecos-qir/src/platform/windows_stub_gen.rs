@@ -240,6 +240,11 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
         params: &[],
     },
     ExportedFunction {
+        name: "__quantum__rt__result_allocate_hugr",
+        return_type: "i64",
+        params: &[],
+    },
+    ExportedFunction {
         name: "__quantum__rt__qubit_release",
         return_type: "void",
         params: &[("usize", "qubit")],
@@ -263,6 +268,11 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
         name: "__quantum__rt__result_record_output",
         return_type: "void",
         params: &[("const unsigned char*", "result"), ("const char*", "name")],
+    },
+    ExportedFunction {
+        name: "__quantum__rt__result_get_one",
+        return_type: "int32_t",
+        params: &[("i64", "result")],
     },
     // Main function (exported from QIR program, not runtime)
     ExportedFunction {

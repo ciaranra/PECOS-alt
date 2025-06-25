@@ -35,10 +35,7 @@ impl TrueStandardQirExtension {
     #[must_use]
     pub fn new(result_names: ResultNameMapping) -> Self {
         // Reset static counters for each new extension instance (per function compilation)
-        unsafe {
-            NEXT_QUBIT_ID = 0;
-            NEXT_RESULT_ID = 0;
-        }
+        // Runtime counters are now managed by the QIR runtime itself
         Self { result_names }
     }
 }
@@ -168,9 +165,7 @@ impl CodegenExtension for TrueStandardQirExtension {
     }
 }
 
-// Static counters for qubit and result allocation
-static mut NEXT_QUBIT_ID: i64 = 0;
-static mut NEXT_RESULT_ID: u64 = 0;
+// Removed static counters - using runtime allocation instead
 
 fn emit_qalloc_true_standard<'c, H: HugrView<Node = Node>>(
     context: &mut EmitFuncContext<'c, '_, H>,
@@ -283,17 +278,17 @@ fn emit_measure_true_standard<'c, H: HugrView<Node = Node>>(
     // The runtime will interpret the pointer value as the qubit index
     let qubit_ptr = builder.build_int_to_ptr(qubit_i64, qubit_ptr_type, "qubit_ptr")?;
 
-    // Allocate result ID
-    let result_id = unsafe {
-        let id = NEXT_RESULT_ID;
-        NEXT_RESULT_ID += 1;
-        id
-    };
+    // Allocate result ID using HUGR runtime allocation
+    // Call __quantum__rt__result_allocate_hugr() which returns i64
+    let allocate_result_func_type = i64_type.fn_type(&[], false);
+    let allocate_result_func = context.get_extern_func("__quantum__rt__result_allocate_hugr", allocate_result_func_type)?;
+    
+    let result_call = builder.build_call(allocate_result_func, &[], "result_id")?;
+    let result_id = result_call.try_as_basic_value().left().unwrap().into_int_value();
 
     // For results, we always use inttoptr (never null) - even for result 0
     // This matches bell.ll: inttoptr (i64 0 to %Result*)
-    let result_id_val = i64_type.const_int(result_id, false);
-    let result_ptr = builder.build_int_to_ptr(result_id_val, result_ptr_type, "result_ptr")?;
+    let result_ptr = builder.build_int_to_ptr(result_id, result_ptr_type, "result_ptr")?;
 
     // True Standard QIR measurement: void @__quantum__qis__m__body(%Qubit*, %Result*)
     let void_type = llvm_context.void_type();

@@ -130,6 +130,11 @@ impl QirRuntimeState {
         // Clear existing register values
         self.classical_registers.clear();
 
+        // First, initialize all registers that will be used to 0
+        for (_, (register_name, _)) in &self.result_mappings {
+            self.classical_registers.insert(register_name.clone(), 0);
+        }
+
         // Apply all result mappings to build register values
         for (result_id, (register_name, bit_position)) in &self.result_mappings {
             // Get the measurement result
@@ -139,17 +144,16 @@ impl QirRuntimeState {
                 .copied()
                 .unwrap_or(false);
 
-            // Get or create the register
-            let register = self
-                .classical_registers
-                .entry(register_name.clone())
-                .or_insert(0);
-
-            // Set the bit
-            if measurement_value {
-                *register |= 1i64 << bit_position;
-            } else {
-                *register &= !(1i64 << bit_position);
+            // Get the register (we know it exists now)
+            if let Some(register) = self.classical_registers.get_mut(register_name) {
+                // Set or clear the bit
+                if measurement_value {
+                    *register |= 1i64 << bit_position;
+                } else {
+                    // Since we initialized to 0, we don't need to clear bits
+                    // But we'll keep this for clarity
+                    *register &= !(1i64 << bit_position);
+                }
             }
         }
     }

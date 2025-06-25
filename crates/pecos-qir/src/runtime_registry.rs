@@ -162,3 +162,16 @@ pub fn set_shutting_down() {
 pub fn clear_shutting_down() {
     SHUTTING_DOWN.store(false, Ordering::Release);
 }
+
+/// Clean up all runtime states (for testing purposes)
+pub fn cleanup_all_runtimes() {
+    let mut registry = RUNTIME_REGISTRY.write().unwrap();
+    if let Some(reg) = registry.as_mut() {
+        reg.states.clear();
+    }
+    
+    // Also clear thread-local state
+    CURRENT_RUNTIME_ID.with(|current| {
+        *current.borrow_mut() = None;
+    });
+}
