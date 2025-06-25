@@ -11,13 +11,13 @@ pub fn force_runtime_cleanup() {
     if CLEANUP_IN_PROGRESS.swap(true, Ordering::SeqCst) {
         return;
     }
-    
+
     // Clear all callbacks
     crate::runtime::core_runtime::clear_interactive_callback();
-    
+
     // Clean up all runtime states
-    crate::runtime_registry::cleanup_all_runtimes();
-    
+    super::registry::cleanup_all_runtimes();
+
     // Mark cleanup as complete
     CLEANUP_IN_PROGRESS.store(false, Ordering::SeqCst);
 }
@@ -25,5 +25,5 @@ pub fn force_runtime_cleanup() {
 /// Thread-local cleanup for test isolation
 pub fn cleanup_thread_local_state() {
     // Clear thread-local runtime ID
-    crate::runtime_registry::RuntimeRegistry::clear_current_runtime();
+    super::registry::RuntimeRegistry::clear_current_runtime();
 }

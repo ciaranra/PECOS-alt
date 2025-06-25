@@ -159,7 +159,7 @@ pub enum PastOp {
     Reset,
     /// Allocate qubit
     QAlloc,
-    
+
     // Classical operations
     /// Integer addition
     Add,
@@ -173,7 +173,7 @@ pub enum PastOp {
     Compare(CompareOp),
     /// Conditional branch
     Branch,
-    
+
     // Memory operations
     /// Allocate qubit
     AllocQubit,
@@ -183,7 +183,7 @@ pub enum PastOp {
     Load,
     /// Store to memory
     Store,
-    
+
     // Control flow
     /// Function call
     Call(String),
@@ -191,7 +191,7 @@ pub enum PastOp {
     Return,
     /// Loop
     Loop,
-    
+
     // Special nodes
     /// Input node
     Input(usize),
@@ -226,11 +226,13 @@ impl PastModule {
     pub fn to_ron_string(&self) -> Result<String, ron::Error> {
         ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default())
     }
-    
+
     /// Load from RON string
     pub fn from_ron_string(s: &str) -> Result<Self, ron::Error> {
         ron::de::from_str(s).map_err(|e| match e {
-            ron::de::SpannedError { code, position } => ron::Error::Message(format!("{:?} at {:?}", code, position)),
+            ron::de::SpannedError { code, position } => {
+                ron::Error::Message(format!("{code:?} at {position:?}"))
+            }
         })
     }
 }
@@ -248,10 +250,10 @@ mod tests {
             functions: vec![],
             types: HashMap::new(),
         };
-        
+
         let ron_str = module.to_ron_string().unwrap();
         assert!(ron_str.contains("test_module"));
-        
+
         let parsed = PastModule::from_ron_string(&ron_str).unwrap();
         assert_eq!(parsed.name, module.name);
     }

@@ -215,12 +215,12 @@ pecos-qir = {{ path = {:?} }}
         Self::ensure_dir(&src_dir)?;
 
         // Create a minimal lib.rs that exports the instance-based runtime
-        let lib_rs_content = r#"// Re-export the instance-based runtime implementation
+        let lib_rs_content = r"// Re-export the instance-based runtime implementation
 pub use pecos_qir::runtime::*;
-pub use pecos_qir::runtime_state::*;
-pub use pecos_qir::runtime_registry::*;
-"#;
-        
+pub use pecos_qir::runtime::state::*;
+pub use pecos_qir::runtime::registry::*;
+";
+
         fs::write(src_dir.join("lib.rs"), lib_rs_content)
             .map_err(|e| PecosError::Processing(format!("Failed to write lib.rs: {e}")))?;
 

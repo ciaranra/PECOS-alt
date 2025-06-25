@@ -13,7 +13,14 @@ use hugr_llvm::custom::{CodegenExtension, CodegenExtsBuilder};
 /// Extension to handle tket2.bool types
 pub struct Tket2BoolExtension;
 
+impl Default for Tket2BoolExtension {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Tket2BoolExtension {
+    #[must_use]
     pub fn new() -> Self {
         Self
     }
@@ -29,14 +36,11 @@ impl CodegenExtension for Tket2BoolExtension {
     {
         let ext_id = ExtensionId::new("tket2.bool").unwrap();
         let bool_type_name = TypeName::new_inline("bool");
-        
+
         // Register the bool type
-        builder.custom_type(
-            (ext_id.clone(), bool_type_name),
-            |ts, _hugr_type| {
-                // Map tket2.bool to LLVM i1 (boolean)
-                Ok(ts.iw_context().bool_type().into())
-            },
-        )
+        builder.custom_type((ext_id.clone(), bool_type_name), |ts, _hugr_type| {
+            // Map tket2.bool to LLVM i1 (boolean)
+            Ok(ts.iw_context().bool_type().into())
+        })
     }
 }

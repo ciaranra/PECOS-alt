@@ -1,7 +1,7 @@
-use std::path::PathBuf;
 use pecos_engines::engine_system::MonteCarloEngine;
 use pecos_engines::noise::DepolarizingNoiseModel;
 use pecos_qir::QirEngine;
+use std::path::PathBuf;
 
 /// Get the path to the QIR Bell state example
 fn get_qir_program_path() -> PathBuf {
@@ -27,12 +27,15 @@ fn test_qir_bell_state_single_worker() {
         Box::new(qir_engine),
         noise_model,
         10,
-        1,  // Single worker to test basic functionality
+        1,    // Single worker to test basic functionality
         None, // No specific seed
     )
     .expect("QIR execution should succeed with single worker");
 
     // The test passes if there are no errors in execution
     assert!(!results.shots.is_empty(), "Expected non-empty results");
-    println!("Single-threaded QIR execution succeeded with {} shots", results.shots.len());
+    println!(
+        "Single-threaded QIR execution succeeded with {} shots",
+        results.shots.len()
+    );
 }

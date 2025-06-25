@@ -1,23 +1,18 @@
-use libloading::{Library, Symbol};
 #[cfg(unix)]
 use libloading::os::unix::Library as UnixLibrary;
+use libloading::{Library, Symbol};
 use log::{debug, warn};
 use pecos_core::errors::PecosError;
 use pecos_engines::byte_message::ByteMessage;
 use pecos_engines::shot_results::{Data, Shot};
-use std::ffi::{CStr, c_char};
+use std::ffi::CStr;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-// FFI struct for shot data (matches runtime.rs)
-#[repr(C)]
-struct FFIShotData {
-    names: *mut *mut c_char,
-    values: *mut i64,
-    count: usize,
-}
+// Import FFIShotData from runtime to avoid duplication
+use crate::runtime::FFIShotData;
 
 /// QIR Library for executing quantum programs
 ///
@@ -146,32 +141,6 @@ impl QirLibrary {
 
         // Try to load the library with retries
         let max_retries = 3;
-        Self::load_library_with_retries(path, max_retries)
-    }
-
-    /// Helper function to implement exponential backoff
-    fn sleep_with_backoff(retry_count: usize) {
-        let sleep_duration =
-            Duration::from_millis(100 * 2u64.pow(u32::try_from(retry_count).unwrap_or(0)));
-        debug!("QIR: Sleeping for {:?} before retry", sleep_duration);
-        thread::sleep(sleep_duration);
-    }
-
-    /// Helper function to load a library with retries
-    ///
-    /// This function attempts to load a library from the given path, with retries
-    /// if the initial attempt fails due to "Text file busy" errors.
-    ///
-    /// # Arguments
-    ///
-    /// * `path` - Path to the library file
-    /// * `max_retries` - Maximum number of retry attempts
-    /// * `thread_id` - Thread ID for logging
-    ///
-    /// # Returns
-    ///
-    /// * `Result<Self, PecosError>` - The loaded library if successful
-    fn load_library_with_retries(path: &Path, max_retries: usize) -> Result<Self, PecosError> {
         let mut retry_count = 0;
 
         while retry_count < max_retries {
@@ -189,8 +158,11 @@ impl QirLibrary {
                     // RTLD_NODELETE prevents the library from being unloaded during cleanup
                     debug!("QIR: Using RTLD_LOCAL | RTLD_NODELETE for library loading");
                     unsafe {
-                        UnixLibrary::open(Some(path), libc::RTLD_NOW | libc::RTLD_LOCAL | libc::RTLD_NODELETE)
-                            .map(Library::from)
+                        UnixLibrary::open(
+                            Some(path),
+                            libc::RTLD_NOW | libc::RTLD_LOCAL | libc::RTLD_NODELETE,
+                        )
+                        .map(Library::from)
                     }
                 }
                 #[cfg(not(unix))]
@@ -200,7 +172,7 @@ impl QirLibrary {
             } else {
                 unsafe { Library::new(path) }
             };
-            
+
             match library_result {
                 Ok(library) => {
                     debug!("QIR: Successfully loaded library from {:?}", path);
@@ -216,7 +188,11 @@ impl QirLibrary {
                     );
 
                     // Sleep before retrying, with exponential backoff
-                    Self::sleep_with_backoff(retry_count);
+                    let sleep_duration =
+                        Duration::from_millis(100 * 2u64.pow(u32::try_from(retry_count).unwrap_or(0)));
+                    debug!("QIR: Sleeping for {:?} before retry", sleep_duration);
+                    thread::sleep(sleep_duration);
+                    
                     retry_count += 1;
                 }
             }
@@ -592,23 +568,28 @@ impl QirLibrary {
 impl Drop for QirLibrary {
     fn drop(&mut self) {
         let strong_count = Arc::strong_count(&self.library);
-        debug!("QIR Library: Dropping library reference (remaining references: {})", strong_count - 1);
-        
+        debug!(
+            "QIR Library: Dropping library reference (remaining references: {})",
+            strong_count - 1
+        );
+
         // Check if we're in a test environment
-        let is_python_test = std::env::var("PYTEST_CURRENT_TEST").is_ok() 
+        let is_python_test = std::env::var("PYTEST_CURRENT_TEST").is_ok()
             || std::env::var("PYTHON_TEST_MODE").is_ok();
-        
+
         // If this is the last reference, set shutdown flag to prevent runtime re-initialization
         if strong_count == 1 {
-            crate::runtime_registry::set_shutting_down();
-            
+            crate::runtime::registry::set_shutting_down();
+
             // Skip reset entirely during drop to avoid segfaults
             // The runtime will be cleaned up when the library is unloaded
             debug!("QIR Library: Skipping reset during drop to avoid segfaults");
         }
-        
+
         if is_python_test {
-            debug!("QIR Library: Test environment - allowing normal library unload for proper cleanup");
+            debug!(
+                "QIR Library: Test environment - allowing normal library unload for proper cleanup"
+            );
         } else {
             debug!("QIR Library: Production environment - RTLD_NODELETE prevents crashes");
         }

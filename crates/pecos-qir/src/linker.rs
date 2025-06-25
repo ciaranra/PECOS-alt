@@ -52,7 +52,7 @@ use crate::platform::macos::MacOSCompiler;
 #[cfg(target_os = "windows")]
 use crate::platform::windows::WindowsCompiler;
 use crate::platform::{executable_name, standard_llvm_paths};
-use crate::runtime_builder::RuntimeBuilder;
+use crate::runtime::builder::RuntimeBuilder;
 use log::{debug, info, warn};
 use pecos_core::errors::PecosError;
 use std::fs;
@@ -544,7 +544,7 @@ impl QirLinker {
                 Ok(file) => {
                     debug!("Acquired compilation lock: {:?}", lock_path);
                     return Ok(FileLock {
-                        file,
+                        _file: file,
                         path: lock_path.to_path_buf(),
                     });
                 }
@@ -588,8 +588,8 @@ impl QirLinker {
 
 /// RAII guard for file-based locking
 struct FileLock {
-    #[allow(dead_code)]
-    file: File,
+    // Keep file handle open for RAII lock pattern
+    _file: File,
     path: PathBuf,
 }
 

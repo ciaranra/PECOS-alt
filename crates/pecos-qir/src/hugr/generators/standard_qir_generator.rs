@@ -30,15 +30,15 @@ pub struct StandardQirExtension {
 impl StandardQirExtension {
     #[must_use]
     pub fn new(result_names: ResultNameMapping) -> Self {
-        Self { 
+        Self {
             result_names,
-            use_hugr_names: true,  // Default to HUGR names for this extension
+            use_hugr_names: true, // Default to HUGR names for this extension
         }
     }
 
     #[must_use]
     pub fn with_hugr_names(result_names: ResultNameMapping, use_hugr_names: bool) -> Self {
-        Self { 
+        Self {
             result_names,
             use_hugr_names,
         }
@@ -48,17 +48,17 @@ impl StandardQirExtension {
         if self.use_hugr_names {
             // Only use __hugr suffix for gates that actually have HUGR versions
             match base_name {
-                "__quantum__qis__h__body" |
-                "__quantum__qis__x__body" |
-                "__quantum__qis__y__body" |
-                "__quantum__qis__z__body" |
-                "__quantum__qis__cx__body" |
-                "__quantum__qis__rz__body" |
-                "__quantum__qis__r1xy__body" => {
+                "__quantum__qis__h__body"
+                | "__quantum__qis__x__body"
+                | "__quantum__qis__y__body"
+                | "__quantum__qis__z__body"
+                | "__quantum__qis__cx__body"
+                | "__quantum__qis__rz__body"
+                | "__quantum__qis__r1xy__body" => {
                     format!("{base_name}__hugr")
                 }
                 // For other gates, use the base name as they already work with integers
-                _ => base_name.to_string()
+                _ => base_name.to_string(),
             }
         } else {
             base_name.to_string()
@@ -75,7 +75,7 @@ impl CodegenExtension for StandardQirExtension {
         Self: 'a,
     {
         let ext_id = hugr_core::extension::ExtensionId::new("tket2.quantum").unwrap();
-        
+
         // Pre-compute all function names before moving self.result_names
         let h_func = self.get_function_name("__quantum__qis__h__body");
         let x_func = self.get_function_name("__quantum__qis__x__body");
@@ -85,7 +85,7 @@ impl CodegenExtension for StandardQirExtension {
         let rx_func = self.get_function_name("__quantum__qis__rx__body");
         let ry_func = self.get_function_name("__quantum__qis__ry__body");
         let rz_func = self.get_function_name("__quantum__qis__rz__body");
-        
+
         let result_names = std::rc::Rc::new(self.result_names);
 
         builder
@@ -94,14 +94,12 @@ impl CodegenExtension for StandardQirExtension {
             })
             .extension_op(ext_id.clone(), "H".into(), {
                 move |ctx, args| {
-                    emit_single_qubit_gate_standard(ctx, args, &h_func)
-                        .map_err(anyhow::Error::new)
+                    emit_single_qubit_gate_standard(ctx, args, &h_func).map_err(anyhow::Error::new)
                 }
             })
             .extension_op(ext_id.clone(), "CX".into(), {
                 move |ctx, args| {
-                    emit_two_qubit_gate_standard(ctx, args, &cx_func)
-                        .map_err(anyhow::Error::new)
+                    emit_two_qubit_gate_standard(ctx, args, &cx_func).map_err(anyhow::Error::new)
                 }
             })
             .extension_op(ext_id.clone(), "MeasureFree".into(), {
@@ -112,39 +110,33 @@ impl CodegenExtension for StandardQirExtension {
             })
             .extension_op(ext_id.clone(), "X".into(), {
                 move |ctx, args| {
-                    emit_single_qubit_gate_standard(ctx, args, &x_func)
-                        .map_err(anyhow::Error::new)
+                    emit_single_qubit_gate_standard(ctx, args, &x_func).map_err(anyhow::Error::new)
                 }
             })
             .extension_op(ext_id.clone(), "Y".into(), {
                 move |ctx, args| {
-                    emit_single_qubit_gate_standard(ctx, args, &y_func)
-                        .map_err(anyhow::Error::new)
+                    emit_single_qubit_gate_standard(ctx, args, &y_func).map_err(anyhow::Error::new)
                 }
             })
             .extension_op(ext_id.clone(), "Z".into(), {
                 move |ctx, args| {
-                    emit_single_qubit_gate_standard(ctx, args, &z_func)
-                        .map_err(anyhow::Error::new)
+                    emit_single_qubit_gate_standard(ctx, args, &z_func).map_err(anyhow::Error::new)
                 }
             })
             // Rotation gates
             .extension_op(ext_id.clone(), "Rx".into(), {
                 move |ctx, args| {
-                    emit_rotation_gate_standard(ctx, args, &rx_func)
-                        .map_err(anyhow::Error::new)
+                    emit_rotation_gate_standard(ctx, args, &rx_func).map_err(anyhow::Error::new)
                 }
             })
             .extension_op(ext_id.clone(), "Ry".into(), {
                 move |ctx, args| {
-                    emit_rotation_gate_standard(ctx, args, &ry_func)
-                        .map_err(anyhow::Error::new)
+                    emit_rotation_gate_standard(ctx, args, &ry_func).map_err(anyhow::Error::new)
                 }
             })
             .extension_op(ext_id.clone(), "Rz".into(), {
                 move |ctx, args| {
-                    emit_rotation_gate_standard(ctx, args, &rz_func)
-                        .map_err(anyhow::Error::new)
+                    emit_rotation_gate_standard(ctx, args, &rz_func).map_err(anyhow::Error::new)
                 }
             })
             // Pauli gates - S/SZ, T, and their adjoints
@@ -186,10 +178,7 @@ impl CodegenExtension for StandardQirExtension {
                 }
             })
             .extension_op(ext_id.clone(), "CH".into(), {
-                move |ctx, args| {
-                    emit_ch_decomposed(ctx, args)
-                        .map_err(anyhow::Error::new)
-                }
+                move |ctx, args| emit_ch_decomposed(ctx, args).map_err(anyhow::Error::new)
             })
             // Controlled rotation gates
             .extension_op(ext_id.clone(), "CRz".into(), {
@@ -219,11 +208,16 @@ fn emit_qalloc_standard<'c, H: HugrView<Node = Node>>(
     // Call the proper runtime allocation function: i64 @__quantum__rt__qubit_allocate()
     let i64_type = llvm_context.i64_type();
     let allocate_func_type = i64_type.fn_type(&[], false);
-    let allocate_func = context.get_extern_func("__quantum__rt__qubit_allocate", allocate_func_type)?;
+    let allocate_func =
+        context.get_extern_func("__quantum__rt__qubit_allocate", allocate_func_type)?;
 
     // Call the allocation function
     let qubit_call = builder.build_call(allocate_func, &[], "qubit_usize")?;
-    let qubit_i64 = qubit_call.try_as_basic_value().left().unwrap().into_int_value();
+    let qubit_i64 = qubit_call
+        .try_as_basic_value()
+        .left()
+        .unwrap()
+        .into_int_value();
 
     // HUGR expects i16, so we need to truncate the ID to i16
     let i16_type = llvm_context.i16_type();
@@ -327,7 +321,7 @@ fn emit_controlled_rotation_gate_standard<'c, H: HugrView<Node = Node>>(
         builder.build_int_z_extend(args.inputs[0].into_int_value(), i64_type, "control_i64")?;
     let target_i64 =
         builder.build_int_z_extend(args.inputs[1].into_int_value(), i64_type, "target_i64")?;
-    
+
     // Get the angle parameter
     let angle = args.inputs[2].into_float_value();
     let f64_type = llvm_context.f64_type();
@@ -337,7 +331,11 @@ fn emit_controlled_rotation_gate_standard<'c, H: HugrView<Node = Node>>(
     let func_type = void_type.fn_type(&[f64_type.into(), i64_type.into(), i64_type.into()], false);
     let func = context.get_extern_func(func_name, func_type)?;
 
-    builder.build_call(func, &[angle.into(), control_i64.into(), target_i64.into()], "")?;
+    builder.build_call(
+        func,
+        &[angle.into(), control_i64.into(), target_i64.into()],
+        "",
+    )?;
     args.outputs
         .finish(builder, [args.inputs[0], args.inputs[1]])?;
     Ok(())
@@ -365,7 +363,11 @@ fn emit_toffoli_gate_standard<'c, H: HugrView<Node = Node>>(
     let func_type = void_type.fn_type(&[i64_type.into(), i64_type.into(), i64_type.into()], false);
     let func = context.get_extern_func(func_name, func_type)?;
 
-    builder.build_call(func, &[control1_i64.into(), control2_i64.into(), target_i64.into()], "")?;
+    builder.build_call(
+        func,
+        &[control1_i64.into(), control2_i64.into(), target_i64.into()],
+        "",
+    )?;
     args.outputs
         .finish(builder, [args.inputs[0], args.inputs[1], args.inputs[2]])?;
     Ok(())
@@ -394,12 +396,16 @@ fn emit_ch_decomposed<'c, H: HugrView<Node = Node>>(
     let pi_4 = f64_type.const_float(std::f64::consts::PI / 4.0);
 
     // First Ry(-π/4) on target
-    let ry_func_type = llvm_context.void_type().fn_type(&[f64_type.into(), i64_type.into()], false);
+    let ry_func_type = llvm_context
+        .void_type()
+        .fn_type(&[f64_type.into(), i64_type.into()], false);
     let ry_func = context.get_extern_func("__quantum__qis__ry__body", ry_func_type)?;
     builder.build_call(ry_func, &[neg_pi_4.into(), target_i64.into()], "")?;
 
     // CZ on control and target
-    let cz_func_type = llvm_context.void_type().fn_type(&[i64_type.into(), i64_type.into()], false);
+    let cz_func_type = llvm_context
+        .void_type()
+        .fn_type(&[i64_type.into(), i64_type.into()], false);
     let cz_func = context.get_extern_func("__quantum__qis__cz__body", cz_func_type)?;
     builder.build_call(cz_func, &[control_i64.into(), target_i64.into()], "")?;
 
@@ -428,10 +434,17 @@ fn emit_measure_standard<'c, H: HugrView<Node = Node>>(
     // Allocate result ID using HUGR runtime allocation
     // Call __quantum__rt__result_allocate_hugr() which returns i64
     let allocate_result_func_type = i64_type.fn_type(&[], false);
-    let allocate_result_func = context.get_extern_func("__quantum__rt__result_allocate_hugr", allocate_result_func_type)?;
-    
+    let allocate_result_func = context.get_extern_func(
+        "__quantum__rt__result_allocate_hugr",
+        allocate_result_func_type,
+    )?;
+
     let result_call = builder.build_call(allocate_result_func, &[], "result_id")?;
-    let result_id_val = result_call.try_as_basic_value().left().unwrap().into_int_value();
+    let result_id_val = result_call
+        .try_as_basic_value()
+        .left()
+        .unwrap()
+        .into_int_value();
 
     // PECOS QIR measurement: i32 @__quantum__qis__m__body(i64, i64)
     let i32_type = llvm_context.i32_type();

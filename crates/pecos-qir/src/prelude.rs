@@ -1,18 +1,52 @@
-// Copyright 2024 The PECOS Developers
-//
-// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
-// in compliance with the License.You may obtain a copy of the License at
-//
-//     https://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software distributed under the License
-// is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
-// or implied. See the License for the specific language governing permissions and limitations under
-// the License.
+//! Prelude module for pecos-qir
+//! 
+//! This module provides convenient re-exports of commonly used types and functions
+//! for working with QIR (Quantum Intermediate Representation) in PECOS.
+//!
+//! # Example
+//! 
+//! ```no_run
+//! use pecos_qir::prelude::*;
+//! use pecos_engines::run_sim;
+//! 
+//! fn main() -> Result<(), PecosError> {
+//!     // Create a QIR engine
+//!     let engine = setup_qir_engine(Path::new("program.qir"), None)?;
+//!     
+//!     // Run the simulation with 1000 shots
+//!     let results = run_sim(engine, 1000, None, None, None, None)?;
+//!     
+//!     // Work with shot results
+//!     println!("Got {} shots", results.len());
+//!     for (i, shot) in results.shots.iter().take(5).enumerate() {
+//!         println!("Shot {}: {:?}", i, shot);
+//!     }
+//!     
+//!     Ok(())
+//! }
+//! ```
 
+// Core QIR functionality
 pub use crate::{QirEngine, setup_qir_engine};
 
-// Re-export common shot result types and formatters from pecos-engines
-pub use pecos_engines::{
-    BitVecDisplayFormat, Shot, ShotMap, ShotMapDisplayExt, ShotMapDisplayOptions, ShotVec,
+// HUGR compilation support (when available)
+#[cfg(feature = "hugr-llvm-pipeline")]
+pub use crate::{
+    HugrCompiler, HugrCompilerConfig, QuantumLlvmConvention,
+    compile_hugr_to_qir, create_hugr_qir_engine, setup_hugr_qir_engine,
 };
+
+// Common types from pecos-engines for working with results
+pub use pecos_engines::{
+    ClassicalEngine,
+    Shot, ShotVec, ShotMap,
+    BitVecDisplayFormat, 
+    ShotMapDisplayExt, ShotMapDisplayOptions,
+    ByteMessage,
+};
+
+// Error types
+pub use pecos_core::errors::PecosError;
+
+// Common standard library imports for path handling
+pub use std::path::{Path, PathBuf};

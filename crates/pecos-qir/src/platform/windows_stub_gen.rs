@@ -96,12 +96,20 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
     ExportedFunction {
         name: "__quantum__qis__r1xy__body",
         return_type: "void",
-        params: &[("double", "theta"), ("double", "phi"), ("const unsigned char*", "qubit")],
+        params: &[
+            ("double", "theta"),
+            ("double", "phi"),
+            ("const unsigned char*", "qubit"),
+        ],
     },
     ExportedFunction {
         name: "__quantum__qis__rxy__body",
         return_type: "void",
-        params: &[("double", "theta"), ("double", "phi"), ("const unsigned char*", "qubit")],
+        params: &[
+            ("double", "theta"),
+            ("double", "phi"),
+            ("const unsigned char*", "qubit"),
+        ],
     },
     ExportedFunction {
         name: "__quantum__qis__h__body",
@@ -156,12 +164,18 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
     ExportedFunction {
         name: "__quantum__qis__cx__body",
         return_type: "void",
-        params: &[("const unsigned char*", "control"), ("const unsigned char*", "target")],
+        params: &[
+            ("const unsigned char*", "control"),
+            ("const unsigned char*", "target"),
+        ],
     },
     ExportedFunction {
         name: "__quantum__qis__cnot__body",
         return_type: "void",
-        params: &[("const unsigned char*", "control"), ("const unsigned char*", "target")],
+        params: &[
+            ("const unsigned char*", "control"),
+            ("const unsigned char*", "target"),
+        ],
     },
     ExportedFunction {
         name: "__quantum__qis__cz__body",
@@ -211,12 +225,18 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
     ExportedFunction {
         name: "__quantum__qis__m__body",
         return_type: "void",
-        params: &[("const unsigned char*", "qubit"), ("const unsigned char*", "result")],
+        params: &[
+            ("const unsigned char*", "qubit"),
+            ("const unsigned char*", "result"),
+        ],
     },
     ExportedFunction {
         name: "__quantum__qis__m__body_ptr",
         return_type: "void",
-        params: &[("const unsigned char*", "qubit"), ("const unsigned char*", "result")],
+        params: &[
+            ("const unsigned char*", "qubit"),
+            ("const unsigned char*", "result"),
+        ],
     },
     ExportedFunction {
         name: "__quantum__qis__reset__body",

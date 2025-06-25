@@ -249,7 +249,7 @@ impl MonteCarloEngine {
         // isolated thread pool to prevent TLS conflicts during library cleanup.
         let thread_pool = ThreadPoolBuilder::new()
             .num_threads(num_workers)
-            .thread_name(|index| format!("pecos-mc-worker-{}", index))
+            .thread_name(|index| format!("pecos-mc-worker-{index}"))
             .build()
             .map_err(|e| PecosError::Processing(format!("Failed to create thread pool: {e}")))?;
 
@@ -294,10 +294,10 @@ impl MonteCarloEngine {
                 })
                 .collect::<Result<Vec<()>, PecosError>>()
         });
-        
+
         // Handle the parallel execution result
         parallel_result?;
-        
+
         // CRITICAL: Explicitly drop the thread pool to ensure clean shutdown
         // This helps prevent TLS issues during test cleanup
         drop(thread_pool);

@@ -113,10 +113,10 @@ pub fn run_sim(
     // Runtime validation
     debug_assert!(shots > 0, "Number of shots must be positive");
     debug_assert!(
-        workers.map_or(true, |w| w > 0),
+        workers.is_none_or(|w| w > 0),
         "Number of workers must be positive if specified"
     );
-    
+
     // Get the number of qubits from the classical engine
     let num_qubits = classical_engine.num_qubits();
 

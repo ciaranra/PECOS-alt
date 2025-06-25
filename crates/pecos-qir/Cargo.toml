@@ -42,13 +42,6 @@ tempfile.workspace = true
 serial_test.workspace = true
 env_logger.workspace = true
 
-[[bin]]
-name = "test_segfault"
-path = "src/bin/test_segfault.rs"
-
-[[bin]]
-name = "test_segfault_stress"
-path = "src/bin/test_segfault_stress.rs"
 
 [features]
 default = ["pmir-pipeline"]

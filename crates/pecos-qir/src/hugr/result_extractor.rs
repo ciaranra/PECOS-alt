@@ -65,7 +65,7 @@ impl ResultNameExtractor {
                         let default_name = if measurement_count == 0 {
                             "c".to_string()
                         } else {
-                            format!("c{}", measurement_count)
+                            format!("c{measurement_count}")
                         };
                         result_mapping.insert(node, default_name);
                         measurement_count += 1;
@@ -126,15 +126,5 @@ impl ResultNameExtractor {
         }
 
         None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    #[test]
-    fn test_result_name_extraction() {
-        // This would be tested with actual HUGR data
-        // For now, we'll rely on integration testing
     }
 }

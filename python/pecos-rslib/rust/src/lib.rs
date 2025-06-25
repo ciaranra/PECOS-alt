@@ -27,12 +27,12 @@ mod qasm_sim_bindings;
 mod qir_bindings;
 mod qir_context_bindings;
 mod qir_execution_guard;
+mod safe_calls;
 mod sparse_sim;
 mod sparse_stab_bindings;
 mod sparse_stab_engine_bindings;
 mod state_vec_bindings;
 mod state_vec_engine_bindings;
-mod safe_calls;
 
 use byte_message_bindings::{PyByteMessage, PyByteMessageBuilder};
 use sparse_stab_bindings::SparseSim;
@@ -59,7 +59,7 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Register HUGR/QIR functions (only if hugr-llvm-pipeline feature is enabled)
     #[cfg(feature = "hugr-llvm-pipeline")]
     hugr_bindings::register_hugr_module(m)?;
-    
+
     // Register PMIR functions (only if pmir-pipeline feature is enabled)
     #[cfg(feature = "pmir-pipeline")]
     pmir_bindings::register_pmir_module(m)?;

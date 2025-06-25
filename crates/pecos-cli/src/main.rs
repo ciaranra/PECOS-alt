@@ -281,7 +281,7 @@ fn check_backend_availability() -> (bool, bool) {
 /// Select the actual backend to use based on user choice and availability
 fn select_backend(requested: BackendType) -> Result<BackendType, PecosError> {
     let (pmir_available, hugr_llvm_available) = check_backend_availability();
-    
+
     match requested {
         BackendType::Auto => {
             if pmir_available {
@@ -299,7 +299,8 @@ fn select_backend(requested: BackendType) -> Result<BackendType, PecosError> {
                 Ok(BackendType::Pmir)
             } else {
                 Err(PecosError::Feature(
-                    "PMIR backend not available. PECOS was built without pmir-pipeline feature.".to_string()
+                    "PMIR backend not available. PECOS was built without pmir-pipeline feature."
+                        .to_string(),
                 ))
             }
         }
@@ -319,7 +320,7 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
     // Select and validate the backend
     let selected_backend = select_backend(args.backend.clone())?;
     debug!("Selected compilation backend: {:?}", selected_backend);
-    
+
     // get_program_path now includes proper context in its errors
     let program_path = get_program_path(&args.program)?;
 
@@ -434,7 +435,7 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
         // Write results to file
         std::fs::write(file_path, &results_str)
             .map_err(|e| PecosError::Resource(format!("Failed to write output file: {e}")))?;
-        
+
         // For QIR, ensure file is fully written before potential segfault
         if program_type == ProgramType::QIR {
             // Force sync to disk
@@ -442,7 +443,7 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
                 let _ = file.sync_all();
             }
         }
-        
+
         println!("Results written to {file_path}");
     } else {
         // Print results to stdout
@@ -467,7 +468,7 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
     // For QIR programs, we used to exit immediately to avoid cleanup segfaults
     // but this prevents test harnesses from capturing output.
     // The library leak in Drop should prevent most issues.
-    
+
     // Force all output to be written
     let _ = std::io::stdout().flush();
     let _ = std::io::stderr().flush();
@@ -483,11 +484,11 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
 fn main() -> Result<(), PecosError> {
     // Initialize logger with default "info" level if not specified
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
-    
+
     // Note: We let Rayon use its default global thread pool configuration
     // The real fix for TLS segfaults is in the QirLibrary Drop implementation
     // and proper thread pool management in MonteCarloEngine
-    
+
     // For QIR programs, disable stdout buffering to ensure output is captured before segfault
     use std::io::{self, Write};
     let _ = io::stdout().flush();

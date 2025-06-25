@@ -48,17 +48,16 @@ pub fn mlir_to_llvm_ir(
     config: &MlirToolchainConfig,
 ) -> Result<String, PecosError> {
     // Write MLIR to temporary file
-    let mut mlir_file = NamedTempFile::new()
-        .map_err(|e| PecosError::IO(e))?;
-    
-    mlir_file.write_all(mlir_text.as_bytes())
-        .map_err(|e| PecosError::IO(e))?;
-    
-    mlir_file.flush()
-        .map_err(|e| PecosError::IO(e))?;
-    
+    let mut mlir_file = NamedTempFile::new().map_err(PecosError::IO)?;
+
+    mlir_file
+        .write_all(mlir_text.as_bytes())
+        .map_err(PecosError::IO)?;
+
+    mlir_file.flush().map_err(PecosError::IO)?;
+
     let mlir_path = mlir_file.path();
-    
+
     // Run mlir-opt for optimization and lowering passes
     let mlir_opt = if let Some(path) = &config.mlir_opt_path {
         path.clone()
@@ -68,23 +67,24 @@ pub fn mlir_to_llvm_ir(
                 "mlir-opt not found. Please install MLIR tools (e.g., 'sudo apt install mlir-14-tools').".to_string()
             ))?
     };
-    
+
     let mut opt_cmd = Command::new(&mlir_opt);
     opt_cmd.arg(mlir_path);
-    
+
     // Add optimization passes
     for pass in &config.optimization_passes {
         opt_cmd.arg(pass);
     }
-    
-    let opt_output = opt_cmd.output()
-        .map_err(|e| PecosError::Processing(format!("Failed to run mlir-opt: {}", e)))?;
-    
+
+    let opt_output = opt_cmd
+        .output()
+        .map_err(|e| PecosError::Processing(format!("Failed to run mlir-opt: {e}")))?;
+
     if !opt_output.status.success() {
         let stderr = String::from_utf8_lossy(&opt_output.stderr);
-        return Err(PecosError::Processing(format!("mlir-opt failed: {}", stderr)));
+        return Err(PecosError::Processing(format!("mlir-opt failed: {stderr}")));
     }
-    
+
     // Run mlir-translate to convert to LLVM IR
     let mlir_translate = if let Some(path) = &config.mlir_translate_path {
         path.clone()
@@ -94,7 +94,7 @@ pub fn mlir_to_llvm_ir(
                 "mlir-translate not found. Please install MLIR tools (e.g., 'sudo apt install mlir-14-tools').".to_string()
             ))?
     };
-    
+
     let translate_output = Command::new(&mlir_translate)
         .arg("--mlir-to-llvmir")
         .stdin(Stdio::piped())
@@ -108,16 +108,18 @@ pub fn mlir_to_llvm_ir(
             }
             child.wait_with_output()
         })
-        .map_err(|e| PecosError::Processing(format!("Failed to run mlir-translate: {}", e)))?;
-    
+        .map_err(|e| PecosError::Processing(format!("Failed to run mlir-translate: {e}")))?;
+
     if !translate_output.status.success() {
         let stderr = String::from_utf8_lossy(&translate_output.stderr);
-        return Err(PecosError::Processing(format!("mlir-translate failed: {}", stderr)));
+        return Err(PecosError::Processing(format!(
+            "mlir-translate failed: {stderr}"
+        )));
     }
-    
+
     // Return LLVM IR
     String::from_utf8(translate_output.stdout)
-        .map_err(|e| PecosError::Processing(format!("Invalid UTF-8 in LLVM IR: {}", e)))
+        .map_err(|e| PecosError::Processing(format!("Invalid UTF-8 in LLVM IR: {e}")))
 }
 
 /// Find an executable, trying versioned variants if the base name fails
@@ -126,15 +128,15 @@ fn find_executable(base_name: &str) -> Option<String> {
     if Command::new(base_name).arg("--version").output().is_ok() {
         return Some(base_name.to_string());
     }
-    
+
     // Try common versioned variants
     for version in &["18", "17", "16", "15", "14", "13", "12"] {
-        let versioned = format!("{}-{}", base_name, version);
+        let versioned = format!("{base_name}-{version}");
         if Command::new(&versioned).arg("--version").output().is_ok() {
             return Some(versioned);
         }
     }
-    
+
     None
 }
 
@@ -148,7 +150,7 @@ pub fn check_mlir_tools(config: &MlirToolchainConfig) -> Result<(), PecosError> 
                 "mlir-opt not found. Please install MLIR tools (e.g., 'sudo apt install mlir-14-tools').".to_string()
             ))?
     };
-    
+
     let mlir_translate = if let Some(path) = &config.mlir_translate_path {
         path.clone()
     } else {
@@ -157,19 +159,19 @@ pub fn check_mlir_tools(config: &MlirToolchainConfig) -> Result<(), PecosError> 
                 "mlir-translate not found. Please install MLIR tools (e.g., 'sudo apt install mlir-14-tools').".to_string()
             ))?
     };
-    
+
     // Check mlir-opt
     Command::new(&mlir_opt)
         .arg("--version")
         .output()
-        .map_err(|e| PecosError::Resource(format!("mlir-opt not accessible: {}", e)))?;
-    
+        .map_err(|e| PecosError::Resource(format!("mlir-opt not accessible: {e}")))?;
+
     // Check mlir-translate
     Command::new(&mlir_translate)
         .arg("--version")
         .output()
-        .map_err(|e| PecosError::Resource(format!("mlir-translate not accessible: {}", e)))?;
-    
+        .map_err(|e| PecosError::Resource(format!("mlir-translate not accessible: {e}")))?;
+
     Ok(())
 }
 
@@ -180,5 +182,7 @@ pub fn mlir_to_llvm_ir_in_memory(
 ) -> Result<String, PecosError> {
     // TODO: This would require direct MLIR C++ API integration
     // For now, we use the file-based approach above
-    Err(PecosError::Feature("In-memory MLIR processing not yet implemented".to_string()))
+    Err(PecosError::Feature(
+        "In-memory MLIR processing not yet implemented".to_string(),
+    ))
 }

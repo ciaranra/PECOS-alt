@@ -1,8 +1,8 @@
-use crate::{ClassicalEngine, NoiseModel, QuantumEngine, MonteCarloEngine};
 use crate::noise::PassThroughNoiseModel;
 use crate::quantum;
-use pecos_core::errors::PecosError;
 use crate::shot_results::ShotVec;
+use crate::{ClassicalEngine, MonteCarloEngine, NoiseModel, QuantumEngine};
+use pecos_core::errors::PecosError;
 
 /// Builder for creating and running simulations with compile-time safety
 pub struct SimulationBuilder {
@@ -14,8 +14,15 @@ pub struct SimulationBuilder {
     quantum_engine: Option<Box<dyn QuantumEngine>>,
 }
 
+impl Default for SimulationBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SimulationBuilder {
     /// Create a new simulation builder
+    #[must_use]
     pub fn new() -> Self {
         Self {
             classical_engine: None,
@@ -28,36 +35,42 @@ impl SimulationBuilder {
     }
 
     /// Set the classical engine (required)
+    #[must_use]
     pub fn classical_engine(mut self, engine: Box<dyn ClassicalEngine>) -> Self {
         self.classical_engine = Some(engine);
         self
     }
 
     /// Set the number of shots
+    #[must_use]
     pub fn shots(mut self, shots: usize) -> Self {
         self.shots = shots;
         self
     }
 
     /// Set the random seed
+    #[must_use]
     pub fn seed(mut self, seed: u64) -> Self {
         self.seed = Some(seed);
         self
     }
 
     /// Set the number of workers
+    #[must_use]
     pub fn workers(mut self, workers: usize) -> Self {
         self.workers = Some(workers);
         self
     }
 
     /// Set the noise model
+    #[must_use]
     pub fn noise_model(mut self, model: Box<dyn NoiseModel>) -> Self {
         self.noise_model = Some(model);
         self
     }
 
     /// Set the quantum engine
+    #[must_use]
     pub fn quantum_engine(mut self, engine: Box<dyn QuantumEngine>) -> Self {
         self.quantum_engine = Some(engine);
         self
@@ -65,14 +78,17 @@ impl SimulationBuilder {
 
     /// Build and run the simulation
     pub fn run(self) -> Result<ShotVec, PecosError> {
-        let classical_engine = self.classical_engine
+        let classical_engine = self
+            .classical_engine
             .ok_or_else(|| PecosError::Input("Classical engine is required".to_string()))?;
-        
+
         let num_qubits = classical_engine.num_qubits();
-        let noise_model = self.noise_model
+        let noise_model = self
+            .noise_model
             .unwrap_or_else(|| Box::new(PassThroughNoiseModel));
-        
-        let quantum_engine = self.quantum_engine
+
+        let quantum_engine = self
+            .quantum_engine
             .unwrap_or_else(|| Box::new(quantum::StateVecEngine::new(num_qubits)));
 
         // Use MonteCarloEngine instead of HybridEngine
@@ -99,7 +115,7 @@ pub fn run_sim_safe(
     let mut builder = SimulationBuilder::new()
         .classical_engine(classical_engine)
         .shots(shots);
-    
+
     if let Some(s) = seed {
         builder = builder.seed(s);
     }
@@ -112,6 +128,6 @@ pub fn run_sim_safe(
     if let Some(qe) = quantum_engine {
         builder = builder.quantum_engine(qe);
     }
-    
+
     builder.run()
 }

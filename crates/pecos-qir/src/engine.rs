@@ -16,7 +16,6 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 
-
 /// Helper function to get the current thread ID as a string
 ///
 /// This function returns the current thread ID formatted as a string.
@@ -170,30 +169,33 @@ impl QirEngine {
         // Get or compile the library
         let library_path = if let Some(ref library_path) = self.library_path {
             debug!("QIR: Using existing library at {:?}", library_path);
-            
+
             // Verify the library still exists
             if library_path.exists() {
                 library_path.clone()
             } else {
                 // Library was removed, need to recompile
                 debug!("QIR: Library no longer exists, recompiling");
-                let output_dir = library_path.parent()
+                let output_dir = library_path
+                    .parent()
                     .ok_or_else(|| PecosError::Processing("Invalid library path".to_string()))?;
                 self.compile_library(output_dir)?
             }
         } else {
             // First time compilation - compile to the build directory
             debug!("QIR: No existing library, compiling from source");
-            let build_dir = self.qir_file.parent()
+            let build_dir = self
+                .qir_file
+                .parent()
                 .unwrap_or_else(|| Path::new("."))
                 .join("build");
-            
+
             // Ensure build directory exists
             if !build_dir.exists() {
                 std::fs::create_dir_all(&build_dir)
                     .map_err(|e| Self::log_error("Failed to create build directory", e))?;
             }
-            
+
             self.compile_library(&build_dir)?
         };
 
@@ -300,13 +302,15 @@ impl QirEngine {
                         shot.data.len(),
                         shot.data.keys().collect::<Vec<_>>()
                     );
-                    return shot;
+                    shot
                 }
                 Ok(None) => {
-                    panic!("QIR: Runtime returned no shot results after finalization - this indicates a bug in the QIR runtime state management");
+                    panic!(
+                        "QIR: Runtime returned no shot results after finalization - this indicates a bug in the QIR runtime state management"
+                    );
                 }
                 Err(e) => {
-                    panic!("QIR: Error getting shot results from library: {}", e);
+                    panic!("QIR: Error getting shot results from library: {e}");
                 }
             }
         } else {
@@ -317,8 +321,8 @@ impl QirEngine {
     /// Run the quantum program and return measurement results
     ///
     /// This method executes the quantum program for the configured number of shots
-    /// using the full PECOS simulation infrastructure (MonteCarloEngine + QuantumSystem).
-    /// 
+    /// using the full PECOS simulation infrastructure (`MonteCarloEngine` + `QuantumSystem`).
+    ///
     /// # Returns
     ///
     /// A vector of measurement results, where each element is 0 or 1
@@ -329,26 +333,32 @@ impl QirEngine {
     pub fn run(&mut self) -> Result<Vec<u8>, PecosError> {
         use pecos_engines::engine_system::MonteCarloEngine;
         use pecos_engines::noise::DepolarizingNoiseModel;
-        
-        debug!("QIR: Running quantum program for {} shots using PECOS infrastructure", self.config.assigned_shots);
-        
+
+        debug!(
+            "QIR: Running quantum program for {} shots using PECOS infrastructure",
+            self.config.assigned_shots
+        );
+
         // Create a noiseless quantum simulation environment
         let noise_model = Box::new(DepolarizingNoiseModel::new_uniform(0.0));
-        
+
         // Clone the engine for use with MonteCarloEngine
         let engine_clone = self.clone();
-        
+
         // Use MonteCarloEngine to run with proper quantum simulation
         let results = MonteCarloEngine::run_with_noise_model(
             Box::new(engine_clone),
             noise_model,
             self.config.assigned_shots,
-            1, // Single worker for simplicity
+            1,    // Single worker for simplicity
             None, // No specific seed
         )?;
-        
-        debug!("QIR: MonteCarloEngine completed with {} shots", results.shots.len());
-        
+
+        debug!(
+            "QIR: MonteCarloEngine completed with {} shots",
+            results.shots.len()
+        );
+
         // Debug: Print what we got from MonteCarloEngine
         for (i, shot) in results.shots.iter().enumerate().take(5) {
             debug!("QIR: Shot {} data: {:?}", i, shot.data);
@@ -356,23 +366,23 @@ impl QirEngine {
             let keys: Vec<&String> = shot.data.keys().collect();
             debug!("QIR: Shot {} keys: {:?}", i, keys);
         }
-        
+
         // Extract measurement results from the shot results
         let mut all_results = Vec::with_capacity(self.config.assigned_shots);
-        
+
         for shot in results.shots {
             // Extract measurement results from the shot data
             // For single-qubit measurements, look for individual result keys
             let mut shot_measurements = Vec::new();
-            
+
             // Check for individual measurement results (result_0, result_1, etc.)
             let mut i = 0;
             loop {
                 let key = format!("result_{i}");
                 if let Some(data) = shot.data.get(&key) {
                     let bit_value = match data {
-                        Data::I64(value) => if *value != 0 { 1u8 } else { 0u8 },
-                        Data::U32(value) => if *value != 0 { 1u8 } else { 0u8 },
+                        Data::I64(value) => u8::from(*value != 0),
+                        Data::U32(value) => u8::from(*value != 0),
                         _ => 0u8,
                     };
                     shot_measurements.push(bit_value);
@@ -381,7 +391,7 @@ impl QirEngine {
                     break;
                 }
             }
-            
+
             // If no individual results found, check for named registers
             if shot_measurements.is_empty() {
                 // First check for "c" register (common name)
@@ -389,7 +399,7 @@ impl QirEngine {
                     // For combined results like Bell states, extract the first measurement bit
                     let combined_value = match data {
                         Data::I64(value) => *value,
-                        Data::U32(value) => *value as i64,
+                        Data::U32(value) => i64::from(*value),
                         _ => 0,
                     };
                     // Extract the least significant bit as the measurement result
@@ -399,40 +409,47 @@ impl QirEngine {
                     // Try any other keys that might contain measurement data
                     // This handles cases where HUGR uses different register names
                     for (key, data) in &shot.data {
-                        if key != "seed" && key != "shot_id" {  // Skip metadata
+                        if key != "seed" && key != "shot_id" {
+                            // Skip metadata
                             let value = match data {
                                 Data::I64(value) => *value,
-                                Data::U32(value) => *value as i64,
+                                Data::U32(value) => i64::from(*value),
                                 _ => continue,
                             };
                             // For now, just take the LSB of any register we find
-                            let bit_value = if (value & 1) != 0 { 1u8 } else { 0u8 };
+                            let bit_value = u8::from((value & 1) != 0);
                             shot_measurements.push(bit_value);
-                            debug!("QIR: Found measurement in register '{}': {}", key, bit_value);
-                            break;  // Just take the first one for now
+                            debug!(
+                                "QIR: Found measurement in register '{}': {}",
+                                key, bit_value
+                            );
+                            break; // Just take the first one for now
                         }
                     }
                 }
             }
-            
+
             // If still no measurements, add a default 0
             if shot_measurements.is_empty() {
                 shot_measurements.push(0);
             }
-            
+
             // For simplicity, just take the first measurement from each shot
             // This matches the behavior expected by single-qubit Guppy programs
             all_results.push(shot_measurements[0]);
         }
-        
+
         // Ensure we have the right number of results
         all_results.truncate(self.config.assigned_shots);
         while all_results.len() < self.config.assigned_shots {
             all_results.push(0);
         }
-        
-        debug!("QIR: Returning {} measurement results using PECOS simulation", all_results.len());
-        
+
+        debug!(
+            "QIR: Returning {} measurement results using PECOS simulation",
+            all_results.len()
+        );
+
         Ok(all_results)
     }
 
@@ -477,7 +494,10 @@ impl QirEngine {
             }
             Err(e) => {
                 // Failed to parse QIR file - log but don't fail during pre-compile
-                debug!("QIR: Failed to detect entry point during pre-compile: {}", e);
+                debug!(
+                    "QIR: Failed to detect entry point during pre-compile: {}",
+                    e
+                );
                 self.entry_point = None;
             }
         }
@@ -513,14 +533,14 @@ impl QirEngine {
     /// appropriate context, including the thread ID.
     fn run_qir_program(&self, library: &QirLibrary) -> Result<ByteMessage, PecosError> {
         // For HUGR convention with deferred measurements, we need to handle this specially
-        // The issue is that HUGR-generated code calls __quantum__rt__result_get_one() 
+        // The issue is that HUGR-generated code calls __quantum__rt__result_get_one()
         // to get measurement results, but those results aren't available until after
         // the quantum simulation runs. This is a fundamental issue with the deferred
         // measurement model when the classical code depends on measurement results.
         //
         // For now, we'll let it return 0s and rely on the MonteCarloEngine to provide
         // the actual measurement results through the Shot data structure.
-        
+
         // Configure verbosity through environment variable
         if self.config.verbose {
             unsafe {
@@ -544,17 +564,20 @@ impl QirEngine {
                  define void @my_function() #0 {\n\
                    ...\n\
                  }\n\
-                 attributes #0 = { \"EntryPoint\" }".to_string()
+                 attributes #0 = { \"EntryPoint\" }"
+                    .to_string(),
             ));
         };
 
         // Check if the entry point function exists in the library
-        if !library.has_function(entry_point.as_bytes()).unwrap_or(false) {
+        if !library
+            .has_function(entry_point.as_bytes())
+            .unwrap_or(false)
+        {
             return Err(PecosError::Input(format!(
-                "Entry point function '{}' was marked with EntryPoint attribute but was not found \
+                "Entry point function '{entry_point}' was marked with EntryPoint attribute but was not found \
                  in the compiled library. This may indicate a compilation error or that the function \
-                 was optimized away. Ensure the function has a body and is not marked as internal.",
-                entry_point
+                 was optimized away. Ensure the function has a body and is not marked as internal."
             )));
         }
 
@@ -609,7 +632,7 @@ impl QirEngine {
             debug!("QIR: Already processed one shot in this run_shot call, returning None");
             return Ok(None);
         }
-        
+
         // Reset the runtime state at the beginning of command generation
         // This ensures each shot starts with a clean state
         if let Some(ref library) = self.library {
@@ -770,7 +793,10 @@ impl QirEngine {
         // Quick analysis for debugging
         let gate_count = content.matches("__quantum__qis__").count();
         let qubit_count = content.matches("qubit").count();
-        debug!("QIR Engine: Program stats - {} gates, {} qubit references", gate_count, qubit_count);
+        debug!(
+            "QIR Engine: Program stats - {} gates, {} qubit references",
+            gate_count, qubit_count
+        );
 
         // Find qubit allocations in the QIR file
         let (max_qubit_index, found_allocation) = Self::find_qubit_allocations(&content);
@@ -787,7 +813,6 @@ impl QirEngine {
             )))
         }
     }
-
 
     /// Helper method to compile the QIR file to a library
     fn compile_library(&self, output_dir: &Path) -> Result<PathBuf, PecosError> {

@@ -41,51 +41,46 @@ impl Default for PmirConfig {
 }
 
 /// Main entry point for HUGR → PAST → MLIR → LLVM compilation
-pub fn compile_hugr_via_pmir(
-    hugr_json: &str,
-    config: &PmirConfig,
-) -> Result<String, PecosError> {
+pub fn compile_hugr_via_pmir(hugr_json: &str, config: &PmirConfig) -> Result<String, PecosError> {
     // Step 1: Parse HUGR JSON to PAST using Pest
     let past = hugr_parser::parse_hugr_to_past(hugr_json)?;
-    
+
     if config.debug_output {
         match past.to_ron_string() {
             Ok(ron_str) => log::debug!("PAST representation:\n{}", ron_str),
             Err(e) => log::warn!("Failed to serialize PAST to RON: {:?}", e),
         }
     }
-    
+
     // Step 2: Lower PAST to PMIR (PECOS Middle-level IR) as MLIR text
     let mlir_module = mlir_lowering::lower_past_to_pmir(&past, config)?;
     let mlir_text = mlir_module.to_string();
-    
+
     if config.debug_output {
         log::debug!("PMIR (as MLIR text):\n{}", mlir_text);
     }
-    
+
     // Step 3: Use MLIR toolchain to generate LLVM IR
     let toolchain_config = mlir_toolchain::MlirToolchainConfig {
         keep_intermediate_files: config.debug_output,
         ..Default::default()
     };
-    
+
     // Check if MLIR tools are available
     mlir_toolchain::check_mlir_tools(&toolchain_config)?;
-    
+
     let llvm_ir = mlir_toolchain::mlir_to_llvm_ir(&mlir_text, &toolchain_config)?;
-    
+
     Ok(llvm_ir)
 }
-
 
 /// Convert HUGR JSON to PAST RON representation
 pub fn hugr_to_past_ron(hugr_json: &str) -> Result<String, PecosError> {
     let past = hugr_parser::parse_hugr_to_past(hugr_json)?;
-    past.to_ron_string()
-        .map_err(|e| PecosError::ParseSyntax {
-            language: "RON".to_string(),
-            message: format!("Failed to serialize PAST to RON: {:?}", e),
-        })
+    past.to_ron_string().map_err(|e| PecosError::ParseSyntax {
+        language: "RON".to_string(),
+        message: format!("Failed to serialize PAST to RON: {e:?}"),
+    })
 }
 
 /// Convert HUGR JSON to PMIR (MLIR text format)
@@ -97,12 +92,11 @@ pub fn hugr_to_pmir_mlir(hugr_json: &str, config: &PmirConfig) -> Result<String,
 
 /// Convert PAST RON to PMIR (MLIR text format)
 pub fn past_ron_to_pmir_mlir(past_ron: &str, config: &PmirConfig) -> Result<String, PecosError> {
-    let past: ast::PastModule = ron::from_str(past_ron)
-        .map_err(|e| PecosError::ParseSyntax {
-            language: "RON".to_string(),
-            message: format!("Failed to deserialize PAST from RON: {:?}", e),
-        })?;
-    
+    let past: ast::PastModule = ron::from_str(past_ron).map_err(|e| PecosError::ParseSyntax {
+        language: "RON".to_string(),
+        message: format!("Failed to deserialize PAST from RON: {e:?}"),
+    })?;
+
     let mlir_module = mlir_lowering::lower_past_to_pmir(&past, config)?;
     Ok(mlir_module.to_string())
 }
@@ -113,14 +107,12 @@ pub fn compile_hugr_file_via_pmir(
     output_path: &Path,
     config: &PmirConfig,
 ) -> Result<(), PecosError> {
-    let hugr_json = std::fs::read_to_string(input_path)
-        .map_err(|e| PecosError::IO(e))?;
-    
+    let hugr_json = std::fs::read_to_string(input_path).map_err(PecosError::IO)?;
+
     let llvm_ir = compile_hugr_via_pmir(&hugr_json, config)?;
-    
-    std::fs::write(output_path, llvm_ir)
-        .map_err(|e| PecosError::IO(e))?;
-    
+
+    std::fs::write(output_path, llvm_ir).map_err(PecosError::IO)?;
+
     Ok(())
 }
 

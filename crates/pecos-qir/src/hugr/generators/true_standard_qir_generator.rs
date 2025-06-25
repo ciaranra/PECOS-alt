@@ -5,7 +5,7 @@ This module generates TRUE standard QIR format that uses opaque pointer types (%
 instead of integer-based types. This format is compatible with Microsoft QIR specification
 and the examples in examples/qir/bell.ll.
 
-The key differences from the current StandardQirExtension are:
+The key differences from the current `StandardQirExtension` are:
 1. Uses opaque pointer types: %Qubit* and %Result* instead of i64
 2. Measurement functions return void instead of i32
 3. Entry points return void instead of i1
@@ -151,8 +151,12 @@ impl CodegenExtension for TrueStandardQirExtension {
             // Controlled rotation gates
             .extension_op(ext_id.clone(), "CRz".into(), {
                 move |ctx, args| {
-                    emit_controlled_rotation_gate_true_standard(ctx, args, "__quantum__qis__crz__body")
-                        .map_err(anyhow::Error::new)
+                    emit_controlled_rotation_gate_true_standard(
+                        ctx,
+                        args,
+                        "__quantum__qis__crz__body",
+                    )
+                    .map_err(anyhow::Error::new)
                 }
             })
             // Three-qubit gates
@@ -178,11 +182,16 @@ fn emit_qalloc_true_standard<'c, H: HugrView<Node = Node>>(
     // This matches the bell_final.ll example
     let i64_type = llvm_context.i64_type();
     let allocate_func_type = i64_type.fn_type(&[], false);
-    let allocate_func = context.get_extern_func("__quantum__rt__qubit_allocate", allocate_func_type)?;
+    let allocate_func =
+        context.get_extern_func("__quantum__rt__qubit_allocate", allocate_func_type)?;
 
     // Call the allocation function
     let qubit_call = builder.build_call(allocate_func, &[], "qubit_usize")?;
-    let qubit_i64 = qubit_call.try_as_basic_value().left().unwrap().into_int_value();
+    let qubit_i64 = qubit_call
+        .try_as_basic_value()
+        .left()
+        .unwrap()
+        .into_int_value();
 
     // HUGR expects i16, so we need to truncate the ID to i16
     let i16_type = llvm_context.i16_type();
@@ -205,11 +214,11 @@ fn emit_single_qubit_gate_true_standard<'c, H: HugrView<Node = Node>>(
     let qubit_i64 =
         builder.build_int_z_extend(args.inputs[0].into_int_value(), i64_type, "qubit_i64")?;
 
-    // Create %Qubit* opaque pointer type 
+    // Create %Qubit* opaque pointer type
     // Note: We use i8* internally but the function signatures will be declared as %Qubit*
     let i8_type = llvm_context.i8_type();
     let qubit_ptr_type = i8_type.ptr_type(hugr_llvm::inkwell::AddressSpace::default());
-    
+
     // Convert qubit ID to pointer - don't use null for qubit 0
     // The runtime will interpret the pointer value as the qubit index
     let qubit_ptr = builder.build_int_to_ptr(qubit_i64, qubit_ptr_type, "qubit_ptr")?;
@@ -273,7 +282,7 @@ fn emit_measure_true_standard<'c, H: HugrView<Node = Node>>(
 
     let qubit_i64 =
         builder.build_int_z_extend(args.inputs[0].into_int_value(), i64_type, "qubit_i64")?;
-    
+
     // Convert qubit ID to pointer - don't use null for qubit 0
     // The runtime will interpret the pointer value as the qubit index
     let qubit_ptr = builder.build_int_to_ptr(qubit_i64, qubit_ptr_type, "qubit_ptr")?;
@@ -281,10 +290,17 @@ fn emit_measure_true_standard<'c, H: HugrView<Node = Node>>(
     // Allocate result ID using HUGR runtime allocation
     // Call __quantum__rt__result_allocate_hugr() which returns i64
     let allocate_result_func_type = i64_type.fn_type(&[], false);
-    let allocate_result_func = context.get_extern_func("__quantum__rt__result_allocate_hugr", allocate_result_func_type)?;
-    
+    let allocate_result_func = context.get_extern_func(
+        "__quantum__rt__result_allocate_hugr",
+        allocate_result_func_type,
+    )?;
+
     let result_call = builder.build_call(allocate_result_func, &[], "result_id")?;
-    let result_id = result_call.try_as_basic_value().left().unwrap().into_int_value();
+    let result_id = result_call
+        .try_as_basic_value()
+        .left()
+        .unwrap()
+        .into_int_value();
 
     // For results, we always use inttoptr (never null) - even for result 0
     // This matches bell.ll: inttoptr (i64 0 to %Result*)
@@ -292,14 +308,11 @@ fn emit_measure_true_standard<'c, H: HugrView<Node = Node>>(
 
     // True Standard QIR measurement: void @__quantum__qis__m__body(%Qubit*, %Result*)
     let void_type = llvm_context.void_type();
-    let measure_func_type = void_type.fn_type(&[qubit_ptr_type.into(), result_ptr_type.into()], false);
+    let measure_func_type =
+        void_type.fn_type(&[qubit_ptr_type.into(), result_ptr_type.into()], false);
     let measure_func = context.get_extern_func("__quantum__qis__m__body", measure_func_type)?;
 
-    builder.build_call(
-        measure_func,
-        &[qubit_ptr.into(), result_ptr.into()],
-        "",
-    )?;
+    builder.build_call(measure_func, &[qubit_ptr.into(), result_ptr.into()], "")?;
 
     // Record the result with __quantum__rt__result_record_output
     let measurement_node = args.node.node();
@@ -321,7 +334,15 @@ fn emit_measure_true_standard<'c, H: HugrView<Node = Node>>(
     };
 
     // Call result recording with the same %Result* pointer we used for measurement
-    let record_func_type = void_type.fn_type(&[result_ptr_type.into(), i8_type.ptr_type(hugr_llvm::inkwell::AddressSpace::default()).into()], false);
+    let record_func_type = void_type.fn_type(
+        &[
+            result_ptr_type.into(),
+            i8_type
+                .ptr_type(hugr_llvm::inkwell::AddressSpace::default())
+                .into(),
+        ],
+        false,
+    );
     let record_func =
         context.get_extern_func("__quantum__rt__result_record_output", record_func_type)?;
 
@@ -351,10 +372,10 @@ fn emit_rotation_gate_true_standard<'c, H: HugrView<Node = Node>>(
     let qubit_i64 =
         builder.build_int_z_extend(args.inputs[0].into_int_value(), i64_type, "qubit_i64")?;
 
-    // Create %Qubit* opaque pointer type 
+    // Create %Qubit* opaque pointer type
     let i8_type = llvm_context.i8_type();
     let qubit_ptr_type = i8_type.ptr_type(hugr_llvm::inkwell::AddressSpace::default());
-    
+
     // Handle special case: qubit 0 should use null pointer
     let qubit_ptr = if qubit_i64.is_const() && qubit_i64.get_zero_extended_constant() == Some(0) {
         qubit_ptr_type.const_null()
@@ -396,13 +417,15 @@ fn emit_controlled_rotation_gate_true_standard<'c, H: HugrView<Node = Node>>(
         builder.build_int_z_extend(args.inputs[1].into_int_value(), i64_type, "target_i64")?;
 
     // Handle special case: qubit 0 should use null pointer
-    let control_ptr = if control_i64.is_const() && control_i64.get_zero_extended_constant() == Some(0) {
-        qubit_ptr_type.const_null()
-    } else {
-        builder.build_int_to_ptr(control_i64, qubit_ptr_type, "control_ptr")?
-    };
-    
-    let target_ptr = if target_i64.is_const() && target_i64.get_zero_extended_constant() == Some(0) {
+    let control_ptr =
+        if control_i64.is_const() && control_i64.get_zero_extended_constant() == Some(0) {
+            qubit_ptr_type.const_null()
+        } else {
+            builder.build_int_to_ptr(control_i64, qubit_ptr_type, "control_ptr")?
+        };
+
+    let target_ptr = if target_i64.is_const() && target_i64.get_zero_extended_constant() == Some(0)
+    {
         qubit_ptr_type.const_null()
     } else {
         builder.build_int_to_ptr(target_i64, qubit_ptr_type, "target_ptr")?
@@ -415,10 +438,21 @@ fn emit_controlled_rotation_gate_true_standard<'c, H: HugrView<Node = Node>>(
 
     // True Standard QIR function signature: void @__quantum__qis__crz__body(%Qubit*, %Qubit*, double)
     let void_type = llvm_context.void_type();
-    let func_type = void_type.fn_type(&[qubit_ptr_type.into(), qubit_ptr_type.into(), f64_type.into()], false);
+    let func_type = void_type.fn_type(
+        &[
+            qubit_ptr_type.into(),
+            qubit_ptr_type.into(),
+            f64_type.into(),
+        ],
+        false,
+    );
     let func = context.get_extern_func(func_name, func_type)?;
 
-    builder.build_call(func, &[control_ptr.into(), target_ptr.into(), angle_f64.into()], "")?;
+    builder.build_call(
+        func,
+        &[control_ptr.into(), target_ptr.into(), angle_f64.into()],
+        "",
+    )?;
     args.outputs
         .finish(builder, [args.inputs[0], args.inputs[1]])?;
     Ok(())
@@ -445,19 +479,22 @@ fn emit_toffoli_gate_true_standard<'c, H: HugrView<Node = Node>>(
         builder.build_int_z_extend(args.inputs[2].into_int_value(), i64_type, "target_i64")?;
 
     // Handle special case: qubit 0 should use null pointer
-    let control1_ptr = if control1_i64.is_const() && control1_i64.get_zero_extended_constant() == Some(0) {
-        qubit_ptr_type.const_null()
-    } else {
-        builder.build_int_to_ptr(control1_i64, qubit_ptr_type, "control1_ptr")?
-    };
-    
-    let control2_ptr = if control2_i64.is_const() && control2_i64.get_zero_extended_constant() == Some(0) {
-        qubit_ptr_type.const_null()
-    } else {
-        builder.build_int_to_ptr(control2_i64, qubit_ptr_type, "control2_ptr")?
-    };
-    
-    let target_ptr = if target_i64.is_const() && target_i64.get_zero_extended_constant() == Some(0) {
+    let control1_ptr =
+        if control1_i64.is_const() && control1_i64.get_zero_extended_constant() == Some(0) {
+            qubit_ptr_type.const_null()
+        } else {
+            builder.build_int_to_ptr(control1_i64, qubit_ptr_type, "control1_ptr")?
+        };
+
+    let control2_ptr =
+        if control2_i64.is_const() && control2_i64.get_zero_extended_constant() == Some(0) {
+            qubit_ptr_type.const_null()
+        } else {
+            builder.build_int_to_ptr(control2_i64, qubit_ptr_type, "control2_ptr")?
+        };
+
+    let target_ptr = if target_i64.is_const() && target_i64.get_zero_extended_constant() == Some(0)
+    {
         qubit_ptr_type.const_null()
     } else {
         builder.build_int_to_ptr(target_i64, qubit_ptr_type, "target_ptr")?
@@ -465,10 +502,21 @@ fn emit_toffoli_gate_true_standard<'c, H: HugrView<Node = Node>>(
 
     // True Standard QIR function signature: void @__quantum__qis__ccx__body(%Qubit*, %Qubit*, %Qubit*)
     let void_type = llvm_context.void_type();
-    let func_type = void_type.fn_type(&[qubit_ptr_type.into(), qubit_ptr_type.into(), qubit_ptr_type.into()], false);
+    let func_type = void_type.fn_type(
+        &[
+            qubit_ptr_type.into(),
+            qubit_ptr_type.into(),
+            qubit_ptr_type.into(),
+        ],
+        false,
+    );
     let func = context.get_extern_func(func_name, func_type)?;
 
-    builder.build_call(func, &[control1_ptr.into(), control2_ptr.into(), target_ptr.into()], "")?;
+    builder.build_call(
+        func,
+        &[control1_ptr.into(), control2_ptr.into(), target_ptr.into()],
+        "",
+    )?;
     args.outputs
         .finish(builder, [args.inputs[0], args.inputs[1], args.inputs[2]])?;
     Ok(())

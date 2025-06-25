@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod compile_time_tests {
-    use crate::{run_sim, ClassicalEngine, NoiseModel, QuantumEngine};
     use crate::simulation_builder::SimulationBuilder;
+    use crate::{ClassicalEngine, NoiseModel, QuantumEngine, run_sim};
 
-    /// This test exists to ensure run_sim parameters are in correct order at compile time
+    /// This test exists to ensure `run_sim` parameters are in correct order at compile time
     #[test]
     fn test_run_sim_parameter_order() {
         // This function will fail to compile if parameter types change
@@ -17,16 +17,17 @@ mod compile_time_tests {
         ) {
             // Just a type check, doesn't need to do anything
         }
-        
+
         // This ensures the function signature hasn't changed
-        let _ = run_sim as fn(
-            Box<dyn ClassicalEngine>,
-            usize,
-            Option<u64>,
-            Option<usize>,
-            Option<Box<dyn NoiseModel>>,
-            Option<Box<dyn QuantumEngine>>,
-        ) -> Result<_, _>;
+        let _ = run_sim
+            as fn(
+                Box<dyn ClassicalEngine>,
+                usize,
+                Option<u64>,
+                Option<usize>,
+                Option<Box<dyn NoiseModel>>,
+                Option<Box<dyn QuantumEngine>>,
+            ) -> Result<_, _>;
     }
 
     /// Test that builder pattern compiles correctly
@@ -34,10 +35,7 @@ mod compile_time_tests {
     fn test_builder_pattern_compiles() {
         // This test just needs to compile, not run
         if false {
-            let _builder = SimulationBuilder::new()
-                .shots(100)
-                .seed(42)
-                .workers(4);
+            let _builder = SimulationBuilder::new().shots(100).seed(42).workers(4);
             // Type checking only
         }
     }

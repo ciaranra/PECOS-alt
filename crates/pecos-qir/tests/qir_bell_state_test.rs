@@ -83,7 +83,7 @@ fn test_qir_bell_state_noiseless() {
             .map(|data| match data {
                 pecos_engines::shot_results::Data::U32(v) => v.to_string(),
                 pecos_engines::shot_results::Data::I64(v) => v.to_string(),
-                _ => panic!("Unexpected data type in 'c' register: {:?}", data),
+                _ => panic!("Unexpected data type in 'c' register: {data:?}"),
             })
             .expect("Expected 'c' register in QIR shot results");
         *counts.entry(result_str).or_insert(0) += 1;
@@ -153,7 +153,7 @@ pub fn test_qir_bell_state_with_noise() {
             let value = match shot.data.get("c") {
                 Some(pecos_engines::shot_results::Data::U32(v)) => *v,
                 Some(pecos_engines::shot_results::Data::I64(v)) => *v as u32,
-                Some(other) => panic!("Expected U32 or I64 data in 'c' register, got: {:?}", other),
+                Some(other) => panic!("Expected U32 or I64 data in 'c' register, got: {other:?}"),
                 None => panic!("Expected 'c' register in QIR shot results"),
             };
             *counts.entry(value).or_insert(0) += 1;

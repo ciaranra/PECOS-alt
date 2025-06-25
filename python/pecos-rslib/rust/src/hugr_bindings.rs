@@ -4,7 +4,7 @@
 This module exposes HUGR compilation and QIR engine functionality to Python.
 */
 
-use pecos_qir::python_api;
+use pecos_qir::hugr_python_api as python_api;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyType};
 
@@ -50,12 +50,8 @@ impl PyHugrCompiler {
     /// QIR as a string
     fn compile_bytes_to_qir(&self, hugr_bytes: &Bound<'_, PyBytes>) -> PyResult<String> {
         let bytes = hugr_bytes.as_bytes();
-        python_api::compile_hugr_bytes_to_qir_string(
-            bytes,
-            self.debug_info,
-            &self.llvm_convention,
-        )
-        .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
+        python_api::compile_hugr_bytes_to_qir_string(bytes, self.debug_info, &self.llvm_convention)
+            .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
     }
 
     /// Compile HUGR file to QIR file
@@ -132,13 +128,13 @@ impl PyHugrQirEngine {
 
         // Create the QIR engine and store it
         let engine_id = get_next_engine_id();
-        
+
         python_api::create_qir_engine_from_hugr_bytes_with_storage(
-            bytes, 
-            shots, 
-            debug_info, 
+            bytes,
+            shots,
+            debug_info,
             &llvm_convention,
-            engine_id
+            engine_id,
         )
         .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)?;
 
@@ -166,13 +162,13 @@ impl PyHugrQirEngine {
 
         // Create the QIR engine and store it
         let engine_id = get_next_engine_id();
-        
+
         python_api::create_qir_engine_from_hugr_file_with_storage(
             hugr_path,
             shots,
             debug_info,
             &llvm_convention,
-            engine_id
+            engine_id,
         )
         .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)?;
 
@@ -199,25 +195,26 @@ impl PyHugrQirEngine {
         // Get the engine from global storage and execute it
         let mut engines = python_api::get_stored_engine_mut(self.engine_id)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))?;
-        
+
         let entry = engines.get_mut(&self.engine_id).ok_or_else(|| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                format!("Engine {} not found", self.engine_id)
-            )
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Engine {} not found",
+                self.engine_id
+            ))
         })?;
-        
+
         let engine = &mut entry.engine;
-        
+
         // Update shots if they've changed
         engine.set_assigned_shots(self.shots);
-        
+
         // Execute the quantum program
         let results = engine.run().map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                format!("Quantum execution failed: {e}")
-            )
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Quantum execution failed: {e}"
+            ))
         })?;
-        
+
         Ok(results)
     }
 

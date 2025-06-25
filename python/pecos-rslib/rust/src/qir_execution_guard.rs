@@ -12,8 +12,8 @@
 
 //! Execution guard for QIR to prevent cleanup issues and enable future context isolation
 
-use std::sync::{Arc, OnceLock};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, OnceLock};
 
 /// Global state for managing QIR execution lifecycle
 static EXECUTION_STATE: OnceLock<Arc<ExecutionState>> = OnceLock::new();
@@ -22,10 +22,9 @@ static EXECUTION_STATE: OnceLock<Arc<ExecutionState>> = OnceLock::new();
 struct ExecutionState {
     /// Number of active executions
     active_executions: AtomicUsize,
-    
+
     /// Flag indicating if Python is shutting down
     shutting_down: AtomicBool,
-    
 }
 
 impl ExecutionState {
@@ -35,7 +34,7 @@ impl ExecutionState {
             shutting_down: AtomicBool::new(false),
         }
     }
-    
+
     fn get() -> &'static Arc<ExecutionState> {
         EXECUTION_STATE.get_or_init(|| Arc::new(Self::new()))
     }
@@ -51,44 +50,46 @@ impl QirExecutionGuard {
     /// Create a new execution guard
     pub fn new() -> Result<Self, &'static str> {
         let state = ExecutionState::get();
-        
+
         // Check if we're shutting down
         if state.shutting_down.load(Ordering::Acquire) {
             return Err("Cannot start QIR execution during shutdown");
         }
-        
+
         // Increment active execution count
         state.active_executions.fetch_add(1, Ordering::AcqRel);
-        
+
         Ok(Self { active: true })
     }
-    
+
     /// Mark that Python is shutting down
     pub fn mark_shutting_down() {
         let state = ExecutionState::get();
         state.shutting_down.store(true, Ordering::Release);
     }
-    
+
     /// Wait for all executions to complete with timeout
     pub fn wait_for_completion() {
         let state = ExecutionState::get();
-        
+
         // Add timeout to prevent infinite hanging during pytest cleanup
         let start_time = std::time::Instant::now();
         let timeout = std::time::Duration::from_secs(10); // 10 second timeout
-        
+
         // Busy wait with exponential backoff
         let mut sleep_ms = 1;
         while state.active_executions.load(Ordering::Acquire) > 0 {
             // Check for timeout
             if start_time.elapsed() > timeout {
-                eprintln!("Warning: QirExecutionGuard timeout waiting for {} active executions to complete", 
-                         state.active_executions.load(Ordering::Acquire));
+                eprintln!(
+                    "Warning: QirExecutionGuard timeout waiting for {} active executions to complete",
+                    state.active_executions.load(Ordering::Acquire)
+                );
                 // Force reset the counter to prevent infinite hanging
                 state.active_executions.store(0, Ordering::Release);
                 break;
             }
-            
+
             std::thread::sleep(std::time::Duration::from_millis(sleep_ms));
             sleep_ms = (sleep_ms * 2).min(100);
         }
@@ -100,14 +101,16 @@ impl Drop for QirExecutionGuard {
         if self.active {
             let state = ExecutionState::get();
             let prev_count = state.active_executions.fetch_sub(1, Ordering::AcqRel);
-            
+
             // Defensive check - prevent underflow
             if prev_count == 0 {
-                eprintln!("Warning: QirExecutionGuard underflow detected - execution counter was already 0");
+                eprintln!(
+                    "Warning: QirExecutionGuard underflow detected - execution counter was already 0"
+                );
                 // Reset to 0 to be safe
                 state.active_executions.store(0, Ordering::Release);
             }
-            
+
             self.active = false;
         }
     }
@@ -131,4 +134,3 @@ pub fn _mark_qir_shutting_down() {
 pub fn _wait_for_qir_completion() {
     QirExecutionGuard::wait_for_completion();
 }
-

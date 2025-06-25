@@ -1,5 +1,5 @@
 //! Thread-local runtime context for QIR execution
-//! 
+//!
 //! This module provides isolated runtime contexts for QIR executions,
 //! replacing global state with thread-local storage to enable parallel execution.
 
@@ -27,10 +27,11 @@ pub struct RuntimeContext {
 
 impl RuntimeContext {
     /// Create a new runtime context
+    #[must_use]
     pub fn new(context_id: usize) -> Self {
         let mut message_builder = ByteMessageBuilder::new();
         let _ = message_builder.for_quantum_operations();
-        
+
         Self {
             message_builder,
             measurement_results: HashMap::new(),
@@ -61,6 +62,7 @@ impl RuntimeContext {
     }
 
     /// Get a measurement result
+    #[must_use]
     pub fn get_measurement(&self, result_id: usize) -> Option<bool> {
         self.measurement_results.get(&result_id).copied()
     }
@@ -71,6 +73,7 @@ impl RuntimeContext {
     }
 
     /// Get a classical register value
+    #[must_use]
     pub fn get_register(&self, name: &str) -> Option<i64> {
         self.classical_registers.get(name).copied()
     }
@@ -88,8 +91,8 @@ impl RuntimeContext {
 
 // Thread-local storage for the current runtime context
 thread_local! {
-    static CURRENT_CONTEXT: std::cell::RefCell<Option<Arc<Mutex<RuntimeContext>>>> = 
-        std::cell::RefCell::new(None);
+    static CURRENT_CONTEXT: std::cell::RefCell<Option<Arc<Mutex<RuntimeContext>>>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 /// Global context counter for unique IDs
@@ -100,12 +103,18 @@ pub struct ContextGuard {
     context: Arc<Mutex<RuntimeContext>>,
 }
 
+impl Default for ContextGuard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ContextGuard {
     /// Create a new context guard with an isolated runtime context
     pub fn new() -> Self {
         let context_id = CONTEXT_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let context = Arc::new(Mutex::new(RuntimeContext::new(context_id)));
-        
+
         // Set as current context for this thread
         CURRENT_CONTEXT.with(|c| {
             *c.borrow_mut() = Some(context.clone());
@@ -115,6 +124,7 @@ impl ContextGuard {
     }
 
     /// Get access to the context
+    #[must_use]
     pub fn context(&self) -> &Arc<Mutex<RuntimeContext>> {
         &self.context
     }
@@ -147,12 +157,9 @@ where
 }
 
 /// Get the current context ID for debugging
+#[must_use]
 pub fn current_context_id() -> Option<usize> {
-    CURRENT_CONTEXT.with(|c| {
-        c.borrow()
-            .as_ref()
-            .map(|ctx| ctx.lock().context_id)
-    })
+    CURRENT_CONTEXT.with(|c| c.borrow().as_ref().map(|ctx| ctx.lock().context_id))
 }
 
 #[cfg(test)]
@@ -165,30 +172,32 @@ mod tests {
         let handle1 = thread::spawn(|| {
             let _guard = ContextGuard::new();
             let id1 = current_context_id().unwrap();
-            
+
             with_current_context(|ctx| {
                 ctx.allocate_qubit();
                 ctx.allocate_result();
-            }).unwrap();
-            
+            })
+            .unwrap();
+
             id1
         });
 
         let handle2 = thread::spawn(|| {
             let _guard = ContextGuard::new();
             let id2 = current_context_id().unwrap();
-            
+
             with_current_context(|ctx| {
                 ctx.allocate_qubit();
                 ctx.allocate_qubit();
-            }).unwrap();
-            
+            })
+            .unwrap();
+
             id2
         });
 
         let id1 = handle1.join().unwrap();
         let id2 = handle2.join().unwrap();
-        
+
         // Each thread should have a different context ID
         assert_ne!(id1, id2);
     }
@@ -196,21 +205,22 @@ mod tests {
     #[test]
     fn test_context_operations() {
         let _guard = ContextGuard::new();
-        
-        let qubit_id = with_current_context(|ctx| ctx.allocate_qubit()).unwrap();
+
+        let qubit_id = with_current_context(super::RuntimeContext::allocate_qubit).unwrap();
         assert_eq!(qubit_id, 0);
-        
-        let result_id = with_current_context(|ctx| ctx.allocate_result()).unwrap();
+
+        let result_id = with_current_context(super::RuntimeContext::allocate_result).unwrap();
         assert_eq!(result_id, 0);
-        
+
         with_current_context(|ctx| {
             ctx.record_measurement(result_id, true);
             ctx.set_register("test".to_string(), 42);
-        }).unwrap();
-        
+        })
+        .unwrap();
+
         let measurement = with_current_context(|ctx| ctx.get_measurement(result_id)).unwrap();
         assert_eq!(measurement, Some(true));
-        
+
         let register_val = with_current_context(|ctx| ctx.get_register("test")).unwrap();
         assert_eq!(register_val, Some(42));
     }

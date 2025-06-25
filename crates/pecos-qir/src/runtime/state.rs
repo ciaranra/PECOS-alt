@@ -1,5 +1,5 @@
 //! Instance-based QIR Runtime State
-//! 
+//!
 //! This module provides an instance-based runtime state for QIR execution,
 //! eliminating the need for global state and enabling proper concurrent execution.
 
@@ -8,41 +8,42 @@ use pecos_engines::shot_results::{Data, Shot};
 use std::collections::HashMap;
 
 /// QIR Runtime State
-/// 
+///
 /// Contains all the state needed for QIR execution, previously stored in globals.
-/// Each QirEngine instance will have its own RuntimeState.
+/// Each `QirEngine` instance will have its own `RuntimeState`.
 pub struct QirRuntimeState {
     /// Counter for qubit allocation
     next_qubit_id: usize,
-    
+
     /// Counter for result allocation  
     next_result_id: usize,
-    
+
     /// Message builder for quantum operations
     message_builder: ByteMessageBuilder,
-    
-    /// Measurement results indexed by result_id
+
+    /// Measurement results indexed by `result_id`
     measurement_results: HashMap<usize, bool>,
-    
+
     /// Classical registers
     classical_registers: HashMap<String, i64>,
-    
+
     /// Tracks bit positions in registers
     register_bit_positions: HashMap<String, usize>,
-    
+
     /// Maps result IDs to register names and bit positions
     result_mappings: HashMap<usize, (String, usize)>,
-    
+
     /// Last shot result for retrieval
     last_shot: Option<Shot>,
 }
 
 impl QirRuntimeState {
     /// Create a new runtime state
+    #[must_use]
     pub fn new() -> Self {
         let mut message_builder = ByteMessageBuilder::new();
         let _ = message_builder.for_quantum_operations();
-        
+
         Self {
             next_qubit_id: 0,
             next_result_id: 0,
@@ -54,7 +55,7 @@ impl QirRuntimeState {
             last_shot: None,
         }
     }
-    
+
     /// Reset the runtime state for a new execution
     pub fn reset(&mut self) {
         self.next_qubit_id = 0;
@@ -67,52 +68,59 @@ impl QirRuntimeState {
         self.result_mappings.clear();
         self.last_shot = None;
     }
-    
+
     /// Allocate a new qubit and return its ID
     pub fn allocate_qubit(&mut self) -> usize {
         let id = self.next_qubit_id;
         self.next_qubit_id += 1;
         id
     }
-    
+
     /// Allocate a new result and return its ID
     pub fn allocate_result(&mut self) -> usize {
         let id = self.next_result_id;
         self.next_result_id += 1;
         id
     }
-    
+
     /// Get a mutable reference to the message builder
     pub fn message_builder_mut(&mut self) -> &mut ByteMessageBuilder {
         &mut self.message_builder
     }
-    
+
     /// Build and return the current message
     pub fn build_message(&mut self) -> ByteMessage {
         self.message_builder.build()
     }
-    
+
     /// Store a measurement result
     pub fn store_measurement(&mut self, result_id: usize, value: bool) {
         self.measurement_results.insert(result_id, value);
     }
-    
+
     /// Get a measurement result
+    #[must_use]
     pub fn get_measurement_result(&self, result_id: usize) -> Option<bool> {
         self.measurement_results.get(&result_id).copied()
     }
-    
+
     /// Map a result to a register and bit position
-    pub fn map_result_to_register(&mut self, result_id: usize, register_name: String, bit_position: usize) {
-        self.result_mappings.insert(result_id, (register_name.clone(), bit_position));
-        
+    pub fn map_result_to_register(
+        &mut self,
+        result_id: usize,
+        register_name: String,
+        bit_position: usize,
+    ) {
+        self.result_mappings
+            .insert(result_id, (register_name.clone(), bit_position));
+
         // Update the maximum bit position for this register
         self.register_bit_positions
             .entry(register_name)
             .and_modify(|pos| *pos = (*pos).max(bit_position))
             .or_insert(bit_position);
     }
-    
+
     /// Update measurement results from external data
     pub fn update_measurement_results(&mut self, results: &[u32]) {
         // Process pairs of (result_id, measurement_value)
@@ -120,18 +128,19 @@ impl QirRuntimeState {
             if i + 1 < results.len() {
                 let result_id = results[i] as usize;
                 let measurement_value = results[i + 1] != 0;
-                self.measurement_results.insert(result_id, measurement_value);
+                self.measurement_results
+                    .insert(result_id, measurement_value);
             }
         }
     }
-    
+
     /// Apply result mappings to build register values
     pub fn apply_mappings(&mut self) {
         // Clear existing register values
         self.classical_registers.clear();
 
         // First, initialize all registers that will be used to 0
-        for (_, (register_name, _)) in &self.result_mappings {
+        for (register_name, _) in self.result_mappings.values() {
             self.classical_registers.insert(register_name.clone(), 0);
         }
 
@@ -157,8 +166,9 @@ impl QirRuntimeState {
             }
         }
     }
-    
+
     /// Export the current state as a Shot
+    #[must_use]
     pub fn export_shot(&self) -> Shot {
         let mut shot = Shot::default();
 
@@ -170,32 +180,33 @@ impl QirRuntimeState {
         // If no named registers, export raw measurements
         if self.classical_registers.is_empty() && !self.measurement_results.is_empty() {
             for (&result_id, &value) in &self.measurement_results {
-                let name = format!("result_{}", result_id);
-                shot.data.insert(name, Data::I64(if value { 1 } else { 0 }));
+                let name = format!("result_{result_id}");
+                shot.data.insert(name, Data::I64(i64::from(value)));
             }
         }
 
         shot
     }
-    
+
     /// Finalize the current shot and store it
     pub fn finalize_shot(&mut self) {
         self.apply_mappings();
         let shot = self.export_shot();
         self.last_shot = Some(shot);
     }
-    
+
     /// Get the last shot result
+    #[must_use]
     pub fn get_last_shot(&self) -> Option<&Shot> {
         self.last_shot.as_ref()
     }
-    
+
     /// Get the bit width of a register
+    #[must_use]
     pub fn get_register_bit_width(&self, register_name: &str) -> usize {
         self.register_bit_positions
             .get(register_name)
-            .map(|&max_pos| max_pos + 1)
-            .unwrap_or(0)
+            .map_or(0, |&max_pos| max_pos + 1)
     }
 }
 

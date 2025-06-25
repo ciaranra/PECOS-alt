@@ -17,9 +17,9 @@ use hugr_core::{Hugr, std_extensions};
 #[cfg(feature = "hugr-llvm-pipeline")]
 use hugr_llvm::emit::EmitHugr;
 #[cfg(feature = "hugr-llvm-pipeline")]
-use hugr_llvm::inkwell::context::Context;
-#[cfg(feature = "hugr-llvm-pipeline")]
 use hugr_llvm::extension::{int::IntCodegenExtension, prelude::DefaultPreludeCodegen};
+#[cfg(feature = "hugr-llvm-pipeline")]
+use hugr_llvm::inkwell::context::Context;
 #[cfg(feature = "hugr-llvm-pipeline")]
 use hugr_llvm::utils::fat::FatExt;
 #[cfg(feature = "hugr-llvm-pipeline")]
@@ -37,13 +37,13 @@ use std::rc::Rc;
 use super::result_extractor::ResultNameExtractor;
 // Removed simple fallback - we should fix the actual issues instead
 #[cfg(feature = "hugr-llvm-pipeline")]
-use super::standard_qir_generator::StandardQirExtension;
+use super::generators::standard_qir_generator::StandardQirExtension;
 #[cfg(feature = "hugr-llvm-pipeline")]
-use super::true_standard_qir_generator::TrueStandardQirExtension;
+use super::extensions::tket2_bool_extension::Tket2BoolExtension;
 #[cfg(feature = "hugr-llvm-pipeline")]
-use super::tket2_bool_extension::Tket2BoolExtension;
+use super::extensions::tket2_rotation_extension::Tket2RotationExtension;
 #[cfg(feature = "hugr-llvm-pipeline")]
-use super::tket2_rotation_extension::Tket2RotationExtension;
+use super::generators::true_standard_qir_generator::TrueStandardQirExtension;
 // Version translator no longer needed - Guppy 0.20.0 and PECOS use same HUGR version
 
 // Imports for non-hugr builds
@@ -76,7 +76,7 @@ impl Default for HugrCompilerConfig {
 /// Quantum operation LLVM-IR conventions
 #[derive(Debug, Clone, PartialEq)]
 pub enum QuantumLlvmConvention {
-    /// Microsoft QIR convention: __quantum__qis__h__body, etc.
+    /// Microsoft QIR convention: __`quantum__qis__h__body`, etc.
     Qir,
     /// HUGR convention: integer-based operations for PECOS runtime
     Hugr,
@@ -189,7 +189,7 @@ impl HugrCompiler {
         // Since both Guppy and PECOS use hugr 0.20.1, no translation needed
         debug!("Using HUGR directly without version translation");
         let transformed_bytes = hugr_bytes.to_vec();
-        
+
         // Fix duplicate function names in HUGR
         let transformed_bytes = fix_duplicate_functions(transformed_bytes)?;
 
@@ -208,7 +208,10 @@ impl HugrCompiler {
                         .unwrap_or(0);
                     let json_bytes = &transformed_bytes[json_start..];
                     if let Ok(json_str) = std::str::from_utf8(json_bytes) {
-                        debug!("Failed HUGR JSON preview: {}", &json_str[..json_str.len().min(500)]);
+                        debug!(
+                            "Failed HUGR JSON preview: {}",
+                            &json_str[..json_str.len().min(500)]
+                        );
                     }
                 }
                 return Err(PecosError::with_context(e, "Failed to parse HUGR"));
@@ -241,7 +244,7 @@ impl HugrCompiler {
         // This ensures our tket2.bool handler takes precedence
         builder = builder.add_extension(Tket2BoolExtension::new());
         builder = builder.add_extension(Tket2RotationExtension::new());
-        
+
         // Choose the appropriate quantum extension based on naming convention
         match self.config.quantum_naming {
             QuantumLlvmConvention::Qir => {
@@ -257,7 +260,7 @@ impl HugrCompiler {
         // Add all standard extensions
         builder = builder.add_default_prelude_extensions();
         builder = builder.add_logic_extensions();
-        
+
         // Add arithmetic extensions for int(6) and float64 support
         builder = builder.add_extension(IntCodegenExtension::new(DefaultPreludeCodegen));
         builder = builder.add_float_extensions();
@@ -300,39 +303,16 @@ impl HugrCompiler {
 
         // Generate LLVM IR string
         let llvm_ir = llvm_module.to_string();
-        
-        // Debug: Check if we have proper result pointers before transformations
-        if llvm_ir.contains("__quantum__rt__result_record_output") {
-            for line in llvm_ir.lines() {
-                if line.contains("__quantum__rt__result_record_output") {
-                    println!("DEBUG: Original result_record_output call: {}", line);
-                }
-            }
-        }
+
 
         // Add standard QIR prologue and fix entry point signature
-        println!("DEBUG: HUGR Compiler quantum_naming: {:?}", self.config.quantum_naming);
         let standard_qir = add_standard_qir_prologue(&llvm_ir, &self.config.quantum_naming);
         let standard_qir = fix_entry_point_signature(&standard_qir, &self.config.quantum_naming);
-        
-        // Debug: Check if we have measurement calls before conversion
-        if standard_qir.contains("__quantum__qis__m__body") {
-            println!("DEBUG: LLVM IR contains measurement calls before conversion");
-            // Find and print the measurement lines
-            for line in standard_qir.lines() {
-                if line.contains("__quantum__qis__m__body") {
-                    println!("DEBUG: Measurement line: {}", line);
-                    // Test the pattern explicitly
-                    if line.contains("call i32 @__quantum__qis__m__body(") {
-                        println!("DEBUG: This line SHOULD match the conversion pattern!");
-                    }
-                }
-            }
-        }
-        
-        println!("DEBUG: About to call convert_immediate_to_deferred_measurements with convention: {:?}", self.config.quantum_naming);
-        
-        let standard_qir = convert_immediate_to_deferred_measurements(&standard_qir, &self.config.quantum_naming);
+
+
+
+        let standard_qir =
+            convert_immediate_to_deferred_measurements(&standard_qir, &self.config.quantum_naming);
 
         // Write to output file
         fs::write(output_path, standard_qir).map_err(|e| {
@@ -387,17 +367,17 @@ fn fix_duplicate_functions(hugr_bytes: Vec<u8>) -> Result<Vec<u8>, PecosError> {
     let json_start = hugr_bytes.iter().position(|&b| b == b'{').unwrap_or(0);
     let prefix = &hugr_bytes[..json_start];
     let json_bytes = &hugr_bytes[json_start..];
-    
+
     // Parse JSON
     let json_str = std::str::from_utf8(json_bytes)
-        .map_err(|e| PecosError::Generic(format!("Invalid UTF-8 in HUGR: {}", e)))?;
+        .map_err(|e| PecosError::Generic(format!("Invalid UTF-8 in HUGR: {e}")))?;
     let mut json_data: serde_json::Value = serde_json::from_str(json_str)
-        .map_err(|e| PecosError::Generic(format!("Failed to parse HUGR JSON: {}", e)))?;
-    
+        .map_err(|e| PecosError::Generic(format!("Failed to parse HUGR JSON: {e}")))?;
+
     // Track seen function names and rename duplicates
     let mut seen_functions = std::collections::HashSet::new();
     let mut duplicate_count = 0;
-    
+
     if let Some(modules) = json_data.get_mut("modules").and_then(|m| m.as_array_mut()) {
         for module in modules {
             if let Some(nodes) = module.get_mut("nodes").and_then(|n| n.as_array_mut()) {
@@ -408,9 +388,13 @@ fn fix_duplicate_functions(hugr_bytes: Vec<u8>) -> Result<Vec<u8>, PecosError> {
                                 if !seen_functions.insert(name.to_string()) {
                                     // Duplicate found
                                     duplicate_count += 1;
-                                    let new_name = format!("{}_duplicate{}", name, duplicate_count);
-                                    debug!("Renaming duplicate function '{}' to '{}'", name, new_name);
-                                    *node.get_mut("name").unwrap() = serde_json::Value::String(new_name);
+                                    let new_name = format!("{name}_duplicate{duplicate_count}");
+                                    debug!(
+                                        "Renaming duplicate function '{}' to '{}'",
+                                        name, new_name
+                                    );
+                                    *node.get_mut("name").unwrap() =
+                                        serde_json::Value::String(new_name);
                                 }
                             }
                         }
@@ -419,49 +403,49 @@ fn fix_duplicate_functions(hugr_bytes: Vec<u8>) -> Result<Vec<u8>, PecosError> {
             }
         }
     }
-    
+
     // Convert back to bytes
     let fixed_json = serde_json::to_string(&json_data)
-        .map_err(|e| PecosError::Generic(format!("Failed to serialize fixed HUGR: {}", e)))?;
-    
+        .map_err(|e| PecosError::Generic(format!("Failed to serialize fixed HUGR: {e}")))?;
+
     let mut result = prefix.to_vec();
     result.extend_from_slice(fixed_json.as_bytes());
-    
+
     Ok(result)
 }
 
-/// Process LLVM IR to ensure compatibility with QirEngine
+/// Process LLVM IR to ensure compatibility with `QirEngine`
 fn add_standard_qir_prologue(llvm_ir: &str, llvm_convention: &QuantumLlvmConvention) -> String {
     match llvm_convention {
         QuantumLlvmConvention::Qir => {
             // Add proper opaque type declarations for true standard QIR
-            let prologue = r#"%Result = type opaque
+            let prologue = r"%Result = type opaque
 %Qubit = type opaque
 
-"#;
-            
+";
+
             // Insert the type declarations at the beginning, after any existing declarations
             if llvm_ir.contains("source_filename") {
                 // Find where to insert - after the source_filename line
                 let lines: Vec<&str> = llvm_ir.lines().collect();
                 let mut result = String::new();
                 let mut inserted = false;
-                
+
                 for line in lines {
                     result.push_str(line);
                     result.push('\n');
-                    
+
                     if !inserted && line.starts_with("source_filename") {
                         result.push('\n');
                         result.push_str(prologue);
                         inserted = true;
                     }
                 }
-                
+
                 result
             } else {
                 // Just prepend the prologue
-                format!("{}{}", prologue, llvm_ir)
+                format!("{prologue}{llvm_ir}")
             }
         }
         QuantumLlvmConvention::Hugr => {
@@ -478,14 +462,19 @@ fn fix_entry_point_signature(llvm_ir: &str, _llvm_convention: &QuantumLlvmConven
     let mut result = String::new();
     let mut found_entry_point = false;
     let mut attribute_number = "#0";
-    
+
     for line in lines {
-        if line.contains("define i1 @") || line.contains("define i16 @") || line.contains("define i32 @") || line.contains("define void @") {
+        if line.contains("define i1 @")
+            || line.contains("define i16 @")
+            || line.contains("define i32 @")
+            || line.contains("define void @")
+        {
             // Check if this is a user-defined function (entry point candidate)
             if let Some(func_name_start) = line.find('@') {
-                let func_name_end = line[func_name_start+1..].find('(').unwrap_or(0) + func_name_start + 1;
-                let func_name = &line[func_name_start+1..func_name_end];
-                
+                let func_name_end =
+                    line[func_name_start + 1..].find('(').unwrap_or(0) + func_name_start + 1;
+                let func_name = &line[func_name_start + 1..func_name_end];
+
                 // Skip LLVM intrinsics and runtime functions
                 if !func_name.starts_with("llvm.") && !func_name.starts_with("__") {
                     found_entry_point = true;
@@ -493,20 +482,28 @@ fn fix_entry_point_signature(llvm_ir: &str, _llvm_convention: &QuantumLlvmConven
                     if line.contains(" #") {
                         // Extract existing attribute number
                         if let Some(attr_start) = line.rfind(" #") {
-                            let attr_end = line[attr_start+2..].find(|c: char| !c.is_numeric()).unwrap_or(line.len() - attr_start - 2) + attr_start + 2;
-                            attribute_number = &line[attr_start+1..attr_end];
+                            let attr_end = line[attr_start + 2..]
+                                .find(|c: char| !c.is_numeric())
+                                .unwrap_or(line.len() - attr_start - 2)
+                                + attr_start
+                                + 2;
+                            attribute_number = &line[attr_start + 1..attr_end];
                         }
                     } else {
                         // Add #0 attribute to the function definition
                         let insertion_point = line.rfind('{').unwrap_or(line.len() - 1);
-                        let modified_line = format!("{} #0 {{", &line[..insertion_point].trim_end());
+                        let modified_line =
+                            format!("{} #0 {{", &line[..insertion_point].trim_end());
                         result.push_str(&modified_line);
                         result.push('\n');
                         continue;
                     }
-                    
+
                     // Change return type to void if needed
-                    if line.contains("define i1 @") || line.contains("define i16 @") || line.contains("define i32 @") {
+                    if line.contains("define i1 @")
+                        || line.contains("define i16 @")
+                        || line.contains("define i32 @")
+                    {
                         let modified_line = line
                             .replace("define i1 @", "define void @")
                             .replace("define i16 @", "define void @")
@@ -517,69 +514,53 @@ fn fix_entry_point_signature(llvm_ir: &str, _llvm_convention: &QuantumLlvmConven
                     }
                 }
             }
-        } else if line.trim().starts_with("ret i1 ") || line.trim().starts_with("ret i16 ") || line.trim().starts_with("ret i32 ") {
+        } else if line.trim().starts_with("ret i1 ")
+            || line.trim().starts_with("ret i16 ")
+            || line.trim().starts_with("ret i32 ")
+        {
             // Replace the return statement with just "ret void"
             result.push_str("  ret void");
             result.push('\n');
             continue;
         }
-        
+
         result.push_str(line);
         result.push('\n');
     }
-    
+
     // Add the EntryPoint attribute definition if we found an entry point
     if found_entry_point && !llvm_ir.contains("attributes #0 = {") {
-        result.push_str(&format!("\nattributes {} = {{ \"EntryPoint\" }}\n", attribute_number));
+        result.push_str(&format!(
+            "\nattributes {attribute_number} = {{ \"EntryPoint\" }}\n"
+        ));
     }
-    
+
     result
 }
 
 /// Convert immediate measurements to deferred measurements using convention adapters
-fn convert_immediate_to_deferred_measurements(llvm_ir: &str, llvm_convention: &QuantumLlvmConvention) -> String {
+fn convert_immediate_to_deferred_measurements(
+    llvm_ir: &str,
+    llvm_convention: &QuantumLlvmConvention,
+) -> String {
     match llvm_convention {
         QuantumLlvmConvention::Hugr => {
             // For HUGR convention, convert immediate measurement calls to deferred ones
-            println!("DEBUG: Converting immediate measurements for HUGR convention");
             let lines: Vec<&str> = llvm_ir.lines().collect();
             let mut result = String::new();
-            let mut conversions_made = 0;
-            
-            for (line_num, line) in lines.iter().enumerate() {
+            for line in lines.iter() {
                 let line_str = *line;
-                if line_str.contains("@__quantum__qis__m__body") {
-                    println!("DEBUG: Line {} contains measurement: {}", line_num, line_str);
-                    println!("DEBUG: Testing pattern match: {}", line_str.contains("call i32 @__quantum__qis__m__body("));
-                    
-                    // Check each character to see why pattern might not match
-                    if line_str.contains("call") && line_str.contains("i32") && line_str.contains("@__quantum__qis__m__body(") {
-                        println!("DEBUG: All parts present separately");
-                        // Print the exact indices
-                        if let Some(idx) = line_str.find("call i32 @__quantum__qis__m__body(") {
-                            println!("DEBUG: Pattern found at index {}", idx);
-                        } else {
-                            println!("DEBUG: Pattern NOT found - checking spacing");
-                            // Check with different spacing
-                            if line_str.contains("call  i32") || line_str.contains("call\ti32") {
-                                println!("DEBUG: Extra whitespace detected");
-                            }
-                        }
-                    }
-                }
                 if line_str.contains("call i32 @__quantum__qis__m__body(") {
                     // Convert: %result = call i32 @__quantum__qis__m__body(i64 %qubit, i64 %result_id)
                     // To:      call void @__hugr__quantum__qis__m__body(i64 %qubit, i64 %result_id)
                     //          %result = call i32 @__quantum__rt__result_get_one(i64 %result_id)
-                    println!("DEBUG: Found immediate measurement call: {}", line);
-                    conversions_made += 1;
-                    
+
                     if line.contains(" = call") {
                         let parts: Vec<&str> = line.splitn(2, " = call").collect();
                         if parts.len() == 2 {
                             let variable_assignment = parts[0].trim();
                             let call_part = parts[1];
-                            
+
                             // Extract result_id from the call
                             let result_id = if let Some(start) = call_part.rfind(", i64 ") {
                                 let id_part = &call_part[start + 6..];
@@ -591,39 +572,51 @@ fn convert_immediate_to_deferred_measurements(llvm_ir: &str, llvm_convention: &Q
                             } else {
                                 "0" // fallback
                             };
-                            
+
                             // Get indentation
-                            let indent = variable_assignment.len() - variable_assignment.trim_start().len();
+                            let indent =
+                                variable_assignment.len() - variable_assignment.trim_start().len();
                             let indent_str = " ".repeat(indent);
-                            
+
                             // First: the deferred measurement call
                             result.push_str(&indent_str);
                             result.push_str("call void @__hugr__quantum__qis__m__body");
                             result.push_str(&call_part[call_part.find('(').unwrap_or(0)..]);
                             result.push('\n');
-                            
+
                             // Second: get the result
                             result.push_str(&indent_str);
                             result.push_str(variable_assignment.trim());
                             result.push_str(" = call i32 @__quantum__rt__result_get_one(i64 ");
                             result.push_str(result_id);
-                            result.push_str(")");
-                            
-                            println!("DEBUG: Converted to deferred measurement + result retrieval");
+                            result.push(')');
+
                         } else {
                             // Fallback - just convert the function name
-                            result.push_str(&line.replace("call i32 @__quantum__qis__m__body(", "call void @__hugr__quantum__qis__m__body("));
+                            result.push_str(&line.replace(
+                                "call i32 @__quantum__qis__m__body(",
+                                "call void @__hugr__quantum__qis__m__body(",
+                            ));
                         }
                     } else {
                         // No assignment, just convert the function call
-                        result.push_str(&line.replace("call i32 @__quantum__qis__m__body(", "call void @__hugr__quantum__qis__m__body("));
+                        result.push_str(&line.replace(
+                            "call i32 @__quantum__qis__m__body(",
+                            "call void @__hugr__quantum__qis__m__body(",
+                        ));
                     }
                 } else if line.contains("call i32 @__quantum__qis__m__body_i64(") {
                     // Convert i64 variant as well
                     let modified_line = line
-                        .replace("call i32 @__quantum__qis__m__body_i64(", "call void @__hugr__quantum__qis__m__body(")
-                        .replace("call u32 @__quantum__qis__m__body_i64(", "call void @__hugr__quantum__qis__m__body(");
-                    
+                        .replace(
+                            "call i32 @__quantum__qis__m__body_i64(",
+                            "call void @__hugr__quantum__qis__m__body(",
+                        )
+                        .replace(
+                            "call u32 @__quantum__qis__m__body_i64(",
+                            "call void @__hugr__quantum__qis__m__body(",
+                        );
+
                     // TODO: Handle assignment for i64 variant too if needed
                     result.push_str(&modified_line);
                 } else if line.contains("declare i32 @__quantum__qis__m__body(") {
@@ -631,7 +624,9 @@ fn convert_immediate_to_deferred_measurements(llvm_ir: &str, llvm_convention: &Q
                     result.push_str("declare void @__hugr__quantum__qis__m__body(i64, i64)");
                     result.push('\n');
                     result.push_str("declare i32 @__quantum__rt__result_get_one(i64)");
-                } else if line.contains("declare i32 @__quantum__qis__m__body_i64(") || line.contains("declare u32 @__quantum__qis__m__body_i64(") {
+                } else if line.contains("declare i32 @__quantum__qis__m__body_i64(")
+                    || line.contains("declare u32 @__quantum__qis__m__body_i64(")
+                {
                     // Convert i64 function declarations
                     result.push_str("declare void @__hugr__quantum__qis__m__body(i64, i64)");
                     result.push('\n');
@@ -641,8 +636,7 @@ fn convert_immediate_to_deferred_measurements(llvm_ir: &str, llvm_convention: &Q
                 }
                 result.push('\n');
             }
-            
-            println!("DEBUG: Made {} measurement conversions", conversions_made);
+
             result
         }
         QuantumLlvmConvention::Qir => {
@@ -696,10 +690,7 @@ mod tests {
     fn test_hugr_compiler_creation() {
         let compiler = HugrCompiler::new();
         assert!(!compiler.config.debug_info);
-        assert_eq!(
-            compiler.config.quantum_naming,
-            QuantumLlvmConvention::Qir
-        );
+        assert_eq!(compiler.config.quantum_naming, QuantumLlvmConvention::Qir);
     }
 
     #[test]
@@ -710,10 +701,7 @@ mod tests {
             .with_output_path("/tmp/test.ll");
 
         assert!(compiler.config.debug_info);
-        assert_eq!(
-            compiler.config.quantum_naming,
-            QuantumLlvmConvention::Hugr
-        );
+        assert_eq!(compiler.config.quantum_naming, QuantumLlvmConvention::Hugr);
         assert_eq!(
             compiler.config.output_path,
             Some(PathBuf::from("/tmp/test.ll"))

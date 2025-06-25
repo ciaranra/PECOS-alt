@@ -50,20 +50,23 @@ let compiler = Compiler::new()
 #[cfg(feature = "hugr-llvm-pipeline")]
 pub mod compiler;
 #[cfg(feature = "hugr-llvm-pipeline")]
-pub mod engine;
+pub mod engine_utils;
 #[cfg(feature = "hugr-llvm-pipeline")]
 pub mod result_extractor;
-// Removed simple_llvm_fallback - no fallbacks, only proper solutions
+
+// Generator modules
 #[cfg(feature = "hugr-llvm-pipeline")]
-pub mod standard_qir_generator;
+pub mod generators {
+    pub mod standard_qir_generator;
+    pub mod true_standard_qir_generator;
+}
+
+// Extension modules
 #[cfg(feature = "hugr-llvm-pipeline")]
-pub mod true_standard_qir_generator;
-#[cfg(feature = "hugr-llvm-pipeline")]
-pub mod tket2_bool_extension;
-#[cfg(feature = "hugr-llvm-pipeline")]
-pub mod tket2_rotation_extension;
-#[cfg(feature = "hugr-llvm-pipeline")]
-pub mod type_transformer;
+pub mod extensions {
+    pub mod tket2_bool_extension;
+    pub mod tket2_rotation_extension;
+}
 // Version translator removed - using same HUGR version as Guppy 0.20.0
 
 // Re-export main types for convenience
@@ -72,7 +75,7 @@ pub use compiler::{
     HugrCompiler as Compiler, HugrCompilerConfig as CompilerConfig, QuantumLlvmConvention,
 };
 #[cfg(feature = "hugr-llvm-pipeline")]
-pub use engine::{compile_hugr_to_qir, create_hugr_qir_engine, setup_hugr_qir_engine};
+pub use engine_utils::{compile_hugr_to_qir, create_hugr_qir_engine, setup_hugr_qir_engine};
 #[cfg(feature = "hugr-llvm-pipeline")]
 pub use result_extractor::{ResultNameExtractor, ResultNameMapping};
 
@@ -155,7 +158,7 @@ pub mod compiler {
 }
 
 #[cfg(not(feature = "hugr-llvm-pipeline"))]
-pub mod engine {
+pub mod engine_utils {
     use pecos_core::errors::PecosError;
     use pecos_engines::ClassicalEngine;
     use std::path::Path;

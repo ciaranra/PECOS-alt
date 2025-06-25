@@ -12,19 +12,17 @@
 
 //! Python bindings for QIR execution
 
-use pyo3::prelude::*;
-use pyo3::exceptions::PyRuntimeError;
-use pyo3::types::{PyDict, PyList};
-use pecos_qir::{setup_qir_engine};
-use pecos_qir::error_handling::{init_qir_context, clear_qir_context, get_qir_diagnostic_report};
-use pecos_qir::panic_handler::{init_qir_panic_handler, with_qir_error_context};
-use pecos_qir::qir_utils::validate_qir_format;
+use pecos_core::rng::RngManageable;
 use pecos_engines::NoiseModel;
 use pecos_engines::noise::DepolarizingNoiseModel;
 use pecos_engines::shot_results;
-use pecos_core::rng::RngManageable;
-use std::path::PathBuf;
+use pecos_qir::error_handling::{init_qir_context, get_qir_diagnostic_report};
+use pecos_qir::setup_qir_engine;
+use pyo3::exceptions::PyRuntimeError;
+use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyList};
 use std::fs;
+use std::path::PathBuf;
 
 /// Python wrapper for QIR execution
 #[pyclass(name = "QirEngine")]
@@ -40,8 +38,7 @@ impl PyQirEngine {
         let path = PathBuf::from(qir_path);
         if !path.exists() {
             return Err(PyRuntimeError::new_err(format!(
-                "QIR file not found: {}",
-                qir_path
+                "QIR file not found: {qir_path}"
             )));
         }
         Ok(Self { qir_path: path })
@@ -58,7 +55,7 @@ impl PyQirEngine {
     ) -> PyResult<PyObject> {
         // Execute QIR with proper serialization (LLVM best practice)
         let results = execute_qir_safe(&self.qir_path, shots, seed, noise_probability, workers)
-            .map_err(|e| PyRuntimeError::new_err(format!("QIR execution failed: {:?}", e)))?;
+            .map_err(|e| PyRuntimeError::new_err(format!("QIR execution failed: {e:?}")))?;
 
         // Convert results to Python format
         convert_results_to_python(py, results, shots)
@@ -90,7 +87,7 @@ fn convert_results_to_python(
         } else if shot.data.len() > 1 {
             // Multiple registers - return as tuple
             let tuple_vals = PyList::empty(py);
-            for (_, data) in &shot.data {
+            for data in shot.data.values() {
                 match data {
                     shot_results::Data::U32(v) => {
                         tuple_vals.append(*v != 0)?;
@@ -110,10 +107,9 @@ fn convert_results_to_python(
     result_dict.set_item("results", result_list)?;
     result_dict.set_item("shots", shots)?;
     result_dict.set_item("execution_successful", true)?;
-    
+
     Ok(result_dict.into())
 }
-
 
 /// Simplified QIR execution
 fn execute_qir_safe(
@@ -124,19 +120,19 @@ fn execute_qir_safe(
     workers: Option<usize>,
 ) -> Result<shot_results::ShotVec, pecos_core::errors::PecosError> {
     use crate::qir_execution_guard::QirExecutionGuard;
-    
+
     // Create execution guard to prevent cleanup issues
     let _guard = QirExecutionGuard::new()
         .map_err(|e| pecos_core::errors::PecosError::Input(e.to_string()))?;
-    
+
     // Simple reset - no complex context system
     unsafe {
         pecos_qir::runtime::qir_runtime_reset();
     }
-    
+
     // Set up QIR engine
     let classical_engine = setup_qir_engine(qir_path, None)?;
-    
+
     // Create noise model
     let noise_model: Box<dyn NoiseModel> = if let Some(prob) = noise_probability {
         let mut model = DepolarizingNoiseModel::new_uniform(prob);
@@ -147,10 +143,10 @@ fn execute_qir_safe(
     } else {
         Box::new(pecos_engines::noise::PassThroughNoiseModel)
     };
-    
+
     // Execute simulation with validated parameters
     let mut params = crate::safe_calls::SimParams::new(classical_engine, shots);
-    
+
     if let Some(s) = seed {
         params = params.with_seed(s);
     }
@@ -158,29 +154,29 @@ fn execute_qir_safe(
         params = params.with_workers(w);
     }
     params = params.with_noise_model(noise_model);
-    
+
     let results = params.run()?;
-    
+
     // Force another reset after execution
     unsafe {
         pecos_qir::runtime::qir_runtime_reset();
     }
-    
+
     // Clear any stored engines
     #[cfg(feature = "hugr-llvm-pipeline")]
     {
-        if let Ok(mut engines) = pecos_qir::python_api::get_stored_engine_mut(0) {
+        if let Ok(mut engines) = pecos_qir::hugr_python_api::get_stored_engine_mut(0) {
             engines.clear();
         }
     }
-    
+
     // Clean up runtime registry
-    pecos_qir::runtime_registry::cleanup_all_runtimes();
-    
+    pecos_qir::runtime::registry::cleanup_all_runtimes();
+
     // Give the runtime a moment to clean up thread-local storage
     // This prevents segfaults when running in pytest environments
     std::thread::sleep(std::time::Duration::from_millis(1));
-    
+
     Ok(results)
 }
 
@@ -196,44 +192,43 @@ pub fn py_execute_qir(
     workers: Option<usize>,
     llvm_convention: Option<&str>,
 ) -> PyResult<PyObject> {
-    // Initialize enhanced error handling
-    init_qir_panic_handler();
-    
+    // Enhanced error handling removed - not needed for simplification
+
     // Validate QIR file path
     let path = std::path::PathBuf::from(qir_path);
     if !path.exists() {
         return Err(PyRuntimeError::new_err(format!(
-            "QIR file not found: {}",
-            qir_path
+            "QIR file not found: {qir_path}"
         )));
     }
-    
+
     // Validate QIR format before execution (skip for HUGR convention)
     let convention = llvm_convention.unwrap_or("qir");
     if convention != "hugr" {
         match fs::read_to_string(&path) {
             Ok(qir_content) => {
-                if let Err(validation_error) = validate_qir_format(&qir_content) {
-                    return Err(PyRuntimeError::new_err(format!(
-                        "QIR format validation failed: {}",
-                        validation_error
-                    )));
+                // Basic validation - just check if it looks like QIR
+                if !qir_content.contains("@__quantum__") {
+                    return Err(PyRuntimeError::new_err(
+                        "Invalid QIR format: No quantum operations found"
+                    ));
                 }
             }
             Err(e) => {
                 return Err(PyRuntimeError::new_err(format!(
-                    "Failed to read QIR file: {}",
-                    e
+                    "Failed to read QIR file: {e}"
                 )));
             }
         }
     }
-    
+
     // Check for pytest environment and warn about potential segfaults
     if std::env::var("PYTEST_CURRENT_TEST").is_ok() {
         // We're running in pytest - execution works but may segfault during cleanup
-        eprintln!("Warning: QIR execution in pytest may segfault during cleanup (output will be produced first)");
-        
+        eprintln!(
+            "Warning: QIR execution in pytest may segfault during cleanup (output will be produced first)"
+        );
+
         // Force clear any lingering runtime state from previous tests
         unsafe {
             pecos_qir::runtime::qir_runtime_reset();
@@ -241,32 +236,21 @@ pub fn py_execute_qir(
         // Clear any interactive callbacks
         pecos_qir::runtime::core_runtime::clear_interactive_callback();
     }
-    
+
     // Initialize QIR execution context
-    init_qir_context(Some(path.file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("unknown")
-        .to_string()));
-    
-    // Execute using enhanced error context
-    let results = with_qir_error_context("execute_qir", || {
-        execute_qir_safe(&path, shots, seed, noise_probability, workers)
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
-    })
-    .map_err(|e| {
-        let diagnostic = get_qir_diagnostic_report();
-        clear_qir_context();
-        
-        let detailed_error = format!(
-            "QIR execution failed: {}\n\nDiagnostic Information:\n{}",
-            e, diagnostic
-        );
-        PyRuntimeError::new_err(detailed_error)
+    init_qir_context(Some(
+        path.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown")
+            .to_string(),
+    ));
+
+    // Execute QIR directly without error context wrapper
+    let results = execute_qir_safe(&path, shots, seed, noise_probability, workers)
+        .map_err(|e| {
+            PyRuntimeError::new_err(format!("QIR execution failed: {e}"))
     })?;
-    
-    // Clear context after successful execution
-    clear_qir_context();
-    
+
     // Convert results to Python format
     convert_results_to_python(py, results, shots)
 }
@@ -275,59 +259,67 @@ pub fn py_execute_qir(
 #[pyfunction]
 #[pyo3(name = "validate_qir_format_detailed")]
 pub fn py_validate_qir_format(qir_path: &str) -> PyResult<PyObject> {
-    use pyo3::types::PyDict;
     use pecos_qir::error_handling::validate_qir_for_runtime_issues;
-    
+    use pyo3::types::PyDict;
+
     let path = std::path::PathBuf::from(qir_path);
     if !path.exists() {
         return Err(PyRuntimeError::new_err(format!(
-            "QIR file not found: {}",
-            qir_path
+            "QIR file not found: {qir_path}"
         )));
     }
-    
+
     let qir_content = fs::read_to_string(&path)
-        .map_err(|e| PyRuntimeError::new_err(format!("Failed to read QIR file: {}", e)))?;
-    
+        .map_err(|e| PyRuntimeError::new_err(format!("Failed to read QIR file: {e}")))?;
+
     Python::with_gil(|py| {
         let result = PyDict::new(py);
-        
+
         // Basic format validation
-        match validate_qir_format(&qir_content) {
-            Ok(()) => {
-                result.set_item("format_valid", true)?;
-                result.set_item("format_errors", Vec::<String>::new())?;
-            }
-            Err(e) => {
-                result.set_item("format_valid", false)?;
-                result.set_item("format_errors", vec![e.to_string()])?;
-            }
+        if qir_content.contains("@__quantum__") {
+            result.set_item("format_valid", true)?;
+            result.set_item("format_errors", Vec::<String>::new())?;
+        } else {
+            result.set_item("format_valid", false)?;
+            result.set_item("format_errors", vec!["No quantum operations found".to_string()])?;
         }
-        
+
         // Runtime issue detection
         match validate_qir_for_runtime_issues(&qir_content) {
             Ok(warnings) => {
                 result.set_item("runtime_warnings", warnings)?;
             }
             Err(e) => {
-                result.set_item("runtime_warnings", vec![format!("Validation failed: {}", e)])?;
+                result.set_item(
+                    "runtime_warnings",
+                    vec![format!("Validation failed: {}", e)],
+                )?;
             }
         }
-        
+
         // QIR statistics
         let stats = PyDict::new(py);
         stats.set_item("total_lines", qir_content.lines().count())?;
-        stats.set_item("quantum_operations", qir_content.matches("__quantum__qis__").count())?;
+        stats.set_item(
+            "quantum_operations",
+            qir_content.matches("__quantum__qis__").count(),
+        )?;
         stats.set_item("has_entry_point", qir_content.contains("EntryPoint"))?;
         stats.set_item("has_opaque_types", qir_content.contains("type opaque"))?;
-        stats.set_item("uses_integer_qubits", qir_content.contains("__quantum__qis__h__body(i64"))?;
-        stats.set_item("uses_pointer_qubits", qir_content.contains("__quantum__qis__h__body(i8*") || qir_content.contains("__quantum__qis__h__body(%Qubit*"))?;
+        stats.set_item(
+            "uses_integer_qubits",
+            qir_content.contains("__quantum__qis__h__body(i64"),
+        )?;
+        stats.set_item(
+            "uses_pointer_qubits",
+            qir_content.contains("__quantum__qis__h__body(i8*")
+                || qir_content.contains("__quantum__qis__h__body(%Qubit*"),
+        )?;
         result.set_item("statistics", stats)?;
-        
+
         Ok(result.into())
     })
 }
-
 
 /// Get QIR execution diagnostic report
 #[pyfunction]
@@ -342,27 +334,27 @@ pub fn py_get_qir_diagnostic_report() -> PyResult<String> {
 pub fn py_reset_qir_runtime() -> PyResult<()> {
     use std::thread;
     use std::time::Duration;
-    
+
     // Clear all stored engines first
     #[cfg(feature = "hugr-llvm-pipeline")]
     {
-        if let Ok(mut engines) = pecos_qir::python_api::get_stored_engine_mut(0) {
+        if let Ok(mut engines) = pecos_qir::hugr_python_api::get_stored_engine_mut(0) {
             engines.clear();
         }
     }
-    
+
     // Simple reset - no aggressive cleanup
     unsafe {
         pecos_qir::runtime::qir_runtime_reset();
     }
-    
+
     // Clean up all runtime registry states
-    pecos_qir::runtime_registry::cleanup_all_runtimes();
-    
+    pecos_qir::runtime::registry::cleanup_all_runtimes();
+
     // Give the runtime a moment to clean up
     // This helps prevent segfaults in pytest environments
     thread::sleep(Duration::from_millis(10));
-    
+
     Ok(())
 }
 
@@ -373,13 +365,19 @@ pub fn register_qir_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_validate_qir_format, m)?)?;
     m.add_function(wrap_pyfunction!(py_get_qir_diagnostic_report, m)?)?;
     m.add_function(wrap_pyfunction!(py_reset_qir_runtime, m)?)?;
-    
+
     // Add cleanup handlers to prevent abort on exit
-    m.add_function(wrap_pyfunction!(crate::qir_execution_guard::_mark_qir_shutting_down, m)?)?;
-    m.add_function(wrap_pyfunction!(crate::qir_execution_guard::_wait_for_qir_completion, m)?)?;
-    
+    m.add_function(wrap_pyfunction!(
+        crate::qir_execution_guard::_mark_qir_shutting_down,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::qir_execution_guard::_wait_for_qir_completion,
+        m
+    )?)?;
+
     // Register cleanup handler on module load
     crate::qir_execution_guard::register_cleanup_handler();
-    
+
     Ok(())
 }

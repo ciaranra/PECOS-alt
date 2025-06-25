@@ -35,7 +35,7 @@ fn run_pecos(
 ) -> Result<String, Box<dyn std::error::Error>> {
     let mut cmd = Command::cargo_bin("pecos")?;
     cmd.env("RUST_LOG", "info")
-        .env("RUST_BACKTRACE", "0")  // Disable backtrace to avoid extra output on segfault
+        .env("RUST_BACKTRACE", "0") // Disable backtrace to avoid extra output on segfault
         .arg("run")
         .arg(file_path)
         .arg("-s")
@@ -55,26 +55,26 @@ fn run_pecos(
     }
 
     let output = cmd.output()?;
-    
+
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    
+
     // Special handling for QIR files which may segfault during cleanup
     let is_qir = file_path.extension().and_then(|s| s.to_str()) == Some("ll");
-    
+
     // Debug output for QIR
     if is_qir {
         eprintln!("QIR Debug - Exit status: {:?}", output.status);
         eprintln!("QIR Debug - Stdout length: {}", stdout.len());
         eprintln!("QIR Debug - Stderr length: {}", stderr.len());
         if !stdout.is_empty() {
-            eprintln!("QIR Debug - Stdout: {}", stdout);
+            eprintln!("QIR Debug - Stdout: {stdout}");
         }
         if !stderr.is_empty() {
-            eprintln!("QIR Debug - Stderr: {}", stderr);
+            eprintln!("QIR Debug - Stderr: {stderr}");
         }
     }
-    
+
     // For QIR files, check if we got valid output even if the process exited with error
     if is_qir && !output.status.success() {
         // QIR has a known segfault issue during cleanup
@@ -83,16 +83,15 @@ fn run_pecos(
             // We have valid JSON output despite the segfault
             eprintln!("Note: QIR process segfaulted during cleanup but produced valid output");
             return Ok(stdout.to_string());
-        } else {
-            // No valid output, this is a real failure
-            return Err(Box::new(PecosError::Resource(format!(
-                "QIR execution failed for file '{}': exit_code={:?}, stderr='{}', stdout='{}'",
-                file_path.display(),
-                output.status.code(),
-                stderr,
-                stdout
-            ))));
         }
+        // No valid output, this is a real failure
+        return Err(Box::new(PecosError::Resource(format!(
+            "QIR execution failed for file '{}': exit_code={:?}, stderr='{}', stdout='{}'",
+            file_path.display(),
+            output.status.code(),
+            stderr,
+            stdout
+        ))));
     } else if !output.status.success() {
         // Provide more context about the error for non-QIR files
         return Err(Box::new(PecosError::Resource(format!(
@@ -124,8 +123,7 @@ fn get_values(json_output: &str) -> Vec<String> {
     let json_part = json_output
         .lines()
         .find(|line| line.trim().starts_with('{') && line.trim().ends_with('}'))
-        .map(|line| line.trim())
-        .unwrap_or(json_output.trim());
+        .map_or(json_output.trim(), str::trim);
 
     // Parse the JSON - expecting an object with register names as keys
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_part) {
@@ -590,7 +588,9 @@ fn test_qir_with_depolarizing_noise() -> Result<(), Box<dyn std::error::Error>> 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let bell_qir_path = manifest_dir.join("../../examples/qir/bell.ll");
 
-    println!("QIR WITH DEPOLARIZING NOISE: Testing QIR implementation with depolarizing noise model");
+    println!(
+        "QIR WITH DEPOLARIZING NOISE: Testing QIR implementation with depolarizing noise model"
+    );
     println!("------------------------------------------------------------------");
 
     // Test with depolarizing noise - reduced shots to avoid segfault issues

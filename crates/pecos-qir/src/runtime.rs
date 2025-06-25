@@ -1,6 +1,6 @@
 /// Instance-based QIR Runtime Implementation with Convention Adapters
 ///
-/// This runtime eliminates global state by using RuntimeRegistry to map
+/// This runtime eliminates global state by using `RuntimeRegistry` to map
 /// threads to their own isolated runtime states. Each worker/thread operates
 /// independently without sharing state until results are combined.
 ///
@@ -8,14 +8,27 @@
 /// 1. Core runtime implementation (convention-agnostic)
 /// 2. QIR convention adapter (pointer-based)
 /// 3. HUGR convention adapter (integer-based)
+// Submodule declarations
+pub mod builder;
+pub mod cleanup;
+pub mod context;
+pub mod registry;
+pub mod state;
 
-use crate::runtime_registry::{RuntimeRegistry, initialize_registry};
-use pecos_engines::byte_message::ByteMessage;
+// Re-export commonly used types
+pub use registry::{RuntimeRegistry, initialize_registry};
+pub use state::QirRuntimeState;
+pub use context::RuntimeContext;
+pub use cleanup::{force_runtime_cleanup, cleanup_thread_local_state};
+
+// Internal imports
+use log::{debug, warn, error};
 use pecos_core::errors::PecosError;
+use pecos_engines::byte_message::ByteMessage;
 use std::env;
 use std::ffi::{CStr, CString, c_char};
+use std::sync::{LazyLock, Mutex, Once};
 use std::thread;
-use std::sync::{Once, Mutex, LazyLock};
 
 // Ensure the runtime registry is initialized exactly once
 static INIT: Once = Once::new();
@@ -31,7 +44,7 @@ fn ensure_runtime_initialized() {
     });
     // Always clear shutdown flag when ensuring runtime is initialized
     // This handles cases where Python keeps the process alive between tests
-    crate::runtime_registry::clear_shutting_down();
+    self::registry::clear_shutting_down();
 }
 
 /// Helper function to get the current thread ID as a string
@@ -58,39 +71,44 @@ fn should_print_commands() -> bool {
 // =============================================================================
 
 pub mod core_runtime {
-    use super::*;
-    
+    use super::{
+        ByteMessage, LazyLock, Mutex, PecosError, RuntimeRegistry, ensure_runtime_initialized,
+        get_thread_id, should_print_commands,
+    };
+    use log::debug;
+
     /// Type alias for the interactive execution callback
-    /// Takes a ByteMessage of quantum operations and returns measurement results
-    pub type InteractiveCallback = Box<dyn Fn(ByteMessage) -> Result<Vec<u32>, PecosError> + Send + Sync>;
-    
+    /// Takes a `ByteMessage` of quantum operations and returns measurement results
+    pub type InteractiveCallback =
+        Box<dyn Fn(ByteMessage) -> Result<Vec<u32>, PecosError> + Send + Sync>;
+
     /// Global callback for interactive execution
-    static INTERACTIVE_CALLBACK: LazyLock<Mutex<Option<InteractiveCallback>>> = 
+    static INTERACTIVE_CALLBACK: LazyLock<Mutex<Option<InteractiveCallback>>> =
         LazyLock::new(|| Mutex::new(None));
-    
+
     /// Set the interactive execution callback
     pub fn set_interactive_callback(callback: InteractiveCallback) {
         if let Ok(mut cb) = INTERACTIVE_CALLBACK.lock() {
             *cb = Some(callback);
         }
     }
-    
+
     /// Execute with the interactive execution callback if available
     pub fn execute_with_callback<T>(f: impl FnOnce(&InteractiveCallback) -> T) -> Option<T> {
         if let Ok(cb) = INTERACTIVE_CALLBACK.lock() {
-            cb.as_ref().map(|callback| f(callback))
+            cb.as_ref().map(f)
         } else {
             None
         }
     }
-    
+
     /// Clear the interactive execution callback
     pub fn clear_interactive_callback() {
         if let Ok(mut cb) = INTERACTIVE_CALLBACK.lock() {
             *cb = None;
         }
     }
-    
+
     /// Reset the QIR runtime state for the current thread
     pub fn reset() {
         ensure_runtime_initialized();
@@ -100,315 +118,357 @@ pub mod core_runtime {
         if let Some(()) = RuntimeRegistry::try_with_current_runtime(|state| {
             state.reset();
             if should_print_commands() {
-                println!("[Thread {thread_id}] Reset QIR runtime state");
+                debug!("[Thread {thread_id}] Reset QIR runtime state");
             }
         }) {
             // Successfully reset
         } else {
             // No runtime to reset - this is fine during cleanup
             if should_print_commands() {
-                println!("[Thread {thread_id}] No runtime state to reset (already cleaned up)");
+                debug!("[Thread {thread_id}] No runtime state to reset (already cleaned up)");
             }
         }
-        
+
         // Also clear the interactive callback to ensure clean state
         clear_interactive_callback();
     }
-    
+
     /// Initialize the runtime
     pub fn initialize() {
         ensure_runtime_initialized();
-        
+
         RuntimeRegistry::with_current_runtime(|state| {
             state.reset();
         });
 
         if should_print_commands() {
-            println!("Quantum runtime initialized");
+            debug!("Quantum runtime initialized");
         }
     }
-    
+
     /// Allocate a qubit
+    #[must_use]
     pub fn allocate_qubit() -> usize {
         RuntimeRegistry::with_current_runtime(|state| {
             let id = state.allocate_qubit();
-            
+
             if should_print_commands() {
                 let thread_id = get_thread_id();
-                println!("[Thread {thread_id}] Allocated qubit {id}");
+                debug!("[Thread {thread_id}] Allocated qubit {id}");
             }
-            
+
             id
-        }).unwrap_or(0)
+        })
+        .unwrap_or(0)
     }
-    
+
     /// Allocate a result
+    #[must_use]
     pub fn allocate_result() -> usize {
         RuntimeRegistry::with_current_runtime(|state| {
             let id = state.allocate_result();
-            
+
             if should_print_commands() {
                 let thread_id = get_thread_id();
-                println!("[Thread {thread_id}] Allocated result {id}");
+                debug!("[Thread {thread_id}] Allocated result {id}");
             }
-            
+
             id
-        }).unwrap_or(0)
+        })
+        .unwrap_or(0)
     }
-    
+
     /// Release a qubit
     pub fn release_qubit(qubit_id: usize) {
         if should_print_commands() {
             let thread_id = get_thread_id();
-            println!("[Thread {thread_id}] Released qubit {qubit_id}");
+            debug!("[Thread {thread_id}] Released qubit {qubit_id}");
         }
     }
-    
+
     /// Release a result
     pub fn release_result(result_id: usize) {
         if should_print_commands() {
             let thread_id = get_thread_id();
-            println!("[Thread {thread_id}] Released result {result_id}");
+            debug!("[Thread {thread_id}] Released result {result_id}");
         }
     }
-    
+
     // Quantum Gate Operations
-    
+
     pub fn h_gate(qubit_id: usize) {
         if should_print_commands() {
             let thread_id = get_thread_id();
-            println!("[Thread {thread_id}] H gate on qubit {qubit_id}");
+            debug!("[Thread {thread_id}] H gate on qubit {qubit_id}");
         }
-        
+
         RuntimeRegistry::with_current_runtime(|state| {
             let _ = state.message_builder_mut().add_h(&[qubit_id]);
         });
     }
-    
+
     pub fn x_gate(qubit_id: usize) {
         if should_print_commands() {
             let thread_id = get_thread_id();
-            println!("[Thread {thread_id}] X gate on qubit {qubit_id}");
+            debug!("[Thread {thread_id}] X gate on qubit {qubit_id}");
         }
-        
+
         RuntimeRegistry::with_current_runtime(|state| {
             let _ = state.message_builder_mut().add_x(&[qubit_id]);
         });
     }
-    
+
     pub fn y_gate(qubit_id: usize) {
         RuntimeRegistry::with_current_runtime(|state| {
             let _ = state.message_builder_mut().add_y(&[qubit_id]);
         });
     }
-    
+
     pub fn z_gate(qubit_id: usize) {
         RuntimeRegistry::with_current_runtime(|state| {
             let _ = state.message_builder_mut().add_z(&[qubit_id]);
         });
     }
-    
+
     pub fn cx_gate(control_id: usize, target_id: usize) {
         if should_print_commands() {
             let thread_id = get_thread_id();
-            println!("[Thread {thread_id}] CX gate: control={control_id}, target={target_id}");
+            debug!("[Thread {thread_id}] CX gate: control={control_id}, target={target_id}");
         }
-        
+
         RuntimeRegistry::with_current_runtime(|state| {
-            let _ = state.message_builder_mut().add_cx(&[control_id], &[target_id]);
+            let _ = state
+                .message_builder_mut()
+                .add_cx(&[control_id], &[target_id]);
         });
     }
-    
+
     pub fn cy_gate(control_id: usize, target_id: usize) {
         RuntimeRegistry::with_current_runtime(|state| {
-            let _ = state.message_builder_mut().add_cy(&[control_id], &[target_id]);
+            let _ = state
+                .message_builder_mut()
+                .add_cy(&[control_id], &[target_id]);
         });
     }
-    
+
     pub fn cz_gate(control_id: usize, target_id: usize) {
         RuntimeRegistry::with_current_runtime(|state| {
-            let _ = state.message_builder_mut().add_cz(&[control_id], &[target_id]);
+            let _ = state
+                .message_builder_mut()
+                .add_cz(&[control_id], &[target_id]);
         });
     }
-    
+
     pub fn ch_gate(control_id: usize, target_id: usize) {
         RuntimeRegistry::with_current_runtime(|state| {
             // CH implemented as H on target, then CX
             let _ = state.message_builder_mut().add_h(&[target_id]);
-            let _ = state.message_builder_mut().add_cx(&[control_id], &[target_id]);
+            let _ = state
+                .message_builder_mut()
+                .add_cx(&[control_id], &[target_id]);
             let _ = state.message_builder_mut().add_h(&[target_id]);
         });
     }
-    
+
     pub fn s_gate(qubit_id: usize) {
         RuntimeRegistry::with_current_runtime(|state| {
             let _ = state.message_builder_mut().add_sz(&[qubit_id]);
         });
     }
-    
+
     pub fn sdg_gate(qubit_id: usize) {
         RuntimeRegistry::with_current_runtime(|state| {
             let _ = state.message_builder_mut().add_szdg(&[qubit_id]);
         });
     }
-    
+
     pub fn t_gate(qubit_id: usize) {
         RuntimeRegistry::with_current_runtime(|state| {
             let _ = state.message_builder_mut().add_t(&[qubit_id]);
         });
     }
-    
+
     pub fn tdg_gate(qubit_id: usize) {
         RuntimeRegistry::with_current_runtime(|state| {
             let _ = state.message_builder_mut().add_tdg(&[qubit_id]);
         });
     }
-    
+
     pub fn rx_gate(theta: f64, qubit_id: usize) {
         RuntimeRegistry::with_current_runtime(|state| {
             let _ = state.message_builder_mut().add_rx(theta, &[qubit_id]);
         });
     }
-    
+
     pub fn ry_gate(theta: f64, qubit_id: usize) {
         RuntimeRegistry::with_current_runtime(|state| {
             let _ = state.message_builder_mut().add_ry(theta, &[qubit_id]);
         });
     }
-    
+
     pub fn rz_gate(theta: f64, qubit_id: usize) {
         RuntimeRegistry::with_current_runtime(|state| {
             let _ = state.message_builder_mut().add_rz(theta, &[qubit_id]);
         });
     }
-    
+
     pub fn r1xy_gate(theta: f64, phi: f64, qubit_id: usize) {
         RuntimeRegistry::with_current_runtime(|state| {
-            let _ = state.message_builder_mut().add_r1xy(theta, phi, &[qubit_id]);
+            let _ = state
+                .message_builder_mut()
+                .add_r1xy(theta, phi, &[qubit_id]);
         });
     }
-    
+
     pub fn crz_gate(theta: f64, control_id: usize, target_id: usize) {
         RuntimeRegistry::with_current_runtime(|state| {
             // CRZ implemented as CX-RZ-CX sequence
-            let _ = state.message_builder_mut().add_cx(&[control_id], &[target_id]);
-            let _ = state.message_builder_mut().add_rz(theta / 2.0, &[target_id]);
-            let _ = state.message_builder_mut().add_cx(&[control_id], &[target_id]);
-            let _ = state.message_builder_mut().add_rz(-theta / 2.0, &[target_id]);
+            let _ = state
+                .message_builder_mut()
+                .add_cx(&[control_id], &[target_id]);
+            let _ = state
+                .message_builder_mut()
+                .add_rz(theta / 2.0, &[target_id]);
+            let _ = state
+                .message_builder_mut()
+                .add_cx(&[control_id], &[target_id]);
+            let _ = state
+                .message_builder_mut()
+                .add_rz(-theta / 2.0, &[target_id]);
         });
     }
-    
+
     pub fn ccx_gate(control1_id: usize, control2_id: usize, target_id: usize) {
         RuntimeRegistry::with_current_runtime(|state| {
             // CCX (Toffoli) - simplified implementation
             let _ = state.message_builder_mut().add_h(&[target_id]);
-            let _ = state.message_builder_mut().add_cx(&[control2_id], &[target_id]);
+            let _ = state
+                .message_builder_mut()
+                .add_cx(&[control2_id], &[target_id]);
             let _ = state.message_builder_mut().add_tdg(&[target_id]);
-            let _ = state.message_builder_mut().add_cx(&[control1_id], &[target_id]);
+            let _ = state
+                .message_builder_mut()
+                .add_cx(&[control1_id], &[target_id]);
             let _ = state.message_builder_mut().add_t(&[target_id]);
-            let _ = state.message_builder_mut().add_cx(&[control2_id], &[target_id]);
+            let _ = state
+                .message_builder_mut()
+                .add_cx(&[control2_id], &[target_id]);
             let _ = state.message_builder_mut().add_tdg(&[target_id]);
-            let _ = state.message_builder_mut().add_cx(&[control1_id], &[target_id]);
+            let _ = state
+                .message_builder_mut()
+                .add_cx(&[control1_id], &[target_id]);
             let _ = state.message_builder_mut().add_t(&[control2_id]);
             let _ = state.message_builder_mut().add_t(&[target_id]);
-            let _ = state.message_builder_mut().add_cx(&[control1_id], &[control2_id]);
+            let _ = state
+                .message_builder_mut()
+                .add_cx(&[control1_id], &[control2_id]);
             let _ = state.message_builder_mut().add_t(&[control1_id]);
             let _ = state.message_builder_mut().add_tdg(&[control2_id]);
-            let _ = state.message_builder_mut().add_cx(&[control1_id], &[control2_id]);
+            let _ = state
+                .message_builder_mut()
+                .add_cx(&[control1_id], &[control2_id]);
             let _ = state.message_builder_mut().add_h(&[target_id]);
         });
     }
-    
+
     pub fn szz_gate(qubit1_id: usize, qubit2_id: usize) {
         RuntimeRegistry::with_current_runtime(|state| {
-            let _ = state.message_builder_mut().add_szz(&[qubit1_id], &[qubit2_id]);
+            let _ = state
+                .message_builder_mut()
+                .add_szz(&[qubit1_id], &[qubit2_id]);
         });
     }
-    
+
     pub fn zz_gate(qubit1_id: usize, qubit2_id: usize) {
         RuntimeRegistry::with_current_runtime(|state| {
             // ZZ gate implementation using CZ
-            let _ = state.message_builder_mut().add_cz(&[qubit1_id], &[qubit2_id]);
+            let _ = state
+                .message_builder_mut()
+                .add_cz(&[qubit1_id], &[qubit2_id]);
         });
     }
-    
+
     pub fn rzz_gate(theta: f64, qubit1_id: usize, qubit2_id: usize) {
         RuntimeRegistry::with_current_runtime(|state| {
-            let _ = state.message_builder_mut().add_rzz(theta, &[qubit1_id], &[qubit2_id]);
+            let _ = state
+                .message_builder_mut()
+                .add_rzz(theta, &[qubit1_id], &[qubit2_id]);
         });
     }
-    
+
     pub fn reset_qubit(qubit_id: usize) {
         RuntimeRegistry::with_current_runtime(|state| {
             // Reset implemented as preparation
             let _ = state.message_builder_mut().add_prep(&[qubit_id]);
         });
     }
-    
+
     pub fn measure(qubit_id: usize, _result_id: usize) {
         if should_print_commands() {
             let thread_id = get_thread_id();
-            println!("[Thread {thread_id}] Measuring qubit {qubit_id}");
+            debug!("[Thread {thread_id}] Measuring qubit {qubit_id}");
         }
-        
+
         RuntimeRegistry::with_current_runtime(|state| {
             let _ = state.message_builder_mut().add_measurements(&[qubit_id]);
         });
     }
-    
+
     pub fn record_result_output(result_id: usize, name: &str) {
         if should_print_commands() {
             let thread_id = get_thread_id();
-            println!("[Thread {thread_id}] Recording result {result_id} as '{name}'");
+            debug!("[Thread {thread_id}] Recording result {result_id} as '{name}'");
         }
 
         RuntimeRegistry::with_current_runtime(|state| {
             // Get the next bit position for this register
             let current_bit_position = state.get_register_bit_width(name);
-            
+
             // Store the mapping for when we get the actual measurement result
             state.map_result_to_register(result_id, name.to_string(), current_bit_position);
 
             if should_print_commands() {
                 let thread_id = get_thread_id();
-                println!(
+                debug!(
                     "[Thread {thread_id}] Mapped result {result_id} to register '{name}' bit {current_bit_position}"
                 );
             }
         });
     }
-    
-    
+
     pub fn update_measurement_results(results: &[u32]) {
         let thread_id = get_thread_id();
-        
+
         if should_print_commands() {
-            println!("[Thread {thread_id}] Updating {} measurement results", results.len() / 2);
+            debug!(
+                "[Thread {thread_id}] Updating {} measurement results",
+                results.len() / 2
+            );
         }
 
         RuntimeRegistry::with_current_runtime(|state| {
             state.update_measurement_results(results);
-            
+
             if should_print_commands() {
                 for i in (0..results.len()).step_by(2) {
                     let result_id = results[i] as usize;
                     let measurement_value = results[i + 1] != 0;
-                    println!(
+                    debug!(
                         "[Thread {thread_id}] Updated measurement result {result_id} = {measurement_value}"
                     );
                 }
             }
         });
     }
-    
+
     pub fn finalize_shot() {
         let thread_id = get_thread_id();
-        
+
         RuntimeRegistry::with_current_runtime(|state| {
             state.finalize_shot();
-            
+
             if should_print_commands() {
-                println!("[Thread {thread_id}] Finalized shot");
+                debug!("[Thread {thread_id}] Finalized shot");
             }
         });
     }
@@ -423,10 +483,10 @@ pub mod core_runtime {
 pub unsafe extern "C" fn qir_runtime_reset() {
     // Clear the interactive callback first
     core_runtime::clear_interactive_callback();
-    
+
     // Reset the core runtime (this only resets the current thread's state)
     core_runtime::reset();
-    
+
     // Note: We DON'T call cleanup_all_runtimes() here because that would
     // interfere with other worker threads in multi-threaded execution.
     // Each thread should only reset its own runtime state.
@@ -686,7 +746,7 @@ pub unsafe extern "C" fn __quantum__qis__m__body_i64(qubit: i64, result: i64) ->
     let qubit_id = i64_to_usize(qubit);
     let result_id = i64_to_usize(result);
     core_runtime::measure(qubit_id, result_id);
-    
+
     // NOTE: This function shouldn't be called directly in the new deferred model.
     // The LLVM-IR post-processor converts immediate calls to deferred calls.
     // Return 0 as fallback for any remaining immediate calls.
@@ -705,7 +765,7 @@ pub unsafe extern "C" fn __quantum__qis__m__body(qubit: i64, result: i64) -> i32
     let qubit_id = i64_to_usize(qubit);
     let result_id = i64_to_usize(result);
     core_runtime::measure(qubit_id, result_id);
-    
+
     // NOTE: This function shouldn't be called directly in the new deferred model.
     // The LLVM-IR post-processor converts immediate calls to deferred calls.
     // Return 0 as fallback for any remaining immediate calls.
@@ -717,63 +777,62 @@ pub unsafe extern "C" fn __quantum__qis__m__body(qubit: i64, result: i64) -> i32
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__result_get_one(result: i64) -> i32 {
     use std::time::{Duration, Instant};
-    
+
     let result_id = i64_to_usize(result);
     let start_time = Instant::now();
-    
+
     if should_print_commands() {
         let thread_id = get_thread_id();
-        println!("[Thread {thread_id}] ENTER __quantum__rt__result_get_one(result_id={result_id})");
+        debug!("[Thread {thread_id}] ENTER __quantum__rt__result_get_one(result_id={result_id})");
     }
-    
+
     // Circuit breaker: prevent recursive callback loops
-    let current_depth = CALLBACK_DEPTH.with(|d| d.get());
+    let current_depth = CALLBACK_DEPTH.with(std::cell::Cell::get);
     if current_depth > 5 {
-        eprintln!("[Thread {}] CIRCUIT_BREAKER: Callback depth {} exceeded for result {result_id}", get_thread_id(), current_depth);
+        error!(
+            "[Thread {}] CIRCUIT_BREAKER: Callback depth {} exceeded for result {result_id}",
+            get_thread_id(),
+            current_depth
+        );
         return 0;
     }
-    
+
     // Add a timeout to prevent infinite hangs
     let timeout = Duration::from_secs(30); // 30 second timeout
-    
+
     let result = RuntimeRegistry::with_current_runtime(|state| {
         // Check for timeout
         if start_time.elapsed() > timeout {
-            eprintln!("[Thread {}] TIMEOUT: __quantum__rt__result_get_one exceeded 30s", get_thread_id());
+            error!("[Thread {}] TIMEOUT: __quantum__rt__result_get_one exceeded 30s", get_thread_id());
             return 0;
         }
         
         // Try to get the measurement result first
         if let Some(measurement_value) = state.get_measurement_result(result_id) {
             if should_print_commands() {
-                println!("[Thread {}] CACHED: Found cached result {result_id} = {measurement_value}", get_thread_id());
+                debug!("[Thread {}] CACHED: Found cached result {result_id} = {measurement_value}", get_thread_id());
             }
-            if measurement_value { 1 } else { 0 }
+            i32::from(measurement_value)
         } else {
             // HUGR immediate measurement: trigger interactive execution
             if should_print_commands() {
                 let thread_id = get_thread_id();
-                println!("[Thread {thread_id}] INTERACTIVE: Triggering execution for result {result_id}");
+                debug!("[Thread {thread_id}] INTERACTIVE: Triggering execution for result {result_id}");
             }
             
             // Check if we have accumulated operations to execute
             let has_operations = state.message_builder_mut().message_count() > 0;
             
-            if !has_operations {
+            if has_operations {
                 if should_print_commands() {
-                    println!("[Thread {}] NO_OPS: No quantum operations for result {result_id}", get_thread_id());
-                }
-                0
-            } else {
-                if should_print_commands() {
-                    println!("[Thread {}] BUILDING: Building message with {} operations", get_thread_id(), state.message_builder_mut().message_count());
+                    debug!("[Thread {}] BUILDING: Building message with {} operations", get_thread_id(), state.message_builder_mut().message_count());
                 }
                 
                 // Build the message with accumulated quantum operations
                 let message = state.build_message();
                 
                 if should_print_commands() {
-                    println!("[Thread {}] CALLBACK: Calling interactive callback", get_thread_id());
+                    debug!("[Thread {}] CALLBACK: Calling interactive callback", get_thread_id());
                 }
                 
                 // Trigger interactive execution by calling the global callback
@@ -784,11 +843,11 @@ pub unsafe extern "C" fn __quantum__rt__result_get_one(result: i64) -> i32 {
                 
                 let callback_result = core_runtime::execute_with_callback(|callback| {
                     if should_print_commands() {
-                        println!("[Thread {}] EXECUTING: Starting quantum execution", get_thread_id());
+                        debug!("[Thread {}] EXECUTING: Starting quantum execution", get_thread_id());
                     }
                     let exec_result = callback(message);
                     if should_print_commands() {
-                        println!("[Thread {}] EXECUTED: Quantum execution completed", get_thread_id());
+                        debug!("[Thread {}] EXECUTED: Quantum execution completed", get_thread_id());
                     }
                     exec_result
                 });
@@ -800,7 +859,7 @@ pub unsafe extern "C" fn __quantum__rt__result_get_one(result: i64) -> i32 {
                     match callback_result {
                         Ok(measurement_results) => {
                             if should_print_commands() {
-                                println!("[Thread {}] SUCCESS: Got {} measurement results", get_thread_id(), measurement_results.len());
+                                debug!("[Thread {}] SUCCESS: Got {} measurement results", get_thread_id(), measurement_results.len());
                             }
                             
                             // Update the runtime state with the measurement results
@@ -809,39 +868,47 @@ pub unsafe extern "C" fn __quantum__rt__result_get_one(result: i64) -> i32 {
                             // Now try to get the result again
                             if let Some(measurement_value) = state.get_measurement_result(result_id) {
                                 if should_print_commands() {
-                                    println!("[Thread {}] FOUND: Result {result_id} = {measurement_value}", get_thread_id());
+                                    debug!("[Thread {}] FOUND: Result {result_id} = {measurement_value}", get_thread_id());
                                 }
-                                if measurement_value { 1 } else { 0 }
+                                i32::from(measurement_value)
                             } else {
                                 if should_print_commands() {
-                                    println!("[Thread {}] MISSING: Result {result_id} still not available after execution", get_thread_id());
+                                    debug!("[Thread {}] MISSING: Result {result_id} still not available after execution", get_thread_id());
                                 }
                                 0
                             }
                         }
                         Err(e) => {
-                            eprintln!("[Thread {}] ERROR: Interactive execution failed for result {result_id}: {:?}", get_thread_id(), e);
+                            error!("[Thread {}] ERROR: Interactive execution failed for result {result_id}: {:?}", get_thread_id(), e);
                             0
                         }
                     }
                 } else {
                     if should_print_commands() {
-                        println!("[Thread {}] NO_CALLBACK: No interactive callback registered for result {result_id}", get_thread_id());
+                        debug!("[Thread {}] NO_CALLBACK: No interactive callback registered for result {result_id}", get_thread_id());
                     }
                     0
                 }
+            } else {
+                if should_print_commands() {
+                    debug!("[Thread {}] NO_OPS: No quantum operations for result {result_id}", get_thread_id());
+                }
+                0
             }
         }
     }).unwrap_or_else(|| {
-        eprintln!("[Thread {}] FATAL: No runtime state available for result {result_id}", get_thread_id());
+        error!("[Thread {}] FATAL: No runtime state available for result {result_id}", get_thread_id());
         0
     });
-    
+
     if should_print_commands() {
         let elapsed = start_time.elapsed();
-        println!("[Thread {}] EXIT __quantum__rt__result_get_one(result_id={result_id}) = {result} in {elapsed:?}", get_thread_id());
+        println!(
+            "[Thread {}] EXIT __quantum__rt__result_get_one(result_id={result_id}) = {result} in {elapsed:?}",
+            get_thread_id()
+        );
     }
-    
+
     result
 }
 
@@ -855,7 +922,7 @@ pub unsafe extern "C" fn __quantum__rt__message(msg: *const c_char) {
     if !msg.is_null() {
         let c_str = unsafe { CStr::from_ptr(msg) };
         if let Ok(rust_str) = c_str.to_str() {
-            println!("QIR Message: {rust_str}");
+            debug!("QIR Message: {rust_str}");
         }
     }
 }
@@ -867,7 +934,7 @@ pub unsafe extern "C" fn __quantum__rt__record(data: *const c_char) {
         let c_str = unsafe { CStr::from_ptr(data) };
         if let Ok(rust_str) = c_str.to_str() {
             if should_print_commands() {
-                println!("QIR Record: {rust_str}");
+                debug!("QIR Record: {rust_str}");
             }
         }
     }
@@ -875,9 +942,12 @@ pub unsafe extern "C" fn __quantum__rt__record(data: *const c_char) {
 
 /// Record a result output
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__rt__result_record_output(result_ptr: *const u8, name: *const c_char) {
+pub unsafe extern "C" fn __quantum__rt__result_record_output(
+    result_ptr: *const u8,
+    name: *const c_char,
+) {
     let result_id = result_ptr as usize;
-    
+
     let name_str = if name.is_null() {
         format!("result_{result_id}")
     } else {
@@ -897,7 +967,7 @@ pub unsafe extern "C" fn qir_runtime_update_measurement_results(
     if results_ptr.is_null() || results_len == 0 {
         if should_print_commands() {
             let thread_id = get_thread_id();
-            println!("[Thread {thread_id}] No measurement results to update");
+            debug!("[Thread {thread_id}] No measurement results to update");
         }
         return;
     }
@@ -934,7 +1004,7 @@ pub unsafe extern "C" fn qir_runtime_get_binary_commands() -> *mut FFIByteData {
         state.build_message()
     }).unwrap_or_else(|| {
         if should_print_commands() {
-            eprintln!("[Thread {thread_id}] WARNING: No runtime state available - returning empty message");
+            warn!("[Thread {thread_id}] WARNING: No runtime state available - returning empty message");
         }
         pecos_engines::byte_message::ByteMessage::create_empty()
     });
@@ -964,7 +1034,7 @@ pub unsafe extern "C" fn qir_runtime_get_binary_commands() -> *mut FFIByteData {
     let ptr = Box::into_raw(boxed_ffi);
 
     if should_print_commands() {
-        println!("[Thread {thread_id}] Got binary commands: {byte_len} bytes ({word_count} words)");
+        debug!("[Thread {thread_id}] Got binary commands: {byte_len} bytes ({word_count} words)");
     }
 
     ptr
@@ -977,7 +1047,7 @@ pub unsafe extern "C" fn qir_runtime_free_binary_commands(ptr: *mut FFIByteData)
 
     if ptr.is_null() {
         if should_print_commands() {
-            eprintln!("[Thread {thread_id}] ERROR: Attempted to free null FFIByteData pointer");
+            error!("[Thread {thread_id}] ERROR: Attempted to free null FFIByteData pointer");
         }
         return;
     }
@@ -985,13 +1055,12 @@ pub unsafe extern "C" fn qir_runtime_free_binary_commands(ptr: *mut FFIByteData)
     let ffi_data = unsafe { Box::from_raw(ptr) };
 
     if !ffi_data.data.is_null() && ffi_data.word_count > 0 {
-        let _aligned_data = unsafe { 
-            Vec::from_raw_parts(ffi_data.data, ffi_data.word_count, ffi_data.word_count) 
-        };
+        let _aligned_data =
+            unsafe { Vec::from_raw_parts(ffi_data.data, ffi_data.word_count, ffi_data.word_count) };
     }
 
     if should_print_commands() {
-        println!("[Thread {thread_id}] Freed FFIByteData");
+        debug!("[Thread {thread_id}] Freed FFIByteData");
     }
 }
 
@@ -1008,9 +1077,8 @@ pub unsafe extern "C" fn qir_runtime_get_shot_results() -> *mut FFIShotData {
     let thread_id = get_thread_id();
 
     // Use try_with_current_runtime to avoid auto-initialization during cleanup
-    let shot_opt = RuntimeRegistry::try_with_current_runtime(|state| {
-        state.get_last_shot().cloned()
-    }).flatten();
+    let shot_opt =
+        RuntimeRegistry::try_with_current_runtime(|state| state.get_last_shot().cloned()).flatten();
 
     if let Some(shot) = shot_opt {
         let count = shot.data.len();
@@ -1058,7 +1126,7 @@ pub unsafe extern "C" fn qir_runtime_get_shot_results() -> *mut FFIShotData {
         let ptr = Box::into_raw(boxed_ffi);
 
         if should_print_commands() {
-            println!("[Thread {thread_id}] Got shot results: {count} registers");
+            debug!("[Thread {thread_id}] Got shot results: {count} registers");
         }
 
         return ptr;
@@ -1075,7 +1143,7 @@ pub unsafe extern "C" fn qir_runtime_free_shot_data(data: *mut FFIShotData) {
 
     if data.is_null() {
         if should_print_commands() {
-            eprintln!("[Thread {thread_id}] ERROR: Attempted to free null FFIShotData pointer");
+            error!("[Thread {thread_id}] ERROR: Attempted to free null FFIShotData pointer");
         }
         return;
     }
@@ -1098,7 +1166,7 @@ pub unsafe extern "C" fn qir_runtime_free_shot_data(data: *mut FFIShotData) {
         }
 
         if should_print_commands() {
-            println!("[Thread {thread_id}] Freed FFIShotData");
+            debug!("[Thread {thread_id}] Freed FFIShotData");
         }
     }
 }

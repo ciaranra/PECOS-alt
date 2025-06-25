@@ -462,7 +462,7 @@ impl ByteMessageBuilder {
         self.add_rz(std::f64::consts::FRAC_PI_2, qubits)
     }
 
-    /// Add an SZdg (S†) gate
+    /// Add an `SZdg` (S†) gate
     pub fn add_szdg(&mut self, qubits: &[usize]) -> &mut Self {
         // S† gate is RZ(-π/2)
         self.add_rz(-std::f64::consts::FRAC_PI_2, qubits)
@@ -503,7 +503,11 @@ impl ByteMessageBuilder {
     /// Add a CY gate
     pub fn add_cy(&mut self, controls: &[usize], targets: &[usize]) -> &mut Self {
         // CY = (I ⊗ Sdg) CX (I ⊗ S)
-        assert_eq!(controls.len(), targets.len(), "Controls and targets must have same length");
+        assert_eq!(
+            controls.len(),
+            targets.len(),
+            "Controls and targets must have same length"
+        );
         for (&c, &t) in controls.iter().zip(targets.iter()) {
             self.add_szdg(&[t]);
             self.add_cx(&[c], &[t]);
@@ -515,7 +519,11 @@ impl ByteMessageBuilder {
     /// Add a CZ gate
     pub fn add_cz(&mut self, controls: &[usize], targets: &[usize]) -> &mut Self {
         // CZ = H CX H
-        assert_eq!(controls.len(), targets.len(), "Controls and targets must have same length");
+        assert_eq!(
+            controls.len(),
+            targets.len(),
+            "Controls and targets must have same length"
+        );
         for (&c, &t) in controls.iter().zip(targets.iter()) {
             self.add_h(&[t]);
             self.add_cx(&[c], &[t]);
