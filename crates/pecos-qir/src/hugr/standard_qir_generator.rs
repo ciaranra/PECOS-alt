@@ -218,7 +218,6 @@ fn emit_qalloc_standard<'c, H: HugrView<Node = Node>>(
 
     // Call the proper runtime allocation function: i64 @__quantum__rt__qubit_allocate()
     let i64_type = llvm_context.i64_type();
-    let void_type = llvm_context.void_type();
     let allocate_func_type = i64_type.fn_type(&[], false);
     let allocate_func = context.get_extern_func("__quantum__rt__qubit_allocate", allocate_func_type)?;
 

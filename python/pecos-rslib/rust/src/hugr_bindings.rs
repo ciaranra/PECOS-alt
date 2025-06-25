@@ -133,7 +133,7 @@ impl PyHugrQirEngine {
         // Create the QIR engine and store it
         let engine_id = get_next_engine_id();
         
-        let engine_result = python_api::create_qir_engine_from_hugr_bytes_with_storage(
+        python_api::create_qir_engine_from_hugr_bytes_with_storage(
             bytes, 
             shots, 
             debug_info, 
@@ -167,7 +167,7 @@ impl PyHugrQirEngine {
         // Create the QIR engine and store it
         let engine_id = get_next_engine_id();
         
-        let engine_result = python_api::create_qir_engine_from_hugr_file_with_storage(
+        python_api::create_qir_engine_from_hugr_file_with_storage(
             hugr_path,
             shots,
             debug_info,

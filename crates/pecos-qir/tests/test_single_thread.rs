@@ -1,7 +1,4 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
-
-use pecos_core::rng::RngManageable;
 use pecos_engines::engine_system::MonteCarloEngine;
 use pecos_engines::noise::DepolarizingNoiseModel;
 use pecos_qir::QirEngine;

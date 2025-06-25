@@ -16,7 +16,6 @@ use std::env;
 use std::ffi::{CStr, CString, c_char};
 use std::thread;
 use std::sync::{Once, Mutex, LazyLock};
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 // Ensure the runtime registry is initialized exactly once
 static INIT: Once = Once::new();

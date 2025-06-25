@@ -7,7 +7,7 @@ It maps rotation angles to LLVM f64 (double) type and handles rotation operation
 
 use anyhow::Result;
 use hugr_core::extension::ExtensionId;
-use hugr_core::ops::{ExtensionOp, OpName};
+use hugr_core::ops::ExtensionOp;
 use hugr_core::types::TypeName;
 use hugr_core::{HugrView, Node};
 use hugr_llvm::custom::{CodegenExtension, CodegenExtsBuilder};

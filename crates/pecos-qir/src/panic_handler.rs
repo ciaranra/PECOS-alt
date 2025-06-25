@@ -6,7 +6,7 @@ context when panics occur, making it easier to debug QIR-related issues.
 */
 
 use crate::error_handling::{get_qir_diagnostic_report, with_qir_context};
-use std::panic::{self, PanicInfo};
+use std::panic::{self, PanicHookInfo};
 use std::sync::Once;
 
 static INIT: Once = Once::new();
@@ -20,7 +20,7 @@ pub fn init_qir_panic_handler() {
 }
 
 /// Custom panic hook that includes QIR execution context
-fn qir_panic_hook(info: &PanicInfo) {
+fn qir_panic_hook(info: &PanicHookInfo) {
     // Get the default panic message
     let location = if let Some(location) = info.location() {
         format!(" at {}:{}:{}", location.file(), location.line(), location.column())

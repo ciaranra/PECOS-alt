@@ -43,7 +43,6 @@ const SIMPLE_H_GATE_HUGR: &str = r#"{
 fn test_hugr_convention_compilation() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let hugr_path = temp_dir.path().join("test_hugr.hugr");
-    let output_path = temp_dir.path().join("test_hugr.ll");
 
     // Write test HUGR data
     fs::write(&hugr_path, SIMPLE_H_GATE_HUGR).expect("Failed to write HUGR file");
@@ -87,7 +86,6 @@ fn test_hugr_convention_compilation() {
 fn test_qir_convention_compilation() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let hugr_path = temp_dir.path().join("test_qir.hugr");
-    let output_path = temp_dir.path().join("test_qir.ll");
 
     // Write test HUGR data
     fs::write(&hugr_path, SIMPLE_H_GATE_HUGR).expect("Failed to write HUGR file");

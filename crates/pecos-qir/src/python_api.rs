@@ -339,13 +339,6 @@ pub fn create_qir_engine_from_hugr_bytes_with_storage(
     
     // Set up quantum system for interactive execution
     // First determine the number of qubits needed by analyzing the QIR file
-    let num_qubits = match qir_engine.analyze_qir_file() {
-        Ok(qubits) => qubits,
-        Err(_) => {
-            // Default to 10 qubits if analysis fails
-            10
-        }
-    };
     
     // Note: Interactive execution for HUGR immediate measurements should be handled
     // by the HybridEngine, not directly by QirEngine
@@ -423,13 +416,6 @@ pub fn create_qir_engine_from_hugr_file_with_storage(
     
     // Set up quantum system for interactive execution
     // First determine the number of qubits needed by analyzing the QIR file
-    let num_qubits = match qir_engine.analyze_qir_file() {
-        Ok(qubits) => qubits,
-        Err(_) => {
-            // Default to 10 qubits if analysis fails
-            10
-        }
-    };
     
     // Note: Interactive execution for HUGR immediate measurements should be handled
     // by the HybridEngine, not directly by QirEngine

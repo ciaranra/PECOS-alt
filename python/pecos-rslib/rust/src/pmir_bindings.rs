@@ -14,8 +14,7 @@
 
 use pecos_qir::pmir::{self, PmirConfig};
 use pyo3::prelude::*;
-use pyo3::exceptions::{PyRuntimeError, PyNotImplementedError};
-use pyo3::types::{PyDict, PyList, PyString};
+use pyo3::exceptions::PyRuntimeError;
 
 /// Find PECOS binary in various possible locations
 fn find_pecos_binary() -> Option<std::path::PathBuf> {
@@ -166,7 +165,6 @@ impl PyPMIRQirEngine {
     pub fn run(&mut self) -> PyResult<PyObject> {
         use pyo3::types::PyDict;
         use std::process::Command;
-        use std::io::Write;
         use tempfile::NamedTempFile;
         
         // Get number of shots
@@ -243,7 +241,6 @@ impl PyPMIRQirEngine {
 #[pyfunction]
 #[pyo3(name = "compile_and_execute_via_pmir")]
 pub fn py_compile_and_execute_via_pmir(
-    py: Python<'_>,
     hugr_json: &str,
     shots: u32,
     seed: Option<u64>,

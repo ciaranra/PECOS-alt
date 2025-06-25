@@ -1,7 +1,6 @@
 //! Runtime cleanup utilities for preventing state contamination between tests
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Once;
 
 /// Global flag to track if we're in the middle of cleanup
 static CLEANUP_IN_PROGRESS: AtomicBool = AtomicBool::new(false);

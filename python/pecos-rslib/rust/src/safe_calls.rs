@@ -68,11 +68,6 @@ impl SimParams {
         self
     }
 
-    /// Set the quantum engine
-    pub fn with_quantum_engine(mut self, engine: Box<dyn pecos_engines::QuantumEngine>) -> Self {
-        self.quantum_engine = Some(engine);
-        self
-    }
 
     /// Run the simulation with these parameters
     pub fn run(self) -> Result<pecos_engines::shot_results::ShotVec, pecos_core::errors::PecosError> {
@@ -87,22 +82,3 @@ impl SimParams {
     }
 }
 
-/// Helper function to validate parameter types at compile time
-pub fn validate_run_sim_params<T1, T2, T3, T4, T5, T6>(
-    _engine: &T1,
-    _shots: &T2,
-    _seed: &T3,
-    _workers: &T4,
-    _noise: &T5,
-    _quantum: &T6,
-) where
-    T1: ?Sized,
-    T2: Into<usize> + Copy,
-    T3: Into<Option<u64>> + Copy,
-    T4: Into<Option<usize>> + Copy,
-    T5: ?Sized,
-    T6: ?Sized,
-{
-    // This function exists purely for compile-time type checking
-    // It doesn't need to do anything at runtime
-}

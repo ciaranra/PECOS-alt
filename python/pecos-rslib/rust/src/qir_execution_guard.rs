@@ -12,9 +12,8 @@
 
 //! Execution guard for QIR to prevent cleanup issues and enable future context isolation
 
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use pyo3::prelude::*;
 
 /// Global state for managing QIR execution lifecycle
 static EXECUTION_STATE: OnceLock<Arc<ExecutionState>> = OnceLock::new();
@@ -27,8 +26,6 @@ struct ExecutionState {
     /// Flag indicating if Python is shutting down
     shutting_down: AtomicBool,
     
-    /// Mutex for coordinating cleanup (used sparingly)
-    cleanup_lock: Mutex<()>,
 }
 
 impl ExecutionState {
@@ -36,7 +33,6 @@ impl ExecutionState {
         Self {
             active_executions: AtomicUsize::new(0),
             shutting_down: AtomicBool::new(false),
-            cleanup_lock: Mutex::new(()),
         }
     }
     
@@ -65,12 +61,6 @@ impl QirExecutionGuard {
         state.active_executions.fetch_add(1, Ordering::AcqRel);
         
         Ok(Self { active: true })
-    }
-    
-    /// Check if any executions are active
-    pub fn has_active_executions() -> bool {
-        let state = ExecutionState::get();
-        state.active_executions.load(Ordering::Acquire) > 0
     }
     
     /// Mark that Python is shutting down
@@ -142,38 +132,3 @@ pub fn _wait_for_qir_completion() {
     QirExecutionGuard::wait_for_completion();
 }
 
-/// Future: Context handle for isolated QIR execution
-/// This will replace global state in the runtime
-#[derive(Clone)]
-pub struct QirContext {
-    /// Unique context ID
-    id: usize,
-    
-    /// Context-specific state will go here
-    _phantom: std::marker::PhantomData<()>,
-}
-
-impl QirContext {
-    /// Create a new isolated context
-    pub fn new() -> Self {
-        static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
-        Self {
-            id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
-            _phantom: std::marker::PhantomData,
-        }
-    }
-    
-    /// Get the context ID
-    pub fn id(&self) -> usize {
-        self.id
-    }
-}
-
-/// Future: Execute with an isolated context
-pub fn with_qir_context<F, R>(f: F) -> R
-where
-    F: FnOnce(&QirContext) -> R,
-{
-    let context = QirContext::new();
-    f(&context)
-}

@@ -180,7 +180,7 @@ impl HugrCompiler {
         let json_bytes = &hugr_bytes[json_start..];
         let json_str = std::str::from_utf8(json_bytes)
             .map_err(|e| PecosError::with_context(e, "Invalid UTF-8 in HUGR JSON"))?;
-        let hugr_json: serde_json::Value = serde_json::from_str(json_str)
+        serde_json::from_str::<serde_json::Value>(json_str)
             .map_err(|e| PecosError::with_context(e, "Failed to parse HUGR JSON"))?;
 
         // No fallbacks - we'll fix the actual compilation issues
@@ -480,7 +480,7 @@ fn fix_entry_point_signature(llvm_ir: &str, _llvm_convention: &QuantumLlvmConven
     let mut attribute_number = "#0";
     
     for line in lines {
-        if (line.contains("define i1 @") || line.contains("define i16 @") || line.contains("define i32 @") || line.contains("define void @")) {
+        if line.contains("define i1 @") || line.contains("define i16 @") || line.contains("define i32 @") || line.contains("define void @") {
             // Check if this is a user-defined function (entry point candidate)
             if let Some(func_name_start) = line.find('@') {
                 let func_name_end = line[func_name_start+1..].find('(').unwrap_or(0) + func_name_start + 1;

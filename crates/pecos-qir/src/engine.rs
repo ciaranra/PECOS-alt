@@ -16,15 +16,6 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 
-/// Program complexity analysis for compilation strategy decisions
-#[derive(Debug, Clone)]
-struct ProgramComplexity {
-    is_simple: bool,
-    has_control_flow: bool,
-    has_classical_compute: bool,
-    gate_count: usize,
-    qubit_count: usize,
-}
 
 /// Helper function to get the current thread ID as a string
 ///
@@ -776,10 +767,10 @@ impl QirEngine {
             )));
         }
 
-        // Analyze program complexity for future compilation strategy decisions
-        let complexity = self.analyze_program_complexity(&content);
-        debug!("QIR Engine: Program complexity - simple: {}, has_control_flow: {}", 
-               complexity.is_simple, complexity.has_control_flow);
+        // Quick analysis for debugging
+        let gate_count = content.matches("__quantum__qis__").count();
+        let qubit_count = content.matches("qubit").count();
+        debug!("QIR Engine: Program stats - {} gates, {} qubit references", gate_count, qubit_count);
 
         // Find qubit allocations in the QIR file
         let (max_qubit_index, found_allocation) = Self::find_qubit_allocations(&content);
@@ -797,35 +788,6 @@ impl QirEngine {
         }
     }
 
-    /// Analyze program complexity to determine optimal compilation strategy
-    fn analyze_program_complexity(&self, content: &str) -> ProgramComplexity {
-        let has_control_flow = content.contains("br i1") || 
-                              content.contains("switch") || 
-                              content.contains("conditional");
-        
-        let has_classical_compute = content.contains("add") || 
-                                   content.contains("mul") || 
-                                   content.contains("div") ||
-                                   content.contains("icmp") ||
-                                   content.contains("fcmp");
-        
-        let gate_count = content.matches("__quantum__qis__").count();
-        let qubit_count = content.matches("qubit").count();
-        
-        // Simple heuristic: Bell states and similar simple circuits
-        let is_simple = !has_control_flow && 
-                       !has_classical_compute && 
-                       gate_count <= 10 && 
-                       qubit_count <= 4;
-        
-        ProgramComplexity {
-            is_simple,
-            has_control_flow,
-            has_classical_compute,
-            gate_count,
-            qubit_count,
-        }
-    }
 
     /// Helper method to compile the QIR file to a library
     fn compile_library(&self, output_dir: &Path) -> Result<PathBuf, PecosError> {

@@ -24,7 +24,6 @@ use pecos_engines::noise::DepolarizingNoiseModel;
 use pecos_engines::shot_results;
 use pecos_core::rng::RngManageable;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering};
 use std::fs;
 
 /// Python wrapper for QIR execution

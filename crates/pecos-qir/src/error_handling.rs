@@ -6,7 +6,7 @@ helping diagnose issues that might otherwise cause segfaults or aborts.
 */
 
 use pecos_core::errors::PecosError;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::collections::HashMap;
 
 /// Context information for QIR execution debugging
