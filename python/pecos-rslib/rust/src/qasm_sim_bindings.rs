@@ -1,10 +1,14 @@
 //! `PyO3` bindings for QASM simulation with enhanced API
 
+use crate::noise_helpers::{
+    get_optional_bool, get_optional_dict, get_optional_f64, validate_and_convert_seed,
+};
 use pecos::prelude::*;
-use pecos_qasm::config::NoiseConfig;
+use pecos_engines::noise::GeneralNoiseModelBuilder;
+use pecos_qasm::config::{parse_gate_type_from_string, NoiseConfig};
 use pecos_qasm::simulation::{
     BiasedDepolarizingNoise, BitVecFormat, DepolarizingCustomNoise, DepolarizingNoise,
-    GeneralNoise, PassThroughNoise,
+    PassThroughNoise,
 };
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -449,13 +453,202 @@ pub fn py_qasm_sim(qasm: &str) -> PyQasmSimulationBuilder {
     }
 }
 
+/// Helper function to apply global parameters to the builder
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // Seed cast is validated
+fn apply_global_params(
+    nm: &Bound<'_, PyAny>,
+    mut builder: GeneralNoiseModelBuilder,
+) -> PyResult<GeneralNoiseModelBuilder> {
+    // Global parameters
+    if let Ok(Some(gates)) = nm.getattr("noiseless_gates").and_then(|v| {
+        if v.is_none() {
+            Ok(None)
+        } else {
+            v.extract::<Vec<String>>().map(Some)
+        }
+    }) {
+        for gate_str in gates {
+            if let Some(gate_type) = parse_gate_type_from_string(&gate_str) {
+                builder = builder.with_noiseless_gate(gate_type);
+            }
+        }
+    }
+
+    if let Some(s) = get_optional_f64(nm, "seed")? {
+        let seed = validate_and_convert_seed(s)?;
+        builder = builder.with_seed(seed);
+    }
+    if let Some(s) = get_optional_f64(nm, "scale")? {
+        builder = builder.with_scale(s);
+    }
+    if let Some(s) = get_optional_f64(nm, "leakage_scale")? {
+        builder = builder.with_leakage_scale(s);
+    }
+    if let Some(s) = get_optional_f64(nm, "emission_scale")? {
+        builder = builder.with_emission_scale(s);
+    }
+
+    Ok(builder)
+}
+
+/// Helper function to apply idle noise parameters to the builder
+fn apply_idle_params(
+    nm: &Bound<'_, PyAny>,
+    mut builder: GeneralNoiseModelBuilder,
+) -> PyResult<GeneralNoiseModelBuilder> {
+    if let Some(v) = get_optional_bool(nm, "p_idle_coherent")? {
+        builder = builder.with_p_idle_coherent(v);
+    }
+    if let Some(v) = get_optional_f64(nm, "p_idle_linear_rate")? {
+        builder = builder.with_p_idle_linear_rate(v);
+    }
+    if let Some(model) = get_optional_dict(nm, "p_idle_linear_model")? {
+        builder = builder.with_p_idle_linear_model(&model);
+    }
+    if let Some(v) = get_optional_f64(nm, "p_idle_quadratic_rate")? {
+        builder = builder.with_p_idle_quadratic_rate(v);
+    }
+    if let Some(v) = get_optional_f64(nm, "p_idle_coherent_to_incoherent_factor")? {
+        builder = builder.with_p_idle_coherent_to_incoherent_factor(v);
+    }
+    if let Some(s) = get_optional_f64(nm, "idle_scale")? {
+        builder = builder.with_idle_scale(s);
+    }
+
+    Ok(builder)
+}
+
+/// Helper function to apply prep noise parameters to the builder
+fn apply_prep_params(
+    nm: &Bound<'_, PyAny>,
+    mut builder: GeneralNoiseModelBuilder,
+) -> PyResult<GeneralNoiseModelBuilder> {
+    if let Some(v) = get_optional_f64(nm, "p_prep")? {
+        builder = builder.with_prep_probability(v);
+    }
+    if let Some(v) = get_optional_f64(nm, "p_prep_leak_ratio")? {
+        builder = builder.with_prep_leak_ratio(v);
+    }
+    if let Some(v) = get_optional_f64(nm, "p_prep_crosstalk")? {
+        builder = builder.with_p_prep_crosstalk(v);
+    }
+    if let Some(s) = get_optional_f64(nm, "prep_scale")? {
+        builder = builder.with_prep_scale(s);
+    }
+    if let Some(s) = get_optional_f64(nm, "p_prep_crosstalk_scale")? {
+        builder = builder.with_p_prep_crosstalk_scale(s);
+    }
+
+    Ok(builder)
+}
+
+/// Helper function to apply single-qubit gate noise parameters to the builder
+fn apply_single_qubit_params(
+    nm: &Bound<'_, PyAny>,
+    mut builder: GeneralNoiseModelBuilder,
+) -> PyResult<GeneralNoiseModelBuilder> {
+    if let Some(v) = get_optional_f64(nm, "p1")? {
+        builder = builder.with_p1_probability(v);
+    }
+    if let Some(v) = get_optional_f64(nm, "p1_emission_ratio")? {
+        builder = builder.with_p1_emission_ratio(v);
+    }
+    if let Some(model) = get_optional_dict(nm, "p1_emission_model")? {
+        builder = builder.with_p1_emission_model(&model);
+    }
+    if let Some(v) = get_optional_f64(nm, "p1_seepage_prob")? {
+        builder = builder.with_p1_seepage_prob(v);
+    }
+    if let Some(model) = get_optional_dict(nm, "p1_pauli_model")? {
+        builder = builder.with_p1_pauli_model(&model);
+    }
+    if let Some(s) = get_optional_f64(nm, "p1_scale")? {
+        builder = builder.with_p1_scale(s);
+    }
+
+    Ok(builder)
+}
+
+/// Helper function to apply two-qubit gate noise parameters to the builder
+fn apply_two_qubit_params(
+    nm: &Bound<'_, PyAny>,
+    mut builder: GeneralNoiseModelBuilder,
+) -> PyResult<GeneralNoiseModelBuilder> {
+    if let Some(v) = get_optional_f64(nm, "p2")? {
+        builder = builder.with_p2_probability(v);
+    }
+    // Handle angle params tuple
+    if let Ok(Some(params)) = nm.getattr("p2_angle_params").and_then(|v| {
+        if v.is_none() {
+            Ok(None)
+        } else {
+            let tuple = v.extract::<(f64, f64, f64, f64)>()?;
+            Ok(Some(tuple))
+        }
+    }) {
+        builder = builder.with_p2_angle_params(params.0, params.1, params.2, params.3);
+    }
+    if let Some(v) = get_optional_f64(nm, "p2_angle_power")? {
+        builder = builder.with_p2_angle_power(v);
+    }
+    if let Some(v) = get_optional_f64(nm, "p2_emission_ratio")? {
+        builder = builder.with_p2_emission_ratio(v);
+    }
+    if let Some(model) = get_optional_dict(nm, "p2_emission_model")? {
+        builder = builder.with_p2_emission_model(&model);
+    }
+    if let Some(v) = get_optional_f64(nm, "p2_seepage_prob")? {
+        builder = builder.with_p2_seepage_prob(v);
+    }
+    if let Some(model) = get_optional_dict(nm, "p2_pauli_model")? {
+        builder = builder.with_p2_pauli_model(&model);
+    }
+    if let Some(v) = get_optional_f64(nm, "p2_idle_quadratic_rate")? {
+        builder = builder.with_p2_idle_quadratic_rate(v);
+    }
+    if let Some(s) = get_optional_f64(nm, "p2_scale")? {
+        builder = builder.with_p2_scale(s);
+    }
+
+    Ok(builder)
+}
+
+/// Helper function to apply measurement noise parameters to the builder
+fn apply_meas_params(
+    nm: &Bound<'_, PyAny>,
+    mut builder: GeneralNoiseModelBuilder,
+) -> PyResult<GeneralNoiseModelBuilder> {
+    if let Some(v) = get_optional_f64(nm, "p_meas_0")? {
+        builder = builder.with_meas_0_probability(v);
+    }
+    if let Some(v) = get_optional_f64(nm, "p_meas_1")? {
+        builder = builder.with_meas_1_probability(v);
+    }
+    if let Some(v) = get_optional_f64(nm, "p_meas_crosstalk")? {
+        builder = builder.with_p_meas_crosstalk(v);
+    }
+    if let Some(s) = get_optional_f64(nm, "meas_scale")? {
+        builder = builder.with_meas_scale(s);
+    }
+    if let Some(s) = get_optional_f64(nm, "p_meas_crosstalk_scale")? {
+        builder = builder.with_p_meas_crosstalk_scale(s);
+    }
+
+    Ok(builder)
+}
+
 /// Helper function to parse noise model from Python object
 fn parse_noise_model(nm: &Bound<'_, PyAny>) -> PyResult<NoiseModelType> {
     if let Ok(model_type) = nm.extract::<PyNoiseModelType>() {
         // Simple enum variant
         match model_type {
             PyNoiseModelType::PassThrough => Ok(NoiseModelType::PassThrough(PassThroughNoise)),
-            PyNoiseModelType::General => Ok(NoiseModelType::General(GeneralNoise)),
+            PyNoiseModelType::General => {
+                // For the enum case, create default general noise
+                Ok(NoiseModelType::GeneralFromBuilder(Box::new(
+                    GeneralNoiseModelBuilder::new(),
+                )))
+            }
             _ => Err(PyValueError::new_err(
                 "Enum noise model requires parameters to be specified via noise model classes",
             )),
@@ -489,7 +682,20 @@ fn parse_noise_model(nm: &Bound<'_, PyAny>) -> PyResult<NoiseModelType> {
                     BiasedDepolarizingNoise { p },
                 ))
             }
-            "GeneralNoise" => Ok(NoiseModelType::General(GeneralNoise)),
+            "GeneralNoise" => {
+                // Create builder and apply all parameters
+                let mut builder = GeneralNoiseModelBuilder::new();
+
+                // Apply all parameter groups
+                builder = apply_global_params(nm, builder)?;
+                builder = apply_idle_params(nm, builder)?;
+                builder = apply_prep_params(nm, builder)?;
+                builder = apply_single_qubit_params(nm, builder)?;
+                builder = apply_two_qubit_params(nm, builder)?;
+                builder = apply_meas_params(nm, builder)?;
+
+                Ok(NoiseModelType::GeneralFromBuilder(Box::new(builder)))
+            }
             _ => Err(PyValueError::new_err(format!(
                 "Unknown noise model type: {class_name}"
             ))),

@@ -8,7 +8,7 @@ https://github.com/CQCL/PECOS/blob/master/docs/user-guide/qasm-simulation.md
 """
 
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Tuple
 from pecos_rslib._pecos_rslib import (
     NoiseModel,
     QuantumEngine,
@@ -142,19 +142,168 @@ class BiasedDepolarizingNoise:
 
 @dataclass
 class GeneralNoise:
-    """General noise model using default configuration."""
+    """General noise model with full parameter configuration.
+
+    This noise model supports detailed configuration of various error types including:
+    - Idle/memory errors with coherent and incoherent noise
+    - State preparation errors with leakage and crosstalk
+    - Single-qubit gate errors with emission and Pauli models
+    - Two-qubit gate errors with angle-dependent noise
+    - Measurement errors with asymmetric bit-flip probabilities
+
+    All parameters are optional. If not specified, default values from the
+    GeneralNoiseModel will be used.
+    """
+
+    # Global parameters
+    noiseless_gates: Optional[List[str]] = None
+    seed: Optional[int] = None
+    scale: Optional[float] = None
+    leakage_scale: Optional[float] = None
+    emission_scale: Optional[float] = None
+
+    # Idle noise parameters
+    p_idle_coherent: Optional[bool] = None
+    p_idle_linear_rate: Optional[float] = None
+    p_idle_linear_model: Optional[Dict[str, float]] = None
+    p_idle_quadratic_rate: Optional[float] = None
+    p_idle_coherent_to_incoherent_factor: Optional[float] = None
+    idle_scale: Optional[float] = None
+
+    # Preparation noise parameters
+    p_prep: Optional[float] = None
+    p_prep_leak_ratio: Optional[float] = None
+    p_prep_crosstalk: Optional[float] = None
+    prep_scale: Optional[float] = None
+    p_prep_crosstalk_scale: Optional[float] = None
+
+    # Single-qubit gate noise parameters
+    p1: Optional[float] = None
+    p1_emission_ratio: Optional[float] = None
+    p1_emission_model: Optional[Dict[str, float]] = None
+    p1_seepage_prob: Optional[float] = None
+    p1_pauli_model: Optional[Dict[str, float]] = None
+    p1_scale: Optional[float] = None
+
+    # Two-qubit gate noise parameters
+    p2: Optional[float] = None
+    p2_angle_params: Optional[Tuple[float, float, float, float]] = None
+    p2_angle_power: Optional[float] = None
+    p2_emission_ratio: Optional[float] = None
+    p2_emission_model: Optional[Dict[str, float]] = None
+    p2_seepage_prob: Optional[float] = None
+    p2_pauli_model: Optional[Dict[str, float]] = None
+    p2_idle_quadratic_rate: Optional[float] = None
+    p2_scale: Optional[float] = None
+
+    # Measurement noise parameters
+    p_meas_0: Optional[float] = None
+    p_meas_1: Optional[float] = None
+    p_meas_crosstalk: Optional[float] = None
+    meas_scale: Optional[float] = None
+    p_meas_crosstalk_scale: Optional[float] = None
 
     @classmethod
     def from_config(cls, config: Dict[str, Any]) -> "GeneralNoise":
         """Create GeneralNoise from configuration dictionary.
 
         Args:
-            config: Configuration dictionary (no parameters needed)
+            config: Configuration dictionary with noise parameters
 
         Returns:
             GeneralNoise instance
+
+        Raises:
+            ValueError: If unknown parameters are provided
         """
-        return cls()
+        # Define all valid parameter names
+        valid_params = {
+            "noiseless_gates",
+            "seed",
+            "scale",
+            "leakage_scale",
+            "emission_scale",
+            "p_idle_coherent",
+            "p_idle_linear_rate",
+            "p_idle_linear_model",
+            "p_idle_quadratic_rate",
+            "p_idle_coherent_to_incoherent_factor",
+            "idle_scale",
+            "p_prep",
+            "p_prep_leak_ratio",
+            "p_prep_crosstalk",
+            "prep_scale",
+            "p_prep_crosstalk_scale",
+            "p1",
+            "p1_emission_ratio",
+            "p1_emission_model",
+            "p1_seepage_prob",
+            "p1_pauli_model",
+            "p1_scale",
+            "p2",
+            "p2_angle_params",
+            "p2_angle_power",
+            "p2_emission_ratio",
+            "p2_emission_model",
+            "p2_seepage_prob",
+            "p2_pauli_model",
+            "p2_idle_quadratic_rate",
+            "p2_scale",
+            "p_meas_0",
+            "p_meas_1",
+            "p_meas_crosstalk",
+            "meas_scale",
+            "p_meas_crosstalk_scale",
+        }
+
+        # Check for unknown parameters
+        unknown_params = set(config.keys()) - valid_params
+        if unknown_params:
+            raise ValueError(
+                f"Unknown parameters for GeneralNoise: {', '.join(sorted(unknown_params))}"
+            )
+
+        # Extract all possible parameters from config
+        return cls(
+            noiseless_gates=config.get("noiseless_gates"),
+            seed=config.get("seed"),
+            scale=config.get("scale"),
+            leakage_scale=config.get("leakage_scale"),
+            emission_scale=config.get("emission_scale"),
+            p_idle_coherent=config.get("p_idle_coherent"),
+            p_idle_linear_rate=config.get("p_idle_linear_rate"),
+            p_idle_linear_model=config.get("p_idle_linear_model"),
+            p_idle_quadratic_rate=config.get("p_idle_quadratic_rate"),
+            p_idle_coherent_to_incoherent_factor=config.get(
+                "p_idle_coherent_to_incoherent_factor"
+            ),
+            idle_scale=config.get("idle_scale"),
+            p_prep=config.get("p_prep"),
+            p_prep_leak_ratio=config.get("p_prep_leak_ratio"),
+            p_prep_crosstalk=config.get("p_prep_crosstalk"),
+            prep_scale=config.get("prep_scale"),
+            p_prep_crosstalk_scale=config.get("p_prep_crosstalk_scale"),
+            p1=config.get("p1"),
+            p1_emission_ratio=config.get("p1_emission_ratio"),
+            p1_emission_model=config.get("p1_emission_model"),
+            p1_seepage_prob=config.get("p1_seepage_prob"),
+            p1_pauli_model=config.get("p1_pauli_model"),
+            p1_scale=config.get("p1_scale"),
+            p2=config.get("p2"),
+            p2_angle_params=config.get("p2_angle_params"),
+            p2_angle_power=config.get("p2_angle_power"),
+            p2_emission_ratio=config.get("p2_emission_ratio"),
+            p2_emission_model=config.get("p2_emission_model"),
+            p2_seepage_prob=config.get("p2_seepage_prob"),
+            p2_pauli_model=config.get("p2_pauli_model"),
+            p2_idle_quadratic_rate=config.get("p2_idle_quadratic_rate"),
+            p2_scale=config.get("p2_scale"),
+            p_meas_0=config.get("p_meas_0"),
+            p_meas_1=config.get("p_meas_1"),
+            p_meas_crosstalk=config.get("p_meas_crosstalk"),
+            meas_scale=config.get("meas_scale"),
+            p_meas_crosstalk_scale=config.get("p_meas_crosstalk_scale"),
+        )
 
 
 def run_qasm(

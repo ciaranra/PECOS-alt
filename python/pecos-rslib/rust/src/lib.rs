@@ -18,6 +18,7 @@
 
 mod byte_message_bindings;
 mod engine_bindings;
+mod noise_helpers;
 pub mod phir_bridge;
 mod qasm_sim_bindings;
 mod sparse_sim;
