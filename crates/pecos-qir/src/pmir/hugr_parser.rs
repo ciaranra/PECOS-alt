@@ -62,8 +62,11 @@ fn convert_json_to_past(json: Value) -> Result<PastModule, PecosError> {
         })?;
 
     // Parse nodes and edges from module
-    let nodes = parse_nodes(first_module)?;
+    let mut nodes = parse_nodes(first_module)?;
     let edges = parse_edges(first_module)?;
+    
+    // Resolve rotation angles from dataflow edges
+    super::angle_resolver::resolve_rotation_angles(&mut nodes, &edges)?;
 
     // Extract metadata
     let name = first_module
@@ -287,15 +290,11 @@ fn parse_operation(node: &serde_json::Map<String, Value>) -> Result<PastOp, Peco
 
 /// Parse angle parameter for rotation gates from node
 fn parse_angle_from_node(_node: &serde_json::Map<String, Value>) -> Result<f64, PecosError> {
-    // WARNING: This is a stub implementation that always returns 0.0
     // In the new HUGR format, angles are passed as inputs to the operation
     // through the dataflow graph, not as direct attributes.
-    // TODO: Implement proper angle extraction from HUGR dataflow by:
-    //   1. Following the input edges to find the constant node
-    //   2. Extracting the float value from the constant
-    // For now, this will make all rotation gates no-ops!
-    log::warn!("parse_angle_from_node: Returning 0.0 - rotation gates will be no-ops!");
-    Ok(0.0)
+    // The actual angle resolution happens in a post-processing step
+    // using angle_resolver::resolve_rotation_angles
+    Ok(0.0) // Placeholder value, will be replaced by angle resolver
 }
 
 /// Parse constant value

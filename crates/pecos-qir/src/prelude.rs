@@ -32,8 +32,8 @@ pub use crate::{QirEngine, setup_qir_engine};
 // HUGR compilation support (when available)
 #[cfg(feature = "hugr-llvm-pipeline")]
 pub use crate::{
-    HugrCompiler, HugrCompilerConfig, QuantumLlvmConvention, compile_hugr_to_qir,
-    create_hugr_qir_engine, setup_hugr_qir_engine,
+    HugrCompiler, HugrCompilerConfig, compile_hugr_to_qir, create_hugr_qir_engine,
+    setup_hugr_qir_engine,
 };
 
 // Common types from pecos-engines for working with results

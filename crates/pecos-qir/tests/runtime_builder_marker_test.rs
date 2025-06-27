@@ -46,21 +46,15 @@ fn create_test_qir_file(dir: &Path, name: &str) -> PathBuf {
     fs::write(
         &qir_file,
         r"
-; Simple QIR test file for marker testing
-%Qubit = type opaque
-%Result = type opaque
+; Simple HUGR LLVM-IR test file for marker testing
 
 declare void @__quantum__rt__initialize(i8*)
-declare %Qubit* @__quantum__rt__qubit_allocate()
-declare void @__quantum__rt__qubit_release(%Qubit*)
-declare void @__quantum__qis__h__body(%Qubit*)
+declare void @__quantum__qis__h__body__hugr(i64)
 
 define void @main() {
 entry:
     call void @__quantum__rt__initialize(i8* null)
-    %q = call %Qubit* @__quantum__rt__qubit_allocate()
-    call void @__quantum__qis__h__body(%Qubit* %q)
-    call void @__quantum__rt__qubit_release(%Qubit* %q)
+    call void @__quantum__qis__h__body__hugr(i64 0)
     ret void
 }
 ",

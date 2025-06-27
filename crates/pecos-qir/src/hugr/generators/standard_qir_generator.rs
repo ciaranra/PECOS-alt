@@ -1,8 +1,8 @@
 /*!
-Standard QIR Generator for HUGR
+HUGR QIR Generator
 
-This module generates standard QIR format that is compatible with the existing
-PECOS `QirEngine` infrastructure, rather than custom LLVM IR.
+This module generates HUGR-style QIR format using integer-based parameters
+that is compatible with the PECOS `QirEngine` infrastructure.
 
 The output format matches examples/qir/bell.ll and works with `QirEngine::new()`.
 */
@@ -20,11 +20,10 @@ pub type ResultNameMapping = HashMap<Node, String>;
 
 /// Standard QIR quantum operation extension
 ///
-/// This generates standard QIR format using opaque %Qubit* and %Result* types
-/// that work with the existing PECOS `QirEngine`.
+/// This generates HUGR-style QIR format using integer types
+/// that work with the PECOS `QirEngine`.
 pub struct StandardQirExtension {
     result_names: ResultNameMapping,
-    use_hugr_names: bool,
 }
 
 impl StandardQirExtension {
@@ -32,36 +31,23 @@ impl StandardQirExtension {
     pub fn new(result_names: ResultNameMapping) -> Self {
         Self {
             result_names,
-            use_hugr_names: true, // Default to HUGR names for this extension
-        }
-    }
-
-    #[must_use]
-    pub fn with_hugr_names(result_names: ResultNameMapping, use_hugr_names: bool) -> Self {
-        Self {
-            result_names,
-            use_hugr_names,
         }
     }
 
     fn get_function_name(&self, base_name: &str) -> String {
-        if self.use_hugr_names {
-            // Only use __hugr suffix for gates that actually have HUGR versions
-            match base_name {
-                "__quantum__qis__h__body"
-                | "__quantum__qis__x__body"
-                | "__quantum__qis__y__body"
-                | "__quantum__qis__z__body"
-                | "__quantum__qis__cx__body"
-                | "__quantum__qis__rz__body"
-                | "__quantum__qis__r1xy__body" => {
-                    format!("{base_name}__hugr")
-                }
-                // For other gates, use the base name as they already work with integers
-                _ => base_name.to_string(),
+        // Only use __hugr suffix for gates that actually have HUGR versions
+        match base_name {
+            "__quantum__qis__h__body"
+            | "__quantum__qis__x__body"
+            | "__quantum__qis__y__body"
+            | "__quantum__qis__z__body"
+            | "__quantum__qis__cx__body"
+            | "__quantum__qis__rz__body"
+            | "__quantum__qis__r1xy__body" => {
+                format!("{base_name}__hugr")
             }
-        } else {
-            base_name.to_string()
+            // For other gates, use the base name as they already work with integers
+            _ => base_name.to_string(),
         }
     }
 }

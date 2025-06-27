@@ -59,11 +59,11 @@ class HugrLlvmCompiler:
 
         Args:
             hugr_bytes: HUGR package as bytes
-            llvm_convention: LLVM-IR convention ("hugr" or "qir")
+            llvm_convention: LLVM-IR convention (only "hugr" supported now)
             output_file: Optional output file path
 
         Returns:
-            LLVM IR as string
+            LLVM IR as string (HUGR convention)
 
         Raises:
             RuntimeError: If compilation fails
@@ -97,7 +97,7 @@ class HugrLlvmCompiler:
                 str(self.hugr_llvm_binary),
                 str(hugr_file),
                 str(llvm_file),
-                llvm_convention,
+                "hugr",  # Always use HUGR convention
             ]
 
             subprocess.run(  # noqa: S603
@@ -144,20 +144,20 @@ class HugrLlvmCompiler:
 
 def compile_hugr_bytes_to_llvm(
     hugr_bytes: bytes,
-    llvm_convention: str = "pecos",
+    llvm_convention: str = "hugr",
 ) -> str:
     """Convenience function to compile HUGR bytes to LLVM IR.
 
     Args:
         hugr_bytes: HUGR package as bytes
-        llvm_convention: LLVM-IR convention ("hugr", "qir", "pecos")
+        llvm_convention: LLVM-IR convention (only "hugr" supported now)
 
     Returns:
-        LLVM IR as string
+        LLVM IR as string (HUGR convention)
     """
     compiler = HugrLlvmCompiler()
     try:
-        return compiler.compile_hugr_to_llvm(hugr_bytes, llvm_convention)
+        return compiler.compile_hugr_to_llvm(hugr_bytes, "hugr")
     finally:
         compiler.cleanup()
 

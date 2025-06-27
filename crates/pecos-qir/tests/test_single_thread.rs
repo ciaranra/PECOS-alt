@@ -3,7 +3,7 @@ use pecos_engines::noise::DepolarizingNoiseModel;
 use pecos_qir::QirEngine;
 use std::path::PathBuf;
 
-/// Get the path to the QIR Bell state example
+/// Get the path to the HUGR Bell state example
 fn get_qir_program_path() -> PathBuf {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let workspace_dir = manifest_dir

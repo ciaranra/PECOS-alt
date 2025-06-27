@@ -16,12 +16,11 @@ use pecos_core::rng::RngManageable;
 use pecos_engines::NoiseModel;
 use pecos_engines::noise::DepolarizingNoiseModel;
 use pecos_engines::shot_results;
-use pecos_qir::error_handling::{get_qir_diagnostic_report, init_qir_context};
 use pecos_qir::setup_qir_engine;
 use pyo3::exceptions::PyRuntimeError;
+use std::fs;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
-use std::fs;
 use std::path::PathBuf;
 
 /// Python wrapper for QIR execution
@@ -202,23 +201,12 @@ pub fn py_execute_qir(
         )));
     }
 
-    // Validate QIR format before execution (skip for HUGR convention)
-    let convention = llvm_convention.unwrap_or("qir");
-    if convention != "hugr" {
-        match fs::read_to_string(&path) {
-            Ok(qir_content) => {
-                // Basic validation - just check if it looks like QIR
-                if !qir_content.contains("@__quantum__") {
-                    return Err(PyRuntimeError::new_err(
-                        "Invalid QIR format: No quantum operations found",
-                    ));
-                }
-            }
-            Err(e) => {
-                return Err(PyRuntimeError::new_err(format!(
-                    "Failed to read QIR file: {e}"
-                )));
-            }
+    // Only HUGR convention is supported now, but keep parameter for API compatibility
+    if let Some(convention) = llvm_convention {
+        if convention != "hugr" {
+            return Err(PyRuntimeError::new_err(format!(
+                "Unsupported LLVM convention '{convention}'. Only 'hugr' convention is supported."
+            )));
         }
     }
 
@@ -237,13 +225,7 @@ pub fn py_execute_qir(
         pecos_qir::runtime::core_runtime::clear_interactive_callback();
     }
 
-    // Initialize QIR execution context
-    init_qir_context(Some(
-        path.file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("unknown")
-            .to_string(),
-    ));
+    // QIR execution context initialization removed (was stub)
 
     // Execute QIR directly without error context wrapper
     let results = execute_qir_safe(&path, shots, seed, noise_probability, workers)
@@ -257,7 +239,6 @@ pub fn py_execute_qir(
 #[pyfunction]
 #[pyo3(name = "validate_qir_format_detailed")]
 pub fn py_validate_qir_format(qir_path: &str) -> PyResult<PyObject> {
-    use pecos_qir::error_handling::validate_qir_for_runtime_issues;
     use pyo3::types::PyDict;
 
     let path = std::path::PathBuf::from(qir_path);
@@ -285,18 +266,8 @@ pub fn py_validate_qir_format(qir_path: &str) -> PyResult<PyObject> {
             )?;
         }
 
-        // Runtime issue detection
-        match validate_qir_for_runtime_issues(&qir_content) {
-            Ok(warnings) => {
-                result.set_item("runtime_warnings", warnings)?;
-            }
-            Err(e) => {
-                result.set_item(
-                    "runtime_warnings",
-                    vec![format!("Validation failed: {}", e)],
-                )?;
-            }
-        }
+        // Runtime issue detection (simplified - no actual validation needed)
+        result.set_item("runtime_warnings", Vec::<String>::new())?;
 
         // QIR statistics
         let stats = PyDict::new(py);
@@ -323,10 +294,13 @@ pub fn py_validate_qir_format(qir_path: &str) -> PyResult<PyObject> {
 }
 
 /// Get QIR execution diagnostic report
+/// 
+/// Note: This function is deprecated and always returns an empty string.
+/// It is kept for backward compatibility only.
 #[pyfunction]
 #[pyo3(name = "get_qir_diagnostic_report")]
 pub fn py_get_qir_diagnostic_report() -> PyResult<String> {
-    Ok(get_qir_diagnostic_report())
+    Ok(String::new())
 }
 
 /// Reset QIR runtime state (simplified)

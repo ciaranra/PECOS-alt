@@ -1,5 +1,4 @@
 pub mod engine;
-pub mod error_handling;
 pub mod hugr_python_api;
 pub mod library;
 pub mod linker; // Links QIR programs with runtime library
@@ -18,7 +17,7 @@ pub mod pmir; // HUGR → PAST (RON) → PMIR (MLIR) → LLVM pipeline
 pub use engine::QirEngine;
 
 // HUGR-LLVM pipeline re-exports
-pub use hugr::compiler::{HugrCompiler, HugrCompilerConfig, QuantumLlvmConvention};
+pub use hugr::compiler::{HugrCompiler, HugrCompilerConfig};
 pub use hugr::engine_utils::{compile_hugr_to_qir, create_hugr_qir_engine, setup_hugr_qir_engine};
 
 // PMIR pipeline re-exports (only available with pmir-pipeline feature)

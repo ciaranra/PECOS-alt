@@ -42,8 +42,6 @@ use super::extensions::tket2_bool_extension::Tket2BoolExtension;
 use super::extensions::tket2_rotation_extension::Tket2RotationExtension;
 #[cfg(feature = "hugr-llvm-pipeline")]
 use super::generators::standard_qir_generator::StandardQirExtension;
-#[cfg(feature = "hugr-llvm-pipeline")]
-use super::generators::true_standard_qir_generator::TrueStandardQirExtension;
 // Version translator no longer needed - Guppy 0.20.0 and PECOS use same HUGR version
 
 // Imports for non-hugr builds
@@ -53,33 +51,12 @@ use pecos_core::errors::PecosError;
 use std::path::{Path, PathBuf};
 
 /// Configuration for HUGR compilation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct HugrCompilerConfig {
     /// Output file path for the generated LLVM IR
     pub output_path: Option<PathBuf>,
     /// Whether to include debug information in the output
     pub debug_info: bool,
-    /// Quantum operation naming convention to use
-    pub quantum_naming: QuantumLlvmConvention,
-}
-
-impl Default for HugrCompilerConfig {
-    fn default() -> Self {
-        Self {
-            output_path: None,
-            debug_info: false,
-            quantum_naming: QuantumLlvmConvention::Qir,
-        }
-    }
-}
-
-/// Quantum operation LLVM-IR conventions
-#[derive(Debug, Clone, PartialEq)]
-pub enum QuantumLlvmConvention {
-    /// Microsoft QIR convention: __`quantum__qis__h__body`, etc.
-    Qir,
-    /// HUGR convention: integer-based operations for PECOS runtime
-    Hugr,
 }
 
 /// HUGR to QIR compiler
@@ -113,13 +90,6 @@ impl HugrCompiler {
     #[must_use]
     pub fn with_debug_info(mut self, debug: bool) -> Self {
         self.config.debug_info = debug;
-        self
-    }
-
-    /// Set the quantum operation naming convention
-    #[must_use]
-    pub fn with_quantum_naming(mut self, naming: QuantumLlvmConvention) -> Self {
-        self.config.quantum_naming = naming;
         self
     }
 
@@ -245,17 +215,8 @@ impl HugrCompiler {
         builder = builder.add_extension(Tket2BoolExtension::new());
         builder = builder.add_extension(Tket2RotationExtension::new());
 
-        // Choose the appropriate quantum extension based on naming convention
-        match self.config.quantum_naming {
-            QuantumLlvmConvention::Qir => {
-                // Use true standard QIR format with opaque pointer types
-                builder = builder.add_extension(TrueStandardQirExtension::new(result_names));
-            }
-            QuantumLlvmConvention::Hugr => {
-                // Use HUGR-style format with integer types (current QirExtension)
-                builder = builder.add_extension(StandardQirExtension::new(result_names));
-            }
-        }
+        // Use HUGR-style format with integer types
+        builder = builder.add_extension(StandardQirExtension::new(result_names));
 
         // Add all standard extensions
         builder = builder.add_default_prelude_extensions();
@@ -304,25 +265,11 @@ impl HugrCompiler {
         // Generate LLVM IR string
         let llvm_ir = llvm_module.to_string();
 
-        // Add standard QIR prologue and fix entry point signature
-        let standard_qir = add_standard_qir_prologue(&llvm_ir, &self.config.quantum_naming);
-        let standard_qir = fix_entry_point_signature(&standard_qir, &self.config.quantum_naming);
+        // Fix entry point signature for HUGR convention
+        let standard_qir = fix_entry_point_signature(&llvm_ir);
 
-        // Apply convention-specific processing
-        let standard_qir = match self.config.quantum_naming {
-            QuantumLlvmConvention::Hugr => {
-                // For HUGR convention, keep native HUGR functions - no conversion needed
-                debug!("Keeping native HUGR convention functions");
-                standard_qir
-            }
-            QuantumLlvmConvention::Qir => {
-                // For QIR convention, apply deferred measurements
-                convert_immediate_to_deferred_measurements(
-                    &standard_qir,
-                    &self.config.quantum_naming,
-                )
-            }
-        };
+        // Keep native HUGR functions - no conversion needed
+        debug!("Using native HUGR convention functions");
 
         // Write to output file
         fs::write(output_path, standard_qir).map_err(|e| {
@@ -424,50 +371,9 @@ fn fix_duplicate_functions(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
     Ok(result)
 }
 
-/// Process LLVM IR to ensure compatibility with `QirEngine`
-fn add_standard_qir_prologue(llvm_ir: &str, llvm_convention: &QuantumLlvmConvention) -> String {
-    match llvm_convention {
-        QuantumLlvmConvention::Qir => {
-            // Add proper opaque type declarations for true standard QIR
-            let prologue = r"%Result = type opaque
-%Qubit = type opaque
-
-";
-
-            // Insert the type declarations at the beginning, after any existing declarations
-            if llvm_ir.contains("source_filename") {
-                // Find where to insert - after the source_filename line
-                let lines: Vec<&str> = llvm_ir.lines().collect();
-                let mut result = String::new();
-                let mut inserted = false;
-
-                for line in lines {
-                    result.push_str(line);
-                    result.push('\n');
-
-                    if !inserted && line.starts_with("source_filename") {
-                        result.push('\n');
-                        result.push_str(prologue);
-                        inserted = true;
-                    }
-                }
-
-                result
-            } else {
-                // Just prepend the prologue
-                format!("{prologue}{llvm_ir}")
-            }
-        }
-        QuantumLlvmConvention::Hugr => {
-            // For HUGR convention, no modifications needed
-            llvm_ir.to_string()
-        }
-    }
-}
-
-/// Fix entry point function signature for standard QIR compatibility
-fn fix_entry_point_signature(llvm_ir: &str, _llvm_convention: &QuantumLlvmConvention) -> String {
-    // Both conventions need void return type for entry points to work with QIR runtime
+/// Fix entry point function signature for HUGR compatibility
+fn fix_entry_point_signature(llvm_ir: &str) -> String {
+    // Entry points need void return type to work with the runtime
     let lines: Vec<&str> = llvm_ir.lines().collect();
     let mut result = String::new();
     let mut found_entry_point = false;
@@ -551,113 +457,6 @@ fn fix_entry_point_signature(llvm_ir: &str, _llvm_convention: &QuantumLlvmConven
     result
 }
 
-/// Convert immediate measurements to deferred measurements using convention adapters
-fn convert_immediate_to_deferred_measurements(
-    llvm_ir: &str,
-    llvm_convention: &QuantumLlvmConvention,
-) -> String {
-    match llvm_convention {
-        QuantumLlvmConvention::Hugr => {
-            // For HUGR convention, convert immediate measurement calls to deferred ones
-            let lines: Vec<&str> = llvm_ir.lines().collect();
-            let mut result = String::new();
-            for line in &lines {
-                let line_str = *line;
-                if line_str.contains("call i32 @__quantum__qis__m__body(") {
-                    // Convert: %result = call i32 @__quantum__qis__m__body(i64 %qubit, i64 %result_id)
-                    // To:      call void @__hugr__quantum__qis__m__body(i64 %qubit, i64 %result_id)
-                    //          %result = call i32 @__quantum__rt__result_get_one(i64 %result_id)
-
-                    if line.contains(" = call") {
-                        let parts: Vec<&str> = line.splitn(2, " = call").collect();
-                        if parts.len() == 2 {
-                            let variable_assignment = parts[0].trim();
-                            let call_part = parts[1];
-
-                            // Extract result_id from the call
-                            let result_id = if let Some(start) = call_part.rfind(", i64 ") {
-                                let id_part = &call_part[start + 6..];
-                                if let Some(end) = id_part.find(')') {
-                                    &id_part[..end]
-                                } else {
-                                    "0" // fallback
-                                }
-                            } else {
-                                "0" // fallback
-                            };
-
-                            // Get indentation
-                            let indent =
-                                variable_assignment.len() - variable_assignment.trim_start().len();
-                            let indent_str = " ".repeat(indent);
-
-                            // First: the deferred measurement call
-                            result.push_str(&indent_str);
-                            result.push_str("call void @__hugr__quantum__qis__m__body");
-                            result.push_str(&call_part[call_part.find('(').unwrap_or(0)..]);
-                            result.push('\n');
-
-                            // Second: get the result
-                            result.push_str(&indent_str);
-                            result.push_str(variable_assignment.trim());
-                            result.push_str(" = call i32 @__quantum__rt__result_get_one(i64 ");
-                            result.push_str(result_id);
-                            result.push(')');
-                        } else {
-                            // Fallback - just convert the function name
-                            result.push_str(&line.replace(
-                                "call i32 @__quantum__qis__m__body(",
-                                "call void @__hugr__quantum__qis__m__body(",
-                            ));
-                        }
-                    } else {
-                        // No assignment, just convert the function call
-                        result.push_str(&line.replace(
-                            "call i32 @__quantum__qis__m__body(",
-                            "call void @__hugr__quantum__qis__m__body(",
-                        ));
-                    }
-                } else if line.contains("call i32 @__quantum__qis__m__body_i64(") {
-                    // Convert i64 variant as well
-                    let modified_line = line
-                        .replace(
-                            "call i32 @__quantum__qis__m__body_i64(",
-                            "call void @__hugr__quantum__qis__m__body(",
-                        )
-                        .replace(
-                            "call u32 @__quantum__qis__m__body_i64(",
-                            "call void @__hugr__quantum__qis__m__body(",
-                        );
-
-                    // TODO: Handle assignment for i64 variant too if needed
-                    result.push_str(&modified_line);
-                } else if line.contains("declare i32 @__quantum__qis__m__body(") {
-                    // Convert function declarations - add both the deferred measurement and result getter
-                    result.push_str("declare void @__hugr__quantum__qis__m__body(i64, i64)");
-                    result.push('\n');
-                    result.push_str("declare i32 @__quantum__rt__result_get_one(i64)");
-                } else if line.contains("declare i32 @__quantum__qis__m__body_i64(")
-                    || line.contains("declare u32 @__quantum__qis__m__body_i64(")
-                {
-                    // Convert i64 function declarations
-                    result.push_str("declare void @__hugr__quantum__qis__m__body(i64, i64)");
-                    result.push('\n');
-                    result.push_str("declare i32 @__quantum__rt__result_get_one(i64)");
-                } else {
-                    result.push_str(line);
-                }
-                result.push('\n');
-            }
-
-            result
-        }
-        QuantumLlvmConvention::Qir => {
-            // For QIR convention, no conversion needed - already uses deferred measurements
-            llvm_ir.to_string()
-        }
-    }
-}
-
 impl Default for HugrCompiler {
     fn default() -> Self {
         Self::new()
@@ -702,18 +501,15 @@ mod tests {
     fn test_hugr_compiler_creation() {
         let compiler = HugrCompiler::new();
         assert!(!compiler.config.debug_info);
-        assert_eq!(compiler.config.quantum_naming, QuantumLlvmConvention::Qir);
     }
 
     #[test]
     fn test_hugr_compiler_configuration() {
         let compiler = HugrCompiler::new()
             .with_debug_info(true)
-            .with_quantum_naming(QuantumLlvmConvention::Hugr)
             .with_output_path("/tmp/test.ll");
 
         assert!(compiler.config.debug_info);
-        assert_eq!(compiler.config.quantum_naming, QuantumLlvmConvention::Hugr);
         assert_eq!(
             compiler.config.output_path,
             Some(PathBuf::from("/tmp/test.ll"))

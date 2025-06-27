@@ -99,12 +99,12 @@ fn test_def_and_stub_generation() {
     let def_content = windows_stub_gen::generate_def_file();
     assert!(def_content.contains("EXPORTS"));
     assert!(def_content.contains("qir_runtime_reset"));
-    assert!(def_content.contains("__quantum__qis__h__body"));
+    assert!(def_content.contains("__quantum__qis__h__body__hugr"));
     assert!(def_content.contains("main @1 NONAME"));
 
     let c_content = windows_stub_gen::generate_c_stub();
     assert!(c_content.contains("BinaryCommands"));
     assert!(c_content.contains("_DllMainCRTStartup"));
-    assert!(c_content.contains("__quantum__qis__h__body(const unsigned char* qubit)"));
+    assert!(c_content.contains("__quantum__qis__h__body__hugr(i64 qubit)"));
     assert!(!c_content.contains("main()")); // main should not be in stub
 }

@@ -60,19 +60,17 @@ def compile_guppy_to_hugr(guppy_function: Callable) -> bytes:
 # Step 2: HUGR -> LLVM/QIR
 def compile_hugr_to_llvm(
     hugr_bytes: bytes,
-    llvm_convention: str = "hugr",
     *,
     debug_info: bool = False,
 ) -> str:
-    """Compile HUGR bytes to LLVM IR/QIR string.
+    """Compile HUGR bytes to LLVM IR string.
 
     Args:
         hugr_bytes: HUGR package as bytes
-        llvm_convention: LLVM-IR convention ("hugr" or "qir")
         debug_info: Whether to include debug information
 
     Returns:
-        LLVM IR/QIR as string
+        LLVM IR as string (HUGR convention)
 
     Raises:
         ImportError: If Rust HUGR backend is not available
@@ -91,7 +89,6 @@ def compile_hugr_to_llvm(
                 hugr_bytes,
                 None,
                 debug_info,
-                llvm_convention,
             )
         except RuntimeError as e:
             error_msg = str(e)
@@ -163,28 +160,25 @@ def execute_llvm(
 # Convenience functions for common pipelines
 def compile_guppy_to_llvm(
     guppy_function: Callable,
-    llvm_convention: str = "hugr",
     *,
     debug_info: bool = False,
 ) -> str:
-    """Compile a Guppy function directly to LLVM IR/QIR.
+    """Compile a Guppy function directly to LLVM IR.
 
     Args:
         guppy_function: A function decorated with @guppy
-        llvm_convention: LLVM-IR convention ("hugr" or "qir")
         debug_info: Whether to include debug information
 
     Returns:
-        LLVM IR/QIR as string
+        LLVM IR as string (HUGR convention)
     """
     hugr_bytes = compile_guppy_to_hugr(guppy_function)
-    return compile_hugr_to_llvm(hugr_bytes, llvm_convention, debug_info=debug_info)
+    return compile_hugr_to_llvm(hugr_bytes, debug_info=debug_info)
 
 
 def run_guppy_function(
     guppy_function: Callable,
     shots: int = 1000,
-    llvm_convention: str = "hugr",
     *,
     debug_info: bool = False,
 ) -> dict:
@@ -193,7 +187,6 @@ def run_guppy_function(
     Args:
         guppy_function: A function decorated with @guppy
         shots: Number of shots to run
-        llvm_convention: LLVM-IR convention ("hugr" or "qir")
         debug_info: Whether to include debug information
 
     Returns:
@@ -201,7 +194,6 @@ def run_guppy_function(
     """
     llvm_ir = compile_guppy_to_llvm(
         guppy_function,
-        llvm_convention,
         debug_info=debug_info,
     )
     return execute_llvm(llvm_ir, shots)

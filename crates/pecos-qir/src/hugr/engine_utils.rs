@@ -40,10 +40,9 @@ pub fn create_hugr_qir_engine<P: AsRef<Path>>(
     let config = HugrCompilerConfig {
         output_path: Some(output_path),
         debug_info: false,
-        quantum_naming: super::compiler::QuantumLlvmConvention::Hugr,
     };
 
-    // Compile HUGR to native HUGR LLVM-IR (no QIR conversion)
+    // Compile HUGR to LLVM-IR
     let compiler = HugrCompiler::with_config(config);
     let llvm_path = compiler.compile_hugr(hugr_path)?;
 
@@ -81,7 +80,6 @@ pub fn compile_hugr_to_qir<P: AsRef<Path>, Q: AsRef<Path>>(
     let config = HugrCompilerConfig {
         output_path: Some(output_path.as_ref().to_path_buf()),
         debug_info: false,
-        quantum_naming: super::compiler::QuantumLlvmConvention::Hugr,
     };
 
     let compiler = HugrCompiler::with_config(config);

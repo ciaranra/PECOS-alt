@@ -1,13 +1,12 @@
-/// Instance-based QIR Runtime Implementation with Convention Adapters
+/// Instance-based QIR Runtime Implementation for HUGR Convention
 ///
 /// This runtime eliminates global state by using `RuntimeRegistry` to map
 /// threads to their own isolated runtime states. Each worker/thread operates
 /// independently without sharing state until results are combined.
 ///
-/// The runtime is organized into three layers:
+/// The runtime is organized into two layers:
 /// 1. Core runtime implementation (convention-agnostic)
-/// 2. QIR convention adapter (pointer-based)
-/// 3. HUGR convention adapter (integer-based)
+/// 2. HUGR convention adapter (integer-based)
 // Submodule declarations
 pub mod builder;
 pub mod cleanup;
@@ -480,7 +479,7 @@ pub mod core_runtime {
 }
 
 // =============================================================================
-// QIR Convention Adapter (Pointer-based)
+// QIR Runtime Functions  
 // =============================================================================
 
 /// Reset the QIR runtime state
@@ -513,81 +512,6 @@ pub unsafe extern "C" fn __quantum__rt__initialize(_config: *const u8) {
     core_runtime::initialize();
 }
 
-/// Standard QIR qubit allocation - returns pointer
-///
-/// # Safety
-///
-/// This function is marked unsafe as it's called from C/FFI context.
-/// The returned pointer is an opaque handle and should not be dereferenced.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__rt__qubit_allocate() -> *const u8 {
-    core_runtime::allocate_qubit() as *const u8
-}
-
-/// Standard QIR result allocation - returns pointer
-///
-/// # Safety
-///
-/// This function is marked unsafe as it's called from C/FFI context.
-/// The returned pointer is an opaque handle and should not be dereferenced.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__rt__result_allocate() -> *const u8 {
-    core_runtime::allocate_result() as *const u8
-}
-
-/// Release a qubit (pointer version)
-///
-/// # Safety
-///
-/// This function is marked unsafe as it's called from C/FFI context.
-/// The `qubit_ptr` must be a valid pointer returned by `__quantum__rt__qubit_allocate`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__rt__qubit_release(qubit_ptr: *const u8) {
-    let qubit_id = qubit_ptr as usize;
-    core_runtime::release_qubit(qubit_id);
-}
-
-/// Release a result (pointer version)
-///
-/// # Safety
-///
-/// This function is marked unsafe as it's called from C/FFI context.
-/// The `result_ptr` must be a valid pointer returned by `__quantum__rt__result_allocate`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__rt__result_release(result_ptr: *const u8) {
-    let result_id = result_ptr as usize;
-    core_runtime::release_result(result_id);
-}
-
-// QIR Gate Operations (Pointer Convention)
-//
-// Safety note for all quantum gate operations below:
-// These functions are marked unsafe as they're called from C/FFI context.
-// The qubit pointers must be valid handles returned by `__quantum__rt__qubit_allocate`.
-// The pointers are opaque handles and should not be dereferenced.
-
-/// Apply Hadamard gate
-///
-/// # Safety
-///
-/// See safety note above for quantum gate operations.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__h__body(qubit_ptr: *const u8) {
-    let qubit_id = qubit_ptr as usize;
-    core_runtime::h_gate(qubit_id);
-}
-
-/// Apply Pauli-X gate
-///
-/// # Safety
-///
-/// See safety note above for quantum gate operations.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__x__body(qubit_ptr: *const u8) {
-    let qubit_id = qubit_ptr as usize;
-    core_runtime::x_gate(qubit_id);
-}
-
 /// Apply Pauli-Y gate
 ///
 /// # Safety
@@ -606,20 +530,6 @@ pub unsafe extern "C" fn __quantum__qis__y__body(qubit: usize) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__z__body(qubit: usize) {
     core_runtime::z_gate(qubit);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__cx__body(control_ptr: *const u8, target_ptr: *const u8) {
-    let control_id = control_ptr as usize;
-    let target_id = target_ptr as usize;
-    core_runtime::cx_gate(control_id, target_id);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__cnot__body(control_ptr: *const u8, target_ptr: *const u8) {
-    let control_id = control_ptr as usize;
-    let target_id = target_ptr as usize;
-    core_runtime::cx_gate(control_id, target_id);
 }
 
 #[unsafe(no_mangle)]
@@ -662,15 +572,8 @@ pub unsafe extern "C" fn __quantum__qis__reset__body(qubit: usize) {
     core_runtime::reset_qubit(qubit);
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__m__body_ptr(qubit_ptr: *const u8, result_ptr: *const u8) {
-    let qubit_id = qubit_ptr as usize;
-    let result_id = result_ptr as usize;
-    core_runtime::measure(qubit_id, result_id);
-}
-
 // =============================================================================
-// HUGR Convention Adapter (Integer-based)
+// HUGR Convention Functions (Integer-based)
 // =============================================================================
 
 #[unsafe(no_mangle)]
@@ -803,6 +706,18 @@ pub unsafe extern "C" fn __quantum__qis__ccx__body(control1: i64, control2: i64,
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__result_allocate_hugr() -> i64 {
     i64::try_from(core_runtime::allocate_result()).expect("Result ID too large for i64")
+}
+
+/// HUGR-style qubit allocation - returns integer ID instead of pointer
+///
+/// This function allocates a new qubit and returns its ID as an i64.
+/// Used by HUGR-generated QIR that expects integer-based qubit handling.
+///
+/// # Safety
+/// This function is marked unsafe as it's called from C/FFI context.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__rt__qubit_allocate() -> i64 {
+    i64::try_from(core_runtime::allocate_qubit()).expect("Qubit ID too large for i64")
 }
 
 #[unsafe(no_mangle)]

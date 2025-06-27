@@ -24,7 +24,6 @@ def run_guppy(
     guppy_function: Callable[..., T],
     shots: int = 1,
     backend: str | None = None,
-    llvm_convention: str = "hugr",
     *,
     verbose: bool = False,
     seed: int | None = None,
@@ -36,7 +35,6 @@ def run_guppy(
         guppy_function: A function decorated with @guppy
         shots: Number of shots to execute (default: 1000)
         backend: Backend to use ("rust", "external", or None for auto-detect)
-        llvm_convention: LLVM-IR convention ("hugr" for integer-based, "qir" for Microsoft QIR pointer-based)
         verbose: Enable verbose output
         seed: Random seed for reproducible results (default: None for random)
         **kwargs: Additional arguments passed to GuppyFrontend
@@ -122,7 +120,6 @@ def run_guppy(
     try:
         frontend = GuppyFrontend(
             use_rust_backend=use_rust_backend,
-            llvm_convention=llvm_convention,
             **kwargs,
         )
     except Exception as e:
@@ -180,14 +177,9 @@ def run_guppy(
     if verbose:
         print("[OK] Using PECOS QIR PyO3 bindings for execution")
     
-    # Determine the actual LLVM convention used based on backend
     # Both Rust HUGR and PMIR backends generate HUGR-style LLVM-IR
-    actual_convention = llvm_convention
-    if backend_used == "external":
-        # PMIR pipeline generates HUGR-style LLVM-IR (not standard QIR)
-        actual_convention = "hugr"
-        if verbose and llvm_convention != "hugr":
-            print(f"[INFO] PMIR backend generates HUGR-style LLVM-IR, overriding to 'hugr'")
+    # Only HUGR convention is supported after removing QIR convention support
+    actual_convention = "hugr"
     
     # Execute the QIR file with the PyO3 bindings
     qir_result = execute_qir(
@@ -196,7 +188,7 @@ def run_guppy(
         seed,
         None,  # noise_probability
         None,  # workers
-        llvm_convention=actual_convention  # Use the actual convention
+        llvm_convention=actual_convention  # Use HUGR convention
     )
     
     # Extract results from the returned dictionary

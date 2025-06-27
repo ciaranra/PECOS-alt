@@ -40,7 +40,7 @@ def test_guppy_frontend() -> None:
     print("=== Testing GuppyFrontend ===")
 
     try:
-        frontend = GuppyFrontend(llvm_convention="qir")
+        frontend = GuppyFrontend()
         info = frontend.get_backend_info()
         print(f"Frontend backend info: {info}")
         print(f"[OK] Using backend: {info['backend']}")

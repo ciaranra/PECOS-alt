@@ -1,7 +1,6 @@
 //! QIR Engine Module
 //!
 //! This module provides the QIR Engine for executing quantum programs compiled to QIR.
-use crate::hugr::compiler::QuantumLlvmConvention;
 use crate::library::QirLibrary;
 use crate::linker::QirLinker;
 use log::{debug, trace, warn};
@@ -37,8 +36,6 @@ pub struct QirEngineConfig {
     pub assigned_shots: usize,
     /// Whether to show verbose command logs
     pub verbose: bool,
-    /// Quantum LLVM convention (auto-detected if None)
-    pub quantum_convention: Option<QuantumLlvmConvention>,
 }
 
 /// QIR Engine for executing quantum programs compiled to QIR
@@ -141,49 +138,6 @@ impl QirEngine {
         self.config.verbose = verbose;
     }
 
-    /// Detect the quantum LLVM convention used in the QIR file
-    ///
-    /// # Returns
-    ///
-    /// The detected quantum LLVM convention
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the file cannot be read or parsed
-    pub fn detect_quantum_convention(&self) -> Result<QuantumLlvmConvention, PecosError> {
-        if let Some(convention) = &self.config.quantum_convention {
-            debug!("QIR: Using configured convention: {:?}", convention);
-            return Ok(convention.clone());
-        }
-
-        debug!(
-            "QIR: Auto-detecting quantum convention from: {:?}",
-            self.qir_file
-        );
-
-        let content = fs::read_to_string(&self.qir_file).map_err(|e| {
-            PecosError::with_context(e, "Failed to read QIR file for convention detection")
-        })?;
-
-        // Check for HUGR-specific function signatures
-        if content.contains("__quantum__qis__h__body__hugr")
-            || content.contains("__hugr__quantum__qis__m__body")
-            || content.contains("__quantum__qis__") && content.contains("(i64")
-        {
-            debug!("QIR: Detected HUGR convention (integer-based signatures)");
-            Ok(QuantumLlvmConvention::Hugr)
-        } else if content.contains("__quantum__qis__h__body")
-            || content.contains("__quantum__rt__qubit_allocate")
-            || content.contains("*const u8")
-        {
-            debug!("QIR: Detected QIR convention (pointer-based signatures)");
-            Ok(QuantumLlvmConvention::Qir)
-        } else {
-            debug!("QIR: No clear convention detected, defaulting to QIR");
-            Ok(QuantumLlvmConvention::Qir)
-        }
-    }
-
     /// Reset the internal state of the engine
     fn reset_internal_state(&mut self) {
         debug!("QIR: Resetting internal state");
@@ -254,10 +208,6 @@ impl QirEngine {
         // Store the library and path
         self.library = Some(Box::new(library));
         self.library_path = Some(library_path.clone());
-
-        // Detect quantum convention if not already configured
-        let convention = self.detect_quantum_convention()?;
-        debug!("QIR: Using quantum convention: {:?}", convention);
 
         // Try to detect the entry point from the QIR file
         if self.entry_point.is_none() {
@@ -742,26 +692,12 @@ impl QirEngine {
         }
     }
 
-    /// Helper method to find qubit allocations in QIR content using regex patterns
+    /// Helper method to find qubit allocations in HUGR-style QIR content
     fn find_qubit_allocations(content: &str) -> (usize, bool) {
         let mut max_qubit_index = 0;
         let mut found_allocation = false;
 
-        // Pattern 1: Direct qubit references like "inttoptr (i64 N to %Qubit*)"
-        // These patterns are static and validated at development time, so we use expect()
-        // instead of unwrap() to provide more context in case of a programming error
-        let direct_pattern = Regex::new(r"inttoptr\s*\(\s*i64\s+(\d+)\s+to\s+%Qubit\*\)")
-            .expect("Invalid regex pattern for direct qubit references");
-        for cap in direct_pattern.captures_iter(content) {
-            if let Some(index_match) = cap.get(1) {
-                if let Ok(index) = index_match.as_str().parse::<usize>() {
-                    max_qubit_index = max_qubit_index.max(index);
-                    found_allocation = true;
-                }
-            }
-        }
-
-        // Pattern 2: Qubit allocations like "__quantum__rt__qubit_allocate()"
+        // Pattern 1: Qubit allocations like "__quantum__rt__qubit_allocate()"
         let alloc_pattern = Regex::new(r"__quantum__rt__qubit_allocate\(\)")
             .expect("Invalid regex pattern for qubit allocations");
         let alloc_count = alloc_pattern.find_iter(content).count();
@@ -770,22 +706,8 @@ impl QirEngine {
             found_allocation = true;
         }
 
-        // Pattern 3: Array allocations like "__quantum__rt__array_create_1d(i64 8, i64 N)"
-        let array_pattern =
-            Regex::new(r"__quantum__rt__array_create_1d\s*\(\s*i64\s+\d+\s*,\s*i64\s+(\d+)\s*\)")
-                .expect("Invalid regex pattern for array allocations");
-        for cap in array_pattern.captures_iter(content) {
-            if let Some(size_match) = cap.get(1) {
-                if let Ok(size) = size_match.as_str().parse::<usize>() {
-                    max_qubit_index = max_qubit_index.max(size - 1);
-                    found_allocation = true;
-                }
-            }
-        }
-
-        // Pattern 4: Integer-based qubit references in PECOS QIR calls like "i64 N"
+        // Pattern 2: Integer-based qubit references in HUGR QIR calls like "i64 N"
         // This pattern looks for quantum gate calls with integer qubit arguments
-        // Handles both __body and __body_i64 variants
         let int_qubit_pattern =
             Regex::new(r"__quantum__qis__[a-z_]+__body[a-z0-9_]*\s*\([^)]*?i64\s+(\d+)")
                 .expect("Invalid regex pattern for integer qubit references");
@@ -795,23 +717,6 @@ impl QirEngine {
                     max_qubit_index = max_qubit_index.max(index);
                     found_allocation = true;
                 }
-            }
-        }
-
-        // Pattern 5: Pointer-based qubit references like "call void @__quantum__qis__h__body(%Qubit* null)"
-        // This pattern looks for standard QIR calls with %Qubit* arguments
-        let ptr_qubit_pattern =
-            Regex::new(r"__quantum__qis__[a-z_]+__body\s*\([^)]*%Qubit\*[^)]*\)")
-                .expect("Invalid regex pattern for pointer qubit references");
-        if ptr_qubit_pattern.is_match(content) {
-            // For pointer-based QIR, we need to count the highest qubit index from the pointers
-            // Look for patterns like "inttoptr (i64 N to %Qubit*)" which we already handle in Pattern 1
-            // Also look for null pointers which represent qubit 0
-            let null_qubit_pattern = Regex::new(r"%Qubit\*\s+null")
-                .expect("Invalid regex pattern for null qubit references");
-            if null_qubit_pattern.is_match(content) {
-                max_qubit_index = max_qubit_index.max(0);
-                found_allocation = true;
             }
         }
 

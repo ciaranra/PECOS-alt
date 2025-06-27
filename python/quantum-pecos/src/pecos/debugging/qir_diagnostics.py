@@ -56,8 +56,11 @@ class QirDiagnostics:
         """
         Get the current QIR execution diagnostic report.
         
+        Note: This method is deprecated and always returns an empty string.
+        It is kept for backward compatibility only.
+        
         Returns:
-            String containing execution diagnostics
+            String containing execution diagnostics (currently always empty)
         """
         if not _DIAGNOSTICS_AVAILABLE:
             return "QIR diagnostics not available - pecos_rslib not installed"

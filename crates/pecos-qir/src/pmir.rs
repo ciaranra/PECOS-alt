@@ -12,6 +12,7 @@ This runs alongside the existing HUGR→LLVM pipeline for comparison and develop
 use pecos_core::errors::PecosError;
 use std::path::Path;
 
+pub mod angle_resolver;
 pub mod ast;
 pub mod hugr_parser;
 pub mod mlir_lowering;

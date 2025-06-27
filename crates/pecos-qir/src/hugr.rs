@@ -33,7 +33,6 @@ use std::path::PathBuf;
 let config = CompilerConfig {
     output_path: Some(PathBuf::from("output.ll")),
     debug_info: false,
-    quantum_naming: pecos_qir::hugr::QuantumLlvmConvention::Qir,
 };
 
 let compiler = Compiler::with_config(config);
@@ -58,7 +57,6 @@ pub mod result_extractor;
 #[cfg(feature = "hugr-llvm-pipeline")]
 pub mod generators {
     pub mod standard_qir_generator;
-    pub mod true_standard_qir_generator;
 }
 
 // Extension modules
@@ -71,9 +69,7 @@ pub mod extensions {
 
 // Re-export main types for convenience
 #[cfg(feature = "hugr-llvm-pipeline")]
-pub use compiler::{
-    HugrCompiler as Compiler, HugrCompilerConfig as CompilerConfig, QuantumLlvmConvention,
-};
+pub use compiler::{HugrCompiler as Compiler, HugrCompilerConfig as CompilerConfig};
 #[cfg(feature = "hugr-llvm-pipeline")]
 pub use engine_utils::{compile_hugr_to_qir, create_hugr_qir_engine, setup_hugr_qir_engine};
 #[cfg(feature = "hugr-llvm-pipeline")]
@@ -91,13 +87,6 @@ pub mod compiler {
     pub struct HugrCompilerConfig {
         pub output_path: Option<PathBuf>,
         pub debug_info: bool,
-        pub quantum_naming: QuantumLlvmConvention,
-    }
-
-    #[derive(Debug, Clone, PartialEq)]
-    pub enum QuantumLlvmConvention {
-        Qir,
-        Hugr,
     }
 
     impl Default for HugrCompilerConfig {
@@ -105,7 +94,6 @@ pub mod compiler {
             Self {
                 output_path: None,
                 debug_info: false,
-                quantum_naming: QuantumLlvmConvention::Qir,
             }
         }
     }

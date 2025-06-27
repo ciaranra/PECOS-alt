@@ -13,7 +13,6 @@ try:
         HugrCompiler,
         HugrQirEngine,
         is_hugr_support_available,
-        get_supported_llvm_conventions,
         compile_hugr_bytes_to_qir,
         compile_hugr_file_to_qir,
     )
@@ -35,8 +34,6 @@ except ImportError as e:
     def is_hugr_support_available() -> bool:
         return False
 
-    def get_supported_llvm_conventions() -> List[str]:
-        return []
 
     def compile_hugr_bytes_to_qir(*args: object, **kwargs: object) -> None:
         raise ImportError("Rust HUGR backend not available")
@@ -53,19 +50,17 @@ class RustHugrCompiler:
     offering better performance than pure Python implementations.
     """
 
-    def __init__(self, debug_info: bool = False, llvm_convention: str = "hugr"):
+    def __init__(self, debug_info: bool = False):
         """
         Initialize the HUGR compiler.
 
         Args:
             debug_info: Whether to include debug information in compiled QIR
-            llvm_convention: Quantum operation naming convention
-                              ("hugr" or "qir")
         """
         if not RUST_HUGR_AVAILABLE:
             raise ImportError("Rust HUGR backend not available")
 
-        self._compiler = HugrCompiler(debug_info, llvm_convention)
+        self._compiler = HugrCompiler(debug_info)
 
     def compile_bytes_to_qir(self, hugr_bytes: bytes) -> str:
         """
@@ -93,20 +88,6 @@ class RustHugrCompiler:
         """Set debug information flag."""
         self._compiler.set_debug_info(debug_info)
 
-    def set_llvm_convention(self, llvm_convention: str) -> None:
-        """Set quantum operation naming convention."""
-        self._compiler.set_llvm_convention(llvm_convention)
-
-    def get_llvm_convention(self) -> str:
-        """Get current naming convention."""
-        return self._compiler.get_llvm_convention()
-
-    @staticmethod
-    def get_supported_llvm_conventions() -> List[str]:
-        """Get list of supported naming conventions."""
-        if not RUST_HUGR_AVAILABLE:
-            return []
-        return HugrCompiler.get_supported_llvm_conventions()
 
 
 class RustHugrQirEngine:
@@ -122,7 +103,6 @@ class RustHugrQirEngine:
         hugr_bytes: bytes,
         shots: int = 1000,
         debug_info: bool = False,
-        llvm_convention: str = "hugr",
     ):
         """
         Create QIR engine from HUGR bytes.
@@ -131,12 +111,11 @@ class RustHugrQirEngine:
             hugr_bytes: HUGR data as bytes
             shots: Number of shots to execute
             debug_info: Whether to include debug information
-            llvm_convention: Quantum operation naming convention
         """
         if not RUST_HUGR_AVAILABLE:
             raise ImportError("Rust HUGR backend not available")
 
-        self._engine = HugrQirEngine(hugr_bytes, shots, debug_info, llvm_convention)
+        self._engine = HugrQirEngine(hugr_bytes, shots, debug_info)
 
     @classmethod
     def from_file(
@@ -144,7 +123,6 @@ class RustHugrQirEngine:
         hugr_path: str,
         shots: int = 1000,
         debug_info: bool = False,
-        llvm_convention: str = "hugr",
     ) -> "RustHugrQirEngine":
         """
         Create QIR engine from HUGR file.
@@ -153,7 +131,6 @@ class RustHugrQirEngine:
             hugr_path: Path to HUGR file
             shots: Number of shots to execute
             debug_info: Whether to include debug information
-            llvm_convention: Quantum operation naming convention
 
         Returns:
             New RustHugrQirEngine instance
@@ -163,7 +140,7 @@ class RustHugrQirEngine:
 
         instance = cls.__new__(cls)
         instance._engine = HugrQirEngine.from_file(
-            hugr_path, shots, debug_info, llvm_convention
+            hugr_path, shots, debug_info
         )
         return instance
 
@@ -193,7 +170,6 @@ def compile_hugr_to_qir_rust(
     hugr_data: Union[bytes, str],
     output_path: Optional[str] = None,
     debug_info: bool = False,
-    llvm_convention: str = "hugr",
 ) -> Optional[str]:
     """
     Compile HUGR to QIR using Rust backend.
@@ -202,7 +178,6 @@ def compile_hugr_to_qir_rust(
         hugr_data: HUGR data as bytes or path to HUGR file
         output_path: Path for output QIR file (if None, returns QIR as string)
         debug_info: Whether to include debug information
-        llvm_convention: Quantum operation naming convention
 
     Returns:
         QIR as string if output_path is None, otherwise None
@@ -212,7 +187,7 @@ def compile_hugr_to_qir_rust(
 
     if isinstance(hugr_data, bytes):
         if output_path is None:
-            return compile_hugr_bytes_to_qir(hugr_data, debug_info, llvm_convention)
+            return compile_hugr_bytes_to_qir(hugr_data, debug_info)
         else:
             # For bytes to file, we'd need to write to temp file first
             import tempfile
@@ -222,7 +197,7 @@ def compile_hugr_to_qir_rust(
                 temp_path = f.name
             try:
                 compile_hugr_file_to_qir(
-                    temp_path, output_path, debug_info, llvm_convention
+                    temp_path, output_path, debug_info
                 )
             finally:
                 import os
@@ -235,10 +210,10 @@ def compile_hugr_to_qir_rust(
             # Read file and compile to string
             with open(hugr_data, "rb") as f:
                 hugr_bytes = f.read()
-            return compile_hugr_bytes_to_qir(hugr_bytes, debug_info, llvm_convention)
+            return compile_hugr_bytes_to_qir(hugr_bytes, debug_info)
         else:
             compile_hugr_file_to_qir(
-                hugr_data, output_path, debug_info, llvm_convention
+                hugr_data, output_path, debug_info
             )
             return None
 
@@ -247,7 +222,6 @@ def create_qir_engine_from_hugr_rust(
     hugr_data: Union[bytes, str],
     shots: int = 1000,
     debug_info: bool = False,
-    llvm_convention: str = "hugr",
 ) -> RustHugrQirEngine:
     """
     Create QIR engine from HUGR using Rust backend.
@@ -256,16 +230,15 @@ def create_qir_engine_from_hugr_rust(
         hugr_data: HUGR data as bytes or path to HUGR file
         shots: Number of shots to execute
         debug_info: Whether to include debug information
-        llvm_convention: Quantum operation naming convention
 
     Returns:
         RustHugrQirEngine instance
     """
     if isinstance(hugr_data, bytes):
-        return RustHugrQirEngine(hugr_data, shots, debug_info, llvm_convention)
+        return RustHugrQirEngine(hugr_data, shots, debug_info)
     else:
         return RustHugrQirEngine.from_file(
-            hugr_data, shots, debug_info, llvm_convention
+            hugr_data, shots, debug_info
         )
 
 

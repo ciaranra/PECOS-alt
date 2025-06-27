@@ -5,26 +5,26 @@ use pecos_engines::engine_system::MonteCarloEngine;
 use pecos_engines::noise::DepolarizingNoiseModel;
 use pecos_qir::QirEngine;
 
-/// Get the path to the HUGR Bell state example
-fn get_hugr_bell_path() -> PathBuf {
+/// Get the path to the Bell state example
+fn get_bell_path() -> PathBuf {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let workspace_dir = manifest_dir
         .parent()
         .expect("CARGO_MANIFEST_DIR should have a parent")
         .parent()
         .expect("Expected to find workspace directory as parent of crates/");
-    workspace_dir.join("examples/qir/bell_hugr.ll")
+    workspace_dir.join("examples/qir/bell.ll")
 }
 
-/// Get the path to the HUGR quantum program example
-fn get_hugr_qprog_path() -> PathBuf {
+/// Get the path to the quantum program example
+fn get_qprog_path() -> PathBuf {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let workspace_dir = manifest_dir
         .parent()
         .expect("CARGO_MANIFEST_DIR should have a parent")
         .parent()
         .expect("Expected to find workspace directory as parent of crates/");
-    workspace_dir.join("examples/qir/qprog_hugr.ll")
+    workspace_dir.join("examples/qir/qprog.ll")
 }
 
 /// Check if LLVM llc tool is available
@@ -52,28 +52,26 @@ fn is_llc_available() -> bool {
 fn skip_if_llc_missing(test_name: &str) -> bool {
     if !is_llc_available() {
         println!("Skipping {test_name}: LLVM 'llc' tool not found");
-        println!(
-            "To enable HUGR QIR tests, install LLVM version 14 (e.g., 'sudo apt install llvm-14')"
-        );
+        println!("To enable QIR tests, install LLVM version 14 (e.g., 'sudo apt install llvm-14')");
         return true;
     }
     false
 }
 
 #[test]
-fn test_hugr_bell_state_immediate_measurement() {
+fn test_bell_state_immediate_measurement() {
     // Skip if LLVM is not available
-    if skip_if_llc_missing("test_hugr_bell_state_immediate_measurement") {
+    if skip_if_llc_missing("test_bell_state_immediate_measurement") {
         return;
     }
 
-    // Create a QIR engine with HUGR Bell state file
-    let qir_engine = QirEngine::new(get_hugr_bell_path());
+    // Create a QIR engine with Bell state file
+    let qir_engine = QirEngine::new(get_bell_path());
 
     // Create a noiseless model
     let noise_model = Box::new(DepolarizingNoiseModel::new_uniform(0.0));
 
-    // Run the HUGR Bell state example with 100 shots
+    // Run the Bell state example with 100 shots
     let results = MonteCarloEngine::run_with_noise_model(
         Box::new(qir_engine),
         noise_model,
@@ -81,7 +79,7 @@ fn test_hugr_bell_state_immediate_measurement() {
         2,
         None, // No specific seed
     )
-    .expect("HUGR QIR execution should succeed");
+    .expect("QIR execution should succeed");
 
     // Count occurrences of each result
     let mut counts: HashMap<String, usize> = HashMap::new();
@@ -96,12 +94,12 @@ fn test_hugr_bell_state_immediate_measurement() {
                 pecos_engines::shot_results::Data::I64(v) => v.to_string(),
                 _ => panic!("Unexpected data type in 'c' register: {data:?}"),
             })
-            .expect("Expected 'c' register in HUGR Bell state results");
+            .expect("Expected 'c' register in Bell state results");
         *counts.entry(result_str).or_insert(0) += 1;
     }
 
     // Print the counts for debugging
-    println!("HUGR Bell state results (immediate measurement):");
+    println!("Bell state results (immediate measurement):");
     for (result, count) in &counts {
         println!("  {result}: {count}");
     }
@@ -115,7 +113,7 @@ fn test_hugr_bell_state_immediate_measurement() {
         if !result.is_empty() {
             assert!(
                 result == "0" || result == "3",
-                "Expected only '0' or '3' in HUGR Bell state measurements, but found '{result}'"
+                "Expected only '0' or '3' in Bell state measurements, but found '{result}'"
             );
         }
     }
@@ -132,19 +130,19 @@ fn test_hugr_bell_state_immediate_measurement() {
 }
 
 #[test]
-fn test_hugr_qprog_adaptive_algorithm() {
+fn test_qprog_adaptive_algorithm() {
     // Skip if LLVM is not available
-    if skip_if_llc_missing("test_hugr_qprog_adaptive_algorithm") {
+    if skip_if_llc_missing("test_qprog_adaptive_algorithm") {
         return;
     }
 
-    // Create a QIR engine with HUGR quantum program file
-    let qir_engine = QirEngine::new(get_hugr_qprog_path());
+    // Create a QIR engine with quantum program file
+    let qir_engine = QirEngine::new(get_qprog_path());
 
     // Create a noiseless model
     let noise_model = Box::new(DepolarizingNoiseModel::new_uniform(0.0));
 
-    // Run the HUGR quantum program with 50 shots
+    // Run the quantum program with 50 shots
     let results = MonteCarloEngine::run_with_noise_model(
         Box::new(qir_engine),
         noise_model,
@@ -152,7 +150,7 @@ fn test_hugr_qprog_adaptive_algorithm() {
         2,
         None, // No specific seed
     )
-    .expect("HUGR adaptive QIR execution should succeed");
+    .expect("Adaptive QIR execution should succeed");
 
     // Verify we get results
     assert!(!results.shots.is_empty(), "Expected non-empty results");
@@ -163,15 +161,15 @@ fn test_hugr_qprog_adaptive_algorithm() {
     // Should have result_0, result_1, and result_2 registers
     assert!(
         first_shot.data.contains_key("result_0"),
-        "Expected 'result_0' register in HUGR adaptive algorithm results"
+        "Expected 'result_0' register in adaptive algorithm results"
     );
     assert!(
         first_shot.data.contains_key("result_1"),
-        "Expected 'result_1' register in HUGR adaptive algorithm results"
+        "Expected 'result_1' register in adaptive algorithm results"
     );
     assert!(
         first_shot.data.contains_key("result_2"),
-        "Expected 'result_2' register in HUGR adaptive algorithm results"
+        "Expected 'result_2' register in adaptive algorithm results"
     );
 
     // Count results for each register
@@ -212,7 +210,7 @@ fn test_hugr_qprog_adaptive_algorithm() {
     }
 
     // Print results for debugging
-    println!("HUGR adaptive algorithm results:");
+    println!("Adaptive algorithm results:");
     println!("  result_0 (final qubit 0): {result_0_counts:?}");
     println!("  result_1 (final qubit 1): {result_1_counts:?}");
     println!("  result_2 (intermediate): {result_2_counts:?}");
@@ -237,80 +235,5 @@ fn test_hugr_qprog_adaptive_algorithm() {
         );
     }
 
-    println!("HUGR adaptive algorithm test passed!");
-}
-
-#[test]
-fn test_hugr_vs_qir_bell_state_comparison() {
-    // Skip if LLVM is not available
-    if skip_if_llc_missing("test_hugr_vs_qir_bell_state_comparison") {
-        return;
-    }
-
-    let shots = 100;
-    let seed = Some(42);
-
-    // Test QIR Bell state
-    let qir_path = {
-        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let workspace_dir = manifest_dir.parent().unwrap().parent().unwrap();
-        workspace_dir.join("examples/qir/bell.ll")
-    };
-
-    let qir_engine = QirEngine::new(qir_path);
-    let qir_noise_model = Box::new(DepolarizingNoiseModel::new_uniform(0.0));
-    let qir_results = MonteCarloEngine::run_with_noise_model(
-        Box::new(qir_engine),
-        qir_noise_model,
-        shots,
-        1,
-        seed,
-    )
-    .expect("QIR execution should succeed");
-
-    // Test HUGR Bell state
-    let hugr_engine = QirEngine::new(get_hugr_bell_path());
-    let hugr_noise_model = Box::new(DepolarizingNoiseModel::new_uniform(0.0));
-    let hugr_results = MonteCarloEngine::run_with_noise_model(
-        Box::new(hugr_engine),
-        hugr_noise_model,
-        shots,
-        1,
-        seed,
-    )
-    .expect("HUGR execution should succeed");
-
-    // Both should produce the same number of shots
-    assert_eq!(qir_results.shots.len(), hugr_results.shots.len());
-
-    // Both should only produce Bell state outcomes (0 or 3)
-    for shot in &qir_results.shots {
-        if let Some(data) = shot.data.get("c") {
-            let value = match data {
-                pecos_engines::shot_results::Data::U32(v) => *v,
-                pecos_engines::shot_results::Data::I64(v) => *v as u32,
-                _ => continue,
-            };
-            assert!(
-                value == 0 || value == 3,
-                "QIR: Expected 0 or 3, got {value}"
-            );
-        }
-    }
-
-    for shot in &hugr_results.shots {
-        if let Some(data) = shot.data.get("c") {
-            let value = match data {
-                pecos_engines::shot_results::Data::U32(v) => *v,
-                pecos_engines::shot_results::Data::I64(v) => *v as u32,
-                _ => continue,
-            };
-            assert!(
-                value == 0 || value == 3,
-                "HUGR: Expected 0 or 3, got {value}"
-            );
-        }
-    }
-
-    println!("✅ Both QIR and HUGR conventions produce valid Bell state correlations");
+    println!("Adaptive algorithm test passed!");
 }
