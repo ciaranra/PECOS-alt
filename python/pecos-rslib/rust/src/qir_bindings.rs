@@ -16,7 +16,7 @@ use pecos_core::rng::RngManageable;
 use pecos_engines::NoiseModel;
 use pecos_engines::noise::DepolarizingNoiseModel;
 use pecos_engines::shot_results;
-use pecos_qir::error_handling::{init_qir_context, get_qir_diagnostic_report};
+use pecos_qir::error_handling::{get_qir_diagnostic_report, init_qir_context};
 use pecos_qir::setup_qir_engine;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
@@ -210,7 +210,7 @@ pub fn py_execute_qir(
                 // Basic validation - just check if it looks like QIR
                 if !qir_content.contains("@__quantum__") {
                     return Err(PyRuntimeError::new_err(
-                        "Invalid QIR format: No quantum operations found"
+                        "Invalid QIR format: No quantum operations found",
                     ));
                 }
             }
@@ -247,9 +247,7 @@ pub fn py_execute_qir(
 
     // Execute QIR directly without error context wrapper
     let results = execute_qir_safe(&path, shots, seed, noise_probability, workers)
-        .map_err(|e| {
-            PyRuntimeError::new_err(format!("QIR execution failed: {e}"))
-    })?;
+        .map_err(|e| PyRuntimeError::new_err(format!("QIR execution failed: {e}")))?;
 
     // Convert results to Python format
     convert_results_to_python(py, results, shots)
@@ -281,7 +279,10 @@ pub fn py_validate_qir_format(qir_path: &str) -> PyResult<PyObject> {
             result.set_item("format_errors", Vec::<String>::new())?;
         } else {
             result.set_item("format_valid", false)?;
-            result.set_item("format_errors", vec!["No quantum operations found".to_string()])?;
+            result.set_item(
+                "format_errors",
+                vec!["No quantum operations found".to_string()],
+            )?;
         }
 
         // Runtime issue detection

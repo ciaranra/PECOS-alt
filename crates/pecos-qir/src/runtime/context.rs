@@ -139,7 +139,11 @@ impl Drop for ContextGuard {
     }
 }
 
-/// Execute a closure with the current runtime context
+/// Execute a function with the current runtime context
+///
+/// # Errors
+///
+/// Returns an error if no runtime context is currently active
 pub fn with_current_context<F, R>(f: F) -> Result<R, &'static str>
 where
     F: FnOnce(&mut RuntimeContext) -> R,

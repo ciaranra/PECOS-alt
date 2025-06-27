@@ -35,22 +35,22 @@ pub fn create_hugr_qir_engine<P: AsRef<Path>>(
     let temp_dir =
         TempDir::new().map_err(|e| PecosError::with_context(e, "Failed to create temp dir"))?;
 
-    // Set up compiler configuration
+    // Set up compiler configuration - use native HUGR convention for direct execution
     let output_path = temp_dir.path().join("compiled.ll");
     let config = HugrCompilerConfig {
         output_path: Some(output_path),
         debug_info: false,
-        quantum_naming: super::compiler::QuantumLlvmConvention::Qir,
+        quantum_naming: super::compiler::QuantumLlvmConvention::Hugr,
     };
 
-    // Compile HUGR to QIR
+    // Compile HUGR to native HUGR LLVM-IR (no QIR conversion)
     let compiler = HugrCompiler::with_config(config);
-    let qir_path = compiler.compile_hugr(hugr_path)?;
+    let llvm_path = compiler.compile_hugr(hugr_path)?;
 
-    info!("Compiled HUGR to QIR: {}", qir_path.display());
+    info!("Compiled HUGR to native LLVM-IR: {}", llvm_path.display());
 
-    // Create QIR engine from compiled output
-    let mut qir_engine = QirEngine::new(qir_path);
+    // Create QIR engine from compiled output (handles both QIR and HUGR conventions)
+    let mut qir_engine = QirEngine::new(llvm_path);
 
     // Set shots if specified
     if let Some(num_shots) = shots {
@@ -63,14 +63,14 @@ pub fn create_hugr_qir_engine<P: AsRef<Path>>(
     Ok(Box::new(qir_engine))
 }
 
-/// Compile a HUGR file to QIR using default settings
+/// Compile a HUGR file to native HUGR LLVM-IR using default settings
 ///
 /// # Arguments
 /// * `hugr_path` - Path to the HUGR file
-/// * `output_path` - Path where the QIR file should be written
+/// * `output_path` - Path where the LLVM-IR file should be written
 ///
 /// # Returns
-/// Path to the generated QIR file
+/// Path to the generated LLVM-IR file
 ///
 /// # Errors
 /// Returns `PecosError` if compilation fails
@@ -81,7 +81,7 @@ pub fn compile_hugr_to_qir<P: AsRef<Path>, Q: AsRef<Path>>(
     let config = HugrCompilerConfig {
         output_path: Some(output_path.as_ref().to_path_buf()),
         debug_info: false,
-        quantum_naming: super::compiler::QuantumLlvmConvention::Qir,
+        quantum_naming: super::compiler::QuantumLlvmConvention::Hugr,
     };
 
     let compiler = HugrCompiler::with_config(config);

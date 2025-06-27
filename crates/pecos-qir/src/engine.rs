@@ -1,6 +1,7 @@
 //! QIR Engine Module
 //!
 //! This module provides the QIR Engine for executing quantum programs compiled to QIR.
+use crate::hugr::compiler::QuantumLlvmConvention;
 use crate::library::QirLibrary;
 use crate::linker::QirLinker;
 use log::{debug, trace, warn};
@@ -36,6 +37,8 @@ pub struct QirEngineConfig {
     pub assigned_shots: usize,
     /// Whether to show verbose command logs
     pub verbose: bool,
+    /// Quantum LLVM convention (auto-detected if None)
+    pub quantum_convention: Option<QuantumLlvmConvention>,
 }
 
 /// QIR Engine for executing quantum programs compiled to QIR
@@ -138,6 +141,49 @@ impl QirEngine {
         self.config.verbose = verbose;
     }
 
+    /// Detect the quantum LLVM convention used in the QIR file
+    ///
+    /// # Returns
+    ///
+    /// The detected quantum LLVM convention
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read or parsed
+    pub fn detect_quantum_convention(&self) -> Result<QuantumLlvmConvention, PecosError> {
+        if let Some(convention) = &self.config.quantum_convention {
+            debug!("QIR: Using configured convention: {:?}", convention);
+            return Ok(convention.clone());
+        }
+
+        debug!(
+            "QIR: Auto-detecting quantum convention from: {:?}",
+            self.qir_file
+        );
+
+        let content = fs::read_to_string(&self.qir_file).map_err(|e| {
+            PecosError::with_context(e, "Failed to read QIR file for convention detection")
+        })?;
+
+        // Check for HUGR-specific function signatures
+        if content.contains("__quantum__qis__h__body__hugr")
+            || content.contains("__hugr__quantum__qis__m__body")
+            || content.contains("__quantum__qis__") && content.contains("(i64")
+        {
+            debug!("QIR: Detected HUGR convention (integer-based signatures)");
+            Ok(QuantumLlvmConvention::Hugr)
+        } else if content.contains("__quantum__qis__h__body")
+            || content.contains("__quantum__rt__qubit_allocate")
+            || content.contains("*const u8")
+        {
+            debug!("QIR: Detected QIR convention (pointer-based signatures)");
+            Ok(QuantumLlvmConvention::Qir)
+        } else {
+            debug!("QIR: No clear convention detected, defaulting to QIR");
+            Ok(QuantumLlvmConvention::Qir)
+        }
+    }
+
     /// Reset the internal state of the engine
     fn reset_internal_state(&mut self) {
         debug!("QIR: Resetting internal state");
@@ -208,6 +254,10 @@ impl QirEngine {
         // Store the library and path
         self.library = Some(Box::new(library));
         self.library_path = Some(library_path.clone());
+
+        // Detect quantum convention if not already configured
+        let convention = self.detect_quantum_convention()?;
+        debug!("QIR: Using quantum convention: {:?}", convention);
 
         // Try to detect the entry point from the QIR file
         if self.entry_point.is_none() {
@@ -403,7 +453,7 @@ impl QirEngine {
                         _ => 0,
                     };
                     // Extract the least significant bit as the measurement result
-                    let bit_value = if (combined_value & 1) != 0 { 1u8 } else { 0u8 };
+                    let bit_value = u8::from((combined_value & 1) != 0);
                     shot_measurements.push(bit_value);
                 } else {
                     // Try any other keys that might contain measurement data
@@ -768,6 +818,14 @@ impl QirEngine {
         (max_qubit_index, found_allocation)
     }
 
+    /// Analyze the QIR file to determine the number of qubits
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The QIR file does not exist
+    /// - The LLVM IR cannot be parsed
+    /// - No qubit allocations are found in the file
     pub fn analyze_qir_file(&self) -> Result<usize, PecosError> {
         debug!("QIR Engine: Analyzing QIR file: {:?}", self.qir_file);
 

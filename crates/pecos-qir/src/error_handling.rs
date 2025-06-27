@@ -11,6 +11,7 @@ pub fn init_qir_context(_function_name: Option<String>) {
 }
 
 /// Get QIR diagnostic report - stub implementation
+#[must_use]
 pub fn get_qir_diagnostic_report() -> String {
     String::new()
 }
@@ -21,6 +22,10 @@ pub fn clear_qir_context() {
 }
 
 /// Validate QIR for runtime issues - stub implementation
+///
+/// # Errors
+///
+/// Currently never returns an error (stub implementation)
 pub fn validate_qir_for_runtime_issues(_qir_content: &str) -> Result<Vec<String>, PecosError> {
     // Stub - always return empty warnings
     Ok(Vec::new())

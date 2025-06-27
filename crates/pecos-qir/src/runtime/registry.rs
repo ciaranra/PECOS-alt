@@ -25,7 +25,11 @@ pub struct RuntimeRegistry {
 }
 
 impl RuntimeRegistry {
-    /// Initialize the global registry
+    /// Initialize the global runtime registry
+    ///
+    /// # Panics
+    ///
+    /// Panics if the registry lock is poisoned
     pub fn initialize() {
         let mut registry = RUNTIME_REGISTRY.write().unwrap();
         if registry.is_none() {
@@ -35,7 +39,11 @@ impl RuntimeRegistry {
         }
     }
 
-    /// Register a new runtime state and return its ID
+    /// Register a new runtime state in the global registry and return its ID
+    ///
+    /// # Panics
+    ///
+    /// Panics if the registry lock is poisoned
     pub fn register_runtime(state: Arc<Mutex<QirRuntimeState>>) -> u64 {
         let id = NEXT_RUNTIME_ID.fetch_add(1, Ordering::SeqCst);
 
@@ -49,7 +57,11 @@ impl RuntimeRegistry {
         id
     }
 
-    /// Unregister a runtime state
+    /// Unregister a runtime state from the global registry
+    ///
+    /// # Panics
+    ///
+    /// Panics if the registry lock is poisoned
     pub fn unregister_runtime(id: u64) {
         let mut registry = RUNTIME_REGISTRY.write().unwrap();
         if let Some(reg) = registry.as_mut() {
@@ -57,7 +69,11 @@ impl RuntimeRegistry {
         }
     }
 
-    /// Get a runtime state by ID
+    /// Get a runtime state by ID from the global registry
+    ///
+    /// # Panics
+    ///
+    /// Panics if the registry lock is poisoned
     pub fn get_runtime(id: u64) -> Option<Arc<Mutex<QirRuntimeState>>> {
         let registry = RUNTIME_REGISTRY.read().unwrap();
         registry.as_ref()?.states.get(&id).cloned()
@@ -77,9 +93,17 @@ impl RuntimeRegistry {
         });
     }
 
-    /// Get the current runtime state for this thread
-    /// Auto-initializes if no runtime is set for this thread
-    /// This function guarantees to return `Some()` by auto-initializing if needed
+    /// Execute a function with the current runtime state for this thread
+    ///
+    /// Auto-initializes if no runtime is set for this thread.
+    /// This function guarantees to return `Some()` by auto-initializing if needed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if:
+    /// - The registry lock is poisoned
+    /// - The runtime state lock is poisoned
+    /// - Failed to initialize runtime state
     pub fn with_current_runtime<F, R>(f: F) -> Option<R>
     where
         F: FnOnce(&mut QirRuntimeState) -> R,
@@ -114,9 +138,7 @@ impl RuntimeRegistry {
             match new_state.lock() {
                 Ok(mut state) => Some(f(&mut state)),
                 Err(e) => {
-                    error!(
-                        "QIR Runtime: Critical error - failed to lock new runtime state: {e}"
-                    );
+                    error!("QIR Runtime: Critical error - failed to lock new runtime state: {e}");
                     // Return a default/fallback result instead of None to avoid crashes
                     // This is a last resort to prevent segfaults
                     panic!("QIR Runtime: Failed to initialize runtime state");
@@ -166,7 +188,13 @@ pub fn clear_shutting_down() {
     SHUTTING_DOWN.store(false, Ordering::Release);
 }
 
-/// Clean up all runtime states (for testing purposes)
+/// Clean up all runtime states in the global registry
+///
+/// This is primarily for testing purposes.
+///
+/// # Panics
+///
+/// Panics if the registry lock is poisoned
 pub fn cleanup_all_runtimes() {
     let mut registry = RUNTIME_REGISTRY.write().unwrap();
     if let Some(reg) = registry.as_mut() {

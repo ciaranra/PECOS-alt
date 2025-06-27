@@ -16,13 +16,13 @@ pub mod registry;
 pub mod state;
 
 // Re-export commonly used types
+pub use cleanup::{cleanup_thread_local_state, force_runtime_cleanup};
+pub use context::RuntimeContext;
 pub use registry::{RuntimeRegistry, initialize_registry};
 pub use state::QirRuntimeState;
-pub use context::RuntimeContext;
-pub use cleanup::{force_runtime_cleanup, cleanup_thread_local_state};
 
 // Internal imports
-use log::{debug, warn, error};
+use log::{debug, error, warn};
 use pecos_core::errors::PecosError;
 use pecos_engines::byte_message::ByteMessage;
 use std::env;
@@ -53,9 +53,14 @@ fn get_thread_id() -> String {
 }
 
 /// Helper function to convert i64 to usize for qubit/result IDs
+///
+/// # Panics
+///
+/// Panics if the value is negative or too large for the target platform
 #[inline]
 fn i64_to_usize(value: i64) -> usize {
-    value as usize
+    usize::try_from(value)
+        .expect("Invalid qubit/result ID: value must be non-negative and fit in usize")
 }
 
 /// Helper function to check if we should print commands
@@ -479,6 +484,11 @@ pub mod core_runtime {
 // =============================================================================
 
 /// Reset the QIR runtime state
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// It performs thread-safe operations internally.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qir_runtime_reset() {
     // Clear the interactive callback first
@@ -492,25 +502,45 @@ pub unsafe extern "C" fn qir_runtime_reset() {
     // Each thread should only reset its own runtime state.
 }
 
-/// Initialize the QIR runtime
+/// Initialize the quantum runtime
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The config parameter is currently unused.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__initialize(_config: *const u8) {
     core_runtime::initialize();
 }
 
 /// Standard QIR qubit allocation - returns pointer
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The returned pointer is an opaque handle and should not be dereferenced.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__qubit_allocate() -> *const u8 {
     core_runtime::allocate_qubit() as *const u8
 }
 
-/// Standard QIR result allocation - returns pointer  
+/// Standard QIR result allocation - returns pointer
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The returned pointer is an opaque handle and should not be dereferenced.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__result_allocate() -> *const u8 {
     core_runtime::allocate_result() as *const u8
 }
 
 /// Release a qubit (pointer version)
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The `qubit_ptr` must be a valid pointer returned by `__quantum__rt__qubit_allocate`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__qubit_release(qubit_ptr: *const u8) {
     let qubit_id = qubit_ptr as usize;
@@ -518,6 +548,11 @@ pub unsafe extern "C" fn __quantum__rt__qubit_release(qubit_ptr: *const u8) {
 }
 
 /// Release a result (pointer version)
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The `result_ptr` must be a valid pointer returned by `__quantum__rt__result_allocate`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__result_release(result_ptr: *const u8) {
     let result_id = result_ptr as usize;
@@ -525,24 +560,49 @@ pub unsafe extern "C" fn __quantum__rt__result_release(result_ptr: *const u8) {
 }
 
 // QIR Gate Operations (Pointer Convention)
+//
+// Safety note for all quantum gate operations below:
+// These functions are marked unsafe as they're called from C/FFI context.
+// The qubit pointers must be valid handles returned by `__quantum__rt__qubit_allocate`.
+// The pointers are opaque handles and should not be dereferenced.
 
+/// Apply Hadamard gate
+///
+/// # Safety
+///
+/// See safety note above for quantum gate operations.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__h__body(qubit_ptr: *const u8) {
     let qubit_id = qubit_ptr as usize;
     core_runtime::h_gate(qubit_id);
 }
 
+/// Apply Pauli-X gate
+///
+/// # Safety
+///
+/// See safety note above for quantum gate operations.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__x__body(qubit_ptr: *const u8) {
     let qubit_id = qubit_ptr as usize;
     core_runtime::x_gate(qubit_id);
 }
 
+/// Apply Pauli-Y gate
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__y__body(qubit: usize) {
     core_runtime::y_gate(qubit);
 }
 
+/// Apply Pauli-Z gate
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__z__body(qubit: usize) {
     core_runtime::z_gate(qubit);
@@ -735,10 +795,14 @@ pub unsafe extern "C" fn __quantum__qis__ccx__body(control1: i64, control2: i64,
     core_runtime::ccx_gate(control1_id, control2_id, target_id);
 }
 
-/// HUGR result allocation - returns i64 ID
+/// Allocate a result for HUGR convention - returns i64 ID
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__result_allocate_hugr() -> i64 {
-    core_runtime::allocate_result() as i64
+    i64::try_from(core_runtime::allocate_result()).expect("Result ID too large for i64")
 }
 
 #[unsafe(no_mangle)]
@@ -806,7 +870,7 @@ pub unsafe extern "C" fn __quantum__rt__result_get_one(result: i64) -> i32 {
             error!("[Thread {}] TIMEOUT: __quantum__rt__result_get_one exceeded 30s", get_thread_id());
             return 0;
         }
-        
+
         // Try to get the measurement result first
         if let Some(measurement_value) = state.get_measurement_result(result_id) {
             if should_print_commands() {
@@ -819,28 +883,28 @@ pub unsafe extern "C" fn __quantum__rt__result_get_one(result: i64) -> i32 {
                 let thread_id = get_thread_id();
                 debug!("[Thread {thread_id}] INTERACTIVE: Triggering execution for result {result_id}");
             }
-            
+
             // Check if we have accumulated operations to execute
             let has_operations = state.message_builder_mut().message_count() > 0;
-            
+
             if has_operations {
                 if should_print_commands() {
                     debug!("[Thread {}] BUILDING: Building message with {} operations", get_thread_id(), state.message_builder_mut().message_count());
                 }
-                
+
                 // Build the message with accumulated quantum operations
                 let message = state.build_message();
-                
+
                 if should_print_commands() {
                     debug!("[Thread {}] CALLBACK: Calling interactive callback", get_thread_id());
                 }
-                
+
                 // Trigger interactive execution by calling the global callback
                 // The QirEngine will handle this through its ControlEngine implementation
-                
+
                 // Increment callback depth to detect recursion
                 CALLBACK_DEPTH.with(|d| d.set(d.get() + 1));
-                
+
                 let callback_result = core_runtime::execute_with_callback(|callback| {
                     if should_print_commands() {
                         debug!("[Thread {}] EXECUTING: Starting quantum execution", get_thread_id());
@@ -851,20 +915,20 @@ pub unsafe extern "C" fn __quantum__rt__result_get_one(result: i64) -> i32 {
                     }
                     exec_result
                 });
-                
+
                 // Decrement callback depth after execution
                 CALLBACK_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
-                
+
                 if let Some(callback_result) = callback_result {
                     match callback_result {
                         Ok(measurement_results) => {
                             if should_print_commands() {
                                 debug!("[Thread {}] SUCCESS: Got {} measurement results", get_thread_id(), measurement_results.len());
                             }
-                            
+
                             // Update the runtime state with the measurement results
                             state.update_measurement_results(&measurement_results);
-                            
+
                             // Now try to get the result again
                             if let Some(measurement_value) = state.get_measurement_result(result_id) {
                                 if should_print_commands() {

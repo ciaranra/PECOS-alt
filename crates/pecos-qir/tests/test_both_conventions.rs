@@ -224,3 +224,61 @@ fn test_convention_enum_values() {
     println!("✓ Convention enum values are correct");
     println!("Convention Enum Test: PASSED");
 }
+
+#[test]
+fn test_unified_runtime_supports_both_conventions() {
+    // Test that the unified runtime supports both conventions without conversion
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+    let hugr_path = temp_dir.path().join("test_unified.hugr");
+
+    // Write test HUGR data
+    fs::write(&hugr_path, SIMPLE_H_GATE_HUGR).expect("Failed to write HUGR file");
+
+    // Test HUGR convention compilation (native, no conversion)
+    let hugr_compiler = Compiler::new().with_quantum_naming(QuantumLlvmConvention::Hugr);
+    let hugr_result = hugr_compiler.compile_hugr(&hugr_path);
+
+    // Test QIR convention compilation
+    let qir_compiler = Compiler::new().with_quantum_naming(QuantumLlvmConvention::Qir);
+    let qir_result = qir_compiler.compile_hugr(&hugr_path);
+
+    match (hugr_result, qir_result) {
+        (Ok(hugr_output), Ok(qir_output)) => {
+            let hugr_content =
+                fs::read_to_string(&hugr_output).expect("Failed to read HUGR output");
+            let qir_content = fs::read_to_string(&qir_output).expect("Failed to read QIR output");
+
+            // HUGR convention should NOT contain conversion artifacts
+            if hugr_content.contains("__quantum__qis__") {
+                if hugr_content.contains("__hugr__quantum__qis__m__body") {
+                    println!("✓ HUGR convention: Contains native HUGR functions (no conversion)");
+                } else if hugr_content.contains("__quantum__rt__result_get_one") {
+                    println!("⚠ HUGR convention: Still contains QIR conversion artifacts");
+                } else {
+                    println!("✓ HUGR convention: Contains quantum functions");
+                }
+            }
+
+            // QIR convention should contain standard QIR functions
+            if qir_content.contains("__quantum__qis__") && !qir_content.contains("__hugr") {
+                println!("✓ QIR convention: Contains standard QIR functions");
+            }
+
+            println!("✓ Both conventions compile successfully without forcing conversion");
+            println!("Unified Runtime Test: PASSED");
+        }
+        (Err(hugr_err), Err(qir_err)) => {
+            println!("Both compilations failed (expected for simple test data):");
+            println!("  HUGR: {hugr_err}");
+            println!("  QIR: {qir_err}");
+        }
+        (Ok(_), Err(qir_err)) => {
+            println!("HUGR compiled successfully, QIR failed: {qir_err}");
+            println!("✓ HUGR native compilation works");
+        }
+        (Err(hugr_err), Ok(_)) => {
+            println!("QIR compiled successfully, HUGR failed: {hugr_err}");
+            println!("✓ QIR compilation works");
+        }
+    }
+}

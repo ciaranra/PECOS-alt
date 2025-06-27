@@ -1,3 +1,13 @@
+/// Macro to generate compile-time checks for function calls
+#[macro_export]
+macro_rules! assert_param_types {
+    ($func:ident($($param:expr),*) => $expected:ty) => {
+        {
+            let _: $expected = $func($($param),*);
+        }
+    };
+}
+
 #[cfg(test)]
 mod compile_time_tests {
     use crate::simulation_builder::SimulationBuilder;
@@ -39,14 +49,4 @@ mod compile_time_tests {
             // Type checking only
         }
     }
-}
-
-/// Macro to generate compile-time checks for function calls
-#[macro_export]
-macro_rules! assert_param_types {
-    ($func:ident($($param:expr),*) => $expected:ty) => {
-        {
-            let _: $expected = $func($($param),*);
-        }
-    };
 }

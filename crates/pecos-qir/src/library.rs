@@ -188,11 +188,12 @@ impl QirLibrary {
                     );
 
                     // Sleep before retrying, with exponential backoff
-                    let sleep_duration =
-                        Duration::from_millis(100 * 2u64.pow(u32::try_from(retry_count).unwrap_or(0)));
+                    let sleep_duration = Duration::from_millis(
+                        100 * 2u64.pow(u32::try_from(retry_count).unwrap_or(0)),
+                    );
                     debug!("QIR: Sleeping for {:?} before retry", sleep_duration);
                     thread::sleep(sleep_duration);
-                    
+
                     retry_count += 1;
                 }
             }

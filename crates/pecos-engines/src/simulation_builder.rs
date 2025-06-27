@@ -77,6 +77,12 @@ impl SimulationBuilder {
     }
 
     /// Build and run the simulation
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The classical engine is not set
+    /// - The simulation execution fails
     pub fn run(self) -> Result<ShotVec, PecosError> {
         let classical_engine = self
             .classical_engine
@@ -104,6 +110,12 @@ impl SimulationBuilder {
 }
 
 /// Convenience function that uses the builder internally
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The classical engine is not set
+/// - The simulation execution fails
 pub fn run_sim_safe(
     classical_engine: Box<dyn ClassicalEngine>,
     shots: usize,

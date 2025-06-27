@@ -9,10 +9,8 @@ use std::path::PathBuf;
 #[cfg(target_os = "windows")]
 pub mod windows;
 
-
 #[cfg(target_os = "macos")]
 pub mod macos;
-
 
 /// Get standard LLVM installation paths for the current platform
 #[must_use]

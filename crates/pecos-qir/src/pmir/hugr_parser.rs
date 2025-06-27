@@ -298,7 +298,6 @@ fn parse_angle_from_node(_node: &serde_json::Map<String, Value>) -> Result<f64, 
     Ok(0.0)
 }
 
-
 /// Parse constant value
 fn parse_const_value(op_obj: &serde_json::Map<String, Value>) -> Result<PastValue, PecosError> {
     let value = op_obj.get("value").ok_or_else(|| PecosError::ParseSyntax {

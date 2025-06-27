@@ -65,6 +65,17 @@ impl RuntimeBuilder {
     /// - The marker file `~/.cargo/pecos-qir/.needs_rebuild` exists
     ///
     /// The marker file is created by build.rs when source changes are detected.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The build lock cannot be acquired
+    /// - Cargo commands fail
+    /// - Library file is not found after build
+    ///
+    /// # Panics
+    ///
+    /// Panics if the build mutex is poisoned
     pub fn build_runtime() -> Result<PathBuf, PecosError> {
         // Prevent concurrent builds
         let _lock = BUILD_MUTEX.lock().unwrap();

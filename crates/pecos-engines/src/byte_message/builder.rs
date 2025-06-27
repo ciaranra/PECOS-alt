@@ -501,6 +501,10 @@ impl ByteMessageBuilder {
     }
 
     /// Add a CY gate
+    ///
+    /// # Panics
+    ///
+    /// Panics if the length of `controls` and `targets` are not equal.
     pub fn add_cy(&mut self, controls: &[usize], targets: &[usize]) -> &mut Self {
         // CY = (I ⊗ Sdg) CX (I ⊗ S)
         assert_eq!(
@@ -517,6 +521,10 @@ impl ByteMessageBuilder {
     }
 
     /// Add a CZ gate
+    ///
+    /// # Panics
+    ///
+    /// Panics if the length of `controls` and `targets` are not equal.
     pub fn add_cz(&mut self, controls: &[usize], targets: &[usize]) -> &mut Self {
         // CZ = H CX H
         assert_eq!(

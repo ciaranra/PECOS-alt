@@ -82,9 +82,13 @@ impl CodegenExtension for StandardQirExtension {
         let y_func = self.get_function_name("__quantum__qis__y__body");
         let z_func = self.get_function_name("__quantum__qis__z__body");
         let cx_func = self.get_function_name("__quantum__qis__cx__body");
-        let rx_func = self.get_function_name("__quantum__qis__rx__body");
-        let ry_func = self.get_function_name("__quantum__qis__ry__body");
-        let rz_func = self.get_function_name("__quantum__qis__rz__body");
+        // These names are intentionally similar as they represent rotation functions for different axes
+        #[allow(clippy::similar_names)]
+        let rotation_x_func = self.get_function_name("__quantum__qis__rx__body");
+        #[allow(clippy::similar_names)]
+        let rotation_y_func = self.get_function_name("__quantum__qis__ry__body");
+        #[allow(clippy::similar_names)]
+        let rotation_z_func = self.get_function_name("__quantum__qis__rz__body");
 
         let result_names = std::rc::Rc::new(self.result_names);
 
@@ -126,17 +130,20 @@ impl CodegenExtension for StandardQirExtension {
             // Rotation gates
             .extension_op(ext_id.clone(), "Rx".into(), {
                 move |ctx, args| {
-                    emit_rotation_gate_standard(ctx, args, &rx_func).map_err(anyhow::Error::new)
+                    emit_rotation_gate_standard(ctx, args, &rotation_x_func)
+                        .map_err(anyhow::Error::new)
                 }
             })
             .extension_op(ext_id.clone(), "Ry".into(), {
                 move |ctx, args| {
-                    emit_rotation_gate_standard(ctx, args, &ry_func).map_err(anyhow::Error::new)
+                    emit_rotation_gate_standard(ctx, args, &rotation_y_func)
+                        .map_err(anyhow::Error::new)
                 }
             })
             .extension_op(ext_id.clone(), "Rz".into(), {
                 move |ctx, args| {
-                    emit_rotation_gate_standard(ctx, args, &rz_func).map_err(anyhow::Error::new)
+                    emit_rotation_gate_standard(ctx, args, &rotation_z_func)
+                        .map_err(anyhow::Error::new)
                 }
             })
             // Pauli gates - S/SZ, T, and their adjoints

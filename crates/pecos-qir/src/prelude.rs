@@ -1,14 +1,14 @@
 //! Prelude module for pecos-qir
-//! 
+//!
 //! This module provides convenient re-exports of commonly used types and functions
 //! for working with QIR (Quantum Intermediate Representation) in PECOS.
 //!
 //! # Example
-//! 
+//!
 //! ```no_run
 //! use pecos_qir::prelude::*;
 //! use pecos_engines::run_sim;
-//! 
+//!
 //! fn main() -> Result<(), PecosError> {
 //!     // Create a QIR engine
 //!     let engine = setup_qir_engine(Path::new("program.qir"), None)?;
@@ -32,17 +32,14 @@ pub use crate::{QirEngine, setup_qir_engine};
 // HUGR compilation support (when available)
 #[cfg(feature = "hugr-llvm-pipeline")]
 pub use crate::{
-    HugrCompiler, HugrCompilerConfig, QuantumLlvmConvention,
-    compile_hugr_to_qir, create_hugr_qir_engine, setup_hugr_qir_engine,
+    HugrCompiler, HugrCompilerConfig, QuantumLlvmConvention, compile_hugr_to_qir,
+    create_hugr_qir_engine, setup_hugr_qir_engine,
 };
 
 // Common types from pecos-engines for working with results
 pub use pecos_engines::{
-    ClassicalEngine,
-    Shot, ShotVec, ShotMap,
-    BitVecDisplayFormat, 
-    ShotMapDisplayExt, ShotMapDisplayOptions,
-    ByteMessage,
+    BitVecDisplayFormat, ByteMessage, ClassicalEngine, Shot, ShotMap, ShotMapDisplayExt,
+    ShotMapDisplayOptions, ShotVec,
 };
 
 // Error types

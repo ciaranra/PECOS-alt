@@ -1,10 +1,10 @@
 pub mod engine;
 pub mod error_handling;
+pub mod hugr_python_api;
 pub mod library;
 pub mod linker; // Links QIR programs with runtime library
 pub mod platform;
 pub mod prelude; // Convenient re-exports for common usage
-pub mod hugr_python_api;
 pub mod qir_utils; // QIR utilities for entry point detection
 pub mod runtime; // QIR runtime implementation with submodules
 
@@ -14,8 +14,6 @@ pub mod hugr; // HUGR frontend (compiler, engine, etc.) - contains stubs when fe
 // PMIR (PECOS MLIR) - Alternative compilation pipeline via MLIR
 #[cfg(feature = "pmir-pipeline")]
 pub mod pmir; // HUGR → PAST (RON) → PMIR (MLIR) → LLVM pipeline
-
-
 
 pub use engine::QirEngine;
 

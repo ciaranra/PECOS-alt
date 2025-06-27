@@ -37,11 +37,11 @@ use std::rc::Rc;
 use super::result_extractor::ResultNameExtractor;
 // Removed simple fallback - we should fix the actual issues instead
 #[cfg(feature = "hugr-llvm-pipeline")]
-use super::generators::standard_qir_generator::StandardQirExtension;
-#[cfg(feature = "hugr-llvm-pipeline")]
 use super::extensions::tket2_bool_extension::Tket2BoolExtension;
 #[cfg(feature = "hugr-llvm-pipeline")]
 use super::extensions::tket2_rotation_extension::Tket2RotationExtension;
+#[cfg(feature = "hugr-llvm-pipeline")]
+use super::generators::standard_qir_generator::StandardQirExtension;
 #[cfg(feature = "hugr-llvm-pipeline")]
 use super::generators::true_standard_qir_generator::TrueStandardQirExtension;
 // Version translator no longer needed - Guppy 0.20.0 and PECOS use same HUGR version
@@ -191,7 +191,7 @@ impl HugrCompiler {
         let transformed_bytes = hugr_bytes.to_vec();
 
         // Fix duplicate function names in HUGR
-        let transformed_bytes = fix_duplicate_functions(transformed_bytes)?;
+        let transformed_bytes = fix_duplicate_functions(&transformed_bytes)?;
 
         // Load HUGR package with transformed types
         let reader = std::io::Cursor::new(transformed_bytes.clone());
@@ -304,15 +304,25 @@ impl HugrCompiler {
         // Generate LLVM IR string
         let llvm_ir = llvm_module.to_string();
 
-
         // Add standard QIR prologue and fix entry point signature
         let standard_qir = add_standard_qir_prologue(&llvm_ir, &self.config.quantum_naming);
         let standard_qir = fix_entry_point_signature(&standard_qir, &self.config.quantum_naming);
 
-
-
-        let standard_qir =
-            convert_immediate_to_deferred_measurements(&standard_qir, &self.config.quantum_naming);
+        // Apply convention-specific processing
+        let standard_qir = match self.config.quantum_naming {
+            QuantumLlvmConvention::Hugr => {
+                // For HUGR convention, keep native HUGR functions - no conversion needed
+                debug!("Keeping native HUGR convention functions");
+                standard_qir
+            }
+            QuantumLlvmConvention::Qir => {
+                // For QIR convention, apply deferred measurements
+                convert_immediate_to_deferred_measurements(
+                    &standard_qir,
+                    &self.config.quantum_naming,
+                )
+            }
+        };
 
         // Write to output file
         fs::write(output_path, standard_qir).map_err(|e| {
@@ -362,7 +372,7 @@ impl HugrCompiler {
 
 #[cfg(feature = "hugr-llvm-pipeline")]
 /// Fix duplicate function names in HUGR JSON
-fn fix_duplicate_functions(hugr_bytes: Vec<u8>) -> Result<Vec<u8>, PecosError> {
+fn fix_duplicate_functions(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
     // Find JSON start
     let json_start = hugr_bytes.iter().position(|&b| b == b'{').unwrap_or(0);
     let prefix = &hugr_bytes[..json_start];
@@ -530,9 +540,12 @@ fn fix_entry_point_signature(llvm_ir: &str, _llvm_convention: &QuantumLlvmConven
 
     // Add the EntryPoint attribute definition if we found an entry point
     if found_entry_point && !llvm_ir.contains("attributes #0 = {") {
-        result.push_str(&format!(
+        use std::fmt::Write;
+        write!(
+            result,
             "\nattributes {attribute_number} = {{ \"EntryPoint\" }}\n"
-        ));
+        )
+        .expect("Writing to String should never fail");
     }
 
     result
@@ -548,7 +561,7 @@ fn convert_immediate_to_deferred_measurements(
             // For HUGR convention, convert immediate measurement calls to deferred ones
             let lines: Vec<&str> = llvm_ir.lines().collect();
             let mut result = String::new();
-            for line in lines.iter() {
+            for line in &lines {
                 let line_str = *line;
                 if line_str.contains("call i32 @__quantum__qis__m__body(") {
                     // Convert: %result = call i32 @__quantum__qis__m__body(i64 %qubit, i64 %result_id)
@@ -590,7 +603,6 @@ fn convert_immediate_to_deferred_measurements(
                             result.push_str(" = call i32 @__quantum__rt__result_get_one(i64 ");
                             result.push_str(result_id);
                             result.push(')');
-
                         } else {
                             // Fallback - just convert the function name
                             result.push_str(&line.replace(
