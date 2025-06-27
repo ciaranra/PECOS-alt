@@ -280,11 +280,11 @@ pub struct GeneralNoiseModel {
     /// The distribution is stored as pre-computed, cached sampler instead of the `HashMap` that is the input.
     p2_pauli_model: TwoQubitWeightedSampler,
 
-    /// Idle noise after each two-qubit gate that is quadratically dependent on the rate.
+    /// Idle noise after each two-qubit gate where noise will be applied stochastically based on
+    /// `p2_idle`.
     ///
-    /// This will be a coherent noise channel unless `p_idle_coherent` is set to false. If it is
-    /// false it will apply Z to each qubit with quadratic dependency on time
-    p2_idle_quadratic_rate: f64,
+    /// This may be useful for memory sweeping.
+    p2_idle: f64,
 
     /// Probability of flipping a 0 measurement to 1
     ///
@@ -971,13 +971,14 @@ impl GeneralNoiseModel {
 
         builder.add_gate_commands(&noise);
 
-        // TODO: add test
-        self.apply_idle_quadratic_dephasing(
-            self.p2_idle_quadratic_rate,
-            1.0,
-            &original_gate_qubits,
-            builder,
-        );
+        if self.p2_idle > f64::EPSILON {
+            self.apply_idle_linear_stochastic_noise(
+                self.p2_idle,
+                1.0,
+                &original_gate_qubits,
+                builder,
+            );
+        }
     }
 
     /// Leak a qubit (or replace it with completely depolarizing noise)

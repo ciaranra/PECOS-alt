@@ -5,7 +5,7 @@ use crate::noise_helpers::{
 };
 use pecos::prelude::*;
 use pecos_engines::noise::GeneralNoiseModelBuilder;
-use pecos_qasm::config::{parse_gate_type_from_string, NoiseConfig};
+use pecos_qasm::config::{NoiseConfig, parse_gate_type_from_string};
 use pecos_qasm::simulation::{
     BiasedDepolarizingNoise, BitVecFormat, DepolarizingCustomNoise, DepolarizingNoise,
     PassThroughNoise,
@@ -603,8 +603,8 @@ fn apply_two_qubit_params(
     if let Some(model) = get_optional_dict(nm, "p2_pauli_model")? {
         builder = builder.with_p2_pauli_model(&model);
     }
-    if let Some(v) = get_optional_f64(nm, "p2_idle_quadratic_rate")? {
-        builder = builder.with_p2_idle_quadratic_rate(v);
+    if let Some(v) = get_optional_f64(nm, "p2_idle")? {
+        builder = builder.with_p2_idle(v);
     }
     if let Some(s) = get_optional_f64(nm, "p2_scale")? {
         builder = builder.with_p2_scale(s);

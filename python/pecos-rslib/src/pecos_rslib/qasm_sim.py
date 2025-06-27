@@ -193,7 +193,7 @@ class GeneralNoise:
     p2_emission_model: Optional[Dict[str, float]] = None
     p2_seepage_prob: Optional[float] = None
     p2_pauli_model: Optional[Dict[str, float]] = None
-    p2_idle_quadratic_rate: Optional[float] = None
+    p2_idle: Optional[float] = None
     p2_scale: Optional[float] = None
 
     # Measurement noise parameters
@@ -247,7 +247,7 @@ class GeneralNoise:
             "p2_emission_model",
             "p2_seepage_prob",
             "p2_pauli_model",
-            "p2_idle_quadratic_rate",
+            "p2_idle",
             "p2_scale",
             "p_meas_0",
             "p_meas_1",
@@ -296,7 +296,7 @@ class GeneralNoise:
             p2_emission_model=config.get("p2_emission_model"),
             p2_seepage_prob=config.get("p2_seepage_prob"),
             p2_pauli_model=config.get("p2_pauli_model"),
-            p2_idle_quadratic_rate=config.get("p2_idle_quadratic_rate"),
+            p2_idle=config.get("p2_idle"),
             p2_scale=config.get("p2_scale"),
             p_meas_0=config.get("p_meas_0"),
             p_meas_1=config.get("p_meas_1"),

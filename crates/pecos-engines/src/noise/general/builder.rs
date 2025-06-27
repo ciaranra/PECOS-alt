@@ -41,7 +41,7 @@ pub struct GeneralNoiseModelBuilder {
     p2_emission_model: Option<TwoQubitWeightedSampler>,
     p2_seepage_prob: Option<f64>,
     p2_pauli_model: Option<TwoQubitWeightedSampler>,
-    p2_idle_quadratic_rate: Option<f64>,
+    p2_idle: Option<f64>,
     p2_scale: Option<f64>,
     // measurement noise
     p_meas_0: Option<f64>,
@@ -96,7 +96,7 @@ impl GeneralNoiseModelBuilder {
             p2_emission_model: None,
             p2_seepage_prob: None,
             p2_pauli_model: None,
-            p2_idle_quadratic_rate: None,
+            p2_idle: None,
             p2_scale: None,
             // measurement noise
             p_meas_0: None,
@@ -226,8 +226,8 @@ impl GeneralNoiseModelBuilder {
             model.p2_pauli_model = model_map;
         }
 
-        if let Some(p2_idle_quadratic_rate) = self.p2_idle_quadratic_rate {
-            model.p2_idle_quadratic_rate = p2_idle_quadratic_rate;
+        if let Some(p2_idle) = self.p2_idle {
+            model.p2_idle = p2_idle;
         }
 
         // measurement noise
@@ -593,8 +593,8 @@ impl GeneralNoiseModelBuilder {
     }
 
     #[must_use]
-    pub fn with_p2_idle_quadratic_rate(mut self, probability: f64) -> Self {
-        self.p2_idle_quadratic_rate = Some(Self::validate_probability(probability));
+    pub fn with_p2_idle(mut self, probability: f64) -> Self {
+        self.p2_idle = Some(Self::validate_probability(probability));
         self
     }
 
@@ -754,13 +754,10 @@ impl GeneralNoiseModelBuilder {
             // 0.5 to deal with the 0.5 in sin(rate x duration x 0.5)^2
             let factor = model.p_idle_coherent_to_incoherent_factor * 0.5;
             model.p_idle_quadratic_rate *= factor;
-
-            // p2_idle_quadratic_rate is an angle in radians...
-            let p = ((model.p2_idle_quadratic_rate * factor).sin()).powi(2)
-                * model.p_idle_coherent_to_incoherent_factor;
-            model.p2_idle_quadratic_rate = Self::validate_probability(p);
         }
         // frequency is in units of 2pi so convert to radians
         model.p_idle_quadratic_rate *= 2.0 * std::f64::consts::PI;
+
+        model.p2_idle = Self::validate_probability(model.p2_idle * scale * idle_scale);
     }
 }

@@ -115,7 +115,7 @@ pub struct GeneralNoiseFields {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub p2_pauli_model: Option<BTreeMap<String, f64>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub p2_idle_quadratic_rate: Option<f64>,
+    pub p2_idle: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub p2_scale: Option<f64>,
 
@@ -303,8 +303,8 @@ impl GeneralNoiseFields {
         if let Some(model) = self.p2_pauli_model.as_ref() {
             builder = builder.with_p2_pauli_model(model);
         }
-        if let Some(v) = self.p2_idle_quadratic_rate {
-            builder = builder.with_p2_idle_quadratic_rate(v);
+        if let Some(v) = self.p2_idle {
+            builder = builder.with_p2_idle(v);
         }
         if let Some(v) = self.p2_scale {
             builder = builder.with_p2_scale(v);
