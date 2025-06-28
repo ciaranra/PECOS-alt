@@ -98,7 +98,7 @@ fn test_def_and_stub_generation() {
     // Test that the generation functions work correctly
     let def_content = windows_stub_gen::generate_def_file();
     assert!(def_content.contains("EXPORTS"));
-    assert!(def_content.contains("qir_runtime_reset"));
+    assert!(def_content.contains("llvm_runtime_reset"));
     assert!(def_content.contains("__quantum__qis__h__body__hugr"));
     assert!(def_content.contains("main @1 NONAME"));
 

@@ -23,7 +23,7 @@ try:
     from pecos_rslib import (
         RUST_HUGR_AVAILABLE,
         check_rust_hugr_availability,
-        compile_hugr_to_qir_rust,
+        compile_hugr_to_llvm_rust,
     )
 
     RUST_BACKEND_AVAILABLE = RUST_HUGR_AVAILABLE
@@ -108,7 +108,6 @@ class GuppyFrontend:
             "backend": "rust" if self.use_rust_backend else "external",
             "rust_available": RUST_BACKEND_AVAILABLE,
             "guppy_available": GUPPY_AVAILABLE,
-            "llvm_convention": "hugr",
             "external_tools": {
                 "hugr_to_llvm_binary": (
                     str(self.hugr_to_llvm_binary) if self.hugr_to_llvm_binary else None
@@ -171,7 +170,7 @@ class GuppyFrontend:
 
             # Compile HUGR to QIR using Rust backend
             # Use the configured naming convention
-            qir_content = compile_hugr_to_qir_rust(
+            qir_content = compile_hugr_to_llvm_rust(
                 hugr_bytes,
                 None,  # output_path
                 debug_info=False,  # debug_info
@@ -255,7 +254,6 @@ class GuppyFrontend:
                     # Use the external hugr_quantum_llvm binary
                     llvm_ir = compiler.compile_hugr_to_llvm(
                         hugr_bytes,
-                        "hugr",
                     )
 
                     qir_file = temp_path / f"{func_name}.ll"
@@ -334,56 +332,6 @@ attributes #0 = {{ "EntryPoint" }}
             else:
                 return qir_file
 
-    def compile_and_run(self, func: Callable, shots: int = 1000) -> dict:
-        """Compile a Guppy function and run it on PECOS using the QIR engine.
-
-        Args:
-            func: A function decorated with @guppy
-            shots: Number of shots to execute
-
-        Returns:
-            Dictionary containing execution results
-        """
-        # Import here to avoid circular dependencies
-        from pecos.frontends.qir_engine_wrapper import (
-            QirEngineWrapper,
-            is_qir_engine_available,
-        )
-
-        if not is_qir_engine_available():
-            msg = "PECOS QIR engine not available"
-            raise RuntimeError(msg)
-
-        # Get function name safely
-        func_name = getattr(func, "__name__", getattr(func, "name", "guppy_func"))
-
-        # Compile to standard QIR
-        qir_file = self.compile_function(func)
-
-        # Execute using QIR engine wrapper (proper pipeline)
-        wrapper = QirEngineWrapper()
-        try:
-            result = wrapper.execute_qir_file(qir_file, shots)
-
-            # Extract results in expected format
-            measurements = result.get("measurements", [])
-            success = result.get("execution_successful", False)
-
-            if not success:
-                error_msg = result.get("error", "Unknown execution error")
-                msg = f"QIR execution failed: {error_msg}"
-                raise RuntimeError(msg)
-
-            return {
-                "shots": shots,
-                "results": measurements,
-                "function_name": func_name,
-                "execution_engine": "pecos_qir_engine",
-                "qir_file": str(qir_file),
-            }
-
-        finally:
-            wrapper.cleanup()
 
     def cleanup(self) -> None:
         """Clean up temporary files."""

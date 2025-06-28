@@ -44,7 +44,6 @@ def test_guppy_frontend() -> None:
         info = frontend.get_backend_info()
         print(f"Frontend backend info: {info}")
         print(f"[OK] Using backend: {info['backend']}")
-        print(f"[OK] LLVM convention: {info['llvm_convention']}")
         print()
         # Test passed
     except (ImportError, RuntimeError) as e:

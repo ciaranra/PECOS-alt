@@ -52,14 +52,12 @@ class HugrLlvmCompiler:
     def compile_hugr_to_llvm(
         self,
         hugr_bytes: bytes,
-        llvm_convention: str = "hugr",
         output_file: Path | None = None,
     ) -> str:
         """Compile HUGR bytes to LLVM IR.
 
         Args:
             hugr_bytes: HUGR package as bytes
-            llvm_convention: LLVM-IR convention (only "hugr" supported now)
             output_file: Optional output file path
 
         Returns:
@@ -144,20 +142,18 @@ class HugrLlvmCompiler:
 
 def compile_hugr_bytes_to_llvm(
     hugr_bytes: bytes,
-    llvm_convention: str = "hugr",
 ) -> str:
     """Convenience function to compile HUGR bytes to LLVM IR.
 
     Args:
         hugr_bytes: HUGR package as bytes
-        llvm_convention: LLVM-IR convention (only "hugr" supported now)
 
     Returns:
         LLVM IR as string (HUGR convention)
     """
     compiler = HugrLlvmCompiler()
     try:
-        return compiler.compile_hugr_to_llvm(hugr_bytes, "hugr")
+        return compiler.compile_hugr_to_llvm(hugr_bytes)
     finally:
         compiler.cleanup()
 

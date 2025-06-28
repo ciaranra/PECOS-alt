@@ -1,10 +1,10 @@
 /*!
-HUGR QIR Generator
+HUGR LLVM Generator
 
-This module generates HUGR-style QIR format using integer-based parameters
-that is compatible with the PECOS `QirEngine` infrastructure.
+This module generates HUGR-style LLVM IR format using integer-based parameters
+that is compatible with the PECOS `LlvmEngine` infrastructure.
 
-The output format matches examples/qir/bell.ll and works with `QirEngine::new()`.
+The output format matches examples/llvm/bell.ll and works with `LlvmEngine::new()`.
 */
 
 use anyhow;
@@ -18,15 +18,15 @@ use std::collections::HashMap;
 /// Result name mapping for measurement outputs
 pub type ResultNameMapping = HashMap<Node, String>;
 
-/// Standard QIR quantum operation extension
+/// Standard LLVM quantum operation extension
 ///
-/// This generates HUGR-style QIR format using integer types
-/// that work with the PECOS `QirEngine`.
-pub struct StandardQirExtension {
+/// This generates HUGR-style LLVM IR format using integer types
+/// that work with the PECOS `LlvmEngine`.
+pub struct StandardLlvmExtension {
     result_names: ResultNameMapping,
 }
 
-impl StandardQirExtension {
+impl StandardLlvmExtension {
     #[must_use]
     pub fn new(result_names: ResultNameMapping) -> Self {
         Self {
@@ -52,7 +52,7 @@ impl StandardQirExtension {
     }
 }
 
-impl CodegenExtension for StandardQirExtension {
+impl CodegenExtension for StandardLlvmExtension {
     fn add_extension<'a, H: HugrView<Node = Node> + 'a>(
         self,
         builder: CodegenExtsBuilder<'a, H>,

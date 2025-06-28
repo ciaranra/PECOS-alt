@@ -25,13 +25,13 @@
 //! * `pecos_engines`: Simulation engines for quantum and classical processing
 //! * `pecos_phir`: PECOS High-level Intermediate Representation
 //! * `pecos_qasm`: `OpenQASM` language support
-//! * `pecos_qir`: Quantum Intermediate Representation support
+//! * `pecos_qir`: LLVM IR execution support
 //! * `pecos_qsim`: Quantum simulation implementations
 //!
 //! It also includes key functionality from the top-level PECOS crate:
 //!
 //! * Simulation functions (`run_sim`)
-//! * Engine setup functions (`setup_qasm_engine`, `setup_qir_engine`)
+//! * Engine setup functions (`setup_qasm_engine`, `setup_llvm_engine`)
 //! * Program type detection and handling
 //!
 //! ## Usage
@@ -61,7 +61,7 @@ pub use crate::program::{
 // Re-export setup functions from format-specific crates
 pub use pecos_phir::setup_phir_engine;
 pub use pecos_qasm::setup_qasm_engine;
-pub use pecos_qir::setup_qir_engine;
+pub use pecos_qir::setup_llvm_engine;
 
 // Re-export run_sim from pecos-engines
 pub use pecos_engines::run_sim;

@@ -14,15 +14,15 @@ use std::time::Duration;
 // Import FFIShotData from runtime to avoid duplication
 use crate::runtime::FFIShotData;
 
-/// QIR Library for executing quantum programs
+/// LLVM Library for executing quantum programs
 ///
-/// This struct represents a loaded QIR library that can be used to execute
+/// This struct represents a loaded LLVM library that can be used to execute
 /// quantum programs. It provides methods for calling functions in the library
 /// and retrieving the generated quantum commands.
 ///
 /// # Thread Safety
 ///
-/// The QIR Library is designed to be thread-safe and can be used from multiple
+/// The LLVM Library is designed to be thread-safe and can be used from multiple
 /// threads. Each thread gets its own copy of the library to avoid conflicts.
 ///
 /// # Error Handling
@@ -33,11 +33,11 @@ use crate::runtime::FFIShotData;
 /// # Examples
 ///
 /// ```no_run
-/// use pecos_qir::library::QirLibrary;
+/// use pecos_qir::library::LlvmLibrary;
 /// use std::path::Path;
 ///
-/// // Load a QIR library from a file
-/// let library = QirLibrary::load(Path::new("path/to/library.so")).unwrap();
+/// // Load an LLVM library from a file
+/// let library = LlvmLibrary::load(Path::new("path/to/library.so")).unwrap();
 ///
 /// // Call the main function in the library
 /// library.call_function(b"main").unwrap();
@@ -48,7 +48,7 @@ use crate::runtime::FFIShotData;
 /// // Reset the library state
 /// library.reset().unwrap();
 /// ```
-pub struct QirLibrary {
+pub struct LlvmLibrary {
     /// The loaded dynamic library wrapped in Arc for safe sharing
     library: Arc<Mutex<Library>>,
 
@@ -56,9 +56,9 @@ pub struct QirLibrary {
     path: PathBuf,
 }
 
-impl Clone for QirLibrary {
+impl Clone for LlvmLibrary {
     fn clone(&self) -> Self {
-        debug!("QIR Library: Cloning library from {:?}", self.path);
+        debug!("LLVM Library: Cloning library from {:?}", self.path);
 
         // Share the same library instance via Arc - no need to reload
         Self {
@@ -68,11 +68,11 @@ impl Clone for QirLibrary {
     }
 }
 
-impl QirLibrary {
+impl LlvmLibrary {
     /// Load a QIR library from the given path
     ///
     /// This method loads a compiled QIR library from the specified path and
-    /// initializes the `QirLibrary` struct for interacting with it.
+    /// initializes the `LlvmLibrary` struct for interacting with it.
     ///
     /// # Arguments
     ///
@@ -94,7 +94,7 @@ impl QirLibrary {
     /// simultaneously.
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, PecosError> {
         let path = path.as_ref();
-        debug!("QIR: Loading library from {:?}", path);
+        debug!("LLVM: Loading library from {:?}", path);
 
         // Perform thorough file verification before loading
         if !path.exists() {
@@ -126,7 +126,7 @@ impl QirLibrary {
 
                 // Log file details for debugging
                 debug!(
-                    "QIR: Verified file {} (size: {} bytes)",
+                    "LLVM: Verified file {} (size: {} bytes)",
                     path.display(),
                     file_size
                 );
@@ -145,7 +145,7 @@ impl QirLibrary {
 
         while retry_count < max_retries {
             debug!(
-                "QIR: Loading library attempt {}/{}",
+                "LLVM: Loading library attempt {}/{}",
                 retry_count + 1,
                 max_retries
             );
@@ -156,7 +156,7 @@ impl QirLibrary {
                 {
                     // Use RTLD_LOCAL for symbol isolation and RTLD_NODELETE to prevent segfaults
                     // RTLD_NODELETE prevents the library from being unloaded during cleanup
-                    debug!("QIR: Using RTLD_LOCAL | RTLD_NODELETE for library loading");
+                    debug!("LLVM: Using RTLD_LOCAL | RTLD_NODELETE for library loading");
                     unsafe {
                         UnixLibrary::open(
                             Some(path),
@@ -175,7 +175,7 @@ impl QirLibrary {
 
             match library_result {
                 Ok(library) => {
-                    debug!("QIR: Successfully loaded library from {:?}", path);
+                    debug!("LLVM: Successfully loaded library from {:?}", path);
                     return Ok(Self {
                         library: Arc::new(Mutex::new(library)),
                         path: path.to_path_buf(),
@@ -191,7 +191,7 @@ impl QirLibrary {
                     let sleep_duration = Duration::from_millis(
                         100 * 2u64.pow(u32::try_from(retry_count).unwrap_or(0)),
                     );
-                    debug!("QIR: Sleeping for {:?} before retry", sleep_duration);
+                    debug!("LLVM: Sleeping for {:?} before retry", sleep_duration);
                     thread::sleep(sleep_duration);
 
                     retry_count += 1;
@@ -249,7 +249,7 @@ impl QirLibrary {
     ///
     /// This function will panic if the internal mutex is poisoned.
     pub fn call_function(&self, name: &[u8]) -> Result<i32, PecosError> {
-        debug!("QIR Library: Calling function {:?}", name);
+        debug!("LLVM Library: Calling function {:?}", name);
 
         unsafe {
             // Get the function pointer
@@ -259,13 +259,13 @@ impl QirLibrary {
             // First try standard QIR signature (returns i32)
             if let Ok(func) = library_guard.get::<Symbol<unsafe extern "C" fn() -> i32>>(name) {
                 let result = func();
-                debug!("QIR Library: Function call returned {}", result);
+                debug!("LLVM Library: Function call returned {}", result);
                 Ok(result)
             }
             // Try HUGR signature (returns tuple, but we'll treat as void)
             else if let Ok(func) = library_guard.get::<Symbol<unsafe extern "C" fn()>>(name) {
                 func();
-                debug!("QIR Library: Function call completed (void return)");
+                debug!("LLVM Library: Function call completed (void return)");
                 Ok(0)
             } else {
                 Err(Self::log_error(
@@ -278,7 +278,7 @@ impl QirLibrary {
 
     /// Resets the QIR runtime
     ///
-    /// This method calls the `qir_runtime_reset` function in the loaded library
+    /// This method calls the `llvm_runtime_reset` function in the loaded library
     /// to reset the QIR runtime state.
     ///
     /// # Returns
@@ -294,18 +294,18 @@ impl QirLibrary {
     ///
     /// This function will panic if the internal mutex is poisoned.
     pub fn reset(&self) -> Result<(), PecosError> {
-        debug!("QIR Library: Resetting QIR runtime");
+        debug!("LLVM Library: Resetting LLVM runtime");
 
         unsafe {
             // Get the function pointer
             let library_guard = self.library.lock().unwrap();
             let reset: Symbol<unsafe extern "C" fn()> = library_guard
-                .get(b"qir_runtime_reset")
+                .get(b"llvm_runtime_reset")
                 .map_err(|e| Self::log_error("Failed to get reset function", e))?;
 
             // Call the function
             reset();
-            debug!("QIR Library: Successfully reset QIR runtime");
+            debug!("LLVM Library: Successfully reset LLVM runtime");
         }
 
         Ok(())
@@ -313,7 +313,7 @@ impl QirLibrary {
 
     /// Gets the binary commands generated by the QIR runtime
     ///
-    /// This method calls the `qir_runtime_get_binary_commands` function in the loaded library
+    /// This method calls the `llvm_runtime_get_binary_commands` function in the loaded library
     /// to get the binary commands generated by the QIR runtime.
     ///
     /// # Returns
@@ -331,24 +331,24 @@ impl QirLibrary {
     pub fn get_binary_commands(&self) -> Result<ByteMessage, PecosError> {
         use crate::runtime::FFIByteData;
 
-        debug!("QIR Library: Getting binary commands");
+        debug!("LLVM Library: Getting binary commands");
 
         // Get the get_binary_commands function
         let library_guard = self.library.lock().unwrap();
         let get_binary_commands: Symbol<unsafe extern "C" fn() -> *mut FFIByteData> = unsafe {
             library_guard
-                .get(b"qir_runtime_get_binary_commands")
+                .get(b"llvm_runtime_get_binary_commands")
                 .map_err(|e| {
-                    Self::log_error("Failed to get qir_runtime_get_binary_commands symbol", e)
+                    Self::log_error("Failed to get llvm_runtime_get_binary_commands symbol", e)
                 })?
         };
 
         // Get the free_binary_commands function
         let free_binary_commands: Symbol<unsafe extern "C" fn(*mut FFIByteData)> = unsafe {
             library_guard
-                .get(b"qir_runtime_free_binary_commands")
+                .get(b"llvm_runtime_free_binary_commands")
                 .map_err(|e| {
-                    Self::log_error("Failed to get qir_runtime_free_binary_commands symbol", e)
+                    Self::log_error("Failed to get llvm_runtime_free_binary_commands symbol", e)
                 })?
         };
 
@@ -356,7 +356,7 @@ impl QirLibrary {
         let ffi_ptr = unsafe { get_binary_commands() };
         if ffi_ptr.is_null() {
             return Err(Self::log_error(
-                "Got null pointer from qir_runtime_get_binary_commands",
+                "Got null pointer from llvm_runtime_get_binary_commands",
                 "Cannot retrieve commands",
             ));
         }
@@ -385,7 +385,7 @@ impl QirLibrary {
 
     /// Gets the shot results from the QIR runtime
     ///
-    /// This method calls the `qir_runtime_get_shot_results` function in the loaded library
+    /// This method calls the `llvm_runtime_get_shot_results` function in the loaded library
     /// to retrieve the classical register values as a Shot.
     ///
     /// # Returns
@@ -401,7 +401,7 @@ impl QirLibrary {
     ///
     /// This function will panic if the internal mutex is poisoned.
     pub fn get_shot_results(&self) -> Result<Option<Shot>, PecosError> {
-        debug!("QIR Library: Getting shot results");
+        debug!("LLVM Library: Getting shot results");
 
         // Get the function pointers
         let (get_shot_results_ptr, free_shot_data_ptr) = {
@@ -410,18 +410,18 @@ impl QirLibrary {
             // Get the get_shot_results function
             let get_shot_results: Symbol<unsafe extern "C" fn() -> *mut FFIShotData> = unsafe {
                 library_guard
-                    .get(b"qir_runtime_get_shot_results")
+                    .get(b"llvm_runtime_get_shot_results")
                     .map_err(|e| {
-                        Self::log_error("Failed to get qir_runtime_get_shot_results symbol", e)
+                        Self::log_error("Failed to get llvm_runtime_get_shot_results symbol", e)
                     })?
             };
 
             // Get the free function
             let free_shot_data: Symbol<unsafe extern "C" fn(*mut FFIShotData)> = unsafe {
                 library_guard
-                    .get(b"qir_runtime_free_shot_data")
+                    .get(b"llvm_runtime_free_shot_data")
                     .map_err(|e| {
-                        Self::log_error("Failed to get qir_runtime_free_shot_data symbol", e)
+                        Self::log_error("Failed to get llvm_runtime_free_shot_data symbol", e)
                     })?
             };
 
@@ -444,7 +444,7 @@ impl QirLibrary {
         let ffi_ptr = unsafe { get_shot_results() };
 
         if ffi_ptr.is_null() {
-            debug!("QIR Library: No shot results available");
+            debug!("LLVM Library: No shot results available");
             return Ok(None);
         }
 
@@ -472,7 +472,7 @@ impl QirLibrary {
         unsafe { free_shot_data(ffi_ptr) };
 
         debug!(
-            "QIR Library: Retrieved shot with {} registers",
+            "LLVM Library: Retrieved shot with {} registers",
             shot.data.len()
         );
         Ok(Some(shot))
@@ -480,7 +480,7 @@ impl QirLibrary {
 
     /// Updates the measurement results in the QIR runtime
     ///
-    /// This method calls the `qir_runtime_update_measurement_results` function to
+    /// This method calls the `llvm_runtime_update_measurement_results` function to
     /// provide measurement results from the quantum system to the runtime.
     ///
     /// # Arguments
@@ -501,7 +501,7 @@ impl QirLibrary {
     /// This function will panic if the internal mutex is poisoned.
     pub fn update_measurement_results(&self, results: &[u32]) -> Result<(), PecosError> {
         debug!(
-            "QIR Library: Updating {} measurement results",
+            "LLVM Library: Updating {} measurement results",
             results.len() / 2
         );
 
@@ -509,7 +509,7 @@ impl QirLibrary {
             // Get the update function
             let library_guard = self.library.lock().unwrap();
             let update_fn: Symbol<unsafe extern "C" fn(*const u32, usize)> = library_guard
-                .get(b"qir_runtime_update_measurement_results")
+                .get(b"llvm_runtime_update_measurement_results")
                 .map_err(|e| {
                     Self::log_error("Failed to get update_measurement_results function", e)
                 })?;
@@ -518,7 +518,7 @@ impl QirLibrary {
             // The second parameter is the number of result pairs (not total array length)
             update_fn(results.as_ptr(), results.len() / 2);
 
-            debug!("QIR Library: Measurement results updated");
+            debug!("LLVM Library: Measurement results updated");
             Ok(())
         }
     }
@@ -541,19 +541,19 @@ impl QirLibrary {
     ///
     /// This function will panic if the internal mutex is poisoned.
     pub fn finalize_shot(&self) -> Result<(), PecosError> {
-        debug!("QIR Library: Finalizing shot");
+        debug!("LLVM Library: Finalizing shot");
 
         unsafe {
             // Get the finalize function
             let library_guard = self.library.lock().unwrap();
             let finalize: Symbol<unsafe extern "C" fn()> = library_guard
-                .get(b"qir_runtime_finalize_shot")
+                .get(b"llvm_runtime_finalize_shot")
                 .map_err(|e| Self::log_error("Failed to get finalize_shot function", e))?;
 
             // Call the function
             finalize();
 
-            debug!("QIR Library: Shot finalized");
+            debug!("LLVM Library: Shot finalized");
             Ok(())
         }
     }
@@ -566,7 +566,7 @@ impl QirLibrary {
     }
 }
 
-impl Drop for QirLibrary {
+impl Drop for LlvmLibrary {
     fn drop(&mut self) {
         let strong_count = Arc::strong_count(&self.library);
         debug!(

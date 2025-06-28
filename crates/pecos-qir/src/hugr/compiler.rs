@@ -41,7 +41,7 @@ use super::extensions::tket2_bool_extension::Tket2BoolExtension;
 #[cfg(feature = "hugr-llvm-pipeline")]
 use super::extensions::tket2_rotation_extension::Tket2RotationExtension;
 #[cfg(feature = "hugr-llvm-pipeline")]
-use super::generators::standard_qir_generator::StandardQirExtension;
+use super::generators::standard_llvm_generator::StandardLlvmExtension;
 // Version translator no longer needed - Guppy 0.20.0 and PECOS use same HUGR version
 
 // Imports for non-hugr builds
@@ -216,7 +216,7 @@ impl HugrCompiler {
         builder = builder.add_extension(Tket2RotationExtension::new());
 
         // Use HUGR-style format with integer types
-        builder = builder.add_extension(StandardQirExtension::new(result_names));
+        builder = builder.add_extension(StandardLlvmExtension::new(result_names));
 
         // Add all standard extensions
         builder = builder.add_default_prelude_extensions();
@@ -478,7 +478,7 @@ impl Default for HugrCompiler {
 /// - HUGR parsing fails
 /// - Compilation fails
 /// - File writing fails
-pub fn compile_hugr_to_qir<P: AsRef<Path>, Q: Into<PathBuf>>(
+pub fn compile_hugr_to_llvm<P: AsRef<Path>, Q: Into<PathBuf>>(
     hugr_path: P,
     output_path: Option<Q>,
 ) -> Result<PathBuf, PecosError> {

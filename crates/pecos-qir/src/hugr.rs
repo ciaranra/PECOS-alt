@@ -56,7 +56,7 @@ pub mod result_extractor;
 // Generator modules
 #[cfg(feature = "hugr-llvm-pipeline")]
 pub mod generators {
-    pub mod standard_qir_generator;
+    pub mod standard_llvm_generator;
 }
 
 // Extension modules
@@ -71,7 +71,7 @@ pub mod extensions {
 #[cfg(feature = "hugr-llvm-pipeline")]
 pub use compiler::{HugrCompiler as Compiler, HugrCompilerConfig as CompilerConfig};
 #[cfg(feature = "hugr-llvm-pipeline")]
-pub use engine_utils::{compile_hugr_to_qir, create_hugr_qir_engine, setup_hugr_qir_engine};
+pub use engine_utils::{compile_hugr_to_llvm, create_hugr_llvm_engine, setup_hugr_llvm_engine};
 #[cfg(feature = "hugr-llvm-pipeline")]
 pub use result_extractor::{ResultNameExtractor, ResultNameMapping};
 
@@ -151,7 +151,7 @@ pub mod engine_utils {
     use pecos_engines::ClassicalEngine;
     use std::path::Path;
 
-    pub fn create_hugr_qir_engine<P: AsRef<Path>>(
+    pub fn create_hugr_llvm_engine<P: AsRef<Path>>(
         _: P,
         _: Option<usize>,
     ) -> Result<Box<dyn ClassicalEngine>, PecosError> {
@@ -164,14 +164,14 @@ pub mod engine_utils {
         ))
     }
 
-    pub fn setup_hugr_qir_engine<P: AsRef<Path>>(
+    pub fn setup_hugr_llvm_engine<P: AsRef<Path>>(
         hugr_path: P,
         shots: Option<usize>,
     ) -> Result<Box<dyn ClassicalEngine>, PecosError> {
-        create_hugr_qir_engine(hugr_path, shots)
+        create_hugr_llvm_engine(hugr_path, shots)
     }
 
-    pub fn compile_hugr_to_qir<P: AsRef<Path>, Q: AsRef<Path>>(
+    pub fn compile_hugr_to_llvm<P: AsRef<Path>, Q: AsRef<Path>>(
         _: P,
         _: Q,
     ) -> Result<std::path::PathBuf, PecosError> {

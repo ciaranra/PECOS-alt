@@ -1,17 +1,17 @@
-//! Instance-based QIR Runtime State
+//! Instance-based LLVM Runtime State
 //!
-//! This module provides an instance-based runtime state for QIR execution,
+//! This module provides an instance-based runtime state for LLVM IR execution,
 //! eliminating the need for global state and enabling proper concurrent execution.
 
 use pecos_engines::byte_message::{ByteMessage, ByteMessageBuilder};
 use pecos_engines::shot_results::{Data, Shot};
 use std::collections::HashMap;
 
-/// QIR Runtime State
+/// LLVM Runtime State
 ///
-/// Contains all the state needed for QIR execution, previously stored in globals.
-/// Each `QirEngine` instance will have its own `RuntimeState`.
-pub struct QirRuntimeState {
+/// Contains all the state needed for LLVM IR execution, previously stored in globals.
+/// Each `LlvmEngine` instance will have its own `RuntimeState`.
+pub struct LlvmRuntimeState {
     /// Counter for qubit allocation
     next_qubit_id: usize,
 
@@ -37,7 +37,7 @@ pub struct QirRuntimeState {
     last_shot: Option<Shot>,
 }
 
-impl QirRuntimeState {
+impl LlvmRuntimeState {
     /// Create a new runtime state
     #[must_use]
     pub fn new() -> Self {
@@ -210,7 +210,7 @@ impl QirRuntimeState {
     }
 }
 
-impl Default for QirRuntimeState {
+impl Default for LlvmRuntimeState {
     fn default() -> Self {
         Self::new()
     }

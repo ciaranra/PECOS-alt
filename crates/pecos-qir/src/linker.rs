@@ -1,12 +1,12 @@
-//! QIR Linker Module
+//! LLVM Linker Module
 //!
-//! This module is responsible for compiling QIR programs (.ll files) and linking them
+//! This module is responsible for compiling LLVM IR programs (.ll files) and linking them
 //! with the pre-built runtime library to create dynamically loadable libraries.
 //!
 //! # Overview
 //!
-//! The QIR compilation process involves:
-//! 1. Compiling the QIR file to an object file using LLVM tools
+//! The LLVM IR compilation process involves:
+//! 1. Compiling the LLVM IR file to an object file using LLVM tools
 //! 2. Getting the pre-built runtime library from `RuntimeBuilder`
 //! 3. Linking them together to create a shared library (.so/.dll/.dylib)
 //!
@@ -31,17 +31,17 @@
 //!   - Builds the static library if needed
 //!   - Removes marker file after successful build
 //!
-//! ## 2. QIR Executables (Compiled QIR linked with runtime)
+//! ## 2. LLVM Executables (Compiled LLVM IR linked with runtime)
 //!
-//! QIR executable rebuild is triggered by:
+//! LLVM executable rebuild is triggered by:
 //! - **Missing executable**: If the compiled library doesn't exist
-//! - **QIR source changes**: When the .ll file is newer than the executable
+//! - **LLVM IR source changes**: When the .ll file is newer than the executable
 //! - **Runtime library changes**: When the runtime library is newer than the executable
 //!
-//! The `QirLinker::compile` method handles this by:
-//! 1. Checking for cached QIR executable
+//! The `LlvmLinker::compile` method handles this by:
+//! 1. Checking for cached LLVM executable
 //! 2. Ensuring runtime library is built/current (via `RuntimeBuilder`)
-//! 3. Comparing timestamps: executable vs QIR source and runtime library
+//! 3. Comparing timestamps: executable vs LLVM IR source and runtime library
 //! 4. Rebuilding if any dependency is newer
 //!
 //! This design ensures seamless operation where rebuilds happen automatically
@@ -62,10 +62,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime};
 
-/// Links QIR programs with the runtime library to create dynamically loadable libraries
-pub struct QirLinker;
+/// Links LLVM IR programs with the runtime library to create dynamically loadable libraries
+pub struct LlvmLinker;
 
-impl QirLinker {
+impl LlvmLinker {
     /// Compile and link a QIR program with the runtime to create a dynamically loadable library
     ///
     /// This method orchestrates the complete QIR compilation process with intelligent

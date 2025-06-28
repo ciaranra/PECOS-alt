@@ -154,13 +154,13 @@ def run_guppy(
     # Execute using QIR Engine PyO3 bindings
     execution_start = time.time()
     
-    from pecos_rslib import execute_qir, reset_qir_runtime
+    from pecos_rslib import execute_llvm, reset_llvm_runtime
     import os
     
-    # IMPORTANT: Reset QIR runtime state before execution to prevent
+    # IMPORTANT: Reset LLVM runtime state before execution to prevent
     # global state accumulation that causes aborts in Python test suites
     try:
-        reset_qir_runtime()
+        reset_llvm_runtime()
     except Exception as e:
         # Log the error but don't fail - reset errors may indicate deeper issues
         # but shouldn't prevent execution entirely
@@ -177,18 +177,13 @@ def run_guppy(
     if verbose:
         print("[OK] Using PECOS QIR PyO3 bindings for execution")
     
-    # Both Rust HUGR and PMIR backends generate HUGR-style LLVM-IR
-    # Only HUGR convention is supported after removing QIR convention support
-    actual_convention = "hugr"
-    
     # Execute the QIR file with the PyO3 bindings
-    qir_result = execute_qir(
+    qir_result = execute_llvm(
         str(qir_file),
         shots,
         seed,
         None,  # noise_probability
         None,  # workers
-        llvm_convention=actual_convention  # Use HUGR convention
     )
     
     # Extract results from the returned dictionary

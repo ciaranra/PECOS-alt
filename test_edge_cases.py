@@ -54,7 +54,7 @@ def test_edge_case(func, name, expected_behavior):
     
     try:
         # Compile with HUGR convention
-        hugr_llvm = hugr_qir.compile_hugr_to_qir_rust(hugr_path, llvm_convention="hugr")
+        hugr_llvm = hugr_qir.compile_hugr_to_llvm_rust(hugr_path, llvm_convention="hugr")
         
         # Check conversion
         deferred_calls = hugr_llvm.count('__hugr__quantum__qis__m__body')

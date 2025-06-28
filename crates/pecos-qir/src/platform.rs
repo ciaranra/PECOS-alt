@@ -1,6 +1,6 @@
-//! Platform-specific implementations for QIR compilation
+//! Platform-specific implementations for LLVM IR compilation
 //!
-//! This module contains platform-specific code for compiling QIR programs,
+//! This module contains platform-specific code for compiling LLVM IR programs,
 //! separated to improve maintainability and organization.
 
 use std::path::PathBuf;

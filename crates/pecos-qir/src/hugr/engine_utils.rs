@@ -1,19 +1,19 @@
 /*!
-HUGR-enabled QIR Engine
+HUGR-enabled LLVM Engine
 
-This module provides functions to compile HUGR files to QIR and create engines from them.
+This module provides functions to compile HUGR files to LLVM IR and create engines from them.
 This is a simplified interface that doesn't try to implement complex traits.
 */
 
 use super::compiler::{HugrCompiler, HugrCompilerConfig};
-use crate::QirEngine;
+use crate::LlvmEngine;
 use log::info;
 use pecos_core::errors::PecosError;
 use pecos_engines::ClassicalEngine;
 use std::path::Path;
 use tempfile::TempDir;
 
-/// Compile a HUGR file to QIR and create a QIR engine from it
+/// Compile a HUGR file to LLVM IR and create an LLVM engine from it
 ///
 /// # Arguments
 /// * `hugr_path` - Path to the HUGR file to compile and load
@@ -24,12 +24,12 @@ use tempfile::TempDir;
 ///
 /// # Errors
 /// Returns `PecosError` if compilation or engine creation fails
-pub fn create_hugr_qir_engine<P: AsRef<Path>>(
+pub fn create_hugr_llvm_engine<P: AsRef<Path>>(
     hugr_path: P,
     shots: Option<usize>,
 ) -> Result<Box<dyn ClassicalEngine>, PecosError> {
     let hugr_path = hugr_path.as_ref();
-    info!("Creating QIR engine from HUGR: {}", hugr_path.display());
+    info!("Creating LLVM engine from HUGR: {}", hugr_path.display());
 
     // Create temporary directory for compilation output
     let temp_dir =
@@ -48,18 +48,18 @@ pub fn create_hugr_qir_engine<P: AsRef<Path>>(
 
     info!("Compiled HUGR to native LLVM-IR: {}", llvm_path.display());
 
-    // Create QIR engine from compiled output (handles both QIR and HUGR conventions)
-    let mut qir_engine = QirEngine::new(llvm_path);
+    // Create LLVM engine from compiled output
+    let mut llvm_engine = LlvmEngine::new(llvm_path);
 
     // Set shots if specified
     if let Some(num_shots) = shots {
-        qir_engine.set_assigned_shots(num_shots);
+        llvm_engine.set_assigned_shots(num_shots);
     }
 
     // Pre-compile for efficiency
-    qir_engine.pre_compile()?;
+    llvm_engine.pre_compile()?;
 
-    Ok(Box::new(qir_engine))
+    Ok(Box::new(llvm_engine))
 }
 
 /// Compile a HUGR file to native HUGR LLVM-IR using default settings
@@ -73,7 +73,7 @@ pub fn create_hugr_qir_engine<P: AsRef<Path>>(
 ///
 /// # Errors
 /// Returns `PecosError` if compilation fails
-pub fn compile_hugr_to_qir<P: AsRef<Path>, Q: AsRef<Path>>(
+pub fn compile_hugr_to_llvm<P: AsRef<Path>, Q: AsRef<Path>>(
     hugr_path: P,
     output_path: Q,
 ) -> Result<std::path::PathBuf, PecosError> {
@@ -86,7 +86,7 @@ pub fn compile_hugr_to_qir<P: AsRef<Path>, Q: AsRef<Path>>(
     compiler.compile_hugr(hugr_path)
 }
 
-/// Setup function for creating a HUGR-enabled QIR engine (alias for backwards compatibility)
+/// Setup function for creating a HUGR-enabled LLVM engine (alias for backwards compatibility)
 ///
 /// # Arguments
 /// * `hugr_path` - Path to the HUGR file
@@ -100,17 +100,17 @@ pub fn compile_hugr_to_qir<P: AsRef<Path>, Q: AsRef<Path>>(
 /// - The HUGR file cannot be read
 /// - Compilation fails
 /// - Engine creation fails
-pub fn setup_hugr_qir_engine<P: AsRef<Path>>(
+pub fn setup_hugr_llvm_engine<P: AsRef<Path>>(
     hugr_path: P,
     shots: Option<usize>,
 ) -> Result<Box<dyn ClassicalEngine>, PecosError> {
-    create_hugr_qir_engine(hugr_path, shots)
+    create_hugr_llvm_engine(hugr_path, shots)
 }
 
 #[cfg(test)]
 mod tests {
     #[cfg(not(feature = "hugr-llvm-pipeline"))]
-    use super::compile_hugr_to_qir;
+    use super::compile_hugr_to_llvm;
     #[cfg(not(feature = "hugr-llvm-pipeline"))]
     use tempfile::NamedTempFile;
 
@@ -126,7 +126,7 @@ mod tests {
         let temp_file = NamedTempFile::new().unwrap();
         let output_file = NamedTempFile::new().unwrap();
 
-        let result = compile_hugr_to_qir(temp_file.path(), output_file.path());
+        let result = compile_hugr_to_llvm(temp_file.path(), output_file.path());
         assert!(result.is_err());
         assert!(
             result

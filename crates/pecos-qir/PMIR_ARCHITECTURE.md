@@ -172,7 +172,7 @@ let custom_config = MlirToolchainConfig {
 
 ### Why Not a Custom Quantum Dialect (Yet)?
 
-While we explored creating a custom quantum dialect for MLIR (see `quantum_dialect.td` and `QuantumToLLVM.cpp`), we chose to generate standard MLIR with function calls for the initial implementation because:
+While we explored creating a custom quantum dialect for MLIR (see `quantum_dialect.td` and `quantum_to_llvm.cpp`), we chose to generate standard MLIR with function calls for the initial implementation because:
 
 1. **Simplicity**: Using standard dialects allows the pipeline to work with stock MLIR tools
 2. **Compatibility**: No need to build custom MLIR tools or integrate C++ code with Rust

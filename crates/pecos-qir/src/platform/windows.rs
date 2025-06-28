@@ -1,4 +1,4 @@
-//! Windows-specific implementations for QIR compilation
+//! Windows-specific implementations for LLVM IR compilation
 
 use log::debug;
 use pecos_core::errors::PecosError;
@@ -9,16 +9,16 @@ use std::process::Command;
 #[path = "windows_stub_gen.rs"]
 mod stub_gen;
 
-/// Handle Windows-specific QIR compilation
+/// Handle Windows-specific LLVM IR compilation
 pub struct WindowsCompiler;
 
 impl WindowsCompiler {
-    /// Compile QIR file to object file using clang
+    /// Compile LLVM IR file to object file using clang
     ///
     /// Windows does not typically include llc.exe in standard LLVM installations
-    /// so we use clang directly to compile the QIR file to an object file.
+    /// so we use clang directly to compile the LLVM IR file to an object file.
     pub fn compile_to_object_file(
-        qir_file: &Path,
+        llvm_file: &Path,
         object_file: &Path,
         clang_path: &Path,
         handle_command_error: impl Fn(
@@ -27,25 +27,25 @@ impl WindowsCompiler {
         ) -> Result<std::process::Output, PecosError>,
         handle_command_status: impl Fn(&std::process::Output, &str) -> Result<(), PecosError>,
     ) -> Result<(), PecosError> {
-        debug!("QIR Compiler: Compiling QIR to object file with Windows-specific logic");
+        debug!("LLVM Compiler: Compiling LLVM IR to object file with Windows-specific logic");
 
-        // Read and modify QIR content to add Windows export attribute
-        let mut qir_content = fs::read_to_string(qir_file).map_err(PecosError::IO)?;
+        // Read and modify LLVM IR content to add Windows export attribute
+        let mut llvm_content = fs::read_to_string(llvm_file).map_err(PecosError::IO)?
 
         // Add dllexport attribute to main function
-        qir_content = qir_content.replace(
+        llvm_content = llvm_content.replace(
             "define void @main() #0 {",
             "define dllexport void @main() #0 {",
         );
 
         // Create a temporary file in the parent directory of the object file
         let parent_dir = object_file.parent().unwrap_or(Path::new("."));
-        let temp_qir_file = parent_dir.join("temp_qir.ll");
+        let temp_llvm_file = parent_dir.join("temp_llvm.ll");
 
-        fs::write(&temp_qir_file, qir_content).map_err(PecosError::IO)?;
+        fs::write(&temp_llvm_file, llvm_content).map_err(PecosError::IO)?
 
         debug!(
-            "QIR Compiler: Using clang at {:?} to compile LLVM IR directly",
+            "LLVM Compiler: Using clang at {:?} to compile LLVM IR directly",
             clang_path
         );
 
@@ -54,11 +54,11 @@ impl WindowsCompiler {
         let result = Command::new(clang_path)
             .args(["-c", "-O2", "-emit-llvm", "-o"]) // Add -emit-llvm flag to ensure proper LLVM IR processing
             .arg(object_file)
-            .arg(&temp_qir_file)
+            .arg(&temp_llvm_file)
             .output();
 
         // Clean up temporary file regardless of compilation result
-        let _ = fs::remove_file(temp_qir_file);
+        let _ = fs::remove_file(temp_llvm_file);
 
         // Check compilation result
         let output = handle_command_error(result, "Failed to execute clang")?;
@@ -67,12 +67,12 @@ impl WindowsCompiler {
         // Verify output file exists
         if !object_file.exists() {
             return Err(PecosError::Processing(format!(
-                "QIR compilation failed: Object file was not created at the expected path: {object_file:?}"
+                "LLVM compilation failed: Object file was not created at the expected path: {object_file:?}"
             )));
         }
 
         debug!(
-            "QIR Compiler: Successfully compiled QIR to object file with Windows-specific logic"
+            "LLVM Compiler: Successfully compiled LLVM IR to object file with Windows-specific logic"
         );
 
         Ok(())

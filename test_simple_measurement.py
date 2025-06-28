@@ -37,7 +37,7 @@ def test_conversions():
     try:
         print("\n1. Testing HUGR Convention (should trigger measurement conversion):")
         print("-"*50)
-        hugr_llvm = hugr_qir.compile_hugr_to_qir_rust(hugr_path, llvm_convention="hugr")
+        hugr_llvm = hugr_qir.compile_hugr_to_llvm_rust(hugr_path, llvm_convention="hugr")
         
         hugr_deferred = hugr_llvm.count('__hugr__quantum__qis__m__body')
         hugr_immediate = hugr_llvm.count('call i32 @__quantum__qis__m__body(')
@@ -50,7 +50,7 @@ def test_conversions():
         
         print("\n2. Testing QIR Convention (should NOT trigger conversion):")
         print("-"*50)
-        qir_llvm = hugr_qir.compile_hugr_to_qir_rust(hugr_path, llvm_convention="qir")
+        qir_llvm = hugr_qir.compile_hugr_to_llvm_rust(hugr_path, llvm_convention="qir")
         
         qir_deferred = qir_llvm.count('__hugr__quantum__qis__m__body')
         qir_immediate = qir_llvm.count('call i32 @__quantum__qis__m__body(')

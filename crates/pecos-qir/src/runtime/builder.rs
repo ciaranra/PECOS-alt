@@ -1,7 +1,7 @@
 //! Runtime Builder Module
 //!
 //! This module handles building and managing the static pecos-qir runtime library
-//! that QIR programs link against.
+//! that LLVM IR programs link against.
 //!
 //! # Runtime Library Location
 //!
@@ -49,7 +49,7 @@ pub struct RuntimeBuilder;
 static BUILD_MUTEX: Mutex<()> = Mutex::new(());
 
 impl RuntimeBuilder {
-    /// Build the Rust QIR runtime as a static library
+    /// Build the Rust LLVM runtime as a static library
     ///
     /// This method ensures we have an up-to-date static library by checking
     /// for the existence of the library and a marker file that indicates

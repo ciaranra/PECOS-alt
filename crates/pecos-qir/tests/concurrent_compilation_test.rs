@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
 
-use pecos_qir::linker::QirLinker;
+use pecos_qir::linker::LlvmLinker;
 
 /// Create a simple test QIR file
 fn create_test_qir_file(dir: &Path, name: &str) -> PathBuf {
@@ -55,7 +55,7 @@ fn test_concurrent_same_file_compilation() {
         let handle = thread::spawn(move || {
             println!("Thread {i} starting compilation...");
             let output_dir = test_dir.path().join(format!("build_{i}"));
-            let result = QirLinker::compile(qir_file.as_ref(), Some(&output_dir));
+            let result = LlvmLinker::compile(qir_file.as_ref(), Some(&output_dir));
             println!("Thread {} finished: {:?}", i, result.is_ok());
             result
         });
@@ -97,7 +97,7 @@ fn test_concurrent_different_files_compilation() {
         let handle = thread::spawn(move || {
             println!("Thread {i} compiling file_{i}.ll...");
             let output_dir = test_dir.path().join("build");
-            let result = QirLinker::compile(qir_file.as_ref(), Some(&output_dir));
+            let result = LlvmLinker::compile(qir_file.as_ref(), Some(&output_dir));
             println!("Thread {} finished: {:?}", i, result.is_ok());
             (i, result)
         });
@@ -137,7 +137,7 @@ fn test_runtime_library_concurrent_access() {
     println!("\n=== Testing concurrent runtime library access ===");
 
     // This test verifies that multiple threads can safely call RuntimeBuilder
-    // at the same time (through QirLinker::compile)
+    // at the same time (through LlvmLinker::compile)
 
     let test_dir = Arc::new(tempfile::tempdir().unwrap());
 
@@ -160,7 +160,7 @@ fn test_runtime_library_concurrent_access() {
             // Now all threads will try to access RuntimeBuilder simultaneously
             println!("Thread {i} accessing runtime library...");
             let output_dir = test_dir.path().join(format!("build_{i}"));
-            let result = QirLinker::compile(&qir_file, Some(&output_dir));
+            let result = LlvmLinker::compile(&qir_file, Some(&output_dir));
 
             println!("Thread {} completed: {:?}", i, result.is_ok());
             result

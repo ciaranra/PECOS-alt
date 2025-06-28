@@ -1,6 +1,6 @@
-//! Thread-local runtime context for QIR execution
+//! Thread-local runtime context for LLVM IR execution
 //!
-//! This module provides isolated runtime contexts for QIR executions,
+//! This module provides isolated runtime contexts for LLVM IR executions,
 //! replacing global state with thread-local storage to enable parallel execution.
 
 use parking_lot::Mutex;
@@ -8,7 +8,7 @@ use pecos_engines::ByteMessageBuilder;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// Runtime state for a single QIR execution context
+/// Runtime state for a single LLVM IR execution context
 #[derive(Debug)]
 pub struct RuntimeContext {
     /// Message builder for recording quantum operations

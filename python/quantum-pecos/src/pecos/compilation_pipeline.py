@@ -77,7 +77,7 @@ def compile_hugr_to_llvm(
         RuntimeError: If compilation fails
     """
     try:
-        from pecos_rslib import compile_hugr_to_qir_rust
+        from pecos_rslib import compile_hugr_to_llvm_rust
 
         rust_backend_available = True
     except ImportError:
@@ -85,7 +85,7 @@ def compile_hugr_to_llvm(
 
     if rust_backend_available:
         try:
-            return compile_hugr_to_qir_rust(
+            return compile_hugr_to_llvm_rust(
                 hugr_bytes,
                 None,
                 debug_info,

@@ -53,66 +53,41 @@ impl ExportedFunction {
 pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
     // QIR runtime API
     ExportedFunction {
-        name: "qir_runtime_reset",
+        name: "llvm_runtime_reset",
         return_type: "void",
         params: &[],
     },
     ExportedFunction {
-        name: "qir_runtime_get_binary_commands",
+        name: "llvm_runtime_get_binary_commands",
         return_type: "void*",
         params: &[],
     },
     ExportedFunction {
-        name: "qir_runtime_free_binary_commands",
+        name: "llvm_runtime_free_binary_commands",
         return_type: "void",
         params: &[("void*", "cmds")],
     },
     ExportedFunction {
-        name: "qir_runtime_update_measurement_results",
+        name: "llvm_runtime_update_measurement_results",
         return_type: "void",
         params: &[("const u32*", "results_ptr"), ("usize", "results_len")],
     },
     ExportedFunction {
-        name: "qir_runtime_finalize_shot",
+        name: "llvm_runtime_finalize_shot",
         return_type: "void",
         params: &[],
     },
     ExportedFunction {
-        name: "qir_runtime_get_shot_results",
+        name: "llvm_runtime_get_shot_results",
         return_type: "void*",
         params: &[],
     },
     ExportedFunction {
-        name: "qir_runtime_free_shot_data",
+        name: "llvm_runtime_free_shot_data",
         return_type: "void",
         params: &[("void*", "data")],
     },
     // Quantum instruction set
-    ExportedFunction {
-        name: "__quantum__qis__y__body",
-        return_type: "void",
-        params: &[("usize", "qubit")],
-    },
-    ExportedFunction {
-        name: "__quantum__qis__z__body",
-        return_type: "void",
-        params: &[("usize", "qubit")],
-    },
-    ExportedFunction {
-        name: "__quantum__qis__rz__body",
-        return_type: "void",
-        params: &[("double", "theta"), ("usize", "qubit")],
-    },
-    ExportedFunction {
-        name: "__quantum__qis__r1xy__body",
-        return_type: "void",
-        params: &[("double", "theta"), ("double", "phi"), ("usize", "qubit")],
-    },
-    ExportedFunction {
-        name: "__quantum__qis__rxy__body",
-        return_type: "void",
-        params: &[("double", "theta"), ("double", "phi"), ("usize", "qubit")],
-    },
     ExportedFunction {
         name: "__quantum__qis__s__body",
         return_type: "void",
@@ -149,11 +124,6 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
         params: &[("i64", "control"), ("i64", "target")],
     },
     ExportedFunction {
-        name: "__quantum__qis__cz__body_usize",
-        return_type: "void",
-        params: &[("usize", "control"), ("usize", "target")],
-    },
-    ExportedFunction {
         name: "__quantum__qis__cy__body",
         return_type: "void",
         params: &[("i64", "control"), ("i64", "target")],
@@ -162,21 +132,6 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
         name: "__quantum__qis__ch__body",
         return_type: "void",
         params: &[("i64", "control"), ("i64", "target")],
-    },
-    ExportedFunction {
-        name: "__quantum__qis__szz__body",
-        return_type: "void",
-        params: &[("usize", "q1"), ("usize", "q2")],
-    },
-    ExportedFunction {
-        name: "__quantum__qis__zz__body",
-        return_type: "void",
-        params: &[("usize", "q1"), ("usize", "q2")],
-    },
-    ExportedFunction {
-        name: "__quantum__qis__rzz__body",
-        return_type: "void",
-        params: &[("double", "theta"), ("usize", "q1"), ("usize", "q2")],
     },
     ExportedFunction {
         name: "__quantum__qis__crz__body",
@@ -189,9 +144,9 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
         params: &[("i64", "control1"), ("i64", "control2"), ("i64", "target")],
     },
     ExportedFunction {
-        name: "__quantum__qis__reset__body",
+        name: "__quantum__qis__zz__body",
         return_type: "void",
-        params: &[("usize", "qubit")],
+        params: &[("i64", "qubit1"), ("i64", "qubit2")],
     },
     // Runtime management
     ExportedFunction {

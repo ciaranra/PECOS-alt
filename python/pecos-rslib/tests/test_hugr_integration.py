@@ -1,7 +1,7 @@
 """
-Tests for HUGR/QIR PyO3 integration
+Tests for HUGR/LLVM PyO3 integration
 
-Tests the Rust backend for HUGR compilation and QIR engine creation.
+Tests the Rust backend for HUGR compilation and LLVM engine creation.
 """
 
 import pytest
@@ -58,7 +58,7 @@ def test_hugr_compilation_with_invalid_data() -> None:
         invalid_hugr = b"this is not valid HUGR data"
 
         with pytest.raises(RuntimeError) as exc_info:
-            compiler.compile_bytes_to_qir(invalid_hugr)
+            compiler.compile_bytes_to_llvm(invalid_hugr)
 
         # Verify we get a reasonable error message
         error_msg = str(exc_info.value).lower()
@@ -73,7 +73,7 @@ def test_hugr_compilation_with_invalid_data() -> None:
 def test_hugr_qir_engine_creation() -> None:
     """Test creating QIR engines from HUGR data."""
     try:
-        from pecos_rslib import RustHugrQirEngine, check_rust_hugr_availability
+        from pecos_rslib import RustHugrLlvmEngine, check_rust_hugr_availability
 
         available, message = check_rust_hugr_availability()
         if not available:
@@ -84,7 +84,7 @@ def test_hugr_qir_engine_creation() -> None:
 
         # This will likely fail due to invalid HUGR data, but tests the interface
         with pytest.raises(RuntimeError):
-            RustHugrQirEngine(dummy_hugr, shots=100)
+            RustHugrLlvmEngine(dummy_hugr, shots=100)
 
     except ImportError:
         pytest.skip("Rust HUGR backend not available")
@@ -93,7 +93,7 @@ def test_hugr_qir_engine_creation() -> None:
 def test_hugr_qir_engine_from_file() -> None:
     """Test creating QIR engines from HUGR files."""
     try:
-        from pecos_rslib import RustHugrQirEngine, check_rust_hugr_availability
+        from pecos_rslib import RustHugrLlvmEngine, check_rust_hugr_availability
 
         available, message = check_rust_hugr_availability()
         if not available:
@@ -107,7 +107,7 @@ def test_hugr_qir_engine_from_file() -> None:
         try:
             # This will likely fail due to invalid HUGR data, but tests the interface
             with pytest.raises(RuntimeError):
-                RustHugrQirEngine.from_file(temp_path, shots=100)
+                RustHugrLlvmEngine.from_file(temp_path, shots=100)
         finally:
             Path(temp_path).unlink()  # Clean up
 
@@ -118,7 +118,7 @@ def test_hugr_qir_engine_from_file() -> None:
 def test_convenience_functions() -> None:
     """Test convenience functions for HUGR compilation."""
     try:
-        from pecos_rslib import compile_hugr_to_qir_rust, check_rust_hugr_availability
+        from pecos_rslib import compile_hugr_to_llvm_rust, check_rust_hugr_availability
 
         available, message = check_rust_hugr_availability()
         if not available:
@@ -127,7 +127,7 @@ def test_convenience_functions() -> None:
         # Test with bytes (should fail due to invalid HUGR data)
         dummy_hugr = b"dummy hugr data"
         with pytest.raises(RuntimeError):
-            compile_hugr_to_qir_rust(dummy_hugr)
+            compile_hugr_to_llvm_rust(dummy_hugr)
 
         # Test with file path
         with tempfile.NamedTemporaryFile(suffix=".hugr", delete=False) as f:
@@ -139,7 +139,7 @@ def test_convenience_functions() -> None:
 
         try:
             with pytest.raises(RuntimeError):
-                compile_hugr_to_qir_rust(temp_hugr_path, temp_qir_path)
+                compile_hugr_to_llvm_rust(temp_hugr_path, temp_qir_path)
         finally:
             Path(temp_hugr_path).unlink()
             Path(temp_qir_path).unlink()

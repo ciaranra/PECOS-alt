@@ -24,9 +24,9 @@ def compile_module_to_string(hugr_bytes: bytes) -> str:
     """
     # Try to use PECOS's Rust backend first (fastest)
     try:
-        from pecos_rslib import compile_hugr_to_qir_rust
+        from pecos_rslib import compile_hugr_to_llvm_rust
 
-        return compile_hugr_to_qir_rust(
+        return compile_hugr_to_llvm_rust(
             hugr_bytes,
             None,  # output_path
             False,  # debug_info  # noqa: FBT003
@@ -113,7 +113,7 @@ def is_available() -> bool:
     """
     try:
         # Check Rust backend
-        from pecos_rslib import compile_hugr_to_qir_rust  # noqa: F401
+        from pecos_rslib import compile_hugr_to_llvm_rust  # noqa: F401
     except ImportError:
         pass
     else:

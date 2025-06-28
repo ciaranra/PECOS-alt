@@ -30,7 +30,7 @@ pub fn setup_cli_engine(
     match program_type {
         ProgramType::QIR => {
             debug!("Setting up QIR engine");
-            setup_qir_engine(program_path, shots)
+            setup_llvm_engine(program_path, shots)
         }
         ProgramType::PHIR => {
             debug!("Setting up PHIR engine");

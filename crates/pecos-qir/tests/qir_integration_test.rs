@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use pecos_engines::engine_system::MonteCarloEngine;
 use pecos_engines::noise::DepolarizingNoiseModel;
-use pecos_qir::QirEngine;
+use pecos_qir::LlvmEngine;
 
 /// Get the path to the Bell state example
 fn get_bell_path() -> PathBuf {
@@ -66,14 +66,14 @@ fn test_bell_state_immediate_measurement() {
     }
 
     // Create a QIR engine with Bell state file
-    let qir_engine = QirEngine::new(get_bell_path());
+    let llvm_engine = LlvmEngine::new(get_bell_path());
 
     // Create a noiseless model
     let noise_model = Box::new(DepolarizingNoiseModel::new_uniform(0.0));
 
     // Run the Bell state example with 100 shots
     let results = MonteCarloEngine::run_with_noise_model(
-        Box::new(qir_engine),
+        Box::new(llvm_engine),
         noise_model,
         100,
         2,
@@ -137,14 +137,14 @@ fn test_qprog_adaptive_algorithm() {
     }
 
     // Create a QIR engine with quantum program file
-    let qir_engine = QirEngine::new(get_qprog_path());
+    let llvm_engine = LlvmEngine::new(get_qprog_path());
 
     // Create a noiseless model
     let noise_model = Box::new(DepolarizingNoiseModel::new_uniform(0.0));
 
     // Run the quantum program with 50 shots
     let results = MonteCarloEngine::run_with_noise_model(
-        Box::new(qir_engine),
+        Box::new(llvm_engine),
         noise_model,
         50,
         2,

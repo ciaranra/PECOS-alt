@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, SystemTime};
 
-use pecos_qir::linker::QirLinker;
+use pecos_qir::linker::LlvmLinker;
 use serial_test::serial;
 
 /// Create a simple test QIR file
@@ -59,7 +59,7 @@ fn test_qir_executable_caching() {
 
     // First compilation
     println!("1. First compilation...");
-    let lib1 = QirLinker::compile(&qir_file, Some(&output_dir)).unwrap();
+    let lib1 = LlvmLinker::compile(&qir_file, Some(&output_dir)).unwrap();
     let lib1_mtime = get_mtime(&lib1).expect("Failed to get library mtime");
     println!("   Created: {:?}", lib1.file_name().unwrap());
 
@@ -68,7 +68,7 @@ fn test_qir_executable_caching() {
 
     // Second compilation - should use cache
     println!("2. Second compilation (should use cache)...");
-    let lib2 = QirLinker::compile(&qir_file, Some(&output_dir)).unwrap();
+    let lib2 = LlvmLinker::compile(&qir_file, Some(&output_dir)).unwrap();
     let lib2_mtime = get_mtime(&lib2).expect("Failed to get library mtime");
 
     assert_eq!(lib1, lib2, "Expected same library path from cache");
@@ -90,7 +90,7 @@ fn test_qir_rebuild_on_source_change() {
 
     // First compilation
     println!("1. Initial compilation...");
-    let lib1 = QirLinker::compile(&qir_file, Some(&output_dir)).unwrap();
+    let lib1 = LlvmLinker::compile(&qir_file, Some(&output_dir)).unwrap();
     println!("   Created: {:?}", lib1.file_name().unwrap());
 
     // Wait to ensure timestamp difference
@@ -106,7 +106,7 @@ fn test_qir_rebuild_on_source_change() {
 
     // Second compilation - should rebuild
     println!("3. Recompiling after source change...");
-    let lib2 = QirLinker::compile(&qir_file, Some(&output_dir)).unwrap();
+    let lib2 = LlvmLinker::compile(&qir_file, Some(&output_dir)).unwrap();
 
     // Should be the same path (consistent naming)
     assert_eq!(lib1, lib2, "Should use the same library file path");
@@ -141,7 +141,7 @@ fn test_qir_rebuild_on_runtime_update() {
 
     // First compilation
     println!("1. Initial compilation...");
-    let lib1 = QirLinker::compile(&qir_file, Some(&output_dir)).unwrap();
+    let lib1 = LlvmLinker::compile(&qir_file, Some(&output_dir)).unwrap();
     let lib1_mtime = get_mtime(&lib1).unwrap();
     println!("   Created: {:?}", lib1.file_name().unwrap());
 
@@ -158,7 +158,7 @@ fn test_qir_rebuild_on_runtime_update() {
 
     // Second compilation - should rebuild because runtime is newer
     println!("3. Recompiling after runtime update...");
-    let lib2 = QirLinker::compile(&qir_file, Some(&output_dir)).unwrap();
+    let lib2 = LlvmLinker::compile(&qir_file, Some(&output_dir)).unwrap();
     let lib2_mtime = get_mtime(&lib2).unwrap();
 
     assert_eq!(lib1, lib2, "Should use same library path");
@@ -187,8 +187,8 @@ fn test_multiple_qir_files_independent_caching() {
 
     // Compile both
     println!("1. Compiling two QIR files...");
-    let lib1 = QirLinker::compile(&qir1, Some(&output_dir)).unwrap();
-    let lib2 = QirLinker::compile(&qir2, Some(&output_dir)).unwrap();
+    let lib1 = LlvmLinker::compile(&qir1, Some(&output_dir)).unwrap();
+    let lib2 = LlvmLinker::compile(&qir2, Some(&output_dir)).unwrap();
 
     assert_ne!(
         lib1, lib2,
@@ -211,8 +211,8 @@ fn test_multiple_qir_files_independent_caching() {
 
     // Recompile both
     println!("3. Recompiling both files...");
-    let lib1_new = QirLinker::compile(&qir1, Some(&output_dir)).unwrap();
-    let lib2_new = QirLinker::compile(&qir2, Some(&output_dir)).unwrap();
+    let lib1_new = LlvmLinker::compile(&qir1, Some(&output_dir)).unwrap();
+    let lib2_new = LlvmLinker::compile(&qir2, Some(&output_dir)).unwrap();
 
     // Check modification times
     let lib1_mtime_new = get_mtime(&lib1_new).unwrap();

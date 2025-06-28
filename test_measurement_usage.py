@@ -39,7 +39,7 @@ def main():
     
     try:
         # Compile with HUGR naming convention
-        llvm_ir = hugr_qir.compile_hugr_to_qir_rust(hugr_path, llvm_convention="hugr")
+        llvm_ir = hugr_qir.compile_hugr_to_llvm_rust(hugr_path, llvm_convention="hugr")
         
         print("\n" + "="*60)
         print("LLVM-IR Analysis:")

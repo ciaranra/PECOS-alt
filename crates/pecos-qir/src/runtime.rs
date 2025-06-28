@@ -1,4 +1,4 @@
-/// Instance-based QIR Runtime Implementation for HUGR Convention
+/// Instance-based LLVM Runtime Implementation for HUGR Convention
 ///
 /// This runtime eliminates global state by using `RuntimeRegistry` to map
 /// threads to their own isolated runtime states. Each worker/thread operates
@@ -18,7 +18,7 @@ pub mod state;
 pub use cleanup::{cleanup_thread_local_state, force_runtime_cleanup};
 pub use context::RuntimeContext;
 pub use registry::{RuntimeRegistry, initialize_registry};
-pub use state::QirRuntimeState;
+pub use state::LlvmRuntimeState;
 
 // Internal imports
 use log::{debug, error, warn};
@@ -64,7 +64,7 @@ fn i64_to_usize(value: i64) -> usize {
 
 /// Helper function to check if we should print commands
 fn should_print_commands() -> bool {
-    match env::var("QIR_RUNTIME_QUIET") {
+    match env::var("LLVM_RUNTIME_QUIET") {
         Ok(val) => val != "1",
         Err(_) => true,
     }
@@ -113,7 +113,7 @@ pub mod core_runtime {
         }
     }
 
-    /// Reset the QIR runtime state for the current thread
+    /// Reset the LLVM runtime state for the current thread
     pub fn reset() {
         ensure_runtime_initialized();
         let thread_id = get_thread_id();
@@ -122,7 +122,7 @@ pub mod core_runtime {
         if let Some(()) = RuntimeRegistry::try_with_current_runtime(|state| {
             state.reset();
             if should_print_commands() {
-                debug!("[Thread {thread_id}] Reset QIR runtime state");
+                debug!("[Thread {thread_id}] Reset LLVM runtime state");
             }
         }) {
             // Successfully reset
@@ -479,17 +479,17 @@ pub mod core_runtime {
 }
 
 // =============================================================================
-// QIR Runtime Functions  
+// LLVM Runtime Functions  
 // =============================================================================
 
-/// Reset the QIR runtime state
+/// Reset the LLVM runtime state
 ///
 /// # Safety
 ///
 /// This function is marked unsafe as it's called from C/FFI context.
 /// It performs thread-safe operations internally.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn qir_runtime_reset() {
+pub unsafe extern "C" fn llvm_runtime_reset() {
     // Clear the interactive callback first
     core_runtime::clear_interactive_callback();
 
@@ -512,65 +512,8 @@ pub unsafe extern "C" fn __quantum__rt__initialize(_config: *const u8) {
     core_runtime::initialize();
 }
 
-/// Apply Pauli-Y gate
-///
-/// # Safety
-///
-/// This function is marked unsafe as it's called from C/FFI context.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__y__body(qubit: usize) {
-    core_runtime::y_gate(qubit);
-}
-
-/// Apply Pauli-Z gate
-///
-/// # Safety
-///
-/// This function is marked unsafe as it's called from C/FFI context.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__z__body(qubit: usize) {
-    core_runtime::z_gate(qubit);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__cz__body_usize(control: usize, target: usize) {
-    core_runtime::cz_gate(control, target);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__rz__body(theta: f64, qubit: usize) {
-    core_runtime::rz_gate(theta, qubit);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__r1xy__body(theta: f64, phi: f64, qubit: usize) {
-    core_runtime::r1xy_gate(theta, phi, qubit);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__rxy__body(theta: f64, phi: f64, qubit: usize) {
-    core_runtime::r1xy_gate(theta, phi, qubit);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__szz__body(qubit1: usize, qubit2: usize) {
-    core_runtime::szz_gate(qubit1, qubit2);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__zz__body(qubit1: usize, qubit2: usize) {
-    core_runtime::zz_gate(qubit1, qubit2);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__rzz__body(theta: f64, qubit1: usize, qubit2: usize) {
-    core_runtime::rzz_gate(theta, qubit1, qubit2);
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__reset__body(qubit: usize) {
-    core_runtime::reset_qubit(qubit);
-}
+// Note: Standard LLVM runtime functions (with usize parameters) have been removed.
+// Only HUGR convention functions (with i64 parameters) are supported.
 
 // =============================================================================
 // HUGR Convention Functions (Integer-based)
@@ -698,6 +641,13 @@ pub unsafe extern "C" fn __quantum__qis__ccx__body(control1: i64, control2: i64,
     core_runtime::ccx_gate(control1_id, control2_id, target_id);
 }
 
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__zz__body(qubit1: i64, qubit2: i64) {
+    let qubit1_id = i64_to_usize(qubit1);
+    let qubit2_id = i64_to_usize(qubit2);
+    core_runtime::zz_gate(qubit1_id, qubit2_id);
+}
+
 /// Allocate a result for HUGR convention - returns i64 ID
 ///
 /// # Safety
@@ -711,7 +661,7 @@ pub unsafe extern "C" fn __quantum__rt__result_allocate_hugr() -> i64 {
 /// HUGR-style qubit allocation - returns integer ID instead of pointer
 ///
 /// This function allocates a new qubit and returns its ID as an i64.
-/// Used by HUGR-generated QIR that expects integer-based qubit handling.
+/// Used by HUGR-generated LLVM IR that expects integer-based qubit handling.
 ///
 /// # Safety
 /// This function is marked unsafe as it's called from C/FFI context.
@@ -901,7 +851,7 @@ pub unsafe extern "C" fn __quantum__rt__message(msg: *const c_char) {
     if !msg.is_null() {
         let c_str = unsafe { CStr::from_ptr(msg) };
         if let Ok(rust_str) = c_str.to_str() {
-            debug!("QIR Message: {rust_str}");
+            debug!("LLVM Message: {rust_str}");
         }
     }
 }
@@ -913,7 +863,7 @@ pub unsafe extern "C" fn __quantum__rt__record(data: *const c_char) {
         let c_str = unsafe { CStr::from_ptr(data) };
         if let Ok(rust_str) = c_str.to_str() {
             if should_print_commands() {
-                debug!("QIR Record: {rust_str}");
+                debug!("LLVM Record: {rust_str}");
             }
         }
     }
@@ -939,7 +889,7 @@ pub unsafe extern "C" fn __quantum__rt__result_record_output(
 
 /// Update measurement results
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn qir_runtime_update_measurement_results(
+pub unsafe extern "C" fn llvm_runtime_update_measurement_results(
     results_ptr: *const u32,
     results_len: usize,
 ) {
@@ -958,7 +908,7 @@ pub unsafe extern "C" fn qir_runtime_update_measurement_results(
 
 /// Finalize shot
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn qir_runtime_finalize_shot() {
+pub unsafe extern "C" fn llvm_runtime_finalize_shot() {
     core_runtime::finalize_shot();
 }
 
@@ -975,7 +925,7 @@ pub struct FFIByteData {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn qir_runtime_get_binary_commands() -> *mut FFIByteData {
+pub unsafe extern "C" fn llvm_runtime_get_binary_commands() -> *mut FFIByteData {
     let thread_id = get_thread_id();
 
     // Use try_with_current_runtime to avoid auto-initialization during cleanup
@@ -1021,7 +971,7 @@ pub unsafe extern "C" fn qir_runtime_get_binary_commands() -> *mut FFIByteData {
 
 /// Free binary commands
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn qir_runtime_free_binary_commands(ptr: *mut FFIByteData) {
+pub unsafe extern "C" fn llvm_runtime_free_binary_commands(ptr: *mut FFIByteData) {
     let thread_id = get_thread_id();
 
     if ptr.is_null() {
@@ -1052,7 +1002,7 @@ pub struct FFIShotData {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn qir_runtime_get_shot_results() -> *mut FFIShotData {
+pub unsafe extern "C" fn llvm_runtime_get_shot_results() -> *mut FFIShotData {
     let thread_id = get_thread_id();
 
     // Use try_with_current_runtime to avoid auto-initialization during cleanup
@@ -1117,7 +1067,7 @@ pub unsafe extern "C" fn qir_runtime_get_shot_results() -> *mut FFIShotData {
 
 /// Free shot data
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn qir_runtime_free_shot_data(data: *mut FFIShotData) {
+pub unsafe extern "C" fn llvm_runtime_free_shot_data(data: *mut FFIShotData) {
     let thread_id = get_thread_id();
 
     if data.is_null() {

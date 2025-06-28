@@ -1,11 +1,11 @@
 pub mod engine;
 pub mod hugr_python_api;
 pub mod library;
-pub mod linker; // Links QIR programs with runtime library
+pub mod linker; // Links LLVM IR programs with runtime library
 pub mod platform;
 pub mod prelude; // Convenient re-exports for common usage
-pub mod qir_utils; // QIR utilities for entry point detection
-pub mod runtime; // QIR runtime implementation with submodules
+pub mod llvm_utils; // LLVM utilities for entry point detection
+pub mod runtime; // LLVM runtime implementation with submodules
 
 // HUGR-LLVM pipeline functionality
 pub mod hugr; // HUGR frontend (compiler, engine, etc.) - contains stubs when feature disabled
@@ -14,11 +14,11 @@ pub mod hugr; // HUGR frontend (compiler, engine, etc.) - contains stubs when fe
 #[cfg(feature = "pmir-pipeline")]
 pub mod pmir; // HUGR → PAST (RON) → PMIR (MLIR) → LLVM pipeline
 
-pub use engine::QirEngine;
+pub use engine::LlvmEngine;
 
 // HUGR-LLVM pipeline re-exports
 pub use hugr::compiler::{HugrCompiler, HugrCompilerConfig};
-pub use hugr::engine_utils::{compile_hugr_to_qir, create_hugr_qir_engine, setup_hugr_qir_engine};
+pub use hugr::engine_utils::{compile_hugr_to_llvm, create_hugr_llvm_engine, setup_hugr_llvm_engine};
 
 // PMIR pipeline re-exports (only available with pmir-pipeline feature)
 #[cfg(feature = "pmir-pipeline")]
@@ -89,39 +89,39 @@ use pecos_core::errors::PecosError;
 use pecos_engines::ClassicalEngine;
 use std::path::Path;
 
-/// Sets up a basic QIR engine.
+/// Sets up a basic LLVM engine.
 ///
-/// This function creates a QIR engine from the provided path.
+/// This function creates an LLVM engine from the provided path.
 ///
 /// # Parameters
 ///
-/// - `program_path`: A reference to the path of the QIR program file
+/// - `program_path`: A reference to the path of the LLVM IR program file
 /// - `shots`: Optional number of shots to assign to the engine
 ///
 /// # Returns
 ///
-/// Returns a `Box<dyn ClassicalEngine>` containing the QIR engine
+/// Returns a `Box<dyn ClassicalEngine>` containing the LLVM engine
 ///
 /// # Errors
 ///
 /// This function may return the following errors:
-/// - `PecosError::Compilation`: If the QIR file cannot be compiled
-/// - `PecosError::Processing`: If the QIR engine fails to process commands
-pub fn setup_qir_engine(
+/// - `PecosError::Compilation`: If the LLVM IR file cannot be compiled
+/// - `PecosError::Processing`: If the LLVM engine fails to process commands
+pub fn setup_llvm_engine(
     program_path: &Path,
     shots: Option<usize>,
 ) -> Result<Box<dyn ClassicalEngine>, PecosError> {
-    debug!("Setting up QIR engine for: {}", program_path.display());
+    debug!("Setting up LLVM engine for: {}", program_path.display());
 
-    // Create a QirEngine from the path
-    let mut engine = QirEngine::new(program_path.to_path_buf());
+    // Create an LlvmEngine from the path
+    let mut engine = LlvmEngine::new(program_path.to_path_buf());
 
     // Set the number of shots assigned to this engine if specified
     if let Some(num_shots) = shots {
         engine.set_assigned_shots(num_shots);
     }
 
-    // Pre-compile the QIR library for efficient cloning
+    // Pre-compile the LLVM library for efficient cloning
     engine.pre_compile()?;
 
     Ok(Box::new(engine))

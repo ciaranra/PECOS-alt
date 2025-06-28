@@ -1,11 +1,11 @@
-//! macOS-specific implementations for QIR compilation
+//! macOS-specific implementations for LLVM IR compilation
 
 use log::debug;
 use pecos_core::errors::PecosError;
 use std::path::Path;
 use std::process::Command;
 
-/// Handle macOS-specific QIR compilation
+/// Handle macOS-specific LLVM IR compilation
 pub struct MacOSCompiler;
 
 impl MacOSCompiler {
@@ -30,7 +30,7 @@ impl MacOSCompiler {
         ) -> Result<std::process::Output, PecosError>,
         handle_command_status: impl Fn(&std::process::Output, &str) -> Result<(), PecosError>,
     ) -> Result<(), PecosError> {
-        debug!("QIR Compiler: Linking with macOS-specific logic");
+        debug!("LLVM Compiler: Linking with macOS-specific logic");
 
         // Use clang instead of ld directly on macOS as it handles the linking better
         let clang = Command::new("clang")
@@ -44,7 +44,7 @@ impl MacOSCompiler {
         handle_command_status(&output, "clang")?;
 
         debug!(
-            "QIR Compiler: Successfully linked shared library on macOS: {:?}",
+            "LLVM Compiler: Successfully linked shared library on macOS: {:?}",
             library_file
         );
 

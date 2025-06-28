@@ -10,21 +10,21 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-//! Python bindings for QIR execution
+//! Python bindings for LLVM execution
 
 use pecos_core::rng::RngManageable;
 use pecos_engines::NoiseModel;
 use pecos_engines::noise::DepolarizingNoiseModel;
 use pecos_engines::shot_results;
-use pecos_qir::setup_qir_engine;
+use pecos_qir::setup_llvm_engine;
 use pyo3::exceptions::PyRuntimeError;
 use std::fs;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use std::path::PathBuf;
 
-/// Python wrapper for QIR execution
-#[pyclass(name = "QirEngine")]
+/// Python wrapper for LLVM execution
+#[pyclass(name = "LlvmEngine")]
 pub struct PyQirEngine {
     qir_path: PathBuf,
 }
@@ -126,11 +126,11 @@ fn execute_qir_safe(
 
     // Simple reset - no complex context system
     unsafe {
-        pecos_qir::runtime::qir_runtime_reset();
+        pecos_qir::runtime::llvm_runtime_reset();
     }
 
     // Set up QIR engine
-    let classical_engine = setup_qir_engine(qir_path, None)?;
+    let classical_engine = setup_llvm_engine(qir_path, None)?;
 
     // Create noise model
     let noise_model: Box<dyn NoiseModel> = if let Some(prob) = noise_probability {
@@ -158,7 +158,7 @@ fn execute_qir_safe(
 
     // Force another reset after execution
     unsafe {
-        pecos_qir::runtime::qir_runtime_reset();
+        pecos_qir::runtime::llvm_runtime_reset();
     }
 
     // Clear any stored engines
@@ -181,7 +181,7 @@ fn execute_qir_safe(
 
 /// Direct function to execute QIR file
 #[pyfunction]
-#[pyo3(name = "execute_qir")]
+#[pyo3(name = "execute_llvm")]
 pub fn py_execute_qir(
     py: Python<'_>,
     qir_path: &str,
@@ -189,7 +189,6 @@ pub fn py_execute_qir(
     seed: Option<u64>,
     noise_probability: Option<f64>,
     workers: Option<usize>,
-    llvm_convention: Option<&str>,
 ) -> PyResult<PyObject> {
     // Enhanced error handling removed - not needed for simplification
 
@@ -201,15 +200,6 @@ pub fn py_execute_qir(
         )));
     }
 
-    // Only HUGR convention is supported now, but keep parameter for API compatibility
-    if let Some(convention) = llvm_convention {
-        if convention != "hugr" {
-            return Err(PyRuntimeError::new_err(format!(
-                "Unsupported LLVM convention '{convention}'. Only 'hugr' convention is supported."
-            )));
-        }
-    }
-
     // Check for pytest environment and warn about potential segfaults
     if std::env::var("PYTEST_CURRENT_TEST").is_ok() {
         // We're running in pytest - execution works but may segfault during cleanup
@@ -219,7 +209,7 @@ pub fn py_execute_qir(
 
         // Force clear any lingering runtime state from previous tests
         unsafe {
-            pecos_qir::runtime::qir_runtime_reset();
+            pecos_qir::runtime::llvm_runtime_reset();
         }
         // Clear any interactive callbacks
         pecos_qir::runtime::core_runtime::clear_interactive_callback();
@@ -303,9 +293,9 @@ pub fn py_get_qir_diagnostic_report() -> PyResult<String> {
     Ok(String::new())
 }
 
-/// Reset QIR runtime state (simplified)
+/// Reset LLVM runtime state (simplified)
 #[pyfunction]
-#[pyo3(name = "reset_qir_runtime")]
+#[pyo3(name = "reset_llvm_runtime")]
 pub fn py_reset_qir_runtime() -> PyResult<()> {
     use std::thread;
     use std::time::Duration;
@@ -320,7 +310,7 @@ pub fn py_reset_qir_runtime() -> PyResult<()> {
 
     // Simple reset - no aggressive cleanup
     unsafe {
-        pecos_qir::runtime::qir_runtime_reset();
+        pecos_qir::runtime::llvm_runtime_reset();
     }
 
     // Clean up all runtime registry states

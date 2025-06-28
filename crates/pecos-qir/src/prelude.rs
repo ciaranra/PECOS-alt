@@ -1,7 +1,7 @@
 //! Prelude module for pecos-qir
 //!
 //! This module provides convenient re-exports of commonly used types and functions
-//! for working with QIR (Quantum Intermediate Representation) in PECOS.
+//! for working with LLVM IR execution in PECOS.
 //!
 //! # Example
 //!
@@ -10,8 +10,8 @@
 //! use pecos_engines::run_sim;
 //!
 //! fn main() -> Result<(), PecosError> {
-//!     // Create a QIR engine
-//!     let engine = setup_qir_engine(Path::new("program.qir"), None)?;
+//!     // Create an LLVM engine
+//!     let engine = setup_llvm_engine(Path::new("program.ll"), None)?;
 //!     
 //!     // Run the simulation with 1000 shots
 //!     let results = run_sim(engine, 1000, None, None, None, None)?;
@@ -26,14 +26,14 @@
 //! }
 //! ```
 
-// Core QIR functionality
-pub use crate::{QirEngine, setup_qir_engine};
+// Core LLVM functionality
+pub use crate::{LlvmEngine, setup_llvm_engine};
 
 // HUGR compilation support (when available)
 #[cfg(feature = "hugr-llvm-pipeline")]
 pub use crate::{
-    HugrCompiler, HugrCompilerConfig, compile_hugr_to_qir, create_hugr_qir_engine,
-    setup_hugr_qir_engine,
+    HugrCompiler, HugrCompilerConfig, compile_hugr_to_llvm, create_hugr_llvm_engine,
+    setup_hugr_llvm_engine,
 };
 
 // Common types from pecos-engines for working with results

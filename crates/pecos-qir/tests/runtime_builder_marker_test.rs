@@ -1,4 +1,4 @@
-use pecos_qir::linker::QirLinker;
+use pecos_qir::linker::LlvmLinker;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -65,7 +65,7 @@ entry:
 
 #[test]
 fn test_marker_based_rebuild_system() {
-    println!("\n=== Testing marker-based rebuild system (via QirLinker) ===");
+    println!("\n=== Testing marker-based rebuild system (via LlvmLinker) ===");
 
     let marker_path = get_marker_path();
     let lib_path = get_runtime_lib_path();
@@ -101,8 +101,8 @@ fn test_normal_build(marker_path: &Path, lib_path: &Path, qir_file: &Path, outpu
     println!("   - Runtime library exists before: {lib_existed_before}");
 
     // Compile QIR (this will trigger runtime build if needed)
-    let result = QirLinker::compile(&qir_file, Some(&output_dir));
-    assert!(result.is_ok(), "QirLinker::compile() failed: {result:?}");
+    let result = LlvmLinker::compile(&qir_file, Some(&output_dir));
+    assert!(result.is_ok(), "LlvmLinker::compile() failed: {result:?}");
 
     // Verify runtime library exists
     assert!(lib_path.exists(), "Runtime library was not created");
@@ -143,10 +143,10 @@ fn test_build_with_marker(
 
     // Compile QIR again (should trigger runtime rebuild due to marker)
     println!("   - Starting QIR compilation...");
-    let result2 = QirLinker::compile(&qir_file, Some(&output_dir));
+    let result2 = LlvmLinker::compile(&qir_file, Some(&output_dir));
     assert!(
         result2.is_ok(),
-        "QirLinker::compile() failed with marker: {result2:?}"
+        "LlvmLinker::compile() failed with marker: {result2:?}"
     );
     println!("   - QIR compilation completed");
 
@@ -237,8 +237,8 @@ fn test_no_rebuild(lib_path: &Path, qir_file: &Path, output_dir: &Path) {
     let lib_mtime_before = fs::metadata(lib_path).unwrap().modified().unwrap();
 
     // Compile again without marker
-    let result = QirLinker::compile(&qir_file, Some(&output_dir));
-    assert!(result.is_ok(), "QirLinker::compile() failed: {result:?}");
+    let result = LlvmLinker::compile(&qir_file, Some(&output_dir));
+    assert!(result.is_ok(), "LlvmLinker::compile() failed: {result:?}");
 
     let lib_mtime_after = fs::metadata(lib_path).unwrap().modified().unwrap();
     assert_eq!(

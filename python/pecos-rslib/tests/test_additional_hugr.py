@@ -18,7 +18,7 @@ def test_hugr_compilation_with_support() -> None:
         # Test that invalid HUGR data raises an error
         dummy_hugr = b"invalid hugr data"
         with pytest.raises(RuntimeError) as exc_info:
-            compiler.compile_bytes_to_qir(dummy_hugr)
+            compiler.compile_bytes_to_llvm(dummy_hugr)
 
         # The error should mention JSON parsing or HUGR format
         error_msg = str(exc_info.value).lower()
@@ -73,7 +73,7 @@ def test_hugr_version_compatibility() -> None:
         # 1. Fail with version mismatch error
         # 2. Be handled by our version translator
         try:
-            result = compiler.compile_bytes_to_qir(hugr_bytes)
+            result = compiler.compile_bytes_to_llvm(hugr_bytes)
             # If it succeeds, our version translator worked!
             print(f"Version translation successful: {result}")
         except RuntimeError as e:
@@ -153,7 +153,7 @@ def test_hugr_arithmetic_extension_handling() -> None:
 
         # We expect this to fail with signature conflict
         with pytest.raises(RuntimeError) as exc_info:
-            compiler.compile_bytes_to_qir(hugr_bytes)
+            compiler.compile_bytes_to_llvm(hugr_bytes)
 
         error_msg = str(exc_info.value)
         # This is the known issue - arithmetic extension conflicts

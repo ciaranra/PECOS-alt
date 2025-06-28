@@ -6,7 +6,7 @@ These functions are designed to be easily wrapped with `PyO3`.
 */
 
 #[cfg(feature = "hugr-llvm-pipeline")]
-use crate::QirEngine;
+use crate::LlvmEngine;
 #[cfg(feature = "hugr-llvm-pipeline")]
 use crate::hugr::compiler::{HugrCompiler, HugrCompilerConfig};
 #[cfg(feature = "hugr-llvm-pipeline")]
@@ -23,16 +23,16 @@ use tempfile::TempDir;
 /// Result type for Python API functions
 pub type PyResult<T> = Result<T, String>;
 
-/// Storage entry for QIR engines - stores both the engine and the temporary directory
+/// Storage entry for LLVM engines - stores both the engine and the temporary directory
 #[cfg(feature = "hugr-llvm-pipeline")]
-pub struct QirEngineEntry {
-    pub engine: QirEngine,
+pub struct LlvmEngineEntry {
+    pub engine: LlvmEngine,
     _temp_dir: TempDir, // Keep the temp dir alive
 }
 
-/// Global storage for QIR engines when called from Python bindings
+/// Global storage for LLVM engines when called from Python bindings
 #[cfg(feature = "hugr-llvm-pipeline")]
-static PYTHON_QIR_ENGINES: LazyLock<Mutex<HashMap<usize, QirEngineEntry>>> =
+static PYTHON_LLVM_ENGINES: LazyLock<Mutex<HashMap<usize, LlvmEngineEntry>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Convert `PecosError` to String for Python compatibility
@@ -47,46 +47,46 @@ fn convert_error(err: &PecosError) -> String {
 //
 
 #[cfg(feature = "hugr-llvm-pipeline")]
-/// Compile HUGR bytes to QIR string
+/// Compile HUGR bytes to LLVM IR string
 ///
 /// # Arguments
 /// * `hugr_bytes` - HUGR data as bytes
 /// * `debug_info` - Whether to include debug information
 ///
 /// # Returns
-/// QIR as a string
+/// LLVM IR as a string
 ///
 /// # Errors
 /// Returns an error if:
 /// - Failed to create temporary directory
 /// - HUGR compilation fails
-/// - Failed to read the generated QIR file
-pub fn compile_hugr_bytes_to_qir_string(hugr_bytes: &[u8], debug_info: bool) -> PyResult<String> {
-    // Create temporary output file for QIR
+/// - Failed to read the generated LLVM IR file
+pub fn compile_hugr_bytes_to_llvm_string(hugr_bytes: &[u8], debug_info: bool) -> PyResult<String> {
+    // Create temporary output file for LLVM IR
     let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {e}"))?;
-    let qir_path = temp_dir.path().join("output.ll");
+    let llvm_path = temp_dir.path().join("output.ll");
 
     // Set up compiler configuration
     let config = HugrCompilerConfig {
-        output_path: Some(qir_path.clone()),
+        output_path: Some(llvm_path.clone()),
         debug_info,
     };
 
-    // Compile HUGR bytes to QIR
+    // Compile HUGR bytes to LLVM IR
     let compiler = HugrCompiler::with_config(config);
     compiler
-        .compile_hugr_bytes(hugr_bytes, &qir_path)
+        .compile_hugr_bytes(hugr_bytes, &llvm_path)
         .map_err(|e| convert_error(&e))?;
 
-    // Read QIR as string
-    std::fs::read_to_string(&qir_path).map_err(|e| format!("Failed to read QIR file: {e}"))
+    // Read LLVM IR as string
+    std::fs::read_to_string(&llvm_path).map_err(|e| format!("Failed to read LLVM IR file: {e}"))
 }
 
-/// Compile HUGR file to QIR file
+/// Compile HUGR file to LLVM IR file
 ///
 /// # Arguments
 /// * `hugr_path` - Path to HUGR file
-/// * `qir_path` - Path for output QIR file
+/// * `llvm_path` - Path for output LLVM IR file
 /// * `debug_info` - Whether to include debug information
 ///
 /// # Returns
@@ -96,18 +96,18 @@ pub fn compile_hugr_bytes_to_qir_string(hugr_bytes: &[u8], debug_info: bool) -> 
 /// Returns an error if:
 /// - HUGR compilation fails
 #[cfg(feature = "hugr-llvm-pipeline")]
-pub fn compile_hugr_file_to_qir_file(
+pub fn compile_hugr_file_to_llvm_file(
     hugr_path: &str,
-    qir_path: &str,
+    llvm_path: &str,
     debug_info: bool,
 ) -> PyResult<()> {
     // Set up compiler configuration
     let config = HugrCompilerConfig {
-        output_path: Some(PathBuf::from(qir_path)),
+        output_path: Some(PathBuf::from(llvm_path)),
         debug_info,
     };
 
-    // Compile HUGR to QIR
+    // Compile HUGR to LLVM IR
     let compiler = HugrCompiler::with_config(config);
     compiler
         .compile_hugr(hugr_path)
@@ -116,7 +116,7 @@ pub fn compile_hugr_file_to_qir_file(
     Ok(())
 }
 
-/// Create a QIR engine from HUGR bytes
+/// Create an LLVM engine from HUGR bytes
 ///
 /// # Arguments
 /// * `hugr_bytes` - HUGR data as bytes
@@ -124,16 +124,16 @@ pub fn compile_hugr_file_to_qir_file(
 /// * `debug_info` - Whether to include debug information
 ///
 /// # Returns
-/// Opaque handle to the QIR engine
+/// Opaque handle to the LLVM engine
 ///
 /// # Errors
 /// Returns an error if:
 /// - Failed to create temporary directory
 /// - Failed to write HUGR file
 /// - HUGR compilation fails
-/// - QIR engine pre-compilation fails
+/// - LLVM engine pre-compilation fails
 #[cfg(feature = "hugr-llvm-pipeline")]
-pub fn create_qir_engine_from_hugr_bytes(
+pub fn create_llvm_engine_from_hugr_bytes(
     hugr_bytes: &[u8],
     shots: usize,
     debug_info: bool,
@@ -141,7 +141,7 @@ pub fn create_qir_engine_from_hugr_bytes(
     // Create temporary file for HUGR
     let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {e}"))?;
     let hugr_path = temp_dir.path().join("input.hugr");
-    let qir_path = temp_dir.path().join("output.ll");
+    let llvm_path = temp_dir.path().join("output.ll");
 
     // Write HUGR bytes to file
     std::fs::write(&hugr_path, hugr_bytes)
@@ -149,27 +149,27 @@ pub fn create_qir_engine_from_hugr_bytes(
 
     // Set up compiler configuration
     let config = HugrCompilerConfig {
-        output_path: Some(qir_path.clone()),
+        output_path: Some(llvm_path.clone()),
         debug_info,
     };
 
-    // Compile HUGR bytes to QIR
+    // Compile HUGR bytes to LLVM IR
     let compiler = HugrCompiler::with_config(config);
     compiler
-        .compile_hugr_bytes(hugr_bytes, &qir_path)
+        .compile_hugr_bytes(hugr_bytes, &llvm_path)
         .map_err(|e| convert_error(&e))?;
 
-    // Create QIR engine
-    let mut qir_engine = QirEngine::new(qir_path);
-    qir_engine.set_assigned_shots(shots);
-    qir_engine.pre_compile().map_err(|e| convert_error(&e))?;
+    // Create LLVM engine
+    let mut llvm_engine = LlvmEngine::new(llvm_path);
+    llvm_engine.set_assigned_shots(shots);
+    llvm_engine.pre_compile().map_err(|e| convert_error(&e))?;
 
     // For now, return a dummy handle - in a full implementation,
     // we'd store the engine in a global map with a unique ID
     Ok(0)
 }
 
-/// Create a QIR engine from HUGR file
+/// Create an LLVM engine from HUGR file
 ///
 /// # Arguments
 /// * `hugr_path` - Path to HUGR file
@@ -177,46 +177,46 @@ pub fn create_qir_engine_from_hugr_bytes(
 /// * `debug_info` - Whether to include debug information
 ///
 /// # Returns
-/// Opaque handle to the QIR engine
+/// Opaque handle to the LLVM engine
 ///
 /// # Errors
 /// Returns an error if:
 /// - Failed to create temporary directory
 /// - HUGR compilation fails
-/// - QIR engine pre-compilation fails
+/// - LLVM engine pre-compilation fails
 #[cfg(feature = "hugr-llvm-pipeline")]
-pub fn create_qir_engine_from_hugr_file(
+pub fn create_llvm_engine_from_hugr_file(
     hugr_path: &str,
     shots: usize,
     debug_info: bool,
 ) -> PyResult<usize> {
     // Create temporary directory for compilation
     let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {e}"))?;
-    let qir_path = temp_dir.path().join("output.ll");
+    let llvm_path = temp_dir.path().join("output.ll");
 
     // Set up compiler configuration
     let config = HugrCompilerConfig {
-        output_path: Some(qir_path.clone()),
+        output_path: Some(llvm_path.clone()),
         debug_info,
     };
 
-    // Compile HUGR to QIR
+    // Compile HUGR to LLVM IR
     let compiler = HugrCompiler::with_config(config);
     compiler
         .compile_hugr(hugr_path)
         .map_err(|e| convert_error(&e))?;
 
-    // Create QIR engine
-    let mut qir_engine = QirEngine::new(qir_path);
-    qir_engine.set_assigned_shots(shots);
-    qir_engine.pre_compile().map_err(|e| convert_error(&e))?;
+    // Create LLVM engine
+    let mut llvm_engine = LlvmEngine::new(llvm_path);
+    llvm_engine.set_assigned_shots(shots);
+    llvm_engine.pre_compile().map_err(|e| convert_error(&e))?;
 
     // For now, return a dummy handle - in a full implementation,
     // we'd store the engine in a global map with a unique ID
     Ok(0)
 }
 
-/// Create a QIR engine from HUGR bytes with engine storage
+/// Create an LLVM engine from HUGR bytes with engine storage
 ///
 /// This version stores the engine in global storage and returns the engine ID
 ///
@@ -234,10 +234,10 @@ pub fn create_qir_engine_from_hugr_file(
 /// - Failed to create temporary directory
 /// - Failed to write HUGR file
 /// - HUGR compilation fails
-/// - QIR engine pre-compilation fails
+/// - LLVM engine pre-compilation fails
 /// - Failed to store engine
 #[cfg(feature = "hugr-llvm-pipeline")]
-pub fn create_qir_engine_from_hugr_bytes_with_storage(
+pub fn create_llvm_engine_from_hugr_bytes_with_storage(
     hugr_bytes: &[u8],
     shots: usize,
     debug_info: bool,
@@ -246,7 +246,7 @@ pub fn create_qir_engine_from_hugr_bytes_with_storage(
     // Create temporary file for HUGR
     let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {e}"))?;
     let hugr_path = temp_dir.path().join("input.hugr");
-    let qir_path = temp_dir.path().join("output.ll");
+    let llvm_path = temp_dir.path().join("output.ll");
 
     // Write HUGR bytes to file
     std::fs::write(&hugr_path, hugr_bytes)
@@ -254,34 +254,34 @@ pub fn create_qir_engine_from_hugr_bytes_with_storage(
 
     // Set up compiler configuration
     let config = HugrCompilerConfig {
-        output_path: Some(qir_path.clone()),
+        output_path: Some(llvm_path.clone()),
         debug_info,
     };
 
-    // Compile HUGR bytes to QIR (this will use our transformation)
+    // Compile HUGR bytes to LLVM IR (this will use our transformation)
     let compiler = HugrCompiler::with_config(config);
     compiler
-        .compile_hugr_bytes(hugr_bytes, &qir_path)
+        .compile_hugr_bytes(hugr_bytes, &llvm_path)
         .map_err(|e| convert_error(&e))?;
 
-    // Create QIR engine
-    let mut qir_engine = QirEngine::new(qir_path.clone());
-    qir_engine.set_assigned_shots(shots);
-    qir_engine.pre_compile().map_err(|e| convert_error(&e))?;
+    // Create LLVM engine
+    let mut llvm_engine = LlvmEngine::new(llvm_path.clone());
+    llvm_engine.set_assigned_shots(shots);
+    llvm_engine.pre_compile().map_err(|e| convert_error(&e))?;
 
     // Set up quantum system for interactive execution
-    // First determine the number of qubits needed by analyzing the QIR file
+    // First determine the number of qubits needed by analyzing the LLVM IR file
 
     // Note: Interactive execution for HUGR immediate measurements should be handled
-    // by the HybridEngine, not directly by QirEngine
+    // by the HybridEngine, not directly by LlvmEngine
 
     // Store the engine and temp directory in global storage
-    let mut engines = PYTHON_QIR_ENGINES
+    let mut engines = PYTHON_LLVM_ENGINES
         .lock()
         .map_err(|e| format!("Failed to lock engine storage: {e}"))?;
 
-    let entry = QirEngineEntry {
-        engine: qir_engine,
+    let entry = LlvmEngineEntry {
+        engine: llvm_engine,
         _temp_dir: temp_dir,
     };
     engines.insert(engine_id, entry);
@@ -289,7 +289,7 @@ pub fn create_qir_engine_from_hugr_bytes_with_storage(
     Ok(engine_id)
 }
 
-/// Create a QIR engine from HUGR file with engine storage
+/// Create an LLVM engine from HUGR file with engine storage
 ///
 /// This version stores the engine in global storage and returns the engine ID
 ///
@@ -306,10 +306,10 @@ pub fn create_qir_engine_from_hugr_bytes_with_storage(
 /// Returns an error if:
 /// - Failed to create temporary directory
 /// - HUGR compilation fails
-/// - QIR engine pre-compilation fails
+/// - LLVM engine pre-compilation fails
 /// - Failed to store engine
 #[cfg(feature = "hugr-llvm-pipeline")]
-pub fn create_qir_engine_from_hugr_file_with_storage(
+pub fn create_llvm_engine_from_hugr_file_with_storage(
     hugr_path: &str,
     shots: usize,
     debug_info: bool,
@@ -317,38 +317,38 @@ pub fn create_qir_engine_from_hugr_file_with_storage(
 ) -> PyResult<usize> {
     // Create temporary directory for compilation
     let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {e}"))?;
-    let qir_path = temp_dir.path().join("output.ll");
+    let llvm_path = temp_dir.path().join("output.ll");
 
     // Set up compiler configuration
     let config = HugrCompilerConfig {
-        output_path: Some(qir_path.clone()),
+        output_path: Some(llvm_path.clone()),
         debug_info,
     };
 
-    // Compile HUGR to QIR
+    // Compile HUGR to LLVM IR
     let compiler = HugrCompiler::with_config(config);
     compiler
         .compile_hugr(hugr_path)
         .map_err(|e| convert_error(&e))?;
 
-    // Create QIR engine
-    let mut qir_engine = QirEngine::new(qir_path.clone());
-    qir_engine.set_assigned_shots(shots);
-    qir_engine.pre_compile().map_err(|e| convert_error(&e))?;
+    // Create LLVM engine
+    let mut llvm_engine = LlvmEngine::new(llvm_path.clone());
+    llvm_engine.set_assigned_shots(shots);
+    llvm_engine.pre_compile().map_err(|e| convert_error(&e))?;
 
     // Set up quantum system for interactive execution
-    // First determine the number of qubits needed by analyzing the QIR file
+    // First determine the number of qubits needed by analyzing the LLVM IR file
 
     // Note: Interactive execution for HUGR immediate measurements should be handled
-    // by the HybridEngine, not directly by QirEngine
+    // by the HybridEngine, not directly by LlvmEngine
 
     // Store the engine and temp directory in global storage
-    let mut engines = PYTHON_QIR_ENGINES
+    let mut engines = PYTHON_LLVM_ENGINES
         .lock()
         .map_err(|e| format!("Failed to lock engine storage: {e}"))?;
 
-    let entry = QirEngineEntry {
-        engine: qir_engine,
+    let entry = LlvmEngineEntry {
+        engine: llvm_engine,
         _temp_dir: temp_dir,
     };
     engines.insert(engine_id, entry);
@@ -371,8 +371,8 @@ pub fn create_qir_engine_from_hugr_file_with_storage(
 #[cfg(feature = "hugr-llvm-pipeline")]
 pub fn get_stored_engine_mut(
     _engine_id: usize,
-) -> PyResult<std::sync::MutexGuard<'static, HashMap<usize, QirEngineEntry>>> {
-    PYTHON_QIR_ENGINES
+) -> PyResult<std::sync::MutexGuard<'static, HashMap<usize, LlvmEngineEntry>>> {
+    PYTHON_LLVM_ENGINES
         .lock()
         .map_err(|e| format!("Failed to lock engine storage: {e}"))
 }
@@ -388,21 +388,21 @@ pub fn is_hugr_support_available() -> bool {
 //
 
 #[cfg(not(feature = "hugr-llvm-pipeline"))]
-pub fn compile_hugr_bytes_to_qir_string(_hugr_bytes: &[u8], _debug_info: bool) -> PyResult<String> {
+pub fn compile_hugr_bytes_to_llvm_string(_hugr_bytes: &[u8], _debug_info: bool) -> PyResult<String> {
     Err("HUGR-LLVM pipeline not available".to_string())
 }
 
 #[cfg(not(feature = "hugr-llvm-pipeline"))]
-pub fn compile_hugr_file_to_qir_file(
+pub fn compile_hugr_file_to_llvm_file(
     _hugr_path: &str,
-    _qir_path: &str,
+    _llvm_path: &str,
     _debug_info: bool,
 ) -> PyResult<()> {
     Err("HUGR-LLVM pipeline not available".to_string())
 }
 
 #[cfg(not(feature = "hugr-llvm-pipeline"))]
-pub fn create_qir_engine_from_hugr_bytes(
+pub fn create_llvm_engine_from_hugr_bytes(
     _hugr_bytes: &[u8],
     _shots: usize,
     _debug_info: bool,
@@ -411,7 +411,7 @@ pub fn create_qir_engine_from_hugr_bytes(
 }
 
 #[cfg(not(feature = "hugr-llvm-pipeline"))]
-pub fn create_qir_engine_from_hugr_file(
+pub fn create_llvm_engine_from_hugr_file(
     _hugr_path: &str,
     _shots: usize,
     _debug_info: bool,
@@ -420,7 +420,7 @@ pub fn create_qir_engine_from_hugr_file(
 }
 
 #[cfg(not(feature = "hugr-llvm-pipeline"))]
-pub fn create_qir_engine_from_hugr_bytes_with_storage(
+pub fn create_llvm_engine_from_hugr_bytes_with_storage(
     _hugr_bytes: &[u8],
     _shots: usize,
     _debug_info: bool,
@@ -430,7 +430,7 @@ pub fn create_qir_engine_from_hugr_bytes_with_storage(
 }
 
 #[cfg(not(feature = "hugr-llvm-pipeline"))]
-pub fn create_qir_engine_from_hugr_file_with_storage(
+pub fn create_llvm_engine_from_hugr_file_with_storage(
     _hugr_path: &str,
     _shots: usize,
     _debug_info: bool,
@@ -452,7 +452,7 @@ mod tests {
     #[cfg(not(feature = "hugr-llvm-pipeline"))]
     #[test]
     fn test_hugr_compilation_fails_without_feature() {
-        let result = compile_hugr_bytes_to_qir_string(&[0, 1, 2, 3], false);
+        let result = compile_hugr_bytes_to_llvm_string(&[0, 1, 2, 3], false);
         assert!(result.is_err());
         assert!(
             result

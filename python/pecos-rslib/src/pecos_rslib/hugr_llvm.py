@@ -1,7 +1,7 @@
 """
-HUGR/QIR functionality using Rust backend
+HUGR/LLVM functionality using Rust backend
 
-This module provides Python access to HUGR compilation and QIR engine functionality
+This module provides Python access to HUGR compilation and LLVM engine functionality
 implemented in Rust for high performance.
 """
 
@@ -11,10 +11,10 @@ import warnings
 try:
     from ._pecos_rslib import (
         HugrCompiler,
-        HugrQirEngine,
+        HugrLlvmEngine,
         is_hugr_support_available,
-        compile_hugr_bytes_to_qir,
-        compile_hugr_file_to_qir,
+        compile_hugr_bytes_to_llvm,
+        compile_hugr_file_to_llvm,
     )
 
     RUST_HUGR_AVAILABLE = True
@@ -27,7 +27,7 @@ except ImportError as e:
         def __init__(self, *args: object, **kwargs: object) -> None:
             raise ImportError("Rust HUGR backend not available")
 
-    class HugrQirEngine:
+    class HugrLlvmEngine:
         def __init__(self, *args: object, **kwargs: object) -> None:
             raise ImportError("Rust HUGR backend not available")
 
@@ -35,16 +35,16 @@ except ImportError as e:
         return False
 
 
-    def compile_hugr_bytes_to_qir(*args: object, **kwargs: object) -> None:
+    def compile_hugr_bytes_to_llvm(*args: object, **kwargs: object) -> None:
         raise ImportError("Rust HUGR backend not available")
 
-    def compile_hugr_file_to_qir(*args: object, **kwargs: object) -> None:
+    def compile_hugr_file_to_llvm(*args: object, **kwargs: object) -> None:
         raise ImportError("Rust HUGR backend not available")
 
 
 class RustHugrCompiler:
     """
-    High-performance HUGR to QIR compiler using Rust backend.
+    High-performance HUGR to LLVM compiler using Rust backend.
 
     This class provides a Python interface to the Rust-implemented HUGR compiler,
     offering better performance than pure Python implementations.
@@ -55,34 +55,34 @@ class RustHugrCompiler:
         Initialize the HUGR compiler.
 
         Args:
-            debug_info: Whether to include debug information in compiled QIR
+            debug_info: Whether to include debug information in compiled LLVM IR
         """
         if not RUST_HUGR_AVAILABLE:
             raise ImportError("Rust HUGR backend not available")
 
         self._compiler = HugrCompiler(debug_info)
 
-    def compile_bytes_to_qir(self, hugr_bytes: bytes) -> str:
+    def compile_bytes_to_llvm(self, hugr_bytes: bytes) -> str:
         """
-        Compile HUGR bytes to QIR string.
+        Compile HUGR bytes to LLVM IR string.
 
         Args:
             hugr_bytes: HUGR data as bytes
 
         Returns:
-            QIR as string
+            LLVM IR as string
         """
-        return self._compiler.compile_bytes_to_qir(hugr_bytes)
+        return self._compiler.compile_bytes_to_llvm(hugr_bytes)
 
-    def compile_file_to_qir(self, hugr_path: str, qir_path: str) -> None:
+    def compile_file_to_llvm(self, hugr_path: str, llvm_path: str) -> None:
         """
-        Compile HUGR file to QIR file.
+        Compile HUGR file to LLVM IR file.
 
         Args:
             hugr_path: Path to input HUGR file
-            qir_path: Path for output QIR file
+            llvm_path: Path for output LLVM IR file
         """
-        self._compiler.compile_file_to_qir(hugr_path, qir_path)
+        self._compiler.compile_file_to_llvm(hugr_path, llvm_path)
 
     def set_debug_info(self, debug_info: bool) -> None:
         """Set debug information flag."""
@@ -90,12 +90,12 @@ class RustHugrCompiler:
 
 
 
-class RustHugrQirEngine:
+class RustHugrLlvmEngine:
     """
-    High-performance QIR engine created from HUGR using Rust backend.
+    High-performance LLVM engine created from HUGR using Rust backend.
 
-    This class provides a Python interface to QIR engines compiled from HUGR,
-    with execution handled by the Rust-implemented PECOS QIR runtime.
+    This class provides a Python interface to LLVM engines compiled from HUGR,
+    with execution handled by the Rust-implemented PECOS LLVM runtime.
     """
 
     def __init__(
@@ -105,7 +105,7 @@ class RustHugrQirEngine:
         debug_info: bool = False,
     ):
         """
-        Create QIR engine from HUGR bytes.
+        Create LLVM engine from HUGR bytes.
 
         Args:
             hugr_bytes: HUGR data as bytes
@@ -115,7 +115,7 @@ class RustHugrQirEngine:
         if not RUST_HUGR_AVAILABLE:
             raise ImportError("Rust HUGR backend not available")
 
-        self._engine = HugrQirEngine(hugr_bytes, shots, debug_info)
+        self._engine = HugrLlvmEngine(hugr_bytes, shots, debug_info)
 
     @classmethod
     def from_file(
@@ -123,9 +123,9 @@ class RustHugrQirEngine:
         hugr_path: str,
         shots: int = 1000,
         debug_info: bool = False,
-    ) -> "RustHugrQirEngine":
+    ) -> "RustHugrLlvmEngine":
         """
-        Create QIR engine from HUGR file.
+        Create LLVM engine from HUGR file.
 
         Args:
             hugr_path: Path to HUGR file
@@ -133,13 +133,13 @@ class RustHugrQirEngine:
             debug_info: Whether to include debug information
 
         Returns:
-            New RustHugrQirEngine instance
+            New RustHugrLlvmEngine instance
         """
         if not RUST_HUGR_AVAILABLE:
             raise ImportError("Rust HUGR backend not available")
 
         instance = cls.__new__(cls)
-        instance._engine = HugrQirEngine.from_file(
+        instance._engine = HugrLlvmEngine.from_file(
             hugr_path, shots, debug_info
         )
         return instance
@@ -163,31 +163,31 @@ class RustHugrQirEngine:
 
     def __repr__(self) -> str:
         """String representation."""
-        return f"RustHugrQirEngine(shots={self.get_shots()})"
+        return f"RustHugrLlvmEngine(shots={self.get_shots()})"
 
 
-def compile_hugr_to_qir_rust(
+def compile_hugr_to_llvm_rust(
     hugr_data: Union[bytes, str],
     output_path: Optional[str] = None,
     debug_info: bool = False,
 ) -> Optional[str]:
     """
-    Compile HUGR to QIR using Rust backend.
+    Compile HUGR to LLVM IR using Rust backend.
 
     Args:
         hugr_data: HUGR data as bytes or path to HUGR file
-        output_path: Path for output QIR file (if None, returns QIR as string)
+        output_path: Path for output LLVM IR file (if None, returns LLVM IR as string)
         debug_info: Whether to include debug information
 
     Returns:
-        QIR as string if output_path is None, otherwise None
+        LLVM IR as string if output_path is None, otherwise None
     """
     if not RUST_HUGR_AVAILABLE:
         raise ImportError("Rust HUGR backend not available")
 
     if isinstance(hugr_data, bytes):
         if output_path is None:
-            return compile_hugr_bytes_to_qir(hugr_data, debug_info)
+            return compile_hugr_bytes_to_llvm(hugr_data, debug_info)
         else:
             # For bytes to file, we'd need to write to temp file first
             import tempfile
@@ -196,7 +196,7 @@ def compile_hugr_to_qir_rust(
                 f.write(hugr_data)
                 temp_path = f.name
             try:
-                compile_hugr_file_to_qir(
+                compile_hugr_file_to_llvm(
                     temp_path, output_path, debug_info
                 )
             finally:
@@ -210,21 +210,21 @@ def compile_hugr_to_qir_rust(
             # Read file and compile to string
             with open(hugr_data, "rb") as f:
                 hugr_bytes = f.read()
-            return compile_hugr_bytes_to_qir(hugr_bytes, debug_info)
+            return compile_hugr_bytes_to_llvm(hugr_bytes, debug_info)
         else:
-            compile_hugr_file_to_qir(
+            compile_hugr_file_to_llvm(
                 hugr_data, output_path, debug_info
             )
             return None
 
 
-def create_qir_engine_from_hugr_rust(
+def create_llvm_engine_from_hugr_rust(
     hugr_data: Union[bytes, str],
     shots: int = 1000,
     debug_info: bool = False,
-) -> RustHugrQirEngine:
+) -> RustHugrLlvmEngine:
     """
-    Create QIR engine from HUGR using Rust backend.
+    Create LLVM engine from HUGR using Rust backend.
 
     Args:
         hugr_data: HUGR data as bytes or path to HUGR file
@@ -232,12 +232,12 @@ def create_qir_engine_from_hugr_rust(
         debug_info: Whether to include debug information
 
     Returns:
-        RustHugrQirEngine instance
+        RustHugrLlvmEngine instance
     """
     if isinstance(hugr_data, bytes):
-        return RustHugrQirEngine(hugr_data, shots, debug_info)
+        return RustHugrLlvmEngine(hugr_data, shots, debug_info)
     else:
-        return RustHugrQirEngine.from_file(
+        return RustHugrLlvmEngine.from_file(
             hugr_data, shots, debug_info
         )
 
@@ -261,9 +261,9 @@ def check_rust_hugr_availability() -> Tuple[bool, str]:
 # Export main functionality
 __all__ = [
     "RustHugrCompiler",
-    "RustHugrQirEngine",
-    "compile_hugr_to_qir_rust",
-    "create_qir_engine_from_hugr_rust",
+    "RustHugrLlvmEngine",
+    "compile_hugr_to_llvm_rust",
+    "create_llvm_engine_from_hugr_rust",
     "check_rust_hugr_availability",
     "RUST_HUGR_AVAILABLE",
 ]

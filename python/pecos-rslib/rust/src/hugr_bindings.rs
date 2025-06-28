@@ -1,7 +1,7 @@
 /*!
-`PyO3` bindings for HUGR/QIR functionality
+`PyO3` bindings for HUGR/LLVM functionality
 
-This module exposes HUGR compilation and QIR engine functionality to Python.
+This module exposes HUGR compilation and LLVM engine functionality to Python.
 */
 
 use pecos_qir::hugr_python_api as python_api;
@@ -38,26 +38,26 @@ impl PyHugrCompiler {
         }
     }
 
-    /// Compile HUGR bytes to QIR string
+    /// Compile HUGR bytes to LLVM IR string
     ///
     /// # Arguments
     /// * `hugr_bytes` - HUGR data as bytes
     ///
     /// # Returns
-    /// QIR as a string
-    fn compile_bytes_to_qir(&self, hugr_bytes: &Bound<'_, PyBytes>) -> PyResult<String> {
+    /// LLVM IR as a string
+    fn compile_bytes_to_llvm(&self, hugr_bytes: &Bound<'_, PyBytes>) -> PyResult<String> {
         let bytes = hugr_bytes.as_bytes();
-        python_api::compile_hugr_bytes_to_qir_string(bytes, self.debug_info)
+        python_api::compile_hugr_bytes_to_llvm_string(bytes, self.debug_info)
             .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
     }
 
-    /// Compile HUGR file to QIR file
+    /// Compile HUGR file to LLVM IR file
     ///
     /// # Arguments
     /// * `hugr_path` - Path to HUGR file
-    /// * `qir_path` - Path for output QIR file
-    fn compile_file_to_qir(&self, hugr_path: &str, qir_path: &str) -> PyResult<()> {
-        python_api::compile_hugr_file_to_qir_file(hugr_path, qir_path, self.debug_info)
+    /// * `llvm_path` - Path for output LLVM IR file
+    fn compile_file_to_llvm(&self, hugr_path: &str, llvm_path: &str) -> PyResult<()> {
+        python_api::compile_hugr_file_to_llvm_file(hugr_path, llvm_path, self.debug_info)
             .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
     }
 
@@ -65,18 +65,28 @@ impl PyHugrCompiler {
     fn set_debug_info(&mut self, debug_info: bool) {
         self.debug_info = debug_info;
     }
+
+    /// Compile HUGR bytes to QIR string (deprecated, use compile_bytes_to_llvm)
+    fn compile_bytes_to_qir(&self, hugr_bytes: &Bound<'_, PyBytes>) -> PyResult<String> {
+        self.compile_bytes_to_llvm(hugr_bytes)
+    }
+
+    /// Compile HUGR file to QIR file (deprecated, use compile_file_to_llvm)
+    fn compile_file_to_qir(&self, hugr_path: &str, qir_path: &str) -> PyResult<()> {
+        self.compile_file_to_llvm(hugr_path, qir_path)
+    }
 }
 
-/// Python wrapper for HUGR QIR engine
-#[pyclass(name = "HugrQirEngine")]
-pub struct PyHugrQirEngine {
+/// Python wrapper for HUGR LLVM engine
+#[pyclass(name = "HugrLlvmEngine")]
+pub struct PyHugrLlvmEngine {
     engine_id: usize,
     shots: usize,
 }
 
 #[pymethods]
-impl PyHugrQirEngine {
-    /// Create QIR engine from HUGR bytes
+impl PyHugrLlvmEngine {
+    /// Create LLVM engine from HUGR bytes
     ///
     /// # Arguments
     /// * `hugr_bytes` - HUGR data as bytes
@@ -92,10 +102,10 @@ impl PyHugrQirEngine {
         let shots = shots.unwrap_or(1000);
         let debug_info = debug_info.unwrap_or(false);
 
-        // Create the QIR engine and store it
+        // Create the LLVM engine and store it
         let engine_id = get_next_engine_id();
 
-        python_api::create_qir_engine_from_hugr_bytes_with_storage(
+        python_api::create_llvm_engine_from_hugr_bytes_with_storage(
             bytes, shots, debug_info, engine_id,
         )
         .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)?;
@@ -103,7 +113,7 @@ impl PyHugrQirEngine {
         Ok(Self { engine_id, shots })
     }
 
-    /// Create QIR engine from HUGR file
+    /// Create LLVM engine from HUGR file
     ///
     /// # Arguments
     /// * `hugr_path` - Path to HUGR file
@@ -119,10 +129,10 @@ impl PyHugrQirEngine {
         let shots = shots.unwrap_or(1000);
         let debug_info = debug_info.unwrap_or(false);
 
-        // Create the QIR engine and store it
+        // Create the LLVM engine and store it
         let engine_id = get_next_engine_id();
 
-        python_api::create_qir_engine_from_hugr_file_with_storage(
+        python_api::create_llvm_engine_from_hugr_file_with_storage(
             hugr_path, shots, debug_info, engine_id,
         )
         .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)?;
@@ -175,7 +185,7 @@ impl PyHugrQirEngine {
 
     /// Get string representation
     fn __repr__(&self) -> String {
-        format!("HugrQirEngine(id={}, shots={})", self.engine_id, self.shots)
+        format!("HugrLlvmEngine(id={}, shots={})", self.engine_id, self.shots)
     }
 }
 
@@ -185,29 +195,29 @@ fn is_hugr_support_available() -> bool {
     python_api::is_hugr_support_available()
 }
 
-/// Compile HUGR bytes to QIR string (standalone function)
+/// Compile HUGR bytes to LLVM IR string (standalone function)
 #[pyfunction]
-fn compile_hugr_bytes_to_qir(
+fn compile_hugr_bytes_to_llvm(
     hugr_bytes: &Bound<'_, PyBytes>,
     debug_info: Option<bool>,
 ) -> PyResult<String> {
     let bytes = hugr_bytes.as_bytes();
     let debug_info = debug_info.unwrap_or(false);
 
-    python_api::compile_hugr_bytes_to_qir_string(bytes, debug_info)
+    python_api::compile_hugr_bytes_to_llvm_string(bytes, debug_info)
         .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
 }
 
-/// Compile HUGR file to QIR file (standalone function)
+/// Compile HUGR file to LLVM IR file (standalone function)
 #[pyfunction]
-fn compile_hugr_file_to_qir(
+fn compile_hugr_file_to_llvm(
     hugr_path: &str,
-    qir_path: &str,
+    llvm_path: &str,
     debug_info: Option<bool>,
 ) -> PyResult<()> {
     let debug_info = debug_info.unwrap_or(false);
 
-    python_api::compile_hugr_file_to_qir_file(hugr_path, qir_path, debug_info)
+    python_api::compile_hugr_file_to_llvm_file(hugr_path, llvm_path, debug_info)
         .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
 }
 
@@ -215,12 +225,12 @@ fn compile_hugr_file_to_qir(
 pub fn register_hugr_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Add classes
     m.add_class::<PyHugrCompiler>()?;
-    m.add_class::<PyHugrQirEngine>()?;
+    m.add_class::<PyHugrLlvmEngine>()?;
 
     // Add standalone functions
     m.add_function(wrap_pyfunction!(is_hugr_support_available, m)?)?;
-    m.add_function(wrap_pyfunction!(compile_hugr_bytes_to_qir, m)?)?;
-    m.add_function(wrap_pyfunction!(compile_hugr_file_to_qir, m)?)?;
+    m.add_function(wrap_pyfunction!(compile_hugr_bytes_to_llvm, m)?)?;
+    m.add_function(wrap_pyfunction!(compile_hugr_file_to_llvm, m)?)?;
 
     Ok(())
 }

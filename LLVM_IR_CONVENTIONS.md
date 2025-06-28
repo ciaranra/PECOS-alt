@@ -1,51 +1,77 @@
 # LLVM-IR Conventions
 
-## Current Status (2025-01-22)
+## Current Status
 
-PECOS supports two LLVM-IR conventions for quantum operations:
+PECOS uses the HUGR convention for LLVM-IR quantum operations. This convention uses integer-based quantum operations that integrate directly with the PECOS runtime.
 
-1. **HUGR Convention** (`llvm_convention="hugr"`) - Default, uses integer-based quantum operations
-   - Function signatures: `void @__quantum__qis__h__body(i64)`
-   - Measurements return i32: `i32 @__quantum__qis__m__body(i64, i64)`
-   - Entry points return i1
-   - Works with current PECOS runtime
+### HUGR Convention Details
 
-2. **QIR Convention** (`llvm_convention="qir"`) - Microsoft QIR standard with opaque pointer types
-   - Declares opaque types: `%Qubit = type opaque`, `%Result = type opaque`
-   - Function signatures: `void @__quantum__qis__h__body(%Qubit*)`
-   - Measurements return void: `void @__quantum__qis__m__body(%Qubit*, %Result*)`
-   - Entry points return void
-   - Currently causes runtime errors with PECOS
+- **Function signatures**: `void @__quantum__qis__h__body(i64)`
+- **Measurements**: Return i32: `i32 @__quantum__qis__m__body(i64, i64)`
+- **Entry points**: Return i1 for main functions
+- **Qubit representation**: Qubits are represented as i64 integers (indices)
+- **Result representation**: Results are represented as i64 integers
 
-## Why HUGR Convention is Default
+### Example LLVM-IR
 
-While we've implemented full support for generating QIR convention LLVM-IR (with all quantum gates including Rx, Ry, Toffoli, etc.), the PECOS runtime currently expects HUGR-style integer-based operations. Attempting to execute QIR convention code results in "index out of bounds" errors during quantum operations.
+```llvm
+; Quantum gate operations use i64 parameters
+declare void @__quantum__qis__h__body(i64)
+declare void @__quantum__qis__cnot__body(i64, i64)
+declare i32 @__quantum__qis__m__body(i64, i64)
 
-The runtime converts pointer values directly to indices (`qubit as usize`), which works for HUGR convention but causes issues with QIR's pointer-based approach.
+; Resource allocation
+declare i64 @__quantum__rt__qubit_allocate()
+declare i64 @__quantum__rt__result_allocate()
 
-## Future Work
-
-To fully support QIR convention, the PECOS runtime needs updates to:
-1. Handle opaque pointer types properly
-2. Support proper qubit allocation/deallocation
-3. Handle void-returning measurements
-4. Support QIR entry point conventions
+; Example quantum function
+define i1 @bell_state() {
+entry:
+  %q0 = call i64 @__quantum__rt__qubit_allocate()
+  %q1 = call i64 @__quantum__rt__qubit_allocate()
+  
+  ; Apply Hadamard to first qubit
+  call void @__quantum__qis__h__body(i64 %q0)
+  
+  ; Apply CNOT
+  call void @__quantum__qis__cnot__body(i64 %q0, i64 %q1)
+  
+  ; Measure both qubits
+  %r0 = call i64 @__quantum__rt__result_allocate()
+  %r1 = call i64 @__quantum__rt__result_allocate()
+  %m0 = call i32 @__quantum__qis__m__body(i64 %q0, i64 %r0)
+  %m1 = call i32 @__quantum__qis__m__body(i64 %q1, i64 %r1)
+  
+  ; Return result
+  %result = icmp eq i32 %m0, %m1
+  ret i1 %result
+}
+```
 
 ## Usage
 
-To generate QIR convention LLVM-IR (for compatibility with Microsoft QIR tools):
+When using PECOS with Guppy or HUGR:
+
 ```python
 from pecos import run_guppy
-# Generate QIR but note it won't execute on PECOS
-results = run_guppy(quantum_function, llvm_convention="qir")
 
-# Or just compile without executing:
-from pecos.compilation_pipeline import compile_guppy_to_llvm
-qir_string = compile_guppy_to_llvm(quantum_function, llvm_convention="qir")
+# Execute quantum function - automatically uses HUGR convention
+results = run_guppy(quantum_function, shots=1000)
 ```
 
-For execution with PECOS (default):
+For direct LLVM-IR compilation:
+
 ```python
-from pecos import run_guppy
-results = run_guppy(quantum_function)  # Uses HUGR convention by default
+from pecos_rslib import compile_hugr_to_llvm_rust
+
+# Compile HUGR to LLVM-IR (HUGR convention)
+llvm_ir = compile_hugr_to_llvm_rust(hugr_bytes)
 ```
+
+## Runtime Integration
+
+The PECOS runtime expects HUGR convention LLVM-IR:
+- Qubits are managed as indices in the quantum state vector
+- Gates operate directly on these indices
+- Measurements return integer results (0 or 1)
+- All quantum operations are implemented in the `pecos-qir` runtime module

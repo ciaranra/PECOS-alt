@@ -32,9 +32,9 @@ from pecos_rslib._pecos_rslib import run_qasm
 from pecos_rslib._pecos_rslib import get_noise_models
 from pecos_rslib._pecos_rslib import get_quantum_engines
 
-# QIR execution exports
-from pecos_rslib._pecos_rslib import execute_qir
-from pecos_rslib._pecos_rslib import reset_qir_runtime
+# LLVM execution exports
+from pecos_rslib._pecos_rslib import execute_llvm
+from pecos_rslib._pecos_rslib import reset_llvm_runtime
 
 # Import the qasm_sim function and noise models for easy access
 from pecos_rslib.qasm_sim import qasm_sim, register_noise_model
@@ -50,11 +50,11 @@ from pecos_rslib.qasm_sim import (
 
 # Import HUGR-LLVM pipeline functionality (with graceful fallback)
 try:
-    from pecos_rslib.hugr_qir import (
+    from pecos_rslib.hugr_llvm import (
         RustHugrCompiler,
-        RustHugrQirEngine,
-        compile_hugr_to_qir_rust,
-        create_qir_engine_from_hugr_rust,
+        RustHugrLlvmEngine,
+        compile_hugr_to_llvm_rust,
+        create_llvm_engine_from_hugr_rust,
         check_rust_hugr_availability,
         RUST_HUGR_AVAILABLE,
     )
@@ -70,13 +70,13 @@ except ImportError:
     def RustHugrCompiler(*args, **kwargs):
         raise ImportError("HUGR-LLVM pipeline not available")
 
-    def RustHugrQirEngine(*args, **kwargs):
+    def RustHugrLlvmEngine(*args, **kwargs):
         raise ImportError("HUGR-LLVM pipeline not available")
 
-    def compile_hugr_to_qir_rust(*args, **kwargs):
+    def compile_hugr_to_llvm_rust(*args, **kwargs):
         raise ImportError("HUGR-LLVM pipeline not available")
 
-    def create_qir_engine_from_hugr_rust(*args, **kwargs):
+    def create_llvm_engine_from_hugr_rust(*args, **kwargs):
         raise ImportError("HUGR-LLVM pipeline not available")
 
 # Import PMIR pipeline functionality (with graceful fallback)
@@ -137,7 +137,7 @@ def get_compilation_backends():
             },
             "hugr-llvm": {
                 "available": HUGR_LLVM_PIPELINE_AVAILABLE,
-                "description": "HUGR-LLVM pipeline: HUGR → QIR (via hugr-llvm)",
+                "description": "HUGR-LLVM pipeline: HUGR → LLVM IR (via hugr-llvm)",
                 "dependencies": ["hugr-llvm"]
             }
         }
@@ -164,9 +164,9 @@ __all__ = [
     "get_quantum_engines",
     "qasm_sim",
     "register_noise_model",
-    # QIR execution
-    "execute_qir",
-    "reset_qir_runtime",
+    # LLVM execution
+    "execute_llvm",
+    "reset_llvm_runtime",
     # Noise model dataclasses
     "PassThroughNoise",
     "DepolarizingNoise",
@@ -175,9 +175,9 @@ __all__ = [
     "GeneralNoise",
     # HUGR-LLVM pipeline functionality
     "RustHugrCompiler",
-    "RustHugrQirEngine", 
-    "compile_hugr_to_qir_rust",
-    "create_qir_engine_from_hugr_rust",
+    "RustHugrLlvmEngine", 
+    "compile_hugr_to_llvm_rust",
+    "create_llvm_engine_from_hugr_rust",
     "check_rust_hugr_availability",
     "RUST_HUGR_AVAILABLE",
     "HUGR_LLVM_PIPELINE_AVAILABLE",

@@ -4,7 +4,7 @@
 import os
 import sys
 sys.path.append('python/quantum-pecos/src')
-from pecos_rslib import RustHugrCompiler, compile_hugr_to_qir_rust, RustHugrQirEngine
+from pecos_rslib import RustHugrCompiler, compile_hugr_to_llvm_rust, RustHugrQirEngine
 
 def test_simple_measurement():
     """Test a simple HUGR circuit with measurement"""

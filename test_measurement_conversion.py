@@ -35,7 +35,7 @@ def main():
     
     try:
         # Compile with HUGR naming convention (which should trigger measurement conversion)
-        llvm_ir = hugr_qir.compile_hugr_to_qir_rust(hugr_path, llvm_convention="hugr")
+        llvm_ir = hugr_qir.compile_hugr_to_llvm_rust(hugr_path, llvm_convention="hugr")
         
         print("Generated LLVM-IR contains:")
         

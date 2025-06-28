@@ -9,7 +9,7 @@ repository.workspace = true
 license.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "QIR (Quantum Intermediate Representation) execution capabilities for PECOS."
+description = "LLVM IR execution capabilities for quantum programs in PECOS."
 
 [dependencies]
 log.workspace = true
@@ -46,7 +46,7 @@ env_logger.workspace = true
 [features]
 default = ["pmir-pipeline"]
 
-# LLVM JIT execution: QIR file execution via LLVM JIT compilation
+# LLVM JIT execution: LLVM IR file execution via LLVM JIT compilation
 # TEMPORARILY DISABLED due to pytest environment conflicts and segfaults
 # TODO: Re-implement with proper isolation or alternative execution strategy
 llvm-jit = []
@@ -55,8 +55,8 @@ llvm-jit = []
 # Uses MLIR toolchain for compilation
 pmir-pipeline = ["hugr-core", "anyhow"]
 
-# HUGR-LLVM pipeline: HUGR → QIR (via hugr-llvm)
-# Uses hugr-llvm for direct HUGR to QIR compilation
+# HUGR-LLVM pipeline: HUGR → LLVM IR (via hugr-llvm)
+# Uses hugr-llvm for direct HUGR to LLVM IR compilation
 hugr-llvm-pipeline = ["hugr-core", "hugr-llvm", "anyhow"]
 
 # All compilation pipelines available

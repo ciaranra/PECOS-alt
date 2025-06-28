@@ -13,7 +13,7 @@ import os
 sys.path.insert(0, "/home/ciaranra/Repos/cl_projects/gup/PECOS/python/pecos-rslib/python")
 
 try:
-    from pecos_rslib import execute_qir
+    from pecos_rslib import execute_llvm
     
     print("Testing QIR interactive execution...")
     
@@ -29,7 +29,7 @@ try:
     try:
         # Execute the QIR file with multiple shots
         print("Running QIR program...")
-        results = execute_qir(qir_path, shots=100, seed=42, noise_probability=0.0, workers=1, llvm_convention="hugr")
+        results = execute_llvm(qir_path, shots=100, seed=42, noise_probability=0.0, workers=1)
         
         print(f"Execution completed! Results type: {type(results)}")
         

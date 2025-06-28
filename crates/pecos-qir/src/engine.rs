@@ -1,8 +1,8 @@
-//! QIR Engine Module
+//! LLVM Engine Module
 //!
-//! This module provides the QIR Engine for executing quantum programs compiled to QIR.
-use crate::library::QirLibrary;
-use crate::linker::QirLinker;
+//! This module provides the LLVM Engine for executing quantum programs compiled to LLVM IR.
+use crate::library::LlvmLibrary;
+use crate::linker::LlvmLinker;
 use log::{debug, trace, warn};
 use pecos_core::errors::PecosError;
 use pecos_engines::Engine;
@@ -29,28 +29,76 @@ pub fn get_thread_id() -> String {
     format!("{:?}", thread::current().id())
 }
 
-/// Configuration options for the QIR engine
+/// Extract the first measurement value from a Shot
+///
+/// This function extracts a single bit measurement from the Shot data.
+/// It processes any numeric data found in the Shot (excluding metadata like "seed" or "shot_id")
+/// and returns the least significant bit of the first measurement register found.
+///
+/// # Arguments
+///
+/// * `shot` - The Shot containing measurement data
+///
+/// # Returns
+///
+/// A u8 value (0 or 1) representing the measurement result
+fn extract_first_measurement(shot: &Shot) -> u8 {
+    // Sort keys to ensure consistent ordering
+    let mut keys: Vec<_> = shot.data.keys().collect();
+    keys.sort();
+    
+    // Find the first non-metadata numeric value
+    for key in keys {
+        // Skip known metadata fields
+        if key == "seed" || key == "shot_id" {
+            continue;
+        }
+        
+        if let Some(data) = shot.data.get(key) {
+            // Extract a bit from any numeric data type
+            match data {
+                Data::U32(value) => return u8::from(*value & 1 != 0),
+                Data::I64(value) => return u8::from(*value & 1 != 0),
+                Data::U64(value) => return u8::from(*value & 1 != 0),
+                Data::BitVec(bv) => {
+                    // For BitVec, return the first bit if available
+                    if let Some(bit) = bv.first() {
+                        return u8::from(*bit);
+                    }
+                }
+                _ => continue, // Skip non-numeric data
+            }
+        }
+    }
+    
+    // Default to 0 if no measurement data found
+    debug!("LLVM: No measurement data found in shot, returning default 0");
+    0
+}
+
+/// Configuration options for the LLVM engine
 #[derive(Debug, Clone, Default)]
-pub struct QirEngineConfig {
+pub struct LlvmEngineConfig {
     /// Number of shots assigned to this engine
     pub assigned_shots: usize,
     /// Whether to show verbose command logs
     pub verbose: bool,
 }
 
-/// QIR Engine for executing quantum programs compiled to QIR
+/// LLVM Engine for executing HUGR-compiled quantum programs
 ///
-/// The engine loads and executes QIR programs, handling the interaction between
-/// the QIR runtime and the quantum system.
-pub struct QirEngine {
-    /// The loaded QIR library for executing quantum programs
-    library: Option<Box<QirLibrary>>,
+/// This engine loads and executes quantum programs that have been compiled from HUGR
+/// (Hierarchical Unified Graph Representation) to LLVM IR using the HUGR convention.
+/// This engine exclusively supports HUGR-convention LLVM IR.
+pub struct LlvmEngine {
+    /// The loaded LLVM library for executing quantum programs
+    library: Option<Box<LlvmLibrary>>,
 
     /// Map of measurement results by `result_id`
     measurement_results: HashMap<usize, i64>,
 
-    /// Path to the QIR file to execute
-    qir_file: PathBuf,
+    /// Path to the LLVM IR file to execute
+    llvm_file: PathBuf,
 
     /// Path to the compiled library file
     library_path: Option<PathBuf>,
@@ -62,63 +110,63 @@ pub struct QirEngine {
     shot_count: usize,
 
     /// Configuration options for the engine
-    config: QirEngineConfig,
+    config: LlvmEngineConfig,
 
-    /// Entry point function name (detected from QIR file)
+    /// Entry point function name (detected from LLVM IR file)
     entry_point: Option<String>,
 }
 
-impl QirEngine {
+impl LlvmEngine {
     /// Helper function to log errors
     fn log_error<E: std::fmt::Display>(context: &str, error: E) -> PecosError {
-        warn!("QIR Engine: {}: {}", context, error);
-        PecosError::Processing(format!("QIR operation failed - {context}: {error}"))
+        warn!("LLVM Engine: {}: {}", context, error);
+        PecosError::Processing(format!("LLVM operation failed - {context}: {error}"))
     }
 
-    /// Create a new QIR engine with default configuration
+    /// Create a new LLVM engine with default configuration
     ///
     /// # Arguments
     ///
-    /// * `qir_file` - Path to the QIR file to execute
+    /// * `llvm_file` - Path to the LLVM IR file to execute
     ///
     /// # Returns
     ///
-    /// A new QIR engine instance with default configuration
+    /// A new LLVM engine instance with default configuration
     #[must_use]
-    pub fn new(qir_file: PathBuf) -> Self {
-        debug!("QIR: Creating new engine with program path: {:?}", qir_file);
+    pub fn new(llvm_file: PathBuf) -> Self {
+        debug!("LLVM: Creating new engine with program path: {:?}", llvm_file);
         Self {
             library: None,
             measurement_results: HashMap::new(),
-            qir_file,
+            llvm_file,
             library_path: None,
             commands_generated: false,
             shot_count: 0,
-            config: QirEngineConfig::default(),
+            config: LlvmEngineConfig::default(),
             entry_point: None,
         }
     }
 
-    /// Create a new QIR engine with custom configuration
+    /// Create a new LLVM engine with custom configuration
     ///
     /// # Arguments
     ///
-    /// * `qir_file` - Path to the QIR file to execute
+    /// * `llvm_file` - Path to the LLVM IR file to execute
     /// * `config` - Configuration options for the engine
     ///
     /// # Returns
     ///
-    /// A new QIR engine instance with the specified configuration
+    /// A new LLVM engine instance with the specified configuration
     #[must_use]
-    pub fn with_config(qir_file: PathBuf, config: QirEngineConfig) -> Self {
+    pub fn with_config(llvm_file: PathBuf, config: LlvmEngineConfig) -> Self {
         debug!(
-            "QIR: Creating new engine with program path: {:?} and custom config",
-            qir_file
+            "LLVM: Creating new engine with program path: {:?} and custom config",
+            llvm_file
         );
         Self {
             library: None,
             measurement_results: HashMap::new(),
-            qir_file,
+            llvm_file,
             library_path: None,
             commands_generated: false,
             shot_count: 0,
@@ -129,7 +177,7 @@ impl QirEngine {
 
     /// Set the number of shots assigned to this engine
     pub fn set_assigned_shots(&mut self, shots: usize) {
-        debug!("QIR: Setting assigned shots to {}", shots);
+        debug!("LLVM: Setting assigned shots to {}", shots);
         self.config.assigned_shots = shots;
     }
 
@@ -140,42 +188,42 @@ impl QirEngine {
 
     /// Reset the internal state of the engine
     fn reset_internal_state(&mut self) {
-        debug!("QIR: Resetting internal state");
+        debug!("LLVM: Resetting internal state");
         self.shot_count = 0;
         self.measurement_results.clear();
         self.commands_generated = false;
 
-        // Reset the QIR runtime state through the library if it exists
+        // Reset the LLVM runtime state through the library if it exists
         if let Some(ref library) = self.library {
             if let Err(e) = library.reset() {
-                debug!("QIR: Failed to reset QIR runtime: {}", e);
+                debug!("LLVM: Failed to reset LLVM runtime: {}", e);
             }
         }
     }
 
-    /// Set up the QIR library
+    /// Set up the LLVM library
     fn setup_library(&mut self) -> Result<(), PecosError> {
         // If the library is already set up, don't recompile
         if self.library.is_some() {
-            trace!("QIR: Library already set up, skipping compilation");
+            trace!("LLVM: Library already set up, skipping compilation");
             return Ok(());
         }
 
-        debug!("QIR: Setting up library");
+        debug!("LLVM: Setting up library");
 
         // Clean up any existing library
         self.reset_internal_state();
 
         // Get or compile the library
         let library_path = if let Some(ref library_path) = self.library_path {
-            debug!("QIR: Using existing library at {:?}", library_path);
+            debug!("LLVM: Using existing library at {:?}", library_path);
 
             // Verify the library still exists
             if library_path.exists() {
                 library_path.clone()
             } else {
                 // Library was removed, need to recompile
-                debug!("QIR: Library no longer exists, recompiling");
+                debug!("LLVM: Library no longer exists, recompiling");
                 let output_dir = library_path
                     .parent()
                     .ok_or_else(|| PecosError::Processing("Invalid library path".to_string()))?;
@@ -183,9 +231,9 @@ impl QirEngine {
             }
         } else {
             // First time compilation - compile to the build directory
-            debug!("QIR: No existing library, compiling from source");
+            debug!("LLVM: No existing library, compiling from source");
             let build_dir = self
-                .qir_file
+                .llvm_file
                 .parent()
                 .unwrap_or_else(|| Path::new("."))
                 .join("build");
@@ -200,35 +248,35 @@ impl QirEngine {
         };
 
         // Load the library
-        debug!("QIR: Loading library from {:?}", library_path);
+        debug!("LLVM: Loading library from {:?}", library_path);
 
-        let library = QirLibrary::load(&library_path)
-            .map_err(|e| Self::log_error("Failed to load QIR library", e))?;
+        let library = LlvmLibrary::load(&library_path)
+            .map_err(|e| Self::log_error("Failed to load LLVM library", e))?;
 
         // Store the library and path
         self.library = Some(Box::new(library));
         self.library_path = Some(library_path.clone());
 
-        // Try to detect the entry point from the QIR file
+        // Try to detect the entry point from the LLVM IR file
         if self.entry_point.is_none() {
-            match crate::qir_utils::find_entry_point(&self.qir_file) {
+            match crate::llvm_utils::find_entry_point(&self.llvm_file) {
                 Ok(Some(entry_point)) => {
-                    debug!("QIR: Detected entry point function: {}", entry_point);
+                    debug!("LLVM: Detected entry point function: {}", entry_point);
                     self.entry_point = Some(entry_point);
                 }
                 Ok(None) => {
                     // No entry point found - log warning but don't fail yet
                     // The error will be caught in run_qir_program
-                    debug!("QIR: No entry point detected from LLVM IR attributes");
+                    debug!("LLVM: No entry point detected from LLVM IR attributes");
                 }
                 Err(e) => {
                     // Failed to detect entry point - log warning but don't fail yet
-                    debug!("QIR: Failed to detect entry point: {}", e);
+                    debug!("LLVM: Failed to detect entry point: {}", e);
                 }
             }
         }
 
-        debug!("QIR: Successfully set up QIR library");
+        debug!("LLVM: Successfully set up LLVM library");
 
         Ok(())
     }
@@ -246,7 +294,7 @@ impl QirEngine {
         let measurements: Vec<(usize, u32)> = outcomes.into_iter().enumerate().collect();
 
         self.measurement_results.clear();
-        // Convert u32 measurements to i64 for QIR standard
+        // Convert u32 measurements to i64 for LLVM standard
         self.measurement_results.extend(
             measurements
                 .iter()
@@ -256,7 +304,7 @@ impl QirEngine {
         // Update the runtime with measurement results
         if let Some(library) = &self.library {
             debug!(
-                "QIR: Updating runtime with {} measurement results",
+                "LLVM: Updating runtime with {} measurement results",
                 measurements.len()
             );
 
@@ -264,7 +312,7 @@ impl QirEngine {
             // The runtime expects pairs of (result_id, value)
             let mut results_data = Vec::with_capacity(measurements.len() * 2);
             for (result_id, value) in measurements {
-                debug!("QIR: Measurement result_id={} value={}", result_id, value);
+                debug!("LLVM: Measurement result_id={} value={}", result_id, value);
                 results_data.push(u32::try_from(result_id).map_err(|_| {
                     PecosError::Resource(format!(
                         "Result ID {result_id} is too large to fit in u32"
@@ -283,7 +331,7 @@ impl QirEngine {
         self.commands_generated = false;
         self.shot_count += 1;
 
-        debug!("QIR: Completed shot {}", self.shot_count);
+        debug!("LLVM: Completed shot {}", self.shot_count);
         Ok(())
     }
 
@@ -298,7 +346,7 @@ impl QirEngine {
             match library.get_shot_results() {
                 Ok(Some(shot)) => {
                     debug!(
-                        "QIR: Retrieved shot from runtime with {} registers: {:?}",
+                        "LLVM: Retrieved shot from runtime with {} registers: {:?}",
                         shot.data.len(),
                         shot.data.keys().collect::<Vec<_>>()
                     );
@@ -306,15 +354,15 @@ impl QirEngine {
                 }
                 Ok(None) => {
                     panic!(
-                        "QIR: Runtime returned no shot results after finalization - this indicates a bug in the QIR runtime state management"
+                        "LLVM: Runtime returned no shot results after finalization - this indicates a bug in the LLVM runtime state management"
                     );
                 }
                 Err(e) => {
-                    panic!("QIR: Error getting shot results from library: {e}");
+                    panic!("LLVM: Error getting shot results from library: {e}");
                 }
             }
         } else {
-            panic!("QIR: No library loaded - engine not properly initialized");
+            panic!("LLVM: No library loaded - engine not properly initialized");
         }
     }
 
@@ -335,7 +383,7 @@ impl QirEngine {
         use pecos_engines::noise::DepolarizingNoiseModel;
 
         debug!(
-            "QIR: Running quantum program for {} shots using PECOS infrastructure",
+            "LLVM: Running quantum program for {} shots using PECOS infrastructure",
             self.config.assigned_shots
         );
 
@@ -355,88 +403,26 @@ impl QirEngine {
         )?;
 
         debug!(
-            "QIR: MonteCarloEngine completed with {} shots",
+            "LLVM: MonteCarloEngine completed with {} shots",
             results.shots.len()
         );
 
         // Debug: Print what we got from MonteCarloEngine
         for (i, shot) in results.shots.iter().enumerate().take(5) {
-            debug!("QIR: Shot {} data: {:?}", i, shot.data);
+            debug!("LLVM: Shot {} data: {:?}", i, shot.data);
             // Also show the keys explicitly
             let keys: Vec<&String> = shot.data.keys().collect();
-            debug!("QIR: Shot {} keys: {:?}", i, keys);
+            debug!("LLVM: Shot {} keys: {:?}", i, keys);
         }
 
         // Extract measurement results from the shot results
         let mut all_results = Vec::with_capacity(self.config.assigned_shots);
 
         for shot in results.shots {
-            // Extract measurement results from the shot data
-            // For single-qubit measurements, look for individual result keys
-            let mut shot_measurements = Vec::new();
-
-            // Check for individual measurement results (result_0, result_1, etc.)
-            let mut i = 0;
-            loop {
-                let key = format!("result_{i}");
-                if let Some(data) = shot.data.get(&key) {
-                    let bit_value = match data {
-                        Data::I64(value) => u8::from(*value != 0),
-                        Data::U32(value) => u8::from(*value != 0),
-                        _ => 0u8,
-                    };
-                    shot_measurements.push(bit_value);
-                    i += 1;
-                } else {
-                    break;
-                }
-            }
-
-            // If no individual results found, check for named registers
-            if shot_measurements.is_empty() {
-                // First check for "c" register (common name)
-                if let Some(data) = shot.data.get("c") {
-                    // For combined results like Bell states, extract the first measurement bit
-                    let combined_value = match data {
-                        Data::I64(value) => *value,
-                        Data::U32(value) => i64::from(*value),
-                        _ => 0,
-                    };
-                    // Extract the least significant bit as the measurement result
-                    let bit_value = u8::from((combined_value & 1) != 0);
-                    shot_measurements.push(bit_value);
-                } else {
-                    // Try any other keys that might contain measurement data
-                    // This handles cases where HUGR uses different register names
-                    for (key, data) in &shot.data {
-                        if key != "seed" && key != "shot_id" {
-                            // Skip metadata
-                            let value = match data {
-                                Data::I64(value) => *value,
-                                Data::U32(value) => i64::from(*value),
-                                _ => continue,
-                            };
-                            // For now, just take the LSB of any register we find
-                            let bit_value = u8::from((value & 1) != 0);
-                            shot_measurements.push(bit_value);
-                            debug!(
-                                "QIR: Found measurement in register '{}': {}",
-                                key, bit_value
-                            );
-                            break; // Just take the first one for now
-                        }
-                    }
-                }
-            }
-
-            // If still no measurements, add a default 0
-            if shot_measurements.is_empty() {
-                shot_measurements.push(0);
-            }
-
-            // For simplicity, just take the first measurement from each shot
-            // This matches the behavior expected by single-qubit Guppy programs
-            all_results.push(shot_measurements[0]);
+            // Extract the first measurement value from the shot data
+            // The Shot data structure contains register_name -> Data mappings
+            let measurement = extract_first_measurement(&shot);
+            all_results.push(measurement);
         }
 
         // Ensure we have the right number of results
@@ -446,56 +432,56 @@ impl QirEngine {
         }
 
         debug!(
-            "QIR: Returning {} measurement results using PECOS simulation",
+            "LLVM: Returning {} measurement results using PECOS simulation",
             all_results.len()
         );
 
         Ok(all_results)
     }
 
-    /// Pre-compile the QIR library to prepare for cloning
+    /// Pre-compile the LLVM library to prepare for cloning
     ///
     /// # Errors
     ///
-    /// Returns an error if the QIR library cannot be pre-compiled.
+    /// Returns an error if the LLVM library cannot be pre-compiled.
     pub fn pre_compile(&mut self) -> Result<(), PecosError> {
         // Get the current thread ID for logging
         let thread_id = get_thread_id();
 
         debug!(
-            "QIR: [Thread {}] Pre-compiling library for efficient cloning",
+            "LLVM: [Thread {}] Pre-compiling library for efficient cloning",
             thread_id
         );
 
         // If the library is already set up, don't recompile
         if self.library.is_some() && self.library_path.is_some() {
             debug!(
-                "QIR: [Thread {}] Library already pre-compiled, skipping",
+                "LLVM: [Thread {}] Library already pre-compiled, skipping",
                 thread_id
             );
             return Ok(());
         }
 
-        // Compile the QIR program to a library
-        let library_path = QirLinker::compile(&self.qir_file, None)
-            .map_err(|e| PecosError::Processing(format!("Failed to compile QIR program: {e}")))?;
+        // Compile the LLVM IR program to a library
+        let library_path = LlvmLinker::compile(&self.llvm_file, None)
+            .map_err(|e| PecosError::Processing(format!("Failed to compile LLVM IR program: {e}")))?;
 
-        // Detect the entry point from the QIR file
-        match crate::qir_utils::find_entry_point(&self.qir_file) {
+        // Detect the entry point from the LLVM IR file
+        match crate::llvm_utils::find_entry_point(&self.llvm_file) {
             Ok(Some(entry_point)) => {
-                debug!("QIR: Detected entry point function: {}", entry_point);
+                debug!("LLVM: Detected entry point function: {}", entry_point);
                 self.entry_point = Some(entry_point);
             }
             Ok(None) => {
                 // No entry point found - log but don't fail during pre-compile
                 // The actual error will be thrown when trying to run the program
-                debug!("QIR: No entry point found in QIR file during pre-compile");
+                debug!("LLVM: No entry point found in LLVM IR file during pre-compile");
                 self.entry_point = None;
             }
             Err(e) => {
-                // Failed to parse QIR file - log but don't fail during pre-compile
+                // Failed to parse LLVM IR file - log but don't fail during pre-compile
                 debug!(
-                    "QIR: Failed to detect entry point during pre-compile: {}",
+                    "LLVM: Failed to detect entry point during pre-compile: {}",
                     e
                 );
                 self.entry_point = None;
@@ -507,31 +493,31 @@ impl QirEngine {
 
         // We don't need to load the library here, as each thread will get its own copy
         debug!(
-            "QIR: [Thread {}] Library pre-compiled successfully (path: {:?})",
+            "LLVM: [Thread {}] Library pre-compiled successfully (path: {:?})",
             thread_id, library_path
         );
 
         Ok(())
     }
 
-    /// Run the QIR program and get the commands
+    /// Run the LLVM IR program and get the commands
     ///
-    /// This method runs the QIR program by calling the main function in the library
+    /// This method runs the LLVM IR program by calling the main function in the library
     /// and retrieves the generated quantum commands.
     ///
     /// # Arguments
     ///
-    /// * `library` - The QIR library to run
+    /// * `library` - The LLVM library to run
     ///
     /// # Returns
     ///
-    /// * `Result<ByteMessage, PecosError>` - The binary message generated by the QIR program
+    /// * `Result<ByteMessage, PecosError>` - The binary message generated by the LLVM IR program
     ///
     /// # Error Handling
     ///
     /// Errors are propagated through the Result type and logged at their source with
     /// appropriate context, including the thread ID.
-    fn run_qir_program(&self, library: &QirLibrary) -> Result<ByteMessage, PecosError> {
+    fn run_llvm_program(&self, library: &LlvmLibrary) -> Result<ByteMessage, PecosError> {
         // For HUGR convention with deferred measurements, we need to handle this specially
         // The issue is that HUGR-generated code calls __quantum__rt__result_get_one()
         // to get measurement results, but those results aren't available until after
@@ -544,11 +530,11 @@ impl QirEngine {
         // Configure verbosity through environment variable
         if self.config.verbose {
             unsafe {
-                std::env::remove_var("QIR_RUNTIME_QUIET");
+                std::env::remove_var("LLVM_RUNTIME_QUIET");
             }
         } else {
             unsafe {
-                std::env::set_var("QIR_RUNTIME_QUIET", "1");
+                std::env::set_var("LLVM_RUNTIME_QUIET", "1");
             }
         }
 
@@ -559,7 +545,7 @@ impl QirEngine {
         } else {
             // No entry point was detected - this is an error
             return Err(PecosError::Input(
-                "No entry point found in QIR program. The program must have a function \
+                "No entry point found in LLVM IR program. The program must have a function \
                  marked with the 'EntryPoint' attribute. Example:\n\
                  define void @my_function() #0 {\n\
                    ...\n\
@@ -581,36 +567,36 @@ impl QirEngine {
             )));
         }
 
-        debug!("QIR: Calling entry point function: {}", entry_point);
+        debug!("LLVM: Calling entry point function: {}", entry_point);
         library.call_function(entry_point.as_bytes()).map_err(|e| {
             // Special case for removed library files
             if e.to_string().contains("No such file or directory") {
-                debug!("QIR: Library file was already removed, continuing");
+                debug!("LLVM: Library file was already removed, continuing");
                 PecosError::Processing("Library file was already removed".to_string())
             } else {
                 Self::log_error(&format!("Failed to call {entry_point} function"), e)
             }
         })?;
 
-        // Get the binary message generated by the QIR runtime
+        // Get the binary message generated by the LLVM runtime
         let runtime_message = library
             .get_binary_commands()
-            .map_err(|e| Self::log_error("Failed to get binary commands from QIR runtime", e))?;
+            .map_err(|e| Self::log_error("Failed to get binary commands from LLVM runtime", e))?;
 
         // Log message details for debugging
         debug!(
-            "QIR: Binary message from runtime: {} bytes",
+            "LLVM: Binary message from runtime: {} bytes",
             runtime_message.as_bytes().len()
         );
 
         // Try to parse and log quantum operations for debugging
         if let Ok(operations) = runtime_message.quantum_ops() {
-            debug!("QIR: Parsed {} quantum operations:", operations.len());
+            debug!("LLVM: Parsed {} quantum operations:", operations.len());
             for (i, op) in operations.iter().enumerate().take(10) {
-                debug!("QIR:   [{}] {:?}", i, op);
+                debug!("LLVM:   [{}] {:?}", i, op);
             }
             if operations.len() > 10 {
-                debug!("QIR:   ... and {} more operations", operations.len() - 10);
+                debug!("LLVM:   ... and {} more operations", operations.len() - 10);
             }
         }
 
@@ -619,17 +605,17 @@ impl QirEngine {
 
     fn generate_commands_impl(&mut self) -> Result<Option<ByteMessage>, PecosError> {
         // Only log at trace level to reduce verbosity
-        trace!("QIR: Generating commands (shot {})", self.shot_count + 1);
+        trace!("LLVM: Generating commands (shot {})", self.shot_count + 1);
 
         // If we've already generated commands for this shot, return None
         if self.commands_generated {
-            trace!("QIR: Commands already generated for this shot, returning None");
+            trace!("LLVM: Commands already generated for this shot, returning None");
             return Ok(None);
         }
 
         // If we've already processed a shot in this run_shot call, return None
         if self.shot_count > 0 {
-            debug!("QIR: Already processed one shot in this run_shot call, returning None");
+            debug!("LLVM: Already processed one shot in this run_shot call, returning None");
             return Ok(None);
         }
 
@@ -637,44 +623,44 @@ impl QirEngine {
         // This ensures each shot starts with a clean state
         if let Some(ref library) = self.library {
             if let Err(e) = library.reset() {
-                debug!("QIR: Failed to reset runtime before shot: {}", e);
+                debug!("LLVM: Failed to reset runtime before shot: {}", e);
             } else {
-                debug!("QIR: Reset runtime state for new shot");
+                debug!("LLVM: Reset runtime state for new shot");
             }
         }
 
         // Set up library if not already done
         if self.library.is_none() {
             debug!(
-                "QIR: Setting up library before generating commands for shot {}",
+                "LLVM: Setting up library before generating commands for shot {}",
                 self.shot_count + 1
             );
 
             // Try to set up the library, handling "Text file busy" error with a retry
             if let Err(e) = self.setup_library() {
                 if e.to_string().contains("Text file busy") {
-                    debug!("QIR: Got 'Text file busy' error, trying to recover");
+                    debug!("LLVM: Got 'Text file busy' error, trying to recover");
                     // Sleep a bit longer to allow the file to be released
                     thread::sleep(Duration::from_millis(500));
                     // Try to set up the library again
                     self.setup_library().map_err(|e| {
-                        warn!("QIR: Failed to set up library after retry: {}", e);
+                        warn!("LLVM: Failed to set up library after retry: {}", e);
                         e
                     })?;
                 } else {
-                    warn!("QIR: Failed to set up library: {}", e);
+                    warn!("LLVM: Failed to set up library: {}", e);
                     return Err(e);
                 }
             }
         }
 
-        // Run the QIR program
+        // Run the LLVM IR program
         if let Some(library) = &self.library {
-            // Run the QIR program and get the ByteMessage directly
-            let runtime_message = self.run_qir_program(library)?;
+            // Run the LLVM IR program and get the ByteMessage directly
+            let runtime_message = self.run_llvm_program(library)?;
 
             debug!(
-                "QIR: Got ByteMessage for shot {} with {} bytes",
+                "LLVM: Got ByteMessage for shot {} with {} bytes",
                 self.shot_count + 1,
                 runtime_message.as_bytes().len()
             );
@@ -685,14 +671,14 @@ impl QirEngine {
             // Return the ByteMessage
             Ok(Some(runtime_message))
         } else {
-            warn!("QIR: No QIR library loaded");
+            warn!("LLVM: No LLVM library loaded");
             Err(PecosError::Processing(
-                "Cannot generate quantum commands: No QIR library loaded. Call compile() or setup_library() first.".to_string(),
+                "Cannot generate quantum commands: No LLVM library loaded. Call compile() or setup_library() first.".to_string(),
             ))
         }
     }
 
-    /// Helper method to find qubit allocations in HUGR-style QIR content
+    /// Helper method to find qubit allocations in HUGR-style LLVM IR content
     fn find_qubit_allocations(content: &str) -> (usize, bool) {
         let mut max_qubit_index = 0;
         let mut found_allocation = false;
@@ -706,7 +692,7 @@ impl QirEngine {
             found_allocation = true;
         }
 
-        // Pattern 2: Integer-based qubit references in HUGR QIR calls like "i64 N"
+        // Pattern 2: Integer-based qubit references in HUGR LLVM IR calls like "i64 N"
         // This pattern looks for quantum gate calls with integer qubit arguments
         let int_qubit_pattern =
             Regex::new(r"__quantum__qis__[a-z_]+__body[a-z0-9_]*\s*\([^)]*?i64\s+(\d+)")
@@ -723,33 +709,33 @@ impl QirEngine {
         (max_qubit_index, found_allocation)
     }
 
-    /// Analyze the QIR file to determine the number of qubits
+    /// Analyze the LLVM IR file to determine the number of qubits
     ///
     /// # Errors
     ///
     /// Returns an error if:
-    /// - The QIR file does not exist
+    /// - The LLVM IR file does not exist
     /// - The LLVM IR cannot be parsed
     /// - No qubit allocations are found in the file
-    pub fn analyze_qir_file(&self) -> Result<usize, PecosError> {
-        debug!("QIR Engine: Analyzing QIR file: {:?}", self.qir_file);
+    pub fn analyze_llvm_file(&self) -> Result<usize, PecosError> {
+        debug!("LLVM Engine: Analyzing LLVM IR file: {:?}", self.llvm_file);
 
         // Check if the file exists
-        if !self.qir_file.exists() {
+        if !self.llvm_file.exists() {
             return Err(PecosError::Resource(format!(
-                "Unable to analyze QIR file: File not found at path '{}'",
-                self.qir_file.display()
+                "Unable to analyze LLVM IR file: File not found at path '{}'",
+                self.llvm_file.display()
             )));
         }
 
         // Read the file content - using IO error directly
-        let content = fs::read_to_string(&self.qir_file)?;
+        let content = fs::read_to_string(&self.llvm_file)?;
 
         // Check if the file is empty
         if content.is_empty() {
             return Err(PecosError::Resource(format!(
-                "Unable to analyze QIR file: File is empty at path '{}'",
-                self.qir_file.display()
+                "Unable to analyze LLVM IR file: File is empty at path '{}'",
+                self.llvm_file.display()
             )));
         }
 
@@ -757,65 +743,65 @@ impl QirEngine {
         let gate_count = content.matches("__quantum__qis__").count();
         let qubit_count = content.matches("qubit").count();
         debug!(
-            "QIR Engine: Program stats - {} gates, {} qubit references",
+            "LLVM Engine: Program stats - {} gates, {} qubit references",
             gate_count, qubit_count
         );
 
-        // Find qubit allocations in the QIR file
+        // Find qubit allocations in the LLVM IR file
         let (max_qubit_index, found_allocation) = Self::find_qubit_allocations(&content);
 
         if found_allocation {
             // The number of qubits is the maximum index + 1
             let num_qubits = max_qubit_index + 1;
-            debug!("QIR Engine: Found {} qubits in QIR file", num_qubits);
+            debug!("LLVM Engine: Found {} qubits in LLVM IR file", num_qubits);
             Ok(num_qubits)
         } else {
             Err(PecosError::Input(format!(
-                "Invalid QIR program: No qubit allocations found in file '{}'. The program must contain at least one qubit allocation.",
-                self.qir_file.display()
+                "Invalid LLVM IR program: No qubit allocations found in file '{}'. The program must contain at least one qubit allocation.",
+                self.llvm_file.display()
             )))
         }
     }
 
-    /// Helper method to compile the QIR file to a library
+    /// Helper method to compile the LLVM IR file to a library
     fn compile_library(&self, output_dir: &Path) -> Result<PathBuf, PecosError> {
-        debug!("QIR: Compiling QIR program to library in {:?}", output_dir);
+        debug!("LLVM: Compiling LLVM IR program to library in {:?}", output_dir);
 
         let output_dir_path = output_dir.to_path_buf();
-        QirLinker::compile(&self.qir_file, Some(&output_dir_path))
-            .map_err(|e| PecosError::Processing(format!("Failed to compile QIR program: {e}")))
+        LlvmLinker::compile(&self.llvm_file, Some(&output_dir_path))
+            .map_err(|e| PecosError::Processing(format!("Failed to compile LLVM IR program: {e}")))
     }
 }
 
-impl ClassicalEngine for QirEngine {
+impl ClassicalEngine for LlvmEngine {
     /// Returns the number of qubits used in the quantum program
     ///
     /// Returns 0 if the qubit count cannot be determined.
     fn num_qubits(&self) -> usize {
-        // Always analyze the QIR file to determine qubit count
+        // Always analyze the LLVM IR file to determine qubit count
         // Don't rely on measurement results from previous executions as they could be stale
-        match self.analyze_qir_file() {
+        match self.analyze_llvm_file() {
             Ok(num_qubits) => {
                 debug!(
-                    "QIR Engine: Determined {} qubits from QIR file analysis",
+                    "LLVM Engine: Determined {} qubits from LLVM IR file analysis",
                     num_qubits
                 );
                 num_qubits
             }
             Err(e) => {
-                warn!("QIR Engine: Could not determine qubit count: {}", e);
+                warn!("LLVM Engine: Could not determine qubit count: {}", e);
                 // Fallback: check if we have measurement results from current execution
                 if !self.measurement_results.is_empty() {
                     let max_result_id = self.measurement_results.keys().max().unwrap_or(&0);
                     let num_qubits = max_result_id + 1;
                     debug!(
-                        "QIR Engine: Fallback to {} qubits from measurement results",
+                        "LLVM Engine: Fallback to {} qubits from measurement results",
                         num_qubits
                     );
                     return num_qubits;
                 }
                 // Return 0 to indicate unknown qubit count
-                warn!("QIR Engine: Returning 0 to indicate unknown qubit count");
+                warn!("LLVM Engine: Returning 0 to indicate unknown qubit count");
                 0
             }
         }
@@ -838,13 +824,13 @@ impl ClassicalEngine for QirEngine {
     }
 
     fn compile(&self) -> Result<(), PecosError> {
-        debug!("QIR: Compiling program");
-        QirLinker::compile(&self.qir_file, None)
-            .map(|_| debug!("QIR: Compilation successful"))
+        debug!("LLVM: Compiling program");
+        LlvmLinker::compile(&self.llvm_file, None)
+            .map(|_| debug!("LLVM: Compilation successful"))
             .map_err(|e| {
                 PecosError::Processing(format!(
-                    "QIR compilation failed for '{}': {}",
-                    self.qir_file.display(),
+                    "LLVM compilation failed for '{}': {}",
+                    self.llvm_file.display(),
                     e
                 ))
             })
@@ -864,15 +850,15 @@ impl ClassicalEngine for QirEngine {
     }
 }
 
-impl Clone for QirEngine {
+impl Clone for LlvmEngine {
     fn clone(&self) -> Self {
-        debug!("QIR: Cloning engine");
+        debug!("LLVM: Cloning engine");
 
         // Create a new engine with a fresh state like the working version
         Self {
             library: None,                       // Start with no library, will be loaded on demand
             measurement_results: HashMap::new(), // Start with empty measurements
-            qir_file: self.qir_file.clone(),
+            llvm_file: self.llvm_file.clone(),
             library_path: self.library_path.clone(),
             commands_generated: false,   // Reset commands_generated flag
             shot_count: 0,               // Reset shot count
@@ -882,12 +868,12 @@ impl Clone for QirEngine {
     }
 }
 
-impl Drop for QirEngine {
+impl Drop for LlvmEngine {
     fn drop(&mut self) {
         // Don't call reset_internal_state during drop to avoid segfaults
-        // The QIR runtime has known cleanup issues that cause segfaults
+        // The LLVM runtime has known cleanup issues that cause segfaults
         // Just clean up the basic state without touching the library
-        debug!("QIR: Dropping engine - skipping library cleanup to avoid segfault");
+        debug!("LLVM: Dropping engine - skipping library cleanup to avoid segfault");
         self.shot_count = 0;
         self.measurement_results.clear();
         self.commands_generated = false;
@@ -895,7 +881,7 @@ impl Drop for QirEngine {
     }
 }
 
-impl ControlEngine for QirEngine {
+impl ControlEngine for LlvmEngine {
     type Input = ();
     type Output = Shot;
     type EngineInput = ByteMessage;
@@ -928,7 +914,7 @@ impl ControlEngine for QirEngine {
     }
 }
 
-impl Engine for QirEngine {
+impl Engine for LlvmEngine {
     type Input = ();
     type Output = Shot;
 
