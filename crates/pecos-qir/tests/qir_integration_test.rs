@@ -182,7 +182,9 @@ fn test_qprog_adaptive_algorithm() {
         if let Some(data) = shot.data.get("result_0") {
             let value = match data {
                 pecos_engines::shot_results::Data::U32(v) => *v,
-                pecos_engines::shot_results::Data::I64(v) => *v as u32,
+                pecos_engines::shot_results::Data::I64(v) => {
+                    u32::try_from(*v).expect("Result value should be 0 or 1, which fits in u32")
+                }
                 _ => panic!("Unexpected data type in result_0"),
             };
             *result_0_counts.entry(value).or_insert(0) += 1;
@@ -192,7 +194,9 @@ fn test_qprog_adaptive_algorithm() {
         if let Some(data) = shot.data.get("result_1") {
             let value = match data {
                 pecos_engines::shot_results::Data::U32(v) => *v,
-                pecos_engines::shot_results::Data::I64(v) => *v as u32,
+                pecos_engines::shot_results::Data::I64(v) => {
+                    u32::try_from(*v).expect("Result value should be 0 or 1, which fits in u32")
+                }
                 _ => panic!("Unexpected data type in result_1"),
             };
             *result_1_counts.entry(value).or_insert(0) += 1;
@@ -202,7 +206,9 @@ fn test_qprog_adaptive_algorithm() {
         if let Some(data) = shot.data.get("result_2") {
             let value = match data {
                 pecos_engines::shot_results::Data::U32(v) => *v,
-                pecos_engines::shot_results::Data::I64(v) => *v as u32,
+                pecos_engines::shot_results::Data::I64(v) => {
+                    u32::try_from(*v).expect("Result value should be 0 or 1, which fits in u32")
+                }
                 _ => panic!("Unexpected data type in result_2"),
             };
             *result_2_counts.entry(value).or_insert(0) += 1;

@@ -223,16 +223,23 @@ pub enum PastValue {
 
 impl PastModule {
     /// Convert to RON string representation
+    ///
+    /// # Errors
+    ///
+    /// Returns a `ron::Error` if serialization fails
     pub fn to_ron_string(&self) -> Result<String, ron::Error> {
         ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default())
     }
 
     /// Load from RON string
+    ///
+    /// # Errors
+    ///
+    /// Returns a `ron::Error` if deserialization fails or the string is malformed
     pub fn from_ron_string(s: &str) -> Result<Self, ron::Error> {
-        ron::de::from_str(s).map_err(|e| match e {
-            ron::de::SpannedError { code, position } => {
-                ron::Error::Message(format!("{code:?} at {position:?}"))
-            }
+        ron::de::from_str(s).map_err(|e| {
+            let ron::de::SpannedError { code, position } = e;
+            ron::Error::Message(format!("{code:?} at {position:?}"))
         })
     }
 }

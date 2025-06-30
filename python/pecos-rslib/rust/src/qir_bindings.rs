@@ -18,9 +18,9 @@ use pecos_engines::noise::DepolarizingNoiseModel;
 use pecos_engines::shot_results;
 use pecos_qir::setup_llvm_engine;
 use pyo3::exceptions::PyRuntimeError;
-use std::fs;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
+use std::fs;
 use std::path::PathBuf;
 
 /// Python wrapper for LLVM execution
@@ -70,34 +70,40 @@ fn convert_results_to_python(
     let result_list = PyList::empty(py);
     for shot in results.shots {
         // Handle different result formats
-        if shot.data.len() == 1 {
-            // Single register - return as single value
-            if let Some((_, data)) = shot.data.iter().next() {
-                match data {
-                    shot_results::Data::U32(v) => {
-                        result_list.append(*v != 0)?;
+        match shot.data.len() {
+            1 => {
+                // Single register - return as single value
+                if let Some((_, data)) = shot.data.iter().next() {
+                    match data {
+                        shot_results::Data::U32(v) => {
+                            result_list.append(*v != 0)?;
+                        }
+                        shot_results::Data::I64(v) => {
+                            result_list.append(*v != 0)?;
+                        }
+                        _ => {}
                     }
-                    shot_results::Data::I64(v) => {
-                        result_list.append(*v != 0)?;
-                    }
-                    _ => {}
                 }
             }
-        } else if shot.data.len() > 1 {
-            // Multiple registers - return as tuple
-            let tuple_vals = PyList::empty(py);
-            for data in shot.data.values() {
-                match data {
-                    shot_results::Data::U32(v) => {
-                        tuple_vals.append(*v != 0)?;
-                    }
-                    shot_results::Data::I64(v) => {
-                        tuple_vals.append(*v != 0)?;
-                    }
-                    _ => {}
-                }
+            0 => {
+                // No data - skip
             }
-            result_list.append(tuple_vals.to_tuple())?;
+            _ => {
+                // Multiple registers - return as tuple
+                let tuple_vals = PyList::empty(py);
+                for data in shot.data.values() {
+                    match data {
+                        shot_results::Data::U32(v) => {
+                            tuple_vals.append(*v != 0)?;
+                        }
+                        shot_results::Data::I64(v) => {
+                            tuple_vals.append(*v != 0)?;
+                        }
+                        _ => {}
+                    }
+                }
+                result_list.append(tuple_vals.to_tuple())?;
+            }
         }
     }
 
@@ -284,19 +290,19 @@ pub fn py_validate_qir_format(qir_path: &str) -> PyResult<PyObject> {
 }
 
 /// Get QIR execution diagnostic report
-/// 
+///
 /// Note: This function is deprecated and always returns an empty string.
 /// It is kept for backward compatibility only.
 #[pyfunction]
 #[pyo3(name = "get_qir_diagnostic_report")]
-pub fn py_get_qir_diagnostic_report() -> PyResult<String> {
-    Ok(String::new())
+pub fn py_get_qir_diagnostic_report() -> String {
+    String::new()
 }
 
 /// Reset LLVM runtime state (simplified)
 #[pyfunction]
 #[pyo3(name = "reset_llvm_runtime")]
-pub fn py_reset_qir_runtime() -> PyResult<()> {
+pub fn py_reset_qir_runtime() {
     use std::thread;
     use std::time::Duration;
 
@@ -319,8 +325,6 @@ pub fn py_reset_qir_runtime() -> PyResult<()> {
     // Give the runtime a moment to clean up
     // This helps prevent segfaults in pytest environments
     thread::sleep(Duration::from_millis(10));
-
-    Ok(())
 }
 
 /// Register QIR Python module  

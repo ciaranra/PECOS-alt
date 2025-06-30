@@ -18,6 +18,10 @@ use super::ast::{
 pub struct HugrParser;
 
 /// Parse HUGR JSON into PAST representation
+///
+/// # Errors
+///
+/// Returns `PecosError::ParseSyntax` if the JSON is invalid or doesn't match the expected HUGR format
 pub fn parse_hugr_to_past(hugr_json: &str) -> Result<PastModule, PecosError> {
     // For now, we'll use serde_json for initial parsing and convert to PAST
     // In the future, we can use the Pest grammar for more control
@@ -27,11 +31,11 @@ pub fn parse_hugr_to_past(hugr_json: &str) -> Result<PastModule, PecosError> {
             message: format!("Invalid HUGR JSON: {e}"),
         })?;
 
-    convert_json_to_past(json_value)
+    convert_json_to_past(&json_value)
 }
 
 /// Convert JSON Value to PAST module
-fn convert_json_to_past(json: Value) -> Result<PastModule, PecosError> {
+fn convert_json_to_past(json: &Value) -> Result<PastModule, PecosError> {
     let obj = json.as_object().ok_or_else(|| PecosError::ParseSyntax {
         language: "HUGR".to_string(),
         message: "HUGR root must be an object".to_string(),
@@ -64,7 +68,7 @@ fn convert_json_to_past(json: Value) -> Result<PastModule, PecosError> {
     // Parse nodes and edges from module
     let mut nodes = parse_nodes(first_module)?;
     let edges = parse_edges(first_module)?;
-    
+
     // Resolve rotation angles from dataflow edges
     super::angle_resolver::resolve_rotation_angles(&mut nodes, &edges)?;
 
@@ -84,7 +88,7 @@ fn convert_json_to_past(json: Value) -> Result<PastModule, PecosError> {
         .to_string();
 
     // Build functions from the graph
-    let functions = build_functions_from_graph(&nodes, &edges)?;
+    let functions = build_functions_from_graph(&nodes, &edges);
 
     Ok(PastModule {
         name,
@@ -131,15 +135,15 @@ fn parse_nodes(obj: &serde_json::Map<String, Value>) -> Result<Vec<PastNode>, Pe
     Ok(past_nodes)
 }
 
-/// Parse operation from node object
-fn parse_operation(node: &serde_json::Map<String, Value>) -> Result<PastOp, PecosError> {
+/// Extract operation type from node
+fn extract_op_type(node: &serde_json::Map<String, Value>) -> Result<(&str, bool), PecosError> {
     let op_value = node.get("op").ok_or_else(|| PecosError::ParseSyntax {
         language: "HUGR".to_string(),
         message: "Missing 'op' in node".to_string(),
     })?;
 
     // Handle both string and object forms of op
-    let (op_type, _is_extension) = if let Some(op_str) = op_value.as_str() {
+    if let Some(op_str) = op_value.as_str() {
         // Check if it's an Extension operation by looking at node fields
         if op_str == "Extension" && node.contains_key("name") {
             // Get the extension operation name
@@ -149,9 +153,9 @@ fn parse_operation(node: &serde_json::Map<String, Value>) -> Result<PastOp, Peco
                     message: "Missing name in Extension operation".to_string(),
                 }
             })?;
-            (ext_name, true)
+            Ok((ext_name, true))
         } else {
-            (op_str, false)
+            Ok((op_str, false))
         }
     } else if let Some(op_obj) = op_value.as_object() {
         // For ExtensionOp, get the operation name
@@ -163,94 +167,100 @@ fn parse_operation(node: &serde_json::Map<String, Value>) -> Result<PastOp, Peco
                     language: "HUGR".to_string(),
                     message: "Missing op_name in ExtensionOp".to_string(),
                 })?;
-            (op_name, true)
+            Ok((op_name, true))
         } else {
-            let op_type = op_obj
-                .get("op_type")
-                .or_else(|| op_obj.get("type"))
-                .or_else(|| op_obj.get("op"))
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| PecosError::ParseSyntax {
+            let op_type = op_obj.get("op").and_then(|v| v.as_str()).ok_or_else(|| {
+                PecosError::ParseSyntax {
                     language: "HUGR".to_string(),
-                    message: "Missing operation type".to_string(),
-                })?;
-            (op_type, false)
+                    message: "Invalid op object structure".to_string(),
+                }
+            })?;
+            Ok((op_type, false))
         }
     } else {
-        return Err(PecosError::ParseSyntax {
+        Err(PecosError::ParseSyntax {
             language: "HUGR".to_string(),
-            message: "Invalid 'op' field - must be string or object".to_string(),
-        });
-    };
+            message: "Op must be a string or object".to_string(),
+        })
+    }
+}
 
+/// Parse quantum gate operations
+fn parse_quantum_gate(
+    op_type: &str,
+    node: &serde_json::Map<String, Value>,
+) -> Result<PastOp, PecosError> {
     match op_type {
-        // Quantum gates
-        "H" | "Hadamard" => Ok(PastOp::H),
-        "X" | "PauliX" => Ok(PastOp::X),
-        "Y" | "PauliY" => Ok(PastOp::Y),
-        "Z" | "PauliZ" => Ok(PastOp::Z),
-        "CX" | "CNOT" | "cx" => Ok(PastOp::CX),
-        "CZ" | "cz" => Ok(PastOp::CZ),
+        "H" | "h" | "Hadamard" => Ok(PastOp::H),
+        "X" | "x" | "PauliX" => Ok(PastOp::X),
+        "Y" | "y" | "PauliY" => Ok(PastOp::Y),
+        "Z" | "z" | "PauliZ" => Ok(PastOp::Z),
+        "CX" | "cx" | "CNOT" => Ok(PastOp::CX),
         "CY" | "cy" => Ok(PastOp::CY),
+        "CZ" | "cz" => Ok(PastOp::CZ),
         "CH" | "ch" => Ok(PastOp::CH),
+        "Toffoli" | "toffoli" | "CCX" | "ccx" => Ok(PastOp::Toffoli),
         "S" | "s" => Ok(PastOp::S),
         "T" | "t" => Ok(PastOp::T),
         "Sdg" | "sdg" => Ok(PastOp::Sdg),
         "Tdg" | "tdg" => Ok(PastOp::Tdg),
         "Rx" | "RX" | "rx" => {
-            let angle = parse_angle_from_node(node)?;
+            let angle = parse_angle_from_node(node);
             Ok(PastOp::RX(angle))
         }
         "Ry" | "RY" | "ry" => {
-            let angle = parse_angle_from_node(node)?;
+            let angle = parse_angle_from_node(node);
             Ok(PastOp::RY(angle))
         }
         "Rz" | "RZ" | "rz" => {
-            let angle = parse_angle_from_node(node)?;
+            let angle = parse_angle_from_node(node);
             Ok(PastOp::RZ(angle))
         }
         "CRz" | "CRZ" | "crz" => {
-            let angle = parse_angle_from_node(node)?;
+            let angle = parse_angle_from_node(node);
             Ok(PastOp::CRZ(angle))
         }
-        "Toffoli" | "toffoli" | "CCX" | "ccx" => Ok(PastOp::Toffoli),
-        "Measure" | "MeasureZ" | "MeasureFree" => Ok(PastOp::Measure),
-        "Reset" => Ok(PastOp::Reset),
-        "QAlloc" | "q_alloc" | "AllocQubit" => Ok(PastOp::QAlloc),
+        "MeasureFree" | "Measure" | "measure" | "MeasureZ" => Ok(PastOp::Measure),
+        "Reset" | "reset" => Ok(PastOp::Reset),
+        "QAlloc" | "AllocQubit" | "q_alloc" => Ok(PastOp::QAlloc),
+        _ => Err(PecosError::ParseSyntax {
+            language: "HUGR".to_string(),
+            message: format!("Unknown quantum operation: {op_type}"),
+        }),
+    }
+}
 
-        // Classical operations
-        "Add" => Ok(PastOp::Add),
-        "Sub" => Ok(PastOp::Sub),
-        "Mul" => Ok(PastOp::Mul),
-        "Div" => Ok(PastOp::Div),
-
-        // Special nodes
+/// Parse special node operations (Input, Output, Const)
+fn parse_special_node(op_type: &str, op_value: &Value) -> Result<Option<PastOp>, PecosError> {
+    match op_type {
         "Input" => {
             let port = if let Some(op_obj) = op_value.as_object() {
                 op_obj
                     .get("port")
                     .and_then(serde_json::Value::as_u64)
-                    .unwrap_or(0) as usize
+                    .and_then(|v| usize::try_from(v).ok())
+                    .unwrap_or(0)
             } else {
                 0
             };
-            Ok(PastOp::Input(port))
+            Ok(Some(PastOp::Input(port)))
         }
         "Output" => {
             let port = if let Some(op_obj) = op_value.as_object() {
                 op_obj
                     .get("port")
                     .and_then(serde_json::Value::as_u64)
-                    .unwrap_or(0) as usize
+                    .and_then(|v| usize::try_from(v).ok())
+                    .unwrap_or(0)
             } else {
                 0
             };
-            Ok(PastOp::Output(port))
+            Ok(Some(PastOp::Output(port)))
         }
         "Const" => {
             if let Some(op_obj) = op_value.as_object() {
                 let value = parse_const_value(op_obj)?;
-                Ok(PastOp::Const(value))
+                Ok(Some(PastOp::Const(value)))
             } else {
                 Err(PecosError::ParseSyntax {
                     language: "HUGR".to_string(),
@@ -258,6 +268,38 @@ fn parse_operation(node: &serde_json::Map<String, Value>) -> Result<PastOp, Peco
                 })
             }
         }
+        _ => Ok(None),
+    }
+}
+
+/// Parse operation from node object
+fn parse_operation(node: &serde_json::Map<String, Value>) -> Result<PastOp, PecosError> {
+    let (op_type, _is_extension) = extract_op_type(node)?;
+
+    let op_value = node.get("op").ok_or_else(|| PecosError::ParseSyntax {
+        language: "HUGR".to_string(),
+        message: "Missing 'op' in node".to_string(),
+    })?;
+
+    // Try special nodes first
+    if let Some(op) = parse_special_node(op_type, op_value)? {
+        return Ok(op);
+    }
+
+    match op_type {
+        // Try quantum gates first
+        "H" | "h" | "Hadamard" | "X" | "x" | "PauliX" | "Y" | "y" | "PauliY" | "Z" | "z"
+        | "PauliZ" | "CX" | "cx" | "CNOT" | "CY" | "cy" | "CZ" | "cz" | "CH" | "ch" | "Toffoli"
+        | "toffoli" | "CCX" | "ccx" | "S" | "s" | "T" | "t" | "Sdg" | "sdg" | "Tdg" | "tdg"
+        | "Rx" | "RX" | "rx" | "Ry" | "RY" | "ry" | "Rz" | "RZ" | "rz" | "CRz" | "CRZ" | "crz"
+        | "MeasureFree" | "Measure" | "measure" | "MeasureZ" | "Reset" | "reset" | "QAlloc"
+        | "AllocQubit" | "q_alloc" => parse_quantum_gate(op_type, node),
+
+        // Classical operations
+        "Add" => Ok(PastOp::Add),
+        "Sub" => Ok(PastOp::Sub),
+        "Mul" => Ok(PastOp::Mul),
+        "Div" => Ok(PastOp::Div),
 
         // Function operations
         "Call" => {
@@ -289,12 +331,12 @@ fn parse_operation(node: &serde_json::Map<String, Value>) -> Result<PastOp, Peco
 }
 
 /// Parse angle parameter for rotation gates from node
-fn parse_angle_from_node(_node: &serde_json::Map<String, Value>) -> Result<f64, PecosError> {
+fn parse_angle_from_node(_node: &serde_json::Map<String, Value>) -> f64 {
     // In the new HUGR format, angles are passed as inputs to the operation
     // through the dataflow graph, not as direct attributes.
     // The actual angle resolution happens in a post-processing step
     // using angle_resolver::resolve_rotation_angles
-    Ok(0.0) // Placeholder value, will be replaced by angle resolver
+    0.0 // Placeholder value, will be replaced by angle resolver
 }
 
 /// Parse constant value
@@ -323,7 +365,7 @@ fn parse_const_value(op_obj: &serde_json::Map<String, Value>) -> Result<PastValu
 /// Count input/output ports for an operation
 fn count_ports(op: &PastOp) -> (usize, usize) {
     match op {
-        // Single qubit gates: 1 in, 1 out
+        // Operations with 1 in, 1 out (single qubit gates and misc operations)
         PastOp::H
         | PastOp::X
         | PastOp::Y
@@ -334,7 +376,16 @@ fn count_ports(op: &PastOp) -> (usize, usize) {
         | PastOp::Tdg
         | PastOp::RX(_)
         | PastOp::RY(_)
-        | PastOp::RZ(_) => (1, 1),
+        | PastOp::RZ(_)
+        | PastOp::Measure
+        | PastOp::Reset
+        | PastOp::Compare(_)
+        | PastOp::Branch
+        | PastOp::Call(_)
+        | PastOp::Return
+        | PastOp::Loop
+        | PastOp::Load
+        | PastOp::Store => (1, 1),
 
         // Two qubit gates: 2 in, 2 out
         PastOp::CX | PastOp::CY | PastOp::CZ | PastOp::CH | PastOp::CRZ(_) => (2, 2),
@@ -342,30 +393,18 @@ fn count_ports(op: &PastOp) -> (usize, usize) {
         // Three qubit gates: 3 in, 3 out
         PastOp::Toffoli => (3, 3),
 
-        // Measurement: 1 qubit in, 1 bit out
-        PastOp::Measure => (1, 1),
-
-        // Reset: 1 in, 1 out
-        PastOp::Reset => (1, 1),
-
-        // Qubit allocation: 0 in, 1 out
-        PastOp::QAlloc => (0, 1),
+        // Operations with 0 in, 1 out
+        PastOp::QAlloc
+        | PastOp::AllocQubit
+        | PastOp::AllocBit(_)
+        | PastOp::Const(_)
+        | PastOp::Input(_) => (0, 1),
 
         // Binary operations: 2 in, 1 out
         PastOp::Add | PastOp::Sub | PastOp::Mul | PastOp::Div => (2, 1),
 
-        // Allocation: 0 in, 1 out
-        PastOp::AllocQubit | PastOp::AllocBit(_) => (0, 1),
-
-        // Constants: 0 in, 1 out
-        PastOp::Const(_) => (0, 1),
-
-        // Input/Output nodes
-        PastOp::Input(_) => (0, 1),
+        // Output node: 1 in, 0 out
         PastOp::Output(_) => (1, 0),
-
-        // Default for others
-        _ => (1, 1),
     }
 }
 
@@ -442,24 +481,37 @@ fn parse_node_port(value: Option<&Value>) -> Result<(usize, usize), PecosError> 
         });
     }
 
-    let node = array[0].as_u64().ok_or_else(|| PecosError::ParseSyntax {
-        language: "HUGR".to_string(),
-        message: "Invalid node ID".to_string(),
-    })? as usize;
+    let node = array[0]
+        .as_u64()
+        .ok_or_else(|| PecosError::ParseSyntax {
+            language: "HUGR".to_string(),
+            message: "Invalid node ID".to_string(),
+        })
+        .and_then(|v| {
+            usize::try_from(v).map_err(|_| PecosError::ParseSyntax {
+                language: "HUGR".to_string(),
+                message: "Node ID too large for platform".to_string(),
+            })
+        })?;
 
-    let port = array[1].as_u64().ok_or_else(|| PecosError::ParseSyntax {
-        language: "HUGR".to_string(),
-        message: "Invalid port ID".to_string(),
-    })? as usize;
+    let port = array[1]
+        .as_u64()
+        .ok_or_else(|| PecosError::ParseSyntax {
+            language: "HUGR".to_string(),
+            message: "Invalid port ID".to_string(),
+        })
+        .and_then(|v| {
+            usize::try_from(v).map_err(|_| PecosError::ParseSyntax {
+                language: "HUGR".to_string(),
+                message: "Port ID too large for platform".to_string(),
+            })
+        })?;
 
     Ok((node, port))
 }
 
 /// Build functions from nodes and edges
-fn build_functions_from_graph(
-    nodes: &[PastNode],
-    edges: &[PastEdge],
-) -> Result<Vec<PastFunction>, PecosError> {
+fn build_functions_from_graph(nodes: &[PastNode], edges: &[PastEdge]) -> Vec<PastFunction> {
     // For now, create a single main function containing all nodes
     // In the future, we'll properly identify function boundaries
 
@@ -510,7 +562,7 @@ fn build_functions_from_graph(
         },
     };
 
-    Ok(vec![main_func])
+    vec![main_func]
 }
 
 /// Find the entry point function

@@ -7,6 +7,9 @@ use std::io::Write;
 mod engine_setup;
 use engine_setup::setup_cli_engine;
 
+// Constants
+const QIR_CLEANUP_DELAY_MS: u64 = 100;
+
 #[derive(Parser)]
 #[command(
     name = "pecos",
@@ -70,7 +73,7 @@ enum SimulatorType {
 }
 
 /// Type of compilation backend to use for QIR execution
-#[derive(PartialEq, Eq, Clone, Debug, Default)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Default)]
 enum BackendType {
     /// PMIR pipeline: HUGR → PAST → PMIR (MLIR) → LLVM IR
     ///
@@ -316,24 +319,9 @@ fn select_backend(requested: BackendType) -> Result<BackendType, PecosError> {
     }
 }
 
-fn run_program(args: &RunArgs) -> Result<(), PecosError> {
-    // Select and validate the backend
-    let selected_backend = select_backend(args.backend.clone())?;
-    debug!("Selected compilation backend: {:?}", selected_backend);
-
-    // get_program_path now includes proper context in its errors
-    let program_path = get_program_path(&args.program)?;
-
-    // Detect the program type (for informational purposes)
-    let program_type = detect_program_type(&program_path)?;
-    debug!("Detected program type: {:?}", program_type);
-
-    // Set up the engine
-    let classical_engine =
-        setup_cli_engine(&program_path, Some(args.shots.div_ceil(args.workers)))?;
-
-    // Create the appropriate noise model based on user selection
-    let noise_model: Box<dyn NoiseModel> = match args.noise_model {
+/// Create noise model based on user arguments
+fn create_noise_model(args: &RunArgs) -> Box<dyn NoiseModel> {
+    match args.noise_model {
         NoiseModelType::Depolarizing => {
             // Create a depolarizing noise model with single probability
             let prob = parse_depolarizing_noise_probability(args.noise_probability.as_ref());
@@ -342,7 +330,7 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
             // Set seed if provided
             if let Some(s) = args.seed {
                 let noise_seed = derive_seed(s, "noise_model");
-                model.set_seed(noise_seed)?;
+                let _ = model.set_seed(noise_seed);
             }
 
             Box::new(model)
@@ -366,13 +354,15 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
 
             Box::new(builder.build())
         }
-    };
+    }
+}
 
-    // Create the appropriate quantum engine based on user selection
-    let quantum_engine: Option<Box<dyn QuantumEngine>> = match args.simulator {
+/// Create quantum engine based on user arguments
+#[allow(clippy::unnecessary_wraps)]
+fn create_quantum_engine(args: &RunArgs, num_qubits: usize) -> Option<Box<dyn QuantumEngine>> {
+    match args.simulator {
         SimulatorType::StateVector => {
             // Use StateVecEngine - full quantum state simulator
-            let num_qubits = classical_engine.num_qubits();
             let engine = if let Some(seed) = args.seed {
                 let engine_seed = derive_seed(seed, "quantum_engine");
                 Box::new(StateVecEngine::with_seed(num_qubits, engine_seed))
@@ -383,7 +373,6 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
         }
         SimulatorType::Stabilizer => {
             // Use SparseStabEngine - Clifford circuit optimizer
-            let num_qubits = classical_engine.num_qubits();
             let engine = if let Some(seed) = args.seed {
                 let engine_seed = derive_seed(seed, "quantum_engine");
                 Box::new(SparseStabEngine::with_seed(num_qubits, engine_seed))
@@ -392,37 +381,16 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
             };
             Some(engine)
         }
-    };
+    }
+}
 
-    // Run the simulation with the selected engine and noise model
-    let results = run_sim(
-        classical_engine,
-        args.shots,
-        args.seed,
-        Some(args.workers),
-        Some(noise_model),
-        quantum_engine,
-    )?;
-
-    // Convert to ShotMap for better display formatting
-    let shot_map = results.try_as_shot_map()?;
-
-    // Format the results using the new display system with the selected format
-    let results_str = match args.display_format.to_lowercase().as_str() {
-        "binary" | "bin" => format!("{}", shot_map.display().bitvec_binary()),
-        "hexadecimal" | "hex" => format!("{}", shot_map.display().bitvec_hex()),
-        "decimal" | "dec" => format!("{}", shot_map.display().bitvec_decimal()),
-        _ => {
-            eprintln!(
-                "Warning: Unknown display format '{}', using decimal",
-                args.display_format
-            );
-            format!("{}", shot_map.display().bitvec_decimal())
-        }
-    };
-
-    // Either write to the specified output file or print to stdout
-    if let Some(file_path) = &args.output_file {
+/// Write results to file or stdout
+fn output_results(
+    results_str: &str,
+    output_file: Option<&String>,
+    program_type: ProgramType,
+) -> Result<(), PecosError> {
+    if let Some(file_path) = output_file {
         // Ensure parent directory exists
         if let Some(parent) = std::path::Path::new(file_path).parent() {
             if !parent.exists() {
@@ -433,7 +401,7 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
         }
 
         // Write results to file
-        std::fs::write(file_path, &results_str)
+        std::fs::write(file_path, results_str)
             .map_err(|e| PecosError::Resource(format!("Failed to write output file: {e}")))?;
 
         // For QIR, ensure file is fully written before potential segfault
@@ -464,10 +432,58 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
             println!(); // Add newline after flush
         }
     }
+    Ok(())
+}
 
-    // For QIR programs, we used to exit immediately to avoid cleanup segfaults
-    // but this prevents test harnesses from capturing output.
-    // The library leak in Drop should prevent most issues.
+fn run_program(args: &RunArgs) -> Result<(), PecosError> {
+    // Select and validate the backend
+    let selected_backend = select_backend(args.backend)?;
+    debug!("Selected compilation backend: {:?}", selected_backend);
+
+    // get_program_path now includes proper context in its errors
+    let program_path = get_program_path(&args.program)?;
+
+    // Detect the program type (for informational purposes)
+    let program_type = detect_program_type(&program_path)?;
+    debug!("Detected program type: {:?}", program_type);
+
+    // Set up the engine
+    let classical_engine =
+        setup_cli_engine(&program_path, Some(args.shots.div_ceil(args.workers)))?;
+
+    // Create the appropriate noise model and quantum engine
+    let noise_model = create_noise_model(args);
+    let quantum_engine = create_quantum_engine(args, classical_engine.num_qubits());
+
+    // Run the simulation with the selected engine and noise model
+    let results = run_sim(
+        classical_engine,
+        args.shots,
+        args.seed,
+        Some(args.workers),
+        Some(noise_model),
+        quantum_engine,
+    )?;
+
+    // Convert to ShotMap for better display formatting
+    let shot_map = results.try_as_shot_map()?;
+
+    // Format the results using the new display system with the selected format
+    let results_str = match args.display_format.to_lowercase().as_str() {
+        "binary" | "bin" => format!("{}", shot_map.display().bitvec_binary()),
+        "hexadecimal" | "hex" => format!("{}", shot_map.display().bitvec_hex()),
+        "decimal" | "dec" => format!("{}", shot_map.display().bitvec_decimal()),
+        _ => {
+            eprintln!(
+                "Warning: Unknown display format '{}', using decimal",
+                args.display_format
+            );
+            format!("{}", shot_map.display().bitvec_decimal())
+        }
+    };
+
+    // Output results to file or stdout
+    output_results(&results_str, args.output_file.as_ref(), program_type)?;
 
     // Force all output to be written
     let _ = std::io::stdout().flush();
@@ -475,13 +491,15 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
 
     // For debugging: add a small delay for QIR programs to test timing hypothesis
     if program_type == ProgramType::QIR {
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        std::thread::sleep(std::time::Duration::from_millis(QIR_CLEANUP_DELAY_MS));
     }
 
     Ok(())
 }
 
 fn main() -> Result<(), PecosError> {
+    use std::io::{self, Write};
+
     // Initialize logger with default "info" level if not specified
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
@@ -490,7 +508,6 @@ fn main() -> Result<(), PecosError> {
     // and proper thread pool management in MonteCarloEngine
 
     // For QIR programs, disable stdout buffering to ensure output is captured before segfault
-    use std::io::{self, Write};
     let _ = io::stdout().flush();
 
     let cli = Cli::parse();

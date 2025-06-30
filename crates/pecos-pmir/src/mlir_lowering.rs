@@ -156,6 +156,12 @@ impl fmt::Display for MlirOperation {
 }
 
 /// Lower PAST to PMIR (PECOS Middle-level IR) expressed as MLIR
+///
+/// # Errors
+///
+/// Returns `PecosError` if:
+/// - No entry point function is found
+/// - Function lowering fails
 pub fn lower_past_to_pmir(
     past: &PastModule,
     config: &PmirConfig,
@@ -175,140 +181,136 @@ pub fn lower_past_to_pmir(
     })
 }
 
+/// Helper to create external function declarations
+fn create_external_functions(specs: &[(&str, Option<&str>, &[&str])]) -> Vec<ExternalFunc> {
+    specs
+        .iter()
+        .map(|(name, ret_type, arg_types)| ExternalFunc {
+            name: (*name).to_string(),
+            return_type: ret_type.map(String::from),
+            arg_types: arg_types.iter().map(|&s| s.to_string()).collect(),
+        })
+        .collect()
+}
+
+/// Create external function declarations for qubit management
+fn qubit_management_functions() -> Vec<ExternalFunc> {
+    create_external_functions(&[
+        ("__quantum__rt__qubit_allocate", Some("!llvm.ptr<i8>"), &[]),
+        ("__quantum__rt__qubit_release", None, &["!llvm.ptr<i8>"]),
+    ])
+}
+
+/// Create external function declarations for single qubit gates
+fn single_qubit_gate_functions() -> Vec<ExternalFunc> {
+    let gates = ["h", "x", "y", "z", "s", "sdg", "t", "tdg"];
+    gates
+        .iter()
+        .map(|&gate| ExternalFunc {
+            name: format!("__quantum__qis__{gate}__body"),
+            return_type: None,
+            arg_types: vec!["!llvm.ptr<i8>".to_string()],
+        })
+        .collect()
+}
+
+/// Create external function declarations for rotation gates
+fn rotation_gate_functions() -> Vec<ExternalFunc> {
+    let gates = ["rx", "ry", "rz"];
+    gates
+        .iter()
+        .map(|&gate| ExternalFunc {
+            name: format!("__quantum__qis__{gate}__body"),
+            return_type: None,
+            arg_types: vec!["f64".to_string(), "!llvm.ptr<i8>".to_string()],
+        })
+        .collect()
+}
+
+/// Create external function declarations for two qubit gates
+fn two_qubit_gate_functions() -> Vec<ExternalFunc> {
+    let gates = ["cx", "cy", "cz", "ch"];
+    gates
+        .iter()
+        .map(|&gate| ExternalFunc {
+            name: format!("__quantum__qis__{gate}__body"),
+            return_type: None,
+            arg_types: vec!["!llvm.ptr<i8>".to_string(), "!llvm.ptr<i8>".to_string()],
+        })
+        .collect()
+}
+
+/// Create external function declarations for measurement and results
+fn measurement_functions() -> Vec<ExternalFunc> {
+    create_external_functions(&[
+        ("__quantum__qis__m__body", Some("i1"), &["!llvm.ptr<i8>"]),
+        ("__quantum__rt__result_allocate", Some("!llvm.ptr<i8>"), &[]),
+        (
+            "__quantum__rt__result_record",
+            None,
+            &["!llvm.ptr<i8>", "i1"],
+        ),
+    ])
+}
+
+/// Create external function declarations for controlled rotation gates
+fn controlled_rotation_functions() -> Vec<ExternalFunc> {
+    create_external_functions(&[(
+        "__quantum__qis__crz__body",
+        None,
+        &["f64", "!llvm.ptr<i8>", "!llvm.ptr<i8>"],
+    )])
+}
+
+/// Create external function declarations for three-qubit gates
+fn three_qubit_gate_functions() -> Vec<ExternalFunc> {
+    create_external_functions(&[(
+        "__quantum__qis__ccx__body",
+        None,
+        &["!llvm.ptr<i8>", "!llvm.ptr<i8>", "!llvm.ptr<i8>"],
+    )])
+}
+
+/// Create external function declarations for special operations
+fn special_operation_functions() -> Vec<ExternalFunc> {
+    create_external_functions(&[
+        (
+            "__quantum__qis__cnot__body",
+            None,
+            &["!llvm.ptr<i8>", "!llvm.ptr<i8>"],
+        ),
+        ("__quantum__rt__result_get_zero", Some("!llvm.ptr<i8>"), &[]),
+        (
+            "__quantum__qis__mz__body",
+            None,
+            &["!llvm.ptr<i8>", "!llvm.ptr<i8>"],
+        ),
+        (
+            "__quantum__qis__read_result__body",
+            Some("i1"),
+            &["!llvm.ptr<i8>"],
+        ),
+    ])
+}
+
 /// Collect all QIR external function declarations
 fn collect_external_functions() -> Vec<ExternalFunc> {
-    vec![
-        // Qubit allocation/deallocation
-        ExternalFunc {
-            name: "__quantum__rt__qubit_allocate".to_string(),
-            return_type: Some("!llvm.ptr<i8>".to_string()),
-            arg_types: vec![],
-        },
-        ExternalFunc {
-            name: "__quantum__rt__qubit_release".to_string(),
-            return_type: None,
-            arg_types: vec!["!llvm.ptr<i8>".to_string()],
-        },
-        // Single qubit gates
-        ExternalFunc {
-            name: "__quantum__qis__h__body".to_string(),
-            return_type: None,
-            arg_types: vec!["!llvm.ptr<i8>".to_string()],
-        },
-        ExternalFunc {
-            name: "__quantum__qis__x__body".to_string(),
-            return_type: None,
-            arg_types: vec!["!llvm.ptr<i8>".to_string()],
-        },
-        ExternalFunc {
-            name: "__quantum__qis__y__body".to_string(),
-            return_type: None,
-            arg_types: vec!["!llvm.ptr<i8>".to_string()],
-        },
-        ExternalFunc {
-            name: "__quantum__qis__z__body".to_string(),
-            return_type: None,
-            arg_types: vec!["!llvm.ptr<i8>".to_string()],
-        },
-        ExternalFunc {
-            name: "__quantum__qis__s__body".to_string(),
-            return_type: None,
-            arg_types: vec!["!llvm.ptr<i8>".to_string()],
-        },
-        ExternalFunc {
-            name: "__quantum__qis__t__body".to_string(),
-            return_type: None,
-            arg_types: vec!["!llvm.ptr<i8>".to_string()],
-        },
-        ExternalFunc {
-            name: "__quantum__qis__sadj__body".to_string(),
-            return_type: None,
-            arg_types: vec!["!llvm.ptr<i8>".to_string()],
-        },
-        ExternalFunc {
-            name: "__quantum__qis__tadj__body".to_string(),
-            return_type: None,
-            arg_types: vec!["!llvm.ptr<i8>".to_string()],
-        },
-        // Two qubit gates
-        ExternalFunc {
-            name: "__quantum__qis__cnot__body".to_string(),
-            return_type: None,
-            arg_types: vec!["!llvm.ptr<i8>".to_string(), "!llvm.ptr<i8>".to_string()],
-        },
-        ExternalFunc {
-            name: "__quantum__qis__cz__body".to_string(),
-            return_type: None,
-            arg_types: vec!["!llvm.ptr<i8>".to_string(), "!llvm.ptr<i8>".to_string()],
-        },
-        ExternalFunc {
-            name: "__quantum__qis__cy__body".to_string(),
-            return_type: None,
-            arg_types: vec!["!llvm.ptr<i8>".to_string(), "!llvm.ptr<i8>".to_string()],
-        },
-        ExternalFunc {
-            name: "__quantum__qis__ch__body".to_string(),
-            return_type: None,
-            arg_types: vec!["!llvm.ptr<i8>".to_string(), "!llvm.ptr<i8>".to_string()],
-        },
-        // Three qubit gates
-        ExternalFunc {
-            name: "__quantum__qis__ccx__body".to_string(),
-            return_type: None,
-            arg_types: vec![
-                "!llvm.ptr<i8>".to_string(),
-                "!llvm.ptr<i8>".to_string(),
-                "!llvm.ptr<i8>".to_string(),
-            ],
-        },
-        // Rotation gates
-        ExternalFunc {
-            name: "__quantum__qis__rx__body".to_string(),
-            return_type: None,
-            arg_types: vec!["f64".to_string(), "!llvm.ptr<i8>".to_string()],
-        },
-        ExternalFunc {
-            name: "__quantum__qis__ry__body".to_string(),
-            return_type: None,
-            arg_types: vec!["f64".to_string(), "!llvm.ptr<i8>".to_string()],
-        },
-        ExternalFunc {
-            name: "__quantum__qis__rz__body".to_string(),
-            return_type: None,
-            arg_types: vec!["f64".to_string(), "!llvm.ptr<i8>".to_string()],
-        },
-        ExternalFunc {
-            name: "__quantum__qis__crz__body".to_string(),
-            return_type: None,
-            arg_types: vec![
-                "f64".to_string(),
-                "!llvm.ptr<i8>".to_string(),
-                "!llvm.ptr<i8>".to_string(),
-            ],
-        },
-        // Measurement
-        ExternalFunc {
-            name: "__quantum__rt__result_get_zero".to_string(),
-            return_type: Some("!llvm.ptr<i8>".to_string()),
-            arg_types: vec![],
-        },
-        ExternalFunc {
-            name: "__quantum__qis__mz__body".to_string(),
-            return_type: None,
-            arg_types: vec!["!llvm.ptr<i8>".to_string(), "!llvm.ptr<i8>".to_string()],
-        },
-        ExternalFunc {
-            name: "__quantum__qis__read_result__body".to_string(),
-            return_type: Some("i1".to_string()),
-            arg_types: vec!["!llvm.ptr<i8>".to_string()],
-        },
-    ]
+    let mut funcs = Vec::new();
+    funcs.extend(qubit_management_functions());
+    funcs.extend(single_qubit_gate_functions());
+    funcs.extend(rotation_gate_functions());
+    funcs.extend(two_qubit_gate_functions());
+    funcs.extend(measurement_functions());
+    funcs.extend(controlled_rotation_functions());
+    funcs.extend(three_qubit_gate_functions());
+    funcs.extend(special_operation_functions());
+    funcs
 }
 
 /// Convert PAST type to MLIR type string
 fn type_to_mlir(ty: &PastType) -> String {
     match ty {
-        PastType::Qubit => "!llvm.ptr<i8>".to_string(), // Opaque pointer for Qubit*
+        PastType::Qubit | PastType::Custom(_) => "!llvm.ptr<i8>".to_string(), // Opaque pointer
         PastType::Bit => "i1".to_string(),
         PastType::Int(width) => format!("i{width}"),
         PastType::Float(width) => format!("f{width}"),
@@ -321,7 +323,6 @@ fn type_to_mlir(ty: &PastType) -> String {
                 .join(", ");
             format!("!llvm.struct<({inner})>")
         }
-        PastType::Custom(_) => "!llvm.ptr<i8>".to_string(), // Default to opaque pointer
     }
 }
 
@@ -471,6 +472,7 @@ fn lower_graph(graph: &PastGraph) -> Result<Vec<MlirBlock>, PecosError> {
 }
 
 /// Lower a single node to MLIR operations (may generate multiple ops)
+#[allow(clippy::too_many_lines)]
 fn lower_node_to_operations(
     node: &PastNode,
     value_map: &std::collections::HashMap<(usize, usize), String>,

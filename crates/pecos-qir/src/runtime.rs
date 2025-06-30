@@ -32,6 +32,49 @@ use std::thread;
 // Ensure the runtime registry is initialized exactly once
 static INIT: Once = Once::new();
 
+// Constants for runtime behavior
+const MAX_CALLBACK_DEPTH: usize = 5;
+const CALLBACK_TIMEOUT_SECS: u64 = 30;
+
+// Macro for creating HUGR convention FFI functions
+// TODO: Use this macro to reduce duplication in FFI function definitions
+#[allow(unused_macros)]
+macro_rules! hugr_ffi_function {
+    ($fn_name:ident, $internal_fn:path, $arg_type:ty) => {
+        /// # Safety
+        ///
+        /// This function is a thin wrapper around the internal function.
+        /// The caller must ensure that the argument values are valid for the operation.
+        #[no_mangle]
+        pub unsafe extern "C" fn $fn_name(arg: $arg_type) {
+            ensure_runtime_initialized();
+            $internal_fn(arg);
+        }
+    };
+    ($fn_name:ident, $internal_fn:path, $arg1_type:ty, $arg2_type:ty) => {
+        /// # Safety
+        ///
+        /// This function is a thin wrapper around the internal function.
+        /// The caller must ensure that the argument values are valid for the operation.
+        #[no_mangle]
+        pub unsafe extern "C" fn $fn_name(arg1: $arg1_type, arg2: $arg2_type) {
+            ensure_runtime_initialized();
+            $internal_fn(arg1, arg2);
+        }
+    };
+    ($fn_name:ident, $internal_fn:path, $arg1_type:ty, $arg2_type:ty, $arg3_type:ty) => {
+        /// # Safety
+        ///
+        /// This function is a thin wrapper around the internal function.
+        /// The caller must ensure that the argument values are valid for the operation.
+        #[no_mangle]
+        pub unsafe extern "C" fn $fn_name(arg1: $arg1_type, arg2: $arg2_type, arg3: $arg3_type) {
+            ensure_runtime_initialized();
+            $internal_fn(arg1, arg2, arg3);
+        }
+    };
+}
+
 // Circuit breaker for preventing infinite callback loops
 thread_local! {
     static CALLBACK_DEPTH: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -76,14 +119,14 @@ fn should_print_commands() -> bool {
 
 pub mod core_runtime {
     use super::{
-        ByteMessage, PecosError, RuntimeRegistry, ensure_runtime_initialized,
-        get_thread_id, should_print_commands,
+        ByteMessage, PecosError, RuntimeRegistry, ensure_runtime_initialized, get_thread_id,
+        should_print_commands,
     };
     use log::debug;
 
     /// Set the interactive execution callback for the current runtime
     pub fn set_interactive_callback(
-        callback: Box<dyn Fn(ByteMessage) -> Result<Vec<u32>, PecosError> + Send + Sync>
+        callback: Box<dyn Fn(ByteMessage) -> Result<Vec<u32>, PecosError> + Send + Sync>,
     ) {
         ensure_runtime_initialized();
         RuntimeRegistry::with_current_runtime(|state| {
@@ -186,39 +229,37 @@ pub mod core_runtime {
 
     // Quantum Gate Operations
 
-    pub fn h_gate(qubit_id: usize) {
-        if should_print_commands() {
-            let thread_id = get_thread_id();
-            debug!("[Thread {thread_id}] H gate on qubit {qubit_id}");
-        }
+    // Helper macro for single-qubit gates
+    macro_rules! single_qubit_gate {
+        ($name:ident, $method:ident, $gate_name:expr) => {
+            pub fn $name(qubit_id: usize) {
+                if should_print_commands() {
+                    let thread_id = get_thread_id();
+                    debug!(
+                        "[Thread {thread_id}] {} gate on qubit {qubit_id}",
+                        $gate_name
+                    );
+                }
 
-        RuntimeRegistry::with_current_runtime(|state| {
-            let _ = state.message_builder_mut().add_h(&[qubit_id]);
-        });
+                RuntimeRegistry::with_current_runtime(|state| {
+                    let _ = state.message_builder_mut().$method(&[qubit_id]);
+                });
+            }
+        };
+        // Variant for gates without debug output
+        ($name:ident, $method:ident) => {
+            pub fn $name(qubit_id: usize) {
+                RuntimeRegistry::with_current_runtime(|state| {
+                    let _ = state.message_builder_mut().$method(&[qubit_id]);
+                });
+            }
+        };
     }
 
-    pub fn x_gate(qubit_id: usize) {
-        if should_print_commands() {
-            let thread_id = get_thread_id();
-            debug!("[Thread {thread_id}] X gate on qubit {qubit_id}");
-        }
-
-        RuntimeRegistry::with_current_runtime(|state| {
-            let _ = state.message_builder_mut().add_x(&[qubit_id]);
-        });
-    }
-
-    pub fn y_gate(qubit_id: usize) {
-        RuntimeRegistry::with_current_runtime(|state| {
-            let _ = state.message_builder_mut().add_y(&[qubit_id]);
-        });
-    }
-
-    pub fn z_gate(qubit_id: usize) {
-        RuntimeRegistry::with_current_runtime(|state| {
-            let _ = state.message_builder_mut().add_z(&[qubit_id]);
-        });
-    }
+    single_qubit_gate!(h_gate, add_h, "H");
+    single_qubit_gate!(x_gate, add_x, "X");
+    single_qubit_gate!(y_gate, add_y);
+    single_qubit_gate!(z_gate, add_z);
 
     pub fn cx_gate(control_id: usize, target_id: usize) {
         if should_print_commands() {
@@ -260,29 +301,10 @@ pub mod core_runtime {
         });
     }
 
-    pub fn s_gate(qubit_id: usize) {
-        RuntimeRegistry::with_current_runtime(|state| {
-            let _ = state.message_builder_mut().add_sz(&[qubit_id]);
-        });
-    }
-
-    pub fn sdg_gate(qubit_id: usize) {
-        RuntimeRegistry::with_current_runtime(|state| {
-            let _ = state.message_builder_mut().add_szdg(&[qubit_id]);
-        });
-    }
-
-    pub fn t_gate(qubit_id: usize) {
-        RuntimeRegistry::with_current_runtime(|state| {
-            let _ = state.message_builder_mut().add_t(&[qubit_id]);
-        });
-    }
-
-    pub fn tdg_gate(qubit_id: usize) {
-        RuntimeRegistry::with_current_runtime(|state| {
-            let _ = state.message_builder_mut().add_tdg(&[qubit_id]);
-        });
-    }
+    single_qubit_gate!(s_gate, add_sz);
+    single_qubit_gate!(sdg_gate, add_szdg);
+    single_qubit_gate!(t_gate, add_t);
+    single_qubit_gate!(tdg_gate, add_tdg);
 
     pub fn rx_gate(theta: f64, qubit_id: usize) {
         RuntimeRegistry::with_current_runtime(|state| {
@@ -465,7 +487,7 @@ pub mod core_runtime {
 }
 
 // =============================================================================
-// LLVM Runtime Functions  
+// LLVM Runtime Functions
 // =============================================================================
 
 /// Reset the LLVM runtime state
@@ -474,6 +496,7 @@ pub mod core_runtime {
 ///
 /// This function is marked unsafe as it's called from C/FFI context.
 /// It performs thread-safe operations internally.
+/// No preconditions are required beyond ensuring the runtime is initialized.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn llvm_runtime_reset() {
     // Clear the interactive callback first
@@ -492,7 +515,8 @@ pub unsafe extern "C" fn llvm_runtime_reset() {
 /// # Safety
 ///
 /// This function is marked unsafe as it's called from C/FFI context.
-/// The config parameter is currently unused.
+/// The config parameter is currently unused but must be a valid pointer or null.
+/// Multiple calls are safe due to internal initialization guards.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__initialize(_config: *const u8) {
     core_runtime::initialize();
@@ -505,30 +529,60 @@ pub unsafe extern "C" fn __quantum__rt__initialize(_config: *const u8) {
 // HUGR Convention Functions (Integer-based)
 // =============================================================================
 
+/// Apply Hadamard gate to a qubit
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The qubit parameter must be a valid qubit ID previously allocated.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__h__body(qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
     core_runtime::h_gate(qubit_id);
 }
 
+/// Apply Pauli-X gate to a qubit
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The qubit parameter must be a valid qubit ID previously allocated.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__x__body(qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
     core_runtime::x_gate(qubit_id);
 }
 
+/// Apply Pauli-Y gate to a qubit
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The qubit parameter must be a valid qubit ID previously allocated.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__y__body(qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
     core_runtime::y_gate(qubit_id);
 }
 
+/// Apply Pauli-Z gate to a qubit
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The qubit parameter must be a valid qubit ID previously allocated.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__z__body(qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
     core_runtime::z_gate(qubit_id);
 }
 
+/// Apply controlled-X (CNOT) gate
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// Both control and target must be valid qubit IDs previously allocated.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__cx__body(control: i64, target: i64) {
     let control_id = i64_to_usize(control);
@@ -536,6 +590,12 @@ pub unsafe extern "C" fn __quantum__qis__cx__body(control: i64, target: i64) {
     core_runtime::cx_gate(control_id, target_id);
 }
 
+/// Apply CNOT gate (alias for CX)
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// Both control and target must be valid qubit IDs previously allocated.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__cnot__body(control: i64, target: i64) {
     let control_id = i64_to_usize(control);
@@ -543,6 +603,12 @@ pub unsafe extern "C" fn __quantum__qis__cnot__body(control: i64, target: i64) {
     core_runtime::cx_gate(control_id, target_id);
 }
 
+/// Apply controlled-Y gate
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// Both control and target must be valid qubit IDs previously allocated.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__cy__body(control: i64, target: i64) {
     let control_id = i64_to_usize(control);
@@ -550,6 +616,12 @@ pub unsafe extern "C" fn __quantum__qis__cy__body(control: i64, target: i64) {
     core_runtime::cy_gate(control_id, target_id);
 }
 
+/// Apply controlled-Z gate
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// Both control and target must be valid qubit IDs previously allocated.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__cz__body(control: i64, target: i64) {
     let control_id = i64_to_usize(control);
@@ -557,6 +629,12 @@ pub unsafe extern "C" fn __quantum__qis__cz__body(control: i64, target: i64) {
     core_runtime::cz_gate(control_id, target_id);
 }
 
+/// Apply controlled-H gate
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// Both control and target must be valid qubit IDs previously allocated.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__ch__body(control: i64, target: i64) {
     let control_id = i64_to_usize(control);
@@ -564,54 +642,113 @@ pub unsafe extern "C" fn __quantum__qis__ch__body(control: i64, target: i64) {
     core_runtime::ch_gate(control_id, target_id);
 }
 
+/// Apply S gate (phase gate)
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The qubit parameter must be a valid qubit ID previously allocated.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__s__body(qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
     core_runtime::s_gate(qubit_id);
 }
 
+/// Apply S-dagger gate (conjugate of S gate)
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The qubit parameter must be a valid qubit ID previously allocated.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__sdg__body(qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
     core_runtime::sdg_gate(qubit_id);
 }
 
+/// Apply T gate (π/8 gate)
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The qubit parameter must be a valid qubit ID previously allocated.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__t__body(qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
     core_runtime::t_gate(qubit_id);
 }
 
+/// Apply T-dagger gate (conjugate of T gate)
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The qubit parameter must be a valid qubit ID previously allocated.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__tdg__body(qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
     core_runtime::tdg_gate(qubit_id);
 }
 
+/// Apply rotation around X-axis
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The qubit parameter must be a valid qubit ID previously allocated.
+/// The theta parameter must be a finite floating-point value.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__rx__body(theta: f64, qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
     core_runtime::rx_gate(theta, qubit_id);
 }
 
+/// Apply rotation around Y-axis
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The qubit parameter must be a valid qubit ID previously allocated.
+/// The theta parameter must be a finite floating-point value.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__ry__body(theta: f64, qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
     core_runtime::ry_gate(theta, qubit_id);
 }
 
+/// Apply rotation around Z-axis
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The qubit parameter must be a valid qubit ID previously allocated.
+/// The theta parameter must be a finite floating-point value.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__rz__body(theta: f64, qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
     core_runtime::rz_gate(theta, qubit_id);
 }
 
+/// Apply R1XY gate
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The qubit parameter must be a valid qubit ID previously allocated.
+/// Both theta and phi parameters must be finite floating-point values.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__r1xy__body(theta: f64, phi: f64, qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
     core_runtime::r1xy_gate(theta, phi, qubit_id);
 }
 
+/// Apply controlled rotation around Z-axis
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// Both control and target must be valid qubit IDs previously allocated.
+/// The theta parameter must be a finite floating-point value.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__crz__body(theta: f64, control: i64, target: i64) {
     let control_id = i64_to_usize(control);
@@ -619,6 +756,12 @@ pub unsafe extern "C" fn __quantum__qis__crz__body(theta: f64, control: i64, tar
     core_runtime::crz_gate(theta, control_id, target_id);
 }
 
+/// Apply Toffoli (CCX) gate
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// All control1, control2, and target must be valid qubit IDs previously allocated.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__ccx__body(control1: i64, control2: i64, target: i64) {
     let control1_id = i64_to_usize(control1);
@@ -627,6 +770,12 @@ pub unsafe extern "C" fn __quantum__qis__ccx__body(control1: i64, control2: i64,
     core_runtime::ccx_gate(control1_id, control2_id, target_id);
 }
 
+/// Apply ZZ gate
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// Both qubit1 and qubit2 must be valid qubit IDs previously allocated.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__zz__body(qubit1: i64, qubit2: i64) {
     let qubit1_id = i64_to_usize(qubit1);
@@ -639,12 +788,15 @@ pub unsafe extern "C" fn __quantum__qis__zz__body(qubit1: i64, qubit2: i64) {
 /// # Safety
 ///
 /// This function is marked unsafe as it's called from C/FFI context.
+/// The function is thread-safe and will always return a valid result ID.
+///
+/// # Panics
+///
+/// Panics if the result ID is too large to fit in an i64 (extremely unlikely).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__result_allocate() -> i64 {
     i64::try_from(core_runtime::allocate_result()).expect("Result ID too large for i64")
 }
-
-
 
 /// HUGR-style qubit allocation - returns integer ID instead of pointer
 ///
@@ -653,38 +805,67 @@ pub unsafe extern "C" fn __quantum__rt__result_allocate() -> i64 {
 ///
 /// # Safety
 /// This function is marked unsafe as it's called from C/FFI context.
+/// The function is thread-safe and will always return a valid qubit ID.
+///
+/// # Panics
+///
+/// Panics if the qubit ID is too large to fit in an i64 (extremely unlikely).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__qubit_allocate() -> i64 {
     i64::try_from(core_runtime::allocate_qubit()).expect("Qubit ID too large for i64")
 }
 
+/// Measure a qubit (i64 version for compatibility)
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// Both qubit and result must be valid IDs previously allocated.
+/// Returns 0 as this uses deferred measurement model.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__m__body_i64(qubit: i64, result: i64) -> u32 {
     let qubit_id = i64_to_usize(qubit);
     let result_id = i64_to_usize(result);
     core_runtime::measure(qubit_id, result_id);
 
-    // NOTE: This function shouldn't be called directly in the new deferred model.
-    // The LLVM-IR post-processor converts immediate calls to deferred calls.
-    // Return 0 as fallback for any remaining immediate calls.
+    // In the deferred measurement model, measurement results are not available immediately.
+    // This function records the measurement for later execution and always returns 0.
+    // The actual measurement result will be available through __quantum__rt__result_get_one.
     0
 }
 
-
+/// Measure a qubit
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// Both qubit and result must be valid IDs previously allocated.
+/// Returns 0 as this uses deferred measurement model.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__m__body(qubit: i64, result: i64) -> i32 {
     let qubit_id = i64_to_usize(qubit);
     let result_id = i64_to_usize(result);
     core_runtime::measure(qubit_id, result_id);
 
-    // NOTE: This function shouldn't be called directly in the new deferred model.
-    // The LLVM-IR post-processor converts immediate calls to deferred calls.
-    // Return 0 as fallback for any remaining immediate calls.
+    // In the deferred measurement model, measurement results are not available immediately.
+    // This function records the measurement for later execution and always returns 0.
+    // The actual measurement result will be available through __quantum__rt__result_get_one.
     0
 }
 
 /// Get measurement result as integer (0 or 1) for deferred measurement model
 /// For HUGR's immediate measurement model, this function triggers interactive execution
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The result parameter must be a valid result ID previously allocated.
+/// May trigger quantum execution if measurements haven't been performed yet.
+///
+/// # Panics
+///
+/// Panics if the result ID cannot be converted to usize (negative or too large).
+#[allow(clippy::too_many_lines)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__result_get_one(result: i64) -> i32 {
     use std::time::{Duration, Instant};
@@ -697,19 +878,19 @@ pub unsafe extern "C" fn __quantum__rt__result_get_one(result: i64) -> i32 {
         debug!("[Thread {thread_id}] ENTER __quantum__rt__result_get_one(result_id={result_id})");
     }
 
-    // Circuit breaker: prevent recursive callback loops
+    // Safety mechanism: prevent infinite recursion in callback chains
+    // This is a proper safety feature, not a workaround. It protects against
+    // malformed quantum programs that might create circular dependencies.
     let current_depth = CALLBACK_DEPTH.with(std::cell::Cell::get);
-    if current_depth > 5 {
-        error!(
-            "[Thread {}] CIRCUIT_BREAKER: Callback depth {} exceeded for result {result_id}",
-            get_thread_id(),
-            current_depth
-        );
-        return 0;
-    }
+    assert!(
+        current_depth <= MAX_CALLBACK_DEPTH,
+        "Quantum program error: Circular dependency detected in measurement results. \
+             Result {result_id} depends on itself through a chain of {current_depth} callbacks. \
+             Maximum allowed callback depth is {MAX_CALLBACK_DEPTH}."
+    );
 
     // Add a timeout to prevent infinite hangs
-    let timeout = Duration::from_secs(30); // 30 second timeout
+    let timeout = Duration::from_secs(CALLBACK_TIMEOUT_SECS);
 
     let result = RuntimeRegistry::with_current_runtime(|state| {
         // Check for timeout
@@ -829,6 +1010,11 @@ pub unsafe extern "C" fn __quantum__rt__result_get_one(result: i64) -> i32 {
 // =============================================================================
 
 /// Message printing
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The msg parameter must be a valid null-terminated C string or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__message(msg: *const c_char) {
     if !msg.is_null() {
@@ -840,6 +1026,11 @@ pub unsafe extern "C" fn __quantum__rt__message(msg: *const c_char) {
 }
 
 /// Record data
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The data parameter must be a valid null-terminated C string or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__record(data: *const c_char) {
     if !data.is_null() {
@@ -853,6 +1044,12 @@ pub unsafe extern "C" fn __quantum__rt__record(data: *const c_char) {
 }
 
 /// Record a result output
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The `result_ptr` is treated as a result ID (cast from pointer).
+/// The name parameter must be a valid null-terminated C string or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__result_record_output(
     result_ptr: *const u8,
@@ -871,6 +1068,12 @@ pub unsafe extern "C" fn __quantum__rt__result_record_output(
 }
 
 /// Update measurement results
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The `results_ptr` must point to a valid array of u32 values of size `results_len`*2.
+/// The array contains pairs of (`result_id`, value) for each measurement.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn llvm_runtime_update_measurement_results(
     results_ptr: *const u32,
@@ -890,6 +1093,12 @@ pub unsafe extern "C" fn llvm_runtime_update_measurement_results(
 }
 
 /// Finalize shot
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// Must be called after all measurements for a shot have been recorded.
+/// No preconditions beyond having an initialized runtime.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn llvm_runtime_finalize_shot() {
     core_runtime::finalize_shot();
@@ -907,6 +1116,13 @@ pub struct FFIByteData {
     pub byte_len: usize,
 }
 
+/// Get binary commands for execution
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// Returns a heap-allocated `FFIByteData` structure that must be freed with
+/// `llvm_runtime_free_binary_commands`. The data field within may be null if empty.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn llvm_runtime_get_binary_commands() -> *mut FFIByteData {
     let thread_id = get_thread_id();
@@ -953,6 +1169,12 @@ pub unsafe extern "C" fn llvm_runtime_get_binary_commands() -> *mut FFIByteData 
 }
 
 /// Free binary commands
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The ptr must be a valid pointer returned by `llvm_runtime_get_binary_commands`
+/// or null. After calling this function, the pointer becomes invalid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn llvm_runtime_free_binary_commands(ptr: *mut FFIByteData) {
     let thread_id = get_thread_id();
@@ -984,6 +1206,18 @@ pub struct FFIShotData {
     pub count: usize,
 }
 
+/// Get shot results
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// Returns a heap-allocated `FFIShotData` structure that must be freed with
+/// `llvm_runtime_free_shot_data`. Returns null if no shot data is available.
+/// The names and values fields are heap-allocated arrays that will be freed together.
+///
+/// # Panics
+///
+/// Panics if a register name contains null bytes (invalid for C strings).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn llvm_runtime_get_shot_results() -> *mut FFIShotData {
     let thread_id = get_thread_id();
@@ -1049,6 +1283,13 @@ pub unsafe extern "C" fn llvm_runtime_get_shot_results() -> *mut FFIShotData {
 }
 
 /// Free shot data
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The data must be a valid pointer returned by `llvm_runtime_get_shot_results`
+/// or null. This frees the `FFIShotData` structure, all name strings, and arrays.
+/// After calling this function, the pointer and all contained data become invalid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn llvm_runtime_free_shot_data(data: *mut FFIShotData) {
     let thread_id = get_thread_id();

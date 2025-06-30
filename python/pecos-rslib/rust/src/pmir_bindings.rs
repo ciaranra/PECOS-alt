@@ -34,13 +34,9 @@ fn find_pecos_binary() -> Option<std::path::PathBuf> {
         possible_paths.insert(0, std::path::PathBuf::from(env_path));
     }
 
-    for path in possible_paths {
-        if path.exists() && path.is_file() {
-            return Some(path);
-        }
-    }
-
-    None
+    possible_paths
+        .into_iter()
+        .find(|path| path.exists() && path.is_file())
 }
 
 /// Convert HUGR JSON to PAST RON representation
@@ -137,14 +133,14 @@ pub struct PyPMIRQirEngine {
 impl PyPMIRQirEngine {
     /// Create a new PMIR QIR engine from LLVM IR content (in-memory)
     #[new]
-    pub fn new(llvm_ir: &str) -> PyResult<Self> {
+    pub fn new(llvm_ir: &str) -> Self {
         // Store LLVM IR content in memory instead of using temp files
         // We'll only create a temp file when actually needed for execution
-        Ok(Self {
+        Self {
             llvm_ir_content: llvm_ir.to_string(),
             shots: None,
             seed: None,
-        })
+        }
     }
 
     /// Set the number of shots for execution
@@ -267,7 +263,7 @@ pub fn py_compile_and_execute_via_pmir(
         .map_err(|e| PyRuntimeError::new_err(format!("PMIR compilation failed: {e:?}")))?;
 
     // Step 2: Create PMIR QIR engine and execute
-    let mut engine = PyPMIRQirEngine::new(&llvm_ir)?;
+    let mut engine = PyPMIRQirEngine::new(&llvm_ir);
     engine.set_shots(shots as usize);
     if let Some(s) = seed {
         engine.set_seed(s);

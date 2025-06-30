@@ -2,10 +2,11 @@ pub mod engine;
 pub mod hugr_python_api;
 pub mod library;
 pub mod linker; // Links LLVM IR programs with runtime library
+pub mod llvm_utils; // LLVM utilities for entry point detection
 pub mod platform;
 pub mod prelude; // Convenient re-exports for common usage
-pub mod llvm_utils; // LLVM utilities for entry point detection
 pub mod runtime; // LLVM runtime implementation with submodules
+pub mod utils; // Common utilities for error handling, logging, etc.
 
 // HUGR-LLVM pipeline functionality
 pub mod hugr; // HUGR frontend (compiler, engine, etc.) - contains stubs when feature disabled
@@ -17,7 +18,9 @@ pub use engine::LlvmEngine;
 
 // HUGR-LLVM pipeline re-exports
 pub use hugr::compiler::{HugrCompiler, HugrCompilerConfig};
-pub use hugr::engine_utils::{compile_hugr_to_llvm, create_hugr_llvm_engine, setup_hugr_llvm_engine};
+pub use hugr::engine_utils::{
+    compile_hugr_to_llvm, create_hugr_llvm_engine, setup_hugr_llvm_engine,
+};
 
 // PMIR pipeline re-exports (only available with pmir-pipeline feature)
 // Users should depend on pecos-pmir directly if they need PMIR functionality

@@ -9,14 +9,19 @@ use crate::ast::{PastEdge, PastNode, PastOp};
 use pecos_core::errors::PecosError;
 
 /// Resolve angles for all rotation gates in the node list by following dataflow edges
-pub fn resolve_rotation_angles(nodes: &mut Vec<PastNode>, edges: &[PastEdge]) -> Result<(), PecosError> {
+///
+/// # Errors
+///
+/// This function currently doesn't return errors, but returns `Result` for future extensibility
+pub fn resolve_rotation_angles(
+    nodes: &mut [PastNode],
+    edges: &[PastEdge],
+) -> Result<(), PecosError> {
     // First, build a map of constant values by node ID
     let mut const_values = std::collections::HashMap::new();
     for node in nodes.iter() {
-        if let PastOp::Const(value) = &node.op {
-            if let crate::ast::PastValue::Float(f) = value {
-                const_values.insert(node.id, *f);
-            }
+        if let PastOp::Const(crate::ast::PastValue::Float(f)) = &node.op {
+            const_values.insert(node.id, *f);
         }
     }
 
@@ -33,7 +38,9 @@ pub fn resolve_rotation_angles(nodes: &mut Vec<PastNode>, edges: &[PastEdge]) ->
             }
             PastOp::CRZ(angle) => {
                 // For controlled rotation, angle is on port 2
-                if let Some(angle_value) = find_angle_input_at_port(node.id, 2, edges, &const_values) {
+                if let Some(angle_value) =
+                    find_angle_input_at_port(node.id, 2, edges, &const_values)
+                {
                     *angle = angle_value;
                 } else {
                     log::warn!("No angle input found for CRZ gate at node {}", node.id);

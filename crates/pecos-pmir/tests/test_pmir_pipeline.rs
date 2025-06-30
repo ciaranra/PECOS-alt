@@ -1,6 +1,6 @@
 //! Test for the PMIR (PECOS MLIR) compilation pipeline
 
-use pecos_qir::{PmirConfig, compile_hugr_via_pmir};
+use pecos_pmir::{PmirConfig, compile_hugr_via_pmir};
 
 #[test]
 fn test_simple_hadamard_measure() {

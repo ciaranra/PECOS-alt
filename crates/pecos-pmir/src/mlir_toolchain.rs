@@ -43,6 +43,13 @@ impl Default for MlirToolchainConfig {
 }
 
 /// Process MLIR text through the toolchain to produce LLVM IR
+///
+/// # Errors
+///
+/// Returns `PecosError` if:
+/// - Failed to create or write temporary files
+/// - MLIR tools are not found or fail to execute
+/// - MLIR optimization or translation fails
 pub fn mlir_to_llvm_ir(
     mlir_text: &str,
     config: &MlirToolchainConfig,
@@ -141,6 +148,11 @@ fn find_executable(base_name: &str) -> Option<String> {
 }
 
 /// Check if MLIR tools are available
+/// Check if MLIR tools are available
+///
+/// # Errors
+///
+/// Returns `PecosError` if any required MLIR tool is not found or cannot be executed
 pub fn check_mlir_tools(config: &MlirToolchainConfig) -> Result<(), PecosError> {
     let mlir_opt = if let Some(path) = &config.mlir_opt_path {
         path.clone()
@@ -176,6 +188,10 @@ pub fn check_mlir_tools(config: &MlirToolchainConfig) -> Result<(), PecosError> 
 }
 
 /// Process MLIR text in memory (requires custom MLIR integration)
+///
+/// # Errors
+///
+/// Currently always returns an error as in-memory processing is not yet implemented
 pub fn mlir_to_llvm_ir_in_memory(
     _mlir_text: &str,
     _config: &MlirToolchainConfig,

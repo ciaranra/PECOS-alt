@@ -1,7 +1,13 @@
-/// Global lock for QIR tests to ensure they run sequentially
+/// File-based lock for tests that modify shared build directories
 ///
-/// This module provides a file-based lock that works across different test binaries
-/// to ensure QIR tests don't run concurrently and cause race conditions.
+/// This lock is only needed for tests that:
+/// - Modify the build directory (e.g., removing cached libraries)
+/// - Compile QIR programs (which may use shared runtime build cache)
+///
+/// Most QIR execution tests don't need this lock because:
+/// - Each test execution uses thread-local runtime contexts
+/// - The runtime library is built once and cached safely
+/// - Multiple tests can execute quantum programs in parallel
 use std::fs::{File, OpenOptions};
 use std::io::ErrorKind;
 use std::path::PathBuf;
@@ -26,9 +32,8 @@ impl QirTestLock {
     #[must_use]
     pub fn acquire() -> Self {
         // Use target directory for lock file to avoid /tmp issues
-        let lock_dir = std::env::var("CARGO_TARGET_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| {
+        let lock_dir = std::env::var("CARGO_TARGET_DIR").map_or_else(
+            |_| {
                 // Find the workspace root by looking for Cargo.lock
                 let mut current = std::env::current_dir().unwrap();
                 loop {
@@ -40,8 +45,10 @@ impl QirTestLock {
                         break PathBuf::from("target");
                     }
                 }
-            });
-        
+            },
+            PathBuf::from,
+        );
+
         // Ensure directory exists
         let _ = std::fs::create_dir_all(&lock_dir);
         let lock_path = lock_dir.join("pecos_qir_test.lock");

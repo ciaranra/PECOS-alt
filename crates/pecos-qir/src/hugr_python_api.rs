@@ -388,7 +388,10 @@ pub fn is_hugr_support_available() -> bool {
 //
 
 #[cfg(not(feature = "hugr-llvm-pipeline"))]
-pub fn compile_hugr_bytes_to_llvm_string(_hugr_bytes: &[u8], _debug_info: bool) -> PyResult<String> {
+pub fn compile_hugr_bytes_to_llvm_string(
+    _hugr_bytes: &[u8],
+    _debug_info: bool,
+) -> PyResult<String> {
     Err("HUGR-LLVM pipeline not available".to_string())
 }
 

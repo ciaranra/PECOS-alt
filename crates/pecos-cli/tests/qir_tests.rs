@@ -19,6 +19,8 @@ use std::process::Command;
 use std::sync::Once;
 use std::time::Duration;
 
+// File-based lock is only needed for test_qir_compile_and_run which modifies build directories
+// All other tests use thread-local runtime contexts and can run in parallel
 #[path = "qir_test_lock.rs"]
 mod qir_test_lock;
 use qir_test_lock::QirTestLock;
@@ -154,10 +156,9 @@ fn get_values(json_output: &str) -> Vec<String> {
 /// Test that QIR Bell state produces correct 50/50 distribution
 #[test]
 fn test_qir_bell_state_distribution() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize test environment and acquire global lock to ensure sequential execution
+    // Initialize test environment (one-time cleanup of old temp directories)
     setup();
-    let _lock = QirTestLock::acquire();
-    println!("Running QIR Bell state distribution test (sequential execution)...");
+    // No lock needed: This test only executes a quantum program without modifying shared state
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let bell_qir_path = manifest_dir.join("../../examples/qir/bell.ll");
 
@@ -249,10 +250,9 @@ fn test_qir_bell_state_distribution() -> Result<(), Box<dyn std::error::Error>> 
 /// Test that QIR produces deterministic results with the same seed
 #[test]
 fn test_qir_determinism() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize test environment and acquire global lock to ensure sequential execution
+    // Initialize test environment (one-time cleanup of old temp directories)
     setup();
-    let _lock = QirTestLock::acquire();
-    println!("Running QIR determinism test (sequential execution)...");
+    // No lock needed: This test only verifies determinism by executing programs
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let bell_qir_path = manifest_dir.join("../../examples/qir/bell.ll");
 
@@ -290,10 +290,11 @@ fn test_qir_determinism() -> Result<(), Box<dyn std::error::Error>> {
 /// Test QIR compilation and execution
 #[test]
 fn test_qir_compile_and_run() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize test environment and acquire global lock to ensure sequential execution
+    // Initialize test environment
     setup();
+    // Keep lock: This test modifies the build directory which could cause conflicts
     let _lock = QirTestLock::acquire();
-    println!("Running QIR compilation and execution test (sequential execution)...");
+    println!("Running QIR compilation test (requires lock for build directory modification)...");
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let test_file = manifest_dir.join("../../examples/qir/qprog.ll");
 
@@ -356,10 +357,9 @@ fn test_qir_compile_and_run() -> Result<(), Box<dyn std::error::Error>> {
 /// Test QIR with various shot counts
 #[test]
 fn test_qir_shot_counts() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize test environment and acquire lock to ensure sequential execution
+    // Initialize test environment (one-time cleanup of old temp directories)
     setup();
-    let _lock = QirTestLock::acquire();
-    println!("Running QIR shot counts test (sequential execution)...");
+    // No lock needed: This test only executes programs with different shot counts
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let bell_qir_path = manifest_dir.join("../../examples/qir/bell.ll");
 
@@ -405,10 +405,9 @@ fn test_qir_shot_counts() -> Result<(), Box<dyn std::error::Error>> {
 /// Test QIR with multiple workers
 #[test]
 fn test_qir_multiple_workers() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize test environment and acquire lock to ensure sequential execution
+    // Initialize test environment (one-time cleanup of old temp directories)
     setup();
-    let _lock = QirTestLock::acquire();
-    println!("Running QIR multi-worker test (sequential execution)...");
+    // No lock needed: This test verifies parallel execution with multiple workers
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let bell_qir_path = manifest_dir.join("../../examples/qir/bell.ll");
 

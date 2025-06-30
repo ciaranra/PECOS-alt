@@ -46,6 +46,10 @@ impl Default for PmirConfig {
 }
 
 /// Main entry point for HUGR → PAST → MLIR → LLVM compilation
+///
+/// # Errors
+///
+/// Returns `PecosError` if any step in the compilation pipeline fails
 pub fn compile_hugr_via_pmir(hugr_json: &str, config: &PmirConfig) -> Result<String, PecosError> {
     // Step 1: Parse HUGR JSON to PAST using Pest
     let past = hugr_parser::parse_hugr_to_past(hugr_json)?;
@@ -80,6 +84,10 @@ pub fn compile_hugr_via_pmir(hugr_json: &str, config: &PmirConfig) -> Result<Str
 }
 
 /// Convert HUGR JSON to PAST RON representation
+///
+/// # Errors
+///
+/// Returns `PecosError` if parsing or serialization fails
 pub fn hugr_to_past_ron(hugr_json: &str) -> Result<String, PecosError> {
     let past = hugr_parser::parse_hugr_to_past(hugr_json)?;
     past.to_ron_string().map_err(|e| PecosError::ParseSyntax {
@@ -89,6 +97,10 @@ pub fn hugr_to_past_ron(hugr_json: &str) -> Result<String, PecosError> {
 }
 
 /// Convert HUGR JSON to PMIR (MLIR text format)
+///
+/// # Errors
+///
+/// Returns `PecosError` if parsing or lowering fails
 pub fn hugr_to_pmir_mlir(hugr_json: &str, config: &PmirConfig) -> Result<String, PecosError> {
     let past = hugr_parser::parse_hugr_to_past(hugr_json)?;
     let mlir_module = mlir_lowering::lower_past_to_pmir(&past, config)?;
@@ -96,6 +108,10 @@ pub fn hugr_to_pmir_mlir(hugr_json: &str, config: &PmirConfig) -> Result<String,
 }
 
 /// Convert PAST RON to PMIR (MLIR text format)
+///
+/// # Errors
+///
+/// Returns `PecosError` if deserialization or lowering fails
 pub fn past_ron_to_pmir_mlir(past_ron: &str, config: &PmirConfig) -> Result<String, PecosError> {
     let past: ast::PastModule = ron::from_str(past_ron).map_err(|e| PecosError::ParseSyntax {
         language: "RON".to_string(),
@@ -107,6 +123,13 @@ pub fn past_ron_to_pmir_mlir(past_ron: &str, config: &PmirConfig) -> Result<Stri
 }
 
 /// Compile HUGR from file using PMIR pipeline
+///
+/// # Errors
+///
+/// Returns `PecosError` if:
+/// - Failed to read input file
+/// - Compilation fails
+/// - Failed to write output file
 pub fn compile_hugr_file_via_pmir(
     input_path: &Path,
     output_path: &Path,
@@ -139,7 +162,7 @@ pub mod direct_execution {
         // 2. Managing quantum state with PECOS simulators
         // 3. Handling classical control flow
         // 4. Returning results
-        
+
         todo!("Direct PMIR execution not yet implemented")
     }
 }

@@ -2,6 +2,10 @@
 ///
 /// This test verifies that QIR files can be compiled and executed correctly.
 /// Note: This test requires LLVM tools and GCC toolchain to be available.
+///
+/// This test modifies the build directory and should ideally be serialized,
+/// but currently runs without locks. Consider adding `serial_test` or `QirTestLock`
+/// if conflicts arise with other compilation tests.
 use assert_cmd::prelude::*;
 use std::path::PathBuf;
 use std::process::Command;

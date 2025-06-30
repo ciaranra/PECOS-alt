@@ -3,6 +3,7 @@
 //! This module provides the LLVM Engine for executing quantum programs compiled to LLVM IR.
 use crate::library::LlvmLibrary;
 use crate::linker::LlvmLinker;
+use crate::utils::{LLVM_LOG, log_error, retry_with_backoff};
 use log::{debug, trace, warn};
 use pecos_core::errors::PecosError;
 use pecos_engines::Engine;
@@ -14,7 +15,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::Duration;
 
 /// Helper function to get the current thread ID as a string
 ///
@@ -32,7 +32,7 @@ pub fn get_thread_id() -> String {
 /// Extract the first measurement value from a Shot
 ///
 /// This function extracts a single bit measurement from the Shot data.
-/// It processes any numeric data found in the Shot (excluding metadata like "seed" or "shot_id")
+/// It processes any numeric data found in the Shot (excluding metadata like "seed" or "`shot_id`")
 /// and returns the least significant bit of the first measurement register found.
 ///
 /// # Arguments
@@ -41,39 +41,32 @@ pub fn get_thread_id() -> String {
 ///
 /// # Returns
 ///
-/// A u8 value (0 or 1) representing the measurement result
-fn extract_first_measurement(shot: &Shot) -> u8 {
-    // Sort keys to ensure consistent ordering
+/// A Result containing the measurement value (0 or 1) or an error if no measurement data is found
+///
+/// # Errors
+///
+/// Returns an error if no measurement data is found in the shot
+fn extract_first_measurement(shot: &Shot) -> Result<u8, PecosError> {
+    // Find the first non-metadata numeric value in sorted order
     let mut keys: Vec<_> = shot.data.keys().collect();
     keys.sort();
-    
-    // Find the first non-metadata numeric value
-    for key in keys {
-        // Skip known metadata fields
-        if key == "seed" || key == "shot_id" {
-            continue;
-        }
-        
-        if let Some(data) = shot.data.get(key) {
-            // Extract a bit from any numeric data type
-            match data {
-                Data::U32(value) => return u8::from(*value & 1 != 0),
-                Data::I64(value) => return u8::from(*value & 1 != 0),
-                Data::U64(value) => return u8::from(*value & 1 != 0),
-                Data::BitVec(bv) => {
-                    // For BitVec, return the first bit if available
-                    if let Some(bit) = bv.first() {
-                        return u8::from(*bit);
-                    }
-                }
-                _ => continue, // Skip non-numeric data
-            }
-        }
-    }
-    
-    // Default to 0 if no measurement data found
-    debug!("LLVM: No measurement data found in shot, returning default 0");
-    0
+
+    keys.into_iter()
+        .filter(|&key| !matches!(key.as_str(), "seed" | "shot_id"))
+        .find_map(|key| {
+            shot.data.get(key).and_then(|data| match data {
+                Data::U32(v) => Some(u8::from(*v & 1 != 0)),
+                Data::I64(v) => Some(u8::from(*v & 1 != 0)),
+                Data::U64(v) => Some(u8::from(*v & 1 != 0)),
+                Data::BitVec(bv) => bv.first().map(|bit| u8::from(*bit)),
+                _ => None,
+            })
+        })
+        .ok_or_else(|| {
+            PecosError::Processing(
+                "No measurement data found in shot results. Expected at least one measurement register.".to_string()
+            )
+        })
 }
 
 /// Configuration options for the LLVM engine
@@ -117,13 +110,6 @@ pub struct LlvmEngine {
 }
 
 impl LlvmEngine {
-    /// Helper function to log errors
-    fn log_error<E: std::fmt::Display>(context: &str, error: E) -> PecosError {
-        warn!("LLVM Engine: {}: {}", context, error);
-        PecosError::Processing(format!("LLVM operation failed - {context}: {error}"))
-    }
-
-
     /// Create a new LLVM engine with default configuration
     ///
     /// # Arguments
@@ -135,7 +121,10 @@ impl LlvmEngine {
     /// A new LLVM engine instance with default configuration
     #[must_use]
     pub fn new(llvm_file: PathBuf) -> Self {
-        debug!("LLVM: Creating new engine with program path: {:?}", llvm_file);
+        debug!(
+            "LLVM: Creating new engine with program path: {:?}",
+            llvm_file
+        );
         Self {
             library: None,
             measurement_results: HashMap::new(),
@@ -242,7 +231,7 @@ impl LlvmEngine {
             // Ensure build directory exists
             if !build_dir.exists() {
                 std::fs::create_dir_all(&build_dir)
-                    .map_err(|e| Self::log_error("Failed to create build directory", e))?;
+                    .map_err(|e| log_error("LLVM Engine", "Failed to create build directory", e))?;
             }
 
             self.compile_library(&build_dir)?
@@ -252,7 +241,7 @@ impl LlvmEngine {
         debug!("LLVM: Loading library from {:?}", library_path);
 
         let library = LlvmLibrary::load(&library_path)
-            .map_err(|e| Self::log_error("Failed to load LLVM library", e))?;
+            .map_err(|e| log_error("LLVM Engine", "Failed to load LLVM library", e))?;
 
         // Store the library and path
         self.library = Some(Box::new(library));
@@ -341,6 +330,12 @@ impl LlvmEngine {
     /// # Returns
     ///
     /// * `Shot` - The results of the quantum computation
+    ///
+    /// # Panics
+    ///
+    /// * If no library is loaded (engine not properly initialized)
+    /// * If the runtime returns no shot results after finalization
+    /// * If there's an error getting shot results from the library
     fn get_results_impl(&self) -> Shot {
         // Get shot results from the runtime - this should always work
         if let Some(library) = &self.library {
@@ -422,7 +417,7 @@ impl LlvmEngine {
         for shot in results.shots {
             // Extract the first measurement value from the shot data
             // The Shot data structure contains register_name -> Data mappings
-            let measurement = extract_first_measurement(&shot);
+            let measurement = extract_first_measurement(&shot)?;
             all_results.push(measurement);
         }
 
@@ -464,8 +459,9 @@ impl LlvmEngine {
         }
 
         // Compile the LLVM IR program to a library
-        let library_path = LlvmLinker::compile(&self.llvm_file, None)
-            .map_err(|e| PecosError::Processing(format!("Failed to compile LLVM IR program: {e}")))?;
+        let library_path = LlvmLinker::compile(&self.llvm_file, None).map_err(|e| {
+            PecosError::Processing(format!("Failed to compile LLVM IR program: {e}"))
+        })?;
 
         // Detect the entry point from the LLVM IR file
         match crate::llvm_utils::find_entry_point(&self.llvm_file) {
@@ -575,14 +571,22 @@ impl LlvmEngine {
                 debug!("LLVM: Library file was already removed, continuing");
                 PecosError::Processing("Library file was already removed".to_string())
             } else {
-                Self::log_error(&format!("Failed to call {entry_point} function"), e)
+                log_error(
+                    "LLVM Engine",
+                    &format!("Failed to call {entry_point} function"),
+                    e,
+                )
             }
         })?;
 
         // Get the binary message generated by the LLVM runtime
-        let runtime_message = library
-            .get_binary_commands()
-            .map_err(|e| Self::log_error("Failed to get binary commands from LLVM runtime", e))?;
+        let runtime_message = library.get_binary_commands().map_err(|e| {
+            log_error(
+                "LLVM Engine",
+                "Failed to get binary commands from LLVM runtime",
+                e,
+            )
+        })?;
 
         // Log message details for debugging
         debug!(
@@ -637,22 +641,16 @@ impl LlvmEngine {
                 self.shot_count + 1
             );
 
-            // Try to set up the library, handling "Text file busy" error with a retry
-            if let Err(e) = self.setup_library() {
-                if e.to_string().contains("Text file busy") {
-                    debug!("LLVM: Got 'Text file busy' error, trying to recover");
-                    // Sleep a bit longer to allow the file to be released
-                    thread::sleep(Duration::from_millis(500));
-                    // Try to set up the library again
-                    self.setup_library().map_err(|e| {
-                        warn!("LLVM: Failed to set up library after retry: {}", e);
-                        e
-                    })?;
-                } else {
-                    warn!("LLVM: Failed to set up library: {}", e);
-                    return Err(e);
-                }
-            }
+            // Set up the library with proper retry handling
+            retry_with_backoff(
+                || self.setup_library(),
+                2,   // max attempts
+                500, // initial delay in ms for file busy errors
+            )
+            .map_err(|e| {
+                LLVM_LOG.warn(format!("Failed to set up library: {e}"));
+                e
+            })?;
         }
 
         // Run the LLVM IR program
@@ -766,7 +764,10 @@ impl LlvmEngine {
 
     /// Helper method to compile the LLVM IR file to a library
     fn compile_library(&self, output_dir: &Path) -> Result<PathBuf, PecosError> {
-        debug!("LLVM: Compiling LLVM IR program to library in {:?}", output_dir);
+        debug!(
+            "LLVM: Compiling LLVM IR program to library in {:?}",
+            output_dir
+        );
 
         let output_dir_path = output_dir.to_path_buf();
         LlvmLinker::compile(&self.llvm_file, Some(&output_dir_path))
@@ -871,14 +872,14 @@ impl Clone for LlvmEngine {
 
 impl Drop for LlvmEngine {
     fn drop(&mut self) {
-        // Don't call reset_internal_state during drop to avoid segfaults
-        // The LLVM runtime has known cleanup issues that cause segfaults
-        // Just clean up the basic state without touching the library
-        debug!("LLVM: Dropping engine - skipping library cleanup to avoid segfault");
+        // Clean up engine state but not the library itself
+        // The library is loaded with RTLD_NODELETE flag which prevents it from being
+        // unloaded, ensuring symbols remain valid for other threads that might still
+        // be using them. This is the proper solution for thread safety.
+        LLVM_LOG.debug("Dropping engine - library remains loaded due to RTLD_NODELETE");
         self.shot_count = 0;
         self.measurement_results.clear();
         self.commands_generated = false;
-        // Note: self.library will be dropped automatically by Rust, which should be safe
     }
 }
 

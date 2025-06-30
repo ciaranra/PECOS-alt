@@ -23,11 +23,6 @@ bytemuck.workspace = true
 tempfile.workspace = true
 env_logger.workspace = true
 parking_lot.workspace = true
-# Pest parser dependencies
-pest = "2.7"
-pest_derive = "2.7"
-# RON serialization
-ron = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 # HUGR dependencies (optional)

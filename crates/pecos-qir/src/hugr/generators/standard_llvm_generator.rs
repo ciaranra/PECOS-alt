@@ -29,18 +29,18 @@ pub struct StandardLlvmExtension {
 impl StandardLlvmExtension {
     #[must_use]
     pub fn new(result_names: ResultNameMapping) -> Self {
-        Self {
-            result_names,
-        }
+        Self { result_names }
     }
 
-    fn get_function_name(&self, base_name: &str) -> String {
+    fn get_function_name(base_name: &str) -> String {
         // Use the base name directly without any suffix
         base_name.to_string()
     }
 }
 
 impl CodegenExtension for StandardLlvmExtension {
+    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::similar_names)]
     fn add_extension<'a, H: HugrView<Node = Node> + 'a>(
         self,
         builder: CodegenExtsBuilder<'a, H>,
@@ -51,18 +51,16 @@ impl CodegenExtension for StandardLlvmExtension {
         let ext_id = hugr_core::extension::ExtensionId::new("tket2.quantum").unwrap();
 
         // Pre-compute all function names before moving self.result_names
-        let h_func = self.get_function_name("__quantum__qis__h__body");
-        let x_func = self.get_function_name("__quantum__qis__x__body");
-        let y_func = self.get_function_name("__quantum__qis__y__body");
-        let z_func = self.get_function_name("__quantum__qis__z__body");
-        let cx_func = self.get_function_name("__quantum__qis__cx__body");
+        let h_func = Self::get_function_name("__quantum__qis__h__body");
+        let x_func = Self::get_function_name("__quantum__qis__x__body");
+        let y_func = Self::get_function_name("__quantum__qis__y__body");
+        let z_func = Self::get_function_name("__quantum__qis__z__body");
+        let cx_func = Self::get_function_name("__quantum__qis__cx__body");
+
         // These names are intentionally similar as they represent rotation functions for different axes
-        #[allow(clippy::similar_names)]
-        let rotation_x_func = self.get_function_name("__quantum__qis__rx__body");
-        #[allow(clippy::similar_names)]
-        let rotation_y_func = self.get_function_name("__quantum__qis__ry__body");
-        #[allow(clippy::similar_names)]
-        let rotation_z_func = self.get_function_name("__quantum__qis__rz__body");
+        let rotation_x_func = Self::get_function_name("__quantum__qis__rx__body");
+        let rotation_y_func = Self::get_function_name("__quantum__qis__ry__body");
+        let rotation_z_func = Self::get_function_name("__quantum__qis__rz__body");
 
         let result_names = std::rc::Rc::new(self.result_names);
 
@@ -415,10 +413,8 @@ fn emit_measure_standard<'c, H: HugrView<Node = Node>>(
     // Allocate result ID using HUGR runtime allocation
     // Call __quantum__rt__result_allocate() which returns i64
     let allocate_result_func_type = i64_type.fn_type(&[], false);
-    let allocate_result_func = context.get_extern_func(
-        "__quantum__rt__result_allocate",
-        allocate_result_func_type,
-    )?;
+    let allocate_result_func =
+        context.get_extern_func("__quantum__rt__result_allocate", allocate_result_func_type)?;
 
     let result_call = builder.build_call(allocate_result_func, &[], "result_id")?;
     let result_id_val = result_call

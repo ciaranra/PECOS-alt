@@ -1,18 +1,17 @@
 #[cfg(unix)]
 use libloading::os::unix::Library as UnixLibrary;
 use libloading::{Library, Symbol};
-use log::{debug, warn};
+use log::debug;
 use pecos_core::errors::PecosError;
 use pecos_engines::byte_message::ByteMessage;
 use pecos_engines::shot_results::{Data, Shot};
 use std::ffi::CStr;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Duration;
 
 // Import FFIShotData from runtime to avoid duplication
 use crate::runtime::FFIShotData;
+use crate::utils::{LLVM_LOG, log_error, retry_with_backoff, validate_library_file};
 
 /// LLVM Library for executing quantum programs
 ///
@@ -94,121 +93,57 @@ impl LlvmLibrary {
     /// simultaneously.
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, PecosError> {
         let path = path.as_ref();
-        debug!("LLVM: Loading library from {:?}", path);
+        LLVM_LOG.debug(format!("Loading library from {}", path.display()));
 
-        // Perform thorough file verification before loading
-        if !path.exists() {
-            return Err(Self::log_error(
-                "File not found",
-                format!("Path: {}", path.display()),
-            ));
-        }
+        // Validate the library file
+        let file_size = validate_library_file(path)?;
+        LLVM_LOG.debug(format!(
+            "Verified file {} (size: {} bytes)",
+            path.display(),
+            file_size
+        ));
 
-        // Check if the file is readable and has valid content
-        match std::fs::metadata(path) {
-            Ok(metadata) => {
-                // Check if the file is a regular file
-                if !metadata.is_file() {
-                    return Err(Self::log_error(
-                        "Not a regular file",
-                        format!("Path: {}", path.display()),
-                    ));
+        // Load the library with retry logic
+        let path_buf = path.to_path_buf();
+        let library = retry_with_backoff(
+            || Self::load_library_once(&path_buf),
+            3,   // max attempts
+            100, // initial delay in ms
+        )?;
+
+        Ok(Self {
+            library: Arc::new(Mutex::new(library)),
+            path: path_buf,
+        })
+    }
+
+    /// Load the library once (used by retry logic)
+    fn load_library_once(path: &Path) -> Result<Library, PecosError> {
+        // Load library with proper isolation flags
+        let library_result = if cfg!(unix) {
+            #[cfg(unix)]
+            {
+                // Use RTLD_LOCAL for symbol isolation and RTLD_NODELETE to prevent segfaults
+                LLVM_LOG.debug("Using RTLD_LOCAL | RTLD_NODELETE for library loading");
+                unsafe {
+                    UnixLibrary::open(
+                        Some(path),
+                        libc::RTLD_NOW | libc::RTLD_LOCAL | libc::RTLD_NODELETE,
+                    )
+                    .map(Library::from)
                 }
-
-                // Check if the file has reasonable size (at least 1KB for a valid library)
-                let file_size = metadata.len();
-                if file_size < 1024 {
-                    return Err(Self::log_error(
-                        "File too small to be a valid library",
-                        format!("Path: {} (size: {} bytes)", path.display(), file_size),
-                    ));
-                }
-
-                // Log file details for debugging
-                debug!(
-                    "LLVM: Verified file {} (size: {} bytes)",
-                    path.display(),
-                    file_size
-                );
             }
-            Err(e) => {
-                return Err(Self::log_error(
-                    "Failed to get file metadata",
-                    format!("Path: {}, Error: {}", path.display(), e),
-                ));
-            }
-        }
-
-        // Try to load the library with retries
-        let max_retries = 3;
-        let mut retry_count = 0;
-
-        while retry_count < max_retries {
-            debug!(
-                "LLVM: Loading library attempt {}/{}",
-                retry_count + 1,
-                max_retries
-            );
-
-            // Load library with proper isolation flags
-            let library_result = if cfg!(unix) {
-                #[cfg(unix)]
-                {
-                    // Use RTLD_LOCAL for symbol isolation and RTLD_NODELETE to prevent segfaults
-                    // RTLD_NODELETE prevents the library from being unloaded during cleanup
-                    debug!("LLVM: Using RTLD_LOCAL | RTLD_NODELETE for library loading");
-                    unsafe {
-                        UnixLibrary::open(
-                            Some(path),
-                            libc::RTLD_NOW | libc::RTLD_LOCAL | libc::RTLD_NODELETE,
-                        )
-                        .map(Library::from)
-                    }
-                }
-                #[cfg(not(unix))]
-                {
-                    unsafe { Library::new(path) }
-                }
-            } else {
+            #[cfg(not(unix))]
+            {
                 unsafe { Library::new(path) }
-            };
-
-            match library_result {
-                Ok(library) => {
-                    debug!("LLVM: Successfully loaded library from {:?}", path);
-                    return Ok(Self {
-                        library: Arc::new(Mutex::new(library)),
-                        path: path.to_path_buf(),
-                    });
-                }
-                Err(e) => {
-                    // Log the detailed error for debugging
-                    warn!(
-                        "LLVM Library: Failed to load library (attempt {}/{}): {} - Error: {}",
-                        retry_count + 1, max_retries, path.display(), e
-                    );
-                    Self::log_error(
-                        "Failed to load library",
-                        format!("Attempt {}/{}: {}", retry_count + 1, max_retries, e),
-                    );
-
-                    // Sleep before retrying, with exponential backoff
-                    let sleep_duration = Duration::from_millis(
-                        100 * 2u64.pow(u32::try_from(retry_count).unwrap_or(0)),
-                    );
-                    debug!("LLVM: Sleeping for {:?} before retry", sleep_duration);
-                    thread::sleep(sleep_duration);
-
-                    retry_count += 1;
-                }
             }
-        }
+        } else {
+            unsafe { Library::new(path) }
+        };
 
-        // If we get here, all attempts failed
-        Err(Self::log_error(
-            "Failed to load library after multiple attempts",
-            format!("Max retries ({max_retries}) exceeded"),
-        ))
+        library_result.map_err(|e| {
+            PecosError::Resource(format!("Failed to load library {}: {}", path.display(), e))
+        })
     }
 
     /// Check if a function exists in the loaded library
@@ -273,7 +208,8 @@ impl LlvmLibrary {
                 debug!("LLVM Library: Function call completed (void return)");
                 Ok(0)
             } else {
-                Err(Self::log_error(
+                Err(log_error(
+                    "QIR Library",
                     "Failed to get function",
                     format!("Function {} not found", String::from_utf8_lossy(name)),
                 ))
@@ -306,7 +242,7 @@ impl LlvmLibrary {
             let library_guard = self.library.lock().unwrap();
             let reset: Symbol<unsafe extern "C" fn()> = library_guard
                 .get(b"llvm_runtime_reset")
-                .map_err(|e| Self::log_error("Failed to get reset function", e))?;
+                .map_err(|e| log_error("QIR Library", "Failed to get reset function", e))?;
 
             // Call the function
             reset();
@@ -344,7 +280,11 @@ impl LlvmLibrary {
             library_guard
                 .get(b"llvm_runtime_get_binary_commands")
                 .map_err(|e| {
-                    Self::log_error("Failed to get llvm_runtime_get_binary_commands symbol", e)
+                    log_error(
+                        "QIR Library",
+                        "Failed to get llvm_runtime_get_binary_commands symbol",
+                        e,
+                    )
                 })?
         };
 
@@ -353,14 +293,19 @@ impl LlvmLibrary {
             library_guard
                 .get(b"llvm_runtime_free_binary_commands")
                 .map_err(|e| {
-                    Self::log_error("Failed to get llvm_runtime_free_binary_commands symbol", e)
+                    log_error(
+                        "QIR Library",
+                        "Failed to get llvm_runtime_free_binary_commands symbol",
+                        e,
+                    )
                 })?
         };
 
         // Call the get_binary_commands function
         let ffi_ptr = unsafe { get_binary_commands() };
         if ffi_ptr.is_null() {
-            return Err(Self::log_error(
+            return Err(log_error(
+                "QIR Library",
                 "Got null pointer from llvm_runtime_get_binary_commands",
                 "Cannot retrieve commands",
             ));
@@ -417,7 +362,11 @@ impl LlvmLibrary {
                 library_guard
                     .get(b"llvm_runtime_get_shot_results")
                     .map_err(|e| {
-                        Self::log_error("Failed to get llvm_runtime_get_shot_results symbol", e)
+                        log_error(
+                            "QIR Library",
+                            "Failed to get llvm_runtime_get_shot_results symbol",
+                            e,
+                        )
                     })?
             };
 
@@ -426,7 +375,11 @@ impl LlvmLibrary {
                 library_guard
                     .get(b"llvm_runtime_free_shot_data")
                     .map_err(|e| {
-                        Self::log_error("Failed to get llvm_runtime_free_shot_data symbol", e)
+                        log_error(
+                            "QIR Library",
+                            "Failed to get llvm_runtime_free_shot_data symbol",
+                            e,
+                        )
                     })?
             };
 
@@ -516,7 +469,11 @@ impl LlvmLibrary {
             let update_fn: Symbol<unsafe extern "C" fn(*const u32, usize)> = library_guard
                 .get(b"llvm_runtime_update_measurement_results")
                 .map_err(|e| {
-                    Self::log_error("Failed to get update_measurement_results function", e)
+                    log_error(
+                        "QIR Library",
+                        "Failed to get update_measurement_results function",
+                        e,
+                    )
                 })?;
 
             // Call the function with the results data
@@ -553,7 +510,7 @@ impl LlvmLibrary {
             let library_guard = self.library.lock().unwrap();
             let finalize: Symbol<unsafe extern "C" fn()> = library_guard
                 .get(b"llvm_runtime_finalize_shot")
-                .map_err(|e| Self::log_error("Failed to get finalize_shot function", e))?;
+                .map_err(|e| log_error("QIR Library", "Failed to get finalize_shot function", e))?;
 
             // Call the function
             finalize();
@@ -561,13 +518,6 @@ impl LlvmLibrary {
             debug!("LLVM Library: Shot finalized");
             Ok(())
         }
-    }
-
-    /// Helper function to log errors with thread ID context
-    fn log_error<E: std::fmt::Display>(context: &str, error: E) -> PecosError {
-        let error_msg = format!("{context}: {error}");
-        warn!("QIR Library: {}", error_msg);
-        PecosError::Resource(error_msg.to_string())
     }
 }
 

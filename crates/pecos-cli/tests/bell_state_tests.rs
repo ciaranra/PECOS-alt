@@ -20,8 +20,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
 
-mod qir_test_lock;
-use qir_test_lock::QirTestLock;
+// Test lock removed: These tests don't modify shared state and can run in parallel
+// Each test execution uses thread-local runtime contexts
 
 /// Helper function to run PECOS CLI with given parameters
 fn run_pecos(
@@ -245,8 +245,7 @@ fn test_perfect_bell_state_distribution() -> Result<(), Box<dyn std::error::Erro
 /// Test that Bell state probabilities are consistent between PHIR, QASM, and QIR implementations
 #[test]
 fn test_cross_implementation_validation() -> Result<(), Box<dyn std::error::Error>> {
-    // Acquire global lock for QIR testing to prevent race conditions
-    let _lock = QirTestLock::acquire();
+    // No lock needed: This test only executes quantum programs without modifying shared state
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let bell_json_path = manifest_dir.join("../../examples/phir/bell.json");
@@ -472,8 +471,7 @@ fn test_bell_state_with_noise() -> Result<(), Box<dyn std::error::Error>> {
 /// Test that with the same seed, all implementations produce deterministic results
 #[test]
 fn test_seed_determinism() -> Result<(), Box<dyn std::error::Error>> {
-    // Acquire global lock for QIR testing to prevent race conditions
-    let _lock = QirTestLock::acquire();
+    // No lock needed: This test only executes quantum programs without modifying shared state
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let bell_json_path = manifest_dir.join("../../examples/phir/bell.json");
@@ -582,8 +580,7 @@ fn test_noise_model_determinism() -> Result<(), Box<dyn std::error::Error>> {
 /// Test QIR implementation with depolarizing noise model
 #[test]
 fn test_qir_with_depolarizing_noise() -> Result<(), Box<dyn std::error::Error>> {
-    // Acquire global lock for QIR testing to prevent race conditions
-    let _lock = QirTestLock::acquire();
+    // No lock needed: This test only executes quantum programs without modifying shared state
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let bell_qir_path = manifest_dir.join("../../examples/qir/bell.ll");
@@ -607,8 +604,7 @@ fn test_qir_with_depolarizing_noise() -> Result<(), Box<dyn std::error::Error>> 
 /// Test QIR implementation with general noise model
 #[test]
 fn test_qir_with_general_noise() -> Result<(), Box<dyn std::error::Error>> {
-    // Acquire global lock for QIR testing to prevent race conditions
-    let _lock = QirTestLock::acquire();
+    // No lock needed: This test only executes quantum programs without modifying shared state
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let bell_qir_path = manifest_dir.join("../../examples/qir/bell.ll");

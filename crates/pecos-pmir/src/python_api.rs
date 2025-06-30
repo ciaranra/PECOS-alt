@@ -4,10 +4,10 @@ Python API for PMIR compilation pipeline
 This module provides Python-accessible functions for the PMIR pipeline.
 */
 
-use pyo3::prelude::*;
 use pyo3::exceptions::PyRuntimeError;
+use pyo3::prelude::*;
 
-use crate::{compile_hugr_via_pmir, PmirConfig};
+use crate::{PmirConfig, compile_hugr_via_pmir};
 
 /// Python-accessible PMIR configuration
 #[pyclass]
@@ -46,12 +46,9 @@ impl From<PyPmirConfig> for PmirConfig {
 /// Compile HUGR JSON to LLVM IR using the PMIR pipeline
 #[pyfunction]
 #[pyo3(name = "compile_hugr_via_pmir")]
-pub fn py_compile_hugr_via_pmir(
-    hugr_json: &str,
-    config: Option<PyPmirConfig>,
-) -> PyResult<String> {
+pub fn py_compile_hugr_via_pmir(hugr_json: &str, config: Option<PyPmirConfig>) -> PyResult<String> {
     let config = config.map(Into::into).unwrap_or_default();
-    
+
     compile_hugr_via_pmir(hugr_json, &config)
         .map_err(|e| PyRuntimeError::new_err(format!("PMIR compilation failed: {:?}", e)))
 }
@@ -61,10 +58,10 @@ pub fn py_compile_hugr_via_pmir(
 #[pyo3(name = "hugr_to_past_ron")]
 pub fn py_hugr_to_past_ron(hugr_json: &str) -> PyResult<String> {
     use super::hugr_parser::parse_hugr_to_past;
-    
+
     let past = parse_hugr_to_past(hugr_json)
         .map_err(|e| PyRuntimeError::new_err(format!("HUGR parsing failed: {:?}", e)))?;
-    
+
     past.to_ron_string()
         .map_err(|e| PyRuntimeError::new_err(format!("RON serialization failed: {:?}", e)))
 }
@@ -75,11 +72,11 @@ pub fn py_hugr_to_past_ron(hugr_json: &str) -> PyResult<String> {
 #[allow(dead_code)]
 pub fn register_pmir_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let pmir_module = PyModule::new(parent.py(), "pmir")?;
-    
+
     pmir_module.add_class::<PyPmirConfig>()?;
     pmir_module.add_function(wrap_pyfunction!(py_compile_hugr_via_pmir, &pmir_module)?)?;
     pmir_module.add_function(wrap_pyfunction!(py_hugr_to_past_ron, &pmir_module)?)?;
-    
+
     parent.add_submodule(&pmir_module)?;
     Ok(())
 }

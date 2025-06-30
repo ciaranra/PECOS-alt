@@ -30,7 +30,7 @@ impl WindowsCompiler {
         debug!("LLVM Compiler: Compiling LLVM IR to object file with Windows-specific logic");
 
         // Read and modify LLVM IR content to add Windows export attribute
-        let mut llvm_content = fs::read_to_string(llvm_file).map_err(PecosError::IO)?
+        let mut llvm_content = fs::read_to_string(llvm_file).map_err(PecosError::IO)?;
 
         // Add dllexport attribute to main function
         llvm_content = llvm_content.replace(
@@ -42,7 +42,7 @@ impl WindowsCompiler {
         let parent_dir = object_file.parent().unwrap_or(Path::new("."));
         let temp_llvm_file = parent_dir.join("temp_llvm.ll");
 
-        fs::write(&temp_llvm_file, llvm_content).map_err(PecosError::IO)?
+        fs::write(&temp_llvm_file, llvm_content).map_err(PecosError::IO)?;
 
         debug!(
             "LLVM Compiler: Using clang at {:?} to compile LLVM IR directly",

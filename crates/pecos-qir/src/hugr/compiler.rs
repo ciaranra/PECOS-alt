@@ -11,6 +11,8 @@ Based on the working implementation from quantum-compilation-examples.
 */
 
 #[cfg(feature = "hugr-llvm-pipeline")]
+use crate::utils::HUGR_LOG;
+#[cfg(feature = "hugr-llvm-pipeline")]
 use hugr_core::package::Package;
 #[cfg(feature = "hugr-llvm-pipeline")]
 use hugr_core::{Hugr, std_extensions};
@@ -23,7 +25,7 @@ use hugr_llvm::inkwell::context::Context;
 #[cfg(feature = "hugr-llvm-pipeline")]
 use hugr_llvm::utils::fat::FatExt;
 #[cfg(feature = "hugr-llvm-pipeline")]
-use log::{debug, info};
+use log::info;
 #[cfg(feature = "hugr-llvm-pipeline")]
 use pecos_core::errors::PecosError;
 #[cfg(feature = "hugr-llvm-pipeline")]
@@ -154,10 +156,10 @@ impl HugrCompiler {
             .map_err(|e| PecosError::with_context(e, "Failed to parse HUGR JSON"))?;
 
         // No fallbacks - we'll fix the actual compilation issues
-        debug!("Proceeding with full HUGR compilation");
+        HUGR_LOG.debug("Proceeding with full HUGR compilation");
 
         // Since both Guppy and PECOS use hugr 0.20.1, no translation needed
-        debug!("Using HUGR directly without version translation");
+        HUGR_LOG.debug("Using HUGR directly without version translation");
         let transformed_bytes = hugr_bytes.to_vec();
 
         // Fix duplicate function names in HUGR
@@ -178,10 +180,10 @@ impl HugrCompiler {
                         .unwrap_or(0);
                     let json_bytes = &transformed_bytes[json_start..];
                     if let Ok(json_str) = std::str::from_utf8(json_bytes) {
-                        debug!(
+                        HUGR_LOG.debug(format!(
                             "Failed HUGR JSON preview: {}",
                             &json_str[..json_str.len().min(500)]
-                        );
+                        ));
                     }
                 }
                 return Err(PecosError::with_context(e, "Failed to parse HUGR"));
@@ -190,17 +192,17 @@ impl HugrCompiler {
 
         let hugr = std::mem::take(&mut package.modules[0]);
 
-        debug!("Loaded HUGR successfully");
+        HUGR_LOG.debug("Loaded HUGR successfully");
 
         // Extract result names from the HUGR
         let result_names = ResultNameExtractor::extract_result_names(&hugr)
             .map_err(|e| PecosError::with_context(e, "Failed to extract result names"))?;
 
         if !result_names.is_empty() {
-            debug!(
+            HUGR_LOG.debug(format!(
                 "Extracted {} result name mappings from HUGR",
                 result_names.len()
-            );
+            ));
         }
 
         // Create LLVM context and module
@@ -257,7 +259,7 @@ impl HugrCompiler {
                         hugr_llvm::inkwell::attributes::AttributeLoc::Function,
                         context.create_string_attribute("EntryPoint", ""),
                     );
-                    debug!("Marked function '{}' as EntryPoint", name);
+                    HUGR_LOG.debug(format!("Marked function '{name}' as EntryPoint"));
                 }
             }
         }
@@ -269,7 +271,7 @@ impl HugrCompiler {
         let standard_qir = fix_entry_point_signature(&llvm_ir);
 
         // Keep native HUGR functions - no conversion needed
-        debug!("Using native HUGR convention functions");
+        HUGR_LOG.debug("Using native HUGR convention functions");
 
         // Write to output file
         fs::write(output_path, standard_qir).map_err(|e| {
@@ -346,10 +348,9 @@ fn fix_duplicate_functions(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
                                     // Duplicate found
                                     duplicate_count += 1;
                                     let new_name = format!("{name}_duplicate{duplicate_count}");
-                                    debug!(
-                                        "Renaming duplicate function '{}' to '{}'",
-                                        name, new_name
-                                    );
+                                    HUGR_LOG.debug(format!(
+                                        "Renaming duplicate function '{name}' to '{new_name}'"
+                                    ));
                                     *node.get_mut("name").unwrap() =
                                         serde_json::Value::String(new_name);
                                 }
@@ -373,88 +374,139 @@ fn fix_duplicate_functions(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
 
 /// Fix entry point function signature for HUGR compatibility
 fn fix_entry_point_signature(llvm_ir: &str) -> String {
-    // Entry points need void return type to work with the runtime
-    let lines: Vec<&str> = llvm_ir.lines().collect();
-    let mut result = String::new();
-    let mut found_entry_point = false;
-    let mut attribute_number = "#0";
+    let processor = EntryPointProcessor::new(llvm_ir);
+    processor.process()
+}
 
-    for line in lines {
-        if line.contains("define i1 @")
+/// Helper struct to process entry point functions in LLVM IR
+struct EntryPointProcessor<'a> {
+    lines: Vec<&'a str>,
+    result: String,
+    found_entry_point: bool,
+    attribute_number: &'a str,
+}
+
+impl<'a> EntryPointProcessor<'a> {
+    fn new(llvm_ir: &'a str) -> Self {
+        Self {
+            lines: llvm_ir.lines().collect(),
+            result: String::new(),
+            found_entry_point: false,
+            attribute_number: "#0",
+        }
+    }
+
+    fn process(mut self) -> String {
+        for line in self.lines.clone() {
+            self.process_line(line);
+        }
+        self.add_entry_point_attribute();
+        self.result
+    }
+
+    fn process_line(&mut self, line: &'a str) {
+        if Self::is_function_definition(line) {
+            self.process_function_definition(line);
+        } else if Self::is_return_statement(line) {
+            self.process_return_statement();
+        } else {
+            self.result.push_str(line);
+            self.result.push('\n');
+        }
+    }
+
+    fn is_function_definition(line: &str) -> bool {
+        line.contains("define i1 @")
             || line.contains("define i16 @")
             || line.contains("define i32 @")
             || line.contains("define void @")
-        {
-            // Check if this is a user-defined function (entry point candidate)
-            if let Some(func_name_start) = line.find('@') {
-                let func_name_end =
-                    line[func_name_start + 1..].find('(').unwrap_or(0) + func_name_start + 1;
-                let func_name = &line[func_name_start + 1..func_name_end];
+    }
 
-                // Skip LLVM intrinsics and runtime functions
-                if !func_name.starts_with("llvm.") && !func_name.starts_with("__") {
-                    found_entry_point = true;
-                    // Check if line already has an attribute
-                    if line.contains(" #") {
-                        // Extract existing attribute number
-                        if let Some(attr_start) = line.rfind(" #") {
-                            let attr_end = line[attr_start + 2..]
-                                .find(|c: char| !c.is_numeric())
-                                .unwrap_or(line.len() - attr_start - 2)
-                                + attr_start
-                                + 2;
-                            attribute_number = &line[attr_start + 1..attr_end];
-                        }
-                    } else {
-                        // Add #0 attribute to the function definition
-                        let insertion_point = line.rfind('{').unwrap_or(line.len() - 1);
-                        let modified_line =
-                            format!("{} #0 {{", &line[..insertion_point].trim_end());
-                        result.push_str(&modified_line);
-                        result.push('\n');
-                        continue;
-                    }
-
-                    // Change return type to void if needed
-                    if line.contains("define i1 @")
-                        || line.contains("define i16 @")
-                        || line.contains("define i32 @")
-                    {
-                        let modified_line = line
-                            .replace("define i1 @", "define void @")
-                            .replace("define i16 @", "define void @")
-                            .replace("define i32 @", "define void @");
-                        result.push_str(&modified_line);
-                        result.push('\n');
-                        continue;
-                    }
-                }
-            }
-        } else if line.trim().starts_with("ret i1 ")
+    fn is_return_statement(line: &str) -> bool {
+        line.trim().starts_with("ret i1 ")
             || line.trim().starts_with("ret i16 ")
             || line.trim().starts_with("ret i32 ")
-        {
-            // Replace the return statement with just "ret void"
-            result.push_str("  ret void");
-            result.push('\n');
-            continue;
+    }
+
+    fn process_function_definition(&mut self, line: &'a str) {
+        if let Some(func_name) = Self::extract_function_name(line) {
+            if Self::is_user_function(func_name) {
+                self.found_entry_point = true;
+                self.extract_attribute_number(line);
+                let modified_line = Self::modify_function_signature(line);
+                self.result.push_str(&modified_line);
+                self.result.push('\n');
+                return;
+            }
         }
-
-        result.push_str(line);
-        result.push('\n');
+        self.result.push_str(line);
+        self.result.push('\n');
     }
 
-    // Add the EntryPoint attribute definition if we found an entry point
-    if found_entry_point && !llvm_ir.contains("attributes #0 = {") {
-        use std::fmt::Write;
-        write!(
-            result,
-            "\nattributes {attribute_number} = {{ \"EntryPoint\" }}\n"
-        )
-        .expect("Writing to String should never fail");
+    fn extract_function_name(line: &str) -> Option<&str> {
+        if let Some(func_name_start) = line.find('@') {
+            let func_name_end =
+                line[func_name_start + 1..].find('(').unwrap_or(0) + func_name_start + 1;
+            Some(&line[func_name_start + 1..func_name_end])
+        } else {
+            None
+        }
     }
 
-    result
+    fn is_user_function(func_name: &str) -> bool {
+        !func_name.starts_with("llvm.") && !func_name.starts_with("__")
+    }
+
+    fn extract_attribute_number(&mut self, line: &'a str) {
+        if let Some(attr_start) = line.rfind(" #") {
+            let attr_end = line[attr_start + 2..]
+                .find(|c: char| !c.is_numeric())
+                .unwrap_or(line.len() - attr_start - 2)
+                + attr_start
+                + 2;
+            self.attribute_number = &line[attr_start + 1..attr_end];
+        }
+    }
+
+    fn modify_function_signature(line: &str) -> String {
+        // Add attribute if missing
+        let line_with_attr = if line.contains(" #") {
+            line.to_string()
+        } else {
+            let insertion_point = line.rfind('{').unwrap_or(line.len() - 1);
+            format!("{} #0 {{", &line[..insertion_point].trim_end())
+        };
+
+        // Change return type to void if needed
+        if line.contains("define i1 @")
+            || line.contains("define i16 @")
+            || line.contains("define i32 @")
+        {
+            line_with_attr
+                .replace("define i1 @", "define void @")
+                .replace("define i16 @", "define void @")
+                .replace("define i32 @", "define void @")
+        } else {
+            line_with_attr
+        }
+    }
+
+    fn process_return_statement(&mut self) {
+        self.result.push_str("  ret void");
+        self.result.push('\n');
+    }
+
+    fn add_entry_point_attribute(&mut self) {
+        if self.found_entry_point && !self.result.contains("attributes #0 = {") {
+            use std::fmt::Write;
+            write!(
+                self.result,
+                "\nattributes {} = {{ \"EntryPoint\" }}\n",
+                self.attribute_number
+            )
+            .expect("Writing to String should never fail");
+        }
+    }
 }
 
 impl Default for HugrCompiler {

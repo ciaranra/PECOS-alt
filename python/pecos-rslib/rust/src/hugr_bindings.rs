@@ -159,7 +159,7 @@ impl PyHugrLlvmEngine {
     fn run(&self) -> PyResult<Vec<u8>> {
         // Get the engine from global storage and execute it
         let mut engines = python_api::get_stored_engine_mut(self.engine_id)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))?;
+            .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)?;
 
         let entry = engines.get_mut(&self.engine_id).ok_or_else(|| {
             PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
@@ -185,7 +185,10 @@ impl PyHugrLlvmEngine {
 
     /// Get string representation
     fn __repr__(&self) -> String {
-        format!("HugrLlvmEngine(id={}, shots={})", self.engine_id, self.shots)
+        format!(
+            "HugrLlvmEngine(id={}, shots={})",
+            self.engine_id, self.shots
+        )
     }
 }
 

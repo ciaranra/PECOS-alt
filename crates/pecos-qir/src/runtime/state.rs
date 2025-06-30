@@ -9,7 +9,8 @@ use pecos_engines::shot_results::{Data, Shot};
 use std::collections::HashMap;
 
 /// Type alias for the interactive execution callback
-pub type InteractiveCallback = Box<dyn Fn(ByteMessage) -> Result<Vec<u32>, PecosError> + Send + Sync>;
+pub type InteractiveCallback =
+    Box<dyn Fn(ByteMessage) -> Result<Vec<u32>, PecosError> + Send + Sync>;
 
 /// LLVM Runtime State
 ///
@@ -223,6 +224,7 @@ impl LlvmRuntimeState {
     }
 
     /// Get a reference to the interactive callback
+    #[must_use]
     pub fn interactive_callback(&self) -> Option<&InteractiveCallback> {
         self.interactive_callback.as_ref()
     }
