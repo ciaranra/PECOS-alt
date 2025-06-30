@@ -65,3 +65,67 @@ def test_permute2() -> None:
     assert "measure b_d[0] -> a_raw_meas[0];" in qasm.lower()
     assert "rx(-pi/2) a_d[0];" in qasm.lower()
     assert "measure a_d[0] -> b_raw_meas[0];" in qasm.lower()
+
+
+def test_permute3() -> None:
+    """Test permutation with T gate followed by explicit permute."""
+    prog = Main(
+        a := Steane("a", default_rus_limit=1),
+        b := Steane("b"),
+        meas := CReg("meas", 1),
+        a.px(),
+    )
+    for _i in range(1):
+        prog.extend(
+            a.t(b, rus_limit=1),
+            a.permute(b),
+        )
+    prog.extend(
+        a.h(),  # Should become H b[0];
+        a.x(),  # Should become X b[1];
+        b.z(),  # Should become Z a[0];
+        b.y(),  # Should become Y a[1];
+        a.mx(meas[0]),
+    )
+    qasm = SlrConverter(prog).qasm()
+
+    print(qasm)
+
+    assert "h b_d[4];" in qasm.lower()
+    assert "x b_d[4];" in qasm.lower()
+    assert "z a_d[4];" in qasm.lower()
+    assert "y a_d[4];" in qasm.lower()
+    assert "ry(-pi/2) b_d[0];" in qasm.lower()
+    assert "measure b_d[0] -> a_raw_meas[0];" in qasm.lower()
+
+
+def test_permute4() -> None:
+    """Test permutation with T teleportation (t_tel) which includes implicit permute."""
+    prog = Main(
+        a := Steane("a", default_rus_limit=1),
+        b := Steane("b"),
+        meas := CReg("meas", 1),
+        a.px(),
+    )
+    for _i in range(1):
+        prog.extend(
+            a.t_tel(b, rus_limit=1),
+        )
+    prog.extend(
+        a.h(),  # Should become H b[0];
+        a.x(),  # Should become X b[1];
+        b.z(),  # Should become Z a[0];
+        b.y(),  # Should become Y a[1];
+        a.mx(meas[0]),
+    )
+
+    qasm = SlrConverter(prog).qasm()
+
+    print(qasm)
+
+    assert "h b_d[4];" in qasm.lower()
+    assert "x b_d[4];" in qasm.lower()
+    assert "z a_d[4];" in qasm.lower()
+    assert "y a_d[4];" in qasm.lower()
+    assert "ry(-pi/2) b_d[0];" in qasm.lower()
+    assert "measure b_d[0] -> a_raw_meas[0];" in qasm.lower()

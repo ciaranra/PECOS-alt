@@ -126,13 +126,9 @@ class QASMGenerator(Generator):
         if len(block.ops) == 0:
             self.write("")
         else:
-            # Check if this block contains a Permute operation
+            # Check if this block contains a Permute operation (recursively)
             # If so, we don't want to restore the permutation map
-            contains_permute = any(
-                type(op).__name__ == "Permute"
-                for op in block.ops
-                if hasattr(op, "__class__")
-            )
+            contains_permute = self._contains_permute(block)
 
             # Save the current permutation map if needed
             saved_permutation_map = (
@@ -149,6 +145,16 @@ class QASMGenerator(Generator):
             # Restore the permutation map if we saved it
             if saved_permutation_map is not None:
                 self.permutation_map = saved_permutation_map
+
+    def _contains_permute(self, block) -> bool:
+        """Recursively check if a block contains any Permute operations."""
+        for op in block.ops:
+            if type(op).__name__ == "Permute":
+                return True
+            # Recursively check nested blocks
+            if hasattr(op, "ops") and self._contains_permute(op):
+                return True
+        return False
 
     def generate_op(self, op):
         op_name = type(op).__name__
