@@ -16,7 +16,7 @@ use pecos_core::rng::RngManageable;
 use pecos_engines::NoiseModel;
 use pecos_engines::noise::DepolarizingNoiseModel;
 use pecos_engines::shot_results;
-use pecos_qir::setup_llvm_engine;
+use pecos::setup_llvm_engine;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
@@ -167,12 +167,11 @@ fn execute_qir_safe(
         pecos_qir::runtime::llvm_runtime_reset();
     }
 
-    // Clear any stored engines
+    // Clear any stored engines from HUGR bindings
     #[cfg(feature = "hugr-llvm-pipeline")]
     {
-        if let Ok(mut engines) = pecos_qir::hugr_python_api::get_stored_engine_mut(0) {
-            engines.clear();
-        }
+        use crate::hugr_bindings::PYTHON_LLVM_ENGINES;
+        PYTHON_LLVM_ENGINES.lock().unwrap().clear();
     }
 
     // Clean up runtime registry
@@ -309,9 +308,8 @@ pub fn py_reset_qir_runtime() {
     // Clear all stored engines first
     #[cfg(feature = "hugr-llvm-pipeline")]
     {
-        if let Ok(mut engines) = pecos_qir::hugr_python_api::get_stored_engine_mut(0) {
-            engines.clear();
-        }
+        use crate::hugr_bindings::PYTHON_LLVM_ENGINES;
+        PYTHON_LLVM_ENGINES.lock().unwrap().clear();
     }
 
     // Simple reset - no aggressive cleanup

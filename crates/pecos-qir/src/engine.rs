@@ -78,11 +78,11 @@ pub struct LlvmEngineConfig {
     pub verbose: bool,
 }
 
-/// LLVM Engine for executing HUGR-compiled quantum programs
+/// LLVM Engine for executing quantum programs in LLVM IR format
 ///
-/// This engine loads and executes quantum programs that have been compiled from HUGR
-/// (Hierarchical Unified Graph Representation) to LLVM IR using the HUGR convention.
-/// This engine exclusively supports HUGR-convention LLVM IR.
+/// This engine loads and executes quantum programs that have been compiled to LLVM IR.
+/// It supports any LLVM IR that follows the quantum runtime conventions for gate calls
+/// and measurement operations.
 pub struct LlvmEngine {
     /// The loaded LLVM library for executing quantum programs
     library: Option<Box<LlvmLibrary>>,
@@ -174,6 +174,11 @@ impl LlvmEngine {
     /// Set whether to show verbose command logs
     pub fn set_verbose(&mut self, verbose: bool) {
         self.config.verbose = verbose;
+    }
+
+    /// Get the path to the LLVM IR file
+    pub fn get_llvm_file(&self) -> &Path {
+        &self.llvm_file
     }
 
     /// Reset the internal state of the engine
@@ -515,14 +520,10 @@ impl LlvmEngine {
     /// Errors are propagated through the Result type and logged at their source with
     /// appropriate context, including the thread ID.
     fn run_llvm_program(&self, library: &LlvmLibrary) -> Result<ByteMessage, PecosError> {
-        // For HUGR convention with deferred measurements, we need to handle this specially
-        // The issue is that HUGR-generated code calls __quantum__rt__result_get_one()
+        // Handle deferred measurements - some LLVM IR may call __quantum__rt__result_get_one()
         // to get measurement results, but those results aren't available until after
-        // the quantum simulation runs. This is a fundamental issue with the deferred
-        // measurement model when the classical code depends on measurement results.
-        //
-        // For now, we'll let it return 0s and rely on the MonteCarloEngine to provide
-        // the actual measurement results through the Shot data structure.
+        // the quantum simulation runs. For now, we'll let it return 0s and rely on the
+        // MonteCarloEngine to provide the actual measurement results through the Shot data structure.
 
         // Configure verbosity through environment variable
         if self.config.verbose {
@@ -677,7 +678,7 @@ impl LlvmEngine {
         }
     }
 
-    /// Helper method to find qubit allocations in HUGR-style LLVM IR content
+    /// Helper method to find qubit allocations in LLVM IR content
     fn find_qubit_allocations(content: &str) -> (usize, bool) {
         let mut max_qubit_index = 0;
         let mut found_allocation = false;
@@ -691,7 +692,7 @@ impl LlvmEngine {
             found_allocation = true;
         }
 
-        // Pattern 2: Integer-based qubit references in HUGR LLVM IR calls like "i64 N"
+        // Pattern 2: Integer-based qubit references in LLVM IR calls like "i64 N"
         // This pattern looks for quantum gate calls with integer qubit arguments
         let int_qubit_pattern =
             Regex::new(r"__quantum__qis__[a-z_]+__body[a-z0-9_]*\s*\([^)]*?i64\s+(\d+)")

@@ -10,9 +10,9 @@ def test_rust_hugr_compilation() -> None:
     """Test that the Rust HUGR support compiles."""
     print("=== Testing Rust HUGR Compilation ===")
 
-    # Test 1: Check if HUGR support compiles
+    # Test 1: Check if HUGR support compiles in the new pecos-hugr-llvm crate
     result = subprocess.run(  # noqa: S603
-        ["cargo", "check", "-p", "pecos-qir", "--features", "hugr-llvm-pipeline"],  # noqa: S607
+        ["cargo", "check", "-p", "pecos-hugr-llvm"],  # noqa: S607
         capture_output=True,
         text=True,
         check=False,
@@ -32,10 +32,7 @@ def test_rust_hugr_compilation() -> None:
             "cargo",
             "test",
             "-p",
-            "pecos-qir",
-            "hugr",
-            "--features",
-            "hugr-llvm-pipeline",
+            "pecos-hugr-llvm",
         ],
         capture_output=True,
         text=True,

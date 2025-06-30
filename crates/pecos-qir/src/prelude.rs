@@ -11,10 +11,11 @@
 //!
 //! fn main() -> Result<(), PecosError> {
 //!     // Create an LLVM engine
-//!     let engine = setup_llvm_engine(Path::new("program.ll"), None)?;
+//!     let mut engine = LlvmEngine::new(PathBuf::from("program.ll"));
+//!     engine.set_assigned_shots(1000);
 //!     
-//!     // Run the simulation with 1000 shots
-//!     let results = run_sim(engine, 1000, None, None, None, None)?;
+//!     // Run the simulation
+//!     let results = run_sim(Box::new(engine), 1000, None, None, None, None)?;
 //!     
 //!     // Work with shot results
 //!     println!("Got {} shots", results.len());
@@ -27,14 +28,7 @@
 //! ```
 
 // Core LLVM functionality
-pub use crate::{LlvmEngine, setup_llvm_engine};
-
-// HUGR compilation support (when available)
-#[cfg(feature = "hugr-llvm-pipeline")]
-pub use crate::{
-    HugrCompiler, HugrCompilerConfig, compile_hugr_to_llvm, create_hugr_llvm_engine,
-    setup_hugr_llvm_engine,
-};
+pub use crate::LlvmEngine;
 
 // Common types from pecos-engines for working with results
 pub use pecos_engines::{

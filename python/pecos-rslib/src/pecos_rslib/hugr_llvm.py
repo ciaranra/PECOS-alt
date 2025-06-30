@@ -186,24 +186,7 @@ def compile_hugr_to_llvm_rust(
         raise ImportError("Rust HUGR backend not available")
 
     if isinstance(hugr_data, bytes):
-        if output_path is None:
-            return compile_hugr_bytes_to_llvm(hugr_data, debug_info)
-        else:
-            # For bytes to file, we'd need to write to temp file first
-            import tempfile
-
-            with tempfile.NamedTemporaryFile(suffix=".hugr", delete=False) as f:
-                f.write(hugr_data)
-                temp_path = f.name
-            try:
-                compile_hugr_file_to_llvm(
-                    temp_path, output_path, debug_info
-                )
-            finally:
-                import os
-
-                os.unlink(temp_path)
-            return None
+        return compile_hugr_bytes_to_llvm(hugr_data, output_path, debug_info)
     else:
         # hugr_data is a file path
         if output_path is None:

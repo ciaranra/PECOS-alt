@@ -28,10 +28,10 @@ default = ["pmir-pipeline", "hugr-llvm-pipeline"]
 llvm-jit = ["pecos-qir/llvm-jit"]
 
 # PMIR pipeline: HUGR → PAST → PMIR (MLIR) → LLVM IR
-pmir-pipeline = ["pecos-qir/pmir-pipeline", "pecos-pmir"]
+pmir-pipeline = ["pecos/pmir-pipeline", "pecos-pmir"]
 
-# HUGR-LLVM pipeline: HUGR → QIR (via hugr-llvm)
-hugr-llvm-pipeline = ["pecos-qir/hugr-llvm-pipeline"]
+# HUGR-LLVM pipeline: HUGR → LLVM IR (via pecos-hugr-llvm)
+hugr-llvm-pipeline = ["pecos-hugr-llvm"]
 
 # All compilation pipelines
 all-pipelines = ["pmir-pipeline", "hugr-llvm-pipeline"]
@@ -50,6 +50,7 @@ pecos-qasm = { workspace = true }
 pecos-engines = { workspace = true }
 pecos-qir = { workspace = true }
 pecos-pmir = { path = "../../../crates/pecos-pmir", optional = true }
+pecos-hugr-llvm = { path = "../../../crates/pecos-hugr-llvm", optional = true }
 parking_lot = { workspace = true}
 serde_json = { workspace = true }
 tempfile = { workspace = true }

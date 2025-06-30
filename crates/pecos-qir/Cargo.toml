@@ -13,9 +13,8 @@ description = "LLVM IR execution capabilities for quantum programs in PECOS."
 
 [dependencies]
 log.workspace = true
-pecos-core = { workspace = true, features = ["anyhow", "hugr-llvm"] }
+pecos-core = { workspace = true, features = ["anyhow"] }
 pecos-engines.workspace = true
-pecos-pmir = { path = "../pecos-pmir", optional = true }
 regex.workspace = true
 libloading.workspace = true
 libc.workspace = true
@@ -25,10 +24,6 @@ env_logger.workspace = true
 parking_lot.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
-# HUGR dependencies (optional)
-hugr-core = { version = "0.20.1", optional = true }
-hugr-llvm = { version = "0.20.1", optional = true }
-anyhow = { version = "1.0", optional = true }
 
 [build-dependencies]
 # No specific build dependencies required
@@ -40,26 +35,15 @@ env_logger.workspace = true
 
 
 [features]
-default = ["pmir-pipeline"]
+default = []
 
 # LLVM JIT execution: LLVM IR file execution via LLVM JIT compilation
 # TEMPORARILY DISABLED due to pytest environment conflicts and segfaults
 # TODO: Re-implement with proper isolation or alternative execution strategy
 llvm-jit = []
 
-# PMIR pipeline: HUGR → PAST → PMIR (MLIR) → LLVM IR
-# Uses MLIR toolchain for compilation
-pmir-pipeline = ["hugr-core", "anyhow", "pecos-pmir"]
-
-# HUGR-LLVM pipeline: HUGR → LLVM IR (via hugr-llvm)
-# Uses hugr-llvm for direct HUGR to LLVM IR compilation
-hugr-llvm-pipeline = ["hugr-core", "hugr-llvm", "anyhow"]
-
-# All compilation pipelines available
-all-pipelines = ["pmir-pipeline", "hugr-llvm-pipeline"]
-
 # All features including LLVM JIT (for advanced users)
-all-features = ["all-pipelines", "llvm-jit"]
+all-features = ["llvm-jit"]
 
 [lints]
 workspace = true
