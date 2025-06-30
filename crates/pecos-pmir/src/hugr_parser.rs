@@ -14,7 +14,7 @@ use super::ast::{
 };
 
 #[derive(Parser)]
-#[grammar = "pmir/hugr.pest"]
+#[grammar = "hugr.pest"]
 pub struct HugrParser;
 
 /// Parse HUGR JSON into PAST representation

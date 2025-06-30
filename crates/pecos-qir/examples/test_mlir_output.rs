@@ -1,6 +1,6 @@
 //! Example to test MLIR output generation
 
-use pecos_qir::pmir::{PmirConfig, compile_hugr_via_pmir};
+use pecos_qir::{PmirConfig, compile_hugr_via_pmir};
 
 fn main() {
     // Simple Hadamard + Measure circuit
@@ -36,7 +36,7 @@ fn main() {
             // If MLIR tools aren't available, generate MLIR text anyway for inspection
             println!("\nGenerating MLIR text for inspection...");
 
-            use pecos_qir::pmir::{hugr_parser, mlir_lowering};
+            use pecos_pmir::{hugr_parser, mlir_lowering};
 
             if let Ok(past) = hugr_parser::parse_hugr_to_past(hugr_json) {
                 if let Ok(mlir_module) = mlir_lowering::lower_past_to_pmir(&past, &config) {

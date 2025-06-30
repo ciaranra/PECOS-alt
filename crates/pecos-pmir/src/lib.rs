@@ -1,12 +1,12 @@
 /*!
-PMIR (PECOS Middle-level IR) Compilation Pipeline
+PECOS PMIR (PECOS MLIR) - Alternative compilation pipeline via MLIR
 
-This module provides an alternative compilation path from HUGR to LLVM IR via:
+This crate provides an alternative compilation path from HUGR to LLVM IR via:
 1. Pest parsing of HUGR JSON to PAST (PECOS AST) in RON format
 2. Lowering from PAST to PMIR (PECOS Middle-level IR) expressed as MLIR text
 3. Using MLIR tools to compile PMIR to LLVM IR
 
-This runs alongside the existing HUGR→LLVM pipeline for comparison and development.
+It also supports direct execution of PMIR without LLVM compilation.
 */
 
 use pecos_core::errors::PecosError;
@@ -17,8 +17,12 @@ pub mod ast;
 pub mod hugr_parser;
 pub mod mlir_lowering;
 pub mod mlir_toolchain;
+#[cfg(feature = "python-bindings")]
+pub mod python_api;
 
-// Python API module removed - now in pecos-rslib
+// Re-export key types for convenience
+pub use ast::PastModule;
+pub use mlir_lowering::MlirModule;
 
 /// Configuration for the PMIR (PECOS Middle-level IR) compilation pipeline
 #[derive(Debug, Clone)]
@@ -115,6 +119,29 @@ pub fn compile_hugr_file_via_pmir(
     std::fs::write(output_path, llvm_ir).map_err(PecosError::IO)?;
 
     Ok(())
+}
+
+/// Direct execution of PMIR without LLVM compilation (future feature)
+#[cfg(feature = "direct-execution")]
+pub mod direct_execution {
+    use super::*;
+    #[allow(unused_imports)]
+    use pecos_engines::prelude::*;
+
+    /// Execute PMIR directly using PECOS simulators
+    pub fn execute_pmir_directly(
+        _pmir_module: &MlirModule,
+        _config: &PmirConfig,
+    ) -> Result<(), PecosError> {
+        // TODO: Implement direct PMIR execution
+        // This would involve:
+        // 1. Interpreting PMIR operations directly
+        // 2. Managing quantum state with PECOS simulators
+        // 3. Handling classical control flow
+        // 4. Returning results
+        
+        todo!("Direct PMIR execution not yet implemented")
+    }
 }
 
 #[cfg(test)]

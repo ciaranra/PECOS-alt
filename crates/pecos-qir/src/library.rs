@@ -182,6 +182,11 @@ impl LlvmLibrary {
                     });
                 }
                 Err(e) => {
+                    // Log the detailed error for debugging
+                    warn!(
+                        "LLVM Library: Failed to load library (attempt {}/{}): {} - Error: {}",
+                        retry_count + 1, max_retries, path.display(), e
+                    );
                     Self::log_error(
                         "Failed to load library",
                         format!("Attempt {}/{}: {}", retry_count + 1, max_retries, e),

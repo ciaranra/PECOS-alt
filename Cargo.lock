@@ -1687,6 +1687,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "pecos-pmir"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "env_logger",
+ "hugr-core",
+ "log",
+ "pecos-core",
+ "pecos-engines",
+ "pest",
+ "pest_derive",
+ "pyo3",
+ "regex",
+ "ron",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "pecos-qasm"
 version = "0.1.1"
 dependencies = [
@@ -1721,6 +1741,7 @@ dependencies = [
  "parking_lot",
  "pecos-core",
  "pecos-engines",
+ "pecos-pmir",
  "pest",
  "pest_derive",
  "regex",
@@ -1749,6 +1770,7 @@ dependencies = [
  "pecos",
  "pecos-core",
  "pecos-engines",
+ "pecos-pmir",
  "pecos-qasm",
  "pecos-qir",
  "pyo3",

@@ -15,6 +15,7 @@ description = "LLVM IR execution capabilities for quantum programs in PECOS."
 log.workspace = true
 pecos-core = { workspace = true, features = ["anyhow", "hugr-llvm"] }
 pecos-engines.workspace = true
+pecos-pmir = { path = "../pecos-pmir", optional = true }
 regex.workspace = true
 libloading.workspace = true
 libc.workspace = true
@@ -53,7 +54,7 @@ llvm-jit = []
 
 # PMIR pipeline: HUGR → PAST → PMIR (MLIR) → LLVM IR
 # Uses MLIR toolchain for compilation
-pmir-pipeline = ["hugr-core", "anyhow"]
+pmir-pipeline = ["hugr-core", "anyhow", "pecos-pmir"]
 
 # HUGR-LLVM pipeline: HUGR → LLVM IR (via hugr-llvm)
 # Uses hugr-llvm for direct HUGR to LLVM IR compilation

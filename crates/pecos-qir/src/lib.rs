@@ -11,8 +11,7 @@ pub mod runtime; // LLVM runtime implementation with submodules
 pub mod hugr; // HUGR frontend (compiler, engine, etc.) - contains stubs when feature disabled
 
 // PMIR (PECOS MLIR) - Alternative compilation pipeline via MLIR
-#[cfg(feature = "pmir-pipeline")]
-pub mod pmir; // HUGR → PAST (RON) → PMIR (MLIR) → LLVM pipeline
+// Using external pecos-pmir crate
 
 pub use engine::LlvmEngine;
 
@@ -21,66 +20,9 @@ pub use hugr::compiler::{HugrCompiler, HugrCompilerConfig};
 pub use hugr::engine_utils::{compile_hugr_to_llvm, create_hugr_llvm_engine, setup_hugr_llvm_engine};
 
 // PMIR pipeline re-exports (only available with pmir-pipeline feature)
+// Users should depend on pecos-pmir directly if they need PMIR functionality
 #[cfg(feature = "pmir-pipeline")]
-pub use pmir::{
-    PmirConfig, compile_hugr_via_pmir, hugr_to_past_ron, hugr_to_pmir_mlir, past_ron_to_pmir_mlir,
-};
-
-// Provide stubs when pmir-pipeline is not enabled
-#[cfg(not(feature = "pmir-pipeline"))]
-pub mod pmir_stubs {
-    use pecos_core::errors::PecosError;
-
-    #[derive(Debug, Clone)]
-    pub struct PmirConfig {
-        pub debug_output: bool,
-        pub optimization_level: u8,
-        pub target_triple: Option<String>,
-    }
-
-    impl Default for PmirConfig {
-        fn default() -> Self {
-            Self {
-                debug_output: false,
-                optimization_level: 2,
-                target_triple: None,
-            }
-        }
-    }
-
-    pub fn compile_hugr_via_pmir(
-        _hugr_json: &str,
-        _config: &PmirConfig,
-    ) -> Result<String, PecosError> {
-        Err(PecosError::Feature(
-            "PMIR pipeline not available".to_string(),
-        ))
-    }
-
-    pub fn hugr_to_past_ron(_hugr_json: &str) -> Result<String, PecosError> {
-        Err(PecosError::Feature(
-            "PMIR pipeline not available".to_string(),
-        ))
-    }
-
-    pub fn hugr_to_pmir_mlir(_hugr_json: &str, _config: &PmirConfig) -> Result<String, PecosError> {
-        Err(PecosError::Feature(
-            "PMIR pipeline not available".to_string(),
-        ))
-    }
-
-    pub fn past_ron_to_pmir_mlir(
-        _past_ron: &str,
-        _config: &PmirConfig,
-    ) -> Result<String, PecosError> {
-        Err(PecosError::Feature(
-            "PMIR pipeline not available".to_string(),
-        ))
-    }
-}
-
-#[cfg(not(feature = "pmir-pipeline"))]
-pub use pmir_stubs::{
+pub use pecos_pmir::{
     PmirConfig, compile_hugr_via_pmir, hugr_to_past_ron, hugr_to_pmir_mlir, past_ron_to_pmir_mlir,
 };
 

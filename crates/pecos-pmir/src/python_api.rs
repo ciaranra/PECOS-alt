@@ -7,7 +7,7 @@ This module provides Python-accessible functions for the PMIR pipeline.
 use pyo3::prelude::*;
 use pyo3::exceptions::PyRuntimeError;
 
-use super::{compile_hugr_via_pmir, PmirConfig};
+use crate::{compile_hugr_via_pmir, PmirConfig};
 
 /// Python-accessible PMIR configuration
 #[pyclass]
@@ -70,13 +70,16 @@ pub fn py_hugr_to_past_ron(hugr_json: &str) -> PyResult<String> {
 }
 
 /// Register PMIR Python module
-pub fn register_pmir_module(py: Python, parent: &PyModule) -> PyResult<()> {
-    let pmir_module = PyModule::new(py, "pmir")?;
+/// This would be used if pecos-pmir was exposed as a standalone Python module
+/// Currently PMIR is exposed through pecos-rslib instead
+#[allow(dead_code)]
+pub fn register_pmir_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
+    let pmir_module = PyModule::new(parent.py(), "pmir")?;
     
     pmir_module.add_class::<PyPmirConfig>()?;
-    pmir_module.add_function(wrap_pyfunction!(py_compile_hugr_via_pmir, pmir_module)?)?;
-    pmir_module.add_function(wrap_pyfunction!(py_hugr_to_past_ron, pmir_module)?)?;
+    pmir_module.add_function(wrap_pyfunction!(py_compile_hugr_via_pmir, &pmir_module)?)?;
+    pmir_module.add_function(wrap_pyfunction!(py_hugr_to_past_ron, &pmir_module)?)?;
     
-    parent.add_submodule(pmir_module)?;
+    parent.add_submodule(&pmir_module)?;
     Ok(())
 }

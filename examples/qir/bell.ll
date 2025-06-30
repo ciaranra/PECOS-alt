@@ -1,8 +1,8 @@
 ; Bell State Circuit
 ; This demonstrates immediate measurement capability with integer-based parameters
 
-declare void @__quantum__qis__h__body__hugr(i64)
-declare void @__quantum__qis__cx__body__hugr(i64, i64)
+declare void @__quantum__qis__h__body(i64)
+declare void @__quantum__qis__cx__body(i64, i64)
 declare i32 @__quantum__qis__m__body(i64, i64)  ; Returns result immediately
 declare void @__quantum__rt__result_record_output(i64, i8*)
 
@@ -10,8 +10,8 @@ declare void @__quantum__rt__result_record_output(i64, i8*)
 
 define void @main() #0 {
     ; Create Bell state: |00⟩ + |11⟩
-    call void @__quantum__qis__h__body__hugr(i64 0)
-    call void @__quantum__qis__cx__body__hugr(i64 0, i64 1)
+    call void @__quantum__qis__h__body(i64 0)
+    call void @__quantum__qis__cx__body(i64 0, i64 1)
 
     ; IMMEDIATE measurements - get results right away
     %result0 = call i32 @__quantum__qis__m__body(i64 0, i64 0)

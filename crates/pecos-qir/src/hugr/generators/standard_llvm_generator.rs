@@ -35,20 +35,8 @@ impl StandardLlvmExtension {
     }
 
     fn get_function_name(&self, base_name: &str) -> String {
-        // Only use __hugr suffix for gates that actually have HUGR versions
-        match base_name {
-            "__quantum__qis__h__body"
-            | "__quantum__qis__x__body"
-            | "__quantum__qis__y__body"
-            | "__quantum__qis__z__body"
-            | "__quantum__qis__cx__body"
-            | "__quantum__qis__rz__body"
-            | "__quantum__qis__r1xy__body" => {
-                format!("{base_name}__hugr")
-            }
-            // For other gates, use the base name as they already work with integers
-            _ => base_name.to_string(),
-        }
+        // Use the base name directly without any suffix
+        base_name.to_string()
     }
 }
 
@@ -425,10 +413,10 @@ fn emit_measure_standard<'c, H: HugrView<Node = Node>>(
         builder.build_int_z_extend(args.inputs[0].into_int_value(), i64_type, "qubit_i64")?;
 
     // Allocate result ID using HUGR runtime allocation
-    // Call __quantum__rt__result_allocate_hugr() which returns i64
+    // Call __quantum__rt__result_allocate() which returns i64
     let allocate_result_func_type = i64_type.fn_type(&[], false);
     let allocate_result_func = context.get_extern_func(
-        "__quantum__rt__result_allocate_hugr",
+        "__quantum__rt__result_allocate",
         allocate_result_func_type,
     )?;
 

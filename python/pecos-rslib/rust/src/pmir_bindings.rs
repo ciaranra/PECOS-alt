@@ -12,7 +12,7 @@
 
 //! Python bindings for PMIR (PECOS Middle-level IR) compilation pipeline
 
-use pecos_qir::pmir::{self, PmirConfig};
+use pecos_pmir::{self as pmir, PmirConfig};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 

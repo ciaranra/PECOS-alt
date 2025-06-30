@@ -5,7 +5,7 @@ This module provides functionality to resolve angle values for rotation gates
 by following the dataflow edges in HUGR graphs.
 */
 
-use super::ast::{PastEdge, PastNode, PastOp};
+use crate::ast::{PastEdge, PastNode, PastOp};
 use pecos_core::errors::PecosError;
 
 /// Resolve angles for all rotation gates in the node list by following dataflow edges
@@ -14,7 +14,7 @@ pub fn resolve_rotation_angles(nodes: &mut Vec<PastNode>, edges: &[PastEdge]) ->
     let mut const_values = std::collections::HashMap::new();
     for node in nodes.iter() {
         if let PastOp::Const(value) = &node.op {
-            if let super::ast::PastValue::Float(f) = value {
+            if let crate::ast::PastValue::Float(f) = value {
                 const_values.insert(node.id, *f);
             }
         }

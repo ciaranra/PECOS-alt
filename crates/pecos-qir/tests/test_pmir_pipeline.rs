@@ -1,6 +1,6 @@
 //! Test for the PMIR (PECOS MLIR) compilation pipeline
 
-use pecos_qir::pmir::{PmirConfig, compile_hugr_via_pmir};
+use pecos_qir::{PmirConfig, compile_hugr_via_pmir};
 
 #[test]
 fn test_simple_hadamard_measure() {
@@ -113,7 +113,7 @@ fn test_bell_state_circuit() {
 
 #[test]
 fn test_past_ron_serialization() {
-    use pecos_qir::pmir::ast::*;
+    use pecos_pmir::ast::*;
     use std::collections::HashMap;
 
     let module = PastModule {

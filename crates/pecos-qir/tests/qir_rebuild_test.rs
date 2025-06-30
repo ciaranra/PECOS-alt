@@ -20,12 +20,12 @@ fn create_test_qir_file(dir: &Path, name: &str, content_suffix: &str) -> PathBuf
             r"; Test HUGR LLVM-IR file {content_suffix}
 
 declare void @__quantum__rt__initialize(i8*)
-declare void @__quantum__qis__h__body__hugr(i64)
+declare void @__quantum__qis__h__body(i64)
 
 define void @main() {{
 entry:
     call void @__quantum__rt__initialize(i8* null)
-    call void @__quantum__qis__h__body__hugr(i64 0)
+    call void @__quantum__qis__h__body(i64 0)
     ret void
 }}
 "

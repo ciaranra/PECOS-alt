@@ -1,7 +1,7 @@
 //! Test for understanding how HUGR represents rotation gates with angles
 
 #[cfg(feature = "pmir-pipeline")]
-use pecos_qir::pmir::hugr_to_past_ron;
+use pecos_qir::hugr_to_past_ron;
 
 #[test]
 #[cfg(feature = "pmir-pipeline")]

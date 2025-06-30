@@ -3,9 +3,13 @@
 //! This module provides an instance-based runtime state for LLVM IR execution,
 //! eliminating the need for global state and enabling proper concurrent execution.
 
+use pecos_core::errors::PecosError;
 use pecos_engines::byte_message::{ByteMessage, ByteMessageBuilder};
 use pecos_engines::shot_results::{Data, Shot};
 use std::collections::HashMap;
+
+/// Type alias for the interactive execution callback
+pub type InteractiveCallback = Box<dyn Fn(ByteMessage) -> Result<Vec<u32>, PecosError> + Send + Sync>;
 
 /// LLVM Runtime State
 ///
@@ -35,6 +39,9 @@ pub struct LlvmRuntimeState {
 
     /// Last shot result for retrieval
     last_shot: Option<Shot>,
+
+    /// Interactive execution callback for immediate measurements
+    interactive_callback: Option<InteractiveCallback>,
 }
 
 impl LlvmRuntimeState {
@@ -53,6 +60,7 @@ impl LlvmRuntimeState {
             register_bit_positions: HashMap::new(),
             result_mappings: HashMap::new(),
             last_shot: None,
+            interactive_callback: None,
         }
     }
 
@@ -207,6 +215,21 @@ impl LlvmRuntimeState {
         self.register_bit_positions
             .get(register_name)
             .map_or(0, |&max_pos| max_pos + 1)
+    }
+
+    /// Set the interactive callback for immediate measurements
+    pub fn set_interactive_callback(&mut self, callback: InteractiveCallback) {
+        self.interactive_callback = Some(callback);
+    }
+
+    /// Get a reference to the interactive callback
+    pub fn interactive_callback(&self) -> Option<&InteractiveCallback> {
+        self.interactive_callback.as_ref()
+    }
+
+    /// Clear the interactive callback
+    pub fn clear_interactive_callback(&mut self) {
+        self.interactive_callback = None;
     }
 }
 

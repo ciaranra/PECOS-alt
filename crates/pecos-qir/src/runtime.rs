@@ -26,7 +26,7 @@ use pecos_core::errors::PecosError;
 use pecos_engines::byte_message::ByteMessage;
 use std::env;
 use std::ffi::{CStr, CString, c_char};
-use std::sync::{LazyLock, Mutex, Once};
+use std::sync::Once;
 use std::thread;
 
 // Ensure the runtime registry is initialized exactly once
@@ -76,41 +76,27 @@ fn should_print_commands() -> bool {
 
 pub mod core_runtime {
     use super::{
-        ByteMessage, LazyLock, Mutex, PecosError, RuntimeRegistry, ensure_runtime_initialized,
+        ByteMessage, PecosError, RuntimeRegistry, ensure_runtime_initialized,
         get_thread_id, should_print_commands,
     };
     use log::debug;
 
-    /// Type alias for the interactive execution callback
-    /// Takes a `ByteMessage` of quantum operations and returns measurement results
-    pub type InteractiveCallback =
-        Box<dyn Fn(ByteMessage) -> Result<Vec<u32>, PecosError> + Send + Sync>;
-
-    /// Global callback for interactive execution
-    static INTERACTIVE_CALLBACK: LazyLock<Mutex<Option<InteractiveCallback>>> =
-        LazyLock::new(|| Mutex::new(None));
-
-    /// Set the interactive execution callback
-    pub fn set_interactive_callback(callback: InteractiveCallback) {
-        if let Ok(mut cb) = INTERACTIVE_CALLBACK.lock() {
-            *cb = Some(callback);
-        }
+    /// Set the interactive execution callback for the current runtime
+    pub fn set_interactive_callback(
+        callback: Box<dyn Fn(ByteMessage) -> Result<Vec<u32>, PecosError> + Send + Sync>
+    ) {
+        ensure_runtime_initialized();
+        RuntimeRegistry::with_current_runtime(|state| {
+            state.set_interactive_callback(callback);
+        });
     }
 
-    /// Execute with the interactive execution callback if available
-    pub fn execute_with_callback<T>(f: impl FnOnce(&InteractiveCallback) -> T) -> Option<T> {
-        if let Ok(cb) = INTERACTIVE_CALLBACK.lock() {
-            cb.as_ref().map(f)
-        } else {
-            None
-        }
-    }
-
-    /// Clear the interactive execution callback
+    /// Clear the interactive execution callback for the current runtime
     pub fn clear_interactive_callback() {
-        if let Ok(mut cb) = INTERACTIVE_CALLBACK.lock() {
-            *cb = None;
-        }
+        ensure_runtime_initialized();
+        RuntimeRegistry::try_with_current_runtime(|state| {
+            state.clear_interactive_callback();
+        });
     }
 
     /// Reset the LLVM runtime state for the current thread
@@ -520,38 +506,38 @@ pub unsafe extern "C" fn __quantum__rt__initialize(_config: *const u8) {
 // =============================================================================
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__h__body__hugr(qubit: i64) {
+pub unsafe extern "C" fn __quantum__qis__h__body(qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
     core_runtime::h_gate(qubit_id);
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__x__body__hugr(qubit: i64) {
+pub unsafe extern "C" fn __quantum__qis__x__body(qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
     core_runtime::x_gate(qubit_id);
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__y__body__hugr(qubit: i64) {
+pub unsafe extern "C" fn __quantum__qis__y__body(qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
     core_runtime::y_gate(qubit_id);
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__z__body__hugr(qubit: i64) {
+pub unsafe extern "C" fn __quantum__qis__z__body(qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
     core_runtime::z_gate(qubit_id);
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__cx__body__hugr(control: i64, target: i64) {
+pub unsafe extern "C" fn __quantum__qis__cx__body(control: i64, target: i64) {
     let control_id = i64_to_usize(control);
     let target_id = i64_to_usize(target);
     core_runtime::cx_gate(control_id, target_id);
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__cnot__body__hugr(control: i64, target: i64) {
+pub unsafe extern "C" fn __quantum__qis__cnot__body(control: i64, target: i64) {
     let control_id = i64_to_usize(control);
     let target_id = i64_to_usize(target);
     core_runtime::cx_gate(control_id, target_id);
@@ -615,13 +601,13 @@ pub unsafe extern "C" fn __quantum__qis__ry__body(theta: f64, qubit: i64) {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__rz__body__hugr(theta: f64, qubit: i64) {
+pub unsafe extern "C" fn __quantum__qis__rz__body(theta: f64, qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
     core_runtime::rz_gate(theta, qubit_id);
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__r1xy__body__hugr(theta: f64, phi: f64, qubit: i64) {
+pub unsafe extern "C" fn __quantum__qis__r1xy__body(theta: f64, phi: f64, qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
     core_runtime::r1xy_gate(theta, phi, qubit_id);
 }
@@ -654,9 +640,11 @@ pub unsafe extern "C" fn __quantum__qis__zz__body(qubit1: i64, qubit2: i64) {
 ///
 /// This function is marked unsafe as it's called from C/FFI context.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__rt__result_allocate_hugr() -> i64 {
+pub unsafe extern "C" fn __quantum__rt__result_allocate() -> i64 {
     i64::try_from(core_runtime::allocate_result()).expect("Result ID too large for i64")
 }
+
+
 
 /// HUGR-style qubit allocation - returns integer ID instead of pointer
 ///
@@ -682,12 +670,6 @@ pub unsafe extern "C" fn __quantum__qis__m__body_i64(qubit: i64, result: i64) ->
     0
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __hugr__quantum__qis__m__body(qubit: i64, result: i64) {
-    let qubit_id = i64_to_usize(qubit);
-    let result_id = i64_to_usize(result);
-    core_runtime::measure(qubit_id, result_id);
-}
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__qis__m__body(qubit: i64, result: i64) -> i32 {
@@ -764,25 +746,26 @@ pub unsafe extern "C" fn __quantum__rt__result_get_one(result: i64) -> i32 {
                     debug!("[Thread {}] CALLBACK: Calling interactive callback", get_thread_id());
                 }
 
-                // Trigger interactive execution by calling the global callback
-                // The QirEngine will handle this through its ControlEngine implementation
+                // Get the callback from the runtime state
+                let callback_result = if let Some(callback) = state.interactive_callback() {
+                    // Increment callback depth to detect recursion
+                    CALLBACK_DEPTH.with(|d| d.set(d.get() + 1));
 
-                // Increment callback depth to detect recursion
-                CALLBACK_DEPTH.with(|d| d.set(d.get() + 1));
-
-                let callback_result = core_runtime::execute_with_callback(|callback| {
                     if should_print_commands() {
-                        debug!("[Thread {}] EXECUTING: Starting quantum execution", get_thread_id());
+                        debug!("[Thread {}] EXECUTING: Starting quantum execution via EngineSystem", get_thread_id());
                     }
                     let exec_result = callback(message);
                     if should_print_commands() {
-                        debug!("[Thread {}] EXECUTED: Quantum execution completed", get_thread_id());
+                        debug!("[Thread {}] EXECUTED: Quantum execution completed via EngineSystem", get_thread_id());
                     }
-                    exec_result
-                });
 
-                // Decrement callback depth after execution
-                CALLBACK_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+                    // Decrement callback depth after execution
+                    CALLBACK_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+
+                    Some(exec_result)
+                } else {
+                    None
+                };
 
                 if let Some(callback_result) = callback_result {
                     match callback_result {

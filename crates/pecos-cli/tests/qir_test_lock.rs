@@ -25,7 +25,26 @@ impl QirTestLock {
     /// - Failed to acquire the lock after maximum retries
     #[must_use]
     pub fn acquire() -> Self {
-        let lock_path = std::env::temp_dir().join("pecos_qir_test.lock");
+        // Use target directory for lock file to avoid /tmp issues
+        let lock_dir = std::env::var("CARGO_TARGET_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| {
+                // Find the workspace root by looking for Cargo.lock
+                let mut current = std::env::current_dir().unwrap();
+                loop {
+                    if current.join("Cargo.lock").exists() {
+                        break current.join("target");
+                    }
+                    if !current.pop() {
+                        // Fallback to current directory
+                        break PathBuf::from("target");
+                    }
+                }
+            });
+        
+        // Ensure directory exists
+        let _ = std::fs::create_dir_all(&lock_dir);
+        let lock_path = lock_dir.join("pecos_qir_test.lock");
 
         // Try to acquire lock with retries
 

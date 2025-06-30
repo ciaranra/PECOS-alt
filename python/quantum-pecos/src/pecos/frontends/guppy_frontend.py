@@ -96,11 +96,17 @@ class GuppyFrontend:
             # Verify Rust backend is working
             available, message = check_rust_hugr_availability()
             if not available:
-                warnings.warn(
-                    f"Rust backend not fully available: {message}",
-                    stacklevel=2,
-                )
-                self.use_rust_backend = False
+                # If Rust backend was explicitly requested, fail rather than fallback
+                if use_rust_backend is True:
+                    msg = f"Rust backend explicitly requested but not available: {message}"
+                    raise ImportError(msg)
+                else:
+                    # Only fallback if auto-detection was used
+                    warnings.warn(
+                        f"Rust backend not fully available: {message}",
+                        stacklevel=2,
+                    )
+                    self.use_rust_backend = False
 
     def get_backend_info(self) -> dict:
         """Get information about the backend being used."""
@@ -295,40 +301,14 @@ class GuppyFrontend:
                     f.write(llvm_ir)
 
             except ImportError:
-                # Final fallback to placeholder if nothing works
-                print(
-                    "  [WARNING] No HUGR->LLVM compiler available, using placeholder QIR",
+                # No fallback - we only support proper HUGR->LLVM compilation
+                msg = (
+                    "HUGR to LLVM compilation failed: No working HUGR compiler available. "
+                    "The Rust backend (compile_hugr_to_llvm_rust) failed and no external "
+                    "compiler is available. We only support proper HUGR convention LLVM-IR "
+                    "generated via hugr-llvm, not fallback QIR."
                 )
-                qir_file = temp_path / f"{func_name}.ll"
-
-                # Simple placeholder that PECOS can execute
-                placeholder_qir = f"""; Generated from Guppy function: {func_name}
-; Placeholder QIR - install hugr-quantum-llvm for real compilation
-
-target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
-target triple = "x86_64-unknown-linux-gnu"
-
-declare i64 @__quantum__rt__qubit_allocate()
-declare void @__quantum__qis__h__body(i64)
-declare i32 @__quantum__qis__m__body(i64, i64)
-declare i64 @__quantum__rt__result_allocate()
-
-define void @{func_name}() #0 {{
-entry:
-  %qubit = call i64 @__quantum__rt__qubit_allocate()
-  call void @__quantum__qis__h__body(i64 %qubit)
-  %result = call i64 @__quantum__rt__result_allocate()
-  %measurement = call i32 @__quantum__qis__m__body(i64 %qubit, i64 %result)
-  ret void
-}}
-
-attributes #0 = {{ "EntryPoint" }}
-"""
-
-                with Path(qir_file).open("w") as f:
-                    f.write(placeholder_qir)
-
-                return qir_file
+                raise RuntimeError(msg)
             else:
                 return qir_file
 

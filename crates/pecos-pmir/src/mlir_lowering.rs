@@ -9,8 +9,8 @@ processed by MLIR tools (mlir-opt, mlir-translate) to produce LLVM IR.
 use pecos_core::errors::PecosError;
 use std::fmt;
 
-use super::PmirConfig;
-use super::ast::{PastFunction, PastGraph, PastModule, PastNode, PastOp, PastType, PastValue};
+use crate::PmirConfig;
+use crate::ast::{PastFunction, PastGraph, PastModule, PastNode, PastOp, PastType, PastValue};
 
 /// MLIR Module representation for text generation
 pub struct MlirModule {

@@ -1,17 +1,19 @@
 ; Quantum Program with Adaptive Algorithm
 ; This demonstrates immediate measurement capability with adaptive algorithm
 
-declare void @__quantum__qis__rz__body__hugr(double, i64)
-declare void @__quantum__qis__r1xy__body__hugr(double, double, i64)  
+declare void @__quantum__qis__rz__body(double, i64)
+declare void @__quantum__qis__rx__body(double, i64)
+declare void @__quantum__qis__ry__body(double, i64)
 declare void @__quantum__qis__zz__body(i64, i64)
-declare void @__quantum__qis__x__body__hugr(i64)
+declare void @__quantum__qis__x__body(i64)
 declare i32 @__quantum__qis__m__body(i64, i64)  ; Returns result immediately
 declare void @__quantum__rt__result_record_output(i64, i8*)
 
 define void @main() #0 {
     ; Apply some gates
-    call void @__quantum__qis__rz__body__hugr(double 3.14159265359, i64 0)
-    call void @__quantum__qis__r1xy__body__hugr(double 3.14159265359, double 1.07, i64 1)
+    call void @__quantum__qis__rz__body(double 3.14159265359, i64 0)
+    call void @__quantum__qis__rx__body(double 3.14159265359, i64 1)
+    call void @__quantum__qis__ry__body(double 1.07, i64 1)
     call void @__quantum__qis__zz__body(i64 0, i64 1)
     
     ; IMMEDIATE measurement for adaptive algorithm
@@ -23,7 +25,7 @@ define void @main() #0 {
 
 apply_x:
     ; Apply X gate if measurement was 1
-    call void @__quantum__qis__x__body__hugr(i64 1)
+    call void @__quantum__qis__x__body(i64 1)
     br label %final_measurements
 
 skip_x:
