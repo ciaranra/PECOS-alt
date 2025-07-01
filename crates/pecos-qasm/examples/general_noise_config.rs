@@ -1,6 +1,12 @@
-//! Example of using `GeneralNoise` with JSON configuration
+//! Example of using `GeneralNoiseModelBuilder` directly and via JSON configuration
+//!
+//! This example demonstrates:
+//! 1. Direct builder usage (recommended)
+//! 2. JSON configuration that converts to builders internally
+//! 3. Complex noise model configurations
 
-use pecos_engines::noise::GeneralNoiseModelBuilder;
+use pecos_core::gate_type::GateType;
+use pecos_engines::noise::GeneralNoiseModel;
 use pecos_qasm::config::NoiseConfig;
 use pecos_qasm::simulation::{NoiseModelType, qasm_sim};
 use serde_json::json;
@@ -17,96 +23,100 @@ fn main() {
         measure q -> c;
     "#;
 
-    // Example 1: Simple configuration from JSON
-    println!("Example 1: Simple GeneralNoise from JSON");
+    // Example 1: Direct builder usage (recommended approach)
+    println!("Example 1: Direct GeneralNoiseModelBuilder usage");
+    let builder = GeneralNoiseModel::builder()
+        .with_p1_probability(0.001)
+        .with_p2_probability(0.01)
+        .with_prep_probability(0.001)
+        .with_meas_0_probability(0.001)
+        .with_meas_1_probability(0.001)
+        .with_seed(42);
+
+    let noise_model = NoiseModelType::General(Box::new(builder));
+    let results = qasm_sim(qasm).noise(noise_model).run(100).unwrap();
+    println!("Shot results: {:?}", &results.shots[..5]);
+
+    // Example 2: JSON configuration (converts to builder internally)
+    println!("\nExample 2: JSON configuration (for backward compatibility)");
     let json_config = json!({
         "type": "GeneralNoise",
         "p1": 0.001,
         "p2": 0.01,
         "p_prep": 0.001,
         "p_meas_0": 0.001,
-        "p_meas_1": 0.001
+        "p_meas_1": 0.001,
+        "seed": 42
     });
 
     let noise_config: NoiseConfig = serde_json::from_value(json_config).unwrap();
     let noise_model: NoiseModelType = noise_config.into();
 
-    let results = qasm_sim(qasm).noise(noise_model).seed(42).run(100).unwrap();
-
+    let results = qasm_sim(qasm).noise(noise_model).run(100).unwrap();
     println!("Shot results: {:?}", &results.shots[..5]);
 
-    // Example 2: Complex configuration with all parameters
-    println!("\nExample 2: Complex GeneralNoise configuration");
-    let json_config = json!({
-        "type": "GeneralNoise",
-        "seed": 123,
-        "scale": 1.5,
-        "p1": 0.001,
-        "p2": 0.01,
-        "p_prep": 0.001,
-        "p_meas_0": 0.002,
-        "p_meas_1": 0.002,
-        "noiseless_gates": ["H", "MEASURE"],
-        "p1_pauli_model": {
-            "X": 0.5,
-            "Y": 0.3,
-            "Z": 0.2
-        },
-        "p2_pauli_model": {
-            "IX": 0.1,
-            "IY": 0.06,
-            "IZ": 0.08,
-            "XI": 0.1,
-            "XX": 0.06,
-            "XY": 0.06,
-            "XZ": 0.06,
-            "YI": 0.06,
-            "YX": 0.06,
-            "YY": 0.06,
-            "YZ": 0.06,
-            "ZI": 0.08,
-            "ZX": 0.06,
-            "ZY": 0.06,
-            "ZZ": 0.04
-        },
-        "p_idle_coherent": false,
-        "p_idle_linear_rate": 0.0001,
-        "leakage_scale": 0.5,
-        "emission_scale": 0.8
-    });
-
-    let noise_config: NoiseConfig = serde_json::from_value(json_config).unwrap();
-    let noise_model: NoiseModelType = noise_config.into();
-
-    let results = qasm_sim(qasm)
-        .noise(noise_model)
-        .workers(4)
-        .run(100)
-        .unwrap();
-
-    println!("Shot results: {:?}", &results.shots[..5]);
-
-    // Example 3: Programmatic configuration (for comparison)
-    println!("\nExample 3: Programmatic GeneralNoise configuration");
+    // Example 3: Complex builder configuration with all parameters
+    println!("\nExample 3: Complex GeneralNoiseModelBuilder configuration");
 
     let mut p1_model = BTreeMap::new();
     p1_model.insert("X".to_string(), 0.5);
     p1_model.insert("Y".to_string(), 0.3);
     p1_model.insert("Z".to_string(), 0.2);
 
-    let builder = GeneralNoiseModelBuilder::new()
+    let mut p2_model = BTreeMap::new();
+    p2_model.insert("IX".to_string(), 0.1);
+    p2_model.insert("IY".to_string(), 0.06);
+    p2_model.insert("IZ".to_string(), 0.08);
+    p2_model.insert("XI".to_string(), 0.1);
+    p2_model.insert("XX".to_string(), 0.06);
+    p2_model.insert("XY".to_string(), 0.06);
+    p2_model.insert("XZ".to_string(), 0.06);
+    p2_model.insert("YI".to_string(), 0.06);
+    p2_model.insert("YX".to_string(), 0.06);
+    p2_model.insert("YY".to_string(), 0.06);
+    p2_model.insert("YZ".to_string(), 0.06);
+    p2_model.insert("ZI".to_string(), 0.08);
+    p2_model.insert("ZX".to_string(), 0.06);
+    p2_model.insert("ZY".to_string(), 0.06);
+    p2_model.insert("ZZ".to_string(), 0.04);
+
+    let builder = GeneralNoiseModel::builder()
+        .with_seed(123)
+        .with_scale(1.5)
         .with_p1_probability(0.001)
         .with_p2_probability(0.01)
         .with_prep_probability(0.001)
         .with_meas_0_probability(0.002)
         .with_meas_1_probability(0.002)
-        .with_scale(1.5)
+        .with_noiseless_gate(GateType::H)
+        .with_noiseless_gate(GateType::Measure)
         .with_p1_pauli_model(&p1_model)
-        .with_seed(456);
+        .with_p2_pauli_model(&p2_model)
+        .with_p_idle_coherent(false)
+        .with_p_idle_linear_rate(0.0001)
+        .with_leakage_scale(0.5)
+        .with_emission_scale(0.8);
 
-    let noise_model = NoiseModelType::GeneralFromBuilder(Box::new(builder));
+    let noise_model = NoiseModelType::General(Box::new(builder));
+    let results = qasm_sim(qasm)
+        .noise(noise_model)
+        .workers(4)
+        .run(100)
+        .unwrap();
+    println!("Shot results: {:?}", &results.shots[..5]);
 
-    let results = qasm_sim(qasm).noise(noise_model).run(100).unwrap();
+    // Example 4: Fluent API style
+    println!("\nExample 4: Fluent API style (method chaining)");
+    let results = qasm_sim(qasm)
+        .noise(NoiseModelType::General(Box::new(
+            GeneralNoiseModel::builder()
+                .with_p1_probability(0.001)
+                .with_p2_probability(0.01)
+                .with_seed(789),
+        )))
+        .workers(4)
+        .run(100)
+        .unwrap();
 
     println!("Shot results: {:?}", &results.shots[..5]);
 }

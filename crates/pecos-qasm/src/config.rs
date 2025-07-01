@@ -18,12 +18,12 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-use crate::simulation::{
-    BiasedDepolarizingNoise, DepolarizingCustomNoise, DepolarizingNoise, NoiseModelType,
-    PassThroughNoise, QuantumEngineType,
-};
+use crate::simulation::{NoiseModelType, QuantumEngineType};
 use pecos_engines::GateType;
-use pecos_engines::noise::GeneralNoiseModelBuilder;
+use pecos_engines::noise::{
+    BiasedDepolarizingNoiseModel, DepolarizingNoiseModel, GeneralNoiseModel,
+    GeneralNoiseModelBuilder, PassThroughNoiseModel,
+};
 
 /// Quantum engine configuration
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -359,26 +359,33 @@ pub fn parse_gate_type_from_string(gate_str: &str) -> Option<GateType> {
 impl From<NoiseConfig> for NoiseModelType {
     fn from(config: NoiseConfig) -> Self {
         match config {
-            NoiseConfig::PassThroughNoise => NoiseModelType::PassThrough(PassThroughNoise),
+            NoiseConfig::PassThroughNoise => {
+                let builder = PassThroughNoiseModel::builder();
+                NoiseModelType::PassThrough(Box::new(builder))
+            }
             NoiseConfig::DepolarizingNoise { p } => {
-                NoiseModelType::Depolarizing(DepolarizingNoise { p })
+                let builder = DepolarizingNoiseModel::builder().with_uniform_probability(p);
+                NoiseModelType::Depolarizing(Box::new(builder))
             }
             NoiseConfig::DepolarizingCustomNoise {
                 p_prep,
                 p_meas,
                 p1,
                 p2,
-            } => NoiseModelType::DepolarizingCustom(DepolarizingCustomNoise {
-                p_prep,
-                p_meas,
-                p1,
-                p2,
-            }),
+            } => {
+                let builder = DepolarizingNoiseModel::builder()
+                    .with_prep_probability(p_prep)
+                    .with_meas_probability(p_meas)
+                    .with_p1_probability(p1)
+                    .with_p2_probability(p2);
+                NoiseModelType::Depolarizing(Box::new(builder))
+            }
             NoiseConfig::BiasedDepolarizingNoise { p } => {
-                NoiseModelType::BiasedDepolarizing(BiasedDepolarizingNoise { p })
+                let builder = BiasedDepolarizingNoiseModel::builder().with_uniform_probability(p);
+                NoiseModelType::BiasedDepolarizing(Box::new(builder))
             }
             NoiseConfig::GeneralNoise(fields) => {
-                let mut builder = GeneralNoiseModelBuilder::new();
+                let mut builder = GeneralNoiseModel::builder();
 
                 // Apply all parameter groups
                 builder = fields.apply_global_params(builder);
@@ -388,7 +395,7 @@ impl From<NoiseConfig> for NoiseModelType {
                 builder = fields.apply_two_qubit_params(builder);
                 builder = fields.apply_meas_params(builder);
 
-                NoiseModelType::GeneralFromBuilder(Box::new(builder))
+                NoiseModelType::General(Box::new(builder))
             }
         }
     }

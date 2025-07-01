@@ -61,9 +61,12 @@ fn test_with_depolarizing_noise() {
         measure q[0] -> c[0];
     "#;
 
+    // Use builder for depolarizing noise
+    let noise_builder = DepolarizingNoiseModel::builder().with_uniform_probability(0.1);
+
     let results = qasm_sim(qasm)
         .seed(42)
-        .noise(DepolarizingNoise { p: 0.1 })
+        .noise(noise_builder)
         .run(1000)
         .unwrap();
 
@@ -90,14 +93,16 @@ fn test_custom_depolarizing_noise() {
         measure q -> c;
     "#;
 
+    // Use builder for custom depolarizing noise
+    let noise_builder = DepolarizingNoiseModel::builder()
+        .with_prep_probability(0.01)
+        .with_meas_probability(0.01)
+        .with_p1_probability(0.001)
+        .with_p2_probability(0.1); // High two-qubit error
+
     let results = qasm_sim(qasm)
         .seed(42)
-        .noise(DepolarizingCustomNoise {
-            p_prep: 0.01,
-            p_meas: 0.01,
-            p1: 0.001,
-            p2: 0.1, // High two-qubit error
-        })
+        .noise(noise_builder)
         .run(1000)
         .unwrap();
 
@@ -125,9 +130,12 @@ fn test_biased_depolarizing_noise() {
         measure q[0] -> c[0];
     "#;
 
+    // Use builder for biased depolarizing noise
+    let noise_builder = BiasedDepolarizingNoiseModel::builder().with_uniform_probability(0.2);
+
     let results = qasm_sim(qasm)
         .seed(42)
-        .noise(BiasedDepolarizingNoise { p: 0.2 })
+        .noise(noise_builder)
         .run(1000)
         .unwrap();
 
@@ -224,11 +232,13 @@ fn test_full_configuration() {
         measure q -> c;
     "#;
 
+    let noise_builder = BiasedDepolarizingNoiseModel::builder().with_uniform_probability(0.01);
+
     let sim = qasm_sim(qasm)
         .seed(42)
         .workers(2)
         .quantum_engine(QuantumEngineType::SparseStabilizer)
-        .noise(BiasedDepolarizingNoise { p: 0.01 })
+        .noise(noise_builder)
         .build()
         .unwrap();
 
@@ -250,7 +260,10 @@ fn test_passthrough_noise() {
         measure q[0] -> c[0];
     "#;
 
-    let results = qasm_sim(qasm).noise(PassThroughNoise).run(100).unwrap();
+    let results = qasm_sim(qasm)
+        .noise(PassThroughNoiseModel::builder())
+        .run(100)
+        .unwrap();
 
     let shot_map = results.try_as_shot_map().unwrap();
     let values = shot_map.try_bits_as_u64("c").unwrap();
@@ -269,8 +282,14 @@ fn test_general_noise() {
         measure q[0] -> c[0];
     "#;
 
-    // Should not panic with general noise
-    let results = qasm_sim(qasm).noise(GeneralNoise).run(10).unwrap();
+    // Use GeneralNoiseModelBuilder instead of old GeneralNoise
+    let noise_builder = GeneralNoiseModel::builder()
+        .with_seed(42)
+        .with_p1_probability(0.001)
+        .with_meas_0_probability(0.001)
+        .with_meas_1_probability(0.001);
+
+    let results = qasm_sim(qasm).noise(noise_builder).run(10).unwrap();
 
     assert_eq!(results.len(), 10);
 }

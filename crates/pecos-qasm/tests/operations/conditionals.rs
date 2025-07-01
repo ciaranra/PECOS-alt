@@ -3,7 +3,7 @@
 
 use std::error::Error;
 
-use pecos_qasm::run::run_qasm_sim;
+use pecos_qasm::{prelude::PassThroughNoiseModel, run::run_qasm};
 
 #[test]
 fn test_conditional_execution() -> Result<(), Box<dyn Error>> {
@@ -30,7 +30,14 @@ fn test_conditional_execution() -> Result<(), Box<dyn Error>> {
     "#;
 
     // Use the simulation helper instead of direct engine usage
-    let results = run_qasm_sim(qasm, 100, Some(42), Some(1), None, None)?;
+    let results = run_qasm(
+        qasm,
+        100,
+        PassThroughNoiseModel::builder(),
+        None,
+        Some(1),
+        Some(42),
+    )?;
     // Count different outcomes
     let mut both_ones = 0;
     let mut both_zeros = 0;
@@ -76,8 +83,15 @@ fn test_simple_if() {
         measure q[1] -> c[1];
     "#;
 
-    let results =
-        run_qasm_sim(qasm, 100, Some(42), Some(1), None, None).expect("Failed to run simulation");
+    let results = run_qasm(
+        qasm,
+        100,
+        PassThroughNoiseModel::builder(),
+        None,
+        Some(1),
+        Some(42),
+    )
+    .expect("Failed to run simulation");
 
     // Should always get c = 11 (binary) = 3 (decimal)
     for shot in &results.shots {
@@ -112,8 +126,15 @@ fn test_exact_issue() {
         if (c[0] == 0) X q[1];
     "#;
 
-    let results =
-        run_qasm_sim(qasm, 100, Some(42), Some(1), None, None).expect("Failed to run simulation");
+    let results = run_qasm(
+        qasm,
+        100,
+        PassThroughNoiseModel::builder(),
+        None,
+        Some(1),
+        Some(42),
+    )
+    .expect("Failed to run simulation");
 
     // Verify we get results
     assert!(!results.is_empty(), "Should have at least one shot");
@@ -145,8 +166,15 @@ fn test_conditional_classical_operations() {
         measure q[0] -> c[0];
     "#;
 
-    let results =
-        run_qasm_sim(qasm, 100, Some(42), Some(1), None, None).expect("Failed to run simulation");
+    let results = run_qasm(
+        qasm,
+        100,
+        PassThroughNoiseModel::builder(),
+        None,
+        Some(1),
+        Some(42),
+    )
+    .expect("Failed to run simulation");
 
     // c[0] should always be 1 (from x q[0])
     for shot in &results.shots {
@@ -180,8 +208,15 @@ fn test_conditional_comparison_operators() {
         measure q -> c;
     "#;
 
-    let results =
-        run_qasm_sim(qasm, 100, Some(42), Some(1), None, None).expect("Failed to run simulation");
+    let results = run_qasm(
+        qasm,
+        100,
+        PassThroughNoiseModel::builder(),
+        None,
+        Some(1),
+        Some(42),
+    )
+    .expect("Failed to run simulation");
 
     // Only q[0] and q[2] should be flipped
     for shot in &results.shots {
@@ -210,8 +245,15 @@ fn test_nested_conditionals() {
         measure q -> c;
     "#;
 
-    let results =
-        run_qasm_sim(qasm, 100, Some(42), Some(1), None, None).expect("Failed to run simulation");
+    let results = run_qasm(
+        qasm,
+        100,
+        PassThroughNoiseModel::builder(),
+        None,
+        Some(1),
+        Some(42),
+    )
+    .expect("Failed to run simulation");
 
     // q[0] should be flipped
     for shot in &results.shots {
@@ -242,8 +284,15 @@ fn test_conditional_with_barriers() {
         measure q[1] -> c[1];
     "#;
 
-    let results =
-        run_qasm_sim(qasm, 100, Some(42), Some(1), None, None).expect("Failed to run simulation");
+    let results = run_qasm(
+        qasm,
+        100,
+        PassThroughNoiseModel::builder(),
+        None,
+        Some(1),
+        Some(42),
+    )
+    .expect("Failed to run simulation");
 
     // When c[0] is 1, c[1] should also be 1
     for shot in &results.shots {
@@ -282,8 +331,15 @@ fn test_conditional_feature_flags() {
         measure q[1] -> c[1];
     "#;
 
-    let results =
-        run_qasm_sim(qasm, 100, Some(42), Some(1), None, None).expect("Failed to run simulation");
+    let results = run_qasm(
+        qasm,
+        100,
+        PassThroughNoiseModel::builder(),
+        None,
+        Some(1),
+        Some(42),
+    )
+    .expect("Failed to run simulation");
     assert!(!results.is_empty(), "Should have at least one shot");
     assert!(
         results.shots[0].data.contains_key("c"),
@@ -309,8 +365,15 @@ fn test_if_with_multiple_statements() {
         measure q[2] -> c[2];
     "#;
 
-    let results =
-        run_qasm_sim(qasm, 100, Some(42), Some(1), None, None).expect("Failed to run simulation");
+    let results = run_qasm(
+        qasm,
+        100,
+        PassThroughNoiseModel::builder(),
+        None,
+        Some(1),
+        Some(42),
+    )
+    .expect("Failed to run simulation");
 
     // c[0] and c[1] should always be 1
     for shot in &results.shots {

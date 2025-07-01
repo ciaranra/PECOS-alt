@@ -56,7 +56,8 @@ fn compare_biased_and_general(circ: &ByteMessage, quantum: &StateVecEngine) {
             .with_p2_probability(0.0)
             .with_seed(seed)
             .build();
-        let mut biased_system = QuantumSystem::new(biased_noise, Box::new(quantum.clone()));
+        let mut biased_system =
+            QuantumSystem::new(Box::new(biased_noise), Box::new(quantum.clone()));
 
         // Create equivalent general noise model (with gate noise set to 0)
         let general_noise = GeneralNoiseModel::builder()
@@ -161,7 +162,7 @@ fn bell_state_comparison() {
         .with_p2_probability(0.0)
         .with_seed(seed)
         .build();
-    let mut biased_system = QuantumSystem::new(biased_noise, Box::new(quantum.clone()));
+    let mut biased_system = QuantumSystem::new(Box::new(biased_noise), Box::new(quantum.clone()));
 
     // Create equivalent general noise model
     let general_noise = GeneralNoiseModel::builder()

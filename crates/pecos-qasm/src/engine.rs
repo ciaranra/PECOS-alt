@@ -528,9 +528,15 @@ impl QASMEngine {
 
         match gate.gate_type {
             GateType::I | GateType::Idle => Ok(()), // No-op gates
-            GateType::X | GateType::Y | GateType::Z | GateType::H | GateType::Prep => {
-                self.process_single_qubit_gate(gate.gate_type, &qubits)
-            }
+            GateType::X
+            | GateType::Y
+            | GateType::Z
+            | GateType::H
+            | GateType::SZ
+            | GateType::SZdg
+            | GateType::T
+            | GateType::Tdg
+            | GateType::Prep => self.process_single_qubit_gate(gate.gate_type, &qubits),
             GateType::CX | GateType::SZZ | GateType::SZZdg => {
                 self.process_two_qubit_gate(gate.gate_type, &qubits)
             }

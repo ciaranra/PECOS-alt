@@ -251,7 +251,7 @@ fn test_simple_rx_pi() {
     let engine = QASMEngine::from_str(qasm).unwrap();
     let results = MonteCarloEngine::run_with_noise_model(
         Box::new(engine),
-        Box::new(PassThroughNoiseModel),
+        Box::new(PassThroughNoiseModel::builder().build()),
         10,
         1,
         Some(42),
@@ -297,7 +297,7 @@ fn test_trig_identity_with_measurement() {
 
     let results = MonteCarloEngine::run_with_noise_model(
         Box::new(engine),
-        Box::new(PassThroughNoiseModel),
+        Box::new(PassThroughNoiseModel::builder().build()),
         100, // 100 shots
         1,
         Some(42), // Fixed seed for deterministic results
@@ -352,7 +352,7 @@ fn test_trig_identity_various_angles() {
 
         let results = MonteCarloEngine::run_with_noise_model(
             Box::new(engine),
-            Box::new(PassThroughNoiseModel),
+            Box::new(PassThroughNoiseModel::builder().build()),
             50, // 50 shots per angle
             1,
             Some(42), // Fixed seed for deterministic results

@@ -31,9 +31,10 @@ from pecos_rslib._pecos_rslib import QuantumEngine
 from pecos_rslib._pecos_rslib import run_qasm
 from pecos_rslib._pecos_rslib import get_noise_models
 from pecos_rslib._pecos_rslib import get_quantum_engines
+from pecos_rslib._pecos_rslib import GeneralNoiseModelBuilder
 
-# Import the qasm_sim function and noise models for easy access
-from pecos_rslib.qasm_sim import qasm_sim, register_noise_model
+# Import the qasm_sim function for easy access
+from pecos_rslib.qasm_sim import qasm_sim
 
 # Also import the noise model dataclasses for convenience
 from pecos_rslib.qasm_sim import (
@@ -42,6 +43,14 @@ from pecos_rslib.qasm_sim import (
     DepolarizingCustomNoise,
     BiasedDepolarizingNoise,
     GeneralNoise,
+)
+
+# Import GeneralNoiseFactory and convenience functions
+from pecos_rslib.general_noise_factory import (
+    GeneralNoiseFactory,
+    create_noise_from_dict,
+    create_noise_from_json,
+    IonTrapNoiseFactory,
 )
 
 try:
@@ -63,11 +72,16 @@ __all__ = [
     "get_noise_models",
     "get_quantum_engines",
     "qasm_sim",
-    "register_noise_model",
+    "GeneralNoiseModelBuilder",
     # Noise model dataclasses
     "PassThroughNoise",
     "DepolarizingNoise",
     "DepolarizingCustomNoise",
     "BiasedDepolarizingNoise",
     "GeneralNoise",
+    # Noise factory
+    "GeneralNoiseFactory",
+    "create_noise_from_dict",
+    "create_noise_from_json",
+    "IonTrapNoiseFactory",
 ]

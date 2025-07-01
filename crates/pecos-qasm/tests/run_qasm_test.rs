@@ -15,7 +15,15 @@ fn test_run_qasm_simple() {
     "#;
 
     // Simple usage - ideal simulation
-    let results = run_qasm(qasm, 100, PassThroughNoise, None, None, None).unwrap();
+    let results = run_qasm(
+        qasm,
+        100,
+        PassThroughNoiseModelBuilder::new(),
+        None,
+        None,
+        None,
+    )
+    .unwrap();
     assert_eq!(results.len(), 100);
 
     // Check Bell state results
@@ -41,7 +49,7 @@ fn test_run_qasm_with_noise() {
     let results = run_qasm(
         qasm,
         1000,
-        DepolarizingNoise { p: 0.1 },
+        DepolarizingNoiseModel::builder().with_uniform_probability(0.1),
         None,
         None,
         Some(42),
@@ -75,7 +83,7 @@ fn test_run_qasm_with_engine() {
     let results_sv = run_qasm(
         qasm,
         100,
-        PassThroughNoise,
+        PassThroughNoiseModelBuilder::new(),
         Some(QuantumEngineType::StateVector),
         None,
         Some(42),
@@ -87,7 +95,7 @@ fn test_run_qasm_with_engine() {
     let results_stab = run_qasm(
         qasm,
         100,
-        PassThroughNoise,
+        PassThroughNoiseModelBuilder::new(),
         Some(QuantumEngineType::SparseStabilizer),
         None,
         Some(42),
@@ -109,12 +117,11 @@ fn test_run_qasm_with_config_structs() {
     "#;
 
     // Test with config struct converted to enum
-    let noise_config = DepolarizingCustomNoise {
-        p_prep: 0.01,
-        p_meas: 0.01,
-        p1: 0.001,
-        p2: 0.1,
-    };
+    let noise_config = DepolarizingNoiseModel::builder()
+        .with_prep_probability(0.01)
+        .with_meas_probability(0.01)
+        .with_p1_probability(0.001)
+        .with_p2_probability(0.1);
 
     let results = run_qasm(
         qasm,
@@ -141,8 +148,24 @@ fn test_run_qasm_deterministic() {
     "#;
 
     // Run twice with same seed
-    let results1 = run_qasm(qasm, 100, PassThroughNoise, None, None, Some(123)).unwrap();
-    let results2 = run_qasm(qasm, 100, PassThroughNoise, None, None, Some(123)).unwrap();
+    let results1 = run_qasm(
+        qasm,
+        100,
+        PassThroughNoiseModelBuilder::new(),
+        None,
+        None,
+        Some(123),
+    )
+    .unwrap();
+    let results2 = run_qasm(
+        qasm,
+        100,
+        PassThroughNoiseModelBuilder::new(),
+        None,
+        None,
+        Some(123),
+    )
+    .unwrap();
 
     // Convert to comparable format
     let map1 = results1.try_as_shot_map().unwrap();

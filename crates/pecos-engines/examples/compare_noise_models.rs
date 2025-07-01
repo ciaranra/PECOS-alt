@@ -36,7 +36,8 @@ fn compare_depolarizing_with_general(circ: &ByteMessage) {
         .with_uniform_probability(p_noise)
         .with_seed(seed)
         .build();
-    let mut depolarizing_system = QuantumSystem::new(depolarizing_noise, Box::new(quantum.clone()));
+    let mut depolarizing_system =
+        QuantumSystem::new(Box::new(depolarizing_noise), Box::new(quantum.clone()));
 
     // Create equivalent general noise model
     let general_noise = GeneralNoiseModel::builder()
@@ -200,7 +201,8 @@ fn test_asymmetric_measurements() {
         .with_two_qubit_probability(0.0)
         .with_seed(seed)
         .build();
-    let mut depolarizing_system = QuantumSystem::new(depolarizing_noise, Box::new(quantum.clone()));
+    let mut depolarizing_system =
+        QuantumSystem::new(Box::new(depolarizing_noise), Box::new(quantum.clone()));
 
     // Run simulations
     let mut general_counts = HashMap::new();

@@ -13,7 +13,7 @@ use pecos_phir::v0_1::engine::PHIREngine;
 /// * `shots` - Number of shots to run
 /// * `workers` - Number of workers to use
 /// * `seed` - Optional seed for reproducibility
-/// * `noise_model` - Optional noise model to use (defaults to `PassThroughNoiseModel`)
+/// * `noise_model` - Optional noise model to use (defaults to pass-through noise)
 /// * `wasm_path` - Optional path to a WebAssembly file (.wat or .wasm) for foreign function integration
 ///
 /// # Returns
@@ -30,7 +30,7 @@ use pecos_phir::v0_1::engine::PHIREngine;
 ///     1,                      // Just one shot
 ///     1,                      // Single worker
 ///     Some(42),               // Seed for reproducibility
-///     None::<PassThroughNoiseModel>,  // No noise model (pass-through)
+///     None,  // No noise model (pass-through)
 ///     None::<&std::path::Path>,       // No WebAssembly file
 /// )?;
 /// ```
@@ -44,7 +44,7 @@ use pecos_phir::v0_1::engine::PHIREngine;
 ///     1,                      // Just one shot
 ///     1,                      // Single worker
 ///     Some(42),               // Seed for reproducibility
-///     None::<PassThroughNoiseModel>,  // No noise model (pass-through)
+///     None,  // No noise model (pass-through)
 ///     Some(&wasm_path),       // WebAssembly file for foreign function calls
 /// )?;
 /// ```
@@ -90,7 +90,7 @@ pub fn run_phir_simulation_from_json<T: NoiseModel + 'static, P: AsRef<std::path
     // Use the provided noise model or default to PassThroughNoiseModel
     let noise_model_box: Box<dyn NoiseModel> = match noise_model {
         Some(model) => Box::new(model),
-        None => Box::new(PassThroughNoiseModel),
+        None => Box::new(PassThroughNoiseModel::builder().build()),
     };
 
     // Debug: Print the engine state before running

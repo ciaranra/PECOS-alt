@@ -1,7 +1,7 @@
 // Test that verifies arbitrary-precision BitVec expressions work without limitations
 
 use pecos_engines::Data;
-use pecos_qasm::run_qasm_sim;
+use pecos_qasm::{prelude::PassThroughNoiseModel, run_qasm};
 
 #[test]
 fn test_large_register_full_value_assignment() {
@@ -23,7 +23,7 @@ fn test_large_register_full_value_assignment() {
         c[127] = 1;
     ";
 
-    let shot_vec = run_qasm_sim(qasm, 1, None, None, None, None).unwrap();
+    let shot_vec = run_qasm(qasm, 1, PassThroughNoiseModel::builder(), None, None, None).unwrap();
     let shot = &shot_vec.shots[0];
 
     if let Data::BitVec(bitvec) = &shot.data["c"] {
@@ -70,7 +70,7 @@ fn test_large_register_full_arithmetic() {
         result = a | b;  // Should now work on full 100 bits
     ";
 
-    let shot_vec = run_qasm_sim(qasm, 1, None, None, None, None).unwrap();
+    let shot_vec = run_qasm(qasm, 1, PassThroughNoiseModel::builder(), None, None, None).unwrap();
     let shot = &shot_vec.shots[0];
 
     // Check sum (a + b)
@@ -136,7 +136,7 @@ fn test_large_register_comparisons() {
         results[3] = (a != b);  // Should be true
     ";
 
-    let shot_vec = run_qasm_sim(qasm, 1, None, None, None, None).unwrap();
+    let shot_vec = run_qasm(qasm, 1, PassThroughNoiseModel::builder(), None, None, None).unwrap();
     let shot = &shot_vec.shots[0];
 
     if let Data::BitVec(results_bits) = &shot.data["results"] {
@@ -173,7 +173,7 @@ fn test_large_register_shift_full_width() {
         right_shift = value >> 3;
     ";
 
-    let shot_vec = run_qasm_sim(qasm, 1, None, None, None, None).unwrap();
+    let shot_vec = run_qasm(qasm, 1, PassThroughNoiseModel::builder(), None, None, None).unwrap();
     let shot = &shot_vec.shots[0];
 
     // Check left shift
@@ -232,7 +232,7 @@ fn test_complex_expression_chain() {
         final = c + a;
     ";
 
-    let shot_vec = run_qasm_sim(qasm, 1, None, None, None, None).unwrap();
+    let shot_vec = run_qasm(qasm, 1, PassThroughNoiseModel::builder(), None, None, None).unwrap();
     let shot = &shot_vec.shots[0];
 
     // Verify temp (XOR result)
@@ -273,7 +273,7 @@ fn test_negative_numbers_full_width() {
         result = -neg_one;  // Should be 1
     ";
 
-    let shot_vec = run_qasm_sim(qasm, 1, None, None, None, None).unwrap();
+    let shot_vec = run_qasm(qasm, 1, PassThroughNoiseModel::builder(), None, None, None).unwrap();
     let shot = &shot_vec.shots[0];
 
     // Check value (-1 in two's complement)

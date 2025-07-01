@@ -16,7 +16,7 @@ use pecos::prelude::*;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
 
-#[pyclass]
+#[pyclass(module = "pecos_rslib._pecos_rslib")]
 pub struct SparseSim {
     inner: SparseStab<VecSet<usize>, usize>,
 }
@@ -32,6 +32,15 @@ impl SparseSim {
 
     fn reset(&mut self) {
         self.inner.reset();
+    }
+
+    fn __repr__(&self) -> String {
+        format!("SparseSim(num_qubits={})", self.inner.num_qubits())
+    }
+
+    #[getter]
+    fn num_qubits(&self) -> usize {
+        self.inner.num_qubits()
     }
 
     #[allow(clippy::too_many_lines)]

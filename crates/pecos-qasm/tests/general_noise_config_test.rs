@@ -31,10 +31,10 @@ fn test_general_noise_json_simple() {
     // Test conversion to NoiseModelType
     let noise_model: NoiseModelType = noise_config.into();
     match noise_model {
-        NoiseModelType::GeneralFromBuilder(_) => {
-            // Success - it should create a GeneralFromBuilder variant
+        NoiseModelType::General(_) => {
+            // Success - it should create a General variant
         }
-        _ => panic!("Expected GeneralFromBuilder variant"),
+        _ => panic!("Expected General variant"),
     }
 }
 
