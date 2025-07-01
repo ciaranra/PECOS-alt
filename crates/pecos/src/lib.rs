@@ -231,7 +231,7 @@ pub mod hugr {
 pub mod pmir {
     use pecos_core::errors::PecosError;
     use pecos_engines::ClassicalEngine;
-    use pecos_pmir::{compile_hugr_via_pmir as compile_hugr_pmir};
+    use pecos_pmir::{compile_hugr_via_pmir as compile_hugr_pmir, compile_hugr_bytes_via_pmir};
     pub use pecos_pmir::PmirConfig;
     use std::path::Path;
 
@@ -257,12 +257,19 @@ pub mod pmir {
         shots: Option<usize>,
         config: Option<PmirConfig>,
     ) -> Result<Box<dyn ClassicalEngine>, PecosError> {
-        // Read HUGR file
-        let hugr_json = std::fs::read_to_string(hugr_path.as_ref())
+        // Read HUGR file (could be binary or JSON format)
+        let hugr_bytes = std::fs::read(hugr_path.as_ref())
             .map_err(|e| PecosError::with_context(e, 
                 format!("Failed to read HUGR file: {}", hugr_path.as_ref().display())))?;
         
-        run_pmir_llvm_from_string(&hugr_json, shots, config)
+        // Use provided config or default
+        let config = config.unwrap_or_default();
+        
+        // Compile via PMIR (handles both binary and JSON formats)
+        let llvm_ir = compile_hugr_bytes_via_pmir(&hugr_bytes, &config)?;
+        
+        // Create LLVM engine from the IR string
+        super::hugr::create_llvm_engine_from_ir_string(&llvm_ir, shots)
     }
 
     /// Compile HUGR JSON string to LLVM IR via PMIR and create an engine
@@ -310,16 +317,16 @@ pub mod pmir {
         hugr_path: P,
         config: Option<PmirConfig>,
     ) -> Result<String, PecosError> {
-        // Read HUGR file
-        let hugr_json = std::fs::read_to_string(hugr_path.as_ref())
+        // Read HUGR file (could be binary or JSON format)
+        let hugr_bytes = std::fs::read(hugr_path.as_ref())
             .map_err(|e| PecosError::with_context(e, 
                 format!("Failed to read HUGR file: {}", hugr_path.as_ref().display())))?;
         
         // Use provided config or default
         let config = config.unwrap_or_default();
         
-        // Compile via PMIR
-        compile_hugr_pmir(&hugr_json, &config)
+        // Compile via PMIR (handles both binary and JSON formats)
+        compile_hugr_bytes_via_pmir(&hugr_bytes, &config)
     }
 
     // Re-export types for convenience (PmirConfig already imported above)
