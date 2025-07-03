@@ -159,6 +159,14 @@ pub enum PastOp {
     Reset,
     /// Allocate qubit
     QAlloc,
+    
+    // Result operations (tket2.result)
+    /// Boolean result recording with name
+    ResultBool(String),
+    /// Integer result recording with name  
+    ResultInt(String),
+    /// Float result recording with name
+    ResultF64(String),
 
     // Classical operations
     /// Integer addition

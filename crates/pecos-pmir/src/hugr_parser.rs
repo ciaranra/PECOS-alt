@@ -68,6 +68,15 @@ fn convert_json_to_past(json: &Value) -> Result<PastModule, PecosError> {
     // Parse nodes and edges from module
     let mut nodes = parse_nodes(first_module)?;
     let edges = parse_edges(first_module)?;
+    
+    // Get the original nodes array for function signature parsing
+    let original_nodes = first_module
+        .get("nodes")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| PecosError::ParseSyntax {
+            language: "HUGR".to_string(),
+            message: "Missing 'nodes' array in first module".to_string(),
+        })?;
 
     // Resolve rotation angles from dataflow edges
     super::angle_resolver::resolve_rotation_angles(&mut nodes, &edges)?;
@@ -87,8 +96,8 @@ fn convert_json_to_past(json: &Value) -> Result<PastModule, PecosError> {
         .unwrap_or("live")
         .to_string();
 
-    // Build functions from the graph
-    let functions = build_functions_from_graph(&nodes, &edges);
+    // Build functions from the graph - pass original JSON nodes for signature parsing
+    let functions = build_functions_from_graph(&nodes, &edges, original_nodes)?;
 
     Ok(PastModule {
         name,
@@ -223,6 +232,18 @@ fn parse_quantum_gate(
         "MeasureFree" | "Measure" | "measure" | "MeasureZ" => Ok(PastOp::Measure),
         "Reset" | "reset" => Ok(PastOp::Reset),
         "QAlloc" | "AllocQubit" | "q_alloc" => Ok(PastOp::QAlloc),
+        "result_bool" => {
+            let name = parse_result_name_from_node(node).unwrap_or_else(|| "result".to_string());
+            Ok(PastOp::ResultBool(name))
+        }
+        "result_int" => {
+            let name = parse_result_name_from_node(node).unwrap_or_else(|| "result".to_string());
+            Ok(PastOp::ResultInt(name))
+        }
+        "result_f64" => {
+            let name = parse_result_name_from_node(node).unwrap_or_else(|| "result".to_string());
+            Ok(PastOp::ResultF64(name))
+        }
         _ => Err(PecosError::ParseSyntax {
             language: "HUGR".to_string(),
             message: format!("Unknown quantum operation: {op_type}"),
@@ -405,6 +426,9 @@ fn count_ports(op: &PastOp) -> (usize, usize) {
 
         // Output node: 1 in, 0 out
         PastOp::Output(_) => (1, 0),
+        
+        // Result operations: 1 in, 0 out (they consume measurement results)
+        PastOp::ResultBool(_) | PastOp::ResultInt(_) | PastOp::ResultF64(_) => (1, 0),
     }
 }
 
@@ -510,8 +534,28 @@ fn parse_node_port(value: Option<&Value>) -> Result<(usize, usize), PecosError> 
     Ok((node, port))
 }
 
+/// Parse result name from tket2.result operation (similar to hugr-llvm)
+fn parse_result_name_from_node(node: &serde_json::Map<String, Value>) -> Option<String> {
+    // tket2.result operations have the result name as the first string parameter in args
+    if let Some(op) = node.get("op").and_then(|v| v.as_object()) {
+        if let Some(args) = op.get("args").and_then(|v| v.as_array()) {
+            // Look for string argument in args array
+            for arg in args {
+                if let Some(string_arg) = arg.get("String").and_then(|v| v.as_str()) {
+                    return Some(string_arg.to_string());
+                }
+                // Also handle direct string format
+                if let Some(string_val) = arg.as_str() {
+                    return Some(string_val.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
 /// Build functions from nodes and edges
-fn build_functions_from_graph(nodes: &[PastNode], edges: &[PastEdge]) -> Vec<PastFunction> {
+fn build_functions_from_graph(nodes: &[PastNode], edges: &[PastEdge], original_nodes: &[Value]) -> Result<Vec<PastFunction>, PecosError> {
     // For now, create a single main function containing all nodes
     // In the future, we'll properly identify function boundaries
 
@@ -533,28 +577,8 @@ fn build_functions_from_graph(nodes: &[PastNode], edges: &[PastEdge]) -> Vec<Pas
         })
         .unwrap_or(0);
 
-    // HACK: The current HUGR structure from guppy has nested CFG/DataflowBlock nodes
-    // that confuse our parser. For now, hardcode the output types based on what we expect.
-    // Bell state should have 2 bit outputs.
-    let output_types = if exit_nodes.len() > 1 {
-        // Multiple output nodes suggest complex control flow
-        // For bell state, we expect 2 outputs
-        vec![PastType::Bit, PastType::Bit]
-    } else {
-        // Fallback to counting edges
-        let mut types = Vec::new();
-        for exit_node in &exit_nodes {
-            let incoming_edges: Vec<_> = edges.iter().filter(|e| e.dst == *exit_node).collect();
-            for _ in incoming_edges {
-                types.push(PastType::Bit);
-            }
-        }
-        if types.is_empty() {
-            vec![PastType::Bit]
-        } else {
-            types
-        }
-    };
+    // Extract output types from the HUGR function signature
+    let output_types = extract_function_output_types(original_nodes)?;
 
     let main_func = PastFunction {
         name: "main".to_string(),
@@ -568,7 +592,104 @@ fn build_functions_from_graph(nodes: &[PastNode], edges: &[PastEdge]) -> Vec<Pas
         },
     };
 
-    vec![main_func]
+    Ok(vec![main_func])
+}
+
+/// Extract function output types from HUGR nodes
+/// This finds the FuncDefn node and parses its signature to determine actual output types
+fn extract_function_output_types(nodes: &[Value]) -> Result<Vec<PastType>, PecosError> {
+    // Find the FuncDefn node (should be node 1 in modern HUGR format)
+    let func_defn_node = nodes
+        .iter()
+        .enumerate()
+        .find(|(_, node)| {
+            node.as_object()
+                .and_then(|obj| obj.get("op"))
+                .and_then(|op| op.as_str()) == Some("FuncDefn")
+        })
+        .map(|(_, node)| node)
+        .ok_or_else(|| PecosError::ParseSyntax {
+            language: "HUGR".to_string(),
+            message: "No FuncDefn node found".to_string(),
+        })?;
+
+    // Extract the signature from the FuncDefn node (if it exists)
+    let signature = func_defn_node
+        .as_object()
+        .and_then(|obj| obj.get("signature"));
+
+    if let Some(sig) = signature {
+        // New HUGR format with explicit signature
+        let outputs = sig.as_object()
+            .and_then(|sig| sig.get("body"))
+            .and_then(|body| body.as_object())
+            .and_then(|body| body.get("output"))
+            .and_then(|output| output.as_array())
+            .ok_or_else(|| PecosError::ParseSyntax {
+                language: "HUGR".to_string(),
+                message: "Invalid function signature output format".to_string(),
+            })?;
+
+        // Convert HUGR output types to PAST types
+        let mut output_types = Vec::new();
+        for output_type in outputs {
+            // For now, all measurement outputs are treated as Bit (i32 in MLIR)
+            if let Some(obj) = output_type.as_object() {
+                if let Some(t) = obj.get("t").and_then(|v| v.as_str()) {
+                    match t {
+                        "Opaque" => {
+                            // Check if it's a bool type (measurement result)
+                            if obj.get("extension").and_then(|v| v.as_str()) == Some("tket2.bool") {
+                                output_types.push(PastType::Bit);
+                            } else {
+                                // Other opaque types, default to bit for now
+                                output_types.push(PastType::Bit);
+                            }
+                        }
+                        "Sum" => {
+                            // Sum types (like unit sums for booleans) are also measurement results
+                            output_types.push(PastType::Bit);
+                        }
+                        _ => {
+                            // Other types, default to bit
+                            output_types.push(PastType::Bit);
+                        }
+                    }
+                } else {
+                    // Fallback for unknown type format
+                    output_types.push(PastType::Bit);
+                }
+            }
+        }
+        Ok(output_types)
+    } else {
+        // Old HUGR format without signature - fallback to counting measurement operations
+        let measurement_count = count_measurement_operations(nodes);
+        let output_types = (0..measurement_count).map(|_| PastType::Bit).collect();
+        Ok(output_types)
+    }
+}
+
+/// Count measurement operations in HUGR nodes (fallback for old format)
+fn count_measurement_operations(nodes: &[Value]) -> usize {
+    nodes
+        .iter()
+        .filter(|node| {
+            if let Some(obj) = node.as_object() {
+                // Check for MeasureFree operation
+                if let Some(name) = obj.get("name").and_then(|v| v.as_str()) {
+                    return name == "MeasureFree" || name == "Measure";
+                }
+                // Check for Extension operations with measurement names
+                if obj.get("op").and_then(|v| v.as_str()) == Some("Extension") {
+                    if let Some(name) = obj.get("name").and_then(|v| v.as_str()) {
+                        return name == "MeasureFree" || name == "Measure";
+                    }
+                }
+            }
+            false
+        })
+        .count()
 }
 
 /// Find the entry point function

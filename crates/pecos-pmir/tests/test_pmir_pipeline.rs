@@ -42,8 +42,8 @@ fn test_simple_hadamard_measure() {
             // Check that the LLVM IR contains expected quantum operations
             assert!(llvm_ir.contains("@__quantum__rt__qubit_allocate"));
             assert!(llvm_ir.contains("@__quantum__qis__h__body"));
-            assert!(llvm_ir.contains("@__quantum__qis__mz__body"));
-            assert!(llvm_ir.contains("ret i1"));
+            assert!(llvm_ir.contains("@__quantum__qis__m__body"));
+            assert!(llvm_ir.contains("ret i32"));
         }
         Err(e) => {
             eprintln!("Compilation failed: {e:?}");
@@ -95,12 +95,12 @@ fn test_bell_state_circuit() {
 
             // Check for Bell state operations
             assert!(llvm_ir.contains("@__quantum__qis__h__body"));
-            assert!(llvm_ir.contains("@__quantum__qis__cnot__body"));
-            assert!(llvm_ir.contains("@__quantum__qis__mz__body"));
+            assert!(llvm_ir.contains("@__quantum__qis__cx__body")); // HUGR uses cx not cnot
+            assert!(llvm_ir.contains("@__quantum__qis__m__body"));
 
             // Should allocate two qubits (count only calls, not declarations)
             let alloc_count = llvm_ir
-                .matches("call i8* @__quantum__rt__qubit_allocate")
+                .matches("call i64 @__quantum__rt__qubit_allocate") // HUGR returns i64 not i8*
                 .count();
             assert_eq!(alloc_count, 2);
         }

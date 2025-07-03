@@ -20,6 +20,15 @@ pub struct MlirModule {
     pub functions: Vec<MlirFunction>,
     /// External function declarations
     pub external_funcs: Vec<ExternalFunc>,
+    /// Global string constants for result names
+    pub global_strings: Vec<GlobalString>,
+}
+
+/// Global string constant declaration
+pub struct GlobalString {
+    pub name: String,
+    pub value: String,
+    pub length: usize,
 }
 
 /// External function declaration
@@ -63,7 +72,17 @@ pub struct MlirOperation {
 
 impl fmt::Display for MlirModule {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Write external function declarations first
+        // Write global string constants first (MLIR format)
+        for global_str in &self.global_strings {
+            writeln!(f, "llvm.mlir.global internal constant @{}(\"{}\\00\") : !llvm.array<{} x i8>", 
+                     global_str.name, global_str.value, global_str.length)?;
+        }
+        
+        if !self.global_strings.is_empty() {
+            writeln!(f)?; // Add blank line after globals
+        }
+        
+        // Write external function declarations
         for ext_func in &self.external_funcs {
             write!(f, "func private @{}(", ext_func.name)?;
             write!(f, "{}", ext_func.arg_types.join(", "))?;
@@ -117,13 +136,25 @@ impl fmt::Display for MlirOperation {
             write!(f, "{} = ", self.results.join(", "))?;
         }
 
-        // Special handling for call and return operations
+        // Special handling for call, return, and LLVM dialect operations
         if self.op_name == "call" && !self.args.is_empty() {
             // Extract function name and arguments
             let first_arg = &self.args[0];
             write!(f, "call {first_arg}")?;
         } else if self.op_name == "return" {
             write!(f, "return")?;
+            if !self.args.is_empty() {
+                write!(f, " {}", self.args.join(", "))?;
+            }
+        } else if self.op_name.starts_with("llvm.") {
+            // Special handling for LLVM dialect operations
+            write!(f, "{}", self.op_name)?;
+            if !self.args.is_empty() {
+                write!(f, " {}", self.args.join(", "))?;
+            }
+        } else if self.op_name.starts_with("arith.") {
+            // Special handling for arith dialect operations - no parentheses
+            write!(f, "{}", self.op_name)?;
             if !self.args.is_empty() {
                 write!(f, " {}", self.args.join(", "))?;
             }
@@ -169,16 +200,72 @@ pub fn lower_past_to_pmir(
     let mut mlir_functions = Vec::new();
     let external_funcs = collect_external_functions();
 
+    // Extract result names from the PAST (parsed from HUGR)
+    let mut result_names = std::collections::HashSet::new();
+    for func in &past.functions {
+        extract_result_names_from_function(func, &mut result_names);
+    }
+
     for func in &past.functions {
         let mlir_func = lower_function(func, config)?;
         mlir_functions.push(mlir_func);
+    }
+
+    // Create global string constants for result recording based on extracted names
+    let mut global_strings = Vec::new();
+    for result_name in &result_names {
+        global_strings.push(GlobalString {
+            name: format!("str_{}", result_name),
+            value: result_name.clone(),
+            length: result_name.len() + 1, // +1 for null terminator
+        });
+    }
+
+    // Add default result strings based on the number of outputs
+    if global_strings.is_empty() {
+        // Check if we have multiple outputs in any function
+        let max_outputs = past.functions.iter()
+            .map(|f| f.outputs.len())
+            .max()
+            .unwrap_or(0);
+            
+        // Always create indexed names like HUGR-LLVM does for consistency
+        // Using "c", "c1", "c2" pattern to match HUGR-LLVM
+        global_strings.push(GlobalString {
+            name: "str_c".to_string(),
+            value: "c".to_string(),
+            length: 2,
+        });
+        
+        // Create additional strings if needed for multiple outputs
+        for i in 1..max_outputs.max(1) {
+            let name = format!("c{}", i);
+            global_strings.push(GlobalString {
+                name: format!("str_{}", name),
+                value: name.clone(),
+                length: name.len() + 1,
+            });
+        }
     }
 
     Ok(MlirModule {
         name: past.name.clone(),
         functions: mlir_functions,
         external_funcs,
+        global_strings,
     })
+}
+
+/// Extract result names from function nodes
+fn extract_result_names_from_function(func: &PastFunction, result_names: &mut std::collections::HashSet<String>) {
+    for node in &func.body.nodes {
+        match &node.op {
+            PastOp::ResultBool(name) | PastOp::ResultInt(name) | PastOp::ResultF64(name) => {
+                result_names.insert(name.clone());
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Helper to create external function declarations
@@ -335,11 +422,9 @@ fn lower_function(func: &PastFunction, _config: &PmirConfig) -> Result<MlirFunct
 
     let signature = if func.outputs.is_empty() {
         format!("@{}({})", func.name, input_types)
-    } else if func.outputs.len() == 1 {
-        format!("@{}({}) -> {}", func.name, input_types, output_types)
+    } else if output_types.is_empty() {
+        format!("@{}({})", func.name, input_types)
     } else {
-        // For multiple outputs, we need to return them as separate values, not a tuple
-        // MLIR's func dialect doesn't use parentheses for multiple returns
         format!("@{}({}) -> ({})", func.name, input_types, output_types)
     };
 
@@ -359,6 +444,7 @@ fn lower_graph(graph: &PastGraph) -> Result<Vec<MlirBlock>, PecosError> {
     let mut operations = Vec::new();
     let mut value_map = std::collections::HashMap::new();
     let mut allocated_qubits = Vec::new();
+    let mut measurement_count = 0usize;
 
     // Build edge connectivity map: (dst_node, dst_port) -> (src_node, src_port)
     let mut edge_map = std::collections::HashMap::new();
@@ -369,7 +455,7 @@ fn lower_graph(graph: &PastGraph) -> Result<Vec<MlirBlock>, PecosError> {
     // Process nodes in topological order (simplified for now)
     for node in &graph.nodes {
         let mlir_ops =
-            lower_node_to_operations(node, &value_map, &edge_map, &mut allocated_qubits)?;
+            lower_node_to_operations(node, &value_map, &edge_map, &mut allocated_qubits, &mut measurement_count)?;
 
         // For quantum gates that operate in-place, we need to track the qubit flow
         match &node.op {
@@ -428,32 +514,46 @@ fn lower_graph(graph: &PastGraph) -> Result<Vec<MlirBlock>, PecosError> {
     // Find the final output value for return
     let mut return_args = vec![];
     
-    // Look for measurement results in the value map
-    // For bell state, we should have %15 and %16 from the measurements
+    // Look for measurement results directly in the operations
     let mut measurement_results = vec![];
-    for ((_node, _port), value) in value_map.iter() {
-        // Look for values that look like measurement results (simple heuristic)
-        if value.starts_with('%') && value != "%9" && value != "%10" {
-            measurement_results.push(value.clone());
+    for operation in &operations {
+        if operation.op_name == "call" && operation.args.iter().any(|arg| arg.contains("@__quantum__qis__m__body")) {
+            if !operation.results.is_empty() {
+                // This is a measurement operation - get the node ID from the result name
+                let result_value = &operation.results[0];
+                // Extract node ID from the result value (e.g., %8 -> 8)
+                if let Some(num_str) = result_value.strip_prefix('%') {
+                    if let Ok(node_id) = num_str.parse::<usize>() {
+                        measurement_results.push((node_id, result_value.clone()));
+                    }
+                }
+            }
         }
     }
     
-    // Sort to ensure consistent ordering
-    measurement_results.sort();
+    // Sort by node ID to ensure consistent ordering
+    measurement_results.sort_by_key(|(node_id, _)| *node_id);
     
     // Use measurement results as return values
     if !measurement_results.is_empty() {
-        return_args = measurement_results.into_iter()
-            .filter(|v| v.parse::<u32>().map(|n| n > 10).unwrap_or(false)) // Filter to likely measurement results
-            .take(2) // For bell state we expect 2 results
+        let measurement_values: Vec<String> = measurement_results.into_iter()
+            .map(|(_, value)| value)
             .collect();
+        
+        // Return all measurements individually as the program specifies
+        return_args = measurement_values;
     }
     
-    // Fallback: if we still don't have the right number of return args,
-    // pad with dummy values to avoid compilation errors
-    // This is a temporary fix - the real issue is in HUGR parsing
-    while return_args.len() < 2 {
-        return_args.push(format!("%{}", 15 + return_args.len()));
+    // If no measurement results found using the proper method, fall back to pattern matching
+    if return_args.is_empty() {
+        // Look through all operations to find measurement calls and their results
+        for operation in &operations {
+            if operation.op_name == "call" && operation.args.iter().any(|arg| arg.contains("@__quantum__qis__m__body")) {
+                if !operation.results.is_empty() {
+                    return_args.push(operation.results[0].clone());
+                }
+            }
+        }
     }
 
     // Add return terminator
@@ -480,6 +580,7 @@ fn lower_node_to_operations(
     value_map: &std::collections::HashMap<(usize, usize), String>,
     edge_map: &std::collections::HashMap<(usize, usize), (usize, usize)>,
     allocated_qubits: &mut Vec<String>,
+    measurement_count: &mut usize,
 ) -> Result<Vec<MlirOperation>, PecosError> {
     // Helper to get input argument names
     let get_input_arg = |port: usize| -> String {
@@ -670,10 +771,10 @@ fn lower_node_to_operations(
         }]),
 
         PastOp::Measure => {
-            // HUGR convention: allocate result, call measure (returns i32)
-            // For simplicity, we'll directly generate the i32 and let LLVM lowering handle conversion
+            // HUGR convention: allocate result, call measure (returns i32), and record output
             let result_id = format!("%result_id_{}", node.id);
             let measurement_result = format!("%{}", node.id);
+            let result_ptr = format!("%result_ptr_{}", node.id);
             let qubit_input = get_input_arg(0);
 
             // Create operations following HUGR convention
@@ -697,13 +798,63 @@ fn lower_node_to_operations(
                 )],
             };
 
-            // For now, just return the i32 measurement result
-            // LLVM lowering will handle i32->i1 conversion as needed
-            Ok(vec![alloc_result, measure])
+            // Convert result_id to pointer for result recording (HUGR convention)
+            let inttoptr = MlirOperation {
+                results: vec![result_ptr.clone()],
+                op_name: "llvm.inttoptr".to_string(),
+                args: vec![result_id.clone()],
+                attrs: vec![("type".to_string(), "i64 to !llvm.ptr<i8>".to_string())],
+            };
 
+            // Choose the appropriate result name based on measurement index
+            // For now, always use indexed names for consistency with multiple outputs
+            let (result_name, array_size) = if *measurement_count == 0 {
+                ("@str_c", 2)
+            } else {
+                let name = format!("@str_c{}", measurement_count);
+                let size = 2 + measurement_count.to_string().len(); // "c" + number + null terminator
+                (Box::leak(name.into_boxed_str()) as &str, size)
+            };
+            
+            // Increment measurement count for next measurement
+            *measurement_count += 1;
+            
+            // Get pointer to global string using llvm.mlir.addressof
+            let str_ptr = format!("%str_ptr_{}", node.id);
+            let get_str_ptr = MlirOperation {
+                results: vec![str_ptr.clone()],
+                op_name: "llvm.mlir.addressof".to_string(),
+                args: vec![result_name.to_string()],
+                attrs: vec![("type".to_string(), format!("!llvm.ptr<!llvm.array<{} x i8>>", array_size))],
+            };
+            
+            // Cast array pointer to i8*
+            let str_i8_ptr = format!("%str_i8_ptr_{}", node.id);
+            let cast_str = MlirOperation {
+                results: vec![str_i8_ptr.clone()],
+                op_name: "llvm.bitcast".to_string(),
+                args: vec![str_ptr],
+                attrs: vec![("type".to_string(), format!("!llvm.ptr<!llvm.array<{} x i8>> to !llvm.ptr<i8>", array_size))],
+            };
+            
+            let record_output = MlirOperation {
+                results: vec![],
+                op_name: "call".to_string(),
+                args: vec![format!(
+                    "@__quantum__rt__result_record_output({}, {})",
+                    result_ptr, str_i8_ptr
+                )],
+                attrs: vec![(
+                    "type".to_string(),
+                    "(!llvm.ptr<i8>, !llvm.ptr<i8>) -> ()".to_string(),
+                )],
+            };
+
+            Ok(vec![alloc_result, measure, inttoptr, get_str_ptr, cast_str, record_output])
         }
 
         PastOp::AllocQubit | PastOp::QAlloc => {
+            // Allocate a qubit (will fix indexing in LLVM IR post-processing)
             let qubit_var = format!("%{}", node.id);
             allocated_qubits.push(qubit_var.clone());
 
@@ -753,6 +904,19 @@ fn lower_node_to_operations(
             attrs: vec![],
         }]),
 
+        // Result operations - these represent the connection between measurements and output names
+        PastOp::ResultBool(name) | PastOp::ResultInt(name) | PastOp::ResultF64(name) => {
+            // Result operations in HUGR are used to name measurement outputs
+            // In our LLVM IR generation, the actual result recording happens in the measurement operation
+            // So we just generate a comment to track the result name mapping
+            Ok(vec![MlirOperation {
+                results: vec![],
+                op_name: format!("// result operation for '{}'", name),
+                args: vec![],
+                attrs: vec![],
+            }])
+        }
+
         _ => Err(PecosError::CompileInvalidOperation {
             operation: format!("{:?}", node.op),
             reason: "Unsupported operation for MLIR lowering".to_string(),
@@ -769,6 +933,7 @@ mod tests {
         let module = MlirModule {
             name: "test".to_string(),
             external_funcs: vec![],
+            global_strings: vec![],
             functions: vec![MlirFunction {
                 name: "main".to_string(),
                 signature: "@main() -> i1".to_string(),

@@ -124,9 +124,30 @@ pub fn mlir_to_llvm_ir(
         )));
     }
 
-    // Return LLVM IR
-    String::from_utf8(translate_output.stdout)
-        .map_err(|e| PecosError::Processing(format!("Invalid UTF-8 in LLVM IR: {e}")))
+    // Get LLVM IR
+    let mut llvm_ir = String::from_utf8(translate_output.stdout)
+        .map_err(|e| PecosError::Processing(format!("Invalid UTF-8 in LLVM IR: {e}")))?;
+    
+    // Add EntryPoint attribute to main function for PECOS runtime compatibility
+    // Use regex to match any main function signature
+    use regex::Regex;
+    let main_pattern = Regex::new(r"define (\{[^}]+\}|[^ ]+) @main\(\)").unwrap();
+    
+    if let Some(captures) = main_pattern.captures(&llvm_ir) {
+        let original = captures.get(0).unwrap().as_str();
+        let replacement = format!("{} #0", original);
+        llvm_ir = llvm_ir.replace(original, &replacement);
+        
+        // Add attribute definition at the end if not present
+        if !llvm_ir.contains("attributes #0") {
+            llvm_ir.push_str("\nattributes #0 = { \"EntryPoint\" }\n");
+        }
+    }
+    
+    // Note: Qubit handles from __quantum__rt__qubit_allocate() are already 0-based
+    // No additional indexing transformation needed
+    
+    Ok(llvm_ir)
 }
 
 /// Find an executable, trying versioned variants if the base name fails
@@ -186,6 +207,7 @@ pub fn check_mlir_tools(config: &MlirToolchainConfig) -> Result<(), PecosError> 
 
     Ok(())
 }
+
 
 /// Process MLIR text in memory (requires custom MLIR integration)
 ///

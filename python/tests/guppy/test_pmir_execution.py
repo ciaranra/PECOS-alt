@@ -92,8 +92,8 @@ def test_pmir_compilation_and_execution():
             llvm_content = llvm_file.read_text()
             assert "@__quantum__rt__qubit_allocate" in llvm_content
             assert "@__quantum__qis__h__body" in llvm_content
-            assert "@__quantum__qis__mz__body" in llvm_content
-            assert "define i1 @main()" in llvm_content
+            assert "@__quantum__qis__m__body" in llvm_content  # Standardized to m__body
+            assert "define i32 @main()" in llvm_content  # PMIR uses i32 for measurements
             
             print(f"\n[PASS] Successfully compiled and saved LLVM IR to {llvm_file}")
             
@@ -160,10 +160,11 @@ def test_bell_state_pmir_analysis():
         
         # Analyze the generated LLVM IR
         # Count quantum operations (only calls, not declarations)
-        qubit_allocs = llvm_ir.count("call i8* @__quantum__rt__qubit_allocate")
+        # PMIR uses i64 for qubit handles, not i8*
+        qubit_allocs = llvm_ir.count("call i64 @__quantum__rt__qubit_allocate")
         h_gates = llvm_ir.count("call void @__quantum__qis__h__body")
-        cnot_gates = llvm_ir.count("call void @__quantum__qis__cnot__body")
-        measurements = llvm_ir.count("call void @__quantum__qis__mz__body")
+        cnot_gates = llvm_ir.count("call void @__quantum__qis__cx__body")  # HUGR uses cx, not cnot
+        measurements = llvm_ir.count("call i32 @__quantum__qis__m__body")  # Standardized to m__body, returns i32
         
         print(f"\nBell State LLVM IR Analysis:")
         print(f"- Qubit allocations: {qubit_allocs}")

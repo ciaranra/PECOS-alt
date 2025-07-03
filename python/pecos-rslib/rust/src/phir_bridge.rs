@@ -446,6 +446,17 @@ impl PHIREngine {
                                     }
                                     result
                                 }
+                                pecos::prelude::Data::Vec(ref v) => {
+                                    // For vectors, try to get the first element or return 0
+                                    v.first()
+                                        .and_then(|d| match d {
+                                            pecos::prelude::Data::U32(n) => Some(*n),
+                                            pecos::prelude::Data::I32(n) => Some(*n as u32),
+                                            pecos::prelude::Data::I64(n) => Some(*n as u32),
+                                            _ => None,
+                                        })
+                                        .unwrap_or(0)
+                                }
                             };
                             u32_results.insert(key, value);
                         }

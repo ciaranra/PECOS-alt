@@ -43,6 +43,9 @@ pub struct LlvmRuntimeState {
 
     /// Interactive execution callback for immediate measurements
     interactive_callback: Option<InteractiveCallback>,
+    
+    /// Tuple return values from main function
+    tuple_return: Vec<i32>,
 }
 
 impl LlvmRuntimeState {
@@ -62,6 +65,7 @@ impl LlvmRuntimeState {
             result_mappings: HashMap::new(),
             last_shot: None,
             interactive_callback: None,
+            tuple_return: Vec::new(),
         }
     }
 
@@ -76,6 +80,7 @@ impl LlvmRuntimeState {
         self.register_bit_positions.clear();
         self.result_mappings.clear();
         self.last_shot = None;
+        self.tuple_return.clear();
     }
 
     /// Allocate a new qubit and return its ID
@@ -181,6 +186,13 @@ impl LlvmRuntimeState {
     pub fn export_shot(&self) -> Shot {
         let mut shot = Shot::default();
 
+        // Check if we have tuple return values
+        if !self.tuple_return.is_empty() {
+            // Store as a single vector result
+            shot.data.insert("result".to_string(), Data::from_i32_vec(self.tuple_return.clone()));
+            return shot;
+        }
+
         // Add all classical registers
         for (name, value) in &self.classical_registers {
             shot.data.insert(name.clone(), Data::I64(*value));
@@ -232,6 +244,11 @@ impl LlvmRuntimeState {
     /// Clear the interactive callback
     pub fn clear_interactive_callback(&mut self) {
         self.interactive_callback = None;
+    }
+    
+    /// Set tuple return values from a function
+    pub fn set_tuple_return(&mut self, values: &[i32]) {
+        self.tuple_return = values.to_vec();
     }
 }
 

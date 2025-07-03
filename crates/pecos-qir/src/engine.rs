@@ -4,12 +4,12 @@
 use crate::library::LlvmLibrary;
 use crate::linker::LlvmLinker;
 use crate::utils::{LLVM_LOG, log_error, retry_with_backoff};
-use log::{debug, trace, warn};
+use log::{debug, error, trace, warn};
 use pecos_core::errors::PecosError;
 use pecos_engines::Engine;
 use pecos_engines::byte_message::ByteMessage;
 use pecos_engines::engine_system::{ClassicalEngine, ControlEngine, EngineStage};
-use pecos_engines::shot_results::{Data, Shot};
+use pecos_engines::shot_results::Shot;
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
@@ -29,45 +29,6 @@ pub fn get_thread_id() -> String {
     format!("{:?}", thread::current().id())
 }
 
-/// Extract the first measurement value from a Shot
-///
-/// This function extracts a single bit measurement from the Shot data.
-/// It processes any numeric data found in the Shot (excluding metadata like "seed" or "`shot_id`")
-/// and returns the least significant bit of the first measurement register found.
-///
-/// # Arguments
-///
-/// * `shot` - The Shot containing measurement data
-///
-/// # Returns
-///
-/// A Result containing the measurement value (0 or 1) or an error if no measurement data is found
-///
-/// # Errors
-///
-/// Returns an error if no measurement data is found in the shot
-fn extract_first_measurement(shot: &Shot) -> Result<u8, PecosError> {
-    // Find the first non-metadata numeric value in sorted order
-    let mut keys: Vec<_> = shot.data.keys().collect();
-    keys.sort();
-
-    keys.into_iter()
-        .filter(|&key| !matches!(key.as_str(), "seed" | "shot_id"))
-        .find_map(|key| {
-            shot.data.get(key).and_then(|data| match data {
-                Data::U32(v) => Some(u8::from(*v & 1 != 0)),
-                Data::I64(v) => Some(u8::from(*v & 1 != 0)),
-                Data::U64(v) => Some(u8::from(*v & 1 != 0)),
-                Data::BitVec(bv) => bv.first().map(|bit| u8::from(*bit)),
-                _ => None,
-            })
-        })
-        .ok_or_else(|| {
-            PecosError::Processing(
-                "No measurement data found in shot results. Expected at least one measurement register.".to_string()
-            )
-        })
-}
 
 /// Configuration options for the LLVM engine
 #[derive(Debug, Clone, Default)]
@@ -367,78 +328,6 @@ impl LlvmEngine {
         }
     }
 
-    /// Run the quantum program and return measurement results
-    ///
-    /// This method executes the quantum program for the configured number of shots
-    /// using the full PECOS simulation infrastructure (`MonteCarloEngine` + `QuantumSystem`).
-    ///
-    /// # Returns
-    ///
-    /// A vector of measurement results, where each element is 0 or 1
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the quantum program execution fails.
-    pub fn run(&mut self) -> Result<Vec<u8>, PecosError> {
-        use pecos_engines::engine_system::MonteCarloEngine;
-        use pecos_engines::noise::DepolarizingNoiseModel;
-
-        debug!(
-            "LLVM: Running quantum program for {} shots using PECOS infrastructure",
-            self.config.assigned_shots
-        );
-
-        // Create a noiseless quantum simulation environment
-        let noise_model = Box::new(DepolarizingNoiseModel::new_uniform(0.0));
-
-        // Clone the engine for use with MonteCarloEngine
-        let engine_clone = self.clone();
-
-        // Use MonteCarloEngine to run with proper quantum simulation
-        let results = MonteCarloEngine::run_with_noise_model(
-            Box::new(engine_clone),
-            noise_model,
-            self.config.assigned_shots,
-            1,    // Single worker for simplicity
-            None, // No specific seed
-        )?;
-
-        debug!(
-            "LLVM: MonteCarloEngine completed with {} shots",
-            results.shots.len()
-        );
-
-        // Debug: Print what we got from MonteCarloEngine
-        for (i, shot) in results.shots.iter().enumerate().take(5) {
-            debug!("LLVM: Shot {} data: {:?}", i, shot.data);
-            // Also show the keys explicitly
-            let keys: Vec<&String> = shot.data.keys().collect();
-            debug!("LLVM: Shot {} keys: {:?}", i, keys);
-        }
-
-        // Extract measurement results from the shot results
-        let mut all_results = Vec::with_capacity(self.config.assigned_shots);
-
-        for shot in results.shots {
-            // Extract the first measurement value from the shot data
-            // The Shot data structure contains register_name -> Data mappings
-            let measurement = extract_first_measurement(&shot)?;
-            all_results.push(measurement);
-        }
-
-        // Ensure we have the right number of results
-        all_results.truncate(self.config.assigned_shots);
-        while all_results.len() < self.config.assigned_shots {
-            all_results.push(0);
-        }
-
-        debug!(
-            "LLVM: Returning {} measurement results using PECOS simulation",
-            all_results.len()
-        );
-
-        Ok(all_results)
-    }
 
     /// Pre-compile the LLVM library to prepare for cloning
     ///
@@ -683,13 +572,15 @@ impl LlvmEngine {
         let mut max_qubit_index = 0;
         let mut found_allocation = false;
 
-        // Pattern 1: Qubit allocations like "__quantum__rt__qubit_allocate()"
-        let alloc_pattern = Regex::new(r"__quantum__rt__qubit_allocate\(\)")
+        // Pattern 1: Qubit allocations like "call i64 @__quantum__rt__qubit_allocate()"
+        // Note: We must match "call" to avoid counting declarations
+        let alloc_pattern = Regex::new(r"call\s+i64\s+@__quantum__rt__qubit_allocate\(\)")
             .expect("Invalid regex pattern for qubit allocations");
         let alloc_count = alloc_pattern.find_iter(content).count();
         if alloc_count > 0 {
             max_qubit_index = max_qubit_index.max(alloc_count - 1);
             found_allocation = true;
+            debug!("Pattern 1: Found {} allocations, max_qubit_index = {}", alloc_count, max_qubit_index);
         }
 
         // Pattern 2: Integer-based qubit references in LLVM IR calls like "i64 N"
@@ -700,6 +591,8 @@ impl LlvmEngine {
         for cap in int_qubit_pattern.captures_iter(content) {
             if let Some(index_match) = cap.get(1) {
                 if let Ok(index) = index_match.as_str().parse::<usize>() {
+                    debug!("Pattern 2: Found integer qubit reference: {}, updating max_qubit_index from {} to {}", 
+                           index, max_qubit_index, max_qubit_index.max(index));
                     max_qubit_index = max_qubit_index.max(index);
                     found_allocation = true;
                 }
@@ -792,7 +685,7 @@ impl ClassicalEngine for LlvmEngine {
                 num_qubits
             }
             Err(e) => {
-                warn!("LLVM Engine: Could not determine qubit count: {}", e);
+                warn!("LLVM Engine: Could not determine qubit count from file {:?}: {}", self.llvm_file, e);
                 // Fallback: check if we have measurement results from current execution
                 if !self.measurement_results.is_empty() {
                     let max_result_id = self.measurement_results.keys().max().unwrap_or(&0);
@@ -803,8 +696,10 @@ impl ClassicalEngine for LlvmEngine {
                     );
                     return num_qubits;
                 }
-                // Return 0 to indicate unknown qubit count
-                warn!("LLVM Engine: Returning 0 to indicate unknown qubit count");
+                // This is likely to cause issues - log an error
+                error!("LLVM Engine: CRITICAL - Returning 0 qubits, this will cause runtime errors!");
+                error!("LLVM Engine: File path was: {:?}", self.llvm_file);
+                error!("LLVM Engine: Error was: {}", e);
                 0
             }
         }

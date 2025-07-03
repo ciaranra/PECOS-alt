@@ -448,6 +448,18 @@ pub mod core_runtime {
         });
     }
 
+    /// Store tuple return values from a function
+    pub fn store_tuple_return(values: &[i32]) {
+        if should_print_commands() {
+            let thread_id = get_thread_id();
+            debug!("[Thread {thread_id}] Storing tuple return with {} values", values.len());
+        }
+
+        RuntimeRegistry::with_current_runtime(|state| {
+            state.set_tuple_return(values);
+        });
+    }
+
     pub fn update_measurement_results(results: &[u32]) {
         let thread_id = get_thread_id();
 

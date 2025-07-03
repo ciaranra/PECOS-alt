@@ -119,13 +119,16 @@ pub fn run_sim(
 
     // Get the number of qubits from the classical engine
     let num_qubits = classical_engine.num_qubits();
+    log::debug!("run_sim: Classical engine reports {} qubits", num_qubits);
 
     // Use default noise model if none provided
     let noise_model = noise_model.unwrap_or_else(|| Box::new(PassThroughNoiseModel));
 
     // Create default quantum engine if none provided
-    let quantum_engine =
-        quantum_engine.unwrap_or_else(|| Box::new(quantum::StateVecEngine::new(num_qubits)));
+    let quantum_engine = quantum_engine.unwrap_or_else(|| {
+        log::debug!("run_sim: Creating StateVecEngine with {} qubits", num_qubits);
+        Box::new(quantum::StateVecEngine::new(num_qubits))
+    });
 
     // Run the simulation
     MonteCarloEngine::run_with_engines(

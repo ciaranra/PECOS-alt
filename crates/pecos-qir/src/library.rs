@@ -202,7 +202,22 @@ impl LlvmLibrary {
                 debug!("LLVM Library: Function call returned {}", result);
                 Ok(result)
             }
-            // Try HUGR signature (returns tuple, but we'll treat as void)
+            // Try HUGR tuple signatures
+            else if let Ok(func) = library_guard.get::<Symbol<unsafe extern "C" fn() -> (i32, i32)>>(name) {
+                let (a, b) = func();
+                debug!("LLVM Library: Function returned tuple ({}, {})", a, b);
+                // Store tuple values in the runtime state
+                crate::runtime::core_runtime::store_tuple_return(&[a, b]);
+                Ok(0) // Return 0 to indicate success
+            }
+            else if let Ok(func) = library_guard.get::<Symbol<unsafe extern "C" fn() -> (i32, i32, i32)>>(name) {
+                let (a, b, c) = func();
+                debug!("LLVM Library: Function returned tuple ({}, {}, {})", a, b, c);
+                // Store tuple values in the runtime state
+                crate::runtime::core_runtime::store_tuple_return(&[a, b, c]);
+                Ok(0) // Return 0 to indicate success
+            }
+            // Try void signature
             else if let Ok(func) = library_guard.get::<Symbol<unsafe extern "C" fn()>>(name) {
                 func();
                 debug!("LLVM Library: Function call completed (void return)");

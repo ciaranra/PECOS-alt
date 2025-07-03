@@ -204,15 +204,20 @@ pub mod hugr {
         use tempfile::NamedTempFile;
         use std::io::Write;
         
-        // Write IR to temporary file
+        // Write IR to temporary file - use persist to keep it around
         let mut temp_file = NamedTempFile::new()
             .map_err(|e| PecosError::with_context(e, "Failed to create temporary file for LLVM IR"))?;
         
         temp_file.write_all(llvm_ir.as_bytes())
             .map_err(|e| PecosError::with_context(e, "Failed to write LLVM IR to temporary file"))?;
         
+        // Persist the file to keep it around after this function returns
+        // This is necessary because the LlvmEngine needs to access the file in worker threads
+        let (_, path) = temp_file.keep()
+            .map_err(|e| PecosError::with_context(e, "Failed to persist temporary LLVM IR file"))?;
+        
         // Create engine from temporary file
-        create_llvm_engine_from_ir(temp_file.path(), shots)
+        create_llvm_engine_from_ir(&path, shots)
     }
 }
 

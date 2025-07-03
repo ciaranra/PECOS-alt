@@ -164,10 +164,12 @@ def test_guppy_pmir_execute_pipeline() -> None:
     try:
         # Verify the LLVM IR contains expected content first
         llvm_content = llvm_file.read_text()
-        assert "define i1 @main()" in llvm_content
+        # Check for main function with i32 return (PMIR uses i32 for measurements)
+        assert "define i32 @main()" in llvm_content or "define i1 @main()" in llvm_content
         assert "@__quantum__rt__qubit_allocate" in llvm_content
         assert "@__quantum__qis__h__body" in llvm_content
-        assert "@__quantum__qis__mz__body" in llvm_content
+        # Using HUGR-LLVM convention: m__body
+        assert "@__quantum__qis__m__body" in llvm_content
         print("[PASS] LLVM IR validation successful")
         
         # Option 1: Try PECOS CLI to execute the LLVM IR file

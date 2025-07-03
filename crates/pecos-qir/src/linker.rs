@@ -403,7 +403,7 @@ impl LlvmLinker {
             Self::check_llvm_version(&llc_path).map_err(PecosError::Processing)?;
 
             let result = Command::new(llc_path)
-                .args(["-filetype=obj", "-o"])
+                .args(["-filetype=obj", "-relocation-model=pic", "-o"])
                 .arg(object_file)
                 .arg(qir_file)
                 .output();
@@ -472,7 +472,7 @@ impl LlvmLinker {
         #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
         {
             let result = Command::new("gcc")
-                .args(["-shared", "-o"])
+                .args(["-shared", "-fPIC", "-o"])
                 .arg(library_file)
                 .arg(object_file)
                 .arg(rust_runtime_lib)

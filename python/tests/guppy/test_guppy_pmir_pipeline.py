@@ -142,8 +142,8 @@ def test_bell_state_hugr_via_pmir():
     assert "func @main" in pmir_mlir
     assert "call @__quantum__rt__qubit_allocate" in pmir_mlir
     assert "call @__quantum__qis__h__body" in pmir_mlir
-    assert "call @__quantum__qis__cnot__body" in pmir_mlir
-    assert "call @__quantum__qis__mz__body" in pmir_mlir
+    assert "call @__quantum__qis__cx__body" in pmir_mlir  # HUGR uses cx, not cnot
+    assert "call @__quantum__qis__m__body" in pmir_mlir   # Standardized to m__body
     assert "return" in pmir_mlir
 
 

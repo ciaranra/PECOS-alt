@@ -247,14 +247,43 @@ impl PyHugrLlvmEngine {
     /// # Returns
     /// List of measurement results (0 or 1)
     fn run(&self) -> PyResult<Vec<u8>> {
+        use pecos_engines::run_sim;
+        
         let mut engines = PYTHON_LLVM_ENGINES.lock().unwrap();
         let entry = engines.get_mut(&self.engine_id)
             .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
                 format!("Engine {} not found", self.engine_id)
             ))?;
 
-        entry.engine.run()
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
+        // Clone the engine to use as a ClassicalEngine
+        let engine_clone = entry.engine.clone();
+        
+        // Use run_sim with the proper architecture
+        let results = run_sim(
+            Box::new(engine_clone),
+            self.shots,
+            None, // seed
+            None, // workers 
+            None, // noise_model
+            None, // quantum_engine
+        ).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+        
+        // Extract measurement results - take the first measurement from each shot
+        let mut measurements = Vec::with_capacity(self.shots);
+        for shot in results.shots {
+            // Find the first measurement value
+            let measurement = shot.data.values()
+                .find_map(|data| match data {
+                    pecos_engines::shot_results::Data::U32(v) => Some(*v != 0),
+                    pecos_engines::shot_results::Data::I64(v) => Some(*v != 0),
+                    pecos_engines::shot_results::Data::U8(v) => Some(*v != 0),
+                    _ => None,
+                })
+                .unwrap_or(false);
+            measurements.push(measurement as u8);
+        }
+        
+        Ok(measurements)
     }
 
     /// Reset the engine state
