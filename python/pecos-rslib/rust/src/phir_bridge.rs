@@ -451,8 +451,14 @@ impl PHIREngine {
                                     v.first()
                                         .and_then(|d| match d {
                                             pecos::prelude::Data::U32(n) => Some(*n),
-                                            pecos::prelude::Data::I32(n) => Some(*n as u32),
-                                            pecos::prelude::Data::I64(n) => Some(*n as u32),
+                                            pecos::prelude::Data::I32(n) => {
+                                                // Measurement results should be non-negative
+                                                u32::try_from(*n).ok()
+                                            }
+                                            pecos::prelude::Data::I64(n) => {
+                                                // Convert to u32 if within valid range
+                                                u32::try_from(*n).ok()
+                                            }
                                             _ => None,
                                         })
                                         .unwrap_or(0)

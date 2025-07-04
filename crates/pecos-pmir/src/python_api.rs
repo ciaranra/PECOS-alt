@@ -53,19 +53,6 @@ pub fn py_compile_hugr_via_pmir(hugr_json: &str, config: Option<PyPmirConfig>) -
         .map_err(|e| PyRuntimeError::new_err(format!("PMIR compilation failed: {:?}", e)))
 }
 
-/// Get the intermediate PAST representation as RON
-#[pyfunction]
-#[pyo3(name = "hugr_to_past_ron")]
-pub fn py_hugr_to_past_ron(hugr_json: &str) -> PyResult<String> {
-    use super::hugr_parser::parse_hugr_to_past;
-
-    let past = parse_hugr_to_past(hugr_json)
-        .map_err(|e| PyRuntimeError::new_err(format!("HUGR parsing failed: {:?}", e)))?;
-
-    past.to_ron_string()
-        .map_err(|e| PyRuntimeError::new_err(format!("RON serialization failed: {:?}", e)))
-}
-
 /// Register PMIR Python module
 /// This would be used if pecos-pmir was exposed as a standalone Python module
 /// Currently PMIR is exposed through pecos-rslib instead
@@ -75,7 +62,6 @@ pub fn register_pmir_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
 
     pmir_module.add_class::<PyPmirConfig>()?;
     pmir_module.add_function(wrap_pyfunction!(py_compile_hugr_via_pmir, &pmir_module)?)?;
-    pmir_module.add_function(wrap_pyfunction!(py_hugr_to_past_ron, &pmir_module)?)?;
 
     parent.add_submodule(&pmir_module)?;
     Ok(())

@@ -17,10 +17,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use super::result_extractor::ResultNameExtractor;
 use super::extensions::tket2_bool_extension::Tket2BoolExtension;
 use super::extensions::tket2_rotation_extension::Tket2RotationExtension;
 use super::generators::standard_llvm_generator::StandardLlvmExtension;
+use super::result_extractor::ResultNameExtractor;
 
 /// Configuration for HUGR compilation
 #[derive(Debug, Clone, Default)]
@@ -84,8 +84,12 @@ impl HugrCompiler {
         debug!("HUGR: Compiling HUGR file: {:?}", hugr_path);
 
         // Read HUGR file
-        let hugr_bytes = fs::read(hugr_path)
-            .map_err(|e| PecosError::with_context(e, format!("Failed to read HUGR file: {}", hugr_path.display())))?;
+        let hugr_bytes = fs::read(hugr_path).map_err(|e| {
+            PecosError::with_context(
+                e,
+                format!("Failed to read HUGR file: {}", hugr_path.display()),
+            )
+        })?;
 
         // Determine output path
         let output_path = self
@@ -106,7 +110,11 @@ impl HugrCompiler {
     /// - HUGR deserialization fails
     /// - LLVM compilation fails
     /// - File I/O operations fail
-    pub fn compile_hugr_bytes(&self, hugr_bytes: &[u8], output_path: &Path) -> Result<PathBuf, PecosError> {
+    pub fn compile_hugr_bytes(
+        &self,
+        hugr_bytes: &[u8],
+        output_path: &Path,
+    ) -> Result<PathBuf, PecosError> {
         debug!("HUGR: Compiling HUGR bytes to {}", output_path.display());
 
         // Fix duplicate function names before processing
@@ -117,10 +125,15 @@ impl HugrCompiler {
         let mut hugr_package = Package::load(reader, Some(&std_extensions::std_reg()))
             .map_err(|e| PecosError::with_context(e, "Failed to parse HUGR"))?;
 
-        debug!("HUGR: Parsed HUGR package with {} modules", hugr_package.modules.len());
+        debug!(
+            "HUGR: Parsed HUGR package with {} modules",
+            hugr_package.modules.len()
+        );
 
         if hugr_package.modules.is_empty() {
-            return Err(PecosError::Input("HUGR package contains no modules".to_string()));
+            return Err(PecosError::Input(
+                "HUGR package contains no modules".to_string(),
+            ));
         }
 
         // Get the main module (first module)
@@ -129,7 +142,7 @@ impl HugrCompiler {
 
         // Create LLVM context and generate IR
         let context = Context::create();
-        let llvm_ir = self.generate_llvm_ir(&context, &main_module)?;
+        let llvm_ir = Self::generate_llvm_ir(&context, &main_module)?;
 
         // Write LLVM IR to file
         fs::write(output_path, llvm_ir).map_err(|e| {
@@ -166,7 +179,7 @@ impl HugrCompiler {
     }
 
     /// Generate LLVM IR from a HUGR module
-    fn generate_llvm_ir(&self, context: &Context, hugr: &Hugr) -> Result<String, PecosError> {
+    fn generate_llvm_ir(context: &Context, hugr: &Hugr) -> Result<String, PecosError> {
         debug!("HUGR: Starting LLVM IR generation");
 
         // Extract result names for proper variable naming
@@ -236,7 +249,7 @@ impl Default for HugrCompiler {
 /// Fix duplicate function names in HUGR JSON
 fn fix_duplicate_functions(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
     use std::collections::HashSet;
-    
+
     // Find JSON start
     let json_start = hugr_bytes.iter().position(|&b| b == b'{').unwrap_or(0);
     let prefix = &hugr_bytes[..json_start];
@@ -246,13 +259,14 @@ fn fix_duplicate_functions(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
     let json_str = std::str::from_utf8(json_bytes)
         .map_err(|e| PecosError::with_context(e, "Invalid UTF-8 in HUGR data"))?;
 
-    let mut json: serde_json::Value = serde_json::from_str(json_str)
-        .map_err(|e| PecosError::with_context(e, "Failed to parse HUGR JSON for duplicate fixing"))?;
+    let mut json: serde_json::Value = serde_json::from_str(json_str).map_err(|e| {
+        PecosError::with_context(e, "Failed to parse HUGR JSON for duplicate fixing")
+    })?;
 
     // Track seen function names
     let mut seen_names = HashSet::new();
     let mut name_counter = std::collections::HashMap::new();
-    
+
     // Fix duplicate function names in all modules
     if let Some(modules) = json.get_mut("modules").and_then(|m| m.as_array_mut()) {
         for module in modules {
@@ -265,10 +279,14 @@ fn fix_duplicate_functions(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
                                     let name_owned = name.to_string();
                                     if seen_names.contains(&name_owned) {
                                         // Generate a unique name
-                                        let count = name_counter.entry(name_owned.clone()).or_insert(1);
+                                        let count =
+                                            name_counter.entry(name_owned.clone()).or_insert(1);
                                         *count += 1;
-                                        let new_name = format!("{}_{}", name_owned, count);
-                                        debug!("Renamed duplicate function '{}' to '{}'", name_owned, new_name);
+                                        let new_name = format!("{name_owned}_{count}");
+                                        debug!(
+                                            "Renamed duplicate function '{}' to '{}'",
+                                            name_owned, new_name
+                                        );
                                         node["name"] = serde_json::Value::String(new_name);
                                     } else {
                                         seen_names.insert(name_owned.clone());
@@ -282,14 +300,14 @@ fn fix_duplicate_functions(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
             }
         }
     }
-    
+
     // Serialize back to bytes
     let fixed_json = serde_json::to_string(&json)
         .map_err(|e| PecosError::with_context(e, "Failed to serialize fixed JSON"))?;
-    
+
     let mut result = prefix.to_vec();
     result.extend_from_slice(fixed_json.as_bytes());
-    
+
     Ok(result)
 }
 
@@ -299,7 +317,7 @@ fn fix_entry_point_signature(llvm_ir: &str) -> String {
     let mut result = String::new();
     let mut found_first_function = false;
     let mut in_attributes_section = false;
-    
+
     for line in llvm_ir.lines() {
         if !found_first_function && line.starts_with("define ") && line.contains("@_hugr_") {
             // This is the first HUGR function - mark it as entry point
@@ -332,12 +350,15 @@ fn fix_entry_point_signature(llvm_ir: &str) -> String {
         }
         result.push('\n');
     }
-    
+
     // If we didn't find an attributes section, add it at the end
-    if found_first_function && !llvm_ir.contains("\"EntryPoint\"") && !llvm_ir.contains("attributes #") {
+    if found_first_function
+        && !llvm_ir.contains("\"EntryPoint\"")
+        && !llvm_ir.contains("attributes #")
+    {
         result.push_str("\nattributes #0 = { \"EntryPoint\" }\n");
     }
-    
+
     result
 }
 

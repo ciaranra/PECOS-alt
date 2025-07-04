@@ -39,17 +39,6 @@ fn find_pecos_binary() -> Option<std::path::PathBuf> {
         .find(|path| path.exists() && path.is_file())
 }
 
-/// Convert HUGR JSON to PAST RON representation
-#[pyfunction]
-#[pyo3(name = "hugr_to_past_ron")]
-pub fn py_hugr_to_past_ron(hugr_json: &str) -> PyResult<String> {
-    let past = pmir::hugr_parser::parse_hugr_to_past(hugr_json)
-        .map_err(|e| PyRuntimeError::new_err(format!("Failed to parse HUGR: {e:?}")))?;
-
-    past.to_ron_string()
-        .map_err(|e| PyRuntimeError::new_err(format!("Failed to serialize PAST to RON: {e:?}")))
-}
-
 /// Convert HUGR JSON to PMIR (MLIR text format)
 #[pyfunction]
 #[pyo3(name = "hugr_to_pmir_mlir")]
@@ -73,51 +62,6 @@ pub fn py_hugr_to_pmir_mlir(
         .map_err(|e| PyRuntimeError::new_err(format!("Failed to lower to PMIR: {e:?}")))?;
 
     Ok(mlir_module.to_string())
-}
-
-/// Convert PAST RON to PMIR (MLIR text format)
-#[pyfunction]
-#[pyo3(name = "past_ron_to_pmir_mlir")]
-pub fn py_past_ron_to_pmir_mlir(
-    past_ron: &str,
-    debug_output: Option<bool>,
-    optimization_level: Option<u8>,
-) -> PyResult<String> {
-    use pmir::ast::PastModule;
-
-    let config = PmirConfig {
-        debug_output: debug_output.unwrap_or(false),
-        optimization_level: optimization_level.unwrap_or(2),
-        target_triple: None,
-    };
-
-    // Deserialize PAST from RON
-    let past = PastModule::from_ron_string(past_ron).map_err(|e| {
-        PyRuntimeError::new_err(format!("Failed to deserialize PAST from RON: {e:?}"))
-    })?;
-
-    // Lower PAST to PMIR (MLIR text)
-    let mlir_module = pmir::mlir_lowering::lower_past_to_pmir(&past, &config)
-        .map_err(|e| PyRuntimeError::new_err(format!("Failed to lower to PMIR: {e:?}")))?;
-
-    Ok(mlir_module.to_string())
-}
-
-/// Convert PAST RON to LLVM IR/QIR
-#[pyfunction]
-#[pyo3(name = "past_ron_to_llvm_ir")]
-pub fn py_past_ron_to_llvm_ir(
-    _past_ron: &str,
-    _debug_output: Option<bool>,
-    _optimization_level: Option<u8>,
-    _target_triple: Option<String>,
-) -> PyResult<String> {
-    // This would require reconstructing HUGR from PAST or implementing
-    // a direct PAST -> LLVM IR path. For now, this is not implemented.
-    Err(PyRuntimeError::new_err(
-        "Direct PAST RON to LLVM IR conversion not yet implemented. \
-         Please use the full pipeline starting from HUGR JSON.",
-    ))
 }
 
 /// PMIR QIR Engine for executing PMIR-generated LLVM IR (in-memory)
@@ -293,10 +237,7 @@ pub fn py_compile_hugr_via_pmir(
 /// Register PMIR Python module
 pub fn register_pmir_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Add PMIR functions directly to the module
-    m.add_function(wrap_pyfunction!(py_hugr_to_past_ron, m)?)?;
     m.add_function(wrap_pyfunction!(py_hugr_to_pmir_mlir, m)?)?;
-    m.add_function(wrap_pyfunction!(py_past_ron_to_pmir_mlir, m)?)?;
-    m.add_function(wrap_pyfunction!(py_past_ron_to_llvm_ir, m)?)?;
     m.add_function(wrap_pyfunction!(py_compile_hugr_via_pmir, m)?)?;
     m.add_function(wrap_pyfunction!(py_compile_and_execute_via_pmir, m)?)?;
 

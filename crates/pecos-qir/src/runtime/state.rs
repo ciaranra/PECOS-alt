@@ -43,7 +43,7 @@ pub struct LlvmRuntimeState {
 
     /// Interactive execution callback for immediate measurements
     interactive_callback: Option<InteractiveCallback>,
-    
+
     /// Tuple return values from main function
     tuple_return: Vec<i32>,
 }
@@ -189,7 +189,10 @@ impl LlvmRuntimeState {
         // Check if we have tuple return values
         if !self.tuple_return.is_empty() {
             // Store as a single vector result
-            shot.data.insert("result".to_string(), Data::from_i32_vec(self.tuple_return.clone()));
+            shot.data.insert(
+                "result".to_string(),
+                Data::from_i32_vec(self.tuple_return.clone()),
+            );
             return shot;
         }
 
@@ -245,7 +248,7 @@ impl LlvmRuntimeState {
     pub fn clear_interactive_callback(&mut self) {
         self.interactive_callback = None;
     }
-    
+
     /// Set tuple return values from a function
     pub fn set_tuple_return(&mut self, values: &[i32]) {
         self.tuple_return = values.to_vec();

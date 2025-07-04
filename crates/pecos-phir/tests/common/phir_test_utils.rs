@@ -193,9 +193,9 @@ pub fn assert_register_value(results: &ShotVec, register_name: &str, expected_va
                     // For vectors, try to get the first element or return 0
                     v.first()
                         .and_then(|d| match d {
-                            Data::I32(n) => Some(*n as i64),
+                            Data::I32(n) => Some(i64::from(*n)),
                             Data::I64(n) => Some(*n),
-                            Data::U32(n) => Some(*n as i64),
+                            Data::U32(n) => Some(i64::from(*n)),
                             _ => None,
                         })
                         .unwrap_or(0)
@@ -264,9 +264,9 @@ pub fn assert_register_value(results: &ShotVec, register_name: &str, expected_va
                 // For vectors, try to get the first element or return 0
                 v.first()
                     .and_then(|d| match d {
-                        Data::I32(n) => Some(*n as i64),
+                        Data::I32(n) => Some(i64::from(*n)),
                         Data::I64(n) => Some(*n),
-                        Data::U32(n) => Some(*n as i64),
+                        Data::U32(n) => Some(i64::from(*n)),
                         _ => None,
                     })
                     .unwrap_or(0)

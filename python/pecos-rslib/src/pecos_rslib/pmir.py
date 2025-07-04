@@ -8,10 +8,7 @@ from typing import Optional
 
 # Import PMIR functions from the Rust bindings
 from pecos_rslib._pecos_rslib import (
-    hugr_to_past_ron,
     hugr_to_pmir_mlir,
-    past_ron_to_pmir_mlir,
-    past_ron_to_llvm_ir,
     compile_hugr_via_pmir,
     compile_and_execute_via_pmir,
     PMIRQirEngine,
@@ -42,16 +39,6 @@ class PMIRCompiler:
         self.optimization_level = optimization_level
         self.target_triple = target_triple
     
-    def get_past(self, hugr_json: str) -> str:
-        """Convert HUGR JSON to PAST (PECOS AST) in RON format.
-        
-        Args:
-            hugr_json: HUGR circuit in JSON format
-            
-        Returns:
-            PAST representation in RON format
-        """
-        return hugr_to_past_ron(hugr_json)
     
     def get_pmir(self, hugr_json: str) -> str:
         """Convert HUGR JSON to PMIR (MLIR text format).
@@ -146,10 +133,7 @@ class PMIRCompiler:
 
 
 __all__ = [
-    "hugr_to_past_ron",
     "hugr_to_pmir_mlir",
-    "past_ron_to_pmir_mlir",
-    "past_ron_to_llvm_ir",
     "compile_hugr_via_pmir",
     "compile_and_execute_via_pmir",
     "PMIRCompiler",

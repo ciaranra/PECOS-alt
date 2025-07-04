@@ -23,7 +23,6 @@ except ImportError:
 try:
     from pecos_rslib import (
         compile_hugr_via_pmir,
-        hugr_to_past_ron,
         hugr_to_pmir_mlir,
         PMIR_AVAILABLE,
     )
@@ -66,14 +65,7 @@ def test_guppy_like_hugr_to_pmir_pipeline():
     
     hugr_json = json.dumps(hugr)
     
-    # Convert HUGR to PAST (PECOS AST)
-    past_ron = hugr_to_past_ron(hugr_json)
-    assert past_ron.startswith("(")
-    assert "QAlloc" in past_ron
-    assert "H" in past_ron
-    assert "Measure" in past_ron
-    
-    # Convert HUGR to PMIR (MLIR text)
+    # Convert HUGR to PMIR (MLIR text) directly
     pmir_mlir = hugr_to_pmir_mlir(hugr_json, debug_output=False, optimization_level=2)
     assert "func" in pmir_mlir
     assert "@main" in pmir_mlir
@@ -176,11 +168,7 @@ def test_pmir_with_manual_hugr():
     
     hugr_json = json.dumps(hugr)
     
-    # Convert to PAST
-    past_ron = hugr_to_past_ron(hugr_json)
-    assert "hadamard_test" in past_ron
-    
-    # Convert to PMIR
+    # Convert to PMIR directly
     pmir_mlir = hugr_to_pmir_mlir(hugr_json, debug_output=False, optimization_level=2)
     assert "func @main" in pmir_mlir
     assert "call @__quantum__qis__h__body" in pmir_mlir

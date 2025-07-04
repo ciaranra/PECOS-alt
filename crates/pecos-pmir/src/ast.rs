@@ -2,7 +2,7 @@
 PAST (PECOS AST) - Abstract Syntax Tree for HUGR
 
 This module defines the AST structures that represent parsed HUGR,
-designed to be serializable to RON (Rust Object Notation) for debugging
+designed to be serializable for debugging
 and intermediate representation.
 */
 
@@ -159,7 +159,7 @@ pub enum PastOp {
     Reset,
     /// Allocate qubit
     QAlloc,
-    
+
     // Result operations (tket2.result)
     /// Boolean result recording with name
     ResultBool(String),
@@ -229,35 +229,14 @@ pub enum PastValue {
     String(String),
 }
 
-impl PastModule {
-    /// Convert to RON string representation
-    ///
-    /// # Errors
-    ///
-    /// Returns a `ron::Error` if serialization fails
-    pub fn to_ron_string(&self) -> Result<String, ron::Error> {
-        ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default())
-    }
-
-    /// Load from RON string
-    ///
-    /// # Errors
-    ///
-    /// Returns a `ron::Error` if deserialization fails or the string is malformed
-    pub fn from_ron_string(s: &str) -> Result<Self, ron::Error> {
-        ron::de::from_str(s).map_err(|e| {
-            let ron::de::SpannedError { code, position } = e;
-            ron::Error::Message(format!("{code:?} at {position:?}"))
-        })
-    }
-}
+// RON serialization removed - keeping structs for internal use only
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_ron_serialization() {
+    fn test_past_creation() {
         let module = PastModule {
             name: "test_module".to_string(),
             version: "0.1.0".to_string(),
@@ -266,10 +245,7 @@ mod tests {
             types: HashMap::new(),
         };
 
-        let ron_str = module.to_ron_string().unwrap();
-        assert!(ron_str.contains("test_module"));
-
-        let parsed = PastModule::from_ron_string(&ron_str).unwrap();
-        assert_eq!(parsed.name, module.name);
+        assert_eq!(module.name, "test_module");
+        assert_eq!(module.entry_point, Some("main".to_string()));
     }
 }

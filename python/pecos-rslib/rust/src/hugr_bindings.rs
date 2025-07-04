@@ -62,15 +62,16 @@ impl PyHugrCompiler {
     /// LLVM IR as a string
     fn compile_bytes_to_llvm(&self, hugr_bytes: &Bound<'_, PyBytes>) -> PyResult<String> {
         let bytes = hugr_bytes.as_bytes();
-        
+
         // Use the pure compilation crate
         let compiler = if self.debug_info {
             HugrCompiler::new().with_debug_info(true)
         } else {
             HugrCompiler::new()
         };
-        
-        compiler.compile_hugr_bytes_to_string(bytes)
+
+        compiler
+            .compile_hugr_bytes_to_string(bytes)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 
@@ -79,19 +80,24 @@ impl PyHugrCompiler {
     /// # Arguments
     /// * `hugr_bytes` - HUGR data as bytes
     /// * `llvm_path` - Path for output LLVM IR file
-    fn compile_bytes_to_llvm_file(&self, hugr_bytes: &Bound<'_, PyBytes>, llvm_path: &str) -> PyResult<()> {
+    fn compile_bytes_to_llvm_file(
+        &self,
+        hugr_bytes: &Bound<'_, PyBytes>,
+        llvm_path: &str,
+    ) -> PyResult<()> {
         let config = HugrCompilerConfig {
             output_path: Some(PathBuf::from(llvm_path)),
             debug_info: self.debug_info,
         };
-        
+
         let compiler = HugrCompiler::with_config(config.clone());
         let bytes = hugr_bytes.as_bytes();
-        
+
         // Compile directly to the output path
-        compiler.compile_hugr_bytes(bytes, config.output_path.as_ref().unwrap())
+        compiler
+            .compile_hugr_bytes(bytes, config.output_path.as_ref().unwrap())
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-        
+
         Ok(())
     }
 
@@ -105,11 +111,12 @@ impl PyHugrCompiler {
             output_path: Some(PathBuf::from(llvm_path)),
             debug_info: self.debug_info,
         };
-        
+
         let compiler = HugrCompiler::with_config(config);
-        compiler.compile_hugr(hugr_path)
+        compiler
+            .compile_hugr(hugr_path)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-        
+
         Ok(())
     }
 
@@ -160,15 +167,16 @@ impl PyHugrLlvmEngine {
         } else {
             HugrCompiler::new()
         };
-        
-        let llvm_ir = compiler.compile_hugr_bytes_to_string(bytes)
+
+        let llvm_ir = compiler
+            .compile_hugr_bytes_to_string(bytes)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
         // Step 2: Create temporary file for LLVM IR
         let temp_dir = TempDir::new()
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string()))?;
         let llvm_path = temp_dir.path().join("output.ll");
-        
+
         std::fs::write(&llvm_path, llvm_ir)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string()))?;
 
@@ -177,7 +185,8 @@ impl PyHugrLlvmEngine {
         engine.set_assigned_shots(shots);
 
         // Pre-compile the engine
-        engine.pre_compile()
+        engine
+            .pre_compile()
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
         // Store the engine
@@ -217,9 +226,10 @@ impl PyHugrLlvmEngine {
             output_path: Some(llvm_path.clone()),
             debug_info,
         };
-        
+
         let compiler = HugrCompiler::with_config(config);
-        compiler.compile_hugr(hugr_path)
+        compiler
+            .compile_hugr(hugr_path)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
         // Step 2: Create LLVM engine
@@ -227,7 +237,8 @@ impl PyHugrLlvmEngine {
         engine.set_assigned_shots(shots);
 
         // Pre-compile the engine
-        engine.pre_compile()
+        engine
+            .pre_compile()
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
         // Store the engine
@@ -248,31 +259,36 @@ impl PyHugrLlvmEngine {
     /// List of measurement results (0 or 1)
     fn run(&self) -> PyResult<Vec<u8>> {
         use pecos_engines::run_sim;
-        
+
         let mut engines = PYTHON_LLVM_ENGINES.lock().unwrap();
-        let entry = engines.get_mut(&self.engine_id)
-            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                format!("Engine {} not found", self.engine_id)
-            ))?;
+        let entry = engines.get_mut(&self.engine_id).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Engine {} not found",
+                self.engine_id
+            ))
+        })?;
 
         // Clone the engine to use as a ClassicalEngine
         let engine_clone = entry.engine.clone();
-        
+
         // Use run_sim with the proper architecture
         let results = run_sim(
             Box::new(engine_clone),
             self.shots,
             None, // seed
-            None, // workers 
+            None, // workers
             None, // noise_model
             None, // quantum_engine
-        ).map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-        
+        )
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
+
         // Extract measurement results - take the first measurement from each shot
         let mut measurements = Vec::with_capacity(self.shots);
         for shot in results.shots {
             // Find the first measurement value
-            let measurement = shot.data.values()
+            let measurement = shot
+                .data
+                .values()
                 .find_map(|data| match data {
                     pecos_engines::shot_results::Data::U32(v) => Some(*v != 0),
                     pecos_engines::shot_results::Data::I64(v) => Some(*v != 0),
@@ -280,25 +296,28 @@ impl PyHugrLlvmEngine {
                     _ => None,
                 })
                 .unwrap_or(false);
-            measurements.push(measurement as u8);
+            measurements.push(u8::from(measurement));
         }
-        
+
         Ok(measurements)
     }
 
     /// Reset the engine state
     fn reset(&mut self) -> PyResult<()> {
         let mut engines = PYTHON_LLVM_ENGINES.lock().unwrap();
-        let entry = engines.get_mut(&self.engine_id)
-            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                format!("Engine {} not found", self.engine_id)
-            ))?;
+        let entry = engines.get_mut(&self.engine_id).ok_or_else(|| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Engine {} not found",
+                self.engine_id
+            ))
+        })?;
 
         // Reset by creating a new engine with the same configuration
         let llvm_path = entry.engine.get_llvm_file().to_path_buf();
         let mut new_engine = LlvmEngine::new(llvm_path);
         new_engine.set_assigned_shots(self.shots);
-        new_engine.pre_compile()
+        new_engine
+            .pre_compile()
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
         entry.engine = new_engine;
         Ok(())
@@ -357,12 +376,12 @@ pub fn register_hugr_module(parent_module: &Bound<'_, PyModule>) -> PyResult<()>
     parent_module.add_class::<PyHugrCompiler>()?;
     parent_module.add_class::<PyHugrLlvmEngine>()?;
     parent_module.add_function(wrap_pyfunction!(is_hugr_supported, parent_module)?)?;
-    
+
     // Also create convenience functions with expected names
     parent_module.add_function(wrap_pyfunction!(compile_hugr_bytes_to_llvm, parent_module)?)?;
     parent_module.add_function(wrap_pyfunction!(compile_hugr_file_to_llvm, parent_module)?)?;
     parent_module.add_function(wrap_pyfunction!(is_hugr_support_available, parent_module)?)?;
-    
+
     Ok(())
 }
 

@@ -29,7 +29,6 @@ pub fn get_thread_id() -> String {
     format!("{:?}", thread::current().id())
 }
 
-
 /// Configuration options for the LLVM engine
 #[derive(Debug, Clone, Default)]
 pub struct LlvmEngineConfig {
@@ -138,6 +137,7 @@ impl LlvmEngine {
     }
 
     /// Get the path to the LLVM IR file
+    #[must_use]
     pub fn get_llvm_file(&self) -> &Path {
         &self.llvm_file
     }
@@ -327,7 +327,6 @@ impl LlvmEngine {
             panic!("LLVM: No library loaded - engine not properly initialized");
         }
     }
-
 
     /// Pre-compile the LLVM library to prepare for cloning
     ///
@@ -580,7 +579,10 @@ impl LlvmEngine {
         if alloc_count > 0 {
             max_qubit_index = max_qubit_index.max(alloc_count - 1);
             found_allocation = true;
-            debug!("Pattern 1: Found {} allocations, max_qubit_index = {}", alloc_count, max_qubit_index);
+            debug!(
+                "Pattern 1: Found {} allocations, max_qubit_index = {}",
+                alloc_count, max_qubit_index
+            );
         }
 
         // Pattern 2: Integer-based qubit references in LLVM IR calls like "i64 N"
@@ -591,8 +593,12 @@ impl LlvmEngine {
         for cap in int_qubit_pattern.captures_iter(content) {
             if let Some(index_match) = cap.get(1) {
                 if let Ok(index) = index_match.as_str().parse::<usize>() {
-                    debug!("Pattern 2: Found integer qubit reference: {}, updating max_qubit_index from {} to {}", 
-                           index, max_qubit_index, max_qubit_index.max(index));
+                    debug!(
+                        "Pattern 2: Found integer qubit reference: {}, updating max_qubit_index from {} to {}",
+                        index,
+                        max_qubit_index,
+                        max_qubit_index.max(index)
+                    );
                     max_qubit_index = max_qubit_index.max(index);
                     found_allocation = true;
                 }
@@ -685,7 +691,10 @@ impl ClassicalEngine for LlvmEngine {
                 num_qubits
             }
             Err(e) => {
-                warn!("LLVM Engine: Could not determine qubit count from file {:?}: {}", self.llvm_file, e);
+                warn!(
+                    "LLVM Engine: Could not determine qubit count from file {:?}: {}",
+                    self.llvm_file, e
+                );
                 // Fallback: check if we have measurement results from current execution
                 if !self.measurement_results.is_empty() {
                     let max_result_id = self.measurement_results.keys().max().unwrap_or(&0);
@@ -697,7 +706,9 @@ impl ClassicalEngine for LlvmEngine {
                     return num_qubits;
                 }
                 // This is likely to cause issues - log an error
-                error!("LLVM Engine: CRITICAL - Returning 0 qubits, this will cause runtime errors!");
+                error!(
+                    "LLVM Engine: CRITICAL - Returning 0 qubits, this will cause runtime errors!"
+                );
                 error!("LLVM Engine: File path was: {:?}", self.llvm_file);
                 error!("LLVM Engine: Error was: {}", e);
                 0

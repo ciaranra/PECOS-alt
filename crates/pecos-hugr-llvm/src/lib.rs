@@ -2,7 +2,7 @@
 Pure HUGR to LLVM IR Compilation
 
 This crate provides pure compilation functionality from HUGR (Hierarchical Unified Graph Representation)
-to LLVM IR. It has no dependencies on execution engines or runtime systems - it focuses solely on 
+to LLVM IR. It has no dependencies on execution engines or runtime systems - it focuses solely on
 translation between representations.
 
 # Architecture
@@ -58,15 +58,15 @@ use std::path::{Path, PathBuf};
 /// # Errors
 /// Returns `PecosError` if compilation fails
 pub fn compile_hugr_to_llvm<P: AsRef<Path>>(
-    hugr_path: P, 
-    output_path: Option<PathBuf>
+    hugr_path: P,
+    output_path: Option<PathBuf>,
 ) -> Result<PathBuf, PecosError> {
     let mut compiler = HugrCompiler::new();
-    
+
     if let Some(output) = output_path {
         compiler = compiler.with_output_path(output);
     }
-    
+
     compiler.compile_hugr(hugr_path)
 }
 

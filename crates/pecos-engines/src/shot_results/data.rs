@@ -65,19 +65,19 @@ impl Data {
     pub fn from_vec(values: Vec<Data>) -> Self {
         Self::Vec(values)
     }
-    
+
     /// Create a Vec variant from a vector of i32 values
     #[must_use]
     pub fn from_i32_vec(values: Vec<i32>) -> Self {
         Self::Vec(values.into_iter().map(Data::I32).collect())
     }
-    
+
     /// Create a Vec variant from a vector of u32 values
     #[must_use]
     pub fn from_u32_vec(values: Vec<u32>) -> Self {
         Self::Vec(values.into_iter().map(Data::U32).collect())
     }
-    
+
     /// Create a Bytes variant from a Vec<u8>
     #[must_use]
     pub fn from_bytes(bytes: Vec<u8>) -> Self {
@@ -160,7 +160,7 @@ impl Data {
             Self::Bytes(v) => format!("{v:?}"), // Could use hex or base64
             Self::Json(v) => v.to_string(),
             Self::Vec(v) => {
-                let strings: Vec<String> = v.iter().map(|d| d.to_value_string()).collect();
+                let strings: Vec<String> = v.iter().map(Data::to_value_string).collect();
                 format!("[{}]", strings.join(", "))
             }
         }
@@ -196,7 +196,7 @@ impl Data {
             _ => None,
         }
     }
-    
+
     /// Get the inner vector if this is a Vec variant
     #[must_use]
     pub fn as_vec(&self) -> Option<&Vec<Data>> {
@@ -205,7 +205,7 @@ impl Data {
             _ => None,
         }
     }
-    
+
     /// Convert Vec variant to vector of u32 values if possible
     #[must_use]
     pub fn as_u32_vec(&self) -> Option<Vec<u32>> {
@@ -223,7 +223,7 @@ impl Data {
             _ => None,
         }
     }
-    
+
     /// Convert Vec variant to vector of i32 values if possible
     #[must_use]
     pub fn as_i32_vec(&self) -> Option<Vec<i32>> {
@@ -233,10 +233,10 @@ impl Data {
                 for item in v {
                     match item {
                         Data::I32(val) => result.push(*val),
-                        Data::I16(val) => result.push(*val as i32),
-                        Data::I8(val) => result.push(*val as i32),
-                        Data::U8(val) => result.push(*val as i32),
-                        Data::U16(val) => result.push(*val as i32),
+                        Data::I16(val) => result.push(i32::from(*val)),
+                        Data::I8(val) => result.push(i32::from(*val)),
+                        Data::U8(val) => result.push(i32::from(*val)),
+                        Data::U16(val) => result.push(i32::from(*val)),
                         Data::U32(val) => {
                             if let Ok(i) = i32::try_from(*val) {
                                 result.push(i);
@@ -280,7 +280,7 @@ impl std::fmt::Display for Data {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}", item)?;
+                    write!(f, "{item}")?;
                 }
                 write!(f, "]")
             }

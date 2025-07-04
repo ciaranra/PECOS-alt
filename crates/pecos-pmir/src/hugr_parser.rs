@@ -68,7 +68,7 @@ fn convert_json_to_past(json: &Value) -> Result<PastModule, PecosError> {
     // Parse nodes and edges from module
     let mut nodes = parse_nodes(first_module)?;
     let edges = parse_edges(first_module)?;
-    
+
     // Get the original nodes array for function signature parsing
     let original_nodes = first_module
         .get("nodes")
@@ -424,11 +424,10 @@ fn count_ports(op: &PastOp) -> (usize, usize) {
         // Binary operations: 2 in, 1 out
         PastOp::Add | PastOp::Sub | PastOp::Mul | PastOp::Div => (2, 1),
 
-        // Output node: 1 in, 0 out
-        PastOp::Output(_) => (1, 0),
-        
-        // Result operations: 1 in, 0 out (they consume measurement results)
-        PastOp::ResultBool(_) | PastOp::ResultInt(_) | PastOp::ResultF64(_) => (1, 0),
+        // Output node and result operations: 1 in, 0 out
+        PastOp::Output(_) | PastOp::ResultBool(_) | PastOp::ResultInt(_) | PastOp::ResultF64(_) => {
+            (1, 0)
+        }
     }
 }
 
@@ -555,7 +554,11 @@ fn parse_result_name_from_node(node: &serde_json::Map<String, Value>) -> Option<
 }
 
 /// Build functions from nodes and edges
-fn build_functions_from_graph(nodes: &[PastNode], edges: &[PastEdge], original_nodes: &[Value]) -> Result<Vec<PastFunction>, PecosError> {
+fn build_functions_from_graph(
+    nodes: &[PastNode],
+    edges: &[PastEdge],
+    original_nodes: &[Value],
+) -> Result<Vec<PastFunction>, PecosError> {
     // For now, create a single main function containing all nodes
     // In the future, we'll properly identify function boundaries
 
@@ -596,7 +599,7 @@ fn build_functions_from_graph(nodes: &[PastNode], edges: &[PastEdge], original_n
 }
 
 /// Extract function output types from HUGR nodes
-/// This finds the FuncDefn node and parses its signature to determine actual output types
+/// This finds the `FuncDefn` node and parses its signature to determine actual output types
 fn extract_function_output_types(nodes: &[Value]) -> Result<Vec<PastType>, PecosError> {
     // Find the FuncDefn node (should be node 1 in modern HUGR format)
     let func_defn_node = nodes
@@ -605,7 +608,8 @@ fn extract_function_output_types(nodes: &[Value]) -> Result<Vec<PastType>, Pecos
         .find(|(_, node)| {
             node.as_object()
                 .and_then(|obj| obj.get("op"))
-                .and_then(|op| op.as_str()) == Some("FuncDefn")
+                .and_then(|op| op.as_str())
+                == Some("FuncDefn")
         })
         .map(|(_, node)| node)
         .ok_or_else(|| PecosError::ParseSyntax {
@@ -620,7 +624,8 @@ fn extract_function_output_types(nodes: &[Value]) -> Result<Vec<PastType>, Pecos
 
     if let Some(sig) = signature {
         // New HUGR format with explicit signature
-        let outputs = sig.as_object()
+        let outputs = sig
+            .as_object()
             .and_then(|sig| sig.get("body"))
             .and_then(|body| body.as_object())
             .and_then(|body| body.get("output"))

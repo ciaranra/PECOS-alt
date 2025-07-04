@@ -2,9 +2,7 @@
 
 import pytest
 from pecos_rslib import (
-    hugr_to_past_ron,
     hugr_to_pmir_mlir,
-    past_ron_to_pmir_mlir,
     compile_hugr_via_pmir,
     PMIRCompiler,
 )
@@ -35,16 +33,8 @@ SIMPLE_HUGR = """{
 }"""
 
 
-def test_hugr_to_past_ron():
-    """Test conversion from HUGR to PAST RON."""
-    past_ron = hugr_to_past_ron(SIMPLE_HUGR)
-    
-    # Check that it's valid RON - it starts with a parenthesis for the tuple struct
-    assert past_ron.startswith("(")
-    assert "hadamard_test" in past_ron
-    # Check for the expected quantum operations in the new format
-    assert ("QAlloc" in past_ron or "Extension" in past_ron)
-    assert "H" in past_ron
+# RON serialization has been removed from PMIR
+# The test_hugr_to_past_ron function has been removed
 
 
 def test_hugr_to_pmir_mlir():
@@ -60,31 +50,13 @@ def test_hugr_to_pmir_mlir():
     assert "return" in pmir_mlir
 
 
-def test_past_ron_to_pmir_mlir():
-    """Test conversion from PAST RON to PMIR MLIR."""
-    # First get PAST RON
-    past_ron = hugr_to_past_ron(SIMPLE_HUGR)
-    
-    # Then convert to PMIR
-    pmir_mlir = past_ron_to_pmir_mlir(past_ron, debug_output=False, optimization_level=2)
-    
-    # Should produce same result as direct conversion
-    direct_mlir = hugr_to_pmir_mlir(SIMPLE_HUGR, debug_output=False, optimization_level=2)
-    
-    # The output should be functionally equivalent
-    # (exact match might differ due to internal node IDs)
-    assert ("main" in pmir_mlir or "@main" in pmir_mlir)
-    assert ("call @__quantum__" in pmir_mlir or "@__quantum__" in pmir_mlir)
+# RON serialization has been removed from PMIR
+# The test_past_ron_to_pmir_mlir function has been removed
 
 
 def test_pmir_compiler_class():
     """Test the PMIRCompiler convenience class."""
     compiler = PMIRCompiler(debug_output=False, optimization_level=2)
-    
-    # Test getting PAST
-    past = compiler.get_past(SIMPLE_HUGR)
-    assert past.startswith("(")  # RON format starts with parenthesis
-    assert "hadamard_test" in past
     
     # Test getting PMIR
     pmir = compiler.get_pmir(SIMPLE_HUGR)
@@ -119,16 +91,19 @@ def test_invalid_hugr():
     invalid_hugr = '{"invalid": "json"}'
     
     with pytest.raises(RuntimeError) as exc_info:
-        hugr_to_past_ron(invalid_hugr)
+        hugr_to_pmir_mlir(invalid_hugr, debug_output=False, optimization_level=2)
     
-    assert "Failed to parse HUGR" in str(exc_info.value)
+    # The error message should indicate HUGR parsing failed
+    assert "Failed to parse HUGR" in str(exc_info.value) or "parse" in str(exc_info.value).lower()
 
 
-def test_invalid_past_ron():
-    """Test error handling for invalid PAST RON."""
-    invalid_ron = "InvalidRON{{"
+def test_malformed_hugr_json():
+    """Test error handling for malformed JSON."""
+    malformed_json = '{"modules": [}'
     
     with pytest.raises(RuntimeError) as exc_info:
-        past_ron_to_pmir_mlir(invalid_ron, debug_output=False, optimization_level=2)
+        hugr_to_pmir_mlir(malformed_json, debug_output=False, optimization_level=2)
     
-    assert "Failed to deserialize PAST" in str(exc_info.value)
+    # Should get a JSON parsing error
+    error_msg = str(exc_info.value).lower()
+    assert "json" in error_msg or "parse" in error_msg

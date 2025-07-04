@@ -2,7 +2,7 @@
 PECOS PMIR (PECOS MLIR) - Alternative compilation pipeline via MLIR
 
 This crate provides an alternative compilation path from HUGR to LLVM IR via:
-1. Pest parsing of HUGR JSON to PAST (PECOS AST) in RON format
+1. Pest parsing of HUGR JSON to PAST (PECOS AST)
 2. Lowering from PAST to PMIR (PECOS Middle-level IR) expressed as MLIR text
 3. Using MLIR tools to compile PMIR to LLVM IR
 
@@ -58,18 +58,16 @@ pub fn binary_hugr_to_json(hugr_bytes: &[u8]) -> Result<String, PecosError> {
     if hugr_bytes.len() >= 10 && &hugr_bytes[0..4] == b"HUGR" {
         // Skip the 10-byte header and decode the JSON
         let json_bytes = &hugr_bytes[10..];
-        String::from_utf8(json_bytes.to_vec())
-            .map_err(|e| PecosError::ParseSyntax {
-                language: "HUGR".to_string(),
-                message: format!("Invalid UTF-8 in HUGR data: {}", e),
-            })
+        String::from_utf8(json_bytes.to_vec()).map_err(|e| PecosError::ParseSyntax {
+            language: "HUGR".to_string(),
+            message: format!("Invalid UTF-8 in HUGR data: {e}"),
+        })
     } else if hugr_bytes.starts_with(b"{") {
         // Already JSON format
-        String::from_utf8(hugr_bytes.to_vec())
-            .map_err(|e| PecosError::ParseSyntax {
-                language: "HUGR".to_string(),
-                message: format!("Invalid UTF-8 in JSON data: {}", e),
-            })
+        String::from_utf8(hugr_bytes.to_vec()).map_err(|e| PecosError::ParseSyntax {
+            language: "HUGR".to_string(),
+            message: format!("Invalid UTF-8 in JSON data: {e}"),
+        })
     } else {
         Err(PecosError::ParseSyntax {
             language: "HUGR".to_string(),
@@ -90,10 +88,10 @@ pub fn compile_hugr_via_pmir(hugr_json: &str, config: &PmirConfig) -> Result<Str
     let past = hugr_parser::parse_hugr_to_past(hugr_json)?;
 
     if config.debug_output {
-        match past.to_ron_string() {
-            Ok(ron_str) => log::debug!("PAST representation:\n{}", ron_str),
-            Err(e) => log::warn!("Failed to serialize PAST to RON: {:?}", e),
-        }
+        log::debug!(
+            "PAST representation created with {} functions",
+            past.functions.len()
+        );
     }
 
     // Step 2: Lower PAST to PMIR (PECOS Middle-level IR) as MLIR text
@@ -129,22 +127,12 @@ pub fn compile_hugr_via_pmir(hugr_json: &str, config: &PmirConfig) -> Result<Str
 /// # Errors
 ///
 /// Returns `PecosError` if any step in the compilation pipeline fails
-pub fn compile_hugr_bytes_via_pmir(hugr_bytes: &[u8], config: &PmirConfig) -> Result<String, PecosError> {
+pub fn compile_hugr_bytes_via_pmir(
+    hugr_bytes: &[u8],
+    config: &PmirConfig,
+) -> Result<String, PecosError> {
     let hugr_json = binary_hugr_to_json(hugr_bytes)?;
     compile_hugr_via_pmir(&hugr_json, config)
-}
-
-/// Convert HUGR JSON to PAST RON representation
-///
-/// # Errors
-///
-/// Returns `PecosError` if parsing or serialization fails
-pub fn hugr_to_past_ron(hugr_json: &str) -> Result<String, PecosError> {
-    let past = hugr_parser::parse_hugr_to_past(hugr_json)?;
-    past.to_ron_string().map_err(|e| PecosError::ParseSyntax {
-        language: "RON".to_string(),
-        message: format!("Failed to serialize PAST to RON: {e:?}"),
-    })
 }
 
 /// Convert HUGR JSON to PMIR (MLIR text format)
@@ -154,21 +142,6 @@ pub fn hugr_to_past_ron(hugr_json: &str) -> Result<String, PecosError> {
 /// Returns `PecosError` if parsing or lowering fails
 pub fn hugr_to_pmir_mlir(hugr_json: &str, config: &PmirConfig) -> Result<String, PecosError> {
     let past = hugr_parser::parse_hugr_to_past(hugr_json)?;
-    let mlir_module = mlir_lowering::lower_past_to_pmir(&past, config)?;
-    Ok(mlir_module.to_string())
-}
-
-/// Convert PAST RON to PMIR (MLIR text format)
-///
-/// # Errors
-///
-/// Returns `PecosError` if deserialization or lowering fails
-pub fn past_ron_to_pmir_mlir(past_ron: &str, config: &PmirConfig) -> Result<String, PecosError> {
-    let past: ast::PastModule = ron::from_str(past_ron).map_err(|e| PecosError::ParseSyntax {
-        language: "RON".to_string(),
-        message: format!("Failed to deserialize PAST from RON: {e:?}"),
-    })?;
-
     let mlir_module = mlir_lowering::lower_past_to_pmir(&past, config)?;
     Ok(mlir_module.to_string())
 }
@@ -195,16 +168,16 @@ pub fn compile_hugr_file_via_pmir(
     Ok(())
 }
 
-/// Fix LLVM IR to add EntryPoint attribute for PECOS runtime compatibility
+/// Fix LLVM IR to add `EntryPoint` attribute for PECOS runtime compatibility
 ///
-/// This function ensures that the main function has the EntryPoint attribute
+/// This function ensures that the main function has the `EntryPoint` attribute
 /// needed by the PECOS LLVM engine, similar to how HUGR-LLVM works.
 fn fix_entry_point_attribute(llvm_ir: &str) -> String {
     // Find the first function definition (should be @main) and add EntryPoint attribute
     let mut result = String::new();
     let mut found_main_function = false;
     let mut in_attributes_section = false;
-    
+
     for line in llvm_ir.lines() {
         if !found_main_function && line.starts_with("define ") && line.contains("@main") {
             // This is the main function - mark it as entry point
@@ -249,12 +222,15 @@ fn fix_entry_point_attribute(llvm_ir: &str) -> String {
         }
         result.push('\n');
     }
-    
+
     // If we didn't find an attributes section, add it at the end
-    if found_main_function && !llvm_ir.contains("\"EntryPoint\"") && !llvm_ir.contains("attributes #") {
+    if found_main_function
+        && !llvm_ir.contains("\"EntryPoint\"")
+        && !llvm_ir.contains("attributes #")
+    {
         result.push_str("\nattributes #0 = { \"EntryPoint\" }\n");
     }
-    
+
     result
 }
 

@@ -126,7 +126,10 @@ pub fn run_sim(
 
     // Create default quantum engine if none provided
     let quantum_engine = quantum_engine.unwrap_or_else(|| {
-        log::debug!("run_sim: Creating StateVecEngine with {} qubits", num_qubits);
+        log::debug!(
+            "run_sim: Creating StateVecEngine with {} qubits",
+            num_qubits
+        );
         Box::new(quantum::StateVecEngine::new(num_qubits))
     });
 

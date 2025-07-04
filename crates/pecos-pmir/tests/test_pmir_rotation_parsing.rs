@@ -1,6 +1,6 @@
 //! Test for understanding how HUGR represents rotation gates with angles
 
-use pecos_pmir::hugr_to_past_ron;
+use pecos_pmir::{PmirConfig, hugr_to_pmir_mlir};
 
 #[test]
 fn test_hugr_rotation_gate_structure() {
@@ -31,19 +31,24 @@ fn test_hugr_rotation_gate_structure() {
         "extensions": []
     }"#;
 
-    // Convert to PAST RON to examine structure
-    match hugr_to_past_ron(hugr_json) {
-        Ok(ron) => {
-            println!("PAST RON representation:\n{ron}");
+    // Convert to PMIR MLIR to examine structure
+    let config = PmirConfig::default();
+    match hugr_to_pmir_mlir(hugr_json, &config) {
+        Ok(mlir) => {
+            println!("PMIR MLIR representation:\n{mlir}");
 
-            // The RON should show the correct angle being parsed
-            // With the fix, we expect to see RX(1.5708)
+            // The MLIR should show the correct angle being parsed
+            // With the fix, we expect to see the RX operation with angle
             assert!(
-                ron.contains("RX(1.5708)"),
-                "Expected RX(1.5708) in RON output"
+                mlir.contains("@__quantum__qis__rx__body"),
+                "Expected RX operation in MLIR output"
+            );
+            assert!(
+                mlir.contains("1.5708"),
+                "Expected angle 1.5708 in MLIR output"
             );
         }
-        Err(e) => panic!("Failed to convert to RON: {e:?}"),
+        Err(e) => panic!("Failed to convert to PMIR: {e:?}"),
     }
 }
 
@@ -75,24 +80,25 @@ fn test_edge_based_angle_passing() {
         "extensions": []
     }"#;
 
-    // Convert to PAST RON to examine structure
-    match hugr_to_past_ron(hugr_json) {
-        Ok(ron) => {
-            println!("\nEdge-based angle passing RON:\n{ron}");
+    // Convert to PMIR MLIR to examine structure
+    let config = PmirConfig::default();
+    match hugr_to_pmir_mlir(hugr_json, &config) {
+        Ok(mlir) => {
+            println!("\nEdge-based angle passing MLIR:\n{mlir}");
 
-            // The RON will show the edges and how constants flow
-            // With the fix, we expect to see RZ(3.14159)
+            // The MLIR will show how constants flow
+            // With the fix, we expect to see RZ operation with pi value
             assert!(
-                ron.contains("RZ(3.14159)"),
-                "Expected RZ(3.14159) in RON output"
+                mlir.contains("@__quantum__qis__rz__body"),
+                "Expected RZ operation in MLIR output"
             );
 
-            // Also check that we have a Const node with the pi value
+            // Also check that we have the pi value
             assert!(
-                ron.contains("Const(Float(3.14159))"),
-                "Expected Const(Float(3.14159)) in RON output"
+                mlir.contains("3.14159"),
+                "Expected angle 3.14159 in MLIR output"
             );
         }
-        Err(e) => panic!("Failed to convert to RON: {e:?}"),
+        Err(e) => panic!("Failed to convert to PMIR: {e:?}"),
     }
 }

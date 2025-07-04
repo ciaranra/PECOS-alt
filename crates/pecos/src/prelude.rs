@@ -59,9 +59,9 @@ pub use crate::program::{
 };
 
 // Re-export setup functions from format-specific crates
+pub use crate::setup_llvm_engine;
 pub use pecos_phir::setup_phir_engine;
 pub use pecos_qasm::setup_qasm_engine;
-pub use crate::setup_llvm_engine;
 
 // Re-export run_sim from pecos-engines
 pub use pecos_engines::run_sim;

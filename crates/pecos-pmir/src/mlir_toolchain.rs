@@ -48,12 +48,20 @@ impl Default for MlirToolchainConfig {
 ///
 /// Returns `PecosError` if:
 /// - Failed to create or write temporary files
-/// - MLIR tools are not found or fail to execute
+/// - MLIR tools are not found or fail to execute  
 /// - MLIR optimization or translation fails
+///
+/// Convert MLIR text to LLVM IR using external MLIR tools
+///
+/// # Panics
+///
+/// Panics if the internal regex pattern for matching the main function is invalid.
+/// This should never happen in practice as the pattern is hardcoded and tested.
 pub fn mlir_to_llvm_ir(
     mlir_text: &str,
     config: &MlirToolchainConfig,
 ) -> Result<String, PecosError> {
+    use regex::Regex;
     // Write MLIR to temporary file
     let mut mlir_file = NamedTempFile::new().map_err(PecosError::IO)?;
 
@@ -127,26 +135,26 @@ pub fn mlir_to_llvm_ir(
     // Get LLVM IR
     let mut llvm_ir = String::from_utf8(translate_output.stdout)
         .map_err(|e| PecosError::Processing(format!("Invalid UTF-8 in LLVM IR: {e}")))?;
-    
+
     // Add EntryPoint attribute to main function for PECOS runtime compatibility
     // Use regex to match any main function signature
-    use regex::Regex;
-    let main_pattern = Regex::new(r"define (\{[^}]+\}|[^ ]+) @main\(\)").unwrap();
-    
+    let main_pattern = Regex::new(r"define (\{[^}]+\}|[^ ]+) @main\(\)")
+        .expect("Invalid regex pattern for main function - this is a bug");
+
     if let Some(captures) = main_pattern.captures(&llvm_ir) {
         let original = captures.get(0).unwrap().as_str();
-        let replacement = format!("{} #0", original);
+        let replacement = format!("{original} #0");
         llvm_ir = llvm_ir.replace(original, &replacement);
-        
+
         // Add attribute definition at the end if not present
         if !llvm_ir.contains("attributes #0") {
             llvm_ir.push_str("\nattributes #0 = { \"EntryPoint\" }\n");
         }
     }
-    
+
     // Note: Qubit handles from __quantum__rt__qubit_allocate() are already 0-based
     // No additional indexing transformation needed
-    
+
     Ok(llvm_ir)
 }
 
@@ -207,7 +215,6 @@ pub fn check_mlir_tools(config: &MlirToolchainConfig) -> Result<(), PecosError> 
 
     Ok(())
 }
-
 
 /// Process MLIR text in memory (requires custom MLIR integration)
 ///

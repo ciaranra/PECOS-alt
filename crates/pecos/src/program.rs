@@ -1,9 +1,9 @@
+use crate::setup_llvm_engine;
 use log::debug;
 use pecos_core::errors::PecosError;
 use pecos_engines::ClassicalEngine;
 use pecos_phir::setup_phir_engine;
 use pecos_qasm::setup_qasm_engine;
-use crate::setup_llvm_engine;
 use std::path::{Path, PathBuf};
 
 /// Represents the types of programs that PECOS can execute

@@ -102,7 +102,7 @@ use std::path::Path;
 /// * `shots` - Optional number of shots to assign to the engine
 ///
 /// # Returns
-/// A boxed ClassicalEngine ready for execution
+/// A boxed `ClassicalEngine` ready for execution
 ///
 /// # Errors
 /// Returns `PecosError` if engine creation fails
@@ -151,7 +151,7 @@ pub mod hugr {
     /// * `shots` - Optional number of shots to assign to the engine
     ///
     /// # Returns
-    /// A boxed ClassicalEngine ready for execution
+    /// A boxed `ClassicalEngine` ready for execution
     ///
     /// # Errors
     /// Returns `PecosError` if HUGR compilation or engine creation fails
@@ -161,7 +161,7 @@ pub mod hugr {
     ) -> Result<Box<dyn ClassicalEngine>, PecosError> {
         // Step 1: Compile HUGR to LLVM IR
         let llvm_ir_path = pecos_hugr_llvm::compile_hugr_to_llvm(hugr_path, None)?;
-        
+
         // Step 2: Create LLVM engine from the generated IR
         create_llvm_engine_from_ir(&llvm_ir_path, shots)
     }
@@ -173,7 +173,7 @@ pub mod hugr {
     /// * `shots` - Optional number of shots to assign to the engine
     ///
     /// # Returns
-    /// A boxed ClassicalEngine ready for execution
+    /// A boxed `ClassicalEngine` ready for execution
     ///
     /// # Errors
     /// Returns `PecosError` if HUGR compilation or engine creation fails
@@ -183,7 +183,7 @@ pub mod hugr {
     ) -> Result<Box<dyn ClassicalEngine>, PecosError> {
         // Step 1: Compile HUGR bytes to LLVM IR string
         let llvm_ir = pecos_hugr_llvm::compile_hugr_bytes_to_string(hugr_bytes)?;
-        
+
         // Step 2: Create LLVM engine from the IR string
         create_llvm_engine_from_ir_string(&llvm_ir, shots)
     }
@@ -201,21 +201,24 @@ pub mod hugr {
         llvm_ir: &str,
         shots: Option<usize>,
     ) -> Result<Box<dyn ClassicalEngine>, PecosError> {
-        use tempfile::NamedTempFile;
         use std::io::Write;
-        
+        use tempfile::NamedTempFile;
+
         // Write IR to temporary file - use persist to keep it around
-        let mut temp_file = NamedTempFile::new()
-            .map_err(|e| PecosError::with_context(e, "Failed to create temporary file for LLVM IR"))?;
-        
-        temp_file.write_all(llvm_ir.as_bytes())
-            .map_err(|e| PecosError::with_context(e, "Failed to write LLVM IR to temporary file"))?;
-        
+        let mut temp_file = NamedTempFile::new().map_err(|e| {
+            PecosError::with_context(e, "Failed to create temporary file for LLVM IR")
+        })?;
+
+        temp_file.write_all(llvm_ir.as_bytes()).map_err(|e| {
+            PecosError::with_context(e, "Failed to write LLVM IR to temporary file")
+        })?;
+
         // Persist the file to keep it around after this function returns
         // This is necessary because the LlvmEngine needs to access the file in worker threads
-        let (_, path) = temp_file.keep()
+        let (_, path) = temp_file
+            .keep()
             .map_err(|e| PecosError::with_context(e, "Failed to persist temporary LLVM IR file"))?;
-        
+
         // Create engine from temporary file
         create_llvm_engine_from_ir(&path, shots)
     }
@@ -236,8 +239,8 @@ pub mod hugr {
 pub mod pmir {
     use pecos_core::errors::PecosError;
     use pecos_engines::ClassicalEngine;
-    use pecos_pmir::{compile_hugr_via_pmir as compile_hugr_pmir, compile_hugr_bytes_via_pmir};
     pub use pecos_pmir::PmirConfig;
+    use pecos_pmir::{compile_hugr_bytes_via_pmir, compile_hugr_via_pmir as compile_hugr_pmir};
     use std::path::Path;
 
     /// Compile and run a HUGR file via PMIR with default settings
@@ -253,7 +256,7 @@ pub mod pmir {
     /// * `config` - Optional PMIR configuration (uses defaults if None)
     ///
     /// # Returns
-    /// A boxed ClassicalEngine ready for execution
+    /// A boxed `ClassicalEngine` ready for execution
     ///
     /// # Errors
     /// Returns `PecosError` if HUGR compilation via PMIR or engine creation fails
@@ -263,16 +266,19 @@ pub mod pmir {
         config: Option<PmirConfig>,
     ) -> Result<Box<dyn ClassicalEngine>, PecosError> {
         // Read HUGR file (could be binary or JSON format)
-        let hugr_bytes = std::fs::read(hugr_path.as_ref())
-            .map_err(|e| PecosError::with_context(e, 
-                format!("Failed to read HUGR file: {}", hugr_path.as_ref().display())))?;
-        
+        let hugr_bytes = std::fs::read(hugr_path.as_ref()).map_err(|e| {
+            PecosError::with_context(
+                e,
+                format!("Failed to read HUGR file: {}", hugr_path.as_ref().display()),
+            )
+        })?;
+
         // Use provided config or default
         let config = config.unwrap_or_default();
-        
+
         // Compile via PMIR (handles both binary and JSON formats)
         let llvm_ir = compile_hugr_bytes_via_pmir(&hugr_bytes, &config)?;
-        
+
         // Create LLVM engine from the IR string
         super::hugr::create_llvm_engine_from_ir_string(&llvm_ir, shots)
     }
@@ -285,7 +291,7 @@ pub mod pmir {
     /// * `config` - Optional PMIR configuration (uses defaults if None)
     ///
     /// # Returns
-    /// A boxed ClassicalEngine ready for execution
+    /// A boxed `ClassicalEngine` ready for execution
     ///
     /// # Errors
     /// Returns `PecosError` if HUGR compilation via PMIR or engine creation fails
@@ -296,10 +302,10 @@ pub mod pmir {
     ) -> Result<Box<dyn ClassicalEngine>, PecosError> {
         // Use provided config or default
         let config = config.unwrap_or_default();
-        
+
         // Step 1: Compile HUGR to LLVM IR via PMIR
         let llvm_ir = compile_hugr_pmir(hugr_json, &config)?;
-        
+
         // Step 2: Create LLVM engine from the IR string
         super::hugr::create_llvm_engine_from_ir_string(&llvm_ir, shots)
     }
@@ -323,17 +329,20 @@ pub mod pmir {
         config: Option<PmirConfig>,
     ) -> Result<String, PecosError> {
         // Read HUGR file (could be binary or JSON format)
-        let hugr_bytes = std::fs::read(hugr_path.as_ref())
-            .map_err(|e| PecosError::with_context(e, 
-                format!("Failed to read HUGR file: {}", hugr_path.as_ref().display())))?;
-        
+        let hugr_bytes = std::fs::read(hugr_path.as_ref()).map_err(|e| {
+            PecosError::with_context(
+                e,
+                format!("Failed to read HUGR file: {}", hugr_path.as_ref().display()),
+            )
+        })?;
+
         // Use provided config or default
         let config = config.unwrap_or_default();
-        
+
         // Compile via PMIR (handles both binary and JSON formats)
         compile_hugr_bytes_via_pmir(&hugr_bytes, &config)
     }
 
     // Re-export types for convenience (PmirConfig already imported above)
-    pub use pecos_pmir::{hugr_to_past_ron, hugr_to_pmir_mlir, past_ron_to_pmir_mlir};
+    pub use pecos_pmir::hugr_to_pmir_mlir;
 }

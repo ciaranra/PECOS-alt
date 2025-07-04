@@ -12,11 +12,11 @@
 
 //! Python bindings for LLVM execution
 
+use pecos::setup_llvm_engine;
 use pecos_core::rng::RngManageable;
 use pecos_engines::NoiseModel;
 use pecos_engines::noise::DepolarizingNoiseModel;
 use pecos_engines::shot_results;
-use pecos::setup_llvm_engine;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};

@@ -82,10 +82,7 @@ except ImportError:
 # Import PMIR pipeline functionality (with graceful fallback)
 try:
     from pecos_rslib.pmir import (
-        hugr_to_past_ron,
         hugr_to_pmir_mlir,
-        past_ron_to_pmir_mlir,
-        past_ron_to_llvm_ir,
         compile_hugr_via_pmir,
         compile_and_execute_via_pmir,
         PMIRCompiler,
@@ -95,16 +92,7 @@ except ImportError:
     # Provide stub implementations for graceful degradation
     PMIR_PIPELINE_AVAILABLE = False
     
-    def hugr_to_past_ron(*args, **kwargs):
-        raise ImportError("PMIR pipeline not available")
-    
     def hugr_to_pmir_mlir(*args, **kwargs):
-        raise ImportError("PMIR pipeline not available")
-    
-    def past_ron_to_pmir_mlir(*args, **kwargs):
-        raise ImportError("PMIR pipeline not available")
-    
-    def past_ron_to_llvm_ir(*args, **kwargs):
         raise ImportError("PMIR pipeline not available")
     
     def compile_hugr_via_pmir(*args, **kwargs):
@@ -182,10 +170,7 @@ __all__ = [
     "RUST_HUGR_AVAILABLE",
     "HUGR_LLVM_PIPELINE_AVAILABLE",
     # PMIR pipeline functionality
-    "hugr_to_past_ron",
     "hugr_to_pmir_mlir",
-    "past_ron_to_pmir_mlir",
-    "past_ron_to_llvm_ir",
     "compile_hugr_via_pmir",
     "compile_and_execute_via_pmir",
     "PMIRCompiler",

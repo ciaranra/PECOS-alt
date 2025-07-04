@@ -24,7 +24,6 @@ def test_guppy_pmir_execute_pipeline() -> None:
     try:
         from pecos_rslib import (
             compile_hugr_via_pmir,
-            hugr_to_past_ron,
             hugr_to_pmir_mlir,
             PMIR_AVAILABLE,
         )
@@ -106,18 +105,8 @@ def test_guppy_pmir_execute_pipeline() -> None:
         msg = f"HUGR compilation failed: {e}"
         raise AssertionError(msg) from e
     
-    # Test 5: Convert HUGR to PAST (PECOS AST)
-    print("\n5. Converting HUGR to PAST...")
-    try:
-        past_ron = hugr_to_past_ron(hugr_json)
-        print(f"[PASS] HUGR → PAST conversion successful")
-        print(f"  PAST size: {len(past_ron)} characters")
-    except Exception as e:
-        print(f"[ERROR] PAST conversion failed: {e}")
-        raise
-    
-    # Test 6: Convert HUGR to PMIR (MLIR)
-    print("\n6. Converting HUGR to PMIR...")
+    # Test 5: Convert HUGR to PMIR (MLIR)
+    print("\n5. Converting HUGR to PMIR...")
     try:
         pmir_mlir = hugr_to_pmir_mlir(hugr_json, debug_output=False, optimization_level=2)
         print(f"[PASS] HUGR → PMIR conversion successful")
@@ -128,8 +117,8 @@ def test_guppy_pmir_execute_pipeline() -> None:
         print(f"[ERROR] PMIR conversion failed: {e}")
         raise
     
-    # Test 7: Compile PMIR to LLVM IR
-    print("\n7. Compiling PMIR to LLVM IR...")
+    # Test 6: Compile PMIR to LLVM IR
+    print("\n6. Compiling PMIR to LLVM IR...")
     try:
         llvm_ir = compile_hugr_via_pmir(
             hugr_json,
@@ -156,8 +145,8 @@ def test_guppy_pmir_execute_pipeline() -> None:
             print(f"[ERROR] Compilation failed: {e}")
             raise
     
-    # Test 8: Execute the LLVM IR
-    print("\n8. Executing LLVM IR via PECOS...")
+    # Test 7: Execute the LLVM IR
+    print("\n7. Executing LLVM IR via PECOS...")
     execution_successful = False
     results = None
     
@@ -319,7 +308,7 @@ def test_guppy_pmir_execute_pipeline() -> None:
     print("\n" + "=" * 60)
     print("Summary: Guppy → PMIR pipeline test completed!")
     print("- Guppy function compiled to HUGR")
-    print("- HUGR converted to PAST (RON format)")
+    print("- HUGR parsed to internal PAST representation")
     print("- HUGR converted to PMIR (MLIR text)")
     print("- PMIR compiled to LLVM IR via MLIR tools")
     if execution_successful:
