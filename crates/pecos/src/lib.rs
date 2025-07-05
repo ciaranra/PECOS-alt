@@ -277,7 +277,8 @@ pub mod pmir {
         let config = config.unwrap_or_default();
 
         // Compile via PMIR (handles both binary and JSON formats)
-        let llvm_ir = compile_hugr_bytes_via_pmir(&hugr_bytes, &config)?;
+        let llvm_ir =
+            compile_hugr_bytes_via_pmir(&hugr_bytes, &config).map_err(convert_pmir_error)?;
 
         // Create LLVM engine from the IR string
         super::hugr::create_llvm_engine_from_ir_string(&llvm_ir, shots)
@@ -304,7 +305,7 @@ pub mod pmir {
         let config = config.unwrap_or_default();
 
         // Step 1: Compile HUGR to LLVM IR via PMIR
-        let llvm_ir = compile_hugr_pmir(hugr_json, &config)?;
+        let llvm_ir = compile_hugr_pmir(hugr_json, &config).map_err(convert_pmir_error)?;
 
         // Step 2: Create LLVM engine from the IR string
         super::hugr::create_llvm_engine_from_ir_string(&llvm_ir, shots)
@@ -340,9 +341,31 @@ pub mod pmir {
         let config = config.unwrap_or_default();
 
         // Compile via PMIR (handles both binary and JSON formats)
-        compile_hugr_bytes_via_pmir(&hugr_bytes, &config)
+        let llvm_ir =
+            compile_hugr_bytes_via_pmir(&hugr_bytes, &config).map_err(convert_pmir_error)?;
+        Ok(llvm_ir)
     }
 
     // Re-export types for convenience (PmirConfig already imported above)
     pub use pecos_pmir::hugr_to_pmir_mlir;
+
+    // Error conversion helper function
+    fn convert_pmir_error(error: pecos_pmir::PMIRError) -> PecosError {
+        // Convert PMIRError to PecosError using appropriate category
+        match error {
+            pecos_pmir::PMIRError::Parse(_) => PecosError::ParseSyntax {
+                language: "PMIR".to_string(),
+                message: error.to_string(),
+            },
+            pecos_pmir::PMIRError::Type(_) | pecos_pmir::PMIRError::Validation(_) => {
+                PecosError::ValidationInvalidCircuitStructure(error.to_string())
+            }
+            pecos_pmir::PMIRError::Runtime(_) => PecosError::Processing(error.to_string()),
+            pecos_pmir::PMIRError::Compilation(_) => PecosError::Compilation(error.to_string()),
+            pecos_pmir::PMIRError::IO(msg) => PecosError::IO(std::io::Error::other(msg)),
+            pecos_pmir::PMIRError::Internal(msg) => {
+                PecosError::Generic(format!("Internal PMIR error: {msg}"))
+            }
+        }
+    }
 }

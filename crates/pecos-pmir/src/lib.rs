@@ -1,260 +1,278 @@
 /*!
-PECOS PMIR (PECOS MLIR) - Alternative compilation pipeline via MLIR
+PECOS PMIR - MLIR-inspired quantum program representation
 
-This crate provides an alternative compilation path from HUGR to LLVM IR via:
-1. Pest parsing of HUGR JSON to PAST (PECOS AST)
-2. Lowering from PAST to PMIR (PECOS Middle-level IR) expressed as MLIR text
-3. Using MLIR tools to compile PMIR to LLVM IR
+This crate provides:
+1. PMIR (PECOS Middle-level IR) - MLIR-inspired SSA representation for parsing, optimization and execution
+2. Hierarchical structure: Operations contain Regions contain Blocks contain Operations
+3. Progressive lowering: parsing ops → high-level ops → low-level ops → execution
+4. Multiple execution strategies: interpreter, Rust codegen, MLIR lowering
 
-It also supports direct execution of PMIR without LLVM compilation.
+Key insight: PMIR follows MLIR's design where everything is an Operation, providing a
+unified representation from parsing through execution.
+
+Design Philosophy:
+- One representation throughout the compilation pipeline
+- Flexibility and extensibility through the dialect system
+- QEC can be expressed naturally through operations without special types
+- Custom types and operations can be added through dialects as needed
+- Progressive complexity - start simple, add sophistication as needed
 */
 
-use pecos_core::errors::PecosError;
-use std::path::Path;
-
-pub mod angle_resolver;
-pub mod ast;
-pub mod hugr_parser;
-pub mod mlir_lowering;
+pub mod analysis; // Dominance, use-def chains, and other analyses
+pub mod attributes; // Attribute system for metadata and boxing
+pub mod builtin_ops; // Builtin operations (Module, Function, etc.)
+pub mod dialect; // Dialect registration and management
+pub mod error; // Error handling
+pub mod hugr_parser; // HUGR parser (direct to PMIR)
+pub mod mlir_lowering; // PMIR to MLIR lowering
 pub mod mlir_toolchain;
-#[cfg(feature = "python-bindings")]
-pub mod python_api;
+pub mod ops; // Core operations
+pub mod parsing_ops; // Operations for parsing directly to PMIR
+pub mod pmir; // Core PMIR structures (Region, Block, Instruction)
+pub mod region_kinds; // Region execution semantics
+pub mod slr_helpers; // Helper functions for translating from SLR/qeclib patterns
+pub mod traits; // Operation traits and interfaces
+pub mod types; // Type system // MLIR to LLVM-IR compilation
 
-// Re-export key types for convenience
-pub use ast::PastModule;
-pub use mlir_lowering::MlirModule;
+// Re-export key types
+pub use error::{PMIRError, Result};
+pub use ops::Operation;
+pub use pmir::Module;
+pub use types::Type;
 
-/// Configuration for the PMIR (PECOS Middle-level IR) compilation pipeline
+/// Configuration for PMIR compilation and execution
 #[derive(Debug, Clone)]
-pub struct PmirConfig {
-    /// Enable debug output of intermediate representations
-    pub debug_output: bool,
+pub struct PMIRConfig {
+    /// Enable debug output
+    pub debug: bool,
     /// Optimization level (0-3)
     pub optimization_level: u8,
-    /// Target triple for LLVM
+    /// Target triple for LLVM (when using MLIR backend)
     pub target_triple: Option<String>,
+    /// Generate LLVM IR instead of MLIR text
+    pub generate_llvm_ir: bool,
 }
 
-impl Default for PmirConfig {
-    fn default() -> Self {
+/// Alias for Python API compatibility (`PmirConfig` -> `PMIRConfig`)
+pub type PmirConfig = PMIRConfig;
+
+// Additional config for Python compatibility
+impl PMIRConfig {
+    /// Create config with debug output setting
+    #[must_use]
+    pub fn with_debug_output(debug_output: bool) -> Self {
         Self {
-            debug_output: false,
+            debug: debug_output,
             optimization_level: 2,
             target_triple: None,
+            generate_llvm_ir: true,
+        }
+    }
+
+    /// Set debug output
+    #[must_use]
+    pub fn debug_output(&self) -> bool {
+        self.debug
+    }
+}
+
+impl Default for PMIRConfig {
+    fn default() -> Self {
+        Self {
+            debug: false,
+            optimization_level: 2,
+            target_triple: None,
+            generate_llvm_ir: true, // Default to generating LLVM IR for compatibility
         }
     }
 }
 
-/// Convert binary HUGR format to JSON by stripping the header
-///
-/// The binary HUGR format consists of a 10-byte header followed by JSON data.
-/// This function strips the header and returns the JSON string.
-///
-/// # Errors
-///
-/// Returns `PecosError` if the data is not valid HUGR format
-pub fn binary_hugr_to_json(hugr_bytes: &[u8]) -> Result<String, PecosError> {
-    // Check if it's binary HUGR format (starts with "HUGR")
-    if hugr_bytes.len() >= 10 && &hugr_bytes[0..4] == b"HUGR" {
-        // Skip the 10-byte header and decode the JSON
-        let json_bytes = &hugr_bytes[10..];
-        String::from_utf8(json_bytes.to_vec()).map_err(|e| PecosError::ParseSyntax {
-            language: "HUGR".to_string(),
-            message: format!("Invalid UTF-8 in HUGR data: {e}"),
-        })
-    } else if hugr_bytes.starts_with(b"{") {
-        // Already JSON format
-        String::from_utf8(hugr_bytes.to_vec()).map_err(|e| PecosError::ParseSyntax {
-            language: "HUGR".to_string(),
-            message: format!("Invalid UTF-8 in JSON data: {e}"),
-        })
-    } else {
-        Err(PecosError::ParseSyntax {
-            language: "HUGR".to_string(),
-            message: "Data does not appear to be HUGR format (neither binary nor JSON)".to_string(),
-        })
+/// Main compilation pipeline: Input format → PAST → PMIR → Execution
+pub struct Pipeline {
+    _config: PMIRConfig,
+}
+
+impl Pipeline {
+    #[must_use]
+    pub fn new(config: PMIRConfig) -> Self {
+        Self { _config: config }
+    }
+
+    /// Compile and execute from any supported input format
+    pub fn compile_and_execute<T>(&self, _input: &str, _format: InputFormat) -> Result<T> {
+        // TODO: Implement the full pipeline:
+        // 1. Parse input to PMIR
+        // 2. Lower high-level ops to low-level ops
+        // 3. Execute using selected strategy
+        Err(PMIRError::internal(
+            "Pipeline execution not yet implemented",
+        ))
     }
 }
 
-/// Main entry point for HUGR → PAST → MLIR → LLVM compilation
-///
-/// Accepts HUGR in JSON format. For binary HUGR format, use `compile_hugr_bytes_via_pmir`.
-///
-/// # Errors
-///
-/// Returns `PecosError` if any step in the compilation pipeline fails
-pub fn compile_hugr_via_pmir(hugr_json: &str, config: &PmirConfig) -> Result<String, PecosError> {
-    // Step 1: Parse HUGR JSON to PAST using Pest
-    let past = hugr_parser::parse_hugr_to_past(hugr_json)?;
+#[derive(Debug, Clone, PartialEq)]
+pub enum InputFormat {
+    HUGR,
+    Guppy,
+}
 
-    if config.debug_output {
-        log::debug!(
-            "PAST representation created with {} functions",
-            past.functions.len()
-        );
+/// Convenience functions for common workflows
+pub mod prelude {
+    pub use crate::{InputFormat, Module, Operation, PMIRConfig, Pipeline, Type};
+
+    /// Quick execution from HUGR
+    pub fn execute_hugr(hugr_json: &str) -> crate::Result<()> {
+        let pipeline = Pipeline::new(PMIRConfig::default());
+        pipeline.compile_and_execute(hugr_json, InputFormat::HUGR)
     }
 
-    // Step 2: Lower PAST to PMIR (PECOS Middle-level IR) as MLIR text
-    let mlir_module = mlir_lowering::lower_past_to_pmir(&past, config)?;
-    let mlir_text = mlir_module.to_string();
-
-    if config.debug_output {
-        log::debug!("PMIR (as MLIR text):\n{}", mlir_text);
+    /// Quick execution from Guppy
+    pub fn execute_guppy(guppy_hugr: &str) -> crate::Result<()> {
+        let pipeline = Pipeline::new(PMIRConfig::default());
+        pipeline.compile_and_execute(guppy_hugr, InputFormat::Guppy)
     }
 
-    // Step 3: Use MLIR toolchain to generate LLVM IR
-    let toolchain_config = mlir_toolchain::MlirToolchainConfig {
-        keep_intermediate_files: config.debug_output,
-        ..Default::default()
-    };
-
-    // Check if MLIR tools are available
-    mlir_toolchain::check_mlir_tools(&toolchain_config)?;
-
-    let llvm_ir = mlir_toolchain::mlir_to_llvm_ir(&mlir_text, &toolchain_config)?;
-
-    // Post-process LLVM IR to add EntryPoint attribute (needed for PECOS runtime)
-    let fixed_llvm_ir = fix_entry_point_attribute(&llvm_ir);
-
-    Ok(fixed_llvm_ir)
+    // TODO: Quick circuit building - implement when builders module is ready
+    // pub fn circuit() -> builders::CircuitBuilder {
+    //     builders::CircuitBuilder::new()
+    // }
 }
 
-/// Compile binary HUGR format via PMIR
+/// Compile HUGR JSON directly to LLVM IR via PMIR pipeline
 ///
-/// This is a convenience function that handles the binary HUGR format
-/// by stripping the header and calling the JSON-based compiler.
-///
-/// # Errors
-///
-/// Returns `PecosError` if any step in the compilation pipeline fails
-pub fn compile_hugr_bytes_via_pmir(
-    hugr_bytes: &[u8],
-    config: &PmirConfig,
-) -> Result<String, PecosError> {
-    let hugr_json = binary_hugr_to_json(hugr_bytes)?;
-    compile_hugr_via_pmir(&hugr_json, config)
-}
+/// This function provides a direct path from HUGR JSON to LLVM IR for Python bindings
+pub fn compile_hugr_via_pmir(hugr_json: &str, config: &PMIRConfig) -> Result<String> {
+    // Parse HUGR to PMIR (handles both actual HUGR and simplified test format)
+    let module = hugr_parser::parse_hugr_to_pmir(hugr_json)?;
 
-/// Convert HUGR JSON to PMIR (MLIR text format)
-///
-/// # Errors
-///
-/// Returns `PecosError` if parsing or lowering fails
-pub fn hugr_to_pmir_mlir(hugr_json: &str, config: &PmirConfig) -> Result<String, PecosError> {
-    let past = hugr_parser::parse_hugr_to_past(hugr_json)?;
-    let mlir_module = mlir_lowering::lower_past_to_pmir(&past, config)?;
-    Ok(mlir_module.to_string())
-}
-
-/// Compile HUGR from file using PMIR pipeline
-///
-/// # Errors
-///
-/// Returns `PecosError` if:
-/// - Failed to read input file
-/// - Compilation fails
-/// - Failed to write output file
-pub fn compile_hugr_file_via_pmir(
-    input_path: &Path,
-    output_path: &Path,
-    config: &PmirConfig,
-) -> Result<(), PecosError> {
-    let hugr_json = std::fs::read_to_string(input_path).map_err(PecosError::IO)?;
-
-    let llvm_ir = compile_hugr_via_pmir(&hugr_json, config)?;
-
-    std::fs::write(output_path, llvm_ir).map_err(PecosError::IO)?;
-
-    Ok(())
-}
-
-/// Fix LLVM IR to add `EntryPoint` attribute for PECOS runtime compatibility
-///
-/// This function ensures that the main function has the `EntryPoint` attribute
-/// needed by the PECOS LLVM engine, similar to how HUGR-LLVM works.
-fn fix_entry_point_attribute(llvm_ir: &str) -> String {
-    // Find the first function definition (should be @main) and add EntryPoint attribute
-    let mut result = String::new();
-    let mut found_main_function = false;
-    let mut in_attributes_section = false;
-
-    for line in llvm_ir.lines() {
-        if !found_main_function && line.starts_with("define ") && line.contains("@main") {
-            // This is the main function - mark it as entry point
-            // Check if it already has an attribute
-            if line.contains(" #") {
-                // Function already has attributes, just note we found it
-                found_main_function = true;
-                result.push_str(line);
-            } else {
-                // Need to insert #0 attribute at the correct position
-                // LLVM syntax: attributes come before debug metadata
-                // "define { i32, i32 } @main() #0 !dbg !3 {"
-                if let Some(dbg_pos) = line.find(" !dbg ") {
-                    // Insert #0 before the debug metadata
-                    result.push_str(&line[..dbg_pos]);
-                    result.push_str(" #0");
-                    result.push_str(&line[dbg_pos..]);
-                    found_main_function = true;
-                } else if let Some(pos) = line.rfind(" {") {
-                    // No debug metadata, insert #0 before opening brace
-                    result.push_str(&line[..pos]);
-                    result.push_str(" #0");
-                    result.push_str(&line[pos..]);
-                    found_main_function = true;
-                } else {
-                    // No opening brace on this line (shouldn't happen)
-                    result.push_str(line);
+    // Debug: print PMIR structure if debug mode is enabled
+    if config.debug {
+        eprintln!("PMIR Module: {}", module.name);
+        if let Some(block) = module.body.blocks.first() {
+            for instr in &block.operations {
+                if let crate::ops::Operation::Builtin(crate::builtin_ops::BuiltinOp::Func(func)) =
+                    &instr.operation
+                {
+                    eprintln!("  Function: {}", func.name);
+                    if let Some(region) = func.body.first() {
+                        if let Some(block) = region.blocks.first() {
+                            for (j, op) in block.operations.iter().enumerate() {
+                                eprintln!("    Instruction {}: {:?}", j, op.operation);
+                                eprintln!("      Operands: {:?}", op.operands);
+                                eprintln!("      Results: {:?}", op.results);
+                            }
+                            if let Some(term) = &block.terminator {
+                                eprintln!("    Terminator: {term:?}");
+                            }
+                        }
+                    }
                 }
             }
-        } else if line.starts_with("attributes #") {
-            in_attributes_section = true;
-            result.push_str(line);
-        } else if in_attributes_section && line.trim().is_empty() {
-            // End of attributes section - add our EntryPoint attribute if needed
-            if found_main_function && !llvm_ir.contains("\"EntryPoint\"") {
-                result.push_str("\nattributes #0 = { \"EntryPoint\" }");
-            }
-            in_attributes_section = false;
-            result.push_str(line);
-        } else {
-            result.push_str(line);
         }
-        result.push('\n');
     }
 
-    // If we didn't find an attributes section, add it at the end
-    if found_main_function
-        && !llvm_ir.contains("\"EntryPoint\"")
-        && !llvm_ir.contains("attributes #")
-    {
-        result.push_str("\nattributes #0 = { \"EntryPoint\" }\n");
+    // Convert PMIR to MLIR text
+    let mlir_text = mlir_lowering::pmir_to_mlir(&module, config)?;
+
+    // Debug: print MLIR if debug mode is enabled
+    if config.debug {
+        eprintln!("\nGenerated MLIR:\n{mlir_text}");
     }
 
-    result
+    // If we're generating MLIR for quantum operations, convert to LLVM IR
+    if config.generate_llvm_ir {
+        // Convert MLIR to LLVM IR using the toolchain
+        let mlir_config = mlir_toolchain::MlirToolchainConfig {
+            keep_intermediate_files: config.debug,
+            ..Default::default()
+        };
+
+        let llvm_ir = mlir_toolchain::mlir_to_llvm_ir(&mlir_text, &mlir_config)
+            .map_err(|e| PMIRError::internal(format!("Failed to convert MLIR to LLVM IR: {e}")))?;
+
+        // Debug: print LLVM IR if debug mode is enabled
+        if config.debug {
+            eprintln!("\nGenerated LLVM IR:\n{llvm_ir}");
+        }
+
+        Ok(llvm_ir)
+    } else {
+        Ok(mlir_text)
+    }
 }
 
-/// Direct execution of PMIR without LLVM compilation (future feature)
-#[cfg(feature = "direct-execution")]
-pub mod direct_execution {
-    use super::*;
-    #[allow(unused_imports)]
-    use pecos_engines::prelude::*;
+/// Compile HUGR bytes (JSON or binary) to LLVM IR via PMIR pipeline
+///
+/// This function handles both JSON and binary HUGR formats
+pub fn compile_hugr_bytes_via_pmir(hugr_bytes: &[u8], config: &PMIRConfig) -> Result<String> {
+    // Parse HUGR to PMIR
+    let module = hugr_parser::parse_hugr_bytes_to_pmir(hugr_bytes)?;
 
-    /// Execute PMIR directly using PECOS simulators
-    pub fn execute_pmir_directly(
-        _pmir_module: &MlirModule,
-        _config: &PmirConfig,
-    ) -> Result<(), PecosError> {
-        // TODO: Implement direct PMIR execution
-        // This would involve:
-        // 1. Interpreting PMIR operations directly
-        // 2. Managing quantum state with PECOS simulators
-        // 3. Handling classical control flow
-        // 4. Returning results
-
-        todo!("Direct PMIR execution not yet implemented")
+    // Debug: print PMIR structure if debug mode is enabled
+    if config.debug {
+        eprintln!("PMIR Module: {}", module.name);
+        if let Some(block) = module.body.blocks.first() {
+            for instr in &block.operations {
+                if let crate::ops::Operation::Builtin(crate::builtin_ops::BuiltinOp::Func(func)) =
+                    &instr.operation
+                {
+                    eprintln!("  Function: {}", func.name);
+                    if let Some(region) = func.body.first() {
+                        if let Some(block) = region.blocks.first() {
+                            for (j, op) in block.operations.iter().enumerate() {
+                                eprintln!("    Instruction {}: {:?}", j, op.operation);
+                                eprintln!("      Operands: {:?}", op.operands);
+                                eprintln!("      Results: {:?}", op.results);
+                            }
+                            if let Some(term) = &block.terminator {
+                                eprintln!("    Terminator: {term:?}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
+
+    // Convert PMIR to MLIR text
+    let mlir_text = mlir_lowering::pmir_to_mlir(&module, config)?;
+
+    // Debug: print MLIR if debug mode is enabled
+    if config.debug {
+        eprintln!("\nGenerated MLIR:\n{mlir_text}");
+    }
+
+    // If we're generating MLIR for quantum operations, convert to LLVM IR
+    if config.generate_llvm_ir {
+        // Convert MLIR to LLVM IR using the toolchain
+        let mlir_config = mlir_toolchain::MlirToolchainConfig {
+            keep_intermediate_files: config.debug,
+            ..Default::default()
+        };
+
+        let llvm_ir = mlir_toolchain::mlir_to_llvm_ir(&mlir_text, &mlir_config)
+            .map_err(|e| PMIRError::internal(format!("Failed to convert MLIR to LLVM IR: {e}")))?;
+
+        // Debug: print LLVM IR if debug mode is enabled
+        if config.debug {
+            eprintln!("\nGenerated LLVM IR:\n{llvm_ir}");
+        }
+
+        Ok(llvm_ir)
+    } else {
+        Ok(mlir_text)
+    }
+}
+
+/// Convert HUGR to PMIR and then to MLIR text representation
+///
+/// This function provides a path from HUGR to MLIR text format for debugging and analysis
+pub fn hugr_to_pmir_mlir(hugr_json: &str, config: &PMIRConfig) -> Result<String> {
+    // Parse HUGR to PMIR
+    let module = hugr_parser::parse_hugr_to_pmir(hugr_json)?;
+
+    // Convert PMIR to MLIR text
+    mlir_lowering::pmir_to_mlir(&module, config)
 }
 
 #[cfg(test)]
@@ -263,8 +281,14 @@ mod tests {
 
     #[test]
     fn test_default_config() {
-        let config = PmirConfig::default();
+        let config = PMIRConfig::default();
         assert_eq!(config.optimization_level, 2);
-        assert!(!config.debug_output);
+        assert!(!config.debug);
+    }
+
+    #[test]
+    fn test_pipeline_creation() {
+        let config = PMIRConfig::default();
+        let _pipeline = Pipeline::new(config);
     }
 }

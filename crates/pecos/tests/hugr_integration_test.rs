@@ -140,7 +140,7 @@ fn test_pmir_compilation_only() -> Result<(), PecosError> {
 
     // Enable debug output to see what's happening
     let config = pecos_pmir::PmirConfig {
-        debug_output: true,
+        debug: true,
         ..Default::default()
     };
 

@@ -719,7 +719,7 @@ fn test_debug_llvm_ir_comparison() {
     println!("\n3. Generating raw LLVM IR for comparison...");
 
     let config = pecos_pmir::PmirConfig {
-        debug_output: true,
+        debug: true,
         ..Default::default()
     };
 

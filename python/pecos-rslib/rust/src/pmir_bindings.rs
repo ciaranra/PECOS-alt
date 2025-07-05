@@ -12,7 +12,7 @@
 
 //! Python bindings for PMIR (PECOS Middle-level IR) compilation pipeline
 
-use pecos_pmir::{self as pmir, PmirConfig};
+use pecos_pmir::{self as pmir, PMIRConfig};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
@@ -47,21 +47,22 @@ pub fn py_hugr_to_pmir_mlir(
     debug_output: Option<bool>,
     optimization_level: Option<u8>,
 ) -> PyResult<String> {
-    let config = PmirConfig {
-        debug_output: debug_output.unwrap_or(false),
+    let config = PMIRConfig {
+        debug: debug_output.unwrap_or(false),
         optimization_level: optimization_level.unwrap_or(2),
         target_triple: None,
+        generate_llvm_ir: false, // For MLIR text output, not LLVM IR
     };
 
-    // Parse HUGR to PAST
-    let past = pmir::hugr_parser::parse_hugr_to_past(hugr_json)
-        .map_err(|e| PyRuntimeError::new_err(format!("Failed to parse HUGR: {e:?}")))?;
+    // Parse HUGR directly to PMIR, then convert to MLIR
+    let pmir_module = pmir::hugr_parser::parse_hugr_to_pmir(hugr_json)
+        .map_err(|e| PyRuntimeError::new_err(format!("Failed to parse HUGR to PMIR: {e:?}")))?;
 
-    // Lower PAST to PMIR (MLIR text)
-    let mlir_module = pmir::mlir_lowering::lower_past_to_pmir(&past, &config)
-        .map_err(|e| PyRuntimeError::new_err(format!("Failed to lower to PMIR: {e:?}")))?;
+    // Convert PMIR to MLIR text
+    let mlir_text = pmir::mlir_lowering::pmir_to_mlir(&pmir_module, &config)
+        .map_err(|e| PyRuntimeError::new_err(format!("Failed to convert PMIR to MLIR: {e:?}")))?;
 
-    Ok(mlir_module.to_string())
+    Ok(mlir_text)
 }
 
 /// PMIR QIR Engine for executing PMIR-generated LLVM IR (in-memory)
@@ -197,10 +198,11 @@ pub fn py_compile_and_execute_via_pmir(
     optimization_level: u8,
 ) -> PyResult<PyObject> {
     // Step 1: Compile HUGR to LLVM IR via PMIR
-    let config = PmirConfig {
-        debug_output,
+    let config = PMIRConfig {
+        debug: debug_output,
         optimization_level,
         target_triple: None,
+        generate_llvm_ir: true, // We want LLVM IR for execution
     };
 
     let llvm_ir = pmir::compile_hugr_via_pmir(hugr_json, &config)
@@ -224,10 +226,11 @@ pub fn py_compile_hugr_via_pmir(
     optimization_level: Option<u8>,
     target_triple: Option<String>,
 ) -> PyResult<String> {
-    let config = PmirConfig {
-        debug_output: debug_output.unwrap_or(false),
+    let config = PMIRConfig {
+        debug: debug_output.unwrap_or(false),
         optimization_level: optimization_level.unwrap_or(2),
         target_triple,
+        generate_llvm_ir: true, // Default to generating LLVM IR
     };
 
     pmir::compile_hugr_via_pmir(hugr_json, &config)

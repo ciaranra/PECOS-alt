@@ -1,6 +1,6 @@
 //! Debug PMIR compilation with guppy HUGR files
 
-use pecos_pmir::{PmirConfig, binary_hugr_to_json, compile_hugr_bytes_via_pmir, hugr_to_pmir_mlir};
+use pecos_pmir::{InputFormat, PMIRConfig, Pipeline};
 use std::fs;
 use std::path::Path;
 
@@ -19,45 +19,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         hugr_path.display()
     );
 
-    // Convert to JSON to examine
-    let hugr_json = binary_hugr_to_json(&hugr_bytes)?;
-    println!(
-        "\nHUGR JSON (first 500 chars):\n{}",
-        &hugr_json[..500.min(hugr_json.len())]
-    );
+    // Convert to string for JSON input (simplified)
+    let hugr_json = String::from_utf8_lossy(&hugr_bytes);
 
     // Try to compile with debug output
-    let config = PmirConfig {
-        debug_output: true,
+    let config = PMIRConfig {
+        debug: true,
         ..Default::default()
     };
 
     println!("\n=== Attempting PMIR compilation ===");
 
-    // Try to get PMIR directly
-    println!("\n=== Generating PMIR representation ===");
-    match hugr_to_pmir_mlir(&hugr_json, &config) {
-        Ok(pmir) => {
-            println!("PMIR MLIR generated successfully");
-            println!("PMIR MLIR:\n{pmir}");
+    let pipeline = Pipeline::new(config);
+    let result: Result<(), _> = pipeline.compile_and_execute(&hugr_json, InputFormat::HUGR);
 
-            // Save to file for inspection
-            fs::write("debug_pmir.mlir", &pmir)?;
-            println!("\nSaved PMIR to debug_pmir.mlir");
-
-            // Now try the full compilation
-            println!("\n=== Attempting full MLIR -> LLVM compilation ===");
-            match compile_hugr_bytes_via_pmir(&hugr_bytes, &config) {
-                Ok(llvm_ir) => {
-                    println!("\nSuccess! LLVM IR generated:");
-                    println!("{}", &llvm_ir[..500.min(llvm_ir.len())]);
-                }
-                Err(e) => {
-                    println!("\nMLIR to LLVM compilation failed: {e:?}");
-                }
-            }
+    match result {
+        Ok(()) => {
+            println!("PMIR pipeline execution completed successfully");
         }
-        Err(e) => println!("Failed to generate PMIR: {e:?}"),
+        Err(e) => {
+            println!("Failed to execute PMIR pipeline: {e:?}");
+            println!("This is expected since parsers are not yet implemented.");
+        }
     }
 
     Ok(())

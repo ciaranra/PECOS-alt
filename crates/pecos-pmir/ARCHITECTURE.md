@@ -1,66 +1,161 @@
-# PMIR (PECOS MLIR) Architecture
+# PMIR Architecture
 
 ## Overview
 
-PMIR (PECOS MLIR) is an alternative compilation pipeline that leverages the MLIR (Multi-Level Intermediate Representation) infrastructure to compile quantum programs from HUGR format to executable LLVM IR.
+PMIR (PECOS Middle-level Intermediate Representation) is an MLIR-inspired quantum compiler infrastructure that provides a unified representation from parsing through execution. Unlike traditional compilers with separate AST and IR phases, PMIR uses a single hierarchical representation throughout.
 
 ## Design Goals
 
-1. **Leverage MLIR Infrastructure**: Use MLIR's powerful optimization and lowering infrastructure rather than reimplementing it
-2. **Modular Design**: Clear separation between parsing, AST representation, and code generation
-3. **Debuggability**: Intermediate representations can be inspected, serialized, and manipulated
-4. **Standards Compliance**: Generate standard MLIR text that can be processed by any MLIR toolchain
+1. **Unified Representation**: One IR from parsing to execution, following MLIR's philosophy
+2. **Progressive Lowering**: Gradually transform high-level operations to machine-level operations
+3. **Multiple Backends**: Support interpretation, native code generation, and LLVM compilation
+4. **Extensibility**: Easy addition of new operations and dialects
+5. **Quantum-Native**: First-class support for quantum operations and error correction
+
+## Philosophical Foundation
+
+PMIR's architecture is deeply influenced by PECOS's SLR (Simple Logical Representation), which proved that complex quantum protocols can be built from simple, composable primitives. This philosophy shapes PMIR at every level:
+
+- **Simple Operations**: Each operation does one thing well (H gate, measurement, branch)
+- **Natural Composition**: Operations → Blocks → Regions → Modules (mirrors how we think about quantum algorithms)
+- **Progressive Complexity**: Start with basic gates, add QEC protocols through composition and attributes
+- **Mechanism over Policy**: PMIR provides the structure; users define the quantum protocols
+
+This approach ensures that PMIR can represent everything from simple quantum circuits to complex fault-tolerant algorithms without compromising simplicity or performance.
 
 ## Architecture
 
-The PMIR (PECOS Middle-level IR) pipeline consists of the following stages:
+The PMIR pipeline uses progressive lowering through the same IR structure:
 
 ```
-┌─────────────┐     ┌──────────┐     ┌──────────┐     ┌─────────────┐     ┌──────────┐
-│   HUGR      │────▶│   PAST   │────▶│   PMIR   │────▶│  LLVM IR    │────▶│ Execution│
-│   (JSON)    │     │  (AST)   │     │  (MLIR)  │     │   (.ll)     │     │          │
-└─────────────┘     └──────────┘     └──────────┘     └─────────────┘     └──────────┘
-      │                   │                 │                 │
-      │                   ▼                 ▼                 ▼
-      │              ┌──────────┐    ┌─────────────┐   ┌─────────────┐
-      └─────────────▶│   RON    │    │  mlir-opt   │   │   PECOS     │
-                     │ (Debug)  │    │mlir-translate│   │   Runtime   │
-                     └──────────┘    └─────────────┘   └─────────────┘
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Source    │────▶│ PMIR (Parse)│────▶│ PMIR (High) │────▶│ PMIR (Low)  │
+│   (HUGR,    │     │   parse.*   │     │  quantum.*  │     │   llvm.*    │
+│   OpenQASM) │     │             │     │  control.*  │     │   machine.* │
+└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+                           │                    │                    │
+                           ▼                    ▼                    ▼
+                    ┌─────────────┐      ┌─────────────┐     ┌─────────────┐
+                    │Type Inference│     │Optimization │     │ Execution:  │
+                    │Symbol Resolve│     │  Passes     │     │ • Interpret │
+                    └─────────────┘      └─────────────┘     │ • Rust Gen  │
+                                                              │ • LLVM      │
+                                                              └─────────────┘
 ```
 
-Note: PMIR (PECOS Middle-level IR) represents the middle-level representation in this pipeline, sitting between the high-level PAST and the low-level LLVM IR. It's expressed as MLIR text format.
+## Core Components
 
-### 1. HUGR Parsing (hugr_parser.rs)
+### 1. Hierarchical Structure
 
-- **Input**: HUGR JSON format (the serialized quantum program representation)
-- **Output**: PAST (PECOS AST) - a Rust data structure
-- **Method**: Currently uses serde_json, with Pest grammar prepared for future use
-- **Purpose**: Parse and validate the input, creating a strongly-typed AST
+PMIR follows MLIR's recursive structure:
 
-### 2. PAST (PECOS AST) - ast.rs
+```rust
+Operation → Region(s) → Block(s) → Operation(s) → ...
+```
 
-The PAST (PECOS Abstract Syntax Tree) is the central intermediate representation:
+- **Operation**: Everything is an operation (Module, Function, quantum gates, loops, etc.)
+- **Region**: A collection of blocks with specific execution semantics
+- **Block**: A sequence of operations ending with an optional terminator
+- **SSA Values**: All values follow Single Static Assignment form
 
-- **Rust Native**: Defined as Rust enums and structs for type safety
-- **Serializable**: Can be serialized to/from RON (Rust Object Notation) for debugging
-- **Complete**: Represents all quantum and classical operations
-- **Graph-Based**: Maintains the dataflow graph structure from HUGR
+### 2. Operation Categories
 
-Key structures:
-- `PastModule`: Top-level container with functions and metadata
-- `PastFunction`: Function with input/output types and body graph
-- `PastGraph`: Nodes and edges representing computation
-- `PastOp`: Enum of all supported operations (quantum gates, measurements, classical ops)
+#### Parsing Operations (`parsing_ops.rs`)
+- `UnresolvedCall`: Function calls before name resolution
+- `UnresolvedRef`: Variable references before resolution
+- `ForLoop`/`IfElse`: High-level control flow
+- `InferType`: Type variables for inference
+- `ImplicitCast`: Type coercions
 
-### 3. MLIR Generation (mlir_lowering.rs)
+#### Core Operations (`ops.rs`)
+- **Builtin**: Module, Function, Return
+- **Quantum**: H, CNOT, Measure, StatePrep
+- **Classical**: Add, Mul, Compare
+- **Control**: Branch, Loop, Call
+- **Memory**: Alloc, Load, Store
 
-- **Input**: PAST data structure
-- **Output**: MLIR text in standard format
-- **Dialects Used**:
-  - `func`: For function definitions and calls
-  - `arith`: For arithmetic operations
-  - `llvm`: For pointer types and eventual lowering
-- **Approach**: Generate standard MLIR with QIR function calls
+#### Custom Operations
+- Dialect-specific operations (QEC, pulse control, etc.)
+- Machine-specific operations
+
+### 3. Progressive Lowering
+
+PMIR uses multiple passes to gradually lower operations:
+
+1. **Parsing → High-level**:
+   - Resolve names and forward references
+   - Infer types and insert implicit casts
+   - Lower ForLoop/IfElse to CFG with branches
+
+2. **High-level → Low-level**:
+   - Lower quantum operations to runtime calls
+   - Convert control flow to basic blocks
+   - Optimize based on operation traits
+
+3. **Low-level → Execution**:
+   - Generate MLIR text for LLVM backend
+   - Generate Rust code for native execution
+   - Interpret directly for debugging
+
+### 4. Boxing and Abstract QEC Representation
+
+PMIR takes an abstract approach to quantum error correction and emerging quantum paradigms:
+
+#### The Boxing Philosophy
+
+Instead of hard-coding specific QEC schemes or quantum protocols into the IR, PMIR uses "boxing" - attaching semantic metadata through attributes:
+
+```mlir
+// A syndrome extraction boxed with metadata
+"qec.syndrome"() {
+  qec.code_type = "surface_code",
+  qec.syndrome_type = "X_stabilizers", 
+  qec.extraction_round = 3 : i32,
+  qec.ancilla_qubits = [5, 6, 7, 8],
+  qec.data_qubits = [0, 1, 2, 3, 4]
+} : () -> (i1, i1, i1, i1)
+
+// A logical operation with multiple implementation strategies
+"protocol.logical_gate"() {
+  protocol.gate_type = "CNOT",
+  protocol.implementations = ["transversal", "lattice_surgery", "code_deformation"],
+  protocol.distance_preserved = true,
+  protocol.resource_estimate = {time = 100, space = 50}
+} : () -> ()
+```
+
+#### Benefits of Boxing
+
+1. **Future-proof**: New QEC codes (LDPC, floquet, quantum polar) can be added without changing core IR
+2. **Research-friendly**: Experimentalists can prototype new protocols with custom attributes
+3. **Multi-paradigm**: Different QEC schemes can coexist in the same program
+4. **Progressive optimization**: 
+   - Generic passes operate on all codes
+   - Specialized passes optimize specific schemes
+   - New passes can be added for new codes
+
+#### Implementation Strategy
+
+```rust
+// Define protocol interfaces through attributes
+pub trait QECProtocol {
+    fn required_attributes() -> Vec<&'static str>;
+    fn validate_attributes(attrs: &Attributes) -> Result<()>;
+}
+
+// Passes interpret boxed operations
+pub struct SurfaceCodeOptimization;
+impl Pass for SurfaceCodeOptimization {
+    fn run_on_operation(&mut self, op: &Operation) -> Result<()> {
+        if op.get_attribute("qec.code_type") == Some("surface_code") {
+            // Apply surface code specific optimizations
+            self.optimize_syndrome_extraction(op)?;
+            self.minimize_logical_gate_overhead(op)?;
+        }
+        Ok(())
+    }
+}
+```
 
 Example MLIR output:
 ```mlir
@@ -108,78 +203,109 @@ The final LLVM IR is produced by the MLIR toolchain and includes:
 
 ## Usage
 
-### Basic Compilation
+### Direct PMIR Construction
 
 ```rust
-use pecos_qir::pmir::{compile_hugr_via_pmir, PmirConfig};
+use pecos_pmir::{Module, Function, Block, Instruction};
+use pecos_pmir::ops::{Operation, QuantumOp};
 
-let config = PmirConfig {
-    debug_output: true,
-    optimization_level: 2,
-    target_triple: None,
-};
+// Build quantum circuit directly
+let mut module = Module::new("quantum_circuit");
+let mut func = Function::new("main", function_type);
 
-let llvm_ir = compile_hugr_via_pmir(hugr_json, &config)?;
+// Add operations to entry block
+let entry_block = func.entry_region_mut()?.entry_block_mut()?;
+entry_block.add_instruction(hadamard_op);
+entry_block.add_instruction(cnot_op);
+entry_block.add_instruction(measure_op);
+
+module.add_function(func);
 ```
 
-### Debugging with RON
+### Parsing to PMIR
 
 ```rust
-// Parse to PAST
-let past = hugr_parser::parse_hugr_to_past(hugr_json)?;
+use pecos_pmir::{Pipeline, PMIRConfig, InputFormat};
 
-// Serialize to RON for inspection
-let ron_string = past.to_ron_string()?;
-println!("PAST in RON:\n{}", ron_string);
+let pipeline = Pipeline::new(PMIRConfig::default());
 
-// Can also deserialize from RON
-let past_from_ron = PastModule::from_ron_string(&ron_string)?;
+// Parse source directly to PMIR
+let module = pipeline.parse_to_pmir(source_code, InputFormat::HUGR)?;
+
+// Module contains parsing operations that need lowering
+// e.g., UnresolvedCall, ForLoop, InferType
+
+// Lower to executable PMIR
+let lowered = pipeline.lower_pmir(module)?;
+
+// Execute using chosen strategy
+let result = pipeline.execute_pmir(lowered)?;
 ```
 
-### Custom MLIR Processing
+### Inspecting PMIR
 
 ```rust
-// Generate MLIR text
-let mlir_module = mlir_lowering::lower_past_to_pmir(&past, &config)?;
-let mlir_text = mlir_module.to_string();
+// Print MLIR text representation
+println!("{}", module.to_mlir_text());
 
-// Write to file for manual processing
-std::fs::write("output.mlir", mlir_text)?;
-
-// Run custom MLIR passes
-let custom_config = MlirToolchainConfig {
-    optimization_passes: vec![
-        "--my-custom-pass".to_string(),
-        "--convert-func-to-llvm".to_string(),
-    ],
-    ..Default::default()
-};
+// Walk operations
+use pecos_pmir::traits::OperationInterface;
+for inst in &block.operations {
+    println!("Op: {}, Side effects: {}", 
+             inst.operation.name(),
+             inst.operation.has_side_effects());
+}
 ```
 
 ## Future Enhancements
 
-1. **Pest Grammar**: Implement full HUGR parsing using the Pest grammar for better error messages
-2. **In-Memory MLIR**: Direct C++ API integration to avoid file I/O
-3. **Quantum Dialect**: Create a proper MLIR quantum dialect for better optimization opportunities
-   - Define quantum types (`!quantum.qubit`, `!quantum.result`)
-   - Implement quantum operations as first-class MLIR ops
-   - Write lowering passes from quantum dialect to QIR calls
-4. **Custom Passes**: Quantum-specific optimization passes in MLIR
-5. **Python Bindings**: Complete Python API for use from quantum frameworks
-6. **Additional Backends**: Target other backends through MLIR (GPU, TPU, specialized quantum hardware)
+1. **Parser Implementations**: Complete parsers for HUGR, PHIR, OpenQASM, Guppy
+2. **Optimization Passes**: 
+   - Quantum gate fusion and optimization
+   - Classical subexpression elimination
+   - Dead code elimination using analysis infrastructure
+3. **Type System Enhancements**:
+   - Linear types for quantum values
+   - Effect types for side-effect tracking
+   - Dependent types for sized arrays
+4. **Execution Backends**:
+   - Direct integration with PECOS simulators
+   - GPU acceleration for classical simulation
+   - Quantum hardware backends
+5. **Tooling**:
+   - Language server for IDE support
+   - Debugger with breakpoints and stepping
+   - Profiler for performance analysis
 
 ## Design Decisions
 
+### Why No Separate AST?
+
+Traditional compilers use separate AST and IR representations, but PMIR follows MLIR's approach of using a single hierarchical IR throughout:
+
+1. **Simplicity**: One representation to learn, debug, and optimize
+2. **Power**: MLIR's structure can represent anything an AST can
+3. **Efficiency**: No conversion overhead or information loss
+4. **Uniformity**: Same infrastructure (visitors, builders, verifiers) works everywhere
+5. **Precedent**: MLIR has proven this approach works for many languages
+
+### Parsing Strategy
+
+Instead of parsing to an AST first, we parse directly to PMIR using special parsing operations:
+
+- **Multi-pass**: Parse with placeholders → resolve → type check → lower
+- **SSA construction**: Build SSA form incrementally during parsing
+- **Type inference**: Use type variables, collect constraints, solve later
+- **Progressive**: Mix high-level and low-level ops in same module
+
 ### Why Not a Custom Quantum Dialect (Yet)?
 
-While we explored creating a custom quantum dialect for MLIR (see `quantum_dialect.td` and `quantum_to_llvm.cpp`), we chose to generate standard MLIR with function calls for the initial implementation because:
+While we explored creating a custom quantum dialect for MLIR, we chose to generate standard MLIR with function calls for the initial implementation because:
 
 1. **Simplicity**: Using standard dialects allows the pipeline to work with stock MLIR tools
 2. **Compatibility**: No need to build custom MLIR tools or integrate C++ code with Rust
 3. **Pragmatism**: The QIR functions are the ultimate target anyway
 4. **Future-Proof**: We can add a quantum dialect later as an optimization pass
-
-The quantum dialect approach remains valuable for future optimization work, where quantum-specific transformations (gate fusion, circuit optimization) would benefit from higher-level operation semantics.
 
 ## Dependencies
 

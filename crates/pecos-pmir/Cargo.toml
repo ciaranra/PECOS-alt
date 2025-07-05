@@ -34,6 +34,9 @@ regex.workspace = true
 # Logging
 log.workspace = true
 
+# Lazy static for global dialect registry
+lazy_static = "1.4"
+
 # Temporary file handling for MLIR pipeline
 tempfile.workspace = true
 

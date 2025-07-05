@@ -32,9 +32,9 @@ impl Default for MlirToolchainConfig {
                 // For MLIR-14, we use different pass names
                 // Convert standard operations to LLVM
                 "--convert-std-to-llvm".to_string(),
-                // Convert arithmetic operations to LLVM
+                // Convert arithmetic operations to LLVM (if available)
                 "--convert-arith-to-llvm".to_string(),
-                // Final cleanup
+                // Final cleanup (if available)
                 "--reconcile-unrealized-casts".to_string(),
             ],
             keep_intermediate_files: false,

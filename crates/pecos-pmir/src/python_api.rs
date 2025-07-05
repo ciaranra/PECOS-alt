@@ -7,7 +7,7 @@ This module provides Python-accessible functions for the PMIR pipeline.
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
-use crate::{PmirConfig, compile_hugr_via_pmir};
+use crate::{PMIRConfig, compile_hugr_via_pmir};
 
 /// Python-accessible PMIR configuration
 #[pyclass]
@@ -33,12 +33,13 @@ impl PyPmirConfig {
     }
 }
 
-impl From<PyPmirConfig> for PmirConfig {
+impl From<PyPmirConfig> for PMIRConfig {
     fn from(py_config: PyPmirConfig) -> Self {
-        PmirConfig {
-            debug_output: py_config.debug_output,
+        PMIRConfig {
+            debug: py_config.debug_output,
             optimization_level: py_config.optimization_level,
             target_triple: py_config.target_triple,
+            generate_llvm_ir: true, // Default to generating LLVM IR
         }
     }
 }
