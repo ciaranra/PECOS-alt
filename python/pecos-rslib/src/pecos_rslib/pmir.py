@@ -11,7 +11,7 @@ from pecos_rslib._pecos_rslib import (
     hugr_to_pmir_mlir,
     compile_hugr_via_pmir,
     compile_and_execute_via_pmir,
-    PMIRQirEngine,
+    PMIRLlvmEngine,
 )
 
 

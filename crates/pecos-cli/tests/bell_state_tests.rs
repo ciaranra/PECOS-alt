@@ -242,7 +242,7 @@ fn test_perfect_bell_state_distribution() -> Result<(), Box<dyn std::error::Erro
     Ok(())
 }
 
-/// Test that Bell state probabilities are consistent between PHIR, QASM, and QIR implementations
+/// Test that Bell state probabilities are consistent between PHIR, QASM, and LLVM implementations
 #[test]
 fn test_cross_implementation_validation() -> Result<(), Box<dyn std::error::Error>> {
     // No lock needed: This test only executes quantum programs without modifying shared state
@@ -250,24 +250,24 @@ fn test_cross_implementation_validation() -> Result<(), Box<dyn std::error::Erro
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let bell_json_path = manifest_dir.join("../../examples/phir/bell.json");
     let bell_qasm_path = manifest_dir.join("../../examples/qasm/bell.qasm");
-    let bell_qir_path = manifest_dir.join("../../examples/qir/bell.ll");
+    let bell_llvm_path = manifest_dir.join("../../examples/llvm/bell.ll");
 
-    println!("BELL STATE CROSS-VALIDATION: Comparing PHIR, QASM, and QIR implementations");
+    println!("BELL STATE CROSS-VALIDATION: Comparing PHIR, QASM, and LLVM implementations");
     println!("------------------------------------------------------------------------");
 
     // Run all three implementations with the same seed
     let phir_output = run_pecos(&bell_json_path, 100, 1, "depolarizing", "0.0", 42, None)?;
     let qasm_output = run_pecos(&bell_qasm_path, 100, 1, "depolarizing", "0.0", 42, None)?;
-    let qir_output = run_pecos(&bell_qir_path, 100, 1, "depolarizing", "0.0", 42, None)?;
+    let llvm_output = run_pecos(&bell_llvm_path, 100, 1, "depolarizing", "0.0", 42, None)?;
 
     // Extract the values and compare
     let phir_values = get_values(&phir_output);
     let qasm_values = get_values(&qasm_output);
-    let qir_values = get_values(&qir_output);
+    let llvm_values = get_values(&llvm_output);
 
     println!("PHIR results: {:.60}...", phir_output.trim());
     println!("QASM results: {:.60}...", qasm_output.trim());
-    println!("QIR results:  {:.60}...", qir_output.trim());
+    println!("LLVM results:  {:.60}...", llvm_output.trim());
 
     // All implementations should produce valid quantum Bell state results
     // Each should have a near 50/50 distribution of |00⟩ and |11⟩
@@ -285,11 +285,11 @@ fn test_cross_implementation_validation() -> Result<(), Box<dyn std::error::Erro
     // Check all implementations
     let (phir_00_count, phir_11_count) = count_bell_states(&phir_values);
     let (qasm_00_count, qasm_11_count) = count_bell_states(&qasm_values);
-    let (qir_00_count, qir_11_count) = count_bell_states(&qir_values);
+    let (llvm_00_count, llvm_11_count) = count_bell_states(&llvm_values);
 
     println!("PHIR Bell state distribution: {phir_00_count}% |00⟩, {phir_11_count}% |11⟩");
     println!("QASM Bell state distribution: {qasm_00_count}% |00⟩, {qasm_11_count}% |11⟩");
-    println!("QIR Bell state distribution:  {qir_00_count}% |00⟩, {qir_11_count}% |11⟩");
+    println!("LLVM Bell state distribution:  {llvm_00_count}% |00⟩, {llvm_11_count}% |11⟩");
 
     // Verify PHIR implementation has balanced distribution
     assert!(
@@ -303,13 +303,13 @@ fn test_cross_implementation_validation() -> Result<(), Box<dyn std::error::Erro
         "QASM implementation should have between 40% and 60% |00⟩ states, but got {qasm_00_count}%"
     );
 
-    // Verify QIR implementation has balanced distribution
+    // Verify LLVM implementation has balanced distribution
     assert!(
-        (40..=60).contains(&qir_00_count),
-        "QIR implementation should have between 40% and 60% |00⟩ states, but got {qir_00_count}%"
+        (40..=60).contains(&llvm_00_count),
+        "LLVM implementation should have between 40% and 60% |00⟩ states, but got {llvm_00_count}%"
     );
 
-    println!("PHIR, QASM, and QIR Bell state implementations all produce correct distributions");
+    println!("PHIR, QASM, and LLVM Bell state implementations all produce correct distributions");
 
     Ok(())
 }
@@ -476,7 +476,7 @@ fn test_seed_determinism() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let bell_json_path = manifest_dir.join("../../examples/phir/bell.json");
     let bell_qasm_path = manifest_dir.join("../../examples/qasm/bell.qasm");
-    let bell_qir_path = manifest_dir.join("../../examples/qir/bell.ll");
+    let bell_llvm_path = manifest_dir.join("../../examples/llvm/bell.ll");
 
     println!("SEED DETERMINISM: Verifying all implementations are deterministic with same seed");
     println!("------------------------------------------------------------------------------");
@@ -507,18 +507,18 @@ fn test_seed_determinism() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!("QASM implementation is deterministic with the same seed");
 
-    // Test QIR determinism
-    let qir_run1 = run_pecos(&bell_qir_path, 50, 1, "depolarizing", "0.0", 42, None)?;
-    let qir_run2 = run_pecos(&bell_qir_path, 50, 1, "depolarizing", "0.0", 42, None)?;
+    // Test LLVM determinism
+    let llvm_run1 = run_pecos(&bell_llvm_path, 50, 1, "depolarizing", "0.0", 42, None)?;
+    let llvm_run2 = run_pecos(&bell_llvm_path, 50, 1, "depolarizing", "0.0", 42, None)?;
 
-    let qir_values1 = get_values(&qir_run1);
-    let qir_values2 = get_values(&qir_run2);
+    let llvm_values1 = get_values(&llvm_run1);
+    let llvm_values2 = get_values(&llvm_run2);
 
     assert_eq!(
-        qir_values1, qir_values2,
-        "QIR implementation should produce identical results with the same seed"
+        llvm_values1, llvm_values2,
+        "LLVM implementation should produce identical results with the same seed"
     );
-    println!("QIR implementation is deterministic with the same seed");
+    println!("LLVM implementation is deterministic with the same seed");
 
     Ok(())
 }
@@ -577,44 +577,44 @@ fn test_noise_model_determinism() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Test QIR implementation with depolarizing noise model
+/// Test LLVM implementation with depolarizing noise model
 #[test]
-fn test_qir_with_depolarizing_noise() -> Result<(), Box<dyn std::error::Error>> {
+fn test_llvm_with_depolarizing_noise() -> Result<(), Box<dyn std::error::Error>> {
     // No lock needed: This test only executes quantum programs without modifying shared state
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let bell_qir_path = manifest_dir.join("../../examples/qir/bell.ll");
+    let bell_llvm_path = manifest_dir.join("../../examples/llvm/bell.ll");
 
     println!(
-        "QIR WITH DEPOLARIZING NOISE: Testing QIR implementation with depolarizing noise model"
+        "LLVM WITH DEPOLARIZING NOISE: Testing LLVM implementation with depolarizing noise model"
     );
     println!("------------------------------------------------------------------");
 
     // Test with depolarizing noise - reduced shots to avoid segfault issues
-    let qir_dep_output = run_pecos(&bell_qir_path, 100, 1, "depolarizing", "0.1", 42, None)?;
+    let llvm_dep_output = run_pecos(&bell_llvm_path, 100, 1, "depolarizing", "0.1", 42, None)?;
 
-    println!("Testing QIR with depolarizing noise model (p=0.1):");
-    analyze_noisy_bell_state(&qir_dep_output, "QIR Depolarizing")?;
+    println!("Testing LLVM with depolarizing noise model (p=0.1):");
+    analyze_noisy_bell_state(&llvm_dep_output, "LLVM Depolarizing")?;
 
-    println!("\nQIR implementation correctly handles depolarizing noise model");
+    println!("\nLLVM implementation correctly handles depolarizing noise model");
 
     Ok(())
 }
 
-/// Test QIR implementation with general noise model
+/// Test LLVM implementation with general noise model
 #[test]
-fn test_qir_with_general_noise() -> Result<(), Box<dyn std::error::Error>> {
+fn test_llvm_with_general_noise() -> Result<(), Box<dyn std::error::Error>> {
     // No lock needed: This test only executes quantum programs without modifying shared state
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let bell_qir_path = manifest_dir.join("../../examples/qir/bell.ll");
+    let bell_llvm_path = manifest_dir.join("../../examples/llvm/bell.ll");
 
-    println!("QIR WITH GENERAL NOISE: Testing QIR implementation with general noise model");
+    println!("LLVM WITH GENERAL NOISE: Testing LLVM implementation with general noise model");
     println!("------------------------------------------------------------------");
 
     // Test with general noise - reduced shots to avoid segfault issues
-    let qir_gen_output = run_pecos(
-        &bell_qir_path,
+    let llvm_gen_output = run_pecos(
+        &bell_llvm_path,
         100,
         1,
         "general",
@@ -623,10 +623,10 @@ fn test_qir_with_general_noise() -> Result<(), Box<dyn std::error::Error>> {
         None,
     )?;
 
-    println!("Testing QIR with general noise model (p=0.1 for all error types):");
-    analyze_noisy_bell_state(&qir_gen_output, "QIR General")?;
+    println!("Testing LLVM with general noise model (p=0.1 for all error types):");
+    analyze_noisy_bell_state(&llvm_gen_output, "LLVM General")?;
 
-    println!("\nQIR implementation correctly handles general noise model");
+    println!("\nLLVM implementation correctly handles general noise model");
 
     Ok(())
 }

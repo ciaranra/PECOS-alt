@@ -275,10 +275,7 @@ impl PHIREngine {
                     variable,
                     size,
                 } => {
-                    debug!(
-                        "Processing variable definition: {} {} {}",
-                        data, data_type, variable
-                    );
+                    debug!("Processing variable definition: {data} {data_type} {variable}");
                     let _ = self
                         .processor
                         .handle_variable_definition(data, data_type, variable, *size);
@@ -292,7 +289,7 @@ impl PHIREngine {
                     returns: _,
                     metadata: _,
                 } => {
-                    debug!("Processing quantum operation: {}", qop);
+                    debug!("Processing quantum operation: {qop}");
 
                     // Clone the operation parameters to avoid borrow issues
                     let qop_str = qop.clone();
@@ -327,13 +324,12 @@ impl PHIREngine {
                     metadata: _,
                     function,
                 } => {
-                    debug!("Processing classical operation: {}", cop);
+                    debug!("Processing classical operation: {cop}");
 
                     // Debug log specially for ffcall operations
                     if cop == "ffcall" {
                         debug!(
-                            "Found ffcall operation: function={:?}, args={:?}, returns={:?}",
-                            function, args, returns
+                            "Found ffcall operation: function={function:?}, args={args:?}, returns={returns:?}"
                         );
                     }
 
@@ -349,7 +345,7 @@ impl PHIREngine {
 
                         // Build and return the message
                         if operation_count > 0 {
-                            debug!("Returning batch with {} operations", operation_count);
+                            debug!("Returning batch with {operation_count} operations");
                             return Ok(Some(self.message_builder.build()));
                         }
 
@@ -366,7 +362,7 @@ impl PHIREngine {
                     false_branch,
                     ..
                 } => {
-                    debug!("Processing block operation: {}", block);
+                    debug!("Processing block operation: {block}");
 
                     match block.as_str() {
                         "if" => {
@@ -557,7 +553,7 @@ impl PHIREngine {
                     duration,
                     metadata,
                 } => {
-                    debug!("Processing machine operation: {}", mop);
+                    debug!("Processing machine operation: {mop}");
 
                     // Process the machine operation
                     match self.processor.process_machine_op(
@@ -583,7 +579,7 @@ impl PHIREngine {
                     args,
                     metadata: _,
                 } => {
-                    debug!("Processing meta instruction: {}", meta);
+                    debug!("Processing meta instruction: {meta}");
 
                     // Process meta instructions like barrier
                     match self.processor.process_meta_instruction(meta, args) {
@@ -600,7 +596,7 @@ impl PHIREngine {
                     }
                 }
                 Operation::Comment { comment } => {
-                    debug!("Processing comment: {}", comment);
+                    debug!("Processing comment: {comment}");
                     // Comments are ignored during execution
                 }
             }
@@ -609,18 +605,12 @@ impl PHIREngine {
             // If we've reached the maximum batch size, break out of the loop
             // This ensures we don't create excessively large messages
             if operation_count >= MAX_BATCH_SIZE {
-                debug!(
-                    "Reached maximum batch size ({}), returning current batch",
-                    MAX_BATCH_SIZE
-                );
+                debug!("Reached maximum batch size ({MAX_BATCH_SIZE}), returning current batch");
                 break;
             }
         }
 
-        debug!(
-            "PHIR engine generated {} operations for shot",
-            operation_count
-        );
+        debug!("PHIR engine generated {operation_count} operations for shot");
 
         // Build and return the message
         Ok(Some(self.message_builder.build()))
@@ -688,10 +678,7 @@ impl ControlEngine for PHIREngine {
 
         // Handle received measurements
         let measurement_results = measurements.outcomes()?;
-        log::debug!(
-            "PHIREngine: Measurement results received: {:?}",
-            measurement_results
-        );
+        log::debug!("PHIREngine: Measurement results received: {measurement_results:?}");
 
         // For Bell state debugging - check if we have 2 qubits and get result patterns
         if let Some(prog) = &self.program {
@@ -703,8 +690,7 @@ impl ControlEngine for PHIREngine {
                 }
             }) {
                 log::debug!(
-                    "Bell state program detected - measurement results: {:?}",
-                    measurement_results
+                    "Bell state program detected - measurement results: {measurement_results:?}"
                 );
             }
         }
@@ -731,7 +717,7 @@ impl ControlEngine for PHIREngine {
                 } = &ops[self.current_op]
                 {
                     if cop == "Result" {
-                        debug!("Processing Result operation: {}", cop);
+                        debug!("Processing Result operation: {cop}");
                         self.processor.handle_classical_op(
                             cop,
                             args,
@@ -850,11 +836,7 @@ impl ClassicalEngine for PHIREngine {
                 for dest in destination_registers {
                     if exported_values.contains_key(&dest) {
                         let value = exported_values[&dest];
-                        log::debug!(
-                            "PHIR: Keeping explicitly mapped register: {} = {}",
-                            dest,
-                            value
-                        );
+                        log::debug!("PHIR: Keeping explicitly mapped register: {dest} = {value}");
                         filtered_values.insert(dest, value);
                     }
                 }
@@ -872,7 +854,7 @@ impl ClassicalEngine for PHIREngine {
 
         for (key, value) in &exported_values {
             results.data.insert(key.clone(), Data::U32(*value));
-            log::debug!("PHIR: Adding mapped register {} = {}", key, value);
+            log::debug!("PHIR: Adding mapped register {key} = {value}");
         }
 
         // If nothing has been exported so far, use all available variables
@@ -899,17 +881,14 @@ impl ClassicalEngine for PHIREngine {
 
                 // Try to get the value from the environment
                 if let Some(value) = self.processor.environment.get(source) {
-                    log::debug!("PHIR: Exporting {} -> {} = {}", source, dest, value);
+                    log::debug!("PHIR: Exporting {source} -> {dest} = {value}");
                     results.data.insert(dest.clone(), Data::U32(value.as_u32()));
                 } else {
                     // If not found in environment, try the exported_values directly
                     // Try to get the value directly from environment if not already found
                     if let Some(value) = self.processor.environment.get(source) {
                         log::debug!(
-                            "PHIR: Exporting from environment {} -> {} = {}",
-                            source,
-                            dest,
-                            value
+                            "PHIR: Exporting from environment {source} -> {dest} = {value}"
                         );
                         results.data.insert(dest.clone(), Data::U32(value.as_u32()));
                     }
@@ -949,7 +928,7 @@ impl ClassicalEngine for PHIREngine {
         // Just log the final state of the registers for debugging
         log::debug!("PHIR: Final register values from environment - no reconstruction needed");
         for (key, value) in &results.data {
-            log::debug!("PHIR: Register {} = {:?}", key, value);
+            log::debug!("PHIR: Register {key} = {value:?}");
         }
 
         log::debug!("PHIR: Exported {} registers", results.data.len());
@@ -1011,7 +990,7 @@ impl Engine for PHIREngine {
                 program.ops.len()
             );
             for (i, op) in program.ops.iter().enumerate() {
-                log::debug!("Process: Operation {}: {:?}", i, op);
+                log::debug!("Process: Operation {i}: {op:?}");
             }
         }
 
@@ -1034,7 +1013,7 @@ impl Engine for PHIREngine {
 
                     // Process operations in order (like a real execution)
                     for (i, op) in program.ops.iter().enumerate() {
-                        log::debug!("Processing operation {}: {:?}", i, op);
+                        log::debug!("Processing operation {i}: {op:?}");
 
                         match op {
                             Operation::VariableDefinition {
@@ -1044,9 +1023,7 @@ impl Engine for PHIREngine {
                                 size,
                             } => {
                                 log::debug!(
-                                    "Processing variable definition: {} {}",
-                                    data_type,
-                                    variable
+                                    "Processing variable definition: {data_type} {variable}"
                                 );
                                 let _ = self
                                     .processor
@@ -1059,7 +1036,7 @@ impl Engine for PHIREngine {
                                 function: _,
                                 metadata: _,
                             } => {
-                                log::debug!("Processing classical operation {}: {}", i, cop);
+                                log::debug!("Processing classical operation {i}: {cop}");
                                 if let Err(e) = self.processor.handle_classical_op(
                                     cop,
                                     args,
@@ -1067,7 +1044,7 @@ impl Engine for PHIREngine {
                                     &program.ops,
                                     i,
                                 ) {
-                                    log::error!("Failed to process classical operation: {}", e);
+                                    log::error!("Failed to process classical operation: {e}");
                                     return Err(e);
                                 }
                             }
@@ -1078,12 +1055,8 @@ impl Engine for PHIREngine {
                                 angles: _,
                                 metadata: _,
                             } => {
-                                log::debug!("Processing quantum operation {}: {}", i, qop);
-                                log::debug!(
-                                    "Simulating quantum gate: {} on qubits: {:?}",
-                                    qop,
-                                    args
-                                );
+                                log::debug!("Processing quantum operation {i}: {qop}");
+                                log::debug!("Simulating quantum gate: {qop} on qubits: {args:?}");
                             }
                             // Handle other operation types as needed
                             _ => log::debug!("Skipping operation type for direct execution"),

@@ -175,7 +175,7 @@ def run_guppy(
         print("[INFO] Running in pytest environment - using defensive execution")
     
     if verbose:
-        print("[OK] Using PECOS QIR PyO3 bindings for execution")
+        print("[OK] Using PECOS LLVM PyO3 bindings for execution")
     
     # Execute the QIR file with the PyO3 bindings
     qir_result = execute_llvm(

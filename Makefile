@@ -86,11 +86,11 @@ lint: check fmt clippy
 
 .PHONY: qir-staticlib
 qir-staticlib:  ## Build the QIR static library (needed for QIR compilation)
-	cargo rustc -p pecos-qir --lib --crate-type=staticlib
+	cargo rustc -p pecos-llvm-runtime --lib --crate-type=staticlib
 
 .PHONY: qir-staticlib-if-needed
 qir-staticlib-if-needed:  ## Build QIR static library only if it doesn't exist in persistent location
-	@if [ ! -f ~/.cargo/pecos-qir/libpecos_qir.a ] && [ ! -f ~/.cargo/pecos-qir/pecos_qir.lib ]; then \
+	@if [ ! -f ~/.cargo/pecos-llvm-runtime/libpecos_llvm_runtime.a ] && [ ! -f ~/.cargo/pecos-llvm-runtime/pecos_llvm_runtime.lib ]; then \
 		echo "Building QIR static library..."; \
 		$(MAKE) qir-staticlib; \
 	fi
@@ -154,7 +154,7 @@ clean-unix:
 	@# Clean the root workspace target directory
 	@cargo clean
 	@# Clean the persistent QIR library directory
-	@rm -rf ~/.cargo/pecos-qir/
+	@rm -rf ~/.cargo/pecos-llvm-runtime/
 
 .PHONY: clean-windows-ps
 clean-windows-ps:
@@ -174,7 +174,7 @@ clean-windows-ps:
 	@powershell -Command "Get-ChildItem -Path python -Recurse -Directory -Filter 'target' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 	@cargo clean
 	@# Clean the persistent QIR library directory
-	@powershell -Command "if (Test-Path '$env:USERPROFILE\.cargo\pecos-qir') { Remove-Item -Recurse -Force $env:USERPROFILE\.cargo\pecos-qir }"
+	@powershell -Command "if (Test-Path '$env:USERPROFILE\.cargo\pecos-llvm-runtime') { Remove-Item -Recurse -Force $env:USERPROFILE\.cargo\pecos-llvm-runtime }"
 
 .PHONY: clean-windows-cmd
 clean-windows-cmd:
@@ -194,7 +194,7 @@ clean-windows-cmd:
 	-@for /f "delims=" %%d in ('dir /s /b /ad python\target 2^>nul') do @rd /s /q "%%d" 2>nul
 	-@cargo clean
 	-@REM Clean the persistent QIR library directory
-	-@if exist %USERPROFILE%\.cargo\pecos-qir rd /s /q %USERPROFILE%\.cargo\pecos-qir
+	-@if exist %USERPROFILE%\.cargo\pecos-llvm-runtime rd /s /q %USERPROFILE%\.cargo\pecos-llvm-runtime
 
 .PHONY: pip-install-uv
 pip-install-uv:  ## Install uv using pip and create a venv. (Recommended to instead follow: https://docs.astral.sh/uv/getting-started/installation/

@@ -98,7 +98,7 @@ def test_pmir_compilation_and_execution():
             print(f"\n[PASS] Successfully compiled and saved LLVM IR to {llvm_file}")
             
             # TODO: To fully execute this, we would need to:
-            # 1. Use pecos_rslib's QirEngine with the generated LLVM file
+            # 1. Use pecos_rslib's PMIRLlvmEngine with the generated LLVM file
             # 2. Or integrate with PECOS's existing QIR execution infrastructure
             
         finally:

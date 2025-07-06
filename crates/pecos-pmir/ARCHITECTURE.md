@@ -328,5 +328,5 @@ The PMIR pipeline includes comprehensive tests:
 
 Run tests with:
 ```bash
-cargo test -p pecos-qir test_pmir
+cargo test -p pecos-llvm-runtime test_pmir
 ```

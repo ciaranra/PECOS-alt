@@ -216,18 +216,18 @@ fn test_basic_determinism_qasm() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Test basic determinism with QIR files, gracefully skipping if LLVM tools are unavailable
+/// Test basic determinism with LLVM files, gracefully skipping if LLVM tools are unavailable
 #[test]
-fn test_basic_determinism_qir() {
+fn test_basic_determinism_llvm() {
     // No lock needed: This test only verifies determinism without modifying shared state
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let bell_ll_path = manifest_dir.join("../../examples/qir/bell.ll");
+    let bell_ll_path = manifest_dir.join("../../examples/llvm/bell.ll");
 
-    println!("BASIC DETERMINISM TEST - QIR FILES");
+    println!("BASIC DETERMINISM TEST - LLVM FILES");
     println!("---------------------------------");
 
-    // Try to run QIR tests, but handle any errors gracefully
+    // Try to run LLVM tests, but handle any errors gracefully
     let result = (|| -> Result<(), Box<dyn std::error::Error>> {
         // Test with depolarizing noise
         println!("\nTesting with depolarizing noise (p=0.1):");
@@ -246,12 +246,12 @@ fn test_basic_determinism_qir() {
 
     // If there was an error, print a message but don't fail the test
     if let Err(e) = result {
-        println!("Skipping QIR determinism test - QIR engine error: {e}");
+        println!("Skipping LLVM determinism test - LLVM engine error: {e}");
         println!("This might be due to missing LLVM tools or other dependencies");
         return;
     }
 
-    println!("\nQIR files exhibit deterministic behavior with the same seed");
+    println!("\nLLVM files exhibit deterministic behavior with the same seed");
 }
 
 /// Test that with 0 noise probability, both noise models give identical results

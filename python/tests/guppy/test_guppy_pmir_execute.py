@@ -243,7 +243,7 @@ def test_guppy_pmir_execute_pipeline() -> None:
         except Exception as e:
             print(f"  [ERROR] PECOS CLI execution failed: {e}")
         
-        # Option 2: Try PECOS execute_llvm if QirEngine didn't work
+        # Option 2: Try PECOS execute_llvm if PMIRLlvmEngine didn't work
         if not execution_successful:
             try:
                 from pecos import execute_llvm
@@ -268,25 +268,25 @@ def test_guppy_pmir_execute_pipeline() -> None:
             except Exception as e:
                 print(f"  [ERROR] execute_llvm execution failed: {e}")
         
-        # Option 3: Try QirEngineWrapper if others didn't work
+        # Option 3: Try PMIRLlvmEngine if others didn't work
         if not execution_successful:
             try:
                 from pecos.frontends.qir_engine_wrapper import execute_standard_qir
-                print("  Attempting execution with QirEngineWrapper...")
+                print("  Attempting execution with PMIRLlvmEngine...")
                 
                 result = execute_standard_qir(llvm_content, shots=50)
                 if result.get("execution_successful"):
-                    print(f"  [PASS] QirEngineWrapper execution successful!")
+                    print(f"  [PASS] PMIRLlvmEngine execution successful!")
                     print(f"    Results: {result}")
                     execution_successful = True
                     results = result
                 else:
-                    print(f"  [ERROR] QirEngineWrapper failed: {result.get('error', 'Unknown error')}")
+                    print(f"  [ERROR] PMIRLlvmEngine failed: {result.get('error', 'Unknown error')}")
                     
             except ImportError:
-                print("  [INFO] QirEngineWrapper not available")
+                print("  [INFO] PMIRLlvmEngine not available")
             except Exception as e:
-                print(f"  [ERROR] QirEngineWrapper execution failed: {e}")
+                print(f"  [ERROR] PMIRLlvmEngine execution failed: {e}")
         
         # Final status
         if execution_successful:

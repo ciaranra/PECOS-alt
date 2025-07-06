@@ -67,15 +67,15 @@ pub fn py_hugr_to_pmir_mlir(
 
 /// PMIR QIR Engine for executing PMIR-generated LLVM IR (in-memory)
 #[pyclass]
-#[pyo3(name = "PMIRQirEngine")]
-pub struct PyPMIRQirEngine {
+#[pyo3(name = "PMIRLlvmEngine")]
+pub struct PyPMIRLlvmEngine {
     llvm_ir_content: String,
     shots: Option<usize>,
     seed: Option<u64>,
 }
 
 #[pymethods]
-impl PyPMIRQirEngine {
+impl PyPMIRLlvmEngine {
     /// Create a new PMIR QIR engine from LLVM IR content (in-memory)
     #[new]
     pub fn new(llvm_ir: &str) -> Self {
@@ -209,7 +209,7 @@ pub fn py_compile_and_execute_via_pmir(
         .map_err(|e| PyRuntimeError::new_err(format!("PMIR compilation failed: {e:?}")))?;
 
     // Step 2: Create PMIR QIR engine and execute
-    let mut engine = PyPMIRQirEngine::new(&llvm_ir);
+    let mut engine = PyPMIRLlvmEngine::new(&llvm_ir);
     engine.set_shots(shots as usize);
     if let Some(s) = seed {
         engine.set_seed(s);
@@ -245,7 +245,7 @@ pub fn register_pmir_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_compile_and_execute_via_pmir, m)?)?;
 
     // Add PMIR QIR Engine class
-    m.add_class::<PyPMIRQirEngine>()?;
+    m.add_class::<PyPMIRLlvmEngine>()?;
 
     Ok(())
 }

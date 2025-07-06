@@ -24,7 +24,7 @@
 //! - `pecos_qasm`: Support for `OpenQASM` language for quantum circuit description
 //! - `pecos_qsim`: Quantum simulation implementations
 //! - `pecos_phir`: PECOS High-level Intermediate Representation
-//! - `pecos_qir`: Support for Quantum Intermediate Representation
+//! - `pecos_llvm_runtime`: Support for Quantum Intermediate Representation
 //!
 //! This meta-crate unifies the API and re-exports the most commonly used types and
 //! functions from the component crates to provide a simplified interface.
@@ -113,7 +113,7 @@ pub fn setup_llvm_engine(
     log::debug!("Setting up LLVM engine for: {}", llvm_ir_path.display());
 
     // Create a generic LLVM engine from the path
-    let mut engine = pecos_qir::LlvmEngine::new(llvm_ir_path.to_path_buf());
+    let mut engine = pecos_llvm_runtime::LlvmEngine::new(llvm_ir_path.to_path_buf());
 
     // Set the number of shots if specified
     if let Some(num_shots) = shots {
@@ -132,7 +132,7 @@ pub fn setup_llvm_engine(
 /// with LLVM execution. The architecture is:
 ///
 /// 1. `pecos-hugr-llvm` compiles HUGR → LLVM IR (pure compilation, no engine dependencies)
-/// 2. `pecos-qir` executes LLVM IR (pure execution, no HUGR dependencies)
+/// 2. `pecos-llvm-runtime` executes LLVM IR (pure execution, no HUGR dependencies)
 /// 3. `pecos` orchestrates: HUGR → LLVM IR → Execution
 pub mod hugr {
     use pecos_core::errors::PecosError;
@@ -143,7 +143,7 @@ pub mod hugr {
     ///
     /// This is a convenience function that:
     /// 1. Compiles HUGR to LLVM IR using `pecos-hugr-llvm`
-    /// 2. Creates an LLVM engine from the IR using `pecos-qir`
+    /// 2. Creates an LLVM engine from the IR using `pecos-llvm-runtime`
     /// 3. Returns the configured engine ready for execution
     ///
     /// # Arguments
@@ -230,7 +230,7 @@ pub mod hugr {
 /// through the PMIR pipeline with LLVM execution. The architecture is:
 ///
 /// 1. `pecos-pmir` compiles HUGR → PAST → PMIR → LLVM IR (pure compilation, no engine dependencies)
-/// 2. `pecos-qir` executes LLVM IR (pure execution, no HUGR/PMIR dependencies)
+/// 2. `pecos-llvm-runtime` executes LLVM IR (pure execution, no HUGR/PMIR dependencies)
 /// 3. `pecos` orchestrates: HUGR → PMIR → LLVM IR → Execution
 ///
 /// PMIR provides an alternative compilation path to HUGR-LLVM that goes through
@@ -247,7 +247,7 @@ pub mod pmir {
     ///
     /// This is a convenience function that:
     /// 1. Compiles HUGR to LLVM IR via PMIR using `pecos-pmir`
-    /// 2. Creates an LLVM engine from the IR using `pecos-qir`
+    /// 2. Creates an LLVM engine from the IR using `pecos-llvm-runtime`
     /// 3. Returns the configured engine ready for execution
     ///
     /// # Arguments

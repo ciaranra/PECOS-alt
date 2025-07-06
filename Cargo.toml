@@ -56,7 +56,7 @@ pecos-qsim = { version = "0.1.1", path = "crates/pecos-qsim" }
 pecos-qasm = { version = "0.1.1", path = "crates/pecos-qasm" }
 pecos-phir = { version = "0.1.1", path = "crates/pecos-phir" }
 pecos-engines = { version = "0.1.1", path = "crates/pecos-engines" }
-pecos-qir = { version = "0.1.1", path = "crates/pecos-qir", default-features = false }
+pecos-llvm-runtime = { version = "0.1.1", path = "crates/pecos-llvm-runtime", default-features = false }
 pecos-pmir = { version = "0.1.1", path = "crates/pecos-pmir" }
 pecos-qec = { version = "0.1.1", path = "crates/pecos-qec" }
 pecos = { version = "0.1.1", path = "crates/pecos" }

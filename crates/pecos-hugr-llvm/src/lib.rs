@@ -11,7 +11,7 @@ translation between representations.
 HUGR JSON/Bytes → [pecos-hugr-llvm] → LLVM IR String/File
 ```
 
-The generated LLVM IR can then be executed by any compatible execution engine (e.g., pecos-qir).
+The generated LLVM IR can then be executed by any compatible execution engine (e.g., pecos-llvm-runtime).
 
 # Example
 

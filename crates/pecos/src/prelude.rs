@@ -25,7 +25,7 @@
 //! * `pecos_engines`: Simulation engines for quantum and classical processing
 //! * `pecos_phir`: PECOS High-level Intermediate Representation
 //! * `pecos_qasm`: `OpenQASM` language support
-//! * `pecos_qir`: LLVM IR execution support
+//! * `pecos_llvm_runtime`: LLVM IR execution support
 //! * `pecos_qsim`: Quantum simulation implementations
 //!
 //! It also includes key functionality from the top-level PECOS crate:
@@ -45,9 +45,9 @@
 // Re-export preludes from component crates
 pub use pecos_core::prelude::*;
 pub use pecos_engines::prelude::*;
+pub use pecos_llvm_runtime::prelude::*;
 pub use pecos_phir::prelude::*;
 pub use pecos_qasm::prelude::*;
-pub use pecos_qir::prelude::*;
 pub use pecos_qsim::prelude::*;
 
 // Re-export ShotVec directly from pecos_engines for easier access

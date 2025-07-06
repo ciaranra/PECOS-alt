@@ -16,13 +16,13 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
-RUNTIME_LIB="$CARGO_HOME/pecos-qir/libpecos_qir.a"
-MARKER_FILE="$CARGO_HOME/pecos-qir/.needs_rebuild"
+RUNTIME_LIB="$CARGO_HOME/pecos-llvm-runtime/libpecos_llvm_runtime.a"
+MARKER_FILE="$CARGO_HOME/pecos-llvm-runtime/.needs_rebuild"
 TEST_DIR="$PROJECT_ROOT/target/edge_case_test_$$"
 
 # Platform adjustments
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
-    RUNTIME_LIB="$CARGO_HOME/pecos-qir/pecos_qir.lib"
+    RUNTIME_LIB="$CARGO_HOME/pecos-llvm-runtime/pecos_llvm_runtime.lib"
 fi
 
 # Logging
@@ -132,7 +132,7 @@ test_corrupted_marker() {
 
     # Try to build
     cd "$PROJECT_ROOT"
-    if cargo build -p pecos-qir --quiet 2>/dev/null; then
+    if cargo build -p pecos-llvm-runtime --quiet 2>/dev/null; then
         log_info "Build succeeded despite corrupted marker"
     else
         log_error "Build failed with corrupted marker"
@@ -186,7 +186,7 @@ test_permission_issues() {
 
     # Try to build (should handle gracefully)
     cd "$PROJECT_ROOT"
-    if cargo build -p pecos-qir --quiet 2>&1 | grep -q "permission"; then
+    if cargo build -p pecos-llvm-runtime --quiet 2>&1 | grep -q "permission"; then
         log_info "Permission error handled gracefully"
         chmod 755 "$MARKER_DIR"
         return 0
@@ -214,7 +214,7 @@ test_symlink_handling() {
 
         # Run build
         cd "$PROJECT_ROOT"
-        if cargo build -p pecos-qir --quiet; then
+        if cargo build -p pecos-llvm-runtime --quiet; then
             log_info "Build works with symlinked runtime library"
 
             # Check if marker was created (it shouldn't be if symlink is valid)
@@ -255,9 +255,9 @@ test_cargo_home_variations() {
     log_info "Testing with CARGO_HOME=$CARGO_HOME"
 
     cd "$PROJECT_ROOT"
-    if cargo build -p pecos-qir --quiet 2>&1; then
+    if cargo build -p pecos-llvm-runtime --quiet 2>&1; then
         # Check if marker path is created in custom location
-        local CUSTOM_MARKER="$CARGO_HOME/pecos-qir/.needs_rebuild"
+        local CUSTOM_MARKER="$CARGO_HOME/pecos-llvm-runtime/.needs_rebuild"
         if [[ -f "$CUSTOM_MARKER" ]]; then
             log_info "Marker created in custom CARGO_HOME"
         else
@@ -303,7 +303,7 @@ test_filesystem_full() {
     export CARGO_HOME="$MOUNT_POINT"
 
     cd "$PROJECT_ROOT"
-    if cargo build -p pecos-qir --quiet 2>&1 | grep -q "space"; then
+    if cargo build -p pecos-llvm-runtime --quiet 2>&1 | grep -q "space"; then
         log_info "Filesystem full error handled"
     else
         log_info "Build handled full filesystem scenario"

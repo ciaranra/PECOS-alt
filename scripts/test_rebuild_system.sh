@@ -20,14 +20,14 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Paths
 CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
-RUNTIME_LIB="$CARGO_HOME/pecos-qir/libpecos_qir.a"
-MARKER_FILE="$CARGO_HOME/pecos-qir/.needs_rebuild"
+RUNTIME_LIB="$CARGO_HOME/pecos-llvm-runtime/libpecos_llvm_runtime.a"
+MARKER_FILE="$CARGO_HOME/pecos-llvm-runtime/.needs_rebuild"
 TEST_DIR="$PROJECT_ROOT/target/rebuild_test_$$"
 QIR_FILE="$TEST_DIR/test.ll"
 
 # Platform-specific adjustments
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
-    RUNTIME_LIB="$CARGO_HOME/pecos-qir/pecos_qir.lib"
+    RUNTIME_LIB="$CARGO_HOME/pecos-llvm-runtime/pecos_llvm_runtime.lib"
 fi
 
 # Helper functions
@@ -98,8 +98,8 @@ test_marker_creation() {
     log_info "Running cargo build with missing runtime library..."
     cd "$PROJECT_ROOT"
     # Force a rebuild by cleaning first
-    cargo clean -p pecos-qir --quiet
-    cargo build -p pecos-qir --quiet
+    cargo clean -p pecos-llvm-runtime --quiet
+    cargo build -p pecos-llvm-runtime --quiet
 
     if check_file "$MARKER_FILE"; then
         log_info "Marker created for missing library"
@@ -120,7 +120,7 @@ test_marker_creation() {
     # Case 2: Up-to-date library
     rm -f "$MARKER_FILE"
     log_info "Running cargo build with up-to-date library..."
-    cargo build -p pecos-qir --quiet
+    cargo build -p pecos-llvm-runtime --quiet
 
     if [[ -f "$MARKER_FILE" ]]; then
         log_error "Marker created when library is up-to-date"
@@ -233,16 +233,16 @@ test_source_change_flow() {
     rm -f "$MARKER_FILE"
 
     # Modify a source file
-    local SRC_FILE="$PROJECT_ROOT/crates/pecos-qir/src/lib.rs"
+    local SRC_FILE="$PROJECT_ROOT/crates/pecos-llvm-runtime/src/lib.rs"
     local ORIG_CONTENT=$(cat "$SRC_FILE")
 
-    log_info "Modifying pecos-qir source file..."
+    log_info "Modifying pecos-llvm-runtime source file..."
     echo "// Test modification" >> "$SRC_FILE"
 
     # Run cargo build
     log_info "Running cargo build after source change..."
     cd "$PROJECT_ROOT"
-    cargo build -p pecos-qir --quiet
+    cargo build -p pecos-llvm-runtime --quiet
 
     if check_file "$MARKER_FILE"; then
         log_info "Marker created after source change"

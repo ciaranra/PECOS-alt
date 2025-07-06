@@ -20,13 +20,13 @@ mod byte_message_bindings;
 mod engine_bindings;
 #[cfg(feature = "hugr-llvm-pipeline")]
 mod hugr_bindings;
+mod llvm_bindings;
+mod llvm_context_bindings;
+mod llvm_execution_guard;
 pub mod phir_bridge;
 #[cfg(feature = "pmir-pipeline")]
 mod pmir_bindings;
 mod qasm_sim_bindings;
-mod qir_bindings;
-mod qir_context_bindings;
-mod qir_execution_guard;
 mod safe_calls;
 mod sparse_sim;
 mod sparse_stab_bindings;
@@ -64,8 +64,8 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     #[cfg(feature = "pmir-pipeline")]
     pmir_bindings::register_pmir_module(m)?;
 
-    // Register QIR execution functions
-    qir_bindings::register_qir_module(m)?;
+    // Register LLVM execution functions
+    llvm_bindings::register_llvm_module(m)?;
 
     Ok(())
 }

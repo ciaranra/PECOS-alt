@@ -1,0 +1,49 @@
+[package]
+name = "pecos-llvm-runtime"
+version.workspace = true
+edition.workspace = true
+readme = "README.md"
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "LLVM IR execution capabilities for quantum programs in PECOS."
+
+[dependencies]
+log.workspace = true
+pecos-core = { workspace = true, features = ["anyhow"] }
+pecos-engines.workspace = true
+regex.workspace = true
+libloading.workspace = true
+libc.workspace = true
+bytemuck.workspace = true
+tempfile.workspace = true
+env_logger.workspace = true
+parking_lot.workspace = true
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
+
+[build-dependencies]
+# No specific build dependencies required
+
+[dev-dependencies]
+tempfile.workspace = true
+serial_test.workspace = true
+env_logger.workspace = true
+
+
+[features]
+default = []
+
+# LLVM JIT execution: LLVM IR file execution via LLVM JIT compilation
+# TEMPORARILY DISABLED due to pytest environment conflicts and segfaults
+# TODO: Re-implement with proper isolation or alternative execution strategy
+llvm-jit = []
+
+# All features including LLVM JIT (for advanced users)
+all-features = ["llvm-jit"]
+
+[lints]
+workspace = true

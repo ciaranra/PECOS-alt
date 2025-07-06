@@ -81,7 +81,7 @@ impl HugrCompiler {
     /// - File I/O operations fail
     pub fn compile_hugr<P: AsRef<Path>>(&self, hugr_path: P) -> Result<PathBuf, PecosError> {
         let hugr_path = hugr_path.as_ref();
-        debug!("HUGR: Compiling HUGR file: {:?}", hugr_path);
+        debug!("HUGR: Compiling HUGR file: {hugr_path:?}");
 
         // Read HUGR file
         let hugr_bytes = fs::read(hugr_path).map_err(|e| {
@@ -233,7 +233,7 @@ impl HugrCompiler {
         let llvm_ir_string = llvm_module.print_to_string().to_string();
         let fixed_llvm_ir = fix_entry_point_signature(&llvm_ir_string);
 
-        trace!("HUGR: Generated LLVM IR:\n{}", fixed_llvm_ir);
+        trace!("HUGR: Generated LLVM IR:\n{fixed_llvm_ir}");
         debug!("HUGR: LLVM IR generation completed successfully");
 
         Ok(fixed_llvm_ir)
@@ -284,8 +284,7 @@ fn fix_duplicate_functions(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
                                         *count += 1;
                                         let new_name = format!("{name_owned}_{count}");
                                         debug!(
-                                            "Renamed duplicate function '{}' to '{}'",
-                                            name_owned, new_name
+                                            "Renamed duplicate function '{name_owned}' to '{new_name}'"
                                         );
                                         node["name"] = serde_json::Value::String(new_name);
                                     } else {

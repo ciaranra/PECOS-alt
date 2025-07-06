@@ -130,31 +130,32 @@ def execute_llvm(
         RuntimeError: If execution fails
     """
     try:
-        from pecos_rslib import QirEngine
+        from pecos_rslib import execute_llvm
     except ImportError as err:
-        msg = "QIR execution backend not available"
+        msg = "LLVM execution backend not available"
         raise ImportError(msg) from err
 
-    # If llvm_ir is a path, read the file
-    if isinstance(llvm_ir, str | Path) and Path(llvm_ir).exists():
-        with Path(llvm_ir).open() as f:
-            llvm_ir_str = f.read()
+    # If llvm_ir is a string content, write to temporary file
+    if isinstance(llvm_ir, str) and not Path(llvm_ir).exists():
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.ll', delete=False) as f:
+            f.write(llvm_ir)
+            temp_path = f.name
+        try:
+            result = execute_llvm(temp_path, shots)
+        finally:
+            import os
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
     else:
-        llvm_ir_str = str(llvm_ir)
+        # It's a path
+        result = execute_llvm(str(llvm_ir), shots)
 
-    try:
-        # Create engine and run
-        engine = QirEngine.from_qir_string(llvm_ir_str, shots)
-        results = engine.run()
-    except Exception as e:
-        msg = f"Failed to execute LLVM/QIR: {e}"
-        raise RuntimeError(msg) from e
-    else:
-        return {
-            "results": results,
-            "shots": shots,
-            "backend": "pecos_qir",
-        }
+    return {
+        "results": result.get("results", []),
+        "shots": shots,
+        "backend": "pecos_llvm_runtime",
+    }
 
 
 # Convenience functions for common pipelines

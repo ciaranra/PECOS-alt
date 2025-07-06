@@ -143,14 +143,14 @@ impl BlockExecutor {
                 variable,
                 size,
             } => {
-                debug!("Processing variable definition: {} {}", data_type, variable);
+                debug!("Processing variable definition: {data_type} {variable}");
                 self.processor
                     .handle_variable_definition(data, data_type, variable, *size)?;
             }
             Operation::QuantumOp {
                 qop, angles, args, ..
             } => {
-                debug!("Processing quantum operation: {}", qop);
+                debug!("Processing quantum operation: {qop}");
                 let (gate_type, qubit_args, angle_args) =
                     self.processor
                         .process_quantum_op(qop, angles.as_ref(), args)?;
@@ -168,15 +168,12 @@ impl BlockExecutor {
             Operation::ClassicalOp {
                 cop, args, returns, ..
             } => {
-                debug!("Processing classical operation: {}", cop);
+                debug!("Processing classical operation: {cop}");
                 let result =
                     self.processor
                         .handle_classical_op(cop, args, returns, &[op.clone()], 0)?;
                 if !result {
-                    debug!(
-                        "Classical operation handled as expression or skipped: {}",
-                        cop
-                    );
+                    debug!("Classical operation handled as expression or skipped: {cop}");
                 }
             }
             Operation::MachineOp {
@@ -186,7 +183,7 @@ impl BlockExecutor {
                 metadata,
                 ..
             } => {
-                debug!("Processing machine operation: {}", mop);
+                debug!("Processing machine operation: {mop}");
                 let mop_result = self.processor.process_machine_op(
                     mop,
                     args.as_ref(),
@@ -201,7 +198,7 @@ impl BlockExecutor {
                 }
             }
             Operation::MetaInstruction { meta, args, .. } => {
-                debug!("Processing meta instruction: {}", meta);
+                debug!("Processing meta instruction: {meta}");
                 let meta_result = self.processor.process_meta_instruction(meta, args)?;
 
                 // Add to byte message builder if we have one
@@ -215,7 +212,7 @@ impl BlockExecutor {
                 self.process_block_operation(op)?;
             }
             Operation::Comment { comment } => {
-                debug!("Skipping comment: {}", comment);
+                debug!("Skipping comment: {comment}");
                 // Comments are no-ops
             }
         }
@@ -245,7 +242,7 @@ impl BlockExecutor {
     /// # Errors
     /// Returns an error if the expression cannot be evaluated.
     pub fn evaluate_condition(&self, condition: &Expression) -> Result<bool, PecosError> {
-        debug!("Evaluating condition: {:?}", condition);
+        debug!("Evaluating condition: {condition:?}");
 
         // Create an evaluator with the current environment
         let mut evaluator = ExpressionEvaluator::new(&self.processor.environment);
@@ -271,7 +268,7 @@ impl BlockExecutor {
 
         // Evaluate the condition
         let condition_result = self.evaluate_condition(condition)?;
-        debug!("Condition evaluated to: {}", condition_result);
+        debug!("Condition evaluated to: {condition_result}");
 
         if condition_result {
             // Execute the true branch

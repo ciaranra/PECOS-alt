@@ -2,7 +2,7 @@
 
 ## Problem Summary
 
-There is a fundamental architectural mismatch between HUGR's measurement model and PECOS's QirEngine execution model.
+There is a fundamental architectural mismatch between HUGR's measurement model and PECOS's LlvmEngine execution model.
 
 ### HUGR Model (Immediate Measurements)
 HUGR generates QIR code that:
@@ -10,8 +10,8 @@ HUGR generates QIR code that:
 2. Immediately uses the result: `%is_one = icmp ne i32 %result, 0`
 3. Returns the boolean result to the caller
 
-### PECOS QirEngine Model (Deferred Measurements)
-The QirEngine executes in phases:
+### PECOS LlvmEngine Model (Deferred Measurements)
+The LlvmEngine executes in phases:
 1. **Command Generation Phase**: Run the QIR program to generate quantum commands
 2. **Quantum Simulation Phase**: Execute the quantum circuit and get measurement results
 3. **Result Collection Phase**: Collect and return the measurement results
@@ -49,7 +49,7 @@ The issue is that HUGR assumes a model where:
 - Classical computation can depend on measurement results
 - The entire program runs sequentially
 
-But PECOS QirEngine assumes:
+But PECOS LlvmEngine assumes:
 - Quantum operations are recorded as commands first
 - All quantum simulation happens in a separate phase
 - Classical computation that depends on measurements must be deferred

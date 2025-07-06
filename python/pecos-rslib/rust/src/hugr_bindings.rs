@@ -5,7 +5,7 @@ This module exposes HUGR compilation and LLVM engine functionality to Python.
 */
 
 use pecos_hugr_llvm::{HugrCompiler, HugrCompilerConfig};
-use pecos_qir::LlvmEngine;
+use pecos_llvm_runtime::LlvmEngine;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyType};
 use std::collections::HashMap;

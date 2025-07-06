@@ -438,14 +438,14 @@ fn output_results(
 fn run_program(args: &RunArgs) -> Result<(), PecosError> {
     // Select and validate the backend
     let selected_backend = select_backend(args.backend)?;
-    debug!("Selected compilation backend: {:?}", selected_backend);
+    debug!("Selected compilation backend: {selected_backend:?}");
 
     // get_program_path now includes proper context in its errors
     let program_path = get_program_path(&args.program)?;
 
     // Detect the program type (for informational purposes)
     let program_type = detect_program_type(&program_path)?;
-    debug!("Detected program type: {:?}", program_type);
+    debug!("Detected program type: {program_type:?}");
 
     // Set up the engine
     let classical_engine =

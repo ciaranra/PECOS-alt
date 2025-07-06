@@ -593,7 +593,7 @@ impl GeneralNoiseModel {
             if has_leakage && idx < self.measured_qubits.len() {
                 let qubit = self.measured_qubits[idx];
                 if self.is_leaked(qubit) {
-                    trace!("Qubit {} is leaked, measuring as 1", qubit);
+                    trace!("Qubit {qubit} is leaked, measuring as 1");
                     // Force the measurement outcome to be 1 for leaked qubits
                     val = 1;
                 }
@@ -737,7 +737,7 @@ impl GeneralNoiseModel {
             let qubit_usize = usize::from(qubit);
             if self.is_leaked(qubit_usize) {
                 self.mark_as_unleaked(qubit_usize);
-                trace!("Qubit {} unleaked due to preparation", qubit);
+                trace!("Qubit {qubit} unleaked due to preparation");
             }
         }
 
@@ -758,10 +758,10 @@ impl GeneralNoiseModel {
                     if let Some(gate) = self.leak(usize::from(qubit)) {
                         builder.add_gate_command(&gate);
                     }
-                    trace!("Qubit {} leaked during preparation", qubit);
+                    trace!("Qubit {qubit} leaked during preparation");
                 } else {
                     builder.add_x(&[*qubit]);
-                    trace!("Preparation error on qubit {}", qubit);
+                    trace!("Preparation error on qubit {qubit}");
                 }
             }
         }
@@ -817,7 +817,7 @@ impl GeneralNoiseModel {
                         } else if let Some(gate) = result.gate {
                             // Handle Pauli gate
                             noise.push(gate);
-                            trace!("Applied Pauli error to qubit {}", qubit);
+                            trace!("Applied Pauli error to qubit {qubit}");
                         }
                     }
                 } else if !has_leakage {
@@ -828,7 +828,7 @@ impl GeneralNoiseModel {
                         .sample_gates(&mut self.rng, usize::from(qubit));
                     if let Some(gate) = result.gate {
                         noise.push(gate);
-                        trace!("Applied Pauli error to qubit {}", qubit);
+                        trace!("Applied Pauli error to qubit {qubit}");
                     }
                 }
             }
@@ -988,19 +988,19 @@ impl GeneralNoiseModel {
     fn leak(&mut self, qubit: usize) -> Option<Gate> {
         if self.leakage_scale >= 1.0 || self.rng.occurs(self.leakage_scale) {
             // Mark qubit as leaked
-            trace!("Marking qubit {} as leaked", qubit);
+            trace!("Marking qubit {qubit} as leaked");
             self.mark_as_leaked(qubit);
             Some(Gate::prep(&[qubit]))
         } else {
             // Apply completely depolarizing noise instead of leakage
-            trace!("Replaced leakage with Pauli error on qubit {}", qubit);
+            trace!("Replaced leakage with Pauli error on qubit {qubit}");
             self.rng.random_pauli_or_none(qubit)
         }
     }
 
     fn mark_as_leaked(&mut self, qubit: usize) {
         // TODO: see if some of the mark_as_leaked needs to move to self.leak()
-        trace!("Marking qubit {} as leaked", qubit);
+        trace!("Marking qubit {qubit} as leaked");
         self.leaked_qubits.insert(qubit);
     }
 
@@ -1017,12 +1017,12 @@ impl GeneralNoiseModel {
     }
 
     fn unleak(&mut self, qubit: usize) -> Option<Gate> {
-        trace!("Replaced leakage with Pauli error on qubit {}", qubit);
+        trace!("Replaced leakage with Pauli error on qubit {qubit}");
         if self.leakage_scale == 0.0 {
             // No leakage is being applied in the system
             None
         } else {
-            trace!("Marking qubit {} as unleaked", qubit);
+            trace!("Marking qubit {qubit} as unleaked");
             self.mark_as_unleaked(qubit);
             Option::from(Gate::prep(&[qubit]))
         }

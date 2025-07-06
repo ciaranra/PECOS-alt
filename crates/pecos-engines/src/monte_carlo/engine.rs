@@ -414,8 +414,7 @@ impl MonteCarloEngine {
         // Create a hybrid engine with the state vector quantum engine
         let num_qubits = classical_engine.num_qubits();
         debug!(
-            "MonteCarloEngine::run_with_noise_model: Creating StateVecEngine with {} qubits",
-            num_qubits
+            "MonteCarloEngine::run_with_noise_model: Creating StateVecEngine with {num_qubits} qubits"
         );
         let quantum_engine = Box::new(StateVecEngine::new(num_qubits));
         let mut hybrid_engine = HybridEngineBuilder::new()

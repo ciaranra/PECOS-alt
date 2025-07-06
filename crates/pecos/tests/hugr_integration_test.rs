@@ -10,7 +10,7 @@ const GHZ_STATE_HUGR: &[u8] = include_bytes!("test_data/hugr/ghz_state.hugr");
 
 #[test]
 fn test_hugr_to_llvm_to_execution() -> Result<(), PecosError> {
-    // Test the full pipeline: HUGR → pecos-hugr-llvm → LLVM IR → pecos-qir execution
+    // Test the full pipeline: HUGR → pecos-hugr-llvm → LLVM IR → pecos-llvm-runtime execution
 
     // Step 1: Compile HUGR to LLVM IR
     let temp_dir = TempDir::new()?;
@@ -110,7 +110,7 @@ fn test_hugr_from_bytes() -> Result<(), PecosError> {
 #[cfg(feature = "pmir-pipeline")]
 #[test]
 fn test_hugr_via_pmir_pipeline() -> Result<(), PecosError> {
-    // Test the alternative pipeline: HUGR → pecos-pmir → LLVM IR → pecos-qir execution
+    // Test the alternative pipeline: HUGR → pecos-pmir → LLVM IR → pecos-llvm-runtime execution
 
     // Create a HUGR file
     let temp_dir = TempDir::new()?;
@@ -158,7 +158,7 @@ fn test_pmir_compilation_only() -> Result<(), PecosError> {
 #[test]
 fn test_setup_llvm_engine_generic() -> Result<(), PecosError> {
     // Test that the generic setup_llvm_engine function works
-    // This tests the orchestration function we moved from pecos-qir
+    // This tests the orchestration function we moved from pecos-llvm-runtime
 
     // Create a simple LLVM IR file
     let temp_dir = TempDir::new()?;

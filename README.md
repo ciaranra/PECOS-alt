@@ -22,7 +22,7 @@ calls to Wasm VMs, conditional branching, and more.
 - Fast Simulation: Leverages a fast stabilizer simulation algorithm.
 - Multi-language extensions: Core functionalities implemented via Rust for performance and safety. Additional add-ons
 and extension support in C/C++ via Cython.
-- QIR Support: Execute Quantum Intermediate Representation programs (requires LLVM version 14 with the 'llc' tool).
+- LLVM IR Support: Execute LLVM Intermediate Representation programs for hybrid quantum/classical computing (requires LLVM version 14 with the 'llc' tool).
 
 ## Getting Started
 
@@ -41,7 +41,7 @@ PECOS now consists of multiple interconnected components:
   - `/crates/pecos-qsims/`: A collection of quantum simulators
   - `/crates/pecos-qec/`: Rust code for analyzing and exploring quantum error correction (QEC)
   - `/crates/pecos-qasm/`: Implementation of QASM parsing and execution
-  - `/crates/pecos-qir/`: Implementation of QIR (Quantum Intermediate Representation) execution
+  - `/crates/pecos-llvm-runtime/`: Implementation of LLVM IR execution for hybrid quantum-classical programs
   - `/crates/pecos-engines/`: Quantum and classical engines for simulations
   - `/crates/pecos-cli/`: Command-line interface for PECOS
   - `/crates/pecos-python/`: Rust code for Python extensions
@@ -104,14 +104,14 @@ pecos = "0.x.x"  # Replace with the latest version
 
 #### Optional Dependencies
 
-- **LLVM version 14**: Required for QIR (Quantum Intermediate Representation) support
+- **LLVM version 14**: Required for LLVM IR execution support
   - Linux: `sudo apt install llvm-14`
   - macOS: `brew install llvm@14`
   - Windows: Download LLVM 14.x installer from [LLVM releases](https://releases.llvm.org/download.html#14.0.0)
 
-  **Note**: Only LLVM version 14.x is compatible. LLVM 15 or later versions will not work with PECOS's QIR implementation.
+  **Note**: Only LLVM version 14.x is compatible. LLVM 15 or later versions will not work with PECOS's LLVM runtime implementation.
 
-  If LLVM 14 is not installed, PECOS will still function normally but QIR-related features will be disabled.
+  If LLVM 14 is not installed, PECOS will still function normally but LLVM IR execution features will be disabled.
 
 ## Development Setup
 
