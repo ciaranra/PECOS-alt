@@ -50,14 +50,14 @@ def test_quick_pipeline_check():
             results["hugr_llvm"] = f"❌ FAIL: {str(e)[:50]}"
             print(f"  Error: {str(e)[:100]}")
     
-    # Test PMIR
-    print("\nTesting PMIR backend...")
+    # Test PHIR
+    print("\nTesting PHIR backend...")
     try:
         result = run_guppy(test_h, shots=1, backend="external", verbose=False)
-        results["pmir"] = "✅ PASS"
+        results["phir"] = "✅ PASS"
         print(f"  Result: {result.get('results', [])}")
     except Exception as e:
-        results["pmir"] = f"❌ FAIL: {str(e)[:50]}"
+        results["phir"] = f"❌ FAIL: {str(e)[:50]}"
         print(f"  Error: {str(e)[:100]}")
     
     # Summary

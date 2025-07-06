@@ -79,33 +79,14 @@ except ImportError:
     def create_llvm_engine_from_hugr_rust(*args, **kwargs):
         raise ImportError("HUGR-LLVM pipeline not available")
 
-# Import PMIR pipeline functionality (with graceful fallback)
-try:
-    from pecos_rslib.pmir import (
-        hugr_to_pmir_mlir,
-        compile_hugr_via_pmir,
-        compile_and_execute_via_pmir,
-        PMIRCompiler,
-    )
-    PMIR_PIPELINE_AVAILABLE = True
-except ImportError:
-    # Provide stub implementations for graceful degradation
-    PMIR_PIPELINE_AVAILABLE = False
-    
-    def hugr_to_pmir_mlir(*args, **kwargs):
-        raise ImportError("PMIR pipeline not available")
-    
-    def compile_hugr_via_pmir(*args, **kwargs):
-        raise ImportError("PMIR pipeline not available")
-    
-    def compile_and_execute_via_pmir(*args, **kwargs):
-        raise ImportError("PMIR pipeline not available")
-    
-    def PMIRCompiler(*args, **kwargs):
-        raise ImportError("PMIR pipeline not available")
+# Import PHIR pipeline functionality (core part of PECOS)
+from pecos_rslib.phir import (
+    hugr_to_phir_mlir,
+    compile_hugr_via_phir,
+    compile_and_execute_via_phir,
+    PhirCompiler,
+)
 
-# Legacy compatibility
-PMIR_AVAILABLE = PMIR_PIPELINE_AVAILABLE
 
 def get_compilation_backends():
     """Get information about available compilation backends.
@@ -114,13 +95,11 @@ def get_compilation_backends():
         dict: Dictionary with backend availability information
     """
     return {
-        "pmir_pipeline_available": PMIR_PIPELINE_AVAILABLE,
-        "hugr_llvm_pipeline_available": HUGR_LLVM_PIPELINE_AVAILABLE,
-        "default_backend": "pmir" if PMIR_PIPELINE_AVAILABLE else ("hugr-llvm" if HUGR_LLVM_PIPELINE_AVAILABLE else "none"),
+        "default_backend": "phir",  # PHIR is the default backend
         "backends": {
-            "pmir": {
-                "available": PMIR_PIPELINE_AVAILABLE,
-                "description": "PMIR pipeline: HUGR → PAST → PMIR (MLIR) → LLVM IR",
+            "phir": {
+                "available": True,
+                "description": "PHIR pipeline: HUGR → PHIR → LLVM IR",
                 "dependencies": ["MLIR tools"]
             },
             "hugr-llvm": {
@@ -169,14 +148,11 @@ __all__ = [
     "check_rust_hugr_availability",
     "RUST_HUGR_AVAILABLE",
     "HUGR_LLVM_PIPELINE_AVAILABLE",
-    # PMIR pipeline functionality
-    "hugr_to_pmir_mlir",
-    "compile_hugr_via_pmir",
-    "compile_and_execute_via_pmir",
-    "PMIRCompiler",
-    "PMIR_PIPELINE_AVAILABLE",
-    # Legacy compatibility
-    "PMIR_AVAILABLE",
+    # PHIR pipeline functionality
+    "hugr_to_phir_mlir",
+    "compile_hugr_via_phir",
+    "compile_and_execute_via_phir",
+    "PhirCompiler",
     # Backend information
     "get_compilation_backends",
 ]

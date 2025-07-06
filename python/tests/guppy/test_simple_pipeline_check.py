@@ -35,24 +35,17 @@ def test_simple_hadamard():
     
     backends = get_guppy_backends()
     
-    # Test HUGR-LLVM if available
+    # Test with Rust backend (the only backend)
     if backends.get("rust_backend", False):
         try:
-            result = run_guppy(test_h, shots=1, backend="rust", verbose=True)
-            print(f"HUGR-LLVM result: {result}")
-            assert "results" in result, "HUGR-LLVM execution failed - no results"
-            assert len(result["results"]) > 0, "HUGR-LLVM execution failed - empty results"
+            result = run_guppy(test_h, shots=1, verbose=True)
+            print(f"Rust backend result: {result}")
+            assert "results" in result, "Execution failed - no results"
+            assert len(result["results"]) > 0, "Execution failed - empty results"
         except Exception as e:
-            pytest.skip(f"HUGR-LLVM backend not working: {e}")
-    
-    # Test PMIR
-    try:
-        result = run_guppy(test_h, shots=1, backend="external", verbose=True)
-        print(f"PMIR result: {result}")
-        assert "results" in result, "PMIR execution failed - no results"
-        assert len(result["results"]) > 0, "PMIR execution failed - empty results"
-    except Exception as e:
-        pytest.skip(f"PMIR backend not working: {e}")
+            pytest.skip(f"Rust backend not working: {e}")
+    else:
+        pytest.skip("Rust backend not available")
 
 
 if __name__ == "__main__":

@@ -23,13 +23,13 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from pecos.error_models.noise_impl_old.gate_groups import one_qubits, two_qubits
-from pecos.reps.pypmir.op_types import QOp
+from pecos.reps.pyphir.op_types import QOp
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from pecos.protocols import MachineProtocol
-    from pecos.reps.pypmir.block_types import SeqBlock
+    from pecos.reps.pyphir.block_types import SeqBlock
 
 one_qubit_paulis = ["X", "Y", "Z"]
 

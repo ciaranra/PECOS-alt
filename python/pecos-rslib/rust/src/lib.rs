@@ -23,9 +23,8 @@ mod hugr_bindings;
 mod llvm_bindings;
 mod llvm_context_bindings;
 mod llvm_execution_guard;
-pub mod phir_bridge;
-#[cfg(feature = "pmir-pipeline")]
-mod pmir_bindings;
+pub mod phir_json_bridge;
+mod phir_bindings;
 mod qasm_sim_bindings;
 mod safe_calls;
 mod sparse_sim;
@@ -46,7 +45,7 @@ use pyo3::prelude::*;
 #[pymodule]
 fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SparseSim>()?;
-    m.add_class::<phir_bridge::PHIREngine>()?;
+    m.add_class::<phir_json_bridge::PhirJsonEngine>()?;
     m.add_class::<RsStateVec>()?;
     m.add_class::<PyByteMessage>()?;
     m.add_class::<PyByteMessageBuilder>()?;
@@ -60,9 +59,8 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     #[cfg(feature = "hugr-llvm-pipeline")]
     hugr_bindings::register_hugr_module(m)?;
 
-    // Register PMIR functions (only if pmir-pipeline feature is enabled)
-    #[cfg(feature = "pmir-pipeline")]
-    pmir_bindings::register_pmir_module(m)?;
+    // Register PHIR functions
+    phir_bindings::register_phir_module(m)?;
 
     // Register LLVM execution functions
     llvm_bindings::register_llvm_module(m)?;

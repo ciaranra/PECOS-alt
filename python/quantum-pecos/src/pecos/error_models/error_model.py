@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pecos.reps.pypmir.op_types import EMOp, MOp, QOp
+from pecos.reps.pyphir.op_types import EMOp, MOp, QOp
 
 if TYPE_CHECKING:
     from collections.abc import Callable

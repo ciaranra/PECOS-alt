@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from pecos.reps.pypmir.op_types import QOp
+from pecos.reps.pyphir.op_types import QOp
 
 if TYPE_CHECKING:
     from pecos.protocols import MachineProtocol

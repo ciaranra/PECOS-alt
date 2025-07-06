@@ -23,7 +23,7 @@
 //!
 //! * `pecos_core`: Core types, traits, and error handling
 //! * `pecos_engines`: Simulation engines for quantum and classical processing
-//! * `pecos_phir`: PECOS High-level Intermediate Representation
+//! * `pecos_phir_json`: PECOS High-level Intermediate Representation
 //! * `pecos_qasm`: `OpenQASM` language support
 //! * `pecos_llvm_runtime`: LLVM IR execution support
 //! * `pecos_qsim`: Quantum simulation implementations
@@ -46,7 +46,7 @@
 pub use pecos_core::prelude::*;
 pub use pecos_engines::prelude::*;
 pub use pecos_llvm_runtime::prelude::*;
-pub use pecos_phir::prelude::*;
+pub use pecos_phir_json::prelude::*;
 pub use pecos_qasm::prelude::*;
 pub use pecos_qsim::prelude::*;
 
@@ -60,7 +60,7 @@ pub use crate::program::{
 
 // Re-export setup functions from format-specific crates
 pub use crate::setup_llvm_engine;
-pub use pecos_phir::setup_phir_engine;
+pub use pecos_phir_json::setup_phir_json_engine;
 pub use pecos_qasm::setup_qasm_engine;
 
 // Re-export run_sim from pecos-engines

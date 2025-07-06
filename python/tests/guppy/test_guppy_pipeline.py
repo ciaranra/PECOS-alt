@@ -15,7 +15,7 @@ print(" Checking backends...")
 backends = get_guppy_backends()
 print(f" Guppy installed: {backends['guppy_available']}")
 print(f" Rust backend: {backends['rust_backend']}")
-print(f" External tools: {backends['external_tools']}")
+# External tools are no longer tracked - only Rust backend is used
 
 if backends["rust_backend"]:
     print("\n Infrastructure ready! Rust backend with HUGR support is available.")

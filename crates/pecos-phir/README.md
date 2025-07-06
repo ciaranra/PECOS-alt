@@ -1,219 +1,274 @@
-# PECOS High-level Intermediate Representation (PHIR)
+# PECOS PHIR - MLIR-Inspired Quantum Compiler IR
 
-This crate provides parsing and execution capabilities for the PECOS High-level Intermediate Representation (PHIR), a
-JSON-based format for representing quantum programs in the PECOS quantum simulator framework.
+PECOS PHIR (PECOS High-level Intermediate Representation) is an MLIR-inspired compiler infrastructure for quantum programs, providing a unified representation from parsing through execution.
 
 ## Overview
 
-PHIR is designed to:
+PHIR follows MLIR's design philosophy where everything is an Operation. This provides a single, hierarchical representation throughout the compilation pipeline:
 
-- Provide a human-readable representation of quantum circuits
-- Support a mix of quantum and classical operations
-- Allow for deterministic execution of quantum programs
-- Serve as an intermediate layer between high-level languages and lower-level simulators
+```
+Source → PHIR (parsing ops) → PHIR (high-level) → PHIR (low-level) → Execution
+         ↓                     ↓                   ↓
+         parse.unresolved_ref  quantum.h           llvm.call
+         parse.for_loop        control.if          llvm.add
+```
+
+Key features:
+- **Unified representation**: No separate AST - parse directly to PHIR
+- **Progressive lowering**: Gradually lower from high-level to machine-level operations
+- **MLIR compatibility**: Can generate MLIR text and integrate with MLIR toolchain
+- **Multiple backends**: Interpreter, Rust codegen, or LLVM compilation
+- **Extensible**: Add new operations and types through the dialect system
+
+## Design Principles
+
+PHIR follows key design principles inspired by PECOS's SLR (Simple Logical Representation):
+
+### 1. Simple Primitives
+Keep the fundamental building blocks simple and well-defined. Complex behavior emerges from composition, not from complex primitives.
+
+```rust
+// Simple operations with clear semantics
+Operation::Quantum(QuantumOp::H)        // Hadamard gate
+Operation::Quantum(QuantumOp::Measure)  // Measurement
+Operation::Classical(ClassicalOp::Add)  // Addition
+```
+
+### 2. Natural Composition
+Make it easy to combine simple operations into more complex protocols. The structure should mirror how quantum algorithms are conceptually built.
+
+```rust
+// Operations compose into blocks
+let syndrome_extraction = Block::new()
+    .add(measure_x_stabilizers)
+    .add(measure_z_stabilizers)
+    .add(decode_syndrome);
+
+// Blocks compose into regions
+let qec_cycle = Region::new()
+    .add_block(syndrome_extraction)
+    .add_block(apply_corrections);
+
+// Regions compose into larger protocols
+let fault_tolerant_gate = Operation::with_regions(vec![
+    prepare_logical_state,
+    qec_cycle,
+    apply_logical_gate,
+    qec_cycle,
+]);
+```
+
+### 3. Mechanism, Not Policy
+PHIR provides the mechanisms for representing quantum programs. Users define the policies (specific QEC schemes, optimization strategies) through attributes and passes.
+
+```rust
+// PHIR provides the mechanism (operations, regions, attributes)
+region.attributes["protocol.type"] = "surface_code_cycle";
+
+// Users/passes define the policy (how to optimize surface codes)
+if region.get_attr("protocol.type") == "surface_code_cycle" {
+    apply_surface_code_optimizations(&mut region);
+}
+```
+
+### 4. Progressive Enhancement
+Start with simple programs and progressively add complexity only as needed. Attributes and metadata can be added incrementally.
+
+```rust
+// Start simple
+let h_gate = Operation::Quantum(QuantumOp::H);
+
+// Add metadata as understanding grows
+h_gate.attributes["noise.model"] = "depolarizing";
+h_gate.attributes["pulse.calibration"] = "optimal_h_pulse_v2";
+
+// Complex protocols built from enhanced simple operations
+let logical_h = region.with_attr("qec.logical_gate", "H");
+```
+
+These principles ensure PHIR remains flexible enough for research while providing structure for production use.
+
+## Architecture
+
+### Core Structure
+
+PHIR follows MLIR's hierarchical structure:
+
+```
+Operation → Region(s) → Block(s) → Operation(s) → ...
+```
+
+- **Operations**: Everything is an operation (modules, functions, quantum gates, control flow)
+- **Regions**: Contain blocks with specific execution semantics (SSACFG or Graph)
+- **Blocks**: Sequences of operations with optional terminator
+- **SSA Values**: Single Static Assignment for all values
+
+### Key Components
+
+1. **Core IR** (`pmir.rs`)
+   - Defines Region, Block, and Instruction structures
+   - Implements SSA value management
+
+2. **Operations** (`ops.rs`)
+   - Builtin: Module, Function, Return
+   - Quantum: Gates, measurements, state prep
+   - Classical: Arithmetic, logic, comparisons
+   - Control flow: Branches, loops, calls
+   - Parsing: Unresolved refs, type inference
+
+3. **Type System** (`types.rs`)
+   - Quantum types: Qubit, quantum registers
+   - Classical types: Int, Float, Bool, Arrays
+   - Function types with variadic support
+
+4. **Parsing Operations** (`parsing_ops.rs`)
+   - UnresolvedCall/Ref for forward references
+   - ForLoop/IfElse for high-level control flow
+   - InferType for type inference
+   - ImplicitCast for type coercion
+
+5. **Analysis** (`analysis.rs`)
+   - Dominance analysis
+   - Use-def chains
+   - Liveness analysis
+   - Dead code detection
 
 ## Usage
 
-### Basic Example
+### Direct PMIR Construction
 
 ```rust
-use pecos_phir::PHIREngine;
-use pecos_engines::core::shot_results::OutputFormat;
-use std::path::Path;
+use pecos_pmir::{Module, Function, Instruction, Operation};
+use pecos_pmir::ops::{QuantumOp, SSAValue};
+use pecos_pmir::types::{Type, FunctionType};
 
-// Load a PHIR program from a file (v0.1 implementation)
-let engine = PHIREngine::new(Path::new("examples/bell.json"))?;
+// Create a module
+let mut module = Module::new("quantum_program");
 
-// Process the program
-let results = engine.process(())?;
+// Create a function
+let mut func = Function::new("bell_pair", FunctionType {
+    inputs: vec![],
+    outputs: vec![Type::Bit, Type::Bit],
+    variadic: false,
+});
 
-// Format the results
-let formatted_results = engine.get_formatted_results(OutputFormat::PrettyJson)?;
-println!("{}", formatted_results);
+// Add quantum operations
+let q0 = SSAValue::new(1);
+let hadamard = Instruction::new(
+    Operation::Quantum(QuantumOp::H),
+    vec![],
+    vec![q0],
+    vec![Type::Qubit],
+);
+
+// Add to function body
+func.entry_region_mut()
+    .unwrap()
+    .entry_block_mut()
+    .unwrap()
+    .add_instruction(hadamard);
+
+module.add_function(func);
 ```
 
-### Using with Automatic Version Detection
+### Parsing to PMIR
 
 ```rust
-use pecos_phir::setup_phir_engine;
-use pecos_engines::{MonteCarloEngine, engines::noise::DepolarizingNoiseModel};
-use std::path::Path;
+use pecos_pmir::{Pipeline, PMIRConfig, InputFormat};
 
-// Create a classical engine from a PHIR program file
-// The version will be automatically detected from the file
-let classical_engine = setup_phir_engine(Path::new("examples/bell.json"))?;
+let config = PMIRConfig {
+    debug: true,
+    optimization_level: 2,
+    execution_strategy: None,
+    target_triple: None,
+};
 
-// Run the program with a noise model
-let noise_model = Box::new(DepolarizingNoiseModel::new_uniform(0.01));
-let results = MonteCarloEngine::run_with_noise_model(
-    classical_engine,
-    noise_model,
-    100, // shots
-    2,   // workers
-    None // seed
+let pipeline = Pipeline::new(config);
+
+// Parse directly to PMIR (no AST!)
+let result = pipeline.compile_and_execute::<i32>(
+    source_code, 
+    InputFormat::HUGR
 )?;
-
-println!("{}", results);
 ```
 
-### Explicit Version Selection
+### Progressive Lowering
 
 ```rust
-// For specific version implementations
-use pecos_phir::setup_phir_v0_1_engine;
-use std::path::Path;
+// Start with high-level parsing operations
+let unresolved_call = Operation::Parsing(ParsingOp::UnresolvedCall(...));
 
-// Explicitly use v0.1 implementation
-let engine = setup_phir_v0_1_engine(Path::new("examples/bell.json"))?;
+// Lower to resolved operations
+let resolved_call = Operation::ControlFlow(ControlFlowOp::Call(...));
+
+// Further lower to LLVM operations
+let llvm_call = Operation::Custom(CustomOp {
+    dialect: "llvm".to_string(),
+    name: "call".to_string(),
+    ...
+});
 ```
 
-## PHIR File Format
+## Key Design Decisions
 
-PHIR files are JSON documents with the following structure:
+### Why No Separate AST?
 
-```json
-{
-  "format": "PHIR/JSON",
-  "version": "0.1.0",
-  "metadata": {
-    "description": "Example PHIR program"
-  },
-  "ops": [
-    {
-      "data": "qvar_define",
-      "data_type": "qubits",
-      "variable": "q",
-      "size": 2
-    },
-    {
-      "data": "cvar_define",
-      "data_type": "i64",
-      "variable": "m",
-      "size": 2
-    },
-    {"qop": "H", "args": [["q", 0]]},
-    {"qop": "CX", "args": [["q", 0], ["q", 1]]},
-    {"qop": "Measure", "args": [["q", 0]], "returns": [["m", 0]]},
-    {"qop": "Measure", "args": [["q", 1]], "returns": [["m", 1]]},
-    {"cop": "Result", "args": ["m"], "returns": ["c"]}
-  ]
-}
-```
+PMIR follows MLIR's approach of using a single IR throughout compilation:
 
-See the [specification](specification/v0.1/spec.md) for more details.
+1. **Simplicity**: One representation to maintain, debug, and optimize
+2. **Power**: MLIR's hierarchical structure can represent anything an AST can
+3. **Efficiency**: No conversion overhead between representations
+4. **Flexibility**: Mix high-level and low-level operations in the same module
 
-## Validation and Execution
+### Parsing Strategy
 
-This crate provides:
+Instead of parsing to an AST, we parse directly to PMIR using special parsing operations:
 
-1. **Validation**: Rust-based parsing and validation of PHIR programs against the specification
-2. **Execution**: Full integration with PECOS for running PHIR programs on quantum simulators
-3. **Error Handling**: Detailed error messages for both validation and runtime errors
+1. **Multi-pass parsing**: Collect declarations → parse with placeholders → resolve → lower
+2. **SSA construction**: Build SSA form incrementally with phi nodes at merge points
+3. **Type inference**: Use type variables and constraints, resolve in a separate pass
+4. **Symbol resolution**: Hierarchical symbol tables that mirror region structure
 
-For alternative validation, the [Python Pydantic PHIR validator](https://github.com/CQCL/phir) is also available.
+### Boxing and Protocols
 
-### Testing with Inline JSON
-
-For testing PHIR programs, you can use the `run_phir_simulation_from_json` helper function to run a simulation directly from a JSON string:
+PMIR embraces an abstract, extensible approach to quantum error correction and emerging quantum computing paradigms through "boxing" - using MLIR's attribute system to attach semantic metadata:
 
 ```rust
-use pecos_core::errors::PecosError;
-use pecos_engines::PassThroughNoiseModel;
+// Tag a region as containing a QFT algorithm
+region.attributes.insert("quantum.algorithm", "QFT");
+region.attributes.insert("quantum.parallelizable", true);
 
-// Import helpers from common module
-use crate::common::phir_test_utils::run_phir_simulation_from_json;
+// QEC boxing - abstract representation allows multiple QEC schemes
+region.attributes.insert("qec.syndrome_extraction", true);
+region.attributes.insert("qec.code_type", "surface_code");
+region.attributes.insert("qec.distance", 5);
 
-#[test]
-fn test_bell_state_with_inline_json() -> Result<(), PecosError> {
-    // Define the Bell state PHIR program directly in the test
-    let phir_json = r#"{
-      "format": "PHIR/JSON",
-      "version": "0.1.0",
-      "metadata": {"description": "Bell state preparation"},
-      "ops": [
-        {"data": "qvar_define", "data_type": "qubits", "variable": "q", "size": 2},
-        {"data": "cvar_define", "data_type": "i32", "variable": "m", "size": 2},
-        {"qop": "H", "args": [["q", 0]]},
-        {"qop": "CX", "args": [["q", 0], ["q", 1]]},
-        {"qop": "Measure", "args": [["q", 0]], "returns": [["m", 0]]},
-        {"qop": "Measure", "args": [["q", 1]], "returns": [["m", 1]]},
-        {"cop": "Result", "args": ["m"], "returns": ["output"]}
-      ]
-    }"#;
-
-    // Run with a single shot and no noise using the full simulation pipeline
-    let results = run_phir_simulation_from_json(
-        phir_json,
-        1,  // shots
-        1,  // workers
-        None,  // No specific seed
-        None::<PassThroughNoiseModel>,  // No noise model
-    )?;
-
-    // Process the results...
-    Ok(())
-}
+// Protocol interfaces - passes can interpret based on capabilities
+operation.attributes.insert("protocol.interface", "stabilizer_measurement");
+operation.attributes.insert("protocol.fault_tolerant", true);
 ```
 
-This approach makes tests more readable and maintainable by keeping the test data and verification code together in one place.
+This approach provides several key benefits:
 
-> **Note**: Work is currently in progress to extend the PHIREngine to support the full PHIR specification. Some
-> advanced features may not be fully implemented yet. The specification itself is also evolving - the "Result"
-> command for exporting measurement results is being added as part of a v0.1.1 specification update.
+1. **Future-proof**: New QEC schemes and quantum algorithms can be added without changing core IR
+2. **Multiple paradigms**: Surface codes, color codes, LDPC codes can coexist
+3. **Progressive optimization**: Generic passes can ignore QEC details, specialized passes can optimize
+4. **Research friendly**: Easy to experiment with new protocols and techniques
+5. **Standard compliant**: Uses MLIR's standard attribute mechanism
 
-## Supported Operations
+## Execution Strategies
 
-### Quantum Operations
+PMIR supports multiple execution backends:
 
-- Single-qubit gates: `H`, `X`, `Y`, `Z`
-- Rotations: `RZ`, `R1XY`
-- Two-qubit gates: `CX` (CNOT), `SZZ` (ZZ interaction)
-- Measurement: `Measure`
+1. **Interpreter**: Direct execution for debugging and small programs
+2. **Rust Codegen**: Generate optimized Rust code
+3. **MLIR/LLVM**: Lower to MLIR text → LLVM IR → native code
+4. **Adaptive**: Automatically choose based on program characteristics
 
-### Classical Operations
+## Future Work
 
-- Variable operations: `=` (assignment), arithmetic (+, -, *, /, etc.), comparisons (==, !=, <, >, etc.)
-- Control flow: Conditional execution with `if` blocks
-- Foreign function calls: `ffcall` for calling WebAssembly functions
-- Export: `Result` for exporting measurement results
-
-### Machine Operations
-
-- `Idle`: Specify qubits to idle for a specific duration
-- `Delay`: Insert a specific delay for qubits
-- `Transport`: Move qubits from one location to another
-- `Timing`: Synchronize operations in time
-- `Reset`: Reset qubits to |0⟩ state
-- `Skip`: No-op placeholder
-
-See [Machine Operations Documentation](src/v0_1/README.md) for more details.
-
-## Versioning
-
-This crate implements a versioning strategy to handle multiple versions of the PHIR specification. See
-[VERSIONING.md](VERSIONING.md) for details on how versions are managed.
-
-### Available Versions
-
-- **v0.1**: The initial version, supporting basic quantum operations, variable definitions, and classical exports.
-  - Specification: [specification/v0.1/spec.md](specification/v0.1/spec.md)
-  - Feature flag: `v0_1` (enabled by default)
-
-### Feature Flags
-
-You can control which PHIR versions are included in your build using Cargo feature flags:
-
-```toml
-# Default: only include v0.1
-pecos-phir = { version = "0.1" }
-
-# Explicitly select a specific version
-pecos-phir = { version = "0.1", default-features = false, features = ["v0_1"] }
-
-# Include all available versions
-pecos-phir = { version = "0.1", features = ["all-versions"] }
-```
-
-## License
-
-This crate is licensed under the Apache License, Version 2.0.
+- **Parser implementations** for HUGR, PHIR, OpenQASM, etc.
+- **Optimization passes**: Quantum-specific and classical optimizations
+- **Direct simulator integration**: Connect to PECOS quantum simulators
+- **Advanced type system**: Linear types for quantum values
+- **Dialect extensions**: QEC, pulse-level control, chemistry

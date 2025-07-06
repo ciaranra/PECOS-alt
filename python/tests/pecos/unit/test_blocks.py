@@ -13,13 +13,13 @@
 from typing import Any
 
 from pecos.classical_interpreters.phir_classical_interpreter import (
-    PHIRClassicalInterpreter,
+    PhirClassicalInterpreter,
 )
 
 
 def get_seq(program: dict[str, Any]) -> list[list[tuple[Any, ...]]]:
     """Get the sequences of operations produced by using the PHIR interpreter."""
-    interp = PHIRClassicalInterpreter()
+    interp = PhirClassicalInterpreter()
     interp.init(program)
 
     ops_seq = []

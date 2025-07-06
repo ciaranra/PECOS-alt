@@ -14,7 +14,7 @@
 import numpy as np
 import pytest
 from pecos.classical_interpreters.phir_classical_interpreter import (
-    PHIRClassicalInterpreter,
+    PhirClassicalInterpreter,
 )
 
 # Note: This test assumes the get_bit method has been updated to include bounds checking.
@@ -22,9 +22,9 @@ from pecos.classical_interpreters.phir_classical_interpreter import (
 
 
 @pytest.fixture
-def interpreter() -> PHIRClassicalInterpreter:
-    """Create and initialize a PHIRClassicalInterpreter with essential test data."""
-    interpreter = PHIRClassicalInterpreter()
+def interpreter() -> PhirClassicalInterpreter:
+    """Create and initialize a PhirClassicalInterpreter with essential test data."""
+    interpreter = PhirClassicalInterpreter()
 
     # Set up test variables
     interpreter.csym2id = {
@@ -46,7 +46,7 @@ def interpreter() -> PHIRClassicalInterpreter:
     return interpreter
 
 
-def test_get_bit_basic_functionality(interpreter: PHIRClassicalInterpreter) -> None:
+def test_get_bit_basic_functionality(interpreter: PhirClassicalInterpreter) -> None:
     """Test basic bit retrieval functionality."""
     # Test alternating 0s and 1s in the 8-bit variable
     assert interpreter.get_bit("u8_var", 0) == 0
@@ -54,7 +54,7 @@ def test_get_bit_basic_functionality(interpreter: PHIRClassicalInterpreter) -> N
     assert interpreter.get_bit("u8_var", 7) == 1
 
 
-def test_get_bit_highest_bit(interpreter: PHIRClassicalInterpreter) -> None:
+def test_get_bit_highest_bit(interpreter: PhirClassicalInterpreter) -> None:
     """Test accessing the highest bit of a 64-bit value, which is most likely to cause issues."""
     # This is the critical test for the potential overflow issue
     assert interpreter.get_bit("u64_var", 63) == 1
@@ -64,7 +64,7 @@ def test_get_bit_highest_bit(interpreter: PHIRClassicalInterpreter) -> None:
     assert interpreter.get_bit("u64_var", 62) == 0
 
 
-def test_get_bit_out_of_bounds(interpreter: PHIRClassicalInterpreter) -> None:
+def test_get_bit_out_of_bounds(interpreter: PhirClassicalInterpreter) -> None:
     """Test that attempting to access bits beyond the data type width raises an error."""
     # Test with specific error message patterns matching the implementation
     with pytest.raises(

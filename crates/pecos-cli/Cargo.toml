@@ -24,10 +24,8 @@ log.workspace = true
 rayon.workspace = true
 
 [features]
-default = ["pmir-pipeline"]
-pmir-pipeline = []
+default = []
 hugr-llvm-pipeline = []
-all-pipelines = ["pmir-pipeline", "hugr-llvm-pipeline"]
 
 [dev-dependencies]
 assert_cmd.workspace = true

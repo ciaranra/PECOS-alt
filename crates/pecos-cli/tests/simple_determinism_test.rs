@@ -102,7 +102,7 @@ fn get_values(json_output: &str) -> Vec<String> {
 #[test]
 fn test_circuit_determinism() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let phir_path = manifest_dir.join("../../examples/phir/simple_test.json");
+    let phir_path = manifest_dir.join("../../examples/phir/simple_test.phir.json");
 
     println!("DETERMINISM TEST: Verifying consistent results with same seed");
     println!("----------------------------------------------------------");
@@ -163,7 +163,7 @@ fn test_circuit_determinism() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_cross_implementation_consistency() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let phir_path = manifest_dir.join("../../examples/phir/simple_test.json");
+    let phir_path = manifest_dir.join("../../examples/phir/simple_test.phir.json");
     let qasm_path = manifest_dir.join("../../examples/qasm/simple_test.qasm");
 
     println!("CROSS-IMPLEMENTATION TEST: Checking PHIR and QASM produce consistent results");
@@ -195,7 +195,7 @@ fn test_cross_implementation_consistency() -> Result<(), Box<dyn std::error::Err
 #[test]
 fn test_noise_impact_on_determinism() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let phir_path = manifest_dir.join("../../examples/phir/simple_test.json");
+    let phir_path = manifest_dir.join("../../examples/phir/simple_test.phir.json");
 
     println!("NOISE IMPACT TEST: Analyzing how noise affects deterministic behavior");
     println!("----------------------------------------------------------------");
@@ -250,7 +250,7 @@ fn test_noise_impact_on_determinism() -> Result<(), Box<dyn std::error::Error>> 
 #[test]
 fn test_worker_count_consistency() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let phir_path = manifest_dir.join("../../examples/phir/simple_test.json");
+    let phir_path = manifest_dir.join("../../examples/phir/simple_test.phir.json");
 
     println!("WORKER COUNT TEST: Verifying results are consistent with different worker counts");
     println!("----------------------------------------------------------------------");

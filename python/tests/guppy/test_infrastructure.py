@@ -31,12 +31,11 @@ def test_backend_detection() -> None:
     assert isinstance(backends, dict)
     assert "guppy_available" in backends
     assert "rust_backend" in backends
-    assert "external_tools" in backends
+    # External tools are no longer tracked - only Rust backend is used
 
     # These should be boolean values
     assert isinstance(backends["guppy_available"], bool)
     assert isinstance(backends["rust_backend"], bool)
-    assert isinstance(backends["external_tools"], bool)
 
 
 def test_guppy_frontend_creation() -> None:

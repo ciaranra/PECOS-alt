@@ -18,7 +18,7 @@ errors in quantum error correction protocols.
 
 import numpy as np
 
-from pecos.reps.pypmir.op_types import QOp
+from pecos.reps.pyphir.op_types import QOp
 
 
 def noise_meas_bitflip(op: QOp, p: float) -> list[QOp] | None:

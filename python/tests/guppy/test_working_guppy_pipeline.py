@@ -158,7 +158,7 @@ def test_complete_pipeline() -> None:
         try:
             results = run_guppy(simple_quantum, shots=5, verbose=True)
             print(f"[PASS] run_guppy succeeded: {len(results['results'])} results")
-            print(f"  Backend: {results['backend_used']}")
+            print("  Backend: Rust (only backend available)")
             print(f"  Compilation time: {results['compilation_time']:.4f}s")
 
         except RuntimeError as e:

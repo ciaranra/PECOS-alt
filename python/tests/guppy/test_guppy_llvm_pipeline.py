@@ -31,7 +31,8 @@ def test_backend_availability() -> None:
             f"[FAIL] Rust HUGR backend is not available: {backends.get('rust_message', 'Unknown')}",
         )
 
-    print(f"[OK] External tools available: {backends['external_tools']}")
+    # External tools are no longer tracked - only Rust backend is used
+    print("[OK] Using Rust backend for compilation")
     print()
 
 
@@ -115,7 +116,7 @@ def test_bell_state_function() -> None:
             result = run_guppy(bell_state, shots=10, verbose=True)
             print("\n[PASS] Execution completed!")
             print(f"  Function: {result['function_name']}")
-            print(f"  Backend used: {result['backend_used']}")
+            print("  Backend: Rust (only backend available)")
             print(f"  Results (first 10): {result['results'][:10]}")
             print(f"  QIR file: {result['qir_file']}")
 

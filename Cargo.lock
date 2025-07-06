@@ -1640,7 +1640,7 @@ dependencies = [
  "pecos-hugr-llvm",
  "pecos-llvm-runtime",
  "pecos-phir",
- "pecos-pmir",
+ "pecos-phir-json",
  "pecos-qasm",
  "pecos-qsim",
  "serde_json",
@@ -1731,20 +1731,6 @@ dependencies = [
 name = "pecos-phir"
 version = "0.1.1"
 dependencies = [
- "log",
- "parking_lot",
- "pecos-core",
- "pecos-engines",
- "serde",
- "serde_json",
- "tempfile",
- "wasmtime",
-]
-
-[[package]]
-name = "pecos-pmir"
-version = "0.1.1"
-dependencies = [
  "anyhow",
  "env_logger",
  "hugr-core",
@@ -1759,6 +1745,20 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "pecos-phir-json"
+version = "0.1.1"
+dependencies = [
+ "log",
+ "parking_lot",
+ "pecos-core",
+ "pecos-engines",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "wasmtime",
 ]
 
 [[package]]
@@ -1801,7 +1801,7 @@ dependencies = [
  "pecos-engines",
  "pecos-hugr-llvm",
  "pecos-llvm-runtime",
- "pecos-pmir",
+ "pecos-phir",
  "pecos-qasm",
  "pyo3",
  "pyo3-build-config",

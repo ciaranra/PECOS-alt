@@ -131,7 +131,7 @@ fn test_run_sim_with_qasm_direct() -> Result<(), PecosError> {
 #[test]
 fn test_run_sim_with_phir_direct() -> Result<(), PecosError> {
     // Parse PHIR/JSON definition
-    let engine = pecos_phir::v0_1::engine::PHIREngine::from_json(SIMPLE_TEST_PHIR)?;
+    let engine = pecos_phir_json::v0_1::engine::PhirJsonEngine::from_json(SIMPLE_TEST_PHIR)?;
 
     // Run simulation with 100 shots
     let results = run_sim(
@@ -174,7 +174,7 @@ fn test_run_sim_with_phir_direct() -> Result<(), PecosError> {
 fn test_cross_format_consistency() -> Result<(), PecosError> {
     // Create engines from strings
     let qasm_engine = QASMEngine::from_str(SIMPLE_TEST_QASM)?;
-    let phir_engine = pecos_phir::v0_1::engine::PHIREngine::from_json(SIMPLE_TEST_PHIR)?;
+    let phir_engine = pecos_phir_json::v0_1::engine::PhirJsonEngine::from_json(SIMPLE_TEST_PHIR)?;
 
     // Run simulations with the same seed
     let qasm_results = run_sim(

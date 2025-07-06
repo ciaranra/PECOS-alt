@@ -29,7 +29,7 @@ def test_infrastructure() -> None:
     print("\n Backend status:")
     print(f"   Guppy available: {backends['guppy_available']}")
     print(f"   Rust backend: {backends['rust_backend']}")
-    print(f"   External tools: {backends['external_tools']}")
+    # External tools are no longer tracked - only Rust backend is used
 
     if backends["rust_backend"]:
         print(" Rust backend with HUGR support is available!")

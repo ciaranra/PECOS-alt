@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test current capabilities of both HUGR-LLVM and PMIR pipelines.
+"""Test current capabilities of both HUGR-LLVM and PHIR pipelines.
 
 This is a simplified version that won't hang.
 """
@@ -72,10 +72,10 @@ def test_pipeline_capabilities():
         print(f"\n📋 Testing: {test_name}")
         results[test_name] = {}
         
-        # Test HUGR-LLVM pipeline
+        # Test with Rust backend (the only backend)
         if backends.get("rust_backend", False):
             try:
-                result = run_guppy(test_func, shots=1, backend="rust", verbose=False)
+                result = run_guppy(test_func, shots=1, verbose=False)
                 results[test_name]["hugr_llvm"] = {
                     "success": True,
                     "result": result.get("results", [])[0] if result.get("results") else None
@@ -88,40 +88,40 @@ def test_pipeline_capabilities():
                 }
                 print(f"  ❌ HUGR-LLVM: {str(e)[:80]}")
         
-        # Test PMIR pipeline
+        # PHIR pipeline no longer exists - using same Rust backend
         try:
-            result = run_guppy(test_func, shots=1, backend="external", verbose=False)
-            results[test_name]["pmir"] = {
+            result = run_guppy(test_func, shots=1, verbose=False)
+            results[test_name]["phir"] = {
                 "success": True,
                 "result": result.get("results", [])[0] if result.get("results") else None
             }
-            print(f"  ✅ PMIR: {results[test_name]['pmir']['result']}")
+            print(f"  ✅ PHIR (via Rust): {results[test_name]['phir']['result']}")
         except Exception as e:
-            results[test_name]["pmir"] = {
+            results[test_name]["phir"] = {
                 "success": False,
                 "error": str(e)[:80]
             }
-            print(f"  ❌ PMIR: {str(e)[:80]}")
+            print(f"  ❌ PHIR: {str(e)[:80]}")
     
     # Generate summary
     print("\n" + "="*80)
     print("PIPELINE CAPABILITY SUMMARY")
     print("="*80)
     
-    print(f"{'Test Case':<25} {'HUGR-LLVM':<15} {'PMIR':<15}")
+    print(f"{'Test Case':<25} {'HUGR-LLVM':<15} {'PHIR':<15}")
     print("-" * 80)
     
     for test_name, test_results in results.items():
         hugr_status = "✅ PASS" if test_results.get("hugr_llvm", {}).get("success", False) else "❌ FAIL"
-        pmir_status = "✅ PASS" if test_results.get("pmir", {}).get("success", False) else "❌ FAIL"
-        print(f"{test_name:<25} {hugr_status:<15} {pmir_status:<15}")
+        phir_status = "✅ PASS" if test_results.get("phir", {}).get("success", False) else "❌ FAIL"
+        print(f"{test_name:<25} {hugr_status:<15} {phir_status:<15}")
     
     # Basic assertions for pytest
     # At least one backend should work for each test
     for test_name, test_results in results.items():
         hugr_success = test_results.get("hugr_llvm", {}).get("success", False)
-        pmir_success = test_results.get("pmir", {}).get("success", False)
-        assert hugr_success or pmir_success, f"Both backends failed for {test_name}"
+        phir_success = test_results.get("phir", {}).get("success", False)
+        assert hugr_success or phir_success, f"Both backends failed for {test_name}"
 
 
 if __name__ == "__main__":

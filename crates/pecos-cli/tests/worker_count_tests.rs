@@ -104,7 +104,7 @@ fn get_values(json_output: &str) -> Vec<String> {
 #[test]
 fn test_worker_count_self_determinism() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let bell_json_path = manifest_dir.join("../../examples/phir/bell.json");
+    let bell_json_path = manifest_dir.join("../../examples/phir/bell.phir.json");
 
     println!("WORKER COUNT SELF-DETERMINISM: Testing that each worker count is self-consistent");
     println!("----------------------------------------------------------------------------");
@@ -160,7 +160,7 @@ fn test_worker_count_self_determinism() -> Result<(), Box<dyn std::error::Error>
 #[allow(clippy::similar_names)]
 fn test_small_shots_with_multiple_workers() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let bell_json_path = manifest_dir.join("../../examples/phir/bell.json");
+    let bell_json_path = manifest_dir.join("../../examples/phir/bell.phir.json");
 
     println!("SMALL SHOT COUNT TEST: Verifying behavior with 10 shots and various worker counts");
     println!("------------------------------------------------------------------------");

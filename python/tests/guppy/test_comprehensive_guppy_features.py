@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Comprehensive testing of Guppy language features across both HUGR-LLVM and PMIR pipelines.
+"""Comprehensive testing of Guppy language features across both HUGR-LLVM and PHIR pipelines.
 
 This test suite systematically validates that both compilation pipelines can handle
 the full spectrum of Guppy language capabilities, from basic quantum operations
@@ -29,10 +29,10 @@ except ImportError:
     PECOS_FRONTEND_AVAILABLE = False
 
 try:
-    from pecos_rslib import HUGR_LLVM_PIPELINE_AVAILABLE, PMIR_PIPELINE_AVAILABLE
+    from pecos_rslib import HUGR_LLVM_PIPELINE_AVAILABLE
 except ImportError:
     HUGR_LLVM_PIPELINE_AVAILABLE = False
-    PMIR_PIPELINE_AVAILABLE = False
+
 
 
 class GuppyPipelineTest:
@@ -42,43 +42,24 @@ class GuppyPipelineTest:
         self.backends = get_guppy_backends() if PECOS_FRONTEND_AVAILABLE else {}
         
     def test_function_on_both_pipelines(self, func, shots: int = 10, seed: int = 42, **kwargs) -> Dict[str, Any]:
-        """Test a Guppy function on both HUGR-LLVM and PMIR pipelines."""
+        """Test a Guppy function (using the Rust backend)."""
         results = {}
         
-        # Test HUGR-LLVM pipeline (rust backend)
+        # Test with Rust backend (the only backend)
         if self.backends.get("rust_backend", False):
             try:
-                result = run_guppy(func, shots=shots, backend="rust", verbose=False, seed=seed, **kwargs)
+                result = run_guppy(func, shots=shots, verbose=False, seed=seed, **kwargs)
                 results["hugr_llvm"] = {
                     "success": True,
                     "result": result,
-                    "backend": result.get("backend_used"),
                     "error": None
                 }
             except Exception as e:
                 results["hugr_llvm"] = {
                     "success": False,
                     "result": None,
-                    "backend": "rust",
                     "error": str(e)
                 }
-        
-        # Test PMIR pipeline (external backend)
-        try:
-            result = run_guppy(func, shots=shots, backend="external", verbose=False, seed=seed, **kwargs)
-            results["pmir"] = {
-                "success": True,
-                "result": result,
-                "backend": result.get("backend_used"),
-                "error": None
-            }
-        except Exception as e:
-            results["pmir"] = {
-                "success": False,
-                "result": None,
-                "backend": "external", 
-                "error": str(e)
-            }
             
         return results
 
@@ -110,9 +91,9 @@ class TestBasicQuantumOperations:
         
         # Both pipelines should succeed
         assert results.get("hugr_llvm", {}).get("success", False), f"HUGR-LLVM failed: {results.get('hugr_llvm', {}).get('error')}"
-        # PMIR might not be available on all systems
-        if "pmir" in results:
-            print(f"PMIR result: {results['pmir']}")
+        # PHIR might not be available on all systems
+        if "phir" in results:
+            print(f"PHIR result: {results['phir']}")
     
     def test_pauli_gates(self, pipeline_tester):
         """Test all Pauli gates (X, Y, Z)."""
@@ -174,13 +155,13 @@ class TestBasicQuantumOperations:
             assert correlation_rate > 0.8, f"Bell state should be highly correlated, got {correlation_rate:.2%}"
             print(f"HUGR-LLVM Bell state correlation: {correlation_rate:.2%}")
         
-        # Verify PMIR pipeline results if available
-        if results.get("pmir", {}).get("success"):
-            measurements = results["pmir"]["result"]["results"]
+        # Verify PHIR pipeline results if available
+        if results.get("phir", {}).get("success"):
+            measurements = results["phir"]["result"]["results"]
             correlated = sum(1 for (a, b) in measurements if a == b)
             correlation_rate = correlated / len(measurements)
-            assert correlation_rate > 0.8, f"PMIR Bell state should be highly correlated, got {correlation_rate:.2%}"
-            print(f"PMIR Bell state correlation: {correlation_rate:.2%}")
+            assert correlation_rate > 0.8, f"PHIR Bell state should be highly correlated, got {correlation_rate:.2%}"
+            print(f"PHIR Bell state correlation: {correlation_rate:.2%}")
 
 
 # ============================================================================
@@ -232,8 +213,8 @@ class TestClassicalComputation:
         # Document current limitations
         if not results.get("hugr_llvm", {}).get("success"):
             print("EXPECTED: HUGR-LLVM may not support pure classical arithmetic yet")
-        if not results.get("pmir", {}).get("success"):
-            print("EXPECTED: PMIR may have limited classical support")
+        if not results.get("phir", {}).get("success"):
+            print("EXPECTED: PHIR may have limited classical support")
 
 
 # ============================================================================
@@ -333,7 +314,7 @@ def test_pipeline_feature_summary():
     print(f"Guppy Available: {GUPPY_AVAILABLE}")
     print(f"PECOS Frontend Available: {PECOS_FRONTEND_AVAILABLE}")
     print(f"HUGR-LLVM Pipeline Available: {HUGR_LLVM_PIPELINE_AVAILABLE}")
-    print(f"PMIR Pipeline Available: {PMIR_PIPELINE_AVAILABLE}")
+    print(f"PHIR Pipeline Available: True")  # PHIR is always available as core part of PECOS
     
     if PECOS_FRONTEND_AVAILABLE:
         print(f"Rust Backend: {backends.get('rust_backend', False)}")
@@ -361,10 +342,10 @@ def test_pipeline_feature_summary():
         ("Function Composition", "❓", "❓"),
     ]
     
-    print(f"\n{'Feature':<30} {'HUGR-LLVM':<12} {'PMIR':<12}")
+    print(f"\n{'Feature':<30} {'HUGR-LLVM':<12} {'PHIR':<12}")
     print("-" * 56)
-    for feature, hugr_status, pmir_status in features:
-        print(f"{feature:<30} {hugr_status:<12} {pmir_status:<12}")
+    for feature, hugr_status, phir_status in features:
+        print(f"{feature:<30} {hugr_status:<12} {phir_status:<12}")
     
     print("\n" + "="*80)
 

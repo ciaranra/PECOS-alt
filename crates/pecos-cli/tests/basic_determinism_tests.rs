@@ -157,14 +157,14 @@ fn test_determinism_for_file(
 
 /// Test basic determinism with PHIR (JSON) files
 #[test]
-fn test_basic_determinism_phir() -> Result<(), Box<dyn std::error::Error>> {
+fn test_basic_determinism_phir_json() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 
-    println!("BASIC DETERMINISM TEST - PHIR FILES");
+    println!("BASIC DETERMINISM TEST - PHIR-JSON FILES");
     println!("-----------------------------------");
 
     // Test bell.json with depolarizing noise model
-    let bell_json_path = manifest_dir.join("../../examples/phir/bell.json");
+    let bell_json_path = manifest_dir.join("../../examples/phir/bell.phir.json");
     println!("\nTesting with depolarizing noise (p=0.1):");
     test_determinism_for_file(&bell_json_path, 100, 1, "depolarizing", "0.1")?;
 
@@ -176,12 +176,12 @@ fn test_basic_determinism_phir() -> Result<(), Box<dyn std::error::Error>> {
     println!("\nTesting with no noise (p=0.0):");
     test_determinism_for_file(&bell_json_path, 100, 1, "depolarizing", "0.0")?;
 
-    // Test qprog.json
-    let qprog_json_path = manifest_dir.join("../../examples/phir/qprog.json");
-    println!("\nTesting qprog.json:");
+    // Test qprog.phir.json
+    let qprog_json_path = manifest_dir.join("../../examples/phir/qprog.phir.json");
+    println!("\nTesting qprog.phir.json:");
     test_determinism_for_file(&qprog_json_path, 100, 1, "depolarizing", "0.1")?;
 
-    println!("\nPHIR files exhibit deterministic behavior with the same seed");
+    println!("\nPHIR-JSON files exhibit deterministic behavior with the same seed");
 
     Ok(())
 }
@@ -258,7 +258,7 @@ fn test_basic_determinism_llvm() {
 #[test]
 fn test_cross_model_consistency() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let bell_json_path = manifest_dir.join("../../examples/phir/bell.json");
+    let bell_json_path = manifest_dir.join("../../examples/phir/bell.phir.json");
 
     println!("CROSS-MODEL CONSISTENCY TEST");
     println!("----------------------------");

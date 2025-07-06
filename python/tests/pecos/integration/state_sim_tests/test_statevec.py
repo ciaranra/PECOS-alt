@@ -407,7 +407,7 @@ def test_all_gate_circ(simulator: str) -> None:
 #     phir_folder = Path(__file__).parent.parent / "phir"
 #
 #     results = HybridEngine(qsim=simulator).run(
-#         program=json.load(Path.open(phir_folder / "bell_qparallel.json")),
+#         program=json.load(Path.open(phir_folder / "bell_qparallel.phir.json")),
 #         shots=n_shots,
 #     )
 #
@@ -453,6 +453,6 @@ def test_all_gate_circ(simulator: str) -> None:
 #     )
 #     sim = HybridEngine(qsim=simulator, error_model=generic_errors)
 #     sim.run(
-#         program=json.load(Path.open(phir_folder / "example1_no_wasm.json")),
+#         program=json.load(Path.open(phir_folder / "example1_no_wasm.phir.json")),
 #         shots=n_shots,
 #     )

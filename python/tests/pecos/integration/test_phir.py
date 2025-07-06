@@ -15,11 +15,11 @@ from pathlib import Path
 
 import pytest
 from pecos.classical_interpreters.phir_classical_interpreter import (
-    PHIRClassicalInterpreter,
+    PhirClassicalInterpreter,
 )
 from pecos.engines.hybrid_engine import HybridEngine
 from pecos.error_models.generic_error_model import GenericErrorModel
-from phir.model import PHIRModel
+from pecos.types import PhirModel
 from pydantic import ValidationError
 
 try:
@@ -41,9 +41,9 @@ this_dir = Path(__file__).parent
 
 add_wat = this_dir / "wat/add.wat"
 math_wat = this_dir / "wat/math.wat"
-example1_phir = json.load(Path.open(this_dir / "phir/example1.json"))
-example1_no_wasm_phir = json.load(Path.open(this_dir / "phir/example1_no_wasm.json"))
-spec_example_phir = json.load(Path.open(this_dir / "phir/spec_example.json"))
+example1_phir = json.load(Path.open(this_dir / "phir/example1.phir.json"))
+example1_no_wasm_phir = json.load(Path.open(this_dir / "phir/example1_no_wasm.phir.json"))
+spec_example_phir = json.load(Path.open(this_dir / "phir/spec_example.phir.json"))
 
 
 # Select which marked tests to run by using the mark flag. See: https://docs.pytest.org/en/7.1.x/example/markers.html
@@ -217,7 +217,7 @@ def test_example1_no_wasm_noisy() -> None:
 def test_record_random_bit() -> None:
     """Applying H and recording both 0 and 1."""
     results = HybridEngine(qsim="stabilizer").run(
-        program=json.load(Path.open(this_dir / "phir" / "recording_random_meas.json")),
+        program=json.load(Path.open(this_dir / "phir" / "recording_random_meas.phir.json")),
         shots=100,
     )
 
@@ -229,7 +229,7 @@ def test_record_random_bit() -> None:
 def test_classical_if_00_11() -> None:
     """Testing using an H + measurement and a conditional X gate to get 00 or 11."""
     results = HybridEngine(qsim="stabilizer").run(
-        program=json.load(Path.open(this_dir / "phir" / "classical_00_11.json")),
+        program=json.load(Path.open(this_dir / "phir" / "classical_00_11.phir.json")),
         shots=100,
     )
 
@@ -239,15 +239,15 @@ def test_classical_if_00_11() -> None:
 
 def test_throw_exception_with_bad_phir() -> None:
     """Making sure the bad PHIR throws an exception."""
-    phir = json.load(Path.open(this_dir / "phir" / "bad_phir.json"))
+    phir = json.load(Path.open(this_dir / "phir" / "bad_phir.phir.json"))
     with pytest.raises(ValidationError):
-        PHIRModel.model_validate(phir)
+        PhirModel.model_validate(phir)
 
 
 def test_qparallel() -> None:
     """Testing the qparallel block of 2 Xs and 2 Ys gives an output of 1111."""
     results = HybridEngine(qsim="stabilizer").run(
-        program=json.load(Path.open(this_dir / "phir" / "qparallel.json")),
+        program=json.load(Path.open(this_dir / "phir" / "qparallel.phir.json")),
         shots=10,
     )
 
@@ -259,7 +259,7 @@ def test_qparallel() -> None:
 def test_bell_qparallel() -> None:
     """Testing a program creating and measuring a Bell state and using qparallel blocks returns expected results."""
     results = HybridEngine(qsim="state-vector").run(
-        program=json.load(Path.open(this_dir / "phir" / "bell_qparallel.json")),
+        program=json.load(Path.open(this_dir / "phir" / "bell_qparallel.phir.json")),
         shots=20,
     )
 
@@ -276,11 +276,11 @@ def test_bell_qparallel_cliff() -> None:
     with Clifford circuits and stabilizer simulator.
     """
     # Create an interpreter with validation disabled for testing Result instruction
-    interp = PHIRClassicalInterpreter()
+    interp = PhirClassicalInterpreter()
     interp.phir_validate = False
 
     results = HybridEngine(qsim="stabilizer", cinterp=interp).run(
-        program=json.load(Path.open(this_dir / "phir" / "bell_qparallel_cliff.json")),
+        program=json.load(Path.open(this_dir / "phir" / "bell_qparallel_cliff.phir.json")),
         shots=20,
     )
 
@@ -296,12 +296,12 @@ def test_bell_qparallel_cliff_barrier() -> None:
     Tests that a program creating and measuring a Bell state using qparallel blocks and barriers returns expected
     results with Clifford circuits and stabilizer simulator.
     """
-    interp = PHIRClassicalInterpreter()
+    interp = PhirClassicalInterpreter()
     interp.phir_validate = False
 
     results = HybridEngine(qsim="stabilizer", cinterp=interp).run(
         program=json.load(
-            Path.open(this_dir / "phir" / "bell_qparallel_cliff_barrier.json"),
+            Path.open(this_dir / "phir" / "bell_qparallel_cliff_barrier.phir.json"),
         ),
         shots=20,
     )
@@ -318,12 +318,12 @@ def test_bell_qparallel_cliff_ifbarrier() -> None:
     Tests that a program creating and measuring a Bell state using qparallel blocks and conditional barriers
     returns expected results with Clifford circuits and stabilizer simulator.
     """
-    interp = PHIRClassicalInterpreter()
+    interp = PhirClassicalInterpreter()
     interp.phir_validate = False
 
     results = HybridEngine(qsim="stabilizer", cinterp=interp).run(
         program=json.load(
-            Path.open(this_dir / "phir" / "bell_qparallel_cliff_ifbarrier.json"),
+            Path.open(this_dir / "phir" / "bell_qparallel_cliff_ifbarrier.phir.json"),
         ),
         shots=20,
     )

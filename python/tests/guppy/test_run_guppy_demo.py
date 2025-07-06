@@ -57,13 +57,12 @@ def test_run_guppy() -> None:
     try:
         result = run_guppy(random_bit, shots=100)
         assert "results" in result
-        assert "backend_used" in result
         assert len(result["results"]) == 100
 
         true_count = sum(result["results"])
         print(f"   [OK] Got {len(result['results'])} results")
         print(f"   True/False ratio: {true_count}/{100 - true_count}")
-        print(f"   Backend used: {result['backend_used']}")
+        print("   Backend: Rust (only backend available)")
     except RuntimeError as e:
         if "Unknown type: bool" in str(e):
             print(f"   [INFO] Expected error: {e}")

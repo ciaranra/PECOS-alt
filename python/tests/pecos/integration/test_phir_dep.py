@@ -14,7 +14,7 @@
 import json
 from pathlib import Path
 
-from phir.model import PHIRModel
+from pecos.types import PhirModel
 
 this_dir = Path(__file__).parent
 
@@ -22,6 +22,6 @@ this_dir = Path(__file__).parent
 def test_spec_example() -> None:
     """Test PHIR specification example for dependency validation."""
     # From https://github.com/CQCL/phir/blob/main/phir_spec_qasm.md#overall-phir-example-with-quantinuums-extended-openqasm-20
-    data = json.load(Path.open(this_dir / "phir/spec_example.json"))
+    data = json.load(Path.open(this_dir / "phir/spec_example.phir.json"))
 
-    PHIRModel.model_validate(data)
+    PhirModel.model_validate(data)

@@ -33,8 +33,8 @@ pub fn setup_cli_engine(
             setup_llvm_engine(program_path, shots)
         }
         ProgramType::PHIR => {
-            debug!("Setting up PHIR engine");
-            setup_phir_engine(program_path)
+            debug!("Setting up PHIR-JSON engine");
+            setup_phir_json_engine(program_path)
         }
         ProgramType::QASM => {
             debug!("Setting up QASM engine");

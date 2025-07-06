@@ -57,7 +57,7 @@ fn get_values(json_output: &str) -> Vec<String> {
 #[test]
 fn test_seed_produces_consistent_results() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let test_file = manifest_dir.join("../../examples/phir/bell.json");
+    let test_file = manifest_dir.join("../../examples/phir/bell.phir.json");
 
     // Run multiple times with seed 42, forcing JSON format
     let seed_42_run1 = Command::cargo_bin("pecos")?

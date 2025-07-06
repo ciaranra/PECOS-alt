@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pecos.reps.pypmir.op_types import QOp
+from pecos.reps.pyphir.op_types import QOp
 from pecos.simulators import StateVecRs
 from pecos.simulators.sparsesim.state import SparseSim
 

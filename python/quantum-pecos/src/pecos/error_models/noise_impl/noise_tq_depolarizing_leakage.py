@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from pecos.reps.pypmir.op_types import QOp
+from pecos.reps.pyphir.op_types import QOp
 
 if TYPE_CHECKING:
     from pecos.protocols import MachineProtocol
@@ -35,7 +35,7 @@ def noise_tq_depolarizing_leakage(
     machine: MachineProtocol,
 ) -> list[QOp] | None:
     """Two-qubit gate depolarizing noise plus leakage."""
-    # TODO: precompute, in PyPMIR, a flattened version of args
+    # TODO: precompute, in PyPHIR, a flattened version of args
     args = set()
     for a in op.args:
         for q in a:
@@ -47,7 +47,7 @@ def noise_tq_depolarizing_leakage(
     if leaked:
         not_leaked = args - leaked
 
-        # TODO: precompute, in PyPMIR, a flattened version of args
+        # TODO: precompute, in PyPHIR, a flattened version of args
         new_args = []
         for a, b in op.args:
             if a not in not_leaked and b not in leaked:

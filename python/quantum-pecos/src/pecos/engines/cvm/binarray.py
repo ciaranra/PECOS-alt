@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from pecos.reps.pypmir import unsigned_data_types
+from pecos.reps.pyphir import unsigned_data_types
 
 if TYPE_CHECKING:
     from typing import Any

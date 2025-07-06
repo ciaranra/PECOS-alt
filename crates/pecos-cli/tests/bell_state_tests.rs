@@ -155,7 +155,7 @@ fn get_values(json_output: &str) -> Vec<String> {
 #[test]
 fn test_perfect_bell_state_distribution() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let bell_json_path = manifest_dir.join("../../examples/phir/bell.json");
+    let bell_json_path = manifest_dir.join("../../examples/phir/bell.phir.json");
 
     println!("PERFECT BELL STATE TEST: Verifying 50/50 distribution of |00⟩ and |11⟩ states");
     println!("---------------------------------------------------------------------------");
@@ -248,7 +248,7 @@ fn test_cross_implementation_validation() -> Result<(), Box<dyn std::error::Erro
     // No lock needed: This test only executes quantum programs without modifying shared state
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let bell_json_path = manifest_dir.join("../../examples/phir/bell.json");
+    let bell_json_path = manifest_dir.join("../../examples/phir/bell.phir.json");
     let bell_qasm_path = manifest_dir.join("../../examples/qasm/bell.qasm");
     let bell_llvm_path = manifest_dir.join("../../examples/llvm/bell.ll");
 
@@ -436,7 +436,7 @@ fn analyze_noisy_bell_state(
 #[test]
 fn test_bell_state_with_noise() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let bell_json_path = manifest_dir.join("../../examples/phir/bell.json");
+    let bell_json_path = manifest_dir.join("../../examples/phir/bell.phir.json");
 
     println!("BELL STATE WITH NOISE: Analyzing how noise affects Bell state outcomes");
     println!("-------------------------------------------------------------------");
@@ -474,7 +474,7 @@ fn test_seed_determinism() -> Result<(), Box<dyn std::error::Error>> {
     // No lock needed: This test only executes quantum programs without modifying shared state
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let bell_json_path = manifest_dir.join("../../examples/phir/bell.json");
+    let bell_json_path = manifest_dir.join("../../examples/phir/bell.phir.json");
     let bell_qasm_path = manifest_dir.join("../../examples/qasm/bell.qasm");
     let bell_llvm_path = manifest_dir.join("../../examples/llvm/bell.ll");
 
@@ -527,7 +527,7 @@ fn test_seed_determinism() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_noise_model_determinism() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let bell_json_path = manifest_dir.join("../../examples/phir/bell.json");
+    let bell_json_path = manifest_dir.join("../../examples/phir/bell.phir.json");
 
     println!("NOISE MODEL DETERMINISM: Verifying noise models are deterministic with same seed");
     println!("------------------------------------------------------------------------");

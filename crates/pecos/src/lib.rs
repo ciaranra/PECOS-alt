@@ -23,7 +23,7 @@
 //! - `pecos_engines`: Simulation engines for quantum and classical processing
 //! - `pecos_qasm`: Support for `OpenQASM` language for quantum circuit description
 //! - `pecos_qsim`: Quantum simulation implementations
-//! - `pecos_phir`: PECOS High-level Intermediate Representation
+//! - `pecos_phir_json`: PECOS High-level Intermediate Representation
 //! - `pecos_llvm_runtime`: Support for Quantum Intermediate Representation
 //!
 //! This meta-crate unifies the API and re-exports the most commonly used types and
@@ -224,46 +224,45 @@ pub mod hugr {
     }
 }
 
-/// PMIR (PECOS MLIR) Integration
+/// PHIR (PECOS High-level Intermediate Representation) Integration
 ///
 /// This module provides thin orchestration functions that combine HUGR compilation
-/// through the PMIR pipeline with LLVM execution. The architecture is:
+/// through the PHIR pipeline with LLVM execution. The architecture is:
 ///
-/// 1. `pecos-pmir` compiles HUGR → PAST → PMIR → LLVM IR (pure compilation, no engine dependencies)
-/// 2. `pecos-llvm-runtime` executes LLVM IR (pure execution, no HUGR/PMIR dependencies)
-/// 3. `pecos` orchestrates: HUGR → PMIR → LLVM IR → Execution
+/// 1. `pecos-phir` compiles HUGR → PHIR → LLVM IR (direct parsing to PHIR, no separate AST)
+/// 2. `pecos-llvm-runtime` executes LLVM IR (pure execution, no HUGR/PHIR dependencies)
+/// 3. `pecos` orchestrates: HUGR → PHIR → LLVM IR → Execution
 ///
-/// PMIR provides an alternative compilation path to HUGR-LLVM that goes through
+/// PHIR provides an alternative compilation path to HUGR-LLVM that goes through
 /// MLIR-based optimizations and transformations.
-#[cfg(feature = "pmir-pipeline")]
-pub mod pmir {
+pub mod phir {
     use pecos_core::errors::PecosError;
     use pecos_engines::ClassicalEngine;
-    pub use pecos_pmir::PmirConfig;
-    use pecos_pmir::{compile_hugr_bytes_via_pmir, compile_hugr_via_pmir as compile_hugr_pmir};
+    pub use pecos_phir::PhirConfig;
+    use pecos_phir::{compile_hugr_bytes_via_phir, compile_hugr_via_phir as compile_hugr_phir};
     use std::path::Path;
 
-    /// Compile and run a HUGR file via PMIR with default settings
+    /// Compile and run a HUGR file via PHIR with default settings
     ///
     /// This is a convenience function that:
-    /// 1. Compiles HUGR to LLVM IR via PMIR using `pecos-pmir`
+    /// 1. Compiles HUGR to LLVM IR via PHIR using `pecos-phir`
     /// 2. Creates an LLVM engine from the IR using `pecos-llvm-runtime`
     /// 3. Returns the configured engine ready for execution
     ///
     /// # Arguments
     /// * `hugr_path` - Path to the HUGR file
     /// * `shots` - Optional number of shots to assign to the engine
-    /// * `config` - Optional PMIR configuration (uses defaults if None)
+    /// * `config` - Optional PHIR configuration (uses defaults if None)
     ///
     /// # Returns
     /// A boxed `ClassicalEngine` ready for execution
     ///
     /// # Errors
-    /// Returns `PecosError` if HUGR compilation via PMIR or engine creation fails
-    pub fn run_pmir_llvm<P: AsRef<Path>>(
+    /// Returns `PecosError` if HUGR compilation via PHIR or engine creation fails
+    pub fn run_phir_llvm<P: AsRef<Path>>(
         hugr_path: P,
         shots: Option<usize>,
-        config: Option<PmirConfig>,
+        config: Option<PhirConfig>,
     ) -> Result<Box<dyn ClassicalEngine>, PecosError> {
         // Read HUGR file (could be binary or JSON format)
         let hugr_bytes = std::fs::read(hugr_path.as_ref()).map_err(|e| {
@@ -276,58 +275,58 @@ pub mod pmir {
         // Use provided config or default
         let config = config.unwrap_or_default();
 
-        // Compile via PMIR (handles both binary and JSON formats)
+        // Compile via PHIR (handles both binary and JSON formats)
         let llvm_ir =
-            compile_hugr_bytes_via_pmir(&hugr_bytes, &config).map_err(convert_pmir_error)?;
+            compile_hugr_bytes_via_phir(&hugr_bytes, &config).map_err(convert_phir_error)?;
 
         // Create LLVM engine from the IR string
         super::hugr::create_llvm_engine_from_ir_string(&llvm_ir, shots)
     }
 
-    /// Compile HUGR JSON string to LLVM IR via PMIR and create an engine
+    /// Compile HUGR JSON string to LLVM IR via PHIR and create an engine
     ///
     /// # Arguments
     /// * `hugr_json` - HUGR data as JSON string
     /// * `shots` - Optional number of shots to assign to the engine
-    /// * `config` - Optional PMIR configuration (uses defaults if None)
+    /// * `config` - Optional PHIR configuration (uses defaults if None)
     ///
     /// # Returns
     /// A boxed `ClassicalEngine` ready for execution
     ///
     /// # Errors
-    /// Returns `PecosError` if HUGR compilation via PMIR or engine creation fails
-    pub fn run_pmir_llvm_from_string(
+    /// Returns `PecosError` if HUGR compilation via PHIR or engine creation fails
+    pub fn run_phir_llvm_from_string(
         hugr_json: &str,
         shots: Option<usize>,
-        config: Option<PmirConfig>,
+        config: Option<PhirConfig>,
     ) -> Result<Box<dyn ClassicalEngine>, PecosError> {
         // Use provided config or default
         let config = config.unwrap_or_default();
 
-        // Step 1: Compile HUGR to LLVM IR via PMIR
-        let llvm_ir = compile_hugr_pmir(hugr_json, &config).map_err(convert_pmir_error)?;
+        // Step 1: Compile HUGR to LLVM IR via PHIR
+        let llvm_ir = compile_hugr_phir(hugr_json, &config).map_err(convert_phir_error)?;
 
         // Step 2: Create LLVM engine from the IR string
         super::hugr::create_llvm_engine_from_ir_string(&llvm_ir, shots)
     }
 
-    /// Compile HUGR file to LLVM IR via PMIR (without creating an engine)
+    /// Compile HUGR file to LLVM IR via PHIR (without creating an engine)
     ///
     /// This function only performs compilation and returns the LLVM IR string.
     /// Useful when you need the compiled output but don't want to create an engine.
     ///
     /// # Arguments
     /// * `hugr_path` - Path to the HUGR file
-    /// * `config` - Optional PMIR configuration (uses defaults if None)
+    /// * `config` - Optional PHIR configuration (uses defaults if None)
     ///
     /// # Returns
     /// LLVM IR as a string
     ///
     /// # Errors
-    /// Returns `PecosError` if HUGR compilation via PMIR fails
-    pub fn compile_hugr_file_via_pmir<P: AsRef<Path>>(
+    /// Returns `PecosError` if HUGR compilation via PHIR fails
+    pub fn compile_hugr_file_via_phir<P: AsRef<Path>>(
         hugr_path: P,
-        config: Option<PmirConfig>,
+        config: Option<PhirConfig>,
     ) -> Result<String, PecosError> {
         // Read HUGR file (could be binary or JSON format)
         let hugr_bytes = std::fs::read(hugr_path.as_ref()).map_err(|e| {
@@ -340,31 +339,31 @@ pub mod pmir {
         // Use provided config or default
         let config = config.unwrap_or_default();
 
-        // Compile via PMIR (handles both binary and JSON formats)
+        // Compile via PHIR (handles both binary and JSON formats)
         let llvm_ir =
-            compile_hugr_bytes_via_pmir(&hugr_bytes, &config).map_err(convert_pmir_error)?;
+            compile_hugr_bytes_via_phir(&hugr_bytes, &config).map_err(convert_phir_error)?;
         Ok(llvm_ir)
     }
 
-    // Re-export types for convenience (PmirConfig already imported above)
-    pub use pecos_pmir::hugr_to_pmir_mlir;
+    // Re-export types for convenience (PhirConfig already imported above)
+    pub use pecos_phir::hugr_to_phir_mlir;
 
     // Error conversion helper function
-    fn convert_pmir_error(error: pecos_pmir::PMIRError) -> PecosError {
-        // Convert PMIRError to PecosError using appropriate category
+    fn convert_phir_error(error: pecos_phir::PhirError) -> PecosError {
+        // Convert PhirError to PecosError using appropriate category
         match error {
-            pecos_pmir::PMIRError::Parse(_) => PecosError::ParseSyntax {
-                language: "PMIR".to_string(),
+            pecos_phir::PhirError::Parse(_) => PecosError::ParseSyntax {
+                language: "PHIR".to_string(),
                 message: error.to_string(),
             },
-            pecos_pmir::PMIRError::Type(_) | pecos_pmir::PMIRError::Validation(_) => {
+            pecos_phir::PhirError::Type(_) | pecos_phir::PhirError::Validation(_) => {
                 PecosError::ValidationInvalidCircuitStructure(error.to_string())
             }
-            pecos_pmir::PMIRError::Runtime(_) => PecosError::Processing(error.to_string()),
-            pecos_pmir::PMIRError::Compilation(_) => PecosError::Compilation(error.to_string()),
-            pecos_pmir::PMIRError::IO(msg) => PecosError::IO(std::io::Error::other(msg)),
-            pecos_pmir::PMIRError::Internal(msg) => {
-                PecosError::Generic(format!("Internal PMIR error: {msg}"))
+            pecos_phir::PhirError::Runtime(_) => PecosError::Processing(error.to_string()),
+            pecos_phir::PhirError::Compilation(_) => PecosError::Compilation(error.to_string()),
+            pecos_phir::PhirError::IO(msg) => PecosError::IO(std::io::Error::other(msg)),
+            pecos_phir::PhirError::Internal(msg) => {
+                PecosError::Generic(format!("Internal PHIR error: {msg}"))
             }
         }
     }

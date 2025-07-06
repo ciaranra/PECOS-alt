@@ -107,18 +107,17 @@ fn test_hugr_from_bytes() -> Result<(), PecosError> {
     Ok(())
 }
 
-#[cfg(feature = "pmir-pipeline")]
 #[test]
-fn test_hugr_via_pmir_pipeline() -> Result<(), PecosError> {
-    // Test the alternative pipeline: HUGR → pecos-pmir → LLVM IR → pecos-llvm-runtime execution
+fn test_hugr_via_phir_pipeline() -> Result<(), PecosError> {
+    // Test the alternative pipeline: HUGR → pecos-phir → LLVM IR → pecos-llvm-runtime execution
 
     // Create a HUGR file
     let temp_dir = TempDir::new()?;
     let hugr_path = temp_dir.path().join("bell_state.hugr");
     std::fs::write(&hugr_path, BELL_STATE_HUGR)?;
 
-    // Use the pmir module to compile via PMIR (now supports binary format)
-    let engine = pecos::pmir::run_pmir_llvm(&hugr_path, Some(1000), None)?;
+    // Use the phir module to compile via PHIR (now supports binary format)
+    let engine = pecos::phir::run_phir_llvm(&hugr_path, Some(1000), None)?;
 
     // Run simulation
     let results = run_sim(engine, 1000, Some(42), None, None, None)?;
@@ -129,23 +128,22 @@ fn test_hugr_via_pmir_pipeline() -> Result<(), PecosError> {
     Ok(())
 }
 
-#[cfg(feature = "pmir-pipeline")]
 #[test]
-fn test_pmir_compilation_only() -> Result<(), PecosError> {
-    // Test just the compilation part of PMIR
+fn test_phir_compilation_only() -> Result<(), PecosError> {
+    // Test just the compilation part of PHIR
 
     let temp_dir = TempDir::new()?;
     let hugr_path = temp_dir.path().join("test.hugr");
     std::fs::write(&hugr_path, BELL_STATE_HUGR)?;
 
     // Enable debug output to see what's happening
-    let config = pecos_pmir::PmirConfig {
+    let config = pecos_phir::PhirConfig {
         debug: true,
         ..Default::default()
     };
 
-    // Compile HUGR to LLVM IR via PMIR (now supports binary format)
-    let llvm_ir = pecos::pmir::compile_hugr_file_via_pmir(&hugr_path, Some(config))?;
+    // Compile HUGR to LLVM IR via PHIR (now supports binary format)
+    let llvm_ir = pecos::phir::compile_hugr_file_via_phir(&hugr_path, Some(config))?;
 
     // Verify we got some LLVM IR
     assert!(!llvm_ir.is_empty());

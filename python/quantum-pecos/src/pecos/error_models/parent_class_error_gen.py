@@ -15,11 +15,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from pecos.error_models.class_errors_circuit import ErrorCircuits
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -201,7 +204,7 @@ class Generator:
         """
         for symbol in self.gate_groups[group_symbol]:
             if symbol in self.error_func_dict:
-                print(f"Overriding gate error for gate: {symbol}.")
+                logger.warning(f"Overriding gate error for gate: {symbol}.")
 
             self.set_gate_error(symbol, error_func, error_param, after)
 
