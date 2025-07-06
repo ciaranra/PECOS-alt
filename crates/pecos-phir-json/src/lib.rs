@@ -14,6 +14,8 @@ pub use v0_1::ast::{Operation, PHIRProgram};
 pub use v0_1::engine::PhirJsonEngine;
 #[cfg(feature = "v0_1")]
 pub use v0_1::setup_phir_json_v0_1_engine;
+#[cfg(feature = "v0_1")]
+pub use v0_1::phir_converter::{phir_json_to_ron, phir_json_to_module, phir_json_to_ron_and_module, stream_phir_json_to_ron};
 
 use common::{PhirJsonVersion, detect_version};
 use log::debug;
@@ -293,5 +295,49 @@ mod tests {
         );
 
         Ok(())
+    }
+}
+
+/// Convert a PHIR-JSON file to a PHIR Module
+///
+/// This function reads a PHIR-JSON file, detects its version, and converts it to a PHIR Module.
+/// The conversion goes through an intermediate PHIR-RON representation.
+///
+/// # Parameters
+///
+/// - `path`: Path to the PHIR-JSON file
+///
+/// # Returns
+///
+/// Returns a PHIR Module on success
+///
+/// # Errors
+///
+/// - Returns an error if the file cannot be read
+/// - Returns an error if the JSON parsing fails
+/// - Returns an error if the version is not supported
+/// - Returns an error if the conversion fails
+#[cfg(feature = "v0_1")]
+pub fn convert_phir_json_file_to_module(path: &Path) -> Result<pecos_phir::Module, PecosError> {
+    use v0_1::phir_converter::phir_json_to_module;
+    
+    debug!("Converting PHIR-JSON file to PHIR Module: {}", path.display());
+    
+    // Read the file
+    let content = std::fs::read_to_string(path).map_err(PecosError::IO)?;
+    
+    // Detect version
+    let version = detect_version(&content)?;
+    
+    match version {
+        PhirJsonVersion::V0_1 => {
+            // Convert directly using streaming converter
+            phir_json_to_module(&content)
+        }
+        #[allow(unreachable_patterns)]
+        _ => Err(PecosError::Input(format!(
+            "Unsupported PHIR-JSON version: {:?}",
+            version
+        ))),
     }
 }

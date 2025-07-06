@@ -30,6 +30,7 @@ pub mod ops; // Core operations
 pub mod parsing_ops; // Operations for parsing directly to PHIR
 pub mod phir; // Core PHIR structures (Region, Block, Instruction)
 pub mod region_kinds; // Region execution semantics
+pub mod ron_support; // RON serialization/deserialization for debugging
 pub mod slr_helpers; // Helper functions for translating from SLR/qeclib patterns
 pub mod traits; // Operation traits and interfaces
 pub mod types; // Type system // MLIR to LLVM-IR compilation
@@ -38,6 +39,7 @@ pub mod types; // Type system // MLIR to LLVM-IR compilation
 pub use error::{PhirError, Result};
 pub use ops::Operation;
 pub use phir::Module;
+pub use ron_support::{from_ron, from_ron_file, to_ron, to_ron_file, ModuleRonExt};
 pub use types::Type;
 
 /// Configuration for PHIR compilation and execution

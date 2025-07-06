@@ -2,6 +2,7 @@ pub mod ast;
 pub mod engine;
 pub mod foreign_objects;
 pub mod operations;
+pub mod phir_converter;
 pub mod wasm_foreign_object;
 
 // Our improved implementations
