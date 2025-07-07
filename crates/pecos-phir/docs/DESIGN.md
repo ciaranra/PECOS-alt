@@ -162,7 +162,7 @@ circuit()
     .build()
 ```
 
-### 3.4 Abstract QEC Through Boxing
+### 3.4 Abstract QEC Through Interface Attributes
 
 Given the rapidly evolving landscape of quantum error correction, PHIR embraces abstraction:
 
@@ -173,7 +173,7 @@ Given the rapidly evolving landscape of quantum error correction, PHIR embraces 
 - **Progressive optimization**: Generic passes work on all codes, specialized passes optimize specific schemes
 
 ```rust
-// Box a region with QEC metadata
+// Tag a region with QEC interface attributes
 region.attributes.insert("qec.logical_region", true);
 region.attributes.insert("qec.code_family", "topological");
 region.attributes.insert("qec.code_type", "surface_code");
@@ -189,7 +189,7 @@ if has_attribute(region, "qec.code_type", "surface_code") {
 }
 ```
 
-This "boxing" approach means:
+This interface-based approach means:
 - Core PHIR doesn't need to understand QEC details
 - New QEC schemes are just new attribute conventions
 - Passes can be as generic or specialized as needed

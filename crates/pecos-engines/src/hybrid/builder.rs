@@ -11,7 +11,7 @@
 // the License.
 
 use super::engine::HybridEngine;
-use crate::engine_system::{ClassicalEngine, QuantumEngine};
+use crate::engine_system::{ClassicalControlEngine, QuantumEngine};
 use crate::noise::{DepolarizingNoiseModel, NoiseModel, PassThroughNoiseModel};
 use crate::quantum_system::QuantumSystem;
 use pecos_core::errors::PecosError;
@@ -51,7 +51,7 @@ use pecos_core::errors::PecosError;
 /// ```
 #[derive(Clone)]
 pub struct HybridEngineBuilder {
-    classical_engine: Option<Box<dyn ClassicalEngine>>,
+    classical_engine: Option<Box<dyn ClassicalControlEngine>>,
     quantum_engine: Option<Box<dyn QuantumEngine>>,
     noise_model: Option<Box<dyn NoiseModel>>,
     quantum_system: Option<QuantumSystem>,
@@ -81,12 +81,12 @@ impl HybridEngineBuilder {
     /// Set the classical engine component
     ///
     /// # Arguments
-    /// * `engine` - The classical engine to use
+    /// * `engine` - The classical engine to use (must implement both `ClassicalEngine` and `ControlEngine`)
     ///
     /// # Returns
     /// The builder for method chaining
     #[must_use]
-    pub fn with_classical_engine(mut self, engine: Box<dyn ClassicalEngine>) -> Self {
+    pub fn with_classical_engine(mut self, engine: Box<dyn ClassicalControlEngine>) -> Self {
         self.classical_engine = Some(engine);
         self
     }

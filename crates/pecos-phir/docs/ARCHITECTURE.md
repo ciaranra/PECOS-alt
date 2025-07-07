@@ -97,16 +97,16 @@ PHIR uses multiple passes to gradually lower operations:
    - Generate Rust code for native execution
    - Interpret directly for debugging
 
-### 4. Boxing and Abstract QEC Representation
+### 4. Interface-Based Abstract QEC Representation
 
 PHIR takes an abstract approach to quantum error correction and emerging quantum paradigms:
 
-#### The Boxing Philosophy
+#### The Interface Philosophy
 
-Instead of hard-coding specific QEC schemes or quantum protocols into the IR, PHIR uses "boxing" - attaching semantic metadata through attributes:
+Instead of hard-coding specific QEC schemes or quantum protocols into the IR, PHIR uses MLIR's interface approach - attaching semantic metadata through attributes to indicate which interfaces an operation implements:
 
 ```mlir
-// A syndrome extraction boxed with metadata
+// A syndrome extraction operation implementing the QEC protocol interface
 "qec.syndrome"() {
   qec.code_type = "surface_code",
   qec.syndrome_type = "X_stabilizers", 
@@ -124,15 +124,15 @@ Instead of hard-coding specific QEC schemes or quantum protocols into the IR, PH
 } : () -> ()
 ```
 
-#### Benefits of Boxing
+#### Benefits of the Interface Approach
 
 1. **Future-proof**: New QEC codes (LDPC, floquet, quantum polar) can be added without changing core IR
-2. **Research-friendly**: Experimentalists can prototype new protocols with custom attributes
-3. **Multi-paradigm**: Different QEC schemes can coexist in the same program
+2. **Research-friendly**: Experimentalists can prototype new protocols with custom interface attributes
+3. **Multi-paradigm**: Different QEC schemes can coexist in the same program by implementing different interfaces
 4. **Progressive optimization**: 
-   - Generic passes operate on all codes
-   - Specialized passes optimize specific schemes
-   - New passes can be added for new codes
+   - Generic passes operate on all interface implementations
+   - Specialized passes optimize specific interface implementations
+   - New passes can be added for new interfaces
 
 #### Implementation Strategy
 
@@ -143,7 +143,7 @@ pub trait QECProtocol {
     fn validate_attributes(attrs: &Attributes) -> Result<()>;
 }
 
-// Passes interpret boxed operations
+// Passes interpret operations based on their interface implementations
 pub struct SurfaceCodeOptimization;
 impl Pass for SurfaceCodeOptimization {
     fn run_on_operation(&mut self, op: &Operation) -> Result<()> {

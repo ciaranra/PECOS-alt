@@ -11,14 +11,14 @@ macro_rules! assert_param_types {
 #[cfg(test)]
 mod compile_time_tests {
     use crate::simulation_builder::SimulationBuilder;
-    use crate::{ClassicalEngine, NoiseModel, QuantumEngine, run_sim};
+    use crate::{ClassicalControlEngine, NoiseModel, QuantumEngine, run_sim};
 
     /// This test exists to ensure `run_sim` parameters are in correct order at compile time
     #[test]
     fn test_run_sim_parameter_order() {
         // This function will fail to compile if parameter types change
         fn _check_signature(
-            _classical: Box<dyn ClassicalEngine>,
+            _classical: Box<dyn ClassicalControlEngine>,
             _shots: usize,
             _seed: Option<u64>,
             _workers: Option<usize>,
@@ -31,7 +31,7 @@ mod compile_time_tests {
         // This ensures the function signature hasn't changed
         let _ = run_sim
             as fn(
-                Box<dyn ClassicalEngine>,
+                Box<dyn ClassicalControlEngine>,
                 usize,
                 Option<u64>,
                 Option<usize>,

@@ -12,7 +12,9 @@
 
 use crate::Engine;
 use crate::byte_message::ByteMessage;
-use crate::engine_system::{ClassicalEngine, ControlEngine, EngineStage, HybridEngine};
+use crate::engine_system::{
+    ClassicalControlEngine, ClassicalEngine, ControlEngine, EngineStage, HybridEngine,
+};
 use crate::hybrid::HybridEngineBuilder;
 use crate::noise::NoiseModel;
 use crate::quantum::{QuantumEngine, StateVecEngine};
@@ -143,7 +145,7 @@ impl MonteCarloEngine {
     /// let mut engine = MonteCarloEngine::new_with_defaults(classical_engine);
     /// ```
     #[must_use]
-    pub fn new_with_defaults(classical_engine: Box<dyn ClassicalEngine>) -> Self {
+    pub fn new_with_defaults(classical_engine: Box<dyn ClassicalControlEngine>) -> Self {
         // Use the builder pattern
         let num_qubits = classical_engine.num_qubits();
         Self::builder()
@@ -181,7 +183,10 @@ impl MonteCarloEngine {
     ///     .build();
     /// ```
     #[must_use]
-    pub fn new_with_depolarizing_noise(classical_engine: Box<dyn ClassicalEngine>, p: f64) -> Self {
+    pub fn new_with_depolarizing_noise(
+        classical_engine: Box<dyn ClassicalControlEngine>,
+        p: f64,
+    ) -> Self {
         // Use the builder pattern
         Self::builder()
             .with_classical_engine(classical_engine)
@@ -335,7 +340,7 @@ impl MonteCarloEngine {
     /// This function will return a `PecosError` if:
     /// - There is an error during the execution of the simulation.
     pub fn run_with_engines(
-        classical_engine: Box<dyn ClassicalEngine>,
+        classical_engine: Box<dyn ClassicalControlEngine>,
         noise_model: Box<dyn NoiseModel>,
         quantum_engine: Box<dyn QuantumEngine>,
         num_shots: usize,
@@ -405,7 +410,7 @@ impl MonteCarloEngine {
     /// # Errors
     /// Returns a `PecosError` if any part of the simulation fails.
     pub fn run_with_noise_model(
-        classical_engine: Box<dyn ClassicalEngine>,
+        classical_engine: Box<dyn ClassicalControlEngine>,
         noise_model: Box<dyn NoiseModel>,
         num_shots: usize,
         num_workers: usize,

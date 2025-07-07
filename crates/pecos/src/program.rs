@@ -1,7 +1,7 @@
 use crate::setup_llvm_engine;
 use log::debug;
 use pecos_core::errors::PecosError;
-use pecos_engines::ClassicalEngine;
+use pecos_engines::ClassicalControlEngine;
 use pecos_phir_json::setup_phir_json_engine;
 use pecos_qasm::setup_qasm_engine;
 use std::path::{Path, PathBuf};
@@ -149,7 +149,7 @@ pub fn setup_engine_for_program(
     program_type: ProgramType,
     program_path: &Path,
     seed: Option<u64>,
-) -> Result<Box<dyn ClassicalEngine>, PecosError> {
+) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
     debug!(
         "Setting up engine for {:?} program: {}",
         program_type,

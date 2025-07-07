@@ -8,7 +8,7 @@ use std::path::Path;
 pub fn setup_cli_engine(
     program_path: &Path,
     shots: Option<usize>,
-) -> Result<Box<dyn ClassicalEngine>, PecosError> {
+) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
     debug!("Setting up engine for path: {}", program_path.display());
 
     // Create build directory for engine outputs

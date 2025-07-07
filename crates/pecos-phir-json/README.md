@@ -213,6 +213,44 @@ pecos-phir-json = { version = "0.1", default-features = false, features = ["v0_1
 pecos-phir-json = { version = "0.1", features = ["all-versions"] }
 ```
 
+## Conversion Architecture
+
+This crate provides a streamlined conversion architecture:
+
+- **PHIR-JSON → PHIR Module**: Direct conversion from JSON to native PHIR Module structures
+- **PHIR Module ↔ PHIR-RON**: Bidirectional serialization for debugging and persistence
+
+The conversion paths are:
+1. **Input**: PHIR-JSON (human-readable JSON format) → PHIR Module (in-memory representation)
+2. **Debug/Export**: PHIR Module → PHIR-RON (Rusty Object Notation for inspection)
+
+### Converting PHIR-JSON to PHIR Module
+
+```rust
+use pecos_phir_json::phir_json_to_module;
+
+// Convert PHIR-JSON string directly to PHIR Module
+let json_str = r#"{
+    "format": "PHIR/JSON",
+    "version": "0.1.0",
+    "ops": [...]
+}"#;
+
+let module = phir_json_to_module(json_str)?;
+```
+
+### Example: PHIR-JSON to Module Converter
+
+The crate includes an example tool for converting PHIR-JSON files:
+
+```bash
+# Convert and display module info
+cargo run --example phir_json_to_module input.phir.json
+
+# Convert and export to PHIR-RON for debugging
+cargo run --example phir_json_to_module input.phir.json output.ron
+```
+
 ## License
 
 This crate is licensed under the Apache License, Version 2.0.

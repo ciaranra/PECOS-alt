@@ -12,7 +12,9 @@
 
 use crate::Engine;
 use crate::byte_message::ByteMessage;
-use crate::engine_system::{ClassicalEngine, ControlEngine, EngineStage, EngineSystem};
+use crate::engine_system::{
+    ClassicalControlEngine, ClassicalEngine, ControlEngine, EngineStage, EngineSystem,
+};
 use crate::quantum_system::QuantumSystem;
 use crate::shot_results::Shot;
 use dyn_clone;
@@ -68,7 +70,7 @@ use pecos_core::rng::rng_manageable::derive_seed;
 /// ```
 pub struct HybridEngine {
     /// The classical engine component responsible for program flow and measurement processing
-    pub classical_engine: Box<dyn ClassicalEngine>,
+    pub classical_engine: Box<dyn ClassicalControlEngine>,
     /// The quantum system component responsible for executing quantum operations
     pub quantum_system: QuantumSystem,
 }
@@ -150,14 +152,25 @@ impl HybridEngine {
                 iteration_count,
                 std::thread::current().id()
             );
+            eprintln!(
+                "DEBUG HybridEngine: Processing quantum commands, iteration {iteration_count}"
+            );
 
             // Process through engine (could be QuantumEngine or EngineSystem)
             let measurement_message = self.quantum_system.process(command_message)?;
 
+            eprintln!("DEBUG HybridEngine: Calling continue_processing with measurements");
             // Continue classical processing with measurements
             stage = self
                 .classical_engine
                 .continue_processing(measurement_message)?;
+            eprintln!(
+                "DEBUG HybridEngine: continue_processing returned stage: {:?}",
+                match &stage {
+                    EngineStage::Complete(_) => "Complete",
+                    EngineStage::NeedsProcessing(_) => "NeedsProcessing",
+                }
+            );
         }
 
         match stage {
@@ -191,7 +204,7 @@ impl Engine for HybridEngine {
 }
 
 impl EngineSystem for HybridEngine {
-    type Controller = Box<dyn ClassicalEngine>;
+    type Controller = Box<dyn ClassicalControlEngine>;
     type ControlledEngine = QuantumSystem;
     type EngineInput = ByteMessage;
     type EngineOutput = ByteMessage;

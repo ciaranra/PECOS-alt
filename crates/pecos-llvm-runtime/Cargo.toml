@@ -20,19 +20,11 @@ libloading.workspace = true
 libc.workspace = true
 bytemuck.workspace = true
 tempfile.workspace = true
-env_logger.workspace = true
 parking_lot.workspace = true
-serde = { version = "1.0", features = ["derive"] }
-serde_json = { version = "1.0" }
-
-[build-dependencies]
-# No specific build dependencies required
 
 [dev-dependencies]
 tempfile.workspace = true
 serial_test.workspace = true
-env_logger.workspace = true
-
 
 [features]
 default = []

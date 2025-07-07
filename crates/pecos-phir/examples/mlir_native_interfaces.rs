@@ -1,13 +1,13 @@
-//! Example showing how MLIR's native structure supports the boxing/protocol approach
+//! Example showing how MLIR's native structure supports interface-based protocol composition
 //!
 //! This demonstrates that we don't need special constructs - MLIR's hierarchy
-//! naturally provides the boxing we need:
+//! naturally provides the interface system we need:
 //!
 //! - Modules = Top-level containers/libraries
-//! - Functions = Reusable protocols/macros
-//! - Regions = Isolated scopes with clear interfaces
+//! - Functions = Reusable protocols/macros implementing interfaces
+//! - Regions = Isolated scopes with clear interface boundaries
 //! - Blocks = Basic protocol steps that can be composed
-//! - Operations = Atomic actions
+//! - Operations = Atomic actions implementing specific interfaces
 
 use pecos_phir::{
     attributes::AttributeBuilder,
@@ -18,7 +18,7 @@ use pecos_phir::{
 };
 
 fn main() {
-    println!("=== MLIR Native Boxing Example ===\n");
+    println!("=== MLIR Native Interface Example ===\n");
 
     // Build a QEC protocol library using MLIR's natural structure
     let qec_library = build_qec_protocol_library();
@@ -29,33 +29,33 @@ fn main() {
 
     // Example: Compose protocols by calling functions
     let surface_code_cycle = build_surface_code_cycle();
-    println!("\n=== Surface Code Cycle (Composed from Protocols) ===");
+    println!("\n=== Surface Code Cycle (Composed from Protocol Interfaces) ===");
     println!("{}", surface_code_cycle.to_mlir_text());
 
-    // Demonstrate region-based isolation
-    demonstrate_region_isolation();
+    // Demonstrate region-based interface isolation
+    demonstrate_interface_isolation();
 }
 
-/// Build a library of QEC protocols as MLIR functions
+/// Build a library of QEC protocols as MLIR functions implementing interfaces
 fn build_qec_protocol_library() -> Module {
     let mut module = Module::new("qec_protocols");
 
-    // Protocol 1: X-type syndrome extraction (as a function)
+    // Protocol 1: X-type syndrome extraction (implementing syndrome extraction interface)
     module.add_function(create_x_syndrome_protocol());
 
-    // Protocol 2: Z-type syndrome extraction (as a function)
+    // Protocol 2: Z-type syndrome extraction (implementing syndrome extraction interface)
     module.add_function(create_z_syndrome_protocol());
 
-    // Protocol 3: Decoder protocol
+    // Protocol 3: Decoder protocol (implementing decoder interface)
     module.add_function(create_decoder_protocol());
 
-    // Protocol 4: Correction application
+    // Protocol 4: Correction application (implementing correction interface)
     module.add_function(create_correction_protocol());
 
     module
 }
 
-/// X-type syndrome extraction as a reusable function/protocol
+/// X-type syndrome extraction implementing the syndrome extraction interface
 fn create_x_syndrome_protocol() -> Function {
     let signature = FunctionType {
         inputs: vec![
@@ -74,7 +74,7 @@ fn create_x_syndrome_protocol() -> Function {
         pecos_phir::phir::Visibility::Public,
     );
 
-    // Tag the function as a protocol
+    // Declare that this function implements the QEC syndrome extraction interface
     func.attributes = AttributeBuilder::new()
         .with_tag("qec_protocol")
         .with_attr(
@@ -82,7 +82,7 @@ fn create_x_syndrome_protocol() -> Function {
             pecos_phir::phir::AttributeValue::String("X".to_string()),
         )
         .with_attr(
-            "protocol_type",
+            "protocol_interface",
             pecos_phir::phir::AttributeValue::String("syndrome_extraction".to_string()),
         )
         .build();
@@ -135,7 +135,7 @@ fn create_x_syndrome_protocol() -> Function {
     func
 }
 
-/// Z-type syndrome extraction protocol
+/// Z-type syndrome extraction protocol implementing the same interface
 fn create_z_syndrome_protocol() -> Function {
     let signature = FunctionType {
         inputs: vec![
@@ -162,7 +162,7 @@ fn create_z_syndrome_protocol() -> Function {
             pecos_phir::phir::AttributeValue::String("Z".to_string()),
         )
         .with_attr(
-            "protocol_type",
+            "protocol_interface",
             pecos_phir::phir::AttributeValue::String("syndrome_extraction".to_string()),
         )
         .build();
@@ -174,7 +174,7 @@ fn create_z_syndrome_protocol() -> Function {
     func
 }
 
-/// Decoder protocol - takes syndrome and returns correction
+/// Decoder protocol implementing the decoder interface
 fn create_decoder_protocol() -> Function {
     let signature = FunctionType {
         inputs: vec![
@@ -196,11 +196,11 @@ fn create_decoder_protocol() -> Function {
     func.attributes = AttributeBuilder::new()
         .with_tag("qec_protocol")
         .with_attr(
-            "protocol_type",
+            "protocol_interface",
             pecos_phir::phir::AttributeValue::String("decoder".to_string()),
         )
         .with_attr(
-            "decoder_type",
+            "decoder_implementation",
             pecos_phir::phir::AttributeValue::String("MWPM".to_string()),
         )
         .build();
@@ -210,7 +210,7 @@ fn create_decoder_protocol() -> Function {
     func
 }
 
-/// Correction application protocol
+/// Correction application protocol implementing the correction interface
 fn create_correction_protocol() -> Function {
     let signature = FunctionType {
         inputs: vec![
@@ -230,7 +230,7 @@ fn create_correction_protocol() -> Function {
     func.attributes = AttributeBuilder::new()
         .with_tag("qec_protocol")
         .with_attr(
-            "protocol_type",
+            "protocol_interface",
             pecos_phir::phir::AttributeValue::String("correction".to_string()),
         )
         .build();
@@ -240,7 +240,7 @@ fn create_correction_protocol() -> Function {
     func
 }
 
-/// Build a complete surface code cycle by composing protocols
+/// Build a complete surface code cycle by composing protocol interfaces
 fn build_surface_code_cycle() -> Module {
     let mut module = Module::new("surface_code_cycle");
 
@@ -260,9 +260,13 @@ fn build_surface_code_cycle() -> Module {
         pecos_phir::phir::Visibility::Public,
     );
 
-    // Tag as a composite protocol
+    // Tag as a composite protocol implementing the surface code cycle interface
     cycle_func.attributes = AttributeBuilder::new()
         .with_tag("composite_protocol")
+        .with_attr(
+            "protocol_interface",
+            pecos_phir::phir::AttributeValue::String("qec_cycle".to_string()),
+        )
         .with_attr(
             "error_correction_code",
             pecos_phir::phir::AttributeValue::String("surface_code".to_string()),
@@ -272,10 +276,10 @@ fn build_surface_code_cycle() -> Module {
     let mut region = Region::new(RegionKind::SSACFG);
     let mut main_block = Block::new(None);
 
-    // Compose the cycle from protocol calls
-    // This is like assembly macros - each call expands to the full protocol
+    // Compose the cycle from protocol interface calls
+    // This is like assembly macros - each call invokes a protocol implementing an interface
 
-    // Step 1: Extract X syndrome
+    // Step 1: Extract X syndrome (calls X syndrome extraction interface)
     let mut x_syndrome_call = Instruction::new(
         Operation::ControlFlow(ControlFlowOp::Call(FunctionCall {
             name: "x_syndrome_extraction".to_string(),
@@ -293,7 +297,7 @@ fn build_surface_code_cycle() -> Module {
         pecos_phir::phir::AttributeValue::String("extract_x_syndrome".to_string()),
     );
 
-    // Step 2: Extract Z syndrome
+    // Step 2: Extract Z syndrome (calls Z syndrome extraction interface)
     let mut z_syndrome_call = Instruction::new(
         Operation::ControlFlow(ControlFlowOp::Call(FunctionCall {
             name: "z_syndrome_extraction".to_string(),
@@ -311,7 +315,7 @@ fn build_surface_code_cycle() -> Module {
         pecos_phir::phir::AttributeValue::String("extract_z_syndrome".to_string()),
     );
 
-    // Step 3: Decode
+    // Step 3: Decode (calls decoder interface)
     let mut decode_call = Instruction::new(
         Operation::ControlFlow(ControlFlowOp::Call(FunctionCall {
             name: "decode_syndrome".to_string(),
@@ -329,7 +333,7 @@ fn build_surface_code_cycle() -> Module {
         pecos_phir::phir::AttributeValue::String("decode_syndrome".to_string()),
     );
 
-    // Step 4: Apply corrections
+    // Step 4: Apply corrections (calls correction interface)
     let mut correct_call = Instruction::new(
         Operation::ControlFlow(ControlFlowOp::Call(FunctionCall {
             name: "apply_corrections".to_string(),
@@ -357,9 +361,9 @@ fn build_surface_code_cycle() -> Module {
     module
 }
 
-/// Example showing how regions provide natural isolation
-fn demonstrate_region_isolation() {
-    println!("\n=== Region-Based Protocol Isolation ===\n");
+/// Example showing how regions provide natural interface isolation
+fn demonstrate_interface_isolation() {
+    println!("\n=== Region-Based Interface Isolation ===\n");
 
     let mut func = Function::new_with_visibility(
         "multi_protocol_function",
@@ -371,20 +375,28 @@ fn demonstrate_region_isolation() {
         pecos_phir::phir::Visibility::Public,
     );
 
-    // Region 1: State preparation protocol
+    // Region 1: State preparation protocol interface
     let mut prep_region = Region::new(RegionKind::SSACFG);
     prep_region.attributes = AttributeBuilder::new()
         .with_tag("state_preparation")
+        .with_attr(
+            "protocol_interface",
+            pecos_phir::phir::AttributeValue::String("state_prep".to_string()),
+        )
         .with_attr(
             "target_state",
             pecos_phir::phir::AttributeValue::String("GHZ".to_string()),
         )
         .build();
 
-    // Region 2: Measurement protocol
+    // Region 2: Measurement protocol interface
     let mut measure_region = Region::new(RegionKind::SSACFG);
     measure_region.attributes = AttributeBuilder::new()
         .with_tag("measurement_protocol")
+        .with_attr(
+            "protocol_interface",
+            pecos_phir::phir::AttributeValue::String("measurement".to_string()),
+        )
         .with_attr(
             "basis",
             pecos_phir::phir::AttributeValue::String("Bell".to_string()),
@@ -394,9 +406,9 @@ fn demonstrate_region_isolation() {
     func.body.push(prep_region);
     func.body.push(measure_region);
 
-    println!("Regions provide natural protocol isolation:");
-    println!("- Each region has its own scope");
-    println!("- Clear interfaces through SSA values");
-    println!("- Can be optimized independently");
-    println!("- Tagged with protocol metadata");
+    println!("Regions provide natural interface isolation:");
+    println!("- Each region has its own scope and interface");
+    println!("- Clear interface boundaries through SSA values");
+    println!("- Can be optimized based on interface implementation");
+    println!("- Tagged with protocol interface metadata");
 }

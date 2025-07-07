@@ -10,7 +10,7 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-use crate::engine_system::{ClassicalEngine, HybridEngine};
+use crate::engine_system::{ClassicalControlEngine, ClassicalEngine, HybridEngine};
 use crate::hybrid::HybridEngineBuilder;
 use crate::monte_carlo::engine::MonteCarloEngine;
 use crate::noise::{DepolarizingNoiseModel, NoiseModel};
@@ -129,7 +129,7 @@ impl MonteCarloEngineBuilder {
     /// Panics if accessing fields of a hybrid engine that doesn't exist when `self.hybrid_engine` is `Some`
     /// but the unwrap operation fails.
     #[must_use]
-    pub fn with_classical_engine(mut self, engine: Box<dyn ClassicalEngine>) -> Self {
+    pub fn with_classical_engine(mut self, engine: Box<dyn ClassicalControlEngine>) -> Self {
         let hybrid_engine_clone = self.hybrid_engine.clone();
 
         let update_fn = move |builder: HybridEngineBuilder| {

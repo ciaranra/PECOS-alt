@@ -1,113 +1,125 @@
 /*!
-Streaming PHIR-JSON to PHIR-RON converter
+Improved PHIR-JSON to PHIR Module converter with explicit bit operations
 
-This module provides a fast, streaming converter from PHIR-JSON to PHIR-RON
-without building an intermediate AST. It reads JSON and writes RON directly.
+This module converts PHIR-JSON to PHIR Module structures and generates
+explicit bit-combining operations for measurements that write to bit indices.
+
+For example, when measurements write to [["m", 0]] and [["m", 1]], this
+generates explicit shift and OR operations to combine the bits.
 */
 
 use pecos_core::errors::PecosError;
-use serde_json::{Value, Map};
-use std::io::{Read, Write};
+use pecos_phir::{
+    Module,
+    builtin_ops::{BuiltinOp, VarDefineOp},
+    ops::{ClassicalOp, Operation, QuantumOp},
+    phir::{Block, Instruction, Region, SSAValue},
+    region_kinds::RegionKind,
+    types::{IntWidth, Type},
+};
+use serde_json::Value;
+use std::collections::HashMap;
 
-/// Convert PHIR-JSON to PHIR-RON using streaming
-pub fn stream_phir_json_to_ron<R: Read, W: Write>(
-    reader: R,
-    writer: &mut W,
-) -> Result<(), PecosError> {
+/// Information about a bit-indexed write
+#[derive(Debug, Clone)]
+struct BitIndexedWrite {
+    bit_index: u32,
+    ssa_value: SSAValue,
+}
+
+/// Convert PHIR-JSON string to PHIR Module with explicit bit operations
+pub fn phir_json_to_module(json_str: &str) -> Result<Module, PecosError> {
     // Parse JSON
-    let json: Value = serde_json::from_reader(reader)
-        .map_err(|e| PecosError::Input(format!("Failed to parse PHIR-JSON: {}", e)))?;
-    
-    // Validate format
-    let obj = json.as_object()
+    let json_value: Value = serde_json::from_str(json_str)
+        .map_err(|e| PecosError::Input(format!("Failed to parse PHIR-JSON: {e}")))?;
+
+    let obj = json_value
+        .as_object()
         .ok_or_else(|| PecosError::Input("PHIR-JSON must be an object".to_string()))?;
-    
-    let format = obj.get("format")
+
+    // Validate format and version
+    let format = obj
+        .get("format")
         .and_then(|v| v.as_str())
         .ok_or_else(|| PecosError::Input("Missing 'format' field".to_string()))?;
-    
+
     if format != "PHIR/JSON" {
-        return Err(PecosError::Input(format!("Invalid format: expected 'PHIR/JSON', got '{}'", format)));
+        return Err(PecosError::Input(format!(
+            "Invalid format: expected 'PHIR/JSON', got '{format}'"
+        )));
     }
-    
-    let version = obj.get("version")
+
+    let version = obj
+        .get("version")
         .and_then(|v| v.as_str())
         .ok_or_else(|| PecosError::Input("Missing 'version' field".to_string()))?;
-    
+
     if version != "0.1.0" {
-        return Err(PecosError::Input(format!("Unsupported version: expected '0.1.0', got '{}'", version)));
+        return Err(PecosError::Input(format!(
+            "Unsupported version: expected '0.1.0', got '{version}'"
+        )));
     }
-    
-    // Start streaming conversion
-    let mut converter = StreamingConverter::new(writer);
-    converter.convert_program(obj)?;
-    
-    Ok(())
+
+    // Extract module name from metadata
+    let module_name = obj
+        .get("metadata")
+        .and_then(|m| m.as_object())
+        .and_then(|m| m.get("name"))
+        .and_then(|n| n.as_str())
+        .unwrap_or("phir_module");
+
+    // Convert operations
+    let ops = obj
+        .get("ops")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| PecosError::Input("Missing 'ops' array".to_string()))?;
+
+    let mut converter = ImprovedConverter::new();
+    let instructions = converter.convert_operations(ops)?;
+
+    // Create main block
+    let main_block = Block {
+        label: None,
+        arguments: vec![],
+        operations: instructions,
+        terminator: None,
+        attributes: HashMap::new(),
+    };
+
+    // Create main region
+    let main_region = Region {
+        blocks: vec![main_block],
+        kind: RegionKind::SSACFG,
+        attributes: HashMap::new(),
+    };
+
+    // Create module
+    let module = Module {
+        name: module_name.to_string(),
+        attributes: HashMap::new(),
+        body: main_region,
+    };
+
+    Ok(module)
 }
 
-/// Fast conversion from PHIR-JSON string to PHIR-RON string
-pub fn phir_json_to_ron(json_str: &str) -> Result<String, PecosError> {
-    let mut output = Vec::new();
-    stream_phir_json_to_ron(json_str.as_bytes(), &mut output)?;
-    String::from_utf8(output)
-        .map_err(|e| PecosError::Input(format!("Invalid UTF-8 in RON output: {}", e)))
-}
-
-/// Convert PHIR-JSON string directly to PHIR Module via RON
-/// 
-/// This is the main conversion function that uses streaming for performance.
-/// The conversion path is: PHIR-JSON string → PHIR-RON string → PHIR Module
-pub fn phir_json_to_module(json_str: &str) -> Result<pecos_phir::Module, PecosError> {
-    // Use streaming converter for speed
-    let ron_text = phir_json_to_ron(json_str)?;
-    
-    // Deserialize RON to PHIR Module
-    pecos_phir::from_ron(&ron_text).map_err(|e| 
-        PecosError::Input(format!("Failed to deserialize PHIR from RON: {}", e))
-    )
-}
-
-/// Convert PHIR-JSON string to both RON text and PHIR Module
-/// 
-/// This is useful for debugging as it returns both the intermediate RON
-/// representation and the final PHIR Module.
-pub fn phir_json_to_ron_and_module(json_str: &str) -> Result<(String, pecos_phir::Module), PecosError> {
-    // Convert to RON text
-    let ron_text = phir_json_to_ron(json_str)?;
-    
-    // Deserialize RON to PHIR Module
-    let module = pecos_phir::from_ron(&ron_text).map_err(|e| 
-        PecosError::Input(format!("Failed to deserialize PHIR from RON: {}", e))
-    )?;
-    
-    Ok((ron_text, module))
-}
-
-struct StreamingConverter<W: Write> {
-    writer: W,
+struct ImprovedConverter {
     next_ssa_id: u32,
-    variable_map: std::collections::HashMap<String, u32>,
+    variable_map: HashMap<String, u32>,
+    variable_types: HashMap<String, Type>,
+    bit_indexed_writes: HashMap<String, Vec<BitIndexedWrite>>,
 }
 
-impl<W: Write> StreamingConverter<W> {
-    fn new(writer: W) -> Self {
+impl ImprovedConverter {
+    fn new() -> Self {
         Self {
-            writer,
             next_ssa_id: 0,
-            variable_map: std::collections::HashMap::new(),
+            variable_map: HashMap::new(),
+            variable_types: HashMap::new(),
+            bit_indexed_writes: HashMap::new(),
         }
     }
-    
-    fn write(&mut self, s: &str) -> Result<(), PecosError> {
-        self.writer.write_all(s.as_bytes())
-            .map_err(|e| PecosError::Input(format!("Write error: {}", e)))
-    }
-    
-    fn writeln(&mut self, s: &str) -> Result<(), PecosError> {
-        self.write(s)?;
-        self.write("\n")
-    }
-    
+
     fn get_ssa_id(&mut self, var: &str) -> u32 {
         if let Some(&id) = self.variable_map.get(var) {
             id
@@ -118,219 +130,473 @@ impl<W: Write> StreamingConverter<W> {
             id
         }
     }
-    
-    fn convert_program(&mut self, obj: &Map<String, Value>) -> Result<(), PecosError> {
-        // Extract module name from metadata
-        let module_name = obj.get("metadata")
-            .and_then(|m| m.as_object())
-            .and_then(|m| m.get("name"))
-            .and_then(|n| n.as_str())
-            .unwrap_or("phir_module");
-        
-        // Write module header
-        self.writeln("ModuleOp(")?;
-        self.writeln(&format!("    name: \"{}\",", module_name))?;
-        self.writeln("    attributes: {},")?;
-        self.writeln("    body: (")?;
-        self.writeln("        blocks: [")?;
-        self.writeln("            (")?;
-        self.writeln("                label: None,")?;
-        self.writeln("                arguments: [],")?;
-        self.writeln("                operations: [")?;
-        
-        // Main function
-        self.writeln("                    (")?;
-        self.writeln("                        operation: Builtin(Func((")?;
-        self.writeln("                            name: \"main\",")?;
-        self.writeln("                            function_type: (inputs: [], outputs: [], variadic: false),")?;
-        self.writeln("                            attributes: {},")?;
-        self.writeln("                            body: [(")?;
-        self.writeln("                                blocks: [(")?;
-        self.writeln("                                    label: None,")?;
-        self.writeln("                                    arguments: [],")?;
-        self.writeln("                                    operations: [")?;
-        
-        // Convert operations
-        if let Some(ops) = obj.get("ops").and_then(|v| v.as_array()) {
-            for op in ops {
-                self.convert_operation(op, 10)?;
+
+    fn new_ssa_id(&mut self) -> u32 {
+        let id = self.next_ssa_id;
+        self.next_ssa_id += 1;
+        id
+    }
+
+    fn convert_operations(&mut self, ops: &[Value]) -> Result<Vec<Instruction>, PecosError> {
+        let mut instructions = Vec::new();
+        let mut result_operations = Vec::new();
+
+        // First pass: convert all operations except Result operations
+        for op in ops {
+            if let Some(cop) = op
+                .as_object()
+                .and_then(|o| o.get("cop"))
+                .and_then(|v| v.as_str())
+            {
+                if cop == "Result" {
+                    // Save Result operations for later
+                    result_operations.push(op.clone());
+                    continue;
+                }
+            }
+
+            if let Some(instruction) = self.convert_operation(op)? {
+                instructions.push(instruction);
             }
         }
-        
-        // Close all the structures
-        self.writeln("                                    ],")?;
-        self.writeln("                                    terminator: Some(Return(values: [])),")?;
-        self.writeln("                                    attributes: {},")?;
-        self.writeln("                                )],")?;
-        self.writeln("                                kind: Graph,")?;
-        self.writeln("                                attributes: {},")?;
-        self.writeln("                            )],")?;
-        self.writeln("                        ))),")?;
-        self.writeln("                        operands: [],")?;
-        self.writeln("                        results: [],")?;
-        self.writeln("                        result_types: [],")?;
-        self.writeln("                        regions: [],")?;
-        self.writeln("                        attributes: {},")?;
-        self.writeln("                        location: None,")?;
-        self.writeln("                    ),")?;
-        self.writeln("                ],")?;
-        self.writeln("                terminator: None,")?;
-        self.writeln("                attributes: {},")?;
-        self.writeln("            ),")?;
-        self.writeln("        ],")?;
-        self.writeln("        kind: SSACFG,")?;
-        self.writeln("        attributes: {},")?;
-        self.writeln("    ),")?;
-        self.writeln(")")?;
-        
-        Ok(())
+
+        // Second pass: generate bit-combining operations for variables with bit-indexed writes
+        let bit_indexed_writes = self.bit_indexed_writes.clone();
+        for (var_name, writes) in &bit_indexed_writes {
+            if writes.len() > 1 {
+                // Multiple bit writes to the same variable - generate combining operations
+                let mut combining_instructions = Vec::new();
+                let combined_ssa = self.generate_bit_combining_operations(
+                    var_name,
+                    writes,
+                    &mut combining_instructions,
+                )?;
+
+                // Add the combining instructions
+                instructions.extend(combining_instructions);
+
+                // Update the variable's SSA mapping to point to the combined value
+                self.variable_map.insert(var_name.clone(), combined_ssa.id);
+            }
+        }
+
+        // Third pass: now process Result operations with updated variable mappings
+        for result_op in &result_operations {
+            if let Some(instruction) = self.convert_operation(result_op)? {
+                instructions.push(instruction);
+            }
+        }
+
+        Ok(instructions)
     }
-    
-    fn convert_operation(&mut self, op: &Value, indent: usize) -> Result<(), PecosError> {
-        let obj = op.as_object()
+
+    fn generate_bit_combining_operations(
+        &mut self,
+        _var_name: &str,
+        writes: &[BitIndexedWrite],
+        instructions: &mut Vec<Instruction>,
+    ) -> Result<SSAValue, PecosError> {
+        // Sort writes by bit index
+        let mut sorted_writes = writes.to_vec();
+        sorted_writes.sort_by_key(|w| w.bit_index);
+
+        // Start with zero
+        let zero_ssa = SSAValue {
+            id: self.new_ssa_id(),
+            version: 0,
+        };
+        let zero_instruction = Instruction {
+            operation: Operation::Classical(ClassicalOp::ConstInt(0)),
+            operands: vec![],
+            results: vec![zero_ssa],
+            result_types: vec![Type::UInt(IntWidth::I32)],
+            regions: vec![],
+            attributes: HashMap::new(),
+            location: None,
+        };
+        instructions.push(zero_instruction);
+
+        let mut current_value = zero_ssa;
+
+        // For each bit write, shift and OR
+        for write in &sorted_writes {
+            // Convert bool to int if needed
+            let bit_as_int = SSAValue {
+                id: self.new_ssa_id(),
+                version: 0,
+            };
+            let cast_instruction = Instruction {
+                operation: Operation::Classical(ClassicalOp::Bitcast),
+                operands: vec![write.ssa_value],
+                results: vec![bit_as_int],
+                result_types: vec![Type::UInt(IntWidth::I32)],
+                regions: vec![],
+                attributes: HashMap::new(),
+                location: None,
+            };
+            instructions.push(cast_instruction);
+
+            if write.bit_index > 0 {
+                // Shift the bit to its position
+                let shifted_ssa = SSAValue {
+                    id: self.new_ssa_id(),
+                    version: 0,
+                };
+                let shift_instruction = Instruction {
+                    operation: Operation::Classical(ClassicalOp::Shl(write.bit_index)),
+                    operands: vec![bit_as_int],
+                    results: vec![shifted_ssa],
+                    result_types: vec![Type::UInt(IntWidth::I32)],
+                    regions: vec![],
+                    attributes: HashMap::new(),
+                    location: None,
+                };
+                instructions.push(shift_instruction);
+
+                // OR with current value
+                let or_ssa = SSAValue {
+                    id: self.new_ssa_id(),
+                    version: 0,
+                };
+                let or_instruction = Instruction {
+                    operation: Operation::Classical(ClassicalOp::Or),
+                    operands: vec![current_value, shifted_ssa],
+                    results: vec![or_ssa],
+                    result_types: vec![Type::UInt(IntWidth::I32)],
+                    regions: vec![],
+                    attributes: HashMap::new(),
+                    location: None,
+                };
+                instructions.push(or_instruction);
+                current_value = or_ssa;
+            } else {
+                // Bit 0 - just OR with current value
+                let or_ssa = SSAValue {
+                    id: self.new_ssa_id(),
+                    version: 0,
+                };
+                let or_instruction = Instruction {
+                    operation: Operation::Classical(ClassicalOp::Or),
+                    operands: vec![current_value, bit_as_int],
+                    results: vec![or_ssa],
+                    result_types: vec![Type::UInt(IntWidth::I32)],
+                    regions: vec![],
+                    attributes: HashMap::new(),
+                    location: None,
+                };
+                instructions.push(or_instruction);
+                current_value = or_ssa;
+            }
+        }
+
+        Ok(current_value)
+    }
+
+    fn convert_operation(&mut self, op: &Value) -> Result<Option<Instruction>, PecosError> {
+        let obj = op
+            .as_object()
             .ok_or_else(|| PecosError::Input("Operation must be an object".to_string()))?;
-        
-        let indent_str = " ".repeat(indent);
-        
+
         // Variable definition
         if let Some(data) = obj.get("data").and_then(|v| v.as_str()) {
-            let data_type = obj.get("data_type").and_then(|v| v.as_str()).unwrap_or("");
-            let variable = obj.get("variable").and_then(|v| v.as_str()).unwrap_or("");
-            let size = obj.get("size").and_then(|v| v.as_u64()).unwrap_or(0);
-            
-            let comment = format!("{}// Variable definition: {} {} {} (size: {})", 
-                indent_str, data, data_type, variable, size);
-            self.writeln(&comment)?;
-            
-            // Register the variable
-            self.get_ssa_id(variable);
-            return Ok(());
+            return self.convert_variable_definition(obj, data);
         }
-        
+
         // Quantum operation
         if let Some(qop) = obj.get("qop").and_then(|v| v.as_str()) {
-            self.writeln(&format!("{}(", indent_str))?;
-            
-            // Convert operation name
-            let phir_op = match qop {
-                "H" => "Quantum(H)",
-                "X" => "Quantum(X)",
-                "Y" => "Quantum(Y)",
-                "Z" => "Quantum(Z)",
-                "S" => "Quantum(S)",
-                "T" => "Quantum(T)",
-                "CX" | "CNOT" => "Quantum(CX)",
-                "CZ" => "Quantum(CZ)",
-                "Measure" => "Quantum(Measure)",
-                _ => return Err(PecosError::Input(format!("Unknown quantum op: {}", qop))),
-            };
-            
-            self.writeln(&format!("{}    operation: {},", indent_str, phir_op))?;
-            
-            // Operands
-            self.write(&format!("{}    operands: [", indent_str))?;
-            if let Some(args) = obj.get("args").and_then(|v| v.as_array()) {
-                for (i, arg) in args.iter().enumerate() {
-                    if i > 0 { self.write(", ")?; }
-                    
-                    if let Some(arr) = arg.as_array() {
-                        if arr.len() == 2 {
-                            if let (Some(var), Some(idx)) = (arr[0].as_str(), arr[1].as_u64()) {
-                                let ssa_id = self.get_ssa_id(var);
-                                self.write(&format!("(id: {}, version: 0)", ssa_id + idx as u32))?;
-                            }
-                        }
-                    }
-                }
-            }
-            self.writeln("],")?;
-            
-            // Results
-            self.write(&format!("{}    results: [", indent_str))?;
-            if let Some(returns) = obj.get("returns").and_then(|v| v.as_array()) {
-                for (i, ret) in returns.iter().enumerate() {
-                    if i > 0 { self.write(", ")?; }
-                    
-                    if let Some(arr) = ret.as_array() {
-                        if arr.len() == 2 {
-                            if let (Some(var), Some(idx)) = (arr[0].as_str(), arr[1].as_u64()) {
-                                let ssa_id = self.get_ssa_id(var);
-                                self.write(&format!("(id: {}, version: 0)", ssa_id + idx as u32))?;
-                            }
-                        }
-                    }
-                }
-            } else {
-                // Generate result
-                let result_id = self.next_ssa_id;
-                self.next_ssa_id += 1;
-                self.write(&format!("(id: {}, version: 0)", result_id))?;
-            }
-            self.writeln("],")?;
-            
-            // Result types
-            let result_type = if qop == "Measure" { "Bit" } else { "Qubit" };
-            self.writeln(&format!("{}    result_types: [{}],", indent_str, result_type))?;
-            self.writeln(&format!("{}    regions: [],", indent_str))?;
-            self.writeln(&format!("{}    attributes: {{}},", indent_str))?;
-            self.writeln(&format!("{}    location: None,", indent_str))?;
-            self.writeln(&format!("{}),", indent_str))?;
-            
-            return Ok(());
+            return self.convert_quantum_operation(obj, qop);
         }
-        
+
         // Classical operation
         if let Some(cop) = obj.get("cop").and_then(|v| v.as_str()) {
-            if cop == "Result" {
-                let args = obj.get("args");
-                let returns = obj.get("returns");
-                let comment = format!("{}// Result operation: {:?} -> {:?}", indent_str, args, returns);
-                self.writeln(&comment)?;
-            } else {
-                let comment = format!("{}// Classical operation: {} (not yet implemented)", indent_str, cop);
-                self.writeln(&comment)?;
-            }
-            return Ok(());
+            return self.convert_classical_operation(obj, cop);
         }
-        
-        // Other operations as comments for now
-        self.writeln(&format!("{}// Unsupported operation: {:?}", indent_str, obj))?;
-        Ok(())
+
+        // Skip unknown operations
+        Ok(None)
+    }
+
+    fn convert_variable_definition(
+        &mut self,
+        obj: &serde_json::Map<String, Value>,
+        data: &str,
+    ) -> Result<Option<Instruction>, PecosError> {
+        let data_type = obj.get("data_type").and_then(|v| v.as_str()).unwrap_or("");
+        let variable = obj.get("variable").and_then(|v| v.as_str()).unwrap_or("");
+        let size = obj
+            .get("size")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0) as usize;
+
+        match data {
+            "qvar_define" | "cvar_define" => {
+                let var_define_op =
+                    VarDefineOp::new(variable.to_string(), data_type.to_string(), size);
+
+                let var_id = self.get_ssa_id(variable);
+
+                let result_type = match data {
+                    "qvar_define" => Type::QuantumReg(size),
+                    "cvar_define" => match data_type {
+                        "i8" => Type::Int(IntWidth::I8),
+                        "i16" => Type::Int(IntWidth::I16),
+                        "i32" => Type::Int(IntWidth::I32),
+                        "i64" => Type::Int(IntWidth::I64),
+                        "u8" => Type::UInt(IntWidth::I8),
+                        "u16" => Type::UInt(IntWidth::I16),
+                        "u32" => Type::UInt(IntWidth::I32),
+                        "u64" => Type::UInt(IntWidth::I64),
+                        "bool" => Type::Bool,
+                        _ => Type::Int(IntWidth::I64), // Default fallback
+                    },
+                    _ => Type::Unknown,
+                };
+
+                // Store the type for later use
+                self.variable_types
+                    .insert(variable.to_string(), result_type.clone());
+
+                let instruction = Instruction {
+                    operation: Operation::Builtin(BuiltinOp::VarDefine(var_define_op)),
+                    operands: vec![],
+                    results: vec![SSAValue {
+                        id: var_id,
+                        version: 0,
+                    }],
+                    result_types: vec![result_type],
+                    regions: vec![],
+                    attributes: HashMap::new(),
+                    location: None,
+                };
+
+                Ok(Some(instruction))
+            }
+            _ => Ok(None), // Skip unknown variable definitions
+        }
+    }
+
+    fn convert_quantum_operation(
+        &mut self,
+        obj: &serde_json::Map<String, Value>,
+        qop: &str,
+    ) -> Result<Option<Instruction>, PecosError> {
+        let quantum_op = match qop {
+            "H" => QuantumOp::H,
+            "X" => QuantumOp::X,
+            "Y" => QuantumOp::Y,
+            "Z" => QuantumOp::Z,
+            "S" => QuantumOp::S,
+            "T" => QuantumOp::T,
+            "CX" | "CNOT" => QuantumOp::CX,
+            "CZ" => QuantumOp::CZ,
+            "Measure" => QuantumOp::Measure,
+            _ => {
+                return Err(PecosError::Input(format!(
+                    "Unknown quantum operation: {qop}"
+                )));
+            }
+        };
+
+        // Convert operands
+        let mut operands = Vec::new();
+        if let Some(args) = obj.get("args").and_then(|v| v.as_array()) {
+            for arg in args {
+                if let Some(arr) = arg.as_array() {
+                    if arr.len() == 2 {
+                        if let (Some(_var), Some(idx)) = (arr[0].as_str(), arr[1].as_u64()) {
+                            // For quantum operations, the operand is the qubit index directly
+                            operands.push(SSAValue {
+                                id: idx as u32,
+                                version: 0,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // Convert results
+        let mut results = Vec::new();
+        let mut result_types = Vec::new();
+
+        if let Some(returns) = obj.get("returns").and_then(|v| v.as_array()) {
+            for ret in returns {
+                if let Some(arr) = ret.as_array() {
+                    if arr.len() == 2 {
+                        if let (Some(var), Some(idx)) = (arr[0].as_str(), arr[1].as_u64()) {
+                            // For measurements with bit-indexed returns, allocate a new SSA ID
+                            if qop == "Measure" {
+                                let result_ssa = SSAValue {
+                                    id: self.new_ssa_id(),
+                                    version: 0,
+                                };
+                                results.push(result_ssa);
+                                result_types.push(Type::Bit);
+
+                                // Track this bit-indexed write
+                                let write = BitIndexedWrite {
+                                    bit_index: idx as u32,
+                                    ssa_value: result_ssa,
+                                };
+                                self.bit_indexed_writes
+                                    .entry(var.to_string())
+                                    .or_default()
+                                    .push(write);
+                            } else {
+                                // Non-measurement operations
+                                let ssa_id = self.get_ssa_id(var);
+                                results.push(SSAValue {
+                                    id: ssa_id + idx as u32,
+                                    version: 0,
+                                });
+                                result_types.push(Type::Qubit);
+                            }
+                        }
+                    }
+                } else if let Some(_var) = ret.as_str() {
+                    // Simple variable return
+                    let result_ssa = SSAValue {
+                        id: self.new_ssa_id(),
+                        version: 0,
+                    };
+                    results.push(result_ssa);
+                    result_types.push(if qop == "Measure" {
+                        Type::Bit
+                    } else {
+                        Type::Qubit
+                    });
+                }
+            }
+        } else if qop != "Measure" {
+            // Generate result for non-measurement operations
+            let result_id = self.new_ssa_id();
+            results.push(SSAValue {
+                id: result_id,
+                version: 0,
+            });
+            result_types.push(Type::Qubit);
+        }
+
+        let instruction = Instruction {
+            operation: Operation::Quantum(quantum_op),
+            operands,
+            results,
+            result_types,
+            regions: vec![],
+            attributes: HashMap::new(),
+            location: None,
+        };
+
+        Ok(Some(instruction))
+    }
+
+    fn convert_classical_operation(
+        &mut self,
+        obj: &serde_json::Map<String, Value>,
+        cop: &str,
+    ) -> Result<Option<Instruction>, PecosError> {
+        match cop {
+            "Result" => {
+                let classical_op = ClassicalOp::Result;
+
+                // Convert operands (source variables)
+                let mut operands = Vec::new();
+                if let Some(args) = obj.get("args").and_then(|v| v.as_array()) {
+                    for arg in args {
+                        if let Some(var_name) = arg.as_str() {
+                            // Use the current SSA ID for this variable
+                            // It may have been updated by bit-combining operations
+                            let ssa_id = self.get_ssa_id(var_name);
+                            operands.push(SSAValue {
+                                id: ssa_id,
+                                version: 0,
+                            });
+                        }
+                    }
+                }
+
+                // Convert results (destination variables)
+                let mut results = Vec::new();
+                if let Some(returns) = obj.get("returns").and_then(|v| v.as_array()) {
+                    for ret in returns {
+                        if let Some(var_name) = ret.as_str() {
+                            let ssa_id = self.get_ssa_id(var_name);
+                            results.push(SSAValue {
+                                id: ssa_id,
+                                version: 0,
+                            });
+                        }
+                    }
+                }
+
+                // Create attributes to store the export names
+                let mut attributes = HashMap::new();
+                if let Some(returns) = obj.get("returns").and_then(|v| v.as_array()) {
+                    if let Some(export_name) = returns.first().and_then(|v| v.as_str()) {
+                        attributes.insert(
+                            "export_name".to_string(),
+                            pecos_phir::phir::AttributeValue::String(export_name.to_string()),
+                        );
+                    }
+                }
+
+                let instruction = Instruction {
+                    operation: Operation::Classical(classical_op),
+                    operands,
+                    results,
+                    result_types: vec![Type::UInt(IntWidth::I32)], // Result operations typically return integers
+                    regions: vec![],
+                    attributes,
+                    location: None,
+                };
+
+                Ok(Some(instruction))
+            }
+            _ => Ok(None), // Skip unknown classical operations
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
-    fn test_fast_conversion() {
-        let json = r#"{
+    fn test_bell_state_conversion() {
+        let bell_json = r#"{
             "format": "PHIR/JSON",
             "version": "0.1.0",
-            "metadata": {"name": "test"},
+            "metadata": {"description": "Bell state"},
             "ops": [
-                {"qop": "H", "args": [["q", 0]]}
+                {"data": "qvar_define", "data_type": "qubits", "variable": "q", "size": 2},
+                {"data": "cvar_define", "data_type": "i64", "variable": "m", "size": 2},
+                {"qop": "H", "args": [["q", 0]]},
+                {"qop": "CX", "args": [["q", 0], ["q", 1]]},
+                {"qop": "Measure", "args": [["q", 0]], "returns": [["m", 0]]},
+                {"qop": "Measure", "args": [["q", 1]], "returns": [["m", 1]]},
+                {"cop": "Result", "args": ["m"], "returns": ["c"]}
             ]
         }"#;
-        
-        let ron = phir_json_to_ron(json).unwrap();
-        assert!(ron.contains("ModuleOp"));
-        assert!(ron.contains("Quantum(H)"));
-    }
-    
-    #[test] 
-    fn test_module_conversion() {
-        let json = r#"{
-            "format": "PHIR/JSON",
-            "version": "0.1.0",
-            "metadata": {"name": "test"},
-            "ops": [
-                {"qop": "H", "args": [["q", 0]]}
-            ]
-        }"#;
-        
-        let module = phir_json_to_module(json).unwrap();
-        assert_eq!(module.name, "test");
+
+        let module = phir_json_to_module(bell_json).unwrap();
+
+        // Should have more than 7 operations due to bit combining
+        assert!(module.body.blocks[0].operations.len() > 7);
+
+        // Check that we have Cast, Shl, Or operations
+        let ops = &module.body.blocks[0].operations;
+        let has_bitcast = ops
+            .iter()
+            .any(|i| matches!(i.operation, Operation::Classical(ClassicalOp::Bitcast)));
+        let has_shift = ops
+            .iter()
+            .any(|i| matches!(i.operation, Operation::Classical(ClassicalOp::Shl(_))));
+        let has_or = ops
+            .iter()
+            .any(|i| matches!(i.operation, Operation::Classical(ClassicalOp::Or)));
+
+        assert!(has_bitcast, "Should have Bitcast operations");
+        assert!(has_shift, "Should have Shift operations");
+        assert!(has_or, "Should have Or operations");
     }
 }

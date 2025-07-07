@@ -17,7 +17,7 @@ macro_rules! run_sim_validated {
 
 /// Type-safe wrapper for `run_sim` parameters
 pub struct SimParams {
-    pub classical_engine: Box<dyn pecos_engines::ClassicalEngine>,
+    pub classical_engine: Box<dyn pecos_engines::ClassicalControlEngine>,
     pub shots: usize,
     pub seed: Option<u64>,
     pub workers: Option<usize>,
@@ -27,7 +27,10 @@ pub struct SimParams {
 
 impl SimParams {
     /// Create a new `SimParams` with required fields
-    pub fn new(classical_engine: Box<dyn pecos_engines::ClassicalEngine>, shots: usize) -> Self {
+    pub fn new(
+        classical_engine: Box<dyn pecos_engines::ClassicalControlEngine>,
+        shots: usize,
+    ) -> Self {
         Self {
             classical_engine,
             shots,

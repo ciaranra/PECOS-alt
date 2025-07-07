@@ -17,7 +17,7 @@
 //!
 //! ```
 //! use pecos_qasm::QASMEngine;
-//! use pecos_engines::ClassicalEngine;
+//! use pecos_engines::{ClassicalEngine, ClassicalControlEngine};
 //! use std::str::FromStr;
 //!
 //! let qasm = r#"
@@ -36,7 +36,7 @@
 //!
 //! ```
 //! use pecos_qasm::QASMEngine;
-//! use pecos_engines::ClassicalEngine;
+//! use pecos_engines::{ClassicalEngine, ClassicalControlEngine};
 //!
 //! let qasm = r#"
 //!     OPENQASM 2.0;
@@ -79,7 +79,7 @@ pub use util::{count_qubits_in_file, count_qubits_in_str};
 
 use log::debug;
 use pecos_core::errors::PecosError;
-use pecos_engines::ClassicalEngine;
+use pecos_engines::ClassicalControlEngine;
 use std::path::Path;
 
 /// Sets up a basic QASM engine.
@@ -103,7 +103,7 @@ use std::path::Path;
 pub fn setup_qasm_engine(
     program_path: &Path,
     seed: Option<u64>,
-) -> Result<Box<dyn ClassicalEngine>, PecosError> {
+) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
     debug!("Setting up QASM engine for: {}", program_path.display());
 
     // Note: The seed parameter is unused as QASMEngine doesn't handle randomness.

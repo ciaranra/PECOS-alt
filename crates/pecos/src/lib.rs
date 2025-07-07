@@ -88,7 +88,7 @@ pub mod program;
 pub use pecos_qasm::run_qasm_sim;
 
 use pecos_core::errors::PecosError;
-use pecos_engines::ClassicalEngine;
+use pecos_engines::ClassicalControlEngine;
 use std::path::Path;
 
 /// Set up a generic LLVM engine for executing quantum programs
@@ -109,7 +109,7 @@ use std::path::Path;
 pub fn setup_llvm_engine(
     llvm_ir_path: &Path,
     shots: Option<usize>,
-) -> Result<Box<dyn ClassicalEngine>, PecosError> {
+) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
     log::debug!("Setting up LLVM engine for: {}", llvm_ir_path.display());
 
     // Create a generic LLVM engine from the path
@@ -136,7 +136,7 @@ pub fn setup_llvm_engine(
 /// 3. `pecos` orchestrates: HUGR → LLVM IR → Execution
 pub mod hugr {
     use pecos_core::errors::PecosError;
-    use pecos_engines::ClassicalEngine;
+    use pecos_engines::ClassicalControlEngine;
     use std::path::Path;
 
     /// Compile and run a HUGR file with default settings
@@ -158,7 +158,7 @@ pub mod hugr {
     pub fn run_hugr_llvm<P: AsRef<Path>>(
         hugr_path: P,
         shots: Option<usize>,
-    ) -> Result<Box<dyn ClassicalEngine>, PecosError> {
+    ) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
         // Step 1: Compile HUGR to LLVM IR
         let llvm_ir_path = pecos_hugr_llvm::compile_hugr_to_llvm(hugr_path, None)?;
 
@@ -180,7 +180,7 @@ pub mod hugr {
     pub fn run_hugr_llvm_from_bytes(
         hugr_bytes: &[u8],
         shots: Option<usize>,
-    ) -> Result<Box<dyn ClassicalEngine>, PecosError> {
+    ) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
         // Step 1: Compile HUGR bytes to LLVM IR string
         let llvm_ir = pecos_hugr_llvm::compile_hugr_bytes_to_string(hugr_bytes)?;
 
@@ -192,7 +192,7 @@ pub mod hugr {
     fn create_llvm_engine_from_ir(
         llvm_ir_path: &Path,
         shots: Option<usize>,
-    ) -> Result<Box<dyn ClassicalEngine>, PecosError> {
+    ) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
         crate::setup_llvm_engine(llvm_ir_path, shots)
     }
 
@@ -200,7 +200,7 @@ pub mod hugr {
     pub(crate) fn create_llvm_engine_from_ir_string(
         llvm_ir: &str,
         shots: Option<usize>,
-    ) -> Result<Box<dyn ClassicalEngine>, PecosError> {
+    ) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
         use std::io::Write;
         use tempfile::NamedTempFile;
 
@@ -237,7 +237,7 @@ pub mod hugr {
 /// MLIR-based optimizations and transformations.
 pub mod phir {
     use pecos_core::errors::PecosError;
-    use pecos_engines::ClassicalEngine;
+    use pecos_engines::ClassicalControlEngine;
     pub use pecos_phir::PhirConfig;
     use pecos_phir::{compile_hugr_bytes_via_phir, compile_hugr_via_phir as compile_hugr_phir};
     use std::path::Path;
@@ -263,7 +263,7 @@ pub mod phir {
         hugr_path: P,
         shots: Option<usize>,
         config: Option<PhirConfig>,
-    ) -> Result<Box<dyn ClassicalEngine>, PecosError> {
+    ) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
         // Read HUGR file (could be binary or JSON format)
         let hugr_bytes = std::fs::read(hugr_path.as_ref()).map_err(|e| {
             PecosError::with_context(
@@ -299,7 +299,7 @@ pub mod phir {
         hugr_json: &str,
         shots: Option<usize>,
         config: Option<PhirConfig>,
-    ) -> Result<Box<dyn ClassicalEngine>, PecosError> {
+    ) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
         // Use provided config or default
         let config = config.unwrap_or_default();
 

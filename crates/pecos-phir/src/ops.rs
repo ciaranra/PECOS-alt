@@ -199,6 +199,10 @@ pub enum ClassicalOp {
     ConstBool(bool),
     /// String constant
     ConstString(String),
+    /// Result operation - maps measurement outcomes to output variables
+    Result,
+    /// Assignment operation
+    Assign,
 }
 
 /// Control flow operations
@@ -402,6 +406,7 @@ impl Operation {
                 BuiltinOp::Module(_) => "module".to_string(),
                 BuiltinOp::Func(_) => "func.func".to_string(),
                 BuiltinOp::Return(_) => "return".to_string(),
+                BuiltinOp::VarDefine(_) => "var_define".to_string(),
             },
             Operation::Quantum(op) => format!("quantum.{}", op.name()),
             Operation::Classical(op) => format!("arith.{}", op.name()),
@@ -451,6 +456,7 @@ impl Operation {
                 BuiltinOp::Module(_) => Some(0),
                 BuiltinOp::Func(_) => Some(0),
                 BuiltinOp::Return(ret) => Some(ret.operands.len()),
+                BuiltinOp::VarDefine(_) => Some(0),
             },
             Operation::Quantum(op) => op.operand_count(),
             Operation::Classical(op) => op.operand_count(),
@@ -606,6 +612,8 @@ impl ClassicalOp {
             ClassicalOp::ConstFloat(_) => "const_float",
             ClassicalOp::ConstBool(_) => "const_bool",
             ClassicalOp::ConstString(_) => "const_string",
+            ClassicalOp::Result => "result",
+            ClassicalOp::Assign => "assign",
         }
     }
 
@@ -653,6 +661,12 @@ impl ClassicalOp {
             | ClassicalOp::ConstFloat(_)
             | ClassicalOp::ConstBool(_)
             | ClassicalOp::ConstString(_) => Some(0),
+
+            // Result operation (variable number of operands)
+            ClassicalOp::Result => None,
+
+            // Assignment operation
+            ClassicalOp::Assign => Some(1),
         }
     }
 }

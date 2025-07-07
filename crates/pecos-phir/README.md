@@ -229,16 +229,16 @@ Instead of parsing to an AST, we parse directly to PMIR using special parsing op
 3. **Type inference**: Use type variables and constraints, resolve in a separate pass
 4. **Symbol resolution**: Hierarchical symbol tables that mirror region structure
 
-### Boxing and Protocols
+### Interface-Based Protocols
 
-PMIR embraces an abstract, extensible approach to quantum error correction and emerging quantum computing paradigms through "boxing" - using MLIR's attribute system to attach semantic metadata:
+PMIR embraces an abstract, extensible approach to quantum error correction and emerging quantum computing paradigms through MLIR's interface system - using attributes to indicate which interfaces an operation or region implements:
 
 ```rust
 // Tag a region as containing a QFT algorithm
 region.attributes.insert("quantum.algorithm", "QFT");
 region.attributes.insert("quantum.parallelizable", true);
 
-// QEC boxing - abstract representation allows multiple QEC schemes
+// QEC interface implementation - abstract representation allows multiple QEC schemes
 region.attributes.insert("qec.syndrome_extraction", true);
 region.attributes.insert("qec.code_type", "surface_code");
 region.attributes.insert("qec.distance", 5);

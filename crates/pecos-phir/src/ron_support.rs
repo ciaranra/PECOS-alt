@@ -11,7 +11,7 @@ RON is used as a debugging format for PHIR, allowing developers to:
 */
 
 use crate::{Module, PhirError, Result};
-use ron::ser::{to_string_pretty, PrettyConfig};
+use ron::ser::{PrettyConfig, to_string_pretty};
 use std::fs;
 use std::path::Path;
 
@@ -21,28 +21,28 @@ pub fn to_ron(module: &Module) -> Result<String> {
         .depth_limit(4)
         .separate_tuple_members(true)
         .enumerate_arrays(true);
-    
+
     to_string_pretty(module, pretty)
-        .map_err(|e| PhirError::internal(format!("Failed to serialize to RON: {}", e)))
+        .map_err(|e| PhirError::internal(format!("Failed to serialize to RON: {e}")))
 }
 
 /// Serialize a PHIR module to a RON file
 pub fn to_ron_file(module: &Module, path: impl AsRef<Path>) -> Result<()> {
     let ron_string = to_ron(module)?;
     fs::write(path, ron_string)
-        .map_err(|e| PhirError::internal(format!("Failed to write RON file: {}", e)))
+        .map_err(|e| PhirError::internal(format!("Failed to write RON file: {e}")))
 }
 
 /// Deserialize a PHIR module from RON string
 pub fn from_ron(ron_str: &str) -> Result<Module> {
     ron::from_str(ron_str)
-        .map_err(|e| PhirError::internal(format!("Failed to deserialize from RON: {}", e)))
+        .map_err(|e| PhirError::internal(format!("Failed to deserialize from RON: {e}")))
 }
 
 /// Deserialize a PHIR module from a RON file
 pub fn from_ron_file(path: impl AsRef<Path>) -> Result<Module> {
     let ron_string = fs::read_to_string(path)
-        .map_err(|e| PhirError::internal(format!("Failed to read RON file: {}", e)))?;
+        .map_err(|e| PhirError::internal(format!("Failed to read RON file: {e}")))?;
     from_ron(&ron_string)
 }
 
@@ -50,7 +50,7 @@ pub fn from_ron_file(path: impl AsRef<Path>) -> Result<Module> {
 pub trait ModuleRonExt {
     /// Convert this module to RON string
     fn to_ron(&self) -> Result<String>;
-    
+
     /// Save this module to a RON file
     fn save_ron(&self, path: impl AsRef<Path>) -> Result<()>;
 }
@@ -59,7 +59,7 @@ impl ModuleRonExt for Module {
     fn to_ron(&self) -> Result<String> {
         to_ron(self)
     }
-    
+
     fn save_ron(&self, path: impl AsRef<Path>) -> Result<()> {
         to_ron_file(self, path)
     }
@@ -72,38 +72,38 @@ mod tests {
     use crate::ops::{Operation, QuantumOp, SSAValue};
     use crate::phir::{Block, Instruction, Region};
     use crate::region_kinds::RegionKind;
-    use crate::types::{qubit_type, bit_type, FunctionType};
-    
+    use crate::types::{FunctionType, bit_type, qubit_type};
+
     #[test]
     fn test_module_ron_roundtrip() {
         // Create a simple module
         let module = ModuleOp::new("test_module");
-        
+
         // Convert to RON and back
         let ron_string = to_ron(&module).unwrap();
         let module2 = from_ron(&ron_string).unwrap();
-        
+
         assert_eq!(module.name, module2.name);
     }
-    
+
     #[test]
     fn test_complex_module_ron() {
         // Create a module with a function
         let mut module = ModuleOp::new("quantum_module");
-        
+
         // Create a function
         let signature = FunctionType {
             inputs: vec![qubit_type()],
             outputs: vec![bit_type()],
             variadic: false,
         };
-        
+
         let mut func = FuncOp::new("measure_qubit", signature);
-        
+
         // Add a region with a block
         let mut region = Region::new(RegionKind::Graph);
         let mut block = Block::new(None);
-        
+
         // Add a quantum operation
         let h_gate = Instruction::new(
             Operation::Quantum(QuantumOp::H),
@@ -112,7 +112,7 @@ mod tests {
             vec![qubit_type()],
         );
         block.add_instruction(h_gate);
-        
+
         // Add a measurement
         let measure = Instruction::new(
             Operation::Quantum(QuantumOp::Measure),
@@ -121,10 +121,10 @@ mod tests {
             vec![bit_type()],
         );
         block.add_instruction(measure);
-        
+
         region.add_block(block);
         func.body.push(region);
-        
+
         // Add function to module
         let func_inst = Instruction::new(
             Operation::Builtin(crate::builtin_ops::BuiltinOp::Func(func)),
@@ -133,33 +133,33 @@ mod tests {
             vec![],
         );
         module.add_operation(func_inst);
-        
+
         // Convert to RON
         let ron_string = to_ron(&module).unwrap();
-        
+
         // Should contain our module and function names
         assert!(ron_string.contains("quantum_module"));
         assert!(ron_string.contains("measure_qubit"));
-        
+
         // Should contain our operations
         assert!(ron_string.contains("Quantum(H)"));
         assert!(ron_string.contains("Quantum(Measure)"));
-        
+
         // Verify roundtrip
         let module2 = from_ron(&ron_string).unwrap();
         assert_eq!(module.name, module2.name);
         assert_eq!(module.body.blocks.len(), module2.body.blocks.len());
     }
-    
+
     #[test]
     fn test_ron_pretty_formatting() {
         let module = ModuleOp::new("pretty_test");
         let ron_string = to_ron(&module).unwrap();
-        
+
         // RON should be nicely formatted with newlines
         assert!(ron_string.contains('\n'));
-        
-        // Should start with the type name
-        assert!(ron_string.starts_with("ModuleOp("));
+
+        // RON starts with parentheses because Module is a type alias
+        assert!(ron_string.starts_with('('));
     }
 }

@@ -1,5 +1,5 @@
 use crate::Engine;
-pub use crate::classical::ClassicalEngine;
+pub use crate::classical::{ClassicalControlEngine, ClassicalEngine};
 pub use crate::hybrid::HybridEngine;
 pub use crate::hybrid::HybridEngineBuilder;
 pub use crate::monte_carlo::MonteCarloEngine;

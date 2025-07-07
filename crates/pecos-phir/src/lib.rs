@@ -19,10 +19,11 @@ Design Philosophy:
 */
 
 pub mod analysis; // Dominance, use-def chains, and other analyses
-pub mod attributes; // Attribute system for metadata and boxing
+pub mod attributes; // Attribute system for metadata and interface implementation
 pub mod builtin_ops; // Builtin operations (Module, Function, etc.)
 pub mod dialect; // Dialect registration and management
 pub mod error; // Error handling
+pub mod execution; // PHIR execution engine
 pub mod hugr_parser; // HUGR parser (direct to PHIR)
 pub mod mlir_lowering; // PHIR to MLIR lowering
 pub mod mlir_toolchain;
@@ -37,9 +38,10 @@ pub mod types; // Type system // MLIR to LLVM-IR compilation
 
 // Re-export key types
 pub use error::{PhirError, Result};
+pub use execution::PhirEngine;
 pub use ops::Operation;
 pub use phir::Module;
-pub use ron_support::{from_ron, from_ron_file, to_ron, to_ron_file, ModuleRonExt};
+pub use ron_support::{ModuleRonExt, from_ron, from_ron_file, to_ron, to_ron_file};
 pub use types::Type;
 
 /// Configuration for PHIR compilation and execution
@@ -54,7 +56,6 @@ pub struct PhirConfig {
     /// Generate LLVM IR instead of MLIR text
     pub generate_llvm_ir: bool,
 }
-
 
 // Additional config for Python compatibility
 impl PhirConfig {
@@ -140,7 +141,6 @@ pub mod prelude {
 
 /// Helper function to compile a PHIR module to LLVM IR or MLIR text
 fn compile_module_to_output(module: Module, config: &PhirConfig) -> Result<String> {
-
     // Debug: print PHIR structure if debug mode is enabled
     if config.debug {
         eprintln!("PHIR Module: {}", module.name);

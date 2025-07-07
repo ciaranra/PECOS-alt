@@ -1,4 +1,7 @@
-//! Example of using the "boxing" approach for quantum algorithms and patterns
+//! Example of using MLIR's interface approach for quantum algorithms and patterns
+//!
+//! This demonstrates how PHIR uses attributes to implement semantic interfaces,
+//! allowing operations and regions to declare which protocols they implement.
 
 use pecos_phir::{
     attributes::{AttributeBuilder, helpers},
@@ -8,19 +11,19 @@ use pecos_phir::{
     types::{FunctionType, Type},
 };
 
-// Example-specific constants
+// Example-specific interface tags
 mod tags {
     pub const QFT: &str = "qft";
     pub const SYNDROME_EXTRACTION: &str = "syndrome_extraction";
 }
 
 fn main() {
-    // Example 1: Boxing a QFT circuit
-    println!("=== Boxing Example: QFT Circuit ===\n");
+    // Example 1: QFT circuit implementing the QFT interface
+    println!("=== Interface Example: QFT Circuit ===\n");
 
     let _module = Module::new("qft_example");
 
-    // Create a function with QFT
+    // Create a function implementing QFT
     let qft_signature = FunctionType {
         inputs: vec![Type::Array(
             Box::new(Type::Qubit),
@@ -41,7 +44,7 @@ fn main() {
     // Create a region for the QFT algorithm
     let mut qft_region = Region::new(RegionKind::SSACFG);
 
-    // Box the region with QFT metadata
+    // Attach interface attributes to indicate this region implements QFT
     qft_region.attributes = AttributeBuilder::new()
         .with_tag(tags::QFT)
         .with_algorithm("quantum_fourier_transform")
@@ -50,17 +53,17 @@ fn main() {
         .parallelizable()
         .build();
 
-    println!("QFT Region Attributes:");
+    println!("QFT Region Interface Attributes:");
     for (key, value) in &qft_region.attributes {
         println!("  {key}: {value:?}");
     }
 
-    // Example 2: Boxing syndrome extraction for QEC experiments
-    println!("\n=== Boxing Example: Syndrome Extraction ===\n");
+    // Example 2: Syndrome extraction implementing QEC protocol interface
+    println!("\n=== Interface Example: Syndrome Extraction ===\n");
 
     let mut syndrome_region = Region::new(RegionKind::SSACFG);
 
-    // Box with syndrome extraction metadata
+    // Attach interface attributes for syndrome extraction protocol
     syndrome_region.attributes = AttributeBuilder::new()
         .with_tag(tags::SYNDROME_EXTRACTION)
         .with_interface(
@@ -80,15 +83,15 @@ fn main() {
         )
         .build();
 
-    println!("Syndrome Extraction Attributes:");
+    println!("Syndrome Extraction Interface Attributes:");
     for (key, value) in &syndrome_region.attributes {
         println!("  {key}: {value:?}");
     }
 
-    // Example 3: Optimization pass can recognize patterns
-    println!("\n=== Pattern Recognition Example ===\n");
+    // Example 3: Optimization pass recognizing interface implementations
+    println!("\n=== Interface Recognition Example ===\n");
 
-    // Simulate an optimization pass checking regions
+    // Simulate an optimization pass checking interface implementations
     let regions = vec![
         ("QFT Region", &qft_region),
         ("Syndrome Region", &syndrome_region),
@@ -97,32 +100,32 @@ fn main() {
     for (name, region) in regions {
         println!("Analyzing {name}");
 
-        // Check semantic tags
+        // Check interface tags
         if helpers::has_tag(&region.attributes, tags::QFT) {
-            println!("  ✓ Found QFT pattern - can apply QFT-specific optimizations");
+            println!("  ✓ Found QFT interface - can apply QFT-specific optimizations");
             if helpers::is_parallelizable(&region.attributes) {
                 println!("  ✓ Marked as parallelizable - can distribute phase rotations");
             }
         }
 
         if helpers::has_tag(&region.attributes, tags::SYNDROME_EXTRACTION) {
-            println!("  ✓ Found syndrome extraction - can optimize for fault tolerance");
+            println!("  ✓ Found syndrome extraction interface - can optimize for fault tolerance");
             if let Some(stab_type) = region.attributes.get("stabilizer_type") {
                 println!("  ✓ Stabilizer type: {stab_type:?}");
             }
         }
 
-        // Check interfaces
+        // Check interface declarations
         if let Some(inputs) = region.attributes.get("input_interface") {
-            println!("  → Inputs: {inputs:?}");
+            println!("  → Input interface: {inputs:?}");
         }
         if let Some(outputs) = region.attributes.get("output_interface") {
-            println!("  → Outputs: {outputs:?}");
+            println!("  → Output interface: {outputs:?}");
         }
     }
 
-    // Example 4: Boxing individual operations
-    println!("\n=== Boxing Individual Operations ===\n");
+    // Example 4: Operations implementing specific interfaces
+    println!("\n=== Operation Interface Implementation ===\n");
 
     let mut magic_state_prep = Instruction::new(
         Operation::Quantum(QuantumOp::InitState(vec![])),
@@ -131,7 +134,7 @@ fn main() {
         vec![Type::Qubit],
     );
 
-    // Tag it as magic state preparation
+    // Tag operation as implementing magic state preparation interface
     magic_state_prep.attributes = AttributeBuilder::new()
         .with_tag("magic_state_preparation")
         .with_attr(
@@ -144,13 +147,13 @@ fn main() {
         )
         .build();
 
-    println!("Magic State Preparation Attributes:");
+    println!("Magic State Preparation Interface Attributes:");
     for (key, value) in &magic_state_prep.attributes {
         println!("  {key}: {value:?}");
     }
 
-    // Example 5: Nested boxing - algorithms within algorithms
-    println!("\n=== Nested Boxing Example ===\n");
+    // Example 5: Nested interfaces - algorithms containing sub-protocols
+    println!("\n=== Nested Interface Example ===\n");
 
     let mut shor_region = Region::new(RegionKind::SSACFG);
     shor_region.attributes = AttributeBuilder::new()
@@ -163,14 +166,16 @@ fn main() {
         )
         .build();
 
-    println!("Shor's Algorithm Region:");
+    println!("Shor's Algorithm Interface:");
     println!(
-        "  - Contains QFT: {:?}",
+        "  - Contains QFT interface: {:?}",
         shor_region.attributes.get("contains_qft")
     );
     println!(
-        "  - Contains Modular Exp: {:?}",
+        "  - Contains Modular Exp interface: {:?}",
         shor_region.attributes.get("contains_modular_exp")
     );
-    println!("\nOptimization passes can recognize nested patterns and optimize accordingly!");
+    println!(
+        "\nOptimization passes can recognize nested interfaces and optimize each sub-protocol!"
+    );
 }

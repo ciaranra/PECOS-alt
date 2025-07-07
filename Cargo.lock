@@ -1665,7 +1665,6 @@ dependencies = [
  "env_logger",
  "log",
  "pecos",
- "rayon",
  "serde_json",
 ]
 
@@ -1707,12 +1706,10 @@ name = "pecos-hugr-llvm"
 version = "0.1.1"
 dependencies = [
  "anyhow",
- "env_logger",
  "hugr-core",
  "hugr-llvm",
  "log",
  "pecos-core",
- "serde",
  "serde_json",
  "tempfile",
 ]
@@ -1722,7 +1719,6 @@ name = "pecos-llvm-runtime"
 version = "0.1.1"
 dependencies = [
  "bytemuck",
- "env_logger",
  "libc",
  "libloading",
  "log",
@@ -1730,8 +1726,6 @@ dependencies = [
  "pecos-core",
  "pecos-engines",
  "regex",
- "serde",
- "serde_json",
  "serial_test",
  "tempfile",
 ]
@@ -1740,15 +1734,11 @@ dependencies = [
 name = "pecos-phir"
 version = "0.1.1"
 dependencies = [
- "anyhow",
- "env_logger",
  "hugr-core",
  "lazy_static",
- "log",
  "pecos-core",
  "pecos-engines",
- "pest",
- "pest_derive",
+ "pecos-phir-json",
  "pyo3",
  "regex",
  "ron",

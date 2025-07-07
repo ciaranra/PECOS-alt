@@ -16,7 +16,9 @@ mod tests;
 
 pub use byte_message::{ByteMessage, ByteMessageBuilder, Gate, GateType};
 pub use engine::Engine;
-pub use engine_system::{ClassicalEngine, ControlEngine, EngineStage, EngineSystem};
+pub use engine_system::{
+    ClassicalControlEngine, ClassicalEngine, ControlEngine, EngineStage, EngineSystem,
+};
 pub use hybrid::HybridEngine;
 pub use monte_carlo::MonteCarloEngine;
 pub use noise::{DepolarizingNoiseModel, NoiseModel, PassThroughNoiseModel};
@@ -50,8 +52,9 @@ pub use simulation_builder::{SimulationBuilder, run_sim_safe};
 /// # Examples
 ///
 /// ```
-/// use pecos_engines::{run_sim, ClassicalEngine, ByteMessage, Engine};
+/// use pecos_engines::{run_sim, ClassicalEngine, ByteMessage, Engine, ControlEngine};
 /// use pecos_engines::shot_results::{Shot, ShotVec};
+/// use pecos_engines::engine_system::EngineStage;
 /// use pecos_core::errors::PecosError;
 /// use std::any::Any;
 ///
@@ -96,6 +99,26 @@ pub use simulation_builder::{SimulationBuilder, run_sim_safe};
 ///     fn as_any_mut(&mut self) -> &mut dyn Any { self }
 /// }
 ///
+/// impl ControlEngine for DummyEngine {
+///     type Input = ();
+///     type Output = Shot;
+///     type EngineInput = ByteMessage;
+///     type EngineOutput = ByteMessage;
+///
+///     fn start(&mut self, _input: ()) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
+///         Ok(EngineStage::Complete(Shot::default()))
+///     }
+///
+///     fn continue_processing(&mut self, _result: ByteMessage)
+///         -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
+///         Ok(EngineStage::Complete(Shot::default()))
+///     }
+///     
+///     fn reset(&mut self) -> Result<(), PecosError> {
+///         Ok(())
+///     }
+/// }
+///
 /// let engine = Box::new(DummyEngine);
 /// let results = run_sim(engine, 1000, Some(42), None, None, None).unwrap();
 /// ```
@@ -103,7 +126,7 @@ pub use simulation_builder::{SimulationBuilder, run_sim_safe};
 /// # Errors
 /// Returns an error if the hybrid engine creation or execution fails.
 pub fn run_sim(
-    classical_engine: Box<dyn ClassicalEngine>,
+    classical_engine: Box<dyn ClassicalControlEngine>,
     shots: usize,
     seed: Option<u64>,
     workers: Option<usize>,

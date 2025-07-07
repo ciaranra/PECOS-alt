@@ -65,3 +65,6 @@ pub use pecos_qasm::setup_qasm_engine;
 
 // Re-export run_sim from pecos-engines
 pub use pecos_engines::run_sim;
+
+// Re-export ClassicalControlEngine
+pub use pecos_engines::ClassicalControlEngine;

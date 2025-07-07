@@ -1,5 +1,5 @@
 use pecos_core::errors::PecosError;
-use pecos_engines::ClassicalEngine;
+use pecos_engines::ClassicalControlEngine;
 use std::path::Path;
 
 /// Trait that defines the common interface for all PHIR versions
@@ -7,7 +7,7 @@ pub trait PhirImplementation {
     /// The program type for this version
     type Program;
     /// The engine type for this version
-    type Engine: ClassicalEngine + 'static;
+    type Engine: ClassicalControlEngine + 'static;
 
     /// Parse a PHIR program from JSON
     ///
@@ -28,7 +28,7 @@ pub trait PhirImplementation {
     /// # Errors
     ///
     /// Returns an error if the file cannot be read or the engine cannot be created.
-    fn setup_engine(path: &Path) -> Result<Box<dyn ClassicalEngine>, PecosError> {
+    fn setup_engine(path: &Path) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
         let content = std::fs::read_to_string(path).map_err(PecosError::IO)?;
         let program = Self::parse_program(&content)?;
         let engine = Self::create_engine(program)?;

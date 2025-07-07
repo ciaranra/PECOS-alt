@@ -17,7 +17,7 @@ pub mod expression;
 
 use crate::version_traits::PhirImplementation;
 use pecos_core::errors::PecosError;
-use pecos_engines::ClassicalEngine;
+use pecos_engines::ClassicalControlEngine;
 use std::path::Path;
 
 /// Implementation of PHIR-JSON v0.1
@@ -98,7 +98,7 @@ impl PhirImplementation for EnhancedV0_1 {
 /// Returns an error if the file cannot be read or parsed.
 pub fn setup_phir_json_v0_1_engine(
     program_path: &Path,
-) -> Result<Box<dyn ClassicalEngine>, PecosError> {
+) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
     V0_1::setup_engine(program_path)
 }
 
@@ -108,7 +108,7 @@ pub fn setup_phir_json_v0_1_engine(
 /// Returns an error if the file cannot be read or parsed.
 pub fn setup_enhanced_phir_json_v0_1_engine(
     program_path: &Path,
-) -> Result<Box<dyn ClassicalEngine>, PecosError> {
+) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
     EnhancedV0_1::setup_engine(program_path)
 }
 
@@ -120,7 +120,7 @@ pub fn setup_enhanced_phir_json_v0_1_engine(
 pub fn setup_enhanced_phir_json_v0_1_engine_with_wasm(
     program_path: &Path,
     wasm_path: &Path,
-) -> Result<Box<dyn ClassicalEngine>, PecosError> {
+) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
     use crate::v0_1::wasm_foreign_object::WasmtimeForeignObject;
 
     // Create WebAssembly foreign object
@@ -146,7 +146,7 @@ pub fn setup_enhanced_phir_json_v0_1_engine_with_wasm(
 pub fn setup_enhanced_phir_json_v0_1_engine_with_wasm(
     _program_path: &Path,
     _wasm_path: &Path,
-) -> Result<Box<dyn ClassicalEngine>, PecosError> {
+) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
     Err(PecosError::Feature(
         "WebAssembly support is not enabled. Rebuild with the 'wasm' feature to enable it."
             .to_string(),
@@ -161,7 +161,7 @@ pub fn setup_enhanced_phir_json_v0_1_engine_with_wasm(
 pub fn setup_phir_json_v0_1_engine_with_wasm(
     program_path: &Path,
     wasm_path: &Path,
-) -> Result<Box<dyn ClassicalEngine>, PecosError> {
+) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
     use crate::v0_1::wasm_foreign_object::WasmtimeForeignObject;
 
     // Create WebAssembly foreign object
@@ -187,7 +187,7 @@ pub fn setup_phir_json_v0_1_engine_with_wasm(
 pub fn setup_phir_json_v0_1_engine_with_wasm(
     _program_path: &Path,
     _wasm_path: &Path,
-) -> Result<Box<dyn ClassicalEngine>, PecosError> {
+) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
     Err(PecosError::Feature(
         "WebAssembly support is not enabled. Rebuild with the 'wasm' feature to enable it."
             .to_string(),

@@ -19,6 +19,8 @@ pub enum BuiltinOp {
     Func(FuncOp),
     /// Return operation - terminates a function
     Return(ReturnOp),
+    /// Variable definition operation
+    VarDefine(VarDefineOp),
 }
 
 /// Module operation - the top-level container
@@ -202,13 +204,13 @@ impl FuncOp {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ReturnOp {
     /// Values to return
-    pub operands: Vec<crate::ops::SSAValue>,
+    pub operands: Vec<crate::phir::SSAValue>,
 }
 
 impl ReturnOp {
     /// Create a new return operation
     #[must_use]
-    pub fn new(operands: Vec<crate::ops::SSAValue>) -> Self {
+    pub fn new(operands: Vec<crate::phir::SSAValue>) -> Self {
         Self { operands }
     }
 
@@ -216,6 +218,35 @@ impl ReturnOp {
     #[must_use]
     pub fn to_operation(self) -> Operation {
         Operation::Builtin(BuiltinOp::Return(self))
+    }
+}
+
+/// Variable definition operation
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct VarDefineOp {
+    /// Variable name
+    pub name: String,
+    /// Variable type ("qubits", "i64", etc.)
+    pub var_type: String,
+    /// Variable size (array length)
+    pub size: usize,
+}
+
+impl VarDefineOp {
+    /// Create a new variable definition operation
+    #[must_use]
+    pub fn new(name: String, var_type: String, size: usize) -> Self {
+        Self {
+            name,
+            var_type,
+            size,
+        }
+    }
+
+    /// Convert to a generic operation
+    #[must_use]
+    pub fn to_operation(self) -> Operation {
+        Operation::Builtin(BuiltinOp::VarDefine(self))
     }
 }
 
@@ -313,6 +344,14 @@ pub fn builtin_op_to_mlir_text(op: &BuiltinOp, indent: usize) -> String {
 
             output.push('\n');
             output
+        }
+
+        BuiltinOp::VarDefine(var_def) => {
+            let indent_str = "  ".repeat(indent);
+            format!(
+                "{}%{} = phir.var_define {} : {}<{}>",
+                indent_str, var_def.name, var_def.var_type, var_def.var_type, var_def.size
+            )
         }
     }
 }

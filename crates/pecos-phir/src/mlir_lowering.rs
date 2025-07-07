@@ -45,7 +45,7 @@ pub fn lower_phir_to_mlir(module: &Module, _config: &PhirConfig) -> Result<MlirM
             if let crate::ops::Operation::Builtin(crate::builtin_ops::BuiltinOp::Func(func)) =
                 &instruction.operation
             {
-                content.push_str(&convert_function_to_mlir(&func)?);
+                content.push_str(&convert_function_to_mlir(func)?);
                 content.push('\n');
             }
         }

@@ -15,7 +15,7 @@
 use crate::engine::QASMEngine;
 use crate::parser::Program;
 use pecos_core::errors::PecosError;
-use pecos_engines::ClassicalEngine;
+use pecos_engines::ClassicalControlEngine;
 use std::fs::read_to_string;
 use std::path::Path;
 use std::str::FromStr;
@@ -55,7 +55,7 @@ use std::str::FromStr;
 ///
 /// ```
 /// use pecos_qasm::QASMProgram;
-/// use pecos_engines::ClassicalEngine;
+/// use pecos_engines::{ClassicalEngine, ClassicalControlEngine};
 /// use std::str::FromStr;
 ///
 /// // Parse a QASM program
@@ -124,7 +124,7 @@ impl QASMProgram {
     /// This is particularly convenient when using the `run_sim` function from the
     /// pecos crate, which takes a `Box<dyn ClassicalEngine>`.
     #[must_use]
-    pub fn into_engine_box(self) -> Box<dyn ClassicalEngine> {
+    pub fn into_engine_box(self) -> Box<dyn ClassicalControlEngine> {
         Box::new(self.into_engine())
     }
 

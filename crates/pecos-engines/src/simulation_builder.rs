@@ -1,12 +1,12 @@
 use crate::noise::PassThroughNoiseModel;
 use crate::quantum;
 use crate::shot_results::ShotVec;
-use crate::{ClassicalEngine, MonteCarloEngine, NoiseModel, QuantumEngine};
+use crate::{ClassicalControlEngine, MonteCarloEngine, NoiseModel, QuantumEngine};
 use pecos_core::errors::PecosError;
 
 /// Builder for creating and running simulations with compile-time safety
 pub struct SimulationBuilder {
-    classical_engine: Option<Box<dyn ClassicalEngine>>,
+    classical_engine: Option<Box<dyn ClassicalControlEngine>>,
     shots: usize,
     seed: Option<u64>,
     workers: Option<usize>,
@@ -36,7 +36,7 @@ impl SimulationBuilder {
 
     /// Set the classical engine (required)
     #[must_use]
-    pub fn classical_engine(mut self, engine: Box<dyn ClassicalEngine>) -> Self {
+    pub fn classical_engine(mut self, engine: Box<dyn ClassicalControlEngine>) -> Self {
         self.classical_engine = Some(engine);
         self
     }
@@ -117,7 +117,7 @@ impl SimulationBuilder {
 /// - The classical engine is not set
 /// - The simulation execution fails
 pub fn run_sim_safe(
-    classical_engine: Box<dyn ClassicalEngine>,
+    classical_engine: Box<dyn ClassicalControlEngine>,
     shots: usize,
     seed: Option<u64>,
     workers: Option<usize>,

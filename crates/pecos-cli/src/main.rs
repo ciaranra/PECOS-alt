@@ -72,7 +72,6 @@ enum SimulatorType {
     Stabilizer,
 }
 
-
 impl std::str::FromStr for NoiseModelType {
     type Err = String;
 
@@ -100,7 +99,6 @@ impl std::str::FromStr for SimulatorType {
         }
     }
 }
-
 
 #[derive(Args, Clone)]
 struct RunArgs {
@@ -153,7 +151,6 @@ struct RunArgs {
     /// - hex: Display as hexadecimal strings
     #[arg(short = 'f', long = "format", default_value = "decimal")]
     display_format: String,
-
 }
 
 /// Parse noise probability specification from command line argument
@@ -236,7 +233,6 @@ fn parse_general_noise_probabilities(noise_str_opt: Option<&String>) -> (f64, f6
         (p, p, p, p, p)
     }
 }
-
 
 /// Create noise model based on user arguments
 fn create_noise_model(args: &RunArgs) -> Box<dyn NoiseModel> {

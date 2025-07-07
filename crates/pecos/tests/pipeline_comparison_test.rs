@@ -438,7 +438,6 @@ fn run_phir_pipeline(hugr_data: &[u8], shots: usize) -> PipelineResult {
     }
 }
 
-
 /// Compare both compilation pipelines on the same HUGR data
 fn compare_pipelines<V: CircuitValidator>(
     hugr_data: &[u8],

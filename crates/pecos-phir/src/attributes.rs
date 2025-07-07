@@ -1,18 +1,19 @@
 /*!
 Attributes and metadata system for PHIR
 
-This module provides utilities for "boxing" operations and regions with
-semantic metadata that optimization passes can understand and work with.
+This module provides utilities for attaching interface implementations to operations
+and regions through semantic metadata that optimization passes can understand and work with.
 
 Key principle: Keep the core IR simple, but allow rich metadata annotation
 for optimization passes and analysis tools.
 
-## Boxing Philosophy
+## Interface Philosophy
 
 PHIR embraces an abstract approach to quantum error correction and other
 rapidly evolving quantum computing paradigms. Instead of hard-coding specific
-QEC schemes or protocols into the IR, we use attributes to "box" operations
-with semantic metadata that can be interpreted by appropriate passes.
+QEC schemes or protocols into the IR, we use attributes to indicate which
+interfaces an operation implements, with semantic metadata that can be
+interpreted by appropriate passes.
 
 This approach allows:
 - Multiple QEC paradigms (surface codes, LDPC, color codes) to coexist
