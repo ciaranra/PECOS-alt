@@ -758,9 +758,7 @@ impl GeneralNoiseModelBuilder {
         // frequency is in units of 2pi so convert to radians
         model.p_idle_quadratic_rate *= 2.0 * std::f64::consts::PI;
 
-        model.p_idle_linear_rate = Self::validate_probability(
-            model.p_idle_linear_rate * scale * idle_scale
-        );
+        model.p_idle_linear_rate = model.p_idle_linear_rate * scale * idle_scale;
         model.p2_idle = Self::validate_probability(model.p2_idle * scale * idle_scale);
     }
 }
