@@ -198,10 +198,16 @@ jobs:
       - name: Install pecos-rslib
         run: pip install ./pecos-rslib-wheel/*.whl
 
-      - name: Install build dependencies
+      - name: Install pecos RNG build dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install build
+          pip install build nanobind
+
+      - name: Build PECOS RNG
+        run: |
+          cd clibs/pecos-rng && mkdir build && cd build/ && cmake ..
+          make && cd .. && pip install .
+        env:
+            NANOBIND_DIR: python -m nanobind --include_dir
 
       - name: Build quantum-pecos SDist
         run: |
@@ -249,10 +255,16 @@ jobs:
       - name: Install pecos-rslib
         run: pip install ./pecos-rslib-wheel/*.whl
 
-      - name: Install build dependencies
+      - name: Install pecos rng build dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install build
+          pip install build nanobind
+
+      - name: Build PECOS RNG
+        run: |
+          cd clibs/pecos-rng && mkdir build && cd build/ && cmake ..
+          make && cd .. && pip install .
+        env:
+            NANOBIND_DIR: python -m nanobind --include_dir
 
       - name: Build quantum-pecos wheel
         run: |
