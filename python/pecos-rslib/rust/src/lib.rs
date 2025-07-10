@@ -23,6 +23,7 @@ mod hugr_bindings;
 mod llvm_bindings;
 mod llvm_context_bindings;
 mod llvm_execution_guard;
+mod llvm_sim_bindings;
 mod phir_bindings;
 pub mod phir_json_bridge;
 mod qasm_sim_bindings;
@@ -64,6 +65,9 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Register LLVM execution functions
     llvm_bindings::register_llvm_module(m)?;
+
+    // Register LlvmSim functions
+    llvm_sim_bindings::register_llvm_sim_module(m)?;
 
     Ok(())
 }

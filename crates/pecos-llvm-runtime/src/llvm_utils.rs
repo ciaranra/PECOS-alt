@@ -9,7 +9,7 @@ use std::path::Path;
 ///
 /// # Errors
 /// Returns an error if the LLVM file cannot be parsed or accessed.
-pub fn find_entry_point(llvm_file: &Path) -> Result<Option<String>, PecosError> {
+pub(crate) fn find_entry_point(llvm_file: &Path) -> Result<Option<String>, PecosError> {
     // Read the LLVM IR file
     let content = fs::read_to_string(llvm_file).map_err(PecosError::IO)?;
 

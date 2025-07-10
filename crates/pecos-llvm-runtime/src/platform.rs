@@ -14,7 +14,7 @@ pub mod macos;
 
 /// Get standard LLVM installation paths for the current platform
 #[must_use]
-pub fn standard_llvm_paths() -> Vec<PathBuf> {
+pub(crate) fn standard_llvm_paths() -> Vec<PathBuf> {
     #[cfg(target_os = "windows")]
     {
         vec![
@@ -50,7 +50,7 @@ pub fn standard_llvm_paths() -> Vec<PathBuf> {
 
 /// Get platform-specific executable name
 #[must_use]
-pub fn executable_name(tool_name: &str) -> String {
+pub(crate) fn executable_name(tool_name: &str) -> String {
     #[cfg(target_os = "windows")]
     {
         format!("{tool_name}.exe")

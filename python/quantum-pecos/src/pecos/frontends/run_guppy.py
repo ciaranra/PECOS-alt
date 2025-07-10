@@ -277,6 +277,8 @@ def get_guppy_backends() -> dict[str, bool]:
 
 
 
+# Import the builder pattern implementation
+from pecos.frontends.guppy_sim_builder import guppy_sim
+
 # Convenience aliases for consistency with existing PECOS APIs
-guppy_sim = run_guppy  # Alias similar to qasm_sim
 run_guppy_circuit = run_guppy  # Alternative name

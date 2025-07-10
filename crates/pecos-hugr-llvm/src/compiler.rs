@@ -27,8 +27,6 @@ use super::result_extractor::ResultNameExtractor;
 pub struct HugrCompilerConfig {
     /// Output file path for the generated LLVM IR
     pub output_path: Option<PathBuf>,
-    /// Whether to include debug information in the output
-    pub debug_info: bool,
 }
 
 /// Pure HUGR to LLVM IR compiler
@@ -58,12 +56,6 @@ impl HugrCompiler {
         self
     }
 
-    /// Enable or disable debug information
-    #[must_use]
-    pub fn with_debug_info(mut self, debug: bool) -> Self {
-        self.config.debug_info = debug;
-        self
-    }
 
     /// Compile a HUGR file to LLVM IR
     ///
@@ -367,17 +359,15 @@ mod tests {
 
     #[test]
     fn test_hugr_compiler_creation() {
-        let compiler = HugrCompiler::new();
-        assert!(!compiler.config.debug_info);
+        let _compiler = HugrCompiler::new();
+        // Basic creation test
     }
 
     #[test]
     fn test_hugr_compiler_configuration() {
         let compiler = HugrCompiler::new()
-            .with_debug_info(true)
             .with_output_path("/tmp/test.ll");
 
-        assert!(compiler.config.debug_info);
         assert_eq!(
             compiler.config.output_path,
             Some(PathBuf::from("/tmp/test.ll"))

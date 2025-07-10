@@ -227,11 +227,6 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
         params: &[("double", "theta"), ("double", "phi"), ("i64", "qubit")],
     },
     ExportedFunction {
-        name: "__quantum__qis__m__body_i64",
-        return_type: "u32",
-        params: &[("i64", "qubit"), ("i64", "result")],
-    },
-    ExportedFunction {
         name: "__quantum__qis__m__body",
         return_type: "i32",
         params: &[("i64", "qubit"), ("i64", "result")],

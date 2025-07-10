@@ -130,14 +130,96 @@ dyn_clone::clone_trait_object!(ClassicalEngine);
 ///
 /// # Example Implementation Pattern
 ///
-/// ```rust,ignore
-/// impl ClassicalEngine for MyEngine {
-///     // Implement quantum command generation and measurement handling
-///     fn generate_commands(&mut self) -> Result<ByteMessage, PecosError> { ... }
-///     fn handle_measurements(&mut self, msg: ByteMessage) -> Result<(), PecosError> { ... }
-///     // ... other required methods
+/// ```rust
+/// use pecos_engines::{
+///     ClassicalEngine, ControlEngine, Engine, EngineStage,
+///     ByteMessage, ByteMessageBuilder, Shot
+/// };
+/// use pecos_core::errors::PecosError;
+/// use std::any::Any;
+///
+/// // Example engine implementation
+/// #[derive(Clone)]
+/// struct MyEngine {
+///     num_qubits: usize,
+///     commands_generated: bool,
+///     shot_result: Shot,
 /// }
 ///
+/// impl MyEngine {
+///     fn new(num_qubits: usize) -> Self {
+///         Self {
+///             num_qubits,
+///             commands_generated: false,
+///             shot_result: Shot::default(),
+///         }
+///     }
+/// }
+///
+/// // First implement the base Engine trait
+/// impl Engine for MyEngine {
+///     type Input = ();
+///     type Output = Shot;
+///
+///     fn process(&mut self, _input: Self::Input) -> Result<Self::Output, PecosError> {
+///         // Process a single shot
+///         Ok(self.shot_result.clone())
+///     }
+///
+///     fn reset(&mut self) -> Result<(), PecosError> {
+///         // Reset engine state
+///         self.commands_generated = false;
+///         self.shot_result = Shot::default();
+///         Ok(())
+///     }
+/// }
+///
+/// // Then implement ClassicalEngine for quantum-specific functionality
+/// impl ClassicalEngine for MyEngine {
+///     fn num_qubits(&self) -> usize {
+///         self.num_qubits
+///     }
+///
+///     fn generate_commands(&mut self) -> Result<ByteMessage, PecosError> {
+///         let mut builder = ByteMessageBuilder::new();
+///         builder.for_quantum_operations();
+///         
+///         // Generate commands only once in this example
+///         if !self.commands_generated {
+///             // Add quantum operations (e.g., H gate on qubit 0)
+///             builder.add_h(&[0]);
+///             self.commands_generated = true;
+///         }
+///         
+///         Ok(builder.build())
+///     }
+///
+///     fn handle_measurements(&mut self, msg: ByteMessage) -> Result<(), PecosError> {
+///         // Process measurement results from quantum engine
+///         // In a real implementation, you would parse the message
+///         // and update internal state accordingly
+///         Ok(())
+///     }
+///
+///     fn get_results(&self) -> Result<Shot, PecosError> {
+///         Ok(self.shot_result.clone())
+///     }
+///
+///     fn compile(&self) -> Result<(), PecosError> {
+///         // Perform any necessary compilation/validation
+///         Ok(())
+///     }
+///
+///     fn as_any(&self) -> &dyn Any {
+///         self
+///     }
+///
+///     fn as_any_mut(&mut self) -> &mut dyn Any {
+///         self
+///     }
+/// }
+///
+/// // Finally implement ControlEngine for execution flow control
 /// impl ControlEngine for MyEngine {
 ///     type Input = ();
 ///     type Output = Shot;
@@ -145,14 +227,57 @@ dyn_clone::clone_trait_object!(ClassicalEngine);
 ///     type EngineOutput = ByteMessage;
 ///     
 ///     fn start(&mut self, _: ()) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
-///         // Your specific control flow logic here
+///         // Generate initial quantum commands
+///         let commands = self.generate_commands()?;
+///         
+///         if commands.is_empty()? {
+///             // No commands to execute, return results
+///             Ok(EngineStage::Complete(self.get_results()?))
+///         } else {
+///             // Send commands to quantum engine
+///             Ok(EngineStage::NeedsProcessing(commands))
+///         }
 ///     }
 ///     
 ///     fn continue_processing(&mut self, measurements: ByteMessage)
 ///         -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
-///         // Your specific measurement handling and continuation logic
+///         // Handle measurements from quantum engine
+///         self.handle_measurements(measurements)?;
+///         
+///         // Check if there are more commands to execute
+///         let commands = self.generate_commands()?;
+///         
+///         if commands.is_empty()? {
+///             // All done, return final results
+///             Ok(EngineStage::Complete(self.get_results()?))
+///         } else {
+///             // More commands to execute
+///             Ok(EngineStage::NeedsProcessing(commands))
+///         }
+///     }
+///     
+///     fn reset(&mut self) -> Result<(), PecosError> {
+///         // Reset control engine state
+///         self.commands_generated = false;
+///         self.shot_result = Shot::default();
+///         Ok(())
 ///     }
 /// }
+///
+/// // Verify the implementation
+/// let mut engine = MyEngine::new(2);
+/// assert_eq!(engine.num_qubits(), 2);
+/// 
+/// // Test compilation
+/// engine.compile().unwrap();
+///
+/// // Test command generation
+/// let commands = engine.generate_commands().unwrap();
+/// assert!(!commands.is_empty().unwrap());
+///
+/// // Second call returns empty (no more commands)
+/// let commands = engine.generate_commands().unwrap();
+/// assert!(commands.is_empty().unwrap());
 /// ```
 ///
 /// See `PhirEngine`, `QasmEngine`, and `LlvmEngine` for concrete examples.

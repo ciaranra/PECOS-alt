@@ -50,17 +50,14 @@ class RustHugrCompiler:
     offering better performance than pure Python implementations.
     """
 
-    def __init__(self, debug_info: bool = False):
+    def __init__(self):
         """
         Initialize the HUGR compiler.
-
-        Args:
-            debug_info: Whether to include debug information in compiled LLVM IR
         """
         if not RUST_HUGR_AVAILABLE:
             raise ImportError("Rust HUGR backend not available")
 
-        self._compiler = HugrCompiler(debug_info)
+        self._compiler = HugrCompiler()
 
     def compile_bytes_to_llvm(self, hugr_bytes: bytes) -> str:
         """
@@ -84,9 +81,6 @@ class RustHugrCompiler:
         """
         self._compiler.compile_file_to_llvm(hugr_path, llvm_path)
 
-    def set_debug_info(self, debug_info: bool) -> None:
-        """Set debug information flag."""
-        self._compiler.set_debug_info(debug_info)
 
 
 
@@ -102,7 +96,6 @@ class RustHugrLlvmEngine:
         self,
         hugr_bytes: bytes,
         shots: int = 1000,
-        debug_info: bool = False,
     ):
         """
         Create LLVM engine from HUGR bytes.
@@ -110,19 +103,17 @@ class RustHugrLlvmEngine:
         Args:
             hugr_bytes: HUGR data as bytes
             shots: Number of shots to execute
-            debug_info: Whether to include debug information
         """
         if not RUST_HUGR_AVAILABLE:
             raise ImportError("Rust HUGR backend not available")
 
-        self._engine = HugrLlvmEngine(hugr_bytes, shots, debug_info)
+        self._engine = HugrLlvmEngine(hugr_bytes, shots)
 
     @classmethod
     def from_file(
         cls,
         hugr_path: str,
         shots: int = 1000,
-        debug_info: bool = False,
     ) -> "RustHugrLlvmEngine":
         """
         Create LLVM engine from HUGR file.
@@ -130,7 +121,6 @@ class RustHugrLlvmEngine:
         Args:
             hugr_path: Path to HUGR file
             shots: Number of shots to execute
-            debug_info: Whether to include debug information
 
         Returns:
             New RustHugrLlvmEngine instance
@@ -140,7 +130,7 @@ class RustHugrLlvmEngine:
 
         instance = cls.__new__(cls)
         instance._engine = HugrLlvmEngine.from_file(
-            hugr_path, shots, debug_info
+            hugr_path, shots
         )
         return instance
 
@@ -169,7 +159,6 @@ class RustHugrLlvmEngine:
 def compile_hugr_to_llvm_rust(
     hugr_data: Union[bytes, str],
     output_path: Optional[str] = None,
-    debug_info: bool = False,
 ) -> Optional[str]:
     """
     Compile HUGR to LLVM IR using Rust backend.
@@ -177,7 +166,6 @@ def compile_hugr_to_llvm_rust(
     Args:
         hugr_data: HUGR data as bytes or path to HUGR file
         output_path: Path for output LLVM IR file (if None, returns LLVM IR as string)
-        debug_info: Whether to include debug information
 
     Returns:
         LLVM IR as string if output_path is None, otherwise None
@@ -186,17 +174,17 @@ def compile_hugr_to_llvm_rust(
         raise ImportError("Rust HUGR backend not available")
 
     if isinstance(hugr_data, bytes):
-        return compile_hugr_bytes_to_llvm(hugr_data, output_path, debug_info)
+        return compile_hugr_bytes_to_llvm(hugr_data, output_path)
     else:
         # hugr_data is a file path
         if output_path is None:
             # Read file and compile to string
             with open(hugr_data, "rb") as f:
                 hugr_bytes = f.read()
-            return compile_hugr_bytes_to_llvm(hugr_bytes, debug_info)
+            return compile_hugr_bytes_to_llvm(hugr_bytes, None)
         else:
             compile_hugr_file_to_llvm(
-                hugr_data, output_path, debug_info
+                hugr_data, output_path
             )
             return None
 
@@ -204,7 +192,6 @@ def compile_hugr_to_llvm_rust(
 def create_llvm_engine_from_hugr_rust(
     hugr_data: Union[bytes, str],
     shots: int = 1000,
-    debug_info: bool = False,
 ) -> RustHugrLlvmEngine:
     """
     Create LLVM engine from HUGR using Rust backend.
@@ -212,16 +199,15 @@ def create_llvm_engine_from_hugr_rust(
     Args:
         hugr_data: HUGR data as bytes or path to HUGR file
         shots: Number of shots to execute
-        debug_info: Whether to include debug information
 
     Returns:
         RustHugrLlvmEngine instance
     """
     if isinstance(hugr_data, bytes):
-        return RustHugrLlvmEngine(hugr_data, shots, debug_info)
+        return RustHugrLlvmEngine(hugr_data, shots)
     else:
         return RustHugrLlvmEngine.from_file(
-            hugr_data, shots, debug_info
+            hugr_data, shots
         )
 
 

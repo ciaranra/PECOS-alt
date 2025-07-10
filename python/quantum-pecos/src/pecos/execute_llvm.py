@@ -29,7 +29,6 @@ def compile_module_to_string(hugr_bytes: bytes) -> str:
         return compile_hugr_to_llvm_rust(
             hugr_bytes,
             None,  # output_path
-            False,  # debug_info  # noqa: FBT003
         )
 
     except ImportError:

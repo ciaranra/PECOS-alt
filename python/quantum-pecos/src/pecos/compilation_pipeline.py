@@ -88,7 +88,6 @@ def compile_hugr_to_llvm(
             return compile_hugr_to_llvm_rust(
                 hugr_bytes,
                 None,
-                debug_info,
             )
         except RuntimeError as e:
             error_msg = str(e)

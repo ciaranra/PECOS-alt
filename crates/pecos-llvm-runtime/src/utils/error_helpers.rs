@@ -14,21 +14,6 @@ pub fn log_error<E: Display>(component: &str, context: &str, error: E) -> PecosE
     PecosError::Processing(format!("{component} operation failed - {context}: {error}"))
 }
 
-/// Convert a Result with a custom error message
-pub trait ProcessingError<T> {
-    /// Map an error to a `PecosError` with additional context
-    ///
-    /// # Errors
-    ///
-    /// Returns `PecosError::Processing` with the provided context and original error message
-    fn map_processing_err(self, context: &str) -> Result<T, PecosError>;
-}
-
-impl<T, E: Display> ProcessingError<T> for Result<T, E> {
-    fn map_processing_err(self, context: &str) -> Result<T, PecosError> {
-        self.map_err(|e| PecosError::Processing(format!("{context}: {e}")))
-    }
-}
 
 /// Retry an operation with exponential backoff
 ///

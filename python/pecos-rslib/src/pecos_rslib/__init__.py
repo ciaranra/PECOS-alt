@@ -36,6 +36,17 @@ from pecos_rslib._pecos_rslib import get_quantum_engines
 from pecos_rslib._pecos_rslib import execute_llvm
 from pecos_rslib._pecos_rslib import reset_llvm_runtime
 
+# Enhanced LLVM simulation exports
+from pecos_rslib.llvm_sim import (
+    llvm_sim,
+    LlvmSimBuilder,
+    LlvmSimulation,
+    PassThroughNoise as LlvmPassThroughNoise,
+    DepolarizingNoise as LlvmDepolarizingNoise,
+    DepolarizingCustomNoise as LlvmDepolarizingCustomNoise,
+    BiasedDepolarizingNoise as LlvmBiasedDepolarizingNoise,
+)
+
 # Import the qasm_sim function and noise models for easy access
 from pecos_rslib.qasm_sim import qasm_sim, register_noise_model
 
@@ -134,6 +145,14 @@ __all__ = [
     # LLVM execution
     "execute_llvm",
     "reset_llvm_runtime",
+    # Enhanced LLVM simulation
+    "llvm_sim",
+    "LlvmSimBuilder",
+    "LlvmSimulation",
+    "LlvmPassThroughNoise",
+    "LlvmDepolarizingNoise",
+    "LlvmDepolarizingCustomNoise",
+    "LlvmBiasedDepolarizingNoise",
     # Noise model dataclasses
     "PassThroughNoise",
     "DepolarizingNoise",

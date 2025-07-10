@@ -29,23 +29,23 @@ use crate::utils::{LLVM_LOG, log_error, retry_with_backoff, validate_library_fil
 /// Errors are propagated through the Result type and include context about
 /// the operation that failed.
 ///
-/// # Examples
+/// # Note
+/// 
+/// This is an internal implementation detail used by `LlvmEngine`. 
+/// Users should interact with `LlvmEngine` instead of using `LlvmLibrary` directly.
+/// 
+/// # Example - Use LlvmEngine instead
 ///
 /// ```no_run
-/// use pecos_llvm_runtime::library::LlvmLibrary;
-/// use std::path::Path;
+/// use pecos_llvm_runtime::prelude::*;
+/// use std::path::PathBuf;
 ///
-/// // Load an LLVM library from a file
-/// let library = LlvmLibrary::load(Path::new("path/to/library.so")).unwrap();
+/// // Create an LLVM engine (this handles library loading internally)
+/// let mut engine = LlvmEngine::new(PathBuf::from("program.ll"));
 ///
-/// // Call the main function in the library
-/// library.call_function(b"main").unwrap();
-///
-/// // Get the generated quantum commands
-/// let commands = library.get_binary_commands().unwrap();
-///
-/// // Reset the library state
-/// library.reset().unwrap();
+/// // Run a single execution (the engine manages the library for you)
+/// let shot = engine.process(()).unwrap();
+/// println!("Result: {:?}", shot);
 /// ```
 pub struct LlvmLibrary {
     /// The loaded dynamic library wrapped in Arc for safe sharing

@@ -1,5 +1,5 @@
 /// Structured logging helpers for PECOS components
-use log::{debug, trace, warn};
+use log::{debug, warn};
 
 /// Component-specific logger
 pub struct ComponentLogger {
@@ -18,18 +18,6 @@ impl ComponentLogger {
         debug!("{}: {}", self.component, message.as_ref());
     }
 
-    /// Log a debug message with formatted arguments
-    pub fn debugf<F>(&self, f: F)
-    where
-        F: FnOnce() -> String,
-    {
-        debug!("{}: {}", self.component, f());
-    }
-
-    /// Log a trace message with component prefix
-    pub fn trace(&self, message: impl AsRef<str>) {
-        trace!("{}: {}", self.component, message.as_ref());
-    }
 
     /// Log a warning with component prefix
     pub fn warn(&self, message: impl AsRef<str>) {
@@ -39,5 +27,3 @@ impl ComponentLogger {
 
 /// Create component loggers for common components
 pub const LLVM_LOG: ComponentLogger = ComponentLogger::new("LLVM");
-pub const HUGR_LOG: ComponentLogger = ComponentLogger::new("HUGR");
-pub const RUNTIME_LOG: ComponentLogger = ComponentLogger::new("Runtime");

@@ -175,6 +175,17 @@ impl CodegenExtension for StandardLlvmExtension {
     }
 }
 
+/// Helper function to convert i16 qubit ID to i64 (compatible with usize on 64-bit systems)
+/// This pattern is repeated throughout the quantum gate emission functions.
+fn convert_qubit_to_i64<'c>(
+    builder: &hugr_llvm::inkwell::builder::Builder<'c>,
+    qubit_i16: hugr_llvm::inkwell::values::BasicValueEnum<'c>,
+    i64_type: hugr_llvm::inkwell::types::IntType<'c>,
+    name: &str,
+) -> Result<hugr_llvm::inkwell::values::IntValue<'c>, pecos_core::errors::PecosError> {
+    Ok(builder.build_int_z_extend(qubit_i16.into_int_value(), i64_type, name)?)
+}
+
 // Removed static counter - using runtime allocation instead
 
 fn emit_qalloc_standard<'c, H: HugrView<Node = Node>>(
@@ -216,8 +227,7 @@ fn emit_single_qubit_gate_standard<'c, H: HugrView<Node = Node>>(
 
     // Convert i16 qubit to i64 (compatible with usize on 64-bit systems)
     let i64_type = llvm_context.i64_type();
-    let qubit_i64 =
-        builder.build_int_z_extend(args.inputs[0].into_int_value(), i64_type, "qubit_i64")?;
+    let qubit_i64 = convert_qubit_to_i64(builder, args.inputs[0], i64_type, "qubit_i64")?;
 
     // PECOS QIR function signature: void @__quantum__qis__h__body(i64)
     let void_type = llvm_context.void_type();
@@ -240,10 +250,8 @@ fn emit_two_qubit_gate_standard<'c, H: HugrView<Node = Node>>(
     // Convert both qubits from i16 to i64 (compatible with usize on 64-bit systems)
     let i64_type = llvm_context.i64_type();
 
-    let control_i64 =
-        builder.build_int_z_extend(args.inputs[0].into_int_value(), i64_type, "control_i64")?;
-    let target_i64 =
-        builder.build_int_z_extend(args.inputs[1].into_int_value(), i64_type, "target_i64")?;
+    let control_i64 = convert_qubit_to_i64(builder, args.inputs[0], i64_type, "control_i64")?;
+    let target_i64 = convert_qubit_to_i64(builder, args.inputs[1], i64_type, "target_i64")?;
 
     // PECOS QIR function signature: void @__quantum__qis__cx__body(i64, i64)
     let void_type = llvm_context.void_type();
@@ -269,19 +277,23 @@ fn emit_rotation_gate_standard<'c, H: HugrView<Node = Node>>(
     // Rotation gates take a qubit and an angle (float)
     // Convert i16 qubit to i64
     let i64_type = llvm_context.i64_type();
-    let qubit_i64 =
-        builder.build_int_z_extend(args.inputs[0].into_int_value(), i64_type, "qubit_i64")?;
+    let qubit_i64 = convert_qubit_to_i64(builder, args.inputs[0], i64_type, "qubit_i64")?;
 
-    // Get the angle parameter (should be a float)
-    let angle = args.inputs[1].into_float_value();
+    // Get the angle parameter (should be a float in half-turns from tket2.rotation)
+    let angle_halfturns = args.inputs[1].into_float_value();
     let f64_type = llvm_context.f64_type();
+    
+    // Convert half-turns to radians (multiply by π)
+    // tket2.rotation uses half-turns where 1.0 = π radians
+    let pi = f64_type.const_float(std::f64::consts::PI);
+    let angle_radians = builder.build_float_mul(angle_halfturns, pi, "angle_radians")?;
 
     // PECOS QIR function signature: void @__quantum__qis__rx__body(f64, i64)
     let void_type = llvm_context.void_type();
     let func_type = void_type.fn_type(&[f64_type.into(), i64_type.into()], false);
     let func = context.get_extern_func(func_name, func_type)?;
 
-    builder.build_call(func, &[angle.into(), qubit_i64.into()], "")?;
+    builder.build_call(func, &[angle_radians.into(), qubit_i64.into()], "")?;
     args.outputs.finish(builder, [args.inputs[0]])?;
     Ok(())
 }
@@ -296,14 +308,16 @@ fn emit_controlled_rotation_gate_standard<'c, H: HugrView<Node = Node>>(
 
     // Controlled rotation gates take two qubits and an angle
     let i64_type = llvm_context.i64_type();
-    let control_i64 =
-        builder.build_int_z_extend(args.inputs[0].into_int_value(), i64_type, "control_i64")?;
-    let target_i64 =
-        builder.build_int_z_extend(args.inputs[1].into_int_value(), i64_type, "target_i64")?;
+    let control_i64 = convert_qubit_to_i64(builder, args.inputs[0], i64_type, "control_i64")?;
+    let target_i64 = convert_qubit_to_i64(builder, args.inputs[1], i64_type, "target_i64")?;
 
-    // Get the angle parameter
-    let angle = args.inputs[2].into_float_value();
+    // Get the angle parameter (in half-turns from tket2.rotation)
+    let angle_halfturns = args.inputs[2].into_float_value();
     let f64_type = llvm_context.f64_type();
+    
+    // Convert half-turns to radians (multiply by π)
+    let pi = f64_type.const_float(std::f64::consts::PI);
+    let angle_radians = builder.build_float_mul(angle_halfturns, pi, "angle_radians")?;
 
     // PECOS QIR function signature: void @__quantum__qis__crz__body(f64, i64, i64)
     let void_type = llvm_context.void_type();
@@ -312,7 +326,7 @@ fn emit_controlled_rotation_gate_standard<'c, H: HugrView<Node = Node>>(
 
     builder.build_call(
         func,
-        &[angle.into(), control_i64.into(), target_i64.into()],
+        &[angle_radians.into(), control_i64.into(), target_i64.into()],
         "",
     )?;
     args.outputs
@@ -330,12 +344,9 @@ fn emit_toffoli_gate_standard<'c, H: HugrView<Node = Node>>(
 
     // Toffoli takes three qubits
     let i64_type = llvm_context.i64_type();
-    let control1_i64 =
-        builder.build_int_z_extend(args.inputs[0].into_int_value(), i64_type, "control1_i64")?;
-    let control2_i64 =
-        builder.build_int_z_extend(args.inputs[1].into_int_value(), i64_type, "control2_i64")?;
-    let target_i64 =
-        builder.build_int_z_extend(args.inputs[2].into_int_value(), i64_type, "target_i64")?;
+    let control1_i64 = convert_qubit_to_i64(builder, args.inputs[0], i64_type, "control1_i64")?;
+    let control2_i64 = convert_qubit_to_i64(builder, args.inputs[1], i64_type, "control2_i64")?;
+    let target_i64 = convert_qubit_to_i64(builder, args.inputs[2], i64_type, "target_i64")?;
 
     // PECOS QIR function signature: void @__quantum__qis__ccx__body(i64, i64, i64)
     let void_type = llvm_context.void_type();
@@ -362,10 +373,8 @@ fn emit_ch_decomposed<'c, H: HugrView<Node = Node>>(
     // CH gate decomposition: Ry(-π/4) on target, CZ, Ry(π/4) on target
     // Convert qubits from i16 to i64
     let i64_type = llvm_context.i64_type();
-    let control_i64 =
-        builder.build_int_z_extend(args.inputs[0].into_int_value(), i64_type, "control_i64")?;
-    let target_i64 =
-        builder.build_int_z_extend(args.inputs[1].into_int_value(), i64_type, "target_i64")?;
+    let control_i64 = convert_qubit_to_i64(builder, args.inputs[0], i64_type, "control_i64")?;
+    let target_i64 = convert_qubit_to_i64(builder, args.inputs[1], i64_type, "target_i64")?;
 
     // Create angle values for Ry gates
     let f64_type = llvm_context.f64_type();
@@ -407,8 +416,7 @@ fn emit_measure_standard<'c, H: HugrView<Node = Node>>(
 
     // Convert qubit from i16 to i64
     let i64_type = llvm_context.i64_type();
-    let qubit_i64 =
-        builder.build_int_z_extend(args.inputs[0].into_int_value(), i64_type, "qubit_i64")?;
+    let qubit_i64 = convert_qubit_to_i64(builder, args.inputs[0], i64_type, "qubit_i64")?;
 
     // Allocate result ID using HUGR runtime allocation
     // Call __quantum__rt__result_allocate() which returns i64

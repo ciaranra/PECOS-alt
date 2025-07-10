@@ -26,15 +26,28 @@ def test_hugr_backend_availability() -> None:
 
 
 def test_hugr_compiler_creation() -> None:
-    """Test creating HUGR compiler instances."""
+    """Test creating HUGR compiler instances and basic functionality."""
     try:
         from pecos_rslib import RustHugrCompiler
 
         # Test default creation
         compiler = RustHugrCompiler()
-
-        # Test with debug_info parameter
-        compiler = RustHugrCompiler(debug_info=True)
+        
+        # Test that compiler has the expected methods
+        assert hasattr(compiler, 'compile_bytes_to_llvm')
+        assert callable(compiler.compile_bytes_to_llvm)
+        
+        # Test that compiler handles None/empty input appropriately
+        with pytest.raises((RuntimeError, TypeError, ValueError)):
+            compiler.compile_bytes_to_llvm(None)
+            
+        with pytest.raises(RuntimeError):
+            compiler.compile_bytes_to_llvm(b"")
+            
+        # Test that compiler provides meaningful error for invalid JSON
+        with pytest.raises(RuntimeError) as exc_info:
+            compiler.compile_bytes_to_llvm(b"not json")
+        assert "json" in str(exc_info.value).lower() or "parse" in str(exc_info.value).lower()
 
     except ImportError:
         pytest.skip("Rust HUGR backend not available")
@@ -199,6 +212,55 @@ def test_guppy_frontend_backend_selection() -> None:
             pytest.skip("Guppylang not available")
         else:
             raise
+
+
+def test_hugr_compiler_with_valid_data() -> None:
+    """Test HUGR compiler with valid HUGR JSON data."""
+    try:
+        from pecos_rslib import RustHugrCompiler
+        import json
+        
+        compiler = RustHugrCompiler()
+        
+        # Create a minimal valid HUGR structure
+        # This represents an empty module with proper HUGR format
+        valid_hugr = {
+            "format": "hugr",
+            "version": "0.1.0",
+            "modules": [
+                {
+                    "name": "main",
+                    "nodes": [
+                        {
+                            "id": "root",
+                            "op": "Module",
+                            "children": []
+                        }
+                    ],
+                    "edges": []
+                }
+            ]
+        }
+        
+        hugr_bytes = json.dumps(valid_hugr).encode('utf-8')
+        
+        # This should either compile successfully or fail with a specific HUGR error
+        # (not a JSON parsing error)
+        try:
+            result = compiler.compile_bytes_to_llvm(hugr_bytes)
+            # If it succeeds, verify we got LLVM IR
+            assert isinstance(result, str)
+            assert len(result) > 0
+            # Basic LLVM IR should contain some expected patterns
+            assert "define" in result or "declare" in result or "@" in result
+        except RuntimeError as e:
+            # If it fails, it should be due to HUGR validation, not JSON parsing
+            error_msg = str(e).lower()
+            assert "json" not in error_msg or "hugr" in error_msg, \
+                f"Expected HUGR validation error, not JSON parsing error: {e}"
+                
+    except ImportError:
+        pytest.skip("Rust HUGR backend not available")
 
 
 if __name__ == "__main__":

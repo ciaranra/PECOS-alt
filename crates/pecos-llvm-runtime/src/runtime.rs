@@ -10,15 +10,14 @@
 // Submodule declarations
 pub mod builder;
 pub mod cleanup;
-pub mod context;
 pub mod registry;
 pub mod state;
 
 // Re-export commonly used types
-pub use cleanup::{cleanup_thread_local_state, force_runtime_cleanup};
-pub use context::RuntimeContext;
-pub use registry::{RuntimeRegistry, initialize_registry};
 pub use state::LlvmRuntimeState;
+
+// Internal use only
+use registry::{RuntimeRegistry, initialize_registry};
 
 // Internal imports
 use log::{debug, error, warn};
@@ -36,44 +35,6 @@ static INIT: Once = Once::new();
 const MAX_CALLBACK_DEPTH: usize = 5;
 const CALLBACK_TIMEOUT_SECS: u64 = 30;
 
-// Macro for creating HUGR convention FFI functions
-// TODO: Use this macro to reduce duplication in FFI function definitions
-#[allow(unused_macros)]
-macro_rules! hugr_ffi_function {
-    ($fn_name:ident, $internal_fn:path, $arg_type:ty) => {
-        /// # Safety
-        ///
-        /// This function is a thin wrapper around the internal function.
-        /// The caller must ensure that the argument values are valid for the operation.
-        #[no_mangle]
-        pub unsafe extern "C" fn $fn_name(arg: $arg_type) {
-            ensure_runtime_initialized();
-            $internal_fn(arg);
-        }
-    };
-    ($fn_name:ident, $internal_fn:path, $arg1_type:ty, $arg2_type:ty) => {
-        /// # Safety
-        ///
-        /// This function is a thin wrapper around the internal function.
-        /// The caller must ensure that the argument values are valid for the operation.
-        #[no_mangle]
-        pub unsafe extern "C" fn $fn_name(arg1: $arg1_type, arg2: $arg2_type) {
-            ensure_runtime_initialized();
-            $internal_fn(arg1, arg2);
-        }
-    };
-    ($fn_name:ident, $internal_fn:path, $arg1_type:ty, $arg2_type:ty, $arg3_type:ty) => {
-        /// # Safety
-        ///
-        /// This function is a thin wrapper around the internal function.
-        /// The caller must ensure that the argument values are valid for the operation.
-        #[no_mangle]
-        pub unsafe extern "C" fn $fn_name(arg1: $arg1_type, arg2: $arg2_type, arg3: $arg3_type) {
-            ensure_runtime_initialized();
-            $internal_fn(arg1, arg2, arg3);
-        }
-    };
-}
 
 // Circuit breaker for preventing infinite callback loops
 thread_local! {
@@ -837,18 +798,6 @@ pub unsafe extern "C" fn __quantum__rt__qubit_allocate() -> i64 {
 /// This function is marked unsafe as it's called from C/FFI context.
 /// Both qubit and result must be valid IDs previously allocated.
 /// Returns 0 as this uses deferred measurement model.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__qis__m__body_i64(qubit: i64, result: i64) -> u32 {
-    let qubit_id = i64_to_usize(qubit);
-    let result_id = i64_to_usize(result);
-    core_runtime::measure(qubit_id, result_id);
-
-    // In the deferred measurement model, measurement results are not available immediately.
-    // This function records the measurement for later execution and always returns 0.
-    // The actual measurement result will be available through __quantum__rt__result_get_one.
-    0
-}
-
 /// Measure a qubit
 ///
 /// # Safety

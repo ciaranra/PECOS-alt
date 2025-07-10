@@ -26,7 +26,6 @@ let llvm_ir = compiler.compile_hugr_bytes_to_string(hugr_bytes)?;
 // Or compile HUGR file to LLVM IR file
 let config = HugrCompilerConfig {
     output_path: Some("output.ll".into()),
-    debug_info: false,
 };
 let compiler = HugrCompiler::with_config(config);
 let llvm_path = compiler.compile_hugr("input.hugr")?;

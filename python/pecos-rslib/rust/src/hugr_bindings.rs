@@ -36,21 +36,14 @@ fn get_next_engine_id() -> usize {
 
 /// Python wrapper for HUGR compiler
 #[pyclass(name = "HugrCompiler")]
-pub struct PyHugrCompiler {
-    debug_info: bool,
-}
+pub struct PyHugrCompiler {}
 
 #[pymethods]
 impl PyHugrCompiler {
     /// Create a new HUGR compiler
-    ///
-    /// # Arguments
-    /// * `debug_info` - Whether to include debug information
     #[new]
-    fn new(debug_info: Option<bool>) -> Self {
-        Self {
-            debug_info: debug_info.unwrap_or(false),
-        }
+    fn new() -> Self {
+        Self {}
     }
 
     /// Compile HUGR bytes to LLVM IR string
@@ -64,11 +57,7 @@ impl PyHugrCompiler {
         let bytes = hugr_bytes.as_bytes();
 
         // Use the pure compilation crate
-        let compiler = if self.debug_info {
-            HugrCompiler::new().with_debug_info(true)
-        } else {
-            HugrCompiler::new()
-        };
+        let compiler = HugrCompiler::new();
 
         compiler
             .compile_hugr_bytes_to_string(bytes)
@@ -87,7 +76,6 @@ impl PyHugrCompiler {
     ) -> PyResult<()> {
         let config = HugrCompilerConfig {
             output_path: Some(PathBuf::from(llvm_path)),
-            debug_info: self.debug_info,
         };
 
         let compiler = HugrCompiler::with_config(config.clone());
@@ -109,7 +97,6 @@ impl PyHugrCompiler {
     fn compile_file_to_llvm(&self, hugr_path: &str, llvm_path: &str) -> PyResult<()> {
         let config = HugrCompilerConfig {
             output_path: Some(PathBuf::from(llvm_path)),
-            debug_info: self.debug_info,
         };
 
         let compiler = HugrCompiler::with_config(config);
@@ -120,10 +107,6 @@ impl PyHugrCompiler {
         Ok(())
     }
 
-    /// Set debug information flag
-    fn set_debug_info(&mut self, debug_info: bool) {
-        self.debug_info = debug_info;
-    }
 
     /// Compile HUGR bytes to QIR string (deprecated, use compile_bytes_to_llvm)
     fn compile_bytes_to_qir(&self, hugr_bytes: &Bound<'_, PyBytes>) -> PyResult<String> {
@@ -150,23 +133,16 @@ impl PyHugrLlvmEngine {
     /// # Arguments
     /// * `hugr_bytes` - HUGR data as bytes
     /// * `shots` - Number of shots to assign to the engine
-    /// * `debug_info` - Whether to include debug information
     #[new]
     fn new(
         hugr_bytes: &Bound<'_, PyBytes>,
         shots: Option<usize>,
-        debug_info: Option<bool>,
     ) -> PyResult<Self> {
         let bytes = hugr_bytes.as_bytes();
         let shots = shots.unwrap_or(1000);
-        let debug_info = debug_info.unwrap_or(false);
 
         // Step 1: Compile HUGR to LLVM IR
-        let compiler = if debug_info {
-            HugrCompiler::new().with_debug_info(true)
-        } else {
-            HugrCompiler::new()
-        };
+        let compiler = HugrCompiler::new();
 
         let llvm_ir = compiler
             .compile_hugr_bytes_to_string(bytes)
@@ -206,16 +182,13 @@ impl PyHugrLlvmEngine {
     /// # Arguments
     /// * `hugr_path` - Path to HUGR file
     /// * `shots` - Number of shots to assign to the engine
-    /// * `debug_info` - Whether to include debug information
     #[classmethod]
     fn from_file(
         _cls: &Bound<'_, PyType>,
         hugr_path: &str,
         shots: Option<usize>,
-        debug_info: Option<bool>,
     ) -> PyResult<Self> {
         let shots = shots.unwrap_or(1000);
-        let debug_info = debug_info.unwrap_or(false);
 
         // Step 1: Compile HUGR to LLVM IR
         let temp_dir = TempDir::new()
@@ -224,7 +197,6 @@ impl PyHugrLlvmEngine {
 
         let config = HugrCompilerConfig {
             output_path: Some(llvm_path.clone()),
-            debug_info,
         };
 
         let compiler = HugrCompiler::with_config(config);
@@ -339,9 +311,8 @@ impl PyHugrLlvmEngine {
         _cls: &Bound<'_, PyType>,
         hugr_bytes: &Bound<'_, PyBytes>,
         shots: Option<usize>,
-        debug_info: Option<bool>,
     ) -> PyResult<Self> {
-        Self::new(hugr_bytes, shots, debug_info)
+        Self::new(hugr_bytes, shots)
     }
 
     /// Create QIR engine from HUGR file (deprecated, use from_file)
@@ -350,9 +321,8 @@ impl PyHugrLlvmEngine {
         cls: &Bound<'_, PyType>,
         hugr_path: &str,
         shots: Option<usize>,
-        debug_info: Option<bool>,
     ) -> PyResult<Self> {
-        Self::from_file(cls, hugr_path, shots, debug_info)
+        Self::from_file(cls, hugr_path, shots)
     }
 }
 
@@ -390,9 +360,8 @@ pub fn register_hugr_module(parent_module: &Bound<'_, PyModule>) -> PyResult<()>
 fn compile_hugr_bytes_to_llvm(
     hugr_bytes: &Bound<'_, PyBytes>,
     output_path: Option<String>,
-    debug_info: Option<bool>,
 ) -> PyResult<Option<String>> {
-    let compiler = PyHugrCompiler::new(debug_info);
+    let compiler = PyHugrCompiler::new();
     if let Some(path) = output_path {
         compiler.compile_bytes_to_llvm_file(hugr_bytes, &path)?;
         Ok(None)
@@ -406,9 +375,8 @@ fn compile_hugr_bytes_to_llvm(
 fn compile_hugr_file_to_llvm(
     hugr_path: &str,
     llvm_path: &str,
-    debug_info: Option<bool>,
 ) -> PyResult<()> {
-    let compiler = PyHugrCompiler::new(debug_info);
+    let compiler = PyHugrCompiler::new();
     compiler.compile_file_to_llvm(hugr_path, llvm_path)
 }
 

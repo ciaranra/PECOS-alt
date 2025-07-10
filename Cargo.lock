@@ -1731,6 +1731,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "pecos-llvm-sim"
+version = "0.1.1"
+dependencies = [
+ "hugr-core",
+ "log",
+ "pecos-core",
+ "pecos-engines",
+ "pecos-hugr-llvm",
+ "pecos-llvm-runtime",
+ "serde_json",
+ "serial_test",
+ "tempfile",
+]
+
+[[package]]
 name = "pecos-phir"
 version = "0.1.1"
 dependencies = [
@@ -1802,6 +1817,7 @@ dependencies = [
  "pecos-engines",
  "pecos-hugr-llvm",
  "pecos-llvm-runtime",
+ "pecos-llvm-sim",
  "pecos-phir",
  "pecos-qasm",
  "pyo3",

@@ -77,16 +77,18 @@ def test_guppy_sim() -> None:
     """Test guppy_sim() alias with bell_state."""
     print("\nTesting guppy_sim() alias with bell_state:")
     try:
-        result = guppy_sim(bell_state, shots=200)
-        assert "results" in result
-        assert len(result["results"]) == 200
+        result = guppy_sim(bell_state).run(200)
+        assert "_result" in result
+        assert len(result["_result"]) == 200
 
-        correlated = sum(1 for r in result["results"] if r[0] == r[1])
-        print(f"   [OK] Got {len(result['results'])} results")
+        # Convert integer results back to check correlation
+        # 0 = (0,0), 3 = (1,1) are correlated
+        correlated = sum(1 for r in result["_result"] if r == 0 or r == 3)
+        print(f"   [OK] Got {len(result['_result'])} results")
         print(
             f"   Correlation rate: {correlated/200:.1%} (expect ~100% for Bell state)",
         )
-        print(f"   Sample results: {result['results'][:5]}")
+        print(f"   Sample results: {result['_result'][:5]}")
     except RuntimeError as e:
         if "Unknown type:" in str(e):
             print(f"   [INFO] Expected error: {e}")

@@ -179,7 +179,6 @@ class GuppyFrontend:
             qir_content = compile_hugr_to_llvm_rust(
                 hugr_bytes,
                 None,  # output_path
-                debug_info=False,  # debug_info
             )
 
             # Write QIR to file

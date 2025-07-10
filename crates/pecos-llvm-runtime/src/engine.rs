@@ -25,7 +25,7 @@ use std::thread;
 ///
 /// A string representation of the current thread ID
 #[must_use]
-pub fn get_thread_id() -> String {
+fn get_thread_id() -> String {
     format!("{:?}", thread::current().id())
 }
 

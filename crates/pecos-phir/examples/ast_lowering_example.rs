@@ -140,7 +140,7 @@ module @quantum_teleportation {{
 /// Stage 3: Fully lowered to SSA form with CFG
 fn show_ssa_representation() {
     println!(
-        r#"
+        r"
 module @quantum_teleportation {{
   // SSA form: Explicit memory and control flow
   %0 = llvm.mlir.global @alice_qubit : !llvm.ptr
@@ -191,7 +191,6 @@ module @quantum_teleportation {{
     llvm.return %bob_ptr : !llvm.ptr
   }}
 }}
-"#
+"
     );
 }
-

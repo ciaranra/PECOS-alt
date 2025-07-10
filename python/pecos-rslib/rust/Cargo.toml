@@ -40,6 +40,7 @@ pecos-core = { workspace = true }
 pecos-qasm = { workspace = true }
 pecos-engines = { workspace = true }
 pecos-llvm-runtime = { workspace = true }
+pecos-llvm-sim = { workspace = true }
 pecos-phir = { path = "../../../crates/pecos-phir" }
 pecos-hugr-llvm = { path = "../../../crates/pecos-hugr-llvm", optional = true }
 parking_lot = { workspace = true}
