@@ -152,20 +152,20 @@ impl HybridEngine {
                 iteration_count,
                 std::thread::current().id()
             );
-            eprintln!(
-                "DEBUG HybridEngine: Processing quantum commands, iteration {iteration_count}"
+            debug!(
+                "Processing quantum commands, iteration {iteration_count}"
             );
 
             // Process through engine (could be QuantumEngine or EngineSystem)
             let measurement_message = self.quantum_system.process(command_message)?;
 
-            eprintln!("DEBUG HybridEngine: Calling continue_processing with measurements");
+            debug!("Calling continue_processing with measurements");
             // Continue classical processing with measurements
             stage = self
                 .classical_engine
                 .continue_processing(measurement_message)?;
-            eprintln!(
-                "DEBUG HybridEngine: continue_processing returned stage: {:?}",
+            debug!(
+                "continue_processing returned stage: {:?}",
                 match &stage {
                     EngineStage::Complete(_) => "Complete",
                     EngineStage::NeedsProcessing(_) => "NeedsProcessing",

@@ -84,6 +84,19 @@ impl CodegenExtension for StandardLlvmExtension {
                     emit_measure_standard(ctx, args, &names).map_err(anyhow::Error::new)
                 }
             })
+            // Add support for tket2.quantum.Measure (returns qubit and bool)
+            .extension_op(ext_id.clone(), "Measure".into(), {
+                let names = result_names.clone();
+                move |ctx, args| {
+                    emit_measure_with_qubit_return(ctx, args, &names).map_err(anyhow::Error::new)
+                }
+            })
+            // Add support for tket2.quantum.Reset
+            .extension_op(ext_id.clone(), "Reset".into(), {
+                move |ctx, args| {
+                    emit_reset_standard(ctx, args).map_err(anyhow::Error::new)
+                }
+            })
             .extension_op(ext_id.clone(), "X".into(), {
                 move |ctx, args| {
                     emit_single_qubit_gate_standard(ctx, args, &x_func).map_err(anyhow::Error::new)
@@ -406,6 +419,112 @@ fn emit_ch_decomposed<'c, H: HugrView<Node = Node>>(
     Ok(())
 }
 
+fn emit_reset_standard<'c, H: HugrView<Node = Node>>(
+    context: &mut EmitFuncContext<'c, '_, H>,
+    args: EmitOpArgs<'c, '_, ExtensionOp, H>,
+) -> Result<(), PecosError> {
+    let llvm_context = context.iw_context();
+    let builder = context.builder();
+
+    // Convert qubit from i16 to i64
+    let i64_type = llvm_context.i64_type();
+    let qubit_i64 = convert_qubit_to_i64(builder, args.inputs[0], i64_type, "qubit_i64")?;
+
+    // PECOS QIR reset: void @__quantum__qis__reset__body(i64)
+    let void_type = llvm_context.void_type();
+    let reset_func_type = void_type.fn_type(&[i64_type.into()], false);
+    let reset_func = context.get_extern_func("__quantum__qis__reset__body", reset_func_type)?;
+
+    builder.build_call(reset_func, &[qubit_i64.into()], "")?;
+    
+    // Reset returns the same qubit
+    args.outputs.finish(builder, [args.inputs[0]])?;
+    Ok(())
+}
+
+fn emit_measure_with_qubit_return<'c, H: HugrView<Node = Node>>(
+    context: &mut EmitFuncContext<'c, '_, H>,
+    args: EmitOpArgs<'c, '_, ExtensionOp, H>,
+    result_names: &ResultNameMapping,
+) -> Result<(), PecosError> {
+    let llvm_context = context.iw_context();
+    let builder = context.builder();
+
+    // Convert qubit from i16 to i64
+    let i64_type = llvm_context.i64_type();
+    let qubit_i64 = convert_qubit_to_i64(builder, args.inputs[0], i64_type, "qubit_i64")?;
+
+    // Allocate result ID using HUGR runtime allocation
+    let allocate_result_func_type = i64_type.fn_type(&[], false);
+    let allocate_result_func =
+        context.get_extern_func("__quantum__rt__result_allocate", allocate_result_func_type)?;
+
+    let result_call = builder.build_call(allocate_result_func, &[], "result_id")?;
+    let result_id_val = result_call
+        .try_as_basic_value()
+        .left()
+        .unwrap()
+        .into_int_value();
+
+    // PECOS QIR measurement: i32 @__quantum__qis__m__body(i64, i64)
+    let i32_type = llvm_context.i32_type();
+    let measure_func_type = i32_type.fn_type(&[i64_type.into(), i64_type.into()], false);
+    let measure_func = context.get_extern_func("__quantum__qis__m__body", measure_func_type)?;
+
+    let measurement_result = builder.build_call(
+        measure_func,
+        &[qubit_i64.into(), result_id_val.into()],
+        "measurement_result",
+    )?;
+
+    // Record the result (same as MeasureFree)
+    let measurement_node = args.node.node();
+    let name = result_names
+        .get(&measurement_node)
+        .map_or("_result_0", std::string::String::as_str);
+
+    // Create string constant for the result name
+    let i8_type = llvm_context.i8_type();
+    let name_str = llvm_context.const_string(name.as_bytes(), true);
+    let name_global = context.get_global(format!("str_{name}"), name_str.get_type(), true)?;
+    name_global.set_initializer(&name_str);
+
+    // Get pointer to the string
+    let zero = i32_type.const_zero();
+    let indices = [zero, zero];
+    let string_ptr = unsafe {
+        builder.build_in_bounds_gep(name_global.as_pointer_value(), &indices, "string_ptr")?
+    };
+
+    // Call result recording
+    let void_type = llvm_context.void_type();
+    let i8_ptr_type = i8_type.ptr_type(hugr_llvm::inkwell::AddressSpace::default());
+    let record_func_type = void_type.fn_type(&[i8_ptr_type.into(), i8_ptr_type.into()], false);
+    let record_func =
+        context.get_extern_func("__quantum__rt__result_record_output", record_func_type)?;
+
+    let result_ptr = builder.build_int_to_ptr(result_id_val, i8_ptr_type, "result_ptr")?;
+    builder.build_call(record_func, &[result_ptr.into(), string_ptr.into()], "")?;
+
+    // Convert i32 result to bool for HUGR
+    let measurement_i32 = measurement_result
+        .try_as_basic_value()
+        .left()
+        .unwrap()
+        .into_int_value();
+    let zero_i32 = i32_type.const_zero();
+    let is_one = builder.build_int_compare(
+        hugr_llvm::inkwell::IntPredicate::NE,
+        measurement_i32,
+        zero_i32,
+        "is_one",
+    )?;
+
+    // Measure returns (qubit, bool) unlike MeasureFree which just returns bool
+    args.outputs.finish(builder, [args.inputs[0], is_one.into()])?;
+    Ok(())
+}
+
 fn emit_measure_standard<'c, H: HugrView<Node = Node>>(
     context: &mut EmitFuncContext<'c, '_, H>,
     args: EmitOpArgs<'c, '_, ExtensionOp, H>,
@@ -443,11 +562,11 @@ fn emit_measure_standard<'c, H: HugrView<Node = Node>>(
     )?;
 
     // IMPORTANT: Record the result with __quantum__rt__result_record_output
-    // Get the result name for this measurement node, fallback to "c" if not found
+    // Get the result name for this measurement node, fallback to "_result_0" if not found
     let measurement_node = args.node.node();
     let name = result_names
         .get(&measurement_node)
-        .map_or("c", std::string::String::as_str);
+        .map_or("_result_0", std::string::String::as_str);
 
     // Create string constant for the result name
     let i8_type = llvm_context.i8_type();

@@ -666,6 +666,18 @@ pub unsafe extern "C" fn __quantum__qis__tdg__body(qubit: i64) {
     core_runtime::tdg_gate(qubit_id);
 }
 
+/// Reset a qubit to |0⟩
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The qubit parameter must be a valid qubit ID previously allocated.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__qis__reset__body(qubit: i64) {
+    let qubit_id = i64_to_usize(qubit);
+    core_runtime::reset_qubit(qubit_id);
+}
+
 /// Apply rotation around X-axis
 ///
 /// # Safety

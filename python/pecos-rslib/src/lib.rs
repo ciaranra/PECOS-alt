@@ -11,6 +11,7 @@
 // the License.
 
 use pyo3::prelude::*;
+use log::LevelFilter;
 
 mod byte_message;
 mod engines;
@@ -33,6 +34,15 @@ use state_vec::PyStateVecRs;
 /// Python bindings for PECOS Rust implementations
 #[pymodule]
 fn _pecos_rslib(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // Initialize logger with default level of WARN to suppress debug messages
+    // Users can override this by setting RUST_LOG environment variable
+    if std::env::var("RUST_LOG").is_err() {
+        // Only set up logging if RUST_LOG is not already set
+        let _ = env_logger::builder()
+            .filter_level(LevelFilter::Warn)
+            .try_init();
+    }
+    
     // Original engine classes
     m.add_class::<PyStateVecRs>()?;
     m.add_class::<PySparseSimRs>()?;

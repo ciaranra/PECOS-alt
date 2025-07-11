@@ -109,6 +109,11 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
         params: &[("i64", "qubit")],
     },
     ExportedFunction {
+        name: "__quantum__qis__reset__body",
+        return_type: "void",
+        params: &[("i64", "qubit")],
+    },
+    ExportedFunction {
         name: "__quantum__qis__rx__body",
         return_type: "void",
         params: &[("double", "theta"), ("i64", "qubit")],

@@ -1811,6 +1811,8 @@ dependencies = [
 name = "pecos-rslib"
 version = "0.1.1"
 dependencies = [
+ "env_logger",
+ "log",
  "parking_lot",
  "pecos",
  "pecos-core",

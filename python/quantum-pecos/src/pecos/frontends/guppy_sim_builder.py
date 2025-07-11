@@ -4,6 +4,13 @@ This module provides a builder pattern interface for running Guppy quantum progr
 similar to how qasm_sim works but keeping everything in memory for performance.
 """
 
+__all__ = [
+    'guppy_sim',
+    'GuppySimulation',
+    'GuppySimulationBuilder',
+    'GuppySimulationConfig',
+]
+
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, TypeVar, Optional, Dict, List
@@ -28,14 +35,18 @@ try:
     from pecos_rslib import (
         execute_llvm as rust_execute_llvm,
         reset_llvm_runtime,
-        NoiseModel,
-        QuantumEngine,
+    )
+    from pecos_rslib.llvm_sim import (
+        llvm_sim,
+        DepolarizingNoise,
+        BiasedDepolarizingNoise,
+        DepolarizingCustomNoise,
+        PassThroughNoise,
     )
     RUST_EXECUTION_AVAILABLE = True
 except ImportError:
     RUST_EXECUTION_AVAILABLE = False
-    NoiseModel = None
-    QuantumEngine = None
+    llvm_sim = None
 
 
 @dataclass
@@ -79,10 +90,15 @@ class GuppySimulation:
         self._config = config
         self.hugr_bytes = hugr_bytes
         self.llvm_ir = llvm_ir
-        self.function_name = getattr(
-            guppy_func, "__name__", 
-            getattr(guppy_func, "name", str(guppy_func))
-        )
+        # Get a short function name for file naming
+        if hasattr(guppy_func, "__name__"):
+            self.function_name = guppy_func.__name__
+        elif hasattr(guppy_func, "name"):
+            self.function_name = guppy_func.name
+        else:
+            # Use a hash of the function for long GuppyDefinition strings
+            import hashlib
+            self.function_name = f"guppy_{hashlib.md5(str(guppy_func).encode()).hexdigest()[:8]}"
         
         # Track intermediate files directory if keeping files
         self.temp_dir = None
@@ -163,29 +179,70 @@ class GuppySimulation:
                 if self._config.verbose:
                     print(f"[WARNING] Runtime reset failed: {e}")
         
-        # Execute using the persistent temp file
-        if RUST_EXECUTION_AVAILABLE:
-            # Use Rust execution engine with our temp file
-            result = rust_execute_llvm(
-                self._temp_file,
-                shots,
-                self._config.seed,
-                None,  # noise_probability (TODO: connect to config.noise_model)
-                self._config.workers,
-            )
+        # Execute using llvm_sim with full feature support
+        if RUST_EXECUTION_AVAILABLE and llvm_sim is not None:
+            # Build llvm_sim with our configuration
+            builder = llvm_sim(self._temp_file)
             
-            if result.get("execution_successful", False):
-                raw_results = result.get("results", [])
-            else:
-                raise RuntimeError(f"Execution failed: {result.get('error', 'Unknown error')}")
+            # Configure seed
+            if self._config.seed is not None:
+                builder = builder.seed(self._config.seed)
+            
+            # Configure workers
+            if self._config.workers is not None:
+                builder = builder.workers(self._config.workers)
+            
+            # Configure noise model
+            if self._config.noise_model is not None:
+                builder = builder.noise(self._config.noise_model)
+            
+            # Configure engine
+            if self._config.engine is not None:
+                if self._config.engine.lower() == "statevector":
+                    builder = builder.with_state_vector_engine()
+                elif self._config.engine.lower() == "sparsestabilizer":
+                    builder = builder.with_sparse_stabilizer_engine()
+            
+            # Configure verbosity and debug
+            if self._config.verbose:
+                builder = builder.verbose(True)
+            if self._config.debug:
+                builder = builder.debug(True)
+            
+            # Run simulation
+            results = builder.run(shots)
+            
+            # llvm_sim returns columnar format, we need to convert back to raw for our formatter
+            # For now, just store the results dict and handle in formatting
+            raw_results = results
         else:
-            # Fallback - should not happen in production
-            raise RuntimeError("Rust execution backend not available")
+            # Fallback to basic execute_llvm
+            if RUST_EXECUTION_AVAILABLE:
+                result = rust_execute_llvm(
+                    self._temp_file,
+                    shots,
+                    self._config.seed,
+                    None,  # basic execute doesn't support noise
+                    self._config.workers,
+                )
+                
+                if result.get("execution_successful", False):
+                    raw_results = result.get("results", [])
+                else:
+                    raise RuntimeError(f"Execution failed: {result.get('error', 'Unknown error')}")
+            else:
+                raise RuntimeError("Rust execution backend not available")
         
         execution_time = time.time() - start_time
         
-        # Convert to columnar format like qasm_sim
-        columnar_results = self._format_results_columnar(raw_results)
+        # If using llvm_sim, results are already in columnar format
+        if RUST_EXECUTION_AVAILABLE and llvm_sim is not None and isinstance(raw_results, dict):
+            # llvm_sim returns results with register names like "c", "c1" etc.
+            # We need to check if this is a multi-value return that should be combined
+            columnar_results = self._process_llvm_sim_results(raw_results)
+        else:
+            # Convert to columnar format like qasm_sim
+            columnar_results = self._format_results_columnar(raw_results)
         
         # Update statistics
         self.total_shots += shots
@@ -243,6 +300,65 @@ class GuppySimulation:
                 return {"_result": ['1' if r else '0' for r in raw_results]}
             else:
                 return {"_result": raw_results}
+    
+    def _process_llvm_sim_results(self, raw_results: Dict[str, List[Any]]) -> Dict[str, List[Any]]:
+        """Process results from llvm_sim, which may have multiple _result_N registers.
+        
+        For Guppy functions returning tuples, llvm_sim creates separate registers 
+        (_result_0, _result_1, etc.) for each measurement. We need to combine these
+        into a single "_result" register with encoded values for compatibility.
+        """
+        # Check if we have multiple _result_N registers
+        result_registers = [(k, v) for k, v in raw_results.items() if k.startswith("_result_")]
+        
+        if len(result_registers) == 0:
+            # No _result_N registers, return as-is
+            return raw_results
+        elif len(result_registers) == 1:
+            # Single result register - rename to "_result" for compatibility
+            key, values = result_registers[0]
+            if key == "_result_0":
+                # Rename _result_0 to _result
+                result = raw_results.copy()
+                result["_result"] = result.pop("_result_0")
+                return result
+            return raw_results
+        else:
+            # Multiple result registers - need to combine into tuple representation
+            # Sort by register number to ensure consistent ordering
+            result_registers.sort(key=lambda x: int(x[0].split("_")[-1]))
+            
+            # Get the number of shots from the first register
+            num_shots = len(result_registers[0][1])
+            
+            # Combine the results shot by shot
+            combined_results = []
+            for shot_idx in range(num_shots):
+                if self._config.binary_string_format:
+                    # Create binary string representation
+                    bits = []
+                    for reg_name, reg_values in result_registers:
+                        bit = reg_values[shot_idx]
+                        bits.append('1' if bit else '0')
+                    combined_results.append(''.join(bits))
+                else:
+                    # Create integer representation (bit encoding)
+                    value = 0
+                    for i, (reg_name, reg_values) in enumerate(result_registers):
+                        bit = reg_values[shot_idx]
+                        if bit:
+                            value |= (1 << i)
+                    combined_results.append(value)
+            
+            # Return with single "_result" register
+            result = {"_result": combined_results}
+            
+            # Copy over any metadata
+            for k, v in raw_results.items():
+                if not k.startswith("_result_"):
+                    result[k] = v
+            
+            return result
     
     def __del__(self):
         """Clean up temporary file when simulation is deleted."""

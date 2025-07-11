@@ -97,7 +97,7 @@ class LlvmSimBuilder:
                                        DepolarizingCustomNoise, BiasedDepolarizingNoise]) -> "LlvmSimBuilder":
         """Set noise model from configuration object."""
         if isinstance(noise_model, PassThroughNoise):
-            rust_noise = LlvmNoiseModel.PassThrough
+            rust_noise = LlvmNoiseModel.PassThrough()
         elif isinstance(noise_model, DepolarizingNoise):
             rust_noise = LlvmNoiseModel.Depolarizing(p=noise_model.p)
         elif isinstance(noise_model, DepolarizingCustomNoise):

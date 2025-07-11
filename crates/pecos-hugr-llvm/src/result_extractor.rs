@@ -62,11 +62,10 @@ impl ResultNameExtractor {
             for node in hugr.nodes() {
                 if let Some(op) = hugr.get_optype(node).as_extension_op() {
                     if op.def().name() == "MeasureFree" {
-                        let default_name = if measurement_count == 0 {
-                            "c".to_string()
-                        } else {
-                            format!("c{measurement_count}")
-                        };
+                        // For Guppy functions that return values without explicit exports,
+                        // use "_result_0", "_result_1", etc. as register names.
+                        // This follows Python conventions where _ prefix indicates internal/computed values.
+                        let default_name = format!("_result_{}", measurement_count);
                         result_mapping.insert(node, default_name);
                         measurement_count += 1;
                     }

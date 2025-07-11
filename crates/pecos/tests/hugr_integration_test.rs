@@ -33,26 +33,26 @@ fn test_hugr_to_llvm_to_execution() -> Result<(), PecosError> {
     let mut other_outcomes = 0;
 
     for shot in &results.shots {
-        // Get the two measurement results from "c" and "c1"
+        // Get the two measurement results from "_result_0" and "_result_1"
         let c = shot
             .data
-            .get("c")
+            .get("_result_0")
             .and_then(|v| match v {
                 pecos_engines::shot_results::Data::I64(n) => Some(*n),
                 pecos_engines::shot_results::Data::U32(n) => Some(i64::from(*n)),
                 _ => None,
             })
-            .expect("Expected 'c' register");
+            .expect("Expected '_result_0' register");
 
         let c1 = shot
             .data
-            .get("c1")
+            .get("_result_1")
             .and_then(|v| match v {
                 pecos_engines::shot_results::Data::I64(n) => Some(*n),
                 pecos_engines::shot_results::Data::U32(n) => Some(i64::from(*n)),
                 _ => None,
             })
-            .expect("Expected 'c1' register");
+            .expect("Expected '_result_1' register");
 
         match (c, c1) {
             (0, 0) => outcome_00 += 1,
@@ -101,8 +101,8 @@ fn test_hugr_from_bytes() -> Result<(), PecosError> {
 
     // Verify at least some results are valid
     let first_shot = &results.shots[0];
-    assert!(first_shot.data.contains_key("c"));
-    assert!(first_shot.data.contains_key("c1"));
+    assert!(first_shot.data.contains_key("_result_0"));
+    assert!(first_shot.data.contains_key("_result_1"));
 
     Ok(())
 }
