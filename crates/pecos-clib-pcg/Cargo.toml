@@ -1,0 +1,20 @@
+[package]
+name = "pecos-clib-pcg"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "PCG RNG C library wrapper for PECOS"
+readme = "README.md"
+
+[dependencies]
+
+[build-dependencies]
+cc.workspace = true
+
+[lints]
+workspace = true

@@ -1167,6 +1167,7 @@ name = "pecos"
 version = "0.1.1"
 dependencies = [
  "log",
+ "pecos-clib-pcg",
  "pecos-core",
  "pecos-engines",
  "pecos-phir",
@@ -1187,6 +1188,13 @@ dependencies = [
  "log",
  "pecos",
  "serde_json",
+]
+
+[[package]]
+name = "pecos-clib-pcg"
+version = "0.1.1"
+dependencies = [
+ "cc",
 ]
 
 [[package]]

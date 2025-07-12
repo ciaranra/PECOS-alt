@@ -18,6 +18,7 @@
 
 mod byte_message_bindings;
 mod engine_bindings;
+mod pcg_bindings;
 pub mod phir_bridge;
 mod sparse_sim;
 mod sparse_stab_bindings;
@@ -43,5 +44,6 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyByteMessageBuilder>()?;
     m.add_class::<PyStateVecEngine>()?;
     m.add_class::<PySparseStabEngine>()?;
+    pcg_bindings::create_pcg_module(m)?;
     Ok(())
 }
