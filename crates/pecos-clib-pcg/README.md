@@ -29,5 +29,8 @@ let r3 = frandom();          // Random float in [0, 1)
 
 ## Implementation
 
-This crate uses the `cc` build dependency to compile the existing C implementation from `clib/pecos-rng/src/rng_pcg.c`
-and provides safe Rust wrappers around the unsafe FFI functions.
+This crate uses the `cc` build dependency to compile the C implementation of PCG32 (64-bit state, 32-bit output).
+When building from the PECOS workspace, it uses the local C source files. When used as a dependency from crates.io,
+it automatically downloads the C source files from the PECOS GitHub repository.
+
+The PCG implementation is based on the work by Melissa E. O'Neill. For more information, visit http://www.pcg-random.org

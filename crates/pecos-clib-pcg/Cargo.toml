@@ -15,6 +15,7 @@ readme = "README.md"
 
 [build-dependencies]
 cc.workspace = true
+ureq = "2.9"
 
 [lints]
 workspace = true
