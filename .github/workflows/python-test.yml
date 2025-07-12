@@ -77,7 +77,7 @@ jobs:
       run: |
         export NANOBIND_CMAKE_DIR=$(uv run -- python -m nanobind --cmake_dir)
         export NANOBIND_DIR=$(uv run -- python -m nanobind --include_dir)
-        cd clibs/pecos-rng && mkdir build && cd build/ && cmake .. -DCMAKE_PREFIX_PATH=$NANOBIND_CMAKE_DIR
+        cd clib/pecos-rng && mkdir build && cd build/ && cmake .. -DCMAKE_PREFIX_PATH=$NANOBIND_CMAKE_DIR
         cmake --build . && cd ..
         uv pip install .
 
