@@ -8,7 +8,7 @@ fn main() {
         .unwrap()
         .parent()
         .unwrap()
-        .join("clibs")
+        .join("clib")
         .join("pecos-rng");
 
     let src_path = clib_path.join("src");

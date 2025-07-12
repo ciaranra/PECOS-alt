@@ -23,7 +23,7 @@ installreqs: ## Install Python project requirements to root .venv
 buildrng:
 	@echo "Building and installing RNG library..."
 	uv pip install nanobind
-	cd clibs/pecos-rng && CC=gcc CXX=g++ uv pip install --python $(shell uv run which python) -e .
+	cd clib/pecos-rng && CC=gcc CXX=g++ uv pip install --python $(shell uv run which python) -e .
 
 # Building development environments
 # ---------------------------------
@@ -155,12 +155,12 @@ clean-unix:
 	@find . -type d -name "junit" -exec rm -rf {} +
 	@find python -name "*.so" -delete
 	@find python -name "*.pyd" -delete
-	@# Clean clibs build artifacts
-	@find clibs -type d -name "build" -exec rm -rf {} +
-	@find clibs -type d -name "dist" -exec rm -rf {} +
-	@find clibs -type d -name "*.egg-info" -exec rm -rf {} +
-	@find clibs -type d -name ".venv" -exec rm -rf {} +
-	@find clibs -name "uv.lock" -delete
+	@# Clean clib build artifacts
+	@find clib -type d -name "build" -exec rm -rf {} +
+	@find clib -type d -name "dist" -exec rm -rf {} +
+	@find clib -type d -name "*.egg-info" -exec rm -rf {} +
+	@find clib -type d -name ".venv" -exec rm -rf {} +
+	@find clib -name "uv.lock" -delete
 	@# Clean all target directories in crates (in case they were built independently)
 	@find crates -type d -name "target" -exec rm -rf {} +
 	@find python -type d -name "target" -exec rm -rf {} +
@@ -182,12 +182,12 @@ clean-windows-ps:
 	@powershell -Command "Get-ChildItem -Path . -Recurse -Directory -Filter '.hypothesis' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 	@powershell -Command "Get-ChildItem -Path . -Recurse -Directory -Filter 'junit' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 	@powershell -Command "Get-ChildItem -Path python -Recurse -File -Include '*.so','*.pyd' | Remove-Item -Force -ErrorAction SilentlyContinue"
-	@# Clean clibs build artifacts
-	@powershell -Command "Get-ChildItem -Path clibs -Recurse -Directory -Filter 'build' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
-	@powershell -Command "Get-ChildItem -Path clibs -Recurse -Directory -Filter 'dist' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
-	@powershell -Command "Get-ChildItem -Path clibs -Recurse -Directory -Filter '*.egg-info' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
-	@powershell -Command "Get-ChildItem -Path clibs -Recurse -Directory -Filter '.venv' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
-	@powershell -Command "Get-ChildItem -Path clibs -Recurse -File -Filter 'uv.lock' | Remove-Item -Force -ErrorAction SilentlyContinue"
+	@# Clean clib build artifacts
+	@powershell -Command "Get-ChildItem -Path clib -Recurse -Directory -Filter 'build' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path clib -Recurse -Directory -Filter 'dist' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path clib -Recurse -Directory -Filter '*.egg-info' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path clib -Recurse -Directory -Filter '.venv' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path clib -Recurse -File -Filter 'uv.lock' | Remove-Item -Force -ErrorAction SilentlyContinue"
 	@# Clean all target directories in crates
 	@powershell -Command "Get-ChildItem -Path crates -Recurse -Directory -Filter 'target' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 	@powershell -Command "Get-ChildItem -Path python -Recurse -Directory -Filter 'target' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
@@ -208,12 +208,12 @@ clean-windows-cmd:
 	-@for /f "delims=" %%d in ('dir /s /b /ad .hypothesis 2^>nul') do @rd /s /q "%%d" 2>nul
 	-@for /f "delims=" %%d in ('dir /s /b /ad junit 2^>nul') do @rd /s /q "%%d" 2>nul
 	-@for /f "delims=" %%f in ('dir /s /b python\*.so python\*.pyd 2^>nul') do @del "%%f" 2>nul
-	-@REM Clean clibs build artifacts
-	-@for /f "delims=" %%d in ('dir /s /b /ad clibs\build 2^>nul') do @rd /s /q "%%d" 2>nul
-	-@for /f "delims=" %%d in ('dir /s /b /ad clibs\dist 2^>nul') do @rd /s /q "%%d" 2>nul
-	-@for /f "delims=" %%d in ('dir /s /b /ad clibs\*.egg-info 2^>nul') do @rd /s /q "%%d" 2>nul
-	-@for /f "delims=" %%d in ('dir /s /b /ad clibs\.venv 2^>nul') do @rd /s /q "%%d" 2>nul
-	-@for /f "delims=" %%f in ('dir /s /b clibs\uv.lock 2^>nul') do @del "%%f" 2>nul
+	-@REM Clean clib build artifacts
+	-@for /f "delims=" %%d in ('dir /s /b /ad clib\build 2^>nul') do @rd /s /q "%%d" 2>nul
+	-@for /f "delims=" %%d in ('dir /s /b /ad clib\dist 2^>nul') do @rd /s /q "%%d" 2>nul
+	-@for /f "delims=" %%d in ('dir /s /b /ad clib\*.egg-info 2^>nul') do @rd /s /q "%%d" 2>nul
+	-@for /f "delims=" %%d in ('dir /s /b /ad clib\.venv 2^>nul') do @rd /s /q "%%d" 2>nul
+	-@for /f "delims=" %%f in ('dir /s /b clib\uv.lock 2^>nul') do @del "%%f" 2>nul
 	-@REM Clean all target directories in crates
 	-@for /f "delims=" %%d in ('dir /s /b /ad crates\target 2^>nul') do @rd /s /q "%%d" 2>nul
 	-@for /f "delims=" %%d in ('dir /s /b /ad python\target 2^>nul') do @rd /s /q "%%d" 2>nul

@@ -29,5 +29,5 @@ let r3 = frandom();          // Random float in [0, 1)
 
 ## Implementation
 
-This crate uses the `cc` build dependency to compile the existing C implementation from `clibs/pecos-rng/src/rng_pcg.c`
+This crate uses the `cc` build dependency to compile the existing C implementation from `clib/pecos-rng/src/rng_pcg.c`
 and provides safe Rust wrappers around the unsafe FFI functions.
