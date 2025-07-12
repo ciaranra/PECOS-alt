@@ -4,6 +4,8 @@ It handles RNG platform function calls that are handled by the pcg_rng library.
 
 """
 
+# TODO: A Rust version of this RNGModel should be created for Rust side usage and then exposed via pecos-rslib/PyO3
+
 from __future__ import annotations
 
 try:
