@@ -97,6 +97,12 @@ impl CodegenExtension for StandardLlvmExtension {
                     emit_reset_standard(ctx, args).map_err(anyhow::Error::new)
                 }
             })
+            // Add support for tket2.quantum.QFree (discard)
+            .extension_op(ext_id.clone(), "QFree".into(), {
+                move |ctx, args| {
+                    emit_qfree_standard(ctx, args).map_err(anyhow::Error::new)
+                }
+            })
             .extension_op(ext_id.clone(), "X".into(), {
                 move |ctx, args| {
                     emit_single_qubit_gate_standard(ctx, args, &x_func).map_err(anyhow::Error::new)
@@ -442,6 +448,29 @@ fn emit_reset_standard<'c, H: HugrView<Node = Node>>(
     Ok(())
 }
 
+fn emit_qfree_standard<'c, H: HugrView<Node = Node>>(
+    context: &mut EmitFuncContext<'c, '_, H>,
+    args: EmitOpArgs<'c, '_, ExtensionOp, H>,
+) -> Result<(), PecosError> {
+    let llvm_context = context.iw_context();
+    let builder = context.builder();
+
+    // Convert qubit from i16 to i64
+    let i64_type = llvm_context.i64_type();
+    let qubit_i64 = convert_qubit_to_i64(builder, args.inputs[0], i64_type, "qubit_i64")?;
+
+    // PECOS QIR discard/release: void @__quantum__rt__qubit_release(i64)
+    let void_type = llvm_context.void_type();
+    let release_func_type = void_type.fn_type(&[i64_type.into()], false);
+    let release_func = context.get_extern_func("__quantum__rt__qubit_release", release_func_type)?;
+
+    builder.build_call(release_func, &[qubit_i64.into()], "")?;
+    
+    // QFree (discard) has no outputs - qubit is consumed
+    args.outputs.finish(builder, [])?;
+    Ok(())
+}
+
 fn emit_measure_with_qubit_return<'c, H: HugrView<Node = Node>>(
     context: &mut EmitFuncContext<'c, '_, H>,
     args: EmitOpArgs<'c, '_, ExtensionOp, H>,
@@ -467,21 +496,24 @@ fn emit_measure_with_qubit_return<'c, H: HugrView<Node = Node>>(
         .into_int_value();
 
     // PECOS QIR measurement: i32 @__quantum__qis__m__body(i64, i64)
+    // Note: This function always returns 0 in PECOS's deferred measurement model
+    // The actual result must be retrieved via __quantum__rt__result_get_one
     let i32_type = llvm_context.i32_type();
     let measure_func_type = i32_type.fn_type(&[i64_type.into(), i64_type.into()], false);
     let measure_func = context.get_extern_func("__quantum__qis__m__body", measure_func_type)?;
 
-    let measurement_result = builder.build_call(
+    // Record the measurement (ignore return value as it's always 0)
+    builder.build_call(
         measure_func,
         &[qubit_i64.into(), result_id_val.into()],
-        "measurement_result",
+        "",
     )?;
 
     // Record the result (same as MeasureFree)
     let measurement_node = args.node.node();
     let name = result_names
         .get(&measurement_node)
-        .map_or("_result_0", std::string::String::as_str);
+        .expect("All measurements should have names assigned by ResultNameExtractor");
 
     // Create string constant for the result name
     let i8_type = llvm_context.i8_type();
@@ -506,8 +538,19 @@ fn emit_measure_with_qubit_return<'c, H: HugrView<Node = Node>>(
     let result_ptr = builder.build_int_to_ptr(result_id_val, i8_ptr_type, "result_ptr")?;
     builder.build_call(record_func, &[result_ptr.into(), string_ptr.into()], "")?;
 
+    // Get the actual measurement result using __quantum__rt__result_get_one
+    // This is necessary because __quantum__qis__m__body always returns 0 in deferred mode
+    let get_result_func_type = i32_type.fn_type(&[i64_type.into()], false);
+    let get_result_func = context.get_extern_func("__quantum__rt__result_get_one", get_result_func_type)?;
+    
+    let actual_result = builder.build_call(
+        get_result_func,
+        &[result_id_val.into()],
+        "actual_measurement_result",
+    )?;
+    
     // Convert i32 result to bool for HUGR
-    let measurement_i32 = measurement_result
+    let measurement_i32 = actual_result
         .try_as_basic_value()
         .left()
         .unwrap()
@@ -551,22 +594,25 @@ fn emit_measure_standard<'c, H: HugrView<Node = Node>>(
         .into_int_value();
 
     // PECOS QIR measurement: i32 @__quantum__qis__m__body(i64, i64)
+    // Note: This function always returns 0 in PECOS's deferred measurement model
+    // The actual result must be retrieved via __quantum__rt__result_get_one
     let i32_type = llvm_context.i32_type();
     let measure_func_type = i32_type.fn_type(&[i64_type.into(), i64_type.into()], false);
     let measure_func = context.get_extern_func("__quantum__qis__m__body", measure_func_type)?;
 
-    let measurement_result = builder.build_call(
+    // Record the measurement (ignore return value as it's always 0)
+    builder.build_call(
         measure_func,
         &[qubit_i64.into(), result_id_val.into()],
-        "measurement_result",
+        "",
     )?;
 
     // IMPORTANT: Record the result with __quantum__rt__result_record_output
-    // Get the result name for this measurement node, fallback to "_result_0" if not found
+    // Get the result name for this measurement node
     let measurement_node = args.node.node();
     let name = result_names
         .get(&measurement_node)
-        .map_or("_result_0", std::string::String::as_str);
+        .expect("All measurements should have names assigned by ResultNameExtractor");
 
     // Create string constant for the result name
     let i8_type = llvm_context.i8_type();
@@ -593,8 +639,19 @@ fn emit_measure_standard<'c, H: HugrView<Node = Node>>(
 
     builder.build_call(record_func, &[result_ptr.into(), string_ptr.into()], "")?;
 
+    // Get the actual measurement result using __quantum__rt__result_get_one
+    // This is necessary because __quantum__qis__m__body always returns 0 in deferred mode
+    let get_result_func_type = i32_type.fn_type(&[i64_type.into()], false);
+    let get_result_func = context.get_extern_func("__quantum__rt__result_get_one", get_result_func_type)?;
+    
+    let actual_result = builder.build_call(
+        get_result_func,
+        &[result_id_val.into()],
+        "actual_measurement_result",
+    )?;
+    
     // Convert i32 result to bool for HUGR
-    let measurement_i32 = measurement_result
+    let measurement_i32 = actual_result
         .try_as_basic_value()
         .left()
         .unwrap()
@@ -606,6 +663,12 @@ fn emit_measure_standard<'c, H: HugrView<Node = Node>>(
         zero_i32,
         "is_one",
     )?;
+
+    // MeasureFree consumes the qubit, so we need to release it
+    // Call __quantum__rt__qubit_release(i64)
+    let release_func_type = void_type.fn_type(&[i64_type.into()], false);
+    let release_func = context.get_extern_func("__quantum__rt__qubit_release", release_func_type)?;
+    builder.build_call(release_func, &[qubit_i64.into()], "")?;
 
     args.outputs.finish(builder, [is_one.into()])?;
     Ok(())

@@ -56,15 +56,14 @@ impl ResultNameExtractor {
             }
         }
 
-        // If no explicit result operations were found, create default names for all measurements
+        // If no explicit result operations were found, generate automatic names for ALL measurements
         if result_mapping.is_empty() {
             let mut measurement_count = 0;
+            
+            // Find all measurement operations and assign automatic names
             for node in hugr.nodes() {
                 if let Some(op) = hugr.get_optype(node).as_extension_op() {
-                    if op.def().name() == "MeasureFree" {
-                        // For Guppy functions that return values without explicit exports,
-                        // use "_result_0", "_result_1", etc. as register names.
-                        // This follows Python conventions where _ prefix indicates internal/computed values.
+                    if op.def().name() == "MeasureFree" || op.def().name() == "Measure" {
                         let default_name = format!("_result_{}", measurement_count);
                         result_mapping.insert(node, default_name);
                         measurement_count += 1;

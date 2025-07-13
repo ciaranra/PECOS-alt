@@ -49,7 +49,7 @@ class TestGuppySimBuilder:
     def test_basic_build_and_run(self):
         """Test basic build() and run() pattern."""
         # Build once
-        sim = guppy_sim(self.bell_state).build()
+        sim = guppy_sim(self.bell_state, max_qubits=10).build()
         
         # Run multiple times
         results1 = sim.run(100)
@@ -69,7 +69,7 @@ class TestGuppySimBuilder:
     
     def test_direct_run(self):
         """Test direct run() without explicit build()."""
-        results = guppy_sim(self.single_qubit).run(50)
+        results = guppy_sim(self.single_qubit, max_qubits=10).run(50)
         
         assert "_result" in results
         assert len(results["_result"]) == 50
@@ -79,7 +79,7 @@ class TestGuppySimBuilder:
         """Test various builder configuration methods."""
         # Test method chaining
         builder = (
-            guppy_sim(self.bell_state)
+            guppy_sim(self.bell_state, max_qubits=10)
             .seed(42)
             .workers(2)
             .verbose(True)
@@ -97,8 +97,8 @@ class TestGuppySimBuilder:
     def test_seeded_reproducibility(self):
         """Test that seeded runs are reproducible."""
         # Create two builders with same seed
-        sim1 = guppy_sim(self.single_qubit).seed(12345).build()
-        sim2 = guppy_sim(self.single_qubit).seed(12345).build()
+        sim1 = guppy_sim(self.single_qubit, max_qubits=10).seed(12345).build()
+        sim2 = guppy_sim(self.single_qubit, max_qubits=10).seed(12345).build()
         
         # Run both
         results1 = sim1.run(100)
@@ -116,7 +116,7 @@ class TestGuppySimBuilder:
             "debug": True,
         }
         
-        sim = guppy_sim(self.bell_state).config(config).build()
+        sim = guppy_sim(self.bell_state, max_qubits=10).config(config).build()
         results = sim.run(50)
         
         assert "_result" in results
@@ -124,24 +124,24 @@ class TestGuppySimBuilder:
     
     def test_bell_state_correlation(self):
         """Test that Bell state results are correlated."""
-        results = guppy_sim(self.bell_state).seed(42).run(1000)
+        results = guppy_sim(self.bell_state, max_qubits=10).seed(42).run(1000)
         
-        # Bell state should produce only |00⟩ (0) and |11⟩ (3)
+        # Bell state should produce only |00⟩ and |11⟩ (as tuples)
         unique_results = set(results["_result"])
-        assert unique_results.issubset({0, 3})
+        assert unique_results.issubset({(False, False), (True, True)})
         
         # Should be roughly 50/50
-        zeros = results["_result"].count(0)
-        threes = results["_result"].count(3)
+        zeros = sum(1 for r in results["_result"] if r == (False, False))
+        ones = sum(1 for r in results["_result"] if r == (True, True))
         assert 400 < zeros < 600  # Allow some variance
-        assert 400 < threes < 600
+        assert 400 < ones < 600
     
     def test_keep_intermediate_files(self):
         """Test keeping intermediate compilation files."""
         import shutil
         
         sim = (
-            guppy_sim(self.single_qubit)
+            guppy_sim(self.single_qubit, max_qubits=10)
             .keep_intermediate_files(True)
             .build()
         )
@@ -180,7 +180,7 @@ def test_api_comparison():
     # results = sim.run(1000)
     
     # guppy_sim API (our implementation):
-    # sim = guppy_sim(guppy_function).seed(42).noise(DepolarizingNoise(0.01)).build()
+    # sim = guppy_sim(guppy_function, max_qubits=10).seed(42).noise(DepolarizingNoise(0.01)).build()
     # results = sim.run(1000)
     
     # Both return columnar format:
@@ -204,7 +204,7 @@ if __name__ == "__main__":
         
         # Show builder pattern
         print("\n1. Building simulation...")
-        sim = guppy_sim(demo_circuit).seed(42).verbose(True).build()
+        sim = guppy_sim(demo_circuit, max_qubits=10).seed(42).verbose(True).build()
         
         print("\n2. Running 100 shots...")
         results = sim.run(100)
@@ -216,7 +216,7 @@ if __name__ == "__main__":
         print(f"   Ones: {sum(results['_result'])}/1000")
         
         print("\n4. Direct run without explicit build...")
-        results = guppy_sim(demo_circuit).seed(123).run(50)
+        results = guppy_sim(demo_circuit, max_qubits=10).seed(123).run(50)
         print(f"   Got {len(results['_result'])} results")
         
         print("\n=== Demo Complete ===")

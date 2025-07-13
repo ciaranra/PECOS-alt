@@ -49,6 +49,7 @@ impl LlvmSimulation {
         let engine_config = LlvmEngineConfig {
             assigned_shots: 0, // Will be set per run
             verbose: false,    // TODO: Add verbose option to LlvmSimConfig if needed
+            max_qubits: config.max_qubits,
         };
 
         let engine = LlvmEngine::with_config(llvm_path, engine_config);
@@ -85,13 +86,26 @@ impl LlvmSimulation {
         let noise_model = self.config.noise_model.clone().create_noise_model();
 
         // Run using MonteCarloEngine for parallelization and noise
-        let shot_vec = MonteCarloEngine::run_with_noise_model(
-            Box::new(self.engine.clone()),
-            noise_model,
-            shots,
-            self.config.workers,
-            self.config.seed,
-        )?;
+        let shot_vec = if let Some(max_qubits) = self.config.max_qubits {
+            // Use max_qubits when specified to handle dynamic allocation in loops
+            MonteCarloEngine::run_with_noise_model_and_max_qubits(
+                Box::new(self.engine.clone()),
+                noise_model,
+                max_qubits,
+                shots,
+                self.config.workers,
+                self.config.seed,
+            )?
+        } else {
+            // Fallback to the original method for backward compatibility
+            MonteCarloEngine::run_with_noise_model(
+                Box::new(self.engine.clone()),
+                noise_model,
+                shots,
+                self.config.workers,
+                self.config.seed,
+            )?
+        };
 
         // Convert to columnar format
         let columnar = self.shots_to_columnar(shot_vec.shots);

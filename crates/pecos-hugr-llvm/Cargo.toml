@@ -15,10 +15,13 @@ description = "Pure HUGR to LLVM IR compilation for PECOS quantum programs."
 log.workspace = true
 pecos-core = { workspace = true, features = ["anyhow", "hugr-llvm"] }
 tempfile.workspace = true
+serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
+typetag = { version = "0.2" }
+regex = { version = "1.10" }
 # HUGR dependencies
-hugr-core = { version = "0.20.1" }
-hugr-llvm = { version = "0.20.1" }
+hugr-core = { version = "0.20.2" }
+hugr-llvm = { version = "0.20.2" }
 anyhow = { version = "1.0" }
 
 [dev-dependencies]

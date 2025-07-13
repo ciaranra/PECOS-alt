@@ -1710,8 +1710,11 @@ dependencies = [
  "hugr-llvm",
  "log",
  "pecos-core",
+ "regex",
+ "serde",
  "serde_json",
  "tempfile",
+ "typetag",
 ]
 
 [[package]]

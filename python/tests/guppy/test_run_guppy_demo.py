@@ -77,7 +77,7 @@ def test_guppy_sim() -> None:
     """Test guppy_sim() alias with bell_state."""
     print("\nTesting guppy_sim() alias with bell_state:")
     try:
-        result = guppy_sim(bell_state).run(200)
+        result = guppy_sim(bell_state, max_qubits=10).run(200)
         assert "_result" in result
         assert len(result["_result"]) == 200
 

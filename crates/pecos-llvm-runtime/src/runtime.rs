@@ -188,6 +188,19 @@ pub mod core_runtime {
         }
     }
 
+    /// Set the maximum number of qubits allowed for allocation
+    pub fn set_max_qubits(max_qubits: usize) {
+        RuntimeRegistry::with_current_runtime(|state| {
+            state.set_max_qubits(max_qubits);
+        });
+    }
+
+    /// Get the maximum number of qubits allowed for allocation
+    #[must_use]
+    pub fn get_max_qubits() -> Option<usize> {
+        RuntimeRegistry::with_current_runtime(|state| state.get_max_qubits()).unwrap_or(None)
+    }
+
     // Quantum Gate Operations
 
     // Helper macro for single-qubit gates
@@ -676,6 +689,18 @@ pub unsafe extern "C" fn __quantum__qis__tdg__body(qubit: i64) {
 pub unsafe extern "C" fn __quantum__qis__reset__body(qubit: i64) {
     let qubit_id = i64_to_usize(qubit);
     core_runtime::reset_qubit(qubit_id);
+}
+
+/// Release (discard) a qubit
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The qubit parameter must be a valid qubit ID previously allocated.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __quantum__rt__qubit_release(qubit: i64) {
+    let qubit_id = i64_to_usize(qubit);
+    core_runtime::release_qubit(qubit_id);
 }
 
 /// Apply rotation around X-axis
@@ -1205,21 +1230,31 @@ pub unsafe extern "C" fn llvm_runtime_get_shot_results() -> *mut FFIShotData {
     if let Some(shot) = shot_opt {
         let count = shot.data.len();
 
+        if should_print_commands() {
+            debug!("[Thread {thread_id}] Shot has {} registers", count);
+            for (k, v) in &shot.data {
+                debug!("[Thread {thread_id}] - {}: {:?}", k, v);
+            }
+        }
+
         if count == 0 {
             return std::ptr::null_mut();
         }
 
-        // Allocate arrays using Vec to ensure proper alignment
-        let mut names_vec: Vec<*mut c_char> = Vec::with_capacity(count);
+        // Allocate arrays using Vec to ensure proper alignment and initialization
+        let mut names_vec: Vec<*mut c_char> = vec![std::ptr::null_mut(); count];
         let names = names_vec.as_mut_ptr();
         std::mem::forget(names_vec);
 
-        let mut values_vec: Vec<i64> = Vec::with_capacity(count);
+        let mut values_vec: Vec<i64> = vec![0; count];
         let values = values_vec.as_mut_ptr();
         std::mem::forget(values_vec);
 
-        // Populate the arrays
-        for (i, (name, data)) in shot.data.iter().enumerate() {
+        // Populate the arrays - sort by key name for deterministic order
+        let mut sorted_data: Vec<_> = shot.data.iter().collect();
+        sorted_data.sort_by_key(|(name, _)| name.as_str());
+        
+        for (i, (name, data)) in sorted_data.into_iter().enumerate() {
             // Convert name to C string
             let c_name = std::ffi::CString::new(name.as_str()).unwrap();
             unsafe {
@@ -1230,6 +1265,19 @@ pub unsafe extern "C" fn llvm_runtime_get_shot_results() -> *mut FFIShotData {
             let value = match data {
                 pecos_engines::shot_results::Data::U32(v) => i64::from(*v),
                 pecos_engines::shot_results::Data::I64(v) => *v,
+                pecos_engines::shot_results::Data::Bool(b) => i64::from(*b),
+                pecos_engines::shot_results::Data::Vec(vec) => {
+                    // For vector data, encode as bit pattern
+                    let mut encoded = 0i64;
+                    for (idx, item) in vec.iter().enumerate() {
+                        if let pecos_engines::shot_results::Data::I32(val) = item {
+                            if *val != 0 {
+                                encoded |= 1i64 << idx;
+                            }
+                        }
+                    }
+                    encoded
+                }
                 _ => 0, // Default for other types
             };
             unsafe {

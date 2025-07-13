@@ -137,6 +137,11 @@ class LlvmSimBuilder:
         self._rust_builder = self._rust_builder.debug(debug)
         return self
     
+    def max_qubits(self, max_qubits: int) -> "LlvmSimBuilder":
+        """Set maximum number of qubits allowed for allocation."""
+        self._rust_builder = self._rust_builder.max_qubits(max_qubits)
+        return self
+    
     def keep_temp_files(self, keep: bool = True) -> "LlvmSimBuilder":
         """Keep temporary files after simulation."""
         self._rust_builder = self._rust_builder.keep_temp_files(keep)

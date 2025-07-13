@@ -89,6 +89,8 @@ pub struct LlvmSimConfig {
     pub noise_model: NoiseModelConfig,
     /// Quantum engine type
     pub quantum_engine: QuantumEngineType,
+    /// Maximum number of qubits allowed for allocation
+    pub max_qubits: Option<usize>,
 }
 
 impl Default for LlvmSimConfig {
@@ -98,6 +100,7 @@ impl Default for LlvmSimConfig {
             workers: 1,
             noise_model: NoiseModelConfig::PassThrough,
             quantum_engine: QuantumEngineType::StateVector,
+            max_qubits: None,
         }
     }
 }

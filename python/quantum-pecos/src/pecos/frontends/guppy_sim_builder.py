@@ -61,6 +61,7 @@ class GuppySimulationConfig:
     optimize: bool = True
     binary_string_format: bool = False  # Match qasm_sim option
     keep_intermediate_files: bool = False  # Keep compilation artifacts
+    max_qubits: Optional[int] = None  # Maximum number of qubits to simulate (REQUIRED)
 
 
 class GuppySimulation:
@@ -209,6 +210,10 @@ class GuppySimulation:
             if self._config.debug:
                 builder = builder.debug(True)
             
+            # Configure max_qubits (should already be validated)
+            if self._config.max_qubits is not None:
+                builder = builder.max_qubits(self._config.max_qubits)
+            
             # Run simulation
             results = builder.run(shots)
             
@@ -342,13 +347,17 @@ class GuppySimulation:
                         bits.append('1' if bit else '0')
                     combined_results.append(''.join(bits))
                 else:
-                    # Create integer representation (bit encoding)
-                    value = 0
-                    for i, (reg_name, reg_values) in enumerate(result_registers):
-                        bit = reg_values[shot_idx]
-                        if bit:
-                            value |= (1 << i)
-                    combined_results.append(value)
+                    # Create tuple representation for multiple values
+                    # Extract the values in order
+                    values = []
+                    for reg_name, reg_values in result_registers:
+                        values.append(bool(reg_values[shot_idx]))
+                    
+                    # If more than one value, return as tuple; otherwise single value
+                    if len(values) == 1:
+                        combined_results.append(values[0])
+                    else:
+                        combined_results.append(tuple(values))
             
             # Return with single "_result" register
             result = {"_result": combined_results}
@@ -387,14 +396,15 @@ class GuppySimulationBuilder:
     Matches the qasm_sim builder pattern API.
     """
     
-    def __init__(self, guppy_func: Callable):
-        """Initialize builder with a Guppy function.
+    def __init__(self, guppy_func: Callable, max_qubits: int):
+        """Initialize builder with a Guppy function and max qubits.
         
         Args:
             guppy_func: A function decorated with @guppy
+            max_qubits: Maximum number of qubits to simulate
             
         Raises:
-            ValueError: If function is not a Guppy function
+            ValueError: If function is not a Guppy function or max_qubits invalid
         """
         if not GUPPY_AVAILABLE:
             raise ImportError("guppylang is not available. Install with: pip install quantum-pecos[guppy]")
@@ -410,8 +420,13 @@ class GuppySimulationBuilder:
             func_name = getattr(guppy_func, "__name__", str(guppy_func))
             raise ValueError(f"Function {func_name} must be decorated with @guppy")
         
+        # Validate max_qubits
+        if not isinstance(max_qubits, int) or max_qubits < 1:
+            raise ValueError("max_qubits must be a positive integer")
+        
         self.guppy_func = guppy_func
         self._config = GuppySimulationConfig()
+        self._config.max_qubits = max_qubits  # Set max_qubits immediately
         self._built = False
         self._simulation: Optional[GuppySimulation] = None
     
@@ -460,6 +475,7 @@ class GuppySimulationBuilder:
         self._config.keep_intermediate_files = enable
         return self
     
+    
     def config(self, config_dict: Dict[str, Any]) -> "GuppySimulationBuilder":
         """Apply configuration from dictionary."""
         for key, value in config_dict.items():
@@ -472,9 +488,14 @@ class GuppySimulationBuilder:
         
         Returns:
             GuppySimulation instance ready to run
+            
+        Raises:
+            ValueError: If max_qubits has not been set
         """
         if self._built and self._simulation:
             return self._simulation
+        
+        # max_qubits is now guaranteed to be set in constructor
         
         if self._config.verbose:
             func_name = getattr(self.guppy_func, "__name__", "guppy_function")
@@ -523,7 +544,7 @@ class GuppySimulationBuilder:
         return sim.run(shots)
 
 
-def guppy_sim(guppy_func: Callable) -> GuppySimulationBuilder:
+def guppy_sim(guppy_func: Callable, max_qubits: int) -> GuppySimulationBuilder:
     """Create a Guppy simulation builder for flexible configuration.
     
     This provides a builder pattern for Guppy simulations matching qasm_sim,
@@ -531,6 +552,7 @@ def guppy_sim(guppy_func: Callable) -> GuppySimulationBuilder:
     
     Args:
         guppy_func: A function decorated with @guppy
+        max_qubits: Maximum number of qubits to simulate
         
     Returns:
         GuppySimulationBuilder that can be configured and run
@@ -547,15 +569,15 @@ def guppy_sim(guppy_func: Callable) -> GuppySimulationBuilder:
         ...     return measure(q0), measure(q1)
         ...
         >>> # Build once, run multiple times
-        >>> sim = guppy_sim(bell_state).seed(42).build()
+        >>> sim = guppy_sim(bell_state, max_qubits=10).seed(42).build()
         >>> results_100 = sim.run(100)
         >>> results_1000 = sim.run(1000)
         >>>
         >>> # Or run directly without building
-        >>> results = guppy_sim(bell_state).seed(42).run(1000)
+        >>> results = guppy_sim(bell_state, max_qubits=10).seed(42).run(1000)
         >>>
         >>> # With binary string format (like qasm_sim)
-        >>> results = guppy_sim(bell_state).binary_string_format().run(100)
+        >>> results = guppy_sim(bell_state, max_qubits=10).binary_string_format().run(100)
         >>> # Results: {"_result": ["00", "11", "00", ...]}
     """
-    return GuppySimulationBuilder(guppy_func)
+    return GuppySimulationBuilder(guppy_func, max_qubits)

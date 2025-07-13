@@ -246,7 +246,8 @@ class TestHybridPrograms:
         
         if results.get("hugr_llvm", {}).get("success"):
             measurements = results["hugr_llvm"]["result"]["results"]
-            ones_count = sum(measurements)
+            # Results are boolean values, count True values
+            ones_count = sum(1 for r in measurements if r)
             # Since condition is never true, should measure mostly 0s
             assert ones_count < 5, f"Conditional gate failed, got {ones_count}/20 ones"
     

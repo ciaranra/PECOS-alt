@@ -46,6 +46,9 @@ pub struct LlvmRuntimeState {
 
     /// Tuple return values from main function
     tuple_return: Vec<i32>,
+
+    /// Maximum number of qubits allowed (set during initialization)
+    max_qubits: Option<usize>,
 }
 
 impl LlvmRuntimeState {
@@ -66,6 +69,7 @@ impl LlvmRuntimeState {
             last_shot: None,
             interactive_callback: None,
             tuple_return: Vec::new(),
+            max_qubits: None,
         }
     }
 
@@ -86,8 +90,31 @@ impl LlvmRuntimeState {
     /// Allocate a new qubit and return its ID
     pub fn allocate_qubit(&mut self) -> usize {
         let id = self.next_qubit_id;
+        
+        // Check qubit limit if set
+        if let Some(max_qubits) = self.max_qubits {
+            if id >= max_qubits {
+                panic!(
+                    "Qubit allocation limit exceeded! Attempted to allocate qubit {} but max_qubits is set to {}. \
+                     Increase max_qubits using .max_qubits({}) or higher when building the simulation.",
+                    id, max_qubits, id + 1
+                );
+            }
+        }
+        
         self.next_qubit_id += 1;
         id
+    }
+
+    /// Set the maximum number of qubits allowed
+    pub fn set_max_qubits(&mut self, max_qubits: usize) {
+        self.max_qubits = Some(max_qubits);
+    }
+
+    /// Get the maximum number of qubits allowed
+    #[must_use]
+    pub fn get_max_qubits(&self) -> Option<usize> {
+        self.max_qubits
     }
 
     /// Allocate a new result and return its ID

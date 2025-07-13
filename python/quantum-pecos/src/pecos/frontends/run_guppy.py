@@ -25,15 +25,17 @@ def run_guppy(
     *,
     verbose: bool = False,
     seed: int | None = None,
+    max_qubits: int | None = None,
     **kwargs: Any,  # noqa: ANN401
 ) -> dict[str, Any]:
     """Run a Guppy quantum function on PECOS - simple API similar to run_qasm().
 
     Args:
         guppy_function: A function decorated with @guppy
-        shots: Number of shots to execute (default: 1000)
+        shots: Number of shots to execute (default: 1)
         verbose: Enable verbose output
         seed: Random seed for reproducible results (default: None for random)
+        max_qubits: Maximum number of qubits to allocate (default: None for automatic)
         **kwargs: Additional arguments passed to GuppyFrontend
 
     Returns:
@@ -163,6 +165,7 @@ def run_guppy(
         seed,
         None,  # noise_probability
         None,  # workers
+        max_qubits,  # max_qubits
     )
     
     # Extract results from the returned dictionary
@@ -173,6 +176,36 @@ def run_guppy(
         if verbose:
             print(f"[PASS] QIR execution completed in {execution_time:.4f}s")
             print(f"Got {len(results)} results from QIR engine")
+        
+        # Post-process results to match the function's return type
+        # When all measurements are recorded, results come back as tuples
+        # but the function signature might specify a single value
+        try:
+            import inspect
+            
+            # Get the function's return type
+            if hasattr(guppy_function, 'wrapped') and hasattr(guppy_function.wrapped, 'python_func'):
+                sig = inspect.signature(guppy_function.wrapped.python_func)
+                return_type = sig.return_annotation
+                
+                # If function returns bool but we got tuples, extract the last element
+                # (which corresponds to the return value)
+                if return_type == bool and results and isinstance(results[0], tuple):
+                    if verbose:
+                        print(f"Post-processing: Extracting bool from {len(results[0])}-tuples")
+                    results = [r[-1] for r in results]
+                # If function returns a specific tuple size, ensure we match it
+                elif hasattr(return_type, '__origin__') and return_type.__origin__ == tuple:
+                    expected_size = len(return_type.__args__)
+                    if results and isinstance(results[0], tuple) and len(results[0]) != expected_size:
+                        if verbose:
+                            print(f"Post-processing: Adjusting tuple size from {len(results[0])} to {expected_size}")
+                        # Take the last N elements to match expected size
+                        results = [r[-expected_size:] if len(r) >= expected_size else r for r in results]
+        except Exception as e:
+            # If we can't determine the return type, just return the raw results
+            if verbose:
+                print(f"[WARNING] Could not process return type: {e}")
         
         # Return the results
         return {

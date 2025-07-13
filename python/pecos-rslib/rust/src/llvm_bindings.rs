@@ -54,7 +54,7 @@ impl PyLlvmEngine {
     ) -> PyResult<PyObject> {
         // Execute LLVM with proper serialization (LLVM best practice)
         let results =
-            execute_llvm_safe(&self.llvm_path, shots, seed, noise_probability, workers)
+            execute_llvm_safe(&self.llvm_path, shots, seed, noise_probability, workers, None)
                 .map_err(|e| PyRuntimeError::new_err(format!("LLVM execution failed: {e:?}")))?;
 
         // Convert results to Python format
@@ -77,10 +77,10 @@ fn convert_results_to_python(
                 if let Some((_, data)) = shot.data.iter().next() {
                     match data {
                         shot_results::Data::U32(v) => {
-                            result_list.append(*v != 0)?;
+                            result_list.append(*v)?;
                         }
                         shot_results::Data::I64(v) => {
-                            result_list.append(*v != 0)?;
+                            result_list.append(*v)?;
                         }
                         _ => {}
                     }
@@ -95,10 +95,10 @@ fn convert_results_to_python(
                 for data in shot.data.values() {
                     match data {
                         shot_results::Data::U32(v) => {
-                            tuple_vals.append(*v != 0)?;
+                            tuple_vals.append(*v)?;
                         }
                         shot_results::Data::I64(v) => {
-                            tuple_vals.append(*v != 0)?;
+                            tuple_vals.append(*v)?;
                         }
                         _ => {}
                     }
@@ -124,6 +124,7 @@ fn execute_llvm_safe(
     seed: Option<u64>,
     noise_probability: Option<f64>,
     workers: Option<usize>,
+    max_qubits: Option<usize>,
 ) -> Result<shot_results::ShotVec, pecos_core::errors::PecosError> {
     use crate::llvm_execution_guard::LlvmExecutionGuard;
 
@@ -136,8 +137,12 @@ fn execute_llvm_safe(
         pecos_llvm_runtime::runtime::llvm_runtime_reset();
     }
 
-    // Set up LLVM engine
-    let classical_engine = setup_llvm_engine(llvm_path, None)?;
+    // Set up LLVM engine with max_qubits if specified
+    let classical_engine = if max_qubits.is_some() {
+        pecos::setup_llvm_engine_with_config(llvm_path, None, max_qubits)?
+    } else {
+        setup_llvm_engine(llvm_path, None)?
+    };
 
     // Create noise model
     let noise_model: Box<dyn NoiseModel> = if let Some(prob) = noise_probability {
@@ -150,18 +155,36 @@ fn execute_llvm_safe(
         Box::new(pecos_engines::noise::PassThroughNoiseModel)
     };
 
-    // Execute simulation with validated parameters
-    let mut params = crate::safe_calls::SimParams::new(classical_engine, shots);
-
-    if let Some(s) = seed {
-        params = params.with_seed(s);
-    }
-    if let Some(w) = workers {
-        params = params.with_workers(w);
-    }
-    params = params.with_noise_model(noise_model);
-
-    let results = params.run()?;
+    // Execute simulation with MonteCarloEngine directly to support max_qubits
+    let workers = workers.unwrap_or(1);
+    
+    // Use MonteCarloEngine directly to have control over max_qubits
+    let results = if let Some(max_q) = max_qubits {
+        // When max_qubits is specified, use the new method
+        pecos_engines::monte_carlo::MonteCarloEngine::run_with_noise_model_and_max_qubits(
+            classical_engine,
+            noise_model,
+            max_q,
+            shots,
+            workers,
+            seed,
+        )?
+    } else {
+        // When max_qubits is not specified, use a reasonable default
+        // For programs with loops, we need extra headroom
+        let static_qubits = classical_engine.num_qubits();
+        // Use 3x the static count or 10, whichever is larger, to handle dynamic allocation
+        let default_max_qubits = std::cmp::max(static_qubits * 3, 10);
+        
+        pecos_engines::monte_carlo::MonteCarloEngine::run_with_noise_model_and_max_qubits(
+            classical_engine,
+            noise_model,
+            default_max_qubits,
+            shots,
+            workers,
+            seed,
+        )?
+    };
 
     // Force another reset after execution
     unsafe {
@@ -188,6 +211,7 @@ fn execute_llvm_safe(
 /// Direct function to execute LLVM file
 #[pyfunction]
 #[pyo3(name = "execute_llvm")]
+#[pyo3(signature = (llvm_path, shots, seed, noise_probability, workers, max_qubits=None))]
 pub fn py_execute_llvm(
     py: Python<'_>,
     llvm_path: &str,
@@ -195,6 +219,7 @@ pub fn py_execute_llvm(
     seed: Option<u64>,
     noise_probability: Option<f64>,
     workers: Option<usize>,
+    max_qubits: Option<usize>,
 ) -> PyResult<PyObject> {
     // Enhanced error handling removed - not needed for simplification
 
@@ -224,7 +249,7 @@ pub fn py_execute_llvm(
     // LLVM execution context initialization removed (was stub)
 
     // Execute LLVM directly without error context wrapper
-    let results = execute_llvm_safe(&path, shots, seed, noise_probability, workers)
+    let results = execute_llvm_safe(&path, shots, seed, noise_probability, workers, max_qubits)
         .map_err(|e| PyRuntimeError::new_err(format!("LLVM execution failed: {e}")))?;
 
     // Convert results to Python format

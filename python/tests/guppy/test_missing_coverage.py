@@ -24,6 +24,7 @@ try:
         h, x, cx, cz,
         measure_array, discard_array
     )
+    from guppylang.std.quantum import array as qubit_array
     from guppylang.std.quantum_functional import reset, project_z
     from guppylang.std.builtins import array
     from guppylang.std.angles import angle, pi
@@ -80,7 +81,7 @@ class TestNoiseModels:
             return measure(q)
         
         # Test with no noise - should be deterministic
-        results_ideal = guppy_sim(noisy_circuit).seed(42).run(100)
+        results_ideal = guppy_sim(noisy_circuit, max_qubits=10).seed(42).run(100)
         
         # Results are in 'c' key
         ones_ideal = sum(results_ideal["_result"])
@@ -88,7 +89,7 @@ class TestNoiseModels:
         
         # Test with depolarizing noise
         noise = DepolarizingNoise(p=0.1)  # 10% error rate
-        results_noisy = guppy_sim(noisy_circuit).seed(42).noise(noise).run(1000)
+        results_noisy = guppy_sim(noisy_circuit, max_qubits=10).seed(42).noise(noise).run(1000)
         ones_noisy = sum(results_noisy["_result"])
         
         # With noise, we should see some errors (not all 1s)
@@ -108,11 +109,11 @@ class TestNoiseModels:
         
         # Test with biased noise
         noise = BiasedDepolarizingNoise(p=0.05)  # 5% biased error
-        results = guppy_sim(bell_state).seed(123).noise(noise).run(1000)
+        results = guppy_sim(bell_state, max_qubits=10).seed(123).noise(noise).run(1000)
         
         # Count correlated outcomes (00 and 11)
-        # Results are in 'c' key as integers where 0=|00⟩, 3=|11⟩
-        correlated = sum(1 for r in results["_result"] if r in [0, 3])
+        # Results are tuples (False, False) or (True, True) for correlated Bell states
+        correlated = sum(1 for r in results["_result"] if r in [(False, False), (True, True)])
         
         # With 5% biased noise, Bell states should still be somewhat correlated
         # But biased depolarizing might affect correlation more than expected
@@ -136,7 +137,7 @@ class TestNoiseModels:
             p2=0.1        # 10% two-qubit gate error
         )
         
-        results = guppy_sim(prep_measure_circuit).seed(456).noise(noise).run(1000)
+        results = guppy_sim(prep_measure_circuit, max_qubits=10).seed(456).noise(noise).run(1000)
         errors = 1000 - sum(results["_result"])
         
         # With high prep error (20%), we expect significant errors
@@ -154,47 +155,43 @@ class TestNoiseModels:
 class TestArrayOperations:
     """Test array and batch quantum operations."""
     
-    @pytest.mark.skip(reason="HUGR doesn't support value_array type yet")
+    @pytest.mark.skip(reason="HUGR doesn't support array types for measure_array yet")  
     def test_measure_array(self):
         """Test measuring an array of qubits."""
-        # First check if measure_array is available
-        if measure_array is None:
-            pytest.skip("measure_array not available in this guppy version")
-            
+        # Note: This test uses the canonical measure_array pattern from guppylang
+        # but HUGR compilation doesn't support it yet
         @guppy
-        def measure_array_test() -> int:
-            # Create array of 5 qubits
+        def measure_array_test() -> list[bool]:
+            # Create array of 5 qubits using comprehension
             qs = array(qubit() for _ in range(5))
             
-            # Apply different operations
+            # Apply different operations using indexing
             h(qs[0])
             x(qs[1])
             h(qs[2])
             x(qs[3])
             # qs[4] stays |0⟩
             
-            # Use measure_array to measure all qubits at once
+            # Use measure_array to measure all qubits at once (canonical pattern)
             results = measure_array(qs)
             
-            # Encode as integer (bit 0 is results[0], bit 1 is results[1], etc.)
-            result = 0
-            for i in range(5):
-                if results[i]:
-                    result |= (1 << i)
-            
-            return result
+            # Convert array to list for return
+            return list(results)
         
-        results = guppy_sim(measure_array_test).seed(789).run(100)
+        results = guppy_sim(measure_array_test, max_qubits=10).seed(789).run(100)
         
-        # Check that results are valid 5-bit integers
+        # Check tuple results
         for result in results["_result"]:
-            # Result should encode 5 bits
-            assert 0 <= result < 32, f"Invalid result for 5 qubits: {result}"
-            # Check known bits: b1 and b3 should always be 1
-            assert (result & 2) == 2, "Bit 1 should be set (from x(qs[1]))"
-            assert (result & 8) == 8, "Bit 3 should be set (from x(qs[3]))"
-            # Bit 4 should always be 0
-            assert (result & 16) == 0, "Bit 4 should be unset (qs[4] stays |0⟩)"
+            # Result is a tuple of 5 booleans
+            # Extract individual measurements
+            b0, b1, b2, b3, b4 = result
+            
+            # Check known deterministic bits
+            assert b1 == True, "Bit 1 should be True (from x(qs[1]))"
+            assert b3 == True, "Bit 3 should be True (from x(qs[3]))"
+            assert b4 == False, "Bit 4 should be False (qs[4] stays |0⟩)"
+            
+            # b0 and b2 are probabilistic (from H gates)
     
     @pytest.mark.skip(reason="HUGR doesn't support value_array type yet")
     def test_discard_array(self):
@@ -220,7 +217,7 @@ class TestArrayOperations:
             return measure(q)
         
         # Should run without errors
-        results = guppy_sim(discard_array_test).run(10)
+        results = guppy_sim(discard_array_test, max_qubits=10).run(10)
         assert all(r == 1 for r in results["_result"]), "Final qubit should be |1⟩"
     
     @pytest.mark.skip(reason="HUGR doesn't support value_array type yet")
@@ -251,7 +248,7 @@ class TestArrayOperations:
             
             return result
         
-        results = guppy_sim(array_loop_test).seed(42).run(100)
+        results = guppy_sim(array_loop_test, max_qubits=10).seed(42).run(100)
         
         # With fixed seed, check deterministic pattern
         # Even indices (0,2) are in superposition, odd indices (1,3) are |1⟩
@@ -276,26 +273,27 @@ class TestArrayOperations:
 class TestAdvancedControlFlow:
     """Test complex control flow patterns."""
     
-    @pytest.mark.skip(reason="HUGR has issues with boolean constants in nested loops")
+    @pytest.mark.skip(reason="HUGR can't handle boolean constants in control flow")
     def test_nested_loops(self):
         """Test nested loops with quantum operations."""
         @guppy
         def nested_loop_test() -> int:
             count = 0
             
-            # Use individual qubits instead of array to avoid issues
+            # Simple nested loops without complex conditionals
             for i in range(3):
                 for j in range(i + 1):
                     q = qubit()  # Create fresh qubit for each iteration
                     h(q)
-                    if measure(q):
-                        count += 1
-                    # No need to reset - qubit is consumed by measure
+                    # Directly add measurement result (bool converts to int)
+                    b = measure(q)
+                    if b:
+                        count = count + 1
             
             return count
         
         # Run multiple times to see distribution
-        results = guppy_sim(nested_loop_test).seed(111).run(100)
+        results = guppy_sim(nested_loop_test, max_qubits=10).seed(111).run(100)
         
         # Count should be between 0 and 6 (sum of 1+2+3 measurements)
         assert all(0 <= r <= 6 for r in results["_result"]), "Count out of expected range"
@@ -327,15 +325,15 @@ class TestAdvancedControlFlow:
             return measure(q)
         
         # Test case n=0
-        results = guppy_sim(conditional_quantum_0).run(10)
+        results = guppy_sim(conditional_quantum_0, max_qubits=10).run(10)
         assert all(r == 0 for r in results["_result"]), "Case n=0 failed"
         
         # Test case n=1
-        results = guppy_sim(conditional_quantum_1).run(10)
+        results = guppy_sim(conditional_quantum_1, max_qubits=10).run(10)
         assert all(r == 1 for r in results["_result"]), "Case n=1 failed"
         
         # Test case n=2 (superposition - should have both 0 and 1)
-        results = guppy_sim(conditional_quantum_2).seed(42).run(100)
+        results = guppy_sim(conditional_quantum_2, max_qubits=10).seed(42).run(100)
         zeros = sum(1 for r in results["_result"] if r == 0)
         ones = sum(1 for r in results["_result"] if r == 1)
         assert zeros > 20 and ones > 20, "Case n=2 (superposition) failed"
@@ -365,8 +363,8 @@ class TestAdvancedControlFlow:
             return measure(q1)
         
         # Test both paths
-        results_true = guppy_sim(early_return_test_true).seed(42).run(100)
-        results_false = guppy_sim(early_return_test_false).seed(42).run(100)
+        results_true = guppy_sim(early_return_test_true, max_qubits=10).seed(42).run(100)
+        results_false = guppy_sim(early_return_test_false, max_qubits=10).seed(42).run(100)
         
         # Both should produce valid results
         assert len(results_true["_result"]) == 100
@@ -392,13 +390,13 @@ class TestQuantumEngines:
             return measure(q0), measure(q1)
         
         # Explicitly use state vector engine
-        results = (guppy_sim(engine_test)
+        results = (guppy_sim(engine_test, max_qubits=10)
                   .engine("StateVector")
                   .seed(42)
                   .run(100))
         
-        # Verify Bell state correlations
-        assert all(r in [0, 3] for r in results["_result"]), "Bell state should be |00⟩ or |11⟩"
+        # Verify Bell state correlations - results are tuples
+        assert all(r in [(False, False), (True, True)] for r in results["_result"]), "Bell state should be |00⟩ or |11⟩"
     
     def test_sparse_stabilizer_engine(self):
         """Test sparse stabilizer engine for Clifford circuits."""
@@ -413,7 +411,7 @@ class TestQuantumEngines:
         
         # Try sparse stabilizer engine
         try:
-            results = (guppy_sim(clifford_circuit)
+            results = (guppy_sim(clifford_circuit, max_qubits=10)
                       .engine("SparseStabilizer")
                       .seed(42)
                       .run(100))
@@ -452,7 +450,7 @@ class TestQuantumErrorHandling:
         # Some shots should panic, some should not
         with pytest.raises(RuntimeError, match="panic"):
             # This might panic on some shots
-            guppy_sim(panic_test).seed(42).run(100)
+            guppy_sim(panic_test, max_qubits=10).seed(42).run(100)
     
     @pytest.mark.skip(reason="project_z requires tket2.bool.make_opaque support in HUGR->LLVM")
     def test_projective_measurement(self):
@@ -470,7 +468,7 @@ class TestQuantumErrorHandling:
             
             return result, final
         
-        results = guppy_sim(project_test).seed(42).run(100)
+        results = guppy_sim(project_test, max_qubits=10).seed(42).run(100)
         
         # After projection, both measurements should match
         for r in results["_result"]:
@@ -496,11 +494,11 @@ class TestQuantumErrorHandling:
             
             return before, after
         
-        results = guppy_sim(reset_test).run(100)
+        results = guppy_sim(reset_test, max_qubits=10).run(100)
         
-        # All results should be (1, 0) - encoded as before + after*2 = 1 + 0*2 = 1
-        assert all(r == 1 for r in results["_result"]), \
-            "Should produce |1⟩ then |0⟩, encoded as 1"
+        # All results should be (True, False) as tuples
+        assert all(r == (True, False) for r in results["_result"]), \
+            "Should produce |1⟩ then |0⟩ as tuple (True, False)"
 
 
 if __name__ == "__main__":

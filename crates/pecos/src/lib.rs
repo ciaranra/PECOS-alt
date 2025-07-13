@@ -126,6 +126,48 @@ pub fn setup_llvm_engine(
     Ok(Box::new(engine))
 }
 
+/// Set up a generic LLVM engine with max qubits configuration
+///
+/// This function creates an LLVM engine from an LLVM IR file with
+/// the ability to specify the maximum number of qubits for dynamic allocation.
+///
+/// # Arguments
+/// * `llvm_ir_path` - Path to the LLVM IR file
+/// * `shots` - Optional number of shots to assign to the engine
+/// * `max_qubits` - Optional maximum number of qubits for dynamic allocation
+///
+/// # Returns
+/// A boxed `ClassicalEngine` ready for execution
+///
+/// # Errors
+/// Returns `PecosError` if engine creation fails
+pub fn setup_llvm_engine_with_config(
+    llvm_ir_path: &Path,
+    shots: Option<usize>,
+    max_qubits: Option<usize>,
+) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
+    log::debug!("Setting up LLVM engine for: {} with max_qubits: {:?}", 
+        llvm_ir_path.display(), max_qubits);
+
+    // Create config with max_qubits
+    let config = pecos_llvm_runtime::LlvmEngineConfig {
+        assigned_shots: shots.unwrap_or(0),
+        verbose: false,
+        max_qubits,
+    };
+
+    // Create LLVM engine with config
+    let mut engine = pecos_llvm_runtime::LlvmEngine::with_config(
+        llvm_ir_path.to_path_buf(), 
+        config
+    );
+
+    // Pre-compile the LLVM library for efficient execution
+    engine.pre_compile()?;
+
+    Ok(Box::new(engine))
+}
+
 /// HUGR-LLVM Integration
 ///
 /// This module provides thin orchestration functions that combine HUGR compilation

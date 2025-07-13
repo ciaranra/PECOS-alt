@@ -193,6 +193,12 @@ impl PyLlvmSimBuilder {
         slf
     }
 
+    /// Set maximum number of qubits allowed for allocation
+    pub fn max_qubits(mut slf: PyRefMut<'_, Self>, max_qubits: usize) -> PyRefMut<'_, Self> {
+        slf.builder = slf.builder.clone().max_qubits(max_qubits);
+        slf
+    }
+
     /// Keep temporary files
     pub fn keep_temp_files(mut slf: PyRefMut<'_, Self>, keep: bool) -> PyRefMut<'_, Self> {
         slf.builder = slf.builder.clone().keep_temp_files(keep);

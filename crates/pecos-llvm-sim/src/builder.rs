@@ -166,6 +166,16 @@ impl LlvmSim {
         self
     }
 
+    /// Set maximum number of qubits allowed for allocation.
+    ///
+    /// This enforces a limit on dynamic qubit allocation to prevent
+    /// out-of-memory issues with exponentially scaling state vectors.
+    #[must_use]
+    pub fn max_qubits(mut self, max_qubits: usize) -> Self {
+        self.config.max_qubits = Some(max_qubits);
+        self
+    }
+
     /// Enable debug output (no-op for compatibility)
     #[must_use]
     pub fn debug(self, _debug: bool) -> Self {

@@ -436,6 +436,50 @@ impl MonteCarloEngine {
         Self::run_with_hybrid_engine(hybrid_engine, num_shots, num_workers, seed)
     }
 
+    /// Static method to run a simulation with a classical engine, noise model, and max qubits.
+    ///
+    /// This method allows specifying the maximum number of qubits for the quantum engine,
+    /// which is necessary for programs with dynamic qubit allocation in loops.
+    ///
+    /// # Parameters
+    /// - `classical_engine`: The classical engine to use.
+    /// - `noise_model`: The noise model to apply during simulation.
+    /// - `max_qubits`: Maximum number of qubits for the quantum engine.
+    /// - `num_shots`: The total number of circuit executions to perform.
+    /// - `num_workers`: The number of worker threads to use for parallel execution.
+    /// - `seed`: Optional seed for deterministic behavior.
+    ///
+    /// # Returns
+    /// Aggregated results from all shots.
+    ///
+    /// # Errors
+    /// Returns a `PecosError` if any part of the simulation fails.
+    pub fn run_with_noise_model_and_max_qubits(
+        classical_engine: Box<dyn ClassicalControlEngine>,
+        noise_model: Box<dyn NoiseModel>,
+        max_qubits: usize,
+        num_shots: usize,
+        num_workers: usize,
+        seed: Option<u64>,
+    ) -> Result<ShotVec, PecosError> {
+        debug!(
+            "MonteCarloEngine::run_with_noise_model_and_max_qubits: Creating StateVecEngine with {max_qubits} qubits"
+        );
+        let quantum_engine = Box::new(StateVecEngine::new(max_qubits));
+        let mut hybrid_engine = HybridEngineBuilder::new()
+            .with_classical_engine(classical_engine)
+            .with_quantum_engine(quantum_engine)
+            .with_noise_model(noise_model)
+            .build();
+
+        // Set seed if provided
+        if let Some(s) = seed {
+            hybrid_engine.set_seed(s)?;
+        }
+
+        Self::run_with_hybrid_engine(hybrid_engine, num_shots, num_workers, seed)
+    }
+
     /// Static method to run a simulation based on a configuration string.
     ///
     /// This method is intended for use with configuration management systems where

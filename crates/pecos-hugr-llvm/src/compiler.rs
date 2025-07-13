@@ -6,7 +6,8 @@ files to LLVM IR. It contains no execution engine dependencies - only compilatio
 */
 
 use hugr_core::package::Package;
-use hugr_core::{Hugr, std_extensions};
+use hugr_core::Hugr;
+use hugr_core::extension::ExtensionRegistry;
 use hugr_llvm::emit::EmitHugr;
 use hugr_llvm::extension::{int::IntCodegenExtension, prelude::DefaultPreludeCodegen};
 use hugr_llvm::inkwell::context::Context;
@@ -17,6 +18,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+use super::extensions::const_bool_extension::ConstBoolExtension;
 use super::extensions::tket2_bool_extension::Tket2BoolExtension;
 use super::extensions::tket2_rotation_extension::Tket2RotationExtension;
 use super::generators::standard_llvm_generator::StandardLlvmExtension;
@@ -28,6 +30,7 @@ pub struct HugrCompilerConfig {
     /// Output file path for the generated LLVM IR
     pub output_path: Option<PathBuf>,
 }
+
 
 /// Pure HUGR to LLVM IR compiler
 pub struct HugrCompiler {
@@ -94,6 +97,23 @@ impl HugrCompiler {
         self.compile_hugr_bytes(&hugr_bytes, &output_path)
     }
 
+    /// Create an extension registry with all required extensions
+    fn create_extension_registry() -> ExtensionRegistry {
+        // Use the standard HUGR registry which includes:
+        // - prelude
+        // - arithmetic.int.types, arithmetic.float.types
+        // - collections.array
+        // - logic, ptr, etc.
+        let registry = hugr_core::std_extensions::std_reg();
+        
+        // The HUGR package includes its own tket2 extension definitions
+        // We don't need to add them here - just return the standard registry
+        registry
+    }
+
+    // TODO: Implement tket2.bool extension creation if needed
+    // Currently the extension registry loads extensions from the HUGR package
+
     /// Compile HUGR bytes to LLVM IR file
     ///
     /// # Errors
@@ -111,10 +131,24 @@ impl HugrCompiler {
 
         // Fix duplicate function names before processing
         let fixed_hugr_bytes = fix_duplicate_functions(hugr_bytes)?;
+        
+        // Preprocess HUGR to replace ConstBool with standard values
+        let preprocessed_hugr_bytes = preprocess_hugr_for_constbool(&fixed_hugr_bytes)?;
 
-        // Load HUGR package
-        let reader = std::io::Cursor::new(fixed_hugr_bytes.clone());
-        let mut hugr_package = Package::load(reader, Some(&std_extensions::std_reg()))
+        // Create extension registry with tket2 extensions
+        let registry = Self::create_extension_registry();
+
+        // Load HUGR package with the extension registry
+        let _reader = std::io::Cursor::new(preprocessed_hugr_bytes.clone());
+        
+        // Always try relaxed validation first for ConstBool handling
+        debug!("HUGR: Attempting to load package with relaxed validation for ConstBool support");
+        let mut hugr_package = load_package_with_relaxed_validation(&preprocessed_hugr_bytes, &registry)
+            .or_else(|e| {
+                debug!("HUGR: Relaxed validation failed: {}, trying standard loading", e);
+                let reader = std::io::Cursor::new(preprocessed_hugr_bytes.clone());
+                Package::load(reader, Some(&registry))
+            })
             .map_err(|e| PecosError::with_context(e, "Failed to parse HUGR"))?;
 
         debug!(
@@ -186,6 +220,7 @@ impl HugrCompiler {
 
         // Add our custom extensions FIRST (before standard extensions)
         // This ensures our tket2.bool handler takes precedence
+        builder = builder.add_extension(ConstBoolExtension::new());
         builder = builder.add_extension(Tket2BoolExtension::new());
         builder = builder.add_extension(Tket2RotationExtension::new());
 
@@ -221,9 +256,11 @@ impl HugrCompiler {
 
         debug!("HUGR: Generated LLVM module");
 
-        // Convert to string and fix entry point
+        // Convert to string and apply fixes
         let llvm_ir_string = llvm_module.print_to_string().to_string();
-        let fixed_llvm_ir = fix_entry_point_signature(&llvm_ir_string);
+        let fixed_entry_point = fix_entry_point_signature(&llvm_ir_string);
+        let fixed_alignment = fix_struct_alignment(&fixed_entry_point);
+        let fixed_llvm_ir = add_struct_return_wrappers(&fixed_alignment);
 
         trace!("HUGR: Generated LLVM IR:\n{fixed_llvm_ir}");
         debug!("HUGR: LLVM IR generation completed successfully");
@@ -300,6 +337,349 @@ fn fix_duplicate_functions(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
     result.extend_from_slice(fixed_json.as_bytes());
 
     Ok(result)
+}
+
+/// Load package with relaxed validation for ConstBool issues
+fn load_package_with_relaxed_validation(
+    hugr_bytes: &[u8],
+    _registry: &ExtensionRegistry,
+) -> Result<Package, hugr_core::envelope::EnvelopeError> {
+    use hugr_core::envelope::read_envelope;
+    use hugr_core::extension::ExtensionRegistry;
+    
+    debug!("HUGR: Loading package with minimal extension validation");
+    
+    // Create a minimal extension registry that only includes basic types
+    let minimal_registry = ExtensionRegistry::new(std::iter::empty());
+    
+    // Read the envelope with minimal validation to bypass ConstBool issues
+    let reader = std::io::Cursor::new(hugr_bytes);
+    let (_, package) = read_envelope(reader, &minimal_registry)?;
+    
+    debug!("HUGR: Package loaded successfully with relaxed validation");
+    Ok(package)
+}
+
+/// Preprocess HUGR to fix ConstBool extension references
+fn preprocess_hugr_for_constbool(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
+    use serde_json::Value;
+    
+    // Find JSON start
+    let json_start = hugr_bytes.iter().position(|&b| b == b'{').unwrap_or(0);
+    let prefix = &hugr_bytes[..json_start];
+    let json_bytes = &hugr_bytes[json_start..];
+    
+    // Parse JSON
+    let json_str = std::str::from_utf8(json_bytes)
+        .map_err(|e| PecosError::with_context(e, "Invalid UTF-8 in HUGR data"))?;
+    
+    let mut json: Value = serde_json::from_str(json_str)
+        .map_err(|e| PecosError::with_context(e, "Failed to parse HUGR JSON"))?;
+    
+    // Process all modules to fix ConstBool values
+    if let Some(modules) = json.get_mut("modules").and_then(|m| m.as_array_mut()) {
+        for module in modules {
+            fix_constbool_in_module(module);
+        }
+    }
+    
+    // Remove tket2.bool from required extensions in any nodes that use it
+    // This is crucial to avoid the "requires extensions" error
+    if let Some(modules) = json.get_mut("modules").and_then(|m| m.as_array_mut()) {
+        for module in modules {
+            remove_tket2_bool_references(module);
+        }
+    }
+    
+    // Serialize back to bytes
+    let fixed_json = serde_json::to_string(&json)
+        .map_err(|e| PecosError::with_context(e, "Failed to serialize fixed JSON"))?;
+    
+    let mut result = prefix.to_vec();
+    result.extend_from_slice(fixed_json.as_bytes());
+    
+    Ok(result)
+}
+
+/// Fix ConstBool values in a module
+fn fix_constbool_in_module(module: &mut serde_json::Value) {
+    if let Some(nodes) = module.get_mut("nodes").and_then(|n| n.as_array_mut()) {
+        for node in nodes {
+            // Check if this is a Const node (can be string or object)
+            let is_const = match node.get("op") {
+                Some(serde_json::Value::String(s)) => s == "Const",
+                Some(serde_json::Value::Object(obj)) => obj.get("op").map(|v| v == "Const").unwrap_or(false),
+                _ => false,
+            };
+            
+            if is_const {
+                // Handle Const nodes with ConstBool values
+                if let Some(v) = node.get_mut("v") {
+                    if let Some(v_type) = v.get("v").and_then(|vt| vt.as_str()) {
+                        if v_type == "Extension" {
+                            if let Some(value) = v.get_mut("value") {
+                                if let Some(c) = value.get("c") {
+                                    if c == "ConstBool" {
+                                        debug!("Found ConstBool value: {:?}", value);
+                                        
+                                        // Get the boolean value
+                                        let bool_val = value.get("v").and_then(|v| v.as_bool()).unwrap_or(false);
+                                        
+                                        // Replace the entire const value with a Sum constant
+                                        *v = serde_json::json!({
+                                            "v": "Sum",
+                                            "tag": if bool_val { 1 } else { 0 },
+                                            "typ": {
+                                                "t": "Sum",
+                                                "s": "Unit", 
+                                                "size": 2
+                                            },
+                                            "vs": []
+                                        });
+                                        
+                                        debug!("Fixed ConstBool to Sum constant");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Remove references to tket2.bool extension from nodes
+fn remove_tket2_bool_references(module: &mut serde_json::Value) {
+    if let Some(nodes) = module.get_mut("nodes").and_then(|n| n.as_array_mut()) {
+        for node in nodes {
+            // Remove tket2.bool from type references
+            if let Some(op) = node.get_mut("op") {
+                if let Some(op_obj) = op.as_object_mut() {
+                    // Check LoadConstant nodes
+                    if let Some(datatype) = op_obj.get_mut("datatype") {
+                        if let Some(dt_obj) = datatype.as_object_mut() {
+                            if dt_obj.get("extension").and_then(|e| e.as_str()) == Some("tket2.bool") {
+                                // Convert to standard bool type
+                                *datatype = serde_json::json!({
+                                    "t": "Sum",
+                                    "s": "Unit",
+                                    "size": 2
+                                });
+                            }
+                        }
+                    }
+                    
+                    // Check function signatures
+                    if let Some(signature) = op_obj.get_mut("signature") {
+                        update_signature_types(signature);
+                    }
+                }
+            }
+            
+            // Check Input/Output nodes
+            if let Some(types) = node.get_mut("types").and_then(|t| t.as_array_mut()) {
+                for typ in types {
+                    if let Some(t_obj) = typ.as_object_mut() {
+                        if t_obj.get("extension").and_then(|e| e.as_str()) == Some("tket2.bool") {
+                            *typ = serde_json::json!({
+                                "t": "Sum",
+                                "s": "Unit",
+                                "size": 2
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Update signature types to replace tket2.bool with standard bool
+fn update_signature_types(sig: &mut serde_json::Value) {
+    if let Some(body) = sig.get_mut("body") {
+        if let Some(input) = body.get_mut("input").and_then(|i| i.as_array_mut()) {
+            for typ in input {
+                replace_tket2_bool_type(typ);
+            }
+        }
+        if let Some(output) = body.get_mut("output").and_then(|o| o.as_array_mut()) {
+            for typ in output {
+                replace_tket2_bool_type(typ);
+            }
+        }
+    }
+}
+
+/// Replace a tket2.bool type reference with standard bool type
+fn replace_tket2_bool_type(typ: &mut serde_json::Value) {
+    if let Some(t_obj) = typ.as_object_mut() {
+        if t_obj.get("extension").and_then(|e| e.as_str()) == Some("tket2.bool") {
+            *typ = serde_json::json!({
+                "t": "Sum",
+                "s": "Unit",
+                "size": 2
+            });
+        }
+    }
+}
+
+/// Fix struct store alignment mismatches in LLVM IR
+/// 
+/// The hugr-llvm crate generates struct stores with align 1, but LLVM allocates
+/// structs with their natural alignment (typically 8 bytes). This mismatch causes
+/// segmentation faults when accessing the misaligned memory.
+fn fix_struct_alignment(llvm_ir: &str) -> String {
+    use regex::Regex;
+    
+    // Fix alignment mismatches for struct stores
+    // Pattern: store { i1, ... } %value, { i1, ... }* %ptr, align 1
+    // Should be: store { i1, ... } %value, { i1, ... }* %ptr, align 8
+    let struct_store_pattern = Regex::new(
+        r"store\s+(\{[^}]+\})\s+([^,]+),\s+(\{[^}]+\}\*)\s+([^,]+),\s+align\s+1\b"
+    ).unwrap();
+    
+    let result = struct_store_pattern.replace_all(llvm_ir, "store $1 $2, $3 $4, align 8");
+    
+    // Also fix empty struct stores: store {} %value, {}* %ptr, align 1
+    let empty_struct_pattern = Regex::new(
+        r"store\s+(\{\})\s+([^,]+),\s+(\{\}\*)\s+([^,]+),\s+align\s+1\b"
+    ).unwrap();
+    
+    empty_struct_pattern.replace_all(&result, "store $1 $2, $3 $4, align 8").to_string()
+}
+
+/// Convert small struct returns to integer returns for ABI compatibility
+/// 
+/// LLVM functions that return { i1, i1, i1, i1 } cause issues with FFI.
+/// This converts them to return i8 instead, packing the bits.
+fn fix_small_struct_returns(llvm_ir: &str) -> String {
+    use regex::Regex;
+    
+    // Check if this function returns a small struct of booleans
+    let func_sig_pattern = Regex::new(
+        r"define\s+\{\s*i1,\s*i1,\s*i1,\s*i1\s*\}\s+@(\w+)"
+    ).unwrap();
+    
+    if let Some(captures) = func_sig_pattern.captures(llvm_ir) {
+        let func_name = &captures[1];
+        debug!("Found function {} returning {{ i1, i1, i1, i1 }}, converting to i8", func_name);
+        
+        // Replace the function signature
+        let mut result = func_sig_pattern.replace(
+            llvm_ir, 
+            format!("define i8 @{}", func_name)
+        ).to_string();
+        
+        // Find the return statement and convert it
+        // Pattern: ret { i1, i1, i1, i1 } %value
+        let ret_pattern = Regex::new(
+            r"ret\s+\{\s*i1,\s*i1,\s*i1,\s*i1\s*\}\s+(%\w+)"
+        ).unwrap();
+        
+        if let Some(ret_captures) = ret_pattern.captures(&result) {
+            let ret_var = &ret_captures[1];
+            
+            // Insert code to pack the struct into an i8
+            // We need to extract each field and pack them
+            let pack_code = format!(
+                r#"  ; Pack {{ i1, i1, i1, i1 }} into i8
+  %pack0 = extractvalue {{ i1, i1, i1, i1 }} {}, 0
+  %pack1 = extractvalue {{ i1, i1, i1, i1 }} {}, 1
+  %pack2 = extractvalue {{ i1, i1, i1, i1 }} {}, 2
+  %pack3 = extractvalue {{ i1, i1, i1, i1 }} {}, 3
+  %pack0_i8 = zext i1 %pack0 to i8
+  %pack1_i8 = zext i1 %pack1 to i8
+  %pack2_i8 = zext i1 %pack2 to i8
+  %pack3_i8 = zext i1 %pack3 to i8
+  %pack1_shift = shl i8 %pack1_i8, 1
+  %pack2_shift = shl i8 %pack2_i8, 2
+  %pack3_shift = shl i8 %pack3_i8, 3
+  %pack01 = or i8 %pack0_i8, %pack1_shift
+  %pack012 = or i8 %pack01, %pack2_shift
+  %packed = or i8 %pack012, %pack3_shift
+  ret i8 %packed"#,
+                ret_var, ret_var, ret_var, ret_var
+            );
+            
+            result = ret_pattern.replace(&result, &pack_code).to_string();
+        }
+        
+        return result;
+    }
+    
+    llvm_ir.to_string()
+}
+
+/// Add wrapper functions for struct returns that are FFI-safe
+/// This creates a global variable to hold the struct and a wrapper that returns a pointer
+fn add_struct_return_wrappers(llvm_ir: &str) -> String {
+    use regex::Regex;
+    
+    // Find functions that return structs
+    let func_pattern = Regex::new(r"define\s+(\{[^}]+\})\s+@(\w+)\(\)\s+").unwrap();
+    
+    let mut result = llvm_ir.to_string();
+    let mut wrappers = String::new();
+    
+    // Process each function that returns a struct
+    for cap in func_pattern.captures_iter(llvm_ir) {
+        let struct_type = &cap[1];
+        let func_name = &cap[2];
+        
+        // Skip if it's not a struct with multiple elements
+        if !struct_type.contains(",") {
+            continue;
+        }
+        
+        // Create a global variable to hold the result
+        wrappers.push_str(&format!(
+            "\n; Global storage for {func_name} result\n\
+             @{func_name}_result = internal global {} zeroinitializer, align 8\n",
+            struct_type
+        ));
+        
+        // Create a wrapper function that stores to global and returns pointer
+        wrappers.push_str(&format!(
+            "\n; FFI-safe wrapper for {func_name}\n\
+             define {}* @{func_name}_wrapper() {{\n\
+               %1 = call {} @{func_name}()\n\
+               store {} %1, {}* @{func_name}_result, align 8\n\
+               ret {}* @{func_name}_result\n\
+             }}\n",
+            struct_type, struct_type, struct_type, struct_type, struct_type
+        ));
+        
+        // Also create accessor functions to get individual elements
+        // Count elements in the struct
+        let elements: Vec<&str> = struct_type[1..struct_type.len()-1]
+            .split(',')
+            .map(|s| s.trim())
+            .collect();
+        
+        for (i, elem_type) in elements.iter().enumerate() {
+            wrappers.push_str(&format!(
+                "\n; Accessor for element {} of {func_name} result\n\
+                 define {} @{func_name}_get_{}() {{\n\
+                   %1 = load {}, {}* @{func_name}_result, align 8\n\
+                   %2 = extractvalue {} %1, {}\n\
+                   ret {} %2\n\
+                 }}\n",
+                i,
+                elem_type, i,
+                struct_type, struct_type,
+                struct_type, i,
+                elem_type
+            ));
+        }
+    }
+    
+    // Add wrappers at the end of the module
+    if !wrappers.is_empty() {
+        result.push_str(&wrappers);
+    }
+    
+    result
 }
 
 /// Fix entry point signature to work with PECOS runtime

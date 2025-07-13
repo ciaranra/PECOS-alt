@@ -47,7 +47,7 @@ class TestNoiseModels:
             return measure(q)
         
         # Run with seed for reproducibility
-        results = guppy_sim(deterministic_circuit).seed(42).run(100)
+        results = guppy_sim(deterministic_circuit, max_qubits=10).seed(42).run(100)
         
         # Should always measure |1⟩
         assert all(r == 1 for r in results["_result"]), "Deterministic circuit should always return 1"
@@ -61,12 +61,12 @@ class TestNoiseModels:
             return measure(q)
         
         # Run without noise
-        results_ideal = guppy_sim(simple_circuit).seed(123).run(1000)
+        results_ideal = guppy_sim(simple_circuit, max_qubits=10).seed(123).run(1000)
         ones_ideal = sum(results_ideal["_result"])
         
         # Run with 10% depolarizing noise
         noise = DepolarizingNoise(p=0.1)
-        results_noisy = guppy_sim(simple_circuit).seed(123).noise(noise).run(1000)
+        results_noisy = guppy_sim(simple_circuit, max_qubits=10).seed(123).noise(noise).run(1000)
         ones_noisy = sum(results_noisy["_result"])
         
         # Noise should reduce fidelity
@@ -93,11 +93,11 @@ class TestNoiseModels:
         
         print("\nNoise Model Comparison (Bell State Correlation):")
         for name, noise in noise_configs:
-            results = guppy_sim(bell_state).seed(42).noise(noise).run(1000)
+            results = guppy_sim(bell_state, max_qubits=10).seed(42).noise(noise).run(1000)
             
             # Count correlated outcomes (|00⟩ or |11⟩)
-            # Results are integers: 0=|00⟩, 1=|01⟩, 2=|10⟩, 3=|11⟩
-            correlated = sum(1 for r in results["_result"] if r in [0, 3])
+            # Results are tuples: (False, False)=|00⟩, (True, True)=|11⟩
+            correlated = sum(1 for r in results["_result"] if r in [(False, False), (True, True)])
             
             print(f"  {name:15s}: {correlated}/1000 correlated ({correlated/10:.1f}%)")
             
@@ -124,7 +124,7 @@ def test_noise_model_builder_pattern():
     
     # Build simulation with noise
     sim = (
-        guppy_sim(test_circuit)
+        guppy_sim(test_circuit, max_qubits=10)
         .seed(12345)
         .noise(DepolarizingNoise(p=0.05))
         .workers(2)

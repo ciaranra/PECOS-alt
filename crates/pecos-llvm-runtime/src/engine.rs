@@ -36,6 +36,8 @@ pub struct LlvmEngineConfig {
     pub assigned_shots: usize,
     /// Whether to show verbose command logs
     pub verbose: bool,
+    /// Maximum number of qubits allowed for allocation
+    pub max_qubits: Option<usize>,
 }
 
 /// LLVM Engine for executing quantum programs in LLVM IR format
@@ -408,6 +410,11 @@ impl LlvmEngine {
             }
         }
 
+        // Set max_qubits in the runtime if configured
+        if let Some(max_qubits) = self.config.max_qubits {
+            crate::runtime::core_runtime::set_max_qubits(max_qubits);
+        }
+
         // Find and call the entry point function
         // First check if we already know the entry point for this program
         let entry_point = if let Some(ref ep) = self.entry_point {
@@ -568,21 +575,67 @@ impl LlvmEngine {
             );
         }
 
-        // Pattern 2: Integer-based qubit references in LLVM IR calls like "i64 N"
-        // This pattern looks for quantum gate calls with integer qubit arguments
-        let int_qubit_pattern =
-            Regex::new(r"__quantum__qis__[a-z_]+__body[a-z0-9_]*\s*\([^)]*?i64\s+(\d+)")
-                .expect("Invalid regex pattern for integer qubit references");
-        for cap in int_qubit_pattern.captures_iter(content) {
+        // Pattern 2: Integer-based qubit references in LLVM IR calls
+        // We need to be more careful here to avoid matching result IDs in measurement calls
+        
+        // Pattern 2a: Single-qubit gates (h, x, y, z, s, t, etc.)
+        let single_qubit_pattern =
+            Regex::new(r"__quantum__qis__(?:h|x|y|z|s|t|sdg|tdg)__body\s*\(i64\s+(\d+)\)")
+                .expect("Invalid regex for single-qubit gates");
+        for cap in single_qubit_pattern.captures_iter(content) {
             if let Some(index_match) = cap.get(1) {
                 if let Ok(index) = index_match.as_str().parse::<usize>() {
-                    debug!(
-                        "Pattern 2: Found integer qubit reference: {}, updating max_qubit_index from {} to {}",
-                        index,
-                        max_qubit_index,
-                        max_qubit_index.max(index)
-                    );
+                    debug!("Pattern 2a: Found single-qubit gate on qubit {}", index);
                     max_qubit_index = max_qubit_index.max(index);
+                    found_allocation = true;
+                }
+            }
+        }
+
+        // Pattern 2b: Two-qubit gates (cx/cnot, cz, etc.)
+        let two_qubit_pattern =
+            Regex::new(r"__quantum__qis__(?:cx|cnot|cz)__body\s*\(i64\s+(\d+),\s*i64\s+(\d+)\)")
+                .expect("Invalid regex for two-qubit gates");
+        for cap in two_qubit_pattern.captures_iter(content) {
+            if let Some(control_match) = cap.get(1) {
+                if let Ok(control) = control_match.as_str().parse::<usize>() {
+                    debug!("Pattern 2b: Found two-qubit gate control qubit {}", control);
+                    max_qubit_index = max_qubit_index.max(control);
+                    found_allocation = true;
+                }
+            }
+            if let Some(target_match) = cap.get(2) {
+                if let Ok(target) = target_match.as_str().parse::<usize>() {
+                    debug!("Pattern 2b: Found two-qubit gate target qubit {}", target);
+                    max_qubit_index = max_qubit_index.max(target);
+                    found_allocation = true;
+                }
+            }
+        }
+
+        // Pattern 2c: Measurement operations - only match the first parameter (qubit)
+        let measurement_pattern =
+            Regex::new(r"__quantum__qis__m__body\s*\(i64\s+(\d+),\s*i64\s+\d+\)")
+                .expect("Invalid regex for measurements");
+        for cap in measurement_pattern.captures_iter(content) {
+            if let Some(qubit_match) = cap.get(1) {
+                if let Ok(qubit) = qubit_match.as_str().parse::<usize>() {
+                    debug!("Pattern 2c: Found measurement on qubit {}", qubit);
+                    max_qubit_index = max_qubit_index.max(qubit);
+                    found_allocation = true;
+                }
+            }
+        }
+
+        // Pattern 2d: Rotation gates with angle parameter
+        let rotation_pattern =
+            Regex::new(r"__quantum__qis__(?:rx|ry|rz)__body\s*\(double\s+[^,]+,\s*i64\s+(\d+)\)")
+                .expect("Invalid regex for rotation gates");
+        for cap in rotation_pattern.captures_iter(content) {
+            if let Some(qubit_match) = cap.get(1) {
+                if let Ok(qubit) = qubit_match.as_str().parse::<usize>() {
+                    debug!("Pattern 2d: Found rotation gate on qubit {}", qubit);
+                    max_qubit_index = max_qubit_index.max(qubit);
                     found_allocation = true;
                 }
             }
