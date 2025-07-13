@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
+from pecos.slr import SlrConverter
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -50,7 +51,6 @@ def compare_qasm() -> Callable[..., None]:
             qasm1 = file.read()
 
         qasm1 = qasm1.strip()
-
         # TODO: Fix this... this is kinda hacky
         if (
             hasattr(block, "qargs")
@@ -61,7 +61,7 @@ def compare_qasm() -> Callable[..., None]:
         elif hasattr(block, "gen"):
             qasm2 = block.gen("qasm", add_versions=False).strip()
         else:
-            qasm2 = block.qasm(add_versions=False).strip()
+            qasm2 = SlrConverter(block).qasm(add_versions=False).strip()
 
         assert qasm1 == qasm2
 

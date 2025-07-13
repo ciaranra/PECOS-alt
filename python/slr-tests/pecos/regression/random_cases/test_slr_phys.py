@@ -1,19 +1,18 @@
 """Test SLR to physical quantum circuit compilation for various cases."""
 
+import re
+
 import pytest
 from pecos.qeclib import qubit as p
 from pecos.qeclib.steane.steane_class import Steane
 from pecos.slr import (
     Barrier,
-    Bit,
     Block,
     Comment,
     CReg,
     If,
     Main,
-    Permute,
     QReg,
-    Qubit,
     Repeat,
     SlrConverter,
 )
@@ -25,7 +24,7 @@ def telep(prep_basis: str, meas_basis: str) -> str:
     """A simple example of creating a logical teleportation circuit.
 
     Args:
-        prep_basis (str): A string indicating what Pauli basis to prepare the state in. Acceptable inputs include:
+        prep_basis (str):  A string indicating what Pauli basis to prepare the state in. Acceptable inputs include:
             "+X"/"X", "-X", "+Y"/"Y", "-Y", "+Z"/"Z", and "-Z".
         meas_basis (str): A string indicating what Pauli basis the measure out the logical qubit in. Acceptable inputs
             include: "X", "Y", and "Z".
@@ -65,29 +64,6 @@ def telep(prep_basis: str, meas_basis: str) -> str:
     )
 
 
-def test_bell() -> None:
-    """Test that a simple Bell prep and measure circuit can be created."""
-    prog = Main(
-        q := QReg("q", 2),
-        m := CReg("m", 2),
-        p.H(q[0]),
-        p.CX(q[0], q[1]),
-        p.Measure(q) > m,
-    )
-
-    qasm = (
-        "OPENQASM 2.0;\n"
-        'include "hqslib1.inc";\n'
-        "qreg q[2];\n"
-        "creg m[2];\n"
-        "h q[0];\n"
-        "cx q[0], q[1];\n"
-        "measure q -> m;"
-    )
-
-    assert SlrConverter(prog).qasm() == qasm
-
-
 @pytest.mark.optional_dependency
 def test_bell_qir() -> None:
     """Test that a simple Bell prep and measure circuit can be created."""
@@ -118,78 +94,24 @@ def test_bell_qreg_qir() -> None:
     assert "__quantum__qis__h__body" in qir
 
 
-def test_if_bell() -> None:
-    """Test that a more complex Bell prep and measure circuit with if statements can be created."""
-
-    class Bell(Block):
-        def __init__(self, q0: Qubit, q1: Qubit, m0: Bit, m1: Bit) -> None:
-            super().__init__()
-            self.extend(
-                p.Prep(q0),
-                p.Prep(q1),
-                p.H(q0),
-                p.CX(q0, q1),
-                p.Measure(q0) > m0,
-                p.Measure(q1) > m1,
-            )
-
-    prog = Main(
+@pytest.mark.optional_dependency
+def test_qir_creg_size_too_large() -> None:
+    """Test that a simple Bell prep and measure circuit can be created."""
+    prog: Main = Main(
         q := QReg("q", 2),
-        m := CReg("m", 2),
-        c := CReg("c", 4),
-        If(c == 1).Then(Bell(q0=q[0], q1=q[1], m0=m[0], m1=m[1])),
-    )
-
-    qasm = (
-        "OPENQASM 2.0;\n"
-        'include "hqslib1.inc";\n'
-        "qreg q[2];\n"
-        "creg m[2];\n"
-        "creg c[4];\n"
-        "if(c == 1) reset q[0];\n"
-        "if(c == 1) reset q[1];\n"
-        "if(c == 1) h q[0];\n"
-        "if(c == 1) cx q[0], q[1];\n"
-        "if(c == 1) measure q[0] -> m[0];\n"
-        "if(c == 1) measure q[1] -> m[1];"
-    )
-
-    assert SlrConverter(prog).qasm() == qasm
-
-
-def test_strange_program() -> None:
-    """Test a weird program to verify we get what is expected for various other SLR objects."""
-    prog = Main(
-        q := QReg("q", 2),
-        c := CReg("c", 4),
-        b := CReg("b", 4),
-        Repeat(3).block(
-            c.set(3),
-        ),
-        Comment("Here is some injected QASM:"),
-        c.set(b & 1),
-        Permute([q[0], q[1]], [q[1], q[0]]),
+        m := CReg("m", 75),
         p.H(q[0]),
+        p.CX(q[0], q[1]),
+        p.Measure(q) > m,
     )
 
-    qasm = (
-        "OPENQASM 2.0;\n"
-        'include "hqslib1.inc";\n'
-        "qreg q[2];\n"
-        "creg c[4];\n"
-        "creg b[4];\n"
-        "c = 3;\n"
-        "c = 3;\n"
-        "c = 3;\n"
-        "// Here is some injected QASM:\n"
-        "c = b & 1;\n"
-        "// Permutation: q[0] -> q[1], q[1] -> q[0]\n"
-        "h q[1];"
-    )
-
-    # TODO: Weird things can happen with Permute... if you run a program twice
-
-    assert SlrConverter(prog).qasm() == qasm
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Classical registers are limited to storing 64 bits (requested: 75)",
+        ),
+    ):
+        SlrConverter(prog).qir()
 
 
 @pytest.mark.optional_dependency
@@ -281,4 +203,28 @@ def test_minus_qir() -> None:
 @pytest.mark.optional_dependency
 def test_steane_qir() -> None:
     """Test the teleportation program using the Steane code."""
-    print(SlrConverter(telep("X", "X")).qir())
+    qir = SlrConverter(telep("X", "X")).qir()
+    assert "__quantum__qis__h__body" in qir
+
+
+@pytest.mark.optional_dependency
+def test_steane_qir_bc() -> None:
+    """Test the teleportation program using the Steane code."""
+    qir = SlrConverter(telep("X", "X")).qir_bc()
+    print(qir)
+
+
+@pytest.mark.optional_dependency
+def test_sx_sxdg() -> None:
+    """Test that a simple Bell prep and measure circuit can be created."""
+    prog: Main = Main(
+        q := QReg("q", 2),
+        m := CReg("m", 2),
+        p.CX(q[0], q[1]),
+        p.SX(q[0]),
+        p.SXdg(q[1]),
+        p.Measure(q) > m,
+    )
+
+    qir = SlrConverter(prog).qir()
+    assert "__quantum__qis__rx__body" in qir

@@ -1,4 +1,4 @@
-# Copyright 2023 The PECOS Developers
+# Copyright 2023-2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
 # the License.You may obtain a copy of the License at
@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 from pecos.slr.fund import Node
-from pecos.slr.gen_codes.gen_qasm import QASMGenerator
 from pecos.slr.vars import Var, Vars
 
 
@@ -60,17 +59,3 @@ class Block(Node):
 
     def iter(self):
         yield from iter(self)
-
-    def gen(self, target: object | str, *, add_versions=True):
-        if isinstance(target, str):
-            if target == "qasm":
-                target = QASMGenerator(add_versions=add_versions)
-            else:
-                msg = f"Code gen target '{target}' is not supported."
-                raise NotImplementedError(msg)
-
-        target.generate_block(self)
-        return target.get_output()
-
-    def qasm(self, *, add_versions=True):
-        return self.gen("qasm", add_versions=add_versions)
