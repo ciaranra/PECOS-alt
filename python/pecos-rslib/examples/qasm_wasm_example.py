@@ -221,4 +221,4 @@ if __name__ == "__main__":
     example_basic_wasm()
     example_quantum_with_wasm()
     example_error_handling()
-    print("\n✓ All examples completed successfully!")
+    print("\nAll examples completed successfully!")

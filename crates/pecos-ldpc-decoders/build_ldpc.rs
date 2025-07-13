@@ -1,0 +1,191 @@
+//! Build script for LDPC decoder integration
+
+use pecos_build_utils::{
+    Result, download_cached, extract_archive, ldpc_download_info, report_cache_config,
+};
+use std::env;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+/// Main build function for LDPC
+pub fn build() -> Result<()> {
+    // Tell Cargo when to rerun this build script
+    println!("cargo:rerun-if-changed=build_ldpc.rs");
+    println!("cargo:rerun-if-changed=src/bridge.rs");
+    println!("cargo:rerun-if-changed=src/bridge.cpp");
+    println!("cargo:rerun-if-changed=include/ldpc_ffi.h");
+
+    // Also rerun if the user forces a rebuild
+    println!("cargo:rerun-if-env-changed=FORCE_REBUILD");
+
+    let out_dir = PathBuf::from(env::var("OUT_DIR")?);
+    let ldpc_dir = out_dir.join("ldpc");
+
+    // Always emit link directives - these are cached by Cargo
+    println!("cargo:rustc-link-search=native={}", out_dir.display());
+    println!("cargo:rustc-link-lib=static=ldpc-bridge");
+
+    // Download and extract LDPC source if not already present
+    if !ldpc_dir.exists() {
+        download_and_extract_ldpc(&out_dir)?;
+    }
+
+    // Build using cxx
+    build_cxx_bridge(&ldpc_dir)?;
+
+    Ok(())
+}
+
+fn download_and_extract_ldpc(out_dir: &Path) -> Result<()> {
+    let info = ldpc_download_info();
+    let tar_gz = download_cached(&info)?;
+    extract_archive(&tar_gz, out_dir, Some("ldpc"))?;
+
+    if std::env::var("PECOS_VERBOSE_BUILD").is_ok() {
+        println!("cargo:warning=LDPC source downloaded and extracted");
+    }
+    Ok(())
+}
+
+fn fix_header_guard_conflict(src_cpp_dir: &Path) -> Result<()> {
+    // Fix the header guard conflict in union_find.hpp
+    // Both union_find.hpp and lsd.hpp use the same header guard UF2_H
+    // This causes compilation errors when both headers are included
+    // Issue exists in commit 31cf9f33872f32579af1efbe1e84552d42b03ea8
+    let union_find_path = src_cpp_dir.join("union_find.hpp");
+
+    if union_find_path.exists() {
+        let content = fs::read_to_string(&union_find_path)?;
+
+        // Only apply patch if not already applied
+        if content.contains("#ifndef UF2_H") {
+            let fixed_content = content
+                .replace("#ifndef UF2_H", "#ifndef UNION_FIND_H")
+                .replace("#define UF2_H", "#define UNION_FIND_H");
+            fs::write(&union_find_path, fixed_content)?;
+            if std::env::var("PECOS_VERBOSE_BUILD").is_ok() {
+                println!("cargo:warning=Fixed header guard conflict in union_find.hpp");
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn fix_mbp_iterate_methods(src_cpp_dir: &Path) -> Result<()> {
+    // Fix the mbp.hpp file to use correct iterate method names and syntax
+    // The mbp_sparse class calls iterate_column_ptr() and iterate_row_ptr()
+    // but these methods don't exist - should be iterate_column() and iterate_row()
+    // Also need to fix iterator usage from pointers to references
+    // Issue exists in commit 31cf9f33872f32579af1efbe1e84552d42b03ea8
+    let mbp_path = src_cpp_dir.join("mbp.hpp");
+
+    if mbp_path.exists() {
+        let content = fs::read_to_string(&mbp_path)?;
+
+        // Only apply patch if not already applied
+        if content.contains("iterate_column_ptr(") || content.contains("iterate_row_ptr(") {
+            // First replace the method names
+            let mut fixed_content = content
+                .replace("iterate_column_ptr(", "iterate_column(")
+                .replace("iterate_row_ptr(", "iterate_row(");
+
+            // Now fix the iterator usage - these return references, not pointers
+            // We need to replace e-> with e. and g-> with g. in the iteration loops
+            let lines: Vec<&str> = fixed_content.lines().collect();
+            let mut new_lines = Vec::new();
+
+            for line in lines {
+                // Only replace -> with . for iterator variables in specific contexts
+                let mut new_line = line.to_string();
+                if line.contains("for (auto e:") || line.contains("for (auto g:") {
+                    // This is a for loop declaration, don't change
+                    new_lines.push(new_line);
+                } else if line.contains("if (g != e)") {
+                    // Need to change comparison to use addresses
+                    new_line = new_line.replace("if (g != e)", "if (&g != &e)");
+                    new_lines.push(new_line);
+                } else {
+                    // Replace e-> with e. and g-> with g. for iterator access
+                    new_line = new_line
+                        .replace("e->pauli", "e.pauli")
+                        .replace("e->qubit_to_stab_msgs", "e.qubit_to_stab_msgs")
+                        .replace("e->stab_to_qubit_msgs", "e.stab_to_qubit_msgs")
+                        .replace("e->row_index", "e.row_index")
+                        .replace("e->col_index", "e.col_index")
+                        .replace("g->pauli", "g.pauli")
+                        .replace("g->qubit_to_stab_msgs", "g.qubit_to_stab_msgs")
+                        .replace("g->stab_to_qubit_msgs", "g.stab_to_qubit_msgs")
+                        .replace("g->row_index", "g.row_index")
+                        .replace("g->col_index", "g.col_index");
+                    new_lines.push(new_line);
+                }
+            }
+
+            fixed_content = new_lines.join("\n");
+            fs::write(&mbp_path, fixed_content)?;
+            if std::env::var("PECOS_VERBOSE_BUILD").is_ok() {
+                println!("cargo:warning=Fixed iterate method names and syntax in mbp.hpp");
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn build_cxx_bridge(ldpc_dir: &Path) -> Result<()> {
+    let src_cpp_dir = ldpc_dir.join("src_cpp");
+    let include_dir = ldpc_dir.join("include");
+
+    // Fix header guard conflict between union_find.hpp and lsd.hpp
+    fix_header_guard_conflict(&src_cpp_dir)?;
+
+    // Fix mbp.hpp iterate method names
+    fix_mbp_iterate_methods(&src_cpp_dir)?;
+
+    // Build the cxx bridge first to generate headers
+    let mut build = cxx_build::bridge("src/bridge.rs");
+    build
+        .file("src/bridge.cpp")
+        .std("c++17")
+        .include(&src_cpp_dir)
+        .include(&include_dir)
+        .include(include_dir.join("robin_map"))
+        .include(include_dir.join("rapidcsv"))
+        .include("include");
+
+    // Report ccache/sccache configuration
+    report_cache_config();
+
+    // Use different optimization levels for debug vs release builds
+    if cfg!(debug_assertions) {
+        build.flag_if_supported("-O0"); // No optimization for faster compilation
+        build.flag_if_supported("-g"); // Include debug symbols
+    } else {
+        build.flag_if_supported("-O3"); // Full optimization for release
+    }
+
+    // Only use -march=native if not cross-compiling and not explicitly disabled
+    if env::var("CARGO_CFG_TARGET_ARCH").ok() == env::var("HOST_ARCH").ok()
+        && env::var("DECODER_DISABLE_NATIVE_ARCH").is_err()
+    {
+        build.flag_if_supported("-march=native");
+    }
+
+    // Suppress warnings from external code
+    if cfg!(not(target_env = "msvc")) {
+        // For GCC/Clang
+        build
+            .flag("-w") // Suppress all warnings
+            .flag_if_supported("-fopenmp"); // Enable OpenMP if available
+    } else {
+        // For MSVC
+        build
+            .flag("/W0") // Warning level 0 (no warnings)
+            .flag_if_supported("/openmp"); // Enable OpenMP if available
+    }
+
+    build.compile("ldpc-bridge");
+
+    Ok(())
+}

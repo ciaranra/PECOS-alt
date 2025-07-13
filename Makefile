@@ -108,6 +108,69 @@ qir-staticlib-if-needed:  ## Build QIR static library only if it doesn't exist i
 rstest: qir-staticlib-if-needed  ## Run Rust tests
 	cargo test --workspace
 
+.PHONY: rstest-all
+rstest-all: qir-staticlib-if-needed  ## Run Rust tests with all features (includes WASM, decoders, etc.)
+	cargo test --workspace --all-features
+
+# Decoder-specific commands
+# -------------------------
+
+.PHONY: build-decoders
+build-decoders: ## Build all decoder crates with all features
+	cargo build --package pecos-decoders --all-features
+
+.PHONY: build-decoder
+build-decoder: ## Build specific decoder. Usage: make build-decoder DECODER=ldpc
+	@if [ -z "$(DECODER)" ]; then \
+		echo "Error: DECODER not specified. Usage: make build-decoder DECODER=ldpc"; \
+		echo "Available decoders: ldpc"; \
+		exit 1; \
+	fi
+	cargo build --package pecos-decoders --features $(DECODER)
+
+.PHONY: test-decoders
+test-decoders: ## Test all decoder crates
+	cargo test --package pecos-decoders --all-features
+
+.PHONY: test-decoder
+test-decoder: ## Test specific decoder. Usage: make test-decoder DECODER=ldpc
+	@if [ -z "$(DECODER)" ]; then \
+		echo "Error: DECODER not specified. Usage: make test-decoder DECODER=ldpc"; \
+		exit 1; \
+	fi
+	cargo test --package pecos-decoders --features $(DECODER)
+
+.PHONY: decoder-info
+decoder-info: ## Show available decoders and their features
+	@echo "Available decoders in PECOS:"
+	@echo "  • ldpc:           LDPC decoders (BP-OSD, MBP, etc.)"
+	@echo ""
+	@echo "To build specific decoder: make build-decoder DECODER=ldpc"
+	@echo "To build all decoders:     make build-decoders"
+	@echo "See DECODERS.md for detailed documentation."
+
+.PHONY: decoder-cache-status
+decoder-cache-status: ## Show decoder download cache status
+	@CACHE_DIR="$${PECOS_CACHE_DIR:-$$HOME/.cache/pecos-decoders}"; \
+	if [ -d "$$CACHE_DIR" ]; then \
+		echo "Cache directory: $$CACHE_DIR"; \
+		echo "Contents:"; \
+		du -sh "$$CACHE_DIR"/* 2>/dev/null || echo "  (empty)"; \
+	else \
+		echo "No cache directory found at $$CACHE_DIR"; \
+		echo "Cache will be created when building decoders"; \
+	fi
+
+.PHONY: decoder-cache-clean
+decoder-cache-clean: ## Clean decoder download cache
+	@CACHE_DIR="$${PECOS_CACHE_DIR:-$$HOME/.cache/pecos-decoders}"; \
+	if [ -d "$$CACHE_DIR" ]; then \
+		echo "Cleaning cache directory: $$CACHE_DIR"; \
+		rm -rf "$$CACHE_DIR"; \
+		echo "Cache cleaned"; \
+	else \
+		echo "No cache directory found"; \
+	fi
 
 .PHONY: pytest
 pytest:  ## Run tests on the Python package (not including optional dependencies). ASSUMES: previous build command
