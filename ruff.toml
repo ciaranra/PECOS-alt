@@ -103,6 +103,7 @@ ignore = [
     "PLW",
     "B",
 ]
+"clib/pecos-rng/pecos_pcg/__init__.py" = ["TID252"]
 
 
 

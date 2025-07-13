@@ -51,59 +51,6 @@ jobs:
             echo "run=false" >> $GITHUB_OUTPUT
           fi
 
-  build_sdist_pecos_rslib:
-    needs: check_pr_push
-    if: |
-      always() &&
-      (needs.check_pr_push.result == 'success' && needs.check_pr_push.outputs.run == 'true' || needs.check_pr_push.result == 'skipped') &&
-      (github.event_name != 'pull_request' || github.event.pull_request.merged == true || github.event.action == 'opened' || github.event.action == 'synchronize')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.sha || github.sha }}
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Remove conflicting README.md
-        run: |
-          if [ -f crates/pecos-python/README.md ]; then
-            mv crates/pecos-python/README.md crates/pecos-python/README.md.bak
-            echo "Moved conflicting README.md to README.md.bak"
-          else
-            echo "No conflicting README.md found"
-          fi
-
-      - name: Build pecos-rslib SDist
-        uses: PyO3/maturin-action@v1
-        with:
-          command: sdist
-          args: --out dist
-          working-directory: python/pecos-rslib
-
-      - name: Restore README.md
-        if: always()
-        run: |
-          if [ -f crates/pecos-python/README.md.bak ]; then
-            mv crates/pecos-python/README.md.bak crates/pecos-python/README.md
-            echo "Restored README.md from backup"
-          else
-            echo "No README.md backup found"
-          fi
-
-      - name: Test pecos-rslib SDist
-        run: |
-          pip install --force-reinstall --verbose python/pecos-rslib/dist/*.tar.gz
-          python -c 'import pecos_rslib; print(pecos_rslib.__version__)'
-
-      - name: Upload pecos-rslib SDist
-        uses: actions/upload-artifact@v4
-        with:
-          name: sdist-pecos-rslib
-          path: python/pecos-rslib/dist/*.tar.gz
 
   build_wheels_pecos_rslib:
     needs: check_pr_push
@@ -173,7 +120,7 @@ jobs:
           path: python/pecos-rslib/dist/*.whl
 
   build_sdist_quantum_pecos:
-    needs: [check_pr_push, build_sdist_pecos_rslib, build_wheels_pecos_rslib]
+    needs: [check_pr_push, build_wheels_pecos_rslib]
     if: |
       always() &&
       (needs.check_pr_push.result == 'success' && needs.check_pr_push.outputs.run == 'true' || needs.check_pr_push.result == 'skipped') &&
@@ -198,10 +145,16 @@ jobs:
       - name: Install pecos-rslib
         run: pip install ./pecos-rslib-wheel/*.whl
 
-      - name: Install build dependencies
+      - name: Install pecos RNG build dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install build
+          pip install build nanobind
+
+      - name: Build PECOS RNG
+        run: |
+          cd clib/pecos-rng && mkdir build && cd build/ && cmake ..
+          make && cd .. && pip install .
+        env:
+            NANOBIND_DIR: python -m nanobind --include_dir
 
       - name: Build quantum-pecos SDist
         run: |
@@ -220,7 +173,7 @@ jobs:
           path: python/quantum-pecos/dist/*.tar.gz
 
   build_wheels_quantum_pecos:
-    needs: [check_pr_push, build_wheels_pecos_rslib, build_sdist_quantum_pecos]
+    needs: [check_pr_push, build_wheels_pecos_rslib]
     if: |
       always() &&
       (needs.check_pr_push.result == 'success' && needs.check_pr_push.outputs.run == 'true' || needs.check_pr_push.result == 'skipped') &&
@@ -249,10 +202,16 @@ jobs:
       - name: Install pecos-rslib
         run: pip install ./pecos-rslib-wheel/*.whl
 
-      - name: Install build dependencies
+      - name: Install pecos rng build dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install build
+          pip install build nanobind
+
+      - name: Build PECOS RNG
+        run: |
+          cd clib/pecos-rng && mkdir build && cd build/ && cmake ..
+          make && cd .. && pip install .
+        env:
+            NANOBIND_DIR: python -m nanobind --include_dir
 
       - name: Build quantum-pecos wheel
         run: |

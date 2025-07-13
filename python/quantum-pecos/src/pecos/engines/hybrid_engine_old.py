@@ -26,6 +26,7 @@ import numpy as np
 
 from pecos.engines.cvm.binarray import BinArray
 from pecos.engines.cvm.classical import eval_condition, eval_cop, set_output
+from pecos.engines.cvm.rng_model import RNGModel
 from pecos.engines.cvm.wasm import eval_cfunc, get_ccop
 from pecos.error_models.fake_error_model import FakeErrorModel
 from pecos.errors import NotSupportedGateError
@@ -89,8 +90,11 @@ class HybridEngine:
             self.seed = None
 
         if self.seed:
+            self.rng_model = RNGModel(self.seed)
             np.random.seed(self.seed)
             random.seed(self.seed)
+        else:
+            self.rng_model = RNGModel(0)
 
         self.ccop = None
 
@@ -100,6 +104,7 @@ class HybridEngine:
         self,
         state: SimulatorProtocol,
         circuit: QuantumCircuit,
+        shot_id: int,
         error_gen: ParentErrorModel | None = None,
         error_params: dict[str, float | dict[str, float]] | None = None,
         error_circuits: dict[int, dict[str, QuantumCircuit | set[int]]] | None = None,
@@ -112,6 +117,7 @@ class HybridEngine:
         Args:
             state: Quantum simulator state.
             circuit: Quantum circuit to execute.
+            shot_id: Integer representing current shot.
             error_gen: Optional error model.
             error_params: Parameters for error generation.
             error_circuits: Pre-generated error circuits.
@@ -137,6 +143,8 @@ class HybridEngine:
         # --------------------
         self.generate_errors = True
         error_circuits = error_gen.start(circuit, error_params)
+        self.rng_model.count = 0
+        self.rng_model.shot_id = shot_id
 
         # run through the circuits...
         # ---------------------------
@@ -150,7 +158,7 @@ class HybridEngine:
                 error_circuits = error_gen.generate_tick_errors(
                     tick_circuit,
                     time,
-                    output,
+                    # output,
                     **params,
                 )
                 errors = error_circuits.get(time, {})
@@ -222,7 +230,6 @@ class HybridEngine:
 
         """
         self.state = state
-
         if removed_locations is None:
             removed_locations = set()
 
@@ -248,7 +255,11 @@ class HybridEngine:
                         pass
 
                     elif params.get("cop_type") == "CFunc":
-                        eval_cfunc(self, params, output)
+                        cop_name = params.get("func")
+                        if "RNG" in cop_name:
+                            self.rng_model.eval_func(params, output)
+                        else:
+                            eval_cfunc(self, params, output)
 
                     elif params.get("expr"):
                         eval_cop(params.get("expr"), output, width=self.regwidth)
