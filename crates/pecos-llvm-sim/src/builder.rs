@@ -3,7 +3,6 @@ use crate::simulation::LlvmSimulation;
 use crate::source::LlvmSource;
 use hugr_core::Hugr;
 use pecos_core::errors::PecosError;
-use pecos_engines::noise::GeneralNoiseModelBuilder;
 use std::path::Path;
 
 /// Builder for LLVM-based quantum simulations.
@@ -22,18 +21,36 @@ impl LlvmSim {
         Self::default()
     }
 
-    /// Set the source to LLVM IR string.
+    /// Set the source to LLVM IR text (human-readable format).
     ///
     /// Note: The LLVM IR must be properly formatted without indentation,
     /// as LLVM's parser is strict about formatting.
-    pub fn llvm(mut self, ir: impl Into<String>) -> Self {
+    pub fn llvm_ir(mut self, ir: impl Into<String>) -> Self {
         self.source = Some(LlvmSource::LlvmIr(ir.into()));
         self
     }
+    
+    /// Set the source to LLVM bitcode (binary format).
+    pub fn llvm_bitcode(mut self, bitcode: impl Into<Vec<u8>>) -> Self {
+        self.source = Some(LlvmSource::LlvmBitcode(bitcode.into()));
+        self
+    }
 
-    /// Set the source to LLVM IR file.
+    /// Set the source to LLVM file (auto-detects .ll or .bc extension).
     pub fn llvm_file(mut self, path: impl AsRef<Path>) -> Self {
         self.source = Some(LlvmSource::LlvmFile(path.as_ref().to_path_buf()));
+        self
+    }
+    
+    /// Set the source to LLVM IR text file (.ll).
+    pub fn llvm_ir_file(mut self, path: impl AsRef<Path>) -> Self {
+        self.source = Some(LlvmSource::LlvmIrFile(path.as_ref().to_path_buf()));
+        self
+    }
+    
+    /// Set the source to LLVM bitcode file (.bc).
+    pub fn llvm_bitcode_file(mut self, path: impl AsRef<Path>) -> Self {
+        self.source = Some(LlvmSource::LlvmBitcodeFile(path.as_ref().to_path_buf()));
         self
     }
 
@@ -78,76 +95,39 @@ impl LlvmSim {
         self
     }
 
-    /// Use no noise model (ideal simulation).
+    /// Set the noise model using any type that implements Into<NoiseModelConfig>.
+    ///
+    /// This provides a consistent API with qasm_sim().
+    ///
+    /// # Examples
+    /// ```
+    /// # use pecos_llvm_sim::{llvm_sim, DepolarizingNoise};
+    /// # let llvm_ir = "";
+    /// // Using noise structs
+    /// let sim = llvm_sim()
+    ///     .llvm_ir(llvm_ir)
+    ///     .noise(DepolarizingNoise { p: 0.01 });
+    /// ```
     #[must_use]
-    pub fn with_no_noise(mut self) -> Self {
-        self.config.noise_model = NoiseModelConfig::PassThrough;
+    pub fn noise<N: Into<NoiseModelConfig>>(mut self, noise: N) -> Self {
+        self.config.noise_model = noise.into();
         self
     }
 
-    /// Use depolarizing noise with uniform probability.
+    /// Set the quantum engine type.
+    ///
+    /// This provides a consistent API with qasm_sim().
+    ///
+    /// # Examples
+    /// ```
+    /// # use pecos_llvm_sim::{llvm_sim, QuantumEngineType};
+    /// # let llvm_ir = "";
+    /// let sim = llvm_sim()
+    ///     .llvm_ir(llvm_ir)
+    ///     .quantum_engine(QuantumEngineType::StateVector);
+    /// ```
     #[must_use]
-    pub fn with_depolarizing_noise(mut self, p: f64) -> Self {
-        self.config.noise_model = NoiseModelConfig::Depolarizing(p);
-        self
-    }
-
-    /// Use custom depolarizing noise with different probabilities.
-    #[must_use]
-    pub fn with_custom_depolarizing_noise(
-        mut self,
-        p_prep: f64,
-        p_meas: f64,
-        p1: f64,
-        p2: f64,
-    ) -> Self {
-        self.config.noise_model = NoiseModelConfig::DepolarizingCustom {
-            p_prep,
-            p_meas,
-            p1,
-            p2,
-        };
-        self
-    }
-
-    /// Use biased depolarizing noise.
-    #[must_use]
-    pub fn with_biased_depolarizing_noise(mut self, p: f64) -> Self {
-        self.config.noise_model = NoiseModelConfig::BiasedDepolarizing(p);
-        self
-    }
-
-    /// Use a general noise model.
-    #[must_use]
-    pub fn with_general_noise(mut self, builder: GeneralNoiseModelBuilder) -> Self {
-        self.config.noise_model = NoiseModelConfig::General(builder);
-        self
-    }
-
-    /// Use custom noise model configuration.
-    #[must_use]
-    pub fn with_noise_model(mut self, noise_model: NoiseModelConfig) -> Self {
-        self.config.noise_model = noise_model;
-        self
-    }
-
-    /// Use state vector quantum engine (default).
-    #[must_use]
-    pub fn with_state_vector_engine(mut self) -> Self {
-        self.config.quantum_engine = QuantumEngineType::StateVector;
-        self
-    }
-
-    /// Use sparse stabilizer quantum engine.
-    #[must_use]
-    pub fn with_sparse_stabilizer_engine(mut self) -> Self {
-        self.config.quantum_engine = QuantumEngineType::SparseStabilizer;
-        self
-    }
-
-    /// Use custom quantum engine type.
-    #[must_use]
-    pub fn with_quantum_engine(mut self, engine: QuantumEngineType) -> Self {
+    pub fn quantum_engine(mut self, engine: QuantumEngineType) -> Self {
         self.config.quantum_engine = engine;
         self
     }
@@ -159,10 +139,10 @@ impl LlvmSim {
         self
     }
 
-    /// Enable verbose output (no-op for compatibility)
+    /// Enable verbose output
     #[must_use]
-    pub fn verbose(self, _verbose: bool) -> Self {
-        // No-op for compatibility - use log crate for verbose output
+    pub fn verbose(mut self, verbose: bool) -> Self {
+        self.config.verbose = verbose;
         self
     }
 
@@ -190,7 +170,7 @@ impl LlvmSim {
         // Get source or error
         let source = self.source.ok_or_else(|| {
             PecosError::Input(
-                "No source specified. Use .llvm(), .hugr(), or similar method.".to_string(),
+                "No source specified. Use .llvm_ir(), .llvm_bitcode(), .hugr(), or similar method.".to_string(),
             )
         })?;
 

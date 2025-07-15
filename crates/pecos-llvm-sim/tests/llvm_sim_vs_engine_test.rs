@@ -2,7 +2,7 @@
 
 use pecos_engines::engine_system::MonteCarloEngine;
 use pecos_engines::noise::DepolarizingNoiseModel;
-use pecos_llvm_sim::{LlvmEngine, LlvmSim};
+use pecos_llvm_sim::{llvm_sim, LlvmEngine, DepolarizingNoise};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -55,7 +55,7 @@ fn test_llvm_sim_vs_engine_noiseless() {
     let shots = 100;
 
     // Run with llvm_sim
-    let sim_results = LlvmSim::new()
+    let sim_results = llvm_sim()
         .llvm_file(get_bell_path())
         .seed(seed)
         .workers(1) // Single worker for determinism
@@ -127,11 +127,11 @@ fn test_llvm_sim_vs_engine_with_noise() {
     let noise_level = 0.1; // 10% depolarizing noise
 
     // Run with llvm_sim
-    let sim_results = LlvmSim::new()
+    let sim_results = llvm_sim()
         .llvm_file(get_bell_path())
         .seed(seed)
         .workers(1)
-        .with_depolarizing_noise(noise_level)
+        .noise(DepolarizingNoise { p: noise_level })
         .run(shots)
         .expect("llvm_sim with noise should succeed");
 
@@ -211,10 +211,10 @@ fn test_llvm_sim_capabilities_exceed_engine() {
     ];
 
     for (name, level) in noise_models {
-        let results = LlvmSim::new()
+        let results = llvm_sim()
             .llvm_file(get_bell_path())
             .seed(42)
-            .with_depolarizing_noise(level)
+            .noise(DepolarizingNoise { p: level })
             .run(100)
             .unwrap_or_else(|_| panic!("{name} should work"));
 
@@ -233,7 +233,7 @@ fn test_llvm_sim_capabilities_exceed_engine() {
     for workers in worker_counts {
         let start = std::time::Instant::now();
 
-        let results = LlvmSim::new()
+        let results = llvm_sim()
             .llvm_file(get_bell_path())
             .seed(42)
             .workers(workers)
@@ -251,10 +251,10 @@ fn test_llvm_sim_capabilities_exceed_engine() {
     }
 
     // 3. Build once, run many with different configurations
-    let mut sim = LlvmSim::new()
+    let mut sim = llvm_sim()
         .llvm_file(get_bell_path())
         .seed(42)
-        .with_depolarizing_noise(0.05)
+        .noise(DepolarizingNoise { p: 0.05 })
         .build()
         .expect("Build should succeed");
 

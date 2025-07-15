@@ -11,17 +11,21 @@ consistent simulation capabilities with noise models, parallelization, and multi
 use pecos_llvm_sim::LlvmSim;
 
 // From LLVM IR
-let results = LlvmSim::new()
-    .llvm("@main() { ret void }")
+use pecos_llvm_sim::{llvm_sim, DepolarizingNoise, QuantumEngineType};
+
+let results = llvm_sim()
+    .llvm_ir("@main() { ret void }")
     .seed(42)
     .workers(8)
+    .noise(DepolarizingNoise { p: 0.01 })
+    .quantum_engine(QuantumEngineType::StateVector)
     .run(1000)?;
 
 // From HUGR
 let hugr = todo!(); // Get HUGR from somewhere
-let results = LlvmSim::new()
+let results = llvm_sim()
     .hugr(hugr)
-    .with_depolarizing_noise(0.01)
+    .noise(DepolarizingNoise { p: 0.01 })
     .run(1000)?;
 # Ok::<(), pecos_core::errors::PecosError>(())
 ```
@@ -34,11 +38,32 @@ pub mod source;
 
 // Re-export main types
 pub use builder::LlvmSim;
-pub use config::{NoiseModelConfig, QuantumEngineType};
+pub use config::{
+    NoiseModelConfig, QuantumEngineType,
+    PassThroughNoise, DepolarizingNoise, DepolarizingCustomNoise, BiasedDepolarizingNoise,
+};
 pub use simulation::LlvmSimulation;
 pub use source::LlvmSource;
 
 // Re-export from pecos-llvm-runtime for backward compatibility
 pub use pecos_llvm_runtime::LlvmEngine;
 
-// No convenience functions - use the builder directly
+/// Convenience function to create a new LLVM simulation builder.
+///
+/// This provides a consistent API with qasm_sim() and selene_sim().
+///
+/// # Example
+/// ```rust,no_run
+/// use pecos_llvm_sim::{llvm_sim, DepolarizingNoise, QuantumEngineType};
+///
+/// let results = llvm_sim()
+///     .llvm_ir("@main() { ret void }")
+///     .seed(42)
+///     .noise(DepolarizingNoise { p: 0.01 })
+///     .quantum_engine(QuantumEngineType::StateVector)
+///     .run(1000)?;
+/// # Ok::<(), pecos_core::errors::PecosError>(())
+/// ```
+pub fn llvm_sim() -> LlvmSim {
+    LlvmSim::new()
+}

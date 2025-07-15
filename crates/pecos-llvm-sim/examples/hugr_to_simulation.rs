@@ -2,7 +2,7 @@
 //!
 //! This example demonstrates the full pipeline from HUGR to simulation results.
 
-use pecos_llvm_sim::LlvmSim;
+use pecos_llvm_sim::{llvm_sim, DepolarizingNoise, BiasedDepolarizingNoise, QuantumEngineType};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 1: Using LLVM IR directly
@@ -25,12 +25,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ";
 
     // Run simulation with LLVM IR
-    let results = LlvmSim::new()
-        .llvm(llvm_ir)
+    let results = llvm_sim()
+        .llvm_ir(llvm_ir)
         .seed(42)
         .auto_workers() // Use all available CPU cores
-        .with_depolarizing_noise(0.01)
-        .with_state_vector_engine()
+        .noise(DepolarizingNoise { p: 0.01 })
+        .quantum_engine(QuantumEngineType::StateVector)
         .run(100)?;
 
     println!("LLVM simulation completed with {} registers", results.len());
@@ -50,7 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Create simulation from HUGR
-    let _builder = LlvmSim::new().hugr(hugr).seed(42).with_no_noise();
+    let _builder = llvm_sim().hugr(hugr).seed(42);
 
     println!("Created simulation builder from HUGR");
 
@@ -64,13 +64,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n=== Example 3: File-based Input ===");
 
     // From LLVM file
-    let _llvm_builder = LlvmSim::new().llvm_file("circuit.ll").seed(123).workers(8);
+    let _llvm_builder = llvm_sim().llvm_file("circuit.ll").seed(123).workers(8);
     println!("Created builder from LLVM file");
 
     // From HUGR file
-    let _hugr_builder = LlvmSim::new()
+    let _hugr_builder = llvm_sim()
         .hugr_file("circuit.hugr")
-        .with_biased_depolarizing_noise(0.005);
+        .noise(BiasedDepolarizingNoise { p: 0.005 });
     println!("Created builder from HUGR file");
 
     Ok(())

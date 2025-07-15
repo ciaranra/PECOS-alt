@@ -12,7 +12,7 @@
 
 //! Python bindings for the LlvmSim builder interface
 
-use pecos_llvm_sim::{LlvmSim, LlvmSimulation, NoiseModelConfig, QuantumEngineType};
+use pecos_llvm_sim::{LlvmSim, LlvmSimulation, NoiseModelConfig, QuantumEngineType, DepolarizingNoise, DepolarizingCustomNoise, BiasedDepolarizingNoise};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
@@ -103,7 +103,7 @@ impl PyLlvmSimBuilder {
             LlvmSim::new().llvm_file(source)
         } else {
             // Assume it's LLVM IR string
-            LlvmSim::new().llvm(source)
+            LlvmSim::new().llvm_ir(source)
         };
         
         Ok(Self { builder })
@@ -123,7 +123,7 @@ impl PyLlvmSimBuilder {
 
     /// Enable depolarizing noise
     pub fn with_depolarizing_noise(mut slf: PyRefMut<'_, Self>, p: f64) -> PyRefMut<'_, Self> {
-        slf.builder = slf.builder.clone().with_depolarizing_noise(p);
+        slf.builder = slf.builder.clone().noise(DepolarizingNoise { p });
         slf
     }
 
@@ -135,25 +135,25 @@ impl PyLlvmSimBuilder {
         p1: f64,
         p2: f64,
     ) -> PyRefMut<'_, Self> {
-        slf.builder = slf.builder.clone().with_custom_depolarizing_noise(p_prep, p_meas, p1, p2);
+        slf.builder = slf.builder.clone().noise(DepolarizingCustomNoise { p_prep, p_meas, p1, p2 });
         slf
     }
 
     /// Enable biased depolarizing noise
     pub fn with_biased_depolarizing_noise(mut slf: PyRefMut<'_, Self>, p: f64) -> PyRefMut<'_, Self> {
-        slf.builder = slf.builder.clone().with_biased_depolarizing_noise(p);
+        slf.builder = slf.builder.clone().noise(BiasedDepolarizingNoise { p });
         slf
     }
 
     /// Use state vector engine
     pub fn with_state_vector_engine(mut slf: PyRefMut<'_, Self>) -> PyRefMut<'_, Self> {
-        slf.builder = slf.builder.clone().with_state_vector_engine();
+        slf.builder = slf.builder.clone().quantum_engine(QuantumEngineType::StateVector);
         slf
     }
 
     /// Use sparse stabilizer engine
     pub fn with_sparse_stabilizer_engine(mut slf: PyRefMut<'_, Self>) -> PyRefMut<'_, Self> {
-        slf.builder = slf.builder.clone().with_sparse_stabilizer_engine();
+        slf.builder = slf.builder.clone().quantum_engine(QuantumEngineType::SparseStabilizer);
         slf
     }
 
@@ -167,7 +167,7 @@ impl PyLlvmSimBuilder {
             }
             NoiseModelVariant::BiasedDepolarizing { p } => NoiseModelConfig::BiasedDepolarizing(p),
         };
-        slf.builder = slf.builder.clone().with_noise_model(config);
+        slf.builder = slf.builder.clone().noise(config);
         slf
     }
 
@@ -177,7 +177,7 @@ impl PyLlvmSimBuilder {
             QuantumEngineVariant::StateVector => QuantumEngineType::StateVector,
             QuantumEngineVariant::SparseStabilizer => QuantumEngineType::SparseStabilizer,
         };
-        slf.builder = slf.builder.clone().with_quantum_engine(engine_type);
+        slf.builder = slf.builder.clone().quantum_engine(engine_type);
         slf
     }
 

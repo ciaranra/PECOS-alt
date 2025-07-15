@@ -27,7 +27,6 @@ mod llvm_sim_bindings;
 mod phir_bindings;
 pub mod phir_json_bridge;
 mod qasm_sim_bindings;
-mod safe_calls;
 mod sparse_sim;
 mod sparse_stab_bindings;
 mod sparse_stab_engine_bindings;

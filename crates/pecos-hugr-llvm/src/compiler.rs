@@ -553,6 +553,7 @@ fn fix_struct_alignment(llvm_ir: &str) -> String {
 /// 
 /// LLVM functions that return { i1, i1, i1, i1 } cause issues with FFI.
 /// This converts them to return i8 instead, packing the bits.
+#[allow(dead_code)]
 fn fix_small_struct_returns(llvm_ir: &str) -> String {
     use regex::Regex;
     

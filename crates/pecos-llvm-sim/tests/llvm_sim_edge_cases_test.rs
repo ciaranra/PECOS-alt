@@ -1,6 +1,6 @@
 //! Edge case and advanced feature tests for `llvm_sim()`
 
-use pecos_llvm_sim::LlvmSim;
+use pecos_llvm_sim::{llvm_sim, DepolarizingNoise, BiasedDepolarizingNoise};
 use std::io::Write;
 use tempfile::NamedTempFile;
 
@@ -46,7 +46,7 @@ ret void
 attributes #0 = { "EntryPoint" }
 "#;
 
-    let result = LlvmSim::new().llvm(empty_ir).run(10);
+    let result = llvm_sim().llvm_ir(empty_ir).run(10);
 
     // Empty circuit with no qubits should return an error
     assert!(result.is_err(), "Empty circuit should return an error");
@@ -84,8 +84,8 @@ attributes #0 = { "EntryPoint" }
 
     // Test with large shot count
     let start = std::time::Instant::now();
-    let results = LlvmSim::new()
-        .llvm(simple_ir)
+    let results = llvm_sim()
+        .llvm_ir(simple_ir)
         .seed(42)
         .workers(8) // Use multiple workers for speed
         .run(10000)
@@ -138,8 +138,8 @@ ret void
 attributes #0 = { "EntryPoint" }
 "#;
 
-    let results = LlvmSim::new()
-        .llvm(multi_reg_ir)
+    let results = llvm_sim()
+        .llvm_ir(multi_reg_ir)
         .seed(42)
         .run(100)
         .expect("Multiple registers should work");
@@ -192,10 +192,10 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     // Run with biased depolarizing noise
-    let results = LlvmSim::new()
-        .llvm(ghz_ir)
+    let results = llvm_sim()
+        .llvm_ir(ghz_ir)
         .seed(42)
-        .with_biased_depolarizing_noise(0.05) // 5% biased noise
+        .noise(BiasedDepolarizingNoise { p: 0.05 }) // 5% biased noise
         .run(1000)
         .expect("Biased noise simulation should work");
 
@@ -252,14 +252,14 @@ attributes #0 = { "EntryPoint" }
     temp_file.flush().expect("Failed to flush");
 
     // Run from string
-    let results_string = LlvmSim::new()
-        .llvm(llvm_ir)
+    let results_string = llvm_sim()
+        .llvm_ir(llvm_ir)
         .seed(42)
         .run(100)
         .expect("String source should work");
 
     // Run from file
-    let results_file = LlvmSim::new()
+    let results_file = llvm_sim()
         .llvm_file(temp_file.path())
         .seed(42)
         .run(100)
@@ -306,10 +306,10 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     // Test with 50% noise - should be almost random
-    let results = LlvmSim::new()
-        .llvm(simple_ir)
+    let results = llvm_sim()
+        .llvm_ir(simple_ir)
         .seed(42)
-        .with_depolarizing_noise(0.5) // 50% error rate!
+        .noise(DepolarizingNoise { p: 0.5 }) // 50% error rate!
         .run(1000)
         .expect("Extreme noise should still work");
 
@@ -340,7 +340,7 @@ fn test_llvm_sim_builder_state_preservation() {
     }
 
     // Build a configured simulation
-    let mut sim = LlvmSim::new().llvm(r#"
+    let mut sim = llvm_sim().llvm_ir(r#"
 declare void @__quantum__qis__h__body(i64)
 declare i32 @__quantum__qis__m__body(i64, i64)
 declare void @__quantum__rt__result_record_output(i64, i8*)
@@ -357,7 +357,7 @@ attributes #0 = { "EntryPoint" }
 "#)
     .seed(12345)
     .workers(2)
-    .with_depolarizing_noise(0.1)
+    .noise(DepolarizingNoise { p: 0.1 })
     .verbose(false)
     .build()
     .expect("Build should succeed");
@@ -392,8 +392,8 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     // Should handle 0 shots gracefully
-    let results = LlvmSim::new()
-        .llvm(simple_ir)
+    let results = llvm_sim()
+        .llvm_ir(simple_ir)
         .run(0)
         .expect("Zero shots should be handled");
 

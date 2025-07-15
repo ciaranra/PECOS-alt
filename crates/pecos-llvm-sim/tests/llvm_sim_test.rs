@@ -1,6 +1,6 @@
 //! Tests for the `llvm_sim()` API with full feature parity with `qasm_sim()`
 
-use pecos_llvm_sim::LlvmSim;
+use pecos_llvm_sim::{llvm_sim, QuantumEngineType, DepolarizingNoise, DepolarizingCustomNoise, BiasedDepolarizingNoise};
 use tempfile::NamedTempFile;
 
 /// Simple LLVM IR for a single qubit Hadamard + measurement
@@ -88,8 +88,8 @@ fn test_basic_llvm_sim() {
     }
 
     // Basic usage - should work like the simple v2 version
-    let results = LlvmSim::new()
-        .llvm(SIMPLE_HADAMARD_IR)
+    let results = llvm_sim()
+        .llvm_ir(SIMPLE_HADAMARD_IR)
         .seed(42)
         .run(100)
         .expect("Simulation should succeed");
@@ -111,11 +111,11 @@ fn test_llvm_sim_with_noise() {
     }
 
     // Run with depolarizing noise
-    let results = LlvmSim::new()
-        .llvm(BELL_STATE_IR)
+    let results = llvm_sim()
+        .llvm_ir(BELL_STATE_IR)
         .seed(42)
         .workers(2)
-        .with_depolarizing_noise(0.1) // 10% error rate
+        .noise(DepolarizingNoise { p: 0.1 }) // 10% error rate
         .run(1000)
         .expect("Simulation with noise should succeed");
 
@@ -166,8 +166,8 @@ fn test_llvm_sim_parallelization() {
 
     // Test with multiple workers
     let start = std::time::Instant::now();
-    let results = LlvmSim::new()
-        .llvm(SIMPLE_HADAMARD_IR)
+    let results = llvm_sim()
+        .llvm_ir(SIMPLE_HADAMARD_IR)
         .seed(42)
         .workers(4) // Use 4 parallel workers
         .run(10000)
@@ -193,8 +193,8 @@ fn test_llvm_sim_auto_workers() {
     }
 
     // Test with auto workers
-    let results = LlvmSim::new()
-        .llvm(SIMPLE_HADAMARD_IR)
+    let results = llvm_sim()
+        .llvm_ir(SIMPLE_HADAMARD_IR)
         .seed(42)
         .auto_workers() // Automatically detect CPU cores
         .run(1000)
@@ -214,11 +214,11 @@ fn test_llvm_sim_build_once_run_many() {
     }
 
     // Build once
-    let mut sim = LlvmSim::new()
-        .llvm(BELL_STATE_IR)
+    let mut sim = llvm_sim()
+        .llvm_ir(BELL_STATE_IR)
         .seed(42)
         .workers(2)
-        .with_depolarizing_noise(0.01)
+        .noise(DepolarizingNoise { p: 0.01 })
         .verbose(true)
         .build()
         .expect("Build should succeed");
@@ -247,18 +247,18 @@ fn test_llvm_sim_quantum_engines() {
     }
 
     // Test with state vector engine (default)
-    let results_sv = LlvmSim::new()
-        .llvm(SIMPLE_HADAMARD_IR)
+    let results_sv = llvm_sim()
+        .llvm_ir(SIMPLE_HADAMARD_IR)
         .seed(42)
-        .with_state_vector_engine()
+        .quantum_engine(QuantumEngineType::StateVector)
         .run(100)
         .expect("State vector simulation should succeed");
 
     // Test with sparse stabilizer engine
-    let results_ss = LlvmSim::new()
-        .llvm(SIMPLE_HADAMARD_IR)
+    let results_ss = llvm_sim()
+        .llvm_ir(SIMPLE_HADAMARD_IR)
         .seed(42)
-        .with_sparse_stabilizer_engine()
+        .quantum_engine(QuantumEngineType::SparseStabilizer)
         .run(100)
         .expect("Sparse stabilizer simulation should succeed");
 
@@ -275,25 +275,25 @@ fn test_llvm_sim_custom_noise_models() {
     }
 
     // Test custom depolarizing noise with different error rates
-    let results = LlvmSim::new()
-        .llvm(BELL_STATE_IR)
+    let results = llvm_sim()
+        .llvm_ir(BELL_STATE_IR)
         .seed(42)
-        .with_custom_depolarizing_noise(
-            0.02, // 2% prep error
-            0.03, // 3% measurement error
-            0.01, // 1% single-qubit gate error
-            0.05, // 5% two-qubit gate error
-        )
+        .noise(DepolarizingCustomNoise {
+            p_prep: 0.02, // 2% prep error
+            p_meas: 0.03, // 3% measurement error
+            p1: 0.01,     // 1% single-qubit gate error
+            p2: 0.05,     // 5% two-qubit gate error
+        })
         .run(1000)
         .expect("Custom noise simulation should succeed");
 
     assert_eq!(results.values().next().unwrap().len(), 1000);
 
     // Test biased depolarizing noise
-    let results_biased = LlvmSim::new()
-        .llvm(BELL_STATE_IR)
+    let results_biased = llvm_sim()
+        .llvm_ir(BELL_STATE_IR)
         .seed(42)
-        .with_biased_depolarizing_noise(0.02)
+        .noise(BiasedDepolarizingNoise { p: 0.02 })
         .run(1000)
         .expect("Biased noise simulation should succeed");
 
@@ -313,7 +313,7 @@ fn test_llvm_sim_from_file() {
         .expect("Failed to write LLVM IR");
 
     // Test loading from file
-    let results = LlvmSim::new()
+    let results = llvm_sim()
         .llvm_file(temp_file.path())
         .seed(42)
         .run(100)
@@ -330,8 +330,8 @@ fn test_llvm_sim_keep_temp_files() {
     }
 
     // Test with keep_temp_files option
-    let _sim = LlvmSim::new()
-        .llvm(SIMPLE_HADAMARD_IR)
+    let _sim = llvm_sim()
+        .llvm_ir(SIMPLE_HADAMARD_IR)
         .keep_temp_files(true)
         .build()
         .expect("Build should succeed");
@@ -350,7 +350,7 @@ fn test_llvm_sim_error_handling() {
 
     // Test with invalid LLVM IR
     let invalid_ir = "This is not valid LLVM IR";
-    let result = LlvmSim::new().llvm(invalid_ir).run(100);
+    let result = llvm_sim().llvm_ir(invalid_ir).run(100);
 
     assert!(result.is_err(), "Invalid LLVM IR should fail");
 
@@ -361,6 +361,6 @@ fn test_llvm_sim_error_handling() {
     }
     ";
 
-    let result = LlvmSim::new().llvm(no_entry_ir).run(100);
+    let result = llvm_sim().llvm_ir(no_entry_ir).run(100);
     assert!(result.is_err(), "LLVM IR without entry point should fail");
 }

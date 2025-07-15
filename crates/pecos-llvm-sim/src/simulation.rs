@@ -48,7 +48,7 @@ impl LlvmSimulation {
         // Create LLVM engine with configuration
         let engine_config = LlvmEngineConfig {
             assigned_shots: 0, // Will be set per run
-            verbose: false,    // TODO: Add verbose option to LlvmSimConfig if needed
+            verbose: config.verbose,
             max_qubits: config.max_qubits,
         };
 

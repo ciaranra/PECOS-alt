@@ -46,6 +46,76 @@ impl NoiseModelConfig {
 }
 
 /// Available quantum simulation engines
+// Convenience noise configuration structs for ergonomic API
+
+/// No noise configuration
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PassThroughNoise;
+
+/// Standard depolarizing noise configuration
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DepolarizingNoise {
+    /// Uniform error probability for all operations
+    pub p: f64,
+}
+
+/// Custom depolarizing noise configuration
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DepolarizingCustomNoise {
+    /// State preparation error probability
+    pub p_prep: f64,
+    /// Measurement error probability
+    pub p_meas: f64,
+    /// Single-qubit gate error probability
+    pub p1: f64,
+    /// Two-qubit gate error probability
+    pub p2: f64,
+}
+
+/// Biased depolarizing noise configuration
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BiasedDepolarizingNoise {
+    /// Uniform probability for all operations
+    pub p: f64,
+}
+
+// Implement From traits for converting noise configs to NoiseModelConfig
+
+impl From<PassThroughNoise> for NoiseModelConfig {
+    fn from(_: PassThroughNoise) -> Self {
+        NoiseModelConfig::PassThrough
+    }
+}
+
+impl From<DepolarizingNoise> for NoiseModelConfig {
+    fn from(noise: DepolarizingNoise) -> Self {
+        NoiseModelConfig::Depolarizing(noise.p)
+    }
+}
+
+impl From<DepolarizingCustomNoise> for NoiseModelConfig {
+    fn from(noise: DepolarizingCustomNoise) -> Self {
+        NoiseModelConfig::DepolarizingCustom {
+            p_prep: noise.p_prep,
+            p_meas: noise.p_meas,
+            p1: noise.p1,
+            p2: noise.p2,
+        }
+    }
+}
+
+impl From<BiasedDepolarizingNoise> for NoiseModelConfig {
+    fn from(noise: BiasedDepolarizingNoise) -> Self {
+        NoiseModelConfig::BiasedDepolarizing(noise.p)
+    }
+}
+
+impl From<GeneralNoiseModelBuilder> for NoiseModelConfig {
+    fn from(builder: GeneralNoiseModelBuilder) -> Self {
+        NoiseModelConfig::General(builder)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum QuantumEngineType {
     /// State vector simulator (full quantum state)
@@ -91,6 +161,8 @@ pub struct LlvmSimConfig {
     pub quantum_engine: QuantumEngineType,
     /// Maximum number of qubits allowed for allocation
     pub max_qubits: Option<usize>,
+    /// Enable verbose output
+    pub verbose: bool,
 }
 
 impl Default for LlvmSimConfig {
@@ -101,6 +173,7 @@ impl Default for LlvmSimConfig {
             noise_model: NoiseModelConfig::PassThrough,
             quantum_engine: QuantumEngineType::StateVector,
             max_qubits: None,
+            verbose: false,
         }
     }
 }
