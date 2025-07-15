@@ -8,12 +8,13 @@ https://github.com/CQCL/PECOS/blob/master/docs/user-guide/qasm-simulation.md
 """
 
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Tuple
 from pecos_rslib._pecos_rslib import (
     NoiseModel,
     QuantumEngine,
     QasmSimulation,
     QasmSimulationBuilder,
+    GeneralNoiseModelBuilder,
     run_qasm as _run_qasm,
     qasm_sim as _qasm_sim,
     get_noise_models as _get_noise_models,
@@ -33,10 +34,11 @@ __all__ = [
     "DepolarizingCustomNoise",
     "BiasedDepolarizingNoise",
     "GeneralNoise",
+    # Builder classes
+    "GeneralNoiseModelBuilder",  # Rust-native builder
     # Main interface
     "run_qasm",
     "qasm_sim",
-    "register_noise_model",
 ]
 
 
@@ -49,14 +51,7 @@ class PassThroughNoise:
 
     @classmethod
     def from_config(cls, config: Dict[str, Any]) -> "PassThroughNoise":
-        """Create PassThroughNoise from configuration dictionary.
-
-        Args:
-            config: Configuration dictionary (no parameters needed)
-
-        Returns:
-            PassThroughNoise instance
-        """
+        """Create PassThroughNoise from configuration dictionary."""
         return cls()
 
 
@@ -72,14 +67,7 @@ class DepolarizingNoise:
 
     @classmethod
     def from_config(cls, config: Dict[str, Any]) -> "DepolarizingNoise":
-        """Create DepolarizingNoise from configuration dictionary.
-
-        Args:
-            config: Configuration dictionary with optional 'p' field
-
-        Returns:
-            DepolarizingNoise instance
-        """
+        """Create DepolarizingNoise from configuration dictionary."""
         return cls(p=config.get("p", 0.001))
 
 
@@ -101,14 +89,7 @@ class DepolarizingCustomNoise:
 
     @classmethod
     def from_config(cls, config: Dict[str, Any]) -> "DepolarizingCustomNoise":
-        """Create DepolarizingCustomNoise from configuration dictionary.
-
-        Args:
-            config: Configuration dictionary with optional probability fields
-
-        Returns:
-            DepolarizingCustomNoise instance
-        """
+        """Create DepolarizingCustomNoise from configuration dictionary."""
         return cls(
             p_prep=config.get("p_prep", 0.001),
             p_meas=config.get("p_meas", 0.001),
@@ -129,32 +110,79 @@ class BiasedDepolarizingNoise:
 
     @classmethod
     def from_config(cls, config: Dict[str, Any]) -> "BiasedDepolarizingNoise":
-        """Create BiasedDepolarizingNoise from configuration dictionary.
-
-        Args:
-            config: Configuration dictionary with optional 'p' field
-
-        Returns:
-            BiasedDepolarizingNoise instance
-        """
+        """Create BiasedDepolarizingNoise from configuration dictionary."""
         return cls(p=config.get("p", 0.001))
 
 
 @dataclass
 class GeneralNoise:
-    """General noise model using default configuration."""
+    """General noise model with full parameter configuration.
+
+    This noise model supports detailed configuration of various error types including:
+    - Idle/memory errors with coherent and incoherent noise
+    - State preparation errors with leakage and crosstalk
+    - Single-qubit gate errors with emission and Pauli models
+    - Two-qubit gate errors with angle-dependent noise
+    - Measurement errors with asymmetric bit-flip probabilities
+
+    All parameters are optional. If not specified, default values from the
+    GeneralNoiseModel will be used.
+    """
+
+    # Global parameters
+    noiseless_gates: Optional[List[str]] = None
+    seed: Optional[int] = None
+    scale: Optional[float] = None
+    leakage_scale: Optional[float] = None
+    emission_scale: Optional[float] = None
+
+    # Idle noise parameters
+    p_idle_coherent: Optional[bool] = None
+    p_idle_linear_rate: Optional[float] = None
+    p_idle_linear_model: Optional[Dict[str, float]] = None
+    p_idle_quadratic_rate: Optional[float] = None
+    p_idle_coherent_to_incoherent_factor: Optional[float] = None
+    idle_scale: Optional[float] = None
+
+    # Preparation noise parameters
+    p_prep: Optional[float] = None
+    p_prep_leak_ratio: Optional[float] = None
+    p_prep_crosstalk: Optional[float] = None
+    prep_scale: Optional[float] = None
+    p_prep_crosstalk_scale: Optional[float] = None
+
+    # Single-qubit gate noise parameters
+    p1: Optional[float] = None
+    p1_emission_ratio: Optional[float] = None
+    p1_emission_model: Optional[Dict[str, float]] = None
+    p1_seepage_prob: Optional[float] = None
+    p1_pauli_model: Optional[Dict[str, float]] = None
+    p1_scale: Optional[float] = None
+
+    # Two-qubit gate noise parameters
+    p2: Optional[float] = None
+    p2_angle_params: Optional[Tuple[float, float, float, float]] = None
+    p2_angle_power: Optional[float] = None
+    p2_emission_ratio: Optional[float] = None
+    p2_emission_model: Optional[Dict[str, float]] = None
+    p2_seepage_prob: Optional[float] = None
+    p2_pauli_model: Optional[Dict[str, float]] = None
+    p2_idle: Optional[float] = None
+    p2_scale: Optional[float] = None
+
+    # Measurement noise parameters
+    p_meas_0: Optional[float] = None
+    p_meas_1: Optional[float] = None
+    p_meas_crosstalk: Optional[float] = None
+    meas_scale: Optional[float] = None
+    p_meas_crosstalk_scale: Optional[float] = None
 
     @classmethod
     def from_config(cls, config: Dict[str, Any]) -> "GeneralNoise":
-        """Create GeneralNoise from configuration dictionary.
-
-        Args:
-            config: Configuration dictionary (no parameters needed)
-
-        Returns:
-            GeneralNoise instance
-        """
-        return cls()
+        """Create GeneralNoise from configuration dictionary."""
+        # Filter out non-GeneralNoise fields
+        filtered_config = {k: v for k, v in config.items() if k != "type"}
+        return cls(**filtered_config)
 
 
 def run_qasm(
@@ -235,15 +263,39 @@ def qasm_sim(qasm: str) -> QasmSimulationBuilder:
         ...     qasm_sim(qasm).noise(DepolarizingNoise(p=0.01)).workers(4).run(1000)
         ... )
         >>>
-        >>> # Or use a configuration dictionary
-        >>> config = {
-        ...     "seed": 42,
-        ...     "workers": 4,
-        ...     "noise": {"type": "DepolarizingNoise", "p": 0.01},
-        ...     "binary_string_format": True,
-        ... }
-        >>> sim = qasm_sim(qasm).config(config).build()
+        >>> # Use Rust-native builder with fluent chaining
+        >>> from pecos_rslib.qasm_sim import GeneralNoiseModelBuilder
+        >>> builder = (
+        ...     GeneralNoiseModelBuilder()
+        ...     .with_seed(42)
+        ...     .with_p1_probability(0.001)
+        ...     .with_p2_probability(0.01)
+        ... )
+        >>>
+        >>> # Direct configuration with method chaining (like Rust API)
+        >>> sim = (
+        ...     qasm_sim(qasm)
+        ...     .seed(42)
+        ...     .auto_workers()
+        ...     .noise(builder)
+        ...     .quantum_engine(QuantumEngine.StateVector)
+        ...     .with_binary_string_format()
+        ...     .build()
+        ... )
         >>> results = sim.run(1000)
+        >>>
+        >>> # Using WebAssembly functions (requires wasm feature)
+        >>> qasm_with_wasm = '''
+        ... OPENQASM 2.0;
+        ... creg a[10];
+        ... creg b[10];
+        ... creg result[10];
+        ... a = 5;
+        ... b = 3;
+        ... result = add(a, b);  // Call WASM function
+        ... '''
+        >>> # Run with WASM module
+        >>> results = qasm_sim(qasm_with_wasm).wasm("add.wasm").run(100)
     """
     return _qasm_sim(qasm)
 
@@ -278,51 +330,3 @@ def get_quantum_engines() -> List[str]:
         ['StateVector', 'SparseStabilizer']
     """
     return _get_quantum_engines()
-
-
-# Noise model registry for configuration-based creation
-_NOISE_MODEL_REGISTRY = {
-    "PassThroughNoise": PassThroughNoise,
-    "DepolarizingNoise": DepolarizingNoise,
-    "DepolarizingCustomNoise": DepolarizingCustomNoise,
-    "BiasedDepolarizingNoise": BiasedDepolarizingNoise,
-    "GeneralNoise": GeneralNoise,
-}
-
-
-def register_noise_model(name: str, noise_class: type) -> None:
-    """Register a custom noise model parser for use with config dictionaries.
-
-    The noise class must have a classmethod 'from_config' that takes
-    a configuration dictionary and returns an instance of one of the
-    built-in noise models (PassThroughNoise, DepolarizingNoise, etc.).
-
-    Note: Due to the Rust backend, custom Python noise models cannot be
-    used directly. The from_config method must return one of the built-in
-    noise types. This is useful for custom configuration parsing, validation,
-    or changing default values.
-
-    Args:
-        name: Name to use in configuration 'type' field
-        noise_class: Class with from_config classmethod that returns a built-in noise type
-
-    Example:
-        >>> class CustomDepolarizingParser:
-        ...     @classmethod
-        ...     def from_config(cls, config):
-        ...         # Custom validation or defaults
-        ...         p = config.get("p", 0.1)  # Different default
-        ...         if p > 0.5:
-        ...             raise ValueError("p too high")
-        ...         return DepolarizingNoise(p=p)
-        ...
-        >>> register_noise_model("MyDepolarizing", CustomDepolarizingParser)
-        >>>
-        >>> config = {"noise": {"type": "MyDepolarizing", "p": 0.05}}
-        >>> sim = qasm_sim("...").config(config).build()
-    """
-    if not hasattr(noise_class, "from_config"):
-        raise ValueError(
-            f"Noise class {noise_class.__name__} must have a 'from_config' classmethod"
-        )
-    _NOISE_MODEL_REGISTRY[name] = noise_class

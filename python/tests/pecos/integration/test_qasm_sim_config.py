@@ -1,4 +1,4 @@
-"""Test qasm_sim config functionality."""
+"""Test qasm_sim structured configuration functionality."""
 
 import json
 from collections import Counter
@@ -6,8 +6,8 @@ from collections import Counter
 import pytest
 
 
-class TestQasmSimConfig:
-    """Test qasm_sim config method functionality."""
+class TestQasmSimStructuredConfig:
+    """Test qasm_sim structured configuration functionality."""
 
     def test_basic_config(self) -> None:
         """Test basic configuration without noise."""
@@ -22,9 +22,7 @@ class TestQasmSimConfig:
             cx q[0], q[1];
             measure q -> c;
             """
-        config = {
-            "seed": 42,
-        }
+        config = {"seed": 42}
 
         sim = qasm_sim(qasm).config(config).build()
         results = sim.run(1000)
@@ -202,6 +200,84 @@ class TestQasmSimConfig:
 
         # Should work the same way
         sim = qasm_sim(qasm).config(loaded_config).build()
+        results = sim.run(100)
+
+        assert len(results["c"]) == 100
+
+    def test_structured_config(self) -> None:
+        """Test new structured configuration approach."""
+        from pecos.rslib import GeneralNoiseModelBuilder, QuantumEngine, qasm_sim
+
+        qasm = """
+            OPENQASM 2.0;
+            include "qelib1.inc";
+            qreg q[2];
+            creg c[2];
+            h q[0];
+            cx q[0], q[1];
+            measure q -> c;
+            """
+
+        # Create noise using builder - pass it directly to noise() method
+        noise_builder = (
+            GeneralNoiseModelBuilder()
+            .with_seed(42)
+            .with_p1_probability(0.001)
+            .with_p2_probability(0.01)
+        )
+
+        # Use builder pattern instead of config dict
+        sim = (
+            qasm_sim(qasm)
+            .seed(42)
+            .auto_workers()
+            .noise(noise_builder)
+            .quantum_engine(QuantumEngine.StateVector)
+            .with_binary_string_format()
+            .build()
+        )
+        results = sim.run(100)
+
+        assert isinstance(results, dict)
+        assert "c" in results
+        assert len(results["c"]) == 100
+
+        # Check binary string format
+        assert all(isinstance(val, str) for val in results["c"])
+        assert all(len(val) == 2 for val in results["c"])
+
+    def test_general_noise_config(self) -> None:
+        """Test GeneralNoise configuration with dictionary."""
+        from pecos.rslib import qasm_sim
+
+        qasm = """
+            OPENQASM 2.0;
+            include "qelib1.inc";
+            qreg q[2];
+            creg c[2];
+            h q[0];
+            cx q[0], q[1];
+            measure q -> c;
+            """
+        config = {
+            "seed": 42,
+            "noise": {
+                "type": "GeneralNoise",
+                "p1": 0.001,
+                "p2": 0.01,
+                "p_prep": 0.001,
+                "p_meas_0": 0.002,
+                "p_meas_1": 0.002,
+                "noiseless_gates": ["H"],
+                "p1_pauli_model": {
+                    "X": 0.5,
+                    "Y": 0.3,
+                    "Z": 0.2,
+                },
+            },
+        }
+
+        sim = qasm_sim(qasm).config(config).build()
         results = sim.run(100)
 
         assert len(results["c"]) == 100

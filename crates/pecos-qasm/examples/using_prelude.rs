@@ -30,7 +30,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         measure q -> c;
     "#;
 
-    let shot_vec = run_qasm_sim(qasm, 10, Some(42), None, None, None)?;
+    let shot_vec = run_qasm(
+        qasm,
+        10,
+        PassThroughNoiseModel::builder(),
+        None,
+        None,
+        Some(42),
+    )?;
     let shot_map = shot_vec.try_as_shot_map()?;
 
     println!("\nQASM simulation results:");

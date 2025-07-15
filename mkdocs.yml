@@ -51,6 +51,8 @@ nav:
   - Introduction: README.md
   - user-guide/getting-started.md
   - user-guide/qasm-simulation.md
+  - user-guide/noise-model-builders.md
+  - user-guide/general-noise-factory.md
 - API:
   - api/api-reference.md
 - Development:

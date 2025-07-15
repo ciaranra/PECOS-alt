@@ -1,5 +1,5 @@
 use pecos_engines::shot_results::Data;
-use pecos_qasm::run_qasm_sim;
+use pecos_qasm::{prelude::PassThroughNoiseModel, run_qasm};
 
 #[test]
 fn test_float_in_classical_expression_error() {
@@ -11,7 +11,7 @@ fn test_float_in_classical_expression_error() {
         c = 3.14;  // This should error
     ";
 
-    let result = run_qasm_sim(qasm, 1, None, None, None, None);
+    let result = run_qasm(qasm, 1, PassThroughNoiseModel::builder(), None, None, None);
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.to_string().contains("Float literals are not allowed"));
@@ -27,7 +27,7 @@ fn test_pi_in_classical_expression_error() {
         c = pi;  // This should error
     ";
 
-    let result = run_qasm_sim(qasm, 1, None, None, None, None);
+    let result = run_qasm(qasm, 1, PassThroughNoiseModel::builder(), None, None, None);
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.to_string().contains("Pi constant is not allowed"));
@@ -44,7 +44,7 @@ fn test_bitwise_in_gate_parameter_error() {
         rx(1 & 2) q[0];  // This should error
     "#;
 
-    let result = run_qasm_sim(qasm, 1, None, None, None, None);
+    let result = run_qasm(qasm, 1, PassThroughNoiseModel::builder(), None, None, None);
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.to_string().contains("not supported in gate parameter"));
@@ -69,7 +69,7 @@ fn test_float_expressions_in_gates_work() {
         measure q -> c;
     "#;
 
-    let result = run_qasm_sim(qasm, 1, None, None, None, None);
+    let result = run_qasm(qasm, 1, PassThroughNoiseModel::builder(), None, None, None);
     match result {
         Ok(_) => {}
         Err(e) => {
@@ -96,7 +96,7 @@ fn test_integer_expressions_in_classical_work() {
         c = c & 255;      // Should be 17
     ";
 
-    let shot_vec = run_qasm_sim(qasm, 1, None, None, None, None).unwrap();
+    let shot_vec = run_qasm(qasm, 1, PassThroughNoiseModel::builder(), None, None, None).unwrap();
     let shot = &shot_vec.shots[0];
 
     if let Data::BitVec(c_bits) = &shot.data["c"] {

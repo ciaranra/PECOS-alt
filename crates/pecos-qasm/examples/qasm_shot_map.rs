@@ -19,8 +19,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         measure q[0] -> ancilla[0];
     "#;
 
-    // Run simulation - run_qasm_sim now returns ShotVec directly
-    let shot_vec = run_qasm_sim(qasm, 20, Some(42), None, None, None)?;
+    // Run simulation - run_qasm returns ShotVec directly
+    let shot_vec = run_qasm(
+        qasm,
+        20,
+        PassThroughNoiseModel::builder(),
+        None,
+        None,
+        Some(42),
+    )?;
 
     // Convert to ShotMap for display and columnar access
     let shot_map: ShotMap = shot_vec.try_as_shot_map()?;
@@ -40,7 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("\nRegister 'c' has {} measurements", c_values.len());
 
             // Count unique outcomes
-            let mut counts = std::collections::HashMap::new();
+            let mut counts = std::collections::BTreeMap::new();
             for bitvec in &c_values {
                 // Convert BitVec to string for counting
                 let mut key = String::new();

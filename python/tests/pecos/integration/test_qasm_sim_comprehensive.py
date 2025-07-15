@@ -275,7 +275,7 @@ class TestQasmSimComprehensive:
 
     def test_deterministic_with_seed(self) -> None:
         """Test that same seed produces same results."""
-        from pecos.rslib import DepolarizingNoise, qasm_sim
+        from pecos.rslib import qasm_sim
 
         qasm = """
         OPENQASM 2.0;
@@ -287,18 +287,44 @@ class TestQasmSimComprehensive:
         measure q -> c;
         """
 
-        # Run twice with same seed
-        results1 = qasm_sim(qasm).seed(123).noise(DepolarizingNoise(p=0.1)).run(100)
-        results2 = qasm_sim(qasm).seed(123).noise(DepolarizingNoise(p=0.1)).run(100)
+        # Use config dict that includes seed
+        config1 = {
+            "seed": 123,
+            "noise": {"type": "DepolarizingNoise", "p": 0.01},
+        }
 
-        # Should produce identical results
+        config2 = {
+            "seed": 123,
+            "noise": {"type": "DepolarizingNoise", "p": 0.01},
+        }
+
+        # Build and run simulations with same config
+        sim1 = qasm_sim(qasm).config(config1).build()
+        sim2 = qasm_sim(qasm).config(config2).build()
+
+        results1 = sim1.run(1000)
+        results2 = sim2.run(1000)
+
+        # Should produce identical results with same seed
         assert results1["c"] == results2["c"]
 
         # Run with different seed
-        results3 = qasm_sim(qasm).seed(456).noise(DepolarizingNoise(p=0.1)).run(100)
+        config3 = {
+            "seed": 456,
+            "noise": {"type": "DepolarizingNoise", "p": 0.01},
+        }
+        sim3 = qasm_sim(qasm).config(config3).build()
+        results3 = sim3.run(1000)
 
         # Should produce different results (with very high probability)
-        assert results1["c"] != results3["c"]
+        # Count occurrences to verify they're different
+        from collections import Counter
+
+        counts1 = Counter(results1["c"])
+        counts3 = Counter(results3["c"])
+
+        # With 1000 shots and noise, the exact counts should differ
+        assert counts1 != counts3
 
     def test_config_with_null_noise(self) -> None:
         """Test config with null noise field."""

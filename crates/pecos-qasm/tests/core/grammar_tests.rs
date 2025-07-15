@@ -1,4 +1,4 @@
-use pecos_qasm::run::run_qasm_sim;
+use pecos_qasm::{prelude::PassThroughNoiseModel, run::run_qasm};
 
 #[test]
 fn test_bell_qasm() {
@@ -15,7 +15,15 @@ fn test_bell_qasm() {
         measure q[1] -> c[1];
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
+    let results = run_qasm(
+        qasm,
+        10,
+        PassThroughNoiseModel::builder(),
+        None,
+        Some(1),
+        Some(42),
+    )
+    .unwrap();
 
     assert_eq!(results.len(), 10);
     assert!(results.shots[0].data.contains_key("c"));
@@ -67,7 +75,15 @@ fn test_x_qasm() {
         measure w[0] -> d[0];
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
+    let results = run_qasm(
+        qasm,
+        10,
+        PassThroughNoiseModel::builder(),
+        None,
+        Some(1),
+        Some(42),
+    )
+    .unwrap();
 
     assert!(
         results.shots[0].data.contains_key("d"),
@@ -104,7 +120,15 @@ fn test_arbitrary_register_names() {
         measure bob[0] -> result[1];
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
+    let results = run_qasm(
+        qasm,
+        10,
+        PassThroughNoiseModel::builder(),
+        None,
+        Some(1),
+        Some(42),
+    )
+    .unwrap();
 
     println!("Arbitrary register test results: {results:?}");
 
@@ -153,7 +177,15 @@ fn test_flips_multi_reg_qasm() {
         measure b -> d;
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
+    let results = run_qasm(
+        qasm,
+        10,
+        PassThroughNoiseModel::builder(),
+        None,
+        Some(1),
+        Some(42),
+    )
+    .unwrap();
 
     assert!(
         results.shots[0].data.contains_key("c"),
@@ -199,7 +231,15 @@ fn test_basic_arthmetic_qasm() {
         b = 0;
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
+    let results = run_qasm(
+        qasm,
+        10,
+        PassThroughNoiseModel::builder(),
+        None,
+        Some(1),
+        Some(42),
+    )
+    .unwrap();
 
     println!("Arithmetic test results: {results:?}");
 
@@ -247,7 +287,15 @@ fn test_defaults_qasm() {
         measure q -> m;
     "#;
 
-    let results = run_qasm_sim(qasm, 5, Some(42), Some(1), None, None).unwrap();
+    let results = run_qasm(
+        qasm,
+        5,
+        PassThroughNoiseModel::builder(),
+        None,
+        Some(1),
+        Some(42),
+    )
+    .unwrap();
 
     println!("Default test results: {results:?}");
 
@@ -303,7 +351,15 @@ fn test_basic_if_creg_statements_qasm() {
         if(b==0) a = 1 + 2;
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
+    let results = run_qasm(
+        qasm,
+        10,
+        PassThroughNoiseModel::builder(),
+        None,
+        Some(1),
+        Some(42),
+    )
+    .unwrap();
 
     println!("If creg test results: {results:?}");
 
@@ -353,7 +409,15 @@ fn test_basic_if_qreg_statements_qasm() {
         measure q[0] -> a[1];
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
+    let results = run_qasm(
+        qasm,
+        10,
+        PassThroughNoiseModel::builder(),
+        None,
+        Some(1),
+        Some(42),
+    )
+    .unwrap();
 
     println!("If creg test results: {results:?}");
 
@@ -407,7 +471,15 @@ fn test_cond_bell() {
         // c should be "10" == 2
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
+    let results = run_qasm(
+        qasm,
+        10,
+        PassThroughNoiseModel::builder(),
+        None,
+        Some(1),
+        Some(42),
+    )
+    .unwrap();
 
     println!("Conditional test results: {results:?}");
 
@@ -455,7 +527,15 @@ fn test_classical_statement() {
 
     "#;
 
-    let results = run_qasm_sim(qasm, 10, Some(42), Some(1), None, None).unwrap();
+    let results = run_qasm(
+        qasm,
+        10,
+        PassThroughNoiseModel::builder(),
+        None,
+        Some(1),
+        Some(42),
+    )
+    .unwrap();
 
     println!("Conditional test results: {results:?}");
 

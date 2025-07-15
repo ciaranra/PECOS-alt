@@ -300,7 +300,7 @@ fn test_noise_model_effects() -> Result<(), PecosError> {
         500, // more shots to analyze statistics
         Some(42),
         None,
-        Some(Box::new(PassThroughNoiseModel)), // explicitly use pass-through (no noise)
+        Some(Box::new(PassThroughNoiseModel::builder().build())), // explicitly use pass-through (no noise)
         None,
     )?;
 

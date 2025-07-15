@@ -110,19 +110,20 @@ class QGate(metaclass=ABCMeta):
 
         return g
 
-    def gen(self, target: object | str) -> str:
-        """Generate code representation for the gate.
+    def gen(self, target: object | str, *, add_versions: bool = False) -> str:
+        """Generate code for the gate using the specified target generator.
 
         Args:
-            target: Code generation target (e.g., 'qasm' or generator object).
+            target: Either a generator object or string specifying the target ("qasm").
+            add_versions: Whether to add version information to generated code.
 
         Returns:
-            String representation of the gate for the target format.
+            Generated code as a string.
         """
         # TODO: Get rid of this as much as possible...
         if isinstance(target, str):
             if target == "qasm":
-                target = QASMGenerator()
+                target = QASMGenerator(add_versions=add_versions)
             else:
                 msg = f"Code gen target '{target}' is not supported."
                 raise NotImplementedError(msg)

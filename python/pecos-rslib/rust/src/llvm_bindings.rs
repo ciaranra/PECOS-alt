@@ -152,7 +152,7 @@ fn execute_llvm_safe(
         }
         Box::new(model)
     } else {
-        Box::new(pecos_engines::noise::PassThroughNoiseModel)
+        Box::new(pecos_engines::noise::PassThroughNoiseModel::new())
     };
 
     // Execute simulation with MonteCarloEngine directly to support max_qubits

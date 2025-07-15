@@ -92,6 +92,12 @@ ignore = [
     "N802",                         # Function name should be lowercase - Test functions often match gate names
     "PLC0415",                      # Import inside try/except for optional dependencies - OK in tests
 ]
+"python/slr-tests/**/*.py" = [
+    "INP001",                       # File is part of an implicit namespace package - OK for test directories
+    "S101",                         # Use of `assert` detected - Assert is standard practice in test files
+    "N802",                         # Function name should be lowercase - Test functions often match gate names
+    "PLC0415",                      # Import inside try/except for optional dependencies - OK in tests
+]
 "python/quantum-pecos/src/pecos/simulators/*.py" = [
     "N802",
 ]
@@ -103,6 +109,7 @@ ignore = [
     "PLW",
     "B",
 ]
+"clib/pecos-rng/pecos_pcg/__init__.py" = ["TID252"]
 
 
 

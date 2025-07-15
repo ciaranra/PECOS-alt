@@ -204,7 +204,7 @@ impl HybridEngineBuilder {
             // Create a noise model (default to PassThroughNoise if not set)
             let noise_model = self
                 .noise_model
-                .unwrap_or_else(|| Box::new(PassThroughNoiseModel));
+                .unwrap_or_else(|| Box::new(PassThroughNoiseModel::builder().build()));
 
             // Create the quantum system
             QuantumSystem::new(noise_model, quantum_engine)
@@ -327,7 +327,7 @@ mod tests {
     fn test_with_quantum_system() {
         // Create a quantum system
         let quantum_system = QuantumSystem::new(
-            Box::new(PassThroughNoiseModel),
+            Box::new(PassThroughNoiseModel::builder().build()),
             quantum::new_quantum_engine_with_seed(2, 42),
         );
 

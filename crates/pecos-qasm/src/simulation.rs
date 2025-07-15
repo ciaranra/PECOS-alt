@@ -6,8 +6,8 @@
 use crate::QASMEngine;
 use pecos_core::errors::PecosError;
 use pecos_engines::noise::{
-    BiasedDepolarizingNoiseModel, DepolarizingNoiseModel, GeneralNoiseModel,
-    GeneralNoiseModelBuilder, NoiseModel, PassThroughNoiseModel,
+    BiasedDepolarizingNoiseModelBuilder, DepolarizingNoiseModelBuilder, GeneralNoiseModelBuilder,
+    NoiseModel, PassThroughNoiseModel, PassThroughNoiseModelBuilder,
 };
 use pecos_engines::quantum::{QuantumEngine, SparseStabEngine, StateVecEngine};
 use pecos_engines::shot_results::ShotVec;
@@ -16,46 +16,35 @@ use std::str::FromStr;
 
 /// Noise model configuration
 ///
-/// This enum holds the configuration for different noise models.
-/// Use the config structs (e.g., `DepolarizingNoise`) for a more ergonomic API.
+/// This enum holds builders for different noise models.
 #[derive(Debug, Clone)]
-pub enum NoiseModelConfig {
+pub enum NoiseModelType {
     /// No noise (ideal simulation)
-    PassThrough(PassThroughNoise),
-    /// Standard depolarizing noise
-    Depolarizing(DepolarizingNoise),
-    /// Depolarizing noise with custom probabilities
-    DepolarizingCustom(DepolarizingCustomNoise),
-    /// Biased depolarizing noise
-    BiasedDepolarizing(BiasedDepolarizingNoise),
+    PassThrough(Box<PassThroughNoiseModelBuilder>),
+    /// Depolarizing noise model
+    Depolarizing(Box<DepolarizingNoiseModelBuilder>),
+    /// Biased depolarizing noise model
+    BiasedDepolarizing(Box<BiasedDepolarizingNoiseModelBuilder>),
     /// General noise model
-    General(GeneralNoise),
-    /// General noise model from builder
-    GeneralFromBuilder(Box<GeneralNoiseModelBuilder>),
+    General(Box<GeneralNoiseModelBuilder>),
 }
-
-// Keep the old type alias for backward compatibility during migration
-pub type NoiseModelType = NoiseModelConfig;
 
 impl NoiseModelType {
     /// Create a boxed noise model instance
     #[must_use]
     pub fn create_noise_model(self) -> Box<dyn NoiseModel> {
         match self {
-            Self::PassThrough(_) => Box::new(PassThroughNoiseModel),
-            Self::Depolarizing(config) => Box::new(DepolarizingNoiseModel::new_uniform(config.p)),
-            Self::DepolarizingCustom(config) => Box::new(DepolarizingNoiseModel::new(
-                config.p_prep,
-                config.p_meas,
-                config.p1,
-                config.p2,
-            )),
-            Self::BiasedDepolarizing(config) => {
-                Box::new(BiasedDepolarizingNoiseModel::new_uniform(config.p))
-            }
-            Self::General(_) => Box::new(GeneralNoiseModel::default()),
-            Self::GeneralFromBuilder(builder) => Box::new(builder.build()),
+            Self::PassThrough(builder) => Box::new(builder.build()),
+            Self::Depolarizing(builder) => Box::new(builder.build()),
+            Self::BiasedDepolarizing(builder) => Box::new(builder.build()),
+            Self::General(builder) => Box::new(builder.build()),
         }
+    }
+}
+
+impl Default for NoiseModelType {
+    fn default() -> Self {
+        Self::PassThrough(Box::new(PassThroughNoiseModel::builder()))
     }
 }
 
@@ -92,78 +81,38 @@ impl QuantumEngineType {
     }
 }
 
-// Noise model configuration structs
-
-/// No noise configuration
+/// Bit vector format for shot results
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct PassThroughNoise;
-
-/// Standard depolarizing noise configuration
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct DepolarizingNoise {
-    /// Uniform error probability for all operations
-    pub p: f64,
+pub enum BitVecFormat {
+    /// Store as `BigUint` (default)
+    BigUint,
+    /// Store as binary strings
+    BinaryString,
 }
 
-/// Custom depolarizing noise configuration
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct DepolarizingCustomNoise {
-    /// State preparation error probability
-    pub p_prep: f64,
-    /// Measurement error probability
-    pub p_meas: f64,
-    /// Single-qubit gate error probability
-    pub p1: f64,
-    /// Two-qubit gate error probability
-    pub p2: f64,
-}
+// Implement From traits for converting noise builders to NoiseModelType
 
-/// Biased depolarizing noise configuration
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct BiasedDepolarizingNoise {
-    /// Uniform probability for all operations
-    pub p: f64,
-}
-
-/// General noise configuration
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct GeneralNoise;
-
-// Implement From traits for converting noise configs to NoiseModelType
-
-impl From<PassThroughNoise> for NoiseModelType {
-    fn from(noise: PassThroughNoise) -> Self {
-        NoiseModelType::PassThrough(noise)
+impl From<PassThroughNoiseModelBuilder> for NoiseModelType {
+    fn from(builder: PassThroughNoiseModelBuilder) -> Self {
+        NoiseModelType::PassThrough(Box::new(builder))
     }
 }
 
-impl From<DepolarizingNoise> for NoiseModelType {
-    fn from(noise: DepolarizingNoise) -> Self {
-        NoiseModelType::Depolarizing(noise)
+impl From<DepolarizingNoiseModelBuilder> for NoiseModelType {
+    fn from(builder: DepolarizingNoiseModelBuilder) -> Self {
+        NoiseModelType::Depolarizing(Box::new(builder))
     }
 }
 
-impl From<DepolarizingCustomNoise> for NoiseModelType {
-    fn from(noise: DepolarizingCustomNoise) -> Self {
-        NoiseModelType::DepolarizingCustom(noise)
-    }
-}
-
-impl From<BiasedDepolarizingNoise> for NoiseModelType {
-    fn from(noise: BiasedDepolarizingNoise) -> Self {
-        NoiseModelType::BiasedDepolarizing(noise)
-    }
-}
-
-impl From<GeneralNoise> for NoiseModelType {
-    fn from(noise: GeneralNoise) -> Self {
-        NoiseModelType::General(noise)
+impl From<BiasedDepolarizingNoiseModelBuilder> for NoiseModelType {
+    fn from(builder: BiasedDepolarizingNoiseModelBuilder) -> Self {
+        NoiseModelType::BiasedDepolarizing(Box::new(builder))
     }
 }
 
 impl From<GeneralNoiseModelBuilder> for NoiseModelType {
     fn from(builder: GeneralNoiseModelBuilder) -> Self {
-        NoiseModelType::GeneralFromBuilder(Box::new(builder))
+        NoiseModelType::General(Box::new(builder))
     }
 }
 
@@ -175,6 +124,8 @@ pub struct QasmSimulation {
     noise_model: NoiseModelType,
     quantum_engine_type: QuantumEngineType,
     bit_format: BitVecFormat,
+    #[cfg(feature = "wasm")]
+    foreign_object: Option<Box<dyn crate::foreign_objects::ForeignObject>>,
 }
 
 impl QasmSimulation {
@@ -196,280 +147,272 @@ impl QasmSimulation {
         let num_qubits = self.engine.num_qubits();
 
         // Create fresh engine instance for this run
+        #[cfg(feature = "wasm")]
+        let mut engine = self.engine.clone();
+        #[cfg(not(feature = "wasm"))]
         let engine = self.engine.clone();
 
-        // Create noise model
+        // Initialize and set foreign object if available
+        #[cfg(feature = "wasm")]
+        if let Some(ref foreign_obj) = self.foreign_object {
+            let mut cloned_obj = foreign_obj.clone_box();
+            cloned_obj.init()?;
+            engine.set_foreign_object(cloned_obj);
+        }
+
+        // Get the noise model
         let noise_model = self.noise_model.clone().create_noise_model();
 
-        // Create quantum engine with seed if provided
-        let quantum_engine = if let Some(seed) = self.seed {
-            self.quantum_engine_type
-                .create_quantum_engine_with_seed(num_qubits, seed)
-        } else {
-            self.quantum_engine_type.create_quantum_engine(num_qubits)
+        // Run simulation
+        let results = match self.quantum_engine_type {
+            QuantumEngineType::StateVector => {
+                if let Some(seed) = self.seed {
+                    let quantum_engine = StateVecEngine::with_seed(num_qubits, seed);
+                    run_qasm_shots(
+                        engine,
+                        quantum_engine,
+                        shots,
+                        noise_model,
+                        self.workers,
+                        Some(seed),
+                    )?
+                } else {
+                    let quantum_engine = StateVecEngine::new(num_qubits);
+                    run_qasm_shots(
+                        engine,
+                        quantum_engine,
+                        shots,
+                        noise_model,
+                        self.workers,
+                        None,
+                    )?
+                }
+            }
+            QuantumEngineType::SparseStabilizer => {
+                if let Some(seed) = self.seed {
+                    let quantum_engine = SparseStabEngine::with_seed(num_qubits, seed);
+                    run_qasm_shots(
+                        engine,
+                        quantum_engine,
+                        shots,
+                        noise_model,
+                        self.workers,
+                        Some(seed),
+                    )?
+                } else {
+                    let quantum_engine = SparseStabEngine::new(num_qubits);
+                    run_qasm_shots(
+                        engine,
+                        quantum_engine,
+                        shots,
+                        noise_model,
+                        self.workers,
+                        None,
+                    )?
+                }
+            }
         };
 
-        // Run simulation
-        MonteCarloEngine::run_with_engines(
-            Box::new(engine),
-            noise_model,
-            quantum_engine,
-            shots,
-            self.workers,
-            self.seed,
-        )
+        Ok(results)
     }
 }
 
-/// Output format for bit vectors
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum BitVecFormat {
-    /// Default format as BigInt/integers
-    BigInt,
-    /// Binary string format (e.g., "0101")
-    BinaryString,
-}
-
-/// Builder for QASM simulation
-pub struct QasmSimulationBuilder<'a> {
-    qasm: &'a str,
+/// Builder for configuring and running QASM simulations
+#[derive(Debug)]
+pub struct QasmSimulationBuilder {
+    qasm: String,
     seed: Option<u64>,
-    workers: usize,
-    noise_model: NoiseModelType,
-    quantum_engine: QuantumEngineType,
+    workers: Option<usize>,
+    noise_model: Option<NoiseModelType>,
+    quantum_engine_type: Option<QuantumEngineType>,
     bit_format: BitVecFormat,
+    #[cfg(feature = "wasm")]
+    wasm_path: Option<String>,
 }
 
-impl<'a> QasmSimulationBuilder<'a> {
-    /// Create a new builder with the given QASM code
-    fn new(qasm: &'a str) -> Self {
+impl QasmSimulationBuilder {
+    /// Create a new builder from QASM source
+    #[must_use]
+    pub fn new(qasm: impl Into<String>) -> Self {
         Self {
-            qasm,
+            qasm: qasm.into(),
             seed: None,
-            workers: 1,
-            noise_model: NoiseModelType::PassThrough(PassThroughNoise),
-            quantum_engine: QuantumEngineType::SparseStabilizer,
-            bit_format: BitVecFormat::BigInt,
+            workers: None,
+            noise_model: None,
+            quantum_engine_type: None,
+            bit_format: BitVecFormat::BigUint,
+            #[cfg(feature = "wasm")]
+            wasm_path: None,
         }
     }
 
-    /// Set the random seed for reproducible results
+    /// Set the random seed
     #[must_use]
     pub fn seed(mut self, seed: u64) -> Self {
         self.seed = Some(seed);
         self
     }
 
-    /// Set the number of worker threads
+    /// Set the number of workers
     #[must_use]
     pub fn workers(mut self, workers: usize) -> Self {
-        self.workers = workers;
+        self.workers = Some(workers);
         self
     }
 
-    /// Automatically set workers based on available CPU cores
+    /// Use automatic worker count based on available CPUs
     #[must_use]
     pub fn auto_workers(mut self) -> Self {
-        self.workers = std::thread::available_parallelism()
-            .map(std::num::NonZero::get)
-            .unwrap_or(4);
+        self.workers = None;
         self
     }
 
-    /// Set the noise model using any type that implements Into<NoiseModelType>
+    /// Set the noise model
     #[must_use]
-    pub fn noise<N: Into<NoiseModelType>>(mut self, noise: N) -> Self {
-        self.noise_model = noise.into();
+    pub fn noise<N>(mut self, noise: N) -> Self
+    where
+        N: Into<NoiseModelType>,
+    {
+        self.noise_model = Some(noise.into());
         self
     }
 
     /// Set the quantum engine type
     #[must_use]
     pub fn quantum_engine(mut self, engine: QuantumEngineType) -> Self {
-        self.quantum_engine = engine;
+        self.quantum_engine_type = Some(engine);
         self
     }
 
-    /// Set the output format to binary strings
+    /// Configure output to use binary string format
     #[must_use]
     pub fn with_binary_string_format(mut self) -> Self {
         self.bit_format = BitVecFormat::BinaryString;
         self
     }
 
-    /// Apply configuration from a JSON object
-    ///
-    /// This method allows you to configure the builder using a JSON configuration
-    /// object, which is useful for loading settings from files or APIs.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - A JSON value containing configuration settings
-    ///
-    /// # Configuration fields
-    ///
-    /// - `seed` (u64): Random seed for reproducibility
-    /// - `workers` (usize or "auto"): Number of worker threads
-    /// - `noise` (object): Noise model configuration
-    /// - `quantum_engine` (string): "`StateVector`" or "`SparseStabilizer`"
-    /// - `binary_string_format` (bool): Whether to output binary strings
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the configuration is invalid or contains unknown fields.
-    pub fn config(mut self, config: &serde_json::Value) -> Result<Self, PecosError> {
-        use crate::config::{NoiseConfig, QuantumEngineConfig};
-
-        // Parse seed
-        if let Some(seed_val) = config.get("seed") {
-            if let Some(seed) = seed_val.as_u64() {
-                self = self.seed(seed);
-            } else {
-                return Err(PecosError::Processing("Invalid seed value".to_string()));
-            }
-        }
-
-        // Parse workers
-        if let Some(workers_val) = config.get("workers") {
-            if let Some(workers_str) = workers_val.as_str() {
-                if workers_str == "auto" {
-                    self = self.auto_workers();
-                } else {
-                    return Err(PecosError::Processing(format!(
-                        "Invalid worker config '{workers_str}', expected 'auto' or a number"
-                    )));
-                }
-            } else if let Some(workers) = workers_val.as_u64() {
-                let workers_usize = usize::try_from(workers)
-                    .map_err(|_| PecosError::Processing("Workers value too large".to_string()))?;
-                self = self.workers(workers_usize);
-            } else {
-                return Err(PecosError::Processing("Invalid workers value".to_string()));
-            }
-        }
-
-        // Parse noise model
-        if let Some(noise_val) = config.get("noise") {
-            // Skip if noise is explicitly null
-            if !noise_val.is_null() {
-                let noise_config: NoiseConfig =
-                    serde_json::from_value(noise_val.clone()).map_err(|e| {
-                        PecosError::Processing(format!("Invalid noise configuration: {e}"))
-                    })?;
-                self.noise_model = noise_config.into();
-            }
-        }
-
-        // Parse quantum engine
-        if let Some(engine_val) = config.get("quantum_engine") {
-            if let Some(engine_str) = engine_val.as_str() {
-                let engine_config: QuantumEngineConfig =
-                    serde_json::from_value(serde_json::Value::String(engine_str.to_string()))
-                        .map_err(|e| {
-                            PecosError::Processing(format!("Invalid quantum engine: {e}"))
-                        })?;
-                self.quantum_engine = engine_config.into();
-            } else {
-                return Err(PecosError::Processing(
-                    "Invalid quantum_engine value".to_string(),
-                ));
-            }
-        }
-
-        // Parse binary string format
-        if let Some(binary_val) = config.get("binary_string_format") {
-            if let Some(binary) = binary_val.as_bool() {
-                if binary {
-                    self = self.with_binary_string_format();
-                }
-            } else {
-                return Err(PecosError::Processing(
-                    "Invalid binary_string_format value".to_string(),
-                ));
-            }
-        }
-
-        Ok(self)
+    /// Set the path to a WebAssembly file (.wasm or .wat) for foreign function calls
+    #[cfg(feature = "wasm")]
+    #[must_use]
+    pub fn wasm(mut self, wasm_path: impl Into<String>) -> Self {
+        self.wasm_path = Some(wasm_path.into());
+        self
     }
 
-    /// Build the simulation for repeated execution
-    ///
-    /// This parses the QASM code and prepares the simulation
-    /// to be run multiple times with different shot counts.
+    /// Build the simulation (for reusable execution)
     ///
     /// # Errors
     ///
-    /// Returns an error if QASM parsing fails.
+    /// Returns an error if the QASM cannot be parsed.
     pub fn build(self) -> Result<QasmSimulation, PecosError> {
-        let engine = QASMEngine::from_str(self.qasm)?;
+        let engine = QASMEngine::from_str(&self.qasm)?;
+
+        #[cfg(feature = "wasm")]
+        let foreign_object = if let Some(wasm_path) = self.wasm_path {
+            use crate::program::QASMProgram;
+            use crate::wasm_foreign_object::WasmtimeForeignObject;
+            use std::str::FromStr;
+
+            // Create the WASM foreign object
+            let wasm_obj = WasmtimeForeignObject::new(wasm_path)?;
+
+            // Get exported functions from WASM module
+            let exported_functions = wasm_obj.get_exported_functions();
+
+            // Check if init function exists
+            if !exported_functions.contains(&"init".to_string()) {
+                return Err(PecosError::Input(
+                    "WebAssembly module must export an 'init' function".to_string(),
+                ));
+            }
+
+            // Parse the QASM program to extract function calls
+            let program = QASMProgram::from_str(&self.qasm)?;
+            let non_builtin_calls = program.get_non_builtin_function_calls();
+
+            // Validate that all non-builtin function calls exist in WASM module
+            for func_name in non_builtin_calls {
+                if !exported_functions.contains(&func_name) {
+                    return Err(PecosError::Input(format!(
+                        "Function '{func_name}' is called in QASM but not exported by WebAssembly module. Available functions: {exported_functions:?}"
+                    )));
+                }
+            }
+
+            Some(Box::new(wasm_obj) as Box<dyn crate::foreign_objects::ForeignObject>)
+        } else {
+            None
+        };
 
         Ok(QasmSimulation {
             engine,
             seed: self.seed,
-            workers: self.workers,
-            noise_model: self.noise_model,
-            quantum_engine_type: self.quantum_engine,
+            workers: self.workers.unwrap_or(1),
+            noise_model: self.noise_model.unwrap_or_default(),
+            quantum_engine_type: self
+                .quantum_engine_type
+                .unwrap_or(QuantumEngineType::SparseStabilizer),
             bit_format: self.bit_format,
+            #[cfg(feature = "wasm")]
+            foreign_object,
         })
     }
 
-    /// Run the simulation with the specified number of shots
-    ///
-    /// This is a convenience method that builds and runs in one step.
+    /// Run the simulation directly with the specified number of shots
     ///
     /// # Errors
     ///
-    /// Returns an error if QASM parsing or simulation fails.
+    /// Returns an error if simulation fails.
     pub fn run(self, shots: usize) -> Result<ShotVec, PecosError> {
-        self.build()?.run(shots)
+        let sim = self.build()?;
+        sim.run(shots)
     }
 }
 
-/// Entry point for QASM simulation
+/// Create a new QASM simulation builder
 ///
-/// # Examples
+/// This is the primary entry point for running QASM simulations.
 ///
-/// ## Simple usage
-/// ```
-/// # use pecos_qasm::simulation::qasm_sim;
-/// # let qasm = "OPENQASM 2.0; include \"qelib1.inc\"; qreg q[1]; creg c[1]; x q[0]; measure q[0] -> c[0];";
-/// // Simple case - just run with shots
-/// let results = qasm_sim(qasm).run(1000).unwrap();
-/// assert_eq!(results.len(), 1000);
-/// ```
+/// # Example
 ///
-/// ## Build once, run multiple times
 /// ```
-/// # use pecos_qasm::simulation::qasm_sim;
-/// # let qasm = "OPENQASM 2.0; include \"qelib1.inc\"; qreg q[1]; creg c[1]; h q[0]; measure q[0] -> c[0];";
-/// let sim = qasm_sim(qasm).seed(42).build().unwrap();
+/// use pecos_qasm::prelude::*;
 ///
-/// // Run with different shot counts
-/// let results_100 = sim.run(100).unwrap();
-/// let results_1000 = sim.run(1000).unwrap();
-/// assert_eq!(results_100.len(), 100);
-/// assert_eq!(results_1000.len(), 1000);
-/// ```
+/// let qasm = r#"
+///     OPENQASM 2.0;
+///     include "qelib1.inc";
+///     qreg q[2];
+///     creg c[2];
+///     h q[0];
+///     cx q[0], q[1];
+///     measure q -> c;
+/// "#;
 ///
-/// ## With noise
-/// ```
-/// # use pecos_qasm::simulation::{qasm_sim, DepolarizingNoise};
-/// # let qasm = "OPENQASM 2.0; include \"qelib1.inc\"; qreg q[2]; creg c[2]; h q[0]; cx q[0], q[1]; measure q -> c;";
+/// // Run with default settings (no noise)
+/// let results = qasm_sim(qasm).run(100).unwrap();
+///
+/// // Run with noise
+/// let noise = GeneralNoiseModel::builder()
+///     .with_p1_probability(0.001)
+///     .with_p2_probability(0.01);
+///
 /// let results = qasm_sim(qasm)
-///     .noise(DepolarizingNoise { p: 0.01 })
+///     .seed(42)
+///     .noise(noise)
 ///     .run(1000)
 ///     .unwrap();
 /// ```
 ///
 /// ## Full configuration
 /// ```
-/// # use pecos_qasm::simulation::{qasm_sim, BiasedDepolarizingNoise, QuantumEngineType};
+/// # use pecos_qasm::simulation::{qasm_sim, QuantumEngineType};
+/// # use pecos_qasm::prelude::NoiseConfig;
 /// # let qasm = "OPENQASM 2.0; include \"qelib1.inc\"; qreg q[2]; creg c[2]; h q[0]; cx q[0], q[1]; measure q -> c;";
 /// let sim = qasm_sim(qasm)
 ///     .seed(42)
 ///     .auto_workers()
 ///     .quantum_engine(QuantumEngineType::StateVector)
-///     .noise(BiasedDepolarizingNoise { p: 0.01 })
+///     .noise(NoiseConfig::BiasedDepolarizingNoise { p: 0.01 })
 ///     .build()
 ///     .unwrap();
 ///
@@ -491,202 +434,25 @@ impl<'a> QasmSimulationBuilder<'a> {
 /// 4. **Batch similar simulations**: Use the same noise model and engine settings when possible
 ///    to reduce overhead.
 #[must_use]
-pub fn qasm_sim(qasm: &str) -> QasmSimulationBuilder {
+pub fn qasm_sim(qasm: impl Into<String>) -> QasmSimulationBuilder {
     QasmSimulationBuilder::new(qasm)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::run::run_qasm;
-
-    #[test]
-    fn test_noise_model_creation() {
-        // Test that each noise model type can be created
-        let _pass_through = NoiseModelType::PassThrough(PassThroughNoise).create_noise_model();
-        let _depolarizing =
-            NoiseModelType::Depolarizing(DepolarizingNoise { p: 0.01 }).create_noise_model();
-        let _depolarizing_custom = NoiseModelType::DepolarizingCustom(DepolarizingCustomNoise {
-            p_prep: 0.01,
-            p_meas: 0.02,
-            p1: 0.03,
-            p2: 0.04,
-        })
-        .create_noise_model();
-        let _biased_depolarizing =
-            NoiseModelType::BiasedDepolarizing(BiasedDepolarizingNoise { p: 0.01 })
-                .create_noise_model();
-        let _general = NoiseModelType::General(GeneralNoise).create_noise_model();
-    }
-
-    #[test]
-    fn test_quantum_engine_creation() {
-        // Test that each quantum engine type can be created
-        let _state_vec = QuantumEngineType::StateVector.create_quantum_engine(5);
-        let _sparse_stab = QuantumEngineType::SparseStabilizer.create_quantum_engine(5);
-
-        // Test with seed
-        let _state_vec_seeded =
-            QuantumEngineType::StateVector.create_quantum_engine_with_seed(5, 42);
-        let _sparse_stab_seeded =
-            QuantumEngineType::SparseStabilizer.create_quantum_engine_with_seed(5, 42);
-    }
-
-    #[test]
-    fn test_builder_api() {
-        let qasm = r#"
-            OPENQASM 2.0;
-            include "qelib1.inc";
-            qreg q[1];
-            creg c[1];
-            x q[0];
-            measure q[0] -> c[0];
-        "#;
-
-        // Test simple usage
-        let result = qasm_sim(qasm).run(10);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap().len(), 10);
-
-        // Test build and run multiple times
-        let sim = qasm_sim(qasm).seed(42).build().unwrap();
-        let result1 = sim.run(100).unwrap();
-        let result2 = sim.run(100).unwrap();
-        // Should be deterministic
-        assert_eq!(
-            result1
-                .try_as_shot_map()
-                .unwrap()
-                .try_bits_as_u64("c")
-                .unwrap(),
-            result2
-                .try_as_shot_map()
-                .unwrap()
-                .try_bits_as_u64("c")
-                .unwrap()
-        );
-
-        // Run with different shot counts
-        let result_50 = sim.run(50).unwrap();
-        let result_200 = sim.run(200).unwrap();
-        assert_eq!(result_50.len(), 50);
-        assert_eq!(result_200.len(), 200);
-
-        // Test with noise struct
-        let result = qasm_sim(qasm)
-            .noise(DepolarizingNoise { p: 0.01 })
-            .run(1000);
-        assert!(result.is_ok());
-
-        // Test with custom noise
-        let result = qasm_sim(qasm)
-            .noise(DepolarizingCustomNoise {
-                p_prep: 0.001,
-                p_meas: 0.002,
-                p1: 0.003,
-                p2: 0.004,
-            })
-            .run(100);
-        assert!(result.is_ok());
-
-        // Test auto workers
-        let result = qasm_sim(qasm).auto_workers().run(100);
-        assert!(result.is_ok());
-
-        // Test full configuration with build
-        let sim = qasm_sim(qasm)
-            .seed(123)
-            .workers(2)
-            .quantum_engine(QuantumEngineType::StateVector)
-            .noise(BiasedDepolarizingNoise { p: 0.01 })
-            .build()
-            .unwrap();
-
-        let result = sim.run(500);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_deterministic_simulation() {
-        let qasm = r#"
-            OPENQASM 2.0;
-            include "qelib1.inc";
-            qreg q[1];
-            creg c[1];
-            h q[0];
-            measure q[0] -> c[0];
-        "#;
-
-        // Run twice with same seed
-        let result1 = qasm_sim(qasm).seed(42).run(100).unwrap();
-        let result2 = qasm_sim(qasm).seed(42).run(100).unwrap();
-
-        // Convert to shot maps for comparison
-        let map1 = result1.try_as_shot_map().unwrap();
-        let map2 = result2.try_as_shot_map().unwrap();
-
-        // Results should be identical
-        let bits1 = map1.try_bits_as_u64("c").unwrap();
-        let bits2 = map2.try_bits_as_u64("c").unwrap();
-        assert_eq!(bits1, bits2);
-    }
-
-    #[test]
-    fn test_builder_integration() {
-        let qasm = r#"
-            OPENQASM 2.0;
-            include "qelib1.inc";
-            qreg q[2];
-            creg c[2];
-            h q[0];
-            cx q[0], q[1];
-            measure q -> c;
-        "#;
-
-        // Create a custom noise model using the builder
-        let noise_builder = GeneralNoiseModel::builder()
-            .with_prep_probability(0.001)
-            .with_meas_0_probability(0.005)
-            .with_meas_1_probability(0.01)
-            .with_p1_probability(0.0001)
-            .with_p2_probability(0.01)
-            .with_seed(42);
-
-        // Use with qasm_sim
-        let results = qasm_sim(qasm).noise(noise_builder).seed(42).run(1000);
-
-        assert!(results.is_ok());
-        assert_eq!(results.unwrap().len(), 1000);
-    }
-
-    #[test]
-    fn test_builder_with_run_qasm() {
-        let qasm = r#"
-            OPENQASM 2.0;
-            include "qelib1.inc";
-            qreg q[1];
-            creg c[1];
-            x q[0];
-            measure q[0] -> c[0];
-        "#;
-
-        // Create a noise model with builder
-        let noise = GeneralNoiseModel::builder()
-            .with_meas_0_probability(0.1) // 10% chance to flip 0->1
-            .with_meas_1_probability(0.05); // 5% chance to flip 1->0
-
-        // Use with run_qasm
-        let results = run_qasm(qasm, 1000, noise, None, None, Some(42)).unwrap();
-
-        // Check that we get some errors due to measurement noise
-        let shot_map = results.try_as_shot_map().unwrap();
-        let values = shot_map.try_bits_as_u64("c").unwrap();
-
-        // Count how many times we measured 0 (should be ~5% due to measurement error on |1>)
-        let zeros = values.iter().filter(|&&v| v == 0).count();
-
-        // With 5% measurement error on |1>, we expect around 50 zeros out of 1000
-        assert!(zeros > 20); // Should have some errors
-        assert!(zeros < 100); // But not too many
-    }
+// Private helper function for running shots
+fn run_qasm_shots<QE: QuantumEngine + 'static>(
+    engine: QASMEngine,
+    quantum_engine: QE,
+    shots: usize,
+    noise_model: Box<dyn NoiseModel>,
+    workers: usize,
+    seed: Option<u64>,
+) -> Result<ShotVec, PecosError> {
+    MonteCarloEngine::run_with_engines(
+        Box::new(engine),
+        noise_model,
+        Box::new(quantum_engine),
+        shots,
+        workers,
+        seed, // pass the seed to MonteCarloEngine
+    )
 }

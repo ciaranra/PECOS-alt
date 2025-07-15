@@ -62,12 +62,33 @@ jobs:
     - name: Cache Rust
       uses: Swatinem/rust-cache@v2
       with:
-          workspaces: python/pecos-rslib
+        workspaces: python/pecos-rslib
+
+    - name: Install LLVM
+      uses: KyleMayes/install-llvm-action@v2
+      with:
+        version: "14.0"
+        env: True
+
+    - name: Configure LLVM
+      run: echo "LLVM_SYS_140_PREFIX=$LLVM_PATH" >>"$GITHUB_ENV" && "$LLVM_PATH/bin/llvm-config" --version
 
     - name: Generate lockfile and install dependencies
       run: |
         uv lock --project .
         uv sync --project .
+
+    - name: Install pecos rng build dependencies
+      run: |
+        uv pip install build nanobind scikit-build-core cmake ninja
+
+    - name: Build PECOS RNG
+      run: |
+        export NANOBIND_CMAKE_DIR=$(uv run -- python -m nanobind --cmake_dir)
+        export NANOBIND_DIR=$(uv run -- python -m nanobind --include_dir)
+        cd clib/pecos-rng && mkdir build && cd build/ && cmake .. -DCMAKE_PREFIX_PATH=$NANOBIND_CMAKE_DIR
+        cmake --build . && cd ..
+        uv pip install .
 
     - name: Install pecos-rslib with maturin
       run: |

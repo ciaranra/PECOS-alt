@@ -50,6 +50,7 @@ tempfile = "3"
 assert_cmd = "2"
 wasmtime = "33"
 serial_test = "3"
+cc = "1"
 
 pecos-core = { version = "0.1.1", path = "crates/pecos-core" }
 pecos-qsim = { version = "0.1.1", path = "crates/pecos-qsim" }
@@ -59,6 +60,7 @@ pecos-engines = { version = "0.1.1", path = "crates/pecos-engines" }
 pecos-llvm-runtime = { version = "0.1.1", path = "crates/pecos-llvm-runtime", default-features = false }
 pecos-phir = { version = "0.1.1", path = "crates/pecos-phir" }
 pecos-qec = { version = "0.1.1", path = "crates/pecos-qec" }
+pecos-clib-pcg = { version = "0.1.1", path = "crates/pecos-clib-pcg" }
 pecos = { version = "0.1.1", path = "crates/pecos" }
 pecos-cli = { version = "0.1.1", path = "crates/pecos-cli" }
 pecos-llvm-sim = { version = "0.1.1", path = "crates/pecos-llvm-sim" }

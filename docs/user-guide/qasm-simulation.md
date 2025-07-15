@@ -42,22 +42,30 @@ Now, let's run this code using PECOS's simple `run_qasm` function:
         measure q -> c;
     "#;
 
-    // Simple simulation with just shots count
+    // Simple simulation with ideal (no noise)
     let num_shots = 1000;
-    let results = run_qasm(qasm_code, num_shots, None, None, None, None)?;
+    let results = run_qasm(
+        qasm_code,
+        num_shots,
+        PassThroughNoiseModel::builder(),
+        None,     // Use default quantum engine
+        None,     // Use default (1 thread)
+        None      // Non-deterministic seed
+    )?;
 
     // With configuration using named variables for clarity
     let num_shots = 1000;
-    let noise_model = Some(DepolarizingNoise { p: 0.01 });
-    let engine_type = None;  // Use default (SparseStabilizer for this circuit)
-    let worker_count = None; // Use default (1 thread) or Some(4) for 4 threads
+    let noise = DepolarizingNoiseModel::builder()
+        .with_uniform_probability(0.01);
+    let quantum_engine = None;  // Use default (SparseStabilizer for this circuit)
+    let worker_count = None;    // Use default (1 thread) or Some(4) for 4 threads
     let random_seed = Some(42);
 
     let results = run_qasm(
         qasm_code,
         num_shots,
-        noise_model,
-        engine_type,
+        noise,
+        quantum_engine,
         worker_count,
         random_seed
     )?;
@@ -117,7 +125,7 @@ For more complex simulations or when you need finer control, you can use the bui
     // With more configuration options
     let results = qasm_sim(qasm_code)
         .seed(42)
-        .noise(DepolarizingNoise { p: 0.01 })
+        .noise(DepolarizingNoiseModel::builder().with_uniform_probability(0.01))
         .workers(4)        // Explicitly set number of threads
         // .auto_workers() // Or use all available CPU cores
         .run(1000)?;
@@ -197,21 +205,22 @@ Real quantum computers are noisy. PECOS helps you understand how noise affects y
 
     ```rust
     // No noise (ideal simulation)
-    PassThroughNoise
+    PassThroughNoiseModel::builder()
 
     // Standard depolarizing
-    DepolarizingNoise { p: 0.01 }
+    DepolarizingNoiseModel::builder()
+        .with_uniform_probability(0.01)
 
     // Custom depolarizing per operation type
-    DepolarizingCustomNoise {
-        p_prep: 0.001,  // State preparation error
-        p_meas: 0.002,  // Measurement error
-        p1: 0.003,      // Single-qubit gate error
-        p2: 0.004,      // Two-qubit gate error
-    }
+    DepolarizingNoiseModel::builder()
+        .with_prep_probability(0.001)  // State preparation error
+        .with_meas_probability(0.002)  // Measurement error
+        .with_p1_probability(0.003)    // Single-qubit gate error
+        .with_p2_probability(0.004)    // Two-qubit gate error
 
     // Biased depolarizing (asymmetric error distribution)
-    BiasedDepolarizingNoise { p: 0.01 }
+    BiasedDepolarizingNoiseModel::builder()
+        .with_uniform_probability(0.01)
     ```
 
 === "Python"
@@ -254,33 +263,41 @@ For research or to match specific hardware characteristics, you can create detai
         .with_seed(42);                    // Deterministic noise
 
     // Use with either API
-    qasm_sim(qasm).noise(noise)
-    run_qasm(qasm, 1000, noise, None, None, None)?
+    let results = qasm_sim(qasm).noise(noise).run(1000)?;
+    let results = run_qasm(qasm, 1000, noise, None, None, None)?
     ```
 
 === "Python"
 
     ```python
-    # Note: Python bindings for builders are planned for future release
-    # Currently, use the dataclasses above or the Rust API for advanced configurations
+    from pecos.rslib import GeneralNoiseModelBuilder
 
-    # Future API (not yet available):
-    # noise = (GeneralNoiseModelBuilder()
-    #     .with_prep_probability(0.001)
-    #     .with_meas_0_probability(0.005)
-    #     .with_meas_1_probability(0.01)
-    #     .with_p1_probability(0.0001)
-    #     .with_p2_probability(0.01)
-    #     .build())
+    # Direct builder usage (available now!)
+    noise = (GeneralNoiseModelBuilder()
+        .with_prep_probability(0.001)      # State prep error
+        .with_meas_0_probability(0.005)    # Measurement error |0> → |1>
+        .with_meas_1_probability(0.01)     # Measurement error |1> → |0>
+        .with_p1_probability(0.0001)       # Single-qubit gate error
+        .with_p2_probability(0.01)         # Two-qubit gate error
+        .with_seed(42))                    # Deterministic noise
+
+    # Or use GeneralNoiseFactory for dict/JSON configuration
+    from pecos.rslib import GeneralNoiseFactory
+
+    factory = GeneralNoiseFactory()
+    noise = factory.create_from_dict({
+        "p_prep": 0.001,
+        "p_meas_0": 0.005,
+        "p_meas_1": 0.01,
+        "p1": 0.0001,
+        "p2": 0.01,
+        "seed": 42
+    })
     ```
 
-The builder provides many configuration options:
-- Idle noise rates and models
-- Leakage and emission probabilities
-- Custom Pauli error distributions
-- Crosstalk effects
-- Gate-specific error rates
-- Coherent vs. incoherent noise
+The builder provides many configuration options including idle noise rates, leakage probabilities,
+Pauli error models, and more. For a comprehensive guide to using noise model builders, see the
+[Noise Model Builders Guide](noise-model-builders.md).
 
 ## Choosing the Right Simulation Engine
 
@@ -395,7 +412,7 @@ This example shows how noise affects quantum entanglement:
         let sim = qasm_sim(qasm)
             .seed(42)
             .workers(4)
-            .noise(DepolarizingNoise { p: 0.01 })
+            .noise(DepolarizingNoiseModel::builder().with_uniform_probability(0.01))
             .build()?;
 
         // Run multiple times
@@ -493,10 +510,11 @@ If you're running the same circuit with different parameters:
     // Parse once
     let sim = qasm_sim(qasm).build()?;
 
-    // Run many times
+    // Run many times with different noise levels
     for noise_level in [0.001, 0.01, 0.1] {
-        let noisy_sim = sim.clone().noise(DepolarizingNoise { p: noise_level });
-        let results = noisy_sim.run(1000)?;
+        let noise = DepolarizingNoiseModel::builder()
+            .with_uniform_probability(noise_level);
+        let results = qasm_sim(qasm).noise(noise).run(1000)?;
         analyze_results(results);
     }
     ```
@@ -693,6 +711,34 @@ config = {
 }
 sim = qasm_sim(qasm_code).config(config).build()
 ```
+
+### Advanced Noise Configuration with GeneralNoiseFactory
+
+For complex noise models with many parameters, PECOS provides the `GeneralNoiseFactory` which offers:
+- Dictionary/JSON-based configuration with validation
+- Custom parameter mappings and terminology
+- Safety features like override warnings
+- Comprehensive documentation of available parameters
+
+```python
+from pecos.rslib import GeneralNoiseFactory
+
+# Create noise from dictionary configuration
+factory = GeneralNoiseFactory()
+noise = factory.create_from_dict({
+    "seed": 42,
+    "p1": 0.001,
+    "p2": 0.01,
+    "scale": 1.2,  # Scale all errors by 20%
+    "noiseless_gates": ["H", "MEASURE"],
+    "p1_pauli": {"X": 0.5, "Y": 0.3, "Z": 0.2}
+})
+
+# Use in simulation
+results = qasm_sim(qasm).noise(noise).run(1000)
+```
+
+For detailed information about GeneralNoiseFactory, see the [GeneralNoiseFactory Guide](general-noise-factory.md).
 
 ## Working with Large Circuits
 

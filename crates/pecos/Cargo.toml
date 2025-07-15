@@ -21,9 +21,10 @@ pecos-qsim.workspace = true
 pecos-engines.workspace = true
 pecos-qasm.workspace = true
 pecos-phir-json.workspace = true
-pecos-llvm-runtime = { workspace = true }
+pecos-llvm-runtime.workspace = true
 pecos-hugr-llvm = { path = "../pecos-hugr-llvm" }
-pecos-phir = { workspace = true }
+pecos-phir.workspace = true
+pecos-clib-pcg.workspace = true
 log.workspace = true
 tempfile.workspace = true
 serde_json.workspace = true

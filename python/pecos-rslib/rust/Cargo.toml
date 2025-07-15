@@ -21,7 +21,8 @@ doctest = false
 test = false
 
 [features]
-default = ["hugr-llvm-pipeline"]
+default = ["wasm", "hugr-llvm-pipeline"]
+wasm = []
 
 # LLVM JIT execution: QIR file execution via LLVM JIT compilation
 # TEMPORARILY DISABLED due to pytest environment conflicts and segfaults
@@ -37,7 +38,7 @@ hugr = ["hugr-llvm-pipeline"]
 pyo3 = { workspace=true, features = ["extension-module", "abi3-py310", "generate-import-lib"] }
 pecos = { workspace = true }
 pecos-core = { workspace = true }
-pecos-qasm = { workspace = true }
+pecos-qasm = { workspace = true, features = ["wasm"] }
 pecos-engines = { workspace = true }
 pecos-llvm-runtime = { workspace = true }
 pecos-llvm-sim = { workspace = true }

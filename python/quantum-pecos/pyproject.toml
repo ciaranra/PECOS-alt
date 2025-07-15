@@ -55,6 +55,9 @@ documentation = "https://quantum-pecos.readthedocs.io"
 repository = "https://github.com/PECOS-packages/PECOS"
 
 [project.optional-dependencies]
+qir = [
+    "llvmlite==0.41.0"
+]
 projectq = [  # State-vector sims using ProjectQ
     "pybind11>=2.2.3",
     "projectq>=0.5",
@@ -81,6 +84,7 @@ all = [
     "quantum-pecos[wasm-all]",
     "quantum-pecos[visualization]",
     "quantum-pecos[guppy]",
+    "quantum-pecos[qir]",
 ]
 # The following only work for some environments/Python versions:
 qulacs = [  # State-vector sims using Qulacs

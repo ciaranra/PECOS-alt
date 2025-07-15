@@ -131,7 +131,11 @@ impl DepolarizingNoiseModel {
                 GateType::X
                 | GateType::Y
                 | GateType::Z
+                | GateType::SZ
+                | GateType::SZdg
                 | GateType::H
+                | GateType::T
+                | GateType::Tdg
                 | GateType::R1XY
                 | GateType::U => {
                     NoiseUtils::add_gate_to_builder(&mut builder, gate);
@@ -326,6 +330,7 @@ impl RngManageable for DepolarizingNoiseModel {
 }
 
 /// Builder for creating depolarizing noise models
+#[derive(Debug, Clone)]
 pub struct DepolarizingNoiseModelBuilder {
     p_prep: Option<f64>,
     p_meas: Option<f64>,
@@ -422,12 +427,12 @@ impl DepolarizingNoiseModelBuilder {
     /// Build the depolarizing noise model
     ///
     /// # Returns
-    /// A boxed noise model
+    /// A `DepolarizingNoiseModel` instance
     ///
     /// # Panics
     /// Panics if any probabilities are not set or are not between 0 and 1.
     #[must_use]
-    pub fn build(self) -> Box<dyn NoiseModel> {
+    pub fn build(self) -> DepolarizingNoiseModel {
         let p_prep = self.p_prep.expect("Preparation probability must be set");
         let p_meas = self.p_meas.expect("Measurement probability must be set");
         let p1 = self.p1.expect("Single-qubit probability must be set");
@@ -442,7 +447,7 @@ impl DepolarizingNoiseModelBuilder {
             noise.set_seed(seed).expect("Failed to set seed");
         }
 
-        Box::new(noise)
+        noise
     }
 }
 

@@ -91,7 +91,7 @@ impl SimulationBuilder {
         let num_qubits = classical_engine.num_qubits();
         let noise_model = self
             .noise_model
-            .unwrap_or_else(|| Box::new(PassThroughNoiseModel));
+            .unwrap_or_else(|| Box::new(PassThroughNoiseModel::new()));
 
         let quantum_engine = self
             .quantum_engine

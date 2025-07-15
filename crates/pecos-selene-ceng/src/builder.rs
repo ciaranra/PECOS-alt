@@ -114,7 +114,7 @@ impl NoiseModelConfig {
     /// Create a boxed noise model instance
     fn create_noise_model(self) -> Box<dyn NoiseModel> {
         match self {
-            Self::PassThrough => Box::new(PassThroughNoiseModel),
+            Self::PassThrough => Box::new(PassThroughNoiseModel::new()),
             Self::Depolarizing(p) => Box::new(DepolarizingNoiseModel::new_uniform(p)),
             Self::DepolarizingCustom { p_prep, p_meas, p1, p2 } => {
                 Box::new(DepolarizingNoiseModel::new(p_prep, p_meas, p1, p2))

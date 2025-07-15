@@ -51,7 +51,7 @@ fn test_biased_depolarizing_noise() {
         .build();
 
     // Get distribution after 1000 shots
-    let counts = count_results(uniform_noise, &circ, 1000, 1);
+    let counts = count_results(Box::new(uniform_noise), &circ, 1000, 1);
 
     // With Hadamard, we expect roughly 50% 0s and 50% 1s
     let count_0 = *counts.get("0").unwrap_or(&0);
@@ -82,7 +82,7 @@ fn test_depolarizing_noise() {
         .with_seed(42)
         .build();
 
-    let ideal_counts = count_results(no_noise, &bell_circ, 1000, 2);
+    let ideal_counts = count_results(Box::new(no_noise), &bell_circ, 1000, 2);
 
     // In the ideal case, we expect only 00 and 11 with roughly equal probability
     assert!(
@@ -108,7 +108,7 @@ fn test_depolarizing_noise() {
         .with_seed(42)
         .build();
 
-    let noisy_counts = count_results(moderate_noise, &bell_circ, 1000, 2);
+    let noisy_counts = count_results(Box::new(moderate_noise), &bell_circ, 1000, 2);
 
     // With noise, we expect to see some 01 and 10 results
     assert!(
@@ -126,7 +126,7 @@ fn test_pass_through_noise() {
         .build();
 
     // Create pass-through noise model (no noise)
-    let no_noise = Box::new(PassThroughNoiseModel);
+    let no_noise = Box::new(PassThroughNoiseModel::new());
 
     // Run with 1000 shots
     let counts = count_results(no_noise, &circ, 1000, 1);

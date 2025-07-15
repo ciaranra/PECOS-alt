@@ -21,7 +21,9 @@ pub use engine_system::{
 };
 pub use hybrid::HybridEngine;
 pub use monte_carlo::MonteCarloEngine;
-pub use noise::{DepolarizingNoiseModel, NoiseModel, PassThroughNoiseModel};
+pub use noise::{
+    DepolarizingNoiseModel, NoiseModel, PassThroughNoiseModel, PassThroughNoiseModelBuilder,
+};
 pub use pecos_core::errors::PecosError;
 pub use quantum::QuantumEngine;
 pub use quantum_system::QuantumSystem;
@@ -145,7 +147,8 @@ pub fn run_sim(
     log::debug!("run_sim: Classical engine reports {num_qubits} qubits");
 
     // Use default noise model if none provided
-    let noise_model = noise_model.unwrap_or_else(|| Box::new(PassThroughNoiseModel));
+    let noise_model =
+        noise_model.unwrap_or_else(|| Box::new(PassThroughNoiseModel::builder().build()));
 
     // Create default quantum engine if none provided
     let quantum_engine = quantum_engine.unwrap_or_else(|| {

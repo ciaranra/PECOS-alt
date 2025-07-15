@@ -85,7 +85,7 @@
 pub mod prelude;
 pub mod program;
 
-pub use pecos_qasm::run_qasm_sim;
+pub use pecos_qasm::run_qasm;
 
 use pecos_core::errors::PecosError;
 use pecos_engines::ClassicalControlEngine;

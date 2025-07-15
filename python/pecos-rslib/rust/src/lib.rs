@@ -18,6 +18,9 @@
 
 mod byte_message_bindings;
 mod engine_bindings;
+mod noise_helpers;
+mod pcg_bindings;
+mod phir_json_bridge;
 #[cfg(feature = "hugr-llvm-pipeline")]
 mod hugr_bindings;
 mod llvm_bindings;
@@ -25,7 +28,6 @@ mod llvm_context_bindings;
 mod llvm_execution_guard;
 mod llvm_sim_bindings;
 mod phir_bindings;
-pub mod phir_json_bridge;
 mod qasm_sim_bindings;
 mod sparse_sim;
 mod sparse_stab_bindings;
@@ -68,5 +70,6 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Register LlvmSim functions
     llvm_sim_bindings::register_llvm_sim_module(m)?;
 
+    pcg_bindings::create_pcg_module(m)?;
     Ok(())
 }

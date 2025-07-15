@@ -16,7 +16,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList, PyType};
 
 /// Python wrapper for Rust ByteMessageBuilder
-#[pyclass(name = "ByteMessageBuilder")]
+#[pyclass(name = "ByteMessageBuilder", module = "pecos_rslib._pecos_rslib")]
 pub struct PyByteMessageBuilder {
     inner: ByteMessageBuilder,
 }
@@ -40,12 +40,6 @@ impl PyByteMessageBuilder {
     /// Configure the builder for measurement outcomes
     #[pyo3(text_signature = "($self)")]
     fn for_outcomes(&mut self) {
-        let _ = self.inner.for_outcomes();
-    }
-
-    /// Configure the builder for measurement results (deprecated, use for_outcomes instead)
-    #[pyo3(text_signature = "($self)")]
-    fn for_measurement_results(&mut self) {
         let _ = self.inner.for_outcomes();
     }
 
@@ -137,10 +131,15 @@ impl PyByteMessageBuilder {
     fn reset(&mut self) {
         self.inner.reset();
     }
+
+    #[allow(clippy::unused_self)]
+    fn __repr__(&self) -> String {
+        "ByteMessageBuilder()".to_string()
+    }
 }
 
 /// Python wrapper for Rust ByteMessage
-#[pyclass(name = "ByteMessage")]
+#[pyclass(name = "ByteMessage", module = "pecos_rslib._pecos_rslib")]
 pub struct PyByteMessage {
     inner: ByteMessage,
 }
@@ -165,7 +164,7 @@ impl PyByteMessage {
     #[classmethod]
     fn outcomes_builder(_cls: &Bound<PyType>) -> PyByteMessageBuilder {
         let mut builder = PyByteMessageBuilder::new();
-        builder.for_measurement_results();
+        builder.for_outcomes();
         builder
     }
 
@@ -248,6 +247,17 @@ impl PyByteMessage {
         }
 
         Ok(result_list.into())
+    }
+
+    fn __repr__(&self) -> String {
+        let bytes_len = self.inner.as_bytes().len();
+        format!("ByteMessage(size={bytes_len} bytes)")
+    }
+
+    /// Get the size of the message in bytes
+    #[getter]
+    fn size(&self) -> usize {
+        self.inner.as_bytes().len()
     }
 }
 

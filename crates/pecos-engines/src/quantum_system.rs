@@ -62,7 +62,10 @@ impl QuantumSystem {
     /// A new `QuantumSystem` with the specified engine and a pass-through noise model
     #[must_use]
     pub fn new_without_noise(quantum_engine: Box<dyn QuantumEngine>) -> Self {
-        Self::new(Box::new(PassThroughNoiseModel), quantum_engine)
+        Self::new(
+            Box::new(PassThroughNoiseModel::builder().build()),
+            quantum_engine,
+        )
     }
 
     /// Set a specific seed for all components of the quantum system

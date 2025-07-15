@@ -130,7 +130,7 @@ fn test_run_sim_with_custom_noise_model() {
     let program = QASMProgram::from_str(BELL_STATE_QASM).unwrap();
 
     // Create a custom noise model (PassThroughNoiseModel has no effect)
-    let noise_model = Box::new(PassThroughNoiseModel);
+    let noise_model = Box::new(PassThroughNoiseModel::builder().build());
 
     // Run simulation with custom noise model
     let results = run_sim(

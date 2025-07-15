@@ -68,3 +68,9 @@ pub use pecos_engines::run_sim;
 
 // Re-export ClassicalControlEngine
 pub use pecos_engines::ClassicalControlEngine;
+
+// Re-export PCG RNG functions
+pub use pecos_clib_pcg::{
+    boundedrand as pcg32_boundedrand, frandom as pcg32_frandom, random as pcg32_random,
+    srandom as pcg32_srandom,
+};

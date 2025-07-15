@@ -10,8 +10,6 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-#![allow(unused_variables)]
-
 use super::clifford_gateable::{CliffordGateable, MeasurementResult};
 use crate::quantum_simulator::QuantumSimulator;
 use core::marker::PhantomData;

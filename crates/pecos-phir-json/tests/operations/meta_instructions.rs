@@ -37,12 +37,12 @@ mod tests {
 
         // Initialize simulation, but we'll handle the results manually
         // The simulation may still be useful for debugging, but we'll use manually crafted results
-        let sim_result = run_phir_simulation_from_json(
+        let sim_result = run_phir_simulation_from_json::<pecos_engines::PassThroughNoiseModel, _>(
             phir_json,
             1,
             1,
             None,
-            None::<PassThroughNoiseModel>,
+            None,
             None::<&std::path::Path>,
         );
 

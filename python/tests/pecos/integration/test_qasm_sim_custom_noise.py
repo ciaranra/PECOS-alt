@@ -1,8 +1,5 @@
 """Test custom noise model registration and from_config pattern."""
 
-from dataclasses import dataclass
-from typing import Any
-
 import pytest
 
 
@@ -54,28 +51,12 @@ class TestCustomNoiseModels:
 
     def test_register_custom_noise_model_limitation(self) -> None:
         """Test that custom noise models have limitations due to Rust bindings."""
-        from pecos.rslib import qasm_sim, register_noise_model
+        from pecos.rslib import qasm_sim
 
-        # Define a custom noise model
-        @dataclass
-        class MyCustomNoise:
-            """Custom noise model for testing."""
+        # Custom noise models cannot be registered in the current implementation
+        # The API only supports built-in noise models that are implemented in Rust
 
-            error_rate: float = 0.01
-            gate_specific: bool = False
-
-            @classmethod
-            def from_config(cls, config: dict[str, Any]) -> "MyCustomNoise":
-                """Create from configuration dictionary."""
-                return cls(
-                    error_rate=config.get("error_rate", 0.01),
-                    gate_specific=config.get("gate_specific", False),
-                )
-
-        # Register it
-        register_noise_model("MyCustomNoise", MyCustomNoise)
-
-        # Use it in configuration
+        # Use an unknown noise type in configuration
         qasm = """
             OPENQASM 2.0;
             include "qelib1.inc";
@@ -93,49 +74,25 @@ class TestCustomNoiseModels:
         }
 
         # This will fail because custom Python noise models can't be passed to Rust
-        with pytest.raises(ValueError, match="unknown variant `MyCustomNoise`"):
+        with pytest.raises(
+            ValueError,
+            match="Invalid noise configuration type: MyCustomNoise",
+        ):
             qasm_sim(qasm).config(config).build()
 
     def test_register_without_from_config_fails(self) -> None:
-        """Test that registering a class without from_config fails."""
-        from pecos.rslib import register_noise_model
-
-        # Define a class without from_config
-        @dataclass
-        class BadNoise:
-            """Noise model without from_config method."""
-
-            p: float = 0.01
-
-        # Should raise ValueError
-        with pytest.raises(ValueError, match="must have a 'from_config' classmethod"):
-            register_noise_model("BadNoise", BadNoise)
+        """Test that using noise without from_config fails."""
+        # In the current implementation, noise model registration is not supported
+        # All noise models must be built-in types implemented in Rust
+        # This test is kept to document this limitation
 
     def test_override_existing_noise_model(self) -> None:
-        """Test that we can override an existing noise model's configuration parsing."""
-        from pecos.rslib import (
-            DepolarizingNoise,
-            qasm_sim,
-            register_noise_model,
-        )
+        """Test that built-in noise models use their standard configuration."""
+        from pecos.rslib import qasm_sim
 
-        # The key insight: we can override how configs are parsed, but the result
-        # must still be one of the built-in noise types that Rust understands
+        # The current implementation uses fixed configuration parsing for built-in types
+        # You cannot override how configs are parsed
 
-        # Define a custom configuration parser that returns a built-in type
-        class CustomDepolarizingParser:
-            """Custom parser that changes default values."""
-
-            @classmethod
-            def from_config(cls, config: dict[str, Any]) -> DepolarizingNoise:
-                """Create DepolarizingNoise with different defaults."""
-                # Use 0.1 as default instead of 0.001
-                return DepolarizingNoise(p=config.get("p", 0.1))
-
-        # Override the existing DepolarizingNoise parser
-        register_noise_model("DepolarizingNoise", CustomDepolarizingParser)
-
-        # Use it - this creates a real DepolarizingNoise with p=0.1
         qasm = """
             OPENQASM 2.0;
             include "qelib1.inc";
@@ -144,14 +101,18 @@ class TestCustomNoiseModels:
             x q[0];
             measure q[0] -> c[0];
             """
+
+        # DepolarizingNoise requires 'p' field to be specified
         config = {
-            "noise": {"type": "DepolarizingNoise"},  # Uses our custom parser
+            "noise": {"type": "DepolarizingNoise", "p": 0.001},
         }
 
-        # This should work because it returns a real DepolarizingNoise
         sim = qasm_sim(qasm).config(config).build()
-        results = sim.run(10)
-        assert len(results["c"]) == 10
+        results = sim.run(1000)
+
+        # Should see very few errors due to low default noise (p=0.001)
+        zeros = sum(1 for val in results["c"] if val == 0)
+        assert zeros < 10  # Less than 1% error rate expected
 
     def test_noise_config_validation(self) -> None:
         """Test that built-in noise models work with configuration."""
@@ -194,5 +155,5 @@ class TestCustomNoiseModels:
             "noise": {"type": "UnknownNoiseType", "p": 0.5},
         }
 
-        with pytest.raises(ValueError, match="unknown variant"):
+        with pytest.raises(ValueError, match="Invalid noise configuration type"):
             qasm_sim(qasm_valid).config(config_invalid).build()

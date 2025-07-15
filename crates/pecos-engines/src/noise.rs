@@ -24,11 +24,13 @@ pub mod pass_through;
 pub mod utils;
 pub mod weighted_sampler;
 
-pub use self::biased_depolarizing::BiasedDepolarizingNoiseModel;
-pub use self::depolarizing::DepolarizingNoiseModel;
+pub use self::biased_depolarizing::{
+    BiasedDepolarizingNoiseModel, BiasedDepolarizingNoiseModelBuilder,
+};
+pub use self::depolarizing::{DepolarizingNoiseModel, DepolarizingNoiseModelBuilder};
 pub use self::general::{GeneralNoiseModel, GeneralNoiseModelBuilder};
 pub use self::noise_rng::NoiseRng;
-pub use self::pass_through::PassThroughNoiseModel;
+pub use self::pass_through::{PassThroughNoiseModel, PassThroughNoiseModelBuilder};
 pub use self::utils::{NoiseUtils, ProbabilityValidator};
 pub use self::weighted_sampler::{
     SingleQubitWeightedSampler, TwoQubitWeightedSampler, WeightedSampler,

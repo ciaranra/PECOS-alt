@@ -18,7 +18,7 @@ fn is_gate_with_name(op: &Operation, gate_name: &str) -> bool {
     }
 }
 
-use pecos_qasm::run::run_qasm_sim;
+use pecos_qasm::{prelude::PassThroughNoiseModel, run::run_qasm};
 
 #[test]
 fn test_x_gate_and_measure() {
@@ -91,8 +91,15 @@ fn test_x_gate_and_measure() {
     }
 
     // Now test actual simulation - X gate should flip the qubit from |0⟩ to |1⟩
-    let shot_vec =
-        run_qasm_sim(qasm, 100, Some(42), Some(1), None, None).expect("Failed to run simulation");
+    let shot_vec = run_qasm(
+        qasm,
+        100,
+        PassThroughNoiseModel::builder(),
+        None,
+        Some(1),
+        Some(42),
+    )
+    .expect("Failed to run simulation");
 
     // Verify that qubit 10 is always measured as 1 (since X flips it)
     assert_eq!(shot_vec.len(), 100, "Should have 100 shots");
