@@ -94,6 +94,10 @@ jobs:
     - name: Install pecos-rslib with maturin
       run: |
         cd python/pecos-rslib
+        # On macOS, use system compiler for C dependencies in Rust crates
+        if [[ "${{ matrix.os }}" == "macOS-latest" ]]; then
+          unset CC CXX
+        fi
         uv run maturin develop --uv
 
     - name: Install quantum-pecos
