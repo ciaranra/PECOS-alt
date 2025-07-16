@@ -123,7 +123,7 @@ jobs:
 
         # Lock and sync dependencies
         uv lock --project .
-        uv sync --project .
+        uv sync --project . --all-extras
 
     - name: Fix SQLite for macOS Python 3.13
       if: ${{ matrix.os == 'macOS-latest' && matrix.python-version == '3.13' }}
@@ -132,8 +132,12 @@ jobs:
         # Install the latest SQLite via Homebrew
         brew install sqlite3
 
-        # Use system compiler instead of LLVM for building C extensions
-        unset CC CXX
+        # Save current compiler settings and use system compiler
+        OLD_CC="$CC"
+        OLD_CXX="$CXX"
+        # Use the system clang (not the LLVM one)
+        export CC=/usr/bin/clang
+        export CXX=/usr/bin/clang++
 
         # Set environment variables to use Homebrew's SQLite
         export LDFLAGS="-L$(brew --prefix sqlite3)/lib"
@@ -141,6 +145,10 @@ jobs:
 
         # Build pysqlite3 from source linking against Homebrew's SQLite
         uv pip install --force-reinstall --no-binary :all: pysqlite3
+        
+        # Restore compiler settings
+        export CC="$OLD_CC"
+        export CXX="$OLD_CXX"
 
         # Create a sitecustomize.py to patch sqlite3 imports
         SITE_PACKAGES=$(uv run python -c "import site; print(site.getsitepackages()[0])")
@@ -178,6 +186,10 @@ jobs:
       run: |
         cd python/quantum-pecos
         uv pip install -e .
+        # Verify installation
+        echo "Checking if pecos is installed:"
+        uv pip list | grep -E "(pecos|quantum)" || true
+        uv run python -c "import pecos; print(f'PECOS version: {pecos.__version__}')" || echo "Failed to import pecos"
 
     - name: Run pre-commit checks
       run: uv run pre-commit run --all-files --show-diff-on-failure
@@ -185,17 +197,32 @@ jobs:
     - name: Install test dependencies
       run: |
         cd python/quantum-pecos
+        # For Linux, unset CC/CXX to avoid LLVM LTO issues with llvmlite
+        if [[ "${{ runner.os }}" == "Linux" ]]; then
+          unset CC CXX
+        fi
+        
         # Disable LTO for llvmlite build to avoid gold linker requirement
-        export CFLAGS="${CFLAGS//-flto/}"
-        export CXXFLAGS="${CXXFLAGS//-flto/}"
-        export LDFLAGS="${LDFLAGS//-flto/}"
-        # Also set specific flags to ensure no LTO
-        export LLVMLITE_CXX_FLAGS="-fno-lto"
+        export CFLAGS="-fno-lto"
+        export CXXFLAGS="-fno-lto"
+        export LDFLAGS="-fno-lto"
+        export LLVMLITE_SKIP_LLVM_VERSION_CHECK=1
+        
         uv pip install -e .[all,test]  # Install with both all and test extras
         uv pip install pytest pytest-cov  # Explicitly install test requirements
 
     - name: Run standard tests
       run: |
+        # Debug: Check Python environment
+        echo "Python executable:"
+        uv run which python
+        echo "Python version:"
+        uv run python --version
+        echo "Installed packages:"
+        uv pip list | grep -E "(pecos|quantum|numpy)" || true
+        echo "Python path:"
+        uv run python -c "import sys; print('\n'.join(sys.path))"
+        # Run tests
         uv run pytest python/tests --doctest-modules --junitxml=junit/test-results.xml --cov=pecos --cov-report=xml --cov-report=html
 
     - name: Run optional dependency tests
