@@ -2203,10 +2203,12 @@ dependencies = [
  "pecos-engines",
  "pecos-hugr-llvm",
  "pecos-llvm-runtime",
+ "pecos-llvm-sim",
  "pecos-phir",
  "pecos-phir-json",
  "pecos-qasm",
  "pecos-qsim",
+ "pecos-selene-ceng",
  "serde_json",
  "tempfile",
 ]

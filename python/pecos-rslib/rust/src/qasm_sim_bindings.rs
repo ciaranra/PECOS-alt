@@ -3,16 +3,16 @@
 use crate::noise_helpers::{
     get_optional_bool, get_optional_dict, get_optional_f64, validate_and_convert_seed,
 };
+use crate::shot_results_bindings::shot_vec_to_dict_binary;
 use pecos::prelude::*;
 use pecos_engines::GateType;
 use pecos_engines::noise::{
     BiasedDepolarizingNoiseModel, DepolarizingNoiseModel, GeneralNoiseModel,
     GeneralNoiseModelBuilder, PassThroughNoiseModel,
 };
-use pecos_qasm::simulation::BitVecFormat;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::types::PyDict;
 use std::collections::BTreeMap;
 
 /// Convert `PecosError` to `PyErr`
@@ -1090,75 +1090,15 @@ impl PyQuantumEngineType {
     }
 }
 
+use crate::shot_results_bindings::shot_vec_to_dict_integers;
+
 /// Convert `ShotVec` to columnar format using `ShotMap`
 fn shot_vec_to_columnar_py(
     py: Python<'_>,
     shot_vec: &ShotVec,
-    bit_format: BitVecFormat,
 ) -> PyResult<PyObject> {
-    use pyo3::types::PyBytes;
-
-    // Convert to ShotMap for efficient columnar access
-    let shot_map = shot_vec
-        .try_as_shot_map()
-        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-
-    let py_dict = PyDict::new(py);
-
-    // Get all register names
-    let register_names = shot_map.register_names();
-
-    for reg_name in register_names {
-        let py_list = PyList::empty(py);
-
-        // Check if this is a BitVec register and handle format
-        if bit_format == BitVecFormat::BinaryString {
-            // Try to get as binary strings
-            if let Ok(binary_values) = shot_map.try_bits_as_binary(reg_name) {
-                for val in binary_values {
-                    py_list.append(val.into_pyobject(py)?)?;
-                }
-                py_dict.set_item(reg_name, py_list)?;
-            }
-        } else if let Ok(biguint_values) = shot_map.try_bits_as_biguint(reg_name) {
-            // Default BigInt format
-            for val in biguint_values {
-                let bytes = val.to_bytes_le();
-                let py_int: PyObject = if bytes.is_empty() {
-                    0u32.into_pyobject(py)?.into()
-                } else {
-                    let py_bytes = PyBytes::new(py, &bytes);
-                    let int_type = py.import("builtins")?.getattr("int")?;
-                    int_type
-                        .call_method1("from_bytes", (py_bytes, "little"))?
-                        .into()
-                };
-                py_list.append(py_int)?;
-            }
-            py_dict.set_item(reg_name, py_list)?;
-        } else if let Ok(f64_values) = shot_map.try_f64s(reg_name) {
-            // Handle float registers
-            for val in f64_values {
-                py_list.append(val)?;
-            }
-            py_dict.set_item(reg_name, py_list)?;
-        } else if let Ok(bool_values) = shot_map.try_bools(reg_name) {
-            // Handle boolean registers
-            for val in bool_values {
-                py_list.append(val)?;
-            }
-            py_dict.set_item(reg_name, py_list)?;
-        } else if let Ok(u32_values) = shot_map.try_u32s(reg_name) {
-            // Handle u32 registers
-            for val in u32_values {
-                py_list.append(val)?;
-            }
-            py_dict.set_item(reg_name, py_list)?;
-        }
-        // Skip any registers we can't handle
-    }
-
-    Ok(py_dict.into())
+    // Just use our helper function for default integer format
+    shot_vec_to_dict_integers(py, shot_vec)
 }
 
 /// Run QASM simulation with a more Pythonic interface
@@ -1195,7 +1135,7 @@ pub fn py_run_qasm(
     }
 
     let shot_vec = builder.run(shots).map_err(|e| pecos_error_to_pyerr(&e))?;
-    shot_vec_to_columnar_py(py, &shot_vec, BitVecFormat::BigUint)
+    shot_vec_to_columnar_py(py, &shot_vec)
 }
 
 /// Get available noise models
@@ -1220,6 +1160,7 @@ pub fn py_get_quantum_engines() -> Vec<&'static str> {
 #[pyclass(name = "QasmSimulation", module = "pecos_rslib._pecos_rslib")]
 pub struct PyQasmSimulation {
     inner: QasmSimulation,
+    use_binary_format: bool,  // Store format preference from builder
 }
 
 #[pymethods]
@@ -1230,7 +1171,12 @@ impl PyQasmSimulation {
             .inner
             .run(shots)
             .map_err(|e| pecos_error_to_pyerr(&e))?;
-        shot_vec_to_columnar_py(py, &shot_vec, self.inner.bit_format())
+        
+        if self.use_binary_format {
+            shot_vec_to_dict_binary(py, &shot_vec)
+        } else {
+            shot_vec_to_columnar_py(py, &shot_vec)
+        }
     }
 
     #[allow(clippy::unused_self)]
@@ -1248,7 +1194,7 @@ pub struct PyQasmSimulationBuilder {
     workers: usize,
     noise_model: NoiseModelType,
     quantum_engine: QuantumEngineType,
-    bit_format: BitVecFormat,
+    use_binary_format: bool,  // Store Python preference for conversion
     #[cfg(feature = "wasm")]
     wasm_path: Option<String>,
 }
@@ -1304,7 +1250,7 @@ impl PyQasmSimulationBuilder {
     /// Set the output format to binary strings
     pub fn with_binary_string_format(&self) -> Self {
         let mut new = self.clone();
-        new.bit_format = BitVecFormat::BinaryString;
+        new.use_binary_format = true;
         new
     }
 
@@ -1384,9 +1330,7 @@ impl PyQasmSimulationBuilder {
         if let Some(format_val) = config.get_item("binary_string_format")? {
             if !format_val.is_none() {
                 let use_binary: bool = format_val.extract()?;
-                if use_binary {
-                    new.bit_format = BitVecFormat::BinaryString;
-                }
+                new.use_binary_format = use_binary;
             }
         }
 
@@ -1404,9 +1348,6 @@ impl PyQasmSimulationBuilder {
             builder = builder.seed(s);
         }
 
-        if self.bit_format == BitVecFormat::BinaryString {
-            builder = builder.with_binary_string_format();
-        }
 
         #[cfg(feature = "wasm")]
         if let Some(ref wasm_path) = self.wasm_path {
@@ -1414,7 +1355,10 @@ impl PyQasmSimulationBuilder {
         }
 
         let sim = builder.build().map_err(|e| pecos_error_to_pyerr(&e))?;
-        Ok(PyQasmSimulation { inner: sim })
+        Ok(PyQasmSimulation { 
+            inner: sim,
+            use_binary_format: self.use_binary_format,
+        })
     }
 
     /// Run the simulation directly
@@ -1428,9 +1372,6 @@ impl PyQasmSimulationBuilder {
             builder = builder.seed(s);
         }
 
-        if self.bit_format == BitVecFormat::BinaryString {
-            builder = builder.with_binary_string_format();
-        }
 
         #[cfg(feature = "wasm")]
         if let Some(ref wasm_path) = self.wasm_path {
@@ -1438,7 +1379,14 @@ impl PyQasmSimulationBuilder {
         }
 
         let shot_vec = builder.run(shots).map_err(|e| pecos_error_to_pyerr(&e))?;
-        shot_vec_to_columnar_py(py, &shot_vec, self.bit_format)
+        
+        // Convert based on format preference
+        if self.use_binary_format {
+            use crate::shot_results_bindings::shot_vec_to_dict_binary;
+            shot_vec_to_dict_binary(py, &shot_vec)
+        } else {
+            shot_vec_to_columnar_py(py, &shot_vec)
+        }
     }
 
     fn __repr__(&self) -> String {
@@ -1473,7 +1421,7 @@ impl PyQasmSimulationBuilder {
     /// Check if binary string format is enabled
     #[getter]
     fn is_binary_string_format(&self) -> bool {
-        self.bit_format == BitVecFormat::BinaryString
+        self.use_binary_format
     }
 }
 
@@ -1486,7 +1434,7 @@ pub fn py_qasm_sim(qasm: &str) -> PyQasmSimulationBuilder {
         workers: 1,
         noise_model: NoiseModelType::PassThrough(Box::new(PassThroughNoiseModel::builder())),
         quantum_engine: QuantumEngineType::SparseStabilizer,
-        bit_format: BitVecFormat::BigUint,
+        use_binary_format: false,
         #[cfg(feature = "wasm")]
         wasm_path: None,
     }

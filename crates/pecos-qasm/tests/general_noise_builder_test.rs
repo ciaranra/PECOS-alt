@@ -376,20 +376,16 @@ fn test_general_noise_builder_comparison_with_sim_builder() {
         .workers(2)
         .noise(noise_model)
         .quantum_engine(QuantumEngineType::SparseStabilizer)
-        .with_binary_string_format()
         .build()
         .unwrap();
 
     let results = sim.run(100).unwrap();
     assert_eq!(results.len(), 100);
 
-    // Check binary string format
+    // Check that we got valid results
     let shot_map = results.try_as_shot_map().unwrap();
-    let binary_values = shot_map.try_bits_as_binary("c").unwrap();
-
-    assert_eq!(binary_values.len(), 100);
-    for binary in &binary_values {
-        assert_eq!(binary.len(), 2);
-        assert!(binary.chars().all(|c| c == '0' || c == '1'));
-    }
+    let values = shot_map.try_bits_as_u64("c").unwrap();
+    assert_eq!(values.len(), 100);
+    // All values should be 0-3 (2 bits)
+    assert!(values.iter().all(|&v| v <= 3));
 }

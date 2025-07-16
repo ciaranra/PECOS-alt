@@ -2,17 +2,29 @@
 //!
 //! This module provides a fluent builder API for running QASM simulations
 //! with support for various noise models and quantum engines.
+//!
+//! The implementation now uses the unified simulation API internally while
+//! maintaining backward compatibility with the existing interface.
+//!
+//! ## Implementation Note
+//!
+//! This module is now a thin wrapper around the unified simulation API
+//! (`qasm_engine().to_sim()`). All configuration options are passed through
+//! to the underlying unified builders.
 
-use crate::QASMEngine;
+use crate::engine::QASMEngine;
+use crate::unified_engine_builder::{qasm_engine, QasmEngineBuilder};
 use pecos_core::errors::PecosError;
 use pecos_engines::noise::{
     BiasedDepolarizingNoiseModelBuilder, DepolarizingNoiseModelBuilder, GeneralNoiseModelBuilder,
     NoiseModel, PassThroughNoiseModel, PassThroughNoiseModelBuilder,
 };
 use pecos_engines::quantum::{QuantumEngine, SparseStabEngine, StateVecEngine};
+use pecos_engines::sim_builder::{
+    QuantumEngineType as UnifiedQuantumEngineType, Simulation,
+};
 use pecos_engines::shot_results::ShotVec;
-use pecos_engines::{ClassicalEngine, MonteCarloEngine};
-use std::str::FromStr;
+use pecos_engines::ClassicalControlEngineBuilder;
 
 /// Noise model configuration
 ///
@@ -81,14 +93,6 @@ impl QuantumEngineType {
     }
 }
 
-/// Bit vector format for shot results
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum BitVecFormat {
-    /// Store as `BigUint` (default)
-    BigUint,
-    /// Store as binary strings
-    BinaryString,
-}
 
 // Implement From traits for converting noise builders to NoiseModelType
 
@@ -118,23 +122,10 @@ impl From<GeneralNoiseModelBuilder> for NoiseModelType {
 
 /// A built QASM simulation that can be run multiple times
 pub struct QasmSimulation {
-    engine: QASMEngine,
-    seed: Option<u64>,
-    workers: usize,
-    noise_model: NoiseModelType,
-    quantum_engine_type: QuantumEngineType,
-    bit_format: BitVecFormat,
-    #[cfg(feature = "wasm")]
-    foreign_object: Option<Box<dyn crate::foreign_objects::ForeignObject>>,
+    simulation: Simulation<QASMEngine>,
 }
 
 impl QasmSimulation {
-    /// Get the configured bit vector format
-    #[must_use]
-    pub fn bit_format(&self) -> BitVecFormat {
-        self.bit_format
-    }
-
     /// Run the simulation with the specified number of shots
     ///
     /// This can be called multiple times to run the same simulation
@@ -144,90 +135,21 @@ impl QasmSimulation {
     ///
     /// Returns an error if simulation fails.
     pub fn run(&self, shots: usize) -> Result<ShotVec, PecosError> {
-        let num_qubits = self.engine.num_qubits();
-
-        // Create fresh engine instance for this run
-        #[cfg(feature = "wasm")]
-        let mut engine = self.engine.clone();
-        #[cfg(not(feature = "wasm"))]
-        let engine = self.engine.clone();
-
-        // Initialize and set foreign object if available
-        #[cfg(feature = "wasm")]
-        if let Some(ref foreign_obj) = self.foreign_object {
-            let mut cloned_obj = foreign_obj.clone_box();
-            cloned_obj.init()?;
-            engine.set_foreign_object(cloned_obj);
-        }
-
-        // Get the noise model
-        let noise_model = self.noise_model.clone().create_noise_model();
-
-        // Run simulation
-        let results = match self.quantum_engine_type {
-            QuantumEngineType::StateVector => {
-                if let Some(seed) = self.seed {
-                    let quantum_engine = StateVecEngine::with_seed(num_qubits, seed);
-                    run_qasm_shots(
-                        engine,
-                        quantum_engine,
-                        shots,
-                        noise_model,
-                        self.workers,
-                        Some(seed),
-                    )?
-                } else {
-                    let quantum_engine = StateVecEngine::new(num_qubits);
-                    run_qasm_shots(
-                        engine,
-                        quantum_engine,
-                        shots,
-                        noise_model,
-                        self.workers,
-                        None,
-                    )?
-                }
-            }
-            QuantumEngineType::SparseStabilizer => {
-                if let Some(seed) = self.seed {
-                    let quantum_engine = SparseStabEngine::with_seed(num_qubits, seed);
-                    run_qasm_shots(
-                        engine,
-                        quantum_engine,
-                        shots,
-                        noise_model,
-                        self.workers,
-                        Some(seed),
-                    )?
-                } else {
-                    let quantum_engine = SparseStabEngine::new(num_qubits);
-                    run_qasm_shots(
-                        engine,
-                        quantum_engine,
-                        shots,
-                        noise_model,
-                        self.workers,
-                        None,
-                    )?
-                }
-            }
-        };
-
-        Ok(results)
+        self.simulation.run(shots)
     }
 }
 
 /// Builder for configuring and running QASM simulations
+///
+/// This builder now wraps the unified API internally while maintaining
+/// backward compatibility with the existing interface.
 #[derive(Debug)]
 pub struct QasmSimulationBuilder {
-    qasm: String,
+    engine_builder: QasmEngineBuilder,
     seed: Option<u64>,
     workers: Option<usize>,
     noise_model: Option<NoiseModelType>,
     quantum_engine_type: Option<QuantumEngineType>,
-    bit_format: BitVecFormat,
-    #[cfg(feature = "wasm")]
-    wasm_path: Option<String>,
 }
 
 impl QasmSimulationBuilder {
@@ -235,14 +157,11 @@ impl QasmSimulationBuilder {
     #[must_use]
     pub fn new(qasm: impl Into<String>) -> Self {
         Self {
-            qasm: qasm.into(),
+            engine_builder: qasm_engine().qasm(qasm),
             seed: None,
             workers: None,
             noise_model: None,
             quantum_engine_type: None,
-            bit_format: BitVecFormat::BigUint,
-            #[cfg(feature = "wasm")]
-            wasm_path: None,
         }
     }
 
@@ -263,7 +182,7 @@ impl QasmSimulationBuilder {
     /// Use automatic worker count based on available CPUs
     #[must_use]
     pub fn auto_workers(mut self) -> Self {
-        self.workers = None;
+        self.workers = Some(0); // 0 means auto
         self
     }
 
@@ -284,18 +203,12 @@ impl QasmSimulationBuilder {
         self
     }
 
-    /// Configure output to use binary string format
-    #[must_use]
-    pub fn with_binary_string_format(mut self) -> Self {
-        self.bit_format = BitVecFormat::BinaryString;
-        self
-    }
 
     /// Set the path to a WebAssembly file (.wasm or .wat) for foreign function calls
     #[cfg(feature = "wasm")]
     #[must_use]
     pub fn wasm(mut self, wasm_path: impl Into<String>) -> Self {
-        self.wasm_path = Some(wasm_path.into());
+        self.engine_builder = self.engine_builder.wasm(wasm_path);
         self
     }
 
@@ -305,57 +218,50 @@ impl QasmSimulationBuilder {
     ///
     /// Returns an error if the QASM cannot be parsed.
     pub fn build(self) -> Result<QasmSimulation, PecosError> {
-        let engine = QASMEngine::from_str(&self.qasm)?;
+        // Convert to SimBuilder through the unified API
+        let mut sim_builder = self.engine_builder.to_sim();
 
-        #[cfg(feature = "wasm")]
-        let foreign_object = if let Some(wasm_path) = self.wasm_path {
-            use crate::program::QASMProgram;
-            use crate::wasm_foreign_object::WasmtimeForeignObject;
-            use std::str::FromStr;
+        // Apply seed if specified
+        if let Some(seed) = self.seed {
+            sim_builder = sim_builder.seed(seed);
+        }
 
-            // Create the WASM foreign object
-            let wasm_obj = WasmtimeForeignObject::new(wasm_path)?;
-
-            // Get exported functions from WASM module
-            let exported_functions = wasm_obj.get_exported_functions();
-
-            // Check if init function exists
-            if !exported_functions.contains(&"init".to_string()) {
-                return Err(PecosError::Input(
-                    "WebAssembly module must export an 'init' function".to_string(),
-                ));
-            }
-
-            // Parse the QASM program to extract function calls
-            let program = QASMProgram::from_str(&self.qasm)?;
-            let non_builtin_calls = program.get_non_builtin_function_calls();
-
-            // Validate that all non-builtin function calls exist in WASM module
-            for func_name in non_builtin_calls {
-                if !exported_functions.contains(&func_name) {
-                    return Err(PecosError::Input(format!(
-                        "Function '{func_name}' is called in QASM but not exported by WebAssembly module. Available functions: {exported_functions:?}"
-                    )));
+        // Apply workers configuration
+        match self.workers {
+            Some(0) | None => {
+                // Auto-workers or unspecified (default is 1)
+                if self.workers == Some(0) {
+                    sim_builder = sim_builder.auto_workers();
                 }
             }
+            Some(n) => {
+                sim_builder = sim_builder.workers(n);
+            }
+        }
 
-            Some(Box::new(wasm_obj) as Box<dyn crate::foreign_objects::ForeignObject>)
-        } else {
-            None
-        };
+        // Apply noise model if specified
+        if let Some(noise) = self.noise_model {
+            sim_builder = match noise {
+                NoiseModelType::PassThrough(builder) => sim_builder.noise(*builder),
+                NoiseModelType::Depolarizing(builder) => sim_builder.noise(*builder),
+                NoiseModelType::BiasedDepolarizing(builder) => sim_builder.noise(*builder),
+                NoiseModelType::General(builder) => sim_builder.noise(*builder),
+            };
+        }
 
-        Ok(QasmSimulation {
-            engine,
-            seed: self.seed,
-            workers: self.workers.unwrap_or(1),
-            noise_model: self.noise_model.unwrap_or_default(),
-            quantum_engine_type: self
-                .quantum_engine_type
-                .unwrap_or(QuantumEngineType::SparseStabilizer),
-            bit_format: self.bit_format,
-            #[cfg(feature = "wasm")]
-            foreign_object,
-        })
+        // Apply quantum engine type
+        if let Some(engine_type) = self.quantum_engine_type {
+            let unified_type = match engine_type {
+                QuantumEngineType::StateVector => UnifiedQuantumEngineType::StateVector,
+                QuantumEngineType::SparseStabilizer => UnifiedQuantumEngineType::SparseStabilizer,
+            };
+            sim_builder = sim_builder.quantum_engine(unified_type);
+        }
+
+        // Build the simulation
+        let simulation = sim_builder.build()?;
+
+        Ok(QasmSimulation { simulation })
     }
 
     /// Run the simulation directly with the specified number of shots
@@ -438,21 +344,3 @@ pub fn qasm_sim(qasm: impl Into<String>) -> QasmSimulationBuilder {
     QasmSimulationBuilder::new(qasm)
 }
 
-// Private helper function for running shots
-fn run_qasm_shots<QE: QuantumEngine + 'static>(
-    engine: QASMEngine,
-    quantum_engine: QE,
-    shots: usize,
-    noise_model: Box<dyn NoiseModel>,
-    workers: usize,
-    seed: Option<u64>,
-) -> Result<ShotVec, PecosError> {
-    MonteCarloEngine::run_with_engines(
-        Box::new(engine),
-        noise_model,
-        Box::new(quantum_engine),
-        shots,
-        workers,
-        seed, // pass the seed to MonteCarloEngine
-    )
-}

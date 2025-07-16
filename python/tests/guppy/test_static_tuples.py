@@ -86,8 +86,8 @@ def test_5_tuple() -> tuple[bool, bool, bool, bool, bool]:
     return r1, r2, r3, r4, r5
 
 
-def test_function(name: str, func):
-    """Test a function and report results."""
+def run_function_test(name: str, func):
+    """Helper to test a function and report results."""
     print(f"\nTesting {name}...")
     try:
         results = guppy_sim(func, max_qubits=10).run(5)
@@ -96,6 +96,31 @@ def test_function(name: str, func):
     except Exception as e:
         print(f"  Failed with error: {e}")
         return False
+
+
+def test_1_tuple_return():
+    """Test that 1-tuple (bool) returns work correctly."""
+    assert run_function_test("1-tuple (bool)", test_1_tuple)
+
+
+def test_2_tuple_return():
+    """Test that 2-tuple returns work correctly."""
+    assert run_function_test("2-tuple", test_2_tuple)
+
+
+def test_3_tuple_return():
+    """Test that 3-tuple returns work correctly."""
+    assert run_function_test("3-tuple", test_3_tuple)
+
+
+def test_4_tuple_return():
+    """Test that 4-tuple returns work correctly."""
+    assert run_function_test("4-tuple", test_4_tuple)
+
+
+def test_5_tuple_return():
+    """Test that 5-tuple returns work correctly."""
+    assert run_function_test("5-tuple", test_5_tuple)
 
 
 if __name__ == "__main__":
@@ -110,7 +135,7 @@ if __name__ == "__main__":
     ]
     
     for name, func in tests:
-        success = test_function(name, func)
+        success = run_function_test(name, func)
         if not success:
             print(f"\nFailed at {name}")
             break

@@ -3,6 +3,9 @@
 use pecos_llvm_sim::{llvm_sim, QuantumEngineType, DepolarizingNoise, DepolarizingCustomNoise, BiasedDepolarizingNoise};
 use tempfile::NamedTempFile;
 
+mod common;
+use common::get_register_i64;
+
 /// Simple LLVM IR for a single qubit Hadamard + measurement
 const SIMPLE_HADAMARD_IR: &str = r#"
 define void @main() #0 {
@@ -24,7 +27,7 @@ declare void @__quantum__rt__result_record_output(i8*, i8*)
 attributes #0 = { "EntryPoint" }
 "#;
 
-/// Bell state LLVM IR
+/// Bell state LLVM IR with dynamic qubit allocation
 const BELL_STATE_IR: &str = r#"
 @str_c0 = constant [3 x i8] c"c0\00"
 @str_c1 = constant [3 x i8] c"c1\00"
@@ -88,19 +91,24 @@ fn test_basic_llvm_sim() {
     }
 
     // Basic usage - should work like the simple v2 version
-    let results = llvm_sim()
+    let shot_vec = llvm_sim()
         .llvm_ir(SIMPLE_HADAMARD_IR)
         .seed(42)
+        .max_qubits(1)  // SIMPLE_HADAMARD_IR allocates 1 qubit
         .run(100)
         .expect("Simulation should succeed");
 
-    // Should have some results
-    assert!(!results.is_empty());
+    // Should have 100 shots
+    assert_eq!(shot_vec.len(), 100);
 
-    // Check that we got 100 shots
-    if let Some(values) = results.values().next() {
-        assert_eq!(values.len(), 100);
-    }
+    // Convert to ShotMap for columnar access
+    let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+
+    // Check that we have some register data
+    assert!(!shot_map.register_names().is_empty());
+    
+    // Verify we got 100 measurements for each register
+    assert_eq!(shot_map.num_shots(), 100);
 }
 
 #[test]
@@ -111,13 +119,17 @@ fn test_llvm_sim_with_noise() {
     }
 
     // Run with depolarizing noise
-    let results = llvm_sim()
+    let shot_vec = llvm_sim()
         .llvm_ir(BELL_STATE_IR)
         .seed(42)
         .workers(2)
+        .max_qubits(2)  // BELL_STATE_IR allocates 2 qubits
         .noise(DepolarizingNoise { p: 0.1 }) // 10% error rate
         .run(1000)
         .expect("Simulation with noise should succeed");
+
+    // Convert to ShotMap for columnar access
+    let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
 
     // With noise, we should see some non-perfect correlations in Bell state
     // Count the results
@@ -127,8 +139,8 @@ fn test_llvm_sim_with_noise() {
     let mut count_10 = 0;
 
     // Get the measurement results
-    let c0_results = results.get("c0").expect("Should have c0 results");
-    let c1_results = results.get("c1").expect("Should have c1 results");
+    let c0_results = get_register_i64(&shot_map, "c0").expect("Should have c0 results");
+    let c1_results = get_register_i64(&shot_map, "c1").expect("Should have c1 results");
 
     for i in 0..1000 {
         let c0 = c0_results[i];
@@ -180,9 +192,7 @@ fn test_llvm_sim_parallelization() {
     );
 
     // Should have 10000 results
-    if let Some(values) = results.values().next() {
-        assert_eq!(values.len(), 10000);
-    }
+    assert_eq!(results.len(), 10000);
 }
 
 #[test]
@@ -193,7 +203,7 @@ fn test_llvm_sim_auto_workers() {
     }
 
     // Test with auto workers
-    let results = llvm_sim()
+    let shot_vec = llvm_sim()
         .llvm_ir(SIMPLE_HADAMARD_IR)
         .seed(42)
         .auto_workers() // Automatically detect CPU cores
@@ -201,9 +211,7 @@ fn test_llvm_sim_auto_workers() {
         .expect("Auto-worker simulation should succeed");
 
     // Should have 1000 results
-    if let Some(values) = results.values().next() {
-        assert_eq!(values.len(), 1000);
-    }
+    assert_eq!(shot_vec.len(), 1000);
 }
 
 #[test]
@@ -213,30 +221,83 @@ fn test_llvm_sim_build_once_run_many() {
         return;
     }
 
-    // Build once
+    // Build once with max_qubits set to handle dynamic allocation
     let mut sim = llvm_sim()
         .llvm_ir(BELL_STATE_IR)
         .seed(42)
         .workers(2)
+        .max_qubits(2)  // BELL_STATE_IR allocates 2 qubits
         .noise(DepolarizingNoise { p: 0.01 })
         .verbose(true)
         .build()
         .expect("Build should succeed");
 
     // Run multiple times
-    let results1 = sim.run(100).expect("First run should succeed");
-    let results2 = sim.run(1000).expect("Second run should succeed");
-    let results3 = sim.run(10).expect("Third run should succeed");
+    let shot_vec1 = sim.run(100).expect("First run should succeed");
+    let shot_vec2 = sim.run(1000).expect("Second run should succeed");
+    let shot_vec3 = sim.run(10).expect("Third run should succeed");
 
     // Check results
-    assert_eq!(results1.values().next().unwrap().len(), 100);
-    assert_eq!(results2.values().next().unwrap().len(), 1000);
-    assert_eq!(results3.values().next().unwrap().len(), 10);
+    assert_eq!(shot_vec1.len(), 100);
+    assert_eq!(shot_vec2.len(), 1000);
+    assert_eq!(shot_vec3.len(), 10);
 
     // Check statistics
     let (total_shots, total_runs) = sim.stats();
     assert_eq!(total_shots, 1110);
     assert_eq!(total_runs, 3);
+}
+
+#[test]
+fn test_llvm_sim_max_qubits_exceeded() {
+    if !is_llvm_available() {
+        println!("Skipping test: LLVM tools not available");
+        return;
+    }
+
+    // LLVM IR that tries to allocate 3 qubits
+    const THREE_QUBIT_IR: &str = r#"
+define void @main() #0 {
+%q0 = call i64 @__quantum__rt__qubit_allocate()
+%q1 = call i64 @__quantum__rt__qubit_allocate()
+%q2 = call i64 @__quantum__rt__qubit_allocate()
+call void @__quantum__qis__h__body(i64 %q0)
+call void @__quantum__qis__cx__body(i64 %q0, i64 %q1)
+call void @__quantum__qis__cx__body(i64 %q1, i64 %q2)
+ret void
+}
+
+declare i64 @__quantum__rt__qubit_allocate()
+declare void @__quantum__qis__h__body(i64)
+declare void @__quantum__qis__cx__body(i64, i64)
+
+attributes #0 = { "EntryPoint" }
+"#;
+
+    // Build with max_qubits=2 but try to allocate 3
+    let mut sim = llvm_sim()
+        .llvm_ir(THREE_QUBIT_IR)
+        .seed(42)
+        .max_qubits(2)  // Only allow 2 qubits
+        .verbose(true)  // Enable verbose output to see what's happening
+        .build()
+        .expect("Build should succeed");
+
+    // Run should fail because we try to use qubits beyond the quantum engine's capacity
+    println!("Running simulation that should exceed quantum engine capacity...");
+    let result = sim.run(1);
+    assert!(result.is_err(), "Should fail when using qubits beyond engine capacity");
+    
+    let err = result.unwrap_err();
+    let err_msg = err.to_string();
+    assert!(
+        err_msg.contains("index out of bounds") || 
+        err_msg.contains("qubit") ||
+        err_msg.contains("bound") ||
+        err_msg.contains("limit"),
+        "Error should indicate a bounds/qubit issue, got: {}", 
+        err_msg
+    );
 }
 
 #[test]
@@ -247,7 +308,7 @@ fn test_llvm_sim_quantum_engines() {
     }
 
     // Test with state vector engine (default)
-    let results_sv = llvm_sim()
+    let shot_vec_sv = llvm_sim()
         .llvm_ir(SIMPLE_HADAMARD_IR)
         .seed(42)
         .quantum_engine(QuantumEngineType::StateVector)
@@ -255,7 +316,7 @@ fn test_llvm_sim_quantum_engines() {
         .expect("State vector simulation should succeed");
 
     // Test with sparse stabilizer engine
-    let results_ss = llvm_sim()
+    let shot_vec_ss = llvm_sim()
         .llvm_ir(SIMPLE_HADAMARD_IR)
         .seed(42)
         .quantum_engine(QuantumEngineType::SparseStabilizer)
@@ -263,8 +324,8 @@ fn test_llvm_sim_quantum_engines() {
         .expect("Sparse stabilizer simulation should succeed");
 
     // Both should give valid results
-    assert_eq!(results_sv.values().next().unwrap().len(), 100);
-    assert_eq!(results_ss.values().next().unwrap().len(), 100);
+    assert_eq!(shot_vec_sv.len(), 100);
+    assert_eq!(shot_vec_ss.len(), 100);
 }
 
 #[test]
@@ -275,7 +336,7 @@ fn test_llvm_sim_custom_noise_models() {
     }
 
     // Test custom depolarizing noise with different error rates
-    let results = llvm_sim()
+    let shot_vec = llvm_sim()
         .llvm_ir(BELL_STATE_IR)
         .seed(42)
         .noise(DepolarizingCustomNoise {
@@ -287,17 +348,17 @@ fn test_llvm_sim_custom_noise_models() {
         .run(1000)
         .expect("Custom noise simulation should succeed");
 
-    assert_eq!(results.values().next().unwrap().len(), 1000);
+    assert_eq!(shot_vec.len(), 1000);
 
     // Test biased depolarizing noise
-    let results_biased = llvm_sim()
+    let shot_vec_biased = llvm_sim()
         .llvm_ir(BELL_STATE_IR)
         .seed(42)
         .noise(BiasedDepolarizingNoise { p: 0.02 })
         .run(1000)
         .expect("Biased noise simulation should succeed");
 
-    assert_eq!(results_biased.values().next().unwrap().len(), 1000);
+    assert_eq!(shot_vec_biased.len(), 1000);
 }
 
 #[test]
@@ -313,13 +374,13 @@ fn test_llvm_sim_from_file() {
         .expect("Failed to write LLVM IR");
 
     // Test loading from file
-    let results = llvm_sim()
+    let shot_vec = llvm_sim()
         .llvm_file(temp_file.path())
         .seed(42)
         .run(100)
         .expect("Simulation from file should succeed");
 
-    assert_eq!(results.values().next().unwrap().len(), 100);
+    assert_eq!(shot_vec.len(), 100);
 }
 
 #[test]

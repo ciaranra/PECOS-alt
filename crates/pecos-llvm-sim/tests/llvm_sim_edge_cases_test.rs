@@ -4,6 +4,9 @@ use pecos_llvm_sim::{llvm_sim, DepolarizingNoise, BiasedDepolarizingNoise};
 use std::io::Write;
 use tempfile::NamedTempFile;
 
+mod common;
+use common::get_register_i64;
+
 /// Check if LLVM tools are available
 fn skip_if_no_llvm() -> bool {
     let has_llvm = if cfg!(windows) {
@@ -84,7 +87,7 @@ attributes #0 = { "EntryPoint" }
 
     // Test with large shot count
     let start = std::time::Instant::now();
-    let results = llvm_sim()
+    let shot_vec = llvm_sim()
         .llvm_ir(simple_ir)
         .seed(42)
         .workers(8) // Use multiple workers for speed
@@ -94,10 +97,14 @@ attributes #0 = { "EntryPoint" }
     let elapsed = start.elapsed();
     println!("10,000 shots completed in {:.3}s", elapsed.as_secs_f64());
 
-    assert_eq!(results["r"].len(), 10000);
+    assert_eq!(shot_vec.len(), 10000);
+
+    // Convert to ShotMap for analysis
+    let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+    let r_values = get_register_i64(&shot_map, "r").expect("Should have r register");
 
     // Check distribution
-    let ones = results["r"].iter().filter(|&&v| v == 1).count();
+    let ones = r_values.iter().filter(|&&v| v == 1).count();
     let ratio = ones as f64 / 10000.0;
     println!("Distribution: {:.2}% ones", ratio * 100.0);
     assert!(ratio > 0.45 && ratio < 0.55, "Should be roughly 50/50");
@@ -138,22 +145,24 @@ ret void
 attributes #0 = { "EntryPoint" }
 "#;
 
-    let results = llvm_sim()
+    let shot_vec = llvm_sim()
         .llvm_ir(multi_reg_ir)
         .seed(42)
         .run(100)
         .expect("Multiple registers should work");
 
+    // Convert to ShotMap
+    let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+    let registers = shot_map.register_names();
+
     // Should have three registers
-    assert_eq!(results.len(), 3);
-    assert!(results.contains_key("a"));
-    assert!(results.contains_key("b"));
-    assert!(results.contains_key("c"));
+    assert_eq!(registers.len(), 3);
+    assert!(registers.iter().any(|r| *r == "a"));
+    assert!(registers.iter().any(|r| *r == "b"));
+    assert!(registers.iter().any(|r| *r == "c"));
 
     // Each should have 100 values
-    for (name, values) in &results {
-        assert_eq!(values.len(), 100, "Register {name} should have 100 values");
-    }
+    assert_eq!(shot_map.num_shots(), 100);
 }
 
 #[test]
@@ -192,17 +201,20 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     // Run with biased depolarizing noise
-    let results = llvm_sim()
+    let shot_vec = llvm_sim()
         .llvm_ir(ghz_ir)
         .seed(42)
         .noise(BiasedDepolarizingNoise { p: 0.05 }) // 5% biased noise
         .run(1000)
         .expect("Biased noise simulation should work");
 
+    // Convert to ShotMap and get GHZ values
+    let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+    let ghz_values = get_register_i64(&shot_map, "ghz").expect("Should have ghz register");
+    
     // Count GHZ outcomes
-    let ghz_values = &results["ghz"];
     let mut counts = std::collections::HashMap::new();
-    for &val in ghz_values {
+    for &val in &ghz_values {
         *counts.entry(val).or_insert(0) += 1;
     }
 
@@ -252,28 +264,36 @@ attributes #0 = { "EntryPoint" }
     temp_file.flush().expect("Failed to flush");
 
     // Run from string
-    let results_string = llvm_sim()
+    let shot_vec_string = llvm_sim()
         .llvm_ir(llvm_ir)
         .seed(42)
         .run(100)
         .expect("String source should work");
 
     // Run from file
-    let results_file = llvm_sim()
+    let shot_vec_file = llvm_sim()
         .llvm_file(temp_file.path())
         .seed(42)
         .run(100)
         .expect("File source should work");
 
+    // Convert to ShotMaps for comparison
+    let shot_map_string = shot_vec_string.try_as_shot_map().expect("Should convert");
+    let shot_map_file = shot_vec_file.try_as_shot_map().expect("Should convert");
+    
+    // Get x values from both
+    let x_string = get_register_i64(&shot_map_string, "x").expect("Should have x register");
+    let x_file = get_register_i64(&shot_map_file, "x").expect("Should have x register");
+
     // Results should be identical
     assert_eq!(
-        results_string, results_file,
+        x_string, x_file,
         "String and file sources should produce identical results"
     );
 
     // All should be 1 (X gate flips |0⟩ to |1⟩)
     assert!(
-        results_string["x"].iter().all(|&v| v == 1),
+        x_string.iter().all(|&v| v == 1),
         "X gate should always produce |1⟩"
     );
 }
@@ -306,16 +326,20 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     // Test with 50% noise - should be almost random
-    let results = llvm_sim()
+    let shot_vec = llvm_sim()
         .llvm_ir(simple_ir)
         .seed(42)
         .noise(DepolarizingNoise { p: 0.5 }) // 50% error rate!
         .run(1000)
         .expect("Extreme noise should still work");
 
+    // Convert to ShotMap and get n values
+    let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+    let n_values = get_register_i64(&shot_map, "n").expect("Should have n register");
+
     // Count outcomes
     let mut counts = [0; 4];
-    for &val in &results["n"] {
+    for &val in &n_values {
         counts[val as usize] += 1;
     }
 
@@ -368,9 +392,9 @@ attributes #0 = { "EntryPoint" }
     let run3 = sim.run(50).expect("Run 3 should succeed");
 
     // All runs should have the same size
-    assert_eq!(run1["s"].len(), 50);
-    assert_eq!(run2["s"].len(), 50);
-    assert_eq!(run3["s"].len(), 50);
+    assert_eq!(run1.len(), 50);
+    assert_eq!(run2.len(), 50);
+    assert_eq!(run3.len(), 50);
 
     // Check stats
     let (total_shots, total_runs) = sim.stats();
@@ -392,14 +416,14 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     // Should handle 0 shots gracefully
-    let results = llvm_sim()
+    let shot_vec = llvm_sim()
         .llvm_ir(simple_ir)
         .run(0)
         .expect("Zero shots should be handled");
 
     // Should return empty results
     assert!(
-        results.is_empty() || results.values().all(std::vec::Vec::is_empty),
+        shot_vec.is_empty(),
         "Zero shots should produce empty results"
     );
 }

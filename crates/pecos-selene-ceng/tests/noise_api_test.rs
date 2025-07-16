@@ -7,6 +7,8 @@ use pecos_selene_ceng::{
 };
 use pecos_engines::noise::GeneralNoiseModelBuilder;
 
+mod common;
+
 #[test]
 fn test_noise_method_with_structs() {
     let llvm_ir = r#"
@@ -128,7 +130,7 @@ fn test_noise_api_matches_qasm_sim() {
         .run(100)
         .unwrap();
     
-    assert_eq!(results.num_shots(), 100);
+    assert_eq!(results.len(), 100);
     
     // Can also chain with other methods
     let results = selene_sim()
@@ -140,5 +142,5 @@ fn test_noise_api_matches_qasm_sim() {
         .run(50)
         .unwrap();
     
-    assert_eq!(results.num_shots(), 50);
+    assert_eq!(results.len(), 50);
 }

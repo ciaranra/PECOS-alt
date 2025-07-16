@@ -184,10 +184,11 @@ impl LlvmSim {
     /// Run the simulation directly without building first.
     ///
     /// This is a convenience method that builds and runs the simulation.
+    /// Returns a `ShotVec` containing all shot results.
     pub fn run(
         self,
         shots: usize,
-    ) -> Result<std::collections::HashMap<String, Vec<i64>>, PecosError> {
+    ) -> Result<pecos_engines::shot_results::ShotVec, PecosError> {
         let mut sim = self.build()?;
         sim.run(shots)
     }

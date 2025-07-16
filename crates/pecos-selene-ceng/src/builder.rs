@@ -10,7 +10,7 @@ use crate::{
 };
 use pecos_core::prelude::PecosError;
 use pecos_engines::{
-    ShotMap,
+    ShotVec,
     MonteCarloEngine,
     noise::{
         NoiseModel, PassThroughNoiseModel, DepolarizingNoiseModel, 
@@ -146,7 +146,7 @@ pub struct SeleneSimulation {
 
 impl SeleneSimulation {
     /// Run the simulation with the specified number of shots
-    pub fn run(&self, shots: usize) -> Result<ShotMap, PecosError> {
+    pub fn run(&self, shots: usize) -> Result<ShotVec, PecosError> {
         // Clone the engine for this run
         let classical_engine = self.engine.clone();
         
@@ -173,7 +173,7 @@ impl SeleneSimulation {
             self.seed,
         )?;
         
-        results.try_as_shot_map()
+        Ok(results)
     }
 }
 
@@ -395,7 +395,7 @@ impl SeleneSimBuilder {
     /// 2. Creating the specified quantum engine
     /// 3. Pairing them with a HybridEngine
     /// 4. Running the simulation with MonteCarloEngine for parallelization
-    pub fn run(self, shots: usize) -> Result<ShotMap, PecosError> {
+    pub fn run(self, shots: usize) -> Result<ShotVec, PecosError> {
         // Get configuration values before consuming self
         let num_qubits = self.num_qubits.ok_or(SeleneError::QubitCountNotSpecified)?;
         let seed = self.seed;
@@ -429,8 +429,8 @@ impl SeleneSimBuilder {
             seed,
         )?;
         
-        // Convert ShotVec to ShotMap
-        results.try_as_shot_map()
+        // Return ShotVec directly for consistency with unified API
+        Ok(results)
     }
 }
 
@@ -539,6 +539,6 @@ entry:
             .run(4);  // Reduced from 100 to 4
         
         assert!(results.is_ok());
-        assert_eq!(results.unwrap().num_shots(), 4);
+        assert_eq!(results.unwrap().len(), 4);
     }
 }

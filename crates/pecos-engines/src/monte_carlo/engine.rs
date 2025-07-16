@@ -286,7 +286,30 @@ impl MonteCarloEngine {
 
                 for shot_idx in 0..shots_this_worker {
                     engine.reset()?;
-                    let shot_result = engine.run_shot()?;
+                    
+                    // Catch panics during shot execution and convert to PecosError
+                    let shot_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        engine.run_shot()
+                    }));
+                    
+                    let shot_result = match shot_result {
+                        Ok(Ok(result)) => result,
+                        Ok(Err(e)) => return Err(e),
+                        Err(panic_payload) => {
+                            // Convert panic to PecosError
+                            let panic_msg = if let Some(s) = panic_payload.downcast_ref::<String>() {
+                                s.clone()
+                            } else if let Some(s) = panic_payload.downcast_ref::<&str>() {
+                                s.to_string()
+                            } else {
+                                "Unknown panic occurred during shot execution".to_string()
+                            };
+                            
+                            return Err(PecosError::Processing(format!(
+                                "Shot execution failed: {}", panic_msg
+                            )));
+                        }
+                    };
 
                     // Store with worker/shot indices for deterministic ordering
                     results_vec

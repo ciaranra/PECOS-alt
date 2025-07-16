@@ -3,6 +3,8 @@
 use pecos_selene_ceng::selene_sim;
 use pecos_engines::{ClassicalEngine, ControlEngine};
 
+mod common;
+
 #[test]
 fn test_basic_simulation() {
     // Create a simple quantum program using LLVM IR
@@ -27,8 +29,8 @@ attributes #0 = { "EntryPoint" }
         .run(1);
     
     assert!(result.is_ok());
-    let shot_map = result.unwrap();
-    assert_eq!(shot_map.num_shots(), 1);
+    let shot_vec = result.unwrap();
+    assert_eq!(shot_vec.len(), 1);
 }
 
 #[test]
@@ -57,13 +59,15 @@ attributes #0 = { "EntryPoint" }
         .run(2);  // Reduced from 100 to 2 for debugging
     
     assert!(results.is_ok());
-    let shot_map = results.unwrap();
+    let shot_vec = results.unwrap();
     
     // Should have 2 shots
-    assert_eq!(shot_map.num_shots(), 2);
+    assert_eq!(shot_vec.len(), 2);
     
     // Should have measurement data keys
-    let shot_keys: Vec<_> = shot_map.iter().map(|(key, _)| key).collect();
+    // Convert to ShotMap for register analysis
+    let shot_map = shot_vec.try_as_shot_map().unwrap();
+    let shot_keys: Vec<_> = shot_map.register_names();
     assert!(!shot_keys.is_empty());
 }
 

@@ -25,6 +25,8 @@ pecos-llvm-runtime.workspace = true
 pecos-hugr-llvm = { path = "../pecos-hugr-llvm" }
 pecos-phir.workspace = true
 pecos-clib-pcg.workspace = true
+pecos-llvm-sim = { path = "../pecos-llvm-sim" }
+pecos-selene-ceng = { path = "../pecos-selene-ceng" }
 log.workspace = true
 tempfile.workspace = true
 serde_json.workspace = true

@@ -54,6 +54,7 @@
 
 pub mod selene_engine;
 pub mod builder;
+pub mod engine_builder;
 pub mod error;
 pub mod program;
 
@@ -65,6 +66,7 @@ pub use builder::{
     NoiseModelConfig, QuantumEngineType,
     PassThroughNoise, DepolarizingNoise, DepolarizingCustomNoise, BiasedDepolarizingNoise,
 };
+pub use engine_builder::{selene_engine, SeleneEngineBuilder};
 pub use selene_engine::SeleneEngine;
 pub use error::SeleneError;
 pub use program::SeleneProgram;

@@ -42,7 +42,8 @@ def minimal_3tuple() -> tuple[bool, bool, bool]:
     return r1, r2, r3
 
 
-def test_tuple(name, func):
+def run_tuple_test(name, func):
+    """Helper function to test a tuple-returning function."""
     print(f"\nTesting {name}...")
     try:
         print("  Compiling...")
@@ -58,9 +59,19 @@ def test_tuple(name, func):
         return False
 
 
+def test_3tuple():
+    """Test that 3-tuple returns work correctly."""
+    assert run_tuple_test("3-tuple", minimal_3tuple)
+
+
+def test_4tuple():
+    """Test that 4-tuple returns work correctly."""
+    assert run_tuple_test("4-tuple", minimal_4tuple)
+
+
 if __name__ == "__main__":
     # Test 3-tuple first
-    test_tuple("3-tuple", minimal_3tuple)
+    run_tuple_test("3-tuple", minimal_3tuple)
     
     # Test 4-tuple  
-    test_tuple("4-tuple", minimal_4tuple)
+    run_tuple_test("4-tuple", minimal_4tuple)

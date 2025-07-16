@@ -3,7 +3,7 @@ use log::debug;
 use pecos_core::errors::PecosError;
 use pecos_engines::{
     ClassicalEngine, MonteCarloEngine,
-    shot_results::{Data, Shot},
+    shot_results::{Data, Shot, ShotVec},
 };
 use pecos_llvm_runtime::{LlvmEngine, LlvmEngineConfig};
 use std::collections::HashMap;
@@ -65,10 +65,10 @@ impl LlvmSimulation {
 
     /// Run the simulation for the specified number of shots.
     ///
-    /// Returns a columnar format with register names as keys and vectors of values.
-    pub fn run(&mut self, shots: usize) -> Result<HashMap<String, Vec<i64>>, PecosError> {
+    /// Returns a `ShotVec` containing the results of all shots.
+    pub fn run(&mut self, shots: usize) -> Result<ShotVec, PecosError> {
         if shots == 0 {
-            return Ok(HashMap::new());
+            return Ok(ShotVec::new());
         }
 
         let start = Instant::now();
@@ -107,9 +107,6 @@ impl LlvmSimulation {
             )?
         };
 
-        // Convert to columnar format
-        let columnar = self.shots_to_columnar(shot_vec.shots);
-
         let elapsed = start.elapsed();
         self.total_shots += shots;
         self.total_runs += 1;
@@ -122,7 +119,7 @@ impl LlvmSimulation {
             self.total_runs
         );
 
-        Ok(columnar)
+        Ok(shot_vec)
     }
 
     /// Run with custom quantum engine type.
@@ -132,7 +129,7 @@ impl LlvmSimulation {
         &mut self,
         shots: usize,
         quantum_engine_type: QuantumEngineType,
-    ) -> Result<HashMap<String, Vec<i64>>, PecosError> {
+    ) -> Result<ShotVec, PecosError> {
         // Temporarily override the quantum engine type
         let original_type = self.config.quantum_engine;
         self.config.quantum_engine = quantum_engine_type;
@@ -145,7 +142,7 @@ impl LlvmSimulation {
         result
     }
 
-    /// Convert shot results to columnar format.
+    /// Convert shot results to columnar format (for internal use).
     fn shots_to_columnar(&self, shots: Vec<Shot>) -> HashMap<String, Vec<i64>> {
         let mut columnar = HashMap::new();
 

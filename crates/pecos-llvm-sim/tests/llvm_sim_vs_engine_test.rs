@@ -6,6 +6,9 @@ use pecos_llvm_sim::{llvm_sim, LlvmEngine, DepolarizingNoise};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+mod common;
+use common::get_register_i64;
+
 /// Get the path to the Bell state example
 fn get_bell_path() -> PathBuf {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -55,7 +58,7 @@ fn test_llvm_sim_vs_engine_noiseless() {
     let shots = 100;
 
     // Run with llvm_sim
-    let sim_results = llvm_sim()
+    let sim_shot_vec = llvm_sim()
         .llvm_file(get_bell_path())
         .seed(seed)
         .workers(1) // Single worker for determinism
@@ -77,6 +80,10 @@ fn test_llvm_sim_vs_engine_noiseless() {
     // Compare results
     println!("Comparing llvm_sim vs LlvmEngine (noiseless):");
 
+    // Convert sim results to ShotMap
+    let sim_shot_map = sim_shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+    let sim_c_values = get_register_i64(&sim_shot_map, "c").expect("Should have c register");
+    
     // Convert engine results to columnar format for comparison
     let mut engine_columnar: HashMap<String, Vec<i64>> = HashMap::new();
     for shot in &engine_results.shots {
@@ -91,8 +98,9 @@ fn test_llvm_sim_vs_engine_noiseless() {
     }
 
     // Both should have "c" register
+    let sim_registers = sim_shot_map.register_names();
     assert!(
-        sim_results.contains_key("c"),
+        sim_registers.iter().any(|r| *r == "c"),
         "llvm_sim should have 'c' register"
     );
     assert!(
@@ -101,7 +109,7 @@ fn test_llvm_sim_vs_engine_noiseless() {
     );
 
     // Compare distributions (not exact values due to potential ordering differences)
-    let sim_counts = count_values(&sim_results["c"]);
+    let sim_counts = count_values(&sim_c_values);
     let engine_counts = count_values(&engine_columnar["c"]);
 
     println!("llvm_sim distribution: {sim_counts:?}");
@@ -127,7 +135,7 @@ fn test_llvm_sim_vs_engine_with_noise() {
     let noise_level = 0.1; // 10% depolarizing noise
 
     // Run with llvm_sim
-    let sim_results = llvm_sim()
+    let sim_shot_vec = llvm_sim()
         .llvm_file(get_bell_path())
         .seed(seed)
         .workers(1)
@@ -147,6 +155,10 @@ fn test_llvm_sim_vs_engine_with_noise() {
     )
     .expect("LlvmEngine with noise should succeed");
 
+    // Convert sim results to ShotMap
+    let sim_shot_map = sim_shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+    let sim_c_values = get_register_i64(&sim_shot_map, "c").expect("Should have c register");
+    
     // Convert to columnar and count
     let mut engine_columnar: HashMap<String, Vec<i64>> = HashMap::new();
     for shot in &engine_results.shots {
@@ -160,7 +172,7 @@ fn test_llvm_sim_vs_engine_with_noise() {
         }
     }
 
-    let sim_counts = count_values(&sim_results["c"]);
+    let sim_counts = count_values(&sim_c_values);
     let engine_counts = count_values(&engine_columnar["c"]);
 
     println!("\nComparing llvm_sim vs LlvmEngine (10% noise):");
@@ -211,14 +223,17 @@ fn test_llvm_sim_capabilities_exceed_engine() {
     ];
 
     for (name, level) in noise_models {
-        let results = llvm_sim()
+        let shot_vec = llvm_sim()
             .llvm_file(get_bell_path())
             .seed(42)
             .noise(DepolarizingNoise { p: level })
             .run(100)
             .unwrap_or_else(|_| panic!("{name} should work"));
 
-        let error_count = results["c"].iter().filter(|&&v| v == 1 || v == 2).count();
+        // Convert to ShotMap and get c values
+        let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+        let c_values = get_register_i64(&shot_map, "c").expect("Should have c register");
+        let error_count = c_values.iter().filter(|&&v| v == 1 || v == 2).count();
 
         println!("{name}: {error_count} errors out of 100");
 
@@ -233,7 +248,7 @@ fn test_llvm_sim_capabilities_exceed_engine() {
     for workers in worker_counts {
         let start = std::time::Instant::now();
 
-        let results = llvm_sim()
+        let shot_vec = llvm_sim()
             .llvm_file(get_bell_path())
             .seed(42)
             .workers(workers)
@@ -247,7 +262,7 @@ fn test_llvm_sim_capabilities_exceed_engine() {
             elapsed.as_secs_f64()
         );
 
-        assert_eq!(results["c"].len(), 1000);
+        assert_eq!(shot_vec.len(), 1000);
     }
 
     // 3. Build once, run many with different configurations
@@ -261,10 +276,10 @@ fn test_llvm_sim_capabilities_exceed_engine() {
     // Run multiple times with same configuration
     for i in 1..=5 {
         let shots = i * 100;
-        let results = sim
+        let shot_vec = sim
             .run(shots)
             .unwrap_or_else(|_| panic!("Run {i} should succeed"));
-        assert_eq!(results["c"].len(), shots);
+        assert_eq!(shot_vec.len(), shots);
     }
 
     let (total_shots, total_runs) = sim.stats();

@@ -410,10 +410,8 @@ impl LlvmEngine {
             }
         }
 
-        // Set max_qubits in the runtime if configured
-        if let Some(max_qubits) = self.config.max_qubits {
-            crate::runtime::core_runtime::set_max_qubits(max_qubits);
-        }
+        // Note: max_qubits is now set earlier in generate_commands_impl
+        // to ensure it's configured before any LLVM code runs
 
         // Find and call the entry point function
         // First check if we already know the entry point for this program
@@ -503,7 +501,7 @@ impl LlvmEngine {
             debug!("LLVM: Already processed one shot in this run_shot call, returning None");
             return Ok(None);
         }
-
+        
         // Reset the runtime state at the beginning of command generation
         // This ensures each shot starts with a clean state
         if let Some(ref library) = self.library {
@@ -512,6 +510,12 @@ impl LlvmEngine {
             } else {
                 debug!("LLVM: Reset runtime state for new shot");
             }
+        }
+
+        // Set max_qubits in the runtime AFTER reset but BEFORE any LLVM code runs
+        // This ensures worker threads have the limit set before qubit allocation
+        if let Some(max_qubits) = self.config.max_qubits {
+            crate::runtime::core_runtime::set_max_qubits(max_qubits);
         }
 
         // Set up library if not already done

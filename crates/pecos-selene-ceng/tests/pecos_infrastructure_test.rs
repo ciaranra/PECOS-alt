@@ -13,6 +13,8 @@ use pecos_engines::{
 use pecos_core::prelude::PecosError;
 use std::collections::HashMap;
 
+mod common;
+
 #[test]
 fn test_selene_with_monte_carlo_engine() -> Result<(), PecosError> {
     env_logger::try_init().ok(); // Initialize logging if not already done
@@ -241,12 +243,13 @@ attributes #0 = { "EntryPoint" }
         .run(4); // Reduced from 1000 for performance
     
     assert!(results.is_ok());
-    let shot_map = results?;
+    let shot_vec = results?;
     
-    println!("Parallel execution completed: {} shots", shot_map.num_shots());
-    assert_eq!(shot_map.num_shots(), 4);
+    println!("Parallel execution completed: {} shots", shot_vec.len());
+    assert_eq!(shot_vec.len(), 4);
     
-    // Check distribution of results
+    // Check distribution of results  
+    let shot_map = shot_vec.try_as_shot_map()?;
     let mut outcome_counts = HashMap::new();
     for (outcome, count) in shot_map.iter() {
         outcome_counts.insert(outcome.clone(), count);

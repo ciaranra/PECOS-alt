@@ -82,10 +82,13 @@ attributes #0 = { "EntryPoint" }
         .workers(2)
         .run(10)?;
     
-    println!("✓ Completed {} shots", results.num_shots());
+    println!("✓ Completed {} shots", results.len());
+    
+    // Convert to ShotMap for display
+    let shot_map = results.try_as_shot_map()?;
     
     // Display results
-    for (outcome, count) in results.iter() {
+    for (outcome, count) in shot_map.iter() {
         println!("  Outcome {:?}: {:?} times", outcome, count);
     }
     println!();

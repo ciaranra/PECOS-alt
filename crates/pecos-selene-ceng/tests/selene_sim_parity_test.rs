@@ -6,6 +6,8 @@
 use pecos_selene_ceng::{selene_sim, QuantumEngineType, PassThroughNoise, DepolarizingNoise, DepolarizingCustomNoise, BiasedDepolarizingNoise};
 use pecos_engines::noise::GeneralNoiseModelBuilder;
 
+mod common;
+
 #[test]
 fn test_selene_sim_with_noise_models() {
     let llvm_ir = r#"
@@ -31,7 +33,7 @@ fn test_selene_sim_with_noise_models() {
         .noise(PassThroughNoise)
         .run(10)
         .unwrap();
-    assert_eq!(results.num_shots(), 10);
+    assert_eq!(results.len(), 10);
     
     // Test with depolarizing noise
     let results = selene_sim()
@@ -40,7 +42,7 @@ fn test_selene_sim_with_noise_models() {
         .noise(DepolarizingNoise { p: 0.01 })
         .run(100)
         .unwrap();
-    assert_eq!(results.num_shots(), 100);
+    assert_eq!(results.len(), 100);
     
     // Test with custom depolarizing noise
     let results = selene_sim()
@@ -49,7 +51,7 @@ fn test_selene_sim_with_noise_models() {
         .noise(DepolarizingCustomNoise { p_prep: 0.001, p_meas: 0.002, p1: 0.003, p2: 0.004 })
         .run(50)
         .unwrap();
-    assert_eq!(results.num_shots(), 50);
+    assert_eq!(results.len(), 50);
     
     // Test with biased depolarizing noise
     let results = selene_sim()
@@ -58,7 +60,7 @@ fn test_selene_sim_with_noise_models() {
         .noise(BiasedDepolarizingNoise { p: 0.01 })
         .run(50)
         .unwrap();
-    assert_eq!(results.num_shots(), 50);
+    assert_eq!(results.len(), 50);
     
     // Test with general noise model
     let general_noise = GeneralNoiseModelBuilder::new()
@@ -70,7 +72,7 @@ fn test_selene_sim_with_noise_models() {
         .noise(general_noise)
         .run(50)
         .unwrap();
-    assert_eq!(results.num_shots(), 50);
+    assert_eq!(results.len(), 50);
 }
 
 #[test]
@@ -98,7 +100,7 @@ fn test_selene_sim_with_quantum_engines() {
         .quantum_engine(QuantumEngineType::StateVector)
         .run(10)
         .unwrap();
-    assert_eq!(results.num_shots(), 10);
+    assert_eq!(results.len(), 10);
     
     // Test with sparse stabilizer engine (for Clifford circuits)
     let results = selene_sim()
@@ -107,7 +109,7 @@ fn test_selene_sim_with_quantum_engines() {
         .quantum_engine(QuantumEngineType::SparseStabilizer)
         .run(10)
         .unwrap();
-    assert_eq!(results.num_shots(), 10);
+    assert_eq!(results.len(), 10);
 }
 
 #[test]
@@ -138,7 +140,7 @@ fn test_selene_sim_full_configuration() {
         .run(100)
         .unwrap();
     
-    assert_eq!(results.num_shots(), 100);
+    assert_eq!(results.len(), 100);
     
     // Verify reproducibility with seed
     let results2 = selene_sim()
@@ -154,8 +156,8 @@ fn test_selene_sim_full_configuration() {
     // Both runs with same seed should produce identical results
     // Since the shots should be deterministic with the same seed,
     // we can just compare shot counts as a simple verification
-    assert_eq!(results.num_shots(), 100);
-    assert_eq!(results2.num_shots(), 100);
+    assert_eq!(results.len(), 100);
+    assert_eq!(results2.len(), 100);
     
     // For more detailed comparison, we'd need to know the exact register names
     // which depend on the LLVM IR measurement naming
@@ -190,9 +192,9 @@ fn test_selene_sim_build_once_run_multiple() {
     let results2 = sim.run(100).unwrap();
     let results3 = sim.run(200).unwrap();
     
-    assert_eq!(results1.num_shots(), 50);
-    assert_eq!(results2.num_shots(), 100);
-    assert_eq!(results3.num_shots(), 200);
+    assert_eq!(results1.len(), 50);
+    assert_eq!(results2.len(), 100);
+    assert_eq!(results3.len(), 200);
 }
 
 #[test]

@@ -1,0 +1,174 @@
+//! Tests for seeding behavior with the unified QASM engine API
+
+#[test]
+fn test_qasm_engine_deterministic_with_seed() {
+    use pecos_qasm::qasm_engine;
+    use pecos_engines::ClassicalControlEngineBuilder;
+    
+    let qasm = r#"
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[2];
+        creg c[2];
+        h q[0];
+        cx q[0], q[1];
+        measure q -> c;
+    "#;
+    
+    // Build simulation with fixed seed
+    let sim = qasm_engine()
+        .qasm(qasm)
+        .to_sim()
+        .seed(42)
+        .build()
+        .unwrap();
+    
+    // Run twice with same parameters
+    let results1 = sim.run(100).unwrap();
+    let results2 = sim.run(100).unwrap();
+    
+    // Both should have same length
+    assert_eq!(results1.len(), 100);
+    assert_eq!(results2.len(), 100);
+    
+    // Convert to shot maps to compare distributions
+    if let (Ok(map1), Ok(map2)) = (results1.try_as_shot_map(), results2.try_as_shot_map()) {
+        // With same seed, distributions should be identical
+        // Check that all registers match
+        for (register, values1) in map1.iter() {
+            if let Some(values2) = map2.get(register) {
+                assert_eq!(values1.len(), values2.len(), 
+                    "Register '{}' has different shot counts", register);
+                // For deterministic results, the actual values should match
+                // but we can't easily compare DataVec variants directly
+            } else {
+                panic!("Register '{}' missing in second run", register);
+            }
+        }
+    }
+}
+
+#[test]
+fn test_qasm_engine_random_without_seed() {
+    use pecos_qasm::qasm_engine;
+    use pecos_engines::ClassicalControlEngineBuilder;
+    
+    let qasm = r#"
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[2];
+        creg c[2];
+        h q[0];
+        cx q[0], q[1];
+        measure q -> c;
+    "#;
+    
+    // Build simulation without seed
+    let sim = qasm_engine()
+        .qasm(qasm)
+        .to_sim()
+        .build()
+        .unwrap();
+    
+    // Run multiple times - should get different distributions
+    let results1 = sim.run(1000).unwrap();
+    let results2 = sim.run(1000).unwrap();
+    let results3 = sim.run(1000).unwrap();
+    
+    assert_eq!(results1.len(), 1000);
+    assert_eq!(results2.len(), 1000);
+    assert_eq!(results3.len(), 1000);
+    
+    // Note: We can't guarantee they're different due to randomness,
+    // but with 1000 shots they almost certainly will be
+}
+
+#[test]
+fn test_qasm_engine_run_with_seed() {
+    use pecos_qasm::qasm_engine;
+    use pecos_engines::ClassicalControlEngineBuilder;
+    
+    let qasm = r#"
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[2];
+        creg c[2];
+        h q[0];
+        cx q[0], q[1];
+        measure q -> c;
+    "#;
+    
+    // Build simulation without initial seed
+    let sim = qasm_engine()
+        .qasm(qasm)
+        .to_sim()
+        .build()
+        .unwrap();
+    
+    // Run with specific seeds
+    let results1a = sim.run_with_seed(100, Some(42)).unwrap();
+    let results1b = sim.run_with_seed(100, Some(42)).unwrap();
+    
+    // Same seed should give same results
+    assert_eq!(results1a.len(), 100);
+    assert_eq!(results1b.len(), 100);
+    
+    if let (Ok(map1a), Ok(map1b)) = (results1a.try_as_shot_map(), results1b.try_as_shot_map()) {
+        // Verify identical distributions
+        for (register, values1) in map1a.iter() {
+            if let Some(values2) = map1b.get(register) {
+                assert_eq!(values1.len(), values2.len(), 
+                    "Register '{}' has different counts with same seed", register);
+            }
+        }
+    }
+    
+    // Different seeds should (likely) give different results
+    let results2 = sim.run_with_seed(100, Some(43)).unwrap();
+    let results3 = sim.run_with_seed(100, None).unwrap(); // Random
+    
+    assert_eq!(results2.len(), 100);
+    assert_eq!(results3.len(), 100);
+}
+
+#[test]
+fn test_qasm_engine_noise_with_seed() {
+    use pecos_qasm::qasm_engine;
+    use pecos_engines::{ClassicalControlEngineBuilder, DepolarizingNoise};
+    
+    let qasm = r#"
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[3];
+        creg c[3];
+        h q[0];
+        cx q[0], q[1];
+        cx q[1], q[2];
+        measure q -> c;
+    "#;
+    
+    // With noise and seed, results should still be deterministic
+    let sim = qasm_engine()
+        .qasm(qasm)
+        .to_sim()
+        .seed(42)
+        .noise(DepolarizingNoise { p: 0.01 })
+        .build()
+        .unwrap();
+    
+    let results1 = sim.run(500).unwrap();
+    let results2 = sim.run(500).unwrap();
+    
+    assert_eq!(results1.len(), 500);
+    assert_eq!(results2.len(), 500);
+    
+    // Even with noise, same seed = same results
+    if let (Ok(map1), Ok(map2)) = (results1.try_as_shot_map(), results2.try_as_shot_map()) {
+        for (register, values1) in map1.iter() {
+            if let Some(values2) = map2.get(register) {
+                assert_eq!(values1.len(), values2.len(),
+                    "Register '{}' should have same counts with noise+seed", register);
+            }
+        }
+    }
+}

@@ -214,14 +214,38 @@ impl PyLlvmSimBuilder {
 
     /// Run the simulation
     pub fn run(&self, py: Python<'_>, shots: usize) -> PyResult<PyObject> {
-        let results = self.builder.clone().run(shots)
+        let shot_vec = self.builder.clone().run(shots)
             .map_err(|e| PyRuntimeError::new_err(format!("Simulation failed: {e}")))?;
         
-        // Convert HashMap<String, Vec<i32>> to Python dict
+        // Convert ShotVec to ShotMap then to Python dict
+        let shot_map = shot_vec.try_as_shot_map()
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to convert to ShotMap: {e}")))?;
+        
         let py_dict = PyDict::new(py);
-        for (key, values) in results {
-            let py_list = PyList::new(py, values)?;
-            py_dict.set_item(key, py_list)?;
+        for register in shot_map.register_names() {
+            // Try to get as BitVec first (most common for quantum registers)
+            if let Ok(values) = shot_map.try_bits_as_u64(&register) {
+                let i64_values: Vec<i64> = values.into_iter().map(|v| v as i64).collect();
+                let py_list = PyList::new(py, i64_values)?;
+                py_dict.set_item(register, py_list)?;
+            }
+            // Try as i64 directly
+            else if let Ok(values) = shot_map.try_i64s(&register) {
+                let py_list = PyList::new(py, values)?;
+                py_dict.set_item(register, py_list)?;
+            }
+            // Try as u32 and convert
+            else if let Ok(values) = shot_map.try_u32s(&register) {
+                let i64_values: Vec<i64> = values.into_iter().map(|v| v as i64).collect();
+                let py_list = PyList::new(py, i64_values)?;
+                py_dict.set_item(register, py_list)?;
+            }
+            // Default to zeros if we can't convert
+            else {
+                let zeros = vec![0i64; shot_map.num_shots()];
+                let py_list = PyList::new(py, zeros)?;
+                py_dict.set_item(register, py_list)?;
+            }
         }
         Ok(py_dict.into())
     }
@@ -237,14 +261,38 @@ pub struct PyLlvmSimulation {
 impl PyLlvmSimulation {
     /// Run the simulation
     pub fn run(&mut self, py: Python<'_>, shots: usize) -> PyResult<PyObject> {
-        let results = self.simulation.run(shots)
+        let shot_vec = self.simulation.run(shots)
             .map_err(|e| PyRuntimeError::new_err(format!("Simulation failed: {e}")))?;
         
-        // Convert HashMap<String, Vec<i32>> to Python dict
+        // Convert ShotVec to ShotMap then to Python dict
+        let shot_map = shot_vec.try_as_shot_map()
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to convert to ShotMap: {e}")))?;
+        
         let py_dict = PyDict::new(py);
-        for (key, values) in results {
-            let py_list = PyList::new(py, values)?;
-            py_dict.set_item(key, py_list)?;
+        for register in shot_map.register_names() {
+            // Try to get as BitVec first (most common for quantum registers)
+            if let Ok(values) = shot_map.try_bits_as_u64(&register) {
+                let i64_values: Vec<i64> = values.into_iter().map(|v| v as i64).collect();
+                let py_list = PyList::new(py, i64_values)?;
+                py_dict.set_item(register, py_list)?;
+            }
+            // Try as i64 directly
+            else if let Ok(values) = shot_map.try_i64s(&register) {
+                let py_list = PyList::new(py, values)?;
+                py_dict.set_item(register, py_list)?;
+            }
+            // Try as u32 and convert
+            else if let Ok(values) = shot_map.try_u32s(&register) {
+                let i64_values: Vec<i64> = values.into_iter().map(|v| v as i64).collect();
+                let py_list = PyList::new(py, i64_values)?;
+                py_dict.set_item(register, py_list)?;
+            }
+            // Default to zeros if we can't convert
+            else {
+                let zeros = vec![0i64; shot_map.num_shots()];
+                let py_list = PyList::new(py, zeros)?;
+                py_dict.set_item(register, py_list)?;
+            }
         }
         Ok(py_dict.into())
     }

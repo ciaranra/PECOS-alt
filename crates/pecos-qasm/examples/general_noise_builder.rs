@@ -127,7 +127,6 @@ fn main() {
         .workers(2)
         .noise(noise_model)
         .quantum_engine(QuantumEngineType::SparseStabilizer)
-        .with_binary_string_format()
         .build()
         .unwrap();
 

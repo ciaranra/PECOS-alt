@@ -33,6 +33,7 @@ let results = llvm_sim()
 
 pub mod builder;
 pub mod config;
+pub mod engine_builder;
 pub mod simulation;
 pub mod source;
 
@@ -42,6 +43,7 @@ pub use config::{
     NoiseModelConfig, QuantumEngineType,
     PassThroughNoise, DepolarizingNoise, DepolarizingCustomNoise, BiasedDepolarizingNoise,
 };
+pub use engine_builder::{llvm_engine, LlvmEngineBuilder};
 pub use simulation::LlvmSimulation;
 pub use source::LlvmSource;
 

@@ -1,6 +1,7 @@
 pub mod byte_message;
 pub mod classical;
 pub mod engine;
+pub mod engine_builder;
 pub mod engine_system;
 pub mod hybrid;
 pub mod monte_carlo;
@@ -9,6 +10,7 @@ pub mod prelude;
 pub mod quantum;
 pub mod quantum_system;
 pub mod shot_results;
+pub mod sim_builder;
 pub mod simulation_builder;
 
 #[cfg(test)]
@@ -33,6 +35,12 @@ pub use shot_results::{
     ShotMapDisplayOptions, ShotVec,
 };
 pub use simulation_builder::{SimulationBuilder, run_sim_safe};
+pub use engine_builder::ClassicalControlEngineBuilder;
+pub use sim_builder::{
+    SimBuilder, SimConfig, Simulation, QuantumEngineType,
+    PassThroughNoise, DepolarizingNoise, DepolarizingCustomNoise, BiasedDepolarizingNoise,
+    shots_to_columnar,
+};
 
 /// Run a quantum simulation.
 ///

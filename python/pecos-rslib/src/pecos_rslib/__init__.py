@@ -25,6 +25,10 @@ from pecos_rslib._pecos_rslib import ByteMessageBuilder
 from pecos_rslib._pecos_rslib import StateVecEngineRs
 from pecos_rslib._pecos_rslib import SparseStabEngineRs
 
+# Shot result types
+from pecos_rslib._pecos_rslib import ShotVec
+from pecos_rslib._pecos_rslib import ShotMap
+
 # QASM simulation exports
 from pecos_rslib._pecos_rslib import NoiseModel
 from pecos_rslib._pecos_rslib import QuantumEngine
@@ -142,6 +146,9 @@ __all__ = [
     "ByteMessageBuilder",
     "StateVecEngineRs",
     "SparseStabEngineRs",
+    # Shot result types
+    "ShotVec",
+    "ShotMap",
     # QASM simulation
     "NoiseModel",
     "QuantumEngine",

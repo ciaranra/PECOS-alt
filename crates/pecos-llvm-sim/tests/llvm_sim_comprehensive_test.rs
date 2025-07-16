@@ -7,6 +7,9 @@ use pecos_llvm_sim::{llvm_sim, QuantumEngineType, DepolarizingNoise, Depolarizin
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+mod common;
+use common::get_register_i64;
+
 /// Get the path to the Bell state example
 fn get_bell_path() -> PathBuf {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -71,7 +74,7 @@ fn test_llvm_sim_bell_state_immediate_measurement() {
     }
 
     // Run Bell state with llvm_sim (matches test_bell_state_immediate_measurement)
-    let results = llvm_sim()
+    let shot_vec = llvm_sim()
         .llvm_file(get_bell_path())
         .seed(42) // Use seed for reproducibility
         .workers(2) // Match the original test
@@ -81,13 +84,12 @@ fn test_llvm_sim_bell_state_immediate_measurement() {
     // Process results
     let mut counts: HashMap<i64, usize> = HashMap::new();
 
-    // llvm_sim returns columnar format
-    if let Some(c_values) = results.get("c") {
-        for &value in c_values {
-            *counts.entry(value).or_insert(0) += 1;
-        }
-    } else {
-        panic!("Expected 'c' register in results");
+    // Convert to ShotMap for columnar access
+    let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+    let c_values = get_register_i64(&shot_map, "c").expect("Should have c register");
+    
+    for &value in &c_values {
+        *counts.entry(value).or_insert(0) += 1;
     }
 
     // Print the counts for debugging
@@ -98,7 +100,7 @@ fn test_llvm_sim_bell_state_immediate_measurement() {
 
     // Verify results
     assert_eq!(
-        results.values().next().unwrap().len(),
+        shot_vec.len(),
         100,
         "Expected 100 shots"
     );
@@ -125,7 +127,7 @@ fn test_llvm_sim_qprog_adaptive_algorithm() {
     }
 
     // Run adaptive algorithm with llvm_sim (matches test_qprog_adaptive_algorithm)
-    let results = llvm_sim()
+    let shot_vec = llvm_sim()
         .llvm_file(get_qprog_path())
         .seed(42)
         .workers(2)
@@ -133,19 +135,23 @@ fn test_llvm_sim_qprog_adaptive_algorithm() {
         .expect("Adaptive algorithm execution should succeed");
 
     // Verify we get results
-    assert!(!results.is_empty(), "Expected non-empty results");
+    assert!(!shot_vec.is_empty(), "Expected non-empty results");
+
+    // Convert to ShotMap for columnar access
+    let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+    let registers = shot_map.register_names();
 
     // Check that we have the expected result registers
     assert!(
-        results.contains_key("result_0"),
+        registers.iter().any(|r| *r == "result_0"),
         "Expected 'result_0' register"
     );
     assert!(
-        results.contains_key("result_1"),
+        registers.iter().any(|r| *r == "result_1"),
         "Expected 'result_1' register"
     );
     assert!(
-        results.contains_key("result_2"),
+        registers.iter().any(|r| *r == "result_2"),
         "Expected 'result_2' register"
     );
 
@@ -154,16 +160,15 @@ fn test_llvm_sim_qprog_adaptive_algorithm() {
     let mut result_1_counts: HashMap<i64, usize> = HashMap::new();
     let mut result_2_counts: HashMap<i64, usize> = HashMap::new();
 
+    // Get values for each register
+    let result_0_values = get_register_i64(&shot_map, "result_0").expect("Should have result_0");
+    let result_1_values = get_register_i64(&shot_map, "result_1").expect("Should have result_1");
+    let result_2_values = get_register_i64(&shot_map, "result_2").expect("Should have result_2");
+
     for i in 0..50 {
-        if let Some(val) = results["result_0"].get(i) {
-            *result_0_counts.entry(*val).or_insert(0) += 1;
-        }
-        if let Some(val) = results["result_1"].get(i) {
-            *result_1_counts.entry(*val).or_insert(0) += 1;
-        }
-        if let Some(val) = results["result_2"].get(i) {
-            *result_2_counts.entry(*val).or_insert(0) += 1;
-        }
+        *result_0_counts.entry(result_0_values[i]).or_insert(0) += 1;
+        *result_1_counts.entry(result_1_values[i]).or_insert(0) += 1;
+        *result_2_counts.entry(result_2_values[i]).or_insert(0) += 1;
     }
 
     // Print results for debugging
@@ -200,16 +205,16 @@ fn test_llvm_sim_single_worker() {
     }
 
     // Test with single worker (matches test_llvm_bell_state_single_worker)
-    let results = llvm_sim()
+    let shot_vec = llvm_sim()
         .llvm_file(get_bell_path())
         .workers(1) // Single worker
         .run(10)
         .expect("Single worker execution should succeed");
 
-    assert!(!results.is_empty(), "Expected non-empty results");
+    assert!(!shot_vec.is_empty(), "Expected non-empty results");
     println!(
         "Single-threaded llvm_sim execution succeeded with {} shots",
-        results.values().next().unwrap().len()
+        shot_vec.len()
     );
 }
 
@@ -224,7 +229,7 @@ fn test_llvm_sim_with_uniform_depolarizing_noise() {
     }
 
     // Test Bell state with significant noise
-    let results = llvm_sim()
+    let shot_vec = llvm_sim()
         .llvm_file(get_bell_path())
         .seed(42)
         .workers(4)
@@ -232,12 +237,13 @@ fn test_llvm_sim_with_uniform_depolarizing_noise() {
         .run(1000)
         .expect("Noisy simulation should succeed");
 
-    // Count results
+    // Convert to ShotMap and count results
+    let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+    let c_values = get_register_i64(&shot_map, "c").expect("Should have c register");
+    
     let mut counts: HashMap<i64, usize> = HashMap::new();
-    if let Some(c_values) = results.get("c") {
-        for &value in c_values {
-            *counts.entry(value).or_insert(0) += 1;
-        }
+    for &value in &c_values {
+        *counts.entry(value).or_insert(0) += 1;
     }
 
     println!("Bell state with 20% depolarizing noise:");
@@ -267,7 +273,7 @@ fn test_llvm_sim_with_custom_depolarizing_noise() {
     }
 
     // Test with custom noise parameters
-    let results = llvm_sim()
+    let shot_vec = llvm_sim()
         .llvm_file(get_bell_path())
         .seed(42)
         .noise(DepolarizingCustomNoise {
@@ -280,7 +286,8 @@ fn test_llvm_sim_with_custom_depolarizing_noise() {
         .expect("Custom noise simulation should succeed");
 
     // With higher two-qubit gate error, we should see more errors
-    let c_values = &results["c"];
+    let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+    let c_values = get_register_i64(&shot_map, "c").expect("Should have c register");
     let error_count = c_values.iter().filter(|&&v| v == 1 || v == 2).count();
 
     println!("Custom noise model results:");
@@ -305,7 +312,7 @@ fn test_llvm_sim_parallel_execution_scaling() {
     for workers in worker_counts {
         let start = std::time::Instant::now();
 
-        let results = llvm_sim()
+        let shot_vec = llvm_sim()
             .llvm_file(get_bell_path())
             .seed(42)
             .workers(workers)
@@ -319,7 +326,7 @@ fn test_llvm_sim_parallel_execution_scaling() {
             workers,
             elapsed.as_secs_f64()
         );
-        assert_eq!(results.values().next().unwrap().len(), 1000);
+        assert_eq!(shot_vec.len(), 1000);
     }
 }
 
@@ -336,7 +343,7 @@ fn test_llvm_sim_quantum_engines() {
     ];
 
     for (name, engine_type) in engines {
-        let results = llvm_sim()
+        let shot_vec = llvm_sim()
             .llvm_file(get_bell_path())
             .seed(42)
             .quantum_engine(engine_type)
@@ -346,17 +353,18 @@ fn test_llvm_sim_quantum_engines() {
         println!(
             "{} engine: {} results",
             name,
-            results.values().next().unwrap().len()
+            shot_vec.len()
         );
 
         // Verify Bell state results
-        if let Some(c_values) = results.get("c") {
-            for &value in c_values {
-                assert!(
-                    value == 0 || value == 3,
-                    "{name} engine: Expected Bell state results"
-                );
-            }
+        let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+        let c_values = get_register_i64(&shot_map, "c").expect("Should have c register");
+        
+        for &value in &c_values {
+            assert!(
+                value == 0 || value == 3,
+                "{name} engine: Expected Bell state results"
+            );
         }
     }
 }
@@ -381,10 +389,10 @@ fn test_llvm_sim_build_once_run_many() {
     let mut total_shots = 0;
 
     for (i, &shots) in shot_counts.iter().enumerate() {
-        let results = sim
+        let shot_vec = sim
             .run(shots)
             .unwrap_or_else(|_| panic!("Run {} should succeed", i + 1));
-        assert_eq!(results.values().next().unwrap().len(), shots);
+        assert_eq!(shot_vec.len(), shots);
         total_shots += shots;
     }
 
@@ -420,17 +428,21 @@ define void @main() #0 {
 attributes #0 = { "EntryPoint" }
 "#;
 
-    let results = llvm_sim()
+    let shot_vec = llvm_sim()
         .llvm_ir(llvm_ir)
         .seed(42)
         .run(100)
         .expect("In-memory LLVM IR should work");
 
-    assert!(results.contains_key("result"));
-    assert_eq!(results["result"].len(), 100);
+    // Convert to ShotMap
+    let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+    let registers = shot_map.register_names();
+    assert!(registers.iter().any(|r| *r == "result"));
+    assert_eq!(shot_vec.len(), 100);
 
     // Should be roughly 50/50 distribution
-    let ones = results["result"].iter().filter(|&&v| v == 1).count();
+    let result_values = get_register_i64(&shot_map, "result").expect("Should have result register");
+    let ones = result_values.iter().filter(|&&v| v == 1).count();
     println!("In-memory Hadamard: {ones} ones out of 100");
     assert!(
         ones > 30 && ones < 70,
@@ -447,23 +459,30 @@ fn test_llvm_sim_reproducibility_with_seed() {
     // Run twice with same seed
     let seed = 12345;
 
-    let results1 = llvm_sim()
+    let shot_vec1 = llvm_sim()
         .llvm_file(get_bell_path())
         .seed(seed)
         .workers(1) // Single worker for determinism
         .run(100)
         .expect("First run should succeed");
 
-    let results2 = llvm_sim()
+    let shot_vec2 = llvm_sim()
         .llvm_file(get_bell_path())
         .seed(seed)
         .workers(1) // Single worker for determinism
         .run(100)
         .expect("Second run should succeed");
 
+    // Convert to ShotMaps for comparison
+    let shot_map1 = shot_vec1.try_as_shot_map().expect("Should convert to ShotMap");
+    let shot_map2 = shot_vec2.try_as_shot_map().expect("Should convert to ShotMap");
+    
+    let c_values1 = get_register_i64(&shot_map1, "c").expect("Should have c register");
+    let c_values2 = get_register_i64(&shot_map2, "c").expect("Should have c register");
+
     // Results should be identical
     assert_eq!(
-        results1["c"], results2["c"],
+        c_values1, c_values2,
         "Same seed should produce identical results"
     );
 
@@ -502,7 +521,7 @@ fn test_llvm_sim_verbose_and_debug_options() {
     }
 
     // Test with verbose and debug options
-    let results = llvm_sim()
+    let shot_vec = llvm_sim()
         .llvm_file(get_bell_path())
         .verbose(true)
         .debug(true)
@@ -510,6 +529,6 @@ fn test_llvm_sim_verbose_and_debug_options() {
         .run(10)
         .expect("Verbose/debug run should succeed");
 
-    assert_eq!(results.values().next().unwrap().len(), 10);
+    assert_eq!(shot_vec.len(), 10);
     println!("Verbose/debug test completed");
 }
