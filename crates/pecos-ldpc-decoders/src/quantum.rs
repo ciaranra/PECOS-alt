@@ -27,7 +27,7 @@ pub enum PauliError {
 ///
 /// Unlike classical decoders that handle X and Z syndromes separately,
 /// MBP considers X, Y, and Z errors simultaneously using:
-/// - GF(4) arithmetic for Pauli operators  
+/// - GF(4) arithmetic for Pauli operators
 /// - Three-channel message passing for correlated X, Y, Z errors
 /// - Joint decoding that exploits Y = iXZ relationships
 /// - Quantum-specific noise models with XYZ bias
@@ -87,11 +87,11 @@ impl MbpDecoder {
 
         // Create sparse matrix representations
         let hx_repr = hx.to_ffi_repr();
-        let hz_repr = hz.to_ffi_repr();
+        let hz_matrix_repr = hz.to_ffi_repr();
 
         let inner = ffi::create_mbp_decoder(
             &hx_repr,
-            &hz_repr,
+            &hz_matrix_repr,
             error_rate,
             &normalized_bias,
             i32::try_from(max_iter).unwrap_or(i32::MAX),
@@ -220,7 +220,7 @@ impl MbpDecoder {
 pub struct CssCode {
     /// X stabilizer matrix
     pub hx: SparseMatrix,
-    /// Z stabilizer matrix  
+    /// Z stabilizer matrix
     pub hz: SparseMatrix,
     /// Number of qubits
     pub n: usize,
@@ -260,20 +260,20 @@ impl CssCode {
         let mut gf4_pcm = Array2::zeros((self.mx + self.mz, self.n));
 
         // Add Z stabilizers (value 3)
-        let hz_matrix = self.hz.to_dense();
+        let z_check_matrix = self.hz.to_dense();
         for i in 0..self.mz {
             for j in 0..self.n {
-                if hz_matrix[[i, j]] == 1 {
+                if z_check_matrix[[i, j]] == 1 {
                     gf4_pcm[[i, j]] = 3;
                 }
             }
         }
 
         // Add X stabilizers (value 1)
-        let hx_matrix = self.hx.to_dense();
+        let x_check_matrix = self.hx.to_dense();
         for i in 0..self.mx {
             for j in 0..self.n {
-                if hx_matrix[[i, j]] == 1 {
+                if x_check_matrix[[i, j]] == 1 {
                     gf4_pcm[[self.mz + i, j]] = 1;
                 }
             }

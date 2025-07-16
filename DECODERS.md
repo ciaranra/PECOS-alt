@@ -12,7 +12,7 @@ The LDPC decoders come from external open-source projects developed by the quant
 
 ### LDPC Decoders (`pecos-ldpc-decoders`)
 - **Description**: Low-Density Parity-Check decoders for quantum error correction
-- **Algorithms**: 
+- **Algorithms**:
   - BP-OSD (Belief Propagation with Ordered Statistics Decoding)
   - BP-LSD (Belief Propagation with Localized Statistics Decoding)
   - MBP (Min-sum Belief Propagation)

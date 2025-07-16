@@ -42,7 +42,7 @@ Advanced belief propagation and ordered statistics decoding algorithms for LDPC 
     ```
 
     !!! note "Decoder Availability"
-        Decoder availability in Python depends on the specific Python package. 
+        Decoder availability in Python depends on the specific Python package.
         Some decoders may only be available through the Rust interface.
 
 === "Rust"
@@ -114,11 +114,11 @@ Before using decoders, you need a quantum error correction code. Here are common
         let hx_rows = vec![0, 1, 0, 1];
         let hx_cols = vec![0, 2, 1, 3];
         let hx = SparseMatrix::new(2, 4, hx_rows, hx_cols)?;
-        
+
         let hz_rows = vec![0, 1, 0, 1];
         let hz_cols = vec![0, 1, 2, 3];
         let hz = SparseMatrix::new(2, 4, hz_rows, hz_cols)?;
-        
+
         Ok(CssCode::new(hx, hz)?)
     }
     ```
@@ -281,7 +281,7 @@ Use log-likelihood ratios for improved decoding performance.
 
     ```python
     decoder = decoders.SoftInfoBpDecoder(hx, hz)
-    
+
     # Provide soft information (LLRs)
     llrs = [0.1, -0.5, 0.8, -0.2]  # Log-likelihood ratios
     result = decoder.decode_with_llrs(syndrome, llrs)
@@ -291,7 +291,7 @@ Use log-likelihood ratios for improved decoding performance.
 
     ```rust
     let mut decoder = SoftInfoBpDecoder::new(css_code);
-    
+
     // Provide soft information
     let llrs = vec![0.1, -0.5, 0.8, -0.2];
     let result = decoder.decode_with_llrs(&syndrome, &llrs)?;
@@ -310,7 +310,7 @@ Decode multiple syndromes efficiently.
         [0, 1, 0, 1],
         [1, 1, 0, 0],
     ]
-    
+
     results = decoder.decode_batch(syndromes)
     for i, result in enumerate(results):
         print(f"Syndrome {i}: {result.correction}")
@@ -320,13 +320,13 @@ Decode multiple syndromes efficiently.
 
     ```rust
     use pecos_decoders::BatchDecoder;
-    
+
     let syndromes = vec![
         vec![1, 0, 1, 0],
         vec![0, 1, 0, 1],
         vec![1, 1, 0, 0],
     ];
-    
+
     let results = decoder.decode_batch(&syndromes)?;
     for (i, result) in results.iter().enumerate() {
         println!("Syndrome {}: {:?}", i, result.correction);
@@ -362,7 +362,7 @@ For large codes, use sparse representations:
     ```python
     # Use sparse matrices for large codes
     from scipy.sparse import csr_matrix
-    
+
     hx_sparse = csr_matrix(hx)
     hz_sparse = csr_matrix(hz)
     decoder = decoders.BpOsdDecoder(hx_sparse, hz_sparse)

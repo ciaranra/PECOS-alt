@@ -49,18 +49,32 @@ pub trait Decoder {
     /// The exact interpretation of the input depends on the decoder type
     /// and configuration. For LDPC decoders, this is typically a syndrome
     /// vector when using syndrome-based decoding.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The input dimensions don't match the decoder's expectations
+    /// - The decoding process fails to converge
+    /// - Internal decoder errors occur
     fn decode(&mut self, input: &ArrayView1<u8>) -> Result<Self::Result, Self::Error>;
 
     /// Get the number of checks (rows in parity check matrix)
     fn check_count(&self) -> usize;
 
-    /// Get the number of bits (columns in parity check matrix)  
+    /// Get the number of bits (columns in parity check matrix)
     fn bit_count(&self) -> usize;
 }
 
 /// Trait for decoders that support soft information (log-likelihood ratios)
 pub trait SoftDecoder: Decoder {
     /// Decode using soft information (log-likelihood ratios)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The LLR array dimensions don't match the decoder's expectations
+    /// - The LLR values are invalid (e.g., NaN or Inf)
+    /// - The soft decoding process fails
     fn decode_soft(&mut self, llrs: &ArrayView1<f64>) -> Result<Self::Result, Self::Error>;
 }
 
@@ -73,6 +87,13 @@ pub trait CssDecoder {
     type Error: std::error::Error + Send + Sync + 'static;
 
     /// Decode both X and Z syndromes for a CSS code
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Either syndrome has incorrect dimensions
+    /// - The X or Z decoding fails
+    /// - The decoder doesn't support CSS decoding
     fn decode_css(
         &mut self,
         x_syndrome: &ArrayView1<u8>,
@@ -92,6 +113,13 @@ pub trait CssDecoder {
 /// Trait for decoders that support batch decoding
 pub trait BatchDecoder: Decoder {
     /// Decode multiple inputs in a batch
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Any input has incorrect dimensions
+    /// - Any individual decoding fails
+    /// - The batch is too large for the decoder to handle
     fn decode_batch(&mut self, inputs: &[ArrayView1<u8>])
     -> Result<Vec<Self::Result>, Self::Error>;
 }
@@ -111,6 +139,7 @@ pub mod testing {
 
     /// Generate a random syndrome with specified density
     #[must_use]
+    #[allow(clippy::cast_precision_loss)]
     pub fn generate_random_syndrome(size: usize, density: f64, seed: u64) -> Vec<u8> {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -128,6 +157,12 @@ pub mod testing {
     }
 
     /// Test sequential determinism for any decoder
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Any decoding operation fails
+    /// - The results are not identical across runs
     pub fn test_sequential_determinism<D: Decoder>(
         mut decoder_factory: impl FnMut() -> D + Copy,
         syndrome: &[u8],
@@ -160,6 +195,16 @@ pub mod testing {
     }
 
     /// Test parallel independence for any decoder
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Any decoding operation fails
+    /// - The results differ between parallel executions
+    ///
+    /// # Panics
+    ///
+    /// Panics if a thread fails to acquire the mutex lock
     pub fn test_parallel_independence<D: Decoder + Send + 'static>(
         decoder_factory: impl Fn() -> D + Send + Sync + Clone + 'static,
         syndrome: Vec<u8>,
@@ -231,6 +276,10 @@ pub mod testing {
     }
 
     /// Benchmark a decoder's performance
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any decoding operation fails during benchmarking
     pub fn benchmark_decoder<D: Decoder>(
         mut decoder: D,
         syndrome: &[u8],
@@ -245,7 +294,7 @@ pub mod testing {
         }
         let elapsed = start.elapsed();
 
-        Ok(elapsed / iterations as u32)
+        Ok(elapsed / u32::try_from(iterations).unwrap_or(u32::MAX))
     }
 }
 

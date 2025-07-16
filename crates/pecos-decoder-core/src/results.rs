@@ -137,6 +137,7 @@ impl BatchDecodingResult {
 
     /// Get success rate
     #[must_use]
+    #[allow(clippy::cast_precision_loss)]
     pub fn success_rate(&self) -> f64 {
         if self.results.is_empty() {
             0.0
@@ -147,6 +148,7 @@ impl BatchDecodingResult {
 
     /// Get average weight
     #[must_use]
+    #[allow(clippy::cast_precision_loss)]
     pub fn average_weight(&self) -> f64 {
         if self.results.is_empty() {
             0.0

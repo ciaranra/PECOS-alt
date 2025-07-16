@@ -21,6 +21,13 @@ pub trait DecoderConfig {
     }
 
     /// Validate the configuration
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConfigError`] if the configuration is invalid, such as:
+    /// - Required fields are missing
+    /// - Values are out of acceptable ranges
+    /// - Incompatible options are set
     fn validate(&self) -> Result<(), ConfigError> {
         Ok(())
     }
@@ -115,12 +122,21 @@ pub trait ConfigBuilder: Sized {
     type Config;
 
     /// Build the configuration
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConfigError`] if:
+    /// - Required fields are missing
+    /// - Any configuration values are invalid
+    /// - The combination of settings is incompatible
     fn build(self) -> Result<Self::Config, ConfigError>;
 
     /// Set the random seed
+    #[must_use]
     fn with_seed(self, seed: u64) -> Self;
 
     /// Set the number of observables
+    #[must_use]
     fn with_observables(self, count: usize) -> Self;
 }
 
@@ -129,10 +145,14 @@ pub mod validation {
     use super::ConfigError;
 
     /// Validate that a value is within range
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConfigError::OutOfRange`] if the value is not within [min, max]
     pub fn validate_range<T: PartialOrd + std::fmt::Display>(
-        value: T,
-        min: T,
-        max: T,
+        value: &T,
+        min: &T,
+        max: &T,
         field_name: &str,
     ) -> Result<(), ConfigError> {
         if value < min || value > max {
@@ -147,11 +167,19 @@ pub mod validation {
     }
 
     /// Validate that a required field is present
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConfigError::MissingField`] if the value is None
     pub fn validate_required<T>(value: Option<T>, field_name: &str) -> Result<T, ConfigError> {
         value.ok_or_else(|| ConfigError::MissingField(field_name.to_string()))
     }
 
     /// Validate probability values (0.0 to 1.0)
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConfigError::OutOfRange`] if the value is not in [0.0, 1.0]
     pub fn validate_probability(value: f64, field_name: &str) -> Result<(), ConfigError> {
         if !(0.0..=1.0).contains(&value) {
             return Err(ConfigError::OutOfRange {
@@ -165,6 +193,10 @@ pub mod validation {
     }
 
     /// Validate positive integer
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConfigError::InvalidValue`] if the value is zero
     pub fn validate_positive(value: usize, field_name: &str) -> Result<(), ConfigError> {
         if value == 0 {
             return Err(ConfigError::InvalidValue {

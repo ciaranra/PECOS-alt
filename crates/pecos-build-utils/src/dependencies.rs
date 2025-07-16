@@ -25,7 +25,7 @@ pub const TESSERACT_COMMIT: &str = "1d81f0b385b6a9de49ae361d08bd6b5dbcec1773";
 pub const TESSERACT_SHA256: &str =
     "0b5d8bfa63bab68ab4882510a96d7e238d598d2ba0e669a8903af142ce276892";
 
-/// Chromobius library constants  
+/// Chromobius library constants
 /// Used by Chromobius decoder
 pub const CHROMOBIUS_COMMIT: &str = "35e289570fdc1d71e73582e1fd4e0c8e29298ef5";
 pub const CHROMOBIUS_SHA256: &str =

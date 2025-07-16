@@ -2,7 +2,7 @@
 //!
 //! This module provides the main decoder types for LDPC codes:
 //! - `BpOsdDecoder`: Belief Propagation with Ordered Statistics Decoding
-//! - `BpLsdDecoder`: Belief Propagation with Localised Statistics Decoding  
+//! - `BpLsdDecoder`: Belief Propagation with Localised Statistics Decoding
 //! - `SoftInfoBpDecoder`: Soft information BP with virtual check nodes
 //! - `FlipDecoder`: Simple bit-flipping decoder
 //! - `UnionFindDecoder`: Cluster-based decoder using Union-Find

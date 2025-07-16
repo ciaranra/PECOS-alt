@@ -12,6 +12,13 @@ pub trait CheckMatrixDecoder: super::Decoder {
     type CheckMatrixConfig: Default;
 
     /// Create decoder from a dense check matrix
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecoderError`] if:
+    /// - The matrix dimensions are invalid (e.g., empty)
+    /// - The matrix values are invalid (only 0 and 1 allowed)
+    /// - The decoder cannot be constructed from the matrix
     fn from_dense_matrix(check_matrix: &ArrayView2<u8>) -> Result<Self, DecoderError>
     where
         Self: Sized,
@@ -20,6 +27,14 @@ pub trait CheckMatrixDecoder: super::Decoder {
     }
 
     /// Create decoder from a dense check matrix with configuration
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecoderError`] if:
+    /// - The matrix dimensions are invalid
+    /// - The matrix values are invalid
+    /// - The configuration is invalid
+    /// - The decoder cannot be constructed with the given parameters
     fn from_dense_matrix_with_config(
         check_matrix: &ArrayView2<u8>,
         config: Self::CheckMatrixConfig,
@@ -28,6 +43,14 @@ pub trait CheckMatrixDecoder: super::Decoder {
         Self: Sized;
 
     /// Create decoder from a sparse check matrix (COO format)
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecoderError`] if:
+    /// - The rows and cols vectors have different lengths
+    /// - Any index is out of bounds for the given shape
+    /// - The shape dimensions are invalid
+    /// - The decoder cannot be constructed from the matrix
     fn from_sparse_matrix(
         rows: Vec<usize>,
         cols: Vec<usize>,
@@ -40,6 +63,13 @@ pub trait CheckMatrixDecoder: super::Decoder {
     }
 
     /// Create decoder from a sparse check matrix with configuration
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecoderError`] if:
+    /// - The sparse matrix format is invalid
+    /// - The configuration is invalid
+    /// - The decoder cannot be constructed with the given parameters
     fn from_sparse_matrix_with_config(
         rows: Vec<usize>,
         cols: Vec<usize>,
@@ -55,7 +85,7 @@ pub trait CheckMatrixDecoder: super::Decoder {
 pub struct SparseCheckMatrix {
     /// Row indices of non-zero entries
     pub rows: Vec<usize>,
-    /// Column indices of non-zero entries  
+    /// Column indices of non-zero entries
     pub cols: Vec<usize>,
     /// Values of non-zero entries (optional, defaults to 1)
     pub values: Option<Vec<u8>>,
@@ -65,6 +95,12 @@ pub struct SparseCheckMatrix {
 
 impl SparseCheckMatrix {
     /// Create a new sparse check matrix
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MatrixError`] if:
+    /// - The rows and cols vectors have different lengths
+    /// - Any index is out of bounds for the given shape
     pub fn new(
         rows: Vec<usize>,
         cols: Vec<usize>,
@@ -98,6 +134,12 @@ impl SparseCheckMatrix {
     }
 
     /// Create with explicit values
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MatrixError`] if:
+    /// - The rows, cols, and values vectors have different lengths
+    /// - Any index is out of bounds for the given shape
     pub fn with_values(
         rows: Vec<usize>,
         cols: Vec<usize>,
@@ -142,6 +184,7 @@ impl SparseCheckMatrix {
 
     /// Get the density of the matrix (nnz / `total_elements`)
     #[must_use]
+    #[allow(clippy::cast_precision_loss)]
     pub fn density(&self) -> f64 {
         let total = self.shape.0 * self.shape.1;
         if total == 0 {
@@ -198,6 +241,12 @@ pub mod utils {
     }
 
     /// Validate that a matrix is a valid parity check matrix
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MatrixError`] if:
+    /// - The matrix is empty
+    /// - The matrix contains values other than 0 and 1
     pub fn validate_check_matrix(matrix: &ArrayView2<u8>) -> Result<(), MatrixError> {
         if matrix.is_empty() {
             return Err(MatrixError::EmptyMatrix);

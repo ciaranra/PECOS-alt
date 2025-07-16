@@ -35,15 +35,15 @@ BpLsdDecoder::~BpLsdDecoder() {
 // Helper function to create PCM from sparse representation
 static bp::BpSparse* create_pcm_from_sparse(const SparseMatrixRepr& sparse) {
     auto pcm = new bp::BpSparse(sparse.rows, sparse.cols);
-    
+
     if (sparse.row_indices.size() != sparse.col_indices.size()) {
         throw std::runtime_error("Row and column indices must have the same length");
     }
-    
+
     for (size_t i = 0; i < sparse.row_indices.size(); i++) {
         pcm->insert_entry(sparse.row_indices[i], sparse.col_indices[i]);
     }
-    
+
     return pcm;
 }
 
@@ -65,21 +65,21 @@ std::unique_ptr<BpOsdDecoder> create_bp_osd_decoder(
     if (channel_probs.size() != pcm.cols) {
         throw std::runtime_error("Channel probabilities length must match number of columns");
     }
-    
+
     auto decoder = std::make_unique<BpOsdDecoder>();
-    
+
     // Create PCM
     decoder->pcm = create_pcm_from_sparse(pcm);
-    
+
     // Copy channel probabilities
     decoder->channel_probs.assign(channel_probs.begin(), channel_probs.end());
-    
+
     // Convert serial schedule order
     std::vector<int> serial_schedule_vec;
     if (!serial_schedule_order.empty()) {
         serial_schedule_vec.assign(serial_schedule_order.begin(), serial_schedule_order.end());
     }
-    
+
     // Create BP decoder
     decoder->bp_decoder = new bp::BpDecoder(
         *static_cast<bp::BpSparse*>(decoder->pcm),
@@ -94,7 +94,7 @@ std::unique_ptr<BpOsdDecoder> create_bp_osd_decoder(
         true,  // random_schedule_at_every_iteration
         static_cast<bp::BpInputType>(input_vector_type)
     );
-    
+
     // Create OSD decoder if enabled
     decoder->use_osd = (osd_method != 0);  // 0 = OSD_OFF
     if (decoder->use_osd) {
@@ -105,7 +105,7 @@ std::unique_ptr<BpOsdDecoder> create_bp_osd_decoder(
             decoder->channel_probs
         );
     }
-    
+
     // Store parameters
     decoder->max_iter = max_iter;
     decoder->bp_method = bp_method;
@@ -116,7 +116,7 @@ std::unique_ptr<BpOsdDecoder> create_bp_osd_decoder(
     decoder->input_vector_type = input_vector_type;
     decoder->omp_thread_count = omp_thread_count;
     decoder->random_schedule_seed = random_schedule_seed;
-    
+
     return decoder;
 }
 
@@ -125,7 +125,7 @@ DecodingResult decode_bp_osd(
     rust::Slice<const uint8_t> input_vector
 ) {
     auto pcm = static_cast<bp::BpSparse*>(decoder.pcm);
-    
+
     // Validate input size based on input type
     if (decoder.input_vector_type == bp::BpInputType::SYNDROME) {
         if (input_vector.size() != pcm->m) {
@@ -141,18 +141,18 @@ DecodingResult decode_bp_osd(
             throw std::runtime_error("Input vector length must match either number of checks or bits");
         }
     }
-    
+
     // Convert input to vector
     std::vector<uint8_t> input_vec(input_vector.begin(), input_vector.end());
-    
+
     // First try BP decoding
     auto bp_decoder = static_cast<bp::BpDecoder*>(decoder.bp_decoder);
     auto bp_result = bp_decoder->decode(input_vec);
-    
+
     DecodingResult result;
     result.converged = bp_decoder->converge;
     result.iterations = bp_decoder->iterations;
-    
+
     // If BP converged or OSD is not enabled, return BP result
     if (bp_decoder->converge || !decoder.use_osd) {
         result.decoding = rust::Vec<uint8_t>();
@@ -162,24 +162,24 @@ DecodingResult decode_bp_osd(
         }
         return result;
     }
-    
+
     // BP didn't converge, use OSD
-    // Note: OSD requires syndrome input. If we received a received_vector, we would need 
+    // Note: OSD requires syndrome input. If we received a received_vector, we would need
     // to compute the syndrome first. For now, we require syndrome input when OSD is enabled.
     if (decoder.input_vector_type == bp::BpInputType::RECEIVED_VECTOR) {
         throw std::runtime_error("OSD decoding requires syndrome input. Please use InputVectorType::Syndrome when OSD is enabled.");
     }
-    
+
     std::vector<double> log_prob_ratios(bp_decoder->log_prob_ratios);
     auto osd_decoder = static_cast<osd::OsdDecoder*>(decoder.osd_decoder);
     auto osd_result = osd_decoder->decode(input_vec, log_prob_ratios);
-    
+
     result.decoding = rust::Vec<uint8_t>();
     result.decoding.reserve(osd_result.size());
     for (auto val : osd_result) {
         result.decoding.push_back(val);
     }
-    
+
     return result;
 }
 
@@ -212,21 +212,21 @@ std::unique_ptr<BpLsdDecoder> create_bp_lsd_decoder(
     if (channel_probs.size() != pcm.cols) {
         throw std::runtime_error("Channel probabilities length must match number of columns");
     }
-    
+
     auto decoder = std::make_unique<BpLsdDecoder>();
-    
+
     // Create PCM
     decoder->pcm = create_pcm_from_sparse(pcm);
-    
+
     // Copy channel probabilities
     decoder->channel_probs.assign(channel_probs.begin(), channel_probs.end());
-    
+
     // Convert serial schedule order
     std::vector<int> serial_schedule_vec;
     if (!serial_schedule_order.empty()) {
         serial_schedule_vec.assign(serial_schedule_order.begin(), serial_schedule_order.end());
     }
-    
+
     // Create BP decoder
     decoder->bp_decoder = new bp::BpDecoder(
         *static_cast<bp::BpSparse*>(decoder->pcm),
@@ -241,16 +241,16 @@ std::unique_ptr<BpLsdDecoder> create_bp_lsd_decoder(
         true,  // random_schedule_at_every_iteration
         static_cast<bp::BpInputType>(input_vector_type)
     );
-    
+
     // Create LSD decoder
     decoder->lsd_decoder = new lsd::LsdDecoder(
         *static_cast<bp::BpSparse*>(decoder->pcm),
         static_cast<osd::OsdMethod>(lsd_method),
         lsd_order
     );
-    
+
     decoder->bits_per_step = bits_per_step;
-    
+
     // Store parameters
     decoder->max_iter = max_iter;
     decoder->bp_method = bp_method;
@@ -261,7 +261,7 @@ std::unique_ptr<BpLsdDecoder> create_bp_lsd_decoder(
     decoder->input_vector_type = input_vector_type;
     decoder->omp_thread_count = omp_thread_count;
     decoder->random_schedule_seed = random_schedule_seed;
-    
+
     return decoder;
 }
 
@@ -270,7 +270,7 @@ DecodingResult decode_bp_lsd(
     rust::Slice<const uint8_t> input_vector
 ) {
     auto pcm = static_cast<bp::BpSparse*>(decoder.pcm);
-    
+
     // Validate input size based on input type
     if (decoder.input_vector_type == bp::BpInputType::SYNDROME) {
         if (input_vector.size() != pcm->m) {
@@ -286,18 +286,18 @@ DecodingResult decode_bp_lsd(
             throw std::runtime_error("Input vector length must match either number of checks or bits");
         }
     }
-    
+
     // Convert input to vector
     std::vector<uint8_t> input_vec(input_vector.begin(), input_vector.end());
-    
+
     // First try BP decoding
     auto bp_decoder = static_cast<bp::BpDecoder*>(decoder.bp_decoder);
     auto bp_result = bp_decoder->decode(input_vec);
-    
+
     DecodingResult result;
     result.converged = bp_decoder->converge;
     result.iterations = bp_decoder->iterations;
-    
+
     // If BP converged, return BP result
     if (bp_decoder->converge) {
         result.decoding = rust::Vec<uint8_t>();
@@ -307,14 +307,14 @@ DecodingResult decode_bp_lsd(
         }
         return result;
     }
-    
+
     // BP didn't converge, use LSD
-    // Note: LSD requires syndrome input. If we received a received_vector, we would need 
+    // Note: LSD requires syndrome input. If we received a received_vector, we would need
     // to compute the syndrome first. For now, we require syndrome input when LSD is used.
     if (decoder.input_vector_type == bp::BpInputType::RECEIVED_VECTOR) {
         throw std::runtime_error("LSD decoding requires syndrome input. Please use InputVectorType::Syndrome when LSD is enabled.");
     }
-    
+
     // Convert log probability ratios to bit weights
     std::vector<double> bit_weights(pcm->n);
     for (size_t i = 0; i < bit_weights.size(); i++) {
@@ -322,22 +322,22 @@ DecodingResult decode_bp_lsd(
         // Convert LLR to probability that bit is 1
         bit_weights[i] = 1.0 / (1.0 + std::exp(llr));
     }
-    
+
     // Run LSD
     auto lsd_decoder = static_cast<lsd::LsdDecoder*>(decoder.lsd_decoder);
     auto lsd_result = lsd_decoder->lsd_decode(
-        input_vec, 
-        bit_weights, 
+        input_vec,
+        bit_weights,
         decoder.bits_per_step,
         true  // is_on_the_fly
     );
-    
+
     result.decoding = rust::Vec<uint8_t>();
     result.decoding.reserve(lsd_result.size());
     for (auto val : lsd_result) {
         result.decoding.push_back(val);
     }
-    
+
     return result;
 }
 
@@ -523,24 +523,24 @@ std::unique_ptr<SoftInfoBpDecoder> create_soft_info_bp_decoder(
     int32_t random_schedule_seed
 ) {
     auto decoder = std::make_unique<SoftInfoBpDecoder>();
-    
+
     // Create sparse matrix
     auto pcm = new bp::BpSparse(pcm_repr.rows, pcm_repr.cols);
     for (size_t i = 0; i < pcm_repr.row_indices.size(); ++i) {
         pcm->insert_entry(pcm_repr.row_indices[i], pcm_repr.col_indices[i]);
     }
     decoder->pcm = pcm;
-    
+
     // Store channel probabilities
     decoder->channel_probs = std::vector<double>(channel_probs.begin(), channel_probs.end());
-    
+
     // Store parameters
     decoder->max_iter = max_iter;
     decoder->bp_method = bp_method;
     decoder->ms_scaling_factor = ms_scaling_factor;
     decoder->omp_thread_count = omp_thread_count;
     decoder->random_schedule_seed = random_schedule_seed;
-    
+
     // Convert serial schedule order
     std::vector<int> schedule_order;
     if (serial_schedule_order.size() == pcm->n) {
@@ -549,7 +549,7 @@ std::unique_ptr<SoftInfoBpDecoder> create_soft_info_bp_decoder(
             schedule_order.push_back(idx);
         }
     }
-    
+
     // Create BP decoder with serial schedule for soft info decoding
     auto bp_decoder = new bp::BpDecoder(
         *pcm,
@@ -562,9 +562,9 @@ std::unique_ptr<SoftInfoBpDecoder> create_soft_info_bp_decoder(
         schedule_order,
         random_schedule_seed
     );
-    
+
     decoder->bp_decoder = bp_decoder;
-    
+
     return decoder;
 }
 
@@ -575,13 +575,13 @@ DecodingResult decode_soft_info_bp(
     double sigma
 ) {
     auto bp_decoder = static_cast<bp::BpDecoder*>(decoder.bp_decoder);
-    
+
     // Convert soft syndrome to std::vector
     std::vector<double> soft_syn(soft_syndrome.begin(), soft_syndrome.end());
-    
+
     // Perform soft information decoding
     auto& decoding = bp_decoder->soft_info_decode_serial(soft_syn, cutoff, sigma);
-    
+
     DecodingResult result;
     result.decoding.reserve(decoding.size());
     for (auto bit : decoding) {
@@ -589,7 +589,7 @@ DecodingResult decode_soft_info_bp(
     }
     result.converged = bp_decoder->converge;
     result.iterations = bp_decoder->iterations;
-    
+
     return result;
 }
 
@@ -662,22 +662,22 @@ std::unique_ptr<FlipDecoder> create_flip_decoder(
     int32_t seed
 ) {
     auto decoder = std::make_unique<FlipDecoder>();
-    
+
     // Create sparse matrix
     auto pcm = new bp::BpSparse(pcm_repr.rows, pcm_repr.cols);
     for (size_t i = 0; i < pcm_repr.row_indices.size(); ++i) {
         pcm->insert_entry(pcm_repr.row_indices[i], pcm_repr.col_indices[i]);
     }
     decoder->pcm = pcm;
-    
+
     // Store parameters
     decoder->max_iter = max_iter;
     decoder->pfreq = pfreq;
     decoder->seed = seed;
-    
+
     // Create flip decoder
     decoder->flip_decoder = new flip::FlipDecoder(*pcm, max_iter, pfreq, seed);
-    
+
     return decoder;
 }
 
@@ -686,13 +686,13 @@ DecodingResult decode_flip(
     rust::Slice<const uint8_t> syndrome
 ) {
     auto flip_decoder = static_cast<flip::FlipDecoder*>(decoder.flip_decoder);
-    
+
     // Convert syndrome to std::vector
     std::vector<uint8_t> synd(syndrome.begin(), syndrome.end());
-    
+
     // Perform decoding
     auto& decoding = flip_decoder->decode(synd);
-    
+
     DecodingResult result;
     result.decoding.reserve(decoding.size());
     for (auto bit : decoding) {
@@ -700,7 +700,7 @@ DecodingResult decode_flip(
     }
     result.converged = flip_decoder->converge;
     result.iterations = flip_decoder->iterations;
-    
+
     return result;
 }
 
@@ -736,20 +736,20 @@ std::unique_ptr<UnionFindDecoder> create_union_find_decoder(
     int32_t uf_method
 ) {
     auto decoder = std::make_unique<UnionFindDecoder>();
-    
+
     // Create sparse matrix
     auto pcm = new bp::BpSparse(pcm_repr.rows, pcm_repr.cols);
     for (size_t i = 0; i < pcm_repr.row_indices.size(); ++i) {
         pcm->insert_entry(pcm_repr.row_indices[i], pcm_repr.col_indices[i]);
     }
     decoder->pcm = pcm;
-    
+
     // Store parameters
     decoder->uf_method = uf_method;
-    
+
     // Create UF decoder
     decoder->uf_decoder = new uf::UfDecoder(*pcm);
-    
+
     return decoder;
 }
 
@@ -760,13 +760,13 @@ DecodingResult decode_union_find(
     int32_t bits_per_step
 ) {
     auto uf_decoder = static_cast<uf::UfDecoder*>(decoder.uf_decoder);
-    
+
     // Convert syndrome to std::vector
     std::vector<uint8_t> synd(syndrome.begin(), syndrome.end());
-    
+
     // Convert LLRs to std::vector (can be empty)
     std::vector<double> llr_vec(llrs.begin(), llrs.end());
-    
+
     // Perform decoding based on method
     std::vector<uint8_t>* decoding_ptr;
     if (decoder.uf_method == 0) { // Inversion method
@@ -775,7 +775,7 @@ DecodingResult decode_union_find(
         decoding_ptr = &uf_decoder->peel_decode(synd, llr_vec, bits_per_step);
     }
     auto& decoding = *decoding_ptr;
-    
+
     DecodingResult result;
     result.decoding.reserve(decoding.size());
     for (auto bit : decoding) {
@@ -783,7 +783,7 @@ DecodingResult decode_union_find(
     }
     result.converged = true; // UF decoder doesn't have a converge flag
     result.iterations = 1;   // UF decoder doesn't track iterations
-    
+
     return result;
 }
 
@@ -817,38 +817,38 @@ std::unique_ptr<MbpDecoder> create_mbp_decoder(
     if (hx.cols != hz.cols) {
         throw std::runtime_error("HX and HZ must have the same number of columns (qubits)");
     }
-    
+
     if (xyz_bias.size() != 3) {
         throw std::runtime_error("xyz_bias must have exactly 3 elements");
     }
-    
+
     auto decoder = std::make_unique<MbpDecoder>();
-    
+
     // Store sizes
     decoder->qubit_count = hx.cols;
     decoder->stab_count = hx.rows + hz.rows;
-    
+
     // Create HX and HZ matrices
     decoder->pcmx = create_pcm_from_sparse(hx);
     decoder->pcmz = create_pcm_from_sparse(hz);
-    
+
     // Create GF(4) parity check matrix
     // HZ checks come first with value 3 (Z stabilizers)
     // HX checks come after with value 1 (X stabilizers)
     auto pcm_gf4 = new mbp_sparse(decoder->stab_count, decoder->qubit_count);
-    
+
     // Add Z stabilizers (value 3)
     for (size_t i = 0; i < hz.row_indices.size(); i++) {
         pcm_gf4->insert_entry(hz.row_indices[i], hz.col_indices[i], 3);
     }
-    
+
     // Add X stabilizers (value 1)
     for (size_t i = 0; i < hx.row_indices.size(); i++) {
         pcm_gf4->insert_entry(hx.row_indices[i] + hz.rows, hx.col_indices[i], 1);
     }
-    
+
     decoder->pcm = pcm_gf4;
-    
+
     // Create error channel (3 x n matrix for X, Y, Z errors)
     std::vector<std::vector<double>> error_channel(3);
     for (int i = 0; i < 3; i++) {
@@ -857,13 +857,13 @@ std::unique_ptr<MbpDecoder> create_mbp_decoder(
             error_channel[i][j] = error_rate * xyz_bias[i];
         }
     }
-    
+
     // Create alpha parameter (3 x n matrix, default to all 1s)
     std::vector<std::vector<double>> alpha(3);
     for (int i = 0; i < 3; i++) {
         alpha[i].resize(decoder->qubit_count, 1.0);
     }
-    
+
     // Create MBP decoder
     decoder->mbp_decoder = new mbp_decoder(
         pcm_gf4,
@@ -874,12 +874,12 @@ std::unique_ptr<MbpDecoder> create_mbp_decoder(
         bp_method,
         ms_scaling_factor
     );
-    
+
     // Store parameters
     decoder->max_iter = max_iter;
     decoder->bp_method = bp_method;
     decoder->ms_scaling_factor = ms_scaling_factor;
-    
+
     return decoder;
 }
 
@@ -888,21 +888,21 @@ DecodingResult decode_mbp(
     rust::Slice<const uint8_t> syndrome
 ) {
     auto mbp = static_cast<mbp_decoder*>(decoder.mbp_decoder);
-    
+
     if (syndrome.size() != decoder.stab_count) {
         throw std::runtime_error("Syndrome length must match number of stabilizers");
     }
-    
+
     // Convert syndrome to vector
     std::vector<uint8_t> synd(syndrome.begin(), syndrome.end());
-    
+
     // Decode - returns GF(4) decoding
     auto& gf4_decoding = mbp->decode(synd);
-    
+
     DecodingResult result;
     result.converged = mbp->converge;
     result.iterations = mbp->iterations;
-    
+
     // Convert GF(4) to binary (just return the GF(4) values for now)
     // In practice, you might want to convert to X and Z components
     result.decoding = rust::Vec<uint8_t>();
@@ -910,7 +910,7 @@ DecodingResult decode_mbp(
     for (auto val : gf4_decoding) {
         result.decoding.push_back(val);
     }
-    
+
     return result;
 }
 

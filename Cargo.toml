@@ -112,7 +112,7 @@ pecos-decoders = { version = "0.1.1", path = "crates/pecos-decoders" }
 # Optimize build times
 [profile.dev]
 opt-level = 0          # No optimization for faster compilation
-debug = true           # Include debug info  
+debug = true           # Include debug info
 incremental = true     # Enable incremental compilation
 split-debuginfo = "unpacked"  # Faster linking on supported platforms
 

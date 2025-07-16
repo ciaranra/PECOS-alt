@@ -11,6 +11,13 @@ pub trait DemDecoder: super::Decoder {
     type DemConfig: Default;
 
     /// Create decoder from a DEM string
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecoderError`] if:
+    /// - The DEM string is malformed or invalid
+    /// - The detector/observable indices are out of bounds
+    /// - The decoder cannot be constructed from the given DEM
     fn from_dem(dem: &str) -> Result<Self, DecoderError>
     where
         Self: Sized,
@@ -19,11 +26,25 @@ pub trait DemDecoder: super::Decoder {
     }
 
     /// Create decoder from a DEM string with configuration
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecoderError`] if:
+    /// - The DEM string is malformed or invalid
+    /// - The configuration is invalid
+    /// - The decoder cannot be constructed with the given parameters
     fn from_dem_with_config(dem: &str, config: Self::DemConfig) -> Result<Self, DecoderError>
     where
         Self: Sized;
 
     /// Create decoder from a DEM file
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecoderError`] if:
+    /// - The file cannot be read (I/O error)
+    /// - The file contents are not valid DEM format
+    /// - The decoder cannot be constructed from the DEM
     fn from_dem_file(path: &str) -> Result<Self, DecoderError>
     where
         Self: Sized,
@@ -33,6 +54,14 @@ pub trait DemDecoder: super::Decoder {
     }
 
     /// Create decoder from a DEM file with configuration
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecoderError`] if:
+    /// - The file cannot be read (I/O error)
+    /// - The file contents are not valid DEM format
+    /// - The configuration is invalid
+    /// - The decoder cannot be constructed with the given parameters
     fn from_dem_file_with_config(path: &str, config: Self::DemConfig) -> Result<Self, DecoderError>
     where
         Self: Sized,
@@ -66,6 +95,12 @@ pub mod utils {
     use super::DecoderError;
 
     /// Parse basic DEM metadata without full parsing
+    ///
+    /// Returns (`detector_count`, `observable_count`)
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecoderError`] if the DEM format is invalid
     pub fn parse_dem_metadata(dem: &str) -> Result<(usize, usize), DecoderError> {
         let mut max_detector = None;
         let mut observables = std::collections::HashSet::new();
@@ -124,6 +159,13 @@ pub mod utils {
     }
 
     /// Validate DEM format
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecoderError`] if:
+    /// - The DEM is empty
+    /// - The DEM contains invalid commands or syntax
+    /// - Detector/observable indices are invalid
     pub fn validate_dem(dem: &str) -> Result<(), DecoderError> {
         if dem.trim().is_empty() {
             return Err(DecoderError::InvalidConfiguration(

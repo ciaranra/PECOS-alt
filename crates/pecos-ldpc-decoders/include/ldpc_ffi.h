@@ -20,7 +20,7 @@ public:
     void* osd_decoder;
     std::vector<double> channel_probs;
     bool use_osd;
-    
+
     // Store decoder parameters
     int32_t max_iter;
     int32_t bp_method;
@@ -31,7 +31,7 @@ public:
     int32_t input_vector_type;
     int32_t omp_thread_count;
     int32_t random_schedule_seed;
-    
+
     // Declare destructor but don't define it here
     ~BpOsdDecoder();
 };
@@ -44,7 +44,7 @@ public:
     void* lsd_decoder;
     std::vector<double> channel_probs;
     int bits_per_step;
-    
+
     // Store decoder parameters
     int32_t max_iter;
     int32_t bp_method;
@@ -55,7 +55,7 @@ public:
     int32_t input_vector_type;
     int32_t omp_thread_count;
     int32_t random_schedule_seed;
-    
+
     // Declare destructor but don't define it here
     ~BpLsdDecoder();
 };
@@ -152,14 +152,14 @@ public:
     void* pcm;
     void* bp_decoder;
     std::vector<double> channel_probs;
-    
+
     // Store decoder parameters
     int32_t max_iter;
     int32_t bp_method;
     double ms_scaling_factor;
     int32_t omp_thread_count;
     int32_t random_schedule_seed;
-    
+
     // Declare destructor but don't define it here
     ~SoftInfoBpDecoder();
 };
@@ -169,12 +169,12 @@ class FlipDecoder {
 public:
     void* pcm;
     void* flip_decoder;
-    
+
     // Store decoder parameters
     int32_t max_iter;
     int32_t pfreq;
     int32_t seed;
-    
+
     ~FlipDecoder();
 };
 
@@ -183,10 +183,10 @@ class UnionFindDecoder {
 public:
     void* pcm;
     void* uf_decoder;
-    
+
     // Store decoder parameters
     int32_t uf_method;
-    
+
     ~UnionFindDecoder();
 };
 
@@ -266,14 +266,14 @@ public:
     void* pcmx;     // X stabilizer matrix
     void* pcmz;     // Z stabilizer matrix
     void* mbp_decoder;
-    
+
     // Store decoder parameters
     int32_t max_iter;
     int32_t bp_method;
     double ms_scaling_factor;
     int32_t qubit_count;
     int32_t stab_count;
-    
+
     ~MbpDecoder();
 };
 

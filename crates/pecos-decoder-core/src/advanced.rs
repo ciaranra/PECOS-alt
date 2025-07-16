@@ -13,6 +13,13 @@ pub trait ErasureDecoder: super::Decoder {
     ///
     /// - `syndrome`: The syndrome or detection events
     /// - `erasures`: Indices of known erasure locations
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The syndrome dimensions don't match the decoder's expectations
+    /// - Any erasure index is out of bounds
+    /// - The decoding process fails to converge
     fn decode_with_erasures(
         &mut self,
         syndrome: &ArrayView1<u8>,
@@ -26,6 +33,13 @@ pub trait DynamicWeightDecoder: super::Decoder {
     ///
     /// - `edges`: List of (node1, node2) pairs
     /// - `weights`: New weights for each edge
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecoderError`] if:
+    /// - The number of edges and weights don't match
+    /// - Any edge refers to invalid node indices
+    /// - Any weight is invalid (e.g., negative or NaN)
     fn update_edge_weights(
         &mut self,
         edges: &[(usize, usize)],
@@ -33,11 +47,22 @@ pub trait DynamicWeightDecoder: super::Decoder {
     ) -> Result<(), DecoderError>;
 
     /// Reset all weights to their initial values
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecoderError`] if the decoder doesn't support weight reset
     fn reset_weights(&mut self) -> Result<(), DecoderError>;
 
     /// Decode with temporary weight modifications
     ///
     /// Weights are automatically reset after decoding
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Weight update fails (see [`update_edge_weights`](Self::update_edge_weights))
+    /// - Decoding fails with the modified weights
+    /// - Weight reset fails after decoding
     fn decode_with_weights(
         &mut self,
         syndrome: &ArrayView1<u8>,
@@ -81,12 +106,26 @@ pub struct MatchedPair {
 /// Trait for decoders that can provide detailed matching information
 pub trait DetailedDecoder: super::Decoder {
     /// Decode and return matched edges
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The syndrome dimensions are invalid
+    /// - The decoding process fails
+    /// - The decoder cannot provide edge information
     fn decode_to_edges(
         &mut self,
         syndrome: &ArrayView1<u8>,
     ) -> Result<Vec<MatchedEdge>, Self::Error>;
 
     /// Decode and return matched detector pairs
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The syndrome dimensions are invalid
+    /// - The decoding process fails
+    /// - The decoder cannot provide pair information
     fn decode_to_pairs(
         &mut self,
         syndrome: &ArrayView1<u8>,
@@ -133,6 +172,15 @@ pub struct DecodingOptions {
 /// Trait for decoders that support advanced options
 pub trait AdvancedDecoder: super::Decoder {
     /// Decode with advanced options
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The syndrome dimensions are invalid
+    /// - Any option values are invalid (e.g., negative `max_iterations`)
+    /// - Erasure indices are out of bounds
+    /// - Edge weight updates fail
+    /// - The decoding process fails
     fn decode_advanced(
         &mut self,
         syndrome: &ArrayView1<u8>,
@@ -165,18 +213,21 @@ impl<R> AdvancedDecodingResult<R> {
     }
 
     /// Add statistics
+    #[must_use]
     pub fn with_stats(mut self, stats: DecodingStats) -> Self {
         self.stats = stats;
         self
     }
 
     /// Add matched edges
+    #[must_use]
     pub fn with_edges(mut self, edges: Vec<MatchedEdge>) -> Self {
         self.matched_edges = Some(edges);
         self
     }
 
     /// Add matched pairs
+    #[must_use]
     pub fn with_pairs(mut self, pairs: Vec<MatchedPair>) -> Self {
         self.matched_pairs = Some(pairs);
         self
