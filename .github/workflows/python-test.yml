@@ -80,10 +80,35 @@ jobs:
           "$LLVM_PATH/bin/llvm-config" --version
         fi
 
+    - name: Set UV_PYTHON environment variable
+      run: |
+        # Get the exact Python path from setup-python
+        PYTHON_PATH=$(which python)
+        echo "Python from setup-python: $PYTHON_PATH"
+        python --version
+        
+        # Export UV_PYTHON for all subsequent steps
+        echo "UV_PYTHON=$PYTHON_PATH" >> "$GITHUB_ENV"
+    
     - name: Generate lockfile and install dependencies
       run: |
-        # Ensure uv uses the correct Python version from the matrix
-        uv venv --python ${{ matrix.python-version }}
+        # Create venv - uv should now use UV_PYTHON
+        uv venv
+        
+        # Verify the venv is using the correct Python version
+        echo "Python in venv:"
+        uv run python --version
+        
+        # Verify version matches what we expect
+        VENV_PYTHON_VERSION=$(uv run python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+        if [[ "$VENV_PYTHON_VERSION" != "${{ matrix.python-version }}" ]]; then
+          echo "ERROR: Python version mismatch!"
+          echo "Expected: ${{ matrix.python-version }}"
+          echo "Got: $VENV_PYTHON_VERSION"
+          exit 1
+        fi
+        
+        # Lock and sync dependencies
         uv lock --project .
         uv sync --project .
 
