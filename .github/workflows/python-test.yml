@@ -85,6 +85,10 @@ jobs:
     - name: Build PECOS RNG
       run: |
         cd clib/pecos-rng
+        # On macOS, use system compiler instead of LLVM for C++ extensions
+        if [[ "${{ matrix.os }}" == "macOS-latest" ]]; then
+          unset CC CXX
+        fi
         uv pip install .
 
     - name: Install pecos-rslib with maturin
