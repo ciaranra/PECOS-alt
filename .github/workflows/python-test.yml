@@ -74,8 +74,16 @@ jobs:
       shell: bash
       run: |
         echo "LLVM_SYS_140_PREFIX=$LLVM_PATH" >> "$GITHUB_ENV"
+        # Test LLVM installation
         if [[ "${{ runner.os }}" == "Windows" ]]; then
-          "$LLVM_PATH/bin/llvm-config.exe" --version
+          # On Windows with bash, we need to convert Windows paths to Unix paths
+          LLVM_CONFIG="$(cygpath -u "$LLVM_PATH")/bin/llvm-config.exe"
+          if [[ -f "$LLVM_CONFIG" ]]; then
+            "$LLVM_CONFIG" --version
+          else
+            echo "Warning: llvm-config.exe not found at $LLVM_CONFIG"
+            ls -la "$(cygpath -u "$LLVM_PATH")/bin/" || true
+          fi
         else
           "$LLVM_PATH/bin/llvm-config" --version
         fi
@@ -115,8 +123,17 @@ jobs:
     - name: Fix SQLite for macOS Python 3.13
       if: ${{ matrix.os == 'macOS-latest' && matrix.python-version == '3.13' }}
       run: |
-        # Install pysqlite3-binary which bundles its own SQLite
-        uv pip install pysqlite3-binary
+        # For Python 3.13 on macOS, we need to handle SQLite differently
+        # Install the latest SQLite via Homebrew
+        brew install sqlite3
+        
+        # Set environment variables to use Homebrew's SQLite
+        export LDFLAGS="-L$(brew --prefix sqlite3)/lib"
+        export CPPFLAGS="-I$(brew --prefix sqlite3)/include"
+        
+        # Build pysqlite3 from source linking against Homebrew's SQLite
+        uv pip install --force-reinstall --no-binary :all: pysqlite3
+        
         # Create a sitecustomize.py to patch sqlite3 imports
         SITE_PACKAGES=$(uv run python -c "import site; print(site.getsitepackages()[0])")
         echo "import sys" > "$SITE_PACKAGES/sitecustomize.py"
