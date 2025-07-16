@@ -121,7 +121,7 @@ jobs:
           exit 1
         fi
 
-        # Lock and sync dependencies  
+        # Lock and sync dependencies
         uv lock --project .
         uv sync --project . --all-extras
 
