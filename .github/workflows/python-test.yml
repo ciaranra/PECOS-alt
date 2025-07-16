@@ -215,14 +215,14 @@ jobs:
 
     - name: Run standard tests
       run: |
-        # Set PYTHONPATH to include quantum-pecos src
-        export PYTHONPATH="$(pwd)/python/quantum-pecos/src:${PYTHONPATH}"
+        # Set PYTHONPATH to include both quantum-pecos and pecos-rslib src
+        export PYTHONPATH="$(pwd)/python/quantum-pecos/src:$(pwd)/python/pecos-rslib/src:${PYTHONPATH}"
         # Run tests
         uv run pytest python/tests --doctest-modules --junitxml=junit/test-results.xml --cov=pecos --cov-report=xml --cov-report=html
 
     - name: Run optional dependency tests
       run: |
-        # Set PYTHONPATH to include quantum-pecos src
-        export PYTHONPATH="$(pwd)/python/quantum-pecos/src:${PYTHONPATH}"
+        # Set PYTHONPATH to include both quantum-pecos and pecos-rslib src
+        export PYTHONPATH="$(pwd)/python/quantum-pecos/src:$(pwd)/python/pecos-rslib/src:${PYTHONPATH}"
         # Run optional dependency tests
         uv run pytest python/tests --doctest-modules --junitxml=junit/test-results-optional.xml --cov=pecos --cov-report=xml --cov-report=html -m optional_dependency
