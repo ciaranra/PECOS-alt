@@ -91,22 +91,27 @@ jobs:
     - name: Set UV_PYTHON environment variable
       run: |
         # Get the exact Python path from setup-python
-        PYTHON_PATH=$(which python)
+        if [[ "${{ runner.os }}" == "Windows" ]]; then
+          # On Windows, we need to use the Windows-style path
+          PYTHON_PATH=$(python -c "import sys; print(sys.executable)")
+        else
+          PYTHON_PATH=$(which python)
+        fi
         echo "Python from setup-python: $PYTHON_PATH"
         python --version
-        
+
         # Export UV_PYTHON for all subsequent steps
         echo "UV_PYTHON=$PYTHON_PATH" >> "$GITHUB_ENV"
-    
+
     - name: Generate lockfile and install dependencies
       run: |
         # Create venv - uv should now use UV_PYTHON
         uv venv
-        
+
         # Verify the venv is using the correct Python version
         echo "Python in venv:"
         uv run python --version
-        
+
         # Verify version matches what we expect
         VENV_PYTHON_VERSION=$(uv run python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
         if [[ "$VENV_PYTHON_VERSION" != "${{ matrix.python-version }}" ]]; then
@@ -115,7 +120,7 @@ jobs:
           echo "Got: $VENV_PYTHON_VERSION"
           exit 1
         fi
-        
+
         # Lock and sync dependencies
         uv lock --project .
         uv sync --project .
@@ -126,14 +131,14 @@ jobs:
         # For Python 3.13 on macOS, we need to handle SQLite differently
         # Install the latest SQLite via Homebrew
         brew install sqlite3
-        
+
         # Set environment variables to use Homebrew's SQLite
         export LDFLAGS="-L$(brew --prefix sqlite3)/lib"
         export CPPFLAGS="-I$(brew --prefix sqlite3)/include"
-        
+
         # Build pysqlite3 from source linking against Homebrew's SQLite
         uv pip install --force-reinstall --no-binary :all: pysqlite3
-        
+
         # Create a sitecustomize.py to patch sqlite3 imports
         SITE_PACKAGES=$(uv run python -c "import site; print(site.getsitepackages()[0])")
         echo "import sys" > "$SITE_PACKAGES/sitecustomize.py"
