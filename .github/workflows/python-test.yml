@@ -103,26 +103,24 @@ jobs:
         # Export UV_PYTHON for all subsequent steps
         echo "UV_PYTHON=$PYTHON_PATH" >> "$GITHUB_ENV"
 
-    - name: Generate lockfile and install dependencies
+    - name: Create virtual environment
       run: |
-        # Create venv - uv should now use UV_PYTHON
-        uv venv
+        # Create venv using the correct Python version from setup-python
+        uv venv --python "$UV_PYTHON"
 
         # Verify the venv is using the correct Python version
         echo "Python in venv:"
-        uv run python --version
+        source .venv/bin/activate
+        python --version
 
         # Verify version matches what we expect
-        VENV_PYTHON_VERSION=$(uv run python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+        VENV_PYTHON_VERSION=$(python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
         if [[ "$VENV_PYTHON_VERSION" != "${{ matrix.python-version }}" ]]; then
           echo "ERROR: Python version mismatch!"
           echo "Expected: ${{ matrix.python-version }}"
           echo "Got: $VENV_PYTHON_VERSION"
           exit 1
         fi
-
-        # Skip sync as it creates wrong Python version
-        # Just ensure the venv is created with correct Python
 
     - name: Fix SQLite for macOS Python 3.13
       if: ${{ matrix.os == 'macOS-latest' && matrix.python-version == '3.13' }}
@@ -159,58 +157,14 @@ jobs:
         echo "except ImportError:" >> "$SITE_PACKAGES/sitecustomize.py"
         echo "    pass" >> "$SITE_PACKAGES/sitecustomize.py"
 
-    - name: Install pecos rng build dependencies
+    - name: Build PECOS
       run: |
-        uv pip install build nanobind scikit-build-core cmake ninja
-
-    - name: Build PECOS RNG
-      run: |
-        cd clib/pecos-rng
-        # On macOS and Windows, use system compiler instead of LLVM for C++ extensions
-        if [[ "${{ matrix.os }}" == "macOS-latest" ]] || [[ "${{ runner.os }}" == "Windows" ]]; then
-          unset CC CXX
-        fi
-        uv pip install .
-
-    - name: Install pecos-rslib with maturin
-      run: |
-        cd python/pecos-rslib
-        # On macOS and Windows, use system compiler for C dependencies in Rust crates
-        if [[ "${{ matrix.os }}" == "macOS-latest" ]] || [[ "${{ runner.os }}" == "Windows" ]]; then
-          unset CC CXX
-        fi
-        uv run maturin develop --uv
-
-    - name: Install quantum-pecos and dependencies
-      run: |
-        # First install the core dependencies
-        uv pip install numpy scipy networkx matplotlib phir
-        # Then install quantum-pecos in editable mode
-        cd python/quantum-pecos
-        uv pip install -e .
-        # Verify installation
-        echo "Checking installed packages:"
-        uv pip list | grep -E "(numpy|scipy|networkx|matplotlib|phir|pecos|quantum)" || true
+        # Use the Makefile to build everything, respecting existing venv
+        UV_PYTHON="$UV_PYTHON" make build
 
     - name: Run pre-commit checks
       run: uv run pre-commit run --all-files --show-diff-on-failure
 
-    - name: Install test dependencies
-      run: |
-        cd python/quantum-pecos
-        # For Linux, unset CC/CXX to avoid LLVM LTO issues with llvmlite
-        if [[ "${{ runner.os }}" == "Linux" ]]; then
-          unset CC CXX
-        fi
-
-        # Disable LTO for llvmlite build to avoid gold linker requirement
-        export CFLAGS="-fno-lto"
-        export CXXFLAGS="-fno-lto"
-        export LDFLAGS="-fno-lto"
-        export LLVMLITE_SKIP_LLVM_VERSION_CHECK=1
-
-        uv pip install -e .[all,test]  # Install with both all and test extras
-        uv pip install pytest pytest-cov  # Explicitly install test requirements
 
     - name: Debug environment
       run: |
@@ -227,19 +181,14 @@ jobs:
         uv run python -c "import sys; print('Python paths:'); print('\n'.join(sys.path))"
         uv run python -c "import numpy; print('numpy imported successfully')" || echo "Failed to import numpy"
         uv run python -c "import networkx; print('networkx imported successfully')" || echo "Failed to import networkx"
+        uv run python -c "import pecos; print('pecos imported successfully')" || echo "Failed to import pecos"
 
     - name: Run standard tests
       run: |
-        # Ensure dependencies are installed
-        uv pip install numpy scipy networkx matplotlib phir pytest pytest-cov
-        # Set PYTHONPATH to include both quantum-pecos and pecos-rslib src
-        export PYTHONPATH="$(pwd)/python/quantum-pecos/src:$(pwd)/python/pecos-rslib/src:${PYTHONPATH}"
-        # Run tests
-        uv run pytest python/tests --doctest-modules --junitxml=junit/test-results.xml --cov=pecos --cov-report=xml --cov-report=html
+        # Use the Makefile to run standard Python tests (now includes PYTHONPATH)
+        make pytest
 
     - name: Run optional dependency tests
       run: |
-        # Set PYTHONPATH to include both quantum-pecos and pecos-rslib src
-        export PYTHONPATH="$(pwd)/python/quantum-pecos/src:$(pwd)/python/pecos-rslib/src:${PYTHONPATH}"
-        # Run optional dependency tests
-        uv run pytest python/tests --doctest-modules --junitxml=junit/test-results-optional.xml --cov=pecos --cov-report=xml --cov-report=html -m optional_dependency
+        # Use the Makefile to run optional dependency tests (now includes PYTHONPATH)
+        make pytest-dep

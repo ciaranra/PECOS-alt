@@ -20,6 +20,14 @@ dev = [
     "mkdocs-material",     # Material theme for MkDocs
     "mkdocstrings[python]", # Code documentation extraction
     "markdown-exec[ansi]",  # Executable markdown blocks
+    # Runtime dependencies for development
+    "numpy>=1.15.0",
+    "scipy>=1.1.0", 
+    "networkx>=2.1.0",
+    "matplotlib>=2.2.0",
+    "phir>=0.3.3",
+    # Optional dependencies for testing
+    "llvmlite==0.41.0",
 ]
 test = [ # pinning testing environment
     "pytest==8.3.3", # 8.3.4 seems to be causing errors

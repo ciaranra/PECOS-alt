@@ -17,13 +17,18 @@ updatereqs:  ## Generate/update lockfiles for both packages
 .PHONY: installreqs
 installreqs: ## Install Python project requirements to root .venv
 	@echo "Installing requirements..."
-	uv sync
+	@if [ -n "$(UV_PYTHON)" ]; then \
+		echo "Using pinned Python: $(UV_PYTHON)"; \
+		uv sync --python "$(UV_PYTHON)"; \
+	else \
+		uv sync; \
+	fi
 
 .PHONY: buildrng
 buildrng:
 	@echo "Building and installing RNG library..."
 	uv pip install nanobind
-	cd clib/pecos-rng && CC=gcc CXX=g++ uv pip install --python $(shell uv run which python) -e .
+	cd clib/pecos-rng && CC=gcc CXX=g++ uv pip install -e .
 
 # Building development environments
 # ---------------------------------
@@ -174,12 +179,12 @@ decoder-cache-clean: ## Clean decoder download cache
 
 .PHONY: pytest
 pytest:  ## Run tests on the Python package (not including optional dependencies). ASSUMES: previous build command
-	uv run pytest ./python/tests/ -m "not optional_dependency"
-	uv run pytest ./python/pecos-rslib/tests/
+	PYTHONPATH="$(PWD)/python/quantum-pecos/src:$(PWD)/python/pecos-rslib/src:$(PYTHONPATH)" uv run pytest ./python/tests/ --doctest-modules --junitxml=junit/test-results.xml --cov=pecos --cov-report=xml --cov-report=html -m "not optional_dependency"
+	PYTHONPATH="$(PWD)/python/quantum-pecos/src:$(PWD)/python/pecos-rslib/src:$(PYTHONPATH)" uv run pytest ./python/pecos-rslib/tests/
 
 .PHONY: pytest-dep
 pytest-dep: ## Run tests on the Python package only for optional dependencies. ASSUMES: previous build command
-	uv run pytest ./python/tests/ -m optional_dependency
+	PYTHONPATH="$(PWD)/python/quantum-pecos/src:$(PWD)/python/pecos-rslib/src:$(PYTHONPATH)" uv run pytest ./python/tests/ --doctest-modules --junitxml=junit/test-results-optional.xml --cov=pecos --cov-report=xml --cov-report=html -m optional_dependency
 
 .PHONY: pytest-all
 pytest-all:  pytest ## Run all tests on the Python package ASSUMES: previous build command
