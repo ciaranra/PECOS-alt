@@ -178,5 +178,5 @@ cython_debug/
 .idea/
 
 # Prevent subdirectory virtual environments
-clibs/*/.venv/
-clibs/*/uv.lock
+clib/*/.venv/
+clib/*/uv.lock

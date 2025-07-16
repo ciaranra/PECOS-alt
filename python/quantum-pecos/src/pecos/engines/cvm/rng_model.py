@@ -1,10 +1,17 @@
 """This Module is responsible for keeping track of the state for generating a sequence of random numbers.
 
-It handles RNG platform function calls that that are handled by the pcg_rng library.
+It handles RNG platform function calls that are handled by the pcg_rng library.
 
 """
 
-from pecos_pcg import pecos_rng
+# TODO: A Rust version of this RNGModel should be created for Rust side usage and then exposed via pecos-rslib/PyO3
+
+from __future__ import annotations
+
+try:
+    from pecos_pcg import pecos_rng
+except ImportError:
+    from pecos_rslib._pecos_rslib import pcg as pecos_rng
 
 from pecos.engines.cvm.binarray import BinArray
 
