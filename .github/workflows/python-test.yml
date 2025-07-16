@@ -185,10 +185,13 @@ jobs:
     - name: Install quantum-pecos
       run: |
         cd python/quantum-pecos
+        # Install quantum-pecos with all its dependencies
         uv pip install -e .
         # Verify installation
         echo "Checking if pecos is installed:"
-        uv pip list | grep -E "(pecos|quantum)" || true
+        uv pip list | grep -E "(pecos|quantum|networkx|scipy)" || true
+        echo "All installed packages:"
+        uv pip list
         uv run python -c "import pecos; print(f'PECOS version: {pecos.__version__}')" || echo "Failed to import pecos"
 
     - name: Run pre-commit checks
