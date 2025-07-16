@@ -51,14 +51,22 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Install SQLite3 on macOS for Python 3.13
+    - name: Fix SQLite for macOS Python 3.13
       if: ${{ matrix.os == 'macOS-latest' && matrix.python-version == '3.13' }}
       run: |
-        brew install sqlite3
-        # Set environment variables to use Homebrew SQLite
-        echo "LDFLAGS=-L$(brew --prefix sqlite3)/lib" >> $GITHUB_ENV
-        echo "CPPFLAGS=-I$(brew --prefix sqlite3)/include" >> $GITHUB_ENV
-        echo "PKG_CONFIG_PATH=$(brew --prefix sqlite3)/lib/pkgconfig" >> $GITHUB_ENV
+        # Install pysqlite3-binary which bundles its own SQLite
+        uv pip install pysqlite3-binary
+        # Create a sitecustomize.py to patch sqlite3 imports
+        SITE_PACKAGES=$(uv run python -c "import site; print(site.getsitepackages()[0])")
+        cat > "$SITE_PACKAGES/sitecustomize.py" << 'EOF'
+import sys
+try:
+    import pysqlite3
+    sys.modules['sqlite3'] = pysqlite3
+    sys.modules['sqlite3.dbapi2'] = pysqlite3.dbapi2
+except ImportError:
+    pass
+EOF
 
     - name: Install the latest version of uv
       uses: astral-sh/setup-uv@v4
@@ -115,12 +123,7 @@ jobs:
         uv pip install -e .
 
     - name: Run pre-commit checks
-      run: |
-        # On macOS with Python 3.13, set DYLD_LIBRARY_PATH for SQLite
-        if [[ "${{ matrix.os }}" == "macOS-latest" && "${{ matrix.python-version }}" == "3.13" ]]; then
-          export DYLD_LIBRARY_PATH="$(brew --prefix sqlite3)/lib:${DYLD_LIBRARY_PATH:-}"
-        fi
-        uv run pre-commit run --all-files --show-diff-on-failure
+      run: uv run pre-commit run --all-files --show-diff-on-failure
 
     - name: Install test dependencies
       run: |
