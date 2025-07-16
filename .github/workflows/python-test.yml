@@ -222,9 +222,14 @@ jobs:
         uv pip list | grep -E "(pecos|quantum|numpy)" || true
         echo "Python path:"
         uv run python -c "import sys; print('\n'.join(sys.path))"
-        # Run tests
-        uv run pytest python/tests --doctest-modules --junitxml=junit/test-results.xml --cov=pecos --cov-report=xml --cov-report=html
+        echo "Checking pecos import:"
+        uv run python -c "import pecos; print(f'PECOS imported from: {pecos.__file__}')" || echo "Failed to import pecos"
+        echo "Checking quantum-pecos src directory:"
+        ls -la python/quantum-pecos/src/ || true
+        echo "PYTHONPATH=$PYTHONPATH"
+        # Run tests with PYTHONPATH set
+        PYTHONPATH="${PYTHONPATH}:$(pwd)/python/quantum-pecos/src" uv run pytest python/tests --doctest-modules --junitxml=junit/test-results.xml --cov=pecos --cov-report=xml --cov-report=html
 
     - name: Run optional dependency tests
       run: |
-        uv run pytest python/tests --doctest-modules --junitxml=junit/test-results-optional.xml --cov=pecos --cov-report=xml --cov-report=html -m optional_dependency
+        PYTHONPATH="${PYTHONPATH}:$(pwd)/python/quantum-pecos/src" uv run pytest python/tests --doctest-modules --junitxml=junit/test-results-optional.xml --cov=pecos --cov-report=xml --cov-report=html -m optional_dependency
