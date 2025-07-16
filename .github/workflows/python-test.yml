@@ -216,23 +216,16 @@ jobs:
 
     - name: Run standard tests
       run: |
-        # Debug: Check Python environment
-        echo "Python executable:"
-        uv run which python
-        echo "Python version:"
-        uv run python --version
-        echo "Installed packages:"
-        uv pip list | grep -E "(pecos|quantum|numpy)" || true
-        echo "Python path:"
-        uv run python -c "import sys; print('\n'.join(sys.path))"
-        echo "Checking pecos import:"
-        uv run python -c "import pecos; print(f'PECOS imported from: {pecos.__file__}')" || echo "Failed to import pecos"
-        echo "Checking quantum-pecos src directory:"
-        ls -la python/quantum-pecos/src/ || true
-        echo "PYTHONPATH=$PYTHONPATH"
-        # Run tests with PYTHONPATH set
-        PYTHONPATH="${PYTHONPATH}:$(pwd)/python/quantum-pecos/src" uv run pytest python/tests --doctest-modules --junitxml=junit/test-results.xml --cov=pecos --cov-report=xml --cov-report=html
+        # Set PYTHONPATH to include quantum-pecos src
+        export PYTHONPATH="$(pwd)/python/quantum-pecos/src:${PYTHONPATH}"
+        # Ensure all dependencies are installed
+        uv pip install numpy scipy networkx matplotlib phir
+        # Run tests
+        uv run pytest python/tests --doctest-modules --junitxml=junit/test-results.xml --cov=pecos --cov-report=xml --cov-report=html
 
     - name: Run optional dependency tests
       run: |
-        PYTHONPATH="${PYTHONPATH}:$(pwd)/python/quantum-pecos/src" uv run pytest python/tests --doctest-modules --junitxml=junit/test-results-optional.xml --cov=pecos --cov-report=xml --cov-report=html -m optional_dependency
+        # Set PYTHONPATH to include quantum-pecos src
+        export PYTHONPATH="$(pwd)/python/quantum-pecos/src:${PYTHONPATH}"
+        # Run optional dependency tests
+        uv run pytest python/tests --doctest-modules --junitxml=junit/test-results-optional.xml --cov=pecos --cov-report=xml --cov-report=html -m optional_dependency
