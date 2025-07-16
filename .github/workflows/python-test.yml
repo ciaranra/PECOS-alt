@@ -51,21 +51,6 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Fix SQLite for macOS Python 3.13
-      if: ${{ matrix.os == 'macOS-latest' && matrix.python-version == '3.13' }}
-      run: |
-        # Install pysqlite3-binary which bundles its own SQLite
-        uv pip install pysqlite3-binary
-        # Create a sitecustomize.py to patch sqlite3 imports
-        SITE_PACKAGES=$(uv run python -c "import site; print(site.getsitepackages()[0])")
-        echo "import sys" > "$SITE_PACKAGES/sitecustomize.py"
-        echo "try:" >> "$SITE_PACKAGES/sitecustomize.py"
-        echo "    import pysqlite3" >> "$SITE_PACKAGES/sitecustomize.py"
-        echo "    sys.modules['sqlite3'] = pysqlite3" >> "$SITE_PACKAGES/sitecustomize.py"
-        echo "    sys.modules['sqlite3.dbapi2'] = pysqlite3.dbapi2" >> "$SITE_PACKAGES/sitecustomize.py"
-        echo "except ImportError:" >> "$SITE_PACKAGES/sitecustomize.py"
-        echo "    pass" >> "$SITE_PACKAGES/sitecustomize.py"
-
     - name: Install the latest version of uv
       uses: astral-sh/setup-uv@v4
       with:
@@ -86,12 +71,36 @@ jobs:
         env: True
 
     - name: Configure LLVM
-      run: echo "LLVM_SYS_140_PREFIX=$LLVM_PATH" >>"$GITHUB_ENV" && "$LLVM_PATH/bin/llvm-config" --version
+      shell: bash
+      run: |
+        echo "LLVM_SYS_140_PREFIX=$LLVM_PATH" >> "$GITHUB_ENV"
+        if [[ "${{ runner.os }}" == "Windows" ]]; then
+          "$LLVM_PATH/bin/llvm-config.exe" --version
+        else
+          "$LLVM_PATH/bin/llvm-config" --version
+        fi
 
     - name: Generate lockfile and install dependencies
       run: |
+        # Ensure uv uses the correct Python version from the matrix
+        uv venv --python ${{ matrix.python-version }}
         uv lock --project .
         uv sync --project .
+
+    - name: Fix SQLite for macOS Python 3.13
+      if: ${{ matrix.os == 'macOS-latest' && matrix.python-version == '3.13' }}
+      run: |
+        # Install pysqlite3-binary which bundles its own SQLite
+        uv pip install pysqlite3-binary
+        # Create a sitecustomize.py to patch sqlite3 imports
+        SITE_PACKAGES=$(uv run python -c "import site; print(site.getsitepackages()[0])")
+        echo "import sys" > "$SITE_PACKAGES/sitecustomize.py"
+        echo "try:" >> "$SITE_PACKAGES/sitecustomize.py"
+        echo "    import pysqlite3" >> "$SITE_PACKAGES/sitecustomize.py"
+        echo "    sys.modules['sqlite3'] = pysqlite3" >> "$SITE_PACKAGES/sitecustomize.py"
+        echo "    sys.modules['sqlite3.dbapi2'] = pysqlite3.dbapi2" >> "$SITE_PACKAGES/sitecustomize.py"
+        echo "except ImportError:" >> "$SITE_PACKAGES/sitecustomize.py"
+        echo "    pass" >> "$SITE_PACKAGES/sitecustomize.py"
 
     - name: Install pecos rng build dependencies
       run: |
@@ -126,6 +135,12 @@ jobs:
     - name: Install test dependencies
       run: |
         cd python/quantum-pecos
+        # Disable LTO for llvmlite build to avoid gold linker requirement
+        export CFLAGS="${CFLAGS//-flto/}"
+        export CXXFLAGS="${CXXFLAGS//-flto/}"
+        export LDFLAGS="${LDFLAGS//-flto/}"
+        # Also set specific flags to ensure no LTO
+        export LLVMLITE_CXX_FLAGS="-fno-lto"
         uv pip install -e .[all,test]  # Install with both all and test extras
         uv pip install pytest pytest-cov  # Explicitly install test requirements
 
