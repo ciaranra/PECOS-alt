@@ -58,15 +58,13 @@ jobs:
         uv pip install pysqlite3-binary
         # Create a sitecustomize.py to patch sqlite3 imports
         SITE_PACKAGES=$(uv run python -c "import site; print(site.getsitepackages()[0])")
-        cat > "$SITE_PACKAGES/sitecustomize.py" << 'EOF'
-import sys
-try:
-    import pysqlite3
-    sys.modules['sqlite3'] = pysqlite3
-    sys.modules['sqlite3.dbapi2'] = pysqlite3.dbapi2
-except ImportError:
-    pass
-EOF
+        echo "import sys" > "$SITE_PACKAGES/sitecustomize.py"
+        echo "try:" >> "$SITE_PACKAGES/sitecustomize.py"
+        echo "    import pysqlite3" >> "$SITE_PACKAGES/sitecustomize.py"
+        echo "    sys.modules['sqlite3'] = pysqlite3" >> "$SITE_PACKAGES/sitecustomize.py"
+        echo "    sys.modules['sqlite3.dbapi2'] = pysqlite3.dbapi2" >> "$SITE_PACKAGES/sitecustomize.py"
+        echo "except ImportError:" >> "$SITE_PACKAGES/sitecustomize.py"
+        echo "    pass" >> "$SITE_PACKAGES/sitecustomize.py"
 
     - name: Install the latest version of uv
       uses: astral-sh/setup-uv@v4
