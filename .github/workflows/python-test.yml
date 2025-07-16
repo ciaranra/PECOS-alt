@@ -121,9 +121,8 @@ jobs:
           exit 1
         fi
 
-        # Lock and sync dependencies
-        uv lock --project .
-        uv sync --project . --all-extras
+        # Skip sync as it creates wrong Python version
+        # Just ensure the venv is created with correct Python
 
     - name: Fix SQLite for macOS Python 3.13
       if: ${{ matrix.os == 'macOS-latest' && matrix.python-version == '3.13' }}
@@ -213,8 +212,26 @@ jobs:
         uv pip install -e .[all,test]  # Install with both all and test extras
         uv pip install pytest pytest-cov  # Explicitly install test requirements
 
+    - name: Debug environment
+      run: |
+        echo "=== Environment Debug ==="
+        echo "Current directory: $(pwd)"
+        echo "Python executable: $(which python)"
+        echo "UV Python: $(uv run which python)"
+        echo "=== Installed packages ==="
+        uv pip list | grep -E "(numpy|scipy|networkx|matplotlib|phir|pecos|quantum)" || echo "No matching packages found"
+        echo "=== PYTHONPATH ==="
+        export PYTHONPATH="$(pwd)/python/quantum-pecos/src:$(pwd)/python/pecos-rslib/src:${PYTHONPATH}"
+        echo "PYTHONPATH=$PYTHONPATH"
+        echo "=== Test import ==="
+        uv run python -c "import sys; print('Python paths:'); print('\n'.join(sys.path))"
+        uv run python -c "import numpy; print('numpy imported successfully')" || echo "Failed to import numpy"
+        uv run python -c "import networkx; print('networkx imported successfully')" || echo "Failed to import networkx"
+        
     - name: Run standard tests
       run: |
+        # Ensure dependencies are installed
+        uv pip install numpy scipy networkx matplotlib phir pytest pytest-cov
         # Set PYTHONPATH to include both quantum-pecos and pecos-rslib src
         export PYTHONPATH="$(pwd)/python/quantum-pecos/src:$(pwd)/python/pecos-rslib/src:${PYTHONPATH}"
         # Run tests
