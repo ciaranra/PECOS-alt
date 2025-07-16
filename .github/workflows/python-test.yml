@@ -227,7 +227,7 @@ jobs:
         uv run python -c "import sys; print('Python paths:'); print('\n'.join(sys.path))"
         uv run python -c "import numpy; print('numpy imported successfully')" || echo "Failed to import numpy"
         uv run python -c "import networkx; print('networkx imported successfully')" || echo "Failed to import networkx"
-        
+
     - name: Run standard tests
       run: |
         # Ensure dependencies are installed
