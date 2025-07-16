@@ -121,7 +121,7 @@ jobs:
           exit 1
         fi
 
-        # Lock and sync dependencies
+        # Lock and sync dependencies  
         uv lock --project .
         uv sync --project . --all-extras
 
@@ -182,17 +182,16 @@ jobs:
         fi
         uv run maturin develop --uv
 
-    - name: Install quantum-pecos
+    - name: Install quantum-pecos and dependencies
       run: |
+        # First install the core dependencies
+        uv pip install numpy scipy networkx matplotlib phir
+        # Then install quantum-pecos in editable mode
         cd python/quantum-pecos
-        # Install quantum-pecos with all its dependencies
         uv pip install -e .
         # Verify installation
-        echo "Checking if pecos is installed:"
-        uv pip list | grep -E "(pecos|quantum|networkx|scipy)" || true
-        echo "All installed packages:"
-        uv pip list
-        uv run python -c "import pecos; print(f'PECOS version: {pecos.__version__}')" || echo "Failed to import pecos"
+        echo "Checking installed packages:"
+        uv pip list | grep -E "(numpy|scipy|networkx|matplotlib|phir|pecos|quantum)" || true
 
     - name: Run pre-commit checks
       run: uv run pre-commit run --all-files --show-diff-on-failure
@@ -218,8 +217,6 @@ jobs:
       run: |
         # Set PYTHONPATH to include quantum-pecos src
         export PYTHONPATH="$(pwd)/python/quantum-pecos/src:${PYTHONPATH}"
-        # Ensure all dependencies are installed
-        uv pip install numpy scipy networkx matplotlib phir
         # Run tests
         uv run pytest python/tests --doctest-modules --junitxml=junit/test-results.xml --cov=pecos --cov-report=xml --cov-report=html
 
