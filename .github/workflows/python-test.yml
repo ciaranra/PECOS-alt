@@ -145,7 +145,7 @@ jobs:
 
         # Build pysqlite3 from source linking against Homebrew's SQLite
         uv pip install --force-reinstall --no-binary :all: pysqlite3
-        
+
         # Restore compiler settings
         export CC="$OLD_CC"
         export CXX="$OLD_CXX"
@@ -201,13 +201,13 @@ jobs:
         if [[ "${{ runner.os }}" == "Linux" ]]; then
           unset CC CXX
         fi
-        
+
         # Disable LTO for llvmlite build to avoid gold linker requirement
         export CFLAGS="-fno-lto"
         export CXXFLAGS="-fno-lto"
         export LDFLAGS="-fno-lto"
         export LLVMLITE_SKIP_LLVM_VERSION_CHECK=1
-        
+
         uv pip install -e .[all,test]  # Install with both all and test extras
         uv pip install pytest pytest-cov  # Explicitly install test requirements
 
