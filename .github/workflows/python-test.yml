@@ -132,6 +132,9 @@ jobs:
         # Install the latest SQLite via Homebrew
         brew install sqlite3
 
+        # Use system compiler instead of LLVM for building C extensions
+        unset CC CXX
+
         # Set environment variables to use Homebrew's SQLite
         export LDFLAGS="-L$(brew --prefix sqlite3)/lib"
         export CPPFLAGS="-I$(brew --prefix sqlite3)/include"
@@ -156,8 +159,8 @@ jobs:
     - name: Build PECOS RNG
       run: |
         cd clib/pecos-rng
-        # On macOS, use system compiler instead of LLVM for C++ extensions
-        if [[ "${{ matrix.os }}" == "macOS-latest" ]]; then
+        # On macOS and Windows, use system compiler instead of LLVM for C++ extensions
+        if [[ "${{ matrix.os }}" == "macOS-latest" ]] || [[ "${{ runner.os }}" == "Windows" ]]; then
           unset CC CXX
         fi
         uv pip install .
@@ -165,8 +168,8 @@ jobs:
     - name: Install pecos-rslib with maturin
       run: |
         cd python/pecos-rslib
-        # On macOS, use system compiler for C dependencies in Rust crates
-        if [[ "${{ matrix.os }}" == "macOS-latest" ]]; then
+        # On macOS and Windows, use system compiler for C dependencies in Rust crates
+        if [[ "${{ matrix.os }}" == "macOS-latest" ]] || [[ "${{ runner.os }}" == "Windows" ]]; then
           unset CC CXX
         fi
         uv run maturin develop --uv
@@ -193,8 +196,10 @@ jobs:
 
     - name: Run standard tests
       run: |
-        uv run pytest ./python/tests --doctest-modules --junitxml=junit/test-results.xml --cov=com --cov-report=xml --cov-report=html
+        cd python/quantum-pecos
+        uv run pytest ../tests --doctest-modules --junitxml=../../junit/test-results.xml --cov=pecos --cov-report=xml --cov-report=html
 
     - name: Run optional dependency tests
       run: |
-        uv run pytest ./python/tests --doctest-modules --junitxml=junit/test-results.xml --cov=com --cov-report=xml --cov-report=html -m optional_dependency
+        cd python/quantum-pecos
+        uv run pytest ../tests --doctest-modules --junitxml=../../junit/test-results-optional.xml --cov=pecos --cov-report=xml --cov-report=html -m optional_dependency
