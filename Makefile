@@ -17,13 +17,18 @@ updatereqs:  ## Generate/update lockfiles for both packages
 .PHONY: installreqs
 installreqs: ## Install Python project requirements to root .venv
 	@echo "Installing requirements..."
-	uv sync
+	@if [ -n "$(UV_PYTHON)" ]; then \
+		echo "Using pinned Python: $(UV_PYTHON)"; \
+		uv sync --python "$(UV_PYTHON)"; \
+	else \
+		uv sync; \
+	fi
 
 .PHONY: buildrng
 buildrng:
 	@echo "Building and installing RNG library..."
 	uv pip install nanobind
-	cd clib/pecos-rng && CC=gcc CXX=g++ uv pip install --python $(shell uv run which python) -e .
+	cd clib/pecos-rng && CC=gcc CXX=g++ uv pip install -e .
 
 # Building development environments
 # ---------------------------------
@@ -109,15 +114,78 @@ rstest: qir-staticlib-if-needed  ## Run Rust tests
 	# Run tests in release mode to avoid QIR timing issues in debug mode
 	cargo test --workspace --release
 
+.PHONY: rstest-all
+rstest-all: qir-staticlib-if-needed  ## Run Rust tests with all features (includes WASM, decoders, etc.)
+	cargo test --workspace --all-features
+
+# Decoder-specific commands
+# -------------------------
+
+.PHONY: build-decoders
+build-decoders: ## Build all decoder crates with all features
+	cargo build --package pecos-decoders --all-features
+
+.PHONY: build-decoder
+build-decoder: ## Build specific decoder. Usage: make build-decoder DECODER=ldpc
+	@if [ -z "$(DECODER)" ]; then \
+		echo "Error: DECODER not specified. Usage: make build-decoder DECODER=ldpc"; \
+		echo "Available decoders: ldpc"; \
+		exit 1; \
+	fi
+	cargo build --package pecos-decoders --features $(DECODER)
+
+.PHONY: test-decoders
+test-decoders: ## Test all decoder crates
+	cargo test --package pecos-decoders --all-features
+
+.PHONY: test-decoder
+test-decoder: ## Test specific decoder. Usage: make test-decoder DECODER=ldpc
+	@if [ -z "$(DECODER)" ]; then \
+		echo "Error: DECODER not specified. Usage: make test-decoder DECODER=ldpc"; \
+		exit 1; \
+	fi
+	cargo test --package pecos-decoders --features $(DECODER)
+
+.PHONY: decoder-info
+decoder-info: ## Show available decoders and their features
+	@echo "Available decoders in PECOS:"
+	@echo "  • ldpc:           LDPC decoders (BP-OSD, MBP, etc.)"
+	@echo ""
+	@echo "To build specific decoder: make build-decoder DECODER=ldpc"
+	@echo "To build all decoders:     make build-decoders"
+	@echo "See DECODERS.md for detailed documentation."
+
+.PHONY: decoder-cache-status
+decoder-cache-status: ## Show decoder download cache status
+	@CACHE_DIR="$${PECOS_CACHE_DIR:-$$HOME/.cache/pecos-decoders}"; \
+	if [ -d "$$CACHE_DIR" ]; then \
+		echo "Cache directory: $$CACHE_DIR"; \
+		echo "Contents:"; \
+		du -sh "$$CACHE_DIR"/* 2>/dev/null || echo "  (empty)"; \
+	else \
+		echo "No cache directory found at $$CACHE_DIR"; \
+		echo "Cache will be created when building decoders"; \
+	fi
+
+.PHONY: decoder-cache-clean
+decoder-cache-clean: ## Clean decoder download cache
+	@CACHE_DIR="$${PECOS_CACHE_DIR:-$$HOME/.cache/pecos-decoders}"; \
+	if [ -d "$$CACHE_DIR" ]; then \
+		echo "Cleaning cache directory: $$CACHE_DIR"; \
+		rm -rf "$$CACHE_DIR"; \
+		echo "Cache cleaned"; \
+	else \
+		echo "No cache directory found"; \
+	fi
 
 .PHONY: pytest
 pytest:  ## Run tests on the Python package (not including optional dependencies). ASSUMES: previous build command
-	uv run pytest ./python/tests/ -m "not optional_dependency"
-	uv run pytest ./python/pecos-rslib/tests/
+	PYTHONPATH="$(PWD)/python/quantum-pecos/src:$(PWD)/python/pecos-rslib/src:$(PYTHONPATH)" uv run pytest ./python/tests/ --doctest-modules --junitxml=junit/test-results.xml --cov=pecos --cov-report=xml --cov-report=html -m "not optional_dependency"
+	PYTHONPATH="$(PWD)/python/quantum-pecos/src:$(PWD)/python/pecos-rslib/src:$(PYTHONPATH)" uv run pytest ./python/pecos-rslib/tests/
 
 .PHONY: pytest-dep
 pytest-dep: ## Run tests on the Python package only for optional dependencies. ASSUMES: previous build command
-	uv run pytest ./python/tests/ -m optional_dependency
+	PYTHONPATH="$(PWD)/python/quantum-pecos/src:$(PWD)/python/pecos-rslib/src:$(PYTHONPATH)" uv run pytest ./python/tests/ --doctest-modules --junitxml=junit/test-results-optional.xml --cov=pecos --cov-report=xml --cov-report=html -m optional_dependency
 
 .PHONY: pytest-all
 pytest-all: ## Run all tests on the Python package ASSUMES: previous build command

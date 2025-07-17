@@ -1,0 +1,30 @@
+[package]
+name = "pecos-decoders"
+version.workspace = true
+edition.workspace = true
+readme.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Unified decoder library for PECOS - meta crate"
+
+[dependencies]
+pecos-decoder-core.workspace = true
+pecos-ldpc-decoders = { workspace = true, optional = true }
+
+[features]
+default = []
+ldpc = ["dep:pecos-ldpc-decoders"]
+all = ["ldpc"]
+
+[dev-dependencies]
+ndarray.workspace = true
+
+[lib]
+name = "pecos_decoders"
+
+[lints]
+workspace = true

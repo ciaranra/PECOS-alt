@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "pecos-pcg"
-version = "0.1.0"
+version = "0.6.0.dev8"
 description = "A Python package with a nanobind-based C++ extension"
 license = { text = "MIT" }
 readme = "README.md"

@@ -71,48 +71,124 @@ jobs:
         env: True
 
     - name: Configure LLVM
-      run: echo "LLVM_SYS_140_PREFIX=$LLVM_PATH" >>"$GITHUB_ENV" && "$LLVM_PATH/bin/llvm-config" --version
-
-    - name: Generate lockfile and install dependencies
+      shell: bash
       run: |
-        uv lock --project .
-        uv sync --project .
+        echo "LLVM_SYS_140_PREFIX=$LLVM_PATH" >> "$GITHUB_ENV"
+        # Test LLVM installation
+        if [[ "${{ runner.os }}" == "Windows" ]]; then
+          # On Windows with bash, we need to convert Windows paths to Unix paths
+          LLVM_CONFIG="$(cygpath -u "$LLVM_PATH")/bin/llvm-config.exe"
+          if [[ -f "$LLVM_CONFIG" ]]; then
+            "$LLVM_CONFIG" --version
+          else
+            echo "Warning: llvm-config.exe not found at $LLVM_CONFIG"
+            ls -la "$(cygpath -u "$LLVM_PATH")/bin/" || true
+          fi
+        else
+          "$LLVM_PATH/bin/llvm-config" --version
+        fi
 
-    - name: Install pecos rng build dependencies
+    - name: Set UV_PYTHON environment variable
       run: |
-        uv pip install build nanobind scikit-build-core cmake ninja
+        # Get the exact Python path from setup-python
+        if [[ "${{ runner.os }}" == "Windows" ]]; then
+          # On Windows, we need to use the Windows-style path
+          PYTHON_PATH=$(python -c "import sys; print(sys.executable)")
+        else
+          PYTHON_PATH=$(which python)
+        fi
+        echo "Python from setup-python: $PYTHON_PATH"
+        python --version
 
-    - name: Build PECOS RNG
-      run: |
-        export NANOBIND_CMAKE_DIR=$(uv run -- python -m nanobind --cmake_dir)
-        export NANOBIND_DIR=$(uv run -- python -m nanobind --include_dir)
-        cd clib/pecos-rng && mkdir build && cd build/ && cmake .. -DCMAKE_PREFIX_PATH=$NANOBIND_CMAKE_DIR
-        cmake --build . && cd ..
-        uv pip install .
+        # Export UV_PYTHON for all subsequent steps
+        echo "UV_PYTHON=$PYTHON_PATH" >> "$GITHUB_ENV"
 
-    - name: Install pecos-rslib with maturin
+    - name: Create virtual environment
       run: |
-        cd python/pecos-rslib
-        uv run maturin develop --uv
+        # Create venv using the correct Python version from setup-python
+        uv venv --python "$UV_PYTHON"
 
-    - name: Install quantum-pecos
+        # Verify the venv is using the correct Python version
+        echo "Python in venv:"
+        source .venv/bin/activate
+        python --version
+
+        # Verify version matches what we expect
+        VENV_PYTHON_VERSION=$(python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+        if [[ "$VENV_PYTHON_VERSION" != "${{ matrix.python-version }}" ]]; then
+          echo "ERROR: Python version mismatch!"
+          echo "Expected: ${{ matrix.python-version }}"
+          echo "Got: $VENV_PYTHON_VERSION"
+          exit 1
+        fi
+
+    - name: Fix SQLite for macOS Python 3.13
+      if: ${{ matrix.os == 'macOS-latest' && matrix.python-version == '3.13' }}
       run: |
-        cd python/quantum-pecos
-        uv pip install -e .
+        # For Python 3.13 on macOS, we need to handle SQLite differently
+        # Install the latest SQLite via Homebrew
+        brew install sqlite3
+
+        # Save current compiler settings and use system compiler
+        OLD_CC="$CC"
+        OLD_CXX="$CXX"
+        # Use the system clang (not the LLVM one)
+        export CC=/usr/bin/clang
+        export CXX=/usr/bin/clang++
+
+        # Set environment variables to use Homebrew's SQLite
+        export LDFLAGS="-L$(brew --prefix sqlite3)/lib"
+        export CPPFLAGS="-I$(brew --prefix sqlite3)/include"
+
+        # Build pysqlite3 from source linking against Homebrew's SQLite
+        uv pip install --force-reinstall --no-binary :all: pysqlite3
+
+        # Restore compiler settings
+        export CC="$OLD_CC"
+        export CXX="$OLD_CXX"
+
+        # Create a sitecustomize.py to patch sqlite3 imports
+        SITE_PACKAGES=$(uv run python -c "import site; print(site.getsitepackages()[0])")
+        echo "import sys" > "$SITE_PACKAGES/sitecustomize.py"
+        echo "try:" >> "$SITE_PACKAGES/sitecustomize.py"
+        echo "    import pysqlite3" >> "$SITE_PACKAGES/sitecustomize.py"
+        echo "    sys.modules['sqlite3'] = pysqlite3" >> "$SITE_PACKAGES/sitecustomize.py"
+        echo "    sys.modules['sqlite3.dbapi2'] = pysqlite3.dbapi2" >> "$SITE_PACKAGES/sitecustomize.py"
+        echo "except ImportError:" >> "$SITE_PACKAGES/sitecustomize.py"
+        echo "    pass" >> "$SITE_PACKAGES/sitecustomize.py"
+
+    - name: Build PECOS
+      run: |
+        # Use the Makefile to build everything, respecting existing venv
+        UV_PYTHON="$UV_PYTHON" make build
 
     - name: Run pre-commit checks
       run: uv run pre-commit run --all-files --show-diff-on-failure
 
-    - name: Install test dependencies
+
+    - name: Debug environment
       run: |
-        cd python/quantum-pecos
-        uv pip install -e .[all,test]  # Install with both all and test extras
-        uv pip install pytest pytest-cov  # Explicitly install test requirements
+        echo "=== Environment Debug ==="
+        echo "Current directory: $(pwd)"
+        echo "Python executable: $(which python)"
+        echo "UV Python: $(uv run which python)"
+        echo "=== Installed packages ==="
+        uv pip list | grep -E "(numpy|scipy|networkx|matplotlib|phir|pecos|quantum)" || echo "No matching packages found"
+        echo "=== PYTHONPATH ==="
+        export PYTHONPATH="$(pwd)/python/quantum-pecos/src:$(pwd)/python/pecos-rslib/src:${PYTHONPATH}"
+        echo "PYTHONPATH=$PYTHONPATH"
+        echo "=== Test import ==="
+        uv run python -c "import sys; print('Python paths:'); print('\n'.join(sys.path))"
+        uv run python -c "import numpy; print('numpy imported successfully')" || echo "Failed to import numpy"
+        uv run python -c "import networkx; print('networkx imported successfully')" || echo "Failed to import networkx"
+        uv run python -c "import pecos; print('pecos imported successfully')" || echo "Failed to import pecos"
 
     - name: Run standard tests
       run: |
-        uv run pytest ./python/tests --doctest-modules --junitxml=junit/test-results.xml --cov=com --cov-report=xml --cov-report=html
+        # Use the Makefile to run standard Python tests (now includes PYTHONPATH)
+        make pytest
 
     - name: Run optional dependency tests
       run: |
-        uv run pytest ./python/tests --doctest-modules --junitxml=junit/test-results.xml --cov=com --cov-report=xml --cov-report=html -m optional_dependency
+        # Use the Makefile to run optional dependency tests (now includes PYTHONPATH)
+        make pytest-dep
