@@ -11,7 +11,7 @@ def poly2qubits(poly, data: QReg):
         qubits.append(data[q])
     return qubits
 
-class BareSynExtract(Block):
+class SynExtractBare(Block):
 
     def __init__(self, data: QReg, ancillas: QReg, checks: list, syn: CReg):
 
@@ -38,7 +38,7 @@ class BareSynExtract(Block):
                 Check(d=poly2qubits(c, data), paulis=pauli, a=ancillas[anc_id], out=syn[syn_id], with_barriers=False)
             )
 
-class BareSynExtractParallel(Block):
+class SynExtractBareParallel(Block):
 
     def __init__(self, data: QReg, ancillas: QReg, checks: list, syn: CReg):
 

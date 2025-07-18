@@ -40,7 +40,7 @@ class SynMeasProcessing(Block):
     ):
         super().__init__()
 
-        assert len(syn_indices) == len(syn)
+        assert len(syn_indices) == len(syn) / 2, f"len(syn_indices) != len(syn) / 2: {len(syn_indices)} != {len(syn) / 2}"
 
         for i, s in enumerate(syn_indices):
             for j in s:
