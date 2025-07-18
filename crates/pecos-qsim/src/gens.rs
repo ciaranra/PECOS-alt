@@ -52,12 +52,13 @@ where
         }
     }
 
+    #[inline]
     pub fn get_num_qubits(&self) -> usize {
         self.num_qubits
     }
 
     #[inline]
-    pub fn clear(&mut self) {
+    fn clear(&mut self) {
         self.col_x.clear();
         self.col_z.clear();
         self.row_x.clear();
@@ -97,7 +98,7 @@ where
     let mut sets = Vec::with_capacity(num_qubits);
     for i in 0..num_qubits {
         let mut set = T::new();
-        set.insert(E::from_usize(i));
+        set.insert(E::from_index(i));
         sets.push(set);
     }
     sets

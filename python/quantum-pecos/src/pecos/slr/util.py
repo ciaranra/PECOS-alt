@@ -12,10 +12,7 @@
 
 def str2list(qasm):
     qasm = qasm.split("\n")
-    qasm_list = []
-    for line in qasm:
-        qasm_list.append(line.strip())
-    return qasm_list
+    return [line.strip() for line in qasm]
 
 
 def list2str(qasm_list):

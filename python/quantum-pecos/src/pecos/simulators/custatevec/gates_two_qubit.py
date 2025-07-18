@@ -9,24 +9,35 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Two-qubit gate operations for cuStateVec simulator.
+
+This module provides GPU-accelerated two-qubit quantum gate operations for the NVIDIA cuStateVec simulator,
+including CNOT gates, controlled gates, and other entangling operations using CUDA acceleration.
+"""
+
+from __future__ import annotations
+
 import cmath
 import math
-from typing import Any
+from typing import TYPE_CHECKING
 
 import cupy as cp
+
+if TYPE_CHECKING:
+    from pecos.simulators.custatevec.state import CuStateVec
+    from pecos.typing import SimulatorGateParams
 from cuquantum import custatevec as cusv
 
 from pecos.simulators.custatevec.gates_one_qubit import H
 
 
 def _apply_controlled_matrix(
-    state,
+    state: CuStateVec,
     control: int,
     target: int,
     matrix: cp.ndarray,
 ) -> None:
-    """
-    Apply the matrix to the state. This should be faster for controlled gates.
+    """Apply the matrix to the state. This should be faster for controlled gates.
 
     Args:
         state: An instance of CuStateVec
@@ -65,9 +76,12 @@ def _apply_controlled_matrix(
     state.stream.synchronize()
 
 
-def CX(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply controlled X gate.
+def CX(
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
+) -> None:
+    """Apply controlled X gate.
 
     Args:
         state: An instance of CuStateVec
@@ -86,9 +100,12 @@ def CX(state, qubits: tuple[int, int], **params: Any) -> None:
     _apply_controlled_matrix(state, qubits[0], qubits[1], matrix)
 
 
-def CY(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply controlled Y gate.
+def CY(
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
+) -> None:
+    """Apply controlled Y gate.
 
     Args:
         state: An instance of CuStateVec
@@ -107,9 +124,12 @@ def CY(state, qubits: tuple[int, int], **params: Any) -> None:
     _apply_controlled_matrix(state, qubits[0], qubits[1], matrix)
 
 
-def CZ(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply controlled Z gate.
+def CZ(
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
+) -> None:
+    """Apply controlled Z gate.
 
     Args:
         state: An instance of CuStateVec
@@ -128,13 +148,16 @@ def CZ(state, qubits: tuple[int, int], **params: Any) -> None:
     _apply_controlled_matrix(state, qubits[0], qubits[1], matrix)
 
 
-def _apply_two_qubit_matrix(state, qubits: tuple[int, int], matrix: cp.ndarray) -> None:
-    """
-    Apply the matrix to the state.
+def _apply_two_qubit_matrix(
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    matrix: cp.ndarray,
+) -> None:
+    """Apply the matrix to the state.
 
     Args:
         state: An instance of CuStateVec
-        qubit: The index of the qubit where the gate is applied
+        qubits: A tuple of two qubit indices where the gate is applied
         matrix: The matrix to be applied
     """
     if qubits[0] >= state.num_qubits or qubits[0] < 0:
@@ -168,9 +191,13 @@ def _apply_two_qubit_matrix(state, qubits: tuple[int, int], matrix: cp.ndarray) 
     state.stream.synchronize()
 
 
-def RXX(state, qubits: tuple[int, int], angles: tuple[float], **params: Any) -> None:
-    """
-    Apply a rotation about XX.
+def RXX(
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    angles: tuple[float],
+    **_params: SimulatorGateParams,
+) -> None:
+    """Apply a rotation about XX.
 
     Args:
         state: An instance of CuStateVec
@@ -206,9 +233,13 @@ def RXX(state, qubits: tuple[int, int], angles: tuple[float], **params: Any) -> 
     _apply_two_qubit_matrix(state, qubits, matrix)
 
 
-def RYY(state, qubits: tuple[int, int], angles: tuple[float], **params: Any) -> None:
-    """
-    Apply a rotation about YY.
+def RYY(
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    angles: tuple[float],
+    **_params: SimulatorGateParams,
+) -> None:
+    """Apply a rotation about YY.
 
     Args:
         state: An instance of CuStateVec
@@ -244,9 +275,13 @@ def RYY(state, qubits: tuple[int, int], angles: tuple[float], **params: Any) -> 
     _apply_two_qubit_matrix(state, qubits, matrix)
 
 
-def RZZ(state, qubits: tuple[int, int], angles: tuple[float], **params: Any) -> None:
-    """
-    Apply a rotation about ZZ.
+def RZZ(
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    angles: tuple[float],
+    **_params: SimulatorGateParams,
+) -> None:
+    """Apply a rotation about ZZ.
 
     Args:
         state: An instance of CuStateVec
@@ -283,13 +318,12 @@ def RZZ(state, qubits: tuple[int, int], angles: tuple[float], **params: Any) -> 
 
 
 def R2XXYYZZ(
-    state,
+    state: CuStateVec,
     qubits: tuple[int, int],
     angles: tuple[float, float, float],
-    **params: Any,
+    **_params: SimulatorGateParams,
 ) -> None:
-    """
-    Apply RXX*RYY*RZZ.
+    """Apply RXX*RYY*RZZ.
 
     Args:
         state: An instance of CuStateVec
@@ -305,9 +339,12 @@ def R2XXYYZZ(
     RZZ(state, qubits, (angles[2],))
 
 
-def SXX(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply a square root of XX gate.
+def SXX(
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
+) -> None:
+    """Apply a square root of XX gate.
 
     Args:
         state: An instance of CuStateVec
@@ -316,9 +353,12 @@ def SXX(state, qubits: tuple[int, int], **params: Any) -> None:
     RXX(state, qubits, angles=(math.pi / 2,))
 
 
-def SXXdg(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply adjoint of a square root of XX gate.
+def SXXdg(
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
+) -> None:
+    """Apply adjoint of a square root of XX gate.
 
     Args:
         state: An instance of CuStateVec
@@ -327,9 +367,12 @@ def SXXdg(state, qubits: tuple[int, int], **params: Any) -> None:
     RXX(state, qubits, angles=(-math.pi / 2,))
 
 
-def SYY(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply a square root of YY gate.
+def SYY(
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
+) -> None:
+    """Apply a square root of YY gate.
 
     Args:
         state: An instance of CuStateVec
@@ -338,9 +381,12 @@ def SYY(state, qubits: tuple[int, int], **params: Any) -> None:
     RYY(state, qubits, angles=(math.pi / 2,))
 
 
-def SYYdg(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply adjoint of a square root of YY gate.
+def SYYdg(
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
+) -> None:
+    """Apply adjoint of a square root of YY gate.
 
     Args:
         state: An instance of CuStateVec
@@ -349,9 +395,12 @@ def SYYdg(state, qubits: tuple[int, int], **params: Any) -> None:
     RYY(state, qubits, angles=(-math.pi / 2,))
 
 
-def SZZ(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply a square root of ZZ gate.
+def SZZ(
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
+) -> None:
+    """Apply a square root of ZZ gate.
 
     Args:
         state: An instance of CuStateVec
@@ -360,9 +409,12 @@ def SZZ(state, qubits: tuple[int, int], **params: Any) -> None:
     RZZ(state, qubits, angles=(math.pi / 2,))
 
 
-def SZZdg(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply adjoint of a square root of ZZ gate.
+def SZZdg(
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
+) -> None:
+    """Apply adjoint of a square root of ZZ gate.
 
     Args:
         state: An instance of CuStateVec
@@ -371,9 +423,12 @@ def SZZdg(state, qubits: tuple[int, int], **params: Any) -> None:
     RZZ(state, qubits, angles=(-math.pi / 2,))
 
 
-def SWAP(state, qubits: tuple[int, int], **params: Any) -> None:
-    """
-    Apply a SWAP gate.
+def SWAP(
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
+) -> None:
+    """Apply a SWAP gate.
 
     Args:
         state: An instance of CuStateVec
@@ -415,8 +470,12 @@ def SWAP(state, qubits: tuple[int, int], **params: Any) -> None:
     state.stream.synchronize()
 
 
-def G(state, qubits: tuple[int, int], **params: Any) -> None:
-    """'G': (('I', 'H'), 'CNOT', ('H', 'H'), 'CNOT', ('I', 'H'))"""
+def G(
+    state: CuStateVec,
+    qubits: tuple[int, int],
+    **_params: SimulatorGateParams,
+) -> None:
+    """'G': (('I', 'H'), 'CNOT', ('H', 'H'), 'CNOT', ('I', 'H'))."""
     H(state, qubits[1])
     CX(state, qubits)
     H(state, qubits[0])

@@ -10,18 +10,64 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-// re-exporting pecos-core
-pub use pecos_core::VecSet;
+//! A prelude for PECOS users.
+//!
+//! This prelude re-exports the most commonly used types, traits, and functions
+//! from all PECOS component crates. By importing this prelude with
+//! `use pecos::prelude::*;`, you get access to the complete PECOS API without
+//! having to manually import from each component crate.
+//!
+//! ## Contents
+//!
+//! This prelude includes re-exports from:
+//!
+//! * `pecos_core`: Core types, traits, and error handling
+//! * `pecos_engines`: Simulation engines for quantum and classical processing
+//! * `pecos_phir`: PECOS High-level Intermediate Representation
+//! * `pecos_qasm`: `OpenQASM` language support
+//! * `pecos_qir`: Quantum Intermediate Representation support
+//! * `pecos_qsim`: Quantum simulation implementations
+//!
+//! It also includes key functionality from the top-level PECOS crate:
+//!
+//! * Simulation functions (`run_sim`)
+//! * Engine setup functions (`setup_qasm_engine`, `setup_qir_engine`)
+//! * Program type detection and handling
+//!
+//! ## Usage
+//!
+//! ```rust
+//! use pecos::prelude::*;
+//!
+//! // Now you can use all common PECOS types and functions without additional imports
+//! ```
 
-// re-exporting pecos-qsim
-pub use pecos_qsim::CliffordSimulator;
-pub use pecos_qsim::SparseStab;
-// TODO: add the following in the future as makes sense...
-// pub use pecos_qsim::clifford_simulator::CliffordSimulator;
-// pub use pecos_qsim::gens::Gens;
-// pub use pecos_qsim::measurement::{MeasBitValue, MeasValue, Measurement}; // TODO: Distinguish between trait and struct/enum
-// pub use pecos_qsim::nonclifford_simulator::NonCliffordSimulator;
-// pub use pecos_qsim::pauli_prop::{PauliProp, StdPauliProp};
-// pub use pecos_qsim::paulis::Paulis;
-// pub use pecos_qsim::quantum_simulator::QuantumSimulator;
-// pub use pecos_qsim::sparse_stab::SparseStab;
+// Re-export preludes from component crates
+pub use pecos_core::prelude::*;
+pub use pecos_engines::prelude::*;
+pub use pecos_phir::prelude::*;
+pub use pecos_qasm::prelude::*;
+pub use pecos_qir::prelude::*;
+pub use pecos_qsim::prelude::*;
+
+// Re-export ShotVec directly from pecos_engines for easier access
+pub use pecos_engines::shot_results::ShotVec;
+
+// Re-export crate-specific utilities
+pub use crate::program::{
+    ProgramType, detect_program_type, get_program_path, setup_engine_for_program,
+};
+
+// Re-export setup functions from format-specific crates
+pub use pecos_phir::setup_phir_engine;
+pub use pecos_qasm::setup_qasm_engine;
+pub use pecos_qir::setup_qir_engine;
+
+// Re-export run_sim from pecos-engines
+pub use pecos_engines::run_sim;
+
+// Re-export PCG RNG functions
+pub use pecos_clib_pcg::{
+    boundedrand as pcg32_boundedrand, frandom as pcg32_frandom, random as pcg32_random,
+    srandom as pcg32_srandom,
+};

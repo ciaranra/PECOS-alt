@@ -12,20 +12,27 @@
 import matplotlib.pyplot as plt
 import networkx as nx
 
-from pecos.qeclib.color488.abstract_layout import gen_layout
+from pecos.qeclib.color488.color488 import Color488
 
 
-def plot_layout(distance, numbered_qubits=False, numbered_poly=False):
+def plot_layout(color488, numbered_qubits=False, numbered_poly=False):
+    """Plot the layout of a Color488 code.
 
-    positions, polygons = gen_layout(distance)
+    Args:
+        color488: A Color488 instance
+        numbered_qubits: Whether to number the data qubits
+        numbered_poly: Whether to number the polygons
+    """
+
+    positions, polygons = color488.get_layout()
 
     # Calculate the mid-point for each polygon
     pos_poly = []
     for polygon in polygons:
         node_ids = polygon[:-1]  # Exclude the color
         coords = [positions[node_id] for node_id in node_ids]
-        mid_x = sum(x for x, y in coords) / len(coords)
-        mid_y = sum(y for x, y in coords) / len(coords)
+        mid_x = sum(x for x, _ in coords) / len(coords)
+        mid_y = sum(y for _, y in coords) / len(coords)
         pos_poly.append((mid_x, mid_y))
 
     # Re-write data structures to plot

@@ -9,11 +9,16 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Main PyPMIR intermediate representation module.
+
+This module provides the core PyPMIR (Python PECOS Medium-level Intermediate Representation) functionality for quantum
+circuit compilation, execution, and representation in the PECOS framework.
+"""
 
 from __future__ import annotations
 
 from math import pi
-from typing import TYPE_CHECKING, Callable, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import numpy as np
 
@@ -23,6 +28,8 @@ from pecos.reps.pypmir import op_types as op
 from pecos.reps.pypmir.name_resolver import sim_name_resolver
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from pecos.reps.pypmir.op_types import QOp
 
 TypeOp = TypeVar("TypeOp", bound=op.Op)
@@ -43,8 +50,9 @@ unsigned_data_types = {
 
 
 class PyPMIR:
-    """Pythonic PECOS Middle-level IR. Used to convert PHIR into an object and optimize the data structure for
-    simulations.
+    """Pythonic PECOS Middle-level IR.
+
+    Used to convert PHIR into an object and optimize the data structure for simulations.
     """
 
     def __init__(
@@ -52,6 +60,13 @@ class PyPMIR:
         metadata: dict | None = None,
         name_resolver: Callable[[QOp], str] | None = None,
     ) -> None:
+        """Initialize the PyPMIR instance.
+
+        Args:
+            metadata: Optional metadata dictionary for the IR.
+            name_resolver: Optional callable to resolve quantum operation names.
+                If not provided, uses the default sim_name_resolver.
+        """
         self.ops = []
         self.metadata = metadata
 
@@ -70,6 +85,15 @@ class PyPMIR:
 
     @classmethod
     def handle_op(cls, o: dict | str | int, p: PyPMIR) -> TypeOp | str | list | int:
+        """Handle different types of operations in PyPMIR.
+
+        Args:
+            o: Operation data (dict, string, or integer).
+            p: PyPMIR instance for context.
+
+        Returns:
+            Processed operation of appropriate type.
+        """
         match o:
             case int() | str():  # Assume int value or register
                 o: int | str
@@ -79,16 +103,13 @@ class PyPMIR:
                 if len(o) == 2 and isinstance(o[0], str) and isinstance(o[1], int):
                     o: list
                     return o
-                else:
-                    msg = f"A bit or qubit was assumed for list types. Got: {o}"
-                    raise ValueError(msg)
+                msg = f"A bit or qubit was assumed for list types. Got: {o}"
+                raise ValueError(msg)
 
             case dict():
                 if "block" in o:
                     if o["block"] == "sequence":
-                        ops = []
-                        for so in o["ops"]:
-                            ops.append(cls.handle_op(so, p))
+                        ops = [cls.handle_op(so, p) for so in o["ops"]]
 
                         instr = blk.SeqBlock(
                             ops=ops,
@@ -104,13 +125,11 @@ class PyPMIR:
                             metadata=o.get("metadata"),
                         )
                     elif o["block"] == "if":
-                        true_branch = []
-                        for so in o["true_branch"]:
-                            true_branch.append(cls.handle_op(so, p))
+                        true_branch = [cls.handle_op(so, p) for so in o["true_branch"]]
 
-                        false_branch = []
-                        for so in o.get("false_branch", []):
-                            false_branch.append(cls.handle_op(so, p))
+                        false_branch = [
+                            cls.handle_op(so, p) for so in o.get("false_branch", [])
+                        ]
 
                         instr = blk.IfBlock(
                             # condition=o["condition"],
@@ -132,10 +151,8 @@ class PyPMIR:
 
                     if o.get("angles"):
                         angles = tuple(
-                            [
-                                angle * (pi if o["angles"][1] == "pi" else 1)
-                                for angle in o["angles"][0]
-                            ],
+                            angle * (pi if o["angles"][1] == "pi" else 1)
+                            for angle in o["angles"][0]
                         )
                     else:
                         angles = None
@@ -151,9 +168,7 @@ class PyPMIR:
 
                     # TODO: Added to satisfy old-style error models. Remove when they not longer need this...
                     if o.get("returns"):
-                        var_output = {}
-                        for q, cvar in zip(args, o["returns"]):
-                            var_output[q] = cvar
+                        var_output = dict(zip(args, o["returns"], strict=False))
                         metadata["var_output"] = var_output
 
                     instr = op.QOp(
@@ -185,11 +200,8 @@ class PyPMIR:
                         )
 
                 elif "mop" in o:
-                    if "args" in o:
-                        # TODO: Assuming qargs... but that might not always be the case...
-                        args = cls.get_qargs(o, p)
-                    else:
-                        args = None
+                    # TODO: Assuming qargs... but that might not always be the case...
+                    args = cls.get_qargs(o, p) if "args" in o else None
 
                     instr = op.MOp(
                         name=o["mop"],
@@ -224,7 +236,16 @@ class PyPMIR:
         return instr
 
     @staticmethod
-    def get_qargs(o, p) -> list[int] | list[tuple[int]]:
+    def get_qargs(o: dict[str, Any], p: PyPMIR) -> list[int] | list[tuple[int]]:
+        """Extract quantum arguments from operation dictionary.
+
+        Args:
+            o: Operation dictionary containing quantum arguments.
+            p: PyPMIR instance for variable metadata.
+
+        Returns:
+            List of qubit IDs or tuples of qubit IDs.
+        """
         args = []
         for a in o["args"]:
             if isinstance(a[0], list):
@@ -241,7 +262,11 @@ class PyPMIR:
         return args
 
     @classmethod
-    def from_phir(cls, phir: dict, name_resolver=None) -> PyPMIR:
+    def from_phir(
+        cls,
+        phir: dict,
+        name_resolver: Callable[[QOp], str] | None = None,
+    ) -> PyPMIR:
         """Takes a PHIR dictionary and converts it into a PyPMIR object."""
         p = PyPMIR(
             metadata=dict(

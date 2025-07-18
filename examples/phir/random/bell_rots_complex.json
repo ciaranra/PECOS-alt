@@ -1,0 +1,29 @@
+{
+    "format": "PHIR/JSON",
+    "version": "0.1.0",
+    "metadata": {"num_qubits": 2},
+    "ops": [
+        {"data": "qvar_define", "data_type": "qubits", "size": 2, "variable": "q"},
+        {"data": "cvar_define", "data_type": "i32", "size": 2, "variable": "m"},
+        {"qop": "Init", "args": [["q", 0], ["q", 1]]},
+        {"mop": "Transport", "args": [["q", 0], ["q", 1]], "metadata": {"duration": 1e-3}},
+        {"qop": "SYdg", "args": [["q", 0]]},
+        {"mop": "Idle", "args": [["q", 1]], "metadata": {"duration": 1e-4}},
+        {"mop": "Transport", "args": [["q", 0], ["q", 1]], "metadata": {"duration": 1e-4}},
+        {"qop": "SYdg", "args": [["q", 1]]},
+        {"mop": "Idle", "args": [["q", 0]], "metadata": {"duration": 1e-4}},
+        {"mop": "Transport", "args": [["q", 0], ["q", 1]], "metadata": {"duration": 1e-4}},
+        {"qop": "SZZ", "args": [[["q", 0], ["q", 1]]]},
+        {"mop": "Transport", "args": [["q", 0], ["q", 1]], "metadata": {"duration": 1e-4}},
+        {"qop": "Measure", "args": [["q", 0]], "returns": [["m", 0]]},
+        {"mop": "Idle", "args": [["q", 1]], "metadata": {"duration": 1e-3}},
+        {"mop": "Transport", "args": [["q", 0], ["q", 1]], "metadata": {"duration": 1e-3}},
+        {"qop": "SXdg", "args": [["q", 1]]},
+        {"mop": "Idle", "args": [["q", 0]], "metadata": {"duration": 1e-4}},
+        {"mop": "Transport", "args": [["q", 0], ["q", 1]], "metadata": {"duration": 1e-4}},
+        {"qop": "Measure", "args": [["q", 1]], "returns": [["m", 1]]},
+        {"mop": "Idle", "args": [["q", 0]], "metadata": {"duration": 1e-3}},
+        {"mop": "Transport", "args": [["q", 0], ["q", 1]], "metadata": {"duration": 1e-3}},
+        {"data": "cvar_export", "variables": ["m"]}
+    ]
+}

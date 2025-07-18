@@ -1,3 +1,8 @@
+"""Surface 4.4.4.4 quantum error correcting code.
+
+This package provides the implementation of the surface 4.4.4.4 code.
+"""
+
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
 #

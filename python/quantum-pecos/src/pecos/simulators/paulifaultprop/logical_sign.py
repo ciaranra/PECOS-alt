@@ -9,20 +9,27 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from pecos.circuits import QuantumCircuit
+"""Logical sign tracking for Pauli fault propagation simulator.
+
+This module provides logical sign tracking functionality for the Pauli fault propagation simulator, managing the
+global phase and logical operator signs that arise from Pauli frame propagation in stabilizer circuits.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pecos.circuits import QuantumCircuit
+    from pecos.simulators.paulifaultprop.state import PauliFaultProp
 
 
-def find_logical_signs(state, logical_circuit: QuantumCircuit) -> int:
+def find_logical_signs(state: PauliFaultProp, logical_circuit: QuantumCircuit) -> int:
     """Find the sign of the logical operator.
 
     Args:
-    ----
-        state:
-        logical_circuit:
-
-    Returns:
-    -------
-
+        state: The PauliFaultProp state instance.
+        logical_circuit (QuantumCircuit): The logical circuit to find the sign of.
     """
     if len(logical_circuit) != 1:
         msg = "Logical operators are expected to only have one tick."
@@ -40,9 +47,9 @@ def find_logical_signs(state, logical_circuit: QuantumCircuit) -> int:
             logical_xs.update(gate_locations)
             logical_zs.update(gate_locations)
         else:
+            msg = f'Can not currently handle logical operator with operator "{symbol}"!'
             raise Exception(
-                'Can not currently handle logical operator with operator "%s"!'
-                % symbol,
+                msg,
             )
 
     anticom = len(state.faults["X"] & logical_zs)

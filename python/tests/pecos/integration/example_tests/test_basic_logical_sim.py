@@ -10,17 +10,17 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Integration tests for basic logical quantum circuit simulations."""
 import pecos as pc
 
 
-def test_surface():
-    """
-    This is to make sure no errors occur for running simple logical circuit.
+def test_surface() -> None:
+    """This is to make sure no errors occur for running simple logical circuit.
 
     Returns:
+        None
 
     """
-
     surface = pc.qeccs.Surface4444(distance=3)
 
     mwpm2d = pc.decoders.MWPM2D(surface)
@@ -39,9 +39,9 @@ def test_surface():
 
     state = pc.simulators.SparseSimPy(surface.num_qudits)
 
-    output1, error_circuits1 = sim.run(state, logic)
+    _output1, _error_circuits1 = sim.run(state, logic)
 
-    output2, error_circuits2 = sim.run(
+    output2, _error_circuits2 = sim.run(
         state,
         logic2,
         error_gen=depolar,

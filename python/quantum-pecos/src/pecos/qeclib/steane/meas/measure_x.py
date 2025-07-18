@@ -1,3 +1,9 @@
+"""Logical X measurement implementations for the Steane 7-qubit code.
+
+This module provides logical X measurement implementations for the Steane 7-qubit code, enabling measurements in the X
+basis while preserving error correction capabilities.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -14,7 +20,20 @@ from pecos.slr import Block, Comment, CReg, QReg, Qubit
 
 
 class NoFlagMeasureX(Block):
-    def __init__(self, d: list[Qubit], a: QReg, out: CReg):
+    """Non-flagged logical X measurement for Steane code.
+
+    This class performs a logical X measurement without using flag qubits
+    for error detection during the measurement process.
+    """
+
+    def __init__(self, d: list[Qubit], a: QReg, out: CReg) -> None:
+        """Initialize NoFlagMeasureX block for non-flagged logical X measurement.
+
+        Args:
+            d: List of data qubits for the logical measurement.
+            a: Ancilla qubit register for the measurement.
+            out: Classical register to store the measurement result.
+        """
         super().__init__()
 
         self.extend(

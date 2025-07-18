@@ -11,6 +11,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Gate bindings for sparse stabilizer simulator.
+
+This module provides gate operation bindings for the sparse stabilizer simulator, organizing and exposing
+stabilizer gate implementations optimized for sparse representation of stabilizer tableaux.
+"""
+
 from pecos.simulators.sparsesim import cmd_init as qinit
 from pecos.simulators.sparsesim import cmd_meas as qmeas
 from pecos.simulators.sparsesim import cmd_one_qubit as q1

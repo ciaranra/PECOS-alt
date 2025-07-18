@@ -1,3 +1,10 @@
+"""Quantum measurement gate implementations.
+
+This module provides measurement gate implementations for qubits,
+including various measurement bases and projective measurements
+used in quantum error correction protocols.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -9,7 +16,14 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from pecos.qeclib.qubit.qgate_base import QGate
+
+if TYPE_CHECKING:
+    from pecos.slr import Bit, Qubit
 
 
 class Measure(QGate):
@@ -17,11 +31,17 @@ class Measure(QGate):
 
     csize = 1
 
-    def __init__(self, *qargs):
+    def __init__(self, *qargs: Qubit) -> None:
+        """Initialize a measurement gate.
+
+        Args:
+            *qargs: Qubit(s) to measure in the Z basis.
+        """
         super().__init__(*qargs)
         self.cout = None
 
-    def __gt__(self, cout):
+    def __gt__(self, cout: Bit | tuple[Bit, ...]) -> Measure:
+        """Set the classical output bit(s) for measurement using > operator."""
         g = self.copy()
 
         if isinstance(cout, tuple):

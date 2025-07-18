@@ -1,6 +1,6 @@
 [project]
 name = "pecos-workspace"
-version = "0.6.0.dev8"
+version = "0.7.0.dev8"
 
 [tool.uv.workspace]
 members = [
@@ -10,11 +10,16 @@ members = [
 
 [dependency-groups]
 dev = [
+    "nanobind",
     "maturin>=1.2,<2.0",  # For building (should match build requirements)
     "setuptools>=62.6",      # Build system
     "pre-commit",           # Git hooks
     "black",               # Code formatting
     "ruff",               # Fast Python linting
+    "mkdocs",              # Documentation framework
+    "mkdocs-material",     # Material theme for MkDocs
+    "mkdocstrings[python]", # Code documentation extraction
+    "markdown-exec[ansi]",  # Executable markdown blocks
 ]
 test = [ # pinning testing environment
     "pytest==8.3.3", # 8.3.4 seems to be causing errors
@@ -24,3 +29,11 @@ test = [ # pinning testing environment
 
 [tool.uv]
 default-groups = ["dev", "test"]
+
+[tool.pytest.ini_options]
+markers = [
+    "optional_dependency: mark a test as using one or more optional dependencies",
+    "optional_unix: mark tests as using an optional dependency that only work with Unix-based systems",
+    "wasmer: mark test as using the 'wasmer' option",
+    "wasmtime: mark test as using the 'wasmtime' option",
+]

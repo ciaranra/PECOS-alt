@@ -1,0 +1,52 @@
+[package]
+name = "pecos-qasm"
+version.workspace = true
+edition.workspace = true
+readme.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "QASM parser and engine for PECOS quantum simulator"
+
+[features]
+default = []
+wasm = ["wasmtime"]
+
+[dependencies]
+# Parser generator
+pest.workspace = true
+pest_derive.workspace = true
+
+# Text processing
+regex.workspace = true
+
+# Logging
+log.workspace = true
+
+# Workspace dependencies
+pecos-core.workspace = true
+pecos-engines.workspace = true
+
+# Serialization (for result formatting)
+serde.workspace = true
+serde_json.workspace = true
+
+# BitVec for storing register results
+bitvec.workspace = true
+
+# Optional WebAssembly support
+wasmtime = { workspace = true, optional = true }
+
+[dev-dependencies]
+# Testing
+tempfile.workspace = true
+# Required for doctests
+pest.workspace = true
+pecos-core.workspace = true
+pecos-engines.workspace = true
+
+[lints]
+workspace = true

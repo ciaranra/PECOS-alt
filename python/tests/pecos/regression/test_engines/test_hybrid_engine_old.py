@@ -14,9 +14,9 @@ def test_hybrid_engine():
     runner = HybridEngine()
 
     ms = []
-    for _ in range(10):
+    for i in range(10):
         state.reset()
-        shot_output, _ = runner.run(state, qc)
+        shot_output, _ = runner.run(state, qc, i)
         ms.append(str(shot_output["m"]))
 
     assert ms.count("00") + ms.count("11") == len(ms)

@@ -1,3 +1,9 @@
+"""Logical Hadamard gates for the Steane 7-qubit code.
+
+This module provides logical Hadamard gate implementations for the Steane 7-qubit code, performing transversal
+operations that preserve the error correction properties of the code.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -14,8 +20,7 @@ from pecos.slr import Block, Comment, QReg
 
 
 class H(Block):
-    """
-    Hadamard
+    """Hadamard.
 
     X -> Z
     Z -> X
@@ -23,7 +28,16 @@ class H(Block):
     Y -> -Y
     """
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
+        """Initialize a logical Hadamard gate on the Steane code.
+
+        Args:
+            q: A quantum register containing exactly 7 qubits representing a logical qubit
+                in the Steane code.
+
+        Raises:
+            Exception: If the quantum register does not contain exactly 7 qubits.
+        """
         if len(q.elems) != 7:
             msg = f"Size of register {len(q.elems)} != 7"
             raise Exception(msg)

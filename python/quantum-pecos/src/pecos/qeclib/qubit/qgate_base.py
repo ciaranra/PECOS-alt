@@ -1,3 +1,10 @@
+"""Base classes for quantum gate implementations.
+
+This module provides the foundational base classes for quantum gate
+implementations in the PECOS quantum error correction library,
+defining interfaces and common functionality for quantum operations.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -13,8 +20,14 @@ from __future__ import annotations
 
 import copy
 from abc import ABCMeta
+from typing import TYPE_CHECKING, Self
 
 from pecos.slr.gen_codes.gen_qasm import QASMGenerator
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from pecos.slr import Qubit
 
 # ruff: noqa: B024
 
@@ -29,7 +42,12 @@ class QGate(metaclass=ABCMeta):
     csize = 0
     has_parameters = False
 
-    def __init__(self, *qargs):
+    def __init__(self, *qargs: Qubit) -> None:
+        """Initialize a quantum gate.
+
+        Args:
+            *qargs: Qubit(s) that the gate acts on.
+        """
         self.sym = type(self).__name__
         if self.sym.endswith("Gate"):
             self.sym = self.sym[:-4]
@@ -39,41 +57,73 @@ class QGate(metaclass=ABCMeta):
 
         self.add_qargs(qargs)
 
-    def add_qargs(self, qargs):
+    def add_qargs(self, qargs: Sequence[Qubit] | Qubit) -> None:
+        """Add quantum arguments to the gate.
+
+        Args:
+            qargs: Qubit or sequence of qubits to add as arguments.
+        """
         if isinstance(qargs, tuple):
             self.qargs = qargs
         else:
             self.qargs = (qargs,)
 
-    def copy(self):
+    def copy(self) -> Self:
+        """Create a shallow copy of the gate.
+
+        Returns:
+            Copy of the gate instance.
+        """
         return copy.copy(self)
 
-    def __getitem__(self, *params):
+    def __getitem__(self, *params: complex) -> Self:
+        """Set gate parameters using square bracket notation."""
         g = self.copy()
 
         if params and not self.has_parameters:
             msg = "This gate does not accept parameters. You might of meant to put qubits in square brackets."
             raise Exception(msg)
-        else:
-            g.params = params
+        g.params = params
 
         return g
 
-    def qubits(self, *qargs):
-        self.__call__(qargs)
+    def qubits(self, *qargs: Qubit) -> None:
+        """Add qubits to the gate.
 
-    def __call__(self, *qargs):
+        Args:
+            *qargs: Variable number of qubits to add.
+        """
+        self(*qargs)
+
+    def __call__(self, *qargs: Qubit) -> Self:
+        """Create a new gate instance with specified qubits.
+
+        Args:
+            *qargs: Variable number of qubits to apply the gate to.
+
+        Returns:
+            New gate instance with the specified qubits.
+        """
         g = self.copy()
 
         g.add_qargs(qargs)
 
         return g
 
-    def gen(self, target: object | str):
+    def gen(self, target: object | str, *, add_versions: bool = False) -> str:
+        """Generate code for the gate using the specified target generator.
+
+        Args:
+            target: Either a generator object or string specifying the target ("qasm").
+            add_versions: Whether to add version information to generated code.
+
+        Returns:
+            Generated code as a string.
+        """
         # TODO: Get rid of this as much as possible...
         if isinstance(target, str):
             if target == "qasm":
-                target = QASMGenerator()
+                target = QASMGenerator(add_versions=add_versions)
             else:
                 msg = f"Code gen target '{target}' is not supported."
                 raise NotImplementedError(msg)
@@ -82,6 +132,6 @@ class QGate(metaclass=ABCMeta):
 
 
 class TQGate(QGate, metaclass=ABCMeta):
-    """Two qubit gates"""
+    """Two qubit gates."""
 
     qsize = 2

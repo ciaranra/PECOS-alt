@@ -10,12 +10,14 @@
 # specific language governing permissions and limitations under the License.
 """Tests to ensure the sequence of operations are as expected."""
 
+from typing import Any
+
 from pecos.classical_interpreters.phir_classical_interpreter import (
     PHIRClassicalInterpreter,
 )
 
 
-def get_seq(program):
+def get_seq(program: dict[str, Any]) -> list[list[tuple[Any, ...]]]:
     """Get the sequences of operations produced by using the PHIR interpreter."""
     interp = PHIRClassicalInterpreter()
     interp.init(program)
@@ -39,7 +41,7 @@ def get_seq(program):
     return ops_seq
 
 
-def test_seq():
+def test_seq() -> None:
     """Test that the expected sequence of operations is returned with a program using Sequence Blocks."""
     program = {
         "format": "PHIR/JSON",
@@ -86,7 +88,7 @@ def test_seq():
     ]
 
 
-def test_qparallel():
+def test_qparallel() -> None:
     """Test that the expected sequence of operations is returned with a program using Sequence Blocks."""
     program = {
         "format": "PHIR/JSON",
@@ -133,7 +135,8 @@ def test_qparallel():
     ]
 
 
-def test_if_true():
+def test_if_true() -> None:
+    """Test PHIR conditional block execution when condition is true."""
     program = {
         "format": "PHIR/JSON",
         "version": "0.1.0",
@@ -177,7 +180,8 @@ def test_if_true():
     ]
 
 
-def test_if_false():
+def test_if_false() -> None:
+    """Test PHIR conditional block execution when condition is false."""
     program = {
         "format": "PHIR/JSON",
         "version": "0.1.0",
@@ -221,7 +225,8 @@ def test_if_false():
     ]
 
 
-def test_if_no_false():
+def test_if_no_false() -> None:
+    """Test PHIR conditional block with no false branch."""
     program = {
         "format": "PHIR/JSON",
         "version": "0.1.0",

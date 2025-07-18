@@ -15,11 +15,14 @@
 
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from pecos.circuits.quantum_circuit import QuantumCircuit
 from pecos.error_models.class_errors_circuit import ErrorCircuits
 from pecos.error_models.parent_class_error_gen import ParentErrorModel
+
+if TYPE_CHECKING:
+    from pecos.typing import ErrorParams, GateParams
 
 
 class XZModel(ParentErrorModel):
@@ -56,15 +59,18 @@ class XZModel(ParentErrorModel):
 
     def __init__(
         self,
-        model_level="circuit",
-        has_idle_errors=False,
-        perp_errors=False,
+        model_level: str = "circuit",
+        *,
+        has_idle_errors: bool = False,
+        perp_errors: bool = False,
     ) -> None:
-        """Args:
+        """Initialize XZ error generator.
+
+        Args:
         ----
-            model_level(str):
-            has_idle_errors(bool):
-            perp_errors(bool):
+            model_level(str): The error model level ('circuit', 'phenomenological', or 'code_capacity').
+            has_idle_errors(bool): Whether to generate errors on idle qubits.
+            perp_errors(bool): Whether to use perpendicular errors on preparation/measurement operations.
         """
         super().__init__()
 
@@ -116,8 +122,8 @@ class XZModel(ParentErrorModel):
             # Don't generate data errors
             self.gen.set_gate_error(
                 "data",
-                False,
-            )  # Don't generate errors for data qudits.
+                error_func=False,  # Don't generate errors for data qudits
+            )
 
             # Generate measurement errors (before errors)
             self.gen.set_group_error("measurements", pauli_errors_before.error_func)
@@ -126,7 +132,8 @@ class XZModel(ParentErrorModel):
             # By default generate pauli errors. (It is expected that this is only for one-qubit and init gates.)
             self.gen.set_default_error(pauli_errors.error_func)
         else:
-            raise Exception("Can not handle model_level == %s" % model_level)
+            msg = f"Can not handle model_level == {model_level}"
+            raise Exception(msg)
 
         # If errors need to be perpendicular to preps and measurements.
         if self.perp_error and model_level != "code_capacity":
@@ -142,16 +149,17 @@ class XZModel(ParentErrorModel):
         if has_idle_errors:
             self.gen.set_gate_error("idle", pauli_errors.error_func)
 
-    def start(self, circuit, error_params):
+    def start(
+        self,
+        circuit: QuantumCircuit,
+        error_params: ErrorParams,
+    ) -> ErrorCircuits:
         """Start up at the beginning of a circuit simulation.
 
         Args:
         ----
-            circuit:
-            error_params:
-
-        Returns:
-        -------
+            circuit: The quantum circuit to simulate.
+            error_params: Parameters controlling error generation.
 
         """
         self.error_circuits = ErrorCircuits()
@@ -160,11 +168,19 @@ class XZModel(ParentErrorModel):
 
         return self.error_circuits
 
-    def generate_tick_errors(self, tick_circuit, time, **params):
+    def generate_tick_errors(
+        self,
+        tick_circuit: QuantumCircuit,
+        time: int | tuple[int, ...],
+        **params: GateParams,
+    ) -> ErrorCircuits:
         """Returns before errors, after errors, and replaced locations for the given key (args).
 
-        Returns:
-        -------
+        Args:
+        ----
+            tick_circuit: The tick circuit containing gate operations.
+            time: The time index or tuple indicating when errors occur.
+            **params: Additional parameters including data_qudit_set.
 
         """
         tick_index = time[-1] if isinstance(time, tuple) else time

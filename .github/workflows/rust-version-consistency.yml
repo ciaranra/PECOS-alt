@@ -1,5 +1,7 @@
 name: Rust Version Consistency Check
 
+# bump
+
 on:
   push:
     paths:

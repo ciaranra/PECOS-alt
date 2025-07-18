@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Operation type definitions for PyPMIR intermediate representation.
+
+This module defines operation classes for PyPMIR (Python PECOS Medium-level Intermediate Representation) including
+quantum operations, classical operations, and machine operations for quantum circuit execution.
+"""
+
 from __future__ import annotations
 
 from pecos.reps.pypmir.instr_type import Instr
@@ -24,6 +30,14 @@ class Op(Instr):
         returns: list | None = None,
         metadata: dict | None = None,
     ) -> None:
+        """Initialize an operation.
+
+        Args:
+            name: The operation name.
+            args: Optional list of operation arguments.
+            returns: Optional list of return values (cvars or cbits).
+            metadata: Optional metadata dictionary.
+        """
         super().__init__(metadata=metadata)
         self.name = name
         self.args = args
@@ -34,8 +48,8 @@ class Op(Instr):
                 if isinstance(r, str):
                     pass
                 elif isinstance(r, list):
-                    sym, _id = r
-                    if not isinstance(sym, str) or not isinstance(_id, int):
+                    sym, id_ = r
+                    if not isinstance(sym, str) or not isinstance(id_, int):
                         msg = f"Returns not of correct form of cvar (str) or cbit ([str, int]): {returns}"
                         raise TypeError(msg)
                 else:
@@ -43,6 +57,7 @@ class Op(Instr):
                     raise TypeError(msg)
 
     def __str__(self) -> str:
+        """Return string representation of the operation."""
         return f"<{self.name}, {self.args}, {self.returns}, {self.metadata}>"
 
 
@@ -58,6 +73,16 @@ class QOp(Op):
         angles: tuple[float, ...] | None = None,
         sim_name: str | None = None,
     ) -> None:
+        """Initialize a quantum operation.
+
+        Args:
+            name: The operation name.
+            args: List of operation arguments (typically qubits).
+            returns: Optional list of return values.
+            metadata: Optional metadata dictionary.
+            angles: Optional tuple of rotation angles.
+            sim_name: Optional simulator-specific name. If not provided, uses name.
+        """
         super().__init__(
             name=name,
             args=args,
@@ -69,13 +94,28 @@ class QOp(Op):
         if self.sim_name is None:
             self.sim_name = name
 
-    def __repr__(self):
-        return (
-            f"<QOP: {self.name} angles: {self.angles} args: {self.args} returns: {self.returns} "
-            f"meta: {self.metadata}>"
-        )
+    def __repr__(self) -> str:
+        """Return detailed string representation of the quantum operation."""
+        repr_str = f"<QOP: {self.name}"
+
+        if self.angles:
+            repr_str += f", angles={self.angles}"
+
+        if self.args:
+            repr_str += f", args={self.args}"
+
+        if self.returns:
+            repr_str += f", returns={self.returns}"
+
+        if self.metadata:
+            repr_str += f", metadata={self.metadata}"
+
+        repr_str += ">"
+
+        return repr_str
 
     def __str__(self) -> str:
+        """Return string representation of the quantum operation."""
         return self.__repr__()
 
 
@@ -89,12 +129,41 @@ class COp(Op):
         returns: list | None = None,
         metadata: dict | None = None,
     ) -> None:
+        """Initialize a classical operation.
+
+        Args:
+            name: The operation name.
+            args: List of operation arguments.
+            returns: Optional list of return values.
+            metadata: Optional metadata dictionary.
+        """
         super().__init__(
             name=name,
             args=args,
             returns=returns,
             metadata=metadata,
         )
+
+    def __repr__(self) -> str:
+        """Return detailed string representation of the classical operation."""
+        repr_str = f"<COP: {self.name}"
+
+        if self.args:
+            repr_str += f", args={self.args}"
+
+        if self.returns:
+            repr_str += f", returns={self.returns}"
+
+        if self.metadata:
+            repr_str += f", metadata={self.metadata}"
+
+        repr_str += ">"
+
+        return repr_str
+
+    def __str__(self) -> str:
+        """Return string representation of the classical operation."""
+        return self.__repr__()
 
 
 class FFCall(COp):

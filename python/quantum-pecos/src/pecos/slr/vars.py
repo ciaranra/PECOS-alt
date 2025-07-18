@@ -18,24 +18,23 @@ from pecos.slr.cops import SET, PyCOp
 class Vars:
     """A collection of variables."""
 
-    def __init__(self, *args):
+    def __init__(self, *args) -> None:  # noqa: ARG002
         self.vars = []
 
-    def extend(self, vars_obj: "Vars"):
+    def extend(self, vars_obj: "Vars") -> None:
         if isinstance(vars_obj, Vars):
             self.vars.extend(vars_obj.vars)
         else:
             msg = f"Was expecting a Vars object. Instead got type: {type(vars_obj)}"
             raise TypeError(msg)
 
-    def append(self, op):
+    def append(self, op) -> bool:
         if isinstance(op, Var):
             self.vars.append(op)
             return True
-        else:
-            return False
+        return False
 
-    def extend_vars(self, vargs):
+    def extend_vars(self, vargs) -> None:
         for v in vargs:
             if not self.append(v):
                 msg = f"Unrecognized variable type: {type(v)}"
@@ -45,6 +44,7 @@ class Vars:
         for v in self.vars:
             if v.sym == sym:
                 return v
+        return None
 
     def __iter__(self):
         return iter(self.vars)
@@ -69,21 +69,24 @@ class Reg(Var):
     def set(self, other):
         return SET(self, other)
 
+    def __len__(self):
+        return self.size
+
     def __getitem__(self, item):
         return self.elems[item]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         repr_str = self.__class__.__name__
         if self.sym is not None:
             repr_str = f"{repr_str}:{self.sym}"
         return f"<{repr_str} at {hex(id(self))}>"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.sym
 
 
 class Elem(Var):
-    def __init__(self, reg: Reg, idx: int):
+    def __init__(self, reg: Reg, idx: int) -> None:
         super().__init__()
 
         self.reg = reg
@@ -96,10 +99,10 @@ class Elem(Var):
         msg = f"'{self.__class__.__name__}' object is not subscriptable"
         raise TypeError(msg)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<{self.__class__.__name__} {self.index} of {self.reg.sym}>"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.reg.sym}[{self.index}]"
 
 
@@ -114,16 +117,17 @@ class Qubit(Elem):
 
 
 class CReg(Reg, PyCOp):
-    def __init__(self, sym: str, size: int) -> None:
+    def __init__(self, sym: str, size: int, *, result: bool = True) -> None:
         """
         Representation for a collection of bits.
 
         Args:
             sym:
             size:
+            result: Whether this register is a result register (default True)
         """
-
         super().__init__(sym, size, elem_type=Bit)
+        self.result = result
 
 
 class Bit(Elem, PyCOp):

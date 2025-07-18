@@ -1,3 +1,9 @@
+"""Lookup table decoder for the Steane 7-qubit code.
+
+This module provides lookup table decoding implementations for the Steane 7-qubit quantum error correction code,
+enabling syndrome-based error correction through pre-computed correction tables.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -20,6 +26,12 @@ if TYPE_CHECKING:
 
 
 class FlagLookupQASM(Block):
+    """Flag-based lookup decoder for Steane code syndrome decoding.
+
+    This class implements a lookup table-based decoder that uses flag qubits
+    to determine the appropriate error correction based on measured syndromes.
+    """
+
     def __init__(
         self,
         basis: str,
@@ -30,7 +42,19 @@ class FlagLookupQASM(Block):
         flag: CReg,
         flags: CReg,
         scratch: CReg,
-    ):
+    ) -> None:
+        """Initialize flag-based lookup decoder for Steane code.
+
+        Args:
+            basis: The basis ('X' or 'Z') for syndrome decoding.
+            syn: Classical register containing current syndrome values.
+            syndromes: Classical register for processed syndrome values.
+            raw_syn: Classical register storing raw syndrome values.
+            pf: Pauli frame bit for tracking logical operations.
+            flag: Classical register containing flag qubit measurements.
+            flags: Classical register for flag status.
+            scratch: Classical register used for intermediate calculations.
+        """
         super().__init__()
 
         # qasm_syn_decoder('X', syn_x, flag_x, 'last_raw_syn_x', 'pf_z1')
@@ -89,6 +113,12 @@ BEGIN Run {basis} decoder
 
 
 class FlagLookupQASMActiveCorrectionX(Block):
+    """Active X-basis correction using flag-based lookup for Steane code.
+
+    This class applies X-basis error corrections based on syndrome measurements
+    and flag qubit information using a lookup table approach.
+    """
+
     def __init__(
         self,
         qubits: QReg,
@@ -100,7 +130,20 @@ class FlagLookupQASMActiveCorrectionX(Block):
         flags: CReg,
         scratch: CReg,
         pf_bit_copy: Bit | None = None,
-    ):
+    ) -> None:
+        """Initialize X-basis active error correction with flag-based lookup.
+
+        Args:
+            qubits: Quantum register containing the logical qubit data.
+            syn: Classical register containing current syndrome values.
+            syndromes: Classical register for processed syndrome values.
+            raw_syn: Classical register storing raw syndrome values.
+            pf: Pauli frame bit for tracking logical operations.
+            flag: Classical register containing flag qubit measurements.
+            flags: Classical register for flag status.
+            scratch: Classical register used for intermediate calculations.
+            pf_bit_copy: Optional bit to copy the Pauli frame value to.
+        """
         super().__init__()
         # qasm_syn_decoder('X', syn_x, flag_x, 'last_raw_syn_x', 'pf_z1')
         # qasm_syn_decoder(basis_check, syn, flag, raw_syn, pf, pf_index=0)
@@ -164,18 +207,37 @@ class FlagLookupQASMActiveCorrectionX(Block):
 
 
 class FlagLookupQASMActiveCorrectionZ(Block):
+    """Active Z-basis correction using flag-based lookup for Steane code.
+
+    This class applies Z-basis error corrections based on syndrome measurements
+    and flag qubit information using a lookup table approach.
+    """
+
     def __init__(
         self,
-        qubits,
-        syn,
-        syndromes,
-        raw_syn,
-        pf,
-        flag,
-        flags,
-        scratch,
+        qubits: QReg,
+        syn: CReg,
+        syndromes: CReg,
+        raw_syn: CReg,
+        pf: Bit,
+        flag: CReg,
+        flags: CReg,
+        scratch: CReg,
         pf_bit_copy: Bit = None,
-    ):
+    ) -> None:
+        """Initialize Z-basis active error correction with flag-based lookup.
+
+        Args:
+            qubits: Quantum register containing the logical qubit data.
+            syn: Classical register containing current syndrome values.
+            syndromes: Classical register for processed syndrome values.
+            raw_syn: Classical register storing raw syndrome values.
+            pf: Pauli frame bit for tracking logical operations.
+            flag: Classical register containing flag qubit measurements.
+            flags: Classical register for flag status.
+            scratch: Classical register used for intermediate calculations.
+            pf_bit_copy: Optional bit to copy the Pauli frame value to.
+        """
         super().__init__()
         q = qubits
 

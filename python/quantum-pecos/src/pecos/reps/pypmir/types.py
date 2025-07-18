@@ -9,6 +9,13 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Consolidated type imports for PyPMIR intermediate representation.
+
+This module provides convenient imports for all PyPMIR (Python PECOS Medium-level Intermediate Representation) types
+including blocks, data types, instructions, and operations.
+"""
+
+
 # ruff: noqa: F401
 
 from pecos.reps.pypmir import block_types as block

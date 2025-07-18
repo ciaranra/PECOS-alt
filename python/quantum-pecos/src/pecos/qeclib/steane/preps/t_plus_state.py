@@ -1,3 +1,9 @@
+"""T|+⟩ magic state preparation for the Steane 7-qubit code.
+
+This module provides implementations for preparing the logical T|+⟩ magic state in the Steane 7-qubit code, which is
+essential for implementing non-Clifford gates in fault-tolerant quantum computation.
+"""
+
 # Copyright 2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -19,7 +25,12 @@ from pecos.slr import Bit, Block, Comment, CReg, QReg
 class PrepEncodeTPlusNonFT(Block):
     """Uses the encoding circuit to non-fault-tolerantly initialize the logical T|+> magic state."""
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
+        """Initialize PrepEncodeTPlusNonFT block for non-fault-tolerant T|+> preparation.
+
+        Args:
+            q: Quantum register containing 7 qubits for the Steane code.
+        """
         super().__init__(
             Comment("Initialize logical |T> = T|+>\n============================="),
             qubit.Prep(q[6]),
@@ -32,7 +43,12 @@ class PrepEncodeTPlusNonFT(Block):
 class PrepEncodeTDagPlusNonFT(Block):
     """Uses the encoding circuit to non-fault-tolerantly initialize the logical T|+> magic state."""
 
-    def __init__(self, q: QReg):
+    def __init__(self, q: QReg) -> None:
+        """Initialize PrepEncodeTDagPlusNonFT block for non-fault-tolerant T†|+> preparation.
+
+        Args:
+            q: Quantum register containing 7 qubits for the Steane code.
+        """
         super().__init__(
             Comment("Initialize logical |T> = T|+>\n============================="),
             qubit.Prep(q[6]),
@@ -43,8 +59,9 @@ class PrepEncodeTDagPlusNonFT(Block):
 
 
 class PrepEncodeTPlusFT(Block):
-    """
-    Initialize a T|+> state fault tolerantly preparing |+H> by measuring the logical Hadamard, doing a QED round, and
+    """Initialize a T|+> state fault tolerantly.
+
+    Prepare |+H> by measuring the logical Hadamard, doing a QED round, and
     then rotate to T|+>.
 
     Arguments:
@@ -65,7 +82,21 @@ class PrepEncodeTPlusFT(Block):
         flags: CReg,
         last_raw_syn_x: CReg,
         last_raw_syn_z: CReg,
-    ):
+    ) -> None:
+        """Initialize PrepEncodeTPlusFT block for fault-tolerant T|+> preparation.
+
+        Args:
+            d: Data qubits (size 7) for the Steane code.
+            a: Ancillary qubits (size 2) for measurements.
+            out: Measurement outputs (size 2). out[0] is the Hadamard measurement,
+                out[1] is the flag result.
+            reject: Bit indicating preparation failure (0 for success, 1 for failure).
+            flag_x: Classical register for X stabilizer flags.
+            flag_z: Classical register for Z stabilizer flags.
+            flags: Combined flags register.
+            last_raw_syn_x: Previous X syndrome measurements.
+            last_raw_syn_z: Previous Z syndrome measurements.
+        """
         super().__init__(
             PrepHStateFT(
                 d,
@@ -83,8 +114,9 @@ class PrepEncodeTPlusFT(Block):
 
 
 class PrepEncodeTPlusFTRUS(Block):
-    """
-    Initialize a T|+> state fault tolerantly by measuring the logical Hadamard using Repeat-until-success style
+    """Initialize a T|+> state fault tolerantly using repeat-until-success.
+
+    By measuring the logical Hadamard using Repeat-until-success style
     initialization.
 
     Arguments:
@@ -107,7 +139,22 @@ class PrepEncodeTPlusFTRUS(Block):
         last_raw_syn_x: CReg,
         last_raw_syn_z: CReg,
         limit: int,
-    ):
+    ) -> None:
+        """Initialize PrepEncodeTPlusFTRUS block for repeat-until-success T|+> preparation.
+
+        Args:
+            d: Data qubits (size 7) for the Steane code.
+            a: Ancillary qubits (size 2) for measurements.
+            out: Measurement outputs (size 2). out[0] is the Hadamard measurement,
+                out[1] is the flag result.
+            reject: Bit indicating preparation failure (0 for success, 1 for failure).
+            flag_x: Classical register for X stabilizer flags.
+            flag_z: Classical register for Z stabilizer flags.
+            flags: Combined flags register.
+            last_raw_syn_x: Previous X syndrome measurements.
+            last_raw_syn_z: Previous Z syndrome measurements.
+            limit: Maximum number of preparation attempts.
+        """
         # NOTE: For QASM, have to avoid nested If statements
         super().__init__(
             PrepHStateFTRUS(

@@ -9,17 +9,29 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Quantum state representation for basic state vector simulator.
+
+This module provides the quantum state representation and management functionality for the basic state vector
+simulator, including state vector storage, manipulation, and utility functions for quantum state operations.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import numpy as np
-from numpy.typing import ArrayLike
 
 from pecos.simulators.basic_sv import bindings
 from pecos.simulators.sim_class_types import StateVector
 
+if TYPE_CHECKING:
+    from typing import Self
+
+    from numpy.typing import ArrayLike
+
 
 class BasicSV(StateVector):
-    """
-    Basic state vector simulator using NumPy.
+    """Basic state vector simulator using NumPy.
 
     Notes:
         The purpose of this simulator is to provide a minimum requirement approach
@@ -27,9 +39,8 @@ class BasicSV(StateVector):
         Maximum number of qubits is restricted to 10.
     """
 
-    def __init__(self, num_qubits, seed=None) -> None:
-        """
-        Initializes the state vector.
+    def __init__(self, num_qubits: int, seed: int | None = None) -> None:
+        """Initializes the state vector.
 
         Args:
             num_qubits (int): Number of qubits being represented.
@@ -38,7 +49,6 @@ class BasicSV(StateVector):
         Raises:
             ValueError: If `num_qubits` is larger than 10.
         """
-
         if not isinstance(num_qubits, int):
             msg = "``num_qubits`` should be of type ``int``."
             raise TypeError(msg)
@@ -55,7 +65,7 @@ class BasicSV(StateVector):
         self.internal_vector = None
         self.reset()
 
-    def subscript_string(self, qubits: tuple[int], labels: tuple[chr]):
+    def subscript_string(self, qubits: tuple[int], labels: tuple[chr]) -> str:
         """Returns a string of subscripts to use with `np.einsum`.
 
         The string returned identifies each of the qubits (ndarray axes) in
@@ -74,7 +84,6 @@ class BasicSV(StateVector):
             ValueError: If a label in `labels` would collide with another label.
             ValueError: If the length of `qubits` and `labels` do not match.
         """
-
         if any(q >= self.num_qubits or q < 0 for q in qubits):
             msg = "Qubit out of range."
             raise ValueError(msg)
@@ -93,25 +102,33 @@ class BasicSV(StateVector):
             raise ValueError(msg)
 
         # Rename the qubits with special labels
-        for q, lbl in zip(qubits, labels):
+        for q, lbl in zip(qubits, labels, strict=False):
             qubit_ids[q] = lbl
 
         # Concatenate characters into a string and return
         return "".join(qubit_ids)
 
-    def reset(self):
+    def reset(self) -> Self:
         """Reset the quantum state for another run without reinitializing."""
         # Initialize state vector to |0>
         self.internal_vector = np.zeros(shape=2**self.num_qubits)
         self.internal_vector[0] = 1
         # Internally use a ndarray representation so that it's easier to apply gates
         # without needing to apply tensor products.
+
+        # Use positional argument for backward compatibility with NumPy < 2.0
         self.internal_vector = np.reshape(
             self.internal_vector,
-            newshape=[2] * self.num_qubits,
+            [2] * self.num_qubits,
         )
         return self
 
     @property
     def vector(self) -> ArrayLike:
-        return np.reshape(self.internal_vector, newshape=2**self.num_qubits)
+        """Get the quantum state vector as a numpy array.
+
+        Returns:
+            The state vector reshaped to have 2^num_qubits elements.
+        """
+        # Use positional argument for backward compatibility with NumPy < 2.0
+        return np.reshape(self.internal_vector, 2**self.num_qubits)

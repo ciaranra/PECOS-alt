@@ -9,12 +9,24 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from typing import Any
+"""Quantum measurement operations for MPS PyTket simulator.
+
+This module provides quantum measurement operations for the Matrix Product State PyTket simulator, including
+projective measurements with MPS state collapse and sampling from low-entanglement quantum states.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pecos.simulators.mps_pytket.state import MPS
+    from pecos.typing import SimulatorGateParams
 
 from pytket import Qubit
 
 
-def meas_z(state, qubit: int, **params: Any) -> int:
+def meas_z(state: MPS, qubit: int, **_params: SimulatorGateParams) -> int:
     """Measure in the Z-basis, collapse and normalise.
 
     Notes:

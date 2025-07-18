@@ -6,7 +6,7 @@ from pecos.qeclib.surface import (
     SurfacePatchBuilder,
     SurfacePatchOrientation,
 )
-from pecos.slr import Main
+from pecos.slr import Main, SlrConverter
 
 
 def test_default_rot_surface_patch():
@@ -15,7 +15,7 @@ def test_default_rot_surface_patch():
         s := RotatedSurfacePatch.default(3),
     )
     assert isinstance(s, RotatedSurfacePatch)
-    prog.qasm()
+    SlrConverter(prog).qasm()
 
 
 def test_default_rot_surface_patch_name():
@@ -24,7 +24,7 @@ def test_default_rot_surface_patch_name():
         s := RotatedSurfacePatch.default(3, "s"),
     )
     assert isinstance(s, RotatedSurfacePatch)
-    prog.qasm()
+    SlrConverter(prog).qasm()
 
 
 def test_build_surface_patch():
@@ -40,7 +40,7 @@ def test_build_surface_patch():
         ),
     )
     assert isinstance(s, NonRotatedSurfacePatch)
-    prog.qasm()
+    SlrConverter(prog).qasm()
 
 
 def test_build_rot_surface_patch():
@@ -55,7 +55,7 @@ def test_build_rot_surface_patch():
         ),
     )
     assert isinstance(s, RotatedSurfacePatch)
-    prog.qasm()
+    SlrConverter(prog).qasm()
 
 
 def test_surface_patch_builder_render():

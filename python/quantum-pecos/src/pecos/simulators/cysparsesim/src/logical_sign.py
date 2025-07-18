@@ -11,25 +11,33 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-"""Functions:
+"""Functions for logical sign computation.
 
 find_logical_signs
 logical_flip
 """
 
+from __future__ import annotations
 
-def find_logical_signs(state, logical_circuit, delogical_circuit=None):
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pecos.circuits import QuantumCircuit
+    from pecos.protocols import SimulatorProtocol
+
+
+def find_logical_signs(
+    state: SimulatorProtocol,
+    logical_circuit: QuantumCircuit,
+    delogical_circuit: QuantumCircuit | None = None,
+) -> int:
     """Find the sign of the logical operator.
 
     Args:
     ----
-        state:
-        logical_circuit (QuantumCircuit):
-        delogical_circuit (QuantumCircuit):
-
-    Returns:
-    -------
-
+        state: The quantum state instance
+        logical_circuit: The logical circuit to find the sign of
+        delogical_circuit: Optional delogical circuit to check anti-commutation with
     """
     if len(logical_circuit) != 1:
         msg = "Logical operators are expected to only have one tick."
@@ -50,9 +58,9 @@ def find_logical_signs(state, logical_circuit, delogical_circuit=None):
             logical_xs.update(gate_locations)
             logical_zs.update(gate_locations)
         else:
+            msg = f'Can not currently handle logical operator with operator "{symbol}"!'
             raise Exception(
-                'Can not currently handle logical operator with operator "%s"!'
-                % symbol,
+                msg,
             )
 
     if (
@@ -74,9 +82,9 @@ def find_logical_signs(state, logical_circuit, delogical_circuit=None):
                 delogical_xs.update(gate_locations)
                 delogical_zs.update(gate_locations)
             else:
+                msg = f'Can not currently handle logical operator with operator "{symbol}"!'
                 raise Exception(
-                    'Can not currently handle logical operator with operator "%s"!'
-                    % symbol,
+                    msg,
                 )
 
         # Make sure the logical and delogical anti-commute
@@ -136,7 +144,7 @@ def find_logical_signs(state, logical_circuit, delogical_circuit=None):
         # for stab in build_stabs:
 
         print(f"Logical op: xs - {logical_xs} and zs - {logical_zs}")
-        msg = f"Failure due to not finding logical op! x... {str(test_x ^ logical_xs)} z... {str(test_z ^ logical_zs)}"
+        msg = f"Failure due to not finding logical op! x... {test_x ^ logical_xs!s} z... {test_z ^ logical_zs!s}"
         raise Exception(msg)
 
     # Get the sign of the logical operator

@@ -15,21 +15,34 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pecos.slr.vars import Elem, QReg, Qubit, Reg
 
+from pecos.slr.block import Block
 from pecos.slr.fund import Statement
 
 
 class Barrier(Statement):
-    def __init__(self, *qregs: QReg | tuple[QReg] | Qubit):
+    def __init__(self, *qregs: QReg | tuple[QReg] | Qubit) -> None:
         self.qregs = qregs
 
 
 class Comment(Statement):
     """A comment for human readability of output qasm."""
 
-    def __init__(self, *txt, space: bool = True, newline: bool = True):
+    def __init__(self, *txt, space: bool = True, newline: bool = True) -> None:
         self.space = space
         self.newline = newline
         self.txt = "\n".join(txt)
+
+
+class Parallel(Block):
+    """A block that indicates the contained statements can be executed in parallel.
+    
+    This is a hint to the compiler/simulator that the operations within this block
+    are independent and can be executed simultaneously.
+    """
+    
+    def __init__(self, *statements: Statement) -> None:
+        super().__init__()
+        self.extend(*statements)
 
 
 class Permute(Statement):
@@ -41,7 +54,7 @@ class Permute(Statement):
         elems_f: list[Elem] | Reg,
         *,
         comment: bool = True,
-    ):
+    ) -> None:
         self.elems_i = elems_i
         self.elems_f = elems_f
         self.comment = comment

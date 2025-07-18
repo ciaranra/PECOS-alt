@@ -11,8 +11,9 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-"""Check Circuits
-==============.
+"""Check Circuits.
+
+==============
 
 This namespace is for callables that take checks and convert them to physical quantum-circuits.
 
@@ -21,34 +22,52 @@ it may be stored in the QECC's folder.
 
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, TypeVar
+
 from pecos.circuits import QuantumCircuit
+
+if TYPE_CHECKING:
+    from pecos.circuits.logical_circuit import LogicalCircuit
+    from pecos.protocols import LogicalInstructionProtocol
+
+T = TypeVar("T")
 
 
 class Check2Circuits:
     """Converts checks to circuits."""
 
     def __init__(self) -> None:
+        """Initialize the Check2Circuits converter.
+
+        Sets the name attribute to "Check2Circuits".
+        """
         self.name = "Check2Circuits"
 
     @staticmethod
-    def get_num_ancillas(num_checks):
-        """Args:
+    def get_num_ancillas(num_checks: int) -> int:
+        """Get the number of ancilla qubits needed for the given number of checks.
+
+        Args:
         ----
-            num_checks:
-
-        Returns:
-        -------
-
+            num_checks: The number of checks to be performed.
         """
         return num_checks
 
-    def compile(self, instr, abstract_circuit, mapping=None):
+    def compile(
+        self,
+        instr: LogicalInstructionProtocol,
+        abstract_circuit: LogicalCircuit,
+        mapping: dict[int, int] | None = None,
+    ) -> QuantumCircuit:
         """Converts abstract circuits that have checks into an instance of ``QuantumCircuit``.
 
         Args:
         ----
+            instr: The logical instruction being compiled.
             abstract_circuit: Abstract circuit that contains checks.
-            mapping (None):
+            mapping: Optional mapping dictionary for qubit indices.
 
         Returns:
         -------
@@ -201,17 +220,13 @@ class Check2Circuits:
         return circuit  # Return QuantumCircuit and number of ancillas used in this circuit.
 
     @staticmethod
-    def mapset(mapping, oldset):
+    def mapset(mapping: dict[int, int], oldset: set[int]) -> set[int]:
         """Applies a mapping to a set.
 
         Args:
         ----
-            mapping:
-            oldset (set):
-
-        Returns:
-        -------
-
+            mapping: Dictionary mapping old indices to new indices.
+            oldset: Set of indices to be mapped.
         """
         newset = set()
 
@@ -221,7 +236,9 @@ class Check2Circuits:
         return newset
 
     @staticmethod
-    def _check_ticks(abstract_circuit):
+    def _check_ticks(
+        abstract_circuit: LogicalCircuit,
+    ) -> tuple[bool, bool, dict[str, Any]]:
         # Determine if any X checks or Z check
         # Determine if ancilla_ticks, data_ticks, or meas_ticks ever set
 
@@ -253,7 +270,23 @@ class Check2Circuits:
         return {"max_xdatas": max_xdatas, "max_zdatas": max_zdatas}
 
     @staticmethod
-    def generate_ticks(make_ticks_data, gate_symbol, locations, params):
+    def generate_ticks(
+        make_ticks_data: dict[str, Any],
+        gate_symbol: str,
+        locations: set[int],  # noqa: ARG004
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Generate tick data for stabilizer checks.
+
+        Args:
+            make_ticks_data: Data structure containing tick generation parameters.
+            gate_symbol: Symbol identifying the type of gate/check to generate.
+            locations: Set of qubit locations (unused in this implementation).
+            params: Additional parameters for gate generation.
+
+        Returns:
+            Dictionary containing generated tick data.
+        """
         # X check: init   H    [all data ticks begin] <- H meas [slide to the left]
         # Z check: [idle] init [all data ticks begin] <- meas [slide to the left]
 
@@ -278,7 +311,11 @@ class NoMap:
     """Default Mapping: item -> item."""
 
     def __init__(self) -> None:
-        pass
+        """Initialize the NoMap identity mapping.
 
-    def __getitem__(self, item):
+        NoMap provides a default identity mapping where each item maps to itself.
+        """
+
+    def __getitem__(self, item: T) -> T:
+        """Return the item unchanged (identity mapping)."""
         return item

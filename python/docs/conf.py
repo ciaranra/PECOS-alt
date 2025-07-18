@@ -1,4 +1,12 @@
-#  =========================================================================  #  # noqa: INP001
+"""Sphinx documentation configuration for PECOS quantum error correction framework.
+
+This module configures Sphinx for generating the PECOS documentation, including
+API reference, user guides, and examples for the quantum error correction library.
+"""
+
+# ruff: noqa: INP001
+
+#  =========================================================================  #
 #   Copyright 2023 The PECOS Developers
 #   Copyright 2018 National Technology & Engineering Solutions of Sandia,
 #   LLC (NTESS). Under the terms of Contract DE-NA0003525 with NTESS,
@@ -28,19 +36,23 @@ import sys
 from importlib import metadata
 from pathlib import Path
 
-sys.path.insert(0, str(Path("../python").resolve()))
+sys.path.insert(0, str(Path("../quantum-pecos/src").resolve()))
 
 # -- Project information -----------------------------------------------------
 
 project = "PECOS"
-copyright = (
+copyright = (  # noqa: A001
     "2018-2023, The PECOS Developers. "
     "\xa9 Copyright 2018, National Technology & Engineering Solutions of Sandia, LLC (NTESS)"
 )
 author = "The PECOS Developers"
 
 # The full version, including alpha/beta/rc tags
-release = metadata.version("quantum-pecos")
+try:
+    release = metadata.version("quantum-pecos")
+except metadata.PackageNotFoundError:
+    # If the package isn't installed, fall back to hardcoded version
+    release = "0.6.0.dev8"
 # The short version
 version = ".".join(release.split(".")[:3])
 
@@ -237,3 +249,18 @@ todo_link_only = True
 # -- Options for autosummary extension ----------------------------------------------
 # Generate subpages for reference docs automatically
 autosummary_generate = True
+
+# -- Options for autodoc extension ----------------------------------------------
+# Mock modules that are not available during doc build
+autodoc_mock_imports = ["wasmer", "wasmtime", "cupy", "pecos.slr.std", "pecos.slr.slr"]
+
+# Skip problematic modules
+autosummary_mock_imports = [
+    "pecos.slr.std",
+    "pecos.slr.slr",
+    "pecos.simulators.cuquantum_old",
+    "pecos.simulators.custatevec",
+    "pecos.simulators.cysparsesim",
+    "pecos.simulators.cysparsesim_col",
+    "pecos.simulators.cysparsesim_row",
+]

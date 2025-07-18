@@ -1,3 +1,9 @@
+"""Quantum simulators for PECOS.
+
+This package provides various quantum simulators including state vector, sparse stabilizer,
+and fault propagation simulators.
+"""
+
 # Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
 #
@@ -11,7 +17,7 @@
 # specific language governing permissions and limitations under the License.
 
 # Rust version of stabilizer sim
-from pecos_rslib import SparseSimRs
+from pecos_rslib import SparseSimRs, StateVecRs
 from pecos_rslib import SparseSimRs as SparseSim
 
 from pecos.simulators import sim_class_types
@@ -21,7 +27,7 @@ from pecos.simulators.cointoss import (
 )
 
 # Ignores quantum gates, coin toss for measurements
-from pecos.simulators.parent_sim_classes import Simulator
+from pecos.simulators.default_simulator import DefaultSimulator
 from pecos.simulators.paulifaultprop import (
     PauliFaultProp,
 )
@@ -53,11 +59,6 @@ try:
 except ImportError:
     Qulacs = None
 
-# Attempt to import optional QuEST package
-try:
-    from pecos.simulators.quest.state import QuEST  # wrapper for QuEST sim
-except ImportError:
-    QuEST = None
 
 # Attempt to import optional cuquantum and cupy packages
 try:

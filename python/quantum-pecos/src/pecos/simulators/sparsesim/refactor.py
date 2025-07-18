@@ -11,25 +11,27 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-"""Functions:
+"""Functions for refactoring stabilizer generators.
 
 find_logical_signs
 logical_flip
 """
 
+from __future__ import annotations
 
-def find_stab(state, xs: set[int], zs: set[int]):
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pecos.simulators.sparsesim.state import SparseSim
+
+
+def find_stab(state: SparseSim, xs: set[int], zs: set[int]) -> tuple[bool, set[int]]:
     """Find a stabilizer in the stabilizer group.
 
     Args:
-    ----
-        state:
-        xs:
-        zs:
-
-    Returns:
-    -------
-
+        state (SparseSim): The SparseSim state instance.
+        xs (set[int]): Set of qubit indices with X operators.
+        zs (set[int]): Set of qubit indices with Z operators.
     """
     stabs = state.stabs
     destabs = state.destabs
@@ -63,20 +65,23 @@ def find_stab(state, xs: set[int], zs: set[int]):
     return found, antidestabs
 
 
-def refactor(state, xs, zs, choose=None, prefer=None, protected=None):
+def refactor(
+    state: SparseSim,
+    xs: set[int],
+    zs: set[int],
+    choose: int | None = None,
+    prefer: set[int] | None = None,
+    protected: set[int] | None = None,
+) -> tuple[bool, int | None]:
     """Find the sign of the logical operator.
 
     Args:
-    ----
-        state:
-        xs:
-        zs:
-        choose (None, int): Order of stabilizer ids to choose from.
-        prefer (None, set): Stabilizer ids that we should choose from.
-        protected (None, set): Stabilizer ids not to choose from.
-
-    Returns:
-    -------
+        state (SparseSim): The SparseSim state instance.
+        xs (set[int]): Set of qubit indices with X operators.
+        zs (set[int]): Set of qubit indices with Z operators.
+        choose (int | None): Order of stabilizer ids to choose from.
+        prefer (set[int] | None): Stabilizer ids that we should choose from.
+        protected (set[int] | None): Stabilizer ids not to choose from.
 
     """
     stabs = state.stabs

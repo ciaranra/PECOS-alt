@@ -9,6 +9,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Gate grouping and classification utilities for PECOS.
+
+This module defines sets and functions for categorizing quantum gates by
+their properties such as qubit count, gate type, and rotation characteristics.
+"""
+
 import numpy as np
 
 two_qubits = {

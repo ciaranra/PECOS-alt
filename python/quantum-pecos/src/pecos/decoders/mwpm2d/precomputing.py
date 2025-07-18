@@ -13,30 +13,29 @@
 
 """These functions build distance graphs for logical gates of qeccs."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
 import networkx as nx
 
+if TYPE_CHECKING:
+    from pecos.protocols import LogicalInstructionProtocol
 
-def precompute(instr):
-    """Args:
+
+def precompute(instr: LogicalInstructionProtocol) -> dict[str, Any]:
+    """Precompute decoder information for the given instruction.
+
+    Args:
     ----
-        instr:
-
-    Returns:
-    -------
-
+        instr: The logical instruction to precompute decoder information for.
     """
     qecc = instr.qecc
 
-    if (
-        qecc.name == "4.4.4.4 Surface Code"
-        and qecc.circuit_compiler.name == "Check2Circuits"
-    ):
+    if qecc.name == "4.4.4.4 Surface Code" and qecc.circuit_compiler.name == "Check2Circuits":
         precomputed_data = code_surface4444(instr)
 
-    elif (
-        qecc.name == "Medial 4.4.4.4 Surface Code"
-        and qecc.circuit_compiler.name == "Check2Circuits"
-    ):
+    elif qecc.name == "Medial 4.4.4.4 Surface Code" and qecc.circuit_compiler.name == "Check2Circuits":
         precomputed_data = code_surface4444medial(instr)
 
     else:
@@ -46,7 +45,7 @@ def precompute(instr):
     return precomputed_data
 
 
-def code_surface4444(instr):
+def code_surface4444(instr: LogicalInstructionProtocol) -> dict[str, Any]:
     """Pre-computing for surface4444 class.
 
     This decoder is for 2D slices. It is assumed that it can decode logical instruction by logical instruction.
@@ -65,7 +64,7 @@ def code_surface4444(instr):
     return decoder_data
 
 
-def code_surface4444medial(instr):
+def code_surface4444medial(instr: LogicalInstructionProtocol) -> dict[str, Any]:
     """Pre-computing for surface4444 class.
 
     This decoder is for 2D slices. It is assumed that it can decode logical instruction by logical instruction.
@@ -84,8 +83,32 @@ def code_surface4444medial(instr):
     return decoder_data
 
 
-def surface4444_identity(instr):
-    """For X and Z decoding separately:
+def compute_all_shortest_paths(graph: nx.Graph) -> dict[Any, dict[Any, list[Any]]]:
+    """Compute all shortest paths in a graph, handling NetworkX API changes.
+
+    This function will explicitly generate the all-pairs shortest paths
+    to be compatible with different NetworkX versions.
+
+    Args:
+        graph: NetworkX graph
+
+    Returns:
+        Dictionary of dictionaries with path[source][target] = list of nodes in path
+    """
+    # Compute all-pairs shortest paths explicitly
+    all_paths = {}
+    for source in graph.nodes():
+        # For each source, get paths to all targets
+        source_paths = nx.single_source_shortest_path(graph, source)
+        all_paths[source] = source_paths
+
+    return all_paths
+
+
+def surface4444_identity(instr: LogicalInstructionProtocol) -> dict[str, Any]:
+    """Compute decoder information for Surface 4444 identity gate.
+
+    For X and Z decoding separately:
 
     - Create dictionary:
 
@@ -155,9 +178,9 @@ def surface4444_identity(instr):
             elif gate_symbol == "Z check":
                 edges = d2edge_z
             else:
+                msg = f"This decoder can only handle check of purely X or Z type rather than {gate_symbol}!"
                 raise Exception(
-                    "This decoder can only handle check of purely X or Z type rather than %s!"
-                    % gate_symbol,
+                    msg,
                 )
 
             syn_list = edges.setdefault(data, [])
@@ -182,18 +205,19 @@ def surface4444_identity(instr):
             virt_node = "v" + str(vi)
 
             # X virtual nodes (sides left and right)
-            if side_label in ["left", "right"]:  # 1 for i = 1 and 3 => left and right
+            if side_label in {"left", "right"}:  # 1 for i = 1 and 3 => left and right
                 syn_list = d2edge_x.setdefault(data, [])
                 syn_list.append(virt_node)
                 virt_x.add(virt_node)
 
             # Z virtual nodes (sides top and bottom)
-            elif side_label in ["top", "bottom"]:  # 0 for i = 0 and 2 => top and bottom
+            elif side_label in {"top", "bottom"}:  # 0 for i = 0 and 2 => top and bottom
                 syn_list = d2edge_z.setdefault(data, [])
                 syn_list.append(virt_node)
                 virt_z.add(virt_node)
             else:
-                raise Exception('side_label "%s" not understood!' % side_label)
+                msg = f'side_label "{side_label}" not understood!'
+                raise Exception(msg)
 
     return invert_data(
         info,
@@ -207,9 +231,93 @@ def surface4444_identity(instr):
         virt_z,
     )
 
+    edges[tuple(edge)] = data
+    edges[edge[1], edge[0]] = data
+    temp_graph.add_edge(edge[0], edge[1])
 
-def surface4444medial_identity(instr):
-    """For X and Z decoding separately:
+    # Create distance graph
+    for check_type in ["X", "Z"]:
+        if check_type == "X":
+            temp_graph = temp_graph_x
+            g = graph_x
+            closest = closest_x
+            virt = virt_x
+            edge2d = edges_x
+            virtual_edge_data = virtual_edge_data_x
+
+        else:
+            temp_graph = temp_graph_z
+            g = graph_z
+            closest = closest_z
+            virt = virt_z
+            edge2d = edges_z
+            virtual_edge_data = virtual_edge_data_z
+
+        # Use a future-proof approach to get all shortest paths
+        paths = compute_all_shortest_paths(temp_graph)
+
+        for n1, wdict in paths.items():
+            for n2, syn_path in wdict.items():
+                weight = len(syn_path) - 1
+
+                if weight != 0:
+                    # Get list of datas corresponding to the connected path between syndromes
+                    data_path = []
+                    s1 = syn_path[0]
+                    for s2 in syn_path[1:]:
+                        data = edge2d[s1, s2]
+                        data_path.append(data)
+                        s1 = s2
+
+                    if (n1 not in virt) and (n2 not in virt):
+                        g.add_edge(
+                            n1,
+                            n2,
+                            weight=-weight,
+                            syn_path=syn_path,
+                            data_path=data_path,
+                        )
+
+        syn = set(g.nodes())
+        syn -= virt
+
+        # Find closest virtual node
+
+        for s in syn:
+            shortest_len = float("inf")
+            closest_v = None
+            for v in virt:
+                sv_len = len(paths[s][v])
+                if sv_len < shortest_len:
+                    shortest_len = sv_len
+                    closest_v = v
+            closest[s] = closest_v
+
+        for s, v in closest.items():
+            syn_path = paths[s][v]
+            weight = len(syn_path) - 1
+
+            data_path = []
+            s1 = syn_path[0]
+            for s2 in syn_path[1:]:
+                data = edge2d[s1, s2]
+                data_path.append(data)
+                s1 = s2
+
+            virtual_edge_data[s] = {
+                "virtual_node": v,
+                "weight": -weight,
+                "syn_path": syn_path,
+                "data_path": data_path,
+            }
+
+    return info
+
+
+def surface4444medial_identity(instr: LogicalInstructionProtocol) -> dict[str, Any]:
+    """Compute decoder information for Surface 4444 medial identity gate.
+
+    For X and Z decoding separately:
 
     - Create dictionary:
 
@@ -279,9 +387,9 @@ def surface4444medial_identity(instr):
             elif gate_symbol == "Z check":
                 edges = d2edge_z
             else:
+                msg = f"This decoder can only handle check of purely X or Z type rather than {gate_symbol}!"
                 raise Exception(
-                    "This decoder can only handle check of purely X or Z type rather than %s!"
-                    % gate_symbol,
+                    msg,
                 )
 
             syn_list = edges.setdefault(data, [])
@@ -310,10 +418,9 @@ def surface4444medial_identity(instr):
                         vi += 1
                         virt_node = "v" + str(vi)
 
-                else:  # even
-                    if i % 2 == 0:
-                        vi += 1
-                        virt_node = "v" + str(vi)
+                elif i % 2 == 0:
+                    vi += 1
+                    virt_node = "v" + str(vi)
 
                 syn_list = d2edge_z.setdefault(data, [])
                 syn_list.append(virt_node)
@@ -342,27 +449,16 @@ def surface4444medial_identity(instr):
                     if i == 0 or i % 2 == 1:
                         vi += 1
                         virt_node = "v" + str(vi)
-                else:
-                    if i % 2 == 0:
-                        vi += 1
-                        virt_node = "v" + str(vi)
+                elif i % 2 == 0:
+                    vi += 1
+                    virt_node = "v" + str(vi)
 
                 syn_list = d2edge_x.setdefault(data, [])
                 syn_list.append(virt_node)
                 virt_x.add(virt_node)
             else:
-                raise Exception('side_label "%s" not understood!' % side_label)
-    return invert_data(
-        info,
-        d2edge_x,
-        d2edge_z,
-        edges_x,
-        edges_z,
-        temp_graph_x,
-        temp_graph_z,
-        virt_x,
-        virt_z,
-    )
+                msg = f'side_label "{side_label}" not understood!'
+                raise Exception(msg)
 
 
 def invert_data(
@@ -396,7 +492,7 @@ def invert_data(
                 raise Exception(msg)
 
             edges[tuple(edge)] = data
-            edges[(edge[1], edge[0])] = data
+            edges[edge[1], edge[0]] = data
             temp_graph.add_edge(edge[0], edge[1])
 
     # Create distance graph
@@ -417,7 +513,8 @@ def invert_data(
             edge2d = edges_z
             virtual_edge_data = info["Z"]["virtual_edge_data"]
 
-        paths = dict(nx.shortest_path(temp_graph))
+        # Use a future-proof approach to get all shortest paths
+        paths = compute_all_shortest_paths(temp_graph)
 
         for n1, wdict in paths.items():
             for n2, syn_path in wdict.items():
@@ -428,7 +525,7 @@ def invert_data(
                     data_path = []
                     s1 = syn_path[0]
                     for s2 in syn_path[1:]:
-                        data = edge2d[(s1, s2)]
+                        data = edge2d[s1, s2]
                         data_path.append(data)
                         s1 = s2
 
@@ -463,7 +560,7 @@ def invert_data(
             data_path = []
             s1 = syn_path[0]
             for s2 in syn_path[1:]:
-                data = edge2d[(s1, s2)]
+                data = edge2d[s1, s2]
                 data_path.append(data)
                 s1 = s2
 

@@ -1,0 +1,34 @@
+[package]
+name = "pecos-engines"
+version.workspace = true
+edition.workspace = true
+readme.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Provides simulator engines for PECOS simulations."
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+rayon.workspace = true
+log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
+bytemuck.workspace = true
+bitflags.workspace = true
+dyn-clone.workspace = true
+num-bigint.workspace = true
+bitvec.workspace = true
+
+pecos-core.workspace = true
+pecos-qsim.workspace = true
+
+[lints]
+workspace = true

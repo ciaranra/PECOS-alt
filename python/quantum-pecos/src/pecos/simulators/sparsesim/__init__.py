@@ -11,8 +11,9 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-"""A stabilizer simulation that takes advantage of the structure of LDPC codes; more precisely, it utilizes the
-row and column-wise sparseness of stabilizer tableau.
+"""A stabilizer simulation that takes advantage of the structure of LDPC codes.
+
+More precisely, it utilizes the row and column-wise sparseness of stabilizer tableau.
 
 .. module:: __init__
    :synopsis: The init file for the package PECOS.

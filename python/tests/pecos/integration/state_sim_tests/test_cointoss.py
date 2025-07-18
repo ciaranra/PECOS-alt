@@ -9,6 +9,7 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Integration tests for coin toss quantum simulator."""
 from __future__ import annotations
 
 import numpy as np
@@ -16,7 +17,8 @@ from pecos.circuits import QuantumCircuit
 from pecos.simulators import CoinToss
 
 
-def test_fixed_prob():
+def test_fixed_prob() -> None:
+    """Test coin toss simulator with fixed probability."""
     qc = QuantumCircuit()
     qc.append({"Init": {0, 1, 2, 3, 4}})
     qc.append({"Measure": {0, 1, 2, 3, 4}})
@@ -32,7 +34,8 @@ def test_fixed_prob():
     assert len(results) == len(qc.qudits)  # All measurements returned 1
 
 
-def test_all_gate_circ():
+def test_all_gate_circ() -> None:
+    """Test coin toss simulator with all gate circuit."""
     qc = QuantumCircuit()
 
     # Apply each gate once
