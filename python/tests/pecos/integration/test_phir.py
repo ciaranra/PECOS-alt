@@ -19,13 +19,9 @@ from pecos.classical_interpreters.phir_classical_interpreter import (
 )
 from pecos.engines.hybrid_engine import HybridEngine
 from pecos.error_models.generic_error_model import GenericErrorModel
-from pecos.types import PhirModel
+from pecos.foreign_objects.wasmtime import WasmtimeObj
+from phir.model import PHIRModel
 from pydantic import ValidationError
-
-try:
-    from pecos.foreign_objects.wasmtime import WasmtimeObj
-except ImportError:
-    WasmtimeObj = None
 
 try:
     from pecos.foreign_objects.wasmer import WasmerObj
@@ -241,7 +237,7 @@ def test_throw_exception_with_bad_phir() -> None:
     """Making sure the bad PHIR throws an exception."""
     phir = json.load(Path.open(this_dir / "phir" / "bad_phir.phir.json"))
     with pytest.raises(ValidationError):
-        PhirModel.model_validate(phir)
+        PHIRModel.model_validate(phir)
 
 
 def test_qparallel() -> None:

@@ -12,6 +12,7 @@ from pecos.slr import (
     CReg,
     If,
     Main,
+    Parallel,
     QReg,
     Repeat,
     SlrConverter,
@@ -227,4 +228,79 @@ def test_sx_sxdg() -> None:
     )
 
     qir = SlrConverter(prog).qir()
+    assert "__quantum__qis__rx__body" in qir
+
+
+@pytest.mark.optional_dependency
+def test_parallel_qir() -> None:
+    """Test that a parallel block can be compiled to QIR."""
+    prog: Main = Main(
+        q := QReg("q", 4),
+        m := CReg("m", 4),
+        Parallel(
+            p.H(q[0]),
+            p.X(q[1]),
+            p.Y(q[2]),
+            p.Z(q[3]),
+        ),
+        p.Measure(q) > m,
+    )
+    qir = SlrConverter(prog).qir()
+    assert "__quantum__qis__h__body" in qir
+    assert "__quantum__qis__x__body" in qir
+    assert "__quantum__qis__y__body" in qir
+    assert "__quantum__qis__z__body" in qir
+
+
+@pytest.mark.optional_dependency
+def test_nested_parallel_qir() -> None:
+    """Test that nested parallel blocks can be compiled to QIR."""
+    prog: Main = Main(
+        q := QReg("q", 4),
+        m := CReg("m", 4),
+        Parallel(
+            p.H(q[0]),
+            Block(
+                p.X(q[1]),
+                p.Y(q[2]),
+            ),
+            p.Z(q[3]),
+        ),
+        Barrier(q),
+        p.Measure(q) > m,
+    )
+    qir = SlrConverter(prog).qir()
+    assert "__quantum__qis__h__body" in qir
+    assert "__quantum__qis__x__body" in qir
+    assert "__quantum__qis__y__body" in qir
+    assert "__quantum__qis__z__body" in qir
+
+
+@pytest.mark.optional_dependency
+def test_parallel_in_control_flow_qir() -> None:
+    """Test parallel blocks within control flow structures in QIR."""
+    prog: Main = Main(
+        q := QReg("q", 4),
+        m := CReg("m", 4),
+        p.H(q[0]),
+        p.Measure(q[0]) > m[0],
+        If(m[0] == 1).Then(
+            Parallel(
+                p.X(q[1]),
+                p.Y(q[2]),
+                p.Z(q[3]),
+            ),
+        ),
+        Repeat(2).block(
+            Parallel(
+                p.RX[0.5](q[0]),
+                p.RY[0.5](q[1]),
+                p.RZ[0.5](q[2]),
+            ),
+        ),
+        p.Measure(q) > m,
+    )
+    qir = SlrConverter(prog).qir()
+    assert "__quantum__qis__h__body" in qir
+    assert "__quantum__qis__x__body" in qir
     assert "__quantum__qis__rx__body" in qir

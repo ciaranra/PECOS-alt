@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pecos.slr.vars import Elem, QReg, Qubit, Reg
 
+from pecos.slr.block import Block
 from pecos.slr.fund import Statement
 
 
@@ -30,6 +31,18 @@ class Comment(Statement):
         self.space = space
         self.newline = newline
         self.txt = "\n".join(txt)
+
+
+class Parallel(Block):
+    """A block that indicates the contained statements can be executed in parallel.
+    
+    This is a hint to the compiler/simulator that the operations within this block
+    are independent and can be executed simultaneously.
+    """
+    
+    def __init__(self, *statements: Statement) -> None:
+        super().__init__()
+        self.extend(*statements)
 
 
 class Permute(Statement):

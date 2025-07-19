@@ -16,7 +16,15 @@ impl WindowsCompiler {
     /// Compile LLVM IR file to object file using clang
     ///
     /// Windows does not typically include llc.exe in standard LLVM installations
-    /// so we use clang directly to compile the LLVM IR file to an object file.
+    /// so we use clang directly to compile the QIR file to an object file.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - QIR file cannot be read
+    /// - Temporary file cannot be written
+    /// - Clang execution fails
+    /// - Object file is not created at expected path
     pub fn compile_to_object_file(
         llvm_file: &Path,
         object_file: &Path,
@@ -79,6 +87,15 @@ impl WindowsCompiler {
     }
 
     /// Link object file and runtime library into a shared library
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Definition file cannot be written
+    /// - C stub file cannot be written
+    /// - Object compilation of stub fails
+    /// - Library linking fails
+    /// - Library file is not created at expected path
     pub fn link_shared_library(
         object_file: &Path,
         _rust_runtime_lib: &Path, // Unused but kept for API compatibility
@@ -100,11 +117,11 @@ impl WindowsCompiler {
         let stub_obj_path = parent_dir.join("llvm_runtime_stub.o");
 
         // Write DEF file for exporting symbols
-        fs::write(&def_file_path, &Self::generate_def_file())
+        fs::write(&def_file_path, Self::generate_def_file())
             .map_err(|e| PecosError::Processing(format!("Failed to write DEF file: {e}")))?;
 
         // Write C stub implementation
-        fs::write(&stub_c_path, &Self::generate_c_stub())
+        fs::write(&stub_c_path, Self::generate_c_stub())
             .map_err(|e| PecosError::Processing(format!("Failed to write stub .c file: {e}")))?;
 
         // Compile the C stub
@@ -144,7 +161,8 @@ impl WindowsCompiler {
         // Verify the library exists
         if !library_file.exists() {
             return Err(PecosError::Processing(format!(
-                "Library file was not created at the expected path: {library_file:?}"
+                "Library file was not created at the expected path: {}",
+                library_file.display()
             )));
         }
 

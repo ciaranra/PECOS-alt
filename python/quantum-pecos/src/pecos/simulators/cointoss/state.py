@@ -24,7 +24,15 @@ from pecos.simulators.cointoss import bindings
 from pecos.simulators.default_simulator import DefaultSimulator
 
 if TYPE_CHECKING:
-    from typing import Self
+    # Handle Python 3.10 compatibility for Self type
+    import sys
+
+    if sys.version_info >= (3, 11):
+        from typing import Self
+    else:
+        from typing import TypeVar
+
+        Self = TypeVar("Self", bound="CoinToss")
 
 
 class CoinToss(DefaultSimulator):

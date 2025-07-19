@@ -25,9 +25,17 @@ from pecos.simulators.basic_sv import bindings
 from pecos.simulators.sim_class_types import StateVector
 
 if TYPE_CHECKING:
-    from typing import Self
+    import sys
 
     from numpy.typing import ArrayLike
+
+    # Handle Python 3.10 compatibility for Self type
+    if sys.version_info >= (3, 11):
+        from typing import Self
+    else:
+        from typing import TypeVar
+
+        Self = TypeVar("Self", bound="BasicSV")
 
 
 class BasicSV(StateVector):

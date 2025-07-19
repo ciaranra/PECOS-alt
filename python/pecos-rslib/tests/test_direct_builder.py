@@ -66,7 +66,12 @@ class TestDirectBuilder:
 
         # Should see some errors due to high p1 error rate
         zeros = sum(1 for val in results["c"] if val == 0)
-        assert zeros > 50  # Some errors expected
+        # With 10% error rate and specific Pauli model, we expect some measurement errors
+        # The X error (50% of errors) would flip |1⟩ back to |0⟩, giving us 0 measurement
+        # Y and Z errors (30% and 20%) would also affect the measurement
+        # We expect roughly 5% of measurements to be 0 (10% error * 50% X errors)
+        # Allow for statistical variation: expect between 30 and 150 zeros
+        assert 30 <= zeros <= 150, f"Expected between 30 and 150 zeros, got {zeros}"
 
     def test_builder_with_method_chaining(self):
         """Test using builder with direct method chaining."""

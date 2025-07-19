@@ -15,7 +15,7 @@ readme = "README.md"
 
 [build-dependencies]
 cc.workspace = true
-ureq = "2.9"
+ureq = { version = "2.9", default-features = false, features = ["native-tls"] }
 
 [lints]
 workspace = true

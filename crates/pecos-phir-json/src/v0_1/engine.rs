@@ -379,7 +379,7 @@ impl PhirJsonEngine {
                                     // Replace the current op with the branch operations
                                     // This is a simplification - a more robust implementation would
                                     // involve temporarily changing the ops list
-                                    for branch_op in branch_ops {
+                                    for branch_op in &branch_ops {
                                         match branch_op {
                                             Operation::QuantumOp {
                                                 qop, angles, args, ..
@@ -407,9 +407,59 @@ impl PhirJsonEngine {
                                                     Err(e) => return Err(e),
                                                 }
                                             }
+                                            Operation::ClassicalOp {
+                                                cop,
+                                                args,
+                                                returns,
+                                                metadata: _,
+                                                function,
+                                            } => {
+                                                debug!(
+                                                    "Processing classical operation in branch: {}",
+                                                    cop
+                                                );
+                                                // Handle classical operations from conditional branches
+                                                if cop == "ffcall" {
+                                                    debug!(
+                                                        "Processing ffcall in branch: function={:?}, args={:?}, returns={:?}",
+                                                        function, args, returns
+                                                    );
+                                                }
+                                                // For ffcall operations from branches, we need to handle them specially
+                                                // because they have the function name directly in the operation
+                                                if cop == "ffcall" {
+                                                    // Create a temporary operation list with just this operation
+                                                    // This ensures handle_classical_op can find the function name
+                                                    let temp_ops = vec![branch_op.clone()];
+                                                    if self.processor.handle_classical_op(
+                                                        cop, args, returns, &temp_ops,
+                                                        0, // The operation is at index 0 in temp_ops
+                                                    )? {
+                                                        debug!(
+                                                            "Classical ffcall operation in branch completed"
+                                                        );
+                                                    }
+                                                } else {
+                                                    // For other classical operations, use the original ops
+                                                    if self.processor.handle_classical_op(
+                                                        cop,
+                                                        args,
+                                                        returns,
+                                                        &branch_ops,
+                                                        0, // Index within branch ops
+                                                    )? {
+                                                        debug!(
+                                                            "Classical operation in branch completed"
+                                                        );
+                                                    }
+                                                }
+                                            }
                                             _ => {
                                                 // For other operation types, we'll handle them later
-                                                debug!("Skipping non-quantum operation in branch");
+                                                debug!(
+                                                    "Skipping other operation type in branch: {:?}",
+                                                    branch_op
+                                                );
                                             }
                                         }
                                     }
