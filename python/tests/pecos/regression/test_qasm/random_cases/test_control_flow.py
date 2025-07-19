@@ -14,7 +14,7 @@
 from collections.abc import Callable
 
 from pecos.qeclib import qubit as qb
-from pecos.slr import Block, CReg, If, Main, QReg, Repeat
+from pecos.slr import Block, CReg, If, Main, Parallel, QReg, Repeat
 
 
 def test_phys_teleport(compare_qasm: Callable[..., None]) -> None:
@@ -120,3 +120,89 @@ def test_phys_repeat(compare_qasm: Callable[..., None]) -> None:
     )
 
     compare_qasm(prog, filename="phys.tele_repeat")
+
+
+def test_phys_parallel() -> None:
+    """Test parallel block QASM generation."""
+    from pecos.slr import SlrConverter
+    
+    prog = Main(
+        q := QReg("q", 4),
+        c := CReg("m", 4),
+        Parallel(
+            qb.H(q[0]),
+            qb.H(q[1]),
+            qb.X(q[2]),
+            qb.Y(q[3]),
+        ),
+        qb.Measure(q) > c,
+    )
+
+    qasm = SlrConverter(prog).qasm()
+    
+    # Verify all operations are present in the generated QASM
+    assert "h q[0]" in qasm
+    assert "h q[1]" in qasm
+    assert "x q[2]" in qasm
+    assert "y q[3]" in qasm
+    # QASM generator uses compact notation for register-wide measurements
+    assert "measure q -> m;" in qasm
+
+
+def test_phys_nested_parallel() -> None:
+    """Test nested parallel blocks QASM generation."""
+    from pecos.slr import SlrConverter
+    
+    prog = Main(
+        q := QReg("q", 4),
+        c := CReg("m", 4),
+        Parallel(
+            qb.H(q[0]),
+            Block(
+                qb.X(q[1]),
+                qb.Y(q[2]),
+            ),
+            qb.Z(q[3]),
+        ),
+        qb.Measure(q) > c,
+    )
+
+    qasm = SlrConverter(prog).qasm()
+    
+    # Verify all operations are present
+    assert "h q[0]" in qasm
+    assert "x q[1]" in qasm
+    assert "y q[2]" in qasm
+    assert "z q[3]" in qasm
+    assert "qreg q[4]" in qasm
+    assert "creg m[4]" in qasm
+
+
+def test_phys_parallel_in_if() -> None:
+    """Test parallel block inside conditional QASM generation."""
+    from pecos.slr import SlrConverter
+    
+    prog = Main(
+        q := QReg("q", 4),
+        c := CReg("m", 4),
+        qb.H(q[0]),
+        qb.Measure(q[0]) > c[0],
+        If(c[0] == 1).Then(
+            Parallel(
+                qb.X(q[1]),
+                qb.Y(q[2]),
+                qb.Z(q[3]),
+            ),
+        ),
+        qb.Measure(q[1:4]) > c[1:4],
+    )
+
+    qasm = SlrConverter(prog).qasm()
+    
+    # Verify the conditional structure
+    assert "h q[0]" in qasm
+    assert "measure q[0] -> m[0]" in qasm
+    # QASM generator applies conditions to individual operations
+    assert "if(m[0] == 1) x q[1]" in qasm
+    assert "if(m[0] == 1) y q[2]" in qasm
+    assert "if(m[0] == 1) z q[3]" in qasm

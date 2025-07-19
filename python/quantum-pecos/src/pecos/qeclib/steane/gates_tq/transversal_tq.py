@@ -16,7 +16,8 @@ fault-tolerant operations between logical qubits while preserving error correcti
 # specific language governing permissions and limitations under the License.
 
 from pecos.qeclib import qubit
-from pecos.slr import Barrier, Block, Comment, QReg
+from pecos.slr import Block, QReg, Comment, Barrier
+from pecos.qeclib.generic.transversal import transversal_tq
 
 
 class CX(Block):
@@ -69,7 +70,6 @@ class CX(Block):
             self.extend(
                 Barrier(q1, q2),
             )
-
 
 class CY(Block):
     """Transversal logical CY gate for Steane code.
@@ -182,6 +182,46 @@ class SZZ(Block):
             Comment("Transversal Logical SZZ"),
             Barrier(q1, q2),
             qubit.SZZ(
+                (q1[0], q2[0]),
+                (q1[1], q2[1]),
+                (q1[2], q2[2]),
+                (q1[3], q2[3]),
+                (q1[4], q2[4]),
+                (q1[5], q2[5]),
+                (q1[6], q2[6]),
+            ),
+            Barrier(q1, q2),
+        )
+
+class SZZdg(Block):
+    """Transversal logical SZZdg gate for Steane code.
+
+    This class implements a transversal logical SZZ interaction gate between
+    two logical qubits encoded in the Steane code.
+    """
+
+    def __init__(self, q1: QReg, q2: QReg) -> None:
+        """Initialize a transversal logical SZZdg gate on two Steane code logical qubits.
+
+        Args:
+            q1: First quantum register containing exactly 7 qubits.
+            q2: Second quantum register containing exactly 7 qubits.
+
+        Raises:
+            Exception: If either quantum register does not contain exactly 7 qubits.
+        """
+        if len(q1.elems) != 7:
+            msg = f"Size of register {len(q1.elems)} != 7"
+            raise Exception(msg)
+
+        if len(q2.elems) != 7:
+            msg = f"Size of register {len(q2.elems)} != 7"
+            raise Exception(msg)
+
+        super().__init__(
+            Comment("Transversal Logical SZZdg"),
+            Barrier(q1, q2),
+            qubit.SZZdg(
                 (q1[0], q2[0]),
                 (q1[1], q2[1]),
                 (q1[2], q2[2]),

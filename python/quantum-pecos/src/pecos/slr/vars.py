@@ -69,6 +69,9 @@ class Reg(Var):
     def set(self, other):
         return SET(self, other)
 
+    def __len__(self):
+        return self.size
+
     def __getitem__(self, item):
         return self.elems[item]
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from pecos.slr.gen_codes.gen_qasm import QASMGenerator
 from pecos.slr.gen_codes.language import Language
+from pecos.slr.transforms.parallel_optimizer import ParallelOptimizer
 
 try:
     from pecos.slr.gen_codes.gen_qir import QIRGenerator
@@ -22,8 +23,20 @@ except ImportError:
 
 class SlrConverter:
 
-    def __init__(self, block):
+    def __init__(self, block, optimize_parallel: bool = True):
+        """Initialize the SLR converter.
+        
+        Args:
+            block: The SLR block to convert
+            optimize_parallel: Whether to apply ParallelOptimizer transformation (default: True).
+                             Only affects blocks containing Parallel() statements.
+        """
         self._block = block
+        
+        # Apply transformations if requested
+        if optimize_parallel:
+            optimizer = ParallelOptimizer()
+            self._block = optimizer.transform(self._block)
 
     def generate(
         self,
