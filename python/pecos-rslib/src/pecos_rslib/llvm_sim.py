@@ -4,7 +4,7 @@ This module provides a Python interface to the Rust llvm_sim implementation,
 offering noise models, parallelization, and multiple quantum engines.
 """
 
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Callable
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -13,6 +13,7 @@ from pecos_rslib._pecos_rslib import (
     llvm_sim_builder as _rust_llvm_sim_builder,
     LlvmNoiseModel,
     LlvmQuantumEngine,
+    ShotVec,
 )
 
 
@@ -49,6 +50,52 @@ class LlvmSimBuilder:
     def __init__(self, rust_builder):
         """Initialize with a Rust builder instance."""
         self._rust_builder = rust_builder
+    
+    @classmethod
+    def guppy(cls, guppy_func: Callable) -> "LlvmSimBuilder":
+        """Create an LLVM simulation builder from a Guppy function.
+        
+        This method compiles a Guppy function to HUGR, then to LLVM IR,
+        and creates an LLVM simulation builder with the same interface as llvm_sim().
+        
+        Args:
+            guppy_func: A function decorated with @guppy
+            
+        Returns:
+            LlvmSimBuilder: Builder for configuring the simulation
+            
+        Examples:
+            >>> from guppylang import guppy
+            >>> from guppylang.std.quantum import qubit, h, measure
+            >>> 
+            >>> @guppy
+            ... def bell_test() -> tuple[bool, bool]:
+            ...     q1, q2 = qubit(), qubit()
+            ...     h(q1)
+            ...     cx(q1, q2)
+            ...     return measure(q1), measure(q2)
+            ...
+            >>> # Same interface as llvm_sim() but starting from Guppy
+            >>> results = LlvmSimBuilder.guppy(bell_test).seed(42).run(1000)
+            >>> 
+            >>> # Or via the convenience function (see below)
+            >>> results = llvm_sim.guppy(bell_test).max_qubits(10).run(1000)
+        """
+        try:
+            # Import Guppy compilation tools
+            from pecos.compilation_pipeline import compile_guppy_to_hugr, compile_hugr_to_llvm
+        except ImportError:
+            raise ImportError(
+                "Guppy compilation tools not available. Install with: pip install quantum-pecos[guppy]"
+            )
+        
+        # Compile Guppy to LLVM IR
+        hugr_bytes = compile_guppy_to_hugr(guppy_func)
+        llvm_ir = compile_hugr_to_llvm(hugr_bytes)
+        
+        # Create standard LLVM sim builder with the compiled IR
+        rust_builder = _rust_llvm_sim_builder(llvm_ir)
+        return cls(rust_builder)
     
     def seed(self, seed: int) -> "LlvmSimBuilder":
         """Set random seed for reproducibility."""
@@ -152,7 +199,7 @@ class LlvmSimBuilder:
         rust_sim = self._rust_builder.build()
         return LlvmSimulation(rust_sim)
     
-    def run(self, shots: int) -> Dict[str, List[int]]:
+    def run(self, shots: int) -> ShotVec:
         """Build and run the simulation in one call."""
         return self._rust_builder.run(shots)
 
@@ -164,7 +211,7 @@ class LlvmSimulation:
         """Initialize with a Rust simulation instance."""
         self._rust_simulation = rust_simulation
     
-    def run(self, shots: int) -> Dict[str, List[int]]:
+    def run(self, shots: int) -> ShotVec:
         """Run the simulation with the given number of shots."""
         return self._rust_simulation.run(shots)
     
@@ -197,6 +244,18 @@ def llvm_sim(source: Union[str, Path]) -> LlvmSimBuilder:
         ... '''
         >>> results = llvm_sim(llvm_ir).seed(42).run(1000)
         
+        >>> # From Guppy function (convenience method)
+        >>> from guppylang import guppy
+        >>> from guppylang.std.quantum import qubit, h, measure
+        >>> 
+        >>> @guppy
+        ... def simple_circuit() -> bool:
+        ...     q = qubit()
+        ...     h(q)
+        ...     return measure(q)
+        ...
+        >>> results = llvm_sim.guppy(simple_circuit).seed(42).run(1000)
+        
         >>> # With noise and parallelization
         >>> results = llvm_sim(llvm_ir) \\
         ...     .seed(42) \\
@@ -219,6 +278,10 @@ def llvm_sim(source: Union[str, Path]) -> LlvmSimBuilder:
     
     rust_builder = _rust_llvm_sim_builder(source)
     return LlvmSimBuilder(rust_builder)
+
+
+# Add convenience method to the function object
+llvm_sim.guppy = LlvmSimBuilder.guppy
 
 
 # Export the main function and noise model classes

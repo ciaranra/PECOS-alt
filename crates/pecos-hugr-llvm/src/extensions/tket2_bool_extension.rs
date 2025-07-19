@@ -58,6 +58,9 @@ impl CodegenExtension for Tket2BoolExtension {
             .extension_op(ext_id.clone(), "not".into(), {
                 move |ctx, args| emit_bool_not(ctx, args).map_err(anyhow::Error::new)
             })
+            .extension_op(ext_id.clone(), "eq".into(), {
+                move |ctx, args| emit_bool_eq(ctx, args).map_err(anyhow::Error::new)
+            })
     }
 }
 
@@ -110,5 +113,27 @@ fn emit_bool_not<'c, H: HugrView<Node = Node>>(
     let not_value = builder.build_xor(bool_value, true_val, "bool_not")?;
     
     args.outputs.finish(builder, [not_value.into()])?;
+    Ok(())
+}
+
+/// Emit the tket2.bool.eq operation
+/// Equality comparison between two boolean values
+fn emit_bool_eq<'c, H: HugrView<Node = Node>>(
+    context: &mut EmitFuncContext<'c, '_, H>,
+    args: EmitOpArgs<'c, '_, ExtensionOp, H>,
+) -> Result<(), PecosError> {
+    let builder = context.builder();
+    
+    // Inputs are two i1 (boolean) values
+    let bool1 = args.inputs[0].into_int_value();
+    let bool2 = args.inputs[1].into_int_value();
+    
+    // Build equality comparison (XNOR - equivalent values)
+    // a == b is equivalent to NOT(a XOR b)
+    let xor_value = builder.build_xor(bool1, bool2, "bool_xor")?;
+    let true_val = context.iw_context().bool_type().const_int(1, false);
+    let eq_value = builder.build_xor(xor_value, true_val, "bool_eq")?;
+    
+    args.outputs.finish(builder, [eq_value.into()])?;
     Ok(())
 }

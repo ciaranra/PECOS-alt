@@ -52,6 +52,23 @@ from pecos_rslib.llvm_sim import (
     BiasedDepolarizingNoise as LlvmBiasedDepolarizingNoise,
 )
 
+# Enhanced Selene simulation exports
+from pecos_rslib.selene_sim import (
+    selene_sim,
+    SeleneSimBuilder,
+    SeleneSimulation,
+    PassThroughNoise as SelenePassThroughNoise,
+    DepolarizingNoise as SeleneDepolarizingNoise,
+    DepolarizingCustomNoise as SeleneDepolarizingCustomNoise,
+    BiasedDepolarizingNoise as SeleneBiasedDepolarizingNoise,
+)
+
+# Selene engine exports
+from pecos_rslib.selene_engine import (
+    selene_engine,
+    SeleneEngineBuilder,
+)
+
 # Import the qasm_sim function and noise models for easy access
 from pecos_rslib.qasm_sim import qasm_sim
 
@@ -168,6 +185,17 @@ __all__ = [
     "LlvmDepolarizingNoise",
     "LlvmDepolarizingCustomNoise",
     "LlvmBiasedDepolarizingNoise",
+    # Enhanced Selene simulation
+    "selene_sim",
+    "SeleneSimBuilder",
+    "SeleneSimulation",
+    "SelenePassThroughNoise",
+    "SeleneDepolarizingNoise",
+    "SeleneDepolarizingCustomNoise",
+    "SeleneBiasedDepolarizingNoise",
+    # Selene engine
+    "selene_engine",
+    "SeleneEngineBuilder",
     # Noise model dataclasses
     "PassThroughNoise",
     "DepolarizingNoise",

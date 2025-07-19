@@ -39,7 +39,7 @@ pub use engine_builder::ClassicalControlEngineBuilder;
 pub use sim_builder::{
     SimBuilder, SimConfig, Simulation, QuantumEngineType,
     PassThroughNoise, DepolarizingNoise, DepolarizingCustomNoise, BiasedDepolarizingNoise,
-    shots_to_columnar,
+    shots_to_columnar, sim,
 };
 
 /// Run a quantum simulation.

@@ -29,7 +29,7 @@ wasm = []
 llvm-jit = ["pecos-llvm-runtime/llvm-jit"]
 
 # HUGR-LLVM pipeline: HUGR → LLVM IR (via pecos-hugr-llvm)
-hugr-llvm-pipeline = ["pecos-hugr-llvm"]
+hugr-llvm-pipeline = ["pecos-hugr-llvm", "dep:hugr"]
 
 # Legacy feature for backward compatibility
 hugr = ["hugr-llvm-pipeline"]
@@ -42,8 +42,10 @@ pecos-qasm = { workspace = true, features = ["wasm"] }
 pecos-engines = { workspace = true }
 pecos-llvm-runtime = { workspace = true }
 pecos-llvm-sim = { workspace = true }
+pecos-selene-ceng = { path = "../../../crates/pecos-selene-ceng", features = ["hugr"] }
 pecos-phir = { path = "../../../crates/pecos-phir" }
 pecos-hugr-llvm = { path = "../../../crates/pecos-hugr-llvm", optional = true }
+hugr = { version = "0.20", optional = true }
 parking_lot = { workspace = true}
 serde_json = { workspace = true }
 tempfile = { workspace = true }

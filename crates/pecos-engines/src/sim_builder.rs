@@ -109,20 +109,23 @@ impl<E: ClassicalControlEngine + Clone + 'static> Simulation<E> {
     pub fn run_with_seed(&self, shots: usize, seed: Option<u64>) -> Result<ShotVec, PecosError> {
         let num_qubits = self.engine.num_qubits();
         
+        // Use max_qubits if specified, otherwise use engine's reported qubits
+        let simulator_qubits = self.config.max_qubits.unwrap_or(num_qubits);
+        
         // Create quantum engine based on config
         let quantum_engine: Box<dyn QuantumEngine> = match self.config.quantum_engine {
             QuantumEngineType::StateVector => {
                 if let Some(s) = seed {
-                    Box::new(StateVecEngine::with_seed(num_qubits, s))
+                    Box::new(StateVecEngine::with_seed(simulator_qubits, s))
                 } else {
-                    Box::new(StateVecEngine::new(num_qubits))
+                    Box::new(StateVecEngine::new(simulator_qubits))
                 }
             }
             QuantumEngineType::SparseStabilizer => {
                 if let Some(s) = seed {
-                    Box::new(SparseStabEngine::with_seed(num_qubits, s))
+                    Box::new(SparseStabEngine::with_seed(simulator_qubits, s))
                 } else {
-                    Box::new(SparseStabEngine::new(num_qubits))
+                    Box::new(SparseStabEngine::new(simulator_qubits))
                 }
             }
         };
@@ -363,6 +366,79 @@ impl<B: ClassicalControlEngineBuilder> SimBuilder<B> {
         let sim = self.build()?;
         sim.run(shots)
     }
+}
+
+impl<B: ClassicalControlEngineBuilder> From<B> for SimBuilder<B> {
+    fn from(builder: B) -> Self {
+        SimBuilder::new(builder)
+    }
+}
+
+/// Helper function to create a simulation builder from any engine builder
+///
+/// This provides a functional-style API as an alternative to the `.to_sim()` method.
+/// Both approaches are equivalent and can be used based on preference.
+///
+/// # Equivalent Patterns
+///
+/// These three patterns all create the same simulation:
+/// ```no_run
+/// # use pecos_engines::{sim, SimBuilder, ClassicalControlEngineBuilder};
+/// # struct MyEngineBuilder;
+/// # impl ClassicalControlEngineBuilder for MyEngineBuilder {
+/// #     type Engine = pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
+/// #     fn build(self) -> Result<Self::Engine, pecos_core::errors::PecosError> {
+/// #         Ok(pecos_engines::monte_carlo::engine::ExternalClassicalEngine::new())
+/// #     }
+/// # }
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// // Pattern 1: Method chaining (original)
+/// let r1 = MyEngineBuilder.to_sim().seed(42).run(1000)?;
+/// 
+/// // Pattern 2: Using From trait
+/// let r2 = SimBuilder::from(MyEngineBuilder).seed(42).run(1000)?;
+/// 
+/// // Pattern 3: Using sim() helper function
+/// let r3 = sim(MyEngineBuilder).seed(42).run(1000)?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # When to Use Each Pattern
+///
+/// - **`.to_sim()`**: Traditional method chaining, discoverable via IDE autocomplete
+/// - **`SimBuilder::from()`**: Explicit conversion, useful when you need the type
+/// - **`sim()`**: Functional style, concise for nested expressions
+///
+/// # Examples
+///
+/// ## With concrete engine builders
+/// ```no_run
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// use pecos_engines::sim;
+/// // use pecos_qasm::qasm_engine;
+/// 
+/// // let results = sim(qasm_engine().qasm("H q[0];"))
+/// //     .seed(42)
+/// //     .noise(pecos_engines::DepolarizingNoise { p: 0.01 })
+/// //     .run(1000)?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// ## With dynamic engine builders
+/// ```no_run
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// use pecos_engines::sim;
+/// // use pecos::DynamicEngineBuilder;
+/// 
+/// // let dynamic_builder = DynamicEngineBuilder::new(some_engine);
+/// // let results = sim(dynamic_builder).seed(42).run(1000)?;
+/// # Ok(())
+/// # }
+/// ```
+pub fn sim<B: ClassicalControlEngineBuilder>(builder: B) -> SimBuilder<B> {
+    SimBuilder::from(builder)
 }
 
 /// Convert ShotVec to columnar format

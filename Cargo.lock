@@ -2698,6 +2698,7 @@ name = "pecos-rslib"
 version = "0.1.1"
 dependencies = [
  "env_logger",
+ "hugr",
  "log",
  "parking_lot",
  "pecos",
@@ -2708,6 +2709,7 @@ dependencies = [
  "pecos-llvm-sim",
  "pecos-phir",
  "pecos-qasm",
+ "pecos-selene-ceng",
  "pyo3",
  "pyo3-build-config",
  "serde_json",

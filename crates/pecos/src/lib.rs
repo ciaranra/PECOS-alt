@@ -82,9 +82,11 @@
 //! PECOS supports a variety of noise models and quantum simulators. Check the documentation
 //! for `run_qasm_with_options` and `NoiseModelType` for more details on the available options.
 
+pub mod engine_type;
 pub mod prelude;
 pub mod program;
 
+pub use engine_type::{EngineType, DynamicEngineBuilder, sim_dynamic};
 pub use pecos_qasm::run_qasm;
 
 use pecos_core::errors::PecosError;

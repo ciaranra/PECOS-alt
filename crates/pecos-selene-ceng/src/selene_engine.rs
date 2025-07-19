@@ -1012,27 +1012,36 @@ impl ClassicalEngine for SeleneEngine {
     }
     
     fn get_results(&self) -> Result<Shot, PecosError> {
-        let mut data = BTreeMap::new();
+        let mut shot = Shot::default();
         
-        data.insert("shot_id".to_string(), Data::U64(self.shot_count as u64));
-        data.insert("program".to_string(), Data::String(format!("{:?}", self.program)));
-        data.insert("num_qubits".to_string(), Data::U64(self.num_qubits as u64));
-        data.insert("optimize".to_string(), Data::Bool(self.optimize));
-        data.insert("engine_type".to_string(), Data::String("Selene".to_string()));
+        // Add metadata as before
+        shot.data.insert("shot_id".to_string(), Data::U64(self.shot_count as u64));
+        shot.data.insert("program".to_string(), Data::String(format!("{:?}", self.program)));
+        shot.data.insert("num_qubits".to_string(), Data::U64(self.num_qubits as u64));
+        shot.data.insert("optimize".to_string(), Data::Bool(self.optimize));
+        shot.data.insert("engine_type".to_string(), Data::String("Selene".to_string()));
         
         // Real Selene information
-        data.insert("has_runtime".to_string(), Data::Bool(self.runtime.is_some()));
-        data.insert("has_plugin".to_string(), Data::Bool(self.plugin_library_path.is_some()));
-        data.insert("measurement_results".to_string(), Data::U64(self.measurement_results.len() as u64));
-        data.insert("pending_operations".to_string(), Data::U64(self.pending_operations.len() as u64));
+        shot.data.insert("has_runtime".to_string(), Data::Bool(self.runtime.is_some()));
+        shot.data.insert("has_plugin".to_string(), Data::Bool(self.plugin_library_path.is_some()));
+        shot.data.insert("measurement_results".to_string(), Data::U64(self.measurement_results.len() as u64));
+        shot.data.insert("pending_operations".to_string(), Data::U64(self.pending_operations.len() as u64));
         
-        // Include actual measurement results
+        // FIXED: Store measurement results as proper BitVec registers
+        // Instead of a single string, create individual result registers
+        for (i, (measurement_id, value)) in self.measurement_results.iter().enumerate() {
+            // Store each measurement as a 1-bit register (0 or 1)
+            let bit_value = if *value { 1u32 } else { 0u32 };
+            shot.add_register(&format!("_result_{}", i), bit_value, 1);
+        }
+        
+        // Also store as a single summary string for debugging (non-BitVec)
         let measurement_summary: Vec<String> = self.measurement_results.iter()
-            .map(|(id, value)| format!("{}:{}", id, value))
+            .map(|(id, value)| format!("{}:{}", id, if *value { 1 } else { 0 }))
             .collect();
-        data.insert("measurements".to_string(), Data::String(measurement_summary.join(",")));
+        shot.data.insert("measurements_debug".to_string(), Data::String(measurement_summary.join(",")));
         
-        Ok(Shot { data })
+        Ok(shot)
     }
     
     fn compile(&self) -> Result<(), PecosError> {

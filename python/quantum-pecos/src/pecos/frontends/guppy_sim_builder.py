@@ -217,9 +217,12 @@ class GuppySimulation:
             # Run simulation
             results = builder.run(shots)
             
-            # llvm_sim returns columnar format, we need to convert back to raw for our formatter
-            # For now, just store the results dict and handle in formatting
-            raw_results = results
+            # llvm_sim now returns ShotVec, convert to dict for compatibility
+            if hasattr(results, 'to_dict'):
+                raw_results = results.to_dict()
+            else:
+                # Fallback for older format
+                raw_results = results
         else:
             # Fallback to basic execute_llvm
             if RUST_EXECUTION_AVAILABLE:

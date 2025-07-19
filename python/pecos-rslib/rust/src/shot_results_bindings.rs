@@ -101,10 +101,20 @@ impl PyShotMap {
     ///
     /// Raises:
     ///     RuntimeError: If register doesn't exist or contains non-integer data
-    fn get_integers(&self, register: &str) -> PyResult<Vec<u64>> {
-        self.inner
-            .try_bits_as_u64(register)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    fn get_integers(&self, register: &str) -> PyResult<Vec<i64>> {
+        // Try different integer types in order
+        if let Ok(u64_values) = self.inner.try_bits_as_u64(register) {
+            Ok(u64_values.into_iter().map(|v| v as i64).collect())
+        } else if let Ok(i64_values) = self.inner.try_i64s(register) {
+            Ok(i64_values)
+        } else if let Ok(u32_values) = self.inner.try_u32s(register) {
+            Ok(u32_values.into_iter().map(|v| v as i64).collect())
+        } else {
+            Err(PyRuntimeError::new_err(format!(
+                "Register '{}' doesn't exist or contains non-integer data",
+                register
+            )))
+        }
     }
 
     /// Get values from a register as binary strings
@@ -224,6 +234,11 @@ pub(crate) fn shot_map_to_dict_integers(py: Python<'_>, shot_map: &ShotMap) -> P
                 py_list.append(val)?;
             }
             py_dict.set_item(reg_name, py_list)?;
+        } else if let Ok(i64_values) = shot_map.try_i64s(&reg_name) {
+            for val in i64_values {
+                py_list.append(val)?;
+            }
+            py_dict.set_item(reg_name, py_list)?;
         } else if let Ok(f64_values) = shot_map.try_f64s(&reg_name) {
             for val in f64_values {
                 py_list.append(val)?;
@@ -257,6 +272,11 @@ pub(crate) fn shot_map_to_dict_binary(py: Python<'_>, shot_map: &ShotMap) -> PyR
         } else if let Ok(u32_values) = shot_map.try_u32s(&reg_name) {
             // Fallback for non-bit data
             for val in u32_values {
+                py_list.append(val)?;
+            }
+            py_dict.set_item(reg_name, py_list)?;
+        } else if let Ok(i64_values) = shot_map.try_i64s(&reg_name) {
+            for val in i64_values {
                 py_list.append(val)?;
             }
             py_dict.set_item(reg_name, py_list)?;

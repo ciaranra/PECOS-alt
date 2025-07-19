@@ -27,6 +27,7 @@ mod llvm_bindings;
 mod llvm_context_bindings;
 mod llvm_execution_guard;
 mod llvm_sim_bindings;
+mod selene_sim_bindings;
 mod phir_bindings;
 mod qasm_sim_bindings;
 mod shot_results_bindings;
@@ -75,6 +76,9 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Register LlvmSim functions
     llvm_sim_bindings::register_llvm_sim_module(m)?;
+
+    // Register Selene simulation functions
+    selene_sim_bindings::register_selene_sim_module(m)?;
 
     pcg_bindings::create_pcg_module(m)?;
     Ok(())
