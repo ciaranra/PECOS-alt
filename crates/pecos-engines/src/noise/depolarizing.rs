@@ -191,15 +191,15 @@ impl DepolarizingNoiseModel {
 
             match fault_type {
                 0 => {
-                    trace!("Applying X fault on qubit {}", qubit);
+                    trace!("Applying X fault on qubit {qubit}");
                     NoiseUtils::apply_x(builder, *qubit);
                 }
                 1 => {
-                    trace!("Applying Y fault on qubit {}", qubit);
+                    trace!("Applying Y fault on qubit {qubit}");
                     NoiseUtils::apply_y(builder, *qubit);
                 }
                 _ => {
-                    trace!("Applying Z fault on qubit {}", qubit);
+                    trace!("Applying Z fault on qubit {qubit}");
                     NoiseUtils::apply_z(builder, *qubit);
                 }
             }

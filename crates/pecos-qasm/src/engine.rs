@@ -187,7 +187,7 @@ impl QASMEngine {
         #[cfg(feature = "wasm")]
         if let Some(ref mut foreign_obj) = self.foreign_object {
             if let Err(e) = foreign_obj.new_instance() {
-                log::error!("Failed to reset WASM instance: {}", e);
+                log::error!("Failed to reset WASM instance: {e}");
             }
         }
 
@@ -793,10 +793,7 @@ impl QASMEngine {
 
         let measure_count = std::cmp::min(qubit_ids.len(), c_size);
 
-        debug!(
-            "Will measure {} qubits from {} to {}",
-            measure_count, q_reg, c_reg
-        );
+        debug!("Will measure {measure_count} qubits from {q_reg} to {c_reg}");
 
         let mut measurements_added = 0;
         for (i, &qubit_id) in qubit_ids.iter().enumerate().take(measure_count) {
@@ -813,8 +810,7 @@ impl QASMEngine {
 
         if measurements_added < measure_count {
             debug!(
-                "Only processed {} of {} measurements in RegMeasure, will continue in next batch",
-                measurements_added, measure_count
+                "Only processed {measurements_added} of {measure_count} measurements in RegMeasure, will continue in next batch"
             );
             return Ok(None);
         }
@@ -927,14 +923,13 @@ impl QASMEngine {
                         }
                     }
 
-                    debug!("Evaluating if condition: {:?}", condition);
+                    debug!("Evaluating if condition: {condition:?}");
                     let condition_value = self.evaluate_expression_bitvec(condition)?.as_i64();
-                    debug!("Condition value: {}", condition_value);
+                    debug!("Condition value: {condition_value}");
 
                     if condition_value != 0 {
                         debug!(
-                            "If condition evaluated to true, executing operation: {:?}",
-                            operation
+                            "If condition evaluated to true, executing operation: {operation:?}"
                         );
 
                         match operation.as_ref() {
@@ -943,10 +938,7 @@ impl QASMEngine {
                                 parameters,
                                 qubits,
                             } => {
-                                debug!(
-                                    "Executing conditional gate {} on qubits {:?}",
-                                    name, qubits
-                                );
+                                debug!("Executing conditional gate {name} on qubits {qubits:?}");
                                 if self.process_gate_operation(name, qubits, parameters)? {
                                     operation_count += 1;
                                 }
@@ -1026,10 +1018,7 @@ impl QASMEngine {
                     index,
                     expression,
                 } => {
-                    debug!(
-                        "Processing classical assignment: {} = {:?}",
-                        target, expression
-                    );
+                    debug!("Processing classical assignment: {target} = {expression:?}");
 
                     // Get target register size for width hint
                     let target_width = if *is_indexed {
@@ -1078,7 +1067,7 @@ impl QASMEngine {
                     operation_count += 1;
                 }
                 Operation::VoidFunctionCall { expression } => {
-                    debug!("Processing void function call: {:?}", expression);
+                    debug!("Processing void function call: {expression:?}");
 
                     // Evaluate the expression (which should be a function call)
                     // We use a dummy width of 1 since we'll discard the result anyway
@@ -1228,22 +1217,17 @@ impl ClassicalEngine for QASMEngine {
                     // Calculate the global index for this measurement
                     let global_index = self.measurements_processed + local_index;
                     debug!(
-                        "Found measurement local_index={} global_index={} value={}",
-                        local_index, global_index, value
+                        "Found measurement local_index={local_index} global_index={global_index} value={value}"
                     );
 
                     if let Some((register, bit)) = mappings.get(global_index) {
-                        debug!(
-                            "Updating register {}[{}] with value {}",
-                            register, bit, value
-                        );
+                        debug!("Updating register {register}[{bit}] with value {value}");
 
                         let safe_value = u8::try_from(value).unwrap_or(1);
                         self.update_register_bit(register, *bit, safe_value)?;
                     } else {
                         debug!(
-                            "No register mapping found for measurement global_index={}",
-                            global_index
+                            "No register mapping found for measurement global_index={global_index}"
                         );
                     }
 
@@ -1257,7 +1241,7 @@ impl ClassicalEngine for QASMEngine {
                 Ok(())
             }
             Err(e) => {
-                debug!("Error parsing measurement results: {:?}", e);
+                debug!("Error parsing measurement results: {e:?}");
                 Err(PecosError::Input(format!(
                     "Error parsing measurement results: {e}"
                 )))
@@ -1362,7 +1346,7 @@ impl ControlEngine for QASMEngine {
             .outcomes()
             .map(|outcomes| outcomes.len())
             .unwrap_or(0);
-        debug!("Received {} measurements", measurement_count);
+        debug!("Received {measurement_count} measurements");
 
         debug!("Processing measurement results");
         self.handle_measurements(measurements)?;

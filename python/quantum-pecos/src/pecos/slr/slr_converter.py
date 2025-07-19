@@ -23,16 +23,16 @@ except ImportError:
 
 class SlrConverter:
 
-    def __init__(self, block, optimize_parallel: bool = True):
+    def __init__(self, block, *, optimize_parallel: bool = True):
         """Initialize the SLR converter.
-        
+
         Args:
             block: The SLR block to convert
             optimize_parallel: Whether to apply ParallelOptimizer transformation (default: True).
                              Only affects blocks containing Parallel() statements.
         """
         self._block = block
-        
+
         # Apply transformations if requested
         if optimize_parallel:
             optimizer = ParallelOptimizer()

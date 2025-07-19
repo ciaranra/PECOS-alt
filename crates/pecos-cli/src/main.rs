@@ -236,7 +236,7 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
 
     // Detect the program type (for informational purposes)
     let program_type = detect_program_type(&program_path)?;
-    debug!("Detected program type: {:?}", program_type);
+    debug!("Detected program type: {program_type:?}");
 
     // Set up the engine
     let classical_engine =

@@ -35,11 +35,11 @@ class Comment(Statement):
 
 class Parallel(Block):
     """A block that indicates the contained statements can be executed in parallel.
-    
+
     This is a hint to the compiler/simulator that the operations within this block
     are independent and can be executed simultaneously.
     """
-    
+
     def __init__(self, *statements: Statement) -> None:
         super().__init__()
         self.extend(*statements)

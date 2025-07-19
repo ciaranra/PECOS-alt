@@ -82,9 +82,9 @@ impl RuntimeBuilder {
             // Remove the marker file after successful build
             let _ = fs::remove_file(&marker_path);
 
-            info!("Runtime library built: {:?}", lib_path);
+            info!("Runtime library built: {}", lib_path.display());
         } else {
-            debug!("Using existing runtime library: {:?}", lib_path);
+            debug!("Using existing runtime library: {}", lib_path.display());
         }
 
         Ok(lib_path)

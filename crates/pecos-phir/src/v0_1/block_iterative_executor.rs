@@ -191,7 +191,7 @@ impl<'a> BlockIterativeExecutor<'a> {
                                 ExpressionEvaluator::new(self.executor.get_environment());
                             let condition_result = evaluator.eval_expr(cond)?.as_bool();
 
-                            debug!("Condition evaluated to: {}", condition_result);
+                            debug!("Condition evaluated to: {condition_result}");
 
                             // Add end block marker
                             self.operation_stack

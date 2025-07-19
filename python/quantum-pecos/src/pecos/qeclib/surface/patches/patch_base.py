@@ -1,3 +1,5 @@
+"""Base classes and protocols for surface code patches."""
+
 from __future__ import annotations
 
 from enum import Enum
@@ -22,6 +24,11 @@ if TYPE_CHECKING:
 
 
 class SurfacePatchOrientation(Enum):
+    """Orientation options for surface code patches.
+
+    Defines the boundary conditions and orientation of logical operators.
+    """
+
     X_TOP_BOTTOM = 0
     Z_TOP_BOTTOM = 1
 
@@ -61,17 +68,25 @@ class SurfacePatch(Protocol):
         return min(self.dx, self.dz)
 
     def validate(self) -> None:
-        """Raises an exception if invalid configuration"""
+        """Raises an exception if invalid configuration."""
+        ...
 
-    def get_visualization_data(self) -> VisualizationData: ...
+    def get_visualization_data(self) -> VisualizationData:
+        """Get data needed for visualization.
+
+        Returns:
+            VisualizationData: Data structure containing nodes, polygons, and colors.
+        """
+        ...
 
     @classmethod
     def default(cls, distance: int, name: str | None = None) -> SurfacePatch:
         """Constructor for common settings."""
+        ...
 
 
 class BaseSurfacePatch(SurfacePatch, Vars):
-    """Base implementation with shared code"""
+    """Base implementation with shared code."""
 
     def __init__(
         self,
@@ -80,7 +95,16 @@ class BaseSurfacePatch(SurfacePatch, Vars):
         orientation: SurfacePatchOrientation,
         name: str | None = None,
         visualizer: VisualizationStrategy | None = None,
-    ):
+    ) -> None:
+        """Initialize a base surface patch.
+
+        Args:
+            dx: Distance of the X logical operator.
+            dz: Distance of the Z logical operator.
+            orientation: Patch orientation determining boundary conditions.
+            name: Optional custom name for the patch.
+            visualizer: Optional visualization strategy.
+        """
         super().__init__()
         self.dx = dx
         self.dz = dz
@@ -105,7 +129,7 @@ class BaseSurfacePatch(SurfacePatch, Vars):
 
     @classmethod
     def default(cls, distance: int, name: str | None = None) -> SurfacePatch:
-        """Create a surface patch with common settings"""
+        """Create a surface patch with common settings."""
         return cls(
             dx=distance,
             dz=distance,
@@ -114,7 +138,7 @@ class BaseSurfacePatch(SurfacePatch, Vars):
         )
 
     def validate(self) -> None:
-        """Shared validation logic"""
+        """Shared validation logic."""
         if self.dx < 1:
             msg = "X distance must be at least 1"
             raise TypeError(msg)
@@ -125,17 +149,37 @@ class BaseSurfacePatch(SurfacePatch, Vars):
             msg = "Invalid orientation type"
             raise TypeError(msg)
 
-    def _initialize_data(self):
+    def _initialize_data(self) -> None:
         n = self._calculate_qubit_count()
         self.data_reg = QReg(f"{self.name}_data", n)
         self.data = [self.data_reg[i] for i in range(n)]
 
     def _calculate_qubit_count(self) -> int:
-        """Hook for implementations to define qubit count"""
+        """Hook for implementations to define qubit count.
+
+        Returns:
+            int: Number of qubits required for this patch.
+
+        Raises:
+            NotImplementedError: Must be implemented by subclasses.
+        """
         raise NotImplementedError
 
     def get_visualization_data(self) -> VisualizationData:
+        """Get visualization data through the configured visualizer.
+
+        Returns:
+            VisualizationData: Data for rendering the patch.
+        """
         return self.visualizer.get_visualization_data(self)
 
     def supports_view(self, view_type: str) -> bool:
+        """Check if a specific view type is supported.
+
+        Args:
+            view_type: Type of view to check (e.g., 'lattice').
+
+        Returns:
+            bool: True if the view type is supported.
+        """
         return self.visualizer.supports_view(view_type)

@@ -16,7 +16,7 @@ operations that preserve the error correction properties of the code.
 # specific language governing permissions and limitations under the License.
 
 from pecos.qeclib import qubit as qb
-from pecos.slr import Block, Comment, QReg
+from pecos.slr import Block, QReg
 
 
 class H(Block):
@@ -36,7 +36,6 @@ class H(Block):
         Args:
             q: A quantum register containing qubits representing a logical qubit in the color code.
         """
-
         super().__init__(
             qb.H(q),
         )

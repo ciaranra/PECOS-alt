@@ -98,6 +98,9 @@ ignore = [
     "N802",                         # Function name should be lowercase - Test functions often match gate names
     "PLC0415",                      # Import inside try/except for optional dependencies - OK in tests
 ]
+"**/*.ipynb" = [
+    "S101",                         # Use of `assert` detected - Assert is appropriate for Jupyter notebook demonstrations
+]
 "python/quantum-pecos/src/pecos/simulators/*.py" = [
     "N802",
 ]

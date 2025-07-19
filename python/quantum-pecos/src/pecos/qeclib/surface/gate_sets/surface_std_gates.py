@@ -1,3 +1,5 @@
+"""Standard gate sets for surface codes."""
+
 from pecos.qeclib.surface.gate_sets.surface_bare_syn_gates import (
     SurfaceBareSynGates,
 )
@@ -14,4 +16,4 @@ class SurfaceStdGates(
     SurfaceTransversalGates,
     SurfaceBareSynGates,
 ):
-    """Collects a standard set of gates to use with `Surface4444RotPatch"""
+    """Collects a standard set of gates to use with `Surface4444RotPatch."""

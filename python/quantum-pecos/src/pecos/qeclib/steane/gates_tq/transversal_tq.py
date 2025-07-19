@@ -16,8 +16,7 @@ fault-tolerant operations between logical qubits while preserving error correcti
 # specific language governing permissions and limitations under the License.
 
 from pecos.qeclib import qubit
-from pecos.slr import Block, QReg, Comment, Barrier
-from pecos.qeclib.generic.transversal import transversal_tq
+from pecos.slr import Barrier, Block, Comment, QReg
 
 
 class CX(Block):
@@ -70,6 +69,7 @@ class CX(Block):
             self.extend(
                 Barrier(q1, q2),
             )
+
 
 class CY(Block):
     """Transversal logical CY gate for Steane code.
@@ -192,6 +192,7 @@ class SZZ(Block):
             ),
             Barrier(q1, q2),
         )
+
 
 class SZZdg(Block):
     """Transversal logical SZZdg gate for Steane code.

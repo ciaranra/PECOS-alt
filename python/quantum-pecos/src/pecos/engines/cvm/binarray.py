@@ -32,6 +32,8 @@ if TYPE_CHECKING:
 class BinArray:
     """As opposed to the original unsigned 32-bit BinArray, this class defaults to signed 64-bit type."""
 
+    __hash__ = None  # BinArray instances are not hashable since __eq__ returns BinArray
+
     def __init__(
         self,
         size: int | str,

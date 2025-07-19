@@ -9,21 +9,33 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Plotting utilities for Color488 code layouts."""
+
+from typing import TYPE_CHECKING
+
 import matplotlib.pyplot as plt
 import networkx as nx
 
-from pecos.qeclib.color488.color488 import Color488
+if TYPE_CHECKING:
+    from pecos.qeclib.color488 import Color488
 
 
-def plot_layout(color488, numbered_qubits=False, numbered_poly=False):
+def plot_layout(
+    color488: "Color488",
+    *,
+    numbered_qubits: bool = False,
+    numbered_poly: bool = False,
+) -> plt:
     """Plot the layout of a Color488 code.
 
     Args:
         color488: A Color488 instance
         numbered_qubits: Whether to number the data qubits
         numbered_poly: Whether to number the polygons
-    """
 
+    Returns:
+        The matplotlib pyplot module with the plot rendered.
+    """
     positions, polygons = color488.get_layout()
 
     # Calculate the mid-point for each polygon
@@ -45,13 +57,15 @@ def plot_layout(color488, numbered_qubits=False, numbered_poly=False):
     for node_id, (x, y) in positions.items():
         g.add_node(node_id, pos=(x, y))
 
-    def get_edges_from_polygon(node_ids):
-        """Extract edges from polygon node ids
+    def get_edges_from_polygon(node_ids: list[int]) -> list[tuple[int, int]]:
+        """Extract edges from polygon node ids.
+
+        Args:
+            node_ids: List of node IDs that form the polygon.
 
         Returns:
             Edges as pairs of consecutive nodes (including the polygon)
         """
-
         edges = []
         for i in range(len(node_ids)):
             edge = (node_ids[i], node_ids[(i + 1) % len(node_ids)])
@@ -91,7 +105,7 @@ def plot_layout(color488, numbered_qubits=False, numbered_poly=False):
             polygon_coords[0],
         )  # Close the polygon by repeating the first point
 
-        x_coords, y_coords = zip(*polygon_coords)
+        x_coords, y_coords = zip(*polygon_coords, strict=False)
 
         plt.fill(
             x_coords,

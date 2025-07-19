@@ -9,6 +9,8 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Pauli projection preparation blocks for surface code operations."""
+
 from pecos.qeclib.qubit.qubit import PhysicalQubit as Q
 from pecos.slr import Block, QReg, Qubit
 
@@ -16,7 +18,13 @@ from pecos.slr import Block, QReg, Qubit
 class PrepZ(Block):
     """Prepare the +Z operator."""
 
-    def __init__(self, q: QReg, data_indices: list[int]):
+    def __init__(self, q: QReg, data_indices: list[int]) -> None:
+        """Initialize the +Z state preparation block.
+
+        Args:
+            q: Quantum register containing the qubits.
+            data_indices: List of indices for data qubits to prepare in +Z state.
+        """
         super().__init__()
 
         for i in data_indices:
@@ -28,7 +36,12 @@ class PrepZ(Block):
 class PrepProjectZ(Block):
     """Prepare the +Z operator."""
 
-    def __init__(self, qs: list[Qubit]):
+    def __init__(self, qs: list[Qubit]) -> None:
+        """Initialize the +Z projection preparation block.
+
+        Args:
+            qs: List of qubits to prepare and project into +Z eigenstate.
+        """
         super().__init__()
 
         self.extend(

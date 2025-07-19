@@ -44,8 +44,8 @@ impl MacOSCompiler {
         handle_command_status(&output, "clang")?;
 
         debug!(
-            "QIR Compiler: Successfully linked shared library on macOS: {:?}",
-            library_file
+            "QIR Compiler: Successfully linked shared library on macOS: {}",
+            library_file.display()
         );
 
         Ok(())

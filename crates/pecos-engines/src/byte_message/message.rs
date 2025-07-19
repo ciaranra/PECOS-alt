@@ -261,7 +261,7 @@ impl ByteMessage {
             match Self::parse_gate_command(payload) {
                 Ok(cmd) => Some(cmd),
                 Err(e) => {
-                    trace!("Error parsing gate: {}", e);
+                    trace!("Error parsing gate: {e}");
                     None
                 }
             }

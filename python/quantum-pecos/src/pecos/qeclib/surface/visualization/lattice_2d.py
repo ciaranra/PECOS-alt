@@ -1,3 +1,5 @@
+"""2D lattice visualization for surface code patches."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -14,7 +16,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class Lattice2DConfig:
-    """Config for 2D lattice visualization
+    """Config for 2D lattice visualization.
 
     Parameters:
         figsize (tuple[int, int] | None): Figure size.
@@ -38,13 +40,14 @@ class Lattice2DConfig:
 
 
 class Lattice2DView:
+    """View for rendering 2D lattice representations of surface code patches."""
+
     @staticmethod
     def render(
         patch: SurfacePatch,
         config: Lattice2DConfig | None = None,
     ) -> tuple[plt.Figure, plt.Axes]:
         """Render a figure of a 2D layout of data qubits and an abstracted notion of the lattice it belongs to."""
-
         v = patch.get_visualization_data()
 
         if config is None:
@@ -59,13 +62,12 @@ class Lattice2DView:
 
 
 def plot_colored_polygons(
-    polygons,
-    points_to_plot,
-    polygon_colors,
+    polygons: list[list[tuple[float, float]]],
+    points_to_plot: list[tuple[float, float]],
+    polygon_colors: dict[int, int],
     config: Lattice2DConfig | None = None,
 ) -> tuple[plt.Figure, plt.Axes]:
-    """
-    Plot polygons with cups replaced for triangles and two-colored based on adjacency.
+    """Plot polygons with cups replaced for triangles and two-colored based on adjacency.
 
     Parameters:
         polygons (list): List of polygons as lists of (x, y) tuples.
@@ -73,7 +75,6 @@ def plot_colored_polygons(
         polygon_colors (dict[int, int]): List of indices into `colors` for each polygon.
         config (Lattice2DConfig | None): Optional Lattice2DConfig object.
     """
-
     c = config
 
     # Plot setup
@@ -86,7 +87,7 @@ def plot_colored_polygons(
     point_labels = {point: i for i, point in enumerate(points_to_plot_sorted)}
 
     # Determine plot scale
-    x_coords, y_coords = zip(*points_to_plot)
+    x_coords, y_coords = zip(*points_to_plot, strict=False)
     x_range = max(x_coords) - min(x_coords)
     y_range = max(y_coords) - min(y_coords)
     scale_factor = min(4 / x_range, 4 / y_range)  # Adjust based on plot size
@@ -188,9 +189,14 @@ def plot_colored_polygons(
     return fig, ax
 
 
-def create_cup_path(base1, base2, direction="outward", curve_height=0.5, curvature=0.5):
-    """
-    Create a cup-shaped path based on two base points and a specified direction.
+def create_cup_path(
+    base1: tuple[float, float],
+    base2: tuple[float, float],
+    direction: str = "outward",
+    curve_height: float = 0.5,
+    curvature: float = 0.5,
+) -> Path:
+    """Create a cup-shaped path based on two base points and a specified direction.
 
     Parameters:
         base1 (tuple): First point of the base (x, y).

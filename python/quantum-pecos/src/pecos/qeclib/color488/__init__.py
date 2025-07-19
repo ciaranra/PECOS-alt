@@ -9,11 +9,19 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from pecos.qeclib.color488.color488_class import Color488Patch
+"""Color 4.8.8 quantum error correction code implementation.
+
+This module contains the implementation of the Color 4.8.8 quantum error correction code,
+including patch definitions, gate implementations, and compilation language options.
+"""
+
 from enum import Enum
 
+from pecos.qeclib.color488.color488_class import Color488Patch
+
+
 class Language(Enum):
-    """Language options to compile SLR to"""
+    """Language options to compile SLR to."""
 
     QASM = 0
     QIR = 1

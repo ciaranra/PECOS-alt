@@ -53,8 +53,8 @@ impl WindowsCompiler {
         fs::write(&temp_qir_file, qir_content).map_err(PecosError::IO)?;
 
         debug!(
-            "QIR Compiler: Using clang at {:?} to compile LLVM IR directly",
-            clang_path
+            "QIR Compiler: Using clang at {} to compile LLVM IR directly",
+            clang_path.display()
         );
 
         // Compile with clang - note we're using clang directly instead of llc

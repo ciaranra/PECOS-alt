@@ -11,8 +11,12 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Abstract layout generation for color 488 quantum error correction codes."""
 
-def gen_layout(distance: int):
+from typing import Any
+
+
+def gen_layout(distance: int) -> tuple[dict[int, tuple[int, int]], list[list[Any]]]:
     """Creates an abstract layout which represents the location of the qubits in the code for a fixed 2D geometry."""
     lattice_height = 4 * distance - 4
     lattice_width = 2 * distance - 2
@@ -63,8 +67,10 @@ def gen_layout(distance: int):
     return nodeid2pos, polygons
 
 
-def get_boundaries(nodeid2pos):
-    """Determines the nodes that lie along the left, right, and bottom boundaries
+def get_boundaries(
+    nodeid2pos: dict[int, tuple[int, int]],
+) -> tuple[list[int], list[int], list[int]]:
+    """Determines the nodes that lie along the left, right, and bottom boundaries.
 
     Returns:
         Three lists: 1) nodes of the left, 2) bottom, and  3) right boundaries of a triangular 4.8.8 color code.
@@ -72,7 +78,21 @@ def get_boundaries(nodeid2pos):
     # TODO: do this...
 
 
-def found_square(x, y, pos2nodeid):
+def found_square(
+    x: int,
+    y: int,
+    pos2nodeid: dict[tuple[int, int], int],
+) -> list[Any] | bool:
+    """Check if a square stabilizer can be formed at the given position.
+
+    Args:
+        x: X coordinate of the check position.
+        y: Y coordinate of the check position.
+        pos2nodeid: Mapping from positions to node IDs.
+
+    Returns:
+        List of node IDs forming the square plus color, or False if square cannot be formed.
+    """
     square = [(x - 1, y + 1), (x - 1, y - 1), (x + 1, y - 1), (x + 1, y + 1)]
     square_ids = []
     for coord in square:
@@ -86,7 +106,21 @@ def found_square(x, y, pos2nodeid):
     return square_ids
 
 
-def found_octogon(x, y, pos2nodeid):
+def found_octogon(
+    x: int,
+    y: int,
+    pos2nodeid: dict[tuple[int, int], int],
+) -> list[Any] | bool:
+    """Check if an octagon stabilizer can be formed at the given position.
+
+    Args:
+        x: X coordinate of the check position.
+        y: Y coordinate of the check position.
+        pos2nodeid: Mapping from positions to node IDs.
+
+    Returns:
+        List of node IDs forming the octagon plus color, or False if octagon cannot be formed.
+    """
     octogon = [
         (x - 1, y + 3),
         (x - 3, y + 1),
@@ -115,7 +149,21 @@ def found_octogon(x, y, pos2nodeid):
     return octo_ids
 
 
-def found_bottomgon(x, y, pos2nodeid):
+def found_bottomgon(
+    x: int,
+    y: int,
+    pos2nodeid: dict[tuple[int, int], int],
+) -> list[Any] | bool:
+    """Check if a bottom boundary stabilizer can be formed at the given position.
+
+    Args:
+        x: X coordinate of the check position.
+        y: Y coordinate of the check position.
+        pos2nodeid: Mapping from positions to node IDs.
+
+    Returns:
+        List of node IDs forming the bottom boundary stabilizer plus color, or False if it cannot be formed.
+    """
     coords = [
         (x - 1, y + 2),
         (x - 3, y),

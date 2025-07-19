@@ -64,15 +64,15 @@ The `ParallelOptimizer` transformation pass analyzes operations within `Parallel
 Parallel(
     Block(H(q[0]), CX(q[0], q[1])),
     Block(H(q[2]), CX(q[2], q[3])),
-    Block(H(q[4]), CX(q[4], q[5]))
+    Block(H(q[4]), CX(q[4], q[5])),
 )
 ```
 
 **After optimization:**
 ```python
 Block(
-    Parallel(H(q[0]), H(q[2]), H(q[4])),              # All H gates
-    Parallel(CX(q[0],q[1]), CX(q[2],q[3]), CX(q[4],q[5]))  # All CX gates
+    Parallel(H(q[0]), H(q[2]), H(q[4])),  # All H gates
+    Parallel(CX(q[0], q[1]), CX(q[2], q[3]), CX(q[4], q[5])),  # All CX gates
 )
 ```
 
@@ -151,7 +151,7 @@ Operations with qubit dependencies maintain their order:
 Parallel(
     qb.H(q[0]),
     qb.CX(q[0], q[1]),  # Depends on H(q[0])
-    qb.X(q[1]),         # Depends on CX
+    qb.X(q[1]),  # Depends on CX
 )
 # These operations cannot be reordered
 ```
@@ -206,13 +206,15 @@ Here's a more complex example showing parallel phase gates:
 from pecos.slr import Main, Parallel, QReg
 from pecos.qeclib import qubit as qb
 
+
 def qft_layer(q, n, k):
     """Generate parallel controlled rotations for QFT layer k"""
     operations = []
-    for j in range(k+1, n):
+    for j in range(k + 1, n):
         angle = np.pi / (2 ** (j - k))
         operations.append(qb.CRZ[angle](q[j], q[k]))
     return Parallel(*operations) if len(operations) > 1 else operations[0]
+
 
 # QFT with parallel phase gates
 prog = Main(

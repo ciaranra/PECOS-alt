@@ -582,7 +582,7 @@ pub unsafe extern "C" fn __quantum__rt__message(msg: *const c_char) {
     let thread_id = get_thread_id();
 
     // Use proper Rust logging instead of storing as QuantumCmd
-    info!("QIR Message [Thread {}]: {}", thread_id, msg_str);
+    info!("QIR Message [Thread {thread_id}]: {msg_str}");
 }
 
 /// Records data.
@@ -602,7 +602,7 @@ pub unsafe extern "C" fn __quantum__rt__record(data: *const c_char) {
     let thread_id = get_thread_id();
 
     // Log the record command
-    debug!("QIR Runtime [Thread {}]: Record: {}", thread_id, data_str);
+    debug!("QIR Runtime [Thread {thread_id}]: Record: {data_str}");
 
     if should_print_commands() {
         println!("QIR Runtime: [Thread {thread_id}] RECORD: {data_str}");

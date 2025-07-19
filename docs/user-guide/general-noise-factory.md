@@ -23,8 +23,8 @@ factory = GeneralNoiseFactory()
 # Define noise configuration
 config = {
     "seed": 42,
-    "p1": 0.001,        # Single-qubit gate error
-    "p2": 0.01,         # Two-qubit gate error
+    "p1": 0.001,  # Single-qubit gate error
+    "p2": 0.01,  # Two-qubit gate error
     "p_meas_0": 0.002,  # Measurement 0->1 flip
     "p_meas_1": 0.003,  # Measurement 1->0 flip
 }
@@ -177,12 +177,18 @@ factory = GeneralNoiseFactory.empty()
 factory = GeneralNoiseFactory.empty()
 
 # Add custom mappings with domain-specific terminology
-factory.add_mapping("single_gate_error", "with_p1_probability", float,
-                   "Error rate for single-qubit gates")
-factory.add_mapping("two_gate_error", "with_p2_probability", float,
-                   "Error rate for two-qubit gates")
-factory.add_mapping("readout_error", "with_meas_0_probability", float,
-                   "Readout error probability")
+factory.add_mapping(
+    "single_gate_error",
+    "with_p1_probability",
+    float,
+    "Error rate for single-qubit gates",
+)
+factory.add_mapping(
+    "two_gate_error", "with_p2_probability", float, "Error rate for two-qubit gates"
+)
+factory.add_mapping(
+    "readout_error", "with_meas_0_probability", float, "Readout error probability"
+)
 
 # Use domain-specific configuration
 config = {
@@ -214,8 +220,10 @@ Add mappings with custom value conversion:
 def percent_to_prob(percent):
     return percent / 100.0
 
-factory.add_mapping("p1_percent", "with_p1_probability",
-                   percent_to_prob, "P1 error as percentage")
+
+factory.add_mapping(
+    "p1_percent", "with_p1_probability", percent_to_prob, "P1 error as percentage"
+)
 
 # Use percentage in config
 config = {"p1_percent": 0.1}  # 0.1% = 0.001 probability
@@ -232,28 +240,36 @@ Create a specialized factory for ion trap quantum computers:
 factory = GeneralNoiseFactory.empty()
 
 # Add ion trap terminology
-factory.add_mapping("state_prep_error", "with_prep_probability", float,
-                   "State preparation infidelity")
-factory.add_mapping("single_qubit_error", "with_p1_probability", float,
-                   "Single-qubit gate infidelity")
-factory.add_mapping("two_qubit_error", "with_p2_probability", float,
-                   "Two-qubit gate infidelity")
-factory.add_mapping("dark_count", "with_meas_0_probability", float,
-                   "Dark count probability")
-factory.add_mapping("detection_error", "with_meas_1_probability", float,
-                   "Bright state detection error")
-factory.add_mapping("motional_heating", "with_scale",
-                   lambda x: 1.0 + x * 0.01,  # Convert to scale factor
-                   "Motional heating rate")
+factory.add_mapping(
+    "state_prep_error", "with_prep_probability", float, "State preparation infidelity"
+)
+factory.add_mapping(
+    "single_qubit_error", "with_p1_probability", float, "Single-qubit gate infidelity"
+)
+factory.add_mapping(
+    "two_qubit_error", "with_p2_probability", float, "Two-qubit gate infidelity"
+)
+factory.add_mapping(
+    "dark_count", "with_meas_0_probability", float, "Dark count probability"
+)
+factory.add_mapping(
+    "detection_error", "with_meas_1_probability", float, "Bright state detection error"
+)
+factory.add_mapping(
+    "motional_heating",
+    "with_scale",
+    lambda x: 1.0 + x * 0.01,  # Convert to scale factor
+    "Motional heating rate",
+)
 
 # Typical ion trap parameters
 config = {
     "state_prep_error": 0.001,
     "single_qubit_error": 0.0001,  # Very good single-qubit gates
-    "two_qubit_error": 0.003,      # Main error source
-    "dark_count": 0.001,           # Low dark count
-    "detection_error": 0.005,       # Higher bright state error
-    "motional_heating": 5.0,        # 5% heating effect
+    "two_qubit_error": 0.003,  # Main error source
+    "dark_count": 0.001,  # Low dark count
+    "detection_error": 0.005,  # Higher bright state error
+    "motional_heating": 5.0,  # 5% heating effect
 }
 
 noise = factory.create_from_dict(config)
@@ -266,13 +282,10 @@ config = {
     # Global settings
     "seed": 42,
     "scale": 1.2,  # Scale all errors by 20%
-
     # Make specific gates noiseless
     "noiseless_gates": ["H", "S", "T"],
-
     # State preparation
     "p_prep": 0.0005,
-
     # Single-qubit gates with Pauli distribution
     "p1_average": 0.001,
     "p1_pauli_model": {
@@ -280,7 +293,6 @@ config = {
         "Y": 0.3,  # 30% Y errors
         "Z": 0.2,  # 20% Z errors
     },
-
     # Two-qubit gates
     "p2_average": 0.008,
     "p2_pauli_model": {
@@ -288,7 +300,6 @@ config = {
         "XI": 0.25,
         "XX": 0.5,
     },
-
     # Asymmetric measurement errors
     "p_meas_0": 0.002,  # 0->1 flip
     "p_meas_1": 0.005,  # 1->0 flip (higher)
@@ -315,10 +326,12 @@ factory.set_default("p_meas_1", 0.002)
 noise1 = factory.create_from_dict({})
 
 # Override specific values
-noise2 = factory.create_from_dict({
-    "p2": 0.005,  # Override two-qubit error
-    "scale": 0.5,  # Scale down all errors by 50%
-})
+noise2 = factory.create_from_dict(
+    {
+        "p2": 0.005,  # Override two-qubit error
+        "scale": 0.5,  # Scale down all errors by 50%
+    }
+)
 ```
 
 ## Validation
@@ -330,8 +343,8 @@ factory = GeneralNoiseFactory()
 
 config = {
     "p1": "not_a_number",  # Type error
-    "unknown_key": 123,     # Unknown key
-    "p2": 0.01,            # Valid
+    "unknown_key": 123,  # Unknown key
+    "p2": 0.01,  # Valid
 }
 
 errors = factory.validate_config(config)
@@ -365,11 +378,13 @@ from pecos.rslib import qasm_sim, GeneralNoiseFactory
 
 # Create noise from configuration
 factory = GeneralNoiseFactory()
-noise = factory.create_from_dict({
-    "seed": 42,
-    "p1": 0.001,
-    "p2": 0.01,
-})
+noise = factory.create_from_dict(
+    {
+        "seed": 42,
+        "p1": 0.001,
+        "p2": 0.01,
+    }
+)
 
 # Use with builder pattern
 sim = qasm_sim(qasm).noise(noise).workers(4).build()
@@ -383,9 +398,9 @@ results = qasm_sim(qasm).noise(noise).run(1000)
 
 ```python
 from pecos.rslib import (
-    GeneralNoiseFactory,      # Main factory class
-    create_noise_from_dict,   # Quick dict->noise conversion
-    create_noise_from_json,   # Quick JSON->noise conversion
-    IonTrapNoiseFactory,      # Pre-configured for ion traps
+    GeneralNoiseFactory,  # Main factory class
+    create_noise_from_dict,  # Quick dict->noise conversion
+    create_noise_from_json,  # Quick JSON->noise conversion
+    IonTrapNoiseFactory,  # Pre-configured for ion traps
 )
 ```

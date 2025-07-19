@@ -125,7 +125,7 @@ def test_phys_repeat(compare_qasm: Callable[..., None]) -> None:
 def test_phys_parallel() -> None:
     """Test parallel block QASM generation."""
     from pecos.slr import SlrConverter
-    
+
     prog = Main(
         q := QReg("q", 4),
         c := CReg("m", 4),
@@ -139,7 +139,7 @@ def test_phys_parallel() -> None:
     )
 
     qasm = SlrConverter(prog).qasm()
-    
+
     # Verify all operations are present in the generated QASM
     assert "h q[0]" in qasm
     assert "h q[1]" in qasm
@@ -152,7 +152,7 @@ def test_phys_parallel() -> None:
 def test_phys_nested_parallel() -> None:
     """Test nested parallel blocks QASM generation."""
     from pecos.slr import SlrConverter
-    
+
     prog = Main(
         q := QReg("q", 4),
         c := CReg("m", 4),
@@ -168,7 +168,7 @@ def test_phys_nested_parallel() -> None:
     )
 
     qasm = SlrConverter(prog).qasm()
-    
+
     # Verify all operations are present
     assert "h q[0]" in qasm
     assert "x q[1]" in qasm
@@ -181,7 +181,7 @@ def test_phys_nested_parallel() -> None:
 def test_phys_parallel_in_if() -> None:
     """Test parallel block inside conditional QASM generation."""
     from pecos.slr import SlrConverter
-    
+
     prog = Main(
         q := QReg("q", 4),
         c := CReg("m", 4),
@@ -198,7 +198,7 @@ def test_phys_parallel_in_if() -> None:
     )
 
     qasm = SlrConverter(prog).qasm()
-    
+
     # Verify the conditional structure
     assert "h q[0]" in qasm
     assert "measure q[0] -> m[0]" in qasm

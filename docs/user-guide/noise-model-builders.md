@@ -10,10 +10,12 @@ The simplest way to add noise to your QASM simulations is using the `GeneralNois
 from pecos.rslib import qasm_sim, GeneralNoiseModelBuilder
 
 # Create noise model with builder
-noise = (GeneralNoiseModelBuilder()
-    .with_seed(42)              # Reproducible randomness
+noise = (
+    GeneralNoiseModelBuilder()
+    .with_seed(42)  # Reproducible randomness
     .with_p1_probability(0.001)  # Single-qubit gate error
-    .with_p2_probability(0.01))  # Two-qubit gate error
+    .with_p2_probability(0.01)
+)  # Two-qubit gate error
 
 # Use directly with qasm_sim
 results = qasm_sim(qasm).noise(noise).run(1000)
@@ -26,15 +28,16 @@ The `GeneralNoiseModelBuilder` provides methods to configure all aspects of quan
 ### Basic Error Probabilities
 
 ```python
-noise = (GeneralNoiseModelBuilder()
+noise = (
+    GeneralNoiseModelBuilder()
     # Gate errors
-    .with_p1_probability(0.001)      # Single-qubit gate error
-    .with_p2_probability(0.01)       # Two-qubit gate error
-
+    .with_p1_probability(0.001)  # Single-qubit gate error
+    .with_p2_probability(0.01)  # Two-qubit gate error
     # State preparation and measurement
-    .with_prep_probability(0.0005)   # State preparation error
+    .with_prep_probability(0.0005)  # State preparation error
     .with_meas_0_probability(0.002)  # Measurement 0→1 flip
-    .with_meas_1_probability(0.003)) # Measurement 1→0 flip
+    .with_meas_1_probability(0.003)
+)  # Measurement 1→0 flip
 ```
 
 ### Average vs Total Probabilities
@@ -43,14 +46,18 @@ The builder supports both "total" and "average" error probabilities:
 
 ```python
 # Average probability (recommended for physical intuition)
-noise = (GeneralNoiseModelBuilder()
+noise = (
+    GeneralNoiseModelBuilder()
     .with_average_p1_probability(0.001)  # Converted to total internally
-    .with_average_p2_probability(0.01))
+    .with_average_p2_probability(0.01)
+)
 
 # Total probability (used internally by the engine)
-noise = (GeneralNoiseModelBuilder()
+noise = (
+    GeneralNoiseModelBuilder()
     .with_p1_probability(0.00133)  # Total for single-qubit
-    .with_p2_probability(0.0133))  # Total for two-qubit
+    .with_p2_probability(0.0133)
+)  # Total for two-qubit
 ```
 
 **Note**: Average probabilities are more intuitive as they represent the actual error rate per gate. Total probabilities include a conversion factor based on the number of Pauli operators.
@@ -60,30 +67,37 @@ noise = (GeneralNoiseModelBuilder()
 Specify custom Pauli error distributions instead of uniform depolarizing noise:
 
 ```python
-noise = (GeneralNoiseModelBuilder()
+noise = (
+    GeneralNoiseModelBuilder()
     # Single-qubit Pauli errors
-    .with_p1_pauli_model({
-        "X": 0.5,  # 50% X errors
-        "Y": 0.3,  # 30% Y errors
-        "Z": 0.2,  # 20% Z errors
-    })
-
+    .with_p1_pauli_model(
+        {
+            "X": 0.5,  # 50% X errors
+            "Y": 0.3,  # 30% Y errors
+            "Z": 0.2,  # 20% Z errors
+        }
+    )
     # Two-qubit Pauli errors
-    .with_p2_pauli_model({
-        "IX": 0.25,  # 25% error on second qubit only
-        "XI": 0.25,  # 25% error on first qubit only
-        "XX": 0.5,   # 50% correlated X errors
-    }))
+    .with_p2_pauli_model(
+        {
+            "IX": 0.25,  # 25% error on second qubit only
+            "XI": 0.25,  # 25% error on first qubit only
+            "XX": 0.5,  # 50% correlated X errors
+        }
+    )
+)
 ```
 
 ### Scaling and Global Parameters
 
 ```python
-noise = (GeneralNoiseModelBuilder()
-    .with_seed(42)                    # Random seed for reproducibility
-    .with_scale(1.5)                  # Scale all error rates by 1.5x
-    .with_leakage_scale(0.1)          # 10% of errors cause leakage
-    .with_emission_scale(0.05))       # 5% spontaneous emission
+noise = (
+    GeneralNoiseModelBuilder()
+    .with_seed(42)  # Random seed for reproducibility
+    .with_scale(1.5)  # Scale all error rates by 1.5x
+    .with_leakage_scale(0.1)  # 10% of errors cause leakage
+    .with_emission_scale(0.05)
+)  # 5% spontaneous emission
 ```
 
 ### Noiseless Gates
@@ -91,17 +105,17 @@ noise = (GeneralNoiseModelBuilder()
 Make specific gates ideal (no noise):
 
 ```python
-noise = (GeneralNoiseModelBuilder()
+noise = (
+    GeneralNoiseModelBuilder()
     .with_p1_probability(0.001)
     .with_p2_probability(0.01)
-
     # Single gate
     .with_noiseless_gate("H")
-
     # Multiple gates
     .with_noiseless_gate("S")
     .with_noiseless_gate("T")
-    .with_noiseless_gate("MEASURE"))
+    .with_noiseless_gate("MEASURE")
+)
 ```
 
 ## Common Noise Model Examples
@@ -112,12 +126,14 @@ Simple uniform noise on all operations:
 
 ```python
 # Uniform depolarizing noise
-noise = (GeneralNoiseModelBuilder()
+noise = (
+    GeneralNoiseModelBuilder()
     .with_p1_probability(0.001)
     .with_p2_probability(0.01)
     .with_prep_probability(0.001)
     .with_meas_0_probability(0.001)
-    .with_meas_1_probability(0.001))
+    .with_meas_1_probability(0.001)
+)
 ```
 
 ### Realistic Hardware Noise
@@ -125,17 +141,17 @@ noise = (GeneralNoiseModelBuilder()
 Model based on typical superconducting qubit parameters:
 
 ```python
-noise = (GeneralNoiseModelBuilder()
+noise = (
+    GeneralNoiseModelBuilder()
     .with_seed(42)
-
     # Gate errors (two-qubit gates are typically 10x worse)
-    .with_average_p1_probability(0.0001)   # 0.01% single-qubit error
-    .with_average_p2_probability(0.001)    # 0.1% two-qubit error
-
+    .with_average_p1_probability(0.0001)  # 0.01% single-qubit error
+    .with_average_p2_probability(0.001)  # 0.1% two-qubit error
     # State prep and measurement (often dominant errors)
-    .with_prep_probability(0.001)          # 0.1% prep error
-    .with_meas_0_probability(0.01)         # 1% false positive
-    .with_meas_1_probability(0.005))       # 0.5% false negative
+    .with_prep_probability(0.001)  # 0.1% prep error
+    .with_meas_0_probability(0.01)  # 1% false positive
+    .with_meas_1_probability(0.005)
+)  # 0.5% false negative
 ```
 
 ### Ion Trap Noise Model
@@ -143,21 +159,19 @@ noise = (GeneralNoiseModelBuilder()
 Ion traps have different characteristics than superconducting qubits:
 
 ```python
-noise = (GeneralNoiseModelBuilder()
+noise = (
+    GeneralNoiseModelBuilder()
     .with_seed(42)
-
     # Excellent single-qubit gates
     .with_average_p1_probability(0.00001)  # 0.001% error
-
     # Two-qubit gates are the limiting factor
-    .with_average_p2_probability(0.003)    # 0.3% error
-
+    .with_average_p2_probability(0.003)  # 0.3% error
     # State preparation
-    .with_prep_probability(0.001)          # 0.1% error
-
+    .with_prep_probability(0.001)  # 0.1% error
     # Asymmetric measurement (bright/dark state detection)
-    .with_meas_0_probability(0.001)        # Dark state error
-    .with_meas_1_probability(0.005))       # Bright state error (higher)
+    .with_meas_0_probability(0.001)  # Dark state error
+    .with_meas_1_probability(0.005)
+)  # Bright state error (higher)
 ```
 
 ### Biased Noise Model
@@ -165,23 +179,28 @@ noise = (GeneralNoiseModelBuilder()
 Model with biased errors (e.g., more phase errors than bit flips):
 
 ```python
-noise = (GeneralNoiseModelBuilder()
+noise = (
+    GeneralNoiseModelBuilder()
     # Biased single-qubit errors
     .with_average_p1_probability(0.001)
-    .with_p1_pauli_model({
-        "X": 0.1,   # 10% bit flips
-        "Y": 0.1,   # 10% Y errors
-        "Z": 0.8,   # 80% phase errors (dominant)
-    })
-
+    .with_p1_pauli_model(
+        {
+            "X": 0.1,  # 10% bit flips
+            "Y": 0.1,  # 10% Y errors
+            "Z": 0.8,  # 80% phase errors (dominant)
+        }
+    )
     # Biased two-qubit errors
     .with_average_p2_probability(0.01)
-    .with_p2_pauli_model({
-        "IZ": 0.3,  # 30% phase on second qubit
-        "ZI": 0.3,  # 30% phase on first qubit
-        "ZZ": 0.2,  # 20% correlated phase
-        "XX": 0.2,  # 20% other errors
-    }))
+    .with_p2_pauli_model(
+        {
+            "IZ": 0.3,  # 30% phase on second qubit
+            "ZI": 0.3,  # 30% phase on first qubit
+            "ZZ": 0.2,  # 20% correlated phase
+            "XX": 0.2,  # 20% other errors
+        }
+    )
+)
 ```
 
 
@@ -206,33 +225,31 @@ measure q -> c;
 """
 
 # Build comprehensive noise model
-noise = (GeneralNoiseModelBuilder()
+noise = (
+    GeneralNoiseModelBuilder()
     # Reproducibility
     .with_seed(42)
-
     # Global scaling
     .with_scale(1.2)  # 20% higher error rates
-
     # Make Hadamard gates perfect
     .with_noiseless_gate("H")
-
     # State preparation
     .with_prep_probability(0.001)
-
     # Single-qubit gates with biased errors
     .with_average_p1_probability(0.0001)
-    .with_p1_pauli_model({
-        "X": 0.2,
-        "Y": 0.2,
-        "Z": 0.6,  # More dephasing
-    })
-
+    .with_p1_pauli_model(
+        {
+            "X": 0.2,
+            "Y": 0.2,
+            "Z": 0.6,  # More dephasing
+        }
+    )
     # Two-qubit gates
     .with_average_p2_probability(0.001)
-
     # Asymmetric measurement
     .with_meas_0_probability(0.002)
-    .with_meas_1_probability(0.005))
+    .with_meas_1_probability(0.005)
+)
 
 # Run simulation
 results = qasm_sim(qasm).noise(noise).run(1000)
@@ -241,7 +258,7 @@ results = qasm_sim(qasm).noise(noise).run(1000)
 counts = Counter(results["c"])
 print("GHZ state measurement results:")
 for state, count in counts.most_common(5):
-    binary = format(state, '03b')
+    binary = format(state, "03b")
     print(f"|{binary}>: {count}")
 ```
 
@@ -264,21 +281,20 @@ for state, count in counts.most_common(5):
 While builders offer maximum flexibility, PECOS also provides simpler predefined models:
 
 ```python
-from pecos.rslib import (
-    DepolarizingNoise,
-    GeneralNoiseModelBuilder
-)
+from pecos.rslib import DepolarizingNoise, GeneralNoiseModelBuilder
 
 # Simple depolarizing (all errors equal)
 simple = DepolarizingNoise(p=0.001)
 
 # Equivalent with builder
-builder = (GeneralNoiseModelBuilder()
+builder = (
+    GeneralNoiseModelBuilder()
     .with_p1_probability(0.001)
     .with_p2_probability(0.001)
     .with_prep_probability(0.001)
     .with_meas_0_probability(0.001)
-    .with_meas_1_probability(0.001))
+    .with_meas_1_probability(0.001)
+)
 
 # Builder advantages:
 # - Fine-grained control

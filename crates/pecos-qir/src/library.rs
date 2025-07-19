@@ -62,7 +62,7 @@ pub struct QirLibrary {
 
 impl Clone for QirLibrary {
     fn clone(&self) -> Self {
-        debug!("QIR Library: Cloning library from {:?}", self.path);
+        debug!("QIR Library: Cloning library from {}", self.path.display());
 
         // Load the library again from the same path with retries
         match Self::load_library_with_retries(&self.path, 3) {
@@ -101,7 +101,7 @@ impl QirLibrary {
     /// simultaneously.
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, PecosError> {
         let path = path.as_ref();
-        debug!("QIR: Loading library from {:?}", path);
+        debug!("QIR: Loading library from {}", path.display());
 
         // Perform thorough file verification before loading
         if !path.exists() {
@@ -155,7 +155,7 @@ impl QirLibrary {
     fn sleep_with_backoff(retry_count: usize) {
         let sleep_duration =
             Duration::from_millis(100 * 2u64.pow(u32::try_from(retry_count).unwrap_or(0)));
-        debug!("QIR: Sleeping for {:?} before retry", sleep_duration);
+        debug!("QIR: Sleeping for {sleep_duration:?} before retry");
         thread::sleep(sleep_duration);
     }
 
@@ -186,7 +186,7 @@ impl QirLibrary {
             // Try to load the library using the path directly
             match unsafe { Library::new(path) } {
                 Ok(library) => {
-                    debug!("QIR: Successfully loaded library from {:?}", path);
+                    debug!("QIR: Successfully loaded library from {}", path.display());
                     return Ok(Self {
                         library: Mutex::new(library),
                         path: path.to_path_buf(),
@@ -231,7 +231,7 @@ impl QirLibrary {
     ///
     /// This function will panic if the internal mutex is poisoned.
     pub fn call_function(&self, name: &[u8]) -> Result<i32, PecosError> {
-        debug!("QIR Library: Calling function {:?}", name);
+        debug!("QIR Library: Calling function {name:?}");
 
         unsafe {
             // Get the function pointer
@@ -242,7 +242,7 @@ impl QirLibrary {
 
             // Call the function
             let result = func();
-            debug!("QIR Library: Function call returned {}", result);
+            debug!("QIR Library: Function call returned {result}");
 
             // Don't finalize the shot here - we need to wait for measurement results
 
@@ -535,7 +535,7 @@ impl QirLibrary {
     /// Helper function to log errors with thread ID context
     fn log_error<E: std::fmt::Display>(context: &str, error: E) -> PecosError {
         let error_msg = format!("{context}: {error}");
-        warn!("QIR Library: {}", error_msg);
+        warn!("QIR Library: {error_msg}");
         PecosError::Resource(error_msg.to_string())
     }
 }
