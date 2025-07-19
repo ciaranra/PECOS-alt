@@ -128,7 +128,7 @@ impl LlvmLinker {
 
             // If cached library is newer than (or same age as) runtime, use it
             if cached_mtime >= runtime_mtime {
-                debug!("Using cached library: {cached_lib:?}");
+                debug!("Using cached library: {}", cached_lib.display());
                 return Ok(cached_lib);
             }
 
@@ -140,7 +140,7 @@ impl LlvmLinker {
             RuntimeBuilder::build_runtime()?;
         }
 
-        info!("Starting compilation: {llvm_file:?}");
+        info!("Starting compilation: {}", qir_file.display());
 
         // Step 4: Build LLVM executable
         // Get the runtime library path (already built in steps above)
@@ -175,7 +175,7 @@ impl LlvmLinker {
         // Link object file with runtime library to create final executable
         Self::link_shared_library(&object_file, &rust_runtime_lib, &library_file)?;
 
-        info!("Compilation successful: {library_file:?}");
+        info!("Compilation successful: {}", library_file.display());
 
         Ok(library_file)
     }
@@ -281,7 +281,7 @@ impl LlvmLinker {
             if let Ok(path) = std::env::var(env_var) {
                 let tool_path = PathBuf::from(path).join("bin").join(&exec_name);
                 if tool_path.exists() {
-                    debug!("Found {tool_name} from {env_var}: {tool_path:?}");
+                    debug!("Found {tool_name} from {env_var}: {}", tool_path.display());
                     return Some(tool_path);
                 }
             }
@@ -300,7 +300,7 @@ impl LlvmLinker {
                     if let Some(first_line) = path_str.lines().next() {
                         let path = PathBuf::from(first_line.trim());
                         if path.exists() {
-                            debug!("Found {tool_name} from PATH: {path:?}");
+                            debug!("Found {tool_name} from PATH: {}", path.display());
                             return Some(path);
                         }
                     }
@@ -312,7 +312,7 @@ impl LlvmLinker {
         for base_path in standard_llvm_paths() {
             let tool_path = base_path.join(&exec_name);
             if tool_path.exists() {
-                debug!("Found {tool_name} at: {tool_path:?}");
+                debug!("Found {tool_name} at: {}", tool_path.display());
                 return Some(tool_path);
             }
         }
@@ -362,9 +362,13 @@ impl LlvmLinker {
             .ok_or("No version found")
     }
 
-    /// Compile LLVM IR file to object file using LLVM tools
-    fn compile_to_object_file(llvm_file: &Path, object_file: &Path) -> Result<(), PecosError> {
-        debug!("Compiling: {llvm_file:?} -> {object_file:?}");
+    /// Compile QIR file to object file using LLVM tools
+    fn compile_to_object_file(qir_file: &Path, object_file: &Path) -> Result<(), PecosError> {
+        debug!(
+            "Compiling: {} -> {}",
+            qir_file.display(),
+            object_file.display()
+        );
 
         // Ensure the output directory exists
         if let Some(parent) = object_file.parent() {
@@ -382,7 +386,7 @@ impl LlvmLinker {
             // Verify LLVM version
             Self::check_llvm_version(&clang).map_err(PecosError::Processing)?;
 
-            debug!("Using clang: {:?}", clang);
+            debug!("Using clang: {}", clang.display());
 
             WindowsCompiler::compile_to_object_file(
                 llvm_file,
@@ -481,7 +485,7 @@ impl LlvmLinker {
             let output = Self::handle_command_error(result, "Failed to execute gcc")?;
             Self::handle_command_status(&output, "gcc")?;
 
-            debug!("Linked: {library_file:?}");
+            debug!("Linked: {}", library_file.display());
             Ok(())
         }
     }
@@ -493,7 +497,7 @@ impl LlvmLinker {
     ) -> Result<T, PecosError> {
         result.map_err(|e| {
             warn!("{error_msg}: {e}");
-            PecosError::Processing(format!("LLVM IR compilation failed: {error_msg}: {e}"))
+            PecosError::Processing(format!("QIR compilation failed: {error_msg}: {e}"))
         })
     }
 
