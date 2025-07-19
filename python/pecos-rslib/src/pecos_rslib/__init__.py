@@ -72,6 +72,18 @@ from pecos_rslib.selene_engine import (
 # Import the qasm_sim function and noise models for easy access
 from pecos_rslib.qasm_sim import qasm_sim
 
+# Import the new unified sim API
+from pecos_rslib.sim import (
+    sim,
+    qasm_engine,
+    llvm_engine,
+    selene_engine,
+    QasmEngineBuilder,
+    LlvmEngineBuilder,
+    SeleneEngineBuilder,
+    SimBuilder,
+)
+
 # Also import the noise model dataclasses for convenience
 from pecos_rslib.qasm_sim import (
     PassThroughNoise,
@@ -222,4 +234,13 @@ __all__ = [
     "PhirCompiler",
     # Backend information
     "get_compilation_backends",
+    # New unified sim API
+    "sim",
+    "qasm_engine",
+    "llvm_engine",
+    "selene_engine",
+    "QasmEngineBuilder",
+    "LlvmEngineBuilder",
+    "SeleneEngineBuilder",
+    "SimBuilder",
 ]

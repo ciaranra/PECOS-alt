@@ -143,6 +143,7 @@ impl LlvmSimulation {
     }
 
     /// Convert shot results to columnar format (for internal use).
+    #[allow(dead_code)]
     fn shots_to_columnar(&self, shots: Vec<Shot>) -> HashMap<String, Vec<i64>> {
         let mut columnar = HashMap::new();
 

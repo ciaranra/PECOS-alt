@@ -20,7 +20,6 @@ from pecos_rslib._pecos_rslib import (
 try:
     from pecos_rslib._pecos_rslib import (
         selene_sim_builder_hugr as _rust_selene_sim_builder_hugr,
-        selene_engine_builder_hugr as _rust_selene_engine_builder_hugr,
     )
     HUGR_SUPPORT = True
 except ImportError:

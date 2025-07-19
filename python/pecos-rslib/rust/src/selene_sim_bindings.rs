@@ -18,7 +18,7 @@ use pecos_selene_ceng::{
     NoiseModelConfig, QuantumEngineType
 };
 use pecos_engines::ClassicalControlEngineBuilder;
-use crate::shot_results_bindings::{PyShotVec, PyShotMap};
+use crate::shot_results_bindings::PyShotVec;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
@@ -177,17 +177,7 @@ pub struct PySeleneSimulation {
     simulation: SeleneSimulation,
 }
 
-/// Python wrapper for Selene engine builder
-#[pyclass(name = "selene_engine_builder")]
-pub struct PySeleneEngineBuilder {
-    builder: Option<SeleneEngineBuilder>,
-}
 
-/// Python wrapper for Selene engine
-#[pyclass(name = "SeleneEngine")]
-pub struct PySeleneEngine {
-    engine: SeleneEngine,
-}
 
 #[pymethods]
 impl PySeleneSimulation {
@@ -201,58 +191,7 @@ impl PySeleneSimulation {
     }
 }
 
-#[pymethods]
-impl PySeleneEngineBuilder {
-    /// Create a new Selene engine builder from source
-    #[new]
-    pub fn new(source: &str) -> PyResult<Self> {
-        let builder = selene_engine().llvm_ir(source);
-        Ok(Self { builder: Some(builder) })
-    }
 
-    /// Set the number of qubits
-    pub fn qubits(&mut self, n: usize) -> PyResult<()> {
-        if let Some(builder) = self.builder.take() {
-            self.builder = Some(builder.qubits(n));
-        }
-        Ok(())
-    }
-
-    /// Enable optimization
-    pub fn optimize(&mut self) -> PyResult<()> {
-        if let Some(builder) = self.builder.take() {
-            self.builder = Some(builder.optimize(true));
-        }
-        Ok(())
-    }
-
-    /// Enable verbose output
-    pub fn verbose(&mut self, v: bool) -> PyResult<()> {
-        if let Some(builder) = self.builder.take() {
-            self.builder = Some(builder.verbose(v));
-        }
-        Ok(())
-    }
-
-    /// Build the engine
-    pub fn build(&mut self) -> PyResult<PySeleneEngine> {
-        if let Some(builder) = self.builder.take() {
-            let engine = builder.build()
-                .map_err(|e| PyRuntimeError::new_err(format!("Failed to build Selene engine: {}", e)))?;
-            Ok(PySeleneEngine { engine })
-        } else {
-            Err(PyRuntimeError::new_err("Builder already consumed"))
-        }
-    }
-}
-
-#[pymethods]
-impl PySeleneEngine {
-    /// Get a description of the engine
-    pub fn description(&self) -> String {
-        "Selene quantum control engine".to_string()
-    }
-}
 
 /// Register the Selene simulation module
 pub fn register_selene_sim_module(parent_module: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -260,18 +199,14 @@ pub fn register_selene_sim_module(parent_module: &Bound<'_, PyModule>) -> PyResu
     parent_module.add_class::<PySeleneQuantumEngine>()?;
     parent_module.add_class::<PySeleneSimBuilder>()?;
     parent_module.add_class::<PySeleneSimulation>()?;
-    parent_module.add_class::<PySeleneEngineBuilder>()?;
-    parent_module.add_class::<PySeleneEngine>()?;
     
     // Add the builder functions
     parent_module.add_function(wrap_pyfunction!(selene_sim_builder, parent_module)?)?;
-    parent_module.add_function(wrap_pyfunction!(selene_engine_builder, parent_module)?)?;
     
     // Add HUGR support functions if feature is enabled
     #[cfg(feature = "hugr")]
     {
         parent_module.add_function(wrap_pyfunction!(selene_sim_builder_hugr, parent_module)?)?;
-        parent_module.add_function(wrap_pyfunction!(selene_engine_builder_hugr, parent_module)?)?;
     }
     
     Ok(())
@@ -286,14 +221,6 @@ fn selene_sim_builder(source: &str) -> PyResult<PySeleneSimBuilder> {
     })
 }
 
-/// Python function to create a Selene engine builder
-#[pyfunction]
-fn selene_engine_builder(source: &str) -> PyResult<PySeleneEngineBuilder> {
-    let builder = selene_engine().llvm_ir(source);
-    Ok(PySeleneEngineBuilder {
-        builder: Some(builder),
-    })
-}
 
 /// Python function to create a Selene simulation builder from HUGR bytes
 #[pyfunction]
@@ -315,22 +242,3 @@ fn selene_sim_builder_hugr(hugr_bytes: &[u8]) -> PyResult<PySeleneSimBuilder> {
     })
 }
 
-/// Python function to create a Selene engine builder from HUGR bytes
-#[pyfunction]
-#[cfg(feature = "hugr")]
-fn selene_engine_builder_hugr(hugr_bytes: &[u8]) -> PyResult<PySeleneEngineBuilder> {
-    use pecos_selene_ceng::hugr_compiler::get_extension_registry;
-    use std::io::Cursor;
-    
-    // Deserialize HUGR from bytes using the proper extension registry
-    let reader = Cursor::new(hugr_bytes);
-    let hugr = match hugr::Hugr::load(reader, Some(get_extension_registry())) {
-        Ok(h) => h,
-        Err(e) => return Err(PyRuntimeError::new_err(format!("Failed to deserialize HUGR: {}", e))),
-    };
-    
-    let builder = selene_engine().hugr(hugr);
-    Ok(PySeleneEngineBuilder {
-        builder: Some(builder),
-    })
-}

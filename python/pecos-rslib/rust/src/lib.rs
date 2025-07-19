@@ -31,6 +31,7 @@ mod selene_sim_bindings;
 mod phir_bindings;
 mod qasm_sim_bindings;
 mod shot_results_bindings;
+mod sim_builder;
 mod sparse_sim;
 mod sparse_stab_bindings;
 mod sparse_stab_engine_bindings;
@@ -79,6 +80,9 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Register Selene simulation functions
     selene_sim_bindings::register_selene_sim_module(m)?;
+
+    // Register the new unified sim builder API
+    sim_builder::register_sim_builder_module(m)?;
 
     pcg_bindings::create_pcg_module(m)?;
     Ok(())

@@ -1029,7 +1029,7 @@ impl ClassicalEngine for SeleneEngine {
         
         // FIXED: Store measurement results as proper BitVec registers
         // Instead of a single string, create individual result registers
-        for (i, (measurement_id, value)) in self.measurement_results.iter().enumerate() {
+        for (i, (_measurement_id, value)) in self.measurement_results.iter().enumerate() {
             // Store each measurement as a 1-bit register (0 or 1)
             let bit_value = if *value { 1u32 } else { 0u32 };
             shot.add_register(&format!("_result_{}", i), bit_value, 1);

@@ -140,7 +140,7 @@ impl LlvmLinker {
             RuntimeBuilder::build_runtime()?;
         }
 
-        info!("Starting compilation: {}", qir_file.display());
+        info!("Starting compilation: {:?}", llvm_file);
 
         // Step 4: Build LLVM executable
         // Get the runtime library path (already built in steps above)
@@ -362,11 +362,11 @@ impl LlvmLinker {
             .ok_or("No version found")
     }
 
-    /// Compile QIR file to object file using LLVM tools
-    fn compile_to_object_file(qir_file: &Path, object_file: &Path) -> Result<(), PecosError> {
+    /// Compile LLVM IR file to object file using LLVM tools
+    fn compile_to_object_file(llvm_file: &Path, object_file: &Path) -> Result<(), PecosError> {
         debug!(
             "Compiling: {} -> {}",
-            qir_file.display(),
+            llvm_file.display(),
             object_file.display()
         );
 

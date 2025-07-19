@@ -15,7 +15,6 @@
 use pecos_llvm_sim::{LlvmSim, LlvmSimulation, NoiseModelConfig, QuantumEngineType, DepolarizingNoise, DepolarizingCustomNoise, BiasedDepolarizingNoise};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
 use crate::shot_results_bindings::PyShotVec;
 
 /// Python class for noise models (using a class instead of enum for PyO3 compatibility)
