@@ -9,22 +9,9 @@ env:
 on:
   push:
     branches: [ "master", "development", "dev" ]
-#    # Comment out paths to force run on all pushes
-#    paths:
-#      - 'python/**'
-#      - '.github/workflows/python-test.yml'
-#      - '.typos.toml'
-#      - 'ruff.toml'
-#      - '.pre-commit-config.yaml'
   pull_request:
     branches: [ "master", "development", "dev" ]
-#    # Comment out paths to force run on all PRs
-#    paths:
-#      - 'python/**'
-#      - '.github/workflows/python-test.yml'
-#      - '.typos.toml'
-#      - 'ruff.toml'
-#      - '.pre-commit-config.yaml'
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -51,6 +38,12 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
+    - name: Set up Visual Studio environment on Windows
+      if: runner.os == 'Windows'
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x64
+
     - name: Install the latest version of uv
       uses: astral-sh/setup-uv@v4
       with:
@@ -64,52 +57,68 @@ jobs:
       with:
         workspaces: python/pecos-rslib
 
-    - name: Install LLVM
-      uses: KyleMayes/install-llvm-action@v2
-      with:
-        version: "14.0"
-        env: True
-
-    - name: Configure LLVM
-      run: echo "LLVM_SYS_140_PREFIX=$LLVM_PATH" >>"$GITHUB_ENV" && "$LLVM_PATH/bin/llvm-config" --version
-
-    - name: Generate lockfile and install dependencies
+    - name: Build and test PECOS (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
       run: |
-        uv lock --project .
-        uv sync --project .
+        # Find MSVC link.exe and create cargo config
+        $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+        $vsPath = & $vsWhere -latest -property installationPath
+        $linkPath = Get-ChildItem -Path "$vsPath\VC\Tools\MSVC" -Recurse -Filter "link.exe" |
+                    Where-Object { $_.FullName -like "*\bin\Hostx64\x64\*" } |
+                    Select-Object -First 1 -ExpandProperty FullName
 
-    - name: Install pecos rng build dependencies
+        if ($linkPath) {
+          Write-Host "Found MSVC link.exe at: $linkPath"
+
+          # Create .cargo directory and config
+          New-Item -ItemType Directory -Force -Path .cargo | Out-Null
+
+          # Create config with escaped path
+          $escapedPath = $linkPath.Replace('\', '/')
+          "[target.x86_64-pc-windows-msvc]" | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8
+          "linker = `"$escapedPath`"" | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8 -Append
+
+          Write-Host "Created .cargo\config.toml:"
+          Get-Content .cargo\config.toml
+        } else {
+          Write-Error "Could not find MSVC link.exe"
+          exit 1
+        }
+
+        # Build and test
+        make build
+        make pytest-all
+
+    - name: Build and test PECOS (non-Windows)
+      if: runner.os != 'Windows'
       run: |
-        uv pip install build nanobind scikit-build-core cmake ninja
+        # On macOS, set up minimal environment for matplotlib compatibility
+        if [[ "${{ runner.os }}" == "macOS" ]]; then
+          # Set matplotlib backend to avoid GUI issues
+          export MPLBACKEND=Agg
+          export MATPLOTLIB_INTERACTIVE=false
 
-    - name: Build PECOS RNG
+          # Try to fix matplotlib segfault by limiting threading
+          export OPENBLAS_NUM_THREADS=1
+          export MKL_NUM_THREADS=1
+          export NUMEXPR_NUM_THREADS=1
+          export OMP_NUM_THREADS=1
+
+          # Disable macOS System Integrity Protection library validation
+          # This can help with library loading issues
+          export DYLD_LIBRARY_PATH=""
+
+          # Force matplotlib to use bundled libraries instead of system ones
+          export MPLCONFIGDIR=$PWD/.matplotlib
+          mkdir -p $MPLCONFIGDIR
+        fi
+
+        # Build and test
+        make build
+        make pytest-all
+
+    - name: Run linting
       run: |
-        cd clib/pecos-rng
-        uv pip install .
-
-    - name: Install pecos-rslib with maturin
-      run: |
-        cd python/pecos-rslib
-        uv run maturin develop --uv
-
-    - name: Install quantum-pecos
-      run: |
-        cd python/quantum-pecos
-        uv pip install -e .
-
-    - name: Run pre-commit checks
-      run: uv run pre-commit run --all-files --show-diff-on-failure
-
-    - name: Install test dependencies
-      run: |
-        cd python/quantum-pecos
-        uv pip install -e .[all,test]  # Install with both all and test extras
-        uv pip install pytest pytest-cov  # Explicitly install test requirements
-
-    - name: Run standard tests
-      run: |
-        uv run pytest ./python/tests --doctest-modules --junitxml=junit/test-results.xml --cov=com --cov-report=xml --cov-report=html
-
-    - name: Run optional dependency tests
-      run: |
-        uv run pytest ./python/tests --doctest-modules --junitxml=junit/test-results.xml --cov=com --cov-report=xml --cov-report=html -m optional_dependency
+        # Run all linting checks
+        make lint  # Rust checks + Python pre-commit

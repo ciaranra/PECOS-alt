@@ -82,21 +82,11 @@ def test_basic_permutation_qasm(basic_permutation_program: tuple) -> None:
     prog, _, _ = basic_permutation_program
 
     # Generate QASM
-    from pecos.slr.gen_codes.gen_qasm import QASMGenerator
-    from pecos.slr.slr_converter import SlrConverter
-
-    # Create a custom QASM generator to debug the permutation map
-    generator = QASMGenerator()
-    generator.generate_block(prog)
-    qasm = generator.get_output()
+    qasm = SlrConverter(prog).qasm()
 
     # Print the QASM for debugging
     print("\nQASM output:")
     print(qasm)
-
-    # Print the permutation map
-    print("\nPermutation map:")
-    print(generator.permutation_map)
 
     # Verify that the QASM contains the correct permuted operation
     # For classical bit permutations, operations still refer to the original bit names
@@ -144,6 +134,7 @@ def test_same_register_permutation_qasm(
 
 
 @pytest.mark.optional_dependency
+@pytest.skipif_no_llvmlite
 def test_basic_permutation_qir(basic_permutation_program: tuple) -> None:
     """Test basic permutation functionality in QIR generation."""
     prog, _, _ = basic_permutation_program
@@ -183,6 +174,7 @@ def test_basic_permutation_qir(basic_permutation_program: tuple) -> None:
 
 
 @pytest.mark.optional_dependency
+@pytest.skipif_no_llvmlite
 def test_same_register_permutation_qir(
     same_register_permutation_program: tuple,
 ) -> None:

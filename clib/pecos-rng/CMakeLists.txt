@@ -1,7 +1,8 @@
 # CMakeLists.txt
 cmake_minimum_required(VERSION 3.15...3.27)
 project(pecos_rng LANGUAGES C CXX)
-set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
+# Don't force universal binaries in CI - let the system decide
+# set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
 
 
 if (CMAKE_VERSION VERSION_LESS 3.18)

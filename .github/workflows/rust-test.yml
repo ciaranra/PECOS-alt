@@ -139,7 +139,7 @@ jobs:
         with:
           version: "14.0"
           directory: ${{ runner.temp }}/llvm
-          env: true
+          env: false  # Don't set CC/CXX - we'll use MSVC for C++ compilation
 
       - name: Setup LLVM Path (Windows)
         if: matrix.os == 'windows-latest'
@@ -148,6 +148,21 @@ jobs:
 
           # Display LLVM_PATH environment variable set by the action
           Write-Host "LLVM_PATH environment variable: $env:LLVM_PATH"
+
+          # Ensure we're using MSVC for C++ compilation, not LLVM clang
+          Write-Host "Ensuring MSVC is used for C++ compilation..."
+          if (Test-Path env:CC) {
+            Write-Host "Removing CC environment variable (was: $env:CC)"
+            Remove-Item Env:CC -ErrorAction SilentlyContinue
+          }
+          if (Test-Path env:CXX) {
+            Write-Host "Removing CXX environment variable (was: $env:CXX)"
+            Remove-Item Env:CXX -ErrorAction SilentlyContinue
+          }
+
+          # Clear these from GITHUB_ENV too
+          echo "CC=" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "CXX=" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
           # Add LLVM bin directory to PATH for this and subsequent steps
           $llvmBinDir = Join-Path -Path $env:LLVM_PATH -ChildPath "bin"
@@ -213,6 +228,12 @@ jobs:
               }
             }
           }
+
+      - name: Set up Visual Studio environment on Windows
+        if: matrix.os == 'windows-latest'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
 
       - name: Compile tests
         run: cargo test --no-run

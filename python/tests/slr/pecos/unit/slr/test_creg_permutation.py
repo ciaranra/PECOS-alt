@@ -58,6 +58,7 @@ def test_creg_permutation_qasm() -> None:
 
 
 @pytest.mark.optional_dependency
+@pytest.skipif_no_llvmlite
 def test_creg_permutation_qir() -> None:
     """Test permutation of whole classical registers followed by both bit and register operations in QIR."""
     prog = create_creg_permutation_program()

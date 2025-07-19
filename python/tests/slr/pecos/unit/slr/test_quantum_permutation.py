@@ -58,6 +58,7 @@ def test_quantum_permutation_qasm(quantum_permutation_program: tuple) -> None:
 
 
 @pytest.mark.optional_dependency
+@pytest.skipif_no_llvmlite
 def test_quantum_permutation_qir(quantum_permutation_program: tuple) -> None:
     """Test permutation with quantum gates in QIR generation."""
     prog, _, _ = quantum_permutation_program
@@ -109,6 +110,7 @@ def test_quantum_permutation_qir(quantum_permutation_program: tuple) -> None:
 
 
 @pytest.mark.optional_dependency
+@pytest.skipif_no_llvmlite
 def test_permutation_with_bell_circuit_qir() -> None:
     """Test permutation functionality with a Bell circuit in QIR generation."""
     # Create a program with permutations and a Bell circuit
@@ -192,6 +194,7 @@ def test_permutation_with_bell_circuit_qir() -> None:
 
 
 @pytest.mark.optional_dependency
+@pytest.skipif_no_llvmlite
 def test_comprehensive_qir_verification() -> None:
     """Test comprehensive verification of QIR generation with permutations."""
     # Create a program with a variety of operations to test permutation effects
@@ -362,6 +365,7 @@ def test_comprehensive_qir_verification() -> None:
 
 
 @pytest.mark.optional_dependency
+@pytest.skipif_no_llvmlite
 def test_rotation_gates_with_permutation() -> None:
     """Test that permutations work correctly with rotation gates in QIR generation."""
     # Create a program with rotation gates and permutations

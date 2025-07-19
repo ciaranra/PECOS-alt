@@ -15,6 +15,11 @@ This package provides generic operations that can be used across different QEC c
 # specific language governing permissions and limitations under the License.
 
 from pecos.slr.gen_codes.gen_qasm import QASMGenerator
-from pecos.slr.gen_codes.gen_qir import QIRGenerator
 from pecos.slr.gen_codes.generator import Generator
 from pecos.slr.gen_codes.language import Language
+
+# QIRGenerator requires llvmlite which is optional
+try:
+    from pecos.slr.gen_codes.gen_qir import QIRGenerator
+except ImportError:
+    QIRGenerator = None

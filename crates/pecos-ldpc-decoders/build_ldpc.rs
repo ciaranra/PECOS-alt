@@ -133,6 +133,47 @@ fn fix_mbp_iterate_methods(src_cpp_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+fn fix_msvc_compatibility(src_cpp_dir: &Path) -> Result<()> {
+    // Fix MSVC compatibility issues in lsd.hpp
+    // MSVC doesn't recognize 'or' keyword without #include <iso646.h>
+    // Also need to fix some C++17 syntax issues
+    let lsd_path = src_cpp_dir.join("lsd.hpp");
+
+    if lsd_path.exists() {
+        let content = fs::read_to_string(&lsd_path)?;
+
+        // Only apply patch if not already applied
+        if !content.contains("#include <iso646.h>") {
+            // Add iso646.h include for MSVC compatibility at the top
+            let lines: Vec<&str> = content.lines().collect();
+            let mut new_lines = Vec::new();
+
+            // Find the first #include and add our fix before it
+            let mut added_includes = false;
+            for line in &lines {
+                if !added_includes && line.starts_with("#include") {
+                    new_lines.push("#ifdef _MSC_VER".to_string());
+                    new_lines.push("#include <iso646.h>".to_string());
+                    new_lines.push("#endif".to_string());
+                    added_includes = true;
+                }
+
+                // Replace 'or' with '||' for better MSVC compatibility
+                let fixed_line = line.replace(" or ", " || ");
+                new_lines.push(fixed_line);
+            }
+
+            let fixed_content = new_lines.join("\n");
+            fs::write(&lsd_path, fixed_content)?;
+            if std::env::var("PECOS_VERBOSE_BUILD").is_ok() {
+                println!("cargo:warning=Fixed MSVC compatibility issues in lsd.hpp");
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn build_cxx_bridge(ldpc_dir: &Path) -> Result<()> {
     let src_cpp_dir = ldpc_dir.join("src_cpp");
     let include_dir = ldpc_dir.join("include");
@@ -142,6 +183,9 @@ fn build_cxx_bridge(ldpc_dir: &Path) -> Result<()> {
 
     // Fix mbp.hpp iterate method names
     fix_mbp_iterate_methods(&src_cpp_dir)?;
+
+    // Fix MSVC compatibility issues
+    fix_msvc_compatibility(&src_cpp_dir)?;
 
     // Build the cxx bridge first to generate headers
     let mut build = cxx_build::bridge("src/bridge.rs");
@@ -182,7 +226,9 @@ fn build_cxx_bridge(ldpc_dir: &Path) -> Result<()> {
         // For MSVC
         build
             .flag("/W0") // Warning level 0 (no warnings)
-            .flag_if_supported("/openmp"); // Enable OpenMP if available
+            .flag_if_supported("/openmp") // Enable OpenMP if available
+            .flag_if_supported("/permissive-") // Enable standards-compliant C++ parsing
+            .flag_if_supported("/Zc:__cplusplus"); // Report correct __cplusplus macro value
     }
 
     build.compile("ldpc-bridge");
