@@ -1,0 +1,24 @@
+[package]
+name = "pecos-decoder-core"
+version.workspace = true
+edition.workspace = true
+readme.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Core traits and utilities for PECOS decoders"
+
+[dependencies]
+ndarray.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+
+[features]
+default = []
+testing = []
+
+[lints]
+workspace = true

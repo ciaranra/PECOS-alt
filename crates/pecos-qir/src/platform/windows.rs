@@ -67,7 +67,8 @@ impl WindowsCompiler {
         // Verify output file exists
         if !object_file.exists() {
             return Err(PecosError::Processing(format!(
-                "QIR compilation failed: Object file was not created at the expected path: {object_file:?}"
+                "QIR compilation failed: Object file was not created at the expected path: {}",
+                object_file.display()
             )));
         }
 
@@ -79,6 +80,15 @@ impl WindowsCompiler {
     }
 
     /// Link object file and runtime library into a shared library
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Definition file cannot be written
+    /// - C stub file cannot be written
+    /// - Object compilation of stub fails
+    /// - Library linking fails
+    /// - Library file is not created at expected path
     pub fn link_shared_library(
         object_file: &Path,
         _rust_runtime_lib: &Path, // Unused but kept for API compatibility
@@ -100,11 +110,11 @@ impl WindowsCompiler {
         let stub_obj_path = parent_dir.join("qir_runtime_stub.o");
 
         // Write DEF file for exporting symbols
-        fs::write(&def_file_path, &Self::generate_def_file())
+        fs::write(&def_file_path, Self::generate_def_file())
             .map_err(|e| PecosError::Processing(format!("Failed to write DEF file: {e}")))?;
 
         // Write C stub implementation
-        fs::write(&stub_c_path, &Self::generate_c_stub())
+        fs::write(&stub_c_path, Self::generate_c_stub())
             .map_err(|e| PecosError::Processing(format!("Failed to write stub .c file: {e}")))?;
 
         // Compile the C stub
@@ -144,7 +154,8 @@ impl WindowsCompiler {
         // Verify the library exists
         if !library_file.exists() {
             return Err(PecosError::Processing(format!(
-                "Library file was not created at the expected path: {library_file:?}"
+                "Library file was not created at the expected path: {}",
+                library_file.display()
             )));
         }
 

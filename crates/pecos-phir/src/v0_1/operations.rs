@@ -1094,9 +1094,9 @@ impl OperationProcessor {
                     );
                 }
 
-                // Return true to indicate we've handled this operation
+                // Return false to continue processing (assignment doesn't end the batch)
                 log::debug!("Assignment operation handled successfully");
-                return Ok(true);
+                return Ok(false);
             }
         } else {
             // For other operations, validate all variables

@@ -51,14 +51,13 @@ nav:
   - Introduction: README.md
   - user-guide/getting-started.md
   - user-guide/qasm-simulation.md
-  - user-guide/parallel-execution.md
   - user-guide/noise-model-builders.md
   - user-guide/general-noise-factory.md
+  - user-guide/decoders.md
 - API:
   - api/api-reference.md
 - Development:
   - development/DEVELOPMENT.md
-  - development/parallel-blocks-and-optimization.md
 - Releases:
   - releases/changelog.md
 markdown_extensions:

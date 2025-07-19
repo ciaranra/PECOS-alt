@@ -41,8 +41,6 @@ class Check(Block):
         paulis: str,
         a: Qubit,
         out: Bit,
-        *,
-        with_barriers: bool = True,
     ) -> None:
         """Initialize a stabilizer check measurement.
 
@@ -80,19 +78,17 @@ class Check(Block):
         ps = paulis
 
         self.extend(
-            # Comment(f"Measure check {ps}"),
+            Comment(f"Measure check {ps}"),
             Prep(a),
             H(a),
         )
 
         for i in range(n):
-            if with_barriers:
-                self.extend(Barrier(a, d[i]),) # to preserve order
             self.extend(
+                Barrier(a, d[i]),  # to preserve order
                 self.cp(ps[i], a, d[i]),
+                Barrier(a, d[i]),  # to preserve order
             )
-            if with_barriers:
-                if with_barriers: Barrier(a, d[i]),  # to preserve order
 
         self.extend(
             H(a),

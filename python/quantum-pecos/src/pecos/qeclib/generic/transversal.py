@@ -8,6 +8,6 @@ def transversal_tq(tq_gate, q1: QReg, q2: QReg,) -> Block:
     block = Block()
 
     for i in range(len(q1)):
-        block.execute(tq_gate(q1[i], q2[i]))
+        block.extend(tq_gate(q1[i], q2[i]))
 
     return block

@@ -19,13 +19,9 @@ from pecos.classical_interpreters.phir_classical_interpreter import (
 )
 from pecos.engines.hybrid_engine import HybridEngine
 from pecos.error_models.generic_error_model import GenericErrorModel
+from pecos.foreign_objects.wasmtime import WasmtimeObj
 from phir.model import PHIRModel
 from pydantic import ValidationError
-
-try:
-    from pecos.foreign_objects.wasmtime import WasmtimeObj
-except ImportError:
-    WasmtimeObj = None
 
 try:
     from pecos.foreign_objects.wasmer import WasmerObj

@@ -97,10 +97,3 @@ Verify your installation:
         // Once loaded, you can use PECOS functionality
     }
     ```
-
-## Next Steps
-
-- [QASM Simulation](qasm-simulation.md) - Learn how to simulate quantum circuits
-- [Parallel Execution](parallel-execution.md) - Express and optimize parallel quantum operations
-- [Noise Model Builders](noise-model-builders.md) - Add realistic noise to simulations
-- [API Reference](../api/api-reference.md) - Detailed API documentation

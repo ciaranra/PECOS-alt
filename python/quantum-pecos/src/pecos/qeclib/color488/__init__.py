@@ -10,3 +10,11 @@
 # specific language governing permissions and limitations under the License.
 
 from pecos.qeclib.color488.color488_class import Color488Patch
+from enum import Enum
+
+class Language(Enum):
+    """Language options to compile SLR to"""
+
+    QASM = 0
+    QIR = 1
+    QIRBC = 2
