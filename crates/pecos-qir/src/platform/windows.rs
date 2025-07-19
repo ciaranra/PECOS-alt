@@ -17,6 +17,14 @@ impl WindowsCompiler {
     ///
     /// Windows does not typically include llc.exe in standard LLVM installations
     /// so we use clang directly to compile the QIR file to an object file.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - QIR file cannot be read
+    /// - Temporary file cannot be written
+    /// - Clang execution fails
+    /// - Object file is not created at expected path
     pub fn compile_to_object_file(
         qir_file: &Path,
         object_file: &Path,
