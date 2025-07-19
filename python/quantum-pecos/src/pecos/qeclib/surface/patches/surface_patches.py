@@ -1,3 +1,5 @@
+"""Concrete implementations of surface code patches."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -20,7 +22,16 @@ class RotatedSurfacePatch(BaseSurfacePatch):
         orientation: SurfacePatchOrientation,
         layout: Layout | None = None,
         name: str | None = None,
-    ):
+    ) -> None:
+        """Initialize a rotated surface code patch.
+
+        Args:
+            dx: Distance of the X logical operator.
+            dz: Distance of the Z logical operator.
+            orientation: Patch orientation determining boundary conditions.
+            layout: Optional custom layout. Uses SquareRotatedLayout by default.
+            name: Optional custom name for the patch.
+        """
         super().__init__(dx, dz, orientation, name)
 
         # TODO: Should each surface patch carry this or should it be stored somewhere for reuse...

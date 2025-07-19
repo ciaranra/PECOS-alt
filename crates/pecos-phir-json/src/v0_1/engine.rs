@@ -415,14 +415,12 @@ impl PhirJsonEngine {
                                                 function,
                                             } => {
                                                 debug!(
-                                                    "Processing classical operation in branch: {}",
-                                                    cop
+                                                    "Processing classical operation in branch: {cop}"
                                                 );
                                                 // Handle classical operations from conditional branches
                                                 if cop == "ffcall" {
                                                     debug!(
-                                                        "Processing ffcall in branch: function={:?}, args={:?}, returns={:?}",
-                                                        function, args, returns
+                                                        "Processing ffcall in branch: function={function:?}, args={args:?}, returns={returns:?}"
                                                     );
                                                 }
                                                 // For ffcall operations from branches, we need to handle them specially
@@ -457,8 +455,7 @@ impl PhirJsonEngine {
                                             _ => {
                                                 // For other operation types, we'll handle them later
                                                 debug!(
-                                                    "Skipping other operation type in branch: {:?}",
-                                                    branch_op
+                                                    "Skipping other operation type in branch: {branch_op:?}"
                                                 );
                                             }
                                         }

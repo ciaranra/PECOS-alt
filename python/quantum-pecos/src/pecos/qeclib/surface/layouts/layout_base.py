@@ -1,3 +1,5 @@
+"""Base classes for surface code layouts."""
+
 from enum import Enum
 from typing import Protocol
 
@@ -18,18 +20,29 @@ class LatticeType(Enum):
 
 
 class Layout(Protocol):
-    """Protocol for different layout strategies"""
+    """Protocol for different layout strategies."""
 
     def get_stabilizers_gens(
         self,
         dx: int,
         dz: int,
-    ) -> list[tuple[str, tuple[int, ...]]]: ...
-    def get_data_positions(self, dx: int, dz: int) -> list[tuple[int, int]]: ...
-    def validate_dimensions(self, dx: int, dz: int) -> None: ...
+    ) -> list[tuple[str, tuple[int, ...]]]:
+        """Get stabilizer generators for the layout."""
+        ...
+
+    def get_data_positions(self, dx: int, dz: int) -> list[tuple[int, int]]:
+        """Get positions of data qubits in the layout."""
+        ...
+
+    def validate_dimensions(self, dx: int, dz: int) -> None:
+        """Validate the layout dimensions."""
+        ...
+
     def get_visualization_elements(
         self,
         dx: int,
         dz: int,
         stab_gens: list[tuple[str, tuple[int, ...]]],
-    ) -> VisualizationData: ...
+    ) -> VisualizationData:
+        """Get visualization elements for the layout."""
+        ...

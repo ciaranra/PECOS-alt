@@ -16,7 +16,7 @@ from pecos.slr import Block, CReg, Main, Parallel, QReg, SlrConverter
 from pecos.slr.transforms import ParallelOptimizer
 
 
-def test_parallel_optimization_example():
+def test_parallel_optimization_example() -> None:
     """Example showing how ParallelOptimizer transforms Bell state preparations."""
     # Create a program with three Bell state preparations in parallel
     prog = Main(
@@ -38,35 +38,43 @@ def test_parallel_optimization_example():
         ),
         qb.Measure(q) > c,
     )
-    
+
     # Generate QASM without optimization
     qasm_unoptimized = SlrConverter(prog).qasm()
     print("=== QASM without optimization ===")
     print(qasm_unoptimized)
     print()
-    
+
     # Apply the ParallelOptimizer transformation
     optimizer = ParallelOptimizer()
     optimized_prog = optimizer.transform(prog)
-    
+
     # Generate QASM with optimization
     qasm_optimized = SlrConverter(optimized_prog).qasm()
     print("=== QASM with optimization ===")
     print(qasm_optimized)
-    
+
     # The optimizer has transformed the structure to:
     # Block(
     #     Parallel(H(q[0]), H(q[2]), H(q[4])),  # All H gates in parallel
     #     Parallel(CX(q[0], q[1]), CX(q[2], q[3]), CX(q[4], q[5])),  # All CX gates in parallel
     # )
-    
+
     # Verify the operations are grouped by type
     assert "h q[0]" in qasm_optimized
     assert "h q[2]" in qasm_optimized
     assert "h q[4]" in qasm_optimized
     # These should appear before the CX gates
-    h_positions = [qasm_optimized.index("h q[0]"), qasm_optimized.index("h q[2]"), qasm_optimized.index("h q[4]")]
-    cx_positions = [qasm_optimized.index("cx q[0]"), qasm_optimized.index("cx q[2]"), qasm_optimized.index("cx q[4]")]
+    h_positions = [
+        qasm_optimized.index("h q[0]"),
+        qasm_optimized.index("h q[2]"),
+        qasm_optimized.index("h q[4]"),
+    ]
+    cx_positions = [
+        qasm_optimized.index("cx q[0]"),
+        qasm_optimized.index("cx q[2]"),
+        qasm_optimized.index("cx q[4]"),
+    ]
     assert all(h < cx for h in h_positions for cx in cx_positions)
 
 

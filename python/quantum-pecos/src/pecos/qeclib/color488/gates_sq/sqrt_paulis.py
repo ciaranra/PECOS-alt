@@ -16,7 +16,7 @@ operations that preserve the error correction properties of the code.
 # specific language governing permissions and limitations under the License.
 
 from pecos.qeclib import qubit as qb
-from pecos.slr import Block, Comment, QReg
+from pecos.slr import Block, QReg
 
 
 class SZ(Block):
@@ -36,7 +36,6 @@ class SZ(Block):
         Args:
             q: A quantum register containing qubits representing a logical qubit in the color code.
         """
-
         # TODO: Verify if the physical implementation of the S gate alternates per distance...
 
         super().__init__(
@@ -61,7 +60,6 @@ class SZdg(Block):
         Args:
             q: A quantum register containing qubits representing a logical qubit in the color code.
         """
-
         # TODO: Verify if the physical implementation of the Sdg gate alternates per distance...
 
         super().__init__(

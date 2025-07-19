@@ -1,3 +1,5 @@
+"""Builder pattern implementation for surface code patch configuration."""
+
 from typing import TYPE_CHECKING, TypeVar
 
 from pecos.errors import ConfigurationError
@@ -18,6 +20,7 @@ class SurfacePatchBuilder:
     """Build for complex patch configurations."""
 
     def __init__(self) -> None:
+        """Initialize a new surface patch builder with default settings."""
         self.name: str | None = None
         self.dx: int | None = None
         self.dz: int | None = None
@@ -60,6 +63,14 @@ class SurfacePatchBuilder:
         return self
 
     def with_lattice(self, lattice: LatticeType) -> Self:
+        """Set the lattice type for the surface code patch.
+
+        Args:
+            lattice: The type of lattice to use (e.g., SQUARE).
+
+        Returns:
+            Self: The builder instance for method chaining.
+        """
         self.lattice_type = lattice
         return self
 
@@ -85,10 +96,9 @@ class SurfacePatchBuilder:
                 dz=self.dz,
                 orientation=self.orientation,
             )
-        else:
-            return NonRotatedSurfacePatch(
-                name=self.name,
-                dx=self.dx,
-                dz=self.dz,
-                orientation=self.orientation,
-            )
+        return NonRotatedSurfacePatch(
+            name=self.name,
+            dx=self.dx,
+            dz=self.dz,
+            orientation=self.orientation,
+        )

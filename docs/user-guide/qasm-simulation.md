@@ -77,7 +77,7 @@ Now, let's run this code using PECOS's simple `run_qasm` function:
     from pecos.rslib import run_qasm, DepolarizingNoise
 
     # Define the Bell state QASM code
-    qasm_code = '''
+    qasm_code = """
         OPENQASM 2.0;
         include "qelib1.inc";
         qreg q[2];
@@ -85,17 +85,14 @@ Now, let's run this code using PECOS's simple `run_qasm` function:
         h q[0];
         cx q[0], q[1];
         measure q -> c;
-    '''
+    """
 
     # Simple simulation
     results = run_qasm(qasm_code, shots=1000)
 
     # With configuration
     results = run_qasm(
-        qasm_code,
-        shots=1000,
-        noise_model=DepolarizingNoise(p=0.01),
-        seed=42
+        qasm_code, shots=1000, noise_model=DepolarizingNoise(p=0.01), seed=42
     )
     ```
 
@@ -137,7 +134,7 @@ For more complex simulations or when you need finer control, you can use the bui
     from pecos.rslib import qasm_sim, DepolarizingNoise
 
     # Define the Bell state QASM code (as above)
-    qasm_code = '''
+    qasm_code = """
         OPENQASM 2.0;
         include "qelib1.inc";
         qreg q[2];
@@ -145,18 +142,20 @@ For more complex simulations or when you need finer control, you can use the bui
         h q[0];
         cx q[0], q[1];
         measure q -> c;
-    '''
+    """
 
     # Simple simulation with builder pattern
     results = qasm_sim(qasm_code).run(1000)
 
     # With more configuration options
-    results = (qasm_sim(qasm_code)
+    results = (
+        qasm_sim(qasm_code)
         .seed(42)
         .noise(DepolarizingNoise(p=0.01))
-        .workers(4)             # Explicitly set number of threads
+        .workers(4)  # Explicitly set number of threads
         # .auto_workers()       # Or use all available CPU cores
-        .run(1000))
+        .run(1000)
+    )
     ```
 
 ## Running Multiple Shots
@@ -184,11 +183,7 @@ lets you build the experiment once and rerun it multiple times:
 
     ```python
     # Build once, run multiple times
-    sim = (qasm_sim(qasm)
-        .seed(42)
-        .noise(DepolarizingNoise(p=0.01))
-        .workers(4)
-        .build())
+    sim = qasm_sim(qasm).seed(42).noise(DepolarizingNoise(p=0.01)).workers(4).build()
 
     # Run with different shot counts
     results_100 = sim.run(100)
@@ -236,8 +231,8 @@ Real quantum computers are noisy. PECOS helps you understand how noise affects y
     DepolarizingCustomNoise(
         p_prep=0.001,  # State preparation error
         p_meas=0.002,  # Measurement error
-        p1=0.003,      # Single-qubit gate error
-        p2=0.004       # Two-qubit gate error
+        p1=0.003,  # Single-qubit gate error
+        p2=0.004,  # Two-qubit gate error
     )
 
     # Biased depolarizing (asymmetric error distribution)
@@ -273,26 +268,30 @@ For research or to match specific hardware characteristics, you can create detai
     from pecos.rslib import GeneralNoiseModelBuilder
 
     # Direct builder usage (available now!)
-    noise = (GeneralNoiseModelBuilder()
-        .with_prep_probability(0.001)      # State prep error
-        .with_meas_0_probability(0.005)    # Measurement error |0> → |1>
-        .with_meas_1_probability(0.01)     # Measurement error |1> → |0>
-        .with_p1_probability(0.0001)       # Single-qubit gate error
-        .with_p2_probability(0.01)         # Two-qubit gate error
-        .with_seed(42))                    # Deterministic noise
+    noise = (
+        GeneralNoiseModelBuilder()
+        .with_prep_probability(0.001)  # State prep error
+        .with_meas_0_probability(0.005)  # Measurement error |0> → |1>
+        .with_meas_1_probability(0.01)  # Measurement error |1> → |0>
+        .with_p1_probability(0.0001)  # Single-qubit gate error
+        .with_p2_probability(0.01)  # Two-qubit gate error
+        .with_seed(42)
+    )  # Deterministic noise
 
     # Or use GeneralNoiseFactory for dict/JSON configuration
     from pecos.rslib import GeneralNoiseFactory
 
     factory = GeneralNoiseFactory()
-    noise = factory.create_from_dict({
-        "p_prep": 0.001,
-        "p_meas_0": 0.005,
-        "p_meas_1": 0.01,
-        "p1": 0.0001,
-        "p2": 0.01,
-        "seed": 42
-    })
+    noise = factory.create_from_dict(
+        {
+            "p_prep": 0.001,
+            "p_meas_0": 0.005,
+            "p_meas_1": 0.01,
+            "p1": 0.0001,
+            "p2": 0.01,
+            "seed": 42,
+        }
+    )
     ```
 
 The builder provides many configuration options including idle noise rates, leakage probabilities,
@@ -367,13 +366,12 @@ Simulation results come back as measurement outcomes for each shot. These can be
 
     # Count the occurrences of each measurement outcome
     from collections import Counter
+
     counts = Counter(results["c"])
     print(counts)  # {0: 492, 3: 508} for an ideal Bell state
 
     # Or get results as binary strings
-    results = qasm_sim(qasm)
-        .with_binary_string_format()
-        .run(1000)
+    results = qasm_sim(qasm).with_binary_string_format().run(1000)
     print(results)
     # {"c": ["00", "11", "00", "11", ...]}  # Binary string format
 
@@ -433,7 +431,7 @@ This example shows how noise affects quantum entanglement:
     from pecos.rslib import run_qasm, qasm_sim, DepolarizingNoise
     from collections import Counter
 
-    qasm = '''
+    qasm = """
         OPENQASM 2.0;
         include "qelib1.inc";
         qreg q[2];
@@ -441,14 +439,10 @@ This example shows how noise affects quantum entanglement:
         h q[0];
         cx q[0], q[1];
         measure q -> c;
-    '''
+    """
 
     # Build simulation with depolarizing noise
-    sim = qasm_sim(qasm) \
-        .seed(42) \
-        .workers(4) \
-        .noise(DepolarizingNoise(p=0.01)) \
-        .build()
+    sim = qasm_sim(qasm).seed(42).workers(4).noise(DepolarizingNoise(p=0.01)).build()
 
     # Run multiple times
     for shots in [100, 1000, 10000]:
@@ -618,7 +612,7 @@ For applications that need to store or share simulation configurations, the buil
     import json
 
     # Define QASM code
-    qasm = '''
+    qasm = """
         OPENQASM 2.0;
         include "qelib1.inc";
         qreg q[2];
@@ -626,18 +620,15 @@ For applications that need to store or share simulation configurations, the buil
         h q[0];
         cx q[0], q[1];
         measure q -> c;
-    '''
+    """
 
     # Define configuration as a dictionary
     config = {
         "seed": 42,
         "workers": 4,  # or "auto" for all CPUs
-        "noise": {
-            "type": "DepolarizingNoise",
-            "p": 0.01
-        },
+        "noise": {"type": "DepolarizingNoise", "p": 0.01},
         "quantum_engine": "SparseStabilizer",
-        "binary_string_format": True
+        "binary_string_format": True,
     }
 
     # Create and run simulation using config method
@@ -659,9 +650,9 @@ For applications that need to store or share simulation configurations, the buil
     # Can also combine config with other builder methods
     sim = (
         qasm_sim(qasm)
-        .config(loaded_config)     # Apply config first
-        .workers(8)                # Override workers
-        .seed(123)                 # Override seed
+        .config(loaded_config)  # Apply config first
+        .workers(8)  # Override workers
+        .seed(123)  # Override seed
         .build()
     )
     ```
@@ -686,9 +677,7 @@ config = {}
 sim = qasm_sim(qasm_code).config(config).build()
 
 # Simple depolarizing noise
-config = {
-    "noise": {"type": "DepolarizingNoise", "p": 0.01}
-}
+config = {"noise": {"type": "DepolarizingNoise", "p": 0.01}}
 sim = qasm_sim(qasm_code).config(config).build()
 
 # Custom depolarizing noise
@@ -698,17 +687,12 @@ config = {
         "p_prep": 0.001,
         "p_meas": 0.002,
         "p1": 0.003,
-        "p2": 0.004
+        "p2": 0.004,
     }
 }
 
 # Biased depolarizing noise
-config = {
-    "noise": {
-        "type": "BiasedDepolarizingNoise",
-        "p": 0.01
-    }
-}
+config = {"noise": {"type": "BiasedDepolarizingNoise", "p": 0.01}}
 sim = qasm_sim(qasm_code).config(config).build()
 ```
 
@@ -725,14 +709,16 @@ from pecos.rslib import GeneralNoiseFactory
 
 # Create noise from dictionary configuration
 factory = GeneralNoiseFactory()
-noise = factory.create_from_dict({
-    "seed": 42,
-    "p1": 0.001,
-    "p2": 0.01,
-    "scale": 1.2,  # Scale all errors by 20%
-    "noiseless_gates": ["H", "MEASURE"],
-    "p1_pauli": {"X": 0.5, "Y": 0.3, "Z": 0.2}
-})
+noise = factory.create_from_dict(
+    {
+        "seed": 42,
+        "p1": 0.001,
+        "p2": 0.01,
+        "scale": 1.2,  # Scale all errors by 20%
+        "noiseless_gates": ["H", "MEASURE"],
+        "p1_pauli": {"X": 0.5, "Y": 0.3, "Z": 0.2},
+    }
+)
 
 # Use in simulation
 results = qasm_sim(qasm).noise(noise).run(1000)

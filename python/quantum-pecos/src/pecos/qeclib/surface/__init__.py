@@ -9,6 +9,8 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Surface code quantum error correction library."""
+
 from pecos.qeclib.surface.gate_sets.surface_std_gates import SurfaceStdGates
 from pecos.qeclib.surface.layouts.layout_base import LatticeType
 from pecos.qeclib.surface.patch_builders import SurfacePatchBuilder

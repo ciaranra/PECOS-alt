@@ -187,7 +187,7 @@ impl QASMEngine {
         #[cfg(feature = "wasm")]
         if let Some(ref mut foreign_obj) = self.foreign_object {
             if let Err(e) = foreign_obj.new_instance() {
-                log::error!("Failed to reset WASM instance: {}", e);
+                log::error!("Failed to reset WASM instance: {e}");
             }
         }
 
@@ -1067,7 +1067,7 @@ impl QASMEngine {
                     operation_count += 1;
                 }
                 Operation::VoidFunctionCall { expression } => {
-                    debug!("Processing void function call: {:?}", expression);
+                    debug!("Processing void function call: {expression:?}");
 
                     // Evaluate the expression (which should be a function call)
                     // We use a dummy width of 1 since we'll discard the result anyway

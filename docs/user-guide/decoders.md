@@ -83,20 +83,23 @@ Before using decoders, you need a quantum error correction code. Here are common
     import pecos
     import numpy as np
 
+
     # Create a surface code
     def create_surface_code(distance):
         """Create a distance-d surface code."""
         # Implementation details...
         return hx, hz
 
+
     # Create a repetition code
     def create_repetition_code(n):
         """Create an n-bit repetition code."""
-        h = np.zeros((n-1, n), dtype=np.uint8)
-        for i in range(n-1):
+        h = np.zeros((n - 1, n), dtype=np.uint8)
+        for i in range(n - 1):
             h[i, i] = 1
-            h[i, i+1] = 1
+            h[i, i + 1] = 1
         return h
+
 
     # Create CSS code for LDPC decoders
     distance = 5
@@ -342,7 +345,7 @@ Decode multiple syndromes efficiently.
     ```python
     decoder = decoders.BpOsdDecoder(hx, hz)
     decoder.set_schedule("parallel")  # Use parallel BP updates
-    decoder.set_num_threads(4)        # Set thread count
+    decoder.set_num_threads(4)  # Set thread count
     ```
 
 === "Rust"

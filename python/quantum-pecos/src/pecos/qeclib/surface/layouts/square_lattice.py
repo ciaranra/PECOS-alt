@@ -11,10 +11,25 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Square lattice layout generation for surface codes."""
 
-def gen_layout(width: int, height: int):
-    """Generate rectangular surface code patch layout for a 4.4.4.4 lattice."""
 
+def gen_layout(
+    width: int,
+    height: int,
+) -> tuple[list[tuple[int, int]], list[tuple[int, int]], list[list[tuple[int, int]]]]:
+    """Generate rectangular surface code patch layout for a 4.4.4.4 lattice.
+
+    Args:
+        width: Width of the patch in logical qubits.
+        height: Height of the patch in logical qubits.
+
+    Returns:
+        A tuple containing:
+        - nodes: List of (x, y) coordinates for data qubits.
+        - dual_nodes: List of (x, y) coordinates for ancilla qubits.
+        - polygons: List of polygons representing stabilizer checks.
+    """
     lattice_height = 2 * (height - 1)
     lattice_width = 2 * (width - 1)
 

@@ -34,7 +34,6 @@ class H(Block):
         Args:
             q: A quantum register containing qubits representing a logical qubit in the color code.
         """
-
         super().__init__(
             qb.H(q),
         )

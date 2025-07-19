@@ -11,22 +11,56 @@
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+"""Rotated square lattice layout for surface codes.
+
+This module provides implementations for creating and visualizing rotated square lattice
+layouts (4.4.4.4 lattice) used in quantum error correction surface codes.
+"""
+
+
 from pecos.qeclib.surface.visualization.visualization_base import VisualizationData
 
 
 class SquareRotatedLayout:
-    """4.4.4.4 rotated lattice implementation"""
+    """4.4.4.4 rotated lattice implementation."""
 
     @staticmethod
     def get_stabilizers_gens(dx: int, dz: int) -> list[tuple[str, tuple[int, ...]]]:
+        """Get stabilizer generators for the rotated square lattice.
+
+        Args:
+            dx: The x-dimension of the lattice.
+            dz: The z-dimension of the lattice.
+
+        Returns:
+            List of tuples containing Pauli type ('X' or 'Z') and qubit indices.
+        """
         return get_stab_gens(dx, dz)
 
     @staticmethod
     def get_data_positions(dx: int, dz: int) -> list[tuple[int, int]]:
+        """Get positions of data qubits in the lattice.
+
+        Args:
+            dx: The x-dimension of the lattice.
+            dz: The z-dimension of the lattice.
+
+        Returns:
+            List of (x, y) coordinate tuples for each data qubit.
+        """
         return [calc_id2pos(i, dz, dx) for i in range(dx * dz)]
 
     @staticmethod
     def validate_dimensions(dx: int, dz: int) -> None:
+        """Validate lattice dimensions.
+
+        Args:
+            dx: The x-dimension of the lattice.
+            dz: The z-dimension of the lattice.
+
+        Raises:
+            ValueError: If either dimension is less than 1.
+        """
         if dx < 1 or dz < 1:
             msg = "Dimensions must be at least 1"
             raise ValueError(msg)
@@ -37,17 +71,23 @@ class SquareRotatedLayout:
         dz: int,
         stab_gens: list[tuple[str, tuple[int, ...]]],
     ) -> VisualizationData:
+        """Get visualization elements for rendering the lattice.
+
+        Args:
+            dx: The x-dimension of the lattice.
+            dz: The z-dimension of the lattice.
+            stab_gens: List of stabilizer generators.
+
+        Returns:
+            VisualizationData containing nodes, polygons, and color information.
+        """
         polygon_colors = {}
         for i, (pauli, _) in enumerate(stab_gens):
             polygon_colors[i] = 0 if pauli == "X" else 1
 
-        polygons = []
-        for _, datas in stab_gens:
-            temp = []
-            for id_ in datas:
-                temp.append(calc_id2pos(id_, dz, dx))
-
-            polygons.append(temp)
+        polygons = [
+            [calc_id2pos(id_, dz, dx) for id_ in datas] for _, datas in stab_gens
+        ]
 
         polygons = [order_coords_counter_clockwise(coords) for coords in polygons]
 
@@ -77,19 +117,39 @@ class SquareRotatedLayout:
         )
 
 
-def calc_id2pos(i, width, height):
+def calc_id2pos(i: int, width: int, height: int) -> tuple[int, int]:
+    """Convert qubit ID to position coordinates.
+
+    Args:
+        i: The qubit ID.
+        width: The width of the lattice.
+        height: The height of the lattice.
+
+    Returns:
+        Tuple of (x, y) coordinates.
+    """
     # return (1+i*2)%(dz*2), (dx-(i//dz))*2-1
     return (1 + i * 2) % (width * 2), (height - (i // width)) * 2 - 1
 
 
-def calc_pos2id(x, y, width, height):
+def calc_pos2id(x: int, y: int, width: int, height: int) -> int:
+    """Convert position coordinates to qubit ID.
+
+    Args:
+        x: The x-coordinate.
+        y: The y-coordinate.
+        width: The width of the lattice.
+        height: The height of the lattice.
+
+    Returns:
+        The qubit ID.
+    """
     # return (x-1)//2+((2*dx-y-1)//2)*dz
     return (x - 1) // 2 + ((2 * height - y - 1) // 2) * width
 
 
-def get_stab_gens(height: int, width: int):
+def get_stab_gens(height: int, width: int) -> list[tuple[str, tuple[int, ...]]]:
     """Generate rectangular rotated surface code patch layout for a 4.4.4.4 lattice."""
-
     lattice_height = height * 2
     lattice_width = width * 2
 
@@ -131,15 +191,13 @@ def get_stab_gens(height: int, width: int):
                         ]
                         polygons_0.append(poly)
 
-                elif x == 0:
+                elif x == 0 and (y - 2) % 4 == 0:
                     # Left: Z checks
-
-                    if (y - 2) % 4 == 0:
-                        poly = [
-                            calc_pos2id(x + 1, y + 1, width, height),
-                            calc_pos2id(x + 1, y - 1, width, height),
-                        ]
-                        polygons_1.append(poly)
+                    poly = [
+                        calc_pos2id(x + 1, y + 1, width, height),
+                        calc_pos2id(x + 1, y - 1, width, height),
+                    ]
+                    polygons_1.append(poly)
 
                 if y == lattice_height:
                     # Top: X checks
@@ -178,19 +236,15 @@ def get_stab_gens(height: int, width: int):
                             ]
                             polygons_1.append(poly)
 
-    stab_gens = []
-
-    for poly in polygons_0:
-        stab_gens.append(("X", tuple(poly)))
-    for poly in polygons_1:
-        stab_gens.append(("Z", tuple(poly)))
-
-    return stab_gens
+    return [("X", tuple(poly)) for poly in polygons_0] + [
+        ("Z", tuple(poly)) for poly in polygons_1
+    ]
 
 
-def order_coords_counter_clockwise(coords):
-    """
-    Reorders a list of coordinates in approximate counter-clockwise order using x, y sorting.
+def order_coords_counter_clockwise(
+    coords: list[tuple[int, int]],
+) -> list[tuple[int, int]]:
+    """Reorders a list of coordinates in approximate counter-clockwise order using x, y sorting.
 
     Parameters:
         coords (list): List of (x, y) tuples.
@@ -206,15 +260,15 @@ def order_coords_counter_clockwise(coords):
     cy = sum(y for x, y in coords) / len(coords)
 
     # Sort based on quadrant and relative position
-    def sort_key(point):
+    def sort_key(point: tuple[int, int]) -> tuple[int, int | float]:
         x, y = point
         if x >= cx and y >= cy:  # Top-right
             return 0, x
-        elif x < cx and y >= cy:  # Top-left
+        if x < cx and y >= cy:  # Top-left
             return 1, -y
-        elif x < cx and y < cy:  # Bottom-left
+        if x < cx and y < cy:  # Bottom-left
             return 2, -x
-        else:  # Bottom-right
-            return 3, y
+        # Bottom-right
+        return 3, y
 
     return sorted(coords, key=sort_key)
