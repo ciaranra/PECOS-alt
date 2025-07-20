@@ -53,16 +53,17 @@ use std::str::FromStr;
 ///
 /// Using with the PECOS simulation API:
 ///
-/// ```no_run
+/// ```
 /// use pecos_qasm::QASMProgram;
+/// use pecos_engines::ClassicalEngine;
 /// use std::str::FromStr;
 ///
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// // Parse a QASM program
 /// let qasm = r#"
 ///     OPENQASM 2.0;
 ///     include "qelib1.inc";
 ///     qreg q[2];
+///     creg c[2];
 ///     h q[0];
 ///     cx q[0], q[1];
 ///     measure q -> c;
@@ -70,14 +71,12 @@ use std::str::FromStr;
 ///
 /// let program = QASMProgram::from_str(qasm)?;
 ///
-/// // Convert directly to a boxed engine ready for simulation
-/// // This is more concise than `Box::new(program.into_engine())`
-/// let engine_box = program.into_engine_box();
+/// // Convert to engine and verify properties
+/// let engine = program.into_engine();
+/// assert_eq!(engine.num_qubits(), 2);
 ///
-/// // Use with pecos::run_sim (not actually run in this example)
-/// // let results = pecos::run_sim(engine_box, 1000, Some(42), None, None, None)?;
-/// # Ok(())
-/// # }
+/// // The engine is ready for simulation
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[derive(Debug, Clone)]
 pub struct QASMProgram {
@@ -137,6 +136,50 @@ impl QASMProgram {
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, PecosError> {
         let source = read_to_string(path).map_err(|e| PecosError::Input(e.to_string()))?;
         Self::from_str(&source)
+    }
+
+    /// Get all function calls used in the program that are not built-in functions
+    #[must_use]
+    pub fn get_non_builtin_function_calls(&self) -> Vec<String> {
+        use crate::ast::{Expression, Operation};
+        use std::collections::BTreeSet;
+
+        // Helper function to extract function calls from expressions
+        fn extract_function_calls(expr: &Expression, calls: &mut BTreeSet<String>) {
+            match expr {
+                Expression::FunctionCall { name, args } => {
+                    if !crate::BUILTIN_FUNCTIONS.contains(&name.as_str()) {
+                        calls.insert(name.clone());
+                    }
+                    // Recursively check arguments
+                    for arg in args {
+                        extract_function_calls(arg, calls);
+                    }
+                }
+                Expression::BinaryOp { left, right, .. } => {
+                    extract_function_calls(left, calls);
+                    extract_function_calls(right, calls);
+                }
+                Expression::UnaryOp { op: _, expr } => {
+                    extract_function_calls(expr, calls);
+                }
+                _ => {}
+            }
+        }
+
+        let mut function_calls = BTreeSet::new();
+
+        // Check all operations
+        for op in &self.program.operations {
+            if let Operation::ClassicalAssignment { expression, .. } = op {
+                extract_function_calls(expression, &mut function_calls);
+            }
+        }
+
+        // Note: Gate parameters are f64 values, not expressions in the current AST
+        // So we don't need to check them for function calls
+
+        function_calls.into_iter().collect()
     }
 }
 

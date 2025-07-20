@@ -62,7 +62,7 @@ pub struct QirLibrary {
 
 impl Clone for QirLibrary {
     fn clone(&self) -> Self {
-        debug!("QIR Library: Cloning library from {:?}", self.path);
+        debug!("QIR Library: Cloning library from {}", self.path.display());
 
         // Load the library again from the same path with retries
         match Self::load_library_with_retries(&self.path, 3) {
@@ -101,14 +101,49 @@ impl QirLibrary {
     /// simultaneously.
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, PecosError> {
         let path = path.as_ref();
-        debug!("QIR: Loading library from {:?}", path);
+        debug!("QIR: Loading library from {}", path.display());
 
-        // Check if the file exists
+        // Perform thorough file verification before loading
         if !path.exists() {
             return Err(Self::log_error(
                 "File not found",
                 format!("Path: {}", path.display()),
             ));
+        }
+
+        // Check if the file is readable and has valid content
+        match std::fs::metadata(path) {
+            Ok(metadata) => {
+                // Check if the file is a regular file
+                if !metadata.is_file() {
+                    return Err(Self::log_error(
+                        "Not a regular file",
+                        format!("Path: {}", path.display()),
+                    ));
+                }
+
+                // Check if the file has reasonable size (at least 1KB for a valid library)
+                let file_size = metadata.len();
+                if file_size < 1024 {
+                    return Err(Self::log_error(
+                        "File too small to be a valid library",
+                        format!("Path: {} (size: {} bytes)", path.display(), file_size),
+                    ));
+                }
+
+                // Log file details for debugging
+                debug!(
+                    "QIR: Verified file {} (size: {} bytes)",
+                    path.display(),
+                    file_size
+                );
+            }
+            Err(e) => {
+                return Err(Self::log_error(
+                    "Failed to get file metadata",
+                    format!("Path: {}, Error: {}", path.display(), e),
+                ));
+            }
         }
 
         // Try to load the library with retries
@@ -120,7 +155,7 @@ impl QirLibrary {
     fn sleep_with_backoff(retry_count: usize) {
         let sleep_duration =
             Duration::from_millis(100 * 2u64.pow(u32::try_from(retry_count).unwrap_or(0)));
-        debug!("QIR: Sleeping for {:?} before retry", sleep_duration);
+        debug!("QIR: Sleeping for {sleep_duration:?} before retry");
         thread::sleep(sleep_duration);
     }
 
@@ -151,7 +186,7 @@ impl QirLibrary {
             // Try to load the library using the path directly
             match unsafe { Library::new(path) } {
                 Ok(library) => {
-                    debug!("QIR: Successfully loaded library from {:?}", path);
+                    debug!("QIR: Successfully loaded library from {}", path.display());
                     return Ok(Self {
                         library: Mutex::new(library),
                         path: path.to_path_buf(),
@@ -196,7 +231,7 @@ impl QirLibrary {
     ///
     /// This function will panic if the internal mutex is poisoned.
     pub fn call_function(&self, name: &[u8]) -> Result<i32, PecosError> {
-        debug!("QIR Library: Calling function {:?}", name);
+        debug!("QIR Library: Calling function {name:?}");
 
         unsafe {
             // Get the function pointer
@@ -207,7 +242,7 @@ impl QirLibrary {
 
             // Call the function
             let result = func();
-            debug!("QIR Library: Function call returned {}", result);
+            debug!("QIR Library: Function call returned {result}");
 
             // Don't finalize the shot here - we need to wait for measurement results
 
@@ -313,7 +348,7 @@ impl QirLibrary {
                 // Create ByteMessage directly from u32 data to maintain alignment
                 ByteMessage::from_aligned_u32_data(aligned_data.to_vec(), ffi_data.byte_len)
             } else {
-                ByteMessage::create_flush()
+                ByteMessage::create_empty()
             };
 
         // Free the FFI data
@@ -500,7 +535,7 @@ impl QirLibrary {
     /// Helper function to log errors with thread ID context
     fn log_error<E: std::fmt::Display>(context: &str, error: E) -> PecosError {
         let error_msg = format!("{context}: {error}");
-        warn!("QIR Library: {}", error_msg);
+        warn!("QIR Library: {error_msg}");
         PecosError::Resource(error_msg.to_string())
     }
 }

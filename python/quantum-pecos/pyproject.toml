@@ -55,6 +55,9 @@ documentation = "https://quantum-pecos.readthedocs.io"
 repository = "https://github.com/PECOS-packages/PECOS"
 
 [project.optional-dependencies]
+qir = [
+    "llvmlite==0.43.0; python_version < '3.13'"
+]
 projectq = [  # State-vector sims using ProjectQ
     "pybind11>=2.2.3",
     "projectq>=0.5",
@@ -71,12 +74,14 @@ simulators = [
 ]
 wasm-all = [
     "quantum-pecos[wasmtime]",
-    "quantum-pecos[wasmer]",  # TODO: avoid installing for 3.13 and adjust tests for this
+    "quantum-pecos[wasmer]; python_version < '3.13'",
 ]
 all = [
+    "quantum-pecos[qir]",
     "quantum-pecos[simulators]",
     "quantum-pecos[wasm-all]",
     "quantum-pecos[visualization]",
+    "quantum-pecos[qir]",
 ]
 # The following only work for some environments/Python versions:
 qulacs = [  # State-vector sims using Qulacs

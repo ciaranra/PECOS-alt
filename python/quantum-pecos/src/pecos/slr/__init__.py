@@ -1,4 +1,4 @@
-# Copyright 2023 The PECOS Developers
+# Copyright 2023-2024 The PECOS Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
 # the License.You may obtain a copy of the License at
@@ -13,7 +13,8 @@ from pecos.slr.block import Block
 from pecos.slr.cond_block import If, Repeat
 from pecos.slr.main import Main
 from pecos.slr.main import Main as SLR  # noqa: N814
-from pecos.slr.misc import Barrier, Comment, Permute
+from pecos.slr.misc import Barrier, Comment, Parallel, Permute
+from pecos.slr.slr_converter import SlrConverter
 from pecos.slr.vars import Bit, CReg, QReg, Qubit, Vars
 
 __all__ = [
@@ -25,9 +26,11 @@ __all__ = [
     "Comment",
     "If",
     "Main",
+    "Parallel",
     "Permute",
     "QReg",
     "Qubit",
     "Repeat",
+    "SlrConverter",
     "Vars",
 ]

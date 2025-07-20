@@ -116,6 +116,10 @@ pub enum PecosError {
     /// Invalid qubit reference
     #[error("Invalid qubit reference: {0}")]
     ValidationInvalidQubitReference(String),
+
+    /// Signals that there are no more commands to generate
+    #[error("No more commands to generate")]
+    EmptyCommands,
 }
 
 impl PecosError {

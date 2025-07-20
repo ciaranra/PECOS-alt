@@ -1,4 +1,43 @@
+use pecos_core::prelude::GateType;
 use pecos_qasm::{Operation, QASMParser};
+
+// Helper function to count operations by gate type
+fn count_gates_by_name(operations: &[Operation], gate_name: &str) -> usize {
+    operations
+        .iter()
+        .filter(|op| match op {
+            Operation::Gate { name, .. } => name.eq_ignore_ascii_case(gate_name),
+            Operation::NativeGate(gate) => {
+                let gate_type_str = format!("{:?}", gate.gate_type);
+                gate_type_str.eq_ignore_ascii_case(gate_name)
+                    || (gate_name.eq_ignore_ascii_case("h")
+                        && matches!(gate.gate_type, GateType::H))
+            }
+            _ => false,
+        })
+        .count()
+}
+
+// Helper function to extract gate parameters
+fn extract_gate_parameters(operations: &[Operation], gate_name: &str) -> Vec<f64> {
+    operations
+        .iter()
+        .filter_map(|op| match op {
+            Operation::Gate {
+                name, parameters, ..
+            } if name.eq_ignore_ascii_case(gate_name) => parameters.first().copied(),
+            Operation::NativeGate(gate) => {
+                let gate_type_str = format!("{:?}", gate.gate_type);
+                if gate_type_str.eq_ignore_ascii_case(gate_name) {
+                    gate.params.first().copied()
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        })
+        .collect()
+}
 
 #[test]
 fn test_hqslib1_rzz_sequence() {
@@ -23,7 +62,7 @@ fn test_hqslib1_rzz_sequence() {
     let gate_count = program
         .operations
         .iter()
-        .filter(|op| matches!(op, Operation::Gate { .. }))
+        .filter(|op| matches!(op, Operation::Gate { .. } | Operation::NativeGate(_)))
         .count();
 
     assert_eq!(gate_count, 7, "Expected 7 RZZ gates");
@@ -40,6 +79,15 @@ fn test_hqslib1_rzz_sequence() {
             } => {
                 if name == "RZZ" {
                     Some((parameters.clone(), qubits.clone()))
+                } else {
+                    None
+                }
+            }
+            Operation::NativeGate(gate) => {
+                let gate_type_str = format!("{:?}", gate.gate_type);
+                if gate_type_str == "RZZ" {
+                    let qubits = gate.qubits.iter().map(|q| q.0).collect();
+                    Some((gate.params.clone(), qubits))
                 } else {
                     None
                 }
@@ -97,22 +145,7 @@ fn test_rzz_with_negative_parameters() {
     let program =
         QASMParser::parse_str(qasm).expect("Failed to parse QASM with negative RZZ parameters");
 
-    let rzz_parameters: Vec<f64> = program
-        .operations
-        .iter()
-        .filter_map(|op| match op {
-            Operation::Gate {
-                name, parameters, ..
-            } => {
-                if name == "RZZ" {
-                    Some(parameters[0])
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        })
-        .collect();
+    let rzz_parameters = extract_gate_parameters(&program.operations, "RZZ");
 
     assert_eq!(rzz_parameters.len(), 3);
 
@@ -159,25 +192,13 @@ fn test_rzz_mixed_with_other_gates() {
     let program = QASMParser::parse_str(qasm).expect("Failed to parse mixed gate QASM");
 
     // Count different operation types
-    let h_count = program
-        .operations
-        .iter()
-        .filter(|op| matches!(op, Operation::Gate { name, .. } if name == "H"))
-        .count();
-    let rzz_count = program
-        .operations
-        .iter()
-        .filter(|op| matches!(op, Operation::Gate { name, .. } if name == "RZZ"))
-        .count();
-    let cx_count = program
-        .operations
-        .iter()
-        .filter(|op| matches!(op, Operation::Gate { name, .. } if name == "CX"))
-        .count();
+    let h_count = count_gates_by_name(&program.operations, "H");
+    let rzz_count = count_gates_by_name(&program.operations, "RZZ");
+    let cx_count = count_gates_by_name(&program.operations, "CX");
     let measure_count = program
         .operations
         .iter()
-        .filter(|op| matches!(op, Operation::Measure { .. }))
+        .filter(|op| matches!(op, Operation::MeasureWithMapping { .. }))
         .count();
 
     assert_eq!(h_count, 2, "Expected 2 Hadamard gates");
@@ -186,14 +207,28 @@ fn test_rzz_mixed_with_other_gates() {
     assert_eq!(measure_count, 3, "Expected 3 measurements");
 
     // Verify the sequence order
-    let gate_sequence: Vec<&str> = program
+    let gate_sequence: Vec<String> = program
         .operations
         .iter()
         .filter_map(|op| match op {
-            Operation::Gate { name, .. } => Some(name.as_str()),
+            Operation::Gate { name, .. } => Some(name.clone()),
+            Operation::NativeGate(gate) => Some(format!("{:?}", gate.gate_type)),
             _ => None,
         })
         .collect();
 
-    assert_eq!(gate_sequence, vec!["H", "H", "RZZ", "CX", "RZZ"]);
+    let expected_names = ["H", "H", "RZZ", "CX", "RZZ"];
+    for (i, expected) in expected_names.iter().enumerate() {
+        if i < gate_sequence.len() {
+            assert!(
+                gate_sequence[i] == *expected
+                    || (expected == &"H" && gate_sequence[i] == "Hadamard")
+                    || (expected == &"CX" && gate_sequence[i] == "CNOT"),
+                "Expected {} at position {}, got {}",
+                expected,
+                i,
+                gate_sequence[i]
+            );
+        }
+    }
 }

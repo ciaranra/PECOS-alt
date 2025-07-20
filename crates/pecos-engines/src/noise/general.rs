@@ -77,10 +77,11 @@
 mod builder;
 mod default;
 
+pub use self::builder::GeneralNoiseModelBuilder;
+
 use crate::Gate;
 use crate::byte_message::{ByteMessage, ByteMessageBuilder, GateType};
 use crate::engine_system::{ControlEngine, EngineStage};
-use crate::noise::general::builder::GeneralNoiseModelBuilder;
 use crate::noise::noise_rng::NoiseRng;
 use crate::noise::utils::NoiseUtils;
 use crate::noise::utils::ProbabilityValidator;
@@ -279,11 +280,11 @@ pub struct GeneralNoiseModel {
     /// The distribution is stored as pre-computed, cached sampler instead of the `HashMap` that is the input.
     p2_pauli_model: TwoQubitWeightedSampler,
 
-    /// Idle noise after each two-qubit gate that is quadratically dependent on the rate.
+    /// Idle noise after each two-qubit gate where noise will be applied stochastically based on
+    /// `p2_idle`.
     ///
-    /// This will be a coherent noise channel unless `p_idle_coherent` is set to false. If it is
-    /// false it will apply Z to each qubit with quadratic dependency on time
-    p2_idle_quadratic_rate: f64,
+    /// This may be useful for memory sweeping.
+    p2_idle: f64,
 
     /// Probability of flipping a 0 measurement to 1
     ///
@@ -476,7 +477,7 @@ impl GeneralNoiseModel {
 
         // Parse the input as quantum operations
         let gates = input
-            .parse_quantum_operations()
+            .quantum_ops()
             .expect("Failed to parse input as quantum operations");
 
         for gate in gates {
@@ -576,10 +577,10 @@ impl GeneralNoiseModel {
         }
 
         // Parse the measurements from the message
-        let measurement_outcomes = message.parse_measurements()?;
+        let measurement_outcomes = message.outcomes()?;
 
         // Apply biased measurement noise to each outcome
-        let mut results_builder = ByteMessage::measurement_results_builder();
+        let mut results_builder = ByteMessage::outcomes_builder();
 
         // Check if we have leaked qubits that were measured
         let has_leakage = !self.leaked_qubits.is_empty()
@@ -592,7 +593,7 @@ impl GeneralNoiseModel {
             if has_leakage && idx < self.measured_qubits.len() {
                 let qubit = self.measured_qubits[idx];
                 if self.is_leaked(qubit) {
-                    trace!("Qubit {} is leaked, measuring as 1", qubit);
+                    trace!("Qubit {qubit} is leaked, measuring as 1");
                     // Force the measurement outcome to be 1 for leaked qubits
                     val = 1;
                 }
@@ -609,7 +610,7 @@ impl GeneralNoiseModel {
                 val = 1;
             }
 
-            results_builder.add_measurement_results(&[val as usize]);
+            results_builder.add_outcomes(&[val as usize]);
         }
 
         // Clear the measured qubits for the next batch
@@ -711,10 +712,12 @@ impl GeneralNoiseModel {
                     noisy_qubits.push(*qubit);
                 }
             }
-            if self.p_idle_coherent {
-                builder.add_rz(angle, &noisy_qubits);
-            } else {
-                builder.add_z(&noisy_qubits);
+            if !noisy_qubits.is_empty() {
+                if self.p_idle_coherent {
+                    builder.add_rz(angle, &noisy_qubits);
+                } else {
+                    builder.add_z(&noisy_qubits);
+                }
             }
         }
     }
@@ -736,7 +739,7 @@ impl GeneralNoiseModel {
             let qubit_usize = usize::from(qubit);
             if self.is_leaked(qubit_usize) {
                 self.mark_as_unleaked(qubit_usize);
-                trace!("Qubit {} unleaked due to preparation", qubit);
+                trace!("Qubit {qubit} unleaked due to preparation");
             }
         }
 
@@ -757,10 +760,10 @@ impl GeneralNoiseModel {
                     if let Some(gate) = self.leak(usize::from(qubit)) {
                         builder.add_gate_command(&gate);
                     }
-                    trace!("Qubit {} leaked during preparation", qubit);
+                    trace!("Qubit {qubit} leaked during preparation");
                 } else {
                     builder.add_x(&[*qubit]);
-                    trace!("Preparation error on qubit {}", qubit);
+                    trace!("Preparation error on qubit {qubit}");
                 }
             }
         }
@@ -816,7 +819,7 @@ impl GeneralNoiseModel {
                         } else if let Some(gate) = result.gate {
                             // Handle Pauli gate
                             noise.push(gate);
-                            trace!("Applied Pauli error to qubit {}", qubit);
+                            trace!("Applied Pauli error to qubit {qubit}");
                         }
                     }
                 } else if !has_leakage {
@@ -827,7 +830,7 @@ impl GeneralNoiseModel {
                         .sample_gates(&mut self.rng, usize::from(qubit));
                     if let Some(gate) = result.gate {
                         noise.push(gate);
-                        trace!("Applied Pauli error to qubit {}", qubit);
+                        trace!("Applied Pauli error to qubit {qubit}");
                     }
                 }
             }
@@ -968,13 +971,14 @@ impl GeneralNoiseModel {
 
         builder.add_gate_commands(&noise);
 
-        // TODO: add test
-        self.apply_idle_quadratic_dephasing(
-            self.p2_idle_quadratic_rate,
-            1.0,
-            &original_gate_qubits,
-            builder,
-        );
+        if self.p2_idle > f64::EPSILON {
+            self.apply_idle_linear_stochastic_noise(
+                self.p2_idle,
+                1.0,
+                &original_gate_qubits,
+                builder,
+            );
+        }
     }
 
     /// Leak a qubit (or replace it with completely depolarizing noise)
@@ -987,19 +991,19 @@ impl GeneralNoiseModel {
     fn leak(&mut self, qubit: usize) -> Option<Gate> {
         if self.leakage_scale >= 1.0 || self.rng.occurs(self.leakage_scale) {
             // Mark qubit as leaked
-            trace!("Marking qubit {} as leaked", qubit);
+            trace!("Marking qubit {qubit} as leaked");
             self.mark_as_leaked(qubit);
             Some(Gate::prep(&[qubit]))
         } else {
             // Apply completely depolarizing noise instead of leakage
-            trace!("Replaced leakage with Pauli error on qubit {}", qubit);
+            trace!("Replaced leakage with Pauli error on qubit {qubit}");
             self.rng.random_pauli_or_none(qubit)
         }
     }
 
     fn mark_as_leaked(&mut self, qubit: usize) {
         // TODO: see if some of the mark_as_leaked needs to move to self.leak()
-        trace!("Marking qubit {} as leaked", qubit);
+        trace!("Marking qubit {qubit} as leaked");
         self.leaked_qubits.insert(qubit);
     }
 
@@ -1016,12 +1020,12 @@ impl GeneralNoiseModel {
     }
 
     fn unleak(&mut self, qubit: usize) -> Option<Gate> {
-        trace!("Replaced leakage with Pauli error on qubit {}", qubit);
+        trace!("Replaced leakage with Pauli error on qubit {qubit}");
         if self.leakage_scale == 0.0 {
             // No leakage is being applied in the system
             None
         } else {
-            trace!("Marking qubit {} as unleaked", qubit);
+            trace!("Marking qubit {qubit} as unleaked");
             self.mark_as_unleaked(qubit);
             Option::from(Gate::prep(&[qubit]))
         }
@@ -1305,28 +1309,30 @@ mod tests {
 
         // Create a message with a 0 measurement result
         let mut builder = ByteMessageBuilder::new();
-        let _ = builder.for_measurement_results();
-        builder.add_measurement_results(&[0]);
+        let _ = builder.for_outcomes();
+        builder.add_outcomes(&[0]);
         let message_with_zero = builder.build();
 
         // Test measurement bias - all 0s should be flipped to 1s
         let biased_zero = noise
             .apply_noise_on_continue_processing(message_with_zero)
             .unwrap();
-        let results = biased_zero.measurement_results_as_vec().unwrap();
+        let outcomes = biased_zero.outcomes().unwrap();
+        let results: Vec<(usize, u32)> = outcomes.into_iter().enumerate().collect();
         assert_eq!(results[0].1, 1, "0 should be flipped to 1");
 
         // Create a message with a 1 measurement result
         let mut builder = ByteMessageBuilder::new();
-        let _ = builder.for_measurement_results();
-        builder.add_measurement_results(&[1]);
+        let _ = builder.for_outcomes();
+        builder.add_outcomes(&[1]);
         let message_with_one = builder.build();
 
         // Test measurement bias - all 1s should be flipped to 0s
         let biased_one = noise
             .apply_noise_on_continue_processing(message_with_one)
             .unwrap();
-        let results = biased_one.measurement_results_as_vec().unwrap();
+        let outcomes = biased_one.outcomes().unwrap();
+        let results: Vec<(usize, u32)> = outcomes.into_iter().enumerate().collect();
         assert_eq!(results[0].1, 0, "1 should be flipped to 0");
 
         // Create a noise model with 0% flip probabilities
@@ -1334,26 +1340,28 @@ mod tests {
 
         // Test measurement bias with 0% flip - all 0s should remain 0s
         let mut builder = ByteMessageBuilder::new();
-        let _ = builder.for_measurement_results();
-        builder.add_measurement_results(&[0]);
+        let _ = builder.for_outcomes();
+        builder.add_outcomes(&[0]);
         let message_with_zero = builder.build();
 
         let unbiased_zero = noise
             .apply_noise_on_continue_processing(message_with_zero)
             .unwrap();
-        let results = unbiased_zero.measurement_results_as_vec().unwrap();
+        let outcomes = unbiased_zero.outcomes().unwrap();
+        let results: Vec<(usize, u32)> = outcomes.into_iter().enumerate().collect();
         assert_eq!(results[0].1, 0, "0 should remain 0");
 
         // Test measurement bias with 0% flip - all 1s should remain 1s
         let mut builder = ByteMessageBuilder::new();
-        let _ = builder.for_measurement_results();
-        builder.add_measurement_results(&[1]);
+        let _ = builder.for_outcomes();
+        builder.add_outcomes(&[1]);
         let message_with_one = builder.build();
 
         let unbiased_one = noise
             .apply_noise_on_continue_processing(message_with_one)
             .unwrap();
-        let results = unbiased_one.measurement_results_as_vec().unwrap();
+        let outcomes = unbiased_one.outcomes().unwrap();
+        let results: Vec<(usize, u32)> = outcomes.into_iter().enumerate().collect();
         assert_eq!(results[0].1, 1, "1 should remain 1");
     }
 
@@ -1463,8 +1471,8 @@ mod tests {
 
         // Now create the measurement results
         let mut builder = ByteMessageBuilder::new();
-        let _ = builder.for_measurement_results();
-        builder.add_measurement_results(&[0]); // Measurement result is 0
+        let _ = builder.for_outcomes();
+        builder.add_outcomes(&[0]); // Measurement result is 0
 
         // Apply measurement noise - this should NOT unleak the qubit
         let biased_message = noise
@@ -1472,7 +1480,8 @@ mod tests {
             .unwrap();
 
         // Get the measurement results
-        let results = biased_message.measurement_results_as_vec().unwrap();
+        let outcomes = biased_message.outcomes().unwrap();
+        let results: Vec<(usize, u32)> = outcomes.into_iter().enumerate().collect();
 
         // Verify that the leaked qubit is reported as measured as 1
         assert_eq!(results[0].1, 1, "Leaked qubit should always measure as 1");
@@ -1518,8 +1527,8 @@ mod tests {
 
         // Now create the measurement results (all originally 0)
         let mut builder = ByteMessageBuilder::new();
-        let _ = builder.for_measurement_results();
-        builder.add_measurement_results(&[0, 0, 0]); // Three measurement results, all 0
+        let _ = builder.for_outcomes();
+        builder.add_outcomes(&[0, 0, 0]); // Three measurement results, all 0
 
         // Apply measurement noise
         let biased_message = noise
@@ -1527,7 +1536,8 @@ mod tests {
             .unwrap();
 
         // Get the measurement results
-        let results = biased_message.measurement_results_as_vec().unwrap();
+        let outcomes = biased_message.outcomes().unwrap();
+        let results: Vec<(usize, u32)> = outcomes.into_iter().enumerate().collect();
 
         // Verify that all three measurements of the leaked qubit report as 1
         assert_eq!(results.len(), 3, "Should have three measurement results");
@@ -1581,14 +1591,15 @@ mod tests {
 
         // Process measurement results
         let mut builder = ByteMessageBuilder::new();
-        let _ = builder.for_measurement_results();
-        builder.add_measurement_results(&[0]);
+        let _ = builder.for_outcomes();
+        builder.add_outcomes(&[0]);
         let biased_message = noise
             .apply_noise_on_continue_processing(builder.build())
             .unwrap();
 
         // Verify the leaked qubit measured as 1 but remains leaked
-        let results = biased_message.measurement_results_as_vec().unwrap();
+        let outcomes = biased_message.outcomes().unwrap();
+        let results: Vec<(usize, u32)> = outcomes.into_iter().enumerate().collect();
         assert_eq!(results[0].1, 1, "Leaked qubit should measure as 1");
         assert!(
             noise.is_leaked(0),
@@ -1642,8 +1653,8 @@ mod tests {
 
         // Create measurement results in the same order
         let mut builder = ByteMessageBuilder::new();
-        let _ = builder.for_measurement_results();
-        builder.add_measurement_results(&[1, 0, 1, 0, 1]); // Results in order
+        let _ = builder.for_outcomes();
+        builder.add_outcomes(&[1, 0, 1, 0, 1]); // Results in order
 
         // Apply measurement noise
         let noisy_results = noise
@@ -1651,7 +1662,7 @@ mod tests {
             .unwrap();
 
         // Parse the noisy results
-        let results = noisy_results.parse_measurements().unwrap();
+        let results = noisy_results.outcomes().unwrap();
 
         // Verify we have the correct number of results
         assert_eq!(results.len(), 5, "Should have 5 measurement results");
@@ -1712,8 +1723,8 @@ mod tests {
 
         // Create measurement results (all zeros)
         let mut builder = ByteMessageBuilder::new();
-        let _ = builder.for_measurement_results();
-        builder.add_measurement_results(&[0, 0, 0, 0, 0]);
+        let _ = builder.for_outcomes();
+        builder.add_outcomes(&[0, 0, 0, 0, 0]);
 
         // Apply noise (should force leaked qubits to 1)
         let noisy_results = noise
@@ -1721,7 +1732,7 @@ mod tests {
             .unwrap();
 
         // Parse results
-        let results = noisy_results.parse_measurements().unwrap();
+        let results = noisy_results.outcomes().unwrap();
 
         // Verify order and leakage effects
         assert_eq!(results.len(), 5);
@@ -1764,13 +1775,13 @@ mod tests {
             let _cmd = noise.apply_noise_on_start(&builder.build()).unwrap();
 
             let mut builder = ByteMessageBuilder::new();
-            let _ = builder.for_measurement_results();
-            builder.add_measurement_results(&[0]);
+            let _ = builder.for_outcomes();
+            builder.add_outcomes(&[0]);
 
             let biased_result = noise
                 .apply_noise_on_continue_processing(builder.build())
                 .unwrap();
-            let results = biased_result.parse_measurements().unwrap();
+            let results = biased_result.outcomes().unwrap();
 
             if results[0] == 1 {
                 zeros_flipped += 1;
@@ -1809,13 +1820,13 @@ mod tests {
             let _cmd = noise.apply_noise_on_start(&builder.build()).unwrap();
 
             let mut builder = ByteMessageBuilder::new();
-            let _ = builder.for_measurement_results();
-            builder.add_measurement_results(&[1]);
+            let _ = builder.for_outcomes();
+            builder.add_outcomes(&[1]);
 
             let biased_result = noise
                 .apply_noise_on_continue_processing(builder.build())
                 .unwrap();
-            let results = biased_result.parse_measurements().unwrap();
+            let results = biased_result.outcomes().unwrap();
 
             if results[0] == 0 {
                 ones_flipped += 1;
@@ -1867,14 +1878,14 @@ mod tests {
         let _cmd = noise.apply_noise_on_start(&builder.build()).unwrap();
 
         let mut builder = ByteMessageBuilder::new();
-        let _ = builder.for_measurement_results();
+        let _ = builder.for_outcomes();
         // Original pattern: 0,1,0,1,0,1,0,1,0,1
-        builder.add_measurement_results(&[0, 1, 0, 1, 0, 1, 0, 1, 0, 1]);
+        builder.add_outcomes(&[0, 1, 0, 1, 0, 1, 0, 1, 0, 1]);
 
         let biased_result = noise
             .apply_noise_on_continue_processing(builder.build())
             .unwrap();
-        let results = biased_result.parse_measurements().unwrap();
+        let results = biased_result.outcomes().unwrap();
 
         // Expected pattern after noise: 1,1,1,1,1,1,1,1,1,1 (all zeros flipped)
         for (i, &result) in results.iter().enumerate() {
@@ -1905,14 +1916,14 @@ mod tests {
         let _cmd = noise.apply_noise_on_start(&builder.build()).unwrap();
 
         let mut builder = ByteMessageBuilder::new();
-        let _ = builder.for_measurement_results();
+        let _ = builder.for_outcomes();
         // Same original pattern: 0,1,0,1,0,1,0,1,0,1
-        builder.add_measurement_results(&[0, 1, 0, 1, 0, 1, 0, 1, 0, 1]);
+        builder.add_outcomes(&[0, 1, 0, 1, 0, 1, 0, 1, 0, 1]);
 
         let biased_result = noise
             .apply_noise_on_continue_processing(builder.build())
             .unwrap();
-        let results = biased_result.parse_measurements().unwrap();
+        let results = biased_result.outcomes().unwrap();
 
         // Expected pattern after noise: 0,0,0,0,0,0,0,0,0,0 (all ones flipped)
         for (i, &result) in results.iter().enumerate() {
@@ -1950,8 +1961,8 @@ mod tests {
 
         // All original results are 0
         let mut builder = ByteMessageBuilder::new();
-        let _ = builder.for_measurement_results();
-        builder.add_measurement_results(&[0, 0, 0, 0]);
+        let _ = builder.for_outcomes();
+        builder.add_outcomes(&[0, 0, 0, 0]);
 
         // Run many times to see statistics
         let mut leaked_flipped_to_zero = 0;
@@ -1971,7 +1982,7 @@ mod tests {
             let biased_result = noise
                 .apply_noise_on_continue_processing(builder.build())
                 .unwrap();
-            let results = biased_result.parse_measurements().unwrap();
+            let results = biased_result.outcomes().unwrap();
 
             // Qubits 0 and 2 were leaked, so forced to 1, then 50% chance to flip to 0
             if results[0] == 0 {
@@ -2215,7 +2226,7 @@ mod tests {
 
         // Get the message and verify it contains RZ gates
         let message = builder.build();
-        let gates = message.parse_quantum_operations().unwrap();
+        let gates = message.quantum_ops().unwrap();
 
         // At least one gate should be an RZ gate
         assert!(!gates.is_empty(), "Should have at least one gate");
@@ -2240,7 +2251,7 @@ mod tests {
         );
 
         let message = builder.build();
-        let gates = message.parse_quantum_operations().unwrap();
+        let gates = message.quantum_ops().unwrap();
 
         // Should have a single RZ gate operating on multiple qubits
         assert!(
@@ -2289,7 +2300,7 @@ mod tests {
 
         // The message may contain Z gates or be empty depending on random outcomes
         let message = builder.build();
-        let _gates = message.parse_quantum_operations().unwrap();
+        let _gates = message.quantum_ops().unwrap();
 
         // We can't assert specific outcomes due to randomness, but the code should run without errors
     }
@@ -2384,13 +2395,13 @@ mod tests {
             "X should not be a noiseless gate"
         );
 
-        let msg =
-            ByteMessage::create_circuit_from_quantum_gates(&[rz_gate.clone(), x_gate.clone()])
-                .expect("Something when wrong in the construction of a circuit");
+        let mut builder = ByteMessage::quantum_operations_builder();
+        builder.add_gate_commands(&[rz_gate.clone(), x_gate.clone()]);
+        let msg = builder.build();
 
         // Apply noise to the gates manually since we can't access apply_noise_to_gates directly
         let message = noise.apply_noise_on_start(&msg).unwrap();
-        let gates = message.parse_quantum_operations().unwrap();
+        let gates = message.quantum_ops().unwrap();
 
         // We expect the RZ gate to be unchanged, and the X gate might have errors applied
         // (can't verify exact count due to randomness, but we know we should have at least one)

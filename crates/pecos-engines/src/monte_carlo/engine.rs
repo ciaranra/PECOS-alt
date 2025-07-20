@@ -25,7 +25,7 @@ use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::any::Any;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use super::builder::MonteCarloEngineBuilder;
@@ -486,7 +486,7 @@ fn distribute_shots(num_shots: usize, num_workers: usize) -> Vec<usize> {
 /// for demonstration and testing purposes.
 #[derive(Debug, Clone)]
 pub struct ExternalClassicalEngine {
-    results: HashMap<String, i64>,
+    results: BTreeMap<String, i64>,
 }
 
 impl Default for ExternalClassicalEngine {
@@ -500,7 +500,7 @@ impl ExternalClassicalEngine {
     #[must_use]
     pub fn new() -> Self {
         // Initialize with a default results map
-        let mut results = HashMap::new();
+        let mut results = BTreeMap::new();
         results.insert("result".to_string(), 0);
 
         Self { results }
@@ -590,7 +590,18 @@ impl ControlEngine for ExternalClassicalEngine {
     fn start(&mut self, (): ()) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
         // Generate commands and return NeedsProcessing
         let commands = self.generate_commands()?;
-        Ok(EngineStage::NeedsProcessing(commands))
+
+        // If the message is empty and we're in compatibility mode, still return NeedsProcessing
+        // to ensure MonteCarloEngine receives at least one batch
+        let is_empty = commands.is_empty().unwrap_or(true);
+        if is_empty {
+            // Decide whether to return Complete or continue with an empty message
+            // For empty messages, we'll check if it's the first batch (just after reset)
+            let shot_result = self.get_results()?;
+            Ok(EngineStage::Complete(shot_result))
+        } else {
+            Ok(EngineStage::NeedsProcessing(commands))
+        }
     }
 
     fn continue_processing(

@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from projectq.ops._basics import BasicGate
 
     from pecos.circuits import QuantumCircuit
-    from pecos.type_defs import Location, SimulatorGateParams
+    from pecos.typing import Location, SimulatorGateParams
 
 
 class ProjectQSim(StateVector):

@@ -1,4 +1,21 @@
-use pecos_qasm::QASMParser;
+use pecos_qasm::{Operation, QASMParser};
+
+// Helper function to check if an operation is a gate with a specific name
+fn is_gate_with_name(op: &Operation, gate_name: &str) -> bool {
+    match op {
+        Operation::Gate { name, .. } => {
+            name == gate_name || name.to_uppercase() == gate_name.to_uppercase()
+        }
+        Operation::NativeGate(gate) => {
+            let gate_type_name = format!("{:?}", gate.gate_type).to_lowercase();
+            let target_name = gate_name.to_lowercase();
+            gate_type_name == target_name
+                || (target_name == "cx" && gate_type_name == "cnot")
+                || (target_name == "cnot" && gate_type_name == "cnot")
+        }
+        _ => false,
+    }
+}
 
 #[test]
 fn test_comprehensive_gate_operations() {
@@ -34,7 +51,7 @@ fn test_comprehensive_gate_operations() {
             || program
                 .operations
                 .iter()
-                .any(|op| matches!(op, pecos_qasm::Operation::Gate { name, .. } if name == "rx")),
+                .any(|op| is_gate_with_name(op, "rx")),
         "rx gate should be available"
     );
 
@@ -43,7 +60,7 @@ fn test_comprehensive_gate_operations() {
             || program
                 .operations
                 .iter()
-                .any(|op| matches!(op, pecos_qasm::Operation::Gate { name, .. } if name == "rxx")),
+                .any(|op| is_gate_with_name(op, "rxx")),
         "rxx gate should be available"
     );
 
@@ -52,7 +69,7 @@ fn test_comprehensive_gate_operations() {
             || program
                 .operations
                 .iter()
-                .any(|op| matches!(op, pecos_qasm::Operation::Gate { name, .. } if name == "rzz")),
+                .any(|op| is_gate_with_name(op, "rzz")),
         "rzz gate should be available"
     );
 
@@ -61,7 +78,7 @@ fn test_comprehensive_gate_operations() {
             || program
                 .operations
                 .iter()
-                .any(|op| matches!(op, pecos_qasm::Operation::Gate { name, .. } if name == "cz")),
+                .any(|op| is_gate_with_name(op, "cz")),
         "cz gate should be available"
     );
 
@@ -70,7 +87,7 @@ fn test_comprehensive_gate_operations() {
             || program
                 .operations
                 .iter()
-                .any(|op| matches!(op, pecos_qasm::Operation::Gate { name, .. } if name == "ccx")),
+                .any(|op| is_gate_with_name(op, "ccx")),
         "ccx gate should be available"
     );
 
@@ -79,7 +96,7 @@ fn test_comprehensive_gate_operations() {
             || program
                 .operations
                 .iter()
-                .any(|op| matches!(op, pecos_qasm::Operation::Gate { name, .. } if name == "u3")),
+                .any(|op| is_gate_with_name(op, "u3")),
         "u3 gate should be available"
     );
 
@@ -88,7 +105,7 @@ fn test_comprehensive_gate_operations() {
             || program
                 .operations
                 .iter()
-                .any(|op| matches!(op, pecos_qasm::Operation::Gate { name, .. } if name == "cu1")),
+                .any(|op| is_gate_with_name(op, "cu1")),
         "cu1 gate should be available"
     );
 }

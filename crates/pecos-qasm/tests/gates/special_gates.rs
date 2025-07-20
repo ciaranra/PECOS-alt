@@ -1,6 +1,21 @@
 //! Tests for special gates including sqrt(X) variants and other non-standard gates
 
+use pecos_core::prelude::GateType;
 use pecos_qasm::{Operation, QASMParser};
+
+// Helper function to extract gate name from operation
+fn get_gate_name(op: &Operation) -> Option<String> {
+    match op {
+        Operation::Gate { name, .. } => Some(name.clone()),
+        Operation::NativeGate(gate) => Some(format!("{:?}", gate.gate_type)),
+        _ => None,
+    }
+}
+
+// Helper function to check if an operation is a gate (either variant)
+fn is_gate_operation(op: &Operation) -> bool {
+    matches!(op, Operation::Gate { .. } | Operation::NativeGate(_))
+}
 
 #[test]
 fn test_sqrt_x_gates() {
@@ -24,10 +39,7 @@ fn test_sqrt_x_gates() {
     let gate_names: Vec<String> = program
         .operations
         .iter()
-        .filter_map(|op| match op {
-            Operation::Gate { name, .. } => Some(name.clone()),
-            _ => None,
-        })
+        .filter_map(get_gate_name)
         .collect();
 
     // Debug: print what gates we actually have
@@ -61,7 +73,7 @@ fn test_sx_gates_expansion() {
 
     // Verify all operations are valid gates
     for op in &program.operations {
-        assert!(matches!(op, Operation::Gate { .. }));
+        assert!(is_gate_operation(op));
     }
 }
 
@@ -80,32 +92,51 @@ fn test_sx_gate_parameters() {
     assert_eq!(program.operations.len(), 3);
 
     // Check first sdg gate has correct parameter
-    if let Operation::Gate {
-        name, parameters, ..
-    } = &program.operations[0]
-    {
-        assert_eq!(name, "RZ");
-        assert_eq!(parameters.len(), 1);
-        assert!((parameters[0] + std::f64::consts::PI / 2.0).abs() < 0.0001); // -pi/2
+    match &program.operations[0] {
+        Operation::Gate {
+            name, parameters, ..
+        } => {
+            assert_eq!(name, "RZ");
+            assert_eq!(parameters.len(), 1);
+            assert!((parameters[0] + std::f64::consts::PI / 2.0).abs() < 0.0001); // -pi/2
+        }
+        Operation::NativeGate(gate) if matches!(gate.gate_type, GateType::RZ) => {
+            // For native gates, the angle is in the params field
+            assert_eq!(gate.params.len(), 1);
+            assert!((gate.params[0] + std::f64::consts::PI / 2.0).abs() < 0.0001); // -pi/2
+        }
+        _ => panic!("Expected RZ gate at position 0"),
     }
 
     // Check h gate
-    if let Operation::Gate {
-        name, parameters, ..
-    } = &program.operations[1]
-    {
-        assert_eq!(name, "H");
-        assert!(parameters.is_empty());
+    match &program.operations[1] {
+        Operation::Gate {
+            name, parameters, ..
+        } => {
+            assert_eq!(name, "H");
+            assert!(parameters.is_empty());
+        }
+        Operation::NativeGate(gate) if matches!(gate.gate_type, GateType::H) => {
+            // Native Hadamard gate - this is expected
+        }
+        _ => panic!("Expected H gate at position 1"),
     }
 
     // Check second sdg gate has correct parameter
-    if let Operation::Gate {
-        name, parameters, ..
-    } = &program.operations[2]
-    {
-        assert_eq!(name, "RZ");
-        assert_eq!(parameters.len(), 1);
-        assert!((parameters[0] + std::f64::consts::PI / 2.0).abs() < 0.0001); // -pi/2
+    match &program.operations[2] {
+        Operation::Gate {
+            name, parameters, ..
+        } => {
+            assert_eq!(name, "RZ");
+            assert_eq!(parameters.len(), 1);
+            assert!((parameters[0] + std::f64::consts::PI / 2.0).abs() < 0.0001); // -pi/2
+        }
+        Operation::NativeGate(gate) if matches!(gate.gate_type, GateType::RZ) => {
+            // For native gates, the angle is in the params field
+            assert_eq!(gate.params.len(), 1);
+            assert!((gate.params[0] + std::f64::consts::PI / 2.0).abs() < 0.0001); // -pi/2
+        }
+        _ => panic!("Expected RZ gate at position 2"),
     }
 }
 
@@ -124,32 +155,51 @@ fn test_sxdg_gate_parameters() {
     assert_eq!(program.operations.len(), 3);
 
     // Check first s gate has correct parameter
-    if let Operation::Gate {
-        name, parameters, ..
-    } = &program.operations[0]
-    {
-        assert_eq!(name, "RZ");
-        assert_eq!(parameters.len(), 1);
-        assert!((parameters[0] - std::f64::consts::PI / 2.0).abs() < 0.0001); // pi/2
+    match &program.operations[0] {
+        Operation::Gate {
+            name, parameters, ..
+        } => {
+            assert_eq!(name, "RZ");
+            assert_eq!(parameters.len(), 1);
+            assert!((parameters[0] - std::f64::consts::PI / 2.0).abs() < 0.0001); // pi/2
+        }
+        Operation::NativeGate(gate) if matches!(gate.gate_type, GateType::RZ) => {
+            // For native gates, the angle is in the params field
+            assert_eq!(gate.params.len(), 1);
+            assert!((gate.params[0] - std::f64::consts::PI / 2.0).abs() < 0.0001); // pi/2
+        }
+        _ => panic!("Expected RZ gate at position 0"),
     }
 
     // Check h gate
-    if let Operation::Gate {
-        name, parameters, ..
-    } = &program.operations[1]
-    {
-        assert_eq!(name, "H");
-        assert!(parameters.is_empty());
+    match &program.operations[1] {
+        Operation::Gate {
+            name, parameters, ..
+        } => {
+            assert_eq!(name, "H");
+            assert!(parameters.is_empty());
+        }
+        Operation::NativeGate(gate) if matches!(gate.gate_type, GateType::H) => {
+            // Native Hadamard gate - this is expected
+        }
+        _ => panic!("Expected H gate at position 1"),
     }
 
     // Check second s gate has correct parameter
-    if let Operation::Gate {
-        name, parameters, ..
-    } = &program.operations[2]
-    {
-        assert_eq!(name, "RZ");
-        assert_eq!(parameters.len(), 1);
-        assert!((parameters[0] - std::f64::consts::PI / 2.0).abs() < 0.0001); // pi/2
+    match &program.operations[2] {
+        Operation::Gate {
+            name, parameters, ..
+        } => {
+            assert_eq!(name, "RZ");
+            assert_eq!(parameters.len(), 1);
+            assert!((parameters[0] - std::f64::consts::PI / 2.0).abs() < 0.0001); // pi/2
+        }
+        Operation::NativeGate(gate) if matches!(gate.gate_type, GateType::RZ) => {
+            // For native gates, the angle is in the params field
+            assert_eq!(gate.params.len(), 1);
+            assert!((gate.params[0] - std::f64::consts::PI / 2.0).abs() < 0.0001); // pi/2
+        }
+        _ => panic!("Expected RZ gate at position 2"),
     }
 }
 

@@ -1,4 +1,4 @@
-use log::info;
+use log::{debug, info};
 use pecos_engines::byte_message::{ByteMessage, ByteMessageBuilder};
 use pecos_engines::shot_results::{Data, Shot};
 use std::collections::HashMap;
@@ -582,7 +582,7 @@ pub unsafe extern "C" fn __quantum__rt__message(msg: *const c_char) {
     let thread_id = get_thread_id();
 
     // Use proper Rust logging instead of storing as QuantumCmd
-    info!("QIR Message [Thread {}]: {}", thread_id, msg_str);
+    info!("QIR Message [Thread {thread_id}]: {msg_str}");
 }
 
 /// Records data.
@@ -601,84 +601,11 @@ pub unsafe extern "C" fn __quantum__rt__record(data: *const c_char) {
     let data_str = c_str.to_string_lossy().into_owned();
     let thread_id = get_thread_id();
 
-    // Try to parse the data string as structured record data
-    let parts: Vec<&str> = data_str.split_whitespace().collect();
-    if parts.len() >= 2 && parts[0] == "RECORD" {
-        if let Ok(result_id) = parts[1].parse::<usize>() {
-            // This is a result record
-            let label = if parts.len() >= 3 {
-                Some(parts[2])
-            } else {
-                None
-            };
+    // Log the record command
+    debug!("QIR Runtime [Thread {thread_id}]: Record: {data_str}");
 
-            if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-                builder.add_result_record(result_id, label);
-            } else {
-                eprintln!("QIR Runtime: [Thread {thread_id}] Failed to lock message builder mutex");
-            }
-
-            if should_print_commands() {
-                if let Some(label_str) = label {
-                    println!("QIR Runtime: [Thread {thread_id}] RECORD {result_id} {label_str}");
-                } else {
-                    println!("QIR Runtime: [Thread {thread_id}] RECORD {result_id}");
-                }
-            }
-        } else if parts.len() >= 3 {
-            // Try to parse as a key-value record
-            if let Ok(value) = parts[2].parse::<f64>() {
-                if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-                    builder.add_record_data(parts[1], value);
-                } else {
-                    eprintln!(
-                        "QIR Runtime: [Thread {thread_id}] Failed to lock message builder mutex"
-                    );
-                }
-
-                if should_print_commands() {
-                    println!(
-                        "QIR Runtime: [Thread {thread_id}] RECORD {} {}",
-                        parts[1], value
-                    );
-                }
-            } else {
-                // Fall back to debug message
-                if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-                    builder.add_debug_message(&data_str);
-                } else {
-                    eprintln!(
-                        "QIR Runtime: [Thread {thread_id}] Failed to lock message builder mutex"
-                    );
-                }
-
-                if should_print_commands() {
-                    println!("QIR Runtime: [Thread {thread_id}] RECORD (raw): {data_str}");
-                }
-            }
-        } else {
-            // Fall back to debug message
-            if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-                builder.add_debug_message(&data_str);
-            } else {
-                eprintln!("QIR Runtime: [Thread {thread_id}] Failed to lock message builder mutex");
-            }
-
-            if should_print_commands() {
-                println!("QIR Runtime: [Thread {thread_id}] RECORD (raw): {data_str}");
-            }
-        }
-    } else {
-        // Fall back to debug message
-        if let Ok(mut builder) = MESSAGE_BUILDER.lock() {
-            builder.add_debug_message(&data_str);
-        } else {
-            eprintln!("QIR Runtime: [Thread {thread_id}] Failed to lock message builder mutex");
-        }
-
-        if should_print_commands() {
-            println!("QIR Runtime: [Thread {thread_id}] RECORD (raw): {data_str}");
-        }
+    if should_print_commands() {
+        println!("QIR Runtime: [Thread {thread_id}] RECORD: {data_str}");
     }
 }
 
@@ -775,7 +702,7 @@ pub unsafe extern "C" fn qir_runtime_get_binary_commands() -> *mut FFIByteData {
             );
             io::stderr().flush().unwrap_or_default();
         }
-        ByteMessage::create_flush()
+        ByteMessage::create_empty()
     };
 
     // Extract the aligned data directly from the message

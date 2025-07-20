@@ -293,7 +293,7 @@ def gen_pauli_errors(
 
         if not css:
             for a in product(paulis, repeat=i):
-                if a in (xs, zs):
+                if a in {xs, zs}:
                     continue
 
                 for b in combinations(qubits, i):

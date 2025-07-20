@@ -1,6 +1,10 @@
 [project]
 name = "pecos-workspace"
-version = "0.7.0.dev8"
+version = "0.6.0.dev8"
+dependencies = [
+    "wasmer~=1.1.0",
+    "wasmer-compiler-cranelift~=1.1.0",
+]
 
 [tool.uv.workspace]
 members = [
@@ -20,6 +24,14 @@ dev = [
     "mkdocs-material",     # Material theme for MkDocs
     "mkdocstrings[python]", # Code documentation extraction
     "markdown-exec[ansi]",  # Executable markdown blocks
+    # Runtime dependencies for development
+    "numpy>=1.15.0",
+    "scipy>=1.1.0",
+    "networkx>=2.1.0",
+    "matplotlib>=2.2.0",
+    "phir>=0.3.3",
+    # WebAssembly runtimes for testing
+    "wasmtime>=13.0",
 ]
 test = [ # pinning testing environment
     "pytest==8.3.3", # 8.3.4 seems to be causing errors
@@ -29,3 +41,11 @@ test = [ # pinning testing environment
 
 [tool.uv]
 default-groups = ["dev", "test"]
+
+[tool.pytest.ini_options]
+markers = [
+    "optional_dependency: mark a test as using one or more optional dependencies",
+    "optional_unix: mark tests as using an optional dependency that only work with Unix-based systems",
+    "wasmer: mark test as using the 'wasmer' option",
+    "wasmtime: mark test as using the 'wasmtime' option",
+]

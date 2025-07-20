@@ -220,7 +220,7 @@ fn test_large_register_values() {
 
 #[test]
 fn test_integration_with_actual_simulation() {
-    use pecos_qasm::run_qasm_sim;
+    use pecos_qasm::{prelude::PassThroughNoiseModel, run_qasm};
 
     // Run an actual QASM simulation
     let qasm = r#"
@@ -244,24 +244,30 @@ fn test_integration_with_actual_simulation() {
     let _register_sizes = engine.classical_register_sizes().unwrap();
 
     // Run simulation
-    let results = run_qasm_sim(qasm, 5, Some(42), None, None, None).unwrap();
+    let shot_vec = run_qasm(
+        qasm,
+        5,
+        PassThroughNoiseModel::builder(),
+        None,
+        None,
+        Some(42),
+    )
+    .unwrap();
 
-    // Format results
-    let formatted = results.to_binary_json();
-    let json_str = serde_json::to_string(&formatted).unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+    // Convert to ShotMap for analysis
+    let shot_map = shot_vec.try_as_shot_map().unwrap();
 
-    // All shots should have the same deterministic result
-    let a_values = parsed["a"].as_array().unwrap();
-    let b_values = parsed["b"].as_array().unwrap();
+    // Get binary strings for each register
+    let a_binary = shot_map.try_bits_as_binary("a").unwrap();
+    let b_binary = shot_map.try_bits_as_binary("b").unwrap();
 
-    assert_eq!(a_values.len(), 5);
-    assert_eq!(b_values.len(), 5);
+    assert_eq!(a_binary.len(), 5);
+    assert_eq!(b_binary.len(), 5);
 
     // Check that all values are consistent (deterministic circuit)
     for i in 0..5 {
-        assert_eq!(a_values[i].as_str().unwrap(), "01"); // a[0]=1, a[1]=0
-        assert_eq!(b_values[i].as_str().unwrap(), "1"); // b[0]=1
+        assert_eq!(a_binary[i], "01"); // a[0]=1, a[1]=0
+        assert_eq!(b_binary[i], "1"); // b[0]=1
     }
 }
 
@@ -341,7 +347,7 @@ fn test_zero_width_registers() {
 #[test]
 fn test_bell_state_formatting() {
     // Test a real Bell state scenario
-    use pecos_qasm::run_qasm_sim;
+    use pecos_qasm::{prelude::PassThroughNoiseModel, run_qasm};
 
     let qasm = r#"
         OPENQASM 2.0;
@@ -359,17 +365,24 @@ fn test_bell_state_formatting() {
     let _register_sizes = engine.classical_register_sizes().unwrap();
 
     // Run with enough shots to likely see both outcomes
-    let results = run_qasm_sim(qasm, 20, Some(42), None, None, None).unwrap();
+    let shot_vec = run_qasm(
+        qasm,
+        20,
+        PassThroughNoiseModel::builder(),
+        None,
+        None,
+        Some(42),
+    )
+    .unwrap();
 
-    let formatted = results.to_binary_json();
-    let json_str = serde_json::to_string(&formatted).unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+    // Convert to ShotMap for analysis
+    let shot_map = shot_vec.try_as_shot_map().unwrap();
 
-    let c_values = parsed["c"].as_array().unwrap();
+    // Get binary strings for the register
+    let c_binary = shot_map.try_bits_as_binary("c").unwrap();
 
     // Verify all values are either "00" or "11" (Bell state)
-    for value in c_values {
-        let binary_str = value.as_str().unwrap();
+    for binary_str in &c_binary {
         assert!(
             binary_str == "00" || binary_str == "11",
             "Bell state should only produce '00' or '11', got '{binary_str}'"

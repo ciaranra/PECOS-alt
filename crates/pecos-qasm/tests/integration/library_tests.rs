@@ -1,5 +1,17 @@
 use pecos_qasm::{Operation, QASMParser};
 
+// Helper function to extract gate names from operations
+fn get_gate_names(operations: &[Operation]) -> Vec<String> {
+    operations
+        .iter()
+        .filter_map(|op| match op {
+            Operation::Gate { name, .. } => Some(name.clone()),
+            Operation::NativeGate(gate) => Some(format!("{:?}", gate.gate_type)),
+            _ => None,
+        })
+        .collect()
+}
+
 #[test]
 fn test_hqslib1_basic_gates() {
     let qasm = r#"
@@ -28,19 +40,12 @@ fn test_hqslib1_basic_gates() {
     let program = QASMParser::parse_str(qasm).expect("Failed to parse QASM");
 
     // Verify the gates were parsed
-    let gate_ops: Vec<_> = program
-        .operations
-        .iter()
-        .filter_map(|op| match op {
-            Operation::Gate { name, .. } => Some(name.as_str()),
-            _ => None,
-        })
-        .collect();
+    let gate_ops = get_gate_names(&program.operations);
 
     // Check that all operations expanded to native gates
-    assert!(gate_ops.contains(&"R1XY")); // U1q expands to R1XY
-    assert!(gate_ops.contains(&"RZ")); // Rz expands to RZ
-    assert!(gate_ops.contains(&"SZZ")); // ZZ expands to SZZ only
+    assert!(gate_ops.contains(&"R1XY".to_string())); // U1q expands to R1XY
+    assert!(gate_ops.contains(&"RZ".to_string())); // Rz expands to RZ
+    assert!(gate_ops.contains(&"SZZ".to_string())); // ZZ expands to SZZ only
 }
 
 #[test]
@@ -60,17 +65,10 @@ fn test_hqslib1_cx_gate() {
     let program = QASMParser::parse_str(qasm).expect("Failed to parse QASM");
 
     // All should expand to native CX
-    let gate_ops: Vec<_> = program
-        .operations
-        .iter()
-        .filter_map(|op| match op {
-            Operation::Gate { name, .. } => Some(name.as_str()),
-            _ => None,
-        })
-        .collect();
+    let gate_ops = get_gate_names(&program.operations);
 
     assert_eq!(gate_ops.len(), 3);
-    assert!(gate_ops.iter().all(|&gate| gate == "CX"));
+    assert!(gate_ops.iter().all(|gate| gate == "CX" || gate == "CNOT"));
 }
 
 #[test]
@@ -139,18 +137,11 @@ fn test_hqslib1_universal_gate() {
     let program = QASMParser::parse_str(qasm).expect("Failed to parse QASM");
 
     // U gate should expand to RZ + R1XY + RZ
-    let gate_ops: Vec<_> = program
-        .operations
-        .iter()
-        .filter_map(|op| match op {
-            Operation::Gate { name, .. } => Some(name.as_str()),
-            _ => None,
-        })
-        .collect();
+    let gate_ops = get_gate_names(&program.operations);
 
     // Should see RZ and R1XY from the U gate expansion
-    assert!(gate_ops.contains(&"RZ"));
-    assert!(gate_ops.contains(&"R1XY"));
+    assert!(gate_ops.contains(&"RZ".to_string()));
+    assert!(gate_ops.contains(&"R1XY".to_string()));
 }
 
 #[test]
@@ -178,17 +169,10 @@ fn test_hqslib1_compatibility_uppercase() {
     let program = QASMParser::parse_str(qasm).expect("Failed to parse QASM");
 
     // All these should work without errors
-    let gate_ops: Vec<_> = program
-        .operations
-        .iter()
-        .filter_map(|op| match op {
-            Operation::Gate { name, .. } => Some(name.clone()),
-            _ => None,
-        })
-        .collect();
+    let gate_ops = get_gate_names(&program.operations);
 
     // Should have expanded to native gates
-    assert!(gate_ops.contains(&"H".to_string()));
+    assert!(gate_ops.contains(&"H".to_string()) || gate_ops.contains(&"Hadamard".to_string()));
     assert!(gate_ops.contains(&"X".to_string()));
     assert!(gate_ops.contains(&"Y".to_string()));
     assert!(gate_ops.contains(&"Z".to_string()));

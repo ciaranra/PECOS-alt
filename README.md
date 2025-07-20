@@ -47,6 +47,14 @@ PECOS now consists of multiple interconnected components:
   - `/crates/pecos-python/`: Rust code for Python extensions
   - `/crates/benchmarks/`: A collection of benchmarks to test the performance of the crates
 
+### Quantum Error Correction Decoders
+
+PECOS includes LDPC (Low-Density Parity-Check) quantum error correction decoders as optional components. See [DECODERS.md](DECODERS.md) for detailed information about:
+- LDPC decoder algorithms and variants
+- How to build and use decoders
+- Performance considerations
+- Architecture and development guide
+
 You may find most of these crates in crates.io if you wish to utilize only a part of PECOS, e.g., the simulators.
 
 ## Versioning

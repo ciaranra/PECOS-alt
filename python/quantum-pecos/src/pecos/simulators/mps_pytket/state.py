@@ -32,7 +32,7 @@ from pecos.simulators.sim_class_types import StateTN
 if TYPE_CHECKING:
     import numpy as np
 
-    from pecos.type_defs import SimulatorInitParams
+    from pecos.typing import SimulatorInitParams
 
 
 class MPS(StateTN):

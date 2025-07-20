@@ -25,6 +25,34 @@ from pecos_rslib._pecos_rslib import ByteMessageBuilder
 from pecos_rslib._pecos_rslib import StateVecEngineRs
 from pecos_rslib._pecos_rslib import SparseStabEngineRs
 
+# QASM simulation exports
+from pecos_rslib._pecos_rslib import NoiseModel
+from pecos_rslib._pecos_rslib import QuantumEngine
+from pecos_rslib._pecos_rslib import run_qasm
+from pecos_rslib._pecos_rslib import get_noise_models
+from pecos_rslib._pecos_rslib import get_quantum_engines
+from pecos_rslib._pecos_rslib import GeneralNoiseModelBuilder
+
+# Import the qasm_sim function for easy access
+from pecos_rslib.qasm_sim import qasm_sim
+
+# Also import the noise model dataclasses for convenience
+from pecos_rslib.qasm_sim import (
+    PassThroughNoise,
+    DepolarizingNoise,
+    DepolarizingCustomNoise,
+    BiasedDepolarizingNoise,
+    GeneralNoise,
+)
+
+# Import GeneralNoiseFactory and convenience functions
+from pecos_rslib.general_noise_factory import (
+    GeneralNoiseFactory,
+    create_noise_from_dict,
+    create_noise_from_json,
+    IonTrapNoiseFactory,
+)
+
 try:
     __version__ = version("pecos-rslib")
 except PackageNotFoundError:
@@ -37,4 +65,23 @@ __all__ = [
     "ByteMessageBuilder",
     "StateVecEngineRs",
     "SparseStabEngineRs",
+    # QASM simulation
+    "NoiseModel",
+    "QuantumEngine",
+    "run_qasm",
+    "get_noise_models",
+    "get_quantum_engines",
+    "qasm_sim",
+    "GeneralNoiseModelBuilder",
+    # Noise model dataclasses
+    "PassThroughNoise",
+    "DepolarizingNoise",
+    "DepolarizingCustomNoise",
+    "BiasedDepolarizingNoise",
+    "GeneralNoise",
+    # Noise factory
+    "GeneralNoiseFactory",
+    "create_noise_from_dict",
+    "create_noise_from_json",
+    "IonTrapNoiseFactory",
 ]

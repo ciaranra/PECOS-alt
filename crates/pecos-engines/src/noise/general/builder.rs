@@ -5,6 +5,7 @@ use crate::noise::{
 use std::collections::{BTreeMap, HashSet};
 
 /// Builder for creating general noise models
+#[derive(Debug, Clone)]
 pub struct GeneralNoiseModelBuilder {
     // global params
     noiseless_gates: Option<HashSet<GateType>>,
@@ -40,7 +41,7 @@ pub struct GeneralNoiseModelBuilder {
     p2_emission_model: Option<TwoQubitWeightedSampler>,
     p2_seepage_prob: Option<f64>,
     p2_pauli_model: Option<TwoQubitWeightedSampler>,
-    p2_idle_quadratic_rate: Option<f64>,
+    p2_idle: Option<f64>,
     p2_scale: Option<f64>,
     // measurement noise
     p_meas_0: Option<f64>,
@@ -95,7 +96,7 @@ impl GeneralNoiseModelBuilder {
             p2_emission_model: None,
             p2_seepage_prob: None,
             p2_pauli_model: None,
-            p2_idle_quadratic_rate: None,
+            p2_idle: None,
             p2_scale: None,
             // measurement noise
             p_meas_0: None,
@@ -225,8 +226,8 @@ impl GeneralNoiseModelBuilder {
             model.p2_pauli_model = model_map;
         }
 
-        if let Some(p2_idle_quadratic_rate) = self.p2_idle_quadratic_rate {
-            model.p2_idle_quadratic_rate = p2_idle_quadratic_rate;
+        if let Some(p2_idle) = self.p2_idle {
+            model.p2_idle = p2_idle;
         }
 
         // measurement noise
@@ -328,15 +329,15 @@ impl GeneralNoiseModelBuilder {
     /// Set the idling noise error rate for the linear term
     #[must_use]
     pub fn with_p_idle_linear_rate(mut self, rate: f64) -> Self {
-        self.p_idle_linear_rate = Some(Self::validate_positive(rate, "linear idling rate"));
+        self.p_idle_linear_rate = Some(Self::validate_non_negative(rate, "linear idling rate"));
         self
     }
 
     // TODO: See if we should put a average scaling...
     /// Set the average idling noise error rate per channel for the linear term
     #[must_use]
-    pub fn with_p_average_idle_linear_rate(mut self, rate: f64) -> Self {
-        let rate: f64 = (rate * 3.0 / 2.0).sqrt();
+    pub fn with_average_p_idle_linear_rate(mut self, rate: f64) -> Self {
+        let rate: f64 = rate * 3.0 / 2.0;
         self.p_idle_linear_rate = Some(rate);
         self
     }
@@ -357,8 +358,8 @@ impl GeneralNoiseModelBuilder {
 
     /// Set the average idling noise error rate per channel for the quadratic term
     #[must_use]
-    pub fn with_p_average_idle_quadratic_rate(mut self, rate: f64) -> Self {
-        let rate: f64 = (rate * 3.0 / 2.0).sqrt();
+    pub fn with_average_p_idle_quadratic_rate(mut self, rate: f64) -> Self {
+        let rate: f64 = rate * (3.0 / 2.0_f64).sqrt();
         self.p_idle_quadratic_rate = Some(rate);
         self
     }
@@ -366,7 +367,7 @@ impl GeneralNoiseModelBuilder {
     /// Set the coherent-to-incoherent conversion factor
     ///
     /// # Parameters
-    /// * `factor` - The conversion factor between coherent and incoherent dephasing rates
+    /// * `factor` - The conversion factor between coherent and incoherent noise
     #[must_use]
     pub fn with_p_idle_coherent_to_incoherent_factor(mut self, factor: f64) -> Self {
         self.p_idle_coherent_to_incoherent_factor = Some(Self::validate_positive(
@@ -592,8 +593,8 @@ impl GeneralNoiseModelBuilder {
     }
 
     #[must_use]
-    pub fn with_p2_idle_quadratic_rate(mut self, probability: f64) -> Self {
-        self.p2_idle_quadratic_rate = Some(Self::validate_probability(probability));
+    pub fn with_p2_idle(mut self, probability: f64) -> Self {
+        self.p2_idle = Some(Self::validate_probability(probability));
         self
     }
 
@@ -748,17 +749,16 @@ impl GeneralNoiseModelBuilder {
 
         model.p_idle_quadratic_rate *= (idle_scale * scale).sqrt();
 
+        // If we need to do incoherent noise instead of coherent
         if !model.p_idle_coherent {
             // 0.5 to deal with the 0.5 in sin(rate x duration x 0.5)^2
             let factor = model.p_idle_coherent_to_incoherent_factor * 0.5;
             model.p_idle_quadratic_rate *= factor;
-
-            // p2_idle_quadratic_rate is an angle in radians...
-            let p = ((model.p2_idle_quadratic_rate * factor).sin()).powi(2)
-                * model.p_idle_coherent_to_incoherent_factor;
-            model.p2_idle_quadratic_rate = Self::validate_probability(p);
         }
         // frequency is in units of 2pi so convert to radians
         model.p_idle_quadratic_rate *= 2.0 * std::f64::consts::PI;
+
+        model.p_idle_linear_rate = model.p_idle_linear_rate * scale * idle_scale;
+        model.p2_idle = Self::validate_probability(model.p2_idle * scale * idle_scale);
     }
 }

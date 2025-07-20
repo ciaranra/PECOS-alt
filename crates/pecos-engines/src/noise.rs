@@ -17,7 +17,6 @@
 //! the `NoiseModel` trait and can be used with the quantum engines.
 
 pub mod biased_depolarizing;
-pub mod biased_measurement;
 pub mod depolarizing;
 pub mod general;
 pub mod noise_rng;
@@ -25,12 +24,13 @@ pub mod pass_through;
 pub mod utils;
 pub mod weighted_sampler;
 
-pub use self::biased_depolarizing::BiasedDepolarizingNoiseModel;
-pub use self::biased_measurement::BiasedMeasurementNoiseModel;
-pub use self::depolarizing::DepolarizingNoiseModel;
-pub use self::general::GeneralNoiseModel;
+pub use self::biased_depolarizing::{
+    BiasedDepolarizingNoiseModel, BiasedDepolarizingNoiseModelBuilder,
+};
+pub use self::depolarizing::{DepolarizingNoiseModel, DepolarizingNoiseModelBuilder};
+pub use self::general::{GeneralNoiseModel, GeneralNoiseModelBuilder};
 pub use self::noise_rng::NoiseRng;
-pub use self::pass_through::PassThroughNoiseModel;
+pub use self::pass_through::{PassThroughNoiseModel, PassThroughNoiseModelBuilder};
 pub use self::utils::{NoiseUtils, ProbabilityValidator};
 pub use self::weighted_sampler::{
     SingleQubitWeightedSampler, TwoQubitWeightedSampler, WeightedSampler,
@@ -220,8 +220,8 @@ mod base_tests {
         assert!(!model.has_measurements(&empty_msg));
 
         // Test with a message that has measurements
-        let mut builder = ByteMessage::measurement_results_builder();
-        builder.add_measurement_results(&[0]);
+        let mut builder = ByteMessage::outcomes_builder();
+        builder.add_outcomes(&[0]);
         let measure_msg = builder.build();
         assert!(model.has_measurements(&measure_msg));
     }
@@ -231,12 +231,12 @@ mod base_tests {
 mod tests {
     use super::*;
     use crate::byte_message::ByteMessageBuilder;
-    use crate::noise::biased_measurement::BiasedMeasurementNoiseModel;
 
     #[test]
-    fn test_noise_model_biased_measurement() {
-        // Create a biased measurement noise model
-        let mut noise_model = BiasedMeasurementNoiseModel::new(0.1, 0.2);
+    fn test_noise_model_biased_depolarizing() {
+        // Create a biased depolarizing noise model with a fixed seed
+        let mut noise_model = BiasedDepolarizingNoiseModel::new_uniform(0.1);
+        noise_model.set_seed(42).unwrap(); // Set seed for deterministic behavior
 
         // Create a quantum operation message
         let mut builder = ByteMessageBuilder::new();
@@ -246,34 +246,29 @@ mod tests {
 
         // Create a measurement result message
         let mut builder = ByteMessageBuilder::new();
-        let _ = builder.for_measurement_results();
-        builder.add_measurement_results(&[0]);
+        let _ = builder.for_outcomes();
+        builder.add_outcomes(&[0]);
         let measurement_message = builder.build();
 
-        // Operation should pass through unchanged
+        // Operations may be modified
         let operation_result = noise_model.start(quantum_message.clone()).unwrap();
-        if let EngineStage::NeedsProcessing(output) = operation_result {
-            assert_eq!(
-                output.as_bytes(),
-                quantum_message.as_bytes(),
-                "Quantum operations should pass through biased measurement noise unchanged"
-            );
+        if let EngineStage::NeedsProcessing(_) = operation_result {
+            // Expected - operations should be processed
         } else {
             panic!("Expected NeedsProcessing stage");
         }
 
-        // Measurements should be potentially modified
+        // Measurements may be modified by biased depolarizing noise
         let measurement_result = noise_model
             .continue_processing(measurement_message.clone())
             .unwrap();
         if let EngineStage::Complete(output) = measurement_result {
-            // We can't check for equality because the noise is random,
-            // but we can at least verify the output is a valid measurement result
-            let measurements = output.parse_measurements().unwrap();
-            assert!(
-                !measurements.is_empty(),
-                "Output should contain at least one measurement"
-            );
+            // BiasedDepolarizingNoiseModel applies measurement bias
+            // With p=0.1, there's a 10% chance of flipping each measurement
+            // We can't assert exact equality, but we should get valid measurement results
+            let outcomes = output.outcomes().unwrap();
+            assert_eq!(outcomes.len(), 1, "Should have one measurement outcome");
+            assert!(outcomes[0] <= 1, "Outcome should be 0 or 1");
         } else {
             panic!("Expected Complete stage");
         }
@@ -292,15 +287,15 @@ mod tests {
 
         // Create a measurement result message
         let mut builder = ByteMessageBuilder::new();
-        let _ = builder.for_measurement_results();
-        builder.add_measurement_results(&[0]);
+        let _ = builder.for_outcomes();
+        builder.add_outcomes(&[0]);
         let measurement_message = builder.build();
 
         // Operations should be modified
         let operation_result = noise_model.start(quantum_message.clone()).unwrap();
         if let EngineStage::NeedsProcessing(output) = operation_result {
             // Can't check for exact output due to randomness
-            let gates = output.parse_quantum_operations().unwrap();
+            let gates = output.quantum_ops().unwrap();
             assert!(!gates.is_empty(), "Output should contain at least one gate");
         } else {
             panic!("Expected NeedsProcessing stage");

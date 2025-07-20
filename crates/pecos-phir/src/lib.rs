@@ -122,7 +122,7 @@ mod tests {
         let command_message = engine.generate_commands()?;
 
         // Parse the message back to confirm it has the correct operations
-        let parsed_commands = command_message.parse_quantum_operations().map_err(|e| {
+        let parsed_commands = command_message.quantum_ops().map_err(|e| {
             PecosError::Input(format!(
                 "PHIR test failed: Unable to validate generated quantum operations: {e}"
             ))
@@ -131,7 +131,7 @@ mod tests {
 
         // Create a measurement message and test handling
         // result_id=0, outcome=1
-        let message = ByteMessage::builder().add_measurement_results(&[1]).build();
+        let message = ByteMessage::builder().add_outcomes(&[1]).build();
 
         // Wrap in a try-catch to be more resilient to variable naming issues in tests
         match engine.handle_measurements(message) {

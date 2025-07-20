@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from pecos.protocols import QECCProtocol
-    from pecos.type_defs import QECCInstrParams
+    from pecos.typing import QECCInstrParams
 
 
 class InstrSynExtraction(DefaultLogicalInstruction):

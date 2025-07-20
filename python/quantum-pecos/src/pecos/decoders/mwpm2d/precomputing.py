@@ -56,9 +56,8 @@ def code_surface4444(instr: LogicalInstructionProtocol) -> dict[str, Any]:
 
     This decoder is for 2D slices. It is assumed that it can decode logical instruction by logical instruction.
 
-    :param logical_gate:
-    :param precomputed_data: A dictionary of precomputed data used to decode syndromes of logical instructions.
-    :return:
+    Parameters:
+        instr: Instruction
     """
     if instr.symbol == "instr_syn_extract":
         # In the future go through different instructions
@@ -76,9 +75,8 @@ def code_surface4444medial(instr: LogicalInstructionProtocol) -> dict[str, Any]:
 
     This decoder is for 2D slices. It is assumed that it can decode logical instruction by logical instruction.
 
-    :param logical_gate:
-    :param precomputed_data: A dictionary of precomputed data used to decode syndromes of logical instructions.
-    :return:
+    Parameters:
+        instr: Instruction
     """
     if instr.symbol == "instr_syn_extract":
         # In the future go through different instructions
@@ -125,8 +123,8 @@ def surface4444_identity(instr: LogicalInstructionProtocol) -> dict[str, Any]:
     - Generate distance graph
     - Determine syn -> closest v and weight
 
-    :param instr:
-    :return:
+    Parameters:
+        instr: Instruction
     """
     # In the end... need:
     # For x and z separately:
@@ -157,14 +155,6 @@ def surface4444_identity(instr: LogicalInstructionProtocol) -> dict[str, Any]:
     # Record what data qudits the syndrome to syndrome edges correspond to.
     edges_x = {}
     edges_z = {}
-
-    # syndrome-to-syndrome, fully-connected graph
-    graph_x = info["X"]["dist_graph"]
-    graph_z = info["Z"]["dist_graph"]
-
-    # The closest virtual node to each syndrome
-    closest_x = info["X"]["closest_virt"]
-    closest_z = info["Z"]["closest_virt"]
 
     # The sides of the QECC patch
     sides = qecc.sides  # t, r, b, l
@@ -221,13 +211,13 @@ def surface4444_identity(instr: LogicalInstructionProtocol) -> dict[str, Any]:
             virt_node = "v" + str(vi)
 
             # X virtual nodes (sides left and right)
-            if side_label in ["left", "right"]:  # 1 for i = 1 and 3 => left and right
+            if side_label in {"left", "right"}:  # 1 for i = 1 and 3 => left and right
                 syn_list = d2edge_x.setdefault(data, [])
                 syn_list.append(virt_node)
                 virt_x.add(virt_node)
 
             # Z virtual nodes (sides top and bottom)
-            elif side_label in ["top", "bottom"]:  # 0 for i = 0 and 2 => top and bottom
+            elif side_label in {"top", "bottom"}:  # 0 for i = 0 and 2 => top and bottom
                 syn_list = d2edge_z.setdefault(data, [])
                 syn_list.append(virt_node)
                 virt_z.add(virt_node)
@@ -235,106 +225,17 @@ def surface4444_identity(instr: LogicalInstructionProtocol) -> dict[str, Any]:
                 msg = f'side_label "{side_label}" not understood!'
                 raise Exception(msg)
 
-    # invert data -> edge and make sure len(edge) = 2
-    for check_type in ["X", "Z"]:
-        if check_type == "X":
-            edge_dict = d2edge_x
-            edges = edges_x
-            temp_graph = temp_graph_x
-        else:
-            edge_dict = d2edge_z
-            edges = edges_z
-            temp_graph = temp_graph_z
-
-        for data, edge in edge_dict.items():
-            if len(edge) != 2:
-                msg = (
-                    f"There should be exactly two syndromes (virtual or not) connected to each data qudit. Instead,"
-                    f" q: {data} edge: {edge}"
-                )
-                raise Exception(msg)
-
-            edges[tuple(edge)] = data
-            edges[(edge[1], edge[0])] = data
-            temp_graph.add_edge(edge[0], edge[1])
-
-    # Create distance graph
-    for check_type in ["X", "Z"]:
-        if check_type == "X":
-            temp_graph = temp_graph_x
-            g = graph_x
-            closest = closest_x
-            virt = virt_x
-            edge2d = edges_x
-            virtual_edge_data = virtual_edge_data_x
-
-        else:
-            temp_graph = temp_graph_z
-            g = graph_z
-            closest = closest_z
-            virt = virt_z
-            edge2d = edges_z
-            virtual_edge_data = virtual_edge_data_z
-
-        # Use a future-proof approach to get all shortest paths
-        paths = compute_all_shortest_paths(temp_graph)
-
-        for n1, wdict in paths.items():
-            for n2, syn_path in wdict.items():
-                weight = len(syn_path) - 1
-
-                if weight != 0:
-                    # Get list of datas corresponding to the connected path between syndromes
-                    data_path = []
-                    s1 = syn_path[0]
-                    for s2 in syn_path[1:]:
-                        data = edge2d[(s1, s2)]
-                        data_path.append(data)
-                        s1 = s2
-
-                    if (n1 not in virt) and (n2 not in virt):
-                        g.add_edge(
-                            n1,
-                            n2,
-                            weight=-weight,
-                            syn_path=syn_path,
-                            data_path=data_path,
-                        )
-
-        syn = set(g.nodes())
-        syn -= virt
-
-        # Find closest virtual node
-
-        for s in syn:
-            shortest_len = float("inf")
-            closest_v = None
-            for v in virt:
-                sv_len = len(paths[s][v])
-                if sv_len < shortest_len:
-                    shortest_len = sv_len
-                    closest_v = v
-            closest[s] = closest_v
-
-        for s, v in closest.items():
-            syn_path = paths[s][v]
-            weight = len(syn_path) - 1
-
-            data_path = []
-            s1 = syn_path[0]
-            for s2 in syn_path[1:]:
-                data = edge2d[(s1, s2)]
-                data_path.append(data)
-                s1 = s2
-
-            virtual_edge_data[s] = {
-                "virtual_node": v,
-                "weight": -weight,
-                "syn_path": syn_path,
-                "data_path": data_path,
-            }
-
-    return info
+    return invert_data(
+        info,
+        d2edge_x,
+        d2edge_z,
+        edges_x,
+        edges_z,
+        temp_graph_x,
+        temp_graph_z,
+        virt_x,
+        virt_z,
+    )
 
 
 def surface4444medial_identity(instr: LogicalInstructionProtocol) -> dict[str, Any]:
@@ -365,10 +266,10 @@ def surface4444medial_identity(instr: LogicalInstructionProtocol) -> dict[str, A
     virtual_edge_data_z = {}
 
     # Create a dictionary to store precomputed information that will be used for decoding
-    info = {
+    {
         "X": {
-            "dist_graph": nx.Graph(),
-            "closest_virt": {},
+            "dist_graph": nx.Graph(),  # syndrome-to-syndrome, fully-connected graph
+            "closest_virt": {},  # The closest virtual node to each syndrome
             "virtual_edge_data": virtual_edge_data_x,
         },
         "Z": {
@@ -379,16 +280,6 @@ def surface4444medial_identity(instr: LogicalInstructionProtocol) -> dict[str, A
     }
 
     # Record what data qudits the syndrome to syndrome edges correspond to.
-    edges_x = {}
-    edges_z = {}
-
-    # syndrome-to-syndrome, fully-connected graph
-    graph_x = info["X"]["dist_graph"]
-    graph_z = info["Z"]["dist_graph"]
-
-    # The closest virtual node to each syndrome
-    closest_x = info["X"]["closest_virt"]
-    closest_z = info["Z"]["closest_virt"]
 
     # The sides of the QECC patch
     sides = qecc.sides  # t, r, b, l
@@ -403,8 +294,8 @@ def surface4444medial_identity(instr: LogicalInstructionProtocol) -> dict[str, A
 
     # Temporary graphs that will store the direct syndrome-to-syndrome edges. This will be used to create the fully
     # connected, distance graph.
-    temp_graph_x = nx.Graph()
-    temp_graph_z = nx.Graph()
+    nx.Graph()
+    nx.Graph()
 
     # Assume the QECC uses checks
     # add edges based on checks
@@ -440,6 +331,7 @@ def surface4444medial_identity(instr: LogicalInstructionProtocol) -> dict[str, A
     distance_height = qecc.height
 
     vi = 0
+    virt_node = None
     for side_label, side_qubits in sides.items():
         for i, data in enumerate(side_qubits):
             if side_label == "top":
@@ -490,6 +382,38 @@ def surface4444medial_identity(instr: LogicalInstructionProtocol) -> dict[str, A
                 msg = f'side_label "{side_label}" not understood!'
                 raise Exception(msg)
 
+
+def invert_data(
+    info: dict[str, Any],
+    d2edge_x: dict[Any, list[Any]],
+    d2edge_z: dict[Any, list[Any]],
+    edges_x: dict[tuple[Any, Any], Any],
+    edges_z: dict[tuple[Any, Any], Any],
+    temp_graph_x: nx.Graph,
+    temp_graph_z: nx.Graph,
+    virt_x: set[Any],
+    virt_z: set[Any],
+) -> dict[str, Any]:
+    """Invert data-to-edge mappings and construct distance graphs.
+
+    This function processes the data-to-edge mappings to create edge-to-data mappings,
+    builds temporary graphs, and constructs fully connected distance graphs for both
+    X and Z type checks. It also finds the closest virtual node for each syndrome.
+
+    Args:
+        info: Dictionary containing precomputed decoder information.
+        d2edge_x: Data qubit to X-type edge mapping.
+        d2edge_z: Data qubit to Z-type edge mapping.
+        edges_x: Dictionary to store X-type edge to data mappings.
+        edges_z: Dictionary to store Z-type edge to data mappings.
+        temp_graph_x: Temporary graph for X-type connections.
+        temp_graph_z: Temporary graph for Z-type connections.
+        virt_x: Set of X-type virtual nodes.
+        virt_z: Set of Z-type virtual nodes.
+
+    Returns:
+        The updated info dictionary with distance graphs and closest virtual nodes.
+    """
     # invert data -> edge and make sure len(edge) = 2
     for check_type in ["X", "Z"]:
         if check_type == "X":
@@ -510,26 +434,26 @@ def surface4444medial_identity(instr: LogicalInstructionProtocol) -> dict[str, A
                 raise Exception(msg)
 
             edges[tuple(edge)] = data
-            edges[(edge[1], edge[0])] = data
+            edges[edge[1], edge[0]] = data
             temp_graph.add_edge(edge[0], edge[1])
 
     # Create distance graph
     for check_type in ["X", "Z"]:
         if check_type == "X":
             temp_graph = temp_graph_x
-            g = graph_x
-            closest = closest_x
+            g = info["X"]["dist_graph"]
+            closest = info["X"]["closest_virt"]
             virt = virt_x
             edge2d = edges_x
-            virtual_edge_data = virtual_edge_data_x
+            virtual_edge_data = info["X"]["virtual_edge_data"]
 
         else:
             temp_graph = temp_graph_z
-            g = graph_z
-            closest = closest_z
+            g = info["Z"]["dist_graph"]
+            closest = info["Z"]["closest_virt"]
             virt = virt_z
             edge2d = edges_z
-            virtual_edge_data = virtual_edge_data_z
+            virtual_edge_data = info["Z"]["virtual_edge_data"]
 
         # Use a future-proof approach to get all shortest paths
         paths = compute_all_shortest_paths(temp_graph)
@@ -543,7 +467,7 @@ def surface4444medial_identity(instr: LogicalInstructionProtocol) -> dict[str, A
                     data_path = []
                     s1 = syn_path[0]
                     for s2 in syn_path[1:]:
-                        data = edge2d[(s1, s2)]
+                        data = edge2d[s1, s2]
                         data_path.append(data)
                         s1 = s2
 
@@ -578,7 +502,7 @@ def surface4444medial_identity(instr: LogicalInstructionProtocol) -> dict[str, A
             data_path = []
             s1 = syn_path[0]
             for s2 in syn_path[1:]:
-                data = edge2d[(s1, s2)]
+                data = edge2d[s1, s2]
                 data_path.append(data)
                 s1 = s2
 

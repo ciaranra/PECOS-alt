@@ -194,7 +194,7 @@ fn test_deterministic_3qubit_circuit() -> Result<(), PecosError> {
         .generate_commands()
         .map_err(|e| PecosError::Processing(format!("Failed to generate commands: {e}")))?;
     let operations1 = command_message1
-        .parse_quantum_operations()
+        .quantum_ops()
         .map_err(|e| PecosError::Processing(format!("Failed to parse quantum operations: {e}")))?;
 
     // Print the actual number of operations in first batch
@@ -207,7 +207,7 @@ fn test_deterministic_3qubit_circuit() -> Result<(), PecosError> {
 
     // Handle the first measurement (qubit 0)
     let message1 = pecos_engines::byte_message::ByteMessage::builder()
-        .add_measurement_results(&[1])
+        .add_outcomes(&[1])
         .build();
 
     engine
@@ -219,7 +219,7 @@ fn test_deterministic_3qubit_circuit() -> Result<(), PecosError> {
         .generate_commands()
         .map_err(|e| PecosError::Processing(format!("Failed to generate second batch: {e}")))?;
 
-    let operations2 = command_message2.parse_quantum_operations().map_err(|e| {
+    let operations2 = command_message2.quantum_ops().map_err(|e| {
         PecosError::Processing(format!("Failed to parse second batch operations: {e}"))
     })?;
 
@@ -231,7 +231,7 @@ fn test_deterministic_3qubit_circuit() -> Result<(), PecosError> {
 
     // Handle the second measurement (qubit 1)
     let message2 = pecos_engines::byte_message::ByteMessage::builder()
-        .add_measurement_results(&[1])
+        .add_outcomes(&[1])
         .build();
 
     engine
@@ -243,7 +243,7 @@ fn test_deterministic_3qubit_circuit() -> Result<(), PecosError> {
         .generate_commands()
         .map_err(|e| PecosError::Processing(format!("Failed to generate third batch: {e}")))?;
 
-    let operations3 = command_message3.parse_quantum_operations().map_err(|e| {
+    let operations3 = command_message3.quantum_ops().map_err(|e| {
         PecosError::Processing(format!("Failed to parse third batch operations: {e}"))
     })?;
 
@@ -252,7 +252,7 @@ fn test_deterministic_3qubit_circuit() -> Result<(), PecosError> {
 
     // Handle the third measurement (qubit 2)
     let message3 = pecos_engines::byte_message::ByteMessage::builder()
-        .add_measurement_results(&[1])
+        .add_outcomes(&[1])
         .build();
 
     engine
@@ -449,7 +449,7 @@ fn test_multiple_measurement_operations() -> Result<(), PecosError> {
 
     // Verify the first batch has the expected operations
     let operations1 = command_message1
-        .parse_quantum_operations()
+        .quantum_ops()
         .map_err(|e| PecosError::Processing(format!("Failed to parse quantum operations: {e}")))?;
     println!("First batch operations: {operations1:?}");
     assert!(
@@ -460,7 +460,7 @@ fn test_multiple_measurement_operations() -> Result<(), PecosError> {
     println!("Simulating first measurement...");
     // Simulate the first measurement (after X gate, qubit is in |1⟩ state)
     let measurement1 = pecos_engines::byte_message::ByteMessage::builder()
-        .add_measurement_results(&[1])
+        .add_outcomes(&[1])
         .build();
 
     // Handle the first measurement results
@@ -484,7 +484,7 @@ fn test_multiple_measurement_operations() -> Result<(), PecosError> {
     );
 
     // Verify the second batch has the expected operations
-    let operations2 = match command_message2.parse_quantum_operations() {
+    let operations2 = match command_message2.quantum_ops() {
         Ok(ops) => {
             println!("Second batch operations: {ops:?}");
             ops
@@ -515,7 +515,7 @@ fn test_multiple_measurement_operations() -> Result<(), PecosError> {
         // Since measurements are tracked by order, the first measurement maps to c1[0]
         // and the second measurement maps to c2[0]
         let all_measurements = pecos_engines::byte_message::ByteMessage::builder()
-            .add_measurement_results(&[1, 1]) // Both measurements return 1
+            .add_outcomes(&[1, 1]) // Both measurements return 1
             .build();
 
         // Handle the measurements
@@ -570,7 +570,7 @@ fn test_multiple_measurement_operations() -> Result<(), PecosError> {
     println!("Simulating second measurement...");
     // Simulate the second measurement (after two X gates, qubit is still in |1⟩ state)
     let measurement2 = pecos_engines::byte_message::ByteMessage::builder()
-        .add_measurement_results(&[1])
+        .add_outcomes(&[1])
         .build();
 
     // Handle the second measurement results

@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pecos.simulators.custatevec.state import CuStateVec
-    from pecos.type_defs import SimulatorGateParams
+    from pecos.typing import SimulatorGateParams
 
 from pecos.simulators.custatevec.gates_meas import meas_z
 from pecos.simulators.custatevec.gates_one_qubit import X

@@ -62,7 +62,10 @@ impl QuantumSystem {
     /// A new `QuantumSystem` with the specified engine and a pass-through noise model
     #[must_use]
     pub fn new_without_noise(quantum_engine: Box<dyn QuantumEngine>) -> Self {
-        Self::new(Box::new(PassThroughNoiseModel), quantum_engine)
+        Self::new(
+            Box::new(PassThroughNoiseModel::builder().build()),
+            quantum_engine,
+        )
     }
 
     /// Set a specific seed for all components of the quantum system
@@ -367,10 +370,10 @@ mod tests {
 
         // Extract and compare measurement results
         let meas1 = result1
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse measurement results from system1");
         let meas2 = result2
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse measurement results from system2");
 
         assert_eq!(
@@ -402,10 +405,10 @@ mod tests {
 
         // Extract and compare measurement results
         let meas1 = result1
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse measurement results from system1");
         let meas3 = result3
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse measurement results from system3");
 
         assert_eq!(
@@ -443,7 +446,7 @@ mod tests {
             .expect("Failed to process input");
 
         // Verify the result contains measurements
-        assert!(result.parse_measurements().is_ok());
+        assert!(result.outcomes().is_ok());
     }
 
     /// Test that the `EngineSystem` pattern works correctly with direct access to
@@ -464,7 +467,7 @@ mod tests {
         let result = system
             .process(input.clone())
             .expect("Failed to process input");
-        assert!(result.parse_measurements().is_ok());
+        assert!(result.outcomes().is_ok());
 
         // Test that we can use controller and engine components directly
         {

@@ -1,6 +1,7 @@
+use pecos_engines::Engine;
 use pecos_engines::byte_message::ByteMessage;
+use pecos_engines::noise::DepolarizingNoiseModel;
 use pecos_engines::quantum::StateVecEngine;
-use pecos_engines::{DepolarizingNoiseModel, Engine};
 use pecos_engines::{EngineSystem, QuantumSystem};
 use std::env;
 
@@ -34,7 +35,7 @@ fn main() {
         noise_builder = noise_builder.with_seed(seed);
     }
 
-    let noise = noise_builder.build();
+    let noise = Box::new(noise_builder.build());
     let mut system = QuantumSystem::new(noise, quantum);
 
     // Also set seed on the system if provided
@@ -48,9 +49,7 @@ fn main() {
         let results = system
             .process_as_system(circ.clone())
             .expect("failed to process circ");
-        let meas = results
-            .parse_measurements()
-            .expect("failed to parse measurements");
+        let meas = results.outcomes().expect("failed to parse measurements");
 
         print!("\"");
         for &value in &meas {

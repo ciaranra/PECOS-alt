@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, List
 from pecos_rslib._pecos_rslib import RsStateVec as RustStateVec
 
 if TYPE_CHECKING:
-    from pecos.type_defs import SimulatorGateParams
+    from pecos.typing import SimulatorGateParams
 
 
 class StateVecRs:

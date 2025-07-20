@@ -3,6 +3,7 @@
 
 target-version = "py310"
 line-length = 120
+# preview = true
 
 [lint]
 select = [
@@ -14,6 +15,7 @@ select = [
     "BLE",      # flake8-blind-except
     "C4",       # flake8-comprehensions
     "COM",      # flake8-commas
+    # "CPY",      # flake8-copyright
     "D",        # flake8-docstrings
     "DTZ",      # flake8-datetimez
     "E",        # pycodestyle
@@ -27,6 +29,7 @@ select = [
     "I",        # isort (imports)
     "ICN",      # flake8-import-conventions
     "INP",      # flake8-no-pep420 (namespace/no __init__.py)
+    "LOG",      # flake8-logging
     "INT",      # flake8-gettext
     "ISC",      # flake9-implicit-str-concat
     "N",        # pep8-naming
@@ -62,11 +65,16 @@ select = [
 ]
 
 ignore = [
-    # pylint
-    "PLR0912", # Too many branches
-    "PLR0913", # Too many arguments
-    "PLR0915", # Too many statements
-    "PLR2004", # Magic value used in comparison, consider replacing with a constant variable
+    "A005", # Module `types` shadows a Python standard-library module
+
+    # pylint refactor rules - too strict for scientific/research code
+    "PLR",
+
+    "S403", # `pickle`, `cPickle`, `dill`, and `shelve` modules are possibly insecure
+    "S404", # `subprocess` module is possibly insecure
+
+    # flake8-boolean-trap
+    "FBT001", # Boolean-typed positional argument in function definition
 
     # flake8-todos
     "TD002", # Missing author in TODO
@@ -82,6 +90,16 @@ ignore = [
     "INP001",                       # File is part of an implicit namespace package - OK for test directories
     "S101",                         # Use of `assert` detected - Assert is standard practice in test files
     "N802",                         # Function name should be lowercase - Test functions often match gate names
+    "PLC0415",                      # Import inside try/except for optional dependencies - OK in tests
+]
+"python/slr-tests/**/*.py" = [
+    "INP001",                       # File is part of an implicit namespace package - OK for test directories
+    "S101",                         # Use of `assert` detected - Assert is standard practice in test files
+    "N802",                         # Function name should be lowercase - Test functions often match gate names
+    "PLC0415",                      # Import inside try/except for optional dependencies - OK in tests
+]
+"**/*.ipynb" = [
+    "S101",                         # Use of `assert` detected - Assert is appropriate for Jupyter notebook demonstrations
 ]
 "python/quantum-pecos/src/pecos/simulators/*.py" = [
     "N802",
@@ -90,8 +108,12 @@ ignore = [
 "python/quantum-pecos/src/pecos/slr/*.py" = [
     "ANN",
     "D",
+    "PLC",
+    "PLW",
+    "B",
 ]
 "clib/pecos-rng/pecos_pcg/__init__.py" = ["TID252"]
+
 
 
 [lint.pycodestyle]

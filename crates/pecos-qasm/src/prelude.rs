@@ -29,10 +29,10 @@
 //!
 //! This prelude includes:
 //!
-//! * Standard library types needed for QASM operations (`FromStr`, `HashMap`)
+//! * Standard library types needed for QASM operations (`FromStr`, `BTreeMap`)
 //! * QASM engine types (`QASMEngine`, `QASMEngineBuilder`, `QASMProgram`)
-//! * QASM simulation function (`run_qasm_sim`)
-//! * Result types (`Shot`, `ShotVec`) and formatting trait (`QASMShotVecExt`)
+//! * QASM simulation function (`run_qasm`)
+//! * Result types (`Shot`, `ShotVec`, `ShotMap`) from pecos-engines
 //! * Engine traits (`ClassicalEngine`) for accessing engine methods
 //! * Noise models and quantum engines from `pecos-engines`
 //! * Error types and random number generator traits
@@ -44,7 +44,7 @@
 //! functionality.
 
 // Standard library imports
-pub use std::collections::HashMap;
+pub use std::collections::BTreeMap;
 pub use std::str::FromStr;
 
 // Re-export engine types
@@ -52,23 +52,34 @@ pub use crate::engine::QASMEngine;
 pub use crate::engine_builder::QASMEngineBuilder;
 pub use crate::program::QASMProgram;
 
-// Re-export run functions and results types
-pub use crate::qasm_results::QASMResults;
-pub use crate::run::run_qasm_sim;
+// Re-export run function
+pub use crate::run::run_qasm;
+
+// Re-export simulation module types and functions
+pub use crate::simulation::{
+    NoiseModelType, QasmSimulation, QasmSimulationBuilder, QuantumEngineType, qasm_sim,
+};
+
+// Re-export config module types
+pub use crate::config::{NoiseConfig, QuantumEngineConfig};
 
 // Re-export setup function
 pub use crate::setup_qasm_engine;
 
 // Re-export engine traits and types from pecos-engines
-pub use pecos_engines::{ClassicalEngine, MonteCarloEngine, PassThroughNoiseModel, Shot, ShotVec};
+pub use pecos_engines::{
+    BitVecDisplayFormat, ClassicalEngine, MonteCarloEngine, Shot, ShotMap, ShotMapDisplayExt,
+    ShotMapDisplayOptions, ShotVec,
+};
 
 // Re-export core error type and traits
 pub use pecos_core::RngManageable;
 pub use pecos_core::errors::PecosError;
-// Re-export noise models from pecos-engines
+// Re-export noise models and builders from pecos-engines
 pub use pecos_engines::noise::{
-    BiasedDepolarizingNoiseModel, BiasedMeasurementNoiseModel, DepolarizingNoiseModel,
-    GeneralNoiseModel, NoiseModel,
+    BiasedDepolarizingNoiseModel, BiasedDepolarizingNoiseModelBuilder, DepolarizingNoiseModel,
+    DepolarizingNoiseModelBuilder, GeneralNoiseModel, GeneralNoiseModelBuilder, NoiseModel,
+    PassThroughNoiseModel, PassThroughNoiseModelBuilder,
 };
 // Re-export noise models from pecos-engines
 pub use pecos_engines::quantum::{

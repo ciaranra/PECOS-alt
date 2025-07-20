@@ -159,7 +159,11 @@ impl BiasedDepolarizingNoiseModel {
                 GateType::X
                 | GateType::Y
                 | GateType::Z
+                | GateType::SZ
+                | GateType::SZdg
                 | GateType::H
+                | GateType::T
+                | GateType::Tdg
                 | GateType::R1XY
                 | GateType::RZ
                 | GateType::U => {
@@ -229,30 +233,36 @@ impl BiasedDepolarizingNoiseModel {
     /// Returns a `PecosError` if applying bias fails
     fn apply_bias_to_message(&mut self, message: ByteMessage) -> Result<ByteMessage, PecosError> {
         // Parse the message to extract the measurement results
-        let measurement_outcomes = message.parse_measurements()?;
-        let measurements: Vec<(usize, u32)> =
-            measurement_outcomes.into_iter().enumerate().collect();
+        let outcomes = message.outcomes()?;
 
         // If the message doesn't contain measurements, return it unchanged
-        if measurements.is_empty() {
+        if outcomes.is_empty() {
             return Ok(message);
         }
 
         // Apply bias to each measurement
-        let biased_measurements: Vec<(usize, u32)> = measurements
+        let biased_outcomes: Vec<u32> = outcomes
             .into_iter()
+            .enumerate()
             .map(|(index, outcome)| {
                 let index_u32 = u32::try_from(index).unwrap_or(u32::MAX);
                 let (_biased_index, biased_outcome) =
                     self.apply_bias_to_measurement(index_u32, outcome);
-                (index, biased_outcome)
+                biased_outcome
             })
             .collect();
 
-        // Create a new ByteMessage with the biased measurements
-        Ok(ByteMessage::record_measurement_results(
-            &biased_measurements,
-        ))
+        // Create a new ByteMessage with the biased measurements using the builder
+        let mut builder = ByteMessage::outcomes_builder();
+
+        // Convert outcomes to usize for the builder
+        let outcomes_usize: Vec<usize> = biased_outcomes
+            .iter()
+            .map(|&outcome| outcome as usize)
+            .collect();
+        builder.add_outcomes(&outcomes_usize);
+
+        Ok(builder.build())
     }
 
     fn apply_prep_faults(&mut self, builder: &mut ByteMessageBuilder, gate: &Gate) {
@@ -269,15 +279,15 @@ impl BiasedDepolarizingNoiseModel {
 
             match fault_type {
                 0 => {
-                    trace!("Applying X fault on qubit {}", qubit);
+                    trace!("Applying X fault on qubit {qubit}");
                     NoiseUtils::apply_x(builder, *qubit);
                 }
                 1 => {
-                    trace!("Applying Y fault on qubit {}", qubit);
+                    trace!("Applying Y fault on qubit {qubit}");
                     NoiseUtils::apply_y(builder, *qubit);
                 }
                 _ => {
-                    trace!("Applying Z fault on qubit {}", qubit);
+                    trace!("Applying Z fault on qubit {qubit}");
                     NoiseUtils::apply_z(builder, *qubit);
                 }
             }
@@ -394,7 +404,7 @@ impl ControlEngine for BiasedDepolarizingNoiseModel {
         trace!("BiasedDepolarizingNoise::start - applying noise to quantum operations");
 
         // Parse the input as quantum operations
-        let gates: Vec<crate::Gate> = input.parse_quantum_operations()?;
+        let gates: Vec<crate::Gate> = input.quantum_ops()?;
 
         // Apply noise to the gates
         let noisy_gates = self.apply_noise_to_gates(&gates);
@@ -446,7 +456,8 @@ impl RngManageable for BiasedDepolarizingNoiseModel {
     }
 }
 
-/// Builder for creating general noise models
+/// Builder for creating biased depolarizing noise models
+#[derive(Debug, Clone)]
 pub struct BiasedDepolarizingNoiseModelBuilder {
     p_prep: Option<f64>,
     p_meas_0: Option<f64>,
@@ -553,12 +564,12 @@ impl BiasedDepolarizingNoiseModelBuilder {
     /// Build the general noise model
     ///
     /// # Returns
-    /// A boxed noise model
+    /// A `BiasedDepolarizingNoiseModel` instance
     ///
     /// # Panics
     /// Panics if any probabilities are not set or are not between 0 and 1.
     #[must_use]
-    pub fn build(self) -> Box<dyn NoiseModel> {
+    pub fn build(self) -> BiasedDepolarizingNoiseModel {
         let p_prep = self.p_prep.expect("Preparation probability must be set");
         let p_meas_0 = self
             .p_meas_0
@@ -578,7 +589,7 @@ impl BiasedDepolarizingNoiseModelBuilder {
             noise.set_seed(seed).expect("Failed to set seed");
         }
 
-        Box::new(noise)
+        noise
     }
 }
 

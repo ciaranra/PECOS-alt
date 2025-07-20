@@ -12,6 +12,14 @@ impl MacOSCompiler {
     /// Link object file and runtime library into a shared library on macOS
     ///
     /// This method uses `-dynamiclib` instead of `-shared` as required by macOS linker
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if:
+    /// - The `clang` command cannot be executed (e.g., clang is not installed or not in PATH)
+    /// - The `clang` command fails to link the object file and runtime library
+    /// - The provided `handle_command_error` closure returns an error
+    /// - The provided `handle_command_status` closure returns an error (e.g., non-zero exit status)
     pub fn link_shared_library(
         object_file: &Path,
         rust_runtime_lib: &Path,
@@ -36,8 +44,8 @@ impl MacOSCompiler {
         handle_command_status(&output, "clang")?;
 
         debug!(
-            "QIR Compiler: Successfully linked shared library on macOS: {:?}",
-            library_file
+            "QIR Compiler: Successfully linked shared library on macOS: {}",
+            library_file.display()
         );
 
         Ok(())

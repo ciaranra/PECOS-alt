@@ -36,7 +36,8 @@ fn compare_depolarizing_with_general(circ: &ByteMessage) {
         .with_uniform_probability(p_noise)
         .with_seed(seed)
         .build();
-    let mut depolarizing_system = QuantumSystem::new(depolarizing_noise, Box::new(quantum.clone()));
+    let mut depolarizing_system =
+        QuantumSystem::new(Box::new(depolarizing_noise), Box::new(quantum.clone()));
 
     // Create equivalent general noise model
     let general_noise = GeneralNoiseModel::builder()
@@ -70,7 +71,7 @@ fn compare_depolarizing_with_general(circ: &ByteMessage) {
             .process_as_system(circ.clone())
             .expect("Failed to process with depolarizing noise");
         let measurements = results
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse depolarizing measurements");
 
         // Format result string
@@ -89,7 +90,7 @@ fn compare_depolarizing_with_general(circ: &ByteMessage) {
             .process_as_system(circ.clone())
             .expect("Failed to process with general noise");
         let measurements = results
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse general measurements");
 
         // Format result string
@@ -200,7 +201,8 @@ fn test_asymmetric_measurements() {
         .with_two_qubit_probability(0.0)
         .with_seed(seed)
         .build();
-    let mut depolarizing_system = QuantumSystem::new(depolarizing_noise, Box::new(quantum.clone()));
+    let mut depolarizing_system =
+        QuantumSystem::new(Box::new(depolarizing_noise), Box::new(quantum.clone()));
 
     // Run simulations
     let mut general_counts = HashMap::new();
@@ -215,7 +217,7 @@ fn test_asymmetric_measurements() {
             .process_as_system(circ.clone())
             .expect("Failed to process with general noise");
         let measurements = results
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse general measurements");
         let result = measurements
             .first()
@@ -230,7 +232,7 @@ fn test_asymmetric_measurements() {
             .process_as_system(circ.clone())
             .expect("Failed to process with depolarizing noise");
         let measurements = results
-            .parse_measurements()
+            .outcomes()
             .expect("Failed to parse depolarizing measurements");
         let result = measurements
             .first()

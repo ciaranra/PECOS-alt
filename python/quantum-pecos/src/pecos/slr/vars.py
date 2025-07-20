@@ -69,6 +69,9 @@ class Reg(Var):
     def set(self, other):
         return SET(self, other)
 
+    def __len__(self):
+        return self.size
+
     def __getitem__(self, item):
         return self.elems[item]
 
@@ -114,14 +117,17 @@ class Qubit(Elem):
 
 
 class CReg(Reg, PyCOp):
-    def __init__(self, sym: str, size: int) -> None:
-        """Representation for a collection of bits.
+    def __init__(self, sym: str, size: int, *, result: bool = True) -> None:
+        """
+        Representation for a collection of bits.
 
         Args:
-            sym: Symbol name for the classical register.
-            size: Number of bits in the register.
+            sym:
+            size:
+            result: Whether this register is a result register (default True)
         """
         super().__init__(sym, size, elem_type=Bit)
+        self.result = result
 
 
 class Bit(Elem, PyCOp):

@@ -60,7 +60,10 @@ fn test_sqrt_function() {
 
     // Verify all operations are gates
     for op in &program.operations {
-        assert!(matches!(op, Operation::Gate { .. }));
+        assert!(matches!(
+            op,
+            Operation::Gate { .. } | Operation::NativeGate(_)
+        ));
     }
 }
 
@@ -100,32 +103,44 @@ fn test_functions_with_expressions() {
 
 #[test]
 fn test_error_cases() {
-    // Test ln of negative number - parsing should succeed
+    // Test ln of negative number - use native gate U which evaluates parameters immediately
     let qasm = r"
         OPENQASM 2.0;
         qreg q[1];
-        rx(ln(-1)) q[0];
+        U(ln(-1), 0, 0) q[0];
     ";
 
     let result = QASMParser::parse_str_raw(qasm);
     // The parsing should fail because ln(-1) is evaluated during parsing for gate parameters
     assert!(result.is_err());
     if let Err(e) = result {
-        assert!(e.to_string().contains("ln(-1) is undefined"));
+        // The error is wrapped with "Failed to evaluate parameter: "
+        let error_str = e.to_string();
+        assert!(
+            error_str.contains("ln(-1) is undefined")
+                || error_str.contains("Failed to evaluate parameter"),
+            "Expected error about ln(-1), got: {error_str}"
+        );
     }
 
-    // Test sqrt of negative number
+    // Test sqrt of negative number - use native gate U which evaluates parameters immediately
     let qasm = r"
         OPENQASM 2.0;
         qreg q[1];
-        rx(sqrt(-4)) q[0];
+        U(sqrt(-4), 0, 0) q[0];
     ";
 
     let result = QASMParser::parse_str_raw(qasm);
     // The parsing should fail because sqrt(-4) is evaluated during parsing for gate parameters
     assert!(result.is_err());
     if let Err(e) = result {
-        assert!(e.to_string().contains("sqrt(-4) is undefined"));
+        // The error is wrapped with "Failed to evaluate parameter: "
+        let error_str = e.to_string();
+        assert!(
+            error_str.contains("sqrt(-4) is undefined")
+                || error_str.contains("Failed to evaluate parameter"),
+            "Expected error about sqrt(-4), got: {error_str}"
+        );
     }
 }
 
@@ -178,42 +193,79 @@ fn test_evaluation_accuracy() {
         name: "sin".to_string(),
         args: vec![Expression::Float(PI / 2.0)],
     };
-    assert!((expr.evaluate_with_context(None).unwrap() - 1.0).abs() < 1e-10);
+    assert!((expr.evaluate(None).unwrap() - 1.0).abs() < 1e-10);
 
     // Test cos
     let expr = Expression::FunctionCall {
         name: "cos".to_string(),
         args: vec![Expression::Float(0.0)],
     };
-    assert!((expr.evaluate_with_context(None).unwrap() - 1.0).abs() < 1e-10);
+    assert!((expr.evaluate(None).unwrap() - 1.0).abs() < 1e-10);
 
     // Test tan
     let expr = Expression::FunctionCall {
         name: "tan".to_string(),
         args: vec![Expression::Float(PI / 4.0)],
     };
-    assert!((expr.evaluate_with_context(None).unwrap() - 1.0).abs() < 1e-10);
+    assert!((expr.evaluate(None).unwrap() - 1.0).abs() < 1e-10);
 
     // Test exp
     let expr = Expression::FunctionCall {
         name: "exp".to_string(),
         args: vec![Expression::Float(0.0)],
     };
-    assert!((expr.evaluate_with_context(None).unwrap() - 1.0).abs() < 1e-10);
+    assert!((expr.evaluate(None).unwrap() - 1.0).abs() < 1e-10);
 
     // Test ln
     let expr = Expression::FunctionCall {
         name: "ln".to_string(),
         args: vec![Expression::Float(std::f64::consts::E)],
     };
-    assert!((expr.evaluate_with_context(None).unwrap() - 1.0).abs() < 1e-10);
+    assert!((expr.evaluate(None).unwrap() - 1.0).abs() < 1e-10);
 
     // Test sqrt
     let expr = Expression::FunctionCall {
         name: "sqrt".to_string(),
         args: vec![Expression::Float(4.0)],
     };
-    assert!((expr.evaluate_with_context(None).unwrap() - 2.0).abs() < 1e-10);
+    assert!((expr.evaluate(None).unwrap() - 2.0).abs() < 1e-10);
+}
+
+#[test]
+fn test_simple_rx_pi() {
+    use pecos_engines::{MonteCarloEngine, PassThroughNoiseModel};
+    use pecos_qasm::QASMEngine;
+    use std::str::FromStr;
+
+    // Simple test: rx(pi) should flip the qubit
+    let qasm = r#"
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[1];
+        creg c[1];
+
+        rx(pi) q[0];
+        measure q[0] -> c[0];
+    "#;
+
+    let engine = QASMEngine::from_str(qasm).unwrap();
+    let results = MonteCarloEngine::run_with_noise_model(
+        Box::new(engine),
+        Box::new(PassThroughNoiseModel::builder().build()),
+        10,
+        1,
+        Some(42),
+    )
+    .unwrap();
+
+    for shot in &results.shots {
+        let value = shot
+            .data
+            .get("c")
+            .and_then(pecos_engines::prelude::Data::as_u32)
+            .expect("c register should be convertible to u32");
+        assert_eq!(value, 1, "rx(pi) should flip qubit to |1⟩");
+    }
 }
 
 #[test]
@@ -237,12 +289,15 @@ fn test_trig_identity_with_measurement() {
         measure q[0] -> c[0];
     "#;
 
+    // Parse and check the expression before running
+    let _program = QASMParser::parse_str(qasm).expect("Failed to parse QASM");
+
     // Run the simulation with multiple shots
     let engine = QASMEngine::from_str(qasm).unwrap();
 
     let results = MonteCarloEngine::run_with_noise_model(
         Box::new(engine),
-        Box::new(PassThroughNoiseModel),
+        Box::new(PassThroughNoiseModel::builder().build()),
         100, // 100 shots
         1,
         Some(42), // Fixed seed for deterministic results
@@ -297,7 +352,7 @@ fn test_trig_identity_various_angles() {
 
         let results = MonteCarloEngine::run_with_noise_model(
             Box::new(engine),
-            Box::new(PassThroughNoiseModel),
+            Box::new(PassThroughNoiseModel::builder().build()),
             50, // 50 shots per angle
             1,
             Some(42), // Fixed seed for deterministic results
@@ -320,8 +375,6 @@ fn test_trig_identity_various_angles() {
                 "Expected all measurements to be 1 for angle {angle} after rx(π)"
             );
         }
-
-        println!("Trigonometric identity verified for angle {angle}: all measurements are 1");
     }
 }
 
@@ -394,6 +447,5 @@ fn test_trig_identity_exact_value() {
 fn evaluate_param_expr(expr: &Expression) -> f64 {
     // Since this is a test helper and we don't have parameters,
     // use evaluate_with_context() which handles basic evaluation
-    expr.evaluate_with_context(None)
-        .expect("Failed to evaluate expression")
+    expr.evaluate(None).expect("Failed to evaluate expression")
 }

@@ -19,10 +19,19 @@ defining interfaces and common functionality for quantum operations.
 from __future__ import annotations
 
 import copy
+import sys
 from abc import ABCMeta
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING
 
 from pecos.slr.gen_codes.gen_qasm import QASMGenerator
+
+# Handle Python 3.10 compatibility for Self type
+if sys.version_info >= (3, 11):
+    from typing import Self
+else:
+    from typing import TypeVar
+
+    Self = TypeVar("Self", bound="QGate")
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -93,7 +102,7 @@ class QGate(metaclass=ABCMeta):
         Args:
             *qargs: Variable number of qubits to add.
         """
-        self.__call__(qargs)
+        self(*qargs)
 
     def __call__(self, *qargs: Qubit) -> Self:
         """Create a new gate instance with specified qubits.
@@ -110,19 +119,20 @@ class QGate(metaclass=ABCMeta):
 
         return g
 
-    def gen(self, target: object | str) -> str:
-        """Generate code representation for the gate.
+    def gen(self, target: object | str, *, add_versions: bool = False) -> str:
+        """Generate code for the gate using the specified target generator.
 
         Args:
-            target: Code generation target (e.g., 'qasm' or generator object).
+            target: Either a generator object or string specifying the target ("qasm").
+            add_versions: Whether to add version information to generated code.
 
         Returns:
-            String representation of the gate for the target format.
+            Generated code as a string.
         """
         # TODO: Get rid of this as much as possible...
         if isinstance(target, str):
             if target == "qasm":
-                target = QASMGenerator()
+                target = QASMGenerator(add_versions=add_versions)
             else:
                 msg = f"Code gen target '{target}' is not supported."
                 raise NotImplementedError(msg)

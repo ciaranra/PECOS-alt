@@ -10,7 +10,7 @@ oqasm = { "OPENQASM" ~ WHITE_SPACE* ~ version_num ~ ";" }
 version_num = @{ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
 
 // Any statement in the program
-statement = { include | register_decl | quantum_op | classical_op | if_stmt | gate_def | opaque_def }
+statement = { include | register_decl | quantum_op | classical_op | function_call_stmt | if_stmt | gate_def | opaque_def }
 
 // Include statement
 include = { "include" ~ string ~ ";" }
@@ -67,6 +67,9 @@ classical_op = {
     (identifier ~ "=" ~ expr ~ ";")  // Support for register-wide assignments
 }
 
+// Standalone function call statement (for void functions)
+function_call_stmt = { identifier ~ "(" ~ (expr ~ ("," ~ expr)*)? ~ ")" ~ ";" }
+
 // Gate definition (simplified)
 gate_def = { "gate" ~ identifier ~ param_list? ~ identifier_list ~ "{" ~ gate_def_statement* ~ "}" }
 gate_def_statement = { gate_def_call }
@@ -76,43 +79,19 @@ identifier_list = { identifier ~ ("," ~ identifier)* }
 // Opaque gate declaration
 opaque_def = { "opaque" ~ identifier ~ param_list? ~ identifier_list ~ ";" }
 
-// Expression with improved support for arithmetic operations
-expr = { b_or_expr }
+// Simplified expression parsing - let Rust handle precedence
+expr = { unary_expr ~ (binary_op ~ unary_expr)* }
 
-// Bitwise OR
-b_or_expr = { b_xor_expr ~ ("|" ~ b_xor_expr)* }
+// All binary operators in one place
+binary_op = {
+    "**" | "*" | "/" | "+" | "-" |
+    "<<" | ">>" |
+    "<=" | ">=" | "<" | ">" |
+    "==" | "!=" |
+    "&" | "^" | "|"
+}
 
-// Bitwise XOR
-b_xor_expr = { b_and_expr ~ ("^" ~ b_and_expr)* }
-
-// Bitwise AND
-b_and_expr = { equality_expr ~ ("&" ~ equality_expr)* }
-
-// Equality operations
-equality_expr = { relational_expr ~ (equality_op ~ relational_expr)* }
-equality_op = { "==" | "!=" }
-
-// Relational operations
-relational_expr = { shift_expr ~ (relational_op ~ shift_expr)* }
-relational_op = { "<=" | ">=" | "<" | ">" }
-
-// Bit shifting operations
-shift_expr = { additive_expr ~ (shift_op ~ additive_expr)* }
-shift_op = { "<<" | ">>" }
-
-// Addition and subtraction
-additive_expr = { multiplicative_expr ~ (add_op ~ multiplicative_expr)* }
-add_op = { "+" | "-" }
-
-// Multiplication and division
-multiplicative_expr = { power_expr ~ (mul_op ~ power_expr)* }
-mul_op = { "*" | "/" }
-
-// Power (exponentiation)
-power_expr = { unary_expr ~ (pow_op ~ unary_expr)* }
-pow_op = { "**" }
-
-// Unary operations (negation, bitwise not)
+// Unary operations
 unary_expr = { unary_op* ~ primary_expr }
 unary_op = { "-" | "~" }
 
@@ -126,9 +105,8 @@ primary_expr = {
     "(" ~ expr ~ ")"
 }
 
-// Function calls (sin, cos, etc.)
-function_call = { function_name ~ "(" ~ expr ~ ("," ~ expr)* ~ ")" }
-function_name = @{ "sin" | "cos" | "tan" | "exp" | "ln" | "sqrt" }
+// Function calls (sin, cos, etc. or any identifier for WASM functions)
+function_call = { identifier ~ "(" ~ (expr ~ ("," ~ expr)*)? ~ ")" }
 pi_constant = @{ "pi" }
 number = @{ real | int }
 

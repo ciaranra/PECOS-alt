@@ -23,7 +23,7 @@ import numpy as np
 
 if TYPE_CHECKING:
     from pecos.simulators.custatevec.state import CuStateVec
-    from pecos.type_defs import SimulatorGateParams
+    from pecos.typing import SimulatorGateParams
 from cuquantum import custatevec as cusv
 
 

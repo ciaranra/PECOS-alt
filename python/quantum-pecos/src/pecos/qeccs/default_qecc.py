@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
     from pecos.protocols import LogicalGateProtocol, LogicalInstructionProtocol
-    from pecos.type_defs import QECCGateParams, QECCInstrParams, QECCParams
+    from pecos.typing import QECCGateParams, QECCInstrParams, QECCParams
 
 T = TypeVar("T")
 
@@ -266,7 +266,7 @@ class DefaultQECC:
         nid = next(iter_ids)
 
         self.layout[nid] = (x, y)
-        self.position2qudit[(x, y)] = nid
+        self.position2qudit[x, y] = nid
 
     def __eq__(self, other: object) -> bool:
         """Check equality with another QECC."""
@@ -278,6 +278,10 @@ class DefaultQECC:
     def __ne__(self, other: object) -> bool:
         """Check inequality with another QECC."""
         return not (self == other)
+
+    def __hash__(self) -> int:
+        """Return hash of the QECC based on name and parameters."""
+        return hash((self.name, tuple(sorted(self.qecc_params.items()))))
 
 
 class NoMap:

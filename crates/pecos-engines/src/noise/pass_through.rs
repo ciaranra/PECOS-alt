@@ -22,7 +22,34 @@ use std::any::Any;
 ///
 /// This is useful as a default for systems that don't need noise.
 #[derive(Clone, Debug)]
-pub struct PassThroughNoiseModel;
+pub struct PassThroughNoiseModel {
+    /// Dummy RNG field to satisfy the `RngManageable` trait
+    /// `PassThroughNoiseModel` doesn't actually use randomness
+    rng: ChaCha8Rng,
+}
+
+impl PassThroughNoiseModel {
+    /// Create a new pass-through noise model
+    #[must_use]
+    pub fn new() -> Self {
+        use rand::SeedableRng;
+        Self {
+            rng: ChaCha8Rng::seed_from_u64(0), // Default seed, not used
+        }
+    }
+
+    /// Create a new builder for pass-through noise model
+    #[must_use]
+    pub fn builder() -> PassThroughNoiseModelBuilder {
+        PassThroughNoiseModelBuilder::new()
+    }
+}
+
+impl Default for PassThroughNoiseModel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl NoiseModel for PassThroughNoiseModel {
     fn as_any(&self) -> &dyn Any {
@@ -38,19 +65,18 @@ impl NoiseModel for PassThroughNoiseModel {
 impl RngManageable for PassThroughNoiseModel {
     type Rng = ChaCha8Rng;
 
-    fn set_rng(&mut self, _rng: Self::Rng) -> Result<(), PecosError> {
-        // PassThroughNoise doesn't use randomness, so just ignore the RNG
+    fn set_rng(&mut self, rng: Self::Rng) -> Result<(), PecosError> {
+        // PassThroughNoise doesn't use randomness, but we store it to satisfy the trait
+        self.rng = rng;
         Ok(())
     }
 
     fn rng(&self) -> &Self::Rng {
-        // This is a placeholder implementation since we don't actually have an RNG
-        panic!("PassThroughNoise doesn't have an RNG")
+        &self.rng
     }
 
     fn rng_mut(&mut self) -> &mut Self::Rng {
-        // This is a placeholder implementation since we don't actually have an RNG
-        panic!("PassThroughNoise doesn't have an RNG")
+        &mut self.rng
     }
 }
 
@@ -79,5 +105,31 @@ impl ControlEngine for PassThroughNoiseModel {
     fn reset(&mut self) -> Result<(), PecosError> {
         // No state to reset
         Ok(())
+    }
+}
+
+/// Builder for creating pass-through (no noise) models
+///
+/// This builder exists for API consistency, allowing all noise models
+/// to be created through the same builder pattern.
+#[derive(Debug, Clone, Default)]
+pub struct PassThroughNoiseModelBuilder;
+
+impl PassThroughNoiseModelBuilder {
+    /// Create a new pass-through noise model builder
+    #[must_use]
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Build the pass-through noise model
+    ///
+    /// Since this is a no-op noise model, the builder has no configuration options.
+    #[must_use]
+    pub fn build(self) -> PassThroughNoiseModel {
+        use rand::SeedableRng;
+        PassThroughNoiseModel {
+            rng: ChaCha8Rng::seed_from_u64(0), // Default seed, not used
+        }
     }
 }

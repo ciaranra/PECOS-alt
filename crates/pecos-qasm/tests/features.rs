@@ -37,3 +37,12 @@ pub mod power_operator_test;
 
 #[path = "features/comparison_operators_debug_test.rs"]
 pub mod comparison_operators_debug_test;
+
+#[path = "features/constant_folding_test.rs"]
+pub mod constant_folding_test;
+
+#[path = "features/commented_includes_test.rs"]
+pub mod commented_includes_test;
+
+#[path = "features/all_includes_available_test.rs"]
+pub mod all_includes_available_test;

@@ -53,3 +53,9 @@ For developers who want to contribute or modify PECOS:
 Before pull requests are merged, they must pass linting and the test.
 
 Note: For the Rust side of the project, you can use `cargo` to run tests, benchmarks, formatting, etc.
+
+## Development Guides
+
+For specific development topics, see:
+
+- [Parallel Blocks and Optimization](parallel-blocks-and-optimization.md) - Guide to using and extending the Parallel block construct and optimizer

@@ -15,11 +15,17 @@ pub use engine::Engine;
 pub use engine_system::{ClassicalEngine, ControlEngine, EngineStage, EngineSystem};
 pub use hybrid::HybridEngine;
 pub use monte_carlo::MonteCarloEngine;
-pub use noise::{DepolarizingNoiseModel, NoiseModel, PassThroughNoiseModel};
+pub use noise::{
+    DepolarizingNoiseModel, NoiseModel, PassThroughNoiseModel, PassThroughNoiseModelBuilder,
+};
 pub use pecos_core::errors::PecosError;
 pub use quantum::QuantumEngine;
 pub use quantum_system::QuantumSystem;
-pub use shot_results::{Shot, ShotVec};
+pub use shot_results::data_vec::DataVecType;
+pub use shot_results::{
+    BitVecDisplayFormat, Data, DataVec, Shot, ShotMap, ShotMapDisplay, ShotMapDisplayExt,
+    ShotMapDisplayOptions, ShotVec,
+};
 
 /// Run a quantum simulation.
 ///
@@ -105,7 +111,8 @@ pub fn run_sim(
     let num_qubits = classical_engine.num_qubits();
 
     // Use default noise model if none provided
-    let noise_model = noise_model.unwrap_or_else(|| Box::new(PassThroughNoiseModel));
+    let noise_model =
+        noise_model.unwrap_or_else(|| Box::new(PassThroughNoiseModel::builder().build()));
 
     // Create default quantum engine if none provided
     let quantum_engine =

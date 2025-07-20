@@ -1,6 +1,20 @@
 use pecos_qasm::ast::Operation;
 use pecos_qasm::parser::QASMParser;
 
+// Helper function to extract gate name from operation
+fn get_gate_name(op: &Operation) -> Option<String> {
+    match op {
+        Operation::Gate { name, .. } => Some(name.clone()),
+        Operation::NativeGate(gate) => match &gate.gate_type {
+            pecos_core::prelude::GateType::H => Some("H".to_string()),
+            pecos_core::prelude::GateType::X => Some("X".to_string()),
+            pecos_core::prelude::GateType::CX => Some("CX".to_string()),
+            _ => Some(format!("{:?}", gate.gate_type)),
+        },
+        _ => None,
+    }
+}
+
 #[test]
 fn test_lowercase_gates_resolve_to_uppercase() {
     let qasm_str = r#"
@@ -17,17 +31,22 @@ fn test_lowercase_gates_resolve_to_uppercase() {
     let program = QASMParser::parse_str(qasm_str).expect("Failed to parse QASM");
 
     // Check that the operations are expanded correctly
-    let gate_ops: Vec<_> = program
+    let gate_ops: Vec<String> = program
         .operations
         .iter()
-        .filter_map(|op| match op {
-            Operation::Gate { name, .. } => Some(name.as_str()),
-            _ => None,
-        })
+        .filter_map(get_gate_name)
         .collect();
 
     // After expansion, all should be uppercase native gates
-    assert_eq!(gate_ops, vec!["H", "X", "H", "X"]);
+    assert_eq!(
+        gate_ops,
+        vec![
+            "H".to_string(),
+            "X".to_string(),
+            "H".to_string(),
+            "X".to_string()
+        ]
+    );
 }
 
 #[test]
@@ -44,16 +63,13 @@ fn test_native_gate_list_has_no_lowercase() {
     let program = QASMParser::parse_str(qasm_str).expect("Failed to parse QASM");
 
     // Check that CX works as a native gate (uppercase)
-    let gate_ops: Vec<_> = program
+    let gate_ops: Vec<String> = program
         .operations
         .iter()
-        .filter_map(|op| match op {
-            Operation::Gate { name, .. } => Some(name.as_str()),
-            _ => None,
-        })
+        .filter_map(get_gate_name)
         .collect();
 
-    assert_eq!(gate_ops, vec!["CX"]);
+    assert_eq!(gate_ops, vec!["CX".to_string()]);
 
     // Now test that lowercase gates need to be defined in qelib1
     let qasm_str2 = r#"
@@ -67,16 +83,13 @@ fn test_native_gate_list_has_no_lowercase() {
     let program2 = QASMParser::parse_str(qasm_str2).expect("Failed to parse QASM");
 
     // After expansion, lowercase cx should be expanded to uppercase CX
-    let gate_ops2: Vec<_> = program2
+    let gate_ops2: Vec<String> = program2
         .operations
         .iter()
-        .filter_map(|op| match op {
-            Operation::Gate { name, .. } => Some(name.as_str()),
-            _ => None,
-        })
+        .filter_map(get_gate_name)
         .collect();
 
-    assert_eq!(gate_ops2, vec!["CX"]);
+    assert_eq!(gate_ops2, vec!["CX".to_string()]);
 }
 
 #[test]

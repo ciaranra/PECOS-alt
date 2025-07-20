@@ -133,6 +133,15 @@ impl HybridEngine {
         );
         let mut stage = self.classical_engine.start(())?;
 
+        // Handle the case where the engine immediately completes with no processing needed
+        if let EngineStage::Complete(results) = stage {
+            debug!(
+                "HybridEngine::run_shot() completed immediately (no commands) - Thread {:?}",
+                std::thread::current().id()
+            );
+            return Ok(results);
+        }
+
         let mut iteration_count = 0;
         while let EngineStage::NeedsProcessing(command_message) = stage {
             iteration_count += 1;

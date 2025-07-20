@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from pecos.error_models.class_errors_circuit import ErrorCircuits
     from pecos.error_models.parent_class_error_gen import ParentErrorModel
     from pecos.misc.symbol_library import JSONDict
-    from pecos.type_defs import (
+    from pecos.typing import (
         ErrorParams,
         LocationSet,
         OutputDict,

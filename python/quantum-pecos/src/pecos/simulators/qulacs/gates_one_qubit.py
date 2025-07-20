@@ -24,7 +24,7 @@ import qulacs.gate as qgate
 
 if TYPE_CHECKING:
     from pecos.simulators.qulacs import Qulacs
-    from pecos.type_defs import SimulatorGateParams
+    from pecos.typing import SimulatorGateParams
 
 
 def identity(state: Qulacs, qubit: int, **_params: SimulatorGateParams) -> None:

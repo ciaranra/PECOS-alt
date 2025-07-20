@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
     from pecos.circuits import QuantumCircuit
-    from pecos.type_defs import GateParams, LocationSet
+    from pecos.typing import GateParams, LocationSet
 
 
 class ParentErrorModel:
@@ -163,7 +163,7 @@ class Generator:
             first = error_func[0]
             if (
                 isinstance(first, str)
-                and first not in ["CNOT", "II", "CZ", "SWAP", "G2"]
+                and first not in {"CNOT", "II", "CZ", "SWAP", "G2"}
             ) or not hasattr(
                 first,
                 "__iter__",

@@ -82,6 +82,7 @@ Verify your installation:
 === "Python"
     ```python
     import pecos
+
     print(pecos.__version__)
     ```
 

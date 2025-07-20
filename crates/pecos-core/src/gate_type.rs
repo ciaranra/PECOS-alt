@@ -21,8 +21,8 @@ pub enum GateType {
     // SXdg = 5,
     // SY = 6
     // SYdg = 7
-    // SZ = 8
-    // SZdg = 9
+    SZ = 8,
+    SZdg = 9,
     H = 10,
     // H2 = 11
     // H3 = 12
@@ -41,8 +41,8 @@ pub enum GateType {
     // RX = 30
     // RY = 31
     RZ = 32,
-    // T = 33
-    // Tdg = 34,
+    T = 33,
+    Tdg = 34,
     // Other T-like gates?
     U = 35,
     R1XY = 36,
@@ -91,18 +91,21 @@ impl From<u8> for GateType {
             1 => GateType::X,
             2 => GateType::Z,
             3 => GateType::Y,
-
+            8 => GateType::SZ,
+            9 => GateType::SZdg,
             10 => GateType::H,
+            32 => GateType::RZ,
+            33 => GateType::T,
+            34 => GateType::Tdg,
+            35 => GateType::U,
+            36 => GateType::R1XY,
             50 => GateType::CX,
             57 => GateType::SZZ,
-            32 => GateType::RZ,
-            36 => GateType::R1XY,
+            58 => GateType::SZZdg,
+            82 => GateType::RZZ,
             104 => GateType::Measure,
             134 => GateType::Prep,
-            82 => GateType::RZZ,
-            58 => GateType::SZZdg,
             200 => GateType::Idle,
-            35 => GateType::U,
             _ => panic!("Invalid gate type ID: {value}"),
         }
     }
@@ -122,7 +125,11 @@ impl GateType {
             | GateType::X
             | GateType::Y
             | GateType::Z
+            | GateType::SZ
+            | GateType::SZdg
             | GateType::H
+            | GateType::T
+            | GateType::Tdg
             | GateType::CX
             | GateType::SZZ
             | GateType::SZZdg
@@ -154,8 +161,12 @@ impl GateType {
             | GateType::X
             | GateType::Y
             | GateType::Z
+            | GateType::SZ
+            | GateType::SZdg
             | GateType::H
             | GateType::RZ
+            | GateType::T
+            | GateType::Tdg
             | GateType::R1XY
             | GateType::U
             | GateType::Measure
@@ -193,17 +204,21 @@ impl fmt::Display for GateType {
             GateType::X => write!(f, "X"),
             GateType::Y => write!(f, "Y"),
             GateType::Z => write!(f, "Z"),
+            GateType::SZ => write!(f, "SZ"),
+            GateType::SZdg => write!(f, "SZdg"),
             GateType::H => write!(f, "H"),
+            GateType::RZ => write!(f, "RZ"),
+            GateType::T => write!(f, "T"),
+            GateType::Tdg => write!(f, "Tdg"),
+            GateType::U => write!(f, "U"),
+            GateType::R1XY => write!(f, "R1XY"),
             GateType::CX => write!(f, "CX"),
             GateType::SZZ => write!(f, "SZZ"),
-            GateType::RZ => write!(f, "RZ"),
-            GateType::R1XY => write!(f, "R1XY"),
+            GateType::SZZdg => write!(f, "SZZdg"),
+            GateType::RZZ => write!(f, "RZZ"),
             GateType::Measure => write!(f, "Measure"),
             GateType::Prep => write!(f, "Prep"),
-            GateType::RZZ => write!(f, "RZZ"),
-            GateType::SZZdg => write!(f, "SZZdg"),
             GateType::Idle => write!(f, "Idle"),
-            GateType::U => write!(f, "U"),
         }
     }
 }

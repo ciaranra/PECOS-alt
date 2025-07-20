@@ -1,7 +1,17 @@
+use pecos_core::prelude::GateType;
 use pecos_engines::classical::ClassicalEngine;
 use pecos_qasm::engine::QASMEngine;
 use pecos_qasm::{Operation, QASMParser};
 use std::str::FromStr;
+
+// Helper function to extract gate name from operation
+fn get_gate_name(op: &Operation) -> Option<String> {
+    match op {
+        Operation::Gate { name, .. } => Some(name.clone()),
+        Operation::NativeGate(gate) => Some(format!("{:?}", gate.gate_type)),
+        _ => None,
+    }
+}
 
 #[test]
 fn test_p_zero_gate_compiles() {
@@ -46,13 +56,12 @@ fn test_u_identity_gate_expansion() {
     // This test documents the current behavior
     if program.operations.len() == 1 {
         if let Some(op) = program.operations.first() {
-            match op {
-                Operation::Gate { name, .. } => {
-                    println!("Gate after expansion: {name}");
-                    // u(0,0,0) might remain as U or be expanded
-                    // depending on implementation
-                }
-                _ => panic!("Expected a gate operation"),
+            if let Some(name) = get_gate_name(op) {
+                println!("Gate after expansion: {name}");
+                // u(0,0,0) might remain as U or be expanded
+                // depending on implementation
+            } else {
+                panic!("Expected a gate operation");
             }
         }
     } else {
@@ -78,18 +87,26 @@ fn test_p_gate_expansion() {
     // p(0) expands to rz(0)
     assert_eq!(program.operations.len(), 1);
 
-    if let Operation::Gate {
-        name, parameters, ..
-    } = &program.operations[0]
-    {
-        assert_eq!(name, "RZ");
-        assert_eq!(parameters.len(), 1);
-        assert!(
-            (parameters[0] - 0.0).abs() < f64::EPSILON,
-            "RZ angle should be 0"
-        );
-    } else {
-        panic!("Expected RZ gate");
+    match &program.operations[0] {
+        Operation::Gate {
+            name, parameters, ..
+        } => {
+            assert_eq!(name, "RZ");
+            assert_eq!(parameters.len(), 1);
+            assert!(
+                (parameters[0] - 0.0).abs() < f64::EPSILON,
+                "RZ angle should be 0"
+            );
+        }
+        Operation::NativeGate(gate) if matches!(gate.gate_type, GateType::RZ) => {
+            // For native gates, check params field
+            assert_eq!(gate.params.len(), 1);
+            assert!(
+                (gate.params[0] - 0.0).abs() < f64::EPSILON,
+                "RZ angle should be 0"
+            );
+        }
+        _ => panic!("Expected RZ gate"),
     }
 }
 
@@ -107,26 +124,41 @@ fn test_u_gate_expansion() {
     // u(0,0,0) now maps directly to native U gate
     assert_eq!(program.operations.len(), 1);
 
-    if let Operation::Gate {
-        name, parameters, ..
-    } = &program.operations[0]
-    {
-        assert_eq!(name, "U");
-        assert_eq!(parameters.len(), 3);
-        assert!(
-            (parameters[0] - 0.0).abs() < f64::EPSILON,
-            "U theta parameter should be 0"
-        );
-        assert!(
-            (parameters[1] - 0.0).abs() < f64::EPSILON,
-            "U phi parameter should be 0"
-        );
-        assert!(
-            (parameters[2] - 0.0).abs() < f64::EPSILON,
-            "U lambda parameter should be 0"
-        );
-    } else {
-        panic!("Expected U gate");
+    match &program.operations[0] {
+        Operation::Gate {
+            name, parameters, ..
+        } => {
+            assert_eq!(name, "U");
+            assert_eq!(parameters.len(), 3);
+            assert!(
+                (parameters[0] - 0.0).abs() < f64::EPSILON,
+                "U theta parameter should be 0"
+            );
+            assert!(
+                (parameters[1] - 0.0).abs() < f64::EPSILON,
+                "U phi parameter should be 0"
+            );
+            assert!(
+                (parameters[2] - 0.0).abs() < f64::EPSILON,
+                "U lambda parameter should be 0"
+            );
+        }
+        Operation::NativeGate(gate) if matches!(gate.gate_type, GateType::U) => {
+            assert_eq!(gate.params.len(), 3);
+            assert!(
+                (gate.params[0] - 0.0).abs() < f64::EPSILON,
+                "U theta parameter should be 0"
+            );
+            assert!(
+                (gate.params[1] - 0.0).abs() < f64::EPSILON,
+                "U phi parameter should be 0"
+            );
+            assert!(
+                (gate.params[2] - 0.0).abs() < f64::EPSILON,
+                "U lambda parameter should be 0"
+            );
+        }
+        _ => panic!("Expected U gate"),
     }
 }
 
@@ -256,9 +288,13 @@ fn test_u_gate_is_native() {
     // U gate should remain as U (not expanded) since it's native
     assert_eq!(program.operations.len(), 1);
 
-    if let Operation::Gate { name, .. } = &program.operations[0] {
-        assert_eq!(name, "U");
-    } else {
-        panic!("Expected U gate operation");
+    match &program.operations[0] {
+        Operation::Gate { name, .. } => {
+            assert_eq!(name, "U");
+        }
+        Operation::NativeGate(gate) if matches!(gate.gate_type, GateType::U) => {
+            // This is also acceptable
+        }
+        _ => panic!("Expected U gate operation"),
     }
 }

@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Sequence
 
     from pecos.protocols import SimulatorProtocol
-    from pecos.type_defs import LogicalOpInfo, StabilizerVerificationResult
+    from pecos.typing import LogicalOpInfo, StabilizerVerificationResult
 
 # TODO: NEED TO ADD SIGN TRACKING TO DESTABILIZERS TO GET THE RIGHT SIGN FOR LOGICAL Xs
 
@@ -90,7 +90,7 @@ class VerifyStabilizers:
         check_string = "check(" + str(paulis) + ", " + str(qubits) + ")"
 
         if isinstance(paulis, str):
-            if paulis not in ["X", "x", "Y", "y", "Z", "z"]:
+            if paulis not in {"X", "x", "Y", "y", "Z", "z"}:
                 msg = 'Paulis should be "X", "Y" or "Z"!'
                 raise Exception(msg)
 
@@ -119,7 +119,7 @@ class VerifyStabilizers:
         logical_string = "check(" + str(paulis) + ", " + str(qubits) + ")"
 
         if isinstance(paulis, str):
-            if paulis not in ["X", "x", "Y", "y", "Z", "z"]:
+            if paulis not in {"X", "x", "Y", "y", "Z", "z"}:
                 msg = 'Paulis should be "X", "Y" or "Z"!'
                 raise Exception(msg)
 
@@ -147,7 +147,7 @@ class VerifyStabilizers:
         logical_string = "check(" + str(paulis) + ", " + str(qubits) + ")"
 
         if isinstance(paulis, str):
-            if paulis not in ["X", "x", "Y", "y", "Z", "z"]:
+            if paulis not in {"X", "x", "Y", "y", "Z", "z"}:
                 msg = 'Paulis should be "X", "Y" or "Z"!'
                 raise Exception(msg)
 
@@ -939,7 +939,7 @@ class VerifyStabilizers:
 
             if not css:
                 for a in product(paulis, repeat=i):
-                    if a in (xs, zs):
+                    if a in {xs, zs}:
                         continue
 
                     for b in combinations(qubits, i):

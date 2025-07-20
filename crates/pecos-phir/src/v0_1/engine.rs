@@ -225,7 +225,7 @@ impl PHIREngine {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn generate_commands(&mut self) -> Result<ByteMessage, PecosError> {
+    fn generate_commands_impl(&mut self) -> Result<Option<ByteMessage>, PecosError> {
         // Define a maximum batch size for better performance
         // This helps avoid creating excessively large messages
         const MAX_BATCH_SIZE: usize = 100;
@@ -244,13 +244,17 @@ impl PHIREngine {
         })?;
         let ops = prog.ops.clone();
 
-        // If we've processed all ops, return empty batch to signal completion
+        // If we've processed all ops, return None to signal completion
         if self.current_op >= ops.len() {
             debug!(
-                "End of program reached at op {}, sending flush",
+                "End of program reached at op {}, no more commands to generate",
                 self.current_op
             );
-            return Ok(ByteMessage::create_flush());
+
+            // With our updated HybridEngine and ControlEngine implementations,
+            // we can now consistently return None when there are no more commands,
+            // even for the first batch.
+            return Ok(None);
         }
 
         debug!(
@@ -271,15 +275,12 @@ impl PHIREngine {
                     variable,
                     size,
                 } => {
-                    debug!(
-                        "Processing variable definition: {} {} {}",
-                        data, data_type, variable
-                    );
+                    debug!("Processing variable definition: {data} {data_type} {variable}");
                     let _ = self
                         .processor
                         .handle_variable_definition(data, data_type, variable, *size);
                     self.current_op += 1;
-                    return self.generate_commands();
+                    return self.generate_commands_impl();
                 }
                 Operation::QuantumOp {
                     qop,
@@ -288,7 +289,7 @@ impl PHIREngine {
                     returns: _,
                     metadata: _,
                 } => {
-                    debug!("Processing quantum operation: {}", qop);
+                    debug!("Processing quantum operation: {qop}");
 
                     // Clone the operation parameters to avoid borrow issues
                     let qop_str = qop.clone();
@@ -323,13 +324,12 @@ impl PHIREngine {
                     metadata: _,
                     function,
                 } => {
-                    debug!("Processing classical operation: {}", cop);
+                    debug!("Processing classical operation: {cop}");
 
                     // Debug log specially for ffcall operations
                     if cop == "ffcall" {
                         debug!(
-                            "Found ffcall operation: function={:?}, args={:?}, returns={:?}",
-                            function, args, returns
+                            "Found ffcall operation: function={function:?}, args={args:?}, returns={returns:?}"
                         );
                     }
 
@@ -345,13 +345,13 @@ impl PHIREngine {
 
                         // Build and return the message
                         if operation_count > 0 {
-                            debug!("Returning batch with {} operations", operation_count);
-                            return Ok(self.message_builder.build());
+                            debug!("Returning batch with {operation_count} operations");
+                            return Ok(Some(self.message_builder.build()));
                         }
 
                         // Create an empty message if no operations were added
                         debug!("Returning empty batch after classical operation");
-                        return Ok(ByteMessage::builder().build());
+                        return Ok(Some(ByteMessage::builder().build()));
                     }
                 }
                 Operation::Block {
@@ -362,7 +362,7 @@ impl PHIREngine {
                     false_branch,
                     ..
                 } => {
-                    debug!("Processing block operation: {}", block);
+                    debug!("Processing block operation: {block}");
 
                     match block.as_str() {
                         "if" => {
@@ -379,7 +379,7 @@ impl PHIREngine {
                                     // Replace the current op with the branch operations
                                     // This is a simplification - a more robust implementation would
                                     // involve temporarily changing the ops list
-                                    for branch_op in branch_ops {
+                                    for branch_op in &branch_ops {
                                         match branch_op {
                                             Operation::QuantumOp {
                                                 qop, angles, args, ..
@@ -407,9 +407,56 @@ impl PHIREngine {
                                                     Err(e) => return Err(e),
                                                 }
                                             }
+                                            Operation::ClassicalOp {
+                                                cop,
+                                                args,
+                                                returns,
+                                                metadata: _,
+                                                function,
+                                            } => {
+                                                debug!(
+                                                    "Processing classical operation in branch: {cop}"
+                                                );
+                                                // Handle classical operations from conditional branches
+                                                if cop == "ffcall" {
+                                                    debug!(
+                                                        "Processing ffcall in branch: function={function:?}, args={args:?}, returns={returns:?}"
+                                                    );
+                                                }
+                                                // For ffcall operations from branches, we need to handle them specially
+                                                // because they have the function name directly in the operation
+                                                if cop == "ffcall" {
+                                                    // Create a temporary operation list with just this operation
+                                                    // This ensures handle_classical_op can find the function name
+                                                    let temp_ops = vec![branch_op.clone()];
+                                                    if self.processor.handle_classical_op(
+                                                        cop, args, returns, &temp_ops,
+                                                        0, // The operation is at index 0 in temp_ops
+                                                    )? {
+                                                        debug!(
+                                                            "Classical ffcall operation in branch completed"
+                                                        );
+                                                    }
+                                                } else {
+                                                    // For other classical operations, use the original ops
+                                                    if self.processor.handle_classical_op(
+                                                        cop,
+                                                        args,
+                                                        returns,
+                                                        &branch_ops,
+                                                        0, // Index within branch ops
+                                                    )? {
+                                                        debug!(
+                                                            "Classical operation in branch completed"
+                                                        );
+                                                    }
+                                                }
+                                            }
                                             _ => {
                                                 // For other operation types, we'll handle them later
-                                                debug!("Skipping non-quantum operation in branch");
+                                                debug!(
+                                                    "Skipping other operation type in branch: {branch_op:?}"
+                                                );
                                             }
                                         }
                                     }
@@ -553,7 +600,7 @@ impl PHIREngine {
                     duration,
                     metadata,
                 } => {
-                    debug!("Processing machine operation: {}", mop);
+                    debug!("Processing machine operation: {mop}");
 
                     // Process the machine operation
                     match self.processor.process_machine_op(
@@ -579,7 +626,7 @@ impl PHIREngine {
                     args,
                     metadata: _,
                 } => {
-                    debug!("Processing meta instruction: {}", meta);
+                    debug!("Processing meta instruction: {meta}");
 
                     // Process meta instructions like barrier
                     match self.processor.process_meta_instruction(meta, args) {
@@ -596,7 +643,7 @@ impl PHIREngine {
                     }
                 }
                 Operation::Comment { comment } => {
-                    debug!("Processing comment: {}", comment);
+                    debug!("Processing comment: {comment}");
                     // Comments are ignored during execution
                 }
             }
@@ -605,21 +652,15 @@ impl PHIREngine {
             // If we've reached the maximum batch size, break out of the loop
             // This ensures we don't create excessively large messages
             if operation_count >= MAX_BATCH_SIZE {
-                debug!(
-                    "Reached maximum batch size ({}), returning current batch",
-                    MAX_BATCH_SIZE
-                );
+                debug!("Reached maximum batch size ({MAX_BATCH_SIZE}), returning current batch");
                 break;
             }
         }
 
-        debug!(
-            "PHIR engine generated {} operations for shot",
-            operation_count
-        );
+        debug!("PHIR engine generated {operation_count} operations for shot");
 
         // Build and return the message
-        Ok(self.message_builder.build())
+        Ok(Some(self.message_builder.build()))
     }
 
     /// Gets the results in a specific format
@@ -664,14 +705,12 @@ impl ControlEngine for PHIREngine {
         self.processor.reset();
 
         debug!("start() called, generating commands");
-        let commands = self.generate_commands()?;
-
-        if commands.is_empty().unwrap_or(false) {
-            debug!("start() - No commands to process, returning results immediately");
-            Ok(EngineStage::Complete(self.get_results()?))
-        } else {
+        if let Some(commands) = self.generate_commands_impl()? {
             debug!("start() - Returning commands for processing");
             Ok(EngineStage::NeedsProcessing(commands))
+        } else {
+            debug!("start() - No commands to process, returning results immediately");
+            Ok(EngineStage::Complete(self.get_results()?))
         }
     }
 
@@ -685,11 +724,8 @@ impl ControlEngine for PHIREngine {
         );
 
         // Handle received measurements
-        let measurement_results = measurements.parse_measurements()?;
-        log::debug!(
-            "PHIREngine: Measurement results received: {:?}",
-            measurement_results
-        );
+        let measurement_results = measurements.outcomes()?;
+        log::debug!("PHIREngine: Measurement results received: {measurement_results:?}");
 
         // For Bell state debugging - check if we have 2 qubits and get result patterns
         if let Some(prog) = &self.program {
@@ -701,8 +737,7 @@ impl ControlEngine for PHIREngine {
                 }
             }) {
                 log::debug!(
-                    "Bell state program detected - measurement results: {:?}",
-                    measurement_results
+                    "Bell state program detected - measurement results: {measurement_results:?}"
                 );
             }
         }
@@ -716,9 +751,10 @@ impl ControlEngine for PHIREngine {
 
         // Get next batch of commands if any
         debug!("Getting next batch of commands");
-        let commands = self.generate_commands()?;
-
-        if commands.is_empty().unwrap_or(false) {
+        if let Some(commands) = self.generate_commands_impl()? {
+            debug!("Returning more commands for processing");
+            Ok(EngineStage::NeedsProcessing(commands))
+        } else {
             debug!("No more commands, returning results");
             // Make sure to process any remaining Result operations
             if self.current_op < self.program.as_ref().map_or(0, |prog| prog.ops.len()) {
@@ -728,7 +764,7 @@ impl ControlEngine for PHIREngine {
                 } = &ops[self.current_op]
                 {
                     if cop == "Result" {
-                        debug!("Processing Result operation: {}", cop);
+                        debug!("Processing Result operation: {cop}");
                         self.processor.handle_classical_op(
                             cop,
                             args,
@@ -743,9 +779,6 @@ impl ControlEngine for PHIREngine {
             let results = self.get_results()?;
             debug!("Completed processing, returning results");
             Ok(EngineStage::Complete(results))
-        } else {
-            debug!("Returning more commands for processing");
-            Ok(EngineStage::NeedsProcessing(commands))
         }
     }
 
@@ -758,7 +791,10 @@ impl ControlEngine for PHIREngine {
 
 impl ClassicalEngine for PHIREngine {
     fn generate_commands(&mut self) -> Result<ByteMessage, PecosError> {
-        self.generate_commands()
+        // When no commands are left to generate, create an empty message
+        Ok(self
+            .generate_commands_impl()?
+            .unwrap_or_else(ByteMessage::create_empty))
     }
 
     fn num_qubits(&self) -> usize {
@@ -791,7 +827,7 @@ impl ClassicalEngine for PHIREngine {
     }
 
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), PecosError> {
-        let measurement_outcomes = message.parse_measurements()?;
+        let measurement_outcomes = message.outcomes()?;
         let ops = match &self.program {
             Some(program) => program.ops.clone(),
             None => vec![],
@@ -847,11 +883,7 @@ impl ClassicalEngine for PHIREngine {
                 for dest in destination_registers {
                     if exported_values.contains_key(&dest) {
                         let value = exported_values[&dest];
-                        log::debug!(
-                            "PHIR: Keeping explicitly mapped register: {} = {}",
-                            dest,
-                            value
-                        );
+                        log::debug!("PHIR: Keeping explicitly mapped register: {dest} = {value}");
                         filtered_values.insert(dest, value);
                     }
                 }
@@ -869,7 +901,7 @@ impl ClassicalEngine for PHIREngine {
 
         for (key, value) in &exported_values {
             results.data.insert(key.clone(), Data::U32(*value));
-            log::debug!("PHIR: Adding mapped register {} = {}", key, value);
+            log::debug!("PHIR: Adding mapped register {key} = {value}");
         }
 
         // If nothing has been exported so far, use all available variables
@@ -896,17 +928,14 @@ impl ClassicalEngine for PHIREngine {
 
                 // Try to get the value from the environment
                 if let Some(value) = self.processor.environment.get(source) {
-                    log::debug!("PHIR: Exporting {} -> {} = {}", source, dest, value);
+                    log::debug!("PHIR: Exporting {source} -> {dest} = {value}");
                     results.data.insert(dest.clone(), Data::U32(value.as_u32()));
                 } else {
                     // If not found in environment, try the exported_values directly
                     // Try to get the value directly from environment if not already found
                     if let Some(value) = self.processor.environment.get(source) {
                         log::debug!(
-                            "PHIR: Exporting from environment {} -> {} = {}",
-                            source,
-                            dest,
-                            value
+                            "PHIR: Exporting from environment {source} -> {dest} = {value}"
                         );
                         results.data.insert(dest.clone(), Data::U32(value.as_u32()));
                     }
@@ -946,7 +975,7 @@ impl ClassicalEngine for PHIREngine {
         // Just log the final state of the registers for debugging
         log::debug!("PHIR: Final register values from environment - no reconstruction needed");
         for (key, value) in &results.data {
-            log::debug!("PHIR: Register {} = {:?}", key, value);
+            log::debug!("PHIR: Register {key} = {value:?}");
         }
 
         log::debug!("PHIR: Exported {} registers", results.data.len());
@@ -1008,374 +1037,108 @@ impl Engine for PHIREngine {
                 program.ops.len()
             );
             for (i, op) in program.ops.iter().enumerate() {
-                log::debug!("Process: Operation {}: {:?}", i, op);
+                log::debug!("Process: Operation {i}: {op:?}");
             }
         }
-
-        // For integration tests, we want to manually execute the operations
-        // to ensure expression tests work correctly - they depend on variable values
-        // being properly set and expressions being properly evaluated
-        log::info!("INTEGRATION TEST HELPER - Enabling direct execution mode");
 
         // Reset state to ensure we start fresh
         self.reset_state();
 
-        // Process all operations sequentially as they would be in a real program
-        if let Some(program) = &self.program {
-            log::debug!("Process: processing all operations in order");
+        // Start the engine and check its state
+        match self.start(())? {
+            EngineStage::Complete(result) => {
+                log::debug!("Shot completed directly in start()");
+                Ok(result)
+            }
+            EngineStage::NeedsProcessing(_cmds) => {
+                log::debug!("PHIREngine cannot process quantum operations directly");
+                log::debug!("Falling back to manual direct execution for integration testing");
 
-            // Process operations in order (like a real execution)
-            for (i, op) in program.ops.iter().enumerate() {
-                log::debug!("Processing operation {}: {:?}", i, op);
+                // For integration tests, manually execute the operations
+                if let Some(program) = &self.program {
+                    log::debug!("Process: processing all operations in order");
 
-                match op {
-                    Operation::VariableDefinition {
-                        data,
-                        data_type,
-                        variable,
-                        size,
-                    } => {
-                        log::debug!("Processing variable definition: {} {}", data_type, variable);
-                        let _ = self
-                            .processor
-                            .handle_variable_definition(data, data_type, variable, *size);
+                    // Process operations in order (like a real execution)
+                    for (i, op) in program.ops.iter().enumerate() {
+                        log::debug!("Processing operation {i}: {op:?}");
+
+                        match op {
+                            Operation::VariableDefinition {
+                                data,
+                                data_type,
+                                variable,
+                                size,
+                            } => {
+                                log::debug!(
+                                    "Processing variable definition: {data_type} {variable}"
+                                );
+                                let _ = self
+                                    .processor
+                                    .handle_variable_definition(data, data_type, variable, *size);
+                            }
+                            Operation::ClassicalOp {
+                                cop,
+                                args,
+                                returns,
+                                function: _,
+                                metadata: _,
+                            } => {
+                                log::debug!("Processing classical operation {i}: {cop}");
+                                if let Err(e) = self.processor.handle_classical_op(
+                                    cop,
+                                    args,
+                                    returns,
+                                    &program.ops,
+                                    i,
+                                ) {
+                                    log::error!("Failed to process classical operation: {e}");
+                                    return Err(e);
+                                }
+                            }
+                            Operation::QuantumOp {
+                                qop,
+                                args,
+                                returns: _,
+                                angles: _,
+                                metadata: _,
+                            } => {
+                                log::debug!("Processing quantum operation {i}: {qop}");
+                                log::debug!("Simulating quantum gate: {qop} on qubits: {args:?}");
+                            }
+                            // Handle other operation types as needed
+                            _ => log::debug!("Skipping operation type for direct execution"),
+                        }
                     }
-                    Operation::ClassicalOp {
-                        cop,
-                        args,
-                        returns,
-                        function: _,
-                        metadata: _,
-                    } => {
-                        log::debug!("Processing classical operation {}: {}", i, cop);
-                        if let Err(e) =
-                            self.processor
-                                .handle_classical_op(cop, args, returns, &program.ops, i)
+
+                    // Process all Result commands to ensure outputs are generated
+                    let mut result_ops = Vec::new();
+                    for (i, op) in program.ops.iter().enumerate() {
+                        if let Operation::ClassicalOp {
+                            cop, args, returns, ..
+                        } = op
                         {
-                            log::error!("Failed to process classical operation: {}", e);
-                            return Err(e);
+                            if cop == "Result" {
+                                result_ops.push((i, args.clone(), returns.clone()));
+                            }
                         }
+                    }
 
-                        // Log state after each classical operation
-                        log::debug!(
-                            "After classical operation {}, environment: {:?}",
+                    log::debug!("Processing {} Result commands", result_ops.len());
+                    for (i, args, returns) in result_ops {
+                        self.processor.handle_classical_op(
+                            "Result",
+                            &args,
+                            &returns,
+                            &program.ops,
                             i,
-                            self.processor.environment.get_all_variables()
-                        );
-                    }
-                    Operation::QuantumOp {
-                        qop,
-                        args,
-                        returns: _, // Unused variable
-                        angles: _,
-                        metadata: _,
-                    } => {
-                        log::debug!("Processing quantum operation {}: {}", i, qop);
-
-                        // When using process() method directly, we DO NOT simulate quantum operations
-                        // Quantum operations (including measurements) should be simulated by a quantum simulator
-                        if qop == "Init" {
-                            // For initialization, nothing needs to be done in simulation
-                            log::debug!("Simulated initialization of qubits: {:?}", args);
-                        } else {
-                            // For other gates, nothing needs to be done in simulation
-                            log::debug!("Simulated quantum gate: {} on qubits: {:?}", qop, args);
-                        }
-                    }
-                    Operation::Block {
-                        block,
-                        ops: block_ops,
-                        condition,
-                        true_branch,
-                        false_branch,
-                        metadata: _,
-                    } => {
-                        log::debug!("Processing block operation {}: {}", i, block);
-
-                        // For direct execution, recursively process operations in blocks
-                        match block.as_str() {
-                            "if" => {
-                                // For conditional blocks, evaluate condition and process appropriate branch
-                                if let Some(cond) = condition {
-                                    if let (Some(tb), fb) = (true_branch, false_branch) {
-                                        // Actually evaluate the condition using ExpressionEvaluator
-                                        let condition_value =
-                                            self.processor.evaluate_expression(cond)? != 0;
-
-                                        // Select branch based on condition
-                                        let branch_ops = if condition_value {
-                                            log::debug!(
-                                                "Condition evaluated to true, executing true branch"
-                                            );
-                                            tb
-                                        } else if let Some(fb_ops) = fb {
-                                            log::debug!(
-                                                "Condition evaluated to false, executing false branch"
-                                            );
-                                            fb_ops
-                                        } else {
-                                            log::debug!(
-                                                "Condition evaluated to false, no false branch"
-                                            );
-                                            &Vec::new()
-                                        };
-
-                                        // Process all operations in the selected branch
-                                        for branch_op in branch_ops {
-                                            // Recursively process this operation
-                                            log::debug!(
-                                                "Processing operation in branch: {:?}",
-                                                branch_op
-                                            );
-                                            match branch_op {
-                                                Operation::QuantumOp {
-                                                    qop, args: _, returns, .. // Marking args as unused since we don't use it here
-                                                } => {
-                                                    if qop == "Measure" && !returns.is_empty() {
-                                                        // Quantum operations including measurements are handled by the quantum simulator
-                                                        log::debug!("Processing quantum operation in branch: {}", qop);
-                                                    }
-                                                }
-                                                Operation::ClassicalOp {
-                                                    cop, args, returns, function: _, metadata: _
-                                                } => {
-                                                    // Actually process the classical operation
-                                                    log::debug!("Processing classical operation in branch: {}", cop);
-                                                    if let Err(e) = self.processor.handle_classical_op(
-                                                        cop, args, returns, &program.ops, i
-                                                    ) {
-                                                        log::error!("Failed to process classical operation in branch: {}", e);
-                                                        return Err(e);
-                                                    }
-                                                }
-                                                // Handle other operations if needed
-                                                _ => {}
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            "qparallel" => {
-                                // For parallel blocks, process all operations
-                                for parallel_op in block_ops {
-                                    if let Operation::QuantumOp {
-                                        qop, args: _, returns, .. // Marking args as unused since we don't use it here
-                                    } = parallel_op {
-                                        if qop == "Measure" && !returns.is_empty() {
-                                            // Quantum operations including measurements are handled by the quantum simulator
-                                            log::debug!("Processing quantum operation in qparallel block: {}", qop);
-                                        }
-                                    }
-                                }
-                            }
-                            "sequence" => {
-                                // Process all operations sequentially
-                                for seq_op in block_ops {
-                                    match seq_op {
-                                        Operation::QuantumOp {
-                                            qop, args: _, returns, .. // Marking args as unused since we don't use it here
-                                        } => {
-                                            if qop == "Measure" && !returns.is_empty() {
-                                                // Quantum operations including measurements are handled by the quantum simulator
-                                                log::debug!("Processing quantum operation in sequence block: {}", qop);
-                                            }
-                                        }
-                                        Operation::ClassicalOp {
-                                            cop, args, returns, ..
-                                        } => {
-                                            if let Err(e) = self.processor.handle_classical_op(
-                                                cop,
-                                                args,
-                                                returns,
-                                                &program.ops,
-                                                i,
-                                            ) {
-                                                log::error!(
-                                                    "Failed to process classical operation in sequence: {}",
-                                                    e
-                                                );
-                                                return Err(e);
-                                            }
-                                        }
-                                        // Handle other operations if needed
-                                        _ => {}
-                                    }
-                                }
-                            }
-                            _ => {
-                                log::warn!("Unknown block type: {}", block);
-                            }
-                        }
-                    }
-                    Operation::MachineOp {
-                        mop,
-                        args,
-                        duration,
-                        metadata,
-                    } => {
-                        log::debug!("Processing machine operation {}: {}", i, mop);
-
-                        // For machine operations, record that we're simulating them
-                        match mop.as_str() {
-                            "Idle" => {
-                                // Use trace level for verification - zero cost in production
-                                log::trace!(
-                                    "VERIFICATION: mop_idle:{} args:{:?} duration:{:?}",
-                                    self.current_op,
-                                    args,
-                                    duration
-                                );
-
-                                // Log additional details at debug level
-                                log::debug!("Simulating Idle operation with args: {:?}", args);
-                            }
-                            "Delay" => {
-                                // Use trace level for verification - zero cost in production
-                                log::trace!(
-                                    "VERIFICATION: mop_delay:{} args:{:?} duration:{:?}",
-                                    self.current_op,
-                                    args,
-                                    duration
-                                );
-
-                                // Log additional details at debug level
-                                log::debug!("Simulating Delay operation with args: {:?}", args);
-                            }
-                            "Transport" => {
-                                // Use trace level for verification - zero cost in production
-                                log::trace!(
-                                    "VERIFICATION: mop_transport:{} args:{:?}",
-                                    self.current_op,
-                                    args
-                                );
-
-                                // Log additional details at debug level
-                                log::debug!("Simulating Transport operation with args: {:?}", args);
-                            }
-                            "Timing" => {
-                                // Use trace level for verification - zero cost in production
-                                log::trace!(
-                                    "VERIFICATION: mop_timing:{} args:{:?} metadata:{:?}",
-                                    self.current_op,
-                                    args,
-                                    metadata
-                                );
-
-                                // Log additional details at debug level
-                                log::debug!("Simulating Timing operation with args: {:?}", args);
-                            }
-                            "Skip" => {
-                                // Use trace level for verification - zero cost in production
-                                log::trace!("VERIFICATION: mop_skip:{}", self.current_op);
-
-                                // Log additional details at debug level
-                                log::debug!("Simulating Skip operation");
-                            }
-                            _ => log::warn!("Unknown machine operation: {}", mop),
-                        }
-                    }
-                    Operation::MetaInstruction {
-                        meta,
-                        args,
-                        metadata: _,
-                    } => {
-                        log::debug!("Processing meta instruction {}: {}", i, meta);
-
-                        // For meta instructions, log that we're simulating them
-                        if meta == "barrier" {
-                            // Log barrier operation with the operation index for verification in tests
-                            // Use trace level for verification - zero cost in production
-                            log::trace!(
-                                "VERIFICATION: meta_barrier:{} args:{:?}",
-                                self.current_op,
-                                args
-                            );
-
-                            // Log additional details at debug level
-                            log::debug!(
-                                "Simulating barrier meta instruction with args: {:?}",
-                                args
-                            );
-                        } else {
-                            log::warn!("Unknown meta instruction: {}", meta);
-                        }
-                    }
-                    Operation::Comment { .. } => {
-                        log::debug!("Skipping comment at index {}", i);
+                        )?;
                     }
                 }
-            }
 
-            log::debug!(
-                "After processing all operations, environment: {:?}",
-                self.processor.environment.get_all_variables()
-            );
-
-            // Extra pass to specifically handle all Result commands again just to be sure
-            log::debug!("Extra pass to handle Result commands");
-
-            // First, explicitly look for Result commands
-            let mut result_ops = Vec::new();
-            for (i, op) in program.ops.iter().enumerate() {
-                if let Operation::ClassicalOp {
-                    cop, args, returns, ..
-                } = op
-                {
-                    if cop == "Result" {
-                        result_ops.push((i, args.clone(), returns.clone()));
-                    }
-                }
-            }
-
-            // Process all Result commands
-            log::debug!("Found {} Result commands to process", result_ops.len());
-            for (i, args, returns) in result_ops {
-                log::debug!("Re-processing Result operation at index {}", i);
-                self.processor
-                    .handle_classical_op("Result", &args, &returns, &program.ops, i)?;
-            }
-
-            // We no longer need special fallback mapping
-            // All variables are now handled generally through the Environment API
-            log::debug!("Ensuring all variables are available to export mappings");
-        }
-
-        // TEMPORARY DEBUGGING: Create a Shot directly from our current state
-        log::debug!("TEMPORARY: Creating result directly from processor state");
-        let mut result = Shot::default();
-
-        // Process all export mappings to ensure we have values for exports
-        log::debug!("Processing export mappings into results");
-        let exported_values = self.processor.process_export_mappings();
-
-        log::debug!("Exported values from mappings: {:?}", exported_values);
-
-        // Add all exported values from process_export_mappings to the results
-        for (key, value) in &exported_values {
-            result.data.insert(key.clone(), Data::U32(*value));
-            log::debug!("Adding exported register {} = {}", key, value);
-        }
-
-        // All exports come from environment and export_mappings now
-
-        // If there are no registers in the results or registers are missing, add all variables
-        // from the environment to ensure we have a comprehensive result
-        if result.data.is_empty() {
-            log::debug!("No registers in results, adding all available variables");
-
-            // Add all variables from the environment
-            for info in self.processor.environment.get_all_variables() {
-                if let Some(value) = self.processor.environment.get(&info.name) {
-                    log::debug!("Adding variable {} = {} to results", info.name, value);
-                    result
-                        .data
-                        .insert(info.name.clone(), Data::U32(value.as_u32()));
-                }
+                // Return results from the processed state
+                Ok(self.get_results()?)
             }
         }
-
-        log::debug!("Returning Shot: {:?}", result);
-        Ok(result)
     }
 
     fn reset(&mut self) -> Result<(), PecosError> {

@@ -162,7 +162,7 @@ class PauliFaultProp(PauliPropagation):
             else:
                 symbol, locations, _ = elem
 
-            if symbol in ["X", "Y", "Z"]:
+            if symbol in {"X", "Y", "Z"}:
                 if symbol == "X":
                     # X.I = X
                     # X.X = I

@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from pecos.circuits import LocationSet, QuantumCircuit
     from pecos.misc.symbol_library import JSONDict
     from pecos.protocols import QECCProtocol
-    from pecos.type_defs import QECCInstrParams
+    from pecos.typing import QECCInstrParams
 
 
 class DefaultLogicalInstruction:

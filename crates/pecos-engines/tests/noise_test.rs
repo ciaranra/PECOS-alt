@@ -39,11 +39,16 @@ fn count_results(
         let output = system.process(circ.clone()).expect("Processing failed");
 
         // Extract measurement results
-        if let Ok(measurements) = output.measurement_results_as_vec() {
+        if let Ok(outcomes) = output.outcomes().map(|outcomes| {
+            outcomes
+                .into_iter()
+                .enumerate()
+                .collect::<Vec<(usize, u32)>>()
+        }) {
             // Create a bitstring from measurements
             // We assume that result_id corresponds to qubit index
             let mut bits = vec!['0'; num_qubits];
-            for (result_id, outcome) in measurements {
+            for (result_id, outcome) in outcomes {
                 if result_id < num_qubits {
                     bits[result_id] = if outcome != 0 { '1' } else { '0' };
                 }
@@ -183,7 +188,7 @@ fn test_rotation_gate_with_different_angles() {
         println!("======= Testing {desc}: angle={angle} =======");
 
         // Print out the quantum operations in the circuit
-        if let Ok(ops) = circ.parse_quantum_operations() {
+        if let Ok(ops) = circ.quantum_ops() {
             println!("Circuit operations:");
             for (i, op) in ops.iter().enumerate() {
                 println!("  Op {i}: {op:?}");
@@ -257,7 +262,7 @@ fn test_rotation_gate_with_different_angles() {
     let circ = builder.build();
 
     println!("======= Testing X gate =======");
-    if let Ok(ops) = circ.parse_quantum_operations() {
+    if let Ok(ops) = circ.quantum_ops() {
         println!("X gate circuit operations:");
         for (i, op) in ops.iter().enumerate() {
             println!("  Op {i}: {op:?}");

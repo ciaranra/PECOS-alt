@@ -48,8 +48,8 @@ class Op(Instr):
                 if isinstance(r, str):
                     pass
                 elif isinstance(r, list):
-                    sym, _id = r
-                    if not isinstance(sym, str) or not isinstance(_id, int):
+                    sym, id_ = r
+                    if not isinstance(sym, str) or not isinstance(id_, int):
                         msg = f"Returns not of correct form of cvar (str) or cbit ([str, int]): {returns}"
                         raise TypeError(msg)
                 else:

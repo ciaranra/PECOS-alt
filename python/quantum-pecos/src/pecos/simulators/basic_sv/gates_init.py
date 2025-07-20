@@ -24,7 +24,7 @@ from pecos.simulators.basic_sv.gates_one_qubit import X
 
 if TYPE_CHECKING:
     from pecos.simulators.basic_sv.state import BasicSV
-    from pecos.type_defs import SimulatorGateParams
+    from pecos.typing import SimulatorGateParams
 
 
 def init_zero(state: BasicSV, qubit: int, **_params: SimulatorGateParams) -> None:

@@ -46,7 +46,7 @@ fn test_scientific_notation_formats() {
     // All operations should be gate calls
     for op in &program.operations {
         match op {
-            pecos_qasm::Operation::Gate { .. } => {
+            pecos_qasm::Operation::Gate { .. } | pecos_qasm::Operation::NativeGate(_) => {
                 // Gate expanded into native operations
             }
             _ => panic!("Expected only gate calls"),

@@ -6,6 +6,34 @@ members = [
     "crates/benchmarks",
 ]
 
+# By default, exclude decoder crates from workspace operations to avoid heavy C++ dependencies
+default-members = [
+    "crates/pecos-core",
+    "crates/pecos-engines",
+    "crates/pecos-qsim",
+    "crates/pecos-qasm",
+    "crates/pecos-phir",
+    "crates/pecos-qir",
+    "crates/pecos-qec",
+    "crates/pecos-clib-pcg",
+    "crates/pecos",
+    "crates/pecos-cli",
+    "python/pecos-rslib/rust",
+    "crates/benchmarks",
+]
+
+# The decoder crates are external and have heavy C++ dependencies.
+# To work with decoders:
+#
+# Build specific decoders:
+#   cargo build --package pecos-decoders --features "ldpc"
+#
+# Build all decoders:
+#   cargo build --package pecos-decoders --all-features
+#
+# Build everything including decoders:
+#   cargo build --workspace
+
 [workspace.package]
 version = "0.1.1"
 edition = "2024"
@@ -51,6 +79,18 @@ wasmtime = "33"
 serial_test = "3"
 cc = "1"
 
+# Dependencies for decoder crates
+ndarray = "0.16"
+anyhow = "1"
+cxx = "1"
+cxx-build = "1"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "native-tls"] }
+tar = "0.4"
+flate2 = "1"
+sha2 = "0.10"
+dirs = "6"
+petgraph = "0.6"
+
 pecos-core = { version = "0.1.1", path = "crates/pecos-core" }
 pecos-qsim = { version = "0.1.1", path = "crates/pecos-qsim" }
 pecos-qasm = { version = "0.1.1", path = "crates/pecos-qasm" }
@@ -63,9 +103,35 @@ pecos = { version = "0.1.1", path = "crates/pecos" }
 pecos-cli = { version = "0.1.1", path = "crates/pecos-cli" }
 pecos-rslib = { version = "0.1.1", path = "python/pecos-rslib/rust" }
 
+# Decoder crates
+pecos-decoder-core = { version = "0.1.1", path = "crates/pecos-decoder-core" }
+pecos-build-utils = { version = "0.1.1", path = "crates/pecos-build-utils" }
+pecos-ldpc-decoders = { version = "0.1.1", path = "crates/pecos-ldpc-decoders" }
+pecos-decoders = { version = "0.1.1", path = "crates/pecos-decoders" }
+
+# Optimize build times
+[profile.dev]
+opt-level = 0          # No optimization for faster compilation
+debug = true           # Include debug info
+incremental = true     # Enable incremental compilation
+split-debuginfo = "unpacked"  # Faster linking on supported platforms
+
+[profile.dev.build-override]
+opt-level = 0          # No optimization for build scripts too
+debug = false          # No debug info for build scripts
+
+# For tests, use no optimization for fastest compilation
+[profile.test]
+opt-level = 0          # No optimization for fastest compilation
+debug = true           # Include debug info
+incremental = true     # Enable incremental compilation
+split-debuginfo = "unpacked"  # Faster linking on supported platforms
+
+# Release profile remains fully optimized
 [profile.release]
-codegen-units = 1
-lto = "fat"
+opt-level = 3          # Maximum optimization
+lto = true             # Link-time optimization (same as "fat")
+codegen-units = 1      # Single codegen unit for better optimization
 
 [workspace.lints.clippy]
 # For more details see: https://doc.rust-lang.org/clippy/lints.html

@@ -377,20 +377,20 @@ def eval_condition(
 
         # Map of operators to their evaluation functions
         ops = {
-            "==": lambda a, b: bool(a.__eq__(b)),
-            "!=": lambda a, b: bool(a.__ne__(b)),
-            "^": lambda a, b: bool(a.__xor__(b).__int__()),
-            "|": lambda a, b: bool(a.__or__(b).__int__()),
-            "&": lambda a, b: bool(a.__and__(b).__int__()),
-            "<": lambda a, b: a.__lt__(b),
-            ">": lambda a, b: a.__gt__(b),
-            "<=": lambda a, b: a.__le__(b),
-            ">=": lambda a, b: a.__ge__(b),
-            ">>": lambda a, b: a.__rshift__(b),
-            "<<": lambda a, b: a.__lshift__(b),
-            "~": lambda a, _: a.__invert__(),
-            "*": lambda a, b: a.__mul__(b),
-            "/": lambda a, b: a.__floordiv__(b),
+            "==": lambda a, b: bool(a == b),
+            "!=": lambda a, b: bool(a != b),
+            "^": lambda a, b: bool(int(a ^ b)),
+            "|": lambda a, b: bool(int(a | b)),
+            "&": lambda a, b: bool(int(a & b)),
+            "<": lambda a, b: a < b,
+            ">": lambda a, b: a > b,
+            "<=": lambda a, b: a <= b,
+            ">=": lambda a, b: a >= b,
+            ">>": lambda a, b: a >> b,
+            "<<": lambda a, b: a << b,
+            "~": lambda a, _: ~a,
+            "*": lambda a, b: a * b,
+            "/": lambda a, b: a // b,
         }
 
         if op in ops:

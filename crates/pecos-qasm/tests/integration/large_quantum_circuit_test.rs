@@ -317,7 +317,7 @@ fn test_large_23_qubit_circuit() {
     let measurement_count = program
         .operations
         .iter()
-        .filter(|op| matches!(op, pecos_qasm::Operation::Measure { .. }))
+        .filter(|op| matches!(op, pecos_qasm::Operation::MeasureWithMapping { .. }))
         .count();
     assert_eq!(
         measurement_count, 23,

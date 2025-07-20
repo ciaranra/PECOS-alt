@@ -1,36 +1,42 @@
-use crate::{QASMEngine, QASMResults};
+use crate::simulation::{NoiseModelType, QuantumEngineType, qasm_sim};
 use pecos_core::errors::PecosError;
-use pecos_engines::noise::NoiseModel;
-use pecos_engines::quantum::{QuantumEngine, StateVecEngine};
-use pecos_engines::{ClassicalEngine, MonteCarloEngine, PassThroughNoiseModel};
-use std::str::FromStr;
+use pecos_engines::shot_results::ShotVec;
 
-/// Run a QASM simulation with detailed control over noise model and quantum engine
+/// Run a QASM simulation with a simple function interface
 ///
-/// This function takes a QASM string and runs a simulation with the specified settings.
-/// For more type safety, consider using [`QASMProgram`] instead of raw QASM strings.
+/// This is a convenience wrapper around [`qasm_sim`] for users who prefer
+/// function calls over builder patterns. It provides the same functionality
+/// in a more traditional function interface.
+///
+/// For more control and a fluent API, consider using [`qasm_sim`] directly:
+///
+/// ```
+/// use pecos_qasm::prelude::*;
+/// use pecos_engines::noise::DepolarizingNoiseModel;
+/// let qasm = "OPENQASM 2.0; include \"qelib1.inc\"; qreg q[1]; creg c[1]; h q[0]; measure q[0] -> c[0];";
+/// let results = qasm_sim(qasm).seed(42).run(100)?;
+/// assert_eq!(results.len(), 100);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 ///
 /// # Parameters
+///
 /// * `qasm` - QASM code as a string
 /// * `shots` - Number of shots to run
+/// * `noise` - Noise configuration (any noise model builder)
+/// * `quantum_engine` - Optional quantum engine type (defaults to appropriate engine for circuit)
+/// * `workers` - Optional number of workers for parallelization (defaults to 1)
 /// * `seed` - Optional seed for reproducibility
-/// * `workers` - Optional number of workers for parallelization (default: 1)
-/// * `noise_model` - Optional custom noise model to use (default: `PassThroughNoiseModel`)
-/// * `quantum_engine` - Optional custom quantum engine to use (default: `StateVecEngine`)
 ///
 /// # Returns
 ///
-/// A [`QASMResults`] containing the simulation results with convenient formatting methods
-/// for binary and decimal output.
-///
-/// # Errors
-///
-/// Returns an error if QASM parsing or simulation fails.
+/// A [`ShotVec`] containing the simulation results. This can be converted to
+/// [`ShotMap`](crate::shot_results::ShotMap) for columnar access via `try_as_shot_map()`
 ///
 /// # Example
 ///
-/// ```no_run
-/// # use pecos_qasm::run_qasm_sim;
+/// ```
+/// # use pecos_qasm::prelude::*;
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let qasm = r#"
 ///     OPENQASM 2.0;
@@ -42,46 +48,78 @@ use std::str::FromStr;
 ///     measure q -> c;
 /// "#;
 ///
-/// let results = run_qasm_sim(qasm, 100, Some(42), None, None, None)?;
+/// // Simple usage - ideal simulation (no noise)
+/// let results = run_qasm(
+///     qasm,
+///     100,
+///     PassThroughNoiseModel::builder(),
+///     None,
+///     None,
+///     None
+/// )?;
+/// assert_eq!(results.len(), 100);
 ///
-/// // Direct access to formatting methods
-/// println!("{}", results.to_compact_json());
-/// println!("Outcome counts: {:?}", results.outcome_counts());
+/// // With depolarizing noise
+/// let noise = DepolarizingNoiseModel::builder()
+///     .with_uniform_probability(0.01);
+/// let results = run_qasm(
+///     qasm,
+///     1000,
+///     noise,
+///     Some(QuantumEngineType::StateVector),
+///     Some(4),  // workers
+///     Some(42), // seed
+/// )?;
+/// assert_eq!(results.len(), 1000);
 ///
-/// // Access the underlying ShotVec if needed
-/// println!("Number of shots: {}", results.len());
+/// // With custom depolarizing noise parameters
+/// let custom_noise = DepolarizingNoiseModel::builder()
+///     .with_prep_probability(0.001)
+///     .with_meas_probability(0.01)
+///     .with_p1_probability(0.005)
+///     .with_p2_probability(0.02);
+/// let results = run_qasm(qasm, 100, custom_noise, None, None, Some(42))?;
+///
+/// // Check results are Bell states
+/// let shot_map = results.try_as_shot_map()?;
+/// let values = shot_map.try_bits_as_u64("c")?;
+/// for val in &values[..10] {  // Check first 10
+///     assert!(*val == 0 || *val == 3 || *val == 1 || *val == 2); // With noise, all outcomes possible
+/// }
 /// # Ok(())
 /// # }
 /// ```
-pub fn run_qasm_sim(
+///
+/// # Errors
+///
+/// Returns a [`PecosError`] if:
+/// - QASM parsing fails due to syntax errors or unsupported operations
+/// - Simulation fails due to invalid quantum operations
+/// - Memory allocation fails for large circuits
+pub fn run_qasm<N>(
     qasm: &str,
     shots: usize,
-    seed: Option<u64>,
+    noise: N,
+    quantum_engine: Option<QuantumEngineType>,
     workers: Option<usize>,
-    noise_model: Option<Box<dyn NoiseModel>>,
-    quantum_engine: Option<Box<dyn QuantumEngine>>,
-) -> Result<QASMResults, PecosError> {
-    // Parse QASM to get register information
-    let engine = QASMEngine::from_str(qasm)?;
-    let num_qubits = engine.num_qubits();
+    seed: Option<u64>,
+) -> Result<ShotVec, PecosError>
+where
+    N: Into<NoiseModelType>,
+{
+    let mut builder = qasm_sim(qasm).noise(noise);
 
-    // Use default noise model if none provided
-    let noise_model = noise_model.unwrap_or_else(|| Box::new(PassThroughNoiseModel));
+    if let Some(e) = quantum_engine {
+        builder = builder.quantum_engine(e);
+    }
 
-    // Create default quantum engine if none provided
-    let quantum_engine =
-        quantum_engine.unwrap_or_else(|| Box::new(StateVecEngine::new(num_qubits)));
+    if let Some(w) = workers {
+        builder = builder.workers(w);
+    }
 
-    // Run simulation
-    let shot_results = MonteCarloEngine::run_with_engines(
-        Box::new(engine),
-        noise_model,
-        quantum_engine,
-        shots,
-        workers.unwrap_or(1),
-        seed,
-    )?;
+    if let Some(s) = seed {
+        builder = builder.seed(s);
+    }
 
-    // Return results wrapped in QASMResults
-    Ok(QASMResults::new(shot_results))
+    builder.run(shots)
 }
