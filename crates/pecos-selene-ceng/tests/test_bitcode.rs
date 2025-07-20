@@ -1,6 +1,8 @@
 //! Test LLVM bitcode support in selene_sim
 
-use pecos_selene_ceng::{selene_sim, PassThroughNoise};
+use pecos_selene_ceng::selene_engine;
+use pecos_engines::{PassThroughNoise, ClassicalControlEngineBuilder};
+use pecos_programs::LlvmProgram;
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
@@ -62,9 +64,10 @@ fn test_selene_bitcode_in_memory() {
     let bitcode = fs::read(&bc_file).unwrap();
     
     // Test with in-memory bitcode
-    let builder = selene_sim()
-        .llvm_bitcode(bitcode)
+    let builder = selene_engine()
+        .program(LlvmProgram::from_bitcode(bitcode))
         .qubits(2)
+        .to_sim()
         .noise(PassThroughNoise);
     
     // Should be able to build (though execution may fail without proper setup)
@@ -109,9 +112,10 @@ fn test_selene_bitcode_file() {
     }
     
     // Test with bitcode file path
-    let builder = selene_sim()
-        .llvm_bitcode_file(&bc_file)
-        .qubits(2);
+    let builder = selene_engine()
+        .program(LlvmProgram::from_bitcode_file(&bc_file).unwrap())
+        .qubits(2)
+        .to_sim();
     
     // Should be able to build
     match builder.build() {
@@ -149,15 +153,17 @@ fn test_selene_auto_detection() {
         .unwrap();
     
     // Test auto-detection with .ll file
-    let builder_ll = selene_sim()
-        .llvm_file(&ll_file)
-        .qubits(2);
+    let builder_ll = selene_engine()
+        .program(LlvmProgram::from_file(&ll_file).unwrap())
+        .qubits(2)
+        .to_sim();
     assert!(builder_ll.build().is_ok() || true); // Allow failure for missing runtime
     
     // Test auto-detection with .bc file
-    let builder_bc = selene_sim()
-        .llvm_file(&bc_file)
-        .qubits(2);
+    let builder_bc = selene_engine()
+        .program(LlvmProgram::from_file(&bc_file).unwrap())
+        .qubits(2)
+        .to_sim();
     match builder_bc.build() {
         Ok(_) => println!("Successfully built from auto-detected .bc file"),
         Err(e) => {
@@ -174,9 +180,10 @@ fn test_selene_llvm_dis_error() {
     // Test error handling with invalid bitcode
     let fake_bitcode = vec![0x42, 0x43]; // BC magic number but invalid content
     
-    let builder = selene_sim()
-        .llvm_bitcode(fake_bitcode)
-        .qubits(1);
+    let builder = selene_engine()
+        .program(LlvmProgram::from_bitcode(fake_bitcode))
+        .qubits(1)
+        .to_sim();
     
     // Since selene_engine skips compilation for tests, we need to check differently
     match builder.build() {

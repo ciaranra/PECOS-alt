@@ -6,19 +6,19 @@
 // Actual execution tests would require fully implemented engines.
 
 #[test]
-fn test_unified_api_consistency() {
-    use pecos_engines::{QuantumEngineType};
+fn test_quantum_engine_builders() {
+    use pecos_engines::{state_vector, sparse_stabilizer};
     
-    // We can't easily create a mock engine due to the complex trait requirements,
-    // so we'll test the API using the real engine builders from other crates.
-    // This test is mainly to ensure the API types and methods exist and compile.
+    // Test that quantum engine builders can be created and configured
+    let _state_vec_builder = state_vector().qubits(4);
+    let _sparse_stab_builder = sparse_stabilizer().qubits(4);
     
-    // Test that QuantumEngineType has expected variants
-    let _state_vec = QuantumEngineType::StateVector;
-    let _sparse_stab = QuantumEngineType::SparseStabilizer;
+    // Test that builders can be created without qubit count (will be set later)
+    let _state_vec_no_qubits = state_vector();
+    let _sparse_stab_no_qubits = sparse_stabilizer();
     
-    // Test that default is SparseStabilizer
-    assert_eq!(QuantumEngineType::default(), QuantumEngineType::SparseStabilizer);
+    // Test chaining
+    let _chained = sparse_stabilizer().qubits(2);
 }
 
 #[test] 
@@ -43,12 +43,10 @@ fn test_noise_conversions() {
 
 #[test]
 fn test_sim_config() {
-    use pecos_engines::{SimConfig, QuantumEngineType};
+    use pecos_engines::sim_builder::SimConfig;
     
     let config = SimConfig::default();
     assert_eq!(config.workers, 1);
-    assert_eq!(config.quantum_engine, QuantumEngineType::SparseStabilizer);
     assert!(config.seed.is_none());
-    assert!(config.max_qubits.is_none());
     assert!(!config.verbose);
 }

@@ -5,12 +5,15 @@
 //! - HybridEngine coordinates between classical and quantum execution
 //! - StateVecEngine (or other quantum engine) handles quantum operations
 
-use pecos_selene_ceng::selene_sim;
+use pecos_selene_ceng::selene_engine;
+use pecos_programs::LlvmProgram;
 use pecos_engines::{
     Engine,
+    ClassicalEngine,
     hybrid::HybridEngineBuilder, 
     quantum::StateVecEngine,
     ShotVec,
+    ClassicalControlEngineBuilder,
 };
 use pecos_core::prelude::PecosError;
 
@@ -39,10 +42,10 @@ entry:
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let selene_engine = selene_sim()
-        .llvm_ir(bell_llvm)
+    let selene_engine = selene_engine()
+        .program(LlvmProgram::from_ir(bell_llvm))
         .qubits(2)
-        .optimize()
+        .optimize(true)
         .verbose(true)
         .build()?;
     
@@ -116,8 +119,8 @@ entry:
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let selene_engine = selene_sim()
-        .llvm_ir(adaptive_llvm)
+    let selene_engine = selene_engine()
+        .program(LlvmProgram::from_ir(adaptive_llvm))
         .qubits(2)
         .verbose(true)
         .build()?;
@@ -185,8 +188,8 @@ entry:
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let selene_engine = selene_sim()
-        .llvm_ir(multi_qubit_llvm)
+    let selene_engine = selene_engine()
+        .program(LlvmProgram::from_ir(multi_qubit_llvm))
         .qubits(3)
         .build()?;
     
@@ -233,8 +236,8 @@ define void @reset_test() #0 {
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let selene_engine = selene_sim()
-        .llvm_ir(reset_llvm)
+    let selene_engine = selene_engine()
+        .program(LlvmProgram::from_ir(reset_llvm))
         .qubits(1)
         .build()?;
     
@@ -270,13 +273,25 @@ fn test_selene_error_handling() -> Result<(), PecosError> {
     println!("=== Testing SeleneEngine Error Handling ===");
     
     // Try to create engine with invalid configuration
-    let result = selene_sim()
-        .llvm_ir("") // Empty IR should cause error
-        .qubits(0) // Invalid qubit count
+    let mut engine = selene_engine()
+        .program(LlvmProgram::from_ir("")) // Empty IR should cause error
+        .qubits(1) // Valid qubit count (0 qubits would be rejected by builder)
+        .build()?;
+    
+    // The error should occur when trying to compile/use the engine
+    let result = engine.generate_commands();
+    
+    assert!(result.is_err(), "Should fail with empty program");
+    println!("Correctly rejected empty program");
+    
+    // Also test zero qubits case
+    let result = selene_engine()
+        .program(LlvmProgram::from_ir("define void @main() { ret void }"))
+        .qubits(0)
         .build();
     
-    assert!(result.is_err(), "Should fail with invalid configuration");
-    println!("Correctly rejected invalid configuration");
+    assert!(result.is_err(), "Should fail with zero qubits");
+    println!("Correctly rejected zero qubits configuration");
     
     Ok(())
 }

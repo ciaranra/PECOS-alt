@@ -46,9 +46,12 @@
 pub use pecos_core::prelude::*;
 pub use pecos_engines::prelude::*;
 pub use pecos_llvm_runtime::prelude::*;
+pub use pecos_llvm_sim::prelude::*;
 pub use pecos_phir_json::prelude::*;
 pub use pecos_qasm::prelude::*;
 pub use pecos_qsim::prelude::*;
+#[cfg(feature = "selene")]
+pub use pecos_selene_ceng::prelude::*;
 
 // Re-export ShotVec directly from pecos_engines for easier access
 pub use pecos_engines::shot_results::ShotVec;
@@ -57,6 +60,9 @@ pub use pecos_engines::shot_results::ShotVec;
 pub use crate::program::{
     ProgramType, detect_program_type, get_program_path, setup_engine_for_program,
 };
+
+// Re-export program types from pecos-programs
+pub use pecos_programs::{QasmProgram, LlvmProgram, HugrProgram, Program};
 
 // Re-export setup functions from format-specific crates
 pub use crate::setup_llvm_engine;

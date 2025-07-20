@@ -2,7 +2,9 @@
 //!
 //! This example demonstrates the full pipeline from HUGR to simulation results.
 
-use pecos_llvm_sim::{llvm_sim, DepolarizingNoise, BiasedDepolarizingNoise, QuantumEngineType};
+use pecos_llvm_sim::llvm_engine;
+use pecos_engines::{DepolarizingNoise, BiasedDepolarizingNoise, state_vector, ClassicalControlEngineBuilder};
+use pecos_programs::{LlvmProgram, HugrProgram};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 1: Using LLVM IR directly
@@ -25,12 +27,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ";
 
     // Run simulation with LLVM IR
-    let results = llvm_sim()
-        .llvm_ir(llvm_ir)
+    let results = llvm_engine()
+        .program(LlvmProgram::from_string(llvm_ir))
+        .to_sim()
         .seed(42)
         .auto_workers() // Use all available CPU cores
         .noise(DepolarizingNoise { p: 0.01 })
-        .quantum_engine(QuantumEngineType::StateVector)
+        .qubits(2)
+        .quantum(state_vector())
         .run(100)?;
 
     println!("LLVM simulation completed with {} registers", results.len());
@@ -50,7 +54,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Create simulation from HUGR
-    let _builder = llvm_sim().hugr(hugr).seed(42);
+    // Note: In a real scenario, you'd serialize the HUGR to bytes first
+    let hugr_bytes = vec![]; // hugr.to_bytes() or similar
+    let hugr_program = HugrProgram::from_bytes(hugr_bytes);
+    let _builder = llvm_engine().program(hugr_program).to_sim().seed(42);
 
     println!("Created simulation builder from HUGR");
 
@@ -64,12 +71,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n=== Example 3: File-based Input ===");
 
     // From LLVM file
-    let _llvm_builder = llvm_sim().llvm_file("circuit.ll").seed(123).workers(8);
+    let _llvm_builder = llvm_engine()
+        .program(LlvmProgram::from_file("circuit.ll").unwrap())
+        .to_sim()
+        .seed(123)
+        .workers(8);
     println!("Created builder from LLVM file");
 
     // From HUGR file
-    let _hugr_builder = llvm_sim()
-        .hugr_file("circuit.hugr")
+    let _hugr_builder = llvm_engine()
+        .program(HugrProgram::from_file("circuit.hugr").unwrap())
+        .to_sim()
         .noise(BiasedDepolarizingNoise { p: 0.005 });
     println!("Created builder from HUGR file");
 

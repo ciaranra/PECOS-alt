@@ -9,17 +9,21 @@ https://github.com/CQCL/PECOS/blob/master/docs/user-guide/qasm-simulation.md
 
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Any, Tuple
-from pecos_rslib._pecos_rslib import (
-    NoiseModel,
-    QuantumEngine,
-    QasmSimulation,
-    QasmSimulationBuilder,
-    GeneralNoiseModelBuilder,
-    run_qasm as _run_qasm,
-    qasm_sim as _qasm_sim,
-    get_noise_models as _get_noise_models,
-    get_quantum_engines as _get_quantum_engines,
-)
+# Old bindings are no longer available - provide compatibility layer
+try:
+    from pecos_rslib._pecos_rslib import GeneralNoiseModelBuilder
+except ImportError:
+    GeneralNoiseModelBuilder = None
+
+# Stubs for backward compatibility
+NoiseModel = None
+QuantumEngine = None
+QasmSimulation = None 
+QasmSimulationBuilder = None
+_run_qasm = None
+_qasm_sim = None
+_get_noise_models = None
+_get_quantum_engines = None
 
 __all__ = [
     "NoiseModel",
@@ -194,6 +198,14 @@ def run_qasm(
     seed: Optional[int] = None,
 ) -> Dict[str, List[int]]:
     """Run a QASM simulation with specified parameters.
+    
+    NOTE: This function is provided for backward compatibility.
+    Consider using the new unified API instead:
+    
+        from pecos_rslib import qasm_engine
+        from pecos_rslib.programs import QasmProgram
+        
+        results = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().seed(42).noise(noise_model).run(shots)
 
     Args:
         qasm: QASM code as a string
@@ -226,7 +238,25 @@ def run_qasm(
         >>> counts = Counter(results["c"])
         >>> print(counts)  # Should show roughly equal counts of 0 (00) and 3 (11)
     """
-    return _run_qasm(qasm, shots, noise_model, engine, workers, seed)
+    # Use the new unified API with qasm_engine
+    from pecos_rslib import qasm_engine
+    from pecos_rslib.programs import QasmProgram
+    
+    sim_builder = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim()
+    
+    if seed is not None:
+        sim_builder = sim_builder.seed(seed)
+    if workers is not None:
+        sim_builder = sim_builder.workers(workers)
+    elif workers is None:
+        # Default to 1 worker as per docstring
+        sim_builder = sim_builder.workers(1)
+    if noise_model is not None:
+        sim_builder = sim_builder.noise(noise_model)
+    if engine is not None:
+        sim_builder = sim_builder.quantum_engine(engine)
+    
+    return sim_builder.run(shots)
 
 
 def qasm_sim(qasm: str) -> QasmSimulationBuilder:

@@ -86,12 +86,12 @@ impl LlvmSimulation {
         let noise_model = self.config.noise_model.clone().create_noise_model();
 
         // Run using MonteCarloEngine for parallelization and noise
-        let shot_vec = if let Some(max_qubits) = self.config.max_qubits {
-            // Use max_qubits when specified to handle dynamic allocation in loops
+        let shot_vec = if let Some(num_qubits) = self.config.num_qubits {
+            // Use num_qubits when specified to handle both quantum engine size and dynamic allocation limits
             MonteCarloEngine::run_with_noise_model_and_max_qubits(
                 Box::new(self.engine.clone()),
                 noise_model,
-                max_qubits,
+                num_qubits,
                 shots,
                 self.config.workers,
                 self.config.seed,

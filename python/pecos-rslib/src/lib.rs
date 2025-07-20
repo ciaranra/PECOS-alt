@@ -15,6 +15,7 @@ use log::LevelFilter;
 
 mod byte_message;
 mod engines;
+mod engine_builders;
 mod error;
 mod phir;
 mod qasm;
@@ -73,6 +74,9 @@ fn _pecos_rslib(m: &Bound<'_, PyModule>) -> PyResult<()> {
     phir::register_phir_module(&phir_module)?;
     m.add_submodule(&phir_module)?;
 
+    // Add engine builders for unified API
+    engine_builders::register_engine_builders(&m)?;
+    
     // Add version info
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     

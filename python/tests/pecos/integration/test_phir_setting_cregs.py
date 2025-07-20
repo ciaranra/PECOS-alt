@@ -27,8 +27,9 @@ def test_setting_bits() -> None:
     }
 
     results = HybridEngine(qsim="stabilizer").run(program=phir, shots=5)
+    results_dict = results
 
-    assert results["c"].count("101") == len(results["c"])
+    assert results_dict["c"].count("101") == len(results_dict["c"])
 
 
 def test_setting_cvar() -> None:
@@ -46,10 +47,11 @@ def test_setting_cvar() -> None:
     }
 
     results = HybridEngine(qsim="stabilizer").run(program=phir, shots=5)
+    results_dict = results
 
-    assert results["a"].count("000") == len(results["a"])
-    assert results["b"].count("001") == len(results["b"])
-    assert results["c"].count("010") == len(results["c"])
+    assert results_dict["a"].count("000") == len(results_dict["a"])
+    assert results_dict["b"].count("001") == len(results_dict["b"])
+    assert results_dict["c"].count("010") == len(results_dict["c"])
 
 
 def test_setting_expr() -> None:
@@ -75,10 +77,11 @@ def test_setting_expr() -> None:
     }
 
     results = HybridEngine(qsim="stabilizer").run(program=phir, shots=5)
+    results_dict = results
 
-    assert results["a"].count("001") == len(results["a"])
-    assert results["b"].count("001") == len(results["b"])
-    assert results["c"].count("010") == len(results["c"])
+    assert results_dict["a"].count("001") == len(results_dict["a"])
+    assert results_dict["b"].count("001") == len(results_dict["b"])
+    assert results_dict["c"].count("010") == len(results_dict["c"])
 
 
 def test_setting_mixed() -> None:
@@ -111,8 +114,9 @@ def test_setting_mixed() -> None:
     }
 
     results = HybridEngine(qsim="stabilizer").run(program=phir, shots=5)
+    results_dict = results
 
-    assert results["a"].count("001") == len(results["a"])
-    assert results["b"].count("011") == len(results["b"])
-    assert results["c"].count("010") == len(results["c"])
-    assert results["d"].count("100") == len(results["d"])
+    assert results_dict["a"].count("001") == len(results_dict["a"])
+    assert results_dict["b"].count("011") == len(results_dict["b"])
+    assert results_dict["c"].count("010") == len(results_dict["c"])
+    assert results_dict["d"].count("100") == len(results_dict["d"])

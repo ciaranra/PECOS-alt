@@ -89,6 +89,9 @@ pub mod program;
 pub use engine_type::{EngineType, DynamicEngineBuilder, sim_dynamic};
 pub use pecos_qasm::run_qasm;
 
+// Re-export program types from pecos-programs
+pub use pecos_programs::{QasmProgram, LlvmProgram, HugrProgram, Program};
+
 use pecos_core::errors::PecosError;
 use pecos_engines::ClassicalControlEngine;
 use std::path::Path;

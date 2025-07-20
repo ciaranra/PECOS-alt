@@ -19,14 +19,15 @@ test = true
 pecos-core.workspace = true
 pecos-qsim.workspace = true
 pecos-engines.workspace = true
+pecos-programs.workspace = true
 pecos-qasm.workspace = true
 pecos-phir-json.workspace = true
 pecos-llvm-runtime.workspace = true
-pecos-hugr-llvm = { path = "../pecos-hugr-llvm" }
+pecos-hugr-llvm.workspace = true
 pecos-phir.workspace = true
 pecos-clib-pcg.workspace = true
-pecos-llvm-sim = { path = "../pecos-llvm-sim" }
-pecos-selene-ceng = { path = "../pecos-selene-ceng" }
+pecos-llvm-sim.workspace = true
+pecos-selene-ceng.workspace = true
 log.workspace = true
 tempfile.workspace = true
 serde_json.workspace = true

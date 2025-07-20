@@ -118,6 +118,7 @@ class TestIsolatedOps:
             return measure(q)
         
         results = guppy_sim(test, max_qubits=10).run(10)
+        print(f"RX test results: {results['_result']}")
         assert all(r == True for r in results["_result"])
     
     def test_rotation_ry(self):

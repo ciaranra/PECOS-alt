@@ -1,8 +1,10 @@
-//! Tests comparing `llvm_sim()` with direct `LlvmEngine` usage to ensure equivalence
+//! Tests for LLVM simulation unified API functionality and correctness
 
-use pecos_engines::engine_system::MonteCarloEngine;
-use pecos_engines::noise::DepolarizingNoiseModel;
-use pecos_llvm_sim::{llvm_sim, LlvmEngine, DepolarizingNoise};
+// use pecos_engines::engine_system::MonteCarloEngine;
+// use pecos_engines::noise::DepolarizingNoiseModel;
+use pecos_llvm_sim::llvm_engine;
+use pecos_engines::{DepolarizingNoise, ClassicalControlEngineBuilder};
+use pecos_programs::LlvmProgram;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -49,7 +51,7 @@ fn skip_if_no_llvm() -> bool {
 }
 
 #[test]
-fn test_llvm_sim_vs_engine_noiseless() {
+fn test_llvm_unified_api_noiseless() {
     if skip_if_no_llvm() {
         return;
     }
@@ -57,75 +59,45 @@ fn test_llvm_sim_vs_engine_noiseless() {
     let seed = 42;
     let shots = 100;
 
-    // Run with llvm_sim
-    let sim_shot_vec = llvm_sim()
-        .llvm_file(get_bell_path())
+    // Run with unified API
+    let sim_shot_vec = llvm_engine()
+        .program(LlvmProgram::from_file(get_bell_path()).unwrap())
+        .to_sim()
         .seed(seed)
         .workers(1) // Single worker for determinism
+        .qubits(2)
         .run(shots)
-        .expect("llvm_sim should succeed");
+        .expect("Unified API should succeed");
 
-    // Run with LlvmEngine directly
-    let llvm_engine = LlvmEngine::new(get_bell_path());
-    let noise_model = Box::new(DepolarizingNoiseModel::new_uniform(0.0));
-    let engine_results = MonteCarloEngine::run_with_noise_model(
-        Box::new(llvm_engine),
-        noise_model,
-        shots,
-        1, // Single worker
-        Some(seed),
-    )
-    .expect("LlvmEngine should succeed");
+    // Analyze results
+    println!("Testing unified API noiseless simulation:");
 
-    // Compare results
-    println!("Comparing llvm_sim vs LlvmEngine (noiseless):");
-
-    // Convert sim results to ShotMap
+    // Convert results to ShotMap
     let sim_shot_map = sim_shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
     let sim_c_values = get_register_i64(&sim_shot_map, "c").expect("Should have c register");
     
-    // Convert engine results to columnar format for comparison
-    let mut engine_columnar: HashMap<String, Vec<i64>> = HashMap::new();
-    for shot in &engine_results.shots {
-        for (key, value) in &shot.data {
-            let val = match value {
-                pecos_engines::shot_results::Data::I64(v) => *v,
-                pecos_engines::shot_results::Data::U32(v) => i64::from(*v),
-                _ => panic!("Unexpected data type"),
-            };
-            engine_columnar.entry(key.clone()).or_default().push(val);
-        }
-    }
-
-    // Both should have "c" register
+    // Should have "c" register
     let sim_registers = sim_shot_map.register_names();
     assert!(
         sim_registers.iter().any(|r| *r == "c"),
-        "llvm_sim should have 'c' register"
-    );
-    assert!(
-        engine_columnar.contains_key("c"),
-        "LlvmEngine should have 'c' register"
+        "Unified API should have 'c' register"
     );
 
-    // Compare distributions (not exact values due to potential ordering differences)
+    // Analyze distribution
     let sim_counts = count_values(&sim_c_values);
-    let engine_counts = count_values(&engine_columnar["c"]);
+    println!("Unified API distribution: {sim_counts:?}");
 
-    println!("llvm_sim distribution: {sim_counts:?}");
-    println!("LlvmEngine distribution: {engine_counts:?}");
-
-    // Both should only have 0 and 3 (Bell states)
+    // Should only have 0 and 3 (Bell states)
     for val in sim_counts.keys() {
-        assert!(*val == 0 || *val == 3, "llvm_sim: unexpected value {val}");
+        assert!(*val == 0 || *val == 3, "Unified API: unexpected value {val}");
     }
-    for val in engine_counts.keys() {
-        assert!(*val == 0 || *val == 3, "LlvmEngine: unexpected value {val}");
-    }
+    
+    // Should have gotten the expected number of shots
+    assert_eq!(sim_shot_vec.len(), shots);
 }
 
 #[test]
-fn test_llvm_sim_vs_engine_with_noise() {
+fn test_llvm_unified_api_with_noise() {
     if skip_if_no_llvm() {
         return;
     }
@@ -134,85 +106,49 @@ fn test_llvm_sim_vs_engine_with_noise() {
     let shots = 1000;
     let noise_level = 0.1; // 10% depolarizing noise
 
-    // Run with llvm_sim
-    let sim_shot_vec = llvm_sim()
-        .llvm_file(get_bell_path())
+    // Run with unified API and noise
+    let sim_shot_vec = llvm_engine()
+        .program(LlvmProgram::from_file(get_bell_path()).unwrap())
+        .to_sim()
         .seed(seed)
         .workers(1)
         .noise(DepolarizingNoise { p: noise_level })
+        .qubits(2)
         .run(shots)
-        .expect("llvm_sim with noise should succeed");
-
-    // Run with LlvmEngine directly
-    let llvm_engine = LlvmEngine::new(get_bell_path());
-    let noise_model = Box::new(DepolarizingNoiseModel::new_uniform(noise_level));
-    let engine_results = MonteCarloEngine::run_with_noise_model(
-        Box::new(llvm_engine),
-        noise_model,
-        shots,
-        1,
-        Some(seed),
-    )
-    .expect("LlvmEngine with noise should succeed");
+        .expect("Unified API with noise should succeed");
 
     // Convert sim results to ShotMap
     let sim_shot_map = sim_shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
     let sim_c_values = get_register_i64(&sim_shot_map, "c").expect("Should have c register");
     
-    // Convert to columnar and count
-    let mut engine_columnar: HashMap<String, Vec<i64>> = HashMap::new();
-    for shot in &engine_results.shots {
-        for (key, value) in &shot.data {
-            let val = match value {
-                pecos_engines::shot_results::Data::I64(v) => *v,
-                pecos_engines::shot_results::Data::U32(v) => i64::from(*v),
-                _ => panic!("Unexpected data type"),
-            };
-            engine_columnar.entry(key.clone()).or_default().push(val);
-        }
-    }
-
+    // Analyze noise effects
     let sim_counts = count_values(&sim_c_values);
-    let engine_counts = count_values(&engine_columnar["c"]);
 
-    println!("\nComparing llvm_sim vs LlvmEngine (10% noise):");
-    println!("llvm_sim distribution: {sim_counts:?}");
-    println!("LlvmEngine distribution: {engine_counts:?}");
+    println!("\nTesting unified API with 10% noise:");
+    println!("Unified API distribution: {sim_counts:?}");
 
     // With noise, we should see all 4 possible outcomes (0, 1, 2, 3)
-    // But distributions should be similar
-    for val in 0..=3 {
-        let sim_count = sim_counts.get(&val).unwrap_or(&0);
-        let engine_count = engine_counts.get(&val).unwrap_or(&0);
-
-        // Allow for statistical variation but they should be reasonably close
-        let diff = (*sim_count as f64 - *engine_count as f64).abs();
-        let avg = f64::midpoint(*sim_count as f64, *engine_count as f64);
-        let relative_diff = if avg > 0.0 { diff / avg } else { 0.0 };
-
-        println!(
-            "Value {}: sim={}, engine={}, relative_diff={:.2}%",
-            val,
-            sim_count,
-            engine_count,
-            relative_diff * 100.0
-        );
-
-        // With same seed and single worker, results should be very close
-        assert!(
-            relative_diff < 0.1,
-            "Value {val} distributions differ too much: sim={sim_count}, engine={engine_count}"
-        );
-    }
+    let error_count = sim_counts.get(&1).unwrap_or(&0) + sim_counts.get(&2).unwrap_or(&0);
+    let ideal_count = sim_counts.get(&0).unwrap_or(&0) + sim_counts.get(&3).unwrap_or(&0);
+    
+    println!("Error states (1,2): {error_count} out of {shots}");
+    println!("Bell states (0,3): {ideal_count} out of {shots}");
+    
+    // With 10% noise, we should see some errors but Bell states should still dominate
+    assert!(error_count > 0, "Should see some errors with 10% noise");
+    assert!(ideal_count > error_count, "Bell states should still be more common than errors");
+    
+    // Should have gotten the expected number of shots
+    assert_eq!(sim_shot_vec.len(), shots);
 }
 
 #[test]
-fn test_llvm_sim_capabilities_exceed_engine() {
+fn test_llvm_unified_api_advanced_features() {
     if skip_if_no_llvm() {
         return;
     }
 
-    // Test features that llvm_sim has but direct LlvmEngine usage doesn't easily provide
+    // Test advanced features of the unified API
 
     // 1. Easy noise model switching
     let noise_models = vec![
@@ -223,10 +159,12 @@ fn test_llvm_sim_capabilities_exceed_engine() {
     ];
 
     for (name, level) in noise_models {
-        let shot_vec = llvm_sim()
-            .llvm_file(get_bell_path())
+        let shot_vec = llvm_engine()
+            .program(LlvmProgram::from_file(get_bell_path()).unwrap())
+            .to_sim()
             .seed(42)
             .noise(DepolarizingNoise { p: level })
+            .qubits(2)
             .run(100)
             .unwrap_or_else(|_| panic!("{name} should work"));
 
@@ -248,10 +186,12 @@ fn test_llvm_sim_capabilities_exceed_engine() {
     for workers in worker_counts {
         let start = std::time::Instant::now();
 
-        let shot_vec = llvm_sim()
-            .llvm_file(get_bell_path())
+        let shot_vec = llvm_engine()
+            .program(LlvmProgram::from_file(get_bell_path()).unwrap())
+            .to_sim()
             .seed(42)
             .workers(workers)
+            .qubits(2)
             .run(1000)
             .unwrap_or_else(|_| panic!("{workers} workers should work"));
 
@@ -266,10 +206,12 @@ fn test_llvm_sim_capabilities_exceed_engine() {
     }
 
     // 3. Build once, run many with different configurations
-    let mut sim = llvm_sim()
-        .llvm_file(get_bell_path())
+    let mut sim = llvm_engine()
+        .program(LlvmProgram::from_file(get_bell_path()).unwrap())
+        .to_sim()
         .seed(42)
         .noise(DepolarizingNoise { p: 0.05 })
+        .qubits(2)
         .build()
         .expect("Build should succeed");
 

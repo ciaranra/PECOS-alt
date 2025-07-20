@@ -258,6 +258,23 @@ impl ByteMessage {
 
         // Process based on message type - we only care about Gate messages here
         let result = if msg_type == MessageType::Gate {
+            // Debug: dump payload bytes for RZ gates
+            if payload.len() >= size_of::<GateHeader>() {
+                let header = *bytemuck::from_bytes::<GateHeader>(&payload[0..size_of::<GateHeader>()]);
+                if header.gate_type == GateType::RZ as u8 {
+                    trace!("process_gate_message: RZ gate payload dump:");
+                    trace!("  Total payload size: {} bytes", payload.len());
+                    trace!("  Header: gate_type={}, num_qubits={}, has_params={}", 
+                        header.gate_type, header.num_qubits, header.has_params);
+                    
+                    // Dump raw bytes in hex
+                    let hex_bytes: Vec<String> = payload.iter()
+                        .map(|b| format!("{:02x}", b))
+                        .collect();
+                    trace!("  Raw bytes: {}", hex_bytes.join(" "));
+                }
+            }
+            
             match Self::parse_gate_command(payload) {
                 Ok(cmd) => Some(cmd),
                 Err(e) => {
@@ -387,21 +404,28 @@ impl ByteMessage {
     pub fn quantum_ops(&self) -> Result<Vec<Gate>, PecosError> {
         // Parse and validate the batch header
         let batch_header = self.parse_batch_header()?;
+        
+        trace!("quantum_ops: Processing {} messages", batch_header.msg_count);
 
         let mut commands = Vec::new();
         let mut offset = size_of::<BatchHeader>();
 
         // Process each message
-        for _ in 0..batch_header.msg_count {
+        for msg_idx in 0..batch_header.msg_count {
             // Try to process this message
             let (new_offset, maybe_gate) = self.process_gate_message(offset)?;
             offset = new_offset;
 
             // Add any gate we found to our commands list
             if let Some(gate) = maybe_gate {
+                trace!("quantum_ops: Message {} parsed as gate: {:?}", msg_idx, gate);
                 commands.push(gate);
+            } else {
+                trace!("quantum_ops: Message {} did not yield a gate", msg_idx);
             }
         }
+        
+        trace!("quantum_ops: Total gates parsed: {}", commands.len());
 
         Ok(commands)
     }
@@ -489,6 +513,8 @@ impl ByteMessage {
         if param_count == 0 {
             return Ok(Vec::new());
         }
+        
+        trace!("parse_gate_parameters: Gate {:?} requires {} parameters", gate_type, param_count);
 
         // Validate the parameter size
         let required_size = param_count * size_of::<f64>();
@@ -504,7 +530,14 @@ impl ByteMessage {
         for i in 0..param_count {
             let param_offset = params_offset + i * size_of::<f64>();
             let param = Self::parse_f64_param(payload, param_offset);
+            trace!("parse_gate_parameters: Parameter {} at offset {}: {}", i, param_offset, param);
             params.push(param);
+        }
+        
+        // Special logging for RZ gate parameters
+        if matches!(gate_type, GateType::RZ) && !params.is_empty() {
+            trace!("parse_gate_parameters: RZ angle parsed as {} radians ({} degrees)", 
+                params[0], params[0].to_degrees());
         }
 
         Ok(params)
@@ -546,6 +579,9 @@ impl ByteMessage {
         let num_qubits = header.num_qubits as usize;
         let has_params = header.has_params != 0;
         let gate_type = GateType::from(header.gate_type);
+        
+        trace!("parse_gate_command: Parsing gate type {:?}, num_qubits: {}, has_params: {}", 
+            gate_type, num_qubits, has_params);
 
         // Calculate sizes
         let qubits_byte_size = num_qubits * size_of::<u32>();
@@ -555,14 +591,24 @@ impl ByteMessage {
 
         // Parse qubit indices directly to QubitId
         let qubits = Self::parse_qubit_indices(payload, qubits_offset, num_qubits);
+        
+        trace!("parse_gate_command: Parsed qubits: {:?}", qubits);
 
         // Parse parameters if present
         let params = if has_params {
             let params_offset = qubits_offset + qubits_byte_size;
-            Self::parse_gate_parameters(payload, params_offset, gate_type)?
+            let parsed_params = Self::parse_gate_parameters(payload, params_offset, gate_type)?;
+            trace!("parse_gate_command: Parsed parameters: {:?}", parsed_params);
+            parsed_params
         } else {
             Vec::new()
         };
+        
+        // Special logging for RZ gates
+        if matches!(gate_type, GateType::RZ) {
+            trace!("parse_gate_command: RZ gate parsed with angle: {:?}, qubit: {:?}", 
+                params.first(), qubits.first());
+        }
 
         Ok(Gate::new(gate_type, params, qubits))
     }

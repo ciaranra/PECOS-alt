@@ -1,57 +1,123 @@
-"""Unified simulation API following the sim(engine_builder) pattern.
+"""Unified simulation API for all engine types.
 
-This module provides a thin Python wrapper around the Rust sim(engine_builder)
-pattern, offering a consistent API across both languages.
+This module provides the new unified API pattern:
+    engine().program(...).to_sim().run(shots)
 
 Examples:
-    Basic usage:
-    >>> from pecos_rslib.sim import sim, qasm_engine
-    >>> results = sim(qasm_engine().qasm("OPENQASM 2.0; qreg q[1]; h q[0];")).seed(42).run(1000)
+    # QASM simulation
+    from pecos_rslib import qasm_engine
+    from pecos_rslib.programs import QasmProgram
     
-    With noise:
-    >>> results = sim(qasm_engine().qasm(source)).seed(42).noise_depolarizing(0.01).run(1000)
+    results = qasm_engine().program(QasmProgram.from_string("H q[0];")).to_sim().run(1000)
     
-    With parallelization:
-    >>> results = sim(llvm_engine().llvm_ir(ir)).auto_workers().run(10000)
+    # LLVM simulation
+    from pecos_rslib import llvm_engine
+    from pecos_rslib.programs import LlvmProgram
     
-    Different engines:
-    >>> # QASM engine
-    >>> results = sim(qasm_engine().qasm(qasm_source)).run(1000)
-    >>>
-    >>> # LLVM engine  
-    >>> results = sim(llvm_engine().llvm_ir(llvm_ir).max_qubits(10)).run(1000)
-    >>>
-    >>> # Selene engine
-    >>> results = sim(selene_engine().llvm_ir(llvm_ir)).quantum_engine("sparsestabilizer").run(1000)
+    results = llvm_engine().program(LlvmProgram.from_string(llvm_ir)).to_sim().run(1000)
+    
+    # Selene simulation with Guppy
+    from pecos_rslib import selene_engine
+    
+    def my_quantum_func(q: Qubit) -> None:
+        H(q)
+        measure(q)
+    
+    results = selene_engine().program(my_quantum_func).to_sim().run(1000)
 """
 
-# Import everything from the Rust module
+from typing import TYPE_CHECKING
+
+# Import the Rust bindings
 from pecos_rslib._pecos_rslib import (
-    # Engine builders
     qasm_engine,
     llvm_engine,
-    selene_engine,
+    selene_engine as _rust_selene_engine,
+    phir_json_engine,
     QasmEngineBuilder,
     LlvmEngineBuilder,
-    SeleneEngineBuilder,
-    # Main sim function
-    sim,
-    SimBuilder,
-    # Result type
-    ShotVec,
+    SeleneEngineBuilder as _RustSeleneEngineBuilder,
+    PhirJsonEngineBuilder,
+    QasmSimBuilder,
+    LlvmSimBuilder,
+    SeleneSimBuilder,
+    PhirJsonSimBuilder,
+    QasmProgram,
+    LlvmProgram,
+    HugrProgram,
+    PhirJsonProgram,
+    GeneralNoiseModelBuilder,
+    DepolarizingNoiseModelBuilder,
+    BiasedDepolarizingNoiseModelBuilder,
+    StateVectorEngineBuilder,
+    SparseStabilizerEngineBuilder,
+    state_vector,
+    sparse_stabilizer,
+    sparse_stab,
+    general_noise,
+    depolarizing_noise,
+    biased_depolarizing_noise,
 )
 
+# Import our Python wrapper for selene_engine with Guppy support
+from pecos_rslib.selene_engine import selene_engine, SeleneEngineBuilder
+
+# Re-export for convenience
 __all__ = [
-    # Engine builders
     "qasm_engine",
     "llvm_engine", 
     "selene_engine",
+    "phir_json_engine",
+    "sim",
     "QasmEngineBuilder",
     "LlvmEngineBuilder",
     "SeleneEngineBuilder",
-    # Main sim function
-    "sim",
+    "PhirJsonEngineBuilder",
     "SimBuilder",
-    # Result type
-    "ShotVec",
+    "QasmSimBuilder",
+    "LlvmSimBuilder",
+    "SeleneSimBuilder",
+    "PhirJsonSimBuilder",
+    "QasmProgram",
+    "LlvmProgram",
+    "HugrProgram",
+    "PhirJsonProgram",
+    "GeneralNoiseModelBuilder",
+    "DepolarizingNoiseModelBuilder",
+    "BiasedDepolarizingNoiseModelBuilder",
+    "StateVectorEngineBuilder",
+    "SparseStabilizerEngineBuilder",
+    "state_vector",
+    "sparse_stabilizer",
+    "sparse_stab",
+    "general_noise",
+    "depolarizing_noise",
+    "biased_depolarizing_noise",
 ]
+
+# Alias for functional style
+def sim(engine_builder):
+    """Create a simulation builder from an engine builder.
+    
+    This is an alias for the functional style API.
+    
+    Args:
+        engine_builder: An engine builder (e.g., from qasm_engine())
+        
+    Returns:
+        The engine builder (for chaining)
+        
+    Example:
+        >>> from pecos_rslib import sim, qasm_engine
+        >>> from pecos_rslib.programs import QasmProgram
+        >>> 
+        >>> results = sim(qasm_engine().program(QasmProgram.from_string("H q[0];"))).to_sim().run(1000)
+    """
+    return engine_builder
+
+# Type alias for SimBuilder - we'll use the specific sim builders from Rust
+if TYPE_CHECKING:
+    from typing import Union
+    SimBuilder = Union[QasmSimBuilder, LlvmSimBuilder, SeleneSimBuilder]
+else:
+    SimBuilder = "SimBuilder"

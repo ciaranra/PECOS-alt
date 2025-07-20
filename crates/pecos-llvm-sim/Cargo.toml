@@ -14,9 +14,10 @@ description = "Unified LLVM-based quantum simulation with support for multiple i
 [dependencies]
 # Core dependencies
 pecos-core = { workspace = true, features = ["anyhow"] }
-pecos-engines = { workspace = true }
-pecos-llvm-runtime = { workspace = true }
-pecos-hugr-llvm = { workspace = true }
+pecos-engines.workspace = true
+pecos-programs.workspace = true
+pecos-llvm-runtime.workspace = true
+pecos-hugr-llvm.workspace = true
 
 # Standard dependencies
 log.workspace = true
@@ -24,7 +25,7 @@ tempfile.workspace = true
 serde_json.workspace = true
 
 # HUGR support
-hugr-core = { version = "0.20.1" }
+hugr-core.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

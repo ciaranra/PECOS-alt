@@ -10,16 +10,61 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-pub use crate::noise::general::GeneralNoiseModel;
-pub use crate::quantum::{SparseStabEngine, StateVecEngine, new_quantum_engine_arbitrary_qgate};
+// Core traits - these are fundamental to using the unified API
 pub use crate::{
-    BitVecDisplayFormat, ByteMessage, ByteMessageBuilder, ClassicalEngine, ControlEngine,
-    DepolarizingNoiseModel, Engine, EngineStage, EngineSystem, HybridEngine, MonteCarloEngine,
-    NoiseModel, PassThroughNoiseModel, QuantumEngine, QuantumSystem, ShotMap, ShotMapDisplay,
-    ShotMapDisplayExt, ShotMapDisplayOptions,
-    byte_message::dump_batch,
-    run_sim,
-    shot_results::{Data, Shot, ShotVec},
+    Engine,
+    ClassicalEngine, 
+    ControlEngine,
+    ClassicalControlEngine,
+    ClassicalControlEngineBuilder,  // Critical for .to_sim() method
 };
+
+// Quantum engines and builders
+pub use crate::quantum::{SparseStabEngine, StateVecEngine, new_quantum_engine_arbitrary_qgate};
+pub use crate::quantum_engine_builder::{state_vector, sparse_stabilizer, IntoQuantumEngineBuilder};
+
+// Noise models - both traits and common implementations
+pub use crate::noise::{
+    NoiseModel,
+    IntoNoiseModel,  // Needed for .noise() method to work smoothly
+};
+pub use crate::{
+    PassThroughNoiseModel,
+    DepolarizingNoiseModel,
+    // Convenience structs for noise configuration
+    PassThroughNoise,
+    DepolarizingNoise,
+    DepolarizingCustomNoise,
+    BiasedDepolarizingNoise,
+};
+pub use crate::noise::general::GeneralNoiseModel;
+
+// Simulation builders
+pub use crate::sim_builder::{sim, SimBuilder};  // For unified API
+
+// Engine implementations
+pub use crate::{
+    HybridEngine,
+    MonteCarloEngine,
+    QuantumSystem,
+    EngineSystem,
+    EngineStage,
+};
+
+// Results and data structures
+pub use crate::shot_results::{Data, Shot, ShotVec, ShotMap};
+pub use crate::{
+    ShotMapDisplay,
+    ShotMapDisplayExt,
+    ShotMapDisplayOptions,
+    BitVecDisplayFormat,
+};
+
+// Message passing
+pub use crate::{ByteMessage, ByteMessageBuilder};
+pub use crate::byte_message::dump_batch;
+
+// Legacy API (to be deprecated)
+pub use crate::run_sim;
 
 pub use serde_json::Value;

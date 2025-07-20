@@ -1,10 +1,12 @@
-//! Test the ergonomic noise API for selene_sim()
+//! Test the ergonomic noise API for selene_engine()
 
-use pecos_selene_ceng::{
-    selene_sim, 
-    NoiseModelConfig, QuantumEngineType,
+use pecos_selene_ceng::selene_engine;
+use pecos_engines::{
+    sparse_stabilizer,
     PassThroughNoise, DepolarizingNoise, DepolarizingCustomNoise, BiasedDepolarizingNoise,
+    ClassicalControlEngineBuilder,
 };
+use pecos_programs::LlvmProgram;
 use pecos_engines::noise::GeneralNoiseModelBuilder;
 
 mod common;
@@ -25,25 +27,28 @@ fn test_noise_method_with_structs() {
     "#;
     
     // Test with PassThroughNoise struct
-    let _sim = selene_sim()
-        .llvm_ir(llvm_ir)
+    let _sim = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(1)
+        .to_sim()
         .noise(PassThroughNoise)
         .build()
         .unwrap();
     
     // Test with DepolarizingNoise struct
-    let _sim = selene_sim()
-        .llvm_ir(llvm_ir)
+    let _sim = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(1)
+        .to_sim()
         .noise(DepolarizingNoise { p: 0.01 })
         .build()
         .unwrap();
     
     // Test with DepolarizingCustomNoise struct
-    let _sim = selene_sim()
-        .llvm_ir(llvm_ir)
+    let _sim = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(1)
+        .to_sim()
         .noise(DepolarizingCustomNoise {
             p_prep: 0.001,
             p_meas: 0.002,
@@ -54,9 +59,10 @@ fn test_noise_method_with_structs() {
         .unwrap();
     
     // Test with BiasedDepolarizingNoise struct
-    let _sim = selene_sim()
-        .llvm_ir(llvm_ir)
+    let _sim = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(1)
+        .to_sim()
         .noise(BiasedDepolarizingNoise { p: 0.01 })
         .build()
         .unwrap();
@@ -65,9 +71,10 @@ fn test_noise_method_with_structs() {
     let general = GeneralNoiseModelBuilder::new()
         .with_p1_probability(0.001)
         .with_p2_probability(0.002);
-    let _sim = selene_sim()
-        .llvm_ir(llvm_ir)
+    let _sim = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(1)
+        .to_sim()
         .noise(general)
         .build()
         .unwrap();
@@ -86,18 +93,20 @@ fn test_noise_method_with_enum() {
     attributes #0 = { "EntryPoint" }
     "#;
     
-    // Can still use the enum directly
-    let _sim = selene_sim()
-        .llvm_ir(llvm_ir)
+    // Use noise structs directly
+    let _sim = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(1)
-        .noise(NoiseModelConfig::Depolarizing(0.01))
+        .to_sim()
+        .noise(DepolarizingNoise { p: 0.01 })
         .build()
         .unwrap();
     
-    let _sim = selene_sim()
-        .llvm_ir(llvm_ir)
+    let _sim = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(1)
-        .noise(NoiseModelConfig::DepolarizingCustom {
+        .to_sim()
+        .noise(DepolarizingCustomNoise {
             p_prep: 0.001,
             p_meas: 0.002,
             p1: 0.003,
@@ -109,7 +118,7 @@ fn test_noise_method_with_enum() {
 
 #[test]
 fn test_noise_api_matches_qasm_sim() {
-    // This test demonstrates that selene_sim() has the same noise API as qasm_sim()
+    // This test demonstrates that selene_engine() has the same noise API as qasm_sim()
     let llvm_ir = r#"
     declare void @__quantum__qis__h__body(i64)
     
@@ -122,9 +131,10 @@ fn test_noise_api_matches_qasm_sim() {
     "#;
     
     // The .noise() method accepts structs just like qasm_sim()
-    let results = selene_sim()
-        .llvm_ir(llvm_ir)
+    let results = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(1)
+        .to_sim()
         .seed(42)
         .noise(DepolarizingNoise { p: 0.01 })
         .run(100)
@@ -133,12 +143,13 @@ fn test_noise_api_matches_qasm_sim() {
     assert_eq!(results.len(), 100);
     
     // Can also chain with other methods
-    let results = selene_sim()
-        .llvm_ir(llvm_ir)
+    let results = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(1)
+        .to_sim()
         .workers(2)
         .noise(BiasedDepolarizingNoise { p: 0.005 })
-        .quantum_engine(QuantumEngineType::SparseStabilizer)
+        .quantum(sparse_stabilizer())
         .run(50)
         .unwrap();
     

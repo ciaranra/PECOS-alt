@@ -762,3 +762,9 @@ impl GeneralNoiseModelBuilder {
         model.p2_idle = Self::validate_probability(model.p2_idle * scale * idle_scale);
     }
 }
+
+impl crate::noise::IntoNoiseModel for GeneralNoiseModelBuilder {
+    fn into_noise_model(self) -> Box<dyn crate::noise::NoiseModel> {
+        Box::new(self.build())
+    }
+}

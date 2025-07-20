@@ -13,6 +13,7 @@ description = "Selene-based classical control engine (Classical Engine) for PECO
 [dependencies]
 pecos-core.workspace = true
 pecos-engines.workspace = true
+pecos-programs.workspace = true
 
 # Selene dependencies - using path dependencies since they're not published
 selene-core = { path = "../../../selene/selene-core" }
@@ -20,27 +21,27 @@ selene-core = { path = "../../../selene/selene-core" }
 # selene-hugr-qis-compiler = { path = "../../../selene/selene-compilers/hugr_qis" }
 
 # For error handling
-thiserror = "2.0"
-anyhow = "1"
+thiserror.workspace = true
+anyhow.workspace = true
 
 # For async operations if needed
-tokio = { version = "1", features = ["full"], optional = true }
+tokio = { workspace = true, features = ["full"], optional = true }
 
 # For HUGR support
-hugr = { version = "0.20", optional = true }
-tket2 = { version = "0.12.3", optional = true }
-tket2-hseries = { version = "0.16.1", features = ["llvm"], optional = true }
-inkwell = { version = "0.6", optional = true }
+hugr = { workspace = true, optional = true }
+tket2 = { workspace = true, optional = true }
+tket2-hseries = { workspace = true, features = ["llvm"], optional = true }
+inkwell = { workspace = true, optional = true }
 
 # Standard library extensions
-log = "0.4"
+log.workspace = true
 
 # For dynamic library compilation and loading
-tempfile = "3.0"
-libloading = "0.8"
+tempfile.workspace = true
+libloading.workspace = true
 
 [dev-dependencies]
-env_logger = "0.11"
+env_logger.workspace = true
 
 [features]
 default = ["hugr"]

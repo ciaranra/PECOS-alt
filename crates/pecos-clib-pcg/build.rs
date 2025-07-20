@@ -50,14 +50,14 @@ fn download_if_needed(path: &Path, url: &str) {
     if !path.exists() {
         println!("cargo:warning=Downloading {} to {}", url, path.display());
 
-        let response = ureq::get(url)
+        let mut response = ureq::get(url)
             .call()
             .unwrap_or_else(|e| panic!("Failed to download {url}: {e}"));
 
-        let mut file = fs::File::create(path)
-            .unwrap_or_else(|e| panic!("Failed to create {}: {}", path.display(), e));
+        let content = response.body_mut().read_to_vec()
+            .unwrap_or_else(|e| panic!("Failed to read response body: {e}"));
 
-        std::io::copy(&mut response.into_reader(), &mut file)
+        fs::write(path, content)
             .unwrap_or_else(|e| panic!("Failed to write {}: {}", path.display(), e));
     }
 }

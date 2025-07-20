@@ -220,7 +220,9 @@ fn test_large_register_values() {
 
 #[test]
 fn test_integration_with_actual_simulation() {
-    use pecos_qasm::{prelude::PassThroughNoiseModel, run_qasm};
+    use pecos_engines::ClassicalControlEngineBuilder;
+    use pecos_qasm::qasm_engine;
+    use pecos_programs::QasmProgram;
 
     // Run an actual QASM simulation
     let qasm = r#"
@@ -244,15 +246,12 @@ fn test_integration_with_actual_simulation() {
     let _register_sizes = engine.classical_register_sizes().unwrap();
 
     // Run simulation
-    let shot_vec = run_qasm(
-        qasm,
-        5,
-        PassThroughNoiseModel::builder(),
-        None,
-        None,
-        Some(42),
-    )
-    .unwrap();
+    let shot_vec = qasm_engine()
+        .program(QasmProgram::from_string(qasm))
+        .to_sim()
+        .seed(42)
+        .run(5)
+        .unwrap();
 
     // Convert to ShotMap for analysis
     let shot_map = shot_vec.try_as_shot_map().unwrap();
@@ -347,7 +346,9 @@ fn test_zero_width_registers() {
 #[test]
 fn test_bell_state_formatting() {
     // Test a real Bell state scenario
-    use pecos_qasm::{prelude::PassThroughNoiseModel, run_qasm};
+    use pecos_engines::ClassicalControlEngineBuilder;
+    use pecos_qasm::qasm_engine;
+    use pecos_programs::QasmProgram;
 
     let qasm = r#"
         OPENQASM 2.0;
@@ -365,15 +366,12 @@ fn test_bell_state_formatting() {
     let _register_sizes = engine.classical_register_sizes().unwrap();
 
     // Run with enough shots to likely see both outcomes
-    let shot_vec = run_qasm(
-        qasm,
-        20,
-        PassThroughNoiseModel::builder(),
-        None,
-        None,
-        Some(42),
-    )
-    .unwrap();
+    let shot_vec = qasm_engine()
+        .program(QasmProgram::from_string(qasm))
+        .to_sim()
+        .seed(42)
+        .run(20)
+        .unwrap();
 
     // Convert to ShotMap for analysis
     let shot_map = shot_vec.try_as_shot_map().unwrap();

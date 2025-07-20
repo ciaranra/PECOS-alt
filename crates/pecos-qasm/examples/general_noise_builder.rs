@@ -1,8 +1,9 @@
-//! Example of using `GeneralNoiseModelBuilder` with fluent API
+//! Example of using `GeneralNoiseModelBuilder` with fluent API and the unified simulation API
 
-use pecos_core::gate_type::GateType;
 use pecos_engines::noise::GeneralNoiseModel;
-use pecos_qasm::prelude::*;
+use pecos_engines::{ClassicalControlEngineBuilder, GateType, sparse_stabilizer};
+use pecos_qasm::qasm_engine;
+use pecos_programs::QasmProgram;
 use std::collections::BTreeMap;
 
 fn main() {
@@ -26,11 +27,11 @@ fn main() {
         .with_meas_0_probability(0.002)
         .with_meas_1_probability(0.002);
 
-    let noise_model = NoiseModelType::General(Box::new(basic_noise));
-
-    let results = qasm_sim(qasm)
+    let results = qasm_engine()
+        .program(QasmProgram::from_string(qasm))
+        .to_sim()
         .seed(42)
-        .noise(noise_model)
+        .noise(basic_noise)
         .run(1000)
         .unwrap();
 
@@ -72,11 +73,11 @@ fn main() {
         .with_leakage_scale(0.1)
         .with_emission_scale(0.8);
 
-    let noise_model = NoiseModelType::General(Box::new(complex_noise));
-
-    let _results = qasm_sim(qasm)
+    let _results = qasm_engine()
+        .program(QasmProgram::from_string(qasm))
+        .to_sim()
         .seed(123)
-        .noise(noise_model)
+        .noise(complex_noise)
         .run(500)
         .unwrap();
 
@@ -89,12 +90,15 @@ fn main() {
         .with_seed(42)
         .with_p1_probability(0.1) // High single-qubit error
         .with_p2_probability(0.1) // High two-qubit error
-        .with_noiseless_gate(GateType::H) // H gates have no noise
-        .with_noiseless_gate(GateType::Measure); // Measurements have no noise
+        .with_noiseless_gate(pecos_core::prelude::GateType::H) // H gates have no noise
+        .with_noiseless_gate(pecos_core::prelude::GateType::Measure); // Measurements have no noise
 
-    let noise_model = NoiseModelType::General(Box::new(selective_noise));
-
-    let _results = qasm_sim(qasm).noise(noise_model).run(100).unwrap();
+    let _results = qasm_engine()
+        .program(QasmProgram::from_string(qasm))
+        .to_sim()
+        .noise(selective_noise)
+        .run(100)
+        .unwrap();
 
     println!("Ran 100 shots with selective noiseless gates");
     println!("H and MEASURE gates are noiseless, CX gates have 10% error rate\n");
@@ -119,18 +123,16 @@ fn main() {
         .with_noiseless_gate(GateType::H)
         .with_noiseless_gate(GateType::CX);
 
-    let noise_model = NoiseModelType::General(Box::new(full_noise));
-
     // Use with full simulation configuration
-    let sim = qasm_sim(qasm)
+    let results = qasm_engine()
+        .program(QasmProgram::from_string(qasm))
+        .to_sim()
         .seed(456)
         .workers(2)
-        .noise(noise_model)
-        .quantum_engine(QuantumEngineType::SparseStabilizer)
-        .build()
+        .noise(full_noise)
+        .quantum(sparse_stabilizer().qubits(3))
+        .run(50)
         .unwrap();
-
-    let results = sim.run(50).unwrap();
 
     println!("Ran 50 shots with full noise configuration");
     let shot_map = results.try_as_shot_map().unwrap();

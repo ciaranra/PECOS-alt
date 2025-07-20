@@ -6,11 +6,13 @@
 //! - Real quantum engines (StateVecEngine)
 //! - LLVM IR programs for quantum circuits
 
-use pecos_selene_ceng::selene_sim;
+use pecos_selene_ceng::selene_engine;
 use pecos_engines::{
-    ClassicalEngine, ControlEngine, Engine, EngineStage, run_sim_safe,
+    ClassicalEngine, ControlEngine, Engine, EngineStage,
+    ClassicalControlEngineBuilder,
 };
 use pecos_core::prelude::PecosError;
+use pecos_programs::LlvmProgram;
 use std::collections::HashMap;
 
 mod common;
@@ -40,23 +42,17 @@ entry:
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let selene_engine = selene_sim()
-        .llvm_ir(bell_llvm)
+    // Use new unified API with MonteCarloEngine for parallel execution
+    let results = selene_engine()
+        .program(LlvmProgram::from_ir(bell_llvm))
         .qubits(2)
-        .optimize()
-        .build()?;
+        .optimize(true)
+        .to_sim()
+        .seed(42)      // seed for reproducibility
+        .workers(4)    // workers
+        .run(100)?;    // shots
 
-    println!("Created SeleneEngine with Bell state program");
-    
-    // Use MonteCarloEngine for parallel execution
-    let results = run_sim_safe(
-        Box::new(selene_engine),
-        100,           // shots
-        Some(42),      // seed for reproducibility
-        Some(4),       // workers
-        None,          // noise model (no noise)
-        None,          // quantum engine (default StateVecEngine)
-    )?;
+    println!("Created and executed SeleneEngine with Bell state program");
     
     println!("Executed with MonteCarloEngine: {} shots", results.shots.len());
     assert_eq!(results.shots.len(), 100);
@@ -110,8 +106,8 @@ entry:
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let mut engine = selene_sim()
-        .llvm_ir(adaptive_llvm)
+    let mut engine = selene_engine()
+        .program(LlvmProgram::from_ir(adaptive_llvm))
         .qubits(2)
         .verbose(true)
         .build()?;
@@ -184,8 +180,8 @@ define void @test_gates() #0 {
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let mut engine = selene_sim()
-        .llvm_ir(test_llvm)
+    let mut engine = selene_engine()
+        .program(LlvmProgram::from_ir(test_llvm))
         .qubits(4)
         .build()?;
     
@@ -235,9 +231,10 @@ define void @parallel_test() #0 {
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let results = selene_sim()
-        .llvm_ir(parallel_llvm)
+    let results = selene_engine()
+        .program(LlvmProgram::from_ir(parallel_llvm))
         .qubits(2)
+        .to_sim()
         .workers(4)
         .seed(999)
         .run(4); // Reduced from 1000 for performance
@@ -279,8 +276,8 @@ define void @reset_test() #0 {
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let mut engine = selene_sim()
-        .llvm_ir(reset_llvm)
+    let mut engine = selene_engine()
+        .program(LlvmProgram::from_ir(reset_llvm))
         .qubits(1)
         .build()?;
     
@@ -318,8 +315,8 @@ define void @clone_test() #0 {
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let base_engine = selene_sim()
-        .llvm_ir(clone_llvm)
+    let base_engine = selene_engine()
+        .program(LlvmProgram::from_ir(clone_llvm))
         .qubits(1)
         .build()?;
     
@@ -360,7 +357,7 @@ fn test_selene_with_hugr_format() -> Result<(), PecosError> {
     let hugr = dfg.finish_hugr_with_outputs(qbs)
         .map_err(|e| PecosError::with_context(e, "Failed to finish HUGR"))?;
     
-    let mut hugr_engine = selene_sim()
+    let mut hugr_engine = selene_engine()
         .hugr(hugr)
         .qubits(1)
         .build()?;

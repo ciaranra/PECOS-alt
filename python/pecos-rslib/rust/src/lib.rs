@@ -18,6 +18,7 @@
 
 mod byte_message_bindings;
 mod engine_bindings;
+mod engine_builders;
 mod noise_helpers;
 mod pcg_bindings;
 mod phir_json_bridge;
@@ -26,12 +27,12 @@ mod hugr_bindings;
 mod llvm_bindings;
 mod llvm_context_bindings;
 mod llvm_execution_guard;
-mod llvm_sim_bindings;
-mod selene_sim_bindings;
+// mod llvm_sim_bindings;
+// mod selene_sim_bindings;
 mod phir_bindings;
-mod qasm_sim_bindings;
+// mod qasm_sim_bindings;
 mod shot_results_bindings;
-mod sim_builder;
+// mod sim_builder; // Disabled in favor of thin wrapper bindings
 mod sparse_sim;
 mod sparse_stab_bindings;
 mod sparse_stab_engine_bindings;
@@ -63,7 +64,7 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyShotMap>()?;
 
     // Register QASM simulation functions
-    qasm_sim_bindings::register_qasm_sim_module(m)?;
+    // qasm_sim_bindings::register_qasm_sim_module(m)?;
 
     // Register HUGR/QIR functions (only if hugr-llvm-pipeline feature is enabled)
     #[cfg(feature = "hugr-llvm-pipeline")]
@@ -76,13 +77,16 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     llvm_bindings::register_llvm_module(m)?;
 
     // Register LlvmSim functions
-    llvm_sim_bindings::register_llvm_sim_module(m)?;
+    // llvm_sim_bindings::register_llvm_sim_module(m)?;
 
     // Register Selene simulation functions
-    selene_sim_bindings::register_selene_sim_module(m)?;
+    // selene_sim_bindings::register_selene_sim_module(m)?;
 
-    // Register the new unified sim builder API
-    sim_builder::register_sim_builder_module(m)?;
+    // Register unified engine builders
+    engine_builders::register_engine_builders(m)?;
+
+    // NOTE: sim_builder module disabled in favor of thin wrapper bindings
+    // sim_builder::register_sim_builder_module(m)?;
 
     pcg_bindings::create_pcg_module(m)?;
     Ok(())

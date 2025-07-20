@@ -3,6 +3,9 @@
 use pecos_core::gate_type::GateType;
 use pecos_engines::noise::GeneralNoiseModel;
 use pecos_qasm::prelude::*;
+use pecos_qasm::qasm_engine;
+use pecos_programs::QasmProgram;
+use pecos_engines::{ClassicalControlEngineBuilder, state_vector, sparse_stabilizer};
 use std::collections::BTreeMap;
 
 #[test]
@@ -27,7 +30,7 @@ fn test_general_noise_builder_basic() {
 
     let noise_model = NoiseModelType::General(Box::new(noise_builder));
 
-    let results = qasm_sim(qasm)
+    let results = qasm_engine().program(QasmProgram::from_string(qasm)).to_sim()
         .seed(42)
         .noise(noise_model)
         .run(1000)
@@ -73,7 +76,7 @@ fn test_general_noise_builder_with_pauli_models() {
 
     let noise_model = NoiseModelType::General(Box::new(noise_builder));
 
-    let results = qasm_sim(qasm).noise(noise_model).run(1000).unwrap();
+    let results = qasm_engine().program(QasmProgram::from_string(qasm)).to_sim().noise(noise_model).run(1000).unwrap();
 
     let shot_map = results.try_as_shot_map().unwrap();
     let values = shot_map.try_bits_as_u64("c").unwrap();
@@ -124,7 +127,7 @@ fn test_general_noise_builder_complex_configuration() {
 
     let noise_model = NoiseModelType::General(Box::new(noise_builder));
 
-    let results = qasm_sim(qasm)
+    let results = qasm_engine().program(QasmProgram::from_string(qasm)).to_sim()
         .seed(123)
         .workers(2)
         .noise(noise_model)
@@ -156,7 +159,7 @@ fn test_general_noise_builder_noiseless_gates() {
 
     let noise_model = NoiseModelType::General(Box::new(noise_builder));
 
-    let results = qasm_sim(qasm).noise(noise_model).run(1000).unwrap();
+    let results = qasm_engine().program(QasmProgram::from_string(qasm)).to_sim().noise(noise_model).run(1000).unwrap();
 
     // Even with very high error rates, H being noiseless should preserve some structure
     let shot_map = results.try_as_shot_map().unwrap();
@@ -187,7 +190,7 @@ fn test_general_noise_builder_with_prep_errors() {
 
     let noise_model = NoiseModelType::General(Box::new(noise_builder));
 
-    let results = qasm_sim(qasm)
+    let results = qasm_engine().program(QasmProgram::from_string(qasm)).to_sim()
         .seed(42)
         .noise(noise_model)
         .run(1000)
@@ -232,7 +235,7 @@ fn test_general_noise_builder_measurement_errors() {
 
     let noise_model = NoiseModelType::General(Box::new(noise_builder));
 
-    let results = qasm_sim(qasm).noise(noise_model).run(1000).unwrap();
+    let results = qasm_engine().program(QasmProgram::from_string(qasm)).to_sim().noise(noise_model).run(1000).unwrap();
 
     let shot_map = results.try_as_shot_map().unwrap();
     let values = shot_map.try_bits_as_u64("c").unwrap();
@@ -289,7 +292,7 @@ fn test_general_noise_builder_chaining_all_methods() {
     let noise_model = NoiseModelType::General(Box::new(noise_builder));
 
     // Should compile and run without errors
-    let results = qasm_sim(qasm).noise(noise_model).run(100).unwrap();
+    let results = qasm_engine().program(QasmProgram::from_string(qasm)).to_sim().noise(noise_model).run(100).unwrap();
 
     assert_eq!(results.len(), 100);
 }
@@ -320,8 +323,8 @@ fn test_general_noise_builder_with_multiple_noiseless_gates() {
 
     let noise_model = NoiseModelType::General(Box::new(noise_builder));
 
-    let results = qasm_sim(qasm)
-        .quantum_engine(QuantumEngineType::StateVector) // Need StateVector for T gate
+    let results = qasm_engine().program(QasmProgram::from_string(qasm)).to_sim()
+        .quantum(state_vector().qubits(2)) // Need StateVector for T gate
         .noise(noise_model)
         .run(100)
         .unwrap();
@@ -371,11 +374,11 @@ fn test_general_noise_builder_comparison_with_sim_builder() {
     let noise_model = NoiseModelType::General(Box::new(noise_builder));
 
     // Test full method chaining with simulation builder
-    let sim = qasm_sim(qasm)
+    let sim = qasm_engine().program(QasmProgram::from_string(qasm)).to_sim()
         .seed(42)
         .workers(2)
         .noise(noise_model)
-        .quantum_engine(QuantumEngineType::SparseStabilizer)
+        .quantum(sparse_stabilizer().qubits(3))
         .build()
         .unwrap();
 

@@ -482,20 +482,14 @@ impl ByteMessageBuilder {
 
     /// Add an RX gate
     pub fn add_rx(&mut self, theta: f64, qubits: &[usize]) -> &mut Self {
-        // RX = H RZ H decomposition
-        for &q in qubits {
-            self.add_h(&[q]);
-            self.add_rz(theta, &[q]);
-            self.add_h(&[q]);
-        }
+        let gate = Gate::new(GateType::RX, vec![theta], qubits.to_vec());
+        self.add_gate_command(&gate);
         self
     }
 
     /// Add an RY gate
     pub fn add_ry(&mut self, theta: f64, qubits: &[usize]) -> &mut Self {
-        // RY using R1XY gate (rotation in XY plane)
-        // RY(θ) = R1XY(θ, π/2)
-        let gate = Gate::r1xy(theta, std::f64::consts::FRAC_PI_2, qubits);
+        let gate = Gate::new(GateType::RY, vec![theta], qubits.to_vec());
         self.add_gate_command(&gate);
         self
     }

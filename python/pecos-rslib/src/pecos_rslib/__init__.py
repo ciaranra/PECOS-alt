@@ -29,48 +29,36 @@ from pecos_rslib._pecos_rslib import SparseStabEngineRs
 from pecos_rslib._pecos_rslib import ShotVec
 from pecos_rslib._pecos_rslib import ShotMap
 
-# QASM simulation exports
-from pecos_rslib._pecos_rslib import NoiseModel
-from pecos_rslib._pecos_rslib import QuantumEngine
-from pecos_rslib._pecos_rslib import run_qasm
-from pecos_rslib._pecos_rslib import get_noise_models
-from pecos_rslib._pecos_rslib import get_quantum_engines
+# QASM simulation exports - these are from the old API
+# from pecos_rslib._pecos_rslib import NoiseModel
+# from pecos_rslib._pecos_rslib import QuantumEngine
+# from pecos_rslib._pecos_rslib import run_qasm
+# from pecos_rslib._pecos_rslib import get_noise_models
+# from pecos_rslib._pecos_rslib import get_quantum_engines
 from pecos_rslib._pecos_rslib import GeneralNoiseModelBuilder
+# These noise free functions need to be exposed from Rust first
+# from pecos_rslib._pecos_rslib import general_noise
+# from pecos_rslib._pecos_rslib import depolarizing_noise
+# from pecos_rslib._pecos_rslib import biased_depolarizing_noise
 
 # LLVM execution exports
 from pecos_rslib._pecos_rslib import execute_llvm
 from pecos_rslib._pecos_rslib import reset_llvm_runtime
 
-# Enhanced LLVM simulation exports
-from pecos_rslib.llvm_sim import (
-    llvm_sim,
-    LlvmSimBuilder,
-    LlvmSimulation,
-    PassThroughNoise as LlvmPassThroughNoise,
-    DepolarizingNoise as LlvmDepolarizingNoise,
-    DepolarizingCustomNoise as LlvmDepolarizingCustomNoise,
-    BiasedDepolarizingNoise as LlvmBiasedDepolarizingNoise,
-)
+# LLVM and Selene are now part of the unified API
 
-# Enhanced Selene simulation exports
-from pecos_rslib.selene_sim import (
-    selene_sim,
-    SeleneSimBuilder,
-    SeleneSimulation,
-    PassThroughNoise as SelenePassThroughNoise,
-    DepolarizingNoise as SeleneDepolarizingNoise,
-    DepolarizingCustomNoise as SeleneDepolarizingCustomNoise,
-    BiasedDepolarizingNoise as SeleneBiasedDepolarizingNoise,
-)
+# Guppy conversion utilities
+from pecos_rslib.guppy_conversion import guppy_to_hugr
 
-# Selene engine exports
-from pecos_rslib.selene_engine import (
-    selene_engine,
-    SeleneEngineBuilder,
+# Program types
+from pecos_rslib.programs import (
+    QasmProgram,
+    LlvmProgram,
+    HugrProgram,
+    PhirJsonProgram,
+    WasmProgram,
+    WatProgram,
 )
-
-# Import the qasm_sim function and noise models for easy access
-from pecos_rslib.qasm_sim import qasm_sim
 
 # Import the new unified sim API
 from pecos_rslib.sim import (
@@ -78,19 +66,27 @@ from pecos_rslib.sim import (
     qasm_engine,
     llvm_engine,
     selene_engine,
+    phir_json_engine,
     QasmEngineBuilder,
     LlvmEngineBuilder,
     SeleneEngineBuilder,
+    PhirJsonEngineBuilder,
     SimBuilder,
+    GeneralNoiseModelBuilder,
+    DepolarizingNoiseModelBuilder,
+    BiasedDepolarizingNoiseModelBuilder,
 )
 
-# Also import the noise model dataclasses for convenience
-from pecos_rslib.qasm_sim import (
-    PassThroughNoise,
-    DepolarizingNoise,
-    DepolarizingCustomNoise,
-    BiasedDepolarizingNoise,
-    GeneralNoise,
+# Import quantum engine builders from sim module
+from pecos_rslib.sim import (
+    StateVectorEngineBuilder,
+    SparseStabilizerEngineBuilder,
+    state_vector,
+    sparse_stabilizer,
+    sparse_stab,
+    general_noise,
+    depolarizing_noise,
+    biased_depolarizing_noise,
 )
 
 # Import GeneralNoiseFactory and convenience functions
@@ -100,6 +96,9 @@ from pecos_rslib.general_noise_factory import (
     create_noise_from_json,
     IonTrapNoiseFactory,
 )
+
+# Import namespace modules for better discoverability
+from pecos_rslib import noise, quantum, programs
 
 try:
     from pecos_rslib.hugr_llvm import (
@@ -178,42 +177,22 @@ __all__ = [
     # Shot result types
     "ShotVec",
     "ShotMap",
-    # QASM simulation
-    "NoiseModel",
-    "QuantumEngine",
-    "run_qasm",
-    "get_noise_models",
-    "get_quantum_engines",
-    "qasm_sim",
+    # Noise builders
     "GeneralNoiseModelBuilder",
+    "DepolarizingNoiseModelBuilder",
+    "BiasedDepolarizingNoiseModelBuilder",
     # LLVM execution
     "execute_llvm",
     "reset_llvm_runtime",
-    # Enhanced LLVM simulation
-    "llvm_sim",
-    "LlvmSimBuilder",
-    "LlvmSimulation",
-    "LlvmPassThroughNoise",
-    "LlvmDepolarizingNoise",
-    "LlvmDepolarizingCustomNoise",
-    "LlvmBiasedDepolarizingNoise",
-    # Enhanced Selene simulation
-    "selene_sim",
-    "SeleneSimBuilder",
-    "SeleneSimulation",
-    "SelenePassThroughNoise",
-    "SeleneDepolarizingNoise",
-    "SeleneDepolarizingCustomNoise",
-    "SeleneBiasedDepolarizingNoise",
-    # Selene engine
-    "selene_engine",
-    "SeleneEngineBuilder",
-    # Noise model dataclasses
-    "PassThroughNoise",
-    "DepolarizingNoise",
-    "DepolarizingCustomNoise",
-    "BiasedDepolarizingNoise",
-    "GeneralNoise",
+    # Guppy conversion
+    "guppy_to_hugr",
+    # Program types
+    "QasmProgram",
+    "LlvmProgram",
+    "HugrProgram",
+    "PhirJsonProgram",
+    "WasmProgram",
+    "WatProgram",
     # Noise factory
     "GeneralNoiseFactory",
     "create_noise_from_dict",
@@ -239,8 +218,24 @@ __all__ = [
     "qasm_engine",
     "llvm_engine",
     "selene_engine",
+    "phir_json_engine",
     "QasmEngineBuilder",
     "LlvmEngineBuilder",
     "SeleneEngineBuilder",
+    "PhirJsonEngineBuilder",
     "SimBuilder",
+    # Quantum engine builders
+    "StateVectorEngineBuilder",
+    "SparseStabilizerEngineBuilder",
+    "state_vector",
+    "sparse_stabilizer",
+    "sparse_stab",
+    # Noise builder free functions
+    "general_noise",
+    "depolarizing_noise",
+    "biased_depolarizing_noise",
+    # Namespace modules for discoverability
+    "noise",
+    "quantum",
+    "programs",
 ]

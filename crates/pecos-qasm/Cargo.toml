@@ -13,7 +13,7 @@ description = "QASM parser and engine for PECOS quantum simulator"
 
 [features]
 default = []
-wasm = ["wasmtime"]
+wasm = ["wasmtime", "wat"]
 
 [dependencies]
 # Parser generator
@@ -28,6 +28,7 @@ log.workspace = true
 
 # Workspace dependencies
 pecos-core.workspace = true
+pecos-programs.workspace = true
 pecos-engines.workspace = true
 
 # Serialization (for result formatting)
@@ -39,6 +40,7 @@ bitvec.workspace = true
 
 # Optional WebAssembly support
 wasmtime = { workspace = true, optional = true }
+wat = { version = "1.235", optional = true }
 
 [dev-dependencies]
 # Testing

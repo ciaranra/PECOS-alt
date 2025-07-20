@@ -12,6 +12,9 @@ use std::path::PathBuf;
 pub enum SeleneProgram {
     #[cfg(feature = "hugr")]
     Hugr(hugr::Hugr),
+    /// HUGR serialized bytes (to be deserialized during build)
+    #[cfg(feature = "hugr")]
+    HugrBytes(Vec<u8>),
     /// LLVM IR text format
     LlvmIr(String),
     /// LLVM bitcode binary format

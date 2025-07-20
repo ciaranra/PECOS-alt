@@ -6,12 +6,13 @@
 //! - StateVecEngine for quantum simulation
 //! - Real Bell state creation and analysis
 
-use pecos_selene_ceng::selene_sim;
+use pecos_selene_ceng::selene_engine;
+use pecos_programs::LlvmProgram;
 use pecos_engines::{
     Engine,
     hybrid::HybridEngineBuilder,
     quantum::StateVecEngine,
-    ShotVec, run_sim_safe,
+    ShotVec, ClassicalControlEngineBuilder,
 };
 use std::collections::HashMap;
 
@@ -66,35 +67,21 @@ entry:
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let selene_engine = selene_sim()
-        .llvm_ir(bell_llvm)
+    // Use new unified API to run Bell state simulation
+    let results = selene_engine()
+        .program(LlvmProgram::from_ir(bell_llvm))
         .qubits(2)
-        .optimize()
-        .build()?;
+        .optimize(true)
+        .to_sim()
+        .run(10)?;
     
-    println!("✓ Created SeleneEngine for Bell state");
+    println!("✓ Created and ran SeleneEngine for Bell state");
+    println!("✓ Completed {} shots showing Bell state correlations", results.len());
     
-    // Create quantum engine
-    let quantum_engine = StateVecEngine::new(2);
-    
-    // Combine with HybridEngine
-    let mut hybrid_engine = HybridEngineBuilder::new()
-        .with_classical_engine(Box::new(selene_engine))
-        .with_quantum_engine(Box::new(quantum_engine))
-        .build();
-    
-    println!("✓ Created HybridEngine (Selene + StateVec)");
-    
-    // Run multiple shots to see Bell state correlations
-    let mut shots = ShotVec::new();
-    for i in 0..10 {
-        let shot = hybrid_engine.process(())?;
+    // Show some results
+    for (i, shot) in results.shots.iter().take(5).enumerate() {
         println!("  Shot {}: {:?}", i, shot.data);
-        shots.shots.push(shot);
-        hybrid_engine.reset()?;
     }
-    
-    println!("✓ Completed {} shots showing Bell state correlations", shots.len());
     
     Ok(())
 }
@@ -136,23 +123,19 @@ entry:
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let selene_engine = selene_sim()
-        .llvm_ir(adaptive_llvm)
+    // Use new unified API for adaptive circuit
+    let results = selene_engine()
+        .program(LlvmProgram::from_ir(adaptive_llvm))
         .qubits(3)
-        .build()?;
+        .to_sim()
+        .run(5)?;
     
-    let quantum_engine = StateVecEngine::new(3);
+    println!("✓ Created and ran adaptive circuit engine");
     
-    let mut hybrid_engine = HybridEngineBuilder::new()
-        .with_classical_engine(Box::new(selene_engine))
-        .with_quantum_engine(Box::new(quantum_engine))
-        .build();
-    
-    println!("✓ Created adaptive circuit engine");
-    
-    // Run and analyze results
-    let shot = hybrid_engine.process(())?;
-    println!("✓ Adaptive circuit result: {:?}", shot.data);
+    // Show results
+    for (i, shot) in results.shots.iter().enumerate() {
+        println!("✓ Adaptive circuit result {}: {:?}", i, shot.data);
+    }
     
     Ok(())
 }
@@ -176,10 +159,15 @@ define void @test() #0 {
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let llvm_engine = selene_sim()
-        .llvm_ir(llvm_llvm)
+    // Run with new unified API for parallel execution
+    println!("\nTesting with MonteCarloEngine (parallel execution):");
+    let results = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_llvm))
         .qubits(1)
-        .build()?;
+        .to_sim()
+        .seed(42)  // seed
+        .workers(4)  // workers for parallel execution
+        .run(1000)?; // shots
     
     println!("✓ Created engine with LLVM IR format");
     
@@ -188,23 +176,13 @@ attributes #0 = { "EntryPoint" }
     {
         use hugr::Hugr;
         let hugr = Hugr::default();
-        let _hugr_engine = selene_sim()
+        let _results = selene_engine()
             .hugr(hugr)
             .qubits(1)
-            .build()?;
-        println!("✓ Created engine with HUGR format");
+            .to_sim()
+            .run(10)?;
+        println!("✓ Created and ran engine with HUGR format");
     }
-    
-    // Run with MonteCarloEngine for parallel execution
-    println!("\nTesting with MonteCarloEngine (parallel execution):");
-    let results = run_sim_safe(
-        Box::new(llvm_engine),
-        1000,      // shots
-        Some(42),  // seed
-        Some(4),   // workers
-        None,      // no specific quantum engine
-        None,      // no noise model
-    )?;
     
     println!("✓ Completed {} shots in parallel", results.shots.len());
     

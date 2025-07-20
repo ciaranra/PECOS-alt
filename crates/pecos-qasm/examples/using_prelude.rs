@@ -1,5 +1,7 @@
 // Using the prelude - all common types are available with one import
 use pecos_qasm::prelude::*;
+use pecos_engines::ClassicalControlEngineBuilder;
+use pecos_programs::QasmProgram;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // No need to import Shot, ShotVec, ShotMap, or ShotMapDisplayExt
@@ -30,14 +32,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         measure q -> c;
     "#;
 
-    let shot_vec = run_qasm(
-        qasm,
-        10,
-        PassThroughNoiseModel::builder(),
-        None,
-        None,
-        Some(42),
-    )?;
+    let shot_vec = qasm_engine()
+        .program(QasmProgram::from_string(qasm))
+        .to_sim()
+        .seed(42)
+        .run(10)?;
     let shot_map = shot_vec.try_as_shot_map()?;
 
     println!("\nQASM simulation results:");

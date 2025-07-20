@@ -11,6 +11,7 @@ use pecos_engines::{sim, SimBuilder, DepolarizingNoise};
 use pecos_qasm::qasm_engine;
 use pecos_llvm_sim::llvm_engine;
 use pecos_selene_ceng::selene_engine;
+use pecos_programs::QasmProgram;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example quantum circuit in OpenQASM
@@ -33,7 +34,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Traditional .to_sim() pattern
     let results_traditional = qasm_engine()
-        .qasm(qasm_code)
+        .program(QasmProgram::from_string(qasm_code))
         .to_sim()
         .seed(42)
         .noise(DepolarizingNoise { p: 0.01 })
@@ -42,7 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   Traditional pattern: {} shots completed", results_traditional.len());
     
     // New sim() pattern - functionally equivalent
-    let results_functional = sim(qasm_engine().qasm(qasm_code))
+    let results_functional = sim(qasm_engine().program(QasmProgram::from_string(qasm_code)))
         .seed(42)
         .noise(DepolarizingNoise { p: 0.01 })
         .run(1000)?;
@@ -50,7 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   Functional pattern: {} shots completed", results_functional.len());
     
     // Using From trait explicitly
-    let results_from = SimBuilder::from(qasm_engine().qasm(qasm_code))
+    let results_from = SimBuilder::from(qasm_engine().program(QasmProgram::from_string(qasm_code)))
         .seed(42)
         .noise(DepolarizingNoise { p: 0.01 })
         .run(1000)?;
@@ -69,17 +70,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dynamic_builder = match user_choice {
         "qasm" => {
             println!("   User selected QASM engine");
-            DynamicEngineBuilder::new(qasm_engine().qasm(qasm_code))
+            DynamicEngineBuilder::new(qasm_engine().program(QasmProgram::from_string(qasm_code)))
         }
         "llvm" => {
             println!("   User selected LLVM engine");
             // In real code, you'd have LLVM IR here
-            DynamicEngineBuilder::new(llvm_engine())
+            use pecos_programs::LlvmProgram;
+            DynamicEngineBuilder::new(llvm_engine().program(LlvmProgram::from_string("define void @main() { ret void }")))
         }
         "selene" => {
             println!("   User selected Selene engine");
             // In real code, you'd have HUGR here
-            DynamicEngineBuilder::new(selene_engine())
+            use pecos_programs::HugrProgram;
+            DynamicEngineBuilder::new(selene_engine().program(HugrProgram::from_bytes(vec![])).qubits(2))
         }
         _ => panic!("Unknown engine type: {}", user_choice),
     };
@@ -104,12 +107,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Add different engine configurations
     engines.insert("qasm_basic", DynamicEngineBuilder::new(
-        qasm_engine().qasm(qasm_code)
+        qasm_engine().program(QasmProgram::from_string(qasm_code))
     ));
     
     engines.insert("qasm_with_includes", DynamicEngineBuilder::new(
         qasm_engine()
-            .qasm(qasm_code)
+            .program(QasmProgram::from_string(qasm_code))
             .with_virtual_includes(vec![
                 ("custom.inc".to_string(), "// Custom gates".to_string())
             ])
@@ -138,12 +141,15 @@ fn create_engine_from_file(path: &str) -> Result<DynamicEngineBuilder, Box<dyn s
     let content = std::fs::read_to_string(path)?;
     
     let builder = if path.ends_with(".qasm") {
-        DynamicEngineBuilder::new(qasm_engine().qasm(&content))
+        DynamicEngineBuilder::new(qasm_engine().program(QasmProgram::from_string(&content)))
     } else if path.ends_with(".ll") {
-        DynamicEngineBuilder::new(llvm_engine().llvm_ir(&content))
+        use pecos_programs::LlvmProgram;
+        DynamicEngineBuilder::new(llvm_engine().program(LlvmProgram::from_string(&content)))
     } else if path.ends_with(".hugr") {
         // In real code, you'd parse HUGR here
-        DynamicEngineBuilder::new(selene_engine())
+        use pecos_programs::HugrProgram;
+        let hugr_bytes = std::fs::read(path)?;
+        DynamicEngineBuilder::new(selene_engine().program(HugrProgram::from_bytes(hugr_bytes)).qubits(2))
     } else {
         return Err("Unknown file type".into());
     };
@@ -158,11 +164,15 @@ fn create_engine_from_type(
     source: &str,
 ) -> DynamicEngineBuilder {
     match engine_type {
-        EngineType::Qasm => DynamicEngineBuilder::new(qasm_engine().qasm(source)),
-        EngineType::Llvm => DynamicEngineBuilder::new(llvm_engine().llvm_ir(source)),
+        EngineType::Qasm => DynamicEngineBuilder::new(qasm_engine().program(QasmProgram::from_string(source))),
+        EngineType::Llvm => {
+            use pecos_programs::LlvmProgram;
+            DynamicEngineBuilder::new(llvm_engine().program(LlvmProgram::from_string(source)))
+        },
         EngineType::Selene => {
             // In real code, you'd parse HUGR from source
-            DynamicEngineBuilder::new(selene_engine())
+            use pecos_programs::HugrProgram;
+            DynamicEngineBuilder::new(selene_engine().program(HugrProgram::from_bytes(vec![])).qubits(2))
         }
     }
 }

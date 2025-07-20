@@ -147,8 +147,11 @@ impl LlvmEngine {
 
         // Reset the LLVM runtime state through the library if it exists
         if let Some(ref library) = self.library {
-            if let Err(e) = library.reset() {
-                debug!("LLVM: Failed to reset LLVM runtime: {e}");
+            // Check if reset function exists (might not for empty circuits)
+            if library.has_function(b"llvm_runtime_reset").unwrap_or(false) {
+                if let Err(e) = library.reset() {
+                    debug!("LLVM: Failed to reset LLVM runtime: {e}");
+                }
             }
         }
     }
@@ -260,24 +263,36 @@ impl LlvmEngine {
                 measurements.len()
             );
 
-            // Convert measurements to the format expected by the runtime
-            // The runtime expects pairs of (result_id, value)
-            let mut results_data = Vec::with_capacity(measurements.len() * 2);
-            for (result_id, value) in measurements {
-                debug!("LLVM: Measurement result_id={result_id} value={value}");
-                results_data.push(u32::try_from(result_id).map_err(|_| {
-                    PecosError::Resource(format!(
-                        "Result ID {result_id} is too large to fit in u32"
-                    ))
-                })?);
-                results_data.push(value);
+            // Check if runtime update functions exist (might not for empty circuits)
+            let has_update = library
+                .has_function(b"llvm_runtime_update_measurement_results")
+                .unwrap_or(false);
+            let has_finalize = library
+                .has_function(b"llvm_runtime_finalize_shot")
+                .unwrap_or(false);
+
+            if has_update && has_finalize {
+                // Convert measurements to the format expected by the runtime
+                // The runtime expects pairs of (result_id, value)
+                let mut results_data = Vec::with_capacity(measurements.len() * 2);
+                for (result_id, value) in measurements {
+                    debug!("LLVM: Measurement result_id={result_id} value={value}");
+                    results_data.push(u32::try_from(result_id).map_err(|_| {
+                        PecosError::Resource(format!(
+                            "Result ID {result_id} is too large to fit in u32"
+                        ))
+                    })?);
+                    results_data.push(value);
+                }
+
+                // Call the runtime update function
+                library.update_measurement_results(&results_data)?;
+
+                // Now finalize the shot with the measurement results
+                library.finalize_shot()?;
+            } else {
+                debug!("LLVM: Runtime update/finalize functions not found, skipping measurement update");
             }
-
-            // Call the runtime update function
-            library.update_measurement_results(&results_data)?;
-
-            // Now finalize the shot with the measurement results
-            library.finalize_shot()?;
         }
 
         self.commands_generated = false;
@@ -301,23 +316,34 @@ impl LlvmEngine {
     fn get_results_impl(&self) -> Shot {
         // Get shot results from the runtime - this should always work
         if let Some(library) = &self.library {
-            match library.get_shot_results() {
-                Ok(Some(shot)) => {
-                    debug!(
-                        "LLVM: Retrieved shot from runtime with {} registers: {:?}",
-                        shot.data.len(),
-                        shot.data.keys().collect::<Vec<_>>()
-                    );
-                    shot
+            // Check if get_shot_results function exists (might not for empty circuits)
+            let has_get_shot_results = library
+                .has_function(b"llvm_runtime_get_shot_results")
+                .unwrap_or(false);
+
+            if has_get_shot_results {
+                match library.get_shot_results() {
+                    Ok(Some(shot)) => {
+                        debug!(
+                            "LLVM: Retrieved shot from runtime with {} registers: {:?}",
+                            shot.data.len(),
+                            shot.data.keys().collect::<Vec<_>>()
+                        );
+                        shot
+                    }
+                    Ok(None) => {
+                        panic!(
+                            "LLVM: Runtime returned no shot results after finalization - this indicates a bug in the LLVM runtime state management"
+                        );
+                    }
+                    Err(e) => {
+                        panic!("LLVM: Error getting shot results from library: {e}");
+                    }
                 }
-                Ok(None) => {
-                    panic!(
-                        "LLVM: Runtime returned no shot results after finalization - this indicates a bug in the LLVM runtime state management"
-                    );
-                }
-                Err(e) => {
-                    panic!("LLVM: Error getting shot results from library: {e}");
-                }
+            } else {
+                // No runtime functions - return an empty shot for empty circuits
+                debug!("LLVM: No get_shot_results function found, returning empty shot");
+                Shot::default()
             }
         } else {
             panic!("LLVM: No library loaded - engine not properly initialized");
@@ -457,14 +483,26 @@ impl LlvmEngine {
             }
         })?;
 
-        // Get the binary message generated by the LLVM runtime
-        let runtime_message = library.get_binary_commands().map_err(|e| {
-            log_error(
-                "LLVM Engine",
-                "Failed to get binary commands from LLVM runtime",
-                e,
-            )
-        })?;
+        // Check if the LLVM runtime symbols are available
+        // For empty circuits, these symbols might not be linked in
+        let has_runtime_symbols = library
+            .has_function(b"llvm_runtime_get_binary_commands")
+            .unwrap_or(false);
+
+        let runtime_message = if has_runtime_symbols {
+            // Get the binary message generated by the LLVM runtime
+            library.get_binary_commands().map_err(|e| {
+                log_error(
+                    "LLVM Engine",
+                    "Failed to get binary commands from LLVM runtime",
+                    e,
+                )
+            })?
+        } else {
+            // No runtime symbols available - this is likely an empty circuit
+            debug!("LLVM: No runtime symbols found, assuming empty circuit");
+            ByteMessage::create_empty()
+        };
 
         // Log message details for debugging
         debug!(
@@ -505,10 +543,15 @@ impl LlvmEngine {
         // Reset the runtime state at the beginning of command generation
         // This ensures each shot starts with a clean state
         if let Some(ref library) = self.library {
-            if let Err(e) = library.reset() {
-                debug!("LLVM: Failed to reset runtime before shot: {e}");
+            // Check if reset function exists (might not for empty circuits)
+            if library.has_function(b"llvm_runtime_reset").unwrap_or(false) {
+                if let Err(e) = library.reset() {
+                    debug!("LLVM: Failed to reset runtime before shot: {e}");
+                } else {
+                    debug!("LLVM: Reset runtime state for new shot");
+                }
             } else {
-                debug!("LLVM: Reset runtime state for new shot");
+                debug!("LLVM: No reset function found, skipping runtime reset");
             }
         }
 

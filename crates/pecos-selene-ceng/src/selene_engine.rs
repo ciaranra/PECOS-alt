@@ -161,8 +161,13 @@ impl SeleneEngine {
         log::info!("Compiling program to Selene runtime plugin: {:?}", self.program);
         
         match self.program.clone() {
+            #[cfg(feature = "hugr")]
             SeleneProgram::Hugr(_hugr) => {
                 self.compile_hugr_to_plugin()?;
+            }
+            #[cfg(feature = "hugr")]
+            SeleneProgram::HugrBytes(_bytes) => {
+                self.compile_hugr_bytes_to_plugin()?;
             }
             SeleneProgram::LlvmIr(_ir) => {
                 self.compile_llvm_ir_to_plugin()?;
@@ -247,12 +252,70 @@ impl SeleneEngine {
         }
     }
 
+    /// Compile HUGR bytes to a Selene runtime plugin
+    #[cfg(feature = "hugr")]
+    fn compile_hugr_bytes_to_plugin(&mut self) -> Result<(), PecosError> {
+        // Extract HUGR bytes from program
+        let hugr_bytes = match &self.program {
+            SeleneProgram::HugrBytes(bytes) => bytes.clone(),
+            _ => return Err(SeleneError::UnsupportedProgram("Expected HUGR bytes".to_string()).into()),
+        };
+
+        // Deserialize HUGR from bytes using tket2/hugr's Package format
+        use hugr::package::Package;
+        use crate::hugr_compiler::get_extension_registry;
+        use std::io::Cursor;
+        
+        let package = Package::load(Cursor::new(&hugr_bytes), Some(get_extension_registry()))
+            .map_err(|e| SeleneError::HugrError(format!("Failed to deserialize HUGR package: {}", e)))?;
+        
+        // Extract the first module from the package
+        let mut hugr = if package.modules.len() == 1 {
+            package.modules.into_iter().next().unwrap()
+        } else {
+            return Err(SeleneError::HugrError(
+                format!("Expected exactly one module in HUGR package, found {}", package.modules.len())
+            ).into());
+        };
+
+        // Set up LLVM compilation
+        let context = Context::create();
+        let config = CompileConfig {
+            name: "selene_hugr_program".to_string(),
+            opt_level: if self.optimize { OptimizationLevel::Default } else { OptimizationLevel::None },
+            ..Default::default()
+        };
+        
+        let target_machine = get_native_target_machine(config.opt_level)
+            .map_err(|e| SeleneError::HugrError(format!("Failed to create target machine: {}", e)))?;
+
+        // Compile HUGR to LLVM Module
+        let llvm_module = compile_hugr_to_llvm(&context, &mut hugr, &config, &target_machine)
+            .map_err(|e| SeleneError::HugrError(format!("HUGR compilation failed: {}", e)))?;
+            
+        log::info!("Successfully compiled HUGR bytes to LLVM module");
+
+        // Convert LLVM Module to IR string
+        let llvm_ir_string = llvm_module.to_string();
+        
+        // Update the program to use the compiled LLVM IR
+        self.program = SeleneProgram::LlvmIr(llvm_ir_string);
+        
+        // Now use the standard LLVM plugin compilation path
+        self.compile_llvm_ir_to_plugin()
+    }
+
     /// Compile LLVM bitcode to a Selene runtime plugin
     fn compile_llvm_bitcode_to_plugin(&mut self) -> Result<(), PecosError> {
         let bitcode = match &self.program {
             SeleneProgram::LlvmBitcode(bc) => bc.clone(),
             _ => return Err(SeleneError::UnsupportedProgram("Expected LLVM bitcode".to_string()).into()),
         };
+        
+        // Validate the bitcode is not empty
+        if bitcode.is_empty() {
+            return Err(SeleneError::EmptyProgram.into());
+        }
         
         // Check if we should skip compilation (for tests without network)
         if std::env::var("PECOS_SKIP_PLUGIN_COMPILATION").is_ok() {
@@ -307,6 +370,11 @@ impl SeleneEngine {
             SeleneProgram::LlvmIr(ir) => ir.clone(),
             _ => return Err(SeleneError::UnsupportedProgram("Expected LLVM IR".to_string()).into()),
         };
+        
+        // Validate the IR is not empty
+        if ir_string.is_empty() {
+            return Err(SeleneError::EmptyProgram.into());
+        }
         
         // Check if we should skip compilation (for tests without network)
         if std::env::var("PECOS_SKIP_PLUGIN_COMPILATION").is_ok() {
@@ -1051,6 +1119,12 @@ impl ClassicalEngine for SeleneEngine {
         match &self.program {
             SeleneProgram::Hugr(_) => {
                 // HUGR program validation passed
+            }
+            SeleneProgram::HugrBytes(bytes) => {
+                if bytes.is_empty() {
+                    return Err(SeleneError::EmptyProgram.into());
+                }
+                // HUGR bytes validation passed
             }
             SeleneProgram::LlvmIr(ir) => {
                 if ir.is_empty() {

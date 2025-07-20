@@ -467,7 +467,7 @@ impl MonteCarloEngine {
     /// # Parameters
     /// - `classical_engine`: The classical engine to use.
     /// - `noise_model`: The noise model to apply during simulation.
-    /// - `max_qubits`: Maximum number of qubits for the quantum engine.
+    /// - `num_qubits`: Number of qubits for the quantum engine (also sets allocation limit).
     /// - `num_shots`: The total number of circuit executions to perform.
     /// - `num_workers`: The number of worker threads to use for parallel execution.
     /// - `seed`: Optional seed for deterministic behavior.
@@ -480,15 +480,15 @@ impl MonteCarloEngine {
     pub fn run_with_noise_model_and_max_qubits(
         classical_engine: Box<dyn ClassicalControlEngine>,
         noise_model: Box<dyn NoiseModel>,
-        max_qubits: usize,
+        num_qubits: usize,
         num_shots: usize,
         num_workers: usize,
         seed: Option<u64>,
     ) -> Result<ShotVec, PecosError> {
         debug!(
-            "MonteCarloEngine::run_with_noise_model_and_max_qubits: Creating StateVecEngine with {max_qubits} qubits"
+            "MonteCarloEngine::run_with_noise_model_and_max_qubits: Creating StateVecEngine with {num_qubits} qubits"
         );
-        let quantum_engine = Box::new(StateVecEngine::new(max_qubits));
+        let quantum_engine = Box::new(StateVecEngine::new(num_qubits));
         let mut hybrid_engine = HybridEngineBuilder::new()
             .with_classical_engine(classical_engine)
             .with_quantum_engine(quantum_engine)

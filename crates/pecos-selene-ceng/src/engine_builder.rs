@@ -9,7 +9,26 @@ use crate::{
 };
 use pecos_core::errors::PecosError;
 use pecos_engines::ClassicalControlEngineBuilder;
+use pecos_programs::{LlvmProgram, HugrProgram};
 use std::path::Path;
+
+/// Program source types that can be converted to Selene engine source
+pub enum ProgramSource {
+    Llvm(LlvmProgram),
+    Hugr(HugrProgram),
+}
+
+impl From<LlvmProgram> for ProgramSource {
+    fn from(program: LlvmProgram) -> Self {
+        ProgramSource::Llvm(program)
+    }
+}
+
+impl From<HugrProgram> for ProgramSource {
+    fn from(program: HugrProgram) -> Self {
+        ProgramSource::Hugr(program)
+    }
+}
 
 /// Builder for Selene engines that integrates with the unified simulation API
 #[derive(Debug, Clone, Default)]
@@ -92,6 +111,37 @@ impl SeleneEngineBuilder {
         self.verbose = verbose;
         self
     }
+    
+    /// Set the program from an LlvmProgram or HugrProgram
+    pub fn program(mut self, program: impl Into<ProgramSource>) -> Self {
+        match program.into() {
+            ProgramSource::Llvm(p) => {
+                match p.content {
+                    pecos_programs::LlvmContent::Ir(ir) => {
+                        self.program = Some(SeleneProgram::LlvmIr(ir));
+                    }
+                    pecos_programs::LlvmContent::Bitcode(bc) => {
+                        self.program = Some(SeleneProgram::LlvmBitcode(bc));
+                    }
+                }
+            }
+            ProgramSource::Hugr(p) => {
+                // Store HUGR bytes for later compilation
+                #[cfg(feature = "hugr")]
+                {
+                    // We'll store the bytes and convert to HUGR during build
+                    // For now, create a temporary placeholder that will be replaced in build()
+                    self.program = Some(SeleneProgram::HugrBytes(p.hugr));
+                }
+                #[cfg(not(feature = "hugr"))]
+                {
+                    // Without HUGR feature, we can't handle HUGR programs
+                    panic!("HUGR support requires the 'hugr' feature to be enabled");
+                }
+            }
+        }
+        self
+    }
 }
 
 impl ClassicalControlEngineBuilder for SeleneEngineBuilder {
@@ -109,9 +159,28 @@ impl ClassicalControlEngineBuilder for SeleneEngineBuilder {
                 "Number of qubits not specified. Use .qubits() to set the number of qubits.".to_string(),
             )
         })?;
+        
+        // Validate number of qubits
+        if num_qubits == 0 {
+            return Err(PecosError::Input(
+                "Number of qubits must be greater than 0".to_string(),
+            ));
+        }
 
         // Build the Selene engine
         Ok(SeleneEngine::new(program, num_qubits, self.optimize))
+    }
+}
+
+impl From<LlvmProgram> for SeleneEngineBuilder {
+    fn from(program: LlvmProgram) -> Self {
+        Self::new().program(program)
+    }
+}
+
+impl From<HugrProgram> for SeleneEngineBuilder {
+    fn from(program: HugrProgram) -> Self {
+        Self::new().program(program)
     }
 }
 

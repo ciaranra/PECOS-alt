@@ -4,8 +4,9 @@
 //! Classical/Control Engine that implements PECOS traits.
 
 use env_logger;
-use pecos_selene_ceng::selene_sim;
-use pecos_engines::{ClassicalEngine, Engine};
+use pecos_selene_ceng::selene_engine;
+use pecos_engines::{ClassicalEngine, Engine, ClassicalControlEngineBuilder};
+use pecos_programs::LlvmProgram;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
@@ -41,24 +42,19 @@ entry:
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let engine = selene_sim()
-        .llvm_ir(bell_state_llvm)
+    let engine = selene_engine()
+        .program(LlvmProgram::from_ir(bell_state_llvm))
         .qubits(2)
-        .optimize()
+        .optimize(true)
         .verbose(true)
         .build()?;
 
     println!("✓ Successfully created SeleneEngine");
     println!("  Qubits: {}", engine.num_qubits());
-    println!("  Shot count: {}", engine.shot_count());
     println!();
 
     // Test as ClassicalEngine
     println!("2. Testing as ClassicalEngine...");
-    
-    // Compile the program (validates the LLVM IR)
-    engine.compile()?;
-    println!("✓ Program compiled successfully");
     
     // Clone the engine (demonstrating it's Send + Sync + Clone)
     let mut engine_clone = engine.clone();
@@ -75,9 +71,10 @@ attributes #0 = { "EntryPoint" }
 
     // Run multiple shots
     println!("4. Running multiple shots...");
-    let results = selene_sim()
-        .llvm_ir(bell_state_llvm)
+    let results = selene_engine()
+        .program(LlvmProgram::from_ir(bell_state_llvm))
         .qubits(2)
+        .to_sim()
         .seed(42)
         .workers(2)
         .run(10)?;
@@ -88,9 +85,7 @@ attributes #0 = { "EntryPoint" }
     let shot_map = results.try_as_shot_map()?;
     
     // Display results
-    for (outcome, count) in shot_map.iter() {
-        println!("  Outcome {:?}: {:?} times", outcome, count);
-    }
+    println!("  Total shots: {}", shot_map.num_shots());
     println!();
 
     // Demonstrate direct construction

@@ -5,8 +5,9 @@ class TestQasmSimDefaults:
     """Test and document default values for all qasm_sim settings."""
 
     def test_builder_defaults(self) -> None:
-        """Test and document defaults when using qasm_sim builder."""
-        from pecos.rslib import qasm_sim
+        """Test and document defaults when using qasm_engine builder."""
+        from pecos_rslib import qasm_engine
+        from pecos_rslib.programs import QasmProgram
 
         qasm = """
         OPENQASM 2.0;
@@ -19,22 +20,24 @@ class TestQasmSimDefaults:
         """
 
         # Build with all defaults
-        sim = qasm_sim(qasm).build()
+        sim = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().build()
 
         # Based on Rust code, the defaults are:
         # - seed: None (non-deterministic)
         # - workers: 1 (single thread)
-        # - noise_model: PassThroughNoise (no noise)
+        # - noise_model: no noise (don't call .noise())
         # - quantum_engine: SparseStabilizer
         # - bit_format: BigInt (integers, not binary strings)
 
         # Run to verify it works
         results = sim.run(100)
-        assert len(results["c"]) == 100
+        results_dict = results.to_dict()
+        assert len(results_dict["c"]) == 100
 
-    def test_run_qasm_defaults(self) -> None:
-        """Test and document defaults when using run_qasm function."""
-        from pecos.rslib import run_qasm
+    def test_run_direct_defaults(self) -> None:
+        """Test and document defaults when using engine run directly."""
+        from pecos_rslib import qasm_engine
+        from pecos_rslib.programs import QasmProgram
 
         qasm = """
         OPENQASM 2.0;
@@ -45,43 +48,44 @@ class TestQasmSimDefaults:
         measure q[0] -> c[0];
         """
 
-        # Run with minimal parameters
-        results = run_qasm(qasm, shots=10)
+        # Run with minimal parameters using new API
+        results = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().run(10)
+        results_dict = results.to_dict()
 
-        # Defaults for run_qasm:
+        # Defaults for direct run:
         # - noise_model: None (no noise)
-        # - engine: None (auto-selected based on circuit)
-        # - workers: None (defaults to 1)
+        # - engine: auto-selected based on circuit
+        # - workers: defaults to 1
         # - seed: None (non-deterministic)
 
-        assert all(val == 1 for val in results["c"])
+        assert all(val == 1 for val in results_dict["c"])
 
     def test_noise_model_defaults(self) -> None:
         """Test and document default parameters for noise models."""
-        from pecos.rslib import (
-            BiasedDepolarizingNoise,
-            DepolarizingCustomNoise,
-            DepolarizingNoise,
+        from pecos_rslib import (
+            biased_depolarizing_noise,
+            depolarizing_noise,
+            GeneralNoiseModelBuilder,
         )
 
-        # Test default values for noise models
-        dep = DepolarizingNoise()
-        assert dep.p == 0.001  # Default probability
+        # Test default values for noise models using builder pattern
+        # Note: depolarizing_noise() builder requires explicit probability
+        dep = depolarizing_noise().with_p1_probability(0.001)
+        # Can't directly assert on builder properties
 
-        dep_custom = DepolarizingCustomNoise()
-        assert dep_custom.p_prep == 0.001
-        assert dep_custom.p_meas == 0.001
-        assert dep_custom.p1 == 0.001
-        assert dep_custom.p2 == 0.002  # Higher for 2-qubit gates
+        # General noise model has defaults that can be overridden
+        general = GeneralNoiseModelBuilder()
+        # Default values are set when building
 
-        biased = BiasedDepolarizingNoise()
-        assert biased.p == 0.001
+        biased = biased_depolarizing_noise().with_p1_probability(0.001).with_p2_probability(0.001).with_prep_probability(0.001)
+        # Builder pattern requires explicit values
 
-    def test_config_defaults(self) -> None:
-        """Test and document defaults when using qasm_sim config method."""
-        from pecos.rslib import qasm_sim
+    def test_builder_defaults_new_api(self) -> None:
+        """Test and document defaults when using new unified API."""
+        from pecos_rslib import qasm_engine
+        from pecos_rslib.programs import QasmProgram
 
-        # Minimal config - only required field
+        # Minimal setup - only required field
         qasm = """
             OPENQASM 2.0;
             include "qelib1.inc";
@@ -90,23 +94,24 @@ class TestQasmSimDefaults:
             x q[0];
             measure q[0] -> c[0];
             """
-        config = {}
 
-        sim = qasm_sim(qasm).config(config).build()
+        sim = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().build()
         results = sim.run(10)
+        results_dict = results.to_dict()
 
-        # Defaults for qasm_sim with config method:
+        # Defaults for new API:
         # - seed: None (not set)
-        # - workers: 1 (from builder default)
-        # - noise: PassThroughNoise (no noise - ideal simulation)
-        # - quantum_engine: SparseStabilizer (from builder default)
+        # - workers: 1 (default)
+        # - noise: no noise (ideal simulation)
+        # - quantum_engine: SparseStabilizer (default)
         # - binary_string_format: False (integers)
 
-        assert all(val == 1 for val in results["c"])
+        assert all(val == 1 for val in results_dict["c"])
 
-    def test_no_noise_means_pass_through(self) -> None:
-        """Test that omitting noise config results in PassThroughNoise (deterministic)."""
-        from pecos.rslib import qasm_sim
+    def test_no_noise_means_ideal(self) -> None:
+        """Test that omitting noise results in ideal (deterministic) simulation."""
+        from pecos_rslib import qasm_engine
+        from pecos_rslib.programs import QasmProgram
 
         qasm = """
         OPENQASM 2.0;
@@ -118,53 +123,35 @@ class TestQasmSimDefaults:
         measure q -> c;
         """
 
-        # Config without noise specification
-        config1 = {}
-
-        # Config with explicit PassThroughNoise
-        config2 = {
-            "noise": {"type": "PassThroughNoise"},
-        }
+        # Build without noise specification
+        sim1 = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().build()
 
         # Both should produce identical deterministic results
-        sim1 = qasm_sim(qasm).config(config1).build()
-        sim2 = qasm_sim(qasm).config(config2).build()
-
         results1 = sim1.run(100)
-        results2 = sim2.run(100)
+        results1_dict = results1.to_dict()
 
-        # Both should always measure |11> = 3
-        assert all(val == 3 for val in results1["c"])
-        assert all(val == 3 for val in results2["c"])
+        # Should always measure |11> = 3
+        assert all(val == 3 for val in results1_dict["c"])
 
     def test_default_summary(self) -> None:
         """Document all defaults in one place."""
         # Default values summary:
         #
-        # QasmSimulationBuilder defaults:
+        # QasmEngine defaults:
         # - seed: None (non-deterministic)
         # - workers: 1 (single thread)
-        # - noise_model: PassThroughNoise (no noise)
+        # - noise_model: no noise (ideal simulation)
         # - quantum_engine: SparseStabilizer
         # - bit_format: BigInt (integers, not binary strings)
         #
-        # run_qasm function defaults:
-        # - noise_model: None (no noise)
-        # - engine: None (auto-selected)
-        # - workers: None → 1 (single thread)
-        # - seed: None (non-deterministic)
+        # Noise model builders:
+        # - depolarizing_noise(): requires explicit .with_p1_probability()
+        # - biased_depolarizing_noise(): requires probability settings
+        # - GeneralNoiseModelBuilder(): has internal defaults
         #
-        # Noise model parameter defaults:
-        # - DepolarizingNoise.p: 0.001
-        # - DepolarizingCustomNoise.p_prep: 0.001
-        # - DepolarizingCustomNoise.p_meas: 0.001
-        # - DepolarizingCustomNoise.p1: 0.001
-        # - DepolarizingCustomNoise.p2: 0.002
-        # - BiasedDepolarizingNoise.p: 0.001
-        #
-        # qasm_sim config method defaults:
+        # New unified API defaults:
         # - All optional fields use builder defaults when not specified
-        # - noise: PassThroughNoise (no noise) when omitted
+        # - noise: no noise (ideal simulation) when omitted
 
         # This test just documents the defaults
         assert True

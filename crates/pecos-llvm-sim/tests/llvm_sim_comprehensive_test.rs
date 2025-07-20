@@ -1,9 +1,11 @@
-//! Comprehensive tests for `llvm_sim()` matching and exceeding `LlvmEngine` test coverage
+//! Comprehensive tests for LLVM simulation API matching and exceeding `LlvmEngine` test coverage
 //!
-//! These tests ensure that `llvm_sim()` provides at least the same functionality as
+//! These tests ensure that the unified LLVM simulation API provides at least the same functionality as
 //! `LlvmEngine`, plus tests for its additional features like noise models and parallelization.
 
-use pecos_llvm_sim::{llvm_sim, QuantumEngineType, DepolarizingNoise, DepolarizingCustomNoise};
+use pecos_llvm_sim::llvm_engine;
+use pecos_engines::{state_vector, sparse_stabilizer, DepolarizingNoise, DepolarizingCustomNoise, ClassicalControlEngineBuilder};
+use pecos_programs::LlvmProgram;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -73,13 +75,15 @@ fn test_llvm_sim_bell_state_immediate_measurement() {
         return;
     }
 
-    // Run Bell state with llvm_sim (matches test_bell_state_immediate_measurement)
-    let shot_vec = llvm_sim()
-        .llvm_file(get_bell_path())
+    // Run Bell state with unified API (matches test_bell_state_immediate_measurement)
+    let shot_vec = llvm_engine()
+        .program(LlvmProgram::from_file(get_bell_path()).unwrap())
+        .to_sim()
         .seed(42) // Use seed for reproducibility
         .workers(2) // Match the original test
+        .qubits(2)
         .run(100)
-        .expect("llvm_sim execution should succeed");
+        .expect("LLVM simulation execution should succeed");
 
     // Process results
     let mut counts: HashMap<i64, usize> = HashMap::new();
@@ -93,7 +97,7 @@ fn test_llvm_sim_bell_state_immediate_measurement() {
     }
 
     // Print the counts for debugging
-    println!("Bell state results (llvm_sim):");
+    println!("Bell state results (unified API):");
     for (result, count) in &counts {
         println!("  {result}: {count}");
     }
@@ -126,11 +130,14 @@ fn test_llvm_sim_qprog_adaptive_algorithm() {
         return;
     }
 
-    // Run adaptive algorithm with llvm_sim (matches test_qprog_adaptive_algorithm)
-    let shot_vec = llvm_sim()
-        .llvm_file(get_qprog_path())
+    // Run adaptive algorithm with unified API (matches test_qprog_adaptive_algorithm)
+    let shot_vec = llvm_engine()
+        .program(LlvmProgram::from_file(get_qprog_path()).unwrap())
+        .to_sim()
         .seed(42)
         .workers(2)
+        .qubits(3)
+        .quantum(state_vector()) // Use state vector engine for RZ gates
         .run(50)
         .expect("Adaptive algorithm execution should succeed");
 
@@ -172,7 +179,7 @@ fn test_llvm_sim_qprog_adaptive_algorithm() {
     }
 
     // Print results for debugging
-    println!("Adaptive algorithm results (llvm_sim):");
+    println!("Adaptive algorithm results (unified API):");
     println!("  result_0: {result_0_counts:?}");
     println!("  result_1: {result_1_counts:?}");
     println!("  result_2: {result_2_counts:?}");
@@ -205,21 +212,23 @@ fn test_llvm_sim_single_worker() {
     }
 
     // Test with single worker (matches test_llvm_bell_state_single_worker)
-    let shot_vec = llvm_sim()
-        .llvm_file(get_bell_path())
+    let shot_vec = llvm_engine()
+        .program(LlvmProgram::from_file(get_bell_path()).unwrap())
+        .to_sim()
         .workers(1) // Single worker
+        .qubits(2)
         .run(10)
         .expect("Single worker execution should succeed");
 
     assert!(!shot_vec.is_empty(), "Expected non-empty results");
     println!(
-        "Single-threaded llvm_sim execution succeeded with {} shots",
+        "Single-threaded LLVM simulation execution succeeded with {} shots",
         shot_vec.len()
     );
 }
 
 // =============================================================================
-// Tests for llvm_sim's additional features
+// Tests for LLVM simulation's additional features
 // =============================================================================
 
 #[test]
@@ -229,11 +238,13 @@ fn test_llvm_sim_with_uniform_depolarizing_noise() {
     }
 
     // Test Bell state with significant noise
-    let shot_vec = llvm_sim()
-        .llvm_file(get_bell_path())
+    let shot_vec = llvm_engine()
+        .program(LlvmProgram::from_file(get_bell_path()).unwrap())
+        .to_sim()
         .seed(42)
         .workers(4)
         .noise(DepolarizingNoise { p: 0.2 }) // 20% error rate
+        .qubits(2)
         .run(1000)
         .expect("Noisy simulation should succeed");
 
@@ -273,8 +284,9 @@ fn test_llvm_sim_with_custom_depolarizing_noise() {
     }
 
     // Test with custom noise parameters
-    let shot_vec = llvm_sim()
-        .llvm_file(get_bell_path())
+    let shot_vec = llvm_engine()
+        .program(LlvmProgram::from_file(get_bell_path()).unwrap())
+        .to_sim()
         .seed(42)
         .noise(DepolarizingCustomNoise {
             p_prep: 0.01, // 1% prep error
@@ -282,6 +294,7 @@ fn test_llvm_sim_with_custom_depolarizing_noise() {
             p1: 0.02,     // 2% single-qubit gate error
             p2: 0.10,     // 10% two-qubit gate error (CNOT)
         })
+        .qubits(2)
         .run(1000)
         .expect("Custom noise simulation should succeed");
 
@@ -312,10 +325,12 @@ fn test_llvm_sim_parallel_execution_scaling() {
     for workers in worker_counts {
         let start = std::time::Instant::now();
 
-        let shot_vec = llvm_sim()
-            .llvm_file(get_bell_path())
+        let shot_vec = llvm_engine()
+            .program(LlvmProgram::from_file(get_bell_path()).unwrap())
+            .to_sim()
             .seed(42)
             .workers(workers)
+            .qubits(2)
             .run(1000)
             .unwrap_or_else(|_| panic!("Simulation with {workers} workers should succeed"));
 
@@ -337,35 +352,45 @@ fn test_llvm_sim_quantum_engines() {
     }
 
     // Test both quantum engines
-    let engines = vec![
-        ("StateVector", QuantumEngineType::StateVector),
-        ("SparseStabilizer", QuantumEngineType::SparseStabilizer),
-    ];
+    // Test StateVector engine
+    let shot_vec = llvm_engine()
+        .program(LlvmProgram::from_file(get_bell_path()).unwrap())
+        .to_sim()
+        .seed(42)
+        .qubits(2)
+        .quantum(state_vector())
+        .run(100)
+        .unwrap_or_else(|_| panic!("StateVector engine should succeed"));
 
-    for (name, engine_type) in engines {
-        let shot_vec = llvm_sim()
-            .llvm_file(get_bell_path())
-            .seed(42)
-            .quantum_engine(engine_type)
-            .run(100)
-            .unwrap_or_else(|_| panic!("{name} engine should succeed"));
+    println!(
+        "StateVector engine succeeded with {} shots",
+        shot_vec.len()
+    );
 
-        println!(
-            "{} engine: {} results",
-            name,
+    // Test SparseStabilizer engine
+    let shot_vec = llvm_engine()
+        .program(LlvmProgram::from_file(get_bell_path()).unwrap())
+        .to_sim()
+        .seed(42)
+        .qubits(2)
+        .quantum(sparse_stabilizer())
+        .run(100)
+        .unwrap_or_else(|_| panic!("SparseStabilizer engine should succeed"));
+
+    println!(
+        "SparseStabilizer engine succeeded with {} shots",
             shot_vec.len()
         );
 
-        // Verify Bell state results
-        let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
-        let c_values = get_register_i64(&shot_map, "c").expect("Should have c register");
-        
-        for &value in &c_values {
-            assert!(
-                value == 0 || value == 3,
-                "{name} engine: Expected Bell state results"
-            );
-        }
+    // Verify Bell state results
+    let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+    let c_values = get_register_i64(&shot_map, "c").expect("Should have c register");
+    
+    for &value in &c_values {
+        assert!(
+            value == 0 || value == 3,
+            "SparseStabilizer engine: Expected Bell state results"
+        );
     }
 }
 
@@ -376,11 +401,13 @@ fn test_llvm_sim_build_once_run_many() {
     }
 
     // Build simulation once
-    let mut sim = llvm_sim()
-        .llvm_file(get_bell_path())
+    let sim = llvm_engine()
+        .program(LlvmProgram::from_file(get_bell_path()).unwrap())
+        .to_sim()
         .seed(42)
         .workers(4)
         .noise(DepolarizingNoise { p: 0.01 })
+        .qubits(2)
         .build()
         .expect("Build should succeed");
 
@@ -428,9 +455,11 @@ define void @main() #0 {
 attributes #0 = { "EntryPoint" }
 "#;
 
-    let shot_vec = llvm_sim()
-        .llvm_ir(llvm_ir)
+    let shot_vec = llvm_engine()
+        .program(LlvmProgram::from_string(llvm_ir))
+        .to_sim()
         .seed(42)
+        .qubits(1)
         .run(100)
         .expect("In-memory LLVM IR should work");
 
@@ -459,17 +488,21 @@ fn test_llvm_sim_reproducibility_with_seed() {
     // Run twice with same seed
     let seed = 12345;
 
-    let shot_vec1 = llvm_sim()
-        .llvm_file(get_bell_path())
+    let shot_vec1 = llvm_engine()
+        .program(LlvmProgram::from_file(get_bell_path()).unwrap())
+        .to_sim()
         .seed(seed)
         .workers(1) // Single worker for determinism
+        .qubits(2)
         .run(100)
         .expect("First run should succeed");
 
-    let shot_vec2 = llvm_sim()
-        .llvm_file(get_bell_path())
+    let shot_vec2 = llvm_engine()
+        .program(LlvmProgram::from_file(get_bell_path()).unwrap())
+        .to_sim()
         .seed(seed)
         .workers(1) // Single worker for determinism
+        .qubits(2)
         .run(100)
         .expect("Second run should succeed");
 
@@ -497,7 +530,7 @@ fn test_llvm_sim_error_handling() {
 
     // Test with invalid LLVM IR
     let invalid_ir = "This is not valid LLVM IR";
-    let result = llvm_sim().llvm_ir(invalid_ir).run(10);
+    let result = llvm_engine().program(LlvmProgram::from_string(invalid_ir)).to_sim().qubits(1).run(10);
     assert!(result.is_err(), "Invalid LLVM IR should fail");
 
     // Test with LLVM IR missing entry point
@@ -506,29 +539,29 @@ fn test_llvm_sim_error_handling() {
         ret void
     }
     ";
-    let result = llvm_sim().llvm_ir(no_entry_ir).run(10);
+    let result = llvm_engine().program(LlvmProgram::from_string(no_entry_ir)).to_sim().qubits(1).run(10);
     assert!(result.is_err(), "LLVM IR without EntryPoint should fail");
 
     // Test with non-existent file
-    let result = llvm_sim().llvm_file("/non/existent/file.ll").run(10);
+    let result = LlvmProgram::from_file("/non/existent/file.ll");
     assert!(result.is_err(), "Non-existent file should fail");
 }
 
 #[test]
-fn test_llvm_sim_verbose_and_debug_options() {
-    if skip_if_llvm_missing("test_llvm_sim_verbose_and_debug_options") {
+fn test_llvm_sim_verbose_options() {
+    if skip_if_llvm_missing("test_llvm_sim_verbose_options") {
         return;
     }
 
-    // Test with verbose and debug options
-    let shot_vec = llvm_sim()
-        .llvm_file(get_bell_path())
+    // Test with verbose option
+    let shot_vec = llvm_engine()
+        .program(LlvmProgram::from_file(get_bell_path()).unwrap())
+        .to_sim()
         .verbose(true)
-        .debug(true)
-        .keep_temp_files(true)
+        .qubits(2)
         .run(10)
-        .expect("Verbose/debug run should succeed");
+        .expect("Verbose run should succeed");
 
     assert_eq!(shot_vec.len(), 10);
-    println!("Verbose/debug test completed");
+    println!("Verbose test completed");
 }

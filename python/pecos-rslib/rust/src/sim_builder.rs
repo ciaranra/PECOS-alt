@@ -1,17 +1,21 @@
 //! Python bindings for the unified simulation builder pattern
 //!
-//! This module provides thin Python wrappers around the Rust sim(engine_builder) pattern.
+//! This module provides thin Python wrappers around the Rust engine().to_sim() pattern.
 
 use pyo3::prelude::*;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pecos_engines::{
-    sim, SimBuilder,
-    QuantumEngineType,
-    PassThroughNoise, DepolarizingNoise, BiasedDepolarizingNoise,
+    SimBuilder, sim_builder::QuantumEngineType,
+    ClassicalControlEngineBuilder,
 };
-use pecos_qasm::{qasm_engine, QasmEngineBuilder};
+use pecos_engines::noise::{
+    DepolarizingNoiseModelBuilder, BiasedDepolarizingNoiseModelBuilder,
+    GeneralNoiseModelBuilder, PassThroughNoiseModelBuilder, IntoNoiseModel
+};
+use pecos_qasm::{qasm_engine, unified_engine_builder::QasmEngineBuilder};
 use pecos_llvm_sim::{llvm_engine, LlvmEngineBuilder};
 use pecos_selene_ceng::{selene_engine, SeleneEngineBuilder};
+use pecos_programs::{QasmProgram, LlvmProgram};
 use crate::shot_results_bindings::PyShotVec;
 
 /// Python wrapper for QASM engine builder
@@ -22,21 +26,22 @@ pub struct PyQasmEngineBuilder {
 
 #[pymethods]
 impl PyQasmEngineBuilder {
-    /// Set QASM source
-    pub fn qasm(&mut self, source: &str) -> PyResult<&mut Self> {
+    /// Set QASM program
+    pub fn program(&mut self, source: &str) -> PyResult<&mut Self> {
         if let Some(builder) = self.builder.take() {
-            self.builder = Some(builder.qasm(source));
+            self.builder = Some(builder.program(QasmProgram::from_string(source)));
             Ok(self)
         } else {
             Err(PyRuntimeError::new_err("Builder already consumed"))
         }
     }
     
-    /// Set QASM file
-    pub fn qasm_file(&mut self, path: &str) -> PyResult<&mut Self> {
+    /// Convert to simulation builder
+    pub fn to_sim(&mut self) -> PyResult<PySimBuilder> {
         if let Some(builder) = self.builder.take() {
-            self.builder = Some(builder.qasm_file(path));
-            Ok(self)
+            Ok(PySimBuilder {
+                inner: SimBuilderInner::Qasm(Some(builder.to_sim())),
+            })
         } else {
             Err(PyRuntimeError::new_err("Builder already consumed"))
         }
@@ -51,31 +56,22 @@ pub struct PyLlvmEngineBuilder {
 
 #[pymethods]
 impl PyLlvmEngineBuilder {
-    /// Set LLVM IR source
-    pub fn llvm_ir(&mut self, source: &str) -> PyResult<&mut Self> {
+    /// Set LLVM program
+    pub fn program(&mut self, source: &str) -> PyResult<&mut Self> {
         if let Some(builder) = self.builder.take() {
-            self.builder = Some(builder.llvm_ir(source));
+            self.builder = Some(builder.program(LlvmProgram::from_string(source)));
             Ok(self)
         } else {
             Err(PyRuntimeError::new_err("Builder already consumed"))
         }
     }
     
-    /// Set LLVM file
-    pub fn llvm_file(&mut self, path: &str) -> PyResult<&mut Self> {
+    /// Convert to simulation builder
+    pub fn to_sim(&mut self) -> PyResult<PySimBuilder> {
         if let Some(builder) = self.builder.take() {
-            self.builder = Some(builder.llvm_file(path));
-            Ok(self)
-        } else {
-            Err(PyRuntimeError::new_err("Builder already consumed"))
-        }
-    }
-    
-    /// Set max qubits
-    pub fn max_qubits(&mut self, max_qubits: usize) -> PyResult<&mut Self> {
-        if let Some(builder) = self.builder.take() {
-            self.builder = Some(builder.max_qubits(max_qubits));
-            Ok(self)
+            Ok(PySimBuilder {
+                inner: SimBuilderInner::Llvm(Some(builder.to_sim())),
+            })
         } else {
             Err(PyRuntimeError::new_err("Builder already consumed"))
         }
@@ -90,10 +86,10 @@ pub struct PySeleneEngineBuilder {
 
 #[pymethods]
 impl PySeleneEngineBuilder {
-    /// Set LLVM IR source
-    pub fn llvm_ir(&mut self, source: &str) -> PyResult<&mut Self> {
+    /// Set LLVM program
+    pub fn program(&mut self, source: &str) -> PyResult<&mut Self> {
         if let Some(builder) = self.builder.take() {
-            self.builder = Some(builder.llvm_ir(source));
+            self.builder = Some(builder.program(LlvmProgram::from_string(source)));
             Ok(self)
         } else {
             Err(PyRuntimeError::new_err("Builder already consumed"))
@@ -119,6 +115,17 @@ impl PySeleneEngineBuilder {
             Err(PyRuntimeError::new_err("Builder already consumed"))
         }
     }
+    
+    /// Convert to simulation builder
+    pub fn to_sim(&mut self) -> PyResult<PySimBuilder> {
+        if let Some(builder) = self.builder.take() {
+            Ok(PySimBuilder {
+                inner: SimBuilderInner::Selene(Some(builder.to_sim())),
+            })
+        } else {
+            Err(PyRuntimeError::new_err("Builder already consumed"))
+        }
+    }
 }
 
 /// Python wrapper for SimBuilder with type erasure
@@ -139,17 +146,17 @@ impl PySimBuilder {
     /// Set random seed
     pub fn seed(&mut self, seed: u64) -> PyResult<&mut Self> {
         match &mut self.inner {
-            SimBuilderInner::Qasm(ref mut builder) => {
+            SimBuilderInner::Qasm(builder) => {
                 if let Some(b) = builder.take() {
                     *builder = Some(b.seed(seed));
                 }
             }
-            SimBuilderInner::Llvm(ref mut builder) => {
+            SimBuilderInner::Llvm(builder) => {
                 if let Some(b) = builder.take() {
                     *builder = Some(b.seed(seed));
                 }
             }
-            SimBuilderInner::Selene(ref mut builder) => {
+            SimBuilderInner::Selene(builder) => {
                 if let Some(b) = builder.take() {
                     *builder = Some(b.seed(seed));
                 }
@@ -161,17 +168,17 @@ impl PySimBuilder {
     /// Set number of workers
     pub fn workers(&mut self, workers: usize) -> PyResult<&mut Self> {
         match &mut self.inner {
-            SimBuilderInner::Qasm(ref mut builder) => {
+            SimBuilderInner::Qasm(builder) => {
                 if let Some(b) = builder.take() {
                     *builder = Some(b.workers(workers));
                 }
             }
-            SimBuilderInner::Llvm(ref mut builder) => {
+            SimBuilderInner::Llvm(builder) => {
                 if let Some(b) = builder.take() {
                     *builder = Some(b.workers(workers));
                 }
             }
-            SimBuilderInner::Selene(ref mut builder) => {
+            SimBuilderInner::Selene(builder) => {
                 if let Some(b) = builder.take() {
                     *builder = Some(b.workers(workers));
                 }
@@ -183,17 +190,17 @@ impl PySimBuilder {
     /// Use automatic worker count
     pub fn auto_workers(&mut self) -> PyResult<&mut Self> {
         match &mut self.inner {
-            SimBuilderInner::Qasm(ref mut builder) => {
+            SimBuilderInner::Qasm(builder) => {
                 if let Some(b) = builder.take() {
                     *builder = Some(b.auto_workers());
                 }
             }
-            SimBuilderInner::Llvm(ref mut builder) => {
+            SimBuilderInner::Llvm(builder) => {
                 if let Some(b) = builder.take() {
                     *builder = Some(b.auto_workers());
                 }
             }
-            SimBuilderInner::Selene(ref mut builder) => {
+            SimBuilderInner::Selene(builder) => {
                 if let Some(b) = builder.take() {
                     *builder = Some(b.auto_workers());
                 }
@@ -211,17 +218,17 @@ impl PySimBuilder {
         };
         
         match &mut self.inner {
-            SimBuilderInner::Qasm(ref mut builder) => {
+            SimBuilderInner::Qasm(builder) => {
                 if let Some(b) = builder.take() {
                     *builder = Some(b.quantum_engine(engine_type));
                 }
             }
-            SimBuilderInner::Llvm(ref mut builder) => {
+            SimBuilderInner::Llvm(builder) => {
                 if let Some(b) = builder.take() {
                     *builder = Some(b.quantum_engine(engine_type));
                 }
             }
-            SimBuilderInner::Selene(ref mut builder) => {
+            SimBuilderInner::Selene(builder) => {
                 if let Some(b) = builder.take() {
                     *builder = Some(b.quantum_engine(engine_type));
                 }
@@ -230,22 +237,22 @@ impl PySimBuilder {
         Ok(self)
     }
     
-    /// Set max qubits
-    pub fn max_qubits(&mut self, max_qubits: usize) -> PyResult<&mut Self> {
+    /// Set number of qubits for quantum engine and allocation limit
+    pub fn qubits(&mut self, num_qubits: usize) -> PyResult<&mut Self> {
         match &mut self.inner {
-            SimBuilderInner::Qasm(ref mut builder) => {
+            SimBuilderInner::Qasm(builder) => {
                 if let Some(b) = builder.take() {
-                    *builder = Some(b.max_qubits(max_qubits));
+                    *builder = Some(b.qubits(num_qubits));
                 }
             }
-            SimBuilderInner::Llvm(ref mut builder) => {
+            SimBuilderInner::Llvm(builder) => {
                 if let Some(b) = builder.take() {
-                    *builder = Some(b.max_qubits(max_qubits));
+                    *builder = Some(b.qubits(num_qubits));
                 }
             }
-            SimBuilderInner::Selene(ref mut builder) => {
+            SimBuilderInner::Selene(builder) => {
                 if let Some(b) = builder.take() {
-                    *builder = Some(b.max_qubits(max_qubits));
+                    *builder = Some(b.qubits(num_qubits));
                 }
             }
         }
@@ -255,17 +262,17 @@ impl PySimBuilder {
     /// Set verbose mode
     pub fn verbose(&mut self, verbose: bool) -> PyResult<&mut Self> {
         match &mut self.inner {
-            SimBuilderInner::Qasm(ref mut builder) => {
+            SimBuilderInner::Qasm(builder) => {
                 if let Some(b) = builder.take() {
                     *builder = Some(b.verbose(verbose));
                 }
             }
-            SimBuilderInner::Llvm(ref mut builder) => {
+            SimBuilderInner::Llvm(builder) => {
                 if let Some(b) = builder.take() {
                     *builder = Some(b.verbose(verbose));
                 }
             }
-            SimBuilderInner::Selene(ref mut builder) => {
+            SimBuilderInner::Selene(builder) => {
                 if let Some(b) = builder.take() {
                     *builder = Some(b.verbose(verbose));
                 }
@@ -276,20 +283,24 @@ impl PySimBuilder {
     
     /// Set depolarizing noise
     pub fn noise_depolarizing(&mut self, p: f64) -> PyResult<&mut Self> {
+        let noise_builder = DepolarizingNoiseModelBuilder::new()
+            .with_p1_probability(p)
+            .with_p2_probability(p);
+            
         match &mut self.inner {
-            SimBuilderInner::Qasm(ref mut builder) => {
+            SimBuilderInner::Qasm(builder) => {
                 if let Some(b) = builder.take() {
-                    *builder = Some(b.noise(DepolarizingNoise { p }));
+                    *builder = Some(b.noise(noise_builder.clone()));
                 }
             }
-            SimBuilderInner::Llvm(ref mut builder) => {
+            SimBuilderInner::Llvm(builder) => {
                 if let Some(b) = builder.take() {
-                    *builder = Some(b.noise(DepolarizingNoise { p }));
+                    *builder = Some(b.noise(noise_builder.clone()));
                 }
             }
-            SimBuilderInner::Selene(ref mut builder) => {
+            SimBuilderInner::Selene(builder) => {
                 if let Some(b) = builder.take() {
-                    *builder = Some(b.noise(DepolarizingNoise { p }));
+                    *builder = Some(b.noise(noise_builder));
                 }
             }
         }
@@ -299,21 +310,21 @@ impl PySimBuilder {
     /// Run the simulation
     pub fn run(&mut self, shots: usize) -> PyResult<PyShotVec> {
         let result = match &mut self.inner {
-            SimBuilderInner::Qasm(ref mut builder) => {
+            SimBuilderInner::Qasm(builder) => {
                 if let Some(b) = builder.take() {
                     b.run(shots).map_err(|e| PyRuntimeError::new_err(e.to_string()))
                 } else {
                     Err(PyRuntimeError::new_err("Builder already consumed"))
                 }
             }
-            SimBuilderInner::Llvm(ref mut builder) => {
+            SimBuilderInner::Llvm(builder) => {
                 if let Some(b) = builder.take() {
                     b.run(shots).map_err(|e| PyRuntimeError::new_err(e.to_string()))
                 } else {
                     Err(PyRuntimeError::new_err("Builder already consumed"))
                 }
             }
-            SimBuilderInner::Selene(ref mut builder) => {
+            SimBuilderInner::Selene(builder) => {
                 if let Some(b) = builder.take() {
                     b.run(shots).map_err(|e| PyRuntimeError::new_err(e.to_string()))
                 } else {
@@ -328,34 +339,34 @@ impl PySimBuilder {
 
 /// Create engine builder functions
 #[pyfunction]
-pub fn qasm_engine() -> PyQasmEngineBuilder {
+pub fn py_qasm_engine() -> PyQasmEngineBuilder {
     PyQasmEngineBuilder {
         builder: Some(qasm_engine()),
     }
 }
 
 #[pyfunction]
-pub fn llvm_engine() -> PyLlvmEngineBuilder {
+pub fn py_llvm_engine() -> PyLlvmEngineBuilder {
     PyLlvmEngineBuilder {
         builder: Some(llvm_engine()),
     }
 }
 
 #[pyfunction]
-pub fn selene_engine() -> PySeleneEngineBuilder {
+pub fn py_selene_engine() -> PySeleneEngineBuilder {
     PySeleneEngineBuilder {
         builder: Some(selene_engine()),
     }
 }
 
-/// Main sim function that takes an engine builder
+/// Main sim function that takes an engine builder (deprecated - use .to_sim() instead)
 #[pyfunction]
-pub fn sim(py: Python, engine_builder: &Bound<'_, PyAny>) -> PyResult<PySimBuilder> {
+pub fn py_sim(_py: Python, engine_builder: &Bound<'_, PyAny>) -> PyResult<PySimBuilder> {
     // Check which type of engine builder we have
     if let Ok(qasm_builder) = engine_builder.extract::<PyRef<PyQasmEngineBuilder>>() {
         if let Some(builder) = qasm_builder.builder.clone() {
             Ok(PySimBuilder {
-                inner: SimBuilderInner::Qasm(Some(sim(builder))),
+                inner: SimBuilderInner::Qasm(Some(builder.to_sim())),
             })
         } else {
             Err(PyRuntimeError::new_err("QASM engine builder already consumed"))
@@ -363,7 +374,7 @@ pub fn sim(py: Python, engine_builder: &Bound<'_, PyAny>) -> PyResult<PySimBuild
     } else if let Ok(llvm_builder) = engine_builder.extract::<PyRef<PyLlvmEngineBuilder>>() {
         if let Some(builder) = llvm_builder.builder.clone() {
             Ok(PySimBuilder {
-                inner: SimBuilderInner::Llvm(Some(sim(builder))),
+                inner: SimBuilderInner::Llvm(Some(builder.to_sim())),
             })
         } else {
             Err(PyRuntimeError::new_err("LLVM engine builder already consumed"))
@@ -371,7 +382,7 @@ pub fn sim(py: Python, engine_builder: &Bound<'_, PyAny>) -> PyResult<PySimBuild
     } else if let Ok(selene_builder) = engine_builder.extract::<PyRef<PySeleneEngineBuilder>>() {
         if let Some(builder) = selene_builder.builder.clone() {
             Ok(PySimBuilder {
-                inner: SimBuilderInner::Selene(Some(sim(builder))),
+                inner: SimBuilderInner::Selene(Some(builder.to_sim())),
             })
         } else {
             Err(PyRuntimeError::new_err("Selene engine builder already consumed"))
@@ -388,10 +399,10 @@ pub fn register_sim_builder_module(parent_module: &Bound<'_, PyModule>) -> PyRes
     parent_module.add_class::<PySeleneEngineBuilder>()?;
     parent_module.add_class::<PySimBuilder>()?;
     
-    parent_module.add_function(wrap_pyfunction!(qasm_engine, parent_module)?)?;
-    parent_module.add_function(wrap_pyfunction!(llvm_engine, parent_module)?)?;
-    parent_module.add_function(wrap_pyfunction!(selene_engine, parent_module)?)?;
-    parent_module.add_function(wrap_pyfunction!(sim, parent_module)?)?;
+    parent_module.add_function(wrap_pyfunction!(py_qasm_engine, parent_module)?)?;
+    parent_module.add_function(wrap_pyfunction!(py_llvm_engine, parent_module)?)?;
+    parent_module.add_function(wrap_pyfunction!(py_selene_engine, parent_module)?)?;
+    parent_module.add_function(wrap_pyfunction!(py_sim, parent_module)?)?;
     
     Ok(())
 }

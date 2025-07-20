@@ -197,3 +197,64 @@ impl std::fmt::Display for QASMProgram {
         write!(f, "{}", self.source)
     }
 }
+
+/// A WebAssembly program for use with QASM engine
+///
+/// This type represents a WASM module that provides foreign functions
+/// for QASM programs. It can be created from either WAT (text format)
+/// or WASM (binary format).
+#[cfg(feature = "wasm")]
+#[derive(Debug, Clone)]
+pub struct QasmEngineWasmProgram {
+    /// The WASM binary data
+    pub wasm_bytes: Vec<u8>,
+    /// Optional source path for debugging
+    pub source_path: Option<String>,
+}
+
+#[cfg(feature = "wasm")]
+impl QasmEngineWasmProgram {
+    /// Create from WASM bytes
+    pub fn from_bytes(bytes: Vec<u8>) -> Self {
+        Self {
+            wasm_bytes: bytes,
+            source_path: None,
+        }
+    }
+
+    /// Create from WAT source (uses the wat crate for parsing)
+    pub fn from_wat(wat: &str) -> Result<Self, PecosError> {
+        let wasm_bytes = wat::parse_str(wat)
+            .map_err(|e| PecosError::Processing(format!("Failed to parse WAT: {}", e)))?;
+        Ok(Self {
+            wasm_bytes,
+            source_path: None,
+        })
+    }
+
+    /// Set the source path for debugging
+    pub fn with_source_path(mut self, path: impl Into<String>) -> Self {
+        self.source_path = Some(path.into());
+        self
+    }
+}
+
+// Implement From traits for the shared program types
+#[cfg(feature = "wasm")]
+impl From<pecos_programs::WasmProgram> for QasmEngineWasmProgram {
+    fn from(program: pecos_programs::WasmProgram) -> Self {
+        Self {
+            wasm_bytes: program.wasm,
+            source_path: None,
+        }
+    }
+}
+
+#[cfg(feature = "wasm")]
+impl TryFrom<pecos_programs::WatProgram> for QasmEngineWasmProgram {
+    type Error = PecosError;
+
+    fn try_from(program: pecos_programs::WatProgram) -> Result<Self, Self::Error> {
+        Self::from_wat(&program.source)
+    }
+}

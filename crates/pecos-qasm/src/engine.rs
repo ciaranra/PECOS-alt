@@ -344,7 +344,28 @@ impl QASMEngine {
         qubits: &[usize],
         params: &[f64],
     ) -> Result<(), PecosError> {
+        eprintln!("DEBUG QASM: handle_rz called with angle={}, qubit={}", params[0], qubits[0]);
         engine.message_builder.add_rz(params[0], &[qubits[0]]);
+        Ok(())
+    }
+
+    #[allow(clippy::unnecessary_wraps)]
+    fn handle_rx(
+        engine: &mut QASMEngine,
+        qubits: &[usize],
+        params: &[f64],
+    ) -> Result<(), PecosError> {
+        engine.message_builder.add_rx(params[0], &[qubits[0]]);
+        Ok(())
+    }
+
+    #[allow(clippy::unnecessary_wraps)]
+    fn handle_ry(
+        engine: &mut QASMEngine,
+        qubits: &[usize],
+        params: &[f64],
+    ) -> Result<(), PecosError> {
+        engine.message_builder.add_ry(params[0], &[qubits[0]]);
         Ok(())
     }
 
@@ -495,6 +516,20 @@ impl QASMEngine {
         use pecos_core::prelude::GateType;
 
         match gate_type {
+            GateType::RX => {
+                if let Some(&angle) = params.first() {
+                    for &qubit in qubits {
+                        self.message_builder.add_rx(angle, &[qubit]);
+                    }
+                }
+            }
+            GateType::RY => {
+                if let Some(&angle) = params.first() {
+                    for &qubit in qubits {
+                        self.message_builder.add_ry(angle, &[qubit]);
+                    }
+                }
+            }
             GateType::RZ => {
                 if let Some(&angle) = params.first() {
                     for &qubit in qubits {
@@ -561,7 +596,7 @@ impl QASMEngine {
             GateType::CX | GateType::SZZ | GateType::SZZdg => {
                 self.process_two_qubit_gate(gate.gate_type, &qubits)
             }
-            GateType::RZ | GateType::RZZ | GateType::R1XY | GateType::U => {
+            GateType::RX | GateType::RY | GateType::RZ | GateType::RZZ | GateType::R1XY | GateType::U => {
                 self.process_parameterized_gate(gate.gate_type, &qubits, &gate.params)
             }
             GateType::Measure => Err(PecosError::Processing(
@@ -627,6 +662,18 @@ impl QASMEngine {
                 required_qubits: 1,
                 required_params: 1,
                 handler: Self::handle_rz,
+            },
+            GateInfo {
+                name: "rx",
+                required_qubits: 1,
+                required_params: 1,
+                handler: Self::handle_rx,
+            },
+            GateInfo {
+                name: "ry",
+                required_qubits: 1,
+                required_params: 1,
+                handler: Self::handle_ry,
             },
             GateInfo {
                 name: "r1xy",

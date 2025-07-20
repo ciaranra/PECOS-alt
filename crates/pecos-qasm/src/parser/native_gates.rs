@@ -13,6 +13,8 @@ pub fn parse_native_gate(name: &str) -> Option<CoreGateType> {
         "SZZ" => Some(CoreGateType::SZZ),
         "SZZDG" => Some(CoreGateType::SZZdg),
         "RZ" => Some(CoreGateType::RZ),
+        "RX" => Some(CoreGateType::RX),
+        "RY" => Some(CoreGateType::RY),
         "RZZ" => Some(CoreGateType::RZZ),
         "R1XY" => Some(CoreGateType::R1XY),
         "U" => Some(CoreGateType::U),

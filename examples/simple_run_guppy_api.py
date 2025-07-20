@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
-"""Simple run_guppy() API Demo.
+"""Simple run_guppy() API Demo (Backward Compatibility).
 
 This example demonstrates the simple, qasm_sim-like API for running Guppy
-quantum programs on PECOS.
+quantum programs on PECOS. This API is provided for backward compatibility.
 
-The API provides:
+NOTE: For new code, consider using the unified API instead:
+    from pecos_rslib import selene_engine
+    from pecos_rslib.programs import HugrProgram
+    
+    # Convert Guppy to HUGR and run
+    hugr_program = HugrProgram.from_bytes(guppy_to_hugr_bytes(my_func))
+    results = selene_engine().program(hugr_program).to_sim().run(shots)
+
+The backward compatibility API provides:
 - run_guppy(function, shots) - Simple execution
 - guppy_sim(function, shots) - Alias for consistency with PECOS APIs
 - run_guppy_batch([functions], shots) - Batch execution
@@ -162,13 +170,20 @@ def demo_comparison_with_qasm() -> None:
     """Show how run_guppy() compares to existing PECOS APIs."""
     print("\n=== API Comparison ===")
 
-    print("PECOS QASM API:")
+    print("PECOS QASM API (Old):")
     print("```python")
-    print("from pecos_rslib import qasm_sim")
-    print("results = qasm_sim(qasm_code, shots=1000)")
+    print("from pecos_rslib.qasm_sim import qasm_sim")
+    print("results = qasm_sim(qasm_code).run(shots=1000)")
+    print("```")
+    
+    print("\nPECOS Unified API (New):")
+    print("```python")
+    print("from pecos_rslib import qasm_engine")
+    print("from pecos_rslib.programs import QasmProgram")
+    print("results = qasm_engine().program(QasmProgram.from_string(qasm_code)).to_sim().run(1000)")
     print("```")
 
-    print("\nPECOS Guppy API:")
+    print("\nPECOS Guppy API (Old - Backward Compatibility):")
     print("```python")
     print("from pecos import run_guppy")
     print("from guppylang import guppy")
@@ -180,6 +195,21 @@ def demo_comparison_with_qasm() -> None:
     print("    return measure(q)")
     print("")
     print("results = run_guppy(my_circuit, shots=1000)")
+    print("```")
+    
+    print("\nPECOS Guppy API (New - Unified):")
+    print("```python")
+    print("from pecos_rslib import selene_engine")
+    print("from pecos_rslib.programs import HugrProgram")
+    print("from pecos.frontends.guppy_frontend import GuppyFrontend")
+    print("")
+    print("# Convert Guppy function to HUGR")
+    print("frontend = GuppyFrontend()")
+    print("hugr_bytes = frontend.guppy_to_hugr(my_circuit)")
+    print("hugr_program = HugrProgram.from_bytes(hugr_bytes)")
+    print("")
+    print("# Run simulation")
+    print("results = selene_engine().program(hugr_program).to_sim().run(1000)")
     print("```")
 
     print("\nBoth return similar result dictionaries with:")
@@ -225,8 +255,11 @@ def demo_error_handling() -> None:
 
 def main() -> None:
     """Run all demos."""
-    print("PECOS Simple Guppy API Demo")
-    print("=" * 40)
+    print("PECOS Simple Guppy API Demo (Backward Compatibility)")
+    print("=" * 50)
+    print("NOTE: This demonstrates the backward compatibility API.")
+    print("      For new code, use the unified selene_engine() API.")
+    print("=" * 50)
 
     demo_simple_api()
     demo_comparison_with_qasm()

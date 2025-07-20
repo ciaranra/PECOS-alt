@@ -1,5 +1,6 @@
-use pecos_engines::Data;
-use pecos_qasm::{prelude::PassThroughNoiseModel, run_qasm};
+use pecos_engines::{Data, ClassicalControlEngineBuilder};
+use pecos_qasm::qasm_engine;
+use pecos_programs::QasmProgram;
 
 #[test]
 fn test_large_classical_register() {
@@ -26,7 +27,11 @@ fn test_large_classical_register() {
         measure q[3] -> c[127];
     "#;
 
-    let shot_vec = run_qasm(qasm, 1, PassThroughNoiseModel::builder(), None, None, None).unwrap();
+    let shot_vec = qasm_engine()
+        .program(QasmProgram::from_string(qasm))
+        .to_sim()
+        .run(1)
+        .unwrap();
     let shot = &shot_vec.shots[0];
 
     // Check that we have the correct register
@@ -82,7 +87,11 @@ fn test_very_large_classical_register() {
         measure q[3] -> c[255];
     "#;
 
-    let shot_vec = run_qasm(qasm, 1, PassThroughNoiseModel::builder(), None, None, None).unwrap();
+    let shot_vec = qasm_engine()
+        .program(QasmProgram::from_string(qasm))
+        .to_sim()
+        .run(1)
+        .unwrap();
     let shot = &shot_vec.shots[0];
 
     if let Data::BitVec(bitvec) = &shot.data["c"] {
@@ -116,7 +125,11 @@ fn test_classical_assignment_beyond_64_bits() {
         c[79] = 1;
     ";
 
-    let shot_vec = run_qasm(qasm, 1, PassThroughNoiseModel::builder(), None, None, None).unwrap();
+    let shot_vec = qasm_engine()
+        .program(QasmProgram::from_string(qasm))
+        .to_sim()
+        .run(1)
+        .unwrap();
     let shot = &shot_vec.shots[0];
 
     if let Data::BitVec(bitvec) = &shot.data["c"] {
@@ -160,7 +173,11 @@ fn test_large_register_arithmetic() {
         c[71] = 1;
     ";
 
-    let shot_vec = run_qasm(qasm, 1, PassThroughNoiseModel::builder(), None, None, None).unwrap();
+    let shot_vec = qasm_engine()
+        .program(QasmProgram::from_string(qasm))
+        .to_sim()
+        .run(1)
+        .unwrap();
     let shot = &shot_vec.shots[0];
 
     if let Data::BitVec(bitvec) = &shot.data["c"] {
@@ -195,7 +212,11 @@ fn test_register_value_assignment_limitation() {
         c = 9223372036854775807;  // 2^63 - 1 (max i64 value)
     ";
 
-    let shot_vec = run_qasm(qasm, 1, PassThroughNoiseModel::builder(), None, None, None).unwrap();
+    let shot_vec = qasm_engine()
+        .program(QasmProgram::from_string(qasm))
+        .to_sim()
+        .run(1)
+        .unwrap();
     let shot = &shot_vec.shots[0];
 
     if let Data::BitVec(bitvec) = &shot.data["c"] {

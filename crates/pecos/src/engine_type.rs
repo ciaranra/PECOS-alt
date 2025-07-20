@@ -14,9 +14,10 @@
 //! ```ignore
 //! use pecos_qasm::qasm_engine;
 //! use pecos_engines::sim;
+//! use pecos_programs::QasmProgram;
 //!
 //! // Compile-time engine selection - best performance
-//! let results = sim(qasm_engine().qasm("H q[0];"))
+//! let results = sim(qasm_engine().program(QasmProgram::from_string("H q[0];")))
 //!     .seed(42)
 //!     .run(1000)?;
 //! ```
@@ -43,9 +44,9 @@
 //!
 //! // Create builder dynamically
 //! let builder = match engine_type {
-//!     EngineType::Qasm => DynamicEngineBuilder::new(qasm_engine().qasm("...")),
-//!     EngineType::Llvm => DynamicEngineBuilder::new(llvm_engine().llvm_ir("...")),
-//!     EngineType::Selene => DynamicEngineBuilder::new(selene_engine().hugr(...)),
+//!     EngineType::Qasm => DynamicEngineBuilder::new(qasm_engine().program(QasmProgram::from_string("..."))),
+//!     EngineType::Llvm => DynamicEngineBuilder::new(llvm_engine().program(LlvmProgram::from_string("..."))),
+//!     EngineType::Selene => DynamicEngineBuilder::new(selene_engine().program(HugrProgram::from_bytes(vec![])).qubits(2)),
 //! };
 //!
 //! // Use the same API regardless of engine type
@@ -113,10 +114,10 @@ impl fmt::Display for EngineType {
 /// fn create_engine_from_config(config: &Config) -> DynamicEngineBuilder {
 ///     match config.engine_type {
 ///         "qasm" => DynamicEngineBuilder::new(
-///             qasm_engine().qasm(&config.source_code)
+///             qasm_engine().program(QasmProgram::from_string(&config.source_code))
 ///         ),
 ///         "llvm" => DynamicEngineBuilder::new(
-///             llvm_engine().llvm_ir(&config.source_code)
+///             llvm_engine().program(LlvmProgram::from_string(&config.source_code))
 ///         ),
 ///         _ => panic!("Unknown engine type"),
 ///     }

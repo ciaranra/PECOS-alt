@@ -63,8 +63,17 @@ assert_cmd = "2"
 wasmtime = "33"
 serial_test = "3"
 cc = "1"
-
-# Dependencies for decoder crates
+hugr = "0.20"
+hugr-core = "0.20"
+hugr-llvm = "0.20"
+ureq = { version = "3", default-features = false }
+typetag = "0.2"
+lazy_static = "1"
+ron = "0.8"
+inkwell = "0.6"
+tket2 = "0.12"
+tket2-hseries = "0.16"
+tokio = "1"
 ndarray = "0.16"
 anyhow = "1"
 cxx = "1"
@@ -77,6 +86,7 @@ dirs = "6"
 petgraph = "0.6"
 
 pecos-core = { version = "0.1.1", path = "crates/pecos-core" }
+pecos-programs = { version = "0.1.1", path = "crates/pecos-programs" }
 pecos-qsim = { version = "0.1.1", path = "crates/pecos-qsim" }
 pecos-qasm = { version = "0.1.1", path = "crates/pecos-qasm" }
 pecos-phir-json = { version = "0.1.1", path = "crates/pecos-phir-json" }
@@ -89,7 +99,7 @@ pecos = { version = "0.1.1", path = "crates/pecos" }
 pecos-cli = { version = "0.1.1", path = "crates/pecos-cli" }
 pecos-llvm-sim = { version = "0.1.1", path = "crates/pecos-llvm-sim" }
 pecos-hugr-llvm = { version = "0.1.1", path = "crates/pecos-hugr-llvm" }
-pecos-selene-eng = { version = "0.1.1", path = "crates/pecos-selene-eng" }
+pecos-selene-ceng = { version = "0.1.1", path = "crates/pecos-selene-ceng" }
 pecos-rslib = { version = "0.1.1", path = "python/pecos-rslib/rust" }
 
 # Decoder crates

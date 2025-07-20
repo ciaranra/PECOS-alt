@@ -12,10 +12,7 @@
 //! # Example
 //!
 //! ```rust
-//! # use pecos_selene_ceng::{selene_sim, SeleneEngine};
-//! # use pecos_selene_ceng::program::SeleneProgram;
-//! # use pecos_engines::Engine;
-//! # use pecos_core::prelude::PecosError;
+//! # use pecos_selene_ceng::prelude::*;
 //! # fn main() -> Result<(), PecosError> {
 //! // Simple LLVM IR for a Hadamard gate and measurement
 //! let simple_llvm = r#"
@@ -32,10 +29,11 @@
 //! "#;
 //!
 //! // Method 1: Using the builder pattern with LLVM IR  
-//! let engine = selene_sim()
-//!     .llvm_ir(simple_llvm)
+//! let engine = selene_engine()
+//!     .program(LlvmProgram::from_ir(simple_llvm))
 //!     .qubits(1)
-//!     .optimize()
+//!     .optimize(true)
+//!     .to_sim()
 //!     .build()?;
 //!
 //! // Method 2: Direct construction using real Selene components
@@ -53,19 +51,16 @@
 
 
 pub mod selene_engine;
-pub mod builder;
 pub mod engine_builder;
 pub mod error;
+pub mod prelude;
 pub mod program;
 
 #[cfg(feature = "hugr")]
 pub mod hugr_compiler;
 
-pub use builder::{
-    selene_sim, SeleneSimBuilder, SeleneSimulation,
-    NoiseModelConfig, QuantumEngineType,
-    PassThroughNoise, DepolarizingNoise, DepolarizingCustomNoise, BiasedDepolarizingNoise,
-};
+// Note: The old selene_sim() API has been removed. Use selene_engine().to_sim() instead.
+// Noise models and quantum engine types are now provided by pecos-engines.
 pub use engine_builder::{selene_engine, SeleneEngineBuilder};
 pub use selene_engine::SeleneEngine;
 pub use error::SeleneError;
@@ -74,10 +69,11 @@ pub use program::SeleneProgram;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pecos_engines::ClassicalControlEngineBuilder;
 
     #[test]
     fn test_selene_sim_builder_creation() {
-        let builder = selene_sim();
+        let builder = selene_engine();
         assert!(builder.build().is_err()); // Should fail without program
     }
     
@@ -116,6 +112,7 @@ mod tests {
     #[test]
     fn test_clean_api_demonstration() {
         use crate::program::SeleneProgram;
+        use pecos_programs::LlvmProgram;
         
         // Demonstrate the clean, simple API  
         let _engine1 = SeleneEngine::new(
@@ -131,9 +128,10 @@ mod tests {
         );
         
         // Builder pattern still works too
-        let _engine3 = selene_sim()
-            .llvm_ir("simple_circuit")
+        let _engine3 = selene_engine()
+            .program(LlvmProgram::from_ir("simple_circuit"))
             .qubits(1)
+            .to_sim()
             .build()
             .expect("Should build successfully");
     }

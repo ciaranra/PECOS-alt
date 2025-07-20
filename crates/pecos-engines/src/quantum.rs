@@ -188,6 +188,28 @@ impl Engine for StateVecEngine {
                     }
                 }
                 // TODO: Consider setting exact numbers of parameters
+                GateType::RX => {
+                    if !cmd.params.is_empty() {
+                        for q in &cmd.qubits {
+                            debug!(
+                                "Processing RX gate with angle {:?} on qubit {:?}",
+                                cmd.params[0], q
+                            );
+                            self.simulator.rx(cmd.params[0], **q);
+                        }
+                    }
+                }
+                GateType::RY => {
+                    if !cmd.params.is_empty() {
+                        for q in &cmd.qubits {
+                            debug!(
+                                "Processing RY gate with angle {:?} on qubit {:?}",
+                                cmd.params[0], q
+                            );
+                            self.simulator.ry(cmd.params[0], **q);
+                        }
+                    }
+                }
                 GateType::RZ => {
                     if !cmd.params.is_empty() {
                         for q in &cmd.qubits {
@@ -392,6 +414,11 @@ impl SparseStabEngine {
                     "Tdg gate is not supported by stabilizer simulator",
                 ));
             }
+            GateType::RX | GateType::RY => {
+                return Err(quantum_error(
+                    "RX/RY gates are not supported by stabilizer simulator",
+                ));
+            }
             _ => {} // Handled elsewhere
         }
         Ok(())
@@ -452,7 +479,9 @@ impl Engine for SparseStabEngine {
                 | GateType::SZ
                 | GateType::SZdg
                 | GateType::T
-                | GateType::Tdg => {
+                | GateType::Tdg
+                | GateType::RX
+                | GateType::RY => {
                     self.process_single_qubit_gate(cmd.gate_type, &cmd.qubits)?;
                 }
                 // Two-qubit gates
@@ -479,7 +508,10 @@ impl Engine for SparseStabEngine {
                     // No active operation needed in the simulator
                 }
                 _ => {
-                    debug!("Skipping unsupported gate {:?}", cmd.gate_type);
+                    return Err(PecosError::Processing(format!(
+                        "Gate {:?} is not supported by the stabilizer simulator. Only Clifford gates are supported.",
+                        cmd.gate_type
+                    )));
                 }
             }
         }

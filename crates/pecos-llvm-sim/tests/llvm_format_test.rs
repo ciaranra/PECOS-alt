@@ -1,6 +1,8 @@
 //! Test the new consistent LLVM format support
 
-use pecos_llvm_sim::{llvm_sim, PassThroughNoise};
+use pecos_llvm_sim::llvm_engine;
+use pecos_engines::{ClassicalControlEngineBuilder, PassThroughNoise};
+use pecos_programs::LlvmProgram;
 use std::fs;
 use tempfile::TempDir;
 
@@ -18,11 +20,13 @@ fn test_llvm_ir_text_format() {
     "#;
     
     // Test with in-memory LLVM IR text
-    let builder = llvm_sim()
-        .llvm_ir(llvm_ir)
-        .noise(PassThroughNoise);
+    let sim = llvm_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
+        .to_sim()
+        .noise(PassThroughNoise)
+        .build();
     
-    assert!(builder.build().is_ok());
+    assert!(sim.is_ok());
 }
 
 #[test]
@@ -34,13 +38,14 @@ fn test_llvm_file_auto_detection() {
     fs::write(&ll_file, "define void @main() { ret void }").unwrap();
     
     // Test auto-detection of .ll file
-    let builder = llvm_sim()
-        .llvm_file(&ll_file);
+    let sim = llvm_engine()
+        .program(LlvmProgram::from_file(&ll_file).unwrap())
+        .to_sim()
+        .build();
     
     // Should succeed (though actual compilation may fail without proper LLVM IR)
-    let result = builder.build();
     // We expect this to succeed at the builder level
-    assert!(result.is_ok());
+    assert!(sim.is_ok());
 }
 
 #[test]
@@ -58,9 +63,11 @@ fn test_llvm_ir_file_explicit() {
     fs::write(&ll_file, llvm_ir).unwrap();
     
     // Test explicit .ll file loading
-    let builder = llvm_sim()
-        .llvm_ir_file(&ll_file);
+    let sim = llvm_engine()
+        .program(LlvmProgram::from_file(&ll_file).unwrap())
+        .to_sim()
+        .build();
     
-    assert!(builder.build().is_ok());
+    assert!(sim.is_ok());
 }
 

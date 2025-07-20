@@ -1,5 +1,6 @@
 pub mod common;
 pub mod version_traits;
+pub mod builder;
 
 pub mod prelude;
 
@@ -16,6 +17,9 @@ pub use v0_1::engine::PhirJsonEngine;
 pub use v0_1::phir_converter::phir_json_to_module;
 #[cfg(feature = "v0_1")]
 pub use v0_1::setup_phir_json_v0_1_engine;
+
+// Export unified API types
+pub use builder::{phir_json_engine, PhirJsonEngineBuilder, PhirJsonEngineProgram};
 
 use common::{PhirJsonVersion, detect_version};
 use log::debug;

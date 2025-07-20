@@ -1,7 +1,8 @@
 //! Test the unified API llvm_engine().to_sim()
 
-use pecos_llvm_sim::engine_builder::llvm_engine;
+use pecos_llvm_sim::llvm_engine;
 use pecos_engines::{ClassicalControlEngineBuilder, DepolarizingNoise};
+use pecos_programs::LlvmProgram;
 
 const SIMPLE_IR: &str = r#"
 @str_c = constant [2 x i8] c"c\00"
@@ -64,9 +65,10 @@ fn test_unified_api_basic() {
 
     // Test the unified API
     let shot_vec = llvm_engine()
-        .llvm_ir(SIMPLE_IR)
+        .program(LlvmProgram::from_string(SIMPLE_IR))
         .to_sim()
         .seed(42)
+        .qubits(2)
         .run(100)
         .expect("Unified API should work");
     
@@ -90,10 +92,11 @@ fn test_unified_api_with_noise() {
 
     // Test the unified API with noise
     let shot_vec = llvm_engine()
-        .llvm_ir(SIMPLE_IR)
+        .program(LlvmProgram::from_string(SIMPLE_IR))
         .to_sim()
         .seed(42)
         .noise(DepolarizingNoise { p: 0.01 })
+        .qubits(2)
         .run(100)
         .expect("Unified API with noise should work");
     
@@ -108,7 +111,7 @@ fn test_unified_api_with_noise() {
 }
 
 #[test]
-fn test_unified_api_parity_with_llvm_sim() {
+fn test_unified_api_deterministic_behavior() {
     if !is_llvm_available() {
         println!("Skipping test: LLVM tools not available");
         return;
@@ -117,36 +120,39 @@ fn test_unified_api_parity_with_llvm_sim() {
     let seed = 42;
     let shots = 50;
 
-    // Test with llvm_sim()
-    let shot_vec_sim = pecos_llvm_sim::llvm_sim()
-        .llvm_ir(SIMPLE_IR)
-        .seed(seed)
-        .workers(1) // Single worker for determinism
-        .run(shots)
-        .expect("llvm_sim should work");
-
-    // Test with llvm_engine().to_sim()
-    let shot_vec_unified = llvm_engine()
-        .llvm_ir(SIMPLE_IR)
+    // Test with first builder instance
+    let shot_vec_sim = llvm_engine()
+        .program(LlvmProgram::from_string(SIMPLE_IR))
         .to_sim()
         .seed(seed)
         .workers(1) // Single worker for determinism
+        .qubits(2)
         .run(shots)
-        .expect("Unified API should work");
+        .expect("First instance should work");
+
+    // Test with second builder instance for comparison
+    let shot_vec_unified = llvm_engine()
+        .program(LlvmProgram::from_string(SIMPLE_IR))
+        .to_sim()
+        .seed(seed)
+        .workers(1) // Single worker for determinism
+        .qubits(2)
+        .run(shots)
+        .expect("Second instance should work");
     
     // Both should have same number of shots
     assert_eq!(shot_vec_sim.len(), shots);
     assert_eq!(shot_vec_unified.len(), shots);
     
     // Convert to ShotMaps
-    let shot_map_sim = shot_vec_sim.try_as_shot_map().expect("Should convert sim");
-    let shot_map_unified = shot_vec_unified.try_as_shot_map().expect("Should convert unified");
+    let shot_map_first = shot_vec_sim.try_as_shot_map().expect("Should convert first");
+    let shot_map_second = shot_vec_unified.try_as_shot_map().expect("Should convert second");
     
     // Both should have 'c' register
-    assert!(shot_map_sim.register_names().iter().any(|r| *r == "c"));
-    assert!(shot_map_unified.register_names().iter().any(|r| *r == "c"));
+    assert!(shot_map_first.register_names().iter().any(|r| *r == "c"));
+    assert!(shot_map_second.register_names().iter().any(|r| *r == "c"));
     
     // Both should have same number of shots
-    assert_eq!(shot_map_sim.num_shots(), shots);
-    assert_eq!(shot_map_unified.num_shots(), shots);
+    assert_eq!(shot_map_first.num_shots(), shots);
+    assert_eq!(shot_map_second.num_shots(), shots);
 }

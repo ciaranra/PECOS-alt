@@ -1,6 +1,8 @@
 #[cfg(feature = "wasm")]
 mod wasm_tests {
-    use pecos_qasm::simulation::qasm_sim;
+    use pecos_qasm::qasm_engine;
+    use pecos_programs::QasmProgram;
+    use pecos_engines::ClassicalControlEngineBuilder;
     use std::io::Write;
     use std::path::PathBuf;
 
@@ -21,8 +23,10 @@ mod wasm_tests {
             .join("wat")
             .join("add.wat");
 
-        let results = qasm_sim(qasm)
-            .wasm(wat_path.to_string_lossy())
+        let results = qasm_engine()
+            .program(QasmProgram::from_string(qasm))
+            .wasm(wat_path.to_string_lossy().to_string())
+            .to_sim()
             .run(100)
             .expect("Simulation should succeed");
 
@@ -117,7 +121,11 @@ mod wasm_tests {
             .join("add.wat");
 
         // Even with WASM loaded, built-in functions should not be overridden
-        let result = qasm_sim(qasm).wasm(wat_path.to_string_lossy()).run(1);
+        let result = qasm_engine()
+            .program(QasmProgram::from_string(qasm))
+            .wasm(wat_path.to_string_lossy().to_string())
+            .to_sim()
+            .run(1);
 
         // This should succeed as it uses the built-in sin function
         assert!(
@@ -142,7 +150,11 @@ mod wasm_tests {
             .join("wat")
             .join("missing_func.wat");
 
-        let result = qasm_sim(qasm).wasm(wat_path.to_string_lossy()).build();
+        let result = qasm_engine()
+            .program(QasmProgram::from_string(qasm))
+            .wasm(wat_path.to_string_lossy().to_string())
+            .to_sim()
+            .build();
 
         assert!(result.is_err());
         let err = result.err().unwrap();
@@ -178,8 +190,10 @@ mod wasm_tests {
             creg c[1];
         "#;
 
-        let result = qasm_sim(qasm)
-            .wasm(temp_file.path().to_string_lossy())
+        let result = qasm_engine()
+            .program(QasmProgram::from_string(qasm))
+            .wasm(temp_file.path().to_string_lossy().to_string())
+            .to_sim()
             .build();
 
         assert!(result.is_err());
@@ -211,8 +225,10 @@ mod wasm_tests {
             .join("wat")
             .join("add.wat");
 
-        let results = qasm_sim(qasm)
-            .wasm(wat_path.to_string_lossy())
+        let results = qasm_engine()
+            .program(QasmProgram::from_string(qasm))
+            .wasm(wat_path.to_string_lossy().to_string())
+            .to_sim()
             .run(1000)
             .expect("Simulation should succeed");
 
@@ -295,7 +311,11 @@ mod wasm_tests {
             .join("wat")
             .join("multiple_funcs.wat");
 
-        let result = qasm_sim(qasm).wasm(wat_path.to_string_lossy()).run(1);
+        let result = qasm_engine()
+            .program(QasmProgram::from_string(qasm))
+            .wasm(wat_path.to_string_lossy().to_string())
+            .to_sim()
+            .run(1);
 
         assert!(result.is_ok(), "Void functions should work");
     }
@@ -321,8 +341,10 @@ mod wasm_tests {
             .join("wat")
             .join("multiple_funcs.wat");
 
-        let results = qasm_sim(qasm)
-            .wasm(wat_path.to_string_lossy())
+        let results = qasm_engine()
+            .program(QasmProgram::from_string(qasm))
+            .wasm(wat_path.to_string_lossy().to_string())
+            .to_sim()
             .run(10)
             .expect("Simulation should succeed");
 
@@ -358,8 +380,10 @@ mod wasm_tests {
             .join("wat")
             .join("multiple_funcs.wat");
 
-        let results = qasm_sim(qasm)
-            .wasm(wat_path.to_string_lossy())
+        let results = qasm_engine()
+            .program(QasmProgram::from_string(qasm))
+            .wasm(wat_path.to_string_lossy().to_string())
+            .to_sim()
             .run(10)
             .expect("Simulation should succeed");
 
@@ -389,8 +413,10 @@ mod wasm_tests {
             .join("wat")
             .join("stateful.wat");
 
-        let results = qasm_sim(qasm)
-            .wasm(wat_path.to_string_lossy())
+        let results = qasm_engine()
+            .program(QasmProgram::from_string(qasm))
+            .wasm(wat_path.to_string_lossy().to_string())
+            .to_sim()
             .run(10)
             .expect("Simulation should succeed");
 
@@ -421,8 +447,10 @@ mod wasm_tests {
             .join("wat")
             .join("multiple_funcs.wat");
 
-        let results = qasm_sim(qasm)
-            .wasm(wat_path.to_string_lossy())
+        let results = qasm_engine()
+            .program(QasmProgram::from_string(qasm))
+            .wasm(wat_path.to_string_lossy().to_string())
+            .to_sim()
             .run(1)
             .expect("Simulation should succeed");
 
@@ -454,8 +482,10 @@ mod wasm_tests {
             .join("wat")
             .join("multiple_funcs.wat");
 
-        let results = qasm_sim(qasm)
-            .wasm(wat_path.to_string_lossy())
+        let results = qasm_engine()
+            .program(QasmProgram::from_string(qasm))
+            .wasm(wat_path.to_string_lossy().to_string())
+            .to_sim()
             .run(1000)
             .expect("Simulation should succeed");
 
@@ -502,8 +532,10 @@ mod wasm_tests {
             .join("wat")
             .join("multiple_funcs.wat");
 
-        let results = qasm_sim(qasm)
-            .wasm(wat_path.to_string_lossy())
+        let results = qasm_engine()
+            .program(QasmProgram::from_string(qasm))
+            .wasm(wat_path.to_string_lossy().to_string())
+            .to_sim()
             .run(1)
             .expect("Simulation should succeed");
 

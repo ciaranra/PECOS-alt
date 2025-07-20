@@ -1,7 +1,7 @@
 """Tests for QASM simulation PyO3 bindings."""
 
 import pytest
-from pecos_rslib import (
+from pecos_rslib.qasm_sim import (
     NoiseModel,
     QuantumEngine,
     run_qasm,

@@ -159,7 +159,9 @@ pub trait EngineSystem: Engine {
                     let engine_output = self.engine_mut().process(engine_input)?;
                     stage = self.controller_mut().continue_processing(engine_output)?;
                 }
-                EngineStage::Complete(output) => return Ok(output),
+                EngineStage::Complete(output) => {
+                    return Ok(output);
+                }
             }
         }
     }

@@ -1,10 +1,12 @@
-//! Test that selene_sim() is on par with llvm_sim()
+//! Test that selene_engine() with to_sim() is on par with llvm_sim()
 //!
-//! This test verifies that selene_sim() supports the same features as llvm_sim(),
+//! This test verifies that selene_engine().to_sim() supports the same features as llvm_sim(),
 //! including noise models, quantum engines, and full simulation capabilities.
 
-use pecos_selene_ceng::{selene_sim, QuantumEngineType, PassThroughNoise, DepolarizingNoise, DepolarizingCustomNoise, BiasedDepolarizingNoise};
+use pecos_selene_ceng::selene_engine;
+use pecos_engines::{state_vector, sparse_stabilizer, PassThroughNoise, DepolarizingNoise, DepolarizingCustomNoise, BiasedDepolarizingNoise, ClassicalControlEngineBuilder};
 use pecos_engines::noise::GeneralNoiseModelBuilder;
+use pecos_programs::LlvmProgram;
 
 mod common;
 
@@ -27,36 +29,40 @@ fn test_selene_sim_with_noise_models() {
     "#;
     
     // Test with no noise (passthrough)
-    let results = selene_sim()
-        .llvm_ir(llvm_ir)
+    let results = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(2)
+        .to_sim()
         .noise(PassThroughNoise)
         .run(10)
         .unwrap();
     assert_eq!(results.len(), 10);
     
     // Test with depolarizing noise
-    let results = selene_sim()
-        .llvm_ir(llvm_ir)
+    let results = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(2)
+        .to_sim()
         .noise(DepolarizingNoise { p: 0.01 })
         .run(100)
         .unwrap();
     assert_eq!(results.len(), 100);
     
     // Test with custom depolarizing noise
-    let results = selene_sim()
-        .llvm_ir(llvm_ir)
+    let results = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(2)
+        .to_sim()
         .noise(DepolarizingCustomNoise { p_prep: 0.001, p_meas: 0.002, p1: 0.003, p2: 0.004 })
         .run(50)
         .unwrap();
     assert_eq!(results.len(), 50);
     
     // Test with biased depolarizing noise
-    let results = selene_sim()
-        .llvm_ir(llvm_ir)
+    let results = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(2)
+        .to_sim()
         .noise(BiasedDepolarizingNoise { p: 0.01 })
         .run(50)
         .unwrap();
@@ -66,9 +72,10 @@ fn test_selene_sim_with_noise_models() {
     let general_noise = GeneralNoiseModelBuilder::new()
         .with_p1_probability(0.001)
         .with_p2_probability(0.002);
-    let results = selene_sim()
-        .llvm_ir(llvm_ir)
+    let results = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(2)
+        .to_sim()
         .noise(general_noise)
         .run(50)
         .unwrap();
@@ -76,7 +83,7 @@ fn test_selene_sim_with_noise_models() {
 }
 
 #[test]
-fn test_selene_sim_with_quantum_engines() {
+fn test_selene_engine_with_quantum_engines() {
     let llvm_ir = r#"
     declare void @__quantum__qis__h__body(i64)
     declare void @__quantum__qis__cx__body(i64, i64)
@@ -94,26 +101,28 @@ fn test_selene_sim_with_quantum_engines() {
     "#;
     
     // Test with state vector engine (default)
-    let results = selene_sim()
-        .llvm_ir(llvm_ir)
+    let results = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(2)
-        .quantum_engine(QuantumEngineType::StateVector)
+        .to_sim()
+        .quantum(state_vector().qubits(2))
         .run(10)
         .unwrap();
     assert_eq!(results.len(), 10);
     
     // Test with sparse stabilizer engine (for Clifford circuits)
-    let results = selene_sim()
-        .llvm_ir(llvm_ir)
+    let results = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(2)
-        .quantum_engine(QuantumEngineType::SparseStabilizer)
+        .to_sim()
+        .quantum(sparse_stabilizer().qubits(2))
         .run(10)
         .unwrap();
     assert_eq!(results.len(), 10);
 }
 
 #[test]
-fn test_selene_sim_full_configuration() {
+fn test_selene_engine_full_configuration() {
     let llvm_ir = r#"
     declare void @__quantum__qis__h__body(i64)
     declare i32 @__quantum__qis__m__body(i64, i64)
@@ -128,28 +137,30 @@ fn test_selene_sim_full_configuration() {
     "#;
     
     // Test full configuration like llvm_sim()
-    let results = selene_sim()
-        .llvm_ir(llvm_ir)
+    let results = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(1)
-        .seed(42)
-        .workers(2)
-        .optimize()
+        .optimize(true)
         .verbose(true)
+        .to_sim()
+        .workers(2)
+        .seed(42)
         .noise(DepolarizingNoise { p: 0.01 })
-        .quantum_engine(QuantumEngineType::StateVector)
+        .quantum(state_vector().qubits(2))
         .run(100)
         .unwrap();
     
     assert_eq!(results.len(), 100);
     
     // Verify reproducibility with seed
-    let results2 = selene_sim()
-        .llvm_ir(llvm_ir)
+    let results2 = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(1)
-        .seed(42)
+        .to_sim()
         .workers(2)
+        .seed(42)
         .noise(DepolarizingNoise { p: 0.01 })
-        .quantum_engine(QuantumEngineType::StateVector)
+        .quantum(state_vector().qubits(2))
         .run(100)
         .unwrap();
     
@@ -164,7 +175,7 @@ fn test_selene_sim_full_configuration() {
 }
 
 #[test]
-fn test_selene_sim_build_once_run_multiple() {
+fn test_selene_engine_build_once_run_multiple() {
     let llvm_ir = r#"
     declare void @__quantum__qis__x__body(i64)
     declare i32 @__quantum__qis__m__body(i64, i64)
@@ -179,12 +190,13 @@ fn test_selene_sim_build_once_run_multiple() {
     "#;
     
     // Build once
-    let sim = selene_sim()
-        .llvm_ir(llvm_ir)
+    let sim = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(1)
+        .to_sim()
         .seed(123)
         .noise(DepolarizingNoise { p: 0.01 })
-        .build_simulation()
+        .build()
         .unwrap();
     
     // Run multiple times with different shot counts
@@ -198,8 +210,8 @@ fn test_selene_sim_build_once_run_multiple() {
 }
 
 #[test]
-fn test_selene_sim_api_matches_llvm_sim() {
-    // This test demonstrates that selene_sim() has the same API as llvm_sim()
+fn test_selene_engine_api_matches_llvm_sim() {
+    // This test demonstrates that selene_engine().to_sim() has the same API as llvm_sim()
     let llvm_ir = r#"
     declare void @__quantum__qis__h__body(i64)
     
@@ -212,19 +224,20 @@ fn test_selene_sim_api_matches_llvm_sim() {
     "#;
     
     // All the methods that should be available for parity with llvm_sim()
-    let _sim = selene_sim()
-        .llvm_ir(llvm_ir)
+    let _sim = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(1)
-        .seed(42)
-        .workers(4)
-        .optimize()
+        .optimize(true)
         .verbose(false)
+        .to_sim()
+        .workers(4)
+        .seed(42)
         .noise(PassThroughNoise)
         .noise(DepolarizingNoise { p: 0.01 })
         .noise(DepolarizingCustomNoise { p_prep: 0.001, p_meas: 0.002, p1: 0.003, p2: 0.004 })
         .noise(BiasedDepolarizingNoise { p: 0.01 })
-        .quantum_engine(QuantumEngineType::StateVector)
-        .quantum_engine(QuantumEngineType::SparseStabilizer)
-        .build_simulation()
+        .quantum(state_vector().qubits(2))
+        .quantum(sparse_stabilizer().qubits(2))
+        .build()
         .unwrap();
 }

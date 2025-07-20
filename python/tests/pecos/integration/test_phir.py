@@ -218,7 +218,8 @@ def test_record_random_bit() -> None:
     )
 
     print(results)
-    c = results["c"]
+    results_dict = results
+    c = results_dict["c"]
     assert c.count("01") + c.count("00") == len(c)
 
 
@@ -229,7 +230,8 @@ def test_classical_if_00_11() -> None:
         shots=100,
     )
 
-    c = results["c"]
+    results_dict = results
+    c = results_dict["c"]
     assert c.count("00") + c.count("11") == len(c)
 
 
@@ -247,7 +249,8 @@ def test_qparallel() -> None:
         shots=10,
     )
 
-    m = results["m"]
+    results_dict = results
+    m = results_dict["m"]
     assert m.count("1111") == len(m)
 
 
@@ -260,8 +263,9 @@ def test_bell_qparallel() -> None:
     )
 
     # Check either "c" (if Result command worked) or "m" (fallback)
-    register = "c" if "c" in results else "m"
-    result_values = results[register]
+    results_dict = results
+    register = "c" if "c" in results_dict else "m"
+    result_values = results_dict[register]
     assert result_values.count("00") + result_values.count("11") == len(result_values)
 
 
@@ -281,8 +285,9 @@ def test_bell_qparallel_cliff() -> None:
     )
 
     # Check either "c" (if Result command worked) or "m" (fallback)
-    register = "c" if "c" in results else "m"
-    result_values = results[register]
+    results_dict = results
+    register = "c" if "c" in results_dict else "m"
+    result_values = results_dict[register]
     assert result_values.count("00") + result_values.count("11") == len(result_values)
 
 
@@ -303,8 +308,9 @@ def test_bell_qparallel_cliff_barrier() -> None:
     )
 
     # Check either "c" (if Result command worked) or "m" (fallback)
-    register = "c" if "c" in results else "m"
-    result_values = results[register]
+    results_dict = results
+    register = "c" if "c" in results_dict else "m"
+    result_values = results_dict[register]
     assert result_values.count("00") + result_values.count("11") == len(result_values)
 
 
@@ -325,6 +331,7 @@ def test_bell_qparallel_cliff_ifbarrier() -> None:
     )
 
     # Check either "c" (if Result command worked) or "m" (fallback)
-    register = "c" if "c" in results else "m"
-    result_values = results[register]
+    results_dict = results
+    register = "c" if "c" in results_dict else "m"
+    result_values = results_dict[register]
     assert result_values.count("00") + result_values.count("11") == len(result_values)

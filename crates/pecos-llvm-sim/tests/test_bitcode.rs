@@ -1,6 +1,8 @@
 //! Test LLVM bitcode support
 
-use pecos_llvm_sim::{llvm_sim, PassThroughNoise};
+use pecos_llvm_sim::llvm_engine;
+use pecos_engines::{ClassicalControlEngineBuilder, PassThroughNoise};
+use pecos_programs::LlvmProgram;
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
@@ -62,12 +64,14 @@ fn test_bitcode_in_memory() {
     let bitcode = fs::read(&bc_file).unwrap();
     
     // Test with in-memory bitcode
-    let builder = llvm_sim()
-        .llvm_bitcode(bitcode)
-        .noise(PassThroughNoise);
+    let sim = llvm_engine()
+        .program(LlvmProgram::from_bitcode(bitcode))
+        .to_sim()
+        .noise(PassThroughNoise)
+        .build();
     
     // Should be able to build (though execution may fail without proper setup)
-    match builder.build() {
+    match sim {
         Ok(_) => println!("Successfully built simulation from bitcode"),
         Err(e) => {
             // Check if it's just a compilation error (expected) vs conversion error (unexpected)
@@ -108,11 +112,13 @@ fn test_bitcode_file() {
     }
     
     // Test with bitcode file path
-    let builder = llvm_sim()
-        .llvm_bitcode_file(&bc_file);
+    let sim = llvm_engine()
+        .program(LlvmProgram::from_file(&bc_file).unwrap())
+        .to_sim()
+        .build();
     
     // Should be able to build
-    match builder.build() {
+    match sim {
         Ok(_) => println!("Successfully built simulation from bitcode file"),
         Err(e) => {
             if e.to_string().contains("llvm-dis") {
@@ -147,12 +153,12 @@ fn test_auto_detection() {
         .unwrap();
     
     // Test auto-detection with .ll file
-    let builder_ll = llvm_sim().llvm_file(&ll_file);
-    assert!(builder_ll.build().is_ok() || true); // Allow failure for missing runtime
+    let sim_ll = llvm_engine().program(LlvmProgram::from_file(&ll_file).unwrap()).to_sim().build();
+    assert!(sim_ll.is_ok() || true); // Allow failure for missing runtime
     
     // Test auto-detection with .bc file
-    let builder_bc = llvm_sim().llvm_file(&bc_file);
-    match builder_bc.build() {
+    let sim_bc = llvm_engine().program(LlvmProgram::from_file(&bc_file).unwrap()).to_sim().build();
+    match sim_bc {
         Ok(_) => println!("Successfully built from auto-detected .bc file"),
         Err(e) => {
             if e.to_string().contains("llvm-dis") {
@@ -168,9 +174,12 @@ fn test_llvm_dis_not_found() {
     // Test error handling when llvm-dis is not available
     let fake_bitcode = vec![0x42, 0x43]; // BC magic number
     
-    let builder = llvm_sim().llvm_bitcode(fake_bitcode);
+    let result = llvm_engine()
+        .program(LlvmProgram::from_bitcode(fake_bitcode))
+        .to_sim()
+        .build();
     
-    match builder.build() {
+    match result {
         Ok(_) => panic!("Expected error when processing invalid bitcode"),
         Err(e) => {
             println!("Got expected error: {}", e);
@@ -194,9 +203,12 @@ fn test_error_without_llvm_tools() {
     
     // Test graceful error when llvm-dis is not available
     let bitcode = vec![0xDE, 0xC0, 0x17, 0x0B]; // Valid bitcode magic
-    let builder = llvm_sim().llvm_bitcode(bitcode);
+    let sim = llvm_engine()
+        .program(LlvmProgram::from_bitcode(bitcode))
+        .to_sim()
+        .build();
     
-    match builder.build() {
+    match sim {
         Ok(_) => panic!("Expected error when llvm-dis is not available"),
         Err(e) => {
             assert!(e.to_string().contains("llvm-dis"));

@@ -1,71 +1,73 @@
 /*!
-Unified LLVM-based quantum simulation with support for multiple input formats.
+Unified LLVM-based quantum simulation using the unified engine builder API.
 
-This crate provides a flexible builder pattern API for quantum circuit simulation that accepts
-LLVM IR, HUGR, or files as input. It handles the compilation pipeline automatically and provides
-consistent simulation capabilities with noise models, parallelization, and multiple quantum engines.
+This crate provides the `llvm_engine()` and `llvm_sim()` functions that integrate with 
+the unified PECOS simulation API. The engine builder handles LLVM IR compilation and 
+provides consistent simulation capabilities with noise models, parallelization, and 
+multiple quantum engines.
 
 # Example
 
 ```rust,no_run
-use pecos_llvm_sim::LlvmSim;
+use pecos_llvm_sim::{llvm_sim, llvm_engine};
+use pecos_programs::LlvmProgram;
+use pecos_engines::noise::DepolarizingNoiseModelBuilder;
+use pecos_engines::ClassicalControlEngineBuilder;
 
-// From LLVM IR
-use pecos_llvm_sim::{llvm_sim, DepolarizingNoise, QuantumEngineType};
-
-let results = llvm_sim()
-    .llvm_ir("@main() { ret void }")
+// Using the convenience function
+let results = llvm_sim("@main() { ret void }")
     .seed(42)
     .workers(8)
-    .noise(DepolarizingNoise { p: 0.01 })
-    .quantum_engine(QuantumEngineType::StateVector)
+    .noise(DepolarizingNoiseModelBuilder::new().with_p1_probability(0.01))
     .run(1000)?;
 
-// From HUGR
-let hugr = todo!(); // Get HUGR from somewhere
-let results = llvm_sim()
-    .hugr(hugr)
-    .noise(DepolarizingNoise { p: 0.01 })
+// Using the full engine builder API
+let results = llvm_engine()
+    .program(LlvmProgram::from_string("@main() { ret void }"))
+    .to_sim()
+    .seed(42)
     .run(1000)?;
 # Ok::<(), pecos_core::errors::PecosError>(())
 ```
 */
 
-pub mod builder;
-pub mod config;
 pub mod engine_builder;
-pub mod simulation;
+pub mod prelude;
 pub mod source;
 
-// Re-export main types
-pub use builder::LlvmSim;
-pub use config::{
-    NoiseModelConfig, QuantumEngineType,
-    PassThroughNoise, DepolarizingNoise, DepolarizingCustomNoise, BiasedDepolarizingNoise,
-};
+// Re-export main types for the unified API
 pub use engine_builder::{llvm_engine, LlvmEngineBuilder};
-pub use simulation::LlvmSimulation;
-pub use source::LlvmSource;
 
 // Re-export from pecos-llvm-runtime for backward compatibility
 pub use pecos_llvm_runtime::LlvmEngine;
 
-/// Convenience function to create a new LLVM simulation builder.
+/// Create a new LLVM simulation builder (thin wrapper around llvm_engine().program().to_sim())
 ///
-/// This provides a consistent API with qasm_sim() and selene_sim().
-///
+/// This function creates a SimBuilder that uses the unified simulation API.
+/// 
 /// # Example
 /// ```rust,no_run
-/// use pecos_llvm_sim::{llvm_sim, DepolarizingNoise, QuantumEngineType};
+/// use pecos_llvm_sim::llvm_sim;
+/// use pecos_programs::LlvmProgram;
+/// use pecos_engines::noise::DepolarizingNoiseModelBuilder;
 ///
-/// let results = llvm_sim()
-///     .llvm_ir("@main() { ret void }")
+/// let llvm_ir = "@main() { ret void }";
+/// let noise = DepolarizingNoiseModelBuilder::new()
+///     .with_p1_probability(0.01)
+///     .with_p2_probability(0.01);
+/// 
+/// let results = llvm_sim(llvm_ir)
 ///     .seed(42)
-///     .noise(DepolarizingNoise { p: 0.01 })
-///     .quantum_engine(QuantumEngineType::StateVector)
+///     .noise(noise)
 ///     .run(1000)?;
 /// # Ok::<(), pecos_core::errors::PecosError>(())
 /// ```
-pub fn llvm_sim() -> LlvmSim {
-    LlvmSim::new()
+#[must_use]
+pub fn llvm_sim(llvm_ir: impl Into<String>) -> pecos_engines::SimBuilder<LlvmEngineBuilder> {
+    use pecos_programs::LlvmProgram;
+    use pecos_engines::ClassicalControlEngineBuilder;
+    
+    llvm_engine()
+        .program(LlvmProgram::from_string(llvm_ir))
+        .to_sim()
 }

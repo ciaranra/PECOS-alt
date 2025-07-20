@@ -51,10 +51,11 @@ def test_setting_cvar() -> None:
     }
 
     results = HybridEngine(qsim="stabilizer").run(program=phir, shots=5)
+    results_dict = results
 
-    assert bin2int(results["var_i32"]) == 2**31 - 1
-    assert bin2int(results["var_u32"]) == 2**32 - 1
-    assert bin2int(results["var_i64"]) == 2**63 - 1
-    assert bin2int(results["var_u64"]) == 2**64 - 1
-    assert bin2int(results["var_i32neg"]) == -(2**31)
-    assert bin2int(results["var_i64neg"]) == -(2**63)
+    assert bin2int(results_dict["var_i32"]) == 2**31 - 1
+    assert bin2int(results_dict["var_u32"]) == 2**32 - 1
+    assert bin2int(results_dict["var_i64"]) == 2**63 - 1
+    assert bin2int(results_dict["var_u64"]) == 2**64 - 1
+    assert bin2int(results_dict["var_i32neg"]) == -(2**31)
+    assert bin2int(results_dict["var_i64neg"]) == -(2**63)

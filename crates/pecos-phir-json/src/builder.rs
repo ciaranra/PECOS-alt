@@ -1,0 +1,217 @@
+// Copyright 2025 The PECOS Developers
+//
+// Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+// in compliance with the License.You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software distributed under the License
+// is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+// or implied. See the License for the specific language governing permissions and limitations under
+// the License.
+
+//! PHIR JSON engine builder following the unified simulation API pattern
+
+use crate::common::{PhirJsonVersion, detect_version};
+use crate::v0_1::engine::PhirJsonEngine;
+use pecos_core::errors::PecosError;
+use pecos_engines::ClassicalControlEngineBuilder;
+use pecos_programs::PhirJsonProgram;
+use std::path::Path;
+
+/// Engine-specific PHIR program that stores the validated JSON and version
+#[derive(Debug, Clone)]
+pub struct PhirJsonEngineProgram {
+    json_content: String,
+    version: PhirJsonVersion,
+}
+
+impl PhirJsonEngineProgram {
+    /// Create from a JSON string, detecting and validating the version
+    pub fn from_json(json: &str) -> Result<Self, PecosError> {
+        let version = detect_version(json)?;
+        Ok(Self {
+            json_content: json.to_string(),
+            version,
+        })
+    }
+
+    /// Get the JSON content
+    pub fn json(&self) -> &str {
+        &self.json_content
+    }
+
+    /// Get the detected version
+    pub fn version(&self) -> PhirJsonVersion {
+        self.version
+    }
+}
+
+// Convert from the shared PhirJsonProgram type
+impl From<PhirJsonProgram> for PhirJsonEngineProgram {
+    fn from(program: PhirJsonProgram) -> Self {
+        // We need to detect the version here, but if it fails, we'll handle it later in build()
+        match detect_version(&program.source) {
+            Ok(version) => Self {
+                json_content: program.source,
+                version,
+            },
+            // If version detection fails, we'll use a placeholder and let build() handle the error
+            Err(_) => Self {
+                json_content: program.source,
+                version: PhirJsonVersion::V0_1, // Default to V0_1
+            },
+        }
+    }
+}
+
+
+/// Builder for PHIR JSON engines
+#[derive(Clone)]
+pub struct PhirJsonEngineBuilder {
+    program: Option<PhirJsonEngineProgram>,
+}
+
+impl PhirJsonEngineBuilder {
+    /// Create a new builder
+    pub fn new() -> Self {
+        Self { program: None }
+    }
+
+    /// Set the program for this engine (accepts either PhirJsonProgram or PhirJsonEngineProgram)
+    pub fn program(mut self, program: impl Into<PhirJsonEngineProgram>) -> Self {
+        self.program = Some(program.into());
+        self
+    }
+
+    /// Set the program from a JSON string
+    pub fn json(mut self, json: &str) -> Result<Self, PecosError> {
+        self.program = Some(PhirJsonEngineProgram::from_json(json)?);
+        Ok(self)
+    }
+
+    /// Set the program from a file path
+    pub fn file(self, path: impl AsRef<Path>) -> Result<Self, PecosError> {
+        let content = std::fs::read_to_string(path).map_err(PecosError::IO)?;
+        self.json(&content)
+    }
+}
+
+impl Default for PhirJsonEngineBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ClassicalControlEngineBuilder for PhirJsonEngineBuilder {
+    type Engine = PhirJsonEngine;
+
+    fn build(self) -> Result<Self::Engine, PecosError> {
+        let program = self
+            .program
+            .ok_or_else(|| PecosError::Input("No program set for PHIR engine".to_string()))?;
+
+        // For now, only support v0.1
+        match program.version {
+            PhirJsonVersion::V0_1 => PhirJsonEngine::from_json(program.json()),
+        }
+    }
+}
+
+/// Create a new PHIR JSON engine builder
+///
+/// This is the entry point for the unified API pattern:
+/// ```rust,ignore
+/// phir_json_engine()
+///     .program(PhirJsonProgram::from_json(json))
+///     .to_sim()
+///     .run(shots)
+/// ```
+pub fn phir_json_engine() -> PhirJsonEngineBuilder {
+    PhirJsonEngineBuilder::new()
+}
+
+/// Convenience conversion from PhirJsonProgram to builder
+impl From<PhirJsonProgram> for PhirJsonEngineBuilder {
+    fn from(program: PhirJsonProgram) -> Self {
+        Self::new().program(program)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_phir_engine_program_from_json() {
+        let json = r#"{
+            "format": "PHIR/JSON",
+            "version": "0.1.0",
+            "metadata": {},
+            "ops": []
+        }"#;
+
+        let program = PhirJsonEngineProgram::from_json(json).unwrap();
+        assert_eq!(program.version(), PhirJsonVersion::V0_1);
+        assert_eq!(program.json(), json);
+    }
+
+    #[test]
+    fn test_phir_program_conversion() {
+        let json = r#"{
+            "format": "PHIR/JSON",
+            "version": "0.1.0",
+            "metadata": {},
+            "ops": []
+        }"#;
+
+        let shared_program = PhirJsonProgram::from_json(json);
+        let engine_program: PhirJsonEngineProgram = shared_program.into();
+        assert_eq!(engine_program.version(), PhirJsonVersion::V0_1);
+        assert_eq!(engine_program.json(), json);
+    }
+
+    #[test]
+    fn test_phir_engine_builder() {
+        let json = r#"{
+            "format": "PHIR/JSON",
+            "version": "0.1.0",
+            "metadata": {},
+            "ops": [
+                {"data": "cvar_define", "data_type": "u32", "variable": "result", "size": 1},
+                {"cop": "Result", "args": [0], "returns": [["result", 0]]}
+            ]
+        }"#;
+
+        let program = PhirJsonProgram::from_json(json);
+        let builder = phir_json_engine().program(program);
+
+        // Build should succeed
+        let engine = builder.build();
+        assert!(engine.is_ok(), "Failed to build engine: {:?}", engine.err());
+    }
+
+    #[test]
+    fn test_phir_unified_api_pattern() {
+        // Test that we can use the unified API pattern
+        let json = r#"{
+            "format": "PHIR/JSON",
+            "version": "0.1.0",
+            "metadata": {},
+            "ops": [
+                {"data": "qvar_define", "data_type": "qubits", "variable": "q", "size": 2},
+                {"data": "cvar_define", "data_type": "u32", "variable": "m", "size": 2},
+                {"data": "cvar_define", "data_type": "u32", "variable": "result", "size": 1},
+                {"cop": "Result", "args": [0], "returns": [["result", 0]]}
+            ]
+        }"#;
+
+        let program = PhirJsonProgram::from_json(json);
+        
+        // This tests that the builder can be used with .to_sim()
+        let _sim_builder = phir_json_engine().program(program).to_sim();
+        
+        // We can't actually run it without quantum backend setup, 
+        // but this verifies the API compiles correctly
+    }
+}

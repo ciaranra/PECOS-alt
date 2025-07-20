@@ -9,12 +9,19 @@ from pathlib import Path
 from dataclasses import dataclass
 
 # Import the Rust bindings
-from pecos_rslib._pecos_rslib import (
-    selene_sim_builder as _rust_selene_sim_builder,
-    SeleneNoiseModel,
-    SeleneQuantumEngine,
-    ShotVec,
-)
+try:
+    from pecos_rslib._pecos_rslib import (
+        selene_sim_builder as _rust_selene_sim_builder,
+        SeleneNoiseModel,
+        SeleneQuantumEngine,
+        ShotVec,
+    )
+except ImportError:
+    # Old bindings not available, use stubs
+    _rust_selene_sim_builder = None
+    SeleneNoiseModel = None
+    SeleneQuantumEngine = None
+    from pecos_rslib._pecos_rslib import ShotVec
 
 # Try to import HUGR support if available
 try:

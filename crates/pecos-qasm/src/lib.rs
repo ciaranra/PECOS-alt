@@ -55,7 +55,7 @@
 
 pub mod ast;
 pub mod bitvec_expression;
-pub mod config;
+// pub mod config; // TODO: Update to use unified API types
 pub mod engine;
 pub mod engine_builder;
 pub mod foreign_objects;
@@ -80,6 +80,8 @@ pub use engine_builder::QASMEngineBuilder;
 pub use parser::{ParseConfig, QASMParser};
 pub use preprocessor::Preprocessor;
 pub use program::QASMProgram;
+#[cfg(feature = "wasm")]
+pub use program::QasmEngineWasmProgram;
 pub use util::{count_qubits_in_file, count_qubits_in_str};
 pub use unified_engine_builder::{qasm_engine, QasmEngineBuilder};
 

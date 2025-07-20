@@ -38,12 +38,14 @@ hugr = ["hugr-llvm-pipeline"]
 pyo3 = { workspace=true, features = ["extension-module", "abi3-py310", "generate-import-lib"] }
 pecos = { workspace = true }
 pecos-core = { workspace = true }
+pecos-programs = { workspace = true }
 pecos-qasm = { workspace = true, features = ["wasm"] }
 pecos-engines = { workspace = true }
 pecos-llvm-runtime = { workspace = true }
 pecos-llvm-sim = { workspace = true }
 pecos-selene-ceng = { path = "../../../crates/pecos-selene-ceng", features = ["hugr"] }
 pecos-phir = { path = "../../../crates/pecos-phir" }
+pecos-phir-json = { path = "../../../crates/pecos-phir-json" }
 pecos-hugr-llvm = { path = "../../../crates/pecos-hugr-llvm", optional = true }
 hugr = { version = "0.20", optional = true }
 parking_lot = { workspace = true}

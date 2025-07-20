@@ -17,23 +17,23 @@ pecos-core = { workspace = true, features = ["anyhow"] }
 pecos-engines.workspace = true
 
 # HUGR dependencies
-hugr-core = "0.20.1"
+hugr-core.workspace = true
 
 # JSON serialization (keeping for HUGR parsing)
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 
 # Regular expressions for text processing
 regex.workspace = true
 
 # Lazy static for global dialect registry
-lazy_static = "1.4"
+lazy_static.workspace = true
 
 # Temporary file handling for MLIR pipeline
 tempfile.workspace = true
 
 # RON (Rusty Object Notation) for debugging
-ron = "0.8"
+ron.workspace = true
 
 # Python bindings (optional)
 pyo3 = { workspace = true, optional = true }

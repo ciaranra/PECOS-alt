@@ -1,0 +1,502 @@
+//! Zero-dependency program types for PECOS quantum simulation
+//!
+//! This crate provides pure data types for quantum programs that can be used
+//! across different PECOS engine crates without creating dependencies between them.
+
+use std::fmt;
+use std::io;
+use std::path::Path;
+
+/// A QASM program
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QasmProgram {
+    /// The QASM source code
+    pub source: String,
+}
+
+impl QasmProgram {
+    /// Create a QASM program from a string
+    pub fn from_string(s: impl Into<String>) -> Self {
+        Self { source: s.into() }
+    }
+
+    /// Create a QASM program by reading from a file
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
+        let source = std::fs::read_to_string(path)?;
+        Ok(Self { source })
+    }
+
+    /// Get the source code
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+}
+
+impl fmt::Display for QasmProgram {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.source)
+    }
+}
+
+/// An LLVM program (can be IR text or bitcode)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LlvmProgram {
+    /// The program content
+    pub content: LlvmContent,
+}
+
+/// The content of an LLVM program
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LlvmContent {
+    /// LLVM IR text (human-readable .ll format)
+    Ir(String),
+    /// LLVM bitcode (binary .bc format)
+    Bitcode(Vec<u8>),
+}
+
+impl LlvmProgram {
+    /// Create an LLVM program from IR text
+    pub fn from_string(s: impl Into<String>) -> Self {
+        Self {
+            content: LlvmContent::Ir(s.into()),
+        }
+    }
+
+    /// Create an LLVM program from IR text (alias for from_string)
+    pub fn from_ir(s: impl Into<String>) -> Self {
+        Self::from_string(s)
+    }
+
+    /// Create an LLVM program from bitcode
+    pub fn from_bitcode(bitcode: impl Into<Vec<u8>>) -> Self {
+        Self {
+            content: LlvmContent::Bitcode(bitcode.into()),
+        }
+    }
+
+    /// Create an LLVM program by reading from a file
+    /// Auto-detects format based on extension (.ll for IR, .bc for bitcode)
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
+        let path = path.as_ref();
+        if path.extension().and_then(|s| s.to_str()) == Some("bc") {
+            // Read as bitcode
+            let bitcode = std::fs::read(path)?;
+            Ok(Self::from_bitcode(bitcode))
+        } else {
+            // Read as IR text (default for .ll or no extension)
+            let ir = std::fs::read_to_string(path)?;
+            Ok(Self::from_ir(ir))
+        }
+    }
+
+    /// Create an LLVM program from an IR text file
+    pub fn from_ir_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
+        let ir = std::fs::read_to_string(path)?;
+        Ok(Self::from_ir(ir))
+    }
+
+    /// Create an LLVM program from a bitcode file
+    pub fn from_bitcode_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
+        let bitcode = std::fs::read(path)?;
+        Ok(Self::from_bitcode(bitcode))
+    }
+
+    /// Get the IR source code (if this is IR text)
+    pub fn ir(&self) -> Option<&str> {
+        match &self.content {
+            LlvmContent::Ir(ir) => Some(ir),
+            LlvmContent::Bitcode(_) => None,
+        }
+    }
+
+    /// Get the bitcode (if this is bitcode)
+    pub fn bitcode(&self) -> Option<&[u8]> {
+        match &self.content {
+            LlvmContent::Ir(_) => None,
+            LlvmContent::Bitcode(bc) => Some(bc),
+        }
+    }
+
+    /// Check if this is IR text
+    pub fn is_ir(&self) -> bool {
+        matches!(self.content, LlvmContent::Ir(_))
+    }
+
+    /// Check if this is bitcode
+    pub fn is_bitcode(&self) -> bool {
+        matches!(self.content, LlvmContent::Bitcode(_))
+    }
+}
+
+impl fmt::Display for LlvmProgram {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.content {
+            LlvmContent::Ir(ir) => write!(f, "{}", ir),
+            LlvmContent::Bitcode(bc) => write!(f, "LlvmProgram(bitcode, {} bytes)", bc.len()),
+        }
+    }
+}
+
+/// A HUGR program
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HugrProgram {
+    /// The HUGR data (serialized bytes)
+    pub hugr: Vec<u8>,
+}
+
+impl HugrProgram {
+    /// Create a HUGR program from bytes
+    pub fn from_bytes(bytes: Vec<u8>) -> Self {
+        Self { hugr: bytes }
+    }
+
+    /// Create a HUGR program by reading from a file
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
+        let hugr = std::fs::read(path)?;
+        Ok(Self { hugr })
+    }
+
+    /// Get the HUGR bytes
+    pub fn bytes(&self) -> &[u8] {
+        &self.hugr
+    }
+
+    /// Get the HUGR bytes as a Vec (consuming self)
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.hugr
+    }
+}
+
+impl fmt::Display for HugrProgram {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "HugrProgram({} bytes)", self.hugr.len())
+    }
+}
+
+/// A WebAssembly program (binary .wasm format)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WasmProgram {
+    /// The WASM binary data
+    pub wasm: Vec<u8>,
+}
+
+impl WasmProgram {
+    /// Create a WASM program from bytes
+    pub fn from_bytes(bytes: impl Into<Vec<u8>>) -> Self {
+        Self { wasm: bytes.into() }
+    }
+
+    /// Create a WASM program by reading from a file
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
+        let wasm = std::fs::read(path)?;
+        Ok(Self { wasm })
+    }
+
+    /// Get the WASM bytes
+    pub fn bytes(&self) -> &[u8] {
+        &self.wasm
+    }
+
+    /// Get the WASM bytes as a Vec (consuming self)
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.wasm
+    }
+}
+
+impl fmt::Display for WasmProgram {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "WasmProgram({} bytes)", self.wasm.len())
+    }
+}
+
+/// A WebAssembly Text program (.wat format)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WatProgram {
+    /// The WAT source code
+    pub source: String,
+}
+
+impl WatProgram {
+    /// Create a WAT program from a string
+    pub fn from_string(s: impl Into<String>) -> Self {
+        Self { source: s.into() }
+    }
+
+    /// Create a WAT program by reading from a file
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
+        let source = std::fs::read_to_string(path)?;
+        Ok(Self { source })
+    }
+
+    /// Get the source code
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+}
+
+impl fmt::Display for WatProgram {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.source)
+    }
+}
+
+/// A PHIR JSON program
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PhirJsonProgram {
+    /// The PHIR JSON source code
+    pub source: String,
+}
+
+impl PhirJsonProgram {
+    /// Create a PHIR JSON program from a string
+    pub fn from_string(s: impl Into<String>) -> Self {
+        Self { source: s.into() }
+    }
+
+    /// Create a PHIR JSON program from JSON (alias for from_string)
+    pub fn from_json(s: impl Into<String>) -> Self {
+        Self::from_string(s)
+    }
+
+    /// Create a PHIR JSON program by reading from a file
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
+        let source = std::fs::read_to_string(path)?;
+        Ok(Self { source })
+    }
+
+    /// Get the source code
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+
+    /// Get the JSON source (alias for source)
+    pub fn json(&self) -> &str {
+        &self.source
+    }
+}
+
+impl fmt::Display for PhirJsonProgram {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.source)
+    }
+}
+
+/// Enum for runtime dispatch of program types
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Program {
+    /// A QASM program
+    Qasm(QasmProgram),
+    /// An LLVM IR program
+    Llvm(LlvmProgram),
+    /// A HUGR program
+    Hugr(HugrProgram),
+    /// A WebAssembly program
+    Wasm(WasmProgram),
+    /// A WebAssembly Text program
+    Wat(WatProgram),
+    /// A PHIR JSON program
+    PhirJson(PhirJsonProgram),
+}
+
+impl Program {
+    /// Get the program type as a string
+    pub fn program_type(&self) -> &'static str {
+        match self {
+            Program::Qasm(_) => "QASM",
+            Program::Llvm(_) => "LLVM",
+            Program::Hugr(_) => "HUGR",
+            Program::Wasm(_) => "WASM",
+            Program::Wat(_) => "WAT",
+            Program::PhirJson(_) => "PHIR-JSON",
+        }
+    }
+}
+
+impl From<QasmProgram> for Program {
+    fn from(program: QasmProgram) -> Self {
+        Program::Qasm(program)
+    }
+}
+
+impl From<LlvmProgram> for Program {
+    fn from(program: LlvmProgram) -> Self {
+        Program::Llvm(program)
+    }
+}
+
+impl From<HugrProgram> for Program {
+    fn from(program: HugrProgram) -> Self {
+        Program::Hugr(program)
+    }
+}
+
+impl From<WasmProgram> for Program {
+    fn from(program: WasmProgram) -> Self {
+        Program::Wasm(program)
+    }
+}
+
+impl From<WatProgram> for Program {
+    fn from(program: WatProgram) -> Self {
+        Program::Wat(program)
+    }
+}
+
+impl From<PhirJsonProgram> for Program {
+    fn from(program: PhirJsonProgram) -> Self {
+        Program::PhirJson(program)
+    }
+}
+
+impl fmt::Display for Program {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Program::Qasm(p) => write!(f, "QASM: {}", p),
+            Program::Llvm(p) => write!(f, "LLVM: {}", p),
+            Program::Hugr(p) => write!(f, "{}", p),
+            Program::Wasm(p) => write!(f, "{}", p),
+            Program::Wat(p) => write!(f, "WAT: {}", p),
+            Program::PhirJson(p) => write!(f, "PHIR-JSON: {}", p),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn test_qasm_program() {
+        let qasm = "OPENQASM 2.0;\nqreg q[2];";
+        let program = QasmProgram::from_string(qasm);
+        assert_eq!(program.source(), qasm);
+        assert_eq!(program.to_string(), qasm);
+    }
+
+    #[test]
+    fn test_llvm_program() {
+        let ir = "define void @main() { ret void }";
+        let program = LlvmProgram::from_string(ir);
+        assert_eq!(program.ir(), Some(ir));
+        assert_eq!(program.to_string(), ir);
+        
+        // Test bitcode
+        let bitcode = vec![0xDE, 0xC0, 0xDE, 0xCA, 0xFE];
+        let program = LlvmProgram::from_bitcode(bitcode.clone());
+        assert_eq!(program.bitcode(), Some(&bitcode[..]));
+        assert_eq!(program.ir(), None);
+        assert_eq!(program.to_string(), "LlvmProgram(bitcode, 5 bytes)");
+    }
+
+    #[test]
+    fn test_hugr_program() {
+        let bytes = vec![1, 2, 3, 4, 5];
+        let program = HugrProgram::from_bytes(bytes.clone());
+        assert_eq!(program.bytes(), &bytes[..]);
+        assert_eq!(program.to_string(), "HugrProgram(5 bytes)");
+    }
+
+    #[test]
+    fn test_wasm_program() {
+        let wasm_bytes = vec![0x00, 0x61, 0x73, 0x6D]; // WASM magic number
+        let program = WasmProgram::from_bytes(wasm_bytes.clone());
+        assert_eq!(program.bytes(), &wasm_bytes[..]);
+        assert_eq!(program.to_string(), "WasmProgram(4 bytes)");
+        
+        let program2 = WasmProgram::from_bytes(&wasm_bytes[..]);
+        assert_eq!(program2.bytes(), &wasm_bytes[..]);
+    }
+
+    #[test]
+    fn test_wat_program() {
+        let wat = "(module (func $main))";
+        let program = WatProgram::from_string(wat);
+        assert_eq!(program.source(), wat);
+        assert_eq!(program.to_string(), wat);
+    }
+
+    #[test]
+    fn test_program_enum() {
+        let qasm = QasmProgram::from_string("OPENQASM 2.0;");
+        let program: Program = qasm.into();
+        assert_eq!(program.program_type(), "QASM");
+
+        let llvm = LlvmProgram::from_string("define void @main() {}");
+        let program: Program = llvm.into();
+        assert_eq!(program.program_type(), "LLVM");
+
+        let hugr = HugrProgram::from_bytes(vec![1, 2, 3]);
+        let program: Program = hugr.into();
+        assert_eq!(program.program_type(), "HUGR");
+
+        let wasm = WasmProgram::from_bytes(vec![0x00, 0x61, 0x73, 0x6D]);
+        let program: Program = wasm.into();
+        assert_eq!(program.program_type(), "WASM");
+
+        let wat = WatProgram::from_string("(module)");
+        let program: Program = wat.into();
+        assert_eq!(program.program_type(), "WAT");
+    }
+
+    #[test]
+    fn test_from_file() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempfile::tempdir()?;
+
+        // Test QASM from file
+        let qasm_path = temp_dir.path().join("test.qasm");
+        let mut file = std::fs::File::create(&qasm_path)?;
+        writeln!(file, "OPENQASM 2.0;")?;
+        writeln!(file, "qreg q[2];")?;
+        drop(file);
+
+        let qasm_program = QasmProgram::from_file(&qasm_path)?;
+        assert_eq!(qasm_program.source().trim(), "OPENQASM 2.0;\nqreg q[2];");
+
+        // Test LLVM from file
+        let llvm_path = temp_dir.path().join("test.ll");
+        let mut file = std::fs::File::create(&llvm_path)?;
+        writeln!(file, "define void @main() {{")?;
+        writeln!(file, "  ret void")?;
+        writeln!(file, "}}")?;
+        drop(file);
+
+        let llvm_program = LlvmProgram::from_file(&llvm_path)?;
+        assert!(llvm_program.ir().unwrap().contains("define void @main()"));
+        
+        // Test LLVM bitcode from file
+        let bc_path = temp_dir.path().join("test.bc");
+        let bitcode_data = vec![0xDE, 0xC0, 0xDE, 0x42, 0x01, 0x0C];
+        std::fs::write(&bc_path, &bitcode_data)?;
+        
+        let bc_program = LlvmProgram::from_file(&bc_path)?;
+        assert!(bc_program.is_bitcode());
+        assert_eq!(bc_program.bitcode(), Some(&bitcode_data[..]));
+
+        // Test HUGR from file
+        let hugr_path = temp_dir.path().join("test.hugr");
+        let hugr_data = vec![0xDE, 0xAD, 0xBE, 0xEF];
+        std::fs::write(&hugr_path, &hugr_data)?;
+
+        let hugr_program = HugrProgram::from_file(&hugr_path)?;
+        assert_eq!(hugr_program.bytes(), &hugr_data[..]);
+
+        // Test WASM from file
+        let wasm_path = temp_dir.path().join("test.wasm");
+        let wasm_data = vec![0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00];
+        std::fs::write(&wasm_path, &wasm_data)?;
+
+        let wasm_program = WasmProgram::from_file(&wasm_path)?;
+        assert_eq!(wasm_program.bytes(), &wasm_data[..]);
+
+        // Test WAT from file
+        let wat_path = temp_dir.path().join("test.wat");
+        let wat_content = "(module\n  (func $main)\n)";
+        std::fs::write(&wat_path, wat_content)?;
+
+        let wat_program = WatProgram::from_file(&wat_path)?;
+        assert_eq!(wat_program.source(), wat_content);
+
+        Ok(())
+    }
+}

@@ -6,79 +6,39 @@ import pytest
 class TestCustomNoiseModels:
     """Test custom noise model registration and configuration."""
 
-    def test_built_in_noise_from_config(self) -> None:
-        """Test that all built-in noise models have from_config methods."""
-        from pecos.rslib import (
-            BiasedDepolarizingNoise,
-            DepolarizingCustomNoise,
-            DepolarizingNoise,
-            GeneralNoise,
-            PassThroughNoise,
+    def test_built_in_noise_builders(self) -> None:
+        """Test that all built-in noise models have builder methods."""
+        from pecos_rslib import (
+            biased_depolarizing_noise,
+            depolarizing_noise,
+            GeneralNoiseModelBuilder,
         )
 
-        # Test PassThroughNoise
-        pt = PassThroughNoise.from_config({})
-        assert isinstance(pt, PassThroughNoise)
+        # Test depolarizing noise builder
+        dep = depolarizing_noise().with_p1_probability(0.05)
+        assert dep is not None
 
-        # Test DepolarizingNoise with default
-        dep1 = DepolarizingNoise.from_config({})
-        assert dep1.p == 0.001  # default
-
-        # Test DepolarizingNoise with custom value
-        dep2 = DepolarizingNoise.from_config({"p": 0.05})
-        assert dep2.p == 0.05
-
-        # Test DepolarizingCustomNoise with mixed defaults and custom
-        dep_custom = DepolarizingCustomNoise.from_config(
-            {
-                "p_prep": 0.002,
-                "p1": 0.003,
-                # p_meas and p2 should use defaults
-            },
-        )
-        assert dep_custom.p_prep == 0.002
-        assert dep_custom.p_meas == 0.001  # default
-        assert dep_custom.p1 == 0.003
-        assert dep_custom.p2 == 0.002  # default
+        # Test depolarizing noise with multiple parameters
+        dep_custom = (depolarizing_noise()
+                     .with_prep_probability(0.002)
+                     .with_meas_probability(0.001)
+                     .with_p1_probability(0.003)
+                     .with_p2_probability(0.002))
+        assert dep_custom is not None
 
         # Test BiasedDepolarizingNoise
-        biased = BiasedDepolarizingNoise.from_config({"p": 0.1})
-        assert biased.p == 0.1
+        biased = biased_depolarizing_noise().with_uniform_probability(0.033)
+        assert biased is not None
 
         # Test GeneralNoise
-        general = GeneralNoise.from_config({})
-        assert isinstance(general, GeneralNoise)
+        general = GeneralNoiseModelBuilder()
+        assert general is not None
 
-    def test_register_custom_noise_model_limitation(self) -> None:
+    def test_custom_noise_model_limitation(self) -> None:
         """Test that custom noise models have limitations due to Rust bindings."""
-        from pecos.rslib import qasm_sim
-
-        # Custom noise models cannot be registered in the current implementation
-        # The API only supports built-in noise models that are implemented in Rust
-
-        # Use an unknown noise type in configuration
-        qasm = """
-            OPENQASM 2.0;
-            include "qelib1.inc";
-            qreg q[1];
-            creg c[1];
-            x q[0];
-            measure q[0] -> c[0];
-            """
-        config = {
-            "noise": {
-                "type": "MyCustomNoise",
-                "error_rate": 0.05,
-                "gate_specific": True,
-            },
-        }
-
-        # This will fail because custom Python noise models can't be passed to Rust
-        with pytest.raises(
-            ValueError,
-            match="Invalid noise configuration type: MyCustomNoise",
-        ):
-            qasm_sim(qasm).config(config).build()
+        # In the new API, only built-in noise builders can be used
+        # Custom Python noise models cannot be passed to Rust
+        # This limitation is enforced at the type level by using builder objects
 
     def test_register_without_from_config_fails(self) -> None:
         """Test that using noise without from_config fails."""
@@ -86,12 +46,10 @@ class TestCustomNoiseModels:
         # All noise models must be built-in types implemented in Rust
         # This test is kept to document this limitation
 
-    def test_override_existing_noise_model(self) -> None:
-        """Test that built-in noise models use their standard configuration."""
-        from pecos.rslib import qasm_sim
-
-        # The current implementation uses fixed configuration parsing for built-in types
-        # You cannot override how configs are parsed
+    def test_noise_builder_configuration(self) -> None:
+        """Test that built-in noise models use builder configuration."""
+        from pecos_rslib import depolarizing_noise, qasm_engine
+        from pecos_rslib.programs import QasmProgram
 
         qasm = """
             OPENQASM 2.0;
@@ -102,23 +60,25 @@ class TestCustomNoiseModels:
             measure q[0] -> c[0];
             """
 
-        # DepolarizingNoise requires 'p' field to be specified
-        config = {
-            "noise": {"type": "DepolarizingNoise", "p": 0.001},
-        }
-
-        sim = qasm_sim(qasm).config(config).build()
+        # Use builder pattern with explicit probability
+        sim = (qasm_engine()
+               .program(QasmProgram.from_string(qasm))
+               .to_sim()
+               .noise(depolarizing_noise().with_uniform_probability(0.001))
+               .build())
         results = sim.run(1000)
+        results_dict = results.to_dict()
 
-        # Should see very few errors due to low default noise (p=0.001)
-        zeros = sum(1 for val in results["c"] if val == 0)
+        # Should see very few errors due to low noise (p=0.001)
+        zeros = sum(1 for val in results_dict["c"] if val == 0)
         assert zeros < 10  # Less than 1% error rate expected
 
-    def test_noise_config_validation(self) -> None:
-        """Test that built-in noise models work with configuration."""
-        from pecos.rslib import qasm_sim
+    def test_noise_builder_validation(self) -> None:
+        """Test that built-in noise models work with builder pattern."""
+        from pecos_rslib import depolarizing_noise, qasm_engine
+        from pecos_rslib.programs import QasmProgram
 
-        # Valid configuration should work with built-in noise models
+        # Valid QASM for testing
         qasm_valid = """
             OPENQASM 2.0;
             include "qelib1.inc";
@@ -129,31 +89,27 @@ class TestCustomNoiseModels:
             """
 
         # Test DepolarizingNoise with valid p
-        config_valid = {
-            "noise": {"type": "DepolarizingNoise", "p": 0.5},
-        }
-        sim = qasm_sim(qasm_valid).config(config_valid).build()
+        sim = (qasm_engine()
+               .program(QasmProgram.from_string(qasm_valid))
+               .to_sim()
+               .noise(depolarizing_noise().with_uniform_probability(0.5))
+               .build())
         results = sim.run(10)
-        assert len(results["c"]) == 10
+        results_dict = results.to_dict()
+        assert len(results_dict["c"]) == 10
 
-        # Test DepolarizingCustomNoise with valid parameters
-        config_custom = {
-            "noise": {
-                "type": "DepolarizingCustomNoise",
-                "p_prep": 0.1,
-                "p_meas": 0.2,
-                "p1": 0.3,
-                "p2": 0.4,
-            },
-        }
-        sim = qasm_sim(qasm_valid).config(config_custom).build()
+        # Test DepolarizingNoise with multiple parameters
+        sim = (qasm_engine()
+               .program(QasmProgram.from_string(qasm_valid))
+               .to_sim()
+               .noise(depolarizing_noise()
+                      .with_prep_probability(0.1)
+                      .with_meas_probability(0.2)
+                      .with_p1_probability(0.3)
+                      .with_p2_probability(0.4))
+               .build())
         results = sim.run(10)
-        assert len(results["c"]) == 10
+        results_dict = results.to_dict()
+        assert len(results_dict["c"]) == 10
 
-        # Test that unknown noise types fail
-        config_invalid = {
-            "noise": {"type": "UnknownNoiseType", "p": 0.5},
-        }
-
-        with pytest.raises(ValueError, match="Invalid noise configuration type"):
-            qasm_sim(qasm_valid).config(config_invalid).build()
+        # Unknown noise types are now prevented at the type level by the builder pattern

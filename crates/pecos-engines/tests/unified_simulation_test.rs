@@ -4,7 +4,7 @@
 //! with different seeding strategies.
 
 use pecos_engines::{
-    DepolarizingNoise, QuantumEngineType,
+    DepolarizingNoise, PassThroughNoise, BiasedDepolarizingNoise,
 };
 
 // For now, we'll use simpler tests that don't require a full mock engine implementation.
@@ -13,20 +13,24 @@ use pecos_engines::{
 
 #[test]
 fn test_sim_builder_api() {
-    use pecos_engines::{SimConfig, PassThroughNoise, BiasedDepolarizingNoise};
+    use pecos_engines::SimConfig;
     
     // Test that SimConfig has expected defaults
     let config = SimConfig::default();
     assert_eq!(config.workers, 1);
-    assert_eq!(config.quantum_engine, QuantumEngineType::SparseStabilizer);
     assert!(config.seed.is_none());
-    assert!(config.max_qubits.is_none());
     assert!(!config.verbose);
     
-    // Test noise conversions work
+    // Test noise conversions work with From trait
     let _: Box<dyn pecos_engines::noise::NoiseModel> = PassThroughNoise.into();
     let _: Box<dyn pecos_engines::noise::NoiseModel> = DepolarizingNoise { p: 0.01 }.into();
     let _: Box<dyn pecos_engines::noise::NoiseModel> = BiasedDepolarizingNoise { p: 0.01 }.into();
+    
+    // Test IntoNoiseModel trait as well
+    use pecos_engines::noise::IntoNoiseModel;
+    let _: Box<dyn pecos_engines::noise::NoiseModel> = PassThroughNoise.into_noise_model();
+    let _: Box<dyn pecos_engines::noise::NoiseModel> = DepolarizingNoise { p: 0.01 }.into_noise_model();
+    let _: Box<dyn pecos_engines::noise::NoiseModel> = BiasedDepolarizingNoise { p: 0.01 }.into_noise_model();
 }
 
 #[test]

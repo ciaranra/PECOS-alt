@@ -11,7 +11,14 @@ use pyo3::types::{PyBytes, PyDict, PyList};
 /// Python wrapper for ShotVec
 #[pyclass(name = "ShotVec", module = "pecos_rslib._pecos_rslib")]
 pub struct PyShotVec {
-    inner: ShotVec,
+    pub(crate) inner: ShotVec,
+}
+
+impl PyShotVec {
+    /// Create a new PyShotVec from a Rust ShotVec
+    pub fn new(inner: ShotVec) -> Self {
+        PyShotVec { inner }
+    }
 }
 
 #[pymethods]

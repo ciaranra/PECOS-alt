@@ -57,11 +57,12 @@ fn test_qasm_engine_builder_with_wasm() {
 #[test]
 fn test_engine_specific_vs_common_methods() {
     use pecos_qasm::qasm_engine;
-    use pecos_engines::{ClassicalControlEngineBuilder, DepolarizingNoise, QuantumEngineType};
+    use pecos_engines::{ClassicalControlEngineBuilder, DepolarizingNoise, state_vector};
+    use pecos_programs::QasmProgram;
     
     // Engine-specific methods on QasmEngineBuilder
     let engine_builder = qasm_engine()
-        .qasm("OPENQASM 2.0; qreg q[1];")  // Engine-specific: input
+        .program(QasmProgram::from_string("OPENQASM 2.0; qreg q[1];"))  // Common: unified program input
         .allow_complex_conditionals(true);  // Engine-specific: parser option
     
     // Common simulation methods on SimBuilder  
@@ -70,5 +71,5 @@ fn test_engine_specific_vs_common_methods() {
         .seed(42)                          // Common: random seed
         .workers(4)                        // Common: parallelization
         .noise(DepolarizingNoise { p: 0.01 })  // Common: noise model
-        .quantum_engine(QuantumEngineType::StateVector);  // Common: quantum backend
+        .quantum(state_vector().qubits(1));  // Common: quantum backend
 }

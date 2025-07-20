@@ -1,7 +1,8 @@
 //! Integration tests for pecos-selene-eng
 
-use pecos_selene_ceng::selene_sim;
-use pecos_engines::{ClassicalEngine, ControlEngine};
+use pecos_selene_ceng::selene_engine;
+use pecos_engines::{ClassicalEngine, ControlEngine, ClassicalControlEngineBuilder};
+use pecos_programs::LlvmProgram;
 
 mod common;
 
@@ -23,9 +24,10 @@ entry:
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let result = selene_sim()
-        .llvm_ir(llvm_ir)
+    let result = selene_engine()
+        .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(1)
+        .to_sim()
         .run(1);
     
     assert!(result.is_ok());
@@ -53,9 +55,10 @@ entry:
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let results = selene_sim()
-        .llvm_ir(bell_llvm)
+    let results = selene_engine()
+        .program(LlvmProgram::from_ir(bell_llvm))
         .qubits(2)
+        .to_sim()
         .run(2);  // Reduced from 100 to 2 for debugging
     
     assert!(results.is_ok());
@@ -86,10 +89,11 @@ define void @optimized() #0 {
 attributes #0 = { "EntryPoint" }
 "#;
 
-    let results = selene_sim()
-        .llvm_ir(simple_llvm)
+    let results = selene_engine()
+        .program(LlvmProgram::from_ir(simple_llvm))
         .qubits(1)
-        .optimize()
+        .optimize(true)
+        .to_sim()
         .run(1);
     
     assert!(results.is_ok());
@@ -110,9 +114,10 @@ define void @seeded() #0 {
 attributes #0 = { "EntryPoint" }
 "#;
 
-    let results = selene_sim()
-        .llvm_ir(test_llvm)
+    let results = selene_engine()
+        .program(LlvmProgram::from_ir(test_llvm))
         .qubits(1)
+        .to_sim()
         .seed(12345)
         .run(1);
     
@@ -134,9 +139,10 @@ define void @parallel() #0 {
 attributes #0 = { "EntryPoint" }
 "#;
 
-    let results = selene_sim()
-        .llvm_ir(parallel_llvm)
+    let results = selene_engine()
+        .program(LlvmProgram::from_ir(parallel_llvm))
         .qubits(1)
+        .to_sim()
         .workers(4)
         .run(4); // Reduced from 100 for performance
     
@@ -156,8 +162,8 @@ define void @traits() #0 {
 attributes #0 = { "EntryPoint" }
 "#;
 
-    let engine = selene_sim()
-        .llvm_ir(trait_llvm)
+    let engine = selene_engine()
+        .program(LlvmProgram::from_ir(trait_llvm))
         .qubits(1)
         .build();
     
@@ -170,8 +176,8 @@ attributes #0 = { "EntryPoint" }
 
 #[test]
 fn test_invalid_program() {
-    let engine = selene_sim()
-        .llvm_ir("") // Empty IR
+    let engine = selene_engine()
+        .program(LlvmProgram::from_ir("")) // Empty IR
         .qubits(1)
         .build();
     
@@ -183,8 +189,9 @@ fn test_invalid_program() {
 
 #[test]
 fn test_missing_qubits() {
-    let result = selene_sim()
-        .llvm_ir("test")
+    let result = selene_engine()
+        .program(LlvmProgram::from_ir("test"))
+        .to_sim()
         .build();
     
     assert!(result.is_err());
@@ -210,10 +217,11 @@ entry:
 attributes #0 = { "EntryPoint" }
 "#;
 
-    let result = selene_sim()
-        .llvm_ir(control_llvm)
+    let result = selene_engine()
+        .program(LlvmProgram::from_ir(control_llvm))
         .qubits(2)
         .verbose(true)
+        .to_sim()
         .run(1);
     
     assert!(result.is_ok());
@@ -236,8 +244,8 @@ define void @adaptive() #0 {
 attributes #0 = { "EntryPoint" }
 "#;
 
-    let mut engine = selene_sim()
-        .llvm_ir(adaptive_llvm)
+    let mut engine = selene_engine()
+        .program(LlvmProgram::from_ir(adaptive_llvm))
         .qubits(1)
         .build()
         .unwrap();

@@ -1,6 +1,8 @@
-//! Edge case and advanced feature tests for `llvm_sim()`
+//! Edge case and advanced feature tests for LLVM simulation unified API
 
-use pecos_llvm_sim::{llvm_sim, DepolarizingNoise, BiasedDepolarizingNoise};
+use pecos_llvm_sim::llvm_engine;
+use pecos_engines::{DepolarizingNoise, BiasedDepolarizingNoise, ClassicalControlEngineBuilder};
+use pecos_programs::LlvmProgram;
 use std::io::Write;
 use tempfile::NamedTempFile;
 
@@ -49,16 +51,16 @@ ret void
 attributes #0 = { "EntryPoint" }
 "#;
 
-    let result = llvm_sim().llvm_ir(empty_ir).run(10);
+    let result = llvm_engine().program(LlvmProgram::from_string(empty_ir)).to_sim().qubits(1).run(10);
 
-    // Empty circuit with no qubits should return an error
-    assert!(result.is_err(), "Empty circuit should return an error");
-
-    if let Err(e) = result {
-        assert!(
-            e.to_string().contains("no qubits allocated"),
-            "Error should mention no qubits allocated"
-        );
+    // Empty circuit with no operations should succeed but produce no meaningful results
+    // Note: The unified API requires specifying qubits, so this is actually valid now
+    match result {
+        Ok(_) => println!("Empty circuit succeeded"),
+        Err(e) => {
+            println!("Empty circuit failed with error: {}", e);
+            panic!("Empty circuit should succeed with unified API");
+        }
     }
 }
 
@@ -87,10 +89,12 @@ attributes #0 = { "EntryPoint" }
 
     // Test with large shot count
     let start = std::time::Instant::now();
-    let shot_vec = llvm_sim()
-        .llvm_ir(simple_ir)
+    let shot_vec = llvm_engine()
+        .program(LlvmProgram::from_string(simple_ir))
+        .to_sim()
         .seed(42)
         .workers(8) // Use multiple workers for speed
+        .qubits(1)
         .run(10000)
         .expect("Large shot count should work");
 
@@ -145,9 +149,11 @@ ret void
 attributes #0 = { "EntryPoint" }
 "#;
 
-    let shot_vec = llvm_sim()
-        .llvm_ir(multi_reg_ir)
+    let shot_vec = llvm_engine()
+        .program(LlvmProgram::from_string(multi_reg_ir))
+        .to_sim()
         .seed(42)
+        .qubits(3)
         .run(100)
         .expect("Multiple registers should work");
 
@@ -201,10 +207,12 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     // Run with biased depolarizing noise
-    let shot_vec = llvm_sim()
-        .llvm_ir(ghz_ir)
+    let shot_vec = llvm_engine()
+        .program(LlvmProgram::from_string(ghz_ir))
+        .to_sim()
         .seed(42)
         .noise(BiasedDepolarizingNoise { p: 0.05 }) // 5% biased noise
+        .qubits(3)
         .run(1000)
         .expect("Biased noise simulation should work");
 
@@ -264,16 +272,20 @@ attributes #0 = { "EntryPoint" }
     temp_file.flush().expect("Failed to flush");
 
     // Run from string
-    let shot_vec_string = llvm_sim()
-        .llvm_ir(llvm_ir)
+    let shot_vec_string = llvm_engine()
+        .program(LlvmProgram::from_string(llvm_ir))
+        .to_sim()
         .seed(42)
+        .qubits(1)
         .run(100)
         .expect("String source should work");
 
     // Run from file
-    let shot_vec_file = llvm_sim()
-        .llvm_file(temp_file.path())
+    let shot_vec_file = llvm_engine()
+        .program(LlvmProgram::from_file(temp_file.path()).unwrap())
+        .to_sim()
         .seed(42)
+        .qubits(1)
         .run(100)
         .expect("File source should work");
 
@@ -326,10 +338,12 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     // Test with 50% noise - should be almost random
-    let shot_vec = llvm_sim()
-        .llvm_ir(simple_ir)
+    let shot_vec = llvm_engine()
+        .program(LlvmProgram::from_string(simple_ir))
+        .to_sim()
         .seed(42)
         .noise(DepolarizingNoise { p: 0.5 }) // 50% error rate!
+        .qubits(2)
         .run(1000)
         .expect("Extreme noise should still work");
 
@@ -364,7 +378,7 @@ fn test_llvm_sim_builder_state_preservation() {
     }
 
     // Build a configured simulation
-    let mut sim = llvm_sim().llvm_ir(r#"
+    let mut sim = llvm_engine().program(LlvmProgram::from_string(r#"
 declare void @__quantum__qis__h__body(i64)
 declare i32 @__quantum__qis__m__body(i64, i64)
 declare void @__quantum__rt__result_record_output(i64, i8*)
@@ -378,11 +392,13 @@ call void @__quantum__rt__result_record_output(i64 0, i8* getelementptr inbounds
 ret void
 }
 attributes #0 = { "EntryPoint" }
-"#)
+"#))
+    .to_sim()
     .seed(12345)
     .workers(2)
     .noise(DepolarizingNoise { p: 0.1 })
     .verbose(false)
+    .qubits(1)
     .build()
     .expect("Build should succeed");
 
@@ -416,8 +432,10 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     // Should handle 0 shots gracefully
-    let shot_vec = llvm_sim()
-        .llvm_ir(simple_ir)
+    let shot_vec = llvm_engine()
+        .program(LlvmProgram::from_string(simple_ir))
+        .to_sim()
+        .qubits(1)
         .run(0)
         .expect("Zero shots should be handled");
 

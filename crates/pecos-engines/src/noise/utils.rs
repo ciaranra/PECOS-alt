@@ -208,6 +208,14 @@ impl NoiseUtils {
             }
 
             // Gates with parameters that need validation
+            GateType::RX if !gate.params.is_empty() => {
+                let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| **q).collect();
+                builder.add_rx(gate.params[0], &qubits_usize);
+            }
+            GateType::RY if !gate.params.is_empty() => {
+                let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| **q).collect();
+                builder.add_ry(gate.params[0], &qubits_usize);
+            }
             GateType::RZ if !gate.params.is_empty() => {
                 let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| **q).collect();
                 builder.add_rz(gate.params[0], &qubits_usize);
@@ -218,6 +226,10 @@ impl NoiseUtils {
             GateType::R1XY if gate.params.len() >= 2 => {
                 let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| **q).collect();
                 builder.add_r1xy(gate.params[0], gate.params[1], &qubits_usize);
+            }
+            GateType::U if gate.params.len() >= 3 => {
+                let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| **q).collect();
+                builder.add_u(gate.params[0], gate.params[1], gate.params[2], &qubits_usize);
             }
 
             // Measurement gates

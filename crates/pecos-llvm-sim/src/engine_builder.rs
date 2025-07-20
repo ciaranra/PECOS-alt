@@ -8,17 +8,36 @@ use hugr_core::Hugr;
 use pecos_core::errors::PecosError;
 use pecos_engines::ClassicalControlEngineBuilder;
 use pecos_llvm_runtime::{LlvmEngine, LlvmEngineConfig};
+use pecos_programs::{LlvmProgram, HugrProgram};
 use std::io::Write;
 use std::path::Path;
 use tempfile::NamedTempFile;
+
+/// Program source types that can be converted to LLVM engine source
+pub enum ProgramSource {
+    Llvm(LlvmProgram),
+    Hugr(HugrProgram),
+}
+
+impl From<LlvmProgram> for ProgramSource {
+    fn from(program: LlvmProgram) -> Self {
+        ProgramSource::Llvm(program)
+    }
+}
+
+impl From<HugrProgram> for ProgramSource {
+    fn from(program: HugrProgram) -> Self {
+        ProgramSource::Hugr(program)
+    }
+}
 
 /// Builder for LLVM engines that integrates with the unified simulation API
 #[derive(Debug, Clone, Default)]
 pub struct LlvmEngineBuilder {
     /// The source of LLVM IR or HUGR
     source: Option<LlvmSource>,
-    /// Maximum number of qubits allowed
-    max_qubits: Option<usize>,
+    /// Number of qubits (used as both initial allocation and hard limit)
+    num_qubits: Option<usize>,
     /// Verbose output
     verbose: bool,
 }
@@ -77,15 +96,35 @@ impl LlvmEngineBuilder {
         self
     }
 
-    /// Set maximum number of qubits allowed for allocation
-    pub fn max_qubits(mut self, max_qubits: usize) -> Self {
-        self.max_qubits = Some(max_qubits);
+    /// Set number of qubits (used as both initial allocation and hard limit)
+    pub fn qubits(mut self, num_qubits: usize) -> Self {
+        self.num_qubits = Some(num_qubits);
         self
     }
 
     /// Enable verbose output
     pub fn verbose(mut self, verbose: bool) -> Self {
         self.verbose = verbose;
+        self
+    }
+
+    /// Set the source from an LlvmProgram
+    pub fn program(mut self, program: impl Into<ProgramSource>) -> Self {
+        match program.into() {
+            ProgramSource::Llvm(p) => {
+                match p.content {
+                    pecos_programs::LlvmContent::Ir(ir) => {
+                        self.source = Some(LlvmSource::LlvmIr(ir));
+                    }
+                    pecos_programs::LlvmContent::Bitcode(bc) => {
+                        self.source = Some(LlvmSource::LlvmBitcode(bc));
+                    }
+                }
+            }
+            ProgramSource::Hugr(p) => {
+                self.source = Some(LlvmSource::HugrBytes(p.hugr));
+            }
+        }
         self
     }
 }
@@ -124,12 +163,24 @@ impl ClassicalControlEngineBuilder for LlvmEngineBuilder {
         let engine_config = LlvmEngineConfig {
             assigned_shots: 0,
             verbose: self.verbose,
-            max_qubits: self.max_qubits,
+            max_qubits: self.num_qubits,
         };
 
         let engine = LlvmEngine::with_config(path, engine_config);
 
         Ok(engine)
+    }
+}
+
+impl From<LlvmProgram> for LlvmEngineBuilder {
+    fn from(program: LlvmProgram) -> Self {
+        Self::new().program(program)
+    }
+}
+
+impl From<HugrProgram> for LlvmEngineBuilder {
+    fn from(program: HugrProgram) -> Self {
+        Self::new().program(program)
     }
 }
 

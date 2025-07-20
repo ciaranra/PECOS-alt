@@ -35,18 +35,18 @@ try:
     from pecos_rslib import (
         execute_llvm as rust_execute_llvm,
         reset_llvm_runtime,
-    )
-    from pecos_rslib.llvm_sim import (
-        llvm_sim,
-        DepolarizingNoise,
-        BiasedDepolarizingNoise,
-        DepolarizingCustomNoise,
-        PassThroughNoise,
+        llvm_engine,
+        LlvmProgram,
+        state_vector,
+        sparse_stabilizer,
+        DepolarizingNoiseModelBuilder,
+        BiasedDepolarizingNoiseModelBuilder,
+        GeneralNoiseModelBuilder,
     )
     RUST_EXECUTION_AVAILABLE = True
 except ImportError:
     RUST_EXECUTION_AVAILABLE = False
-    llvm_sim = None
+    llvm_engine = None
 
 
 @dataclass
@@ -111,6 +111,56 @@ class GuppySimulation:
         # Track execution statistics
         self.total_shots = 0
         self.total_runs = 0
+    
+    def _convert_noise_model(self, noise_model):
+        """Convert old-style noise model classes to new builder pattern.
+        
+        Args:
+            noise_model: Old-style noise model object or new builder
+            
+        Returns:
+            Noise model builder or None
+        """
+        # Import here to avoid circular dependencies
+        try:
+            from pecos_rslib.qasm_sim import (
+                DepolarizingNoise, 
+                DepolarizingCustomNoise,
+                BiasedDepolarizingNoise,
+                PassThroughNoise
+            )
+        except ImportError:
+            # If can't import, assume it's already a builder
+            return noise_model
+            
+        # Check if it's already a builder
+        if hasattr(noise_model, 'inner'):
+            return noise_model
+            
+        # Convert based on type
+        type_name = type(noise_model).__name__
+        
+        if isinstance(noise_model, DepolarizingNoise):
+            # Uniform depolarizing noise
+            return DepolarizingNoiseModelBuilder().with_uniform_probability(noise_model.p)
+        elif isinstance(noise_model, DepolarizingCustomNoise):
+            # Custom depolarizing noise
+            builder = DepolarizingNoiseModelBuilder()
+            builder = builder.with_prep_probability(noise_model.p_prep)
+            builder = builder.with_meas_probability(noise_model.p_meas)
+            builder = builder.with_p1_probability(noise_model.p1)
+            builder = builder.with_p2_probability(noise_model.p2)
+            return builder
+        elif isinstance(noise_model, BiasedDepolarizingNoise):
+            # For biased depolarizing, use uniform probability
+            # (BiasedDepolarizingNoiseModelBuilder might need different parameters)
+            return BiasedDepolarizingNoiseModelBuilder().with_uniform_probability(noise_model.p)
+        elif isinstance(noise_model, PassThroughNoise):
+            # No noise - return None
+            return None
+        else:
+            # Unknown type, assume it's already a builder or compatible
+            return noise_model
     
     def _create_temp_file(self):
         """Create a temporary file for LLVM IR that persists across runs."""
@@ -180,10 +230,19 @@ class GuppySimulation:
                 if self._config.verbose:
                     print(f"[WARNING] Runtime reset failed: {e}")
         
-        # Execute using llvm_sim with full feature support
-        if RUST_EXECUTION_AVAILABLE and llvm_sim is not None:
-            # Build llvm_sim with our configuration
-            builder = llvm_sim(self._temp_file)
+        # Execute using the new unified API
+        if RUST_EXECUTION_AVAILABLE and llvm_engine is not None:
+            
+            # Build using the new unified API
+            # Read the LLVM IR from the temp file
+            with open(self._temp_file, 'r') as f:
+                llvm_ir = f.read()
+            
+            builder = (
+                llvm_engine()
+                .program(LlvmProgram.from_string(llvm_ir))
+                .to_sim()
+            )
             
             # Configure seed
             if self._config.seed is not None:
@@ -195,29 +254,25 @@ class GuppySimulation:
             
             # Configure noise model
             if self._config.noise_model is not None:
-                builder = builder.noise(self._config.noise_model)
+                # Convert old-style noise classes to new builder pattern
+                noise_builder = self._convert_noise_model(self._config.noise_model)
+                if noise_builder is not None:
+                    builder = builder.noise(noise_builder)
             
-            # Configure engine
+            # Configure quantum engine
             if self._config.engine is not None:
                 if self._config.engine.lower() == "statevector":
-                    builder = builder.with_state_vector_engine()
+                    builder = builder.quantum(state_vector())
                 elif self._config.engine.lower() == "sparsestabilizer":
-                    builder = builder.with_sparse_stabilizer_engine()
+                    builder = builder.quantum(sparse_stabilizer())
             
-            # Configure verbosity and debug
-            if self._config.verbose:
-                builder = builder.verbose(True)
-            if self._config.debug:
-                builder = builder.debug(True)
-            
-            # Configure max_qubits (should already be validated)
-            if self._config.max_qubits is not None:
-                builder = builder.max_qubits(self._config.max_qubits)
+            # Note: verbose, debug, and max_qubits may not be available in the new API
+            # TODO: Check if these are supported
             
             # Run simulation
             results = builder.run(shots)
             
-            # llvm_sim now returns ShotVec, convert to dict for compatibility
+            # The new API returns ShotVec, convert to dict for compatibility
             if hasattr(results, 'to_dict'):
                 raw_results = results.to_dict()
             else:
@@ -243,11 +298,11 @@ class GuppySimulation:
         
         execution_time = time.time() - start_time
         
-        # If using llvm_sim, results are already in columnar format
-        if RUST_EXECUTION_AVAILABLE and llvm_sim is not None and isinstance(raw_results, dict):
-            # llvm_sim returns results with register names like "c", "c1" etc.
+        # If using llvm_engine, results are already in columnar format
+        if RUST_EXECUTION_AVAILABLE and llvm_engine is not None and isinstance(raw_results, dict):
+            # llvm_engine returns results with register names like "c", "c1" etc.
             # We need to check if this is a multi-value return that should be combined
-            columnar_results = self._process_llvm_sim_results(raw_results)
+            columnar_results = self._process_llvm_engine_results(raw_results)
         else:
             # Convert to columnar format like qasm_sim
             columnar_results = self._format_results_columnar(raw_results)
@@ -309,10 +364,10 @@ class GuppySimulation:
             else:
                 return {"_result": raw_results}
     
-    def _process_llvm_sim_results(self, raw_results: Dict[str, List[Any]]) -> Dict[str, List[Any]]:
-        """Process results from llvm_sim, which may have multiple _result_N registers.
+    def _process_llvm_engine_results(self, raw_results: Dict[str, List[Any]]) -> Dict[str, List[Any]]:
+        """Process results from llvm_engine, which may have multiple _result_N registers.
         
-        For Guppy functions returning tuples, llvm_sim creates separate registers 
+        For Guppy functions returning tuples, llvm_engine creates separate registers 
         (_result_0, _result_1, etc.) for each measurement. We need to combine these
         into a single "_result" register with encoded values for compatibility.
         """
@@ -545,6 +600,24 @@ class GuppySimulationBuilder:
         """
         sim = self.build()
         return sim.run(shots)
+
+
+# Helper functions to create noise models
+def depolarizing_noise(p1=0.0, p2=0.0, pn=0.0):
+    """Create a depolarizing noise model."""
+    builder = DepolarizingNoiseModelBuilder()
+    if p1 > 0:
+        builder = builder.with_p1_probability(p1)
+    if p2 > 0:
+        builder = builder.with_p2_probability(p2)
+    if pn > 0:
+        builder = builder.with_pn_probability(pn)
+    return builder
+
+
+def biased_depolarizing_noise(px=0.0, py=0.0, pz=0.0):
+    """Create a biased depolarizing noise model."""
+    return BiasedDepolarizingNoiseModelBuilder(px, py, pz)
 
 
 def guppy_sim(guppy_func: Callable, max_qubits: int) -> GuppySimulationBuilder:

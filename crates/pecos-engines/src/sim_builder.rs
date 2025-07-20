@@ -3,6 +3,7 @@
 //! This module provides the `SimBuilder` struct that handles common simulation
 //! configuration (seed, workers, noise, quantum engine) for any classical control engine.
 
+use crate::classical::{ClassicalEngine, ClassicalControlEngine};
 use crate::engine_builder::ClassicalControlEngineBuilder;
 use crate::noise::{
     NoiseModel, PassThroughNoiseModel, PassThroughNoiseModelBuilder,
@@ -10,26 +11,15 @@ use crate::noise::{
     BiasedDepolarizingNoiseModel, BiasedDepolarizingNoiseModelBuilder,
     GeneralNoiseModelBuilder,
 };
-use crate::quantum::{QuantumEngine, SparseStabEngine, StateVecEngine};
+use crate::quantum::QuantumEngine;
+use crate::quantum_engine_builder::{QuantumEngineBuilder, IntoQuantumEngineBuilder, sparse_stab};
 use crate::shot_results::ShotVec;
-use crate::{ClassicalControlEngine, MonteCarloEngine};
+use crate::MonteCarloEngine;
 use pecos_core::errors::PecosError;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
-/// Quantum engine type selection
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum QuantumEngineType {
-    /// State vector simulator (full quantum state)
-    StateVector,
-    /// Sparse stabilizer simulator (efficient for Clifford circuits)
-    SparseStabilizer,
-}
-
-impl Default for QuantumEngineType {
-    fn default() -> Self {
-        Self::SparseStabilizer
-    }
-}
+// Removed QuantumEngineType enum - using builders instead
 
 /// Configuration for simulations
 #[derive(Debug, Clone)]
@@ -38,10 +28,6 @@ pub struct SimConfig {
     pub seed: Option<u64>,
     /// Number of worker threads
     pub workers: usize,
-    /// Quantum engine type
-    pub quantum_engine: QuantumEngineType,
-    /// Maximum number of qubits allowed
-    pub max_qubits: Option<usize>,
     /// Verbose output
     pub verbose: bool,
 }
@@ -51,18 +37,25 @@ impl Default for SimConfig {
         Self {
             seed: None,
             workers: 1,
-            quantum_engine: QuantumEngineType::default(),
-            max_qubits: None,
             verbose: false,
         }
     }
 }
 
+/// Statistics tracking for simulation runs
+#[derive(Debug, Clone, Default)]
+struct RunStats {
+    total_shots: usize,
+    run_count: usize,
+}
+
 /// A built simulation ready to run
 pub struct Simulation<E: ClassicalControlEngine> {
     engine: E,
-    config: SimConfig,
+    quantum_engine: Box<dyn QuantumEngine>,
     noise_model: Box<dyn NoiseModel>,
+    config: SimConfig,
+    stats: Arc<Mutex<RunStats>>,
 }
 
 impl<E: ClassicalControlEngine + Clone + 'static> Simulation<E> {
@@ -107,43 +100,46 @@ impl<E: ClassicalControlEngine + Clone + 'static> Simulation<E> {
     /// # }
     /// ```
     pub fn run_with_seed(&self, shots: usize, seed: Option<u64>) -> Result<ShotVec, PecosError> {
-        let num_qubits = self.engine.num_qubits();
-        
-        // Use max_qubits if specified, otherwise use engine's reported qubits
-        let simulator_qubits = self.config.max_qubits.unwrap_or(num_qubits);
-        
-        // Create quantum engine based on config
-        let quantum_engine: Box<dyn QuantumEngine> = match self.config.quantum_engine {
-            QuantumEngineType::StateVector => {
-                if let Some(s) = seed {
-                    Box::new(StateVecEngine::with_seed(simulator_qubits, s))
-                } else {
-                    Box::new(StateVecEngine::new(simulator_qubits))
-                }
+        // Handle zero shots case
+        if shots == 0 {
+            // Update statistics even for zero shots
+            if let Ok(mut stats) = self.stats.lock() {
+                stats.run_count += 1;
             }
-            QuantumEngineType::SparseStabilizer => {
-                if let Some(s) = seed {
-                    Box::new(SparseStabEngine::with_seed(simulator_qubits, s))
-                } else {
-                    Box::new(SparseStabEngine::new(simulator_qubits))
-                }
-            }
-        };
+            return Ok(ShotVec::new());
+        }
+        
+        // Use pre-built quantum engine (cloned for thread safety)
+        let quantum_engine = self.quantum_engine.clone();
 
         // Run using MonteCarloEngine
-        MonteCarloEngine::run_with_engines(
+        let result = MonteCarloEngine::run_with_engines(
             Box::new(self.engine.clone()),
             self.noise_model.clone(),
             quantum_engine,
             shots,
             self.config.workers,
             seed,
-        )
+        )?;
+        
+        // Update statistics
+        if let Ok(mut stats) = self.stats.lock() {
+            stats.total_shots += shots;
+            stats.run_count += 1;
+        }
+        
+        Ok(result)
     }
 
-    /// Get statistics about the simulation
+    /// Get statistics about the simulation runs
+    /// 
+    /// Returns (total_shots_run, number_of_runs)
     pub fn stats(&self) -> (usize, usize) {
-        (self.engine.num_qubits(), self.config.workers)
+        if let Ok(stats) = self.stats.lock() {
+            (stats.total_shots, stats.run_count)
+        } else {
+            (0, 0)
+        }
     }
 }
 
@@ -278,7 +274,9 @@ impl<E: ClassicalControlEngine + Clone + 'static> Simulation<E> {
 pub struct SimBuilder<B: ClassicalControlEngineBuilder> {
     engine_builder: B,
     config: SimConfig,
-    noise_model: Option<Box<dyn NoiseModel>>,
+    noise_model_factory: Option<Box<dyn FnOnce() -> Box<dyn NoiseModel> + Send>>,
+    quantum_engine_builder: Option<Box<dyn QuantumEngineBuilder>>,
+    explicit_num_qubits: Option<usize>,
 }
 
 impl<B: ClassicalControlEngineBuilder> SimBuilder<B> {
@@ -287,7 +285,9 @@ impl<B: ClassicalControlEngineBuilder> SimBuilder<B> {
         Self {
             engine_builder,
             config: SimConfig::default(),
-            noise_model: None,
+            noise_model_factory: None,
+            quantum_engine_builder: None,
+            explicit_num_qubits: None,
         }
     }
 
@@ -311,29 +311,55 @@ impl<B: ClassicalControlEngineBuilder> SimBuilder<B> {
         self
     }
 
-    /// Set the noise model
+    /// Set the noise model from a builder
     ///
-    /// This method accepts any type that can be converted into a noise model,
-    /// including noise structs and builders.
-    pub fn noise<N>(mut self, noise: N) -> Self
+    /// This method accepts noise model builders, which are stored for lazy evaluation
+    /// and built later when the simulation is created.
+    pub fn noise<N>(mut self, noise_builder: N) -> Self
     where
-        N: Into<Box<dyn NoiseModel>>,
+        N: crate::noise::IntoNoiseModel + 'static,
     {
-        self.noise_model = Some(noise.into());
+        self.noise_model_factory = Some(Box::new(move || noise_builder.into_noise_model()));
         self
     }
 
-    /// Set the quantum engine type
-    pub fn quantum_engine(mut self, engine: QuantumEngineType) -> Self {
-        self.config.quantum_engine = engine;
+    /// Set the quantum engine using any type that implements IntoQuantumEngineBuilder
+    /// 
+    /// This method accepts quantum engine builders from this crate or custom
+    /// engine builders from other crates.
+    /// 
+    /// # Examples
+    /// ```rust,ignore
+    /// use pecos_engines::{SimBuilder, quantum_engine_builder::{state_vector, sparse_stab}};
+    /// 
+    /// // Using builder functions
+    /// let sim1 = engine.to_sim()
+    ///     .quantum(state_vector())
+    ///     .build()?;
+    ///     
+    /// // Using builder with configuration
+    /// let sim2 = engine.to_sim()
+    ///     .quantum(sparse_stab().qubits(20))
+    ///     .build()?;
+    /// ```
+    pub fn quantum<Q>(mut self, engine: Q) -> Self
+    where
+        Q: IntoQuantumEngineBuilder + 'static,
+        Q::Builder: 'static,
+    {
+        self.quantum_engine_builder = Some(Box::new(engine.into_quantum_engine_builder()));
+        self
+    }
+    
+    /// Set the number of qubits for the simulation
+    /// 
+    /// This overrides any qubit count from the quantum engine builder or program.
+    /// The last .qubits() call wins.
+    pub fn qubits(mut self, num_qubits: usize) -> Self {
+        self.explicit_num_qubits = Some(num_qubits);
         self
     }
 
-    /// Set maximum number of qubits allowed
-    pub fn max_qubits(mut self, max_qubits: usize) -> Self {
-        self.config.max_qubits = Some(max_qubits);
-        self
-    }
 
     /// Enable verbose output
     pub fn verbose(mut self, verbose: bool) -> Self {
@@ -347,15 +373,40 @@ impl<B: ClassicalControlEngineBuilder> SimBuilder<B> {
     pub fn build(self) -> Result<Simulation<B::Engine>, PecosError> {
         // Build the classical engine
         let engine = self.engine_builder.build()?;
+        
+        // Determine the number of qubits
+        // Priority: 1. explicit_num_qubits, 2. engine.num_qubits()
+        let num_qubits = if let Some(n) = self.explicit_num_qubits {
+            n
+        } else {
+            engine.num_qubits()
+        };
+        
 
-        // Get noise model or use default
-        let noise_model = self.noise_model
-            .unwrap_or_else(|| Box::new(PassThroughNoiseModel::new()));
+        // Build quantum engine
+        let quantum_engine = if let Some(mut builder) = self.quantum_engine_builder {
+            // Ensure the builder has qubits set
+            builder.set_qubits_if_needed(num_qubits);
+            builder.build()?
+        } else {
+            // Default to sparse stabilizer
+            let mut default_builder = sparse_stab().qubits(num_qubits);
+            default_builder.build()?
+        };
+
+        // Build noise model from factory or use default
+        let noise_model = if let Some(factory) = self.noise_model_factory {
+            factory()
+        } else {
+            Box::new(PassThroughNoiseModel::new())
+        };
 
         Ok(Simulation {
             engine,
-            config: self.config,
+            quantum_engine,
             noise_model,
+            config: self.config,
+            stats: Arc::new(Mutex::new(RunStats::default())),
         })
     }
 
@@ -417,8 +468,9 @@ impl<B: ClassicalControlEngineBuilder> From<B> for SimBuilder<B> {
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use pecos_engines::sim;
 /// // use pecos_qasm::qasm_engine;
+/// // use pecos_programs::QasmProgram;
 /// 
-/// // let results = sim(qasm_engine().qasm("H q[0];"))
+/// // let results = sim(qasm_engine().program(QasmProgram::from_string("H q[0];")))
 /// //     .seed(42)
 /// //     .noise(pecos_engines::DepolarizingNoise { p: 0.01 })
 /// //     .run(1000)?;
@@ -580,5 +632,38 @@ impl From<BiasedDepolarizingNoiseModelBuilder> for Box<dyn NoiseModel> {
 impl From<GeneralNoiseModelBuilder> for Box<dyn NoiseModel> {
     fn from(builder: GeneralNoiseModelBuilder) -> Self {
         Box::new(builder.build())
+    }
+}
+
+// ============================================================================
+// IntoNoiseModel implementations for convenience structs
+// ============================================================================
+
+impl crate::noise::IntoNoiseModel for PassThroughNoise {
+    fn into_noise_model(self) -> Box<dyn NoiseModel> {
+        Box::new(PassThroughNoiseModel::new())
+    }
+}
+
+impl crate::noise::IntoNoiseModel for DepolarizingNoise {
+    fn into_noise_model(self) -> Box<dyn NoiseModel> {
+        Box::new(DepolarizingNoiseModel::new_uniform(self.p))
+    }
+}
+
+impl crate::noise::IntoNoiseModel for DepolarizingCustomNoise {
+    fn into_noise_model(self) -> Box<dyn NoiseModel> {
+        Box::new(DepolarizingNoiseModel::new(
+            self.p_prep,
+            self.p_meas,
+            self.p1,
+            self.p2,
+        ))
+    }
+}
+
+impl crate::noise::IntoNoiseModel for BiasedDepolarizingNoise {
+    fn into_noise_model(self) -> Box<dyn NoiseModel> {
+        Box::new(BiasedDepolarizingNoiseModel::new_uniform(self.p))
     }
 }

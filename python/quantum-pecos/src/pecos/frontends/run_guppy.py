@@ -29,6 +29,13 @@ def run_guppy(
     **kwargs: Any,  # noqa: ANN401
 ) -> dict[str, Any]:
     """Run a Guppy quantum function on PECOS - simple API similar to run_qasm().
+    
+    NOTE: This function is provided for backward compatibility.
+    Consider using the new unified API instead:
+    
+        from pecos_rslib import selene_engine
+        
+        results = selene_engine().program(guppy_func).qubits(n).to_sim().seed(42).run(shots)
 
     Args:
         guppy_function: A function decorated with @guppy

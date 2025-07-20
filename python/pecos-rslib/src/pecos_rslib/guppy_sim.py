@@ -343,7 +343,12 @@ def run_guppy(
 ) -> Dict[str, List[Any]]:
     """Run a Guppy simulation with specified parameters.
     
-    This is a convenience function that creates a builder and runs immediately.
+    NOTE: This function is provided for backward compatibility.
+    Consider using the new unified API instead:
+    
+        from pecos_rslib import selene_engine
+        
+        results = selene_engine().program(guppy_func).qubits(n).to_sim().seed(42).noise(noise_model).run(shots)
     
     Args:
         guppy_func: A function decorated with @guppy
@@ -370,15 +375,23 @@ def run_guppy(
         >>> results = run_guppy(bell_state, shots=1000, seed=42)
         >>> print(results)  # {"_result": [0, 3, 0, 3, ...]}
     """
-    builder = guppy_sim(guppy_func)
+    # Use the new unified API with selene_engine
+    from pecos_rslib import selene_engine
+    
+    # For Guppy, we need to determine the number of qubits
+    # This is a limitation - we'll use a default or try to infer
+    # In practice, the user should use the new API directly
+    num_qubits = 10  # Default, should be sufficient for most cases
+    
+    sim_builder = selene_engine().program(guppy_func).qubits(num_qubits).to_sim()
     
     if seed is not None:
-        builder.seed(seed)
+        sim_builder = sim_builder.seed(seed)
     if workers is not None:
-        builder.workers(workers)
+        sim_builder = sim_builder.workers(workers)
     if noise_model is not None:
-        builder.noise(noise_model)
+        sim_builder = sim_builder.noise(noise_model)
     if engine is not None:
-        builder.engine(engine)
+        sim_builder = sim_builder.quantum_engine(engine)
     
-    return builder.run(shots)
+    return sim_builder.run(shots)
