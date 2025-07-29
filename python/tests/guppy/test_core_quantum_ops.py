@@ -4,6 +4,19 @@
 import sys
 from pathlib import Path
 import pytest
+from typing import List, Tuple
+
+
+def decode_integer_results(results: List[int], n_bits: int) -> List[Tuple[bool, ...]]:
+    """Decode integer-encoded results back to tuples of booleans."""
+    decoded = []
+    for val in results:
+        bits = []
+        for i in range(n_bits):
+            bits.append(bool(val & (1 << i)))
+        decoded.append(tuple(bits))
+    return decoded
+
 
 sys.path.append("python/quantum-pecos/src")
 
@@ -43,7 +56,7 @@ class TestSingleQubitGates:
             return measure(q)
         
         results = guppy_sim(x_test, max_qubits=5).run(100)
-        assert all(r == 1 for r in results["_result"])
+        assert all(r == 1 for r in results["result"])
     
     def test_y_gate(self):
         """Test Pauli-Y gate."""
@@ -54,7 +67,7 @@ class TestSingleQubitGates:
             return measure(q)
         
         results = guppy_sim(y_test, max_qubits=10).run(100)
-        assert all(r == 1 for r in results["_result"])
+        assert all(r == 1 for r in results["result"])
     
     def test_z_gate(self):
         """Test Pauli-Z gate."""
@@ -65,7 +78,7 @@ class TestSingleQubitGates:
             return measure(q)
         
         results = guppy_sim(z_test, max_qubits=10).run(100)
-        assert all(r == 0 for r in results["_result"])
+        assert all(r == 0 for r in results["result"])
     
     def test_h_gate(self):
         """Test Hadamard gate."""
@@ -77,8 +90,8 @@ class TestSingleQubitGates:
         
         results = guppy_sim(h_test, max_qubits=10).seed(42).run(100)
         # Should see both 0 and 1
-        zeros = sum(1 for r in results["_result"] if r == 0)
-        ones = sum(1 for r in results["_result"] if r == 1)
+        zeros = sum(1 for r in results["result"] if r == 0)
+        ones = sum(1 for r in results["result"] if r == 1)
         assert zeros > 20 and ones > 20
     
     def test_s_gate(self):
@@ -92,7 +105,7 @@ class TestSingleQubitGates:
         
         results = guppy_sim(s_test, max_qubits=10).run(100)
         # S gate doesn't change computational basis
-        assert all(r == 1 for r in results["_result"])
+        assert all(r == 1 for r in results["result"])
     
     def test_t_gate(self):
         """Test T gate."""
@@ -105,7 +118,7 @@ class TestSingleQubitGates:
         
         results = guppy_sim(t_test, max_qubits=10).run(100)
         # T gate doesn't change computational basis
-        assert all(r == 1 for r in results["_result"])
+        assert all(r == 1 for r in results["result"])
 
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
@@ -125,7 +138,9 @@ class TestTwoQubitGates:
         
         results = guppy_sim(cx_test, max_qubits=10).run(100)
         # Should get (True, True) for both qubits
-        assert all(r == (True, True) for r in results["_result"])
+        # Decode integer-encoded results
+        decoded_results = decode_integer_results(results["result"], 2)
+        assert all(r == (True, True) for r in decoded_results)
     
     def test_cz_gate(self):
         """Test CZ gate."""
@@ -141,7 +156,9 @@ class TestTwoQubitGates:
         results = guppy_sim(cz_test, max_qubits=10).run(100)
         # CZ doesn't change computational basis
         # Both qubits remain |1⟩
-        assert all(r == (True, True) for r in results["_result"])
+        # Decode integer-encoded results
+        decoded_results = decode_integer_results(results["result"], 2)
+        assert all(r == (True, True) for r in decoded_results)
     
     def test_cy_gate(self):
         """Test CY gate."""
@@ -156,7 +173,9 @@ class TestTwoQubitGates:
         results = guppy_sim(cy_test, max_qubits=10).run(100)
         # CY with control=1 applies Y to target
         # Y|0⟩ = i|1⟩, so both measure as |1⟩
-        assert all(r == (True, True) for r in results["_result"])
+        # Decode integer-encoded results
+        decoded_results = decode_integer_results(results["result"], 2)
+        assert all(r == (True, True) for r in decoded_results)
 
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
@@ -175,7 +194,7 @@ class TestQuantumStateManagement:
         
         results = guppy_sim(reset_test, max_qubits=10).run(100)
         # Reset should give |0⟩
-        assert all(r == 0 for r in results["_result"])
+        assert all(r == 0 for r in results["result"])
     
     def test_discard(self):
         """Test discard operation."""
@@ -190,7 +209,7 @@ class TestQuantumStateManagement:
             return measure(q2)
         
         results = guppy_sim(discard_test, max_qubits=10).run(100)
-        assert all(r == 1 for r in results["_result"])
+        assert all(r == 1 for r in results["result"])
 
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
@@ -209,9 +228,9 @@ class TestQuantumCircuits:
             return measure(q1), measure(q2)
         
         results = guppy_sim(bell_test, max_qubits=10).seed(42).run(100)
-        # Should only see (False, False) and (True, True)
-        for r in results["_result"]:
-            assert r == (False, False) or r == (True, True)
+        # Should only see 0 (|00⟩) and 3 (|11⟩)
+        for r in results["result"]:
+            assert r == 0 or r == 3  # Integer-encoded tuple values  # Integer-encoded tuple values
     
     def test_ghz_state(self):
         """Test 3-qubit GHZ state."""
@@ -226,9 +245,9 @@ class TestQuantumCircuits:
             return measure(q1), measure(q2), measure(q3)
         
         results = guppy_sim(ghz_test, max_qubits=10).seed(42).run(100)
-        # Should only see (False, False, False) and (True, True, True)
-        for r in results["_result"]:
-            assert r == (False, False, False) or r == (True, True, True)
+        # Should only see 0 (|000⟩) and 7 (|111⟩)
+        for r in results["result"]:
+            assert r == 0 or r == 7  # Integer-encoded tuple values  # Integer-encoded tuple values
 
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
@@ -245,7 +264,7 @@ class TestRotationGates:
             return measure(q)
         
         results = guppy_sim(rx_test, max_qubits=10).run(100)
-        assert all(r == 1 for r in results["_result"])
+        assert all(r == 1 for r in results["result"])
     
     def test_ry_gate(self):
         """Test Ry rotation."""
@@ -256,7 +275,7 @@ class TestRotationGates:
             return measure(q)
         
         results = guppy_sim(ry_test, max_qubits=10).run(100)
-        assert all(r == 1 for r in results["_result"])
+        assert all(r == 1 for r in results["result"])
     
     def test_rz_gate(self):
         """Test Rz rotation."""
@@ -268,7 +287,7 @@ class TestRotationGates:
         
         results = guppy_sim(rz_test, max_qubits=10).run(100)
         # Rz doesn't change |0⟩ measurement
-        assert all(r == 0 for r in results["_result"])
+        assert all(r == 0 for r in results["result"])
 
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
@@ -299,8 +318,8 @@ class TestControlFlow:
         results_true = guppy_sim(test_true, max_qubits=10).run(100)
         results_false = guppy_sim(test_false, max_qubits=10).run(100)
         
-        assert all(r == 1 for r in results_true["_result"])
-        assert all(r == 0 for r in results_false["_result"])
+        assert all(r == 1 for r in results_true["result"])
+        assert all(r == 0 for r in results_false["result"])
     
     def test_loop_with_quantum(self):
         """Test loop with quantum operations."""
@@ -316,7 +335,7 @@ class TestControlFlow:
         
         results = guppy_sim(loop_test, max_qubits=10).seed(42).run(100)
         # Should see values 0-3
-        values = set(results["_result"])
+        values = set(results["result"])
         assert len(values) >= 2  # At least some variation
 
 

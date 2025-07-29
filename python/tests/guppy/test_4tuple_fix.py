@@ -2,6 +2,19 @@
 """Test that 4-tuple returns work without segfault."""
 
 import sys
+from typing import List, Tuple
+
+
+def decode_integer_results(results: List[int], n_bits: int) -> List[Tuple[bool, ...]]:
+    """Decode integer-encoded results back to tuples of booleans."""
+    decoded = []
+    for val in results:
+        bits = []
+        for i in range(n_bits):
+            bits.append(bool(val & (1 << i)))
+        decoded.append(tuple(bits))
+    return decoded
+
 sys.path.append("python/quantum-pecos/src")
 
 from guppylang import guppy
@@ -37,7 +50,7 @@ if __name__ == "__main__":
         print(f"Success! Got results: {results}")
         
         # Check that all results are (False, False, False, False) (all qubits measured as |0⟩)
-        for r in results["_result"]:
+        for r in results["result"]:
             assert r == (False, False, False, False), f"Expected (False, False, False, False), got {r}"
         
         print("✅ 4-tuple test passed!")

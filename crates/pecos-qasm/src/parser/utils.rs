@@ -54,8 +54,11 @@ fn expand_gate_operation(
     qubits: &[usize],
     gate_definitions: &BTreeMap<String, GateDefinition>,
 ) -> Result<Vec<Operation>, PecosError> {
-    // First check if it's a native gate (case insensitive) - prioritize native over user-defined
-    if let Some(gate_type) = parse_native_gate(name) {
+    // First check if it's a user-defined gate - prioritize user-defined over native
+    if let Some(gate_def) = gate_definitions.get(name) {
+        // Use the existing expand_gate_call function
+        expand_gate_call(gate_def, parameters, qubits, gate_definitions)
+    } else if let Some(gate_type) = parse_native_gate(name) {
         // Native gates can be uppercase or lowercase - we'll use them as native either way
 
         // Validate parameter count
@@ -148,9 +151,6 @@ fn expand_gate_operation(
                 )))
             }
         }
-    } else if let Some(gate_def) = gate_definitions.get(name) {
-        // User-defined gate (only if not a native gate)
-        expand_gate_call(gate_def, parameters, qubits, gate_definitions)
     } else {
         // Unknown gate
         Err(undefined_gate(name))

@@ -14,6 +14,18 @@ from pathlib import Path
 from typing import List, Tuple
 import pytest
 
+
+def decode_integer_results(results: List[int], n_bits: int) -> List[Tuple[bool, ...]]:
+    """Decode integer-encoded results back to tuples of booleans."""
+    decoded = []
+    for val in results:
+        bits = []
+        for i in range(n_bits):
+            bits.append(bool(val & (1 << i)))
+        decoded.append(tuple(bits))
+    return decoded
+
+
 sys.path.append("python/quantum-pecos/src")
 
 # Check dependencies
@@ -84,13 +96,13 @@ class TestNoiseModels:
         results_ideal = guppy_sim(noisy_circuit, max_qubits=10).seed(42).run(100)
         
         # Results are in 'c' key
-        ones_ideal = sum(results_ideal["_result"])
+        ones_ideal = sum(results_ideal["result"])
         assert ones_ideal == 100, f"Ideal circuit should produce all 1s, got {ones_ideal}/100"
         
         # Test with depolarizing noise
         noise = DepolarizingNoise(p=0.1)  # 10% error rate
         results_noisy = guppy_sim(noisy_circuit, max_qubits=10).seed(42).noise(noise).run(1000)
-        ones_noisy = sum(results_noisy["_result"])
+        ones_noisy = sum(results_noisy["result"])
         
         # With noise, we should see some errors (not all 1s)
         # 10% depolarizing noise means ~10% chance of error
@@ -113,7 +125,7 @@ class TestNoiseModels:
         
         # Count correlated outcomes (00 and 11)
         # Results are tuples (False, False) or (True, True) for correlated Bell states
-        correlated = sum(1 for r in results["_result"] if r in [(False, False), (True, True)])
+        correlated = sum(1 for r in results["result"] if r in [(False, False), (True, True)])
         
         # With 5% biased noise, Bell states should still be somewhat correlated
         # But biased depolarizing might affect correlation more than expected
@@ -138,7 +150,7 @@ class TestNoiseModels:
         )
         
         results = guppy_sim(prep_measure_circuit, max_qubits=10).seed(456).noise(noise).run(1000)
-        errors = 1000 - sum(results["_result"])
+        errors = 1000 - sum(results["result"])
         
         # With high prep error (20%), we expect significant errors
         # The circuit has prep + 2 gates + measurement, so errors compound
@@ -181,7 +193,7 @@ class TestArrayOperations:
         results = guppy_sim(measure_array_test, max_qubits=10).seed(789).run(100)
         
         # Check tuple results
-        for result in results["_result"]:
+        for result in results["result"]:
             # Result is a tuple of 5 booleans
             # Extract individual measurements
             b0, b1, b2, b3, b4 = result
@@ -218,7 +230,7 @@ class TestArrayOperations:
         
         # Should run without errors
         results = guppy_sim(discard_array_test, max_qubits=10).run(10)
-        assert all(r == 1 for r in results["_result"]), "Final qubit should be |1⟩"
+        assert all(r == 1 for r in results["result"]), "Final qubit should be |1⟩"
     
     @pytest.mark.skip(reason="HUGR doesn't support value_array type yet")
     def test_array_indexing_and_loops(self):
@@ -253,7 +265,7 @@ class TestArrayOperations:
         # With fixed seed, check deterministic pattern
         # Even indices (0,2) are in superposition, odd indices (1,3) are |1⟩
         # This gives us a specific pattern we can verify
-        for result in results["_result"]:
+        for result in results["result"]:
             # Extract individual bits: result = b3*8 + b2*4 + b1*2 + b0
             b0 = result & 1
             b1 = (result >> 1) & 1  
@@ -296,9 +308,9 @@ class TestAdvancedControlFlow:
         results = guppy_sim(nested_loop_test, max_qubits=10).seed(111).run(100)
         
         # Count should be between 0 and 6 (sum of 1+2+3 measurements)
-        assert all(0 <= r <= 6 for r in results["_result"]), "Count out of expected range"
+        assert all(0 <= r <= 6 for r in results["result"]), "Count out of expected range"
         # Check we get a reasonable distribution
-        avg_count = sum(results["_result"]) / len(results["_result"])
+        avg_count = sum(results["result"]) / len(results["result"])
         assert 2.5 < avg_count < 3.5, f"Average count {avg_count} out of expected range"
     
     def test_conditional_quantum_operations(self):
@@ -326,16 +338,16 @@ class TestAdvancedControlFlow:
         
         # Test case n=0
         results = guppy_sim(conditional_quantum_0, max_qubits=10).run(10)
-        assert all(r == 0 for r in results["_result"]), "Case n=0 failed"
+        assert all(r == 0 for r in results["result"]), "Case n=0 failed"
         
         # Test case n=1
         results = guppy_sim(conditional_quantum_1, max_qubits=10).run(10)
-        assert all(r == 1 for r in results["_result"]), "Case n=1 failed"
+        assert all(r == 1 for r in results["result"]), "Case n=1 failed"
         
         # Test case n=2 (superposition - should have both 0 and 1)
         results = guppy_sim(conditional_quantum_2, max_qubits=10).seed(42).run(100)
-        zeros = sum(1 for r in results["_result"] if r == 0)
-        ones = sum(1 for r in results["_result"] if r == 1)
+        zeros = sum(1 for r in results["result"] if r == 0)
+        ones = sum(1 for r in results["result"] if r == 1)
         assert zeros > 20 and ones > 20, "Case n=2 (superposition) failed"
     
     def test_early_return_with_quantum(self):
@@ -367,8 +379,8 @@ class TestAdvancedControlFlow:
         results_false = guppy_sim(early_return_test_false, max_qubits=10).seed(42).run(100)
         
         # Both should produce valid results
-        assert len(results_true["_result"]) == 100
-        assert len(results_false["_result"]) == 100
+        assert len(results_true["result"]) == 100
+        assert len(results_false["result"]) == 100
 
 
 # ============================================================================
@@ -396,7 +408,7 @@ class TestQuantumEngines:
                   .run(100))
         
         # Verify Bell state correlations - results are tuples
-        assert all(r in [(False, False), (True, True)] for r in results["_result"]), "Bell state should be |00⟩ or |11⟩"
+        assert all(r in [(False, False), (True, True)] for r in results["result"]), "Bell state should be |00⟩ or |11⟩"
     
     def test_sparse_stabilizer_engine(self):
         """Test sparse stabilizer engine for Clifford circuits."""
@@ -417,7 +429,7 @@ class TestQuantumEngines:
                       .run(100))
             
             # Should produce deterministic result for Clifford circuit
-            assert all(r == results["_result"][0] for r in results["_result"]), \
+            assert all(r == results["result"][0] for r in results["result"]), \
                 "Clifford circuit should be deterministic"
         except Exception as e:
             # Engine might not be available for all operations
@@ -471,7 +483,7 @@ class TestQuantumErrorHandling:
         results = guppy_sim(project_test, max_qubits=10).seed(42).run(100)
         
         # After projection, both measurements should match
-        for r in results["_result"]:
+        for r in results["result"]:
             # Extract two bits from result
             first = r & 1
             second = (r >> 1) & 1
@@ -497,7 +509,9 @@ class TestQuantumErrorHandling:
         results = guppy_sim(reset_test, max_qubits=10).run(100)
         
         # All results should be (True, False) as tuples
-        assert all(r == (True, False) for r in results["_result"]), \
+        # Decode integer-encoded results
+        decoded_results = decode_integer_results(results["result"], 2)
+        assert all(r == (True, False) for r in decoded_results), \
             "Should produce |1⟩ then |0⟩ as tuple (True, False)"
 
 

@@ -15,6 +15,18 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple, Callable
 import math
 
+
+def decode_integer_results(results: List[int], n_bits: int) -> List[Tuple[bool, ...]]:
+    """Decode integer-encoded results back to tuples of booleans."""
+    decoded = []
+    for val in results:
+        bits = []
+        for i in range(n_bits):
+            bits.append(bool(val & (1 << i)))
+        decoded.append(tuple(bits))
+    return decoded
+
+
 import pytest
 
 sys.path.append("python/quantum-pecos/src")
@@ -158,7 +170,9 @@ class TestPhaseAndRotationGates:
         if result["success"]:
             print(f"Rotation gate test: {result}")
             # Check RY(π) behavior - should be equivalent to Y gate
-            r3_values = [r[2] for r in result["result"]["results"]]
+            # Decode integer-encoded results
+            decoded_results = decode_integer_results(result["result"]["results"], 3)
+            r3_values = [r[2] for r in decoded_results]
             ones = sum(r3_values)
             # RY(π) should flip |0⟩ to |1⟩ like Y gate
             assert ones > 95, f"RY(π) should behave like Y gate, got {ones}/100 ones"
@@ -196,7 +210,9 @@ class TestMultiQubitGates:
         if result_cy["success"]:
             # CY with control=1 should flip target
             measurements = result_cy["result"]["results"]
-            flipped = sum(1 for (c, t) in measurements if c == 1 and t == 1)
+            # Decode integer-encoded results
+            decoded_measurements = decode_integer_results(measurements, 2)
+            flipped = sum(1 for (c, t) in decoded_measurements if c == 1 and t == 1)
             assert flipped > 95, f"CY should flip target when control=1, got {flipped}/100"
         
         # Test CZ  
@@ -204,7 +220,9 @@ class TestMultiQubitGates:
         if result_cz["success"]:
             # CZ on |00⟩ should do nothing
             measurements = result_cz["result"]["results"]
-            zeros = sum(1 for (a, b) in measurements if a == 0 and b == 0)
+            # Decode integer-encoded results
+            decoded_measurements = decode_integer_results(measurements, 2)
+            zeros = sum(1 for (a, b) in decoded_measurements if a == 0 and b == 0)
             assert zeros > 95, f"CZ on |00⟩ should do nothing, got {zeros}/100"
     
     def test_controlled_hadamard(self, tester):
@@ -310,7 +328,9 @@ class TestClassicalDataTypes:
         if result["success"]:
             # Check Bell state correlation
             measurements = result["result"]["results"]
-            correlated = sum(1 for (a, b) in measurements if a == b)
+            # Decode integer-encoded results
+            decoded_measurements = decode_integer_results(measurements, 2)
+            correlated = sum(1 for (a, b) in decoded_measurements if a == b)
             assert correlated > 80, f"Tuple ops failed, correlation={correlated}/100"
     
     @pytest.mark.skip(reason="Known measurement-based conditional bug")
@@ -539,7 +559,9 @@ class TestErrorHandling:
         result = tester.test_function(reset_test, shots=100)
         if result["success"]:
             measurements = result["result"]["results"]
-            correct = sum(1 for (b, a) in measurements if b and not a)
+            # Decode integer-encoded results
+            decoded_measurements = decode_integer_results(measurements, 2)
+            correct = sum(1 for (b, a) in decoded_measurements if b and not a)
             assert correct > 95, f"Reset failed, got {correct}/100 correct"
     
     def test_discard_operation(self, tester):

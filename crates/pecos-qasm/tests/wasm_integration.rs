@@ -2,7 +2,7 @@
 mod wasm_tests {
     use pecos_qasm::qasm_engine;
     use pecos_programs::QasmProgram;
-    use pecos_engines::ClassicalControlEngineBuilder;
+    use pecos_engines::{ClassicalControlEngineBuilder, state_vector};
     use std::io::Write;
     use std::path::PathBuf;
 
@@ -125,6 +125,7 @@ mod wasm_tests {
             .program(QasmProgram::from_string(qasm))
             .wasm(wat_path.to_string_lossy().to_string())
             .to_sim()
+            .quantum(state_vector())
             .run(1);
 
         // This should succeed as it uses the built-in sin function

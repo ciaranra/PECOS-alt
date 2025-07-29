@@ -14,6 +14,21 @@ import pytest
 
 sys.path.append("python/quantum-pecos/src")
 
+
+def decode_integer_results(results: List[int], n_bits: int) -> List[Tuple[bool, ...]]:
+    """Decode integer-encoded results back to tuples of booleans.
+    
+    When guppy functions return tuples of bools, guppy_sim encodes them 
+    as integers where bit i represents the i-th boolean in the tuple.
+    """
+    decoded = []
+    for val in results:
+        bits = []
+        for i in range(n_bits):
+            bits.append(bool(val & (1 << i)))
+        decoded.append(tuple(bits))
+    return decoded
+
 # Check dependencies
 try:
     from guppylang import guppy
@@ -150,16 +165,20 @@ class TestBasicQuantumOperations:
         # Verify HUGR-LLVM pipeline results
         if results.get("hugr_llvm", {}).get("success"):
             measurements = results["hugr_llvm"]["result"]["results"]
-            correlated = sum(1 for (a, b) in measurements if a == b)
-            correlation_rate = correlated / len(measurements)
+            # Decode integer-encoded results
+            decoded_measurements = decode_integer_results(measurements, 2)
+            correlated = sum(1 for (a, b) in decoded_measurements if a == b)
+            correlation_rate = correlated / len(decoded_measurements)
             assert correlation_rate > 0.8, f"Bell state should be highly correlated, got {correlation_rate:.2%}"
             print(f"HUGR-LLVM Bell state correlation: {correlation_rate:.2%}")
         
         # Verify PHIR pipeline results if available
         if results.get("phir", {}).get("success"):
             measurements = results["phir"]["result"]["results"]
-            correlated = sum(1 for (a, b) in measurements if a == b)
-            correlation_rate = correlated / len(measurements)
+            # Decode integer-encoded results
+            decoded_measurements = decode_integer_results(measurements, 2)
+            correlated = sum(1 for (a, b) in decoded_measurements if a == b)
+            correlation_rate = correlated / len(decoded_measurements)
             assert correlation_rate > 0.8, f"PHIR Bell state should be highly correlated, got {correlation_rate:.2%}"
             print(f"PHIR Bell state correlation: {correlation_rate:.2%}")
 
@@ -390,8 +409,10 @@ class TestAdvancedAlgorithms:
         
         if results_const.get("hugr_llvm", {}).get("success"):
             measurements = results_const["hugr_llvm"]["result"]["results"]
+            # Decode integer-encoded results
+            decoded_measurements = decode_integer_results(measurements, 2)
             # For constant function, should measure |00⟩ with high probability
-            zeros = sum(1 for (a, b) in measurements if not a and not b)
+            zeros = sum(1 for (a, b) in decoded_measurements if not a and not b)
             assert zeros > 95, f"Constant oracle should give |00⟩, got {zeros}/100"
         
         # Test balanced function
@@ -401,8 +422,10 @@ class TestAdvancedAlgorithms:
         
         if results_bal.get("hugr_llvm", {}).get("success"):
             measurements = results_bal["hugr_llvm"]["result"]["results"]
+            # Decode integer-encoded results
+            decoded_measurements = decode_integer_results(measurements, 2)
             # For balanced function, should never measure |00⟩
-            zeros = sum(1 for (a, b) in measurements if not a and not b)
+            zeros = sum(1 for (a, b) in decoded_measurements if not a and not b)
             assert zeros < 5, f"Balanced oracle should not give |00⟩, got {zeros}/100"
     
     def test_grover_search(self, pipeline_tester):
@@ -454,8 +477,10 @@ class TestAdvancedAlgorithms:
         
         if results.get("hugr_llvm", {}).get("success"):
             measurements = results["hugr_llvm"]["result"]["results"]
+            # Decode integer-encoded results
+            decoded_measurements = decode_integer_results(measurements, 2)
             # Should find |11⟩ with high probability after 1 Grover iteration
-            found = sum(1 for (a, b) in measurements if a and b)
+            found = sum(1 for (a, b) in decoded_measurements if a and b)
             print(f"Grover found |11⟩ in {found}/100 measurements")
             assert found > 70, f"Grover should amplify |11⟩, got {found}/100"
 

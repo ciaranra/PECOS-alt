@@ -69,6 +69,9 @@ pub struct LlvmEngine {
 
     /// Entry point function name (detected from LLVM IR file)
     entry_point: Option<String>,
+    
+    /// Track if measurements have been processed via interactive execution
+    measurements_processed_interactively: bool,
 }
 
 impl LlvmEngine {
@@ -93,6 +96,7 @@ impl LlvmEngine {
             shot_count: 0,
             config: LlvmEngineConfig::default(),
             entry_point: None,
+            measurements_processed_interactively: false,
         }
     }
 
@@ -118,6 +122,7 @@ impl LlvmEngine {
             shot_count: 0,
             config,
             entry_point: None,
+            measurements_processed_interactively: false,
         }
     }
 
@@ -143,6 +148,7 @@ impl LlvmEngine {
         debug!("LLVM: Resetting internal state");
         self.shot_count = 0;
         self.measurement_results.clear();
+        self.measurements_processed_interactively = false;
         self.commands_generated = false;
 
         // Reset the LLVM runtime state through the library if it exists
@@ -244,9 +250,72 @@ impl LlvmEngine {
                 "Failed to extract measurements from ByteMessage: {e}"
             ))
         })?;
+        
+        debug!("LLVM: Raw outcomes from quantum engine: {:?}", outcomes);
+        debug!("LLVM: Number of outcomes: {}", outcomes.len());
+        
+        // Check if all measurements have already been processed interactively
+        if let Some(library) = &self.library {
+            if let Ok(executed_count) = library.get_measurements_executed() {
+                if let Ok(all_ids) = library.get_measurement_result_ids() {
+                    if executed_count >= all_ids.len() {
+                        debug!("LLVM: All {} measurements already processed interactively, skipping", executed_count);
+                        return Ok(());
+                    }
+                }
+            }
+        }
 
-        // Convert to indexed format for compatibility with existing code
-        let measurements: Vec<(usize, u32)> = outcomes.into_iter().enumerate().collect();
+        // Get the result IDs from the runtime state
+        let (result_ids, previously_executed) = if let Some(library) = &self.library {
+            // Get the measurement result IDs that were tracked during execution
+            if library.has_function(b"llvm_runtime_get_measurement_result_ids").unwrap_or(false) &&
+               library.has_function(b"llvm_runtime_get_measurements_executed").unwrap_or(false) {
+                match (library.get_measurement_result_ids(), library.get_measurements_executed()) {
+                    (Ok(all_ids), Ok(executed_count)) => {
+                        debug!("LLVM: Got {} result IDs from runtime: {:?}", all_ids.len(), all_ids);
+                        debug!("LLVM: Previously executed measurements: {}", executed_count);
+                        // Only take the result IDs for the NEW measurements
+                        let new_ids: Vec<usize> = all_ids.into_iter()
+                            .skip(executed_count)
+                            .take(outcomes.len())
+                            .collect();
+                        debug!("LLVM: Using result IDs for new measurements: {:?}", new_ids);
+                        (new_ids, executed_count)
+                    },
+                    _ => {
+                        debug!("LLVM: Failed to get measurement tracking info");
+                        // Fallback to sequential IDs
+                        ((0..outcomes.len()).collect(), 0)
+                    }
+                }
+            } else {
+                // Fallback to sequential IDs if function not available
+                ((0..outcomes.len()).collect(), 0)
+            }
+        } else {
+            // No library, use sequential IDs
+            ((0..outcomes.len()).collect(), 0)
+        };
+
+        // Verify we have the same number of result IDs as outcomes
+        if result_ids.len() != outcomes.len() {
+            return Err(PecosError::Processing(format!(
+                "Mismatch between number of measurement outcomes ({}) and result IDs ({})",
+                outcomes.len(),
+                result_ids.len()
+            )));
+        }
+
+        // Create measurements with the correct result IDs
+        debug!("LLVM: About to zip result_ids={:?} with outcomes={:?}", result_ids, outcomes);
+        debug!("LLVM: Previously executed: {}", previously_executed);
+        let measurements: Vec<(usize, u32)> = result_ids
+            .into_iter()
+            .zip(outcomes.into_iter())
+            .collect();
+        
+        debug!("LLVM: Zipped measurements (result_id, outcome): {:?}", measurements);
 
         self.measurement_results.clear();
         // Convert u32 measurements to i64 for LLVM standard
@@ -275,14 +344,15 @@ impl LlvmEngine {
                 // Convert measurements to the format expected by the runtime
                 // The runtime expects pairs of (result_id, value)
                 let mut results_data = Vec::with_capacity(measurements.len() * 2);
-                for (result_id, value) in measurements {
-                    debug!("LLVM: Measurement result_id={result_id} value={value}");
-                    results_data.push(u32::try_from(result_id).map_err(|_| {
+                for (idx, (result_id, value)) in measurements.iter().enumerate() {
+                    debug!("LLVM: Measurement[{}] result_id={} value={} ({})", 
+                           idx, result_id, value, if *value == 0 { "False" } else { "True" });
+                    results_data.push(u32::try_from(*result_id).map_err(|_| {
                         PecosError::Resource(format!(
                             "Result ID {result_id} is too large to fit in u32"
                         ))
                     })?);
-                    results_data.push(value);
+                    results_data.push(*value);
                 }
 
                 // Call the runtime update function
@@ -513,7 +583,7 @@ impl LlvmEngine {
         // Try to parse and log quantum operations for debugging
         if let Ok(operations) = runtime_message.quantum_ops() {
             debug!("LLVM: Parsed {} quantum operations:", operations.len());
-            for (i, op) in operations.iter().enumerate().take(10) {
+            for (i, op) in operations.iter().enumerate() {
                 debug!("LLVM:   [{i}] {op:?}");
             }
             if operations.len() > 10 {
@@ -844,6 +914,7 @@ impl Clone for LlvmEngine {
             shot_count: 0,               // Reset shot count
             config: self.config.clone(), // Keep the configuration
             entry_point: self.entry_point.clone(), // Keep the detected entry point
+            measurements_processed_interactively: false, // Reset interactive flag
         }
     }
 }

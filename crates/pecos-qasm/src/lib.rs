@@ -46,7 +46,7 @@
 //! "#;
 //!
 //! let engine = QASMEngine::builder()
-//!     .with_virtual_include("custom.inc", "gate my_gate a { h a; }")
+//!     .with_virtual_include("custom.inc", "gate my_gate a { H a; }")
 //!     .allow_complex_conditionals(true)
 //!     .build_from_str(qasm)?;
 //! assert_eq!(engine.num_qubits(), 1);

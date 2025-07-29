@@ -112,6 +112,46 @@ impl CircuitValidator for BellStateValidator {
                         .collect();
                 }
 
+                // Check if there's an encoded result from HUGR-LLVM (bit pattern in a single integer)
+                if let Some(data) = shot.data.get("result") {
+                    match data {
+                        pecos_engines::shot_results::Data::I64(n) => {
+                            // Decode bit pattern: each bit represents a qubit measurement
+                            let mut values = Vec::new();
+                            let encoded = *n;
+                            // Extract up to 64 bits (though we expect only 2 for Bell, 3 for GHZ)
+                            for bit_idx in 0..64 {
+                                if bit_idx == 2 {
+                                    // For Bell state, we expect exactly 2 qubits
+                                    break;
+                                }
+                                let bit_value = (encoded >> bit_idx) & 1;
+                                values.push(bit_value as u32);
+                            }
+                            if !values.is_empty() {
+                                return values;
+                            }
+                        }
+                        pecos_engines::shot_results::Data::U32(n) => {
+                            // Similar decoding for U32
+                            let mut values = Vec::new();
+                            let encoded = *n;
+                            for bit_idx in 0..32 {
+                                if bit_idx == 2 {
+                                    // For Bell state, we expect exactly 2 qubits
+                                    break;
+                                }
+                                let bit_value = (encoded >> bit_idx) & 1;
+                                values.push(bit_value);
+                            }
+                            if !values.is_empty() {
+                                return values;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+
                 // Try different possible key names for the measurement results
                 let mut values = Vec::new();
 
@@ -221,6 +261,23 @@ impl CircuitValidator for HadamardValidator {
                         .collect();
                 }
 
+                // Check if there's an encoded result from HUGR-LLVM (bit pattern in a single integer)
+                if let Some(data) = shot.data.get("result") {
+                    match data {
+                        pecos_engines::shot_results::Data::I64(n) => {
+                            // For single qubit, just take the least significant bit
+                            let bit_value = (*n & 1) as u32;
+                            return vec![bit_value];
+                        }
+                        pecos_engines::shot_results::Data::U32(n) => {
+                            // For single qubit, just take the least significant bit
+                            let bit_value = *n & 1;
+                            return vec![bit_value];
+                        }
+                        _ => {}
+                    }
+                }
+
                 // Get the single measurement result
                 let val = shot.data.values().next().map_or(0, |data| match data {
                     pecos_engines::shot_results::Data::U32(n) => *n,
@@ -308,6 +365,34 @@ impl CircuitValidator for GhzStateValidator {
                             _ => None,
                         })
                         .collect();
+                }
+
+                // Check if there's an encoded result from HUGR-LLVM (bit pattern in a single integer)
+                if let Some(data) = shot.data.get("result") {
+                    match data {
+                        pecos_engines::shot_results::Data::I64(n) => {
+                            // Decode bit pattern: each bit represents a qubit measurement
+                            let mut values = Vec::new();
+                            let encoded = *n;
+                            // Extract exactly 3 bits for GHZ state
+                            for bit_idx in 0..3 {
+                                let bit_value = (encoded >> bit_idx) & 1;
+                                values.push(bit_value as u32);
+                            }
+                            return values;
+                        }
+                        pecos_engines::shot_results::Data::U32(n) => {
+                            // Similar decoding for U32
+                            let mut values = Vec::new();
+                            let encoded = *n;
+                            for bit_idx in 0..3 {
+                                let bit_value = (encoded >> bit_idx) & 1;
+                                values.push(bit_value);
+                            }
+                            return values;
+                        }
+                        _ => {}
+                    }
                 }
 
                 // Get all three measurement results

@@ -208,7 +208,18 @@ impl LlvmLibrary {
                 debug!("LLVM Library: Found wrapper function for {}, calling it for ABI safety", name_str);
                 // Call the wrapper which internally calls the original function
                 // This ensures the shot results are recorded properly
-                let _struct_ptr = wrapper_func();
+                let struct_ptr = wrapper_func();
+                
+                // DEBUG: Let's see what's in the returned structure
+                if !struct_ptr.is_null() {
+                    // Cast to { i1, i1 }* which is what the wrapper returns
+                    let tuple_ptr = struct_ptr as *const (bool, bool);
+                    let (a, b) = *tuple_ptr;
+                    
+                    // Store the values for debugging
+                    crate::runtime::core_runtime::store_tuple_return(&[a as i32, b as i32]);
+                }
+                
                 // Don't extract values or call store_tuple_return
                 // The shot results have already been recorded by the original function
                 debug!("LLVM Library: Wrapper function completed, shot results recorded");
@@ -218,7 +229,7 @@ impl LlvmLibrary {
             // Try standard QIR signature (returns i32)
             if let Ok(func) = library_guard.get::<Symbol<unsafe extern "C" fn() -> i32>>(name) {
                 let result = func();
-                debug!("LLVM Library: Function call returned {result}");
+                debug!("LLVM Library: Function call returned i32: {result}");
                 Ok(result)
             }
             // Try HUGR tuple signatures
@@ -226,33 +237,56 @@ impl LlvmLibrary {
                 library_guard.get::<Symbol<unsafe extern "C" fn() -> (i32, i32)>>(name)
             {
                 let (a, b) = func();
-                debug!("LLVM Library: Function returned tuple ({a}, {b})");
-                // Store tuple values in the runtime state
+                debug!("LLVM Library: Function returned 2-tuple ({}, {})", a, b);
+                debug!("LLVM Library: Binary representation: a={:032b}, b={:032b}", a, b);
+                
+                // DEBUGGING: Check if values are already wrong here
+                if a == 1 && b == 1 {
+                    debug!("LLVM Library: WARNING - Both values are 1, expected (1, 0)!");
+                }
+                
+                // Store the tuple values, including placeholders (0) for unexecuted measurements
+                // The actual measurement values will be filled in by update_measurement_results
+                // when the EngineSystem executes the quantum operations
                 crate::runtime::core_runtime::store_tuple_return(&[a, b]);
                 Ok(0) // Return 0 to indicate success
             } else if let Ok(func) =
                 library_guard.get::<Symbol<unsafe extern "C" fn() -> (i32, i32, i32)>>(name)
             {
                 let (a, b, c) = func();
-                debug!("LLVM Library: Function returned tuple ({a}, {b}, {c})");
-                // Store tuple values in the runtime state
+                debug!("LLVM Library: Function returned 3-tuple ({}, {}, {})", a, b, c);
+                
+                // Store the tuple values, including placeholders (-1) for unexecuted measurements
                 crate::runtime::core_runtime::store_tuple_return(&[a, b, c]);
                 Ok(0) // Return 0 to indicate success
             } else if let Ok(func) =
                 library_guard.get::<Symbol<unsafe extern "C" fn() -> (i32, i32, i32, i32)>>(name)
             {
                 let (a, b, c, d) = func();
-                debug!("LLVM Library: Function returned 4-tuple ({a}, {b}, {c}, {d})");
-                // Store tuple values in the runtime state
+                debug!("LLVM Library: Function returned 4-i32-tuple ({}, {}, {}, {})", a, b, c, d);
+                
+                // Check for degenerate values
+                if a == b && b == c && c == d && a == -1 {
+                    debug!("LLVM Library: All values are placeholders (-1), measurements will be resolved later");
+                }
+                
+                // Store the tuple values, including placeholders (-1) for unexecuted measurements
                 crate::runtime::core_runtime::store_tuple_return(&[a, b, c, d]);
                 Ok(0) // Return 0 to indicate success
             } else if let Ok(func) =
                 library_guard.get::<Symbol<unsafe extern "C" fn() -> (bool, bool, bool, bool)>>(name)
             {
                 let (a, b, c, d) = func();
-                debug!("LLVM Library: Function returned 4-bool-tuple ({a}, {b}, {c}, {d})");
-                // Convert bools to i32 for storage
+                debug!("LLVM Library: Function returned 4-bool-tuple ({}, {}, {}, {})", a, b, c, d);
+                
+                // Convert bool values to i32
                 let values = [a as i32, b as i32, c as i32, d as i32];
+                
+                // Check if all values are placeholders
+                if values.iter().all(|&v| v == -1) {
+                    debug!("LLVM Library: All values are placeholders, measurements will be resolved later");
+                }
+                
                 crate::runtime::core_runtime::store_tuple_return(&values);
                 Ok(0) // Return 0 to indicate success
             } else if let Ok(func) =
@@ -304,16 +338,16 @@ impl LlvmLibrary {
                 library_guard.get::<Symbol<unsafe extern "C" fn() -> (i32, i32, i32, i32, i32)>>(name)
             {
                 let (a, b, c, d, e) = func();
-                debug!("LLVM Library: Function returned 5-tuple ({a}, {b}, {c}, {d}, {e})");
-                // Store tuple values in the runtime state
+                debug!("LLVM Library: Function returned 5-tuple ({}, {}, {}, {}, {})", a, b, c, d, e);
+                // For now, always use the direct function return values
                 crate::runtime::core_runtime::store_tuple_return(&[a, b, c, d, e]);
                 Ok(0) // Return 0 to indicate success
             } else if let Ok(func) =
                 library_guard.get::<Symbol<unsafe extern "C" fn() -> (i32, i32, i32, i32, i32, i32)>>(name)
             {
                 let (a, b, c, d, e, f) = func();
-                debug!("LLVM Library: Function returned 6-tuple ({a}, {b}, {c}, {d}, {e}, {f})");
-                // Store tuple values in the runtime state
+                debug!("LLVM Library: Function returned 6-tuple ({}, {}, {}, {}, {}, {})", a, b, c, d, e, f);
+                // For now, always use the direct function return values
                 crate::runtime::core_runtime::store_tuple_return(&[a, b, c, d, e, f]);
                 Ok(0) // Return 0 to indicate success
             }
@@ -562,6 +596,117 @@ impl LlvmLibrary {
             shot.data.len()
         );
         Ok(Some(shot))
+    }
+    
+    /// Get how many measurements have been executed
+    ///
+    /// # Returns
+    ///
+    /// * `Result<usize, PecosError>` - The number of measurements executed
+    ///
+    /// # Errors
+    ///
+    /// This method can return the following errors:
+    /// * `PecosError::Resource` - If the function is not found or the call fails
+    pub fn get_measurements_executed(&self) -> Result<usize, PecosError> {
+        debug!("LLVM Library: Getting measurements executed count");
+        
+        let library_guard = self.library.lock().unwrap();
+        
+        // Get the function
+        let get_count: Symbol<unsafe extern "C" fn() -> usize> = unsafe {
+            library_guard
+                .get(b"llvm_runtime_get_measurements_executed")
+                .map_err(|e| {
+                    log_error(
+                        "LLVM Library",
+                        "get_measurements_executed not found",
+                        e,
+                    )
+                })?
+        };
+        
+        // Call the function
+        let count = unsafe { get_count() };
+        
+        debug!("LLVM Library: Measurements executed: {}", count);
+        Ok(count)
+    }
+
+    /// Gets the measurement result IDs from the runtime
+    ///
+    /// # Returns
+    ///
+    /// * `Result<Vec<usize>, PecosError>` - The measurement result IDs in order
+    ///
+    /// # Errors
+    ///
+    /// This method can return the following errors:
+    /// * `PecosError::Resource` - If the function is not found or the call fails
+    pub fn get_measurement_result_ids(&self) -> Result<Vec<usize>, PecosError> {
+        debug!("LLVM Library: Getting measurement result IDs");
+        
+        // Get the function pointers
+        let (get_result_ids_ptr, free_result_ids_ptr) = {
+            let library_guard = self.library.lock().unwrap();
+            
+            // Get the get_measurement_result_ids function
+            let get_result_ids: Symbol<unsafe extern "C" fn() -> *mut crate::runtime::FFIResultIds> = unsafe {
+                library_guard
+                    .get(b"llvm_runtime_get_measurement_result_ids")
+                    .map_err(|e| {
+                        log_error(
+                            "LLVM Library",
+                            "get_measurement_result_ids not found",
+                            e,
+                        )
+                    })?
+            };
+            
+            // Get the free function
+            let free_result_ids: Symbol<unsafe extern "C" fn(*mut crate::runtime::FFIResultIds)> = unsafe {
+                library_guard
+                    .get(b"llvm_runtime_free_result_ids")
+                    .map_err(|e| {
+                        log_error(
+                            "LLVM Library", 
+                            "free_result_ids not found",
+                            e,
+                        )
+                    })?
+            };
+            
+            unsafe { (get_result_ids.into_raw(), free_result_ids.into_raw()) }
+        };
+        
+        // Convert to function pointers
+        let get_result_ids: unsafe extern "C" fn() -> *mut crate::runtime::FFIResultIds =
+            unsafe { std::mem::transmute(get_result_ids_ptr) };
+        let free_result_ids: unsafe extern "C" fn(*mut crate::runtime::FFIResultIds) =
+            unsafe { std::mem::transmute(free_result_ids_ptr) };
+            
+        // Call the function
+        let ffi_ptr = unsafe { get_result_ids() };
+        if ffi_ptr.is_null() {
+            debug!("LLVM Library: No measurement result IDs available");
+            return Ok(Vec::new());
+        }
+        
+        // Convert FFI data to Vec<usize>
+        let result_ids = unsafe {
+            let ffi_data = &*ffi_ptr;
+            let mut ids = Vec::with_capacity(ffi_data.count);
+            for i in 0..ffi_data.count {
+                ids.push(*ffi_data.ids.add(i));
+            }
+            ids
+        };
+        
+        // Free the FFI data
+        unsafe { free_result_ids(ffi_ptr) };
+        
+        debug!("LLVM Library: Retrieved {} measurement result IDs", result_ids.len());
+        Ok(result_ids)
     }
 
     /// Updates the measurement results in the QIR runtime

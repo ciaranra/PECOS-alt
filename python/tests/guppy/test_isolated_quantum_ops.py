@@ -6,6 +6,7 @@ to identify which specific operation causes the segfault.
 """
 
 import sys
+from typing import List, Tuple
 from pathlib import Path
 import pytest
 
@@ -36,6 +37,19 @@ except ImportError:
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
 @pytest.mark.skipif(not PECOS_AVAILABLE, reason="PECOS not available")
+
+
+def decode_integer_results(results: List[int], n_bits: int) -> List[Tuple[bool, ...]]:
+    """Decode integer-encoded results back to tuples of booleans."""
+    decoded = []
+    for val in results:
+        bits = []
+        for i in range(n_bits):
+            bits.append(bool(val & (1 << i)))
+        decoded.append(tuple(bits))
+    return decoded
+
+
 class TestIsolatedOps:
     """Test individual operations in isolation to find segfault source."""
     
@@ -48,7 +62,7 @@ class TestIsolatedOps:
             return measure(q)
         
         results = guppy_sim(test, max_qubits=10).run(10)
-        assert len(results["_result"]) == 10
+        assert len(results["result"]) == 10
     
     def test_single_x_gate(self):
         """Test just X gate."""
@@ -59,7 +73,7 @@ class TestIsolatedOps:
             return measure(q)
         
         results = guppy_sim(test, max_qubits=10).run(10)
-        assert all(r == True for r in results["_result"])
+        assert all(r == True for r in results["result"])
     
     def test_single_y_gate(self):
         """Test just Y gate."""
@@ -70,7 +84,7 @@ class TestIsolatedOps:
             return measure(q)
         
         results = guppy_sim(test, max_qubits=10).run(10)
-        assert all(r == True for r in results["_result"])
+        assert all(r == True for r in results["result"])
     
     def test_single_z_gate(self):
         """Test just Z gate."""
@@ -81,7 +95,7 @@ class TestIsolatedOps:
             return measure(q)
         
         results = guppy_sim(test, max_qubits=10).run(10)
-        assert all(r == False for r in results["_result"])
+        assert all(r == False for r in results["result"])
     
     def test_phase_gates_s_sdg(self):
         """Test S and S-dagger gates."""
@@ -94,7 +108,7 @@ class TestIsolatedOps:
             return measure(q)
         
         results = guppy_sim(test, max_qubits=10).run(10)
-        assert all(r == True for r in results["_result"])
+        assert all(r == True for r in results["result"])
     
     def test_phase_gates_t_tdg(self):
         """Test T and T-dagger gates."""
@@ -107,7 +121,7 @@ class TestIsolatedOps:
             return measure(q)
         
         results = guppy_sim(test, max_qubits=10).run(10)
-        assert all(r == True for r in results["_result"])
+        assert all(r == True for r in results["result"])
     
     def test_rotation_rx(self):
         """Test Rx rotation."""
@@ -118,8 +132,8 @@ class TestIsolatedOps:
             return measure(q)
         
         results = guppy_sim(test, max_qubits=10).run(10)
-        print(f"RX test results: {results['_result']}")
-        assert all(r == True for r in results["_result"])
+        print(f"RX test results: {results['result']}")
+        assert all(r == True for r in results["result"])
     
     def test_rotation_ry(self):
         """Test Ry rotation."""
@@ -130,7 +144,7 @@ class TestIsolatedOps:
             return measure(q)
         
         results = guppy_sim(test, max_qubits=10).run(10)
-        assert all(r == True for r in results["_result"])
+        assert all(r == True for r in results["result"])
     
     def test_rotation_rz(self):
         """Test Rz rotation."""
@@ -141,7 +155,7 @@ class TestIsolatedOps:
             return measure(q)
         
         results = guppy_sim(test, max_qubits=10).run(10)
-        assert all(r == False for r in results["_result"])
+        assert all(r == False for r in results["result"])
     
     def test_two_qubit_cx(self):
         """Test CX gate."""
@@ -155,7 +169,9 @@ class TestIsolatedOps:
         
         results = guppy_sim(test, max_qubits=10).run(10)
         # Should get (True, True) for both qubits
-        assert all(r == (True, True) for r in results["_result"])
+        # Decode integer-encoded results
+        decoded_results = decode_integer_results(results["result"], 2)
+        assert all(r == (True, True) for r in decoded_results)
     
     def test_two_qubit_cy(self):
         """Test CY gate."""
@@ -169,7 +185,9 @@ class TestIsolatedOps:
         
         results = guppy_sim(test, max_qubits=10).run(10)
         # CY with control=1 should flip target
-        assert all(r == (True, True) for r in results["_result"])
+        # Decode integer-encoded results
+        decoded_results = decode_integer_results(results["result"], 2)
+        assert all(r == (True, True) for r in decoded_results)
     
     def test_two_qubit_cz(self):
         """Test CZ gate."""
@@ -184,7 +202,9 @@ class TestIsolatedOps:
         
         results = guppy_sim(test, max_qubits=10).run(10)
         # Both qubits should be |1⟩
-        assert all(r == (True, True) for r in results["_result"])
+        # Decode integer-encoded results
+        decoded_results = decode_integer_results(results["result"], 2)
+        assert all(r == (True, True) for r in decoded_results)
     
     def test_two_qubit_ch(self):
         """Test CH gate."""
@@ -197,7 +217,9 @@ class TestIsolatedOps:
         
         results = guppy_sim(test, max_qubits=10).run(10)
         # CH with control=0 does nothing
-        assert all(r == (False, False) for r in results["_result"])
+        # Decode integer-encoded results
+        decoded_results = decode_integer_results(results["result"], 2)
+        assert all(r == (False, False) for r in decoded_results)
     
     def test_toffoli(self):
         """Test Toffoli gate."""
@@ -213,7 +235,9 @@ class TestIsolatedOps:
         
         results = guppy_sim(test, max_qubits=10).run(10)
         # Both controls at |1⟩, target flips to |1⟩
-        assert all(r == (True, True, True) for r in results["_result"])
+        # Decode integer-encoded results
+        decoded_results = decode_integer_results(results["result"], 3)
+        assert all(r == (True, True, True) for r in decoded_results)
     
     def test_reset_operation(self):
         """Test reset operation."""
@@ -225,7 +249,7 @@ class TestIsolatedOps:
             return measure(q)
         
         results = guppy_sim(test, max_qubits=10).run(10)
-        assert all(r == False for r in results["_result"])
+        assert all(r == False for r in results["result"])
     
     def test_discard_operation(self):
         """Test discard operation."""
@@ -239,7 +263,7 @@ class TestIsolatedOps:
             return measure(q2)
         
         results = guppy_sim(test, max_qubits=10).run(10)
-        assert all(r == True for r in results["_result"])
+        assert all(r == True for r in results["result"])
     
     def test_complex_sequence(self):
         """Test a more complex sequence of operations."""
@@ -268,7 +292,9 @@ class TestIsolatedOps:
         
         results = guppy_sim(test, max_qubits=10).run(10)
         # Check tuple values directly
-        for r in results["_result"]:
+        # Decode integer-encoded results
+        decoded_results = decode_integer_results(results["result"], 4)
+        for r in decoded_results:
             # r is now a tuple like (r1, r2, r3, r4)
             _, r2, r3, r4 = r
             assert r2 == True   # Y on |0⟩ gives |1⟩

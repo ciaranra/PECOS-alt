@@ -1,4 +1,5 @@
 pub mod engine;
+pub mod interactive;
 pub(crate) mod library;
 
 /// LLVM linker module for compiling LLVM IR programs with the runtime library.

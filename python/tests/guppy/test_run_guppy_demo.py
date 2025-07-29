@@ -9,6 +9,19 @@ import pytest
 from guppylang import guppy
 from guppylang.std.quantum import cx, h, measure, qubit
 from pecos import get_guppy_backends, guppy_sim, run_guppy, run_guppy_batch
+from typing import List, Tuple
+
+
+def decode_integer_results(results: List[int], n_bits: int) -> List[Tuple[bool, ...]]:
+    """Decode integer-encoded results back to tuples of booleans."""
+    decoded = []
+    for val in results:
+        bits = []
+        for i in range(n_bits):
+            bits.append(bool(val & (1 << i)))
+        decoded.append(tuple(bits))
+    return decoded
+
 
 pytestmark = pytest.mark.optional_dependency
 
@@ -78,17 +91,17 @@ def test_guppy_sim() -> None:
     print("\nTesting guppy_sim() alias with bell_state:")
     try:
         result = guppy_sim(bell_state, max_qubits=10).run(200)
-        assert "_result" in result
-        assert len(result["_result"]) == 200
+        assert "result" in result
+        assert len(result["result"]) == 200
 
         # Convert integer results back to check correlation
         # 0 = (0,0), 3 = (1,1) are correlated
-        correlated = sum(1 for r in result["_result"] if r == 0 or r == 3)
-        print(f"   [OK] Got {len(result['_result'])} results")
+        correlated = sum(1 for r in result["result"] if r == 0 or r == 3)
+        print(f"   [OK] Got {len(result['result'])} results")
         print(
             f"   Correlation rate: {correlated/200:.1%} (expect ~100% for Bell state)",
         )
-        print(f"   Sample results: {result['_result'][:5]}")
+        print(f"   Sample results: {result['result'][:5]}")
     except RuntimeError as e:
         if "Unknown type:" in str(e):
             print(f"   [INFO] Expected error: {e}")

@@ -2,6 +2,19 @@
 """Simple test to debug single qubit gates."""
 
 import sys
+from typing import List, Tuple
+
+
+def decode_integer_results(results: List[int], n_bits: int) -> List[Tuple[bool, ...]]:
+    """Decode integer-encoded results back to tuples of booleans."""
+    decoded = []
+    for val in results:
+        bits = []
+        for i in range(n_bits):
+            bits.append(bool(val & (1 << i)))
+        decoded.append(tuple(bits))
+    return decoded
+
 sys.path.append("python/quantum-pecos/src")
 
 from guppylang import guppy
@@ -29,7 +42,7 @@ try:
     
     # Decode integer results back to tuples
     decoded = []
-    for val in results['_result']:
+    for val in results['result']:
         bit0 = bool(val & 1)
         bit1 = bool(val & 2)
         decoded.append((bit0, bit1))

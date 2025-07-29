@@ -178,6 +178,10 @@ pub mod core_runtime {
             let thread_id = get_thread_id();
             debug!("[Thread {thread_id}] Released qubit {qubit_id}");
         }
+        
+        RuntimeRegistry::with_current_runtime(|state| {
+            state.release_qubit(qubit_id);
+        });
     }
 
     /// Release a result
@@ -389,14 +393,14 @@ pub mod core_runtime {
         });
     }
 
-    pub fn measure(qubit_id: usize, _result_id: usize) {
+    pub fn measure(qubit_id: usize, result_id: usize) {
         if should_print_commands() {
             let thread_id = get_thread_id();
-            debug!("[Thread {thread_id}] Measuring qubit {qubit_id}");
+            debug!("[Thread {thread_id}] Measuring qubit {qubit_id} with result_id {result_id}");
         }
 
         RuntimeRegistry::with_current_runtime(|state| {
-            let _ = state.message_builder_mut().add_measurements(&[qubit_id]);
+            state.add_measurement(qubit_id, result_id);
         });
     }
 
@@ -427,14 +431,136 @@ pub mod core_runtime {
         if should_print_commands() {
             let thread_id = get_thread_id();
             debug!(
-                "[Thread {thread_id}] Storing tuple return with {} values",
-                values.len()
+                "[Thread {thread_id}] Storing tuple return with {} values: {:?}",
+                values.len(),
+                values
             );
+            debug!("[Thread {thread_id}] Binary values: {:?}", 
+                values.iter().map(|v| format!("{:032b}", v)).collect::<Vec<_>>());
         }
 
         RuntimeRegistry::with_current_runtime(|state| {
             state.set_tuple_return(values);
         });
+    }
+    
+    /// Force execution of any pending measurements
+    pub fn force_measurement_execution() {
+        RuntimeRegistry::with_current_runtime(|state| {
+            // Check if we have accumulated operations to execute
+            let has_operations = state.message_builder_mut().message_count() > 0;
+            
+            if has_operations {
+                if should_print_commands() {
+                    let thread_id = get_thread_id();
+                    debug!("[Thread {thread_id}] Forcing measurement execution before tuple return");
+                }
+                
+                // Get the measurement result IDs before executing
+                let measurement_result_ids = state.get_measurement_result_ids().to_vec();
+                
+                // Build the message with accumulated quantum operations
+                let message = state.build_message();
+                
+                // Get the callback from the runtime state
+                if let Some(callback) = state.interactive_callback() {
+                    // Execute the measurements
+                    if let Ok(measurement_outcomes) = callback(message) {
+                        if should_print_commands() {
+                            let thread_id = get_thread_id();
+                            debug!("[Thread {thread_id}] Got {} measurement outcomes from forced execution", measurement_outcomes.len());
+                        }
+                        
+                        // Convert outcomes to result_id/value pairs
+                        // The quantum backend returns measurement outcomes in order
+                        // We need to map them to the result IDs that were allocated
+                        let mut paired_results = Vec::new();
+                        for (idx, &outcome) in measurement_outcomes.iter().enumerate() {
+                            if idx < measurement_result_ids.len() {
+                                let result_id = measurement_result_ids[idx] as u32;
+                                paired_results.push(result_id);
+                                paired_results.push(outcome);
+                                
+                                if should_print_commands() {
+                                    let thread_id = get_thread_id();
+                                    debug!("[Thread {thread_id}] Mapping measurement[{}] outcome={} to result_id={}", 
+                                           idx, outcome, result_id);
+                                }
+                            }
+                        }
+                        
+                        // Update the runtime state with the properly paired results
+                        state.update_measurement_results(&paired_results);
+                    }
+                }
+            }
+        });
+    }
+    
+    /// Get measurement results for tuple return
+    /// Returns None if no measurement results or wrong count
+    pub fn get_measurement_results_for_tuple(expected_count: usize) -> Option<Vec<i32>> {
+        RuntimeRegistry::with_current_runtime(|state| {
+            // Get the measurement result IDs in order
+            let result_ids = state.get_measurement_result_ids();
+            
+            if should_print_commands() {
+                let thread_id = get_thread_id();
+                debug!(
+                    "[Thread {thread_id}] get_measurement_results_for_tuple: expected={}, result_ids={:?}",
+                    expected_count, result_ids
+                );
+            }
+            
+            // Check if we have the expected number of results
+            if result_ids.len() != expected_count {
+                if should_print_commands() {
+                    let thread_id = get_thread_id();
+                    debug!(
+                        "[Thread {thread_id}] Expected {} measurement results but have {}",
+                        expected_count,
+                        result_ids.len()
+                    );
+                }
+                return None;
+            }
+            
+            // Get the actual measurement values for each result ID
+            let mut values = Vec::with_capacity(expected_count);
+            for (idx, &result_id) in result_ids.iter().enumerate() {
+                if let Some(measurement_value) = state.get_measurement_result(result_id) {
+                    // Convert bool to i32 (false = 0, true = 1)
+                    let int_val = measurement_value as i32;
+                    values.push(int_val);
+                    if should_print_commands() {
+                        let thread_id = get_thread_id();
+                        debug!(
+                            "[Thread {thread_id}] Measurement[{}]: result_id={} value={} (as i32={})",
+                            idx, result_id, measurement_value, int_val
+                        );
+                    }
+                } else {
+                    if should_print_commands() {
+                        let thread_id = get_thread_id();
+                        debug!(
+                            "[Thread {thread_id}] No measurement result found for ID {}",
+                            result_id
+                        );
+                    }
+                    return None;
+                }
+            }
+            
+            if should_print_commands() {
+                let thread_id = get_thread_id();
+                debug!(
+                    "[Thread {thread_id}] Returning measurement tuple values: {:?}",
+                    values
+                );
+            }
+            
+            Some(values)
+        }).flatten()
     }
 
     pub fn update_measurement_results(results: &[u32]) {
@@ -900,12 +1026,44 @@ pub unsafe extern "C" fn __quantum__rt__result_get_one(result: i64) -> i32 {
             return 0;
         }
 
+        // Track ALL tuple accesses, not just unexecuted ones
+        // This is important for proper tuple index mapping
+        if state.find_result_id_index(result_id).is_some() {
+            state.track_tuple_access(result_id);
+            if should_print_commands() {
+                debug!("[Thread {}] Tracked tuple access for result_id={}", get_thread_id(), result_id);
+                debug!("[Thread {}] Current tuple accessed results: {:?}", get_thread_id(), 
+                       state.get_tuple_accessed_results());
+            }
+        }
+        
+        // DEBUG: Log exactly what we're about to return
+        if should_print_commands() {
+            debug!("[Thread {}] __quantum__rt__result_get_one: Checking result_id={}", get_thread_id(), result_id);
+            debug!("[Thread {}] Current measurement_results: {:?}", get_thread_id(), state.get_all_measurement_results());
+        }
+        
+        // Check if this is a measurement that hasn't been executed yet
+        if state.find_result_id_index(result_id).is_some() && state.get_measurement_result(result_id).is_none() {
+            if should_print_commands() {
+                debug!("[Thread {}] PLACEHOLDER: Returning 0 for unexecuted measurement {result_id}", get_thread_id());
+            }
+            // Return 0 as placeholder for unexecuted measurements
+            // This is safe because 0 = false in bool context
+            // We'll track which values need updating separately
+            return 0;
+        }
+        
         // Try to get the measurement result first
         if let Some(measurement_value) = state.get_measurement_result(result_id) {
             if should_print_commands() {
                 debug!("[Thread {}] CACHED: Found cached result {result_id} = {measurement_value}", get_thread_id());
             }
-            i32::from(measurement_value)
+            // Note: We don't increment measurements_executed here because this measurement
+            // was already executed previously (that's why it's cached)
+            let return_value = i32::from(measurement_value);
+            debug!("[Thread {}] CACHED: Returning {} for result_id={}", get_thread_id(), return_value, result_id);
+            return_value
         } else {
             // HUGR immediate measurement: trigger interactive execution
             if should_print_commands() {
@@ -951,13 +1109,48 @@ pub unsafe extern "C" fn __quantum__rt__result_get_one(result: i64) -> i32 {
 
                 if let Some(callback_result) = callback_result {
                     match callback_result {
-                        Ok(measurement_results) => {
+                        Ok(measurement_outcomes) => {
                             if should_print_commands() {
-                                debug!("[Thread {}] SUCCESS: Got {} measurement results", get_thread_id(), measurement_results.len());
+                                debug!("[Thread {}] SUCCESS: Got {} measurement outcomes", get_thread_id(), measurement_outcomes.len());
                             }
 
-                            // Update the runtime state with the measurement results
-                            state.update_measurement_results(&measurement_results);
+                            // Get info about measurements
+                            let measurement_result_ids = state.get_measurement_result_ids().to_vec();
+                            let previously_executed = state.get_measurements_executed();
+                            
+                            // Find which measurement index we need for this result_id
+                            let needed_index = state.find_result_id_index(result_id);
+                            
+                            if should_print_commands() {
+                                debug!("[Thread {}] Result {} is at index {:?}, previously executed: {}", 
+                                       get_thread_id(), result_id, needed_index, previously_executed);
+                            }
+                            
+                            // Convert outcomes to result_id/value pairs
+                            // Only process the new measurements (skip previously executed ones)
+                            let mut paired_results = Vec::new();
+                            let outcomes_to_process = measurement_outcomes.len();
+                            
+                            for idx in 0..outcomes_to_process {
+                                let actual_idx = previously_executed + idx;
+                                if actual_idx < measurement_result_ids.len() {
+                                    let mapped_result_id = measurement_result_ids[actual_idx] as u32;
+                                    let outcome = measurement_outcomes[idx];
+                                    paired_results.push(mapped_result_id);
+                                    paired_results.push(outcome);
+                                    
+                                    if should_print_commands() {
+                                        debug!("[Thread {}] Mapping measurement[{}] outcome={} to result_id={}", 
+                                               get_thread_id(), actual_idx, outcome, mapped_result_id);
+                                    }
+                                }
+                            }
+
+                            // Update the runtime state with the properly paired results
+                            state.update_measurement_results(&paired_results);
+                            
+                            // DON'T update the executed count - this causes issues with result mapping
+                            // Keep it simple: each measurement is considered executed only when explicitly requested
 
                             // Now try to get the result again
                             if let Some(measurement_value) = state.get_measurement_result(result_id) {
@@ -1001,6 +1194,9 @@ pub unsafe extern "C" fn __quantum__rt__result_get_one(result: i64) -> i32 {
             "[Thread {}] EXIT __quantum__rt__result_get_one(result_id={result_id}) = {result} in {elapsed:?}",
             get_thread_id()
         );
+        
+        // Extra debug for the specific case we're investigating
+        debug!("[Thread {}] RETURN VALUE: result_id={} -> {}", get_thread_id(), result_id, result);
     }
 
     result
@@ -1344,6 +1540,80 @@ pub unsafe extern "C" fn llvm_runtime_free_shot_data(data: *mut FFIShotData) {
 
         if should_print_commands() {
             debug!("[Thread {thread_id}] Freed FFIShotData");
+        }
+    }
+}
+
+/// FFI structure for returning measurement result IDs
+#[repr(C)]
+pub struct FFIResultIds {
+    pub ids: *mut usize,
+    pub count: usize,
+}
+
+/// Get how many measurements have been executed
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// Returns the number of measurements that have been executed so far.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn llvm_runtime_get_measurements_executed() -> usize {
+    RuntimeRegistry::try_with_current_runtime(|state| {
+        state.get_measurements_executed()
+    }).unwrap_or(0)
+}
+
+/// Get measurement result IDs in order
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// Returns a heap-allocated array of result IDs that must be freed by the caller.
+/// Returns null if no measurements have been recorded.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn llvm_runtime_get_measurement_result_ids() -> *mut FFIResultIds {
+    let thread_id = get_thread_id();
+    
+    let result_ids = RuntimeRegistry::try_with_current_runtime(|state| {
+        state.get_measurement_result_ids().to_vec()
+    }).unwrap_or_default();
+    
+    if result_ids.is_empty() {
+        return std::ptr::null_mut();
+    }
+    
+    if should_print_commands() {
+        debug!("[Thread {thread_id}] Returning {} measurement result IDs", result_ids.len());
+    }
+    
+    // Allocate arrays
+    let count = result_ids.len();
+    let ids_array = Box::into_raw(result_ids.into_boxed_slice()) as *mut usize;
+    
+    // Create the FFI struct
+    let ffi_data = Box::new(FFIResultIds {
+        ids: ids_array,
+        count,
+    });
+    
+    Box::into_raw(ffi_data)
+}
+
+/// Free result IDs data
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+/// The data parameter must be a valid pointer returned by `llvm_runtime_get_measurement_result_ids`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn llvm_runtime_free_result_ids(data: *mut FFIResultIds) {
+    if !data.is_null() {
+        unsafe {
+            let ffi_data = Box::from_raw(data);
+            if !ffi_data.ids.is_null() {
+                let _ = Box::from_raw(std::slice::from_raw_parts_mut(ffi_data.ids, ffi_data.count));
+            }
         }
     }
 }

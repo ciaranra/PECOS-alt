@@ -2,6 +2,19 @@
 """Test different tuple sizes with static functions."""
 
 import sys
+from typing import List, Tuple
+
+
+def decode_integer_results(results: List[int], n_bits: int) -> List[Tuple[bool, ...]]:
+    """Decode integer-encoded results back to tuples of booleans."""
+    decoded = []
+    for val in results:
+        bits = []
+        for i in range(n_bits):
+            bits.append(bool(val & (1 << i)))
+        decoded.append(tuple(bits))
+    return decoded
+
 sys.path.append("python/quantum-pecos/src")
 
 from guppylang import guppy
@@ -91,7 +104,7 @@ def run_function_test(name: str, func):
     print(f"\nTesting {name}...")
     try:
         results = guppy_sim(func, max_qubits=10).run(5)
-        print(f"  Success! Results: {results['_result']}")
+        print(f"  Success! Results: {results['result']}")
         return True
     except Exception as e:
         print(f"  Failed with error: {e}")

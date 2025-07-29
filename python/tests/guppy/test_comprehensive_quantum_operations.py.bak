@@ -57,7 +57,7 @@ def decode_integer_results(results: List[int], n_bits: int) -> List[Tuple[bool, 
     return decoded
 
 
-def get_decoded_results(results: Dict[str, Any], key: str = "result", n_bits: int = None) -> List:
+def get_decoded_results(results: Dict[str, Any], key: str = "_result", n_bits: int = None) -> List:
     """Get decoded results from guppy_sim output.
     
     Args:
@@ -116,7 +116,7 @@ class TestBasicQuantumGates:
         results = guppy_sim(single_qubit_test, max_qubits=10).run(100)
         
         # Decode integer-encoded results
-        decoded_results = decode_integer_results(results["result"], 4)
+        decoded_results = decode_integer_results(results["_result"], 4)
         for i, val in enumerate(decoded_results):
             # val is now a tuple like (True, False, False, True)
             r1, r2, r3, r4 = val
@@ -250,8 +250,7 @@ class TestBasicQuantumGates:
         
         results = guppy_sim(ch_test, max_qubits=10).run(100)
         
-        decoded_results = get_decoded_results(results, n_bits=2)
-        for r in decoded_results:
+        for r in results["_result"]:
             assert r == (False, False)
     
     def test_toffoli_gate(self):
@@ -267,8 +266,7 @@ class TestBasicQuantumGates:
         
         results = guppy_sim(toffoli_test, max_qubits=10).run(100)
         
-        decoded_results = get_decoded_results(results, n_bits=3)
-        for r in decoded_results:
+        for r in results["_result"]:
             # Both controls stay 1, target flips to 1
             assert r == (True, True, True)
 
@@ -317,8 +315,7 @@ class TestQuantumStateManagement:
         results = guppy_sim(measure_test, max_qubits=10).seed(42).run(100)
         
         # Check m1 is always True
-        decoded_results = get_decoded_results(results, n_bits=3)
-        for r in decoded_results:
+        for r in results["_result"]:
             assert r[0] == True
             # m2 is probabilistic
             # m3 should equal m2 (if m2 is True, q3 gets X gate and measures True)
@@ -340,8 +337,7 @@ class TestQuantumStateManagement:
         results = guppy_sim(discard_test, max_qubits=10).run(100)
         
         # Should always measure True
-        decoded_results = get_decoded_results(results, n_bits=1)
-        assert all(r == True for r in decoded_results)
+        assert all(r == True for r in results["_result"])
     
     def test_reset_operation(self):
         """Test reset operation."""
@@ -360,8 +356,7 @@ class TestQuantumStateManagement:
         
         results = guppy_sim(reset_test, max_qubits=10).run(100)
         
-        decoded_results = get_decoded_results(results, n_bits=2)
-        for r in decoded_results:
+        for r in results["_result"]:
             assert r[0] == True  # Before reset
             assert r[1] == False  # After reset
 
@@ -382,9 +377,8 @@ class TestLinearTypeSystem:
         results = guppy_sim(ownership_test, max_qubits=10).seed(42).run(100)
         
         # Should see both 0 and 1 from H gate
-        decoded_results = get_decoded_results(results, n_bits=1)
-        zeros = sum(1 for r in decoded_results if not r)
-        ones = sum(1 for r in decoded_results if r)
+        zeros = sum(1 for r in results["_result"] if not r)
+        ones = sum(1 for r in results["_result"] if r)
         assert zeros > 20 and ones > 20
     
     def test_linear_rebinding(self):
@@ -400,8 +394,7 @@ class TestLinearTypeSystem:
         results = guppy_sim(rebinding_test, max_qubits=10).run(100)
         
         # Should always be True
-        decoded_results = get_decoded_results(results, n_bits=1)
-        assert all(r == True for r in decoded_results)
+        assert all(r == True for r in results["_result"])
     
     def test_conditional_linear_flow(self):
         """Test qubits in conditional control flow."""
@@ -429,11 +422,11 @@ class TestLinearTypeSystem:
         results_false = guppy_sim(test_false, max_qubits=10).seed(42).run(100)
         
         # With flag=True, always get 1
-        assert all(r == True for r in results_true["result"])
+        assert all(r == True for r in results_true["_result"])
         
         # With flag=False, get mix from H
-        zeros = sum(1 for r in results_false["result"] if not r)
-        ones = sum(1 for r in results_false["result"] if r)
+        zeros = sum(1 for r in results_false["_result"] if not r)
+        ones = sum(1 for r in results_false["_result"] if r)
         assert zeros > 20 and ones > 20
 
 
@@ -472,8 +465,7 @@ class TestQuantumClassicalHybrid:
         results = guppy_sim(hybrid_test, max_qubits=10).seed(42).run(100)
         
         # Should see all values 0-7
-        # This returns integers, not bools, so no decoding needed
-        values = set(results["result"])
+        values = set(results["_result"])
         assert len(values) > 4  # Should see multiple different values
     
     def test_conditional_quantum_ops(self):
@@ -512,11 +504,11 @@ class TestQuantumClassicalHybrid:
         results1 = guppy_sim(test_n1, max_qubits=10).run(10)
         results2 = guppy_sim(test_n2, max_qubits=10).run(10)
         
-        assert all(not r for r in results0["result"])  # n=0: always 0
-        assert all(r for r in results1["result"])      # n=1: always 1
+        assert all(not r for r in results0["_result"])  # n=0: always 0
+        assert all(r for r in results1["_result"])      # n=1: always 1
         # n=2: H followed by X gives superposition, not deterministic
         # Just check we get some results
-        assert len(results2["result"]) == 10
+        assert len(results2["_result"]) == 10
     
     @pytest.mark.skip(reason="Known measurement-based conditional bug")
     def test_parity_accumulation(self):
@@ -537,9 +529,8 @@ class TestQuantumClassicalHybrid:
         results = guppy_sim(parity_test, max_qubits=10).seed(42).run(100)
         
         # Should see both even and odd parity roughly equally
-        decoded_results = get_decoded_results(results, n_bits=1)
-        false_count = sum(1 for r in decoded_results if not r)
-        true_count = sum(1 for r in decoded_results if r)
+        false_count = sum(1 for r in results["_result"] if not r)
+        true_count = sum(1 for r in results["_result"] if r)
         assert false_count > 20 and true_count > 20
 
 
@@ -564,9 +555,8 @@ class TestQuantumCircuitPatterns:
         results = guppy_sim(sequential_test, max_qubits=10).seed(42).run(100)
         
         # Complex sequence should give some results in both states
-        decoded_results = get_decoded_results(results, n_bits=1)
-        zeros = sum(1 for r in decoded_results if not r)
-        ones = sum(1 for r in decoded_results if r)
+        zeros = sum(1 for r in results["_result"] if not r)
+        ones = sum(1 for r in results["_result"] if r)
         # Just check that we got both 0s and 1s (not all the same)
         assert zeros > 0 and ones > 0
     
@@ -585,8 +575,7 @@ class TestQuantumCircuitPatterns:
         results = guppy_sim(bell_test, max_qubits=10).seed(42).run(100)
         
         # Should only see 00 and 11
-        decoded_results = get_decoded_results(results, n_bits=2)
-        for r in decoded_results:
+        for r in results["_result"]:
             assert r == (False, False) or r == (True, True)
     
     def test_ghz_state(self):
@@ -606,8 +595,7 @@ class TestQuantumCircuitPatterns:
         results = guppy_sim(ghz_test, max_qubits=10).seed(42).run(100)
         
         # Should only see 000 and 111
-        decoded_results = get_decoded_results(results, n_bits=3)
-        for r in decoded_results:
+        for r in results["_result"]:
             assert r == (False, False, False) or r == (True, True, True)
     
     @pytest.mark.skip(reason="Known measurement-based conditional bug")
@@ -631,8 +619,7 @@ class TestQuantumCircuitPatterns:
         results = guppy_sim(repeat_test, max_qubits=10).run(100)
         
         # Should always succeed on first try since H² = I gives |0⟩
-        # This returns integers (tries count), not booleans
-        assert all(r == 1 for r in results["result"])
+        assert all(r == 1 for r in results["_result"])
 
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
@@ -658,8 +645,7 @@ class TestStructuredQuantumData:
         results = guppy_sim(tuple_test, max_qubits=10).seed(42).run(100)
         
         # First qubit always 1, second follows first
-        decoded_results = get_decoded_results(results, n_bits=2)
-        for r in decoded_results:
+        for r in results["_result"]:
             assert r[0] == True
     
     def test_multiple_qubit_return(self):
@@ -680,8 +666,7 @@ class TestStructuredQuantumData:
         results = guppy_sim(use_pair, max_qubits=10).seed(42).run(100)
         
         # Should see Bell state correlations
-        decoded_results = get_decoded_results(results, n_bits=2)
-        for r in decoded_results:
+        for r in results["_result"]:
             assert r == (False, False) or r == (True, True)
 
 

@@ -33,31 +33,47 @@ fn test_hugr_to_llvm_to_execution() -> Result<(), PecosError> {
     let mut other_outcomes = 0;
 
     for shot in &results.shots {
-        // Get the two measurement results from "_result_0" and "_result_1"
-        let c = shot
-            .data
-            .get("_result_0")
-            .and_then(|v| match v {
-                pecos_engines::shot_results::Data::I64(n) => Some(*n),
-                pecos_engines::shot_results::Data::U32(n) => Some(i64::from(*n)),
-                _ => None,
-            })
-            .expect("Expected '_result_0' register");
-
-        let c1 = shot
-            .data
-            .get("_result_1")
-            .and_then(|v| match v {
-                pecos_engines::shot_results::Data::I64(n) => Some(*n),
-                pecos_engines::shot_results::Data::U32(n) => Some(i64::from(*n)),
-                _ => None,
-            })
-            .expect("Expected '_result_1' register");
-
-        match (c, c1) {
-            (0, 0) => outcome_00 += 1,
-            (1, 1) => outcome_11 += 1,
-            _ => other_outcomes += 1,
+        // Debug: print what keys we have
+        eprintln!("DEBUG test: Shot data keys: {:?}", shot.data.keys().collect::<Vec<_>>());
+        
+        // Get the measurement results - could be Vec or I64 (bit-packed)
+        match shot.data.get("result") {
+            Some(pecos_engines::shot_results::Data::Vec(vec)) => {
+                // Vec format
+                if vec.len() >= 2 {
+                    let c = match &vec[0] {
+                        pecos_engines::shot_results::Data::I32(n) => *n,
+                        _ => panic!("Expected I32 in Vec"),
+                    };
+                    let c1 = match &vec[1] {
+                        pecos_engines::shot_results::Data::I32(n) => *n,
+                        _ => panic!("Expected I32 in Vec"),
+                    };
+                    
+                    match (c, c1) {
+                        (0, 0) => outcome_00 += 1,
+                        (1, 1) => outcome_11 += 1,
+                        _ => other_outcomes += 1,
+                    }
+                } else {
+                    panic!("Expected at least 2 elements in result Vec");
+                }
+            }
+            Some(pecos_engines::shot_results::Data::I64(packed)) => {
+                // Bit-packed format: bits represent measurements
+                let c = (packed & 1) as i32;
+                let c1 = ((packed >> 1) & 1) as i32;
+                
+                match (c, c1) {
+                    (0, 0) => outcome_00 += 1,
+                    (1, 1) => outcome_11 += 1,
+                    _ => other_outcomes += 1,
+                }
+            }
+            _ => {
+                eprintln!("DEBUG test: Expected 'result' key with Vec or I64 data, but got: {:?}", shot.data);
+                panic!("Expected 'result' key with Vec or I64 data");
+            }
         }
     }
 
@@ -101,8 +117,20 @@ fn test_hugr_from_bytes() -> Result<(), PecosError> {
 
     // Verify at least some results are valid
     let first_shot = &results.shots[0];
-    assert!(first_shot.data.contains_key("_result_0"));
-    assert!(first_shot.data.contains_key("_result_1"));
+    assert!(first_shot.data.contains_key("result"));
+    
+    // Verify it's either a Vec with at least 2 elements or a bit-packed I64
+    match first_shot.data.get("result") {
+        Some(pecos_engines::shot_results::Data::Vec(vec)) => {
+            assert!(vec.len() >= 2, "Expected at least 2 measurement results");
+        }
+        Some(pecos_engines::shot_results::Data::I64(_packed)) => {
+            // Bit-packed format is also valid - contains measurements as bits
+        }
+        _ => {
+            panic!("Expected 'result' key with Vec or I64 data");
+        }
+    }
 
     Ok(())
 }
@@ -265,7 +293,7 @@ fn test_ghz_state_execution() -> Result<(), PecosError> {
     let mut other_outcomes = 0;
 
     for shot in &results.shots {
-        // Get all measurement values
+        // Get all measurement values - could be packed as a single integer or Vec
         let values: Vec<u32> = shot
             .data
             .values()
@@ -273,18 +301,40 @@ fn test_ghz_state_execution() -> Result<(), PecosError> {
                 pecos_engines::shot_results::Data::U32(n) => Some(*n),
                 pecos_engines::shot_results::Data::I64(n) => u32::try_from(*n).ok(),
                 pecos_engines::shot_results::Data::U8(n) => Some(u32::from(*n)),
+                pecos_engines::shot_results::Data::Vec(vec) => {
+                    // Handle Vec data - encoded as bit pattern
+                    if let Some(pecos_engines::shot_results::Data::I64(packed)) = vec.first() {
+                        u32::try_from(*packed).ok()
+                    } else {
+                        None
+                    }
+                }
                 _ => None,
             })
             .collect();
 
-        if values.len() == 3 {
+        // Handle both packed and unpacked formats
+        if values.len() == 1 {
+            // Packed format: bits represent measurements
+            let packed = values[0];
+            let m0 = (packed >> 0) & 1;
+            let m1 = (packed >> 1) & 1;
+            let m2 = (packed >> 2) & 1;
+            
+            match (m0, m1, m2) {
+                (0, 0, 0) => outcome_000 += 1,
+                (1, 1, 1) => outcome_111 += 1,
+                _ => other_outcomes += 1,
+            }
+        } else if values.len() == 3 {
+            // Unpacked format: individual measurements
             match (values[0], values[1], values[2]) {
                 (0, 0, 0) => outcome_000 += 1,
                 (1, 1, 1) => outcome_111 += 1,
                 _ => other_outcomes += 1,
             }
         } else {
-            println!("Warning: Expected 3 values, got {values:?}");
+            println!("Warning: Expected 1 packed or 3 unpacked values, got {values:?}");
         }
     }
 

@@ -244,6 +244,10 @@ class GuppySimulation:
                 .to_sim()
             )
             
+            # Configure max_qubits if specified
+            if self._config.max_qubits is not None:
+                builder = builder.qubits(self._config.max_qubits)
+            
             # Configure seed
             if self._config.seed is not None:
                 builder = builder.seed(self._config.seed)
@@ -265,9 +269,9 @@ class GuppySimulation:
                     builder = builder.quantum(state_vector())
                 elif self._config.engine.lower() == "sparsestabilizer":
                     builder = builder.quantum(sparse_stabilizer())
-            
-            # Note: verbose, debug, and max_qubits may not be available in the new API
-            # TODO: Check if these are supported
+            else:
+                # Default to state vector engine to support all gates
+                builder = builder.quantum(state_vector())
             
             # Run simulation
             results = builder.run(shots)
@@ -331,10 +335,10 @@ class GuppySimulation:
         For a Bell state returning tuple[bool, bool], qasm_sim returns:
         {"c": [0, 3, 0, 3, ...]} where 0 = |00⟩ and 3 = |11⟩
         
-        We'll use "_result" as the default register name for Guppy returns.
+        We'll use "result" as the default register name for Guppy returns.
         """
         if not raw_results:
-            return {"_result": []}
+            return {"result": []}
         
         # Handle different result types
         if isinstance(raw_results[0], (list, tuple)):
@@ -355,77 +359,22 @@ class GuppySimulation:
                         if b:
                             val |= (1 << i)
                     values.append(val)
-            return {"_result": values}
+            return {"result": values}
         else:
             # Single return value - keep as is
             if self._config.binary_string_format and isinstance(raw_results[0], bool):
                 # Convert bools to "0" or "1"
-                return {"_result": ['1' if r else '0' for r in raw_results]}
+                return {"result": ['1' if r else '0' for r in raw_results]}
             else:
-                return {"_result": raw_results}
+                return {"result": raw_results}
     
     def _process_llvm_engine_results(self, raw_results: Dict[str, List[Any]]) -> Dict[str, List[Any]]:
-        """Process results from llvm_engine, which may have multiple _result_N registers.
+        """Process results from llvm_engine.
         
-        For Guppy functions returning tuples, llvm_engine creates separate registers 
-        (_result_0, _result_1, etc.) for each measurement. We need to combine these
-        into a single "_result" register with encoded values for compatibility.
+        Simply return the results as-is since we're not maintaining backward compatibility.
+        The new format uses "result" as the key.
         """
-        # Check if we have multiple _result_N registers
-        result_registers = [(k, v) for k, v in raw_results.items() if k.startswith("_result_")]
-        
-        if len(result_registers) == 0:
-            # No _result_N registers, return as-is
-            return raw_results
-        elif len(result_registers) == 1:
-            # Single result register - rename to "_result" for compatibility
-            key, values = result_registers[0]
-            if key == "_result_0":
-                # Rename _result_0 to _result
-                result = raw_results.copy()
-                result["_result"] = result.pop("_result_0")
-                return result
-            return raw_results
-        else:
-            # Multiple result registers - need to combine into tuple representation
-            # Sort by register number to ensure consistent ordering
-            result_registers.sort(key=lambda x: int(x[0].split("_")[-1]))
-            
-            # Get the number of shots from the first register
-            num_shots = len(result_registers[0][1])
-            
-            # Combine the results shot by shot
-            combined_results = []
-            for shot_idx in range(num_shots):
-                if self._config.binary_string_format:
-                    # Create binary string representation
-                    bits = []
-                    for reg_name, reg_values in result_registers:
-                        bit = reg_values[shot_idx]
-                        bits.append('1' if bit else '0')
-                    combined_results.append(''.join(bits))
-                else:
-                    # Create tuple representation for multiple values
-                    # Extract the values in order
-                    values = []
-                    for reg_name, reg_values in result_registers:
-                        values.append(bool(reg_values[shot_idx]))
-                    
-                    # If more than one value, return as tuple; otherwise single value
-                    if len(values) == 1:
-                        combined_results.append(values[0])
-                    else:
-                        combined_results.append(tuple(values))
-            
-            # Return with single "_result" register
-            result = {"_result": combined_results}
-            
-            # Copy over any metadata
-            for k, v in raw_results.items():
-                if not k.startswith("_result_"):
-                    result[k] = v
-            
-            return result
+        return raw_results
     
     def __del__(self):
         """Clean up temporary file when simulation is deleted."""

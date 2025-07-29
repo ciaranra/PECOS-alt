@@ -239,13 +239,16 @@ impl Engine for StateVecEngine {
                     for q in &cmd.qubits {
                         debug!("Processing measurement on qubit {q:?}");
                         let meas_result = self.simulator.mz(**q);
+                        // According to the documentation:
+                        // mz() outcome: true if projected to |1⟩, false if projected to |0⟩
+                        // So we can directly convert the boolean to u32
                         let outcome = u32::from(meas_result.outcome);
                         measurements.push(outcome);
                     }
                 }
                 GateType::Prep => {
                     for q in &cmd.qubits {
-                        debug!("Processing Y gate on qubit {q:?}");
+                        debug!("Processing Prep gate on qubit {q:?}");
                         self.simulator.pz(**q);
                     }
                 }
@@ -493,13 +496,16 @@ impl Engine for SparseStabEngine {
                     for q in &cmd.qubits {
                         debug!("Processing measurement on qubit {q:?}");
                         let meas_result = self.simulator.mz(**q);
+                        // According to the documentation:
+                        // mz() outcome: true if projected to |1⟩, false if projected to |0⟩
+                        // So we can directly convert the boolean to u32
                         let outcome = u32::from(meas_result.outcome);
                         measurements.push(outcome);
                     }
                 }
                 GateType::Prep => {
                     for q in &cmd.qubits {
-                        debug!("Processing Y gate on qubit {q:?}");
+                        debug!("Processing Prep gate on qubit {q:?}");
                         self.simulator.pz(**q);
                     }
                 }

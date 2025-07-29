@@ -1,4 +1,4 @@
-use pecos_engines::{shot_results::Data, ClassicalControlEngineBuilder};
+use pecos_engines::{shot_results::Data, ClassicalControlEngineBuilder, state_vector};
 use pecos_qasm::qasm_engine;
 use pecos_programs::QasmProgram;
 
@@ -82,6 +82,7 @@ fn test_float_expressions_in_gates_work() {
     let result = qasm_engine()
         .program(QasmProgram::from_string(qasm))
         .to_sim()
+        .quantum(state_vector())
         .run(1);
     match result {
         Ok(_) => {}

@@ -7,6 +7,19 @@ and working with the guppy_sim builder pattern.
 
 import sys
 from pathlib import Path
+from typing import List, Tuple
+
+
+def decode_integer_results(results: List[int], n_bits: int) -> List[Tuple[bool, ...]]:
+    """Decode integer-encoded results back to tuples of booleans."""
+    decoded = []
+    for val in results:
+        bits = []
+        for i in range(n_bits):
+            bits.append(bool(val & (1 << i)))
+        decoded.append(tuple(bits))
+    return decoded
+
 
 import pytest
 
@@ -50,7 +63,7 @@ class TestNoiseModels:
         results = guppy_sim(deterministic_circuit, max_qubits=10).seed(42).run(100)
         
         # Should always measure |1⟩
-        assert all(r == 1 for r in results["_result"]), "Deterministic circuit should always return 1"
+        assert all(r == 1 for r in results["result"]), "Deterministic circuit should always return 1"
     
     def test_depolarizing_noise_effect(self):
         """Test that depolarizing noise introduces errors."""
@@ -62,12 +75,12 @@ class TestNoiseModels:
         
         # Run without noise
         results_ideal = guppy_sim(simple_circuit, max_qubits=10).seed(123).run(1000)
-        ones_ideal = sum(results_ideal["_result"])
+        ones_ideal = sum(results_ideal["result"])
         
         # Run with 10% depolarizing noise
         noise = DepolarizingNoise(p=0.1)
         results_noisy = guppy_sim(simple_circuit, max_qubits=10).seed(123).noise(noise).run(1000)
-        ones_noisy = sum(results_noisy["_result"])
+        ones_noisy = sum(results_noisy["result"])
         
         # Noise should reduce fidelity
         assert ones_ideal == 1000, "Ideal circuit should have perfect fidelity"
@@ -96,8 +109,8 @@ class TestNoiseModels:
             results = guppy_sim(bell_state, max_qubits=10).seed(42).noise(noise).run(1000)
             
             # Count correlated outcomes (|00⟩ or |11⟩)
-            # Results are tuples: (False, False)=|00⟩, (True, True)=|11⟩
-            correlated = sum(1 for r in results["_result"] if r in [(False, False), (True, True)])
+            # Results are integers: 0=|00⟩, 3=|11⟩
+            correlated = sum(1 for r in results["result"] if r in [0, 3])
             
             print(f"  {name:15s}: {correlated}/1000 correlated ({correlated/10:.1f}%)")
             
@@ -136,12 +149,12 @@ def test_noise_model_builder_pattern():
     results2 = sim.run(100)
     
     # Both runs should have results
-    assert len(results1["_result"]) == 100
-    assert len(results2["_result"]) == 100
+    assert len(results1["result"]) == 100
+    assert len(results2["result"]) == 100
     
     # With noise, results should vary
-    zeros1 = sum(1 for r in results1["_result"] if r == 0)
-    zeros2 = sum(1 for r in results2["_result"] if r == 0)
+    zeros1 = sum(1 for r in results1["result"] if r == 0)
+    zeros2 = sum(1 for r in results2["result"] if r == 0)
     
     print(f"\n✓ Builder pattern with noise: Run1={zeros1}/100 zeros, Run2={zeros2}/100 zeros")
 

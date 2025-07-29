@@ -6,6 +6,19 @@ This test demonstrates that guppy_sim follows the same builder pattern as qasm_s
 
 import sys
 from pathlib import Path
+from typing import List, Tuple
+
+
+def decode_integer_results(results: List[int], n_bits: int) -> List[Tuple[bool, ...]]:
+    """Decode integer-encoded results back to tuples of booleans."""
+    decoded = []
+    for val in results:
+        bits = []
+        for i in range(n_bits):
+            bits.append(bool(val & (1 << i)))
+        decoded.append(tuple(bits))
+    return decoded
+
 
 import pytest
 
@@ -56,9 +69,9 @@ class TestGuppySimBuilder:
         results2 = sim.run(200)
         
         # Check format matches qasm_sim (columnar)
-        assert "_result" in results1
-        assert len(results1["_result"]) == 100
-        assert len(results2["_result"]) == 200
+        assert "result" in results1
+        assert len(results1["result"]) == 100
+        assert len(results2["result"]) == 200
         
         # Check metadata
         assert "_metadata" in results1
@@ -71,9 +84,9 @@ class TestGuppySimBuilder:
         """Test direct run() without explicit build()."""
         results = guppy_sim(self.single_qubit, max_qubits=10).run(50)
         
-        assert "_result" in results
-        assert len(results["_result"]) == 50
-        assert all(r in [0, 1] for r in results["_result"])
+        assert "result" in results
+        assert len(results["result"]) == 50
+        assert all(r in [0, 1] for r in results["result"])
     
     def test_builder_methods(self):
         """Test various builder configuration methods."""
@@ -91,8 +104,8 @@ class TestGuppySimBuilder:
         sim = builder.build()
         results = sim.run(100)
         
-        assert "_result" in results
-        assert len(results["_result"]) == 100
+        assert "result" in results
+        assert len(results["result"]) == 100
     
     def test_seeded_reproducibility(self):
         """Test that seeded runs are reproducible."""
@@ -105,7 +118,7 @@ class TestGuppySimBuilder:
         results2 = sim2.run(100)
         
         # Results should be identical
-        assert results1["_result"] == results2["_result"]
+        assert results1["result"] == results2["result"]
     
     def test_config_dict(self):
         """Test configuration via dictionary."""
@@ -119,20 +132,20 @@ class TestGuppySimBuilder:
         sim = guppy_sim(self.bell_state, max_qubits=10).config(config).build()
         results = sim.run(50)
         
-        assert "_result" in results
-        assert len(results["_result"]) == 50
+        assert "result" in results
+        assert len(results["result"]) == 50
     
     def test_bell_state_correlation(self):
         """Test that Bell state results are correlated."""
         results = guppy_sim(self.bell_state, max_qubits=10).seed(42).run(1000)
         
-        # Bell state should produce only |00⟩ and |11⟩ (as tuples)
-        unique_results = set(results["_result"])
-        assert unique_results.issubset({(False, False), (True, True)})
+        # Bell state should produce only |00⟩ and |11⟩ (encoded as 0 and 3)
+        unique_results = set(results["result"])
+        assert unique_results.issubset({0, 3})  # 0 = |00⟩, 3 = |11⟩
         
         # Should be roughly 50/50
-        zeros = sum(1 for r in results["_result"] if r == (False, False))
-        ones = sum(1 for r in results["_result"] if r == (True, True))
+        zeros = sum(1 for r in results["result"] if r == 0)  # |00⟩
+        ones = sum(1 for r in results["result"] if r == 3)   # |11⟩
         assert 400 < zeros < 600  # Allow some variance
         assert 400 < ones < 600
     
@@ -160,7 +173,7 @@ class TestGuppySimBuilder:
         
         # Run simulation
         results = sim.run(10)
-        assert len(results["_result"]) == 10
+        assert len(results["result"]) == 10
         
         # Files should still exist after run
         assert Path(sim.temp_dir).exists()
@@ -208,16 +221,16 @@ if __name__ == "__main__":
         
         print("\n2. Running 100 shots...")
         results = sim.run(100)
-        print(f"   Results: {results['_result'][:10]}... (first 10)")
-        print(f"   Ones: {sum(results['_result'])}/100")
+        print(f"   Results: {results['result'][:10]}... (first 10)")
+        print(f"   Ones: {sum(results['result'])}/100")
         
         print("\n3. Running 1000 shots...")
         results = sim.run(1000)
-        print(f"   Ones: {sum(results['_result'])}/1000")
+        print(f"   Ones: {sum(results['result'])}/1000")
         
         print("\n4. Direct run without explicit build...")
         results = guppy_sim(demo_circuit, max_qubits=10).seed(123).run(50)
-        print(f"   Got {len(results['_result'])} results")
+        print(f"   Got {len(results['result'])} results")
         
         print("\n=== Demo Complete ===")
     else:

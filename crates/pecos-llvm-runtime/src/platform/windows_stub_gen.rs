@@ -87,6 +87,21 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
         return_type: "void",
         params: &[("void*", "data")],
     },
+    ExportedFunction {
+        name: "llvm_runtime_get_measurement_result_ids",
+        return_type: "void*",
+        params: &[],
+    },
+    ExportedFunction {
+        name: "llvm_runtime_free_result_ids",
+        return_type: "void",
+        params: &[("void*", "data")],
+    },
+    ExportedFunction {
+        name: "llvm_runtime_get_measurements_executed",
+        return_type: "usize",
+        params: &[],
+    },
     // Quantum instruction set
     ExportedFunction {
         name: "__quantum__qis__s__body",
