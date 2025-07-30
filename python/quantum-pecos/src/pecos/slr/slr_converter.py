@@ -20,6 +20,11 @@ try:
 except ImportError:
     QIRGenerator = None
 
+try:
+    from pecos.slr.gen_codes.gen_guppy import GuppyGenerator
+except ImportError:
+    GuppyGenerator = None
+
 
 class SlrConverter:
 
@@ -44,6 +49,7 @@ class SlrConverter:
         *,
         skip_headers: bool = False,
         add_versions: bool = False,
+        module_name: str = "generated_module",
     ) -> str:
         if target == Language.QASM:
             generator = QASMGenerator(
@@ -53,6 +59,9 @@ class SlrConverter:
         elif target in [Language.QIR, Language.QIRBC]:
             self._check_qir_imported()
             generator = QIRGenerator()
+        elif target == Language.GUPPY:
+            self._check_guppy_imported()
+            generator = GuppyGenerator(module_name=module_name)
         else:
             msg = f"Code gen target '{target}' is not supported."
             raise NotImplementedError(msg)
@@ -88,3 +97,16 @@ class SlrConverter:
     def qir_bc(self):
         self._check_qir_imported()
         return self.generate(Language.QIRBC)
+
+    @staticmethod
+    def _check_guppy_imported():
+        if GuppyGenerator is None:
+            msg = (
+                "Trying to compile to Guppy without the GuppyGenerator. "
+                "Make sure gen_guppy.py is available."
+            )
+            raise Exception(msg)
+
+    def guppy(self, *, module_name: str = "generated_module"):
+        self._check_guppy_imported()
+        return self.generate(Language.GUPPY, module_name=module_name)
