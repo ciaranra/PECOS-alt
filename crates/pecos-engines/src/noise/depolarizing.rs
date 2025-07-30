@@ -435,11 +435,10 @@ impl DepolarizingNoiseModelBuilder {
     /// Panics if any probabilities are not between 0 and 1.
     #[must_use]
     pub fn build(self) -> DepolarizingNoiseModel {
-        // Use default value of 0.0 for any unset probabilities
-        let p_prep = self.p_prep.unwrap_or(0.0);
-        let p_meas = self.p_meas.unwrap_or(0.0);
-        let p1 = self.p1.unwrap_or(0.0);
-        let p2 = self.p2.unwrap_or(0.0);
+        let p_prep = self.p_prep.expect("Preparation probability must be set");
+        let p_meas = self.p_meas.expect("Measurement probability must be set");
+        let p1 = self.p1.expect("Single-qubit probability must be set");
+        let p2 = self.p2.expect("Two-qubit probability must be set");
 
         // Create the noise model
         let mut noise = DepolarizingNoiseModel::new(p_prep, p_meas, p1, p2);

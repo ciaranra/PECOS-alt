@@ -88,8 +88,9 @@ class TestQuantumEngineBuilders:
             .seed(42)
         )
         results = sim.run(100)
-        assert "c" in results
-        assert len(results["c"]) == 100
+        results_dict = results.to_dict()
+        assert "c" in results_dict
+        assert len(results_dict["c"]) == 100
         
         # Test with sparse stabilizer engine
         sim2 = (
@@ -100,8 +101,9 @@ class TestQuantumEngineBuilders:
             .seed(42)
         )
         results2 = sim2.run(100)
-        assert "c" in results2
-        assert len(results2["c"]) == 100
+        results2_dict = results2.to_dict()
+        assert "c" in results2_dict
+        assert len(results2_dict["c"]) == 100
         
     def test_quantum_engine_with_noise(self):
         """Test using quantum engines with noise models."""
@@ -114,8 +116,8 @@ class TestQuantumEngineBuilders:
         measure q[0] -> c[0];
         """
         
-        # Create noise model
-        noise = depolarizing_noise().with_p1_probability(0.01)
+        # Create noise model with all required probabilities
+        noise = depolarizing_noise().with_uniform_probability(0.01)
         
         # Test with state vector engine and noise
         sim = (
@@ -127,31 +129,59 @@ class TestQuantumEngineBuilders:
             .seed(42)
         )
         results = sim.run(1000)
-        assert "c" in results
-        assert len(results["c"]) == 1000
+        results_dict = results.to_dict()
+        assert "c" in results_dict
+        assert len(results_dict["c"]) == 1000
         
-    @pytest.mark.skip(reason="LLVM runtime not available in test environment")
     def test_llvm_with_quantum_engine(self):
         """Test LLVM engine with quantum engine builders."""
-        llvm_ir = """
-        declare void @__quantum__qis__h__body(i64)
-        declare i32 @__quantum__qis__m__body(i64, i64)
+        # Minimal LLVM IR - single qubit H gate and measurement
+        llvm_ir = """; ModuleID = 'test_module'
+source_filename = "test_module"
+
+@str_r0 = constant [3 x i8] c"r0\\00"
+
+declare void @__quantum__qis__h__body(i64)
+declare i32 @__quantum__qis__m__body(i64, i64)
+declare void @__quantum__rt__result_record_output(i64, i8*)
+
+define void @test_function() #0 {
+entry:
+    call void @__quantum__qis__h__body(i64 0)
+    %result = call i32 @__quantum__qis__m__body(i64 0, i64 0)
+    call void @__quantum__rt__result_record_output(i64 0, i8* getelementptr inbounds ([3 x i8], [3 x i8]* @str_r0, i32 0, i32 0))
+    ret void
+}
+
+attributes #0 = { "EntryPoint" }
+"""
         
-        define void @test() #0 {
-            call void @__quantum__qis__h__body(i64 0)
-            %r = call i32 @__quantum__qis__m__body(i64 0, i64 0)
-            ret void
-        }
-        
-        attributes #0 = { "EntryPoint" }
-        """
-        
-        sim = (
-            llvm_engine()
-            .program(LlvmProgram.from_ir(llvm_ir))
-            .to_sim()
-            .quantum(state_vector())
-            .seed(42)
-        )
-        results = sim.run(100)
-        assert results is not None
+        try:
+            # Try to create LLVM engine
+            sim = (
+                llvm_engine()
+                .program(LlvmProgram.from_ir(llvm_ir))
+                .to_sim()
+                .quantum(state_vector())
+                .seed(42)
+            )
+            # If we get here, LLVM is available
+            results = sim.run(100)
+            results_dict = results.to_dict()
+            
+            # Check results - should have roughly 50/50 distribution due to H gate
+            assert "r0" in results_dict
+            assert len(results_dict["r0"]) == 100
+            
+            # Count occurrences
+            zeros = sum(1 for r in results_dict["r0"] if r == 0)
+            ones = sum(1 for r in results_dict["r0"] if r == 1)
+            assert zeros + ones == 100
+            # With H gate, should get roughly 50/50 split (allow some variance)
+            assert 30 < zeros < 70
+            assert 30 < ones < 70
+            
+        except (RuntimeError, ImportError, AttributeError, OSError) as e:
+            # LLVM runtime not available or not working
+            # OSError can occur if LLVM shared libraries are missing
+            pytest.skip(f"LLVM runtime not available: {type(e).__name__}: {e}")

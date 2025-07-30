@@ -22,7 +22,7 @@ test = false
 
 [features]
 default = ["wasm", "hugr-llvm-pipeline"]
-wasm = []
+wasm = ["pecos-qasm/wasm"]
 
 # LLVM JIT execution: QIR file execution via LLVM JIT compilation
 # TEMPORARILY DISABLED due to pytest environment conflicts and segfaults

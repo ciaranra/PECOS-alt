@@ -295,9 +295,8 @@ class TestRotationGates:
 class TestControlFlow:
     """Test control flow with quantum operations."""
     
-    @pytest.mark.skip(reason="HUGR doesn't support boolean constants in control flow yet")
     def test_conditional_ops(self):
-        """Test conditional quantum operations."""
+        """Test conditional quantum operations with boolean constants."""
         @guppy
         def conditional_test(flag: bool) -> bool:
             q = qubit()

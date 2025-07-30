@@ -121,11 +121,53 @@ impl ClassicalControlEngineBuilder for PhirJsonEngineBuilder {
 /// Create a new PHIR JSON engine builder
 ///
 /// This is the entry point for the unified API pattern:
-/// ```rust,ignore
-/// phir_json_engine()
+/// ```rust
+/// use pecos_phir_json::phir_json_engine;
+/// use pecos_programs::PhirJsonProgram;
+/// use pecos_engines::engine_builder::ClassicalControlEngineBuilder;
+/// 
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let json = r#"{
+///     "format": "PHIR/JSON",
+///     "version": "0.1.0",
+///     "metadata": {
+///         "name": "simple_measurement",
+///         "description": "Single qubit measurement example"
+///     },
+///     "ops": [
+///         {
+///             "data": "qvar_define",
+///             "data_type": "qubits",
+///             "variable": "q",
+///             "size": 1
+///         },
+///         {
+///             "data": "cvar_define",
+///             "data_type": "i64",
+///             "variable": "m",
+///             "size": 1
+///         },
+///         {"qop": "H", "args": [["q", 0]]},
+///         {"qop": "Measure", "args": [["q", 0]], "returns": [["m", 0]]},
+///         {"cop": "Result", "args": ["m"], "returns": ["c"]}
+///     ]
+/// }"#;
+/// 
+/// let results = phir_json_engine()
 ///     .program(PhirJsonProgram::from_json(json))
 ///     .to_sim()
-///     .run(shots)
+///     .run(100)?;
+/// 
+/// // Verify we got the expected number of shots
+/// assert_eq!(results.len(), 100);
+/// 
+/// // Convert to columnar format and verify the result register exists
+/// let shot_map = results.try_as_shot_map()?;
+/// let register_names = shot_map.register_names();
+/// assert!(register_names.iter().any(|n| *n == "c"), 
+///         "Expected 'c' register in results, found: {:?}", register_names);
+/// # Ok(())
+/// # }
 /// ```
 pub fn phir_json_engine() -> PhirJsonEngineBuilder {
     PhirJsonEngineBuilder::new()

@@ -24,13 +24,13 @@ from pecos.frontends import guppy_sim
 
 # Pre-define functions for each tuple size instead of using exec
 @guppy
-def test_1_tuple() -> tuple[bool]:
+def circuit_1_tuple() -> tuple[bool]:
     q = qubit()
     x(q)
     return (measure(q),)
 
 @guppy
-def test_2_tuple() -> tuple[bool, bool]:
+def circuit_2_tuple() -> tuple[bool, bool]:
     q1 = qubit()
     x(q1)
     r1 = measure(q1)
@@ -39,7 +39,7 @@ def test_2_tuple() -> tuple[bool, bool]:
     return (r1, r2)
 
 @guppy
-def test_3_tuple() -> tuple[bool, bool, bool]:
+def circuit_3_tuple() -> tuple[bool, bool, bool]:
     q1 = qubit()
     x(q1)
     r1 = measure(q1)
@@ -51,7 +51,7 @@ def test_3_tuple() -> tuple[bool, bool, bool]:
     return (r1, r2, r3)
 
 @guppy
-def test_4_tuple() -> tuple[bool, bool, bool, bool]:
+def circuit_4_tuple() -> tuple[bool, bool, bool, bool]:
     q1 = qubit()
     x(q1)
     r1 = measure(q1)
@@ -65,7 +65,7 @@ def test_4_tuple() -> tuple[bool, bool, bool, bool]:
     return (r1, r2, r3, r4)
 
 @guppy
-def test_5_tuple() -> tuple[bool, bool, bool, bool, bool]:
+def circuit_5_tuple() -> tuple[bool, bool, bool, bool, bool]:
     q1 = qubit()
     x(q1)
     r1 = measure(q1)
@@ -82,7 +82,7 @@ def test_5_tuple() -> tuple[bool, bool, bool, bool, bool]:
     return (r1, r2, r3, r4, r5)
 
 @guppy
-def test_6_tuple() -> tuple[bool, bool, bool, bool, bool, bool]:
+def circuit_6_tuple() -> tuple[bool, bool, bool, bool, bool, bool]:
     q1 = qubit()
     x(q1)
     r1 = measure(q1)
@@ -101,7 +101,7 @@ def test_6_tuple() -> tuple[bool, bool, bool, bool, bool, bool]:
     return (r1, r2, r3, r4, r5, r6)
 
 @guppy
-def test_7_tuple() -> tuple[bool, bool, bool, bool, bool, bool, bool]:
+def circuit_7_tuple() -> tuple[bool, bool, bool, bool, bool, bool, bool]:
     q1 = qubit()
     x(q1)
     r1 = measure(q1)
@@ -123,7 +123,7 @@ def test_7_tuple() -> tuple[bool, bool, bool, bool, bool, bool, bool]:
     return (r1, r2, r3, r4, r5, r6, r7)
 
 @guppy
-def test_8_tuple() -> tuple[bool, bool, bool, bool, bool, bool, bool, bool]:
+def circuit_8_tuple() -> tuple[bool, bool, bool, bool, bool, bool, bool, bool]:
     q1 = qubit()
     x(q1)
     r1 = measure(q1)
@@ -164,57 +164,57 @@ def run_tuple_size_test(n: int, test_func):
 
 def test_tuple_size_1():
     """Test 1-tuple returns."""
-    assert run_tuple_size_test(1, test_1_tuple)
+    assert run_tuple_size_test(1, circuit_1_tuple)
 
 
 def test_tuple_size_2():
     """Test 2-tuple returns."""
-    assert run_tuple_size_test(2, test_2_tuple)
+    assert run_tuple_size_test(2, circuit_2_tuple)
 
 
 def test_tuple_size_3():
     """Test 3-tuple returns."""
-    assert run_tuple_size_test(3, test_3_tuple)
+    assert run_tuple_size_test(3, circuit_3_tuple)
 
 
 def test_tuple_size_4():
     """Test 4-tuple returns."""
-    assert run_tuple_size_test(4, test_4_tuple)
+    assert run_tuple_size_test(4, circuit_4_tuple)
 
 
 def test_tuple_size_5():
     """Test 5-tuple returns."""
-    assert run_tuple_size_test(5, test_5_tuple)
+    assert run_tuple_size_test(5, circuit_5_tuple)
 
 
 def test_tuple_size_6():
     """Test 6-tuple returns."""
-    assert run_tuple_size_test(6, test_6_tuple)
+    assert run_tuple_size_test(6, circuit_6_tuple)
 
 
 def test_tuple_size_7():
     """Test 7-tuple returns."""
-    assert run_tuple_size_test(7, test_7_tuple)
+    assert run_tuple_size_test(7, circuit_7_tuple)
 
 
 def test_tuple_size_8():
     """Test 8-tuple returns."""
-    assert run_tuple_size_test(8, test_8_tuple)
+    assert run_tuple_size_test(8, circuit_8_tuple)
 
 
 if __name__ == "__main__":
     print("Testing different tuple sizes...")
     
-    # Map of tuple sizes to test functions
+    # Map of tuple sizes to circuit functions
     test_functions = {
-        1: test_1_tuple,
-        2: test_2_tuple,
-        3: test_3_tuple,
-        4: test_4_tuple,
-        5: test_5_tuple,
-        6: test_6_tuple,
-        7: test_7_tuple,
-        8: test_8_tuple,
+        1: circuit_1_tuple,
+        2: circuit_2_tuple,
+        3: circuit_3_tuple,
+        4: circuit_4_tuple,
+        5: circuit_5_tuple,
+        6: circuit_6_tuple,
+        7: circuit_7_tuple,
+        8: circuit_8_tuple,
     }
     
     # Test progressively larger tuples

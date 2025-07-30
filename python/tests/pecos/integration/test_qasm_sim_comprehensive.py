@@ -333,8 +333,8 @@ class TestQasmSimComprehensive:
         """
 
         # Build and run simulations with same seed
-        noise1 = depolarizing_noise().with_p1_probability(0.01)
-        noise2 = depolarizing_noise().with_p1_probability(0.01)
+        noise1 = depolarizing_noise().with_uniform_probability(0.01)
+        noise2 = depolarizing_noise().with_uniform_probability(0.01)
 
         sim1 = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().seed(123).noise(noise1).build()
         sim2 = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().seed(123).noise(noise2).build()

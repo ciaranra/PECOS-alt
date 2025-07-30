@@ -74,7 +74,7 @@ impl<E: ClassicalControlEngine + Clone + 'static> Simulation<E> {
     /// results from each run.
     ///
     /// # Examples
-    /// ```no_run
+    /// ```rust
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # use pecos_engines::{ClassicalControlEngineBuilder, sim_builder::SimBuilder};
     /// # use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
@@ -93,9 +93,14 @@ impl<E: ClassicalControlEngine + Clone + 'static> Simulation<E> {
     /// let sim = engine.to_sim().build()?;
     /// 
     /// // Different seed each time for different results
-    /// let r1 = sim.run_with_seed(1000, Some(42))?;
-    /// let r2 = sim.run_with_seed(1000, Some(43))?;
-    /// let r3 = sim.run_with_seed(1000, None)?;  // Random
+    /// let r1 = sim.run_with_seed(10, Some(42))?;
+    /// let r2 = sim.run_with_seed(10, Some(43))?;
+    /// let r3 = sim.run_with_seed(10, None)?;  // Random
+    /// 
+    /// // Verify we got results
+    /// assert_eq!(r1.len(), 10);
+    /// assert_eq!(r2.len(), 10);
+    /// assert_eq!(r3.len(), 10);
     /// # Ok(())
     /// # }
     /// ```
@@ -157,7 +162,7 @@ impl<E: ClassicalControlEngine + Clone + 'static> Simulation<E> {
 /// The builder pattern supports two usage modes:
 ///
 /// ## One-shot execution
-/// ```no_run
+/// ```rust
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// # use pecos_engines::{ClassicalControlEngineBuilder, sim_builder::SimBuilder};
 /// # use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
@@ -174,13 +179,14 @@ impl<E: ClassicalControlEngine + Clone + 'static> Simulation<E> {
 /// # }
 /// # 
 /// # let engine = MyEngineBuilder;
-/// let results = engine.to_sim().seed(42).run(1000)?;
+/// let results = engine.to_sim().seed(42).run(10)?;
+/// assert_eq!(results.len(), 10);
 /// # Ok(())
 /// # }
 /// ```
 ///
 /// ## Build once, run multiple times
-/// ```no_run
+/// ```rust
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// # use pecos_engines::{ClassicalControlEngineBuilder, sim_builder::SimBuilder, DepolarizingNoise};
 /// # use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
@@ -203,9 +209,13 @@ impl<E: ClassicalControlEngine + Clone + 'static> Simulation<E> {
 ///     .build()?;
 ///
 /// // Run multiple times with different shot counts
-/// let results_100 = sim.run(100)?;
-/// let results_1000 = sim.run(1000)?;
-/// let results_10000 = sim.run(10000)?;
+/// let results_10 = sim.run(10)?;
+/// let results_20 = sim.run(20)?;
+/// let results_30 = sim.run(30)?;
+/// 
+/// assert_eq!(results_10.len(), 10);
+/// assert_eq!(results_20.len(), 20);
+/// assert_eq!(results_30.len(), 30);
 /// # Ok(())
 /// # }
 /// ```
@@ -218,7 +228,7 @@ impl<E: ClassicalControlEngine + Clone + 'static> Simulation<E> {
 /// - Don't specify a seed during building (uses system randomness)
 /// - Build a new simulation for each run with different seeds
 ///
-/// ```no_run
+/// ```rust
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// # use pecos_engines::{ClassicalControlEngineBuilder, sim_builder::SimBuilder};
 /// # use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
@@ -236,13 +246,15 @@ impl<E: ClassicalControlEngine + Clone + 'static> Simulation<E> {
 /// # let engine = MyEngineBuilder;
 /// // Option 1: Override seed per run
 /// let sim = engine.to_sim().build()?;
-/// let r1 = sim.run_with_seed(1000, Some(42))?;
-/// let r2 = sim.run_with_seed(1000, Some(43))?;
+/// let r1 = sim.run_with_seed(10, Some(42))?;
+/// let r2 = sim.run_with_seed(10, Some(43))?;
+/// assert_eq!(r1.len(), 10);
+/// assert_eq!(r2.len(), 10);
 /// # Ok(())
 /// # }
 /// ```
 /// 
-/// ```no_run
+/// ```rust
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// # use pecos_engines::{ClassicalControlEngineBuilder, sim_builder::SimBuilder};
 /// # use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
@@ -260,8 +272,10 @@ impl<E: ClassicalControlEngine + Clone + 'static> Simulation<E> {
 /// # let engine = MyEngineBuilder;
 /// // Option 2: No seed = random each time
 /// let sim = engine.to_sim().build()?;
-/// let r1 = sim.run(1000)?;  // Random
-/// let r2 = sim.run(1000)?;  // Random, different from r1
+/// let r1 = sim.run(10)?;  // Random
+/// let r2 = sim.run(10)?;  // Random, different from r1
+/// assert_eq!(r1.len(), 10);
+/// assert_eq!(r2.len(), 10);
 /// # Ok(())
 /// # }
 /// ```
@@ -329,18 +343,42 @@ impl<B: ClassicalControlEngineBuilder> SimBuilder<B> {
     /// engine builders from other crates.
     /// 
     /// # Examples
-    /// ```rust,ignore
-    /// use pecos_engines::{SimBuilder, quantum_engine_builder::{state_vector, sparse_stab}};
+    /// ```rust
+    /// # use pecos_core::errors::PecosError;
+    /// # use pecos_engines::{ClassicalControlEngineBuilder, sim_builder::SimBuilder};
+    /// # use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
+    /// # 
+    /// # struct MyEngineBuilder;
+    /// # 
+    /// # impl ClassicalControlEngineBuilder for MyEngineBuilder {
+    /// #     type Engine = ExternalClassicalEngine;
+    /// #     
+    /// #     fn build(self) -> Result<Self::Engine, PecosError> {
+    /// #         Ok(ExternalClassicalEngine::new())
+    /// #     }
+    /// # }
+    /// # 
+    /// # fn example() -> Result<(), PecosError> {
+    /// use pecos_engines::quantum_engine_builder::{state_vector, sparse_stabilizer};
     /// 
     /// // Using builder functions
-    /// let sim1 = engine.to_sim()
+    /// let sim1 = MyEngineBuilder.to_sim()
     ///     .quantum(state_vector())
     ///     .build()?;
     ///     
-    /// // Using builder with configuration
-    /// let sim2 = engine.to_sim()
-    ///     .quantum(sparse_stab().qubits(20))
+    /// // Using builder with configuration - note: qubits() is on SimBuilder, not quantum engine builder
+    /// let sim2 = MyEngineBuilder.to_sim()
+    ///     .quantum(sparse_stabilizer())
+    ///     .qubits(20)
     ///     .build()?;
+    ///     
+    /// // Run a quick test to verify they work
+    /// let r1 = sim1.run(1)?;
+    /// let r2 = sim2.run(1)?;
+    /// assert_eq!(r1.len(), 1);
+    /// assert_eq!(r2.len(), 1);
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn quantum<Q>(mut self, engine: Q) -> Self
     where
@@ -433,7 +471,7 @@ impl<B: ClassicalControlEngineBuilder> From<B> for SimBuilder<B> {
 /// # Equivalent Patterns
 ///
 /// These three patterns all create the same simulation:
-/// ```no_run
+/// ```rust
 /// # use pecos_engines::{sim, SimBuilder, ClassicalControlEngineBuilder};
 /// # struct MyEngineBuilder;
 /// # impl ClassicalControlEngineBuilder for MyEngineBuilder {
@@ -444,13 +482,17 @@ impl<B: ClassicalControlEngineBuilder> From<B> for SimBuilder<B> {
 /// # }
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// // Pattern 1: Method chaining (original)
-/// let r1 = MyEngineBuilder.to_sim().seed(42).run(1000)?;
+/// let r1 = MyEngineBuilder.to_sim().seed(42).run(10)?;
 /// 
 /// // Pattern 2: Using From trait
-/// let r2 = SimBuilder::from(MyEngineBuilder).seed(42).run(1000)?;
+/// let r2 = SimBuilder::from(MyEngineBuilder).seed(42).run(10)?;
 /// 
 /// // Pattern 3: Using sim() helper function
-/// let r3 = sim(MyEngineBuilder).seed(42).run(1000)?;
+/// let r3 = sim(MyEngineBuilder).seed(42).run(10)?;
+/// 
+/// assert_eq!(r1.len(), 10);
+/// assert_eq!(r2.len(), 10);
+/// assert_eq!(r3.len(), 10);
 /// # Ok(())
 /// # }
 /// ```
@@ -464,28 +506,48 @@ impl<B: ClassicalControlEngineBuilder> From<B> for SimBuilder<B> {
 /// # Examples
 ///
 /// ## With concrete engine builders
-/// ```no_run
+/// ```rust
+/// # #[cfg(feature = "qasm")]
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// use pecos_engines::sim;
-/// // use pecos_qasm::qasm_engine;
-/// // use pecos_programs::QasmProgram;
+/// use pecos_engines::{sim, DepolarizingNoise};
+/// use pecos_qasm::qasm_engine;
+/// use pecos_programs::QasmProgram;
 /// 
-/// // let results = sim(qasm_engine().program(QasmProgram::from_string("H q[0];")))
-/// //     .seed(42)
-/// //     .noise(pecos_engines::DepolarizingNoise { p: 0.01 })
-/// //     .run(1000)?;
+/// let qasm_code = r#"
+/// OPENQASM 2.0;
+/// include "qelib1.inc";
+/// qreg q[1];
+/// creg c[1];
+/// h q[0];
+/// measure q[0] -> c[0];
+/// "#;
+/// 
+/// let results = sim(qasm_engine().program(QasmProgram::from_string(qasm_code)))
+///     .seed(42)
+///     .noise(DepolarizingNoise { p: 0.01 })
+///     .run(10)?;
+///     
+/// assert_eq!(results.len(), 10);
 /// # Ok(())
 /// # }
+/// # #[cfg(not(feature = "qasm"))]
+/// # fn main() {}
 /// ```
 ///
-/// ## With dynamic engine builders
-/// ```no_run
+/// ## With dynamic engine builders  
+/// ```rust
+/// # use pecos_engines::{sim, ClassicalControlEngineBuilder};
+/// # use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
+/// # struct MyEngineBuilder;
+/// # impl ClassicalControlEngineBuilder for MyEngineBuilder {
+/// #     type Engine = ExternalClassicalEngine;
+/// #     fn build(self) -> Result<Self::Engine, pecos_core::errors::PecosError> {
+/// #         Ok(ExternalClassicalEngine::new())
+/// #     }
+/// # }
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// use pecos_engines::sim;
-/// // use pecos::DynamicEngineBuilder;
-/// 
-/// // let dynamic_builder = DynamicEngineBuilder::new(some_engine);
-/// // let results = sim(dynamic_builder).seed(42).run(1000)?;
+/// let results = sim(MyEngineBuilder).seed(42).run(10)?;
+/// assert_eq!(results.len(), 10);
 /// # Ok(())
 /// # }
 /// ```

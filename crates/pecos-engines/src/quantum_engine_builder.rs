@@ -25,18 +25,22 @@ use pecos_core::errors::PecosError;
 /// Different crates can implement this trait to provide their own quantum simulators.
 ///
 /// # Example
-/// ```rust,ignore
-/// use pecos_engines::{QuantumEngineBuilder, IntoQuantumEngine};
+/// ```rust
+/// use pecos_engines::quantum_engine_builder::{state_vector, sparse_stabilizer, QuantumEngineBuilder};
 /// 
 /// // Using built-in engines
-/// let state_vec = StateVectorEngineBuilder::new().qubits(10);
-/// let sparse_stab = SparseStabilizerEngineBuilder::new();
+/// let mut state_vec = state_vector();
+/// state_vec.set_qubits_if_needed(10);
 /// 
-/// // Custom engine from another crate
-/// let custom = MyCustomEngineBuilder::new()
-///     .qubits(20)
-///     .with_optimization_level(3)
-///     .with_gpu_acceleration(true);
+/// let mut sparse_stab = sparse_stabilizer();
+/// sparse_stab.set_qubits_if_needed(5);
+/// 
+/// // You can build engines from these builders
+/// let engine1 = state_vec.build().unwrap();
+/// let engine2 = sparse_stab.build().unwrap();
+/// 
+/// // Engines are successfully created and ready to use
+/// // They implement the QuantumEngine trait for processing quantum operations
 /// ```
 pub trait QuantumEngineBuilder: Send + Sync {
     /// Build the quantum engine, consuming the builder

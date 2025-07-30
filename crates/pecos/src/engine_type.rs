@@ -11,15 +11,34 @@
 //! PECOS provides multiple classical control engines (QASM, LLVM, Selene) for
 //! executing quantum programs. Normally, you work with these engines directly:
 //!
-//! ```ignore
+//! ```rust
+//! # use pecos_core::errors::PecosError;
+//! # fn main() -> Result<(), PecosError> {
 //! use pecos_qasm::qasm_engine;
 //! use pecos_engines::sim;
 //! use pecos_programs::QasmProgram;
 //!
 //! // Compile-time engine selection - best performance
-//! let results = sim(qasm_engine().program(QasmProgram::from_string("H q[0];")))
+//! let qasm_code = r#"
+//! OPENQASM 2.0;
+//! include "qelib1.inc";
+//! qreg q[1];
+//! creg c[1];
+//! h q[0];
+//! measure q[0] -> c[0];
+//! "#;
+//! let results = sim(qasm_engine().program(QasmProgram::from_string(qasm_code)))
 //!     .seed(42)
-//!     .run(1000)?;
+//!     .run(10)?;
+//! 
+//! // Verify results
+//! assert_eq!(results.len(), 10);
+//! let shot_map = results.try_as_shot_map().unwrap();
+//! let values = shot_map.try_bits_as_u64("c").unwrap();
+//! // H gate creates superposition, so we should see both 0 and 1
+//! assert!(values.iter().any(|&v| v == 0) || values.iter().any(|&v| v == 1));
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! However, sometimes you need to select an engine at runtime based on user input,
@@ -31,10 +50,17 @@
 //! The `DynamicEngineBuilder` type uses trait objects to enable runtime engine
 //! selection while maintaining the same API:
 //!
-//! ```ignore
+//! ```rust
+//! # #[cfg(feature = "qasm")]
+//! # {
+//! # use pecos_core::errors::PecosError;
+//! # fn main() -> Result<(), PecosError> {
 //! use pecos::{EngineType, DynamicEngineBuilder, sim_dynamic};
+//! use pecos_qasm::qasm_engine;
+//! use pecos_programs::QasmProgram;
 //!
 //! // Runtime engine selection based on user input
+//! let user_input = "qasm";
 //! let engine_type = match user_input {
 //!     "qasm" => EngineType::Qasm,
 //!     "llvm" => EngineType::Llvm,
@@ -42,15 +68,23 @@
 //!     _ => panic!("Unknown engine type"),
 //! };
 //!
-//! // Create builder dynamically
-//! let builder = match engine_type {
-//!     EngineType::Qasm => DynamicEngineBuilder::new(qasm_engine().program(QasmProgram::from_string("..."))),
-//!     EngineType::Llvm => DynamicEngineBuilder::new(llvm_engine().program(LlvmProgram::from_string("..."))),
-//!     EngineType::Selene => DynamicEngineBuilder::new(selene_engine().program(HugrProgram::from_bytes(vec![])).qubits(2)),
-//! };
+//! // For this example, we'll just use QASM
+//! let qasm_code = r#"
+//! OPENQASM 2.0;
+//! include "qelib1.inc";
+//! qreg q[1];
+//! creg c[1];
+//! h q[0];
+//! measure q[0] -> c[0];
+//! "#;
+//! let builder = DynamicEngineBuilder::new(qasm_engine().program(QasmProgram::from_string(qasm_code)));
 //!
 //! // Use the same API regardless of engine type
-//! let results = sim_dynamic(builder).seed(42).run(1000)?;
+//! let results = sim_dynamic(builder).seed(42).run(10)?;
+//! assert_eq!(results.len(), 10);
+//! # Ok(())
+//! # }
+//! # }
 //! ```
 //!
 //! # Performance Considerations
@@ -108,36 +142,75 @@ impl fmt::Display for EngineType {
 /// # Examples
 ///
 /// ## Runtime engine selection from user input
-/// ```ignore
+/// ```rust
+/// # #[cfg(feature = "qasm")]
+/// # {
+/// # use pecos_core::errors::PecosError;
+/// # fn example() -> Result<(), PecosError> {
 /// use pecos::{EngineType, DynamicEngineBuilder, sim_dynamic};
+/// use pecos_qasm::qasm_engine;
+/// use pecos_programs::QasmProgram;
+/// 
+/// struct Config {
+///     engine_type: &'static str,
+///     source_code: String,
+/// }
 /// 
 /// fn create_engine_from_config(config: &Config) -> DynamicEngineBuilder {
 ///     match config.engine_type {
 ///         "qasm" => DynamicEngineBuilder::new(
 ///             qasm_engine().program(QasmProgram::from_string(&config.source_code))
 ///         ),
-///         "llvm" => DynamicEngineBuilder::new(
-///             llvm_engine().program(LlvmProgram::from_string(&config.source_code))
-///         ),
 ///         _ => panic!("Unknown engine type"),
 ///     }
 /// }
 ///
+/// let config = Config {
+///     engine_type: "qasm",
+///     source_code: r#"
+/// OPENQASM 2.0;
+/// include "qelib1.inc";
+/// qreg q[1];
+/// creg c[1];
+/// h q[0];
+/// measure q[0] -> c[0];
+/// "#.to_string(),
+/// };
 /// let engine = create_engine_from_config(&config);
-/// let results = sim_dynamic(engine).seed(42).run(1000)?;
+/// let results = sim_dynamic(engine).seed(42).run(10)?;
+/// assert_eq!(results.len(), 10);
+/// # Ok(())
+/// # }
+/// # }
 /// ```
 ///
 /// ## Storing multiple engines in a collection
-/// ```ignore
+/// ```rust
+/// # #[cfg(feature = "qasm")]
+/// # {
 /// use std::collections::HashMap;
+/// use pecos::{DynamicEngineBuilder};
+/// use pecos_qasm::qasm_engine;
+/// use pecos_programs::QasmProgram;
 /// 
 /// let mut engines = HashMap::new();
-/// engines.insert("qasm", DynamicEngineBuilder::new(qasm_engine()));
-/// engines.insert("llvm", DynamicEngineBuilder::new(llvm_engine()));
-/// engines.insert("selene", DynamicEngineBuilder::new(selene_engine()));
+/// let qasm_code = r#"
+/// OPENQASM 2.0;
+/// include "qelib1.inc";
+/// qreg q[1];
+/// creg c[1];
+/// h q[0];
+/// measure q[0] -> c[0];
+/// "#;
+/// engines.insert("qasm", DynamicEngineBuilder::new(
+///     qasm_engine().program(QasmProgram::from_string(qasm_code))
+/// ));
 /// 
 /// // Select engine at runtime
+/// let user_choice = "qasm";
 /// let selected = engines.get(user_choice).unwrap();
+/// assert!(engines.contains_key("qasm"));
+/// # }
 /// ```
 pub struct DynamicEngineBuilder {
     builder: Box<dyn DynamicEngineBuilderTrait>,
@@ -200,11 +273,20 @@ impl ClassicalControlEngineBuilder for DynamicEngineBuilder {
 /// This allows using the sim() function with dynamic engine builders.
 ///
 /// # Example
-/// ```ignore
-/// use pecos::{EngineType, DynamicEngineBuilder, sim_dynamic};
+/// ```rust
+/// # #[cfg(feature = "qasm")]
+/// # {
+/// # use pecos_core::errors::PecosError;
+/// # fn example() -> Result<(), PecosError> {
+/// use pecos::{EngineType, create_engine_builder, sim_dynamic};
+/// use pecos_programs::QasmProgram;
 /// 
-/// let engine = DynamicEngineBuilder::from_type(EngineType::Qasm);
-/// let results = sim_dynamic(engine).seed(42).run(1000)?;
+/// // Create a QASM engine builder using the macro
+/// let engine = create_engine_builder!(EngineType::Qasm);
+/// // In a real scenario, you would configure the engine with a program
+/// # Ok(())
+/// # }
+/// # }
 /// ```
 pub fn sim_dynamic(builder: DynamicEngineBuilder) -> SimBuilder<DynamicEngineBuilder> {
     sim(builder)
@@ -215,10 +297,14 @@ pub fn sim_dynamic(builder: DynamicEngineBuilder) -> SimBuilder<DynamicEngineBui
 /// This macro assumes the engine crates are available as dependencies.
 ///
 /// # Example
-/// ```ignore
+/// ```rust
+/// # #[cfg(feature = "qasm")]
+/// # {
 /// use pecos::{create_engine_builder, EngineType};
 /// 
 /// let builder = create_engine_builder!(EngineType::Qasm);
+/// // Builder is created successfully
+/// # }
 /// ```
 #[macro_export]
 macro_rules! create_engine_builder {

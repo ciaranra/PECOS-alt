@@ -52,6 +52,14 @@ impl PyQasmEngineBuilder {
         Ok(self.clone())
     }
 
+    /// Set the WebAssembly module for foreign function calls
+    #[cfg(feature = "wasm")]
+    #[pyo3(signature = (wasm_path))]
+    fn wasm(&mut self, wasm_path: &str) -> PyResult<Self> {
+        self.inner = self.inner.clone().wasm(wasm_path);
+        Ok(self.clone())
+    }
+
     /// Convert to simulation builder
     fn to_sim(&self) -> PyResult<PyQasmSimBuilder> {
         Ok(PyQasmSimBuilder {
@@ -1067,6 +1075,310 @@ impl PyGeneralNoiseModelBuilder {
             inner: self.inner.clone().with_seed(seed)
         })
     }
+    
+    /// Set global scale factor
+    fn with_scale(&self, scale: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_scale(scale)
+        })
+    }
+    
+    /// Set leakage scale factor
+    fn with_leakage_scale(&self, scale: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_leakage_scale(scale)
+        })
+    }
+    
+    /// Set emission scale factor
+    fn with_emission_scale(&self, scale: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_emission_scale(scale)
+        })
+    }
+    
+    /// Set single-qubit Pauli error model
+    fn with_p1_pauli_model(&self, model: std::collections::HashMap<String, f64>) -> PyResult<Self> {
+        use std::collections::BTreeMap;
+        let btree_map: BTreeMap<String, f64> = model.into_iter().collect();
+        Ok(Self {
+            inner: self.inner.clone().with_p1_pauli_model(&btree_map)
+        })
+    }
+    
+    /// Set two-qubit Pauli error model
+    fn with_p2_pauli_model(&self, model: std::collections::HashMap<String, f64>) -> PyResult<Self> {
+        use std::collections::BTreeMap;
+        let btree_map: BTreeMap<String, f64> = model.into_iter().collect();
+        Ok(Self {
+            inner: self.inner.clone().with_p2_pauli_model(&btree_map)
+        })
+    }
+    
+    /// Set average single-qubit gate error probability
+    fn with_average_p1_probability(&self, p: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_average_p1_probability(p)
+        })
+    }
+    
+    /// Set average two-qubit gate error probability
+    fn with_average_p2_probability(&self, p: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_average_p2_probability(p)
+        })
+    }
+    
+    /// Set measurement error probability (symmetric)
+    fn with_meas_probability(&self, p: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_meas_probability(p)
+        })
+    }
+    
+    /// Set preparation error probability
+    fn with_preparation_probability(&self, p: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_prep_probability(p)
+        })
+    }
+    
+    /// Set measurement error probability (asymmetric)
+    fn with_measurement_probability(&self, p0: f64, p1: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_meas_0_probability(p0).with_meas_1_probability(p1)
+        })
+    }
+    
+    /// Add a noiseless gate
+    fn with_noiseless_gate(&self, gate_name: &str) -> PyResult<Self> {
+        use pecos_core::gate_type::GateType;
+        // Make it case-insensitive
+        let gate_type = match gate_name.to_uppercase().as_str() {
+            "I" => GateType::I,
+            "X" => GateType::X,
+            "Y" => GateType::Y,
+            "Z" => GateType::Z,
+            "S" => GateType::SZ,  // S gate is SZ in GateType
+            "SZ" => GateType::SZ,
+            "SDG" => GateType::SZdg,  // S dagger
+            "SZDG" => GateType::SZdg,
+            "H" => GateType::H,
+            "RX" => GateType::RX,
+            "RY" => GateType::RY,
+            "RZ" => GateType::RZ,
+            "T" => GateType::T,
+            "TDG" => GateType::Tdg,
+            "U" => GateType::U,
+            "R1XY" => GateType::R1XY,
+            "CX" => GateType::CX,
+            "SZZ" => GateType::SZZ,
+            "SZZDG" => GateType::SZZdg,
+            "RZZ" => GateType::RZZ,
+            "MEASURE" => GateType::Measure,
+            "PREP" => GateType::Prep,
+            "IDLE" => GateType::Idle,
+            _ => return Err(pyo3::exceptions::PyValueError::new_err(format!("Invalid gate type: {}", gate_name))),
+        };
+        Ok(Self {
+            inner: self.inner.clone().with_noiseless_gate(gate_type)
+        })
+    }
+    
+    /// Set seepage probability
+    fn with_seepage_prob(&self, prob: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_seepage_prob(prob)
+        })
+    }
+    
+    /// Set whether to use coherent dephasing for idle errors
+    fn with_p_idle_coherent(&self, use_coherent: bool) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_p_idle_coherent(use_coherent)
+        })
+    }
+    
+    /// Set the idling noise error rate for the linear term
+    fn with_p_idle_linear_rate(&self, rate: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_p_idle_linear_rate(rate)
+        })
+    }
+    
+    /// Set the idling noise error rate for the quadratic term
+    fn with_p_idle_quadratic_rate(&self, rate: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_p_idle_quadratic_rate(rate)
+        })
+    }
+    
+    /// Set the stochastic model for idling that is linearly dependent on time
+    fn with_p_idle_linear_model(&self, model: std::collections::HashMap<String, f64>) -> PyResult<Self> {
+        use std::collections::BTreeMap;
+        let btree_map: BTreeMap<String, f64> = model.into_iter().collect();
+        Ok(Self {
+            inner: self.inner.clone().with_p_idle_linear_model(&btree_map)
+        })
+    }
+    
+    /// Set coherent to incoherent noise conversion factor
+    fn with_p_idle_coherent_to_incoherent_factor(&self, factor: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_p_idle_coherent_to_incoherent_factor(factor)
+        })
+    }
+    
+    /// Set the average idling noise error rate per channel for the linear term
+    fn with_average_p_idle_linear_rate(&self, rate: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_average_p_idle_linear_rate(rate)
+        })
+    }
+    
+    /// Set the average idling noise error rate per channel for the quadratic term
+    fn with_average_p_idle_quadratic_rate(&self, rate: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_average_p_idle_quadratic_rate(rate)
+        })
+    }
+    
+    /// Set idle scale factor
+    fn with_idle_scale(&self, scale: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_idle_scale(scale)
+        })
+    }
+    
+    /// Set the preparation leakage ratio
+    fn with_prep_leak_ratio(&self, ratio: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_prep_leak_ratio(ratio)
+        })
+    }
+    
+    /// Set the probability of crosstalk during initialization operations
+    fn with_p_prep_crosstalk(&self, prob: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_p_prep_crosstalk(prob)
+        })
+    }
+    
+    /// Set the scaling factor for initialization errors
+    fn with_prep_scale(&self, scale: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_prep_scale(scale)
+        })
+    }
+    
+    /// Set the scaling factor for initialization crosstalk probability
+    fn with_p_prep_crosstalk_scale(&self, scale: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_p_prep_crosstalk_scale(scale)
+        })
+    }
+    
+    /// Set the emission-to-absorption ratio for single-qubit gates
+    fn with_p1_emission_ratio(&self, ratio: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_p1_emission_ratio(ratio)
+        })
+    }
+    
+    /// Set the emission model for single-qubit gates
+    fn with_p1_emission_model(&self, model: std::collections::HashMap<String, f64>) -> PyResult<Self> {
+        use std::collections::BTreeMap;
+        let btree_map: BTreeMap<String, f64> = model.into_iter().collect();
+        Ok(Self {
+            inner: self.inner.clone().with_p1_emission_model(&btree_map)
+        })
+    }
+    
+    /// Set the seepage probability for single-qubit gates
+    fn with_p1_seepage_prob(&self, prob: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_p1_seepage_prob(prob)
+        })
+    }
+    
+    /// Set the scaling factor for single-qubit gate errors
+    fn with_p1_scale(&self, scale: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_p1_scale(scale)
+        })
+    }
+    
+    /// Set angle-dependent parameters for two-qubit gates
+    fn with_p2_angle_params(&self, a: f64, b: f64, c: f64, d: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_p2_angle_params(a, b, c, d)
+        })
+    }
+    
+    /// Set angle-dependent power for two-qubit gates
+    fn with_p2_angle_power(&self, power: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_p2_angle_power(power)
+        })
+    }
+    
+    /// Set the emission-to-absorption ratio for two-qubit gates
+    fn with_p2_emission_ratio(&self, ratio: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_p2_emission_ratio(ratio)
+        })
+    }
+    
+    /// Set the emission model for two-qubit gates
+    fn with_p2_emission_model(&self, model: std::collections::HashMap<String, f64>) -> PyResult<Self> {
+        use std::collections::BTreeMap;
+        let btree_map: BTreeMap<String, f64> = model.into_iter().collect();
+        Ok(Self {
+            inner: self.inner.clone().with_p2_emission_model(&btree_map)
+        })
+    }
+    
+    /// Set the seepage probability for two-qubit gates
+    fn with_p2_seepage_prob(&self, prob: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_p2_seepage_prob(prob)
+        })
+    }
+    
+    /// Set idle probability for two-qubit gates
+    fn with_p2_idle(&self, probability: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_p2_idle(probability)
+        })
+    }
+    
+    /// Set the scaling factor for two-qubit gate errors
+    fn with_p2_scale(&self, scale: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_p2_scale(scale)
+        })
+    }
+    
+    /// Set the probability of crosstalk during measurement operations
+    fn with_p_meas_crosstalk(&self, prob: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_p_meas_crosstalk(prob)
+        })
+    }
+    
+    /// Set the scaling factor for measurement errors
+    fn with_meas_scale(&self, scale: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_meas_scale(scale)
+        })
+    }
+    
+    /// Set the scaling factor for measurement crosstalk probability
+    fn with_p_meas_crosstalk_scale(&self, scale: f64) -> PyResult<Self> {
+        Ok(Self {
+            inner: self.inner.clone().with_p_meas_crosstalk_scale(scale)
+        })
+    }
 }
 
 /// Python wrapper for DepolarizingNoiseModelBuilder
@@ -1125,6 +1437,11 @@ impl PyDepolarizingNoiseModelBuilder {
         Ok(Self {
             inner: self.inner.clone().with_seed(seed)
         })
+    }
+    
+    /// Set preparation error probability (alias for with_prep_probability)
+    fn with_preparation_probability(&self, p: f64) -> PyResult<Self> {
+        self.with_prep_probability(p)
     }
 }
 

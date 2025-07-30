@@ -16,9 +16,8 @@ try:
 
     print("✅ Function defined")
 
-    from guppylang import guppy as guppy_compiler
-
-    compiled = guppy_compiler.compile(random_bit)
+    # Compile the function - in newer guppylang, this is done via the function itself
+    compiled = random_bit.compile()
     print(f"✅ Compiled: {type(compiled)}")
 
 except (ImportError, RuntimeError) as e:

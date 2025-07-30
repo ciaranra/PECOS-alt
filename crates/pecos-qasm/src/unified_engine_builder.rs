@@ -153,10 +153,12 @@ impl QasmEngineBuilder {
     #[cfg(feature = "wasm")]
     pub fn wasm(mut self, wasm: impl IntoWasmProgram) -> Self {
         match wasm.into_wasm_program() {
-            Ok(program) => self.wasm_program = Some(program),
+            Ok(program) => {
+                self.wasm_program = Some(program);
+            }
             Err(e) => {
                 // Store error for later reporting during build
-                eprintln!("Warning: Failed to load WASM program: {}", e);
+                log::warn!("Failed to load WASM program: {}", e);
             }
         }
         self

@@ -2,7 +2,6 @@ name: Python Artifacts
 
 env:
   TRIGGER_ON_PR_PUSH: true  # Set to true to enable triggers on PR pushes
-  PYTHON_VERSION: '3.10'
 
 on:
   push:
@@ -38,14 +37,20 @@ defaults:
 jobs:
   check_pr_push:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    if: |
+      github.event_name == 'pull_request' && github.event.action != 'closed' ||
+      github.event_name == 'push' && contains(fromJSON('["master", "dev", "development"]'), github.ref_name)
     outputs:
       run: ${{ steps.check.outputs.run }}
     steps:
       - name: Check if should run on PR push
         id: check
         run: |
-          if [ "${{ env.TRIGGER_ON_PR_PUSH }}" = "true" ]; then
+          # Always run on pushes to main branches
+          if [ "${{ github.event_name }}" = "push" ] && [[ "${{ github.ref_name }}" =~ ^(master|dev|development)$ ]]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          # For PRs, check the TRIGGER_ON_PR_PUSH setting
+          elif [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ env.TRIGGER_ON_PR_PUSH }}" = "true" ]; then
             echo "run=true" >> $GITHUB_OUTPUT
           else
             echo "run=false" >> $GITHUB_OUTPUT
@@ -54,16 +59,12 @@ jobs:
 
   build_wheels_pecos_rslib:
     needs: check_pr_push
-    if: |
-      always() &&
-      (needs.check_pr_push.result == 'success' && needs.check_pr_push.outputs.run == 'true' || needs.check_pr_push.result == 'skipped') &&
-      (github.event_name != 'pull_request' || github.event.pull_request.merged == true || github.event.action == 'opened' || github.event.action == 'synchronize')
+    if: needs.check_pr_push.result == 'success' && needs.check_pr_push.outputs.run == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ['3.10', '3.11', '3.12', '3.13']
         architecture: [ x86_64, aarch64 ]
         exclude:
           - os: windows-latest
@@ -77,7 +78,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.10'
 
       - name: Remove conflicting README.md
         run: |
@@ -92,7 +93,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --out dist --interpreter python${{ matrix.python-version }}
+          args: --release --out dist --interpreter python3.10
           working-directory: python/pecos-rslib
           target: ${{ matrix.architecture == 'aarch64' && (matrix.os == 'macos-latest' && 'aarch64-apple-darwin' || 'aarch64-unknown-linux-gnu') || (matrix.os == 'macos-latest' && 'x86_64-apple-darwin' || '') }}
           manylinux: auto
@@ -116,24 +117,77 @@ jobs:
             echo "No README.md backup found"
           fi
 
-      - name: Test wheel
-        if: ${{ !(matrix.architecture == 'x86_64' && matrix.os == 'macos-latest') && matrix.architecture != 'aarch64' }}
+      - name: Test wheel is abi3
         run: |
-          pip install --force-reinstall --verbose python/pecos-rslib/dist/*.whl
-          python -c 'import pecos_rslib; print(pecos_rslib.__version__)'
+          # Check that the wheel has abi3 tag
+          ls -la python/pecos-rslib/dist/
+          wheel_file=$(ls python/pecos-rslib/dist/*.whl)
+          echo "Built wheel: $wheel_file"
+          if [[ $wheel_file == *"abi3"* ]]; then
+            echo "Wheel has abi3 tag"
+          else
+            echo "ERROR: Wheel does not have abi3 tag!"
+            exit 1
+          fi
 
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
-          name: wheel-pecos-rslib-${{ matrix.os }}-${{ matrix.architecture }}-py${{ matrix.python-version }}
+          name: wheel-pecos-rslib-${{ matrix.os }}-${{ matrix.architecture }}
           path: python/pecos-rslib/dist/*.whl
 
-  build_sdist_quantum_pecos:
-    needs: [check_pr_push, build_wheels_pecos_rslib]
+  test_abi3_wheels:
+    needs: build_wheels_pecos_rslib
     if: |
       always() &&
-      (needs.check_pr_push.result == 'success' && needs.check_pr_push.outputs.run == 'true' || needs.check_pr_push.result == 'skipped') &&
-      (github.event_name != 'pull_request' || github.event.pull_request.merged == true || github.event.action == 'opened' || github.event.action == 'synchronize')
+      needs.build_wheels_pecos_rslib.result == 'success'
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12', '3.13']
+        platform:
+          - runner: ubuntu-latest
+            os: ubuntu-latest
+            architecture: x86_64
+          - runner: windows-latest
+            os: windows-latest
+            architecture: x86_64
+          - runner: macos-13
+            os: macos-latest
+            architecture: x86_64
+          - runner: macos-latest
+            os: macos-latest
+            architecture: aarch64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download abi3 wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: wheel-pecos-rslib-${{ matrix.platform.os }}-${{ matrix.platform.architecture }}
+          path: ./pecos-rslib-wheel
+
+      - name: Test abi3 wheel with Python ${{ matrix.python-version }}
+        run: |
+          echo "Testing abi3 wheel with Python ${{ matrix.python-version }}"
+          python --version
+          pip install --force-reinstall --verbose ./pecos-rslib-wheel/*.whl
+          python -c 'import pecos_rslib; print(f"pecos_rslib version: {pecos_rslib.__version__}")'
+          python -c 'import sys; print(f"Python version: {sys.version}")'
+
+  build_sdist_quantum_pecos:
+    needs: build_wheels_pecos_rslib
+    if: |
+      always() &&
+      needs.build_wheels_pecos_rslib.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -143,12 +197,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: '3.10'
 
       - name: Download pecos-rslib wheel
         uses: actions/download-artifact@v4
         with:
-          name: wheel-pecos-rslib-ubuntu-latest-x86_64-py${{ env.PYTHON_VERSION }}
+          name: wheel-pecos-rslib-ubuntu-latest-x86_64
           path: ./pecos-rslib-wheel
 
       - name: Install pecos-rslib
@@ -182,30 +236,26 @@ jobs:
           path: python/quantum-pecos/dist/*.tar.gz
 
   build_wheels_quantum_pecos:
-    needs: [check_pr_push, build_wheels_pecos_rslib]
+    needs: build_wheels_pecos_rslib
     if: |
       always() &&
-      (needs.check_pr_push.result == 'success' && needs.check_pr_push.outputs.run == 'true' || needs.check_pr_push.result == 'skipped') &&
-      (github.event_name != 'pull_request' || github.event.pull_request.merged == true || github.event.action == 'opened' || github.event.action == 'synchronize')
+      needs.build_wheels_pecos_rslib.result == 'success'
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ['3.10', '3.11', '3.12', '3.13']
 
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.sha || github.sha }}
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.10'
 
       - name: Download pecos-rslib wheel
         uses: actions/download-artifact@v4
         with:
-          name: wheel-pecos-rslib-ubuntu-latest-x86_64-py${{ matrix.python-version }}
+          name: wheel-pecos-rslib-ubuntu-latest-x86_64
           path: ./pecos-rslib-wheel
 
       - name: Install pecos-rslib
@@ -234,7 +284,71 @@ jobs:
 
       - name: Upload quantum-pecos wheel
         uses: actions/upload-artifact@v4
-        if: matrix.python-version == '3.10'
         with:
           name: wheel-quantum-pecos
           path: python/quantum-pecos/dist/*.whl
+
+  collect_artifacts:
+    needs: [build_wheels_pecos_rslib, build_sdist_quantum_pecos, build_wheels_quantum_pecos, test_abi3_wheels]
+    if: |
+      needs.build_wheels_pecos_rslib.result == 'success' &&
+      needs.build_sdist_quantum_pecos.result == 'success' &&
+      needs.build_wheels_quantum_pecos.result == 'success' &&
+      needs.test_abi3_wheels.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create distribution directories
+        run: |
+          mkdir -p dist/pecos-rslib
+          mkdir -p dist/quantum-pecos
+
+      # Download artifacts into temp directory first
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: temp-artifacts/
+
+      - name: Organize distribution files
+        run: |
+          # Debug: Show what we downloaded
+          echo "=== Downloaded artifacts structure ==="
+          ls -la temp-artifacts/
+
+          # Move pecos-rslib wheels to distribution directory
+          for artifact in temp-artifacts/wheel-pecos-rslib-*/; do
+            if [ -d "$artifact" ]; then
+              echo "Processing $artifact"
+              mv "$artifact"*.whl dist/pecos-rslib/ 2>/dev/null || true
+            fi
+          done
+
+          # Move quantum-pecos files to distribution directory
+          for artifact in temp-artifacts/*-quantum-pecos*/; do
+            if [ -d "$artifact" ]; then
+              echo "Processing $artifact"
+              mv "$artifact"*.whl dist/quantum-pecos/ 2>/dev/null || true
+              mv "$artifact"*.tar.gz dist/quantum-pecos/ 2>/dev/null || true
+            fi
+          done
+
+          # Clean up
+          rm -rf temp-artifacts
+
+      - name: List all collected artifacts
+        run: |
+          echo "=== pecos-rslib artifacts ==="
+          ls -la dist/pecos-rslib/
+          echo ""
+          echo "=== quantum-pecos artifacts ==="
+          ls -la dist/quantum-pecos/
+          echo ""
+          echo "=== Summary ==="
+          echo "pecos-rslib wheels: $(ls -1 dist/pecos-rslib/*.whl 2>/dev/null | wc -l)"
+          echo "quantum-pecos distributions: $(ls -1 dist/quantum-pecos/* 2>/dev/null | wc -l)"
+
+
+      - name: Upload distribution bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: pecos-distribution
+          path: dist/

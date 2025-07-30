@@ -20,35 +20,40 @@ pub use crate::{
 };
 
 // Quantum engines and builders
-pub use crate::quantum::{SparseStabEngine, StateVecEngine, new_quantum_engine_arbitrary_qgate};
+pub use crate::quantum::{SparseStabEngine, StateVecEngine, new_quantum_engine_arbitrary_qgate, QuantumEngine};
 pub use crate::quantum_engine_builder::{state_vector, sparse_stabilizer, IntoQuantumEngineBuilder};
 
 // Noise models - both traits and common implementations
 pub use crate::noise::{
     NoiseModel,
     IntoNoiseModel,  // Needed for .noise() method to work smoothly
-};
-pub use crate::{
     PassThroughNoiseModel,
     DepolarizingNoiseModel,
-    // Convenience structs for noise configuration
+    general::GeneralNoiseModel,
+};
+
+// Convenience structs for noise configuration
+pub use crate::{
     PassThroughNoise,
     DepolarizingNoise,
     DepolarizingCustomNoise,
     BiasedDepolarizingNoise,
 };
-pub use crate::noise::general::GeneralNoiseModel;
 
-// Simulation builders
-pub use crate::sim_builder::{sim, SimBuilder};  // For unified API
-
-// Engine implementations
+// Engine system and stages
 pub use crate::{
+    EngineStage,
+    EngineSystem,
     HybridEngine,
     MonteCarloEngine,
     QuantumSystem,
-    EngineSystem,
-    EngineStage,
+};
+
+// Message passing
+pub use crate::{
+    ByteMessage,
+    ByteMessageBuilder,
+    byte_message::dump_batch,
 };
 
 // Results and data structures
@@ -60,9 +65,8 @@ pub use crate::{
     BitVecDisplayFormat,
 };
 
-// Message passing
-pub use crate::{ByteMessage, ByteMessageBuilder};
-pub use crate::byte_message::dump_batch;
+// Simulation builders
+pub use crate::sim_builder::{sim, SimBuilder};  // For unified API
 
 // Legacy API (to be deprecated)
 pub use crate::run_sim;

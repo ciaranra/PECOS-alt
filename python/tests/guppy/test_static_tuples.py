@@ -23,14 +23,14 @@ from pecos.frontends import guppy_sim
 
 
 @guppy
-def test_1_tuple() -> bool:
+def circuit_1_tuple() -> bool:
     q = qubit()
     x(q)
     return measure(q)
 
 
 @guppy
-def test_2_tuple() -> tuple[bool, bool]:
+def circuit_2_tuple() -> tuple[bool, bool]:
     q1 = qubit()
     x(q1)
     r1 = measure(q1)
@@ -42,7 +42,7 @@ def test_2_tuple() -> tuple[bool, bool]:
 
 
 @guppy
-def test_3_tuple() -> tuple[bool, bool, bool]:
+def circuit_3_tuple() -> tuple[bool, bool, bool]:
     q1 = qubit()
     x(q1)
     r1 = measure(q1)
@@ -58,7 +58,7 @@ def test_3_tuple() -> tuple[bool, bool, bool]:
 
 
 @guppy
-def test_4_tuple() -> tuple[bool, bool, bool, bool]:
+def circuit_4_tuple() -> tuple[bool, bool, bool, bool]:
     q1 = qubit()
     x(q1)
     r1 = measure(q1)
@@ -77,7 +77,7 @@ def test_4_tuple() -> tuple[bool, bool, bool, bool]:
 
 
 @guppy  
-def test_5_tuple() -> tuple[bool, bool, bool, bool, bool]:
+def circuit_5_tuple() -> tuple[bool, bool, bool, bool, bool]:
     q1 = qubit()
     x(q1)
     r1 = measure(q1)
@@ -113,38 +113,38 @@ def run_function_test(name: str, func):
 
 def test_1_tuple_return():
     """Test that 1-tuple (bool) returns work correctly."""
-    assert run_function_test("1-tuple (bool)", test_1_tuple)
+    assert run_function_test("1-tuple (bool)", circuit_1_tuple)
 
 
 def test_2_tuple_return():
     """Test that 2-tuple returns work correctly."""
-    assert run_function_test("2-tuple", test_2_tuple)
+    assert run_function_test("2-tuple", circuit_2_tuple)
 
 
 def test_3_tuple_return():
     """Test that 3-tuple returns work correctly."""
-    assert run_function_test("3-tuple", test_3_tuple)
+    assert run_function_test("3-tuple", circuit_3_tuple)
 
 
 def test_4_tuple_return():
     """Test that 4-tuple returns work correctly."""
-    assert run_function_test("4-tuple", test_4_tuple)
+    assert run_function_test("4-tuple", circuit_4_tuple)
 
 
 def test_5_tuple_return():
     """Test that 5-tuple returns work correctly."""
-    assert run_function_test("5-tuple", test_5_tuple)
+    assert run_function_test("5-tuple", circuit_5_tuple)
 
 
 if __name__ == "__main__":
     print("Testing different tuple sizes with static functions...")
     
     tests = [
-        ("1-tuple (bool)", test_1_tuple),
-        ("2-tuple", test_2_tuple),
-        ("3-tuple", test_3_tuple),
-        ("4-tuple", test_4_tuple),
-        ("5-tuple", test_5_tuple),
+        ("1-tuple (bool)", circuit_1_tuple),
+        ("2-tuple", circuit_2_tuple),
+        ("3-tuple", circuit_3_tuple),
+        ("4-tuple", circuit_4_tuple),
+        ("5-tuple", circuit_5_tuple),
     ]
     
     for name, func in tests:

@@ -971,7 +971,9 @@ impl QASMEngine {
                     }
 
                     debug!("Evaluating if condition: {condition:?}");
-                    let condition_value = self.evaluate_expression_bitvec(condition)?.as_i64();
+                    // Use evaluate_expression_bitvec_with_width to support WASM functions
+                    // For conditions, we don't need a specific width - just evaluate as boolean
+                    let condition_value = self.evaluate_expression_bitvec_with_width(condition, 1)?.as_i64();
                     debug!("Condition value: {condition_value}");
 
                     if condition_value != 0 {
@@ -1132,24 +1134,24 @@ impl QASMEngine {
         Ok(Some(self.message_builder.build()))
     }
 
-    /// Evaluate an expression with `BitVec` support
-    fn evaluate_expression_bitvec(&self, expr: &Expression) -> Result<ExpressionValue, PecosError> {
-        // For non-assignment contexts (like conditionals), let operands determine width
-        // by using 0 as the minimum width hint
-        evaluate_expression_bitvec(expr, self, 0)
-    }
 
     fn evaluate_expression_bitvec_with_width(
         &mut self,
         expr: &Expression,
         target_width: usize,
     ) -> Result<ExpressionValue, PecosError> {
+        eprintln!("DEBUG: evaluate_expression_bitvec_with_width called with expr: {:?}", expr);
+        
         // Check if this is a WASM function call
         #[cfg(feature = "wasm")]
         if let Expression::FunctionCall { name, args } = expr {
+            eprintln!("DEBUG: Found function call '{}' with {} args", name, args.len());
+            eprintln!("DEBUG: Checking foreign_object: {:?}", self.foreign_object.is_some());
             if let Some(ref _foreign_obj) = self.foreign_object {
+                eprintln!("DEBUG: foreign_object is Some");
                 // Check if it's not a built-in function
                 if !crate::BUILTIN_FUNCTIONS.contains(&name.as_str()) {
+                    eprintln!("DEBUG: '{}' is not a built-in function, treating as WASM", name);
                     // Evaluate arguments first (while we still have access to self)
                     let mut arg_values = Vec::new();
                     for arg in args {
@@ -1187,6 +1189,19 @@ impl QASMEngine {
         }
 
         // Use target width as hint for expression evaluation
+        debug!("Falling back to regular evaluate_expression_bitvec for expr: {:?}", expr);
+        
+        // If this is a function call and we reached here, it means:
+        // 1. Either WASM feature is disabled, or
+        // 2. No foreign object is set, or  
+        // 3. It's a built-in function
+        #[cfg(feature = "wasm")]
+        if let Expression::FunctionCall { name, .. } = expr {
+            if !crate::BUILTIN_FUNCTIONS.contains(&name.as_str()) {
+                debug!("WASM function '{}' called but foreign_object is {:?}", name, self.foreign_object.is_some());
+            }
+        }
+        
         evaluate_expression_bitvec(expr, self, target_width)
     }
 }
