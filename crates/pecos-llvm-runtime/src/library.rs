@@ -34,7 +34,7 @@ use crate::utils::{LLVM_LOG, log_error, retry_with_backoff, validate_library_fil
 /// This is an internal implementation detail used by `LlvmEngine`. 
 /// Users should interact with `LlvmEngine` instead of using `LlvmLibrary` directly.
 /// 
-/// # Example - Use LlvmEngine instead
+/// # Example - Use `LlvmEngine` instead
 ///
 /// ```no_run
 /// use pecos_llvm_runtime::prelude::*;
@@ -213,11 +213,11 @@ impl LlvmLibrary {
                 // DEBUG: Let's see what's in the returned structure
                 if !struct_ptr.is_null() {
                     // Cast to { i1, i1 }* which is what the wrapper returns
-                    let tuple_ptr = struct_ptr as *const (bool, bool);
+                    let tuple_ptr = struct_ptr.cast::<(bool, bool)>();
                     let (a, b) = *tuple_ptr;
                     
                     // Store the values for debugging
-                    crate::runtime::core_runtime::store_tuple_return(&[a as i32, b as i32]);
+                    crate::runtime::core_runtime::store_tuple_return(&[i32::from(a), i32::from(b)]);
                 }
                 
                 // Don't extract values or call store_tuple_return
@@ -280,7 +280,7 @@ impl LlvmLibrary {
                 debug!("LLVM Library: Function returned 4-bool-tuple ({}, {}, {}, {})", a, b, c, d);
                 
                 // Convert bool values to i32
-                let values = [a as i32, b as i32, c as i32, d as i32];
+                let values = [i32::from(a), i32::from(b), i32::from(c), i32::from(d)];
                 
                 // Check if all values are placeholders
                 if values.iter().all(|&v| v == -1) {
@@ -297,10 +297,10 @@ impl LlvmLibrary {
                 debug!("LLVM Library: Function returned packed u8: {packed:08b}");
                 // Extract individual bits
                 let values = [
-                    (packed & 0x01) as i32,
-                    ((packed >> 1) & 0x01) as i32,
-                    ((packed >> 2) & 0x01) as i32,
-                    ((packed >> 3) & 0x01) as i32,
+                    i32::from(packed & 0x01),
+                    i32::from((packed >> 1) & 0x01),
+                    i32::from((packed >> 2) & 0x01),
+                    i32::from((packed >> 3) & 0x01),
                 ];
                 crate::runtime::core_runtime::store_tuple_return(&values);
                 Ok(0) // Return 0 to indicate success

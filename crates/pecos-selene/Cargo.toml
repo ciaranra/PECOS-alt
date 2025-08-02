@@ -1,0 +1,50 @@
+[package]
+name = "pecos-selene"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Selene integration for PECOS quantum simulation"
+readme = "README.md"
+
+[dependencies]
+pecos-core.workspace = true
+pecos-engines.workspace = true
+pecos-programs.workspace = true
+
+# Selene dependencies - using path dependencies since they're not published
+selene-core = { path = "../../../selene/selene-core" }
+# TODO: Add hugr-qis-compiler when PyO3 version conflicts are resolved
+# selene-hugr-qis-compiler = { path = "../../../selene/selene-compilers/hugr_qis" }
+
+# For error handling
+thiserror.workspace = true
+anyhow.workspace = true
+
+# For async operations if needed
+tokio = { workspace = true, features = ["full"], optional = true }
+
+# For HUGR support
+hugr = { workspace = true, optional = true }
+tket2 = { workspace = true, optional = true }
+tket2-hseries = { workspace = true, features = ["llvm"], optional = true }
+inkwell = { workspace = true, optional = true }
+
+# Standard library extensions
+log.workspace = true
+
+# For dynamic library compilation and loading
+tempfile.workspace = true
+libloading.workspace = true
+
+[dev-dependencies]
+env_logger.workspace = true
+
+[features]
+default = ["hugr"]
+hugr = ["dep:hugr", "dep:tket2", "dep:tket2-hseries", "dep:inkwell"]
+async = ["tokio"]

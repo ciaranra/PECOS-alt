@@ -124,8 +124,8 @@ impl LlvmSource {
             Self::HugrBytes(bytes) => compile_hugr_bytes(bytes),
 
             Self::HugrFile(path) => {
-                // Use pecos-hugr-llvm to compile file directly
-                use pecos_hugr_llvm::compile_hugr_to_llvm;
+                // Use pecos-hugr to compile file directly
+                use pecos_hugr::compile_hugr_to_llvm;
                 let temp_output = tempfile::NamedTempFile::new()
                     .map_err(|e| PecosError::with_context(e, "Failed to create temp file"))?;
 
@@ -145,6 +145,6 @@ impl LlvmSource {
 
 /// Compile HUGR bytes to LLVM IR string
 fn compile_hugr_bytes(hugr_bytes: Vec<u8>) -> Result<String, PecosError> {
-    use pecos_hugr_llvm::compile_hugr_bytes_to_string;
+    use pecos_hugr::compile_hugr_bytes_to_string;
     compile_hugr_bytes_to_string(&hugr_bytes)
 }

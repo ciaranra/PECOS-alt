@@ -85,14 +85,15 @@ use super::builder::MonteCarloEngineBuilder;
 ///
 /// // This would run the simulation but we won't actually run it in the doctest
 /// # let num_shots = 10; // Using a small number for the doctest
-/// # let num_workers = 1; // Using a single worker for the doctest
-/// # let _results = engine.run(num_shots, num_workers);
+/// # let _results = engine.run(num_shots);
 /// ```
 pub struct MonteCarloEngine {
     /// Template `HybridEngine` that is cloned for each worker
     pub hybrid_engine_template: HybridEngine,
     /// Random number generator for seed generation
     pub rng: ChaCha8Rng,
+    /// Default number of worker threads
+    pub default_workers: usize,
 }
 
 impl MonteCarloEngine {
@@ -232,8 +233,29 @@ impl MonteCarloEngine {
     ///
     /// # Panics
     /// - If `num_shots` is zero.
+    pub fn run(&mut self, num_shots: usize) -> Result<ShotVec, PecosError> {
+        self.run_with_workers(num_shots, self.default_workers)
+    }
+
+    /// Run the Monte Carlo simulation with a specified number of worker threads.
+    ///
+    /// This method runs the simulation with the specified number of shots and worker threads,
+    /// overriding the default worker count configured during construction.
+    ///
+    /// # Arguments
+    /// * `num_shots` - The number of shots to run
+    /// * `num_workers` - The number of parallel worker threads to use
+    ///
+    /// # Returns
+    /// Aggregated results from all shots.
+    ///
+    /// # Errors
+    /// Returns a `PecosError` if any part of the simulation fails.
+    ///
+    /// # Panics
+    /// - If `num_shots` is zero.
     /// - If `num_workers` is zero.
-    pub fn run(&mut self, num_shots: usize, num_workers: usize) -> Result<ShotVec, PecosError> {
+    pub fn run_with_workers(&mut self, num_shots: usize, num_workers: usize) -> Result<ShotVec, PecosError> {
         assert!(num_shots > 0, "num_shots cannot be zero");
         assert!(num_workers > 0, "num_workers cannot be zero");
 
@@ -300,13 +322,13 @@ impl MonteCarloEngine {
                             let panic_msg = if let Some(s) = panic_payload.downcast_ref::<String>() {
                                 s.clone()
                             } else if let Some(s) = panic_payload.downcast_ref::<&str>() {
-                                s.to_string()
+                                (*s).to_string()
                             } else {
                                 "Unknown panic occurred during shot execution".to_string()
                             };
                             
                             return Err(PecosError::Processing(format!(
-                                "Shot execution failed: {}", panic_msg
+                                "Shot execution failed: {panic_msg}"
                             )));
                         }
                     };
@@ -411,7 +433,7 @@ impl MonteCarloEngine {
             engine.set_seed(s)?;
         }
 
-        engine.run(num_shots, num_workers)
+        engine.run_with_workers(num_shots, num_workers)
     }
 
     /// Static method to run a simulation with a classical engine and any noise model.
@@ -555,6 +577,7 @@ impl Clone for MonteCarloEngine {
         Self {
             hybrid_engine_template: self.hybrid_engine_template.clone(),
             rng: self.rng.clone(),
+            default_workers: self.default_workers,
         }
     }
 }

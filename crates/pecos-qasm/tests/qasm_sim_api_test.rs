@@ -3,7 +3,7 @@
 use pecos_qasm::prelude::*;
 use pecos_qasm::qasm_engine;
 use pecos_programs::QasmProgram;
-use pecos_engines::{ClassicalControlEngineBuilder, state_vector, sparse_stabilizer};
+use pecos_engines::{ClassicalControlEngineBuilder, sim_builder, state_vector, sparse_stabilizer};
 use std::collections::BTreeMap;
 
 #[test]
@@ -41,7 +41,7 @@ fn test_build_once_run_multiple() {
         measure q[0] -> c[0];
     "#;
 
-    let sim = qasm_engine().program(QasmProgram::from_string(qasm)).to_sim().seed(42).build().unwrap();
+    let mut sim = qasm_engine().program(QasmProgram::from_string(qasm)).to_sim().seed(42).build().unwrap();
 
     // Run multiple times
     let results1 = sim.run(100).unwrap();
@@ -207,11 +207,13 @@ fn test_deterministic_with_seed() {
         measure q[0] -> c[0];
     "#;
 
-    // Run twice with same seed
-    let sim = qasm_engine().program(QasmProgram::from_string(qasm)).to_sim().seed(123).build().unwrap();
+    // Build two separate simulations with same seed
+    let mut sim1 = sim_builder()
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm))).seed(123).build().unwrap();
+    let mut sim2 = qasm_engine().program(QasmProgram::from_string(qasm)).to_sim().seed(123).build().unwrap();
 
-    let results1 = sim.run(100).unwrap();
-    let results2 = sim.run(100).unwrap();
+    let results1 = sim1.run(100).unwrap();
+    let results2 = sim2.run(100).unwrap();
 
     // Convert to comparable format
     let map1 = results1.try_as_shot_map().unwrap();
@@ -238,7 +240,7 @@ fn test_full_configuration() {
 
     let noise_builder = BiasedDepolarizingNoiseModel::builder().with_uniform_probability(0.01);
 
-    let sim = qasm_engine().program(QasmProgram::from_string(qasm)).to_sim()
+    let mut sim = qasm_engine().program(QasmProgram::from_string(qasm)).to_sim()
         .seed(42)
         .workers(2)
         .qubits(2)

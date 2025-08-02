@@ -39,7 +39,7 @@ enum QasmSource {
 /// Trait for types that can be converted to a WASM program
 #[cfg(feature = "wasm")]
 pub trait IntoWasmProgram {
-    /// Convert to a QasmEngineWasmProgram
+    /// Convert to a `QasmEngineWasmProgram`
     fn into_wasm_program(self) -> Result<crate::QasmEngineWasmProgram, PecosError>;
 }
 
@@ -84,7 +84,7 @@ impl IntoWasmProgram for &str {
 
 impl QasmEngineBuilder {
     /// Create a new QASM engine builder
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self::default()
     }
 
@@ -100,7 +100,7 @@ impl QasmEngineBuilder {
         self
     }
 
-    /// Set the QASM source from a QasmProgram
+    /// Set the QASM source from a `QasmProgram`
     pub fn program(mut self, program: impl Into<QasmProgram>) -> Self {
         let program = program.into();
         self.source = Some(QasmSource::String(program.source));
@@ -108,14 +108,14 @@ impl QasmEngineBuilder {
     }
 
     /// Add a virtual include (filename -> content)
-    pub fn with_virtual_include(mut self, filename: &str, content: &str) -> Self {
+    #[must_use] pub fn with_virtual_include(mut self, filename: &str, content: &str) -> Self {
         self.virtual_includes
             .push((filename.to_string(), content.to_string()));
         self
     }
 
     /// Add multiple virtual includes
-    pub fn with_virtual_includes(mut self, includes: &[(&str, &str)]) -> Self {
+    #[must_use] pub fn with_virtual_includes(mut self, includes: &[(&str, &str)]) -> Self {
         for (filename, content) in includes {
             self.virtual_includes
                 .push(((*filename).to_string(), (*content).to_string()));
@@ -124,13 +124,13 @@ impl QasmEngineBuilder {
     }
 
     /// Add an include search path
-    pub fn with_include_path(mut self, path: &str) -> Self {
+    #[must_use] pub fn with_include_path(mut self, path: &str) -> Self {
         self.include_paths.push(path.to_string());
         self
     }
 
     /// Add multiple include search paths
-    pub fn with_include_paths(mut self, paths: &[&str]) -> Self {
+    #[must_use] pub fn with_include_paths(mut self, paths: &[&str]) -> Self {
         for path in paths {
             self.include_paths.push((*path).to_string());
         }
@@ -138,7 +138,7 @@ impl QasmEngineBuilder {
     }
 
     /// Enable or disable complex conditionals
-    pub fn allow_complex_conditionals(mut self, allow: bool) -> Self {
+    #[must_use] pub fn allow_complex_conditionals(mut self, allow: bool) -> Self {
         self.allow_complex_conditionals = allow;
         self
     }
@@ -276,6 +276,6 @@ impl From<QasmProgram> for QasmEngineBuilder {
 /// # Ok(())
 /// # }
 /// ```
-pub fn qasm_engine() -> QasmEngineBuilder {
+#[must_use] pub fn qasm_engine() -> QasmEngineBuilder {
     QasmEngineBuilder::new()
 }

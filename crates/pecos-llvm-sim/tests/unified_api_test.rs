@@ -1,7 +1,7 @@
-//! Test the unified API llvm_engine().to_sim()
+//! Test the unified API `sim_builder().classical(llvm_engine())`
 
 use pecos_llvm_sim::llvm_engine;
-use pecos_engines::{ClassicalControlEngineBuilder, DepolarizingNoise};
+use pecos_engines::{sim_builder, DepolarizingNoise};
 use pecos_programs::LlvmProgram;
 
 const SIMPLE_IR: &str = r#"
@@ -64,9 +64,9 @@ fn test_unified_api_basic() {
     }
 
     // Test the unified API
-    let shot_vec = llvm_engine()
-        .program(LlvmProgram::from_string(SIMPLE_IR))
-        .to_sim()
+    let shot_vec = sim_builder()
+        .classical(llvm_engine()
+        .program(LlvmProgram::from_string(SIMPLE_IR)))
         .seed(42)
         .qubits(2)
         .run(100)
@@ -91,9 +91,9 @@ fn test_unified_api_with_noise() {
     }
 
     // Test the unified API with noise
-    let shot_vec = llvm_engine()
-        .program(LlvmProgram::from_string(SIMPLE_IR))
-        .to_sim()
+    let shot_vec = sim_builder()
+        .classical(llvm_engine()
+        .program(LlvmProgram::from_string(SIMPLE_IR)))
         .seed(42)
         .noise(DepolarizingNoise { p: 0.01 })
         .qubits(2)
@@ -121,9 +121,9 @@ fn test_unified_api_deterministic_behavior() {
     let shots = 50;
 
     // Test with first builder instance
-    let shot_vec_sim = llvm_engine()
-        .program(LlvmProgram::from_string(SIMPLE_IR))
-        .to_sim()
+    let shot_vec_sim = sim_builder()
+        .classical(llvm_engine()
+        .program(LlvmProgram::from_string(SIMPLE_IR)))
         .seed(seed)
         .workers(1) // Single worker for determinism
         .qubits(2)
@@ -131,9 +131,9 @@ fn test_unified_api_deterministic_behavior() {
         .expect("First instance should work");
 
     // Test with second builder instance for comparison
-    let shot_vec_unified = llvm_engine()
-        .program(LlvmProgram::from_string(SIMPLE_IR))
-        .to_sim()
+    let shot_vec_unified = sim_builder()
+        .classical(llvm_engine()
+        .program(LlvmProgram::from_string(SIMPLE_IR)))
         .seed(seed)
         .workers(1) // Single worker for determinism
         .qubits(2)

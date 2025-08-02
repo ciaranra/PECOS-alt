@@ -13,14 +13,14 @@ mod tests {
         let _ = || {
             use pecos_qasm::{qasm_engine};
             use pecos_llvm_sim::{llvm_engine};
-            use pecos_selene_ceng::{selene_engine};
-            use pecos_engines::{ClassicalControlEngineBuilder, DepolarizingNoise, state_vector, sparse_stabilizer};
+            use pecos_selene::{selene_engine};
+            use pecos_engines::{sim_builder, DepolarizingNoise, state_vector, sparse_stabilizer, ClassicalControlEngineBuilder};
             use pecos_programs::QasmProgram;
             
             // QASM engine with unified API
-            let _results = qasm_engine()
-                .program(QasmProgram::from_string("OPENQASM 2.0; include \"qelib1.inc\"; qreg q[2]; h q[0];"))
-                .to_sim()
+            let _results = sim_builder()
+                .classical(qasm_engine()
+                    .program(QasmProgram::from_string("OPENQASM 2.0; include \"qelib1.inc\"; qreg q[2]; h q[0];")))
                 .seed(42)
                 .workers(4)
                 .noise(DepolarizingNoise { p: 0.01 })
@@ -30,9 +30,9 @@ mod tests {
             
             // LLVM engine with unified API
             use pecos_programs::LlvmProgram;
-            let _results = llvm_engine()
-                .program(LlvmProgram::from_string("define void @main() { ret void }"))
-                .to_sim()
+            let _results = sim_builder()
+                .classical(llvm_engine()
+                .program(LlvmProgram::from_string("define void @main() { ret void }")))
                 .seed(42)
                 .auto_workers()
                 .noise(DepolarizingNoise { p: 0.01 })
@@ -41,10 +41,10 @@ mod tests {
                 .run(1000);
             
             // Selene engine with unified API
-            let _results = selene_engine()
+            let _results = sim_builder()
+                .classical(selene_engine()
                 .program(LlvmProgram::from_string("define void @main() { ret void }"))
-                .qubits(2)
-                .to_sim()
+                .qubits(2))
                 .seed(42)
                 .workers(8)
                 .noise(DepolarizingNoise { p: 0.01 })
@@ -59,9 +59,8 @@ mod tests {
         let _ = || {
             use pecos_qasm::{qasm_engine};
             use pecos_llvm_sim::{llvm_engine};
-            use pecos_selene_ceng::{selene_engine};
-            use pecos_engines::ClassicalControlEngineBuilder;
-            
+            use pecos_selene::{selene_engine};
+                        
             // QASM-specific inputs
             use pecos_programs::QasmProgram;
             let _q1 = qasm_engine().program(QasmProgram::from_string("..."));
@@ -81,19 +80,88 @@ mod tests {
             // Note: from_file returns Result, so in real code you'd handle the error
             // let _s3 = selene_engine().program(LlvmProgram::from_file("circuit.ll")?).qubits(1);
             
-            // Common simulation methods (via to_sim())
-            use pecos_engines::{PassThroughNoise, BiasedDepolarizingNoise};
+            // Common simulation methods
+            use pecos_engines::{PassThroughNoise, BiasedDepolarizingNoise, sim_builder};
             
-            let _sim1 = qasm_engine().program(QasmProgram::from_string("...")).to_sim()
+            let _sim1 = sim_builder()
+                .classical(qasm_engine().program(QasmProgram::from_string("...")))
                 .seed(42)
                 .workers(4)
                 .noise(PassThroughNoise);
                 
-            let _sim2 = llvm_engine().program(LlvmProgram::from_string("...")).to_sim()
+            let _sim2 = sim_builder()
+                .classical(llvm_engine().program(LlvmProgram::from_string("...")))
                 .seed(123)
                 .auto_workers()
                 .noise(BiasedDepolarizingNoise { p: 0.02 })
                 .qubits(20);
+        };
+    }
+    
+    #[test]
+    fn test_unified_sim_api() {
+        // Test the new unified simulation API patterns
+        let _ = || {
+            use pecos::sim;
+            use pecos_engines::{sim_builder, state_vector, sparse_stabilizer};
+            use pecos_qasm::qasm_engine;
+            use pecos_programs::{QasmProgram, LlvmProgram};
+            use pecos_engines::DepolarizingNoise;
+            
+            // Pattern 1: Base sim_builder from pecos-engines with explicit .classical()
+            let _results1 = sim_builder()
+                .classical(qasm_engine().program(QasmProgram::from_string("OPENQASM 2.0; qreg q[1];")))
+                .seed(42)
+                .quantum(state_vector())
+                .run(100);
+            
+            // Pattern 2: Convenience sim() from pecos with auto-selection
+            let _results2 = sim(QasmProgram::from_string("OPENQASM 2.0; qreg q[1];"))
+                .seed(42)
+                .quantum(sparse_stabilizer())
+                .run(100);
+            
+            // Pattern 3: Override auto-selection with explicit .classical()
+            use pecos_llvm_sim::llvm_engine;
+            let _results3 = sim(LlvmProgram::from_string("define void @main() { ret void }"))
+                .classical(llvm_engine().program(LlvmProgram::from_string("define void @main() { ret void }")))
+                .run(100);
+            
+            // Pattern 4: Various configuration options work with new API
+            let _results4 = sim(QasmProgram::from_string("OPENQASM 2.0; qreg q[2];"))
+                .seed(123)
+                .workers(4)
+                .noise(DepolarizingNoise { p: 0.01 })
+                .verbose(true)
+                .qubits(2)
+                .quantum(state_vector())
+                .run(1000);
+        };
+    }
+    
+    #[test]
+    fn test_auto_engine_selection() {
+        // Verify that different program types select appropriate engines
+        let _ = || {
+            use pecos::sim;
+            use pecos_programs::{QasmProgram, LlvmProgram, HugrProgram};
+            use pecos_engines::state_vector;
+            
+            // QASM -> QASM engine
+            let _qasm_results = sim(QasmProgram::from_string("OPENQASM 2.0; qreg q[1];"))
+                .quantum(state_vector())
+                .run(10);
+            
+            // LLVM -> LLVM engine
+            let _llvm_results = sim(LlvmProgram::from_string("define void @main() { ret void }"))
+                .quantum(state_vector())
+                .run(10);
+            
+            // HUGR -> Selene engine
+            let _hugr_results = sim(HugrProgram::from_bytes(vec![0x00, 0x01, 0x02]))
+                .quantum(state_vector())
+                .qubits(1)
+                .run(10);
         };
     }
 }

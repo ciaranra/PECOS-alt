@@ -10,7 +10,7 @@
 //! - `pecos-engines`: Engine traits and quantum backends
 //! - `pecos-qasm`: QASM parser and engine
 //! - `pecos-llvm-sim`: LLVM-based simulation engine
-//! - `pecos-selene-ceng`: Selene control engine
+//! - `pecos-selene`: Selene integration
 //! - `pecos-programs`: Program types
 //! - `pecos`: This meta-crate providing unified API
 //! 
@@ -47,7 +47,7 @@ pub mod engines {
     
     pub use pecos_qasm::{qasm_engine, QasmEngine, QasmEngineBuilder};
     pub use pecos_llvm_sim::{llvm_engine, LlvmEngine, LlvmEngineBuilder};
-    pub use pecos_selene_ceng::{selene_engine, SeleneEngine, SeleneEngineBuilder};
+    pub use pecos_selene::{selene_engine, SeleneEngine, SeleneEngineBuilder};
     
     // Export the main trait
     pub use pecos_engines::ClassicalControlEngine;
@@ -206,4 +206,4 @@ pub use results::*;
 pub use errors::*;
 
 // Also export the sim builder at top level
-pub use pecos_engines::{sim, SimBuilder, Simulation};
+pub use pecos_engines::{sim, Simulation};

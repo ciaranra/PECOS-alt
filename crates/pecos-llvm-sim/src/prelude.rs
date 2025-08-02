@@ -42,7 +42,6 @@ pub use pecos_engines::{
 // Noise models - convenience structs
 pub use pecos_engines::{
     DepolarizingNoise,
-    DepolarizingCustomNoise,
     BiasedDepolarizingNoise,
     PassThroughNoise,
 };

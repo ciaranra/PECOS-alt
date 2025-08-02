@@ -98,8 +98,8 @@ pecos-clib-pcg = { version = "0.1.1", path = "crates/pecos-clib-pcg" }
 pecos = { version = "0.1.1", path = "crates/pecos" }
 pecos-cli = { version = "0.1.1", path = "crates/pecos-cli" }
 pecos-llvm-sim = { version = "0.1.1", path = "crates/pecos-llvm-sim" }
-pecos-hugr-llvm = { version = "0.1.1", path = "crates/pecos-hugr-llvm" }
-pecos-selene-ceng = { version = "0.1.1", path = "crates/pecos-selene-ceng" }
+pecos-hugr = { version = "0.1.1", path = "crates/pecos-hugr" }
+pecos-selene = { version = "0.1.1", path = "crates/pecos-selene" }
 pecos-rslib = { version = "0.1.1", path = "python/pecos-rslib/rust" }
 
 # Decoder crates

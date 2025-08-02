@@ -10,7 +10,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Note: In real usage, you would use actual engine builders from the crates:
     // - pecos_qasm::unified_engine_builder::qasm_engine()
     // - pecos_llvm_sim::engine_builder::llvm_engine()
-    // - pecos_selene_ceng::engine_builder::selene_engine()
+    // - pecos_selene::engine_builder::selene_engine()
     //
     // This example focuses on the result format conversions rather than
     // the engine implementation details.

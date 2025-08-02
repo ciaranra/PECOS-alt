@@ -499,7 +499,7 @@ pub mod core_runtime {
     
     /// Get measurement results for tuple return
     /// Returns None if no measurement results or wrong count
-    pub fn get_measurement_results_for_tuple(expected_count: usize) -> Option<Vec<i32>> {
+    #[must_use] pub fn get_measurement_results_for_tuple(expected_count: usize) -> Option<Vec<i32>> {
         RuntimeRegistry::with_current_runtime(|state| {
             // Get the measurement result IDs in order
             let result_ids = state.get_measurement_result_ids();
@@ -530,7 +530,7 @@ pub mod core_runtime {
             for (idx, &result_id) in result_ids.iter().enumerate() {
                 if let Some(measurement_value) = state.get_measurement_result(result_id) {
                     // Convert bool to i32 (false = 0, true = 1)
-                    let int_val = measurement_value as i32;
+                    let int_val = i32::from(measurement_value);
                     values.push(int_val);
                     if should_print_commands() {
                         let thread_id = get_thread_id();
@@ -1589,7 +1589,7 @@ pub unsafe extern "C" fn llvm_runtime_get_measurement_result_ids() -> *mut FFIRe
     
     // Allocate arrays
     let count = result_ids.len();
-    let ids_array = Box::into_raw(result_ids.into_boxed_slice()) as *mut usize;
+    let ids_array = Box::into_raw(result_ids.into_boxed_slice()).cast::<usize>();
     
     // Create the FFI struct
     let ffi_data = Box::new(FFIResultIds {

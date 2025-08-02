@@ -4,7 +4,7 @@ HUGR Parser - Direct to PHIR
 This module parses HUGR format directly into PHIR structures using `hugr_core`,
 leveraging PHIR's hierarchical structure to serve as both AST and IR.
 
-Uses flat iteration approach inspired by pecos-hugr-llvm to avoid stack overflow
+Uses flat iteration approach inspired by pecos-hugr to avoid stack overflow
 issues with deeply nested structures.
 */
 

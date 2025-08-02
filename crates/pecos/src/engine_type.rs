@@ -100,14 +100,14 @@
 //! - `llvm`: Enables LLVM engine support
 //! - `selene`: Enables Selene engine support
 
-use pecos_engines::{ClassicalControlEngineBuilder, ClassicalControlEngine, sim, SimBuilder};
+use pecos_engines::{ClassicalControlEngineBuilder, ClassicalControlEngine, sim};
 use pecos_core::errors::PecosError;
 use std::fmt;
 
 /// Available engine types in PECOS
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EngineType {
-    /// QASM engine for OpenQASM 2.0 programs
+    /// QASM engine for `OpenQASM` 2.0 programs
     Qasm,
     /// LLVM engine for LLVM IR/bitcode programs
     Llvm,
@@ -131,12 +131,12 @@ impl fmt::Display for EngineType {
 /// It's useful when you need to dynamically choose between different engines
 /// based on runtime conditions.
 ///
-/// # Why Use DynamicEngineBuilder?
+/// # Why Use `DynamicEngineBuilder`?
 ///
-/// In Rust, each engine builder has its own concrete type (QasmEngineBuilder,
-/// LlvmEngineBuilder, etc.). This is great for performance and type safety,
+/// In Rust, each engine builder has its own concrete type (`QasmEngineBuilder`,
+/// `LlvmEngineBuilder`, etc.). This is great for performance and type safety,
 /// but it means you can't easily store different builders in the same variable
-/// or collection. DynamicEngineBuilder solves this by wrapping any engine
+/// or collection. `DynamicEngineBuilder` solves this by wrapping any engine
 /// builder in a type-erased container.
 ///
 /// # Examples
@@ -220,7 +220,7 @@ impl DynamicEngineBuilder {
     /// Create a new dynamic engine builder from any concrete engine builder
     pub fn new<B>(builder: B) -> Self 
     where 
-        B: ClassicalControlEngineBuilder + 'static,
+        B: ClassicalControlEngineBuilder + Send + 'static,
         B::Engine: 'static,
     {
         Self {
@@ -237,13 +237,13 @@ impl DynamicEngineBuilder {
         match engine_type {
             EngineType::Qasm => Self::new(pecos_qasm::qasm_engine()),
             EngineType::Llvm => Self::new(pecos_llvm_sim::llvm_engine()),
-            EngineType::Selene => Self::new(pecos_selene_ceng::selene_engine()),
+            EngineType::Selene => Self::new(pecos_selene::selene_engine()),
         }
     }
 }
 
 /// Internal trait for type erasure
-trait DynamicEngineBuilderTrait {
+trait DynamicEngineBuilderTrait: Send {
     fn build(self: Box<Self>) -> Result<Box<dyn ClassicalControlEngine>, PecosError>;
 }
 
@@ -252,7 +252,7 @@ struct ConcreteEngineBuilder<B: ClassicalControlEngineBuilder>(B);
 
 impl<B> DynamicEngineBuilderTrait for ConcreteEngineBuilder<B>
 where
-    B: ClassicalControlEngineBuilder + 'static,
+    B: ClassicalControlEngineBuilder + Send + 'static,
     B::Engine: 'static,
 {
     fn build(self: Box<Self>) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
@@ -270,7 +270,7 @@ impl ClassicalControlEngineBuilder for DynamicEngineBuilder {
 
 /// Create a simulation builder from a dynamic engine builder
 ///
-/// This allows using the sim() function with dynamic engine builders.
+/// This allows using the `sim()` function with dynamic engine builders.
 ///
 /// # Example
 /// ```rust
@@ -288,11 +288,11 @@ impl ClassicalControlEngineBuilder for DynamicEngineBuilder {
 /// # }
 /// # }
 /// ```
-pub fn sim_dynamic(builder: DynamicEngineBuilder) -> SimBuilder<DynamicEngineBuilder> {
+#[must_use] pub fn sim_dynamic(builder: DynamicEngineBuilder) -> pecos_engines::SimBuilder {
     sim(builder)
 }
 
-/// Helper macro to create engine builders based on EngineType
+/// Helper macro to create engine builders based on `EngineType`
 ///
 /// This macro assumes the engine crates are available as dependencies.
 ///
@@ -333,7 +333,7 @@ macro_rules! create_engine_builder {
             $crate::EngineType::Selene => {
                 #[cfg(feature = "selene")]
                 {
-                    $crate::DynamicEngineBuilder::new(pecos_selene_ceng::selene_engine())
+                    $crate::DynamicEngineBuilder::new(pecos_selene::selene_engine())
                 }
                 #[cfg(not(feature = "selene"))]
                 {

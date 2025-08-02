@@ -2,10 +2,11 @@ use clap::{Args, Parser, Subcommand};
 use env_logger::Env;
 use log::debug;
 use pecos::prelude::*;
+use pecos::{sim_builder, state_vector, sparse_stabilizer, DepolarizingNoise, GeneralNoiseModelBuilder};
 use std::io::Write;
 
 mod engine_setup;
-use engine_setup::setup_cli_engine;
+use engine_setup::{setup_cli_engine, setup_cli_engine_builder};
 
 // Constants
 const QIR_CLEANUP_DELAY_MS: u64 = 100;
@@ -234,70 +235,7 @@ fn parse_general_noise_probabilities(noise_str_opt: Option<&String>) -> (f64, f6
     }
 }
 
-/// Create noise model based on user arguments
-fn create_noise_model(args: &RunArgs) -> Box<dyn NoiseModel> {
-    match args.noise_model {
-        NoiseModelType::Depolarizing => {
-            // Create a depolarizing noise model with single probability
-            let prob = parse_depolarizing_noise_probability(args.noise_probability.as_ref());
-            let mut model = DepolarizingNoiseModel::new_uniform(prob);
-
-            // Set seed if provided
-            if let Some(s) = args.seed {
-                let noise_seed = derive_seed(s, "noise_model");
-                let _ = model.set_seed(noise_seed);
-            }
-
-            Box::new(model)
-        }
-        NoiseModelType::General => {
-            // Create a general noise model with five probabilities
-            let (prep, meas_0, meas_1, single_qubit, two_qubit) =
-                parse_general_noise_probabilities(args.noise_probability.as_ref());
-            let mut builder = GeneralNoiseModel::builder()
-                .with_prep_probability(prep)
-                .with_meas_0_probability(meas_0)
-                .with_meas_1_probability(meas_1)
-                .with_p1_probability(single_qubit)
-                .with_p2_probability(two_qubit);
-
-            // Set seed if provided
-            if let Some(s) = args.seed {
-                let noise_seed = derive_seed(s, "noise_model");
-                builder = builder.with_seed(noise_seed);
-            }
-
-            Box::new(builder.build())
-        }
-    }
-}
-
 /// Create quantum engine based on user arguments
-#[allow(clippy::unnecessary_wraps)]
-fn create_quantum_engine(args: &RunArgs, num_qubits: usize) -> Option<Box<dyn QuantumEngine>> {
-    match args.simulator {
-        SimulatorType::StateVector => {
-            // Use StateVecEngine - full quantum state simulator
-            let engine = if let Some(seed) = args.seed {
-                let engine_seed = derive_seed(seed, "quantum_engine");
-                Box::new(StateVecEngine::with_seed(num_qubits, engine_seed))
-            } else {
-                Box::new(StateVecEngine::new(num_qubits))
-            };
-            Some(engine)
-        }
-        SimulatorType::Stabilizer => {
-            // Use SparseStabEngine - Clifford circuit optimizer
-            let engine = if let Some(seed) = args.seed {
-                let engine_seed = derive_seed(seed, "quantum_engine");
-                Box::new(SparseStabEngine::with_seed(num_qubits, engine_seed))
-            } else {
-                Box::new(SparseStabEngine::new(num_qubits))
-            };
-            Some(engine)
-        }
-    }
-}
 
 /// Write results to file or stdout
 fn output_results(
@@ -358,23 +296,49 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
     let program_type = detect_program_type(&program_path)?;
     debug!("Detected program type: {program_type:?}");
 
-    // Set up the engine
-    let classical_engine =
-        setup_cli_engine(&program_path, Some(args.shots.div_ceil(args.workers)))?;
+    // Set up the engine builder
+    let classical_engine_builder = setup_cli_engine_builder(&program_path)?;
 
-    // Create the appropriate noise model and quantum engine
-    let noise_model = create_noise_model(args);
-    let quantum_engine = create_quantum_engine(args, classical_engine.num_qubits());
-
-    // Run the simulation with the selected engine and noise model
-    let results = run_sim(
-        classical_engine,
-        args.shots,
-        args.seed,
-        Some(args.workers),
-        Some(noise_model),
-        quantum_engine,
-    )?;
+    // Run the simulation with the selected engine
+    let mut builder = sim_builder()
+        .classical(classical_engine_builder)
+        .workers(args.workers);
+    
+    if let Some(seed) = args.seed {
+        builder = builder.seed(seed);
+    }
+    
+    // Set noise model based on type
+    match args.noise_model {
+        NoiseModelType::Depolarizing => {
+            let prob = parse_depolarizing_noise_probability(args.noise_probability.as_ref());
+            builder = builder.noise(DepolarizingNoise { p: prob });
+        }
+        NoiseModelType::General => {
+            let (prep, meas_0, meas_1, single_qubit, two_qubit) =
+                parse_general_noise_probabilities(args.noise_probability.as_ref());
+            builder = builder.noise(
+                GeneralNoiseModelBuilder::new()
+                    .with_prep_probability(prep)
+                    .with_meas_0_probability(meas_0)
+                    .with_meas_1_probability(meas_1)
+                    .with_p1_probability(single_qubit)
+                    .with_p2_probability(two_qubit)
+            );
+        }
+    }
+    
+    // Set quantum engine based on simulator type
+    match args.simulator {
+        SimulatorType::StateVector => {
+            builder = builder.quantum(state_vector());
+        }
+        SimulatorType::Stabilizer => {
+            builder = builder.quantum(sparse_stabilizer());
+        }
+    }
+    
+    let results = builder.run(args.shots)?;
 
     // Convert to ShotMap for better display formatting
     let shot_map = results.try_as_shot_map()?;
@@ -432,6 +396,7 @@ fn main() -> Result<(), PecosError> {
 
             match program_type {
                 ProgramType::QIR => {
+                    // For compilation, we need the actual engine not a builder
                     let engine = setup_cli_engine(&program_path, None)?;
                     // The compile method should already return a properly formatted PecosError::Compilation
                     engine.compile()?;

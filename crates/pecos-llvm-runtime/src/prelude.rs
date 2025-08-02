@@ -7,20 +7,20 @@
 //!
 //! ```no_run
 //! use pecos_llvm_runtime::prelude::*;
-//! use pecos_engines::run_sim;
+//! use pecos_engines::{state_vector, PassThroughNoiseModel, QuantumEngineBuilder};
 //!
 //! fn main() -> Result<(), PecosError> {
 //!     // Create an LLVM engine
 //!     let engine = LlvmEngine::new(PathBuf::from("program.ll"));
 //!     
-//!     // Option 1: Run simulation with run_sim (general purpose)
-//!     let results = run_sim(
+//!     // Option 1: Run simulation with MonteCarloEngine
+//!     let results = MonteCarloEngine::run_with_engines(
 //!         Box::new(engine.clone()),
+//!         Box::new(PassThroughNoiseModel::builder().build()),
+//!         state_vector().qubits(engine.num_qubits()).build()?,
 //!         1000,  // shots
+//!         1,     // workers
 //!         Some(42),  // seed
-//!         None,  // workers (defaults to 1)
-//!         None,  // noise model (defaults to no noise)
-//!         None,  // quantum engine (defaults to StateVecEngine)
 //!     )?;
 //!     
 //!     // Work with shot results
@@ -47,7 +47,7 @@ pub use crate::LlvmEngine;
 
 // Common types from pecos-engines for working with results
 pub use pecos_engines::{
-    BitVecDisplayFormat, ByteMessage, ClassicalEngine, Engine, MonteCarloEngine, 
+    BitVecDisplayFormat, ByteMessage, ClassicalEngine, ClassicalControlEngine, Engine, MonteCarloEngine, 
     Shot, ShotMap, ShotMapDisplayExt, ShotMapDisplayOptions, ShotVec,
 };
 

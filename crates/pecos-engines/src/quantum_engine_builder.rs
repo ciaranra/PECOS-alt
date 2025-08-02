@@ -50,7 +50,7 @@ pub trait QuantumEngineBuilder: Send + Sync {
     fn build(&mut self) -> Result<Box<dyn QuantumEngine>, PecosError>;
     
     /// Set the number of qubits if not already set
-    /// This allows SimBuilder to provide qubits at build time if needed
+    /// This allows `SimBuilder` to provide qubits at build time if needed
     fn set_qubits_if_needed(&mut self, num_qubits: usize);
 }
 
@@ -77,12 +77,12 @@ pub struct StateVectorEngineBuilder {
 
 impl StateVectorEngineBuilder {
     /// Create a new state vector engine builder
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self::default()
     }
     
     /// Set the number of qubits
-    pub fn qubits(mut self, num_qubits: usize) -> Self {
+    #[must_use] pub fn qubits(mut self, num_qubits: usize) -> Self {
         self.num_qubits = Some(num_qubits);
         self
     }
@@ -122,12 +122,12 @@ pub struct SparseStabilizerEngineBuilder {
 
 impl SparseStabilizerEngineBuilder {
     /// Create a new sparse stabilizer engine builder
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self::default()
     }
     
     /// Set the number of qubits
-    pub fn qubits(mut self, num_qubits: usize) -> Self {
+    #[must_use] pub fn qubits(mut self, num_qubits: usize) -> Self {
         self.num_qubits = Some(num_qubits);
         self
     }
@@ -159,17 +159,17 @@ impl IntoQuantumEngineBuilder for SparseStabilizerEngineBuilder {
 // Removed IntoQuantumEngine implementation for enum - using builders only
 
 /// Create a state vector quantum engine builder
-pub fn state_vector() -> StateVectorEngineBuilder {
+#[must_use] pub fn state_vector() -> StateVectorEngineBuilder {
     StateVectorEngineBuilder::new()
 }
 
 /// Create a sparse stabilizer quantum engine builder
-pub fn sparse_stabilizer() -> SparseStabilizerEngineBuilder {
+#[must_use] pub fn sparse_stabilizer() -> SparseStabilizerEngineBuilder {
     SparseStabilizerEngineBuilder::new()
 }
 
-/// Alias for sparse_stabilizer
-pub fn sparse_stab() -> SparseStabilizerEngineBuilder {
+/// Alias for `sparse_stabilizer`
+#[must_use] pub fn sparse_stab() -> SparseStabilizerEngineBuilder {
     sparse_stabilizer()
 }
 

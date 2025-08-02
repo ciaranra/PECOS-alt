@@ -28,8 +28,8 @@ wasm = ["pecos-qasm/wasm"]
 # TEMPORARILY DISABLED due to pytest environment conflicts and segfaults
 llvm-jit = ["pecos-llvm-runtime/llvm-jit"]
 
-# HUGR-LLVM pipeline: HUGR → LLVM IR (via pecos-hugr-llvm)
-hugr-llvm-pipeline = ["pecos-hugr-llvm", "dep:hugr"]
+# HUGR-LLVM pipeline: HUGR → LLVM IR (via pecos-hugr)
+hugr-llvm-pipeline = ["pecos-hugr", "dep:hugr"]
 
 # Legacy feature for backward compatibility
 hugr = ["hugr-llvm-pipeline"]
@@ -43,10 +43,10 @@ pecos-qasm = { workspace = true, features = ["wasm"] }
 pecos-engines = { workspace = true }
 pecos-llvm-runtime = { workspace = true }
 pecos-llvm-sim = { workspace = true }
-pecos-selene-ceng = { path = "../../../crates/pecos-selene-ceng", features = ["hugr"] }
+pecos-selene = { path = "../../../crates/pecos-selene", features = ["hugr"] }
 pecos-phir = { path = "../../../crates/pecos-phir" }
 pecos-phir-json = { path = "../../../crates/pecos-phir-json" }
-pecos-hugr-llvm = { path = "../../../crates/pecos-hugr-llvm", optional = true }
+pecos-hugr = { path = "../../../crates/pecos-hugr", optional = true }
 hugr = { version = "0.20", optional = true }
 parking_lot = { workspace = true}
 serde_json = { workspace = true }

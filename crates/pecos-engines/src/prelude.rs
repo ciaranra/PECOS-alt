@@ -36,7 +36,6 @@ pub use crate::noise::{
 pub use crate::{
     PassThroughNoise,
     DepolarizingNoise,
-    DepolarizingCustomNoise,
     BiasedDepolarizingNoise,
 };
 
@@ -66,9 +65,6 @@ pub use crate::{
 };
 
 // Simulation builders
-pub use crate::sim_builder::{sim, SimBuilder};  // For unified API
-
-// Legacy API (to be deprecated)
-pub use crate::run_sim;
+pub use crate::sim_builder::{sim, SimBuilder, sim_builder};  // For unified API
 
 pub use serde_json::Value;

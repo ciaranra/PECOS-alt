@@ -1,6 +1,6 @@
 // Test that verifies arbitrary-precision BitVec expressions work without limitations
 
-use pecos_engines::{Data, ClassicalControlEngineBuilder};
+use pecos_engines::{Data, sim_builder};
 use pecos_qasm::qasm_engine;
 use pecos_programs::QasmProgram;
 
@@ -24,9 +24,9 @@ fn test_large_register_full_value_assignment() {
         c[127] = 1;
     ";
 
-    let shot_vec = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let shot_vec = sim_builder()
+        .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];
@@ -75,9 +75,9 @@ fn test_large_register_full_arithmetic() {
         result = a | b;  // Should now work on full 100 bits
     ";
 
-    let shot_vec = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let shot_vec = sim_builder()
+        .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];
@@ -145,9 +145,9 @@ fn test_large_register_comparisons() {
         results[3] = (a != b);  // Should be true
     ";
 
-    let shot_vec = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let shot_vec = sim_builder()
+        .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];
@@ -186,9 +186,9 @@ fn test_large_register_shift_full_width() {
         right_shift = value >> 3;
     ";
 
-    let shot_vec = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let shot_vec = sim_builder()
+        .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];
@@ -249,9 +249,9 @@ fn test_complex_expression_chain() {
         final = c + a;
     ";
 
-    let shot_vec = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let shot_vec = sim_builder()
+        .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];
@@ -294,9 +294,9 @@ fn test_negative_numbers_full_width() {
         result = -neg_one;  // Should be 1
     ";
 
-    let shot_vec = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let shot_vec = sim_builder()
+        .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];

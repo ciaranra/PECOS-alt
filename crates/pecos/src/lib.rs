@@ -69,9 +69,11 @@
 //! measure q -> c;
 //! "#;
 //!
-//! // Run simulation with default settings (no noise, state vector simulator)
-//! let program = QASMProgram::from_str(qasm_str).unwrap();
-//! let results = run_sim(program.into_engine_box(), 1000, Some(42), None, None, None).unwrap();
+//! // Run simulation using the new API
+//! let results = sim(QasmProgram::from_string(qasm_str))
+//!     .seed(42)
+//!     .run(1000)
+//!     .unwrap();
 //!
 //! // Results contains measurement outcomes for each shot
 //! println!("Simulation results: {:?}", results);
@@ -80,17 +82,33 @@
 //! ## Features
 //!
 //! PECOS supports a variety of noise models and quantum simulators. Check the documentation
-//! for `run_qasm_with_options` and `NoiseModelType` for more details on the available options.
+//! for the simulation builders and noise models for more details on the available options.
 
 pub mod engine_type;
 pub mod prelude;
 pub mod program;
+pub mod unified_sim;
 
 pub use engine_type::{EngineType, DynamicEngineBuilder, sim_dynamic};
 pub use pecos_qasm::run_qasm;
+pub use unified_sim::{sim, SimBuilderExt, ProgrammedSimBuilder};
+pub use pecos_engines::{sim_builder, SimInput, state_vector, sparse_stabilizer, DepolarizingNoise, GeneralNoiseModelBuilder, PassThroughNoiseModel};
 
 // Re-export program types from pecos-programs
 pub use pecos_programs::{QasmProgram, LlvmProgram, HugrProgram, Program};
+
+// Re-export engine builders from individual crates
+#[cfg(feature = "qasm")]
+pub use pecos_qasm::qasm_engine;
+
+#[cfg(feature = "llvm")]
+pub use pecos_llvm_sim::llvm_engine;
+
+#[cfg(feature = "selene")]
+pub use pecos_selene::selene_engine;
+
+#[cfg(feature = "phir")]
+pub use pecos_phir_json::phir_json_engine;
 
 use pecos_core::errors::PecosError;
 use pecos_engines::ClassicalControlEngine;
@@ -178,7 +196,7 @@ pub fn setup_llvm_engine_with_config(
 /// This module provides thin orchestration functions that combine HUGR compilation
 /// with LLVM execution. The architecture is:
 ///
-/// 1. `pecos-hugr-llvm` compiles HUGR → LLVM IR (pure compilation, no engine dependencies)
+/// 1. `pecos-hugr` compiles HUGR → LLVM IR (pure compilation, no engine dependencies)
 /// 2. `pecos-llvm-runtime` executes LLVM IR (pure execution, no HUGR dependencies)
 /// 3. `pecos` orchestrates: HUGR → LLVM IR → Execution
 pub mod hugr {
@@ -189,7 +207,7 @@ pub mod hugr {
     /// Compile and run a HUGR file with default settings
     ///
     /// This is a convenience function that:
-    /// 1. Compiles HUGR to LLVM IR using `pecos-hugr-llvm`
+    /// 1. Compiles HUGR to LLVM IR using `pecos-hugr`
     /// 2. Creates an LLVM engine from the IR using `pecos-llvm-runtime`
     /// 3. Returns the configured engine ready for execution
     ///
@@ -207,7 +225,7 @@ pub mod hugr {
         shots: Option<usize>,
     ) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
         // Step 1: Compile HUGR to LLVM IR
-        let llvm_ir_path = pecos_hugr_llvm::compile_hugr_to_llvm(hugr_path, None)?;
+        let llvm_ir_path = pecos_hugr::compile_hugr_to_llvm(hugr_path, None)?;
 
         // Step 2: Create LLVM engine from the generated IR
         create_llvm_engine_from_ir(&llvm_ir_path, shots)
@@ -229,7 +247,7 @@ pub mod hugr {
         shots: Option<usize>,
     ) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
         // Step 1: Compile HUGR bytes to LLVM IR string
-        let llvm_ir = pecos_hugr_llvm::compile_hugr_bytes_to_string(hugr_bytes)?;
+        let llvm_ir = pecos_hugr::compile_hugr_bytes_to_string(hugr_bytes)?;
 
         // Step 2: Create LLVM engine from the IR string
         create_llvm_engine_from_ir_string(&llvm_ir, shots)

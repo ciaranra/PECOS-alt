@@ -215,7 +215,7 @@ pub struct QasmEngineWasmProgram {
 #[cfg(feature = "wasm")]
 impl QasmEngineWasmProgram {
     /// Create from WASM bytes
-    pub fn from_bytes(bytes: Vec<u8>) -> Self {
+    #[must_use] pub fn from_bytes(bytes: Vec<u8>) -> Self {
         Self {
             wasm_bytes: bytes,
             source_path: None,

@@ -4,7 +4,7 @@
 This module exposes HUGR compilation and LLVM engine functionality to Python.
 */
 
-use pecos_hugr_llvm::{HugrCompiler, HugrCompilerConfig};
+use pecos_hugr::{HugrCompiler, HugrCompilerConfig};
 use pecos_llvm_runtime::LlvmEngine;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyType};
@@ -230,7 +230,7 @@ impl PyHugrLlvmEngine {
     /// # Returns
     /// List of measurement results (0 or 1)
     fn run(&self) -> PyResult<Vec<u8>> {
-        use pecos_engines::run_sim;
+        use pecos_engines::{MonteCarloEngine, PassThroughNoiseModel, state_vector, QuantumEngineBuilder, ClassicalEngine};
 
         let mut engines = PYTHON_LLVM_ENGINES.lock().unwrap();
         let entry = engines.get_mut(&self.engine_id).ok_or_else(|| {
@@ -242,15 +242,16 @@ impl PyHugrLlvmEngine {
 
         // Clone the engine to use as a ClassicalEngine
         let engine_clone = entry.engine.clone();
+        let num_qubits = engine_clone.num_qubits();
 
-        // Use run_sim with the proper architecture
-        let results = run_sim(
+        // Use MonteCarloEngine with the proper architecture
+        let results = MonteCarloEngine::run_with_engines(
             Box::new(engine_clone),
+            Box::new(PassThroughNoiseModel::builder().build()),
+            state_vector().qubits(num_qubits).build().map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?,
             self.shots,
+            1,    // workers
             None, // seed
-            None, // workers
-            None, // noise_model
-            None, // quantum_engine
         )
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
@@ -336,7 +337,7 @@ impl Drop for PyHugrLlvmEngine {
 /// Python function to check if HUGR support is available
 #[pyfunction]
 fn is_hugr_supported() -> bool {
-    // Always true now that we have the separate pecos-hugr-llvm crate
+    // Always true now that we have the separate pecos-hugr crate
     true
 }
 

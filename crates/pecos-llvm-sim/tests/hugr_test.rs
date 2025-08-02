@@ -4,7 +4,7 @@
 //! Full integration tests would require a working HUGR → LLVM compilation pipeline.
 
 use pecos_llvm_sim::llvm_engine;
-use pecos_engines::{state_vector, sparse_stabilizer, DepolarizingNoise, ClassicalControlEngineBuilder};
+use pecos_engines::{state_vector, sparse_stabilizer, DepolarizingNoise, sim_builder};
 use pecos_programs::HugrProgram;
 
 #[test]
@@ -23,9 +23,9 @@ fn test_hugr_sim_api() {
 
     // Test builder method with HUGR program
     let hugr_bytes = vec![0x42; 100]; // Dummy serialized HUGR
-    let builder = llvm_engine()
-        .program(HugrProgram::from_bytes(hugr_bytes))
-        .to_sim()
+    let builder = sim_builder()
+        .classical(llvm_engine()
+        .program(HugrProgram::from_bytes(hugr_bytes)))
         .seed(42)
         .noise(DepolarizingNoise { p: 0.01 });
     assert!(matches!(builder, _));
@@ -36,9 +36,9 @@ fn test_hugr_bytes_input() {
     // Test with dummy HUGR bytes
     let hugr_bytes = vec![0x42; 100]; // Dummy bytes
 
-    let builder = llvm_engine()
-        .program(HugrProgram::from_bytes(hugr_bytes))
-        .to_sim()
+    let builder = sim_builder()
+        .classical(llvm_engine()
+        .program(HugrProgram::from_bytes(hugr_bytes)))
         .workers(4)
         .qubits(2)
         .quantum(state_vector());
@@ -57,9 +57,9 @@ fn test_hugr_file_input() {
     fs::write(temp_file.path(), &hugr_bytes).expect("Failed to write temp file");
 
     // Test with file path
-    let builder = llvm_engine()
-        .program(HugrProgram::from_file(temp_file.path()).unwrap())
-        .to_sim()
+    let builder = sim_builder()
+        .classical(llvm_engine()
+        .program(HugrProgram::from_file(temp_file.path()).unwrap()))
         .seed(12345)
         .qubits(2)
         .quantum(sparse_stabilizer());

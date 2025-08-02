@@ -271,23 +271,20 @@ impl LlvmEngine {
             // Get the measurement result IDs that were tracked during execution
             if library.has_function(b"llvm_runtime_get_measurement_result_ids").unwrap_or(false) &&
                library.has_function(b"llvm_runtime_get_measurements_executed").unwrap_or(false) {
-                match (library.get_measurement_result_ids(), library.get_measurements_executed()) {
-                    (Ok(all_ids), Ok(executed_count)) => {
-                        debug!("LLVM: Got {} result IDs from runtime: {:?}", all_ids.len(), all_ids);
-                        debug!("LLVM: Previously executed measurements: {}", executed_count);
-                        // Only take the result IDs for the NEW measurements
-                        let new_ids: Vec<usize> = all_ids.into_iter()
-                            .skip(executed_count)
-                            .take(outcomes.len())
-                            .collect();
-                        debug!("LLVM: Using result IDs for new measurements: {:?}", new_ids);
-                        (new_ids, executed_count)
-                    },
-                    _ => {
-                        debug!("LLVM: Failed to get measurement tracking info");
-                        // Fallback to sequential IDs
-                        ((0..outcomes.len()).collect(), 0)
-                    }
+                if let (Ok(all_ids), Ok(executed_count)) = (library.get_measurement_result_ids(), library.get_measurements_executed()) {
+                    debug!("LLVM: Got {} result IDs from runtime: {:?}", all_ids.len(), all_ids);
+                    debug!("LLVM: Previously executed measurements: {}", executed_count);
+                    // Only take the result IDs for the NEW measurements
+                    let new_ids: Vec<usize> = all_ids.into_iter()
+                        .skip(executed_count)
+                        .take(outcomes.len())
+                        .collect();
+                    debug!("LLVM: Using result IDs for new measurements: {:?}", new_ids);
+                    (new_ids, executed_count)
+                } else {
+                    debug!("LLVM: Failed to get measurement tracking info");
+                    // Fallback to sequential IDs
+                    ((0..outcomes.len()).collect(), 0)
                 }
             } else {
                 // Fallback to sequential IDs if function not available

@@ -37,12 +37,12 @@ impl PhirJsonEngineProgram {
     }
 
     /// Get the JSON content
-    pub fn json(&self) -> &str {
+    #[must_use] pub fn json(&self) -> &str {
         &self.json_content
     }
 
     /// Get the detected version
-    pub fn version(&self) -> PhirJsonVersion {
+    #[must_use] pub fn version(&self) -> PhirJsonVersion {
         self.version
     }
 }
@@ -74,11 +74,11 @@ pub struct PhirJsonEngineBuilder {
 
 impl PhirJsonEngineBuilder {
     /// Create a new builder
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self { program: None }
     }
 
-    /// Set the program for this engine (accepts either PhirJsonProgram or PhirJsonEngineProgram)
+    /// Set the program for this engine (accepts either `PhirJsonProgram` or `PhirJsonEngineProgram`)
     pub fn program(mut self, program: impl Into<PhirJsonEngineProgram>) -> Self {
         self.program = Some(program.into());
         self
@@ -169,11 +169,11 @@ impl ClassicalControlEngineBuilder for PhirJsonEngineBuilder {
 /// # Ok(())
 /// # }
 /// ```
-pub fn phir_json_engine() -> PhirJsonEngineBuilder {
+#[must_use] pub fn phir_json_engine() -> PhirJsonEngineBuilder {
     PhirJsonEngineBuilder::new()
 }
 
-/// Convenience conversion from PhirJsonProgram to builder
+/// Convenience conversion from `PhirJsonProgram` to builder
 impl From<PhirJsonProgram> for PhirJsonEngineBuilder {
     fn from(program: PhirJsonProgram) -> Self {
         Self::new().program(program)

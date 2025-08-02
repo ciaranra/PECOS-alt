@@ -63,7 +63,7 @@ pub struct LlvmRuntimeState {
     released_qubits: VecDeque<usize>,
     
     /// Tracks the order of measurements and their corresponding result IDs
-    /// This is needed because ByteMessage only returns measurement outcomes in order,
+    /// This is needed because `ByteMessage` only returns measurement outcomes in order,
     /// but we need to map them back to their allocated result IDs
     measurement_result_ids: Vec<usize>,
     
@@ -135,13 +135,11 @@ impl LlvmRuntimeState {
         
         // Check qubit limit if set
         if let Some(max_qubits) = self.max_qubits {
-            if id >= max_qubits {
-                panic!(
+            assert!(!(id >= max_qubits), 
                     "Qubit allocation limit exceeded! Attempted to allocate qubit {} but max_qubits is set to {}. \
                      Increase max_qubits using .max_qubits({}) or higher when building the simulation.",
                     id, max_qubits, id + 1
                 );
-            }
         }
         
         self.next_qubit_id += 1;
@@ -209,12 +207,12 @@ impl LlvmRuntimeState {
     }
     
     /// Get the tuple accessed results for debugging
-    pub fn get_tuple_accessed_results(&self) -> &[usize] {
+    #[must_use] pub fn get_tuple_accessed_results(&self) -> &[usize] {
         &self.tuple_accessed_results
     }
     
     /// Get all measurement results for debugging
-    pub fn get_all_measurement_results(&self) -> &HashMap<usize, bool> {
+    #[must_use] pub fn get_all_measurement_results(&self) -> &HashMap<usize, bool> {
         &self.measurement_results
     }
     
@@ -289,7 +287,7 @@ impl LlvmRuntimeState {
             for (&tuple_idx, &result_id) in &self.tuple_placeholder_mapping {
                 debug!("Checking tuple_idx={} -> result_id={}", tuple_idx, result_id);
                 if let Some(&measurement) = self.measurement_results.get(&result_id) {
-                    let new_value = if measurement { 1 } else { 0 };
+                    let new_value = i32::from(measurement);
                     if tuple_idx < updated_tuple.len() {
                         let old_value = updated_tuple[tuple_idx];
                         updated_tuple[tuple_idx] = new_value;
@@ -419,7 +417,7 @@ impl LlvmRuntimeState {
             // Convert to i32 values (0 or 1)
             let values: Vec<i32> = sorted_results
                 .iter()
-                .map(|(_, value)| if **value { 1 } else { 0 })
+                .map(|(_, value)| i32::from(**value))
                 .collect();
             
             debug!("Exporting measurements as result array: {:?}", values);
@@ -504,12 +502,12 @@ impl LlvmRuntimeState {
     }
     
     /// Get the measurement result IDs in order
-    pub fn get_measurement_result_ids(&self) -> &[usize] {
+    #[must_use] pub fn get_measurement_result_ids(&self) -> &[usize] {
         &self.measurement_result_ids
     }
     
     /// Get how many measurements have been executed
-    pub fn get_measurements_executed(&self) -> usize {
+    #[must_use] pub fn get_measurements_executed(&self) -> usize {
         self.measurements_executed
     }
     
@@ -525,7 +523,7 @@ impl LlvmRuntimeState {
     
     /// Find the index of a result ID in the measurement order
     /// Returns None if the result ID hasn't been queued for measurement yet
-    pub fn find_result_id_index(&self, result_id: usize) -> Option<usize> {
+    #[must_use] pub fn find_result_id_index(&self, result_id: usize) -> Option<usize> {
         self.measurement_result_ids.iter().position(|&id| id == result_id)
     }
 }

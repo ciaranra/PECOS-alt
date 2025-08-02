@@ -1,6 +1,6 @@
 // Tests for the new unified QASM API
 
-use pecos_engines::{state_vector, sparse_stabilizer, ClassicalControlEngineBuilder};
+use pecos_engines::{state_vector, sparse_stabilizer, sim_builder};
 use pecos_engines::noise::{PassThroughNoiseModelBuilder, DepolarizingNoiseModelBuilder};
 use pecos_qasm::qasm_engine;
 use pecos_programs::QasmProgram;
@@ -18,9 +18,9 @@ fn test_run_qasm_simple() {
     "#;
 
     // Simple usage - ideal simulation
-    let results = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let results = sim_builder()
+        .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
         .noise(PassThroughNoiseModelBuilder::new())
         .run(100)
         .unwrap();
@@ -46,9 +46,9 @@ fn test_run_qasm_with_noise() {
         measure q[0] -> c[0];
     "#;
 
-    let results = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let results = sim_builder()
+        .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
         .seed(42)
         .noise(DepolarizingNoiseModelBuilder::new().with_uniform_probability(0.1))
         .run(1000)
@@ -78,9 +78,9 @@ fn test_run_qasm_with_engine() {
     "#;
 
     // Test with StateVector engine
-    let results_sv = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let results_sv = sim_builder()
+        .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
         .seed(42)
         .noise(PassThroughNoiseModelBuilder::new())
         .quantum(state_vector().qubits(2))
@@ -89,9 +89,9 @@ fn test_run_qasm_with_engine() {
     assert_eq!(results_sv.len(), 100);
 
     // Test with SparseStabilizer engine
-    let results_stab = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let results_stab = sim_builder()
+        .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
         .seed(42)
         .noise(PassThroughNoiseModelBuilder::new())
         .quantum(sparse_stabilizer().qubits(2))
@@ -119,9 +119,9 @@ fn test_run_qasm_with_config_structs() {
         .with_p1_probability(0.001)
         .with_p2_probability(0.1);
 
-    let results = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let results = sim_builder()
+        .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
         .seed(42)
         .workers(4)
         .noise(noise_config)
@@ -143,16 +143,16 @@ fn test_run_qasm_deterministic() {
     "#;
 
     // Run twice with same seed
-    let results1 = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let results1 = sim_builder()
+        .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
         .seed(123)
         .noise(PassThroughNoiseModelBuilder::new())
         .run(100)
         .unwrap();
-    let results2 = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let results2 = sim_builder()
+        .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
         .seed(123)
         .noise(PassThroughNoiseModelBuilder::new())
         .run(100)

@@ -17,7 +17,7 @@ pecos-core = { workspace = true, features = ["anyhow"] }
 pecos-engines.workspace = true
 pecos-programs.workspace = true
 pecos-llvm-runtime.workspace = true
-pecos-hugr-llvm.workspace = true
+pecos-hugr.workspace = true
 
 # Standard dependencies
 log.workspace = true

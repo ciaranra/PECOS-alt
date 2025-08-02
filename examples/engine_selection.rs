@@ -10,7 +10,7 @@ use pecos::{EngineType, DynamicEngineBuilder, sim_dynamic};
 use pecos_engines::{sim, SimBuilder, DepolarizingNoise};
 use pecos_qasm::qasm_engine;
 use pecos_llvm_sim::llvm_engine;
-use pecos_selene_ceng::selene_engine;
+use pecos_selene::selene_engine;
 use pecos_programs::QasmProgram;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

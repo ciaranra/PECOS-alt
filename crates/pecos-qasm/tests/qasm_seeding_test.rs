@@ -3,7 +3,7 @@
 #[test]
 fn test_qasm_engine_deterministic_with_seed() {
     use pecos_qasm::qasm_engine;
-    use pecos_engines::ClassicalControlEngineBuilder;
+    use pecos_engines::sim_builder;
     
     let qasm = r#"
         OPENQASM 2.0;
@@ -16,14 +16,15 @@ fn test_qasm_engine_deterministic_with_seed() {
     "#;
     
     // Build simulation with fixed seed
-    let sim = qasm_engine()
-        .qasm(qasm)
-        .to_sim()
+    let sim = sim_builder()
+        .classical(qasm_engine()
+            .qasm(qasm))
         .seed(42)
         .build()
         .unwrap();
     
     // Run twice with same parameters
+    let mut sim = sim;
     let results1 = sim.run(100).unwrap();
     let results2 = sim.run(100).unwrap();
     
@@ -51,7 +52,7 @@ fn test_qasm_engine_deterministic_with_seed() {
 #[test]
 fn test_qasm_engine_random_without_seed() {
     use pecos_qasm::qasm_engine;
-    use pecos_engines::ClassicalControlEngineBuilder;
+    use pecos_engines::sim_builder;
     
     let qasm = r#"
         OPENQASM 2.0;
@@ -64,13 +65,14 @@ fn test_qasm_engine_random_without_seed() {
     "#;
     
     // Build simulation without seed
-    let sim = qasm_engine()
-        .qasm(qasm)
-        .to_sim()
+    let sim = sim_builder()
+        .classical(qasm_engine()
+            .qasm(qasm))
         .build()
         .unwrap();
     
     // Run multiple times - should get different distributions
+    let mut sim = sim;
     let results1 = sim.run(1000).unwrap();
     let results2 = sim.run(1000).unwrap();
     let results3 = sim.run(1000).unwrap();
@@ -84,9 +86,9 @@ fn test_qasm_engine_random_without_seed() {
 }
 
 #[test]
-fn test_qasm_engine_run_with_seed() {
+fn test_qasm_engine_with_seed_reproducibility() {
     use pecos_qasm::qasm_engine;
-    use pecos_engines::ClassicalControlEngineBuilder;
+    use pecos_engines::sim_builder;
     
     let qasm = r#"
         OPENQASM 2.0;
@@ -98,16 +100,24 @@ fn test_qasm_engine_run_with_seed() {
         measure q -> c;
     "#;
     
-    // Build simulation without initial seed
-    let sim = qasm_engine()
-        .qasm(qasm)
-        .to_sim()
+    
+    // Note: MonteCarloEngine doesn't support changing seed after creation
+    // Build with seed instead
+    let mut sim1 = sim_builder()
+        .classical(qasm_engine()
+            .qasm(qasm))
+        .seed(42)
         .build()
         .unwrap();
+    let results1a = sim1.run(100).unwrap();
     
-    // Run with specific seeds
-    let results1a = sim.run_with_seed(100, Some(42)).unwrap();
-    let results1b = sim.run_with_seed(100, Some(42)).unwrap();
+    let mut sim2 = sim_builder()
+        .classical(qasm_engine()
+            .qasm(qasm))
+        .seed(42)
+        .build()
+        .unwrap();
+    let results1b = sim2.run(100).unwrap();
     
     // Same seed should give same results
     assert_eq!(results1a.len(), 100);
@@ -124,8 +134,20 @@ fn test_qasm_engine_run_with_seed() {
     }
     
     // Different seeds should (likely) give different results
-    let results2 = sim.run_with_seed(100, Some(43)).unwrap();
-    let results3 = sim.run_with_seed(100, None).unwrap(); // Random
+    let mut sim3 = sim_builder()
+        .classical(qasm_engine()
+            .qasm(qasm))
+        .seed(43)
+        .build()
+        .unwrap();
+    let results2 = sim3.run(100).unwrap();
+    
+    let mut sim4 = sim_builder()
+        .classical(qasm_engine()
+            .qasm(qasm))
+        .build()
+        .unwrap();
+    let results3 = sim4.run(100).unwrap(); // Random
     
     assert_eq!(results2.len(), 100);
     assert_eq!(results3.len(), 100);
@@ -134,7 +156,7 @@ fn test_qasm_engine_run_with_seed() {
 #[test]
 fn test_qasm_engine_noise_with_seed() {
     use pecos_qasm::qasm_engine;
-    use pecos_engines::{ClassicalControlEngineBuilder, DepolarizingNoise};
+    use pecos_engines::{ClassicalControlEngineBuilder, DepolarizingNoise, sim_builder};
     
     let qasm = r#"
         OPENQASM 2.0;
@@ -148,14 +170,15 @@ fn test_qasm_engine_noise_with_seed() {
     "#;
     
     // With noise and seed, results should still be deterministic
-    let sim = qasm_engine()
-        .qasm(qasm)
-        .to_sim()
+    let sim = sim_builder()
+        .classical(qasm_engine()
+            .qasm(qasm))
         .seed(42)
         .noise(DepolarizingNoise { p: 0.01 })
         .build()
         .unwrap();
     
+    let mut sim = sim;
     let results1 = sim.run(500).unwrap();
     let results2 = sim.run(500).unwrap();
     

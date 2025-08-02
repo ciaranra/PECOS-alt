@@ -49,10 +49,11 @@ pub fn run_qasm<N, Q>(
     seed: Option<u64>,
 ) -> Result<ShotVec, PecosError>
 where
-    N: IntoNoiseModel + 'static,
+    N: IntoNoiseModel + Send + 'static,
     Q: IntoQuantumEngineBuilder + 'static,
-    Q::Builder: 'static,
+    Q::Builder: Send + 'static,
 {
+    // Use the SimBuilder for conditional configuration
     let mut builder = qasm_engine().program(QasmProgram::from_string(qasm)).to_sim();
 
     if let Some(noise) = noise {

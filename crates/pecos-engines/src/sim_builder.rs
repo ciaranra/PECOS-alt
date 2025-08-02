@@ -1,25 +1,17 @@
-//! Unified simulation builder for all engine types
+//! Simulation builder using data-oriented design
 //!
-//! This module provides the `SimBuilder` struct that handles common simulation
-//! configuration (seed, workers, noise, quantum engine) for any classical control engine.
+//! This module provides a builder pattern that collects all simulation configuration
+//! data and constructs a `MonteCarloEngine` for the "build once, run multiple times" pattern.
 
-use crate::classical::{ClassicalEngine, ClassicalControlEngine};
 use crate::engine_builder::ClassicalControlEngineBuilder;
-use crate::noise::{
-    NoiseModel, PassThroughNoiseModel, PassThroughNoiseModelBuilder,
-    DepolarizingNoiseModel, DepolarizingNoiseModelBuilder,
-    BiasedDepolarizingNoiseModel, BiasedDepolarizingNoiseModelBuilder,
-    GeneralNoiseModelBuilder,
-};
-use crate::quantum::QuantumEngine;
-use crate::quantum_engine_builder::{QuantumEngineBuilder, IntoQuantumEngineBuilder, sparse_stab};
-use crate::shot_results::ShotVec;
-use crate::MonteCarloEngine;
+use crate::noise::{NoiseModel, IntoNoiseModel};
+use crate::quantum_engine_builder::{QuantumEngineBuilder, IntoQuantumEngineBuilder};
+use crate::ClassicalControlEngine;
 use pecos_core::errors::PecosError;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-
-// Removed QuantumEngineType enum - using builders instead
+use crate::shot_results::ShotVec;
+use crate::monte_carlo::engine::MonteCarloEngine;
+use crate::monte_carlo::builder::MonteCarloEngineBuilder;
+use crate::hybrid::HybridEngineBuilder;
 
 /// Configuration for simulations
 #[derive(Debug, Clone)]
@@ -42,277 +34,154 @@ impl Default for SimConfig {
     }
 }
 
-/// Statistics tracking for simulation runs
-#[derive(Debug, Clone, Default)]
-struct RunStats {
-    total_shots: usize,
-    run_count: usize,
+/// Trait for building boxed classical control engines
+///
+/// This internal trait allows storing different engine builders uniformly as trait objects.
+trait BoxedClassicalEngineBuilder: Send {
+    fn build_boxed(self: Box<Self>) -> Result<Box<dyn ClassicalControlEngine>, PecosError>;
 }
 
-/// A built simulation ready to run
-pub struct Simulation<E: ClassicalControlEngine> {
-    engine: E,
-    quantum_engine: Box<dyn QuantumEngine>,
-    noise_model: Box<dyn NoiseModel>,
-    config: SimConfig,
-    stats: Arc<Mutex<RunStats>>,
+/// Trait for building boxed quantum engines
+trait BoxedQuantumEngineBuilder: Send {
+    fn build_boxed(self: Box<Self>) -> Result<Box<dyn crate::quantum::QuantumEngine>, PecosError>;
+    fn set_qubits_if_needed(&mut self, num_qubits: usize);
 }
 
-impl<E: ClassicalControlEngine + Clone + 'static> Simulation<E> {
-    /// Run the simulation for the specified number of shots
-    ///
-    /// If a seed was specified during building, it will be used for each run,
-    /// producing identical results. Use `run_with_seed` for different results.
-    pub fn run(&self, shots: usize) -> Result<ShotVec, PecosError> {
-        self.run_with_seed(shots, self.config.seed)
+/// Trait for building boxed noise models
+trait BoxedNoiseModelBuilder: Send {
+    fn build_boxed(self: Box<Self>) -> Box<dyn NoiseModel>;
+}
+
+/// Wrapper that converts any `ClassicalControlEngineBuilder` to `BoxedClassicalEngineBuilder`
+struct ClassicalBuilderWrapper<B: ClassicalControlEngineBuilder> {
+    builder: B,
+}
+
+impl<B> BoxedClassicalEngineBuilder for ClassicalBuilderWrapper<B>
+where
+    B: ClassicalControlEngineBuilder + Send,
+    B::Engine: 'static,
+{
+    fn build_boxed(self: Box<Self>) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
+        Ok(Box::new(self.builder.build()?))
+    }
+}
+
+/// Wrapper for quantum engine builders
+struct QuantumBuilderWrapper<B: QuantumEngineBuilder> {
+    builder: B,
+}
+
+impl<B> BoxedQuantumEngineBuilder for QuantumBuilderWrapper<B>
+where
+    B: QuantumEngineBuilder + Send + 'static,
+{
+    fn build_boxed(mut self: Box<Self>) -> Result<Box<dyn crate::quantum::QuantumEngine>, PecosError> {
+        self.builder.build()
     }
     
-    /// Run the simulation with a specific seed (or None for random)
-    ///
-    /// This allows overriding the seed configured during building, which is
-    /// useful for the reusable simulation pattern when you want different
-    /// results from each run.
-    ///
-    /// # Examples
-    /// ```rust
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # use pecos_engines::{ClassicalControlEngineBuilder, sim_builder::SimBuilder};
-    /// # use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
-    /// # 
-    /// # struct MyEngineBuilder;
-    /// # 
-    /// # impl ClassicalControlEngineBuilder for MyEngineBuilder {
-    /// #     type Engine = ExternalClassicalEngine;
-    /// #     
-    /// #     fn build(self) -> Result<Self::Engine, pecos_core::errors::PecosError> {
-    /// #         Ok(ExternalClassicalEngine::new())
-    /// #     }
-    /// # }
-    /// # 
-    /// # let engine = MyEngineBuilder;
-    /// let sim = engine.to_sim().build()?;
-    /// 
-    /// // Different seed each time for different results
-    /// let r1 = sim.run_with_seed(10, Some(42))?;
-    /// let r2 = sim.run_with_seed(10, Some(43))?;
-    /// let r3 = sim.run_with_seed(10, None)?;  // Random
-    /// 
-    /// // Verify we got results
-    /// assert_eq!(r1.len(), 10);
-    /// assert_eq!(r2.len(), 10);
-    /// assert_eq!(r3.len(), 10);
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn run_with_seed(&self, shots: usize, seed: Option<u64>) -> Result<ShotVec, PecosError> {
-        // Handle zero shots case
-        if shots == 0 {
-            // Update statistics even for zero shots
-            if let Ok(mut stats) = self.stats.lock() {
-                stats.run_count += 1;
-            }
-            return Ok(ShotVec::new());
-        }
-        
-        // Use pre-built quantum engine (cloned for thread safety)
-        let quantum_engine = self.quantum_engine.clone();
-
-        // Run using MonteCarloEngine
-        let result = MonteCarloEngine::run_with_engines(
-            Box::new(self.engine.clone()),
-            self.noise_model.clone(),
-            quantum_engine,
-            shots,
-            self.config.workers,
-            seed,
-        )?;
-        
-        // Update statistics
-        if let Ok(mut stats) = self.stats.lock() {
-            stats.total_shots += shots;
-            stats.run_count += 1;
-        }
-        
-        Ok(result)
-    }
-
-    /// Get statistics about the simulation runs
-    /// 
-    /// Returns (total_shots_run, number_of_runs)
-    pub fn stats(&self) -> (usize, usize) {
-        if let Ok(stats) = self.stats.lock() {
-            (stats.total_shots, stats.run_count)
-        } else {
-            (0, 0)
-        }
+    fn set_qubits_if_needed(&mut self, num_qubits: usize) {
+        self.builder.set_qubits_if_needed(num_qubits);
     }
 }
 
-/// Builder for unified simulations
+/// Wrapper for noise model builders
+struct NoiseModelWrapper<N: IntoNoiseModel> {
+    noise: N,
+}
+
+impl<N> BoxedNoiseModelBuilder for NoiseModelWrapper<N>
+where
+    N: IntoNoiseModel + Send + 'static,
+{
+    fn build_boxed(self: Box<Self>) -> Box<dyn NoiseModel> {
+        self.noise.into_noise_model()
+    }
+}
+
+/// A simulation builder using data-oriented design principles
 ///
-/// The unified API returns `ShotVec` as the standard result format because:
-/// - It preserves all shot information
-/// - Can be converted to `ShotMap` via `try_as_shot_map()`
-/// - Can be converted to columnar format via `shots_to_columnar()`
+/// This builder collects all simulation configuration data and builds a `MonteCarloEngine`
+/// that can be run multiple times. It treats all components (classical engine, quantum engine,
+/// noise model) equally and validates everything at build time.
+///
+/// # Design Philosophy
 /// 
-/// This provides compatibility with all existing PECOS result formats.
+/// - **Data Collection**: The builder is just a data collector - POD-like configuration
+/// - **Ownership**: The builder owns all its data and consumes itself on build
+/// - **Validation**: All validation happens at build time, not during collection
+/// - **Flexibility**: Supports runtime component selection via trait objects
 ///
-/// # Reusable Simulations
+/// # Example
 ///
-/// The builder pattern supports two usage modes:
-///
-/// ## One-shot execution
 /// ```rust
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// # use pecos_engines::{ClassicalControlEngineBuilder, sim_builder::SimBuilder};
+/// # use pecos_engines::{sim_builder, ClassicalControlEngineBuilder};
 /// # use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
-/// # 
-/// # // Example engine builder that builds ExternalClassicalEngine
 /// # struct MyEngineBuilder;
-/// # 
 /// # impl ClassicalControlEngineBuilder for MyEngineBuilder {
 /// #     type Engine = ExternalClassicalEngine;
-/// #     
 /// #     fn build(self) -> Result<Self::Engine, pecos_core::errors::PecosError> {
 /// #         Ok(ExternalClassicalEngine::new())
 /// #     }
 /// # }
-/// # 
-/// # let engine = MyEngineBuilder;
-/// let results = engine.to_sim().seed(42).run(10)?;
-/// assert_eq!(results.len(), 10);
-/// # Ok(())
-/// # }
-/// ```
-///
-/// ## Build once, run multiple times
-/// ```rust
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// # use pecos_engines::{ClassicalControlEngineBuilder, sim_builder::SimBuilder, DepolarizingNoise};
-/// # use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
-/// # 
-/// # struct MyEngineBuilder;
-/// # 
-/// # impl ClassicalControlEngineBuilder for MyEngineBuilder {
-/// #     type Engine = ExternalClassicalEngine;
-/// #     
-/// #     fn build(self) -> Result<Self::Engine, pecos_core::errors::PecosError> {
-/// #         Ok(ExternalClassicalEngine::new())
-/// #     }
-/// # }
-/// # 
-/// # let engine = MyEngineBuilder;
-/// // Build a reusable simulation
-/// let sim = engine.to_sim()
+/// // Pattern 1: Direct run
+/// let results = sim_builder()
+///     .classical(MyEngineBuilder)
 ///     .seed(42)
-///     .noise(DepolarizingNoise { p: 0.01 })
+///     .run(100)?;
+/// 
+/// // Pattern 2: Build once, run multiple times
+/// let mut engine = sim_builder()
+///     .classical(MyEngineBuilder)
+///     .seed(42)
 ///     .build()?;
-///
-/// // Run multiple times with different shot counts
-/// let results_10 = sim.run(10)?;
-/// let results_20 = sim.run(20)?;
-/// let results_30 = sim.run(30)?;
 /// 
-/// assert_eq!(results_10.len(), 10);
-/// assert_eq!(results_20.len(), 20);
-/// assert_eq!(results_30.len(), 30);
+/// let results1 = engine.run(100)?;  // 100 shots
+/// let results2 = engine.run_with_workers(200, 4)?;  // 200 shots, 4 workers
 /// # Ok(())
 /// # }
 /// ```
-///
-/// **Important Note on Seeding**: When using a fixed seed with the reusable pattern,
-/// each `run()` call will produce identical results (for the same number of shots).
-/// This is because the seed is used to initialize the RNG at the start of each run.
-/// If you need different results from each run, you can:
-/// - Use `run_with_seed()` to override the seed for each run
-/// - Don't specify a seed during building (uses system randomness)
-/// - Build a new simulation for each run with different seeds
-///
-/// ```rust
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// # use pecos_engines::{ClassicalControlEngineBuilder, sim_builder::SimBuilder};
-/// # use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
-/// # 
-/// # struct MyEngineBuilder;
-/// # 
-/// # impl ClassicalControlEngineBuilder for MyEngineBuilder {
-/// #     type Engine = ExternalClassicalEngine;
-/// #     
-/// #     fn build(self) -> Result<Self::Engine, pecos_core::errors::PecosError> {
-/// #         Ok(ExternalClassicalEngine::new())
-/// #     }
-/// # }
-/// # 
-/// # let engine = MyEngineBuilder;
-/// // Option 1: Override seed per run
-/// let sim = engine.to_sim().build()?;
-/// let r1 = sim.run_with_seed(10, Some(42))?;
-/// let r2 = sim.run_with_seed(10, Some(43))?;
-/// assert_eq!(r1.len(), 10);
-/// assert_eq!(r2.len(), 10);
-/// # Ok(())
-/// # }
-/// ```
-/// 
-/// ```rust
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// # use pecos_engines::{ClassicalControlEngineBuilder, sim_builder::SimBuilder};
-/// # use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
-/// # 
-/// # struct MyEngineBuilder;
-/// # 
-/// # impl ClassicalControlEngineBuilder for MyEngineBuilder {
-/// #     type Engine = ExternalClassicalEngine;
-/// #     
-/// #     fn build(self) -> Result<Self::Engine, pecos_core::errors::PecosError> {
-/// #         Ok(ExternalClassicalEngine::new())
-/// #     }
-/// # }
-/// # 
-/// # let engine = MyEngineBuilder;
-/// // Option 2: No seed = random each time
-/// let sim = engine.to_sim().build()?;
-/// let r1 = sim.run(10)?;  // Random
-/// let r2 = sim.run(10)?;  // Random, different from r1
-/// assert_eq!(r1.len(), 10);
-/// assert_eq!(r2.len(), 10);
-/// # Ok(())
-/// # }
-/// ```
-///
-/// The reusable pattern is particularly useful for:
-/// - Parameter sweeps over shot counts
-/// - Statistical analysis requiring multiple runs
-/// - Benchmarking and performance testing
-/// - Production scenarios where the same circuit is run repeatedly
-pub struct SimBuilder<B: ClassicalControlEngineBuilder> {
-    engine_builder: B,
+pub struct SimBuilder {
+    // Store builders as trait objects for runtime flexibility
+    classical_builder: Option<Box<dyn BoxedClassicalEngineBuilder>>,
+    quantum_builder: Option<Box<dyn BoxedQuantumEngineBuilder>>,
+    noise_builder: Option<Box<dyn BoxedNoiseModelBuilder>>,
     config: SimConfig,
-    noise_model_factory: Option<Box<dyn FnOnce() -> Box<dyn NoiseModel> + Send>>,
-    quantum_engine_builder: Option<Box<dyn QuantumEngineBuilder>>,
     explicit_num_qubits: Option<usize>,
 }
 
-impl<B: ClassicalControlEngineBuilder> SimBuilder<B> {
-    /// Create a new simulation builder
-    pub fn new(engine_builder: B) -> Self {
+impl SimBuilder {
+    /// Create a new unified simulation builder
+    #[must_use] pub fn new() -> Self {
         Self {
-            engine_builder,
+            classical_builder: None,
+            quantum_builder: None,
+            noise_builder: None,
             config: SimConfig::default(),
-            noise_model_factory: None,
-            quantum_engine_builder: None,
             explicit_num_qubits: None,
         }
     }
 
+    /// Set the classical control engine builder
+    pub fn classical<B>(mut self, engine_builder: B) -> Self
+    where
+        B: ClassicalControlEngineBuilder + Send + 'static,
+        B::Engine: 'static,
+    {
+        self.classical_builder = Some(Box::new(ClassicalBuilderWrapper { builder: engine_builder }));
+        self
+    }
+    
+
     /// Set the random seed
-    pub fn seed(mut self, seed: u64) -> Self {
+    #[must_use] pub fn seed(mut self, seed: u64) -> Self {
         self.config.seed = Some(seed);
         self
     }
 
     /// Set the number of worker threads
-    pub fn workers(mut self, workers: usize) -> Self {
+    #[must_use] pub fn workers(mut self, workers: usize) -> Self {
         self.config.workers = workers;
         self
     }
@@ -325,216 +194,186 @@ impl<B: ClassicalControlEngineBuilder> SimBuilder<B> {
         self
     }
 
-    /// Set the noise model from a builder
-    ///
-    /// This method accepts noise model builders, which are stored for lazy evaluation
-    /// and built later when the simulation is created.
-    pub fn noise<N>(mut self, noise_builder: N) -> Self
-    where
-        N: crate::noise::IntoNoiseModel + 'static,
-    {
-        self.noise_model_factory = Some(Box::new(move || noise_builder.into_noise_model()));
-        self
-    }
-
-    /// Set the quantum engine using any type that implements IntoQuantumEngineBuilder
-    /// 
-    /// This method accepts quantum engine builders from this crate or custom
-    /// engine builders from other crates.
-    /// 
-    /// # Examples
-    /// ```rust
-    /// # use pecos_core::errors::PecosError;
-    /// # use pecos_engines::{ClassicalControlEngineBuilder, sim_builder::SimBuilder};
-    /// # use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
-    /// # 
-    /// # struct MyEngineBuilder;
-    /// # 
-    /// # impl ClassicalControlEngineBuilder for MyEngineBuilder {
-    /// #     type Engine = ExternalClassicalEngine;
-    /// #     
-    /// #     fn build(self) -> Result<Self::Engine, PecosError> {
-    /// #         Ok(ExternalClassicalEngine::new())
-    /// #     }
-    /// # }
-    /// # 
-    /// # fn example() -> Result<(), PecosError> {
-    /// use pecos_engines::quantum_engine_builder::{state_vector, sparse_stabilizer};
-    /// 
-    /// // Using builder functions
-    /// let sim1 = MyEngineBuilder.to_sim()
-    ///     .quantum(state_vector())
-    ///     .build()?;
-    ///     
-    /// // Using builder with configuration - note: qubits() is on SimBuilder, not quantum engine builder
-    /// let sim2 = MyEngineBuilder.to_sim()
-    ///     .quantum(sparse_stabilizer())
-    ///     .qubits(20)
-    ///     .build()?;
-    ///     
-    /// // Run a quick test to verify they work
-    /// let r1 = sim1.run(1)?;
-    /// let r2 = sim2.run(1)?;
-    /// assert_eq!(r1.len(), 1);
-    /// assert_eq!(r2.len(), 1);
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn quantum<Q>(mut self, engine: Q) -> Self
-    where
-        Q: IntoQuantumEngineBuilder + 'static,
-        Q::Builder: 'static,
-    {
-        self.quantum_engine_builder = Some(Box::new(engine.into_quantum_engine_builder()));
-        self
-    }
-    
-    /// Set the number of qubits for the simulation
-    /// 
-    /// This overrides any qubit count from the quantum engine builder or program.
-    /// The last .qubits() call wins.
-    pub fn qubits(mut self, num_qubits: usize) -> Self {
-        self.explicit_num_qubits = Some(num_qubits);
-        self
-    }
-
-
     /// Enable verbose output
-    pub fn verbose(mut self, verbose: bool) -> Self {
+    #[must_use] pub fn verbose(mut self, verbose: bool) -> Self {
         self.config.verbose = verbose;
         self
     }
 
-    /// Build the simulation
+    /// Set the noise model
+    pub fn noise<N>(mut self, noise: N) -> Self
+    where
+        N: IntoNoiseModel + Send + 'static,
+    {
+        self.noise_builder = Some(Box::new(NoiseModelWrapper { noise }));
+        self
+    }
+
+    /// Set the quantum engine
+    pub fn quantum<Q>(mut self, quantum_builder: Q) -> Self
+    where
+        Q: IntoQuantumEngineBuilder + 'static,
+        Q::Builder: Send + 'static,
+    {
+        let builder = quantum_builder.into_quantum_engine_builder();
+        self.quantum_builder = Some(Box::new(QuantumBuilderWrapper { builder }));
+        self
+    }
+
+    /// Alias for `quantum` method
+    pub fn quantum_engine<Q>(self, quantum_builder: Q) -> Self
+    where
+        Q: IntoQuantumEngineBuilder + 'static,
+        Q::Builder: Send + 'static,
+    {
+        self.quantum(quantum_builder)
+    }
+
+    /// Set the number of qubits explicitly
     ///
-    /// This creates a reusable simulation object that can be run multiple times.
-    pub fn build(self) -> Result<Simulation<B::Engine>, PecosError> {
-        // Build the classical engine
-        let engine = self.engine_builder.build()?;
+    /// This is useful when the engine needs to know the number of qubits
+    /// before program execution.
+    #[must_use] pub fn qubits(mut self, num_qubits: usize) -> Self {
+        self.explicit_num_qubits = Some(num_qubits);
+        self
+    }
+    
+    /// Build the `MonteCarloEngine`
+    ///
+    /// This consumes the builder and all its data to create a `MonteCarloEngine`
+    /// that can be run multiple times.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if required components are missing:
+    /// - Classical engine (always required)
+    /// - Number of qubits (if not provided by engine)
+    pub fn build(self) -> Result<MonteCarloEngine, PecosError> {
+        use crate::noise::PassThroughNoiseModel;
+        use crate::quantum::SparseStabEngine;
         
-        // Determine the number of qubits
-        // Priority: 1. explicit_num_qubits, 2. engine.num_qubits()
-        let num_qubits = if let Some(n) = self.explicit_num_qubits {
-            n
-        } else {
-            engine.num_qubits()
+        // Build classical engine (required)
+        let classical_engine = match self.classical_builder {
+            Some(builder) => builder.build_boxed()?,
+            None => return Err(PecosError::Input(
+                "Classical control engine not set. Use .classical() to set one.".to_string()
+            )),
         };
         
-
-        // Build quantum engine
-        let quantum_engine = if let Some(mut builder) = self.quantum_engine_builder {
-            // Ensure the builder has qubits set
+        // Determine number of qubits
+        let num_qubits = self.explicit_num_qubits
+            .or_else(|| Some(classical_engine.num_qubits()))
+            .ok_or_else(|| PecosError::Input(
+                "Number of qubits not specified and cannot be inferred from engine".to_string()
+            ))?;
+        
+        // Build quantum engine (with default if not set)
+        let quantum_engine = if let Some(mut builder) = self.quantum_builder {
             builder.set_qubits_if_needed(num_qubits);
-            builder.build()?
+            builder.build_boxed()?
         } else {
-            // Default to sparse stabilizer
-            let mut default_builder = sparse_stab().qubits(num_qubits);
-            default_builder.build()?
+            // Default: sparse stabilizer
+            Box::new(SparseStabEngine::new(num_qubits))
         };
-
-        // Build noise model from factory or use default
-        let noise_model = if let Some(factory) = self.noise_model_factory {
-            factory()
+        
+        // Build noise model (with default if not set)
+        let noise_model = if let Some(builder) = self.noise_builder {
+            builder.build_boxed()
         } else {
+            // Default: no noise
             Box::new(PassThroughNoiseModel::new())
         };
-
-        Ok(Simulation {
-            engine,
-            quantum_engine,
-            noise_model,
-            config: self.config,
-            stats: Arc::new(Mutex::new(RunStats::default())),
-        })
+        
+        // Build HybridEngine
+        let hybrid_engine = HybridEngineBuilder::new()
+            .with_classical_engine(classical_engine)
+            .with_quantum_engine(quantum_engine)
+            .with_noise_model(noise_model)
+            .build();
+        
+        // Build MonteCarloEngine
+        let mut monte_carlo = MonteCarloEngineBuilder::new()
+            .with_hybrid_engine(hybrid_engine)
+            .with_default_workers(self.config.workers)
+            .build();
+        
+        // Set seed if configured
+        if let Some(seed) = self.config.seed {
+            monte_carlo.set_seed(seed)?;
+        }
+        
+        Ok(monte_carlo)
     }
-
-    /// Run the simulation directly
+    
+    /// Build and run the simulation
     ///
-    /// This is a convenience method that builds and runs the simulation.
+    /// This is a convenience method that builds and runs in one step.
+    /// Uses the configured number of workers (default: 1).
     pub fn run(self, shots: usize) -> Result<ShotVec, PecosError> {
-        let sim = self.build()?;
-        sim.run(shots)
+        let mut engine = self.build()?;
+        engine.run(shots)
     }
 }
 
-impl<B: ClassicalControlEngineBuilder> From<B> for SimBuilder<B> {
-    fn from(builder: B) -> Self {
-        SimBuilder::new(builder)
+impl Default for SimBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-/// Helper function to create a simulation builder from any engine builder
+/// Create a new simulation builder without a classical engine
 ///
-/// This provides a functional-style API as an alternative to the `.to_sim()` method.
-/// Both approaches are equivalent and can be used based on preference.
+/// This function returns a builder that requires setting the classical engine
+/// via the `.classical()` method, providing a flexible API for simulation setup.
 ///
-/// # Equivalent Patterns
+/// The builder supports two usage patterns:
+/// - Direct: `.run(shots)` - builds and runs in one step
+/// - Reusable: `.build()` then `.run(shots)` multiple times
 ///
-/// These three patterns all create the same simulation:
+/// # Example
+///
 /// ```rust
-/// # use pecos_engines::{sim, SimBuilder, ClassicalControlEngineBuilder};
+/// # use pecos_engines::{sim_builder, ClassicalControlEngineBuilder};
+/// # use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
 /// # struct MyEngineBuilder;
 /// # impl ClassicalControlEngineBuilder for MyEngineBuilder {
-/// #     type Engine = pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
+/// #     type Engine = ExternalClassicalEngine;
 /// #     fn build(self) -> Result<Self::Engine, pecos_core::errors::PecosError> {
-/// #         Ok(pecos_engines::monte_carlo::engine::ExternalClassicalEngine::new())
+/// #         Ok(ExternalClassicalEngine::new())
 /// #     }
 /// # }
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// // Pattern 1: Method chaining (original)
-/// let r1 = MyEngineBuilder.to_sim().seed(42).run(10)?;
-/// 
-/// // Pattern 2: Using From trait
-/// let r2 = SimBuilder::from(MyEngineBuilder).seed(42).run(10)?;
-/// 
-/// // Pattern 3: Using sim() helper function
-/// let r3 = sim(MyEngineBuilder).seed(42).run(10)?;
-/// 
-/// assert_eq!(r1.len(), 10);
-/// assert_eq!(r2.len(), 10);
-/// assert_eq!(r3.len(), 10);
-/// # Ok(())
-/// # }
-/// ```
+/// use pecos_engines::{sim_builder, sparse_stab, DepolarizingNoise};
 ///
-/// # When to Use Each Pattern
-///
-/// - **`.to_sim()`**: Traditional method chaining, discoverable via IDE autocomplete
-/// - **`SimBuilder::from()`**: Explicit conversion, useful when you need the type
-/// - **`sim()`**: Functional style, concise for nested expressions
-///
-/// # Examples
-///
-/// ## With concrete engine builders
-/// ```rust
-/// # #[cfg(feature = "qasm")]
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// use pecos_engines::{sim, DepolarizingNoise};
-/// use pecos_qasm::qasm_engine;
-/// use pecos_programs::QasmProgram;
-/// 
-/// let qasm_code = r#"
-/// OPENQASM 2.0;
-/// include "qelib1.inc";
-/// qreg q[1];
-/// creg c[1];
-/// h q[0];
-/// measure q[0] -> c[0];
-/// "#;
-/// 
-/// let results = sim(qasm_engine().program(QasmProgram::from_string(qasm_code)))
-///     .seed(42)
+/// // Direct usage
+/// let results = sim_builder()
+///     .classical(MyEngineBuilder)
+///     .quantum(sparse_stab())
 ///     .noise(DepolarizingNoise { p: 0.01 })
-///     .run(10)?;
+///     .seed(42)
+///     .run(100)?;
 ///     
-/// assert_eq!(results.len(), 10);
+/// // Reusable pattern
+/// let mut sim = sim_builder()
+///     .classical(MyEngineBuilder)
+///     .quantum(sparse_stab())
+///     .build()?;
+/// 
+/// let batch1 = sim.run(100)?;  // 100 shots
+/// let batch2 = sim.run_with_workers(200, 4)?;  // 200 shots, 4 workers
 /// # Ok(())
 /// # }
-/// # #[cfg(not(feature = "qasm"))]
-/// # fn main() {}
 /// ```
+#[must_use] pub fn sim_builder() -> SimBuilder {
+    SimBuilder::new()
+}
+
+/// Create a simulation builder from any `SimInput`
 ///
-/// ## With dynamic engine builders  
+/// This function accepts any type that can be converted into a `SimBuilder`,
+/// including engine builders, programs, or other custom types implementing `SimInput`.
+///
+/// # Example
 /// ```rust
 /// # use pecos_engines::{sim, ClassicalControlEngineBuilder};
 /// # use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
@@ -546,19 +385,66 @@ impl<B: ClassicalControlEngineBuilder> From<B> for SimBuilder<B> {
 /// #     }
 /// # }
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// // With an engine builder
 /// let results = sim(MyEngineBuilder).seed(42).run(10)?;
 /// assert_eq!(results.len(), 10);
 /// # Ok(())
 /// # }
 /// ```
-pub fn sim<B: ClassicalControlEngineBuilder>(builder: B) -> SimBuilder<B> {
-    SimBuilder::from(builder)
+pub fn sim<I: crate::engine_builder::SimInput>(input: I) -> SimBuilder {
+    input.into_sim_builder()
 }
 
-/// Convert ShotVec to columnar format
+// ============================================================================
+// Noise Model Structs for Ergonomic API
+// ============================================================================
+
+/// Pass-through noise configuration (no noise)
+#[derive(Debug, Clone, Copy)]
+pub struct PassThroughNoise;
+
+/// Depolarizing noise configuration
+#[derive(Debug, Clone, Copy)]
+pub struct DepolarizingNoise {
+    /// The depolarizing probability
+    pub p: f64,
+}
+
+/// Biased depolarizing noise configuration
+#[derive(Debug, Clone, Copy)]
+pub struct BiasedDepolarizingNoise {
+    /// The depolarizing probability
+    pub p: f64,
+}
+
+// ============================================================================
+// IntoNoiseModel implementations for convenience structs
+// ============================================================================
+
+impl crate::noise::IntoNoiseModel for PassThroughNoise {
+    fn into_noise_model(self) -> Box<dyn crate::noise::NoiseModel> {
+        Box::new(crate::noise::PassThroughNoiseModel::new())
+    }
+}
+
+impl crate::noise::IntoNoiseModel for DepolarizingNoise {
+    fn into_noise_model(self) -> Box<dyn crate::noise::NoiseModel> {
+        Box::new(crate::noise::DepolarizingNoiseModel::new_uniform(self.p))
+    }
+}
+
+impl crate::noise::IntoNoiseModel for BiasedDepolarizingNoise {
+    fn into_noise_model(self) -> Box<dyn crate::noise::NoiseModel> {
+        Box::new(crate::noise::BiasedDepolarizingNoiseModel::new_uniform(self.p))
+    }
+}
+
+/// Convert `ShotVec` to columnar format
 ///
-/// This is a helper for engines that need to return HashMap<String, Vec<i64>>
-pub fn shots_to_columnar(shots: ShotVec) -> HashMap<String, Vec<i64>> {
+/// This is a helper for engines that need to return `HashMap`<String, Vec<i64>>
+#[must_use] pub fn shots_to_columnar(shots: crate::shot_results::ShotVec) -> std::collections::HashMap<String, Vec<i64>> {
+    use std::collections::HashMap;
+    
     let mut columnar = HashMap::new();
     
     if shots.is_empty() {
@@ -603,129 +489,4 @@ pub fn shots_to_columnar(shots: ShotVec) -> HashMap<String, Vec<i64>> {
     }
 
     columnar
-}
-
-// ============================================================================
-// Noise Model Structs for Ergonomic API
-// ============================================================================
-
-/// Pass-through noise configuration (no noise)
-#[derive(Debug, Clone, Copy)]
-pub struct PassThroughNoise;
-
-/// Depolarizing noise configuration
-#[derive(Debug, Clone, Copy)]
-pub struct DepolarizingNoise {
-    /// The depolarizing probability
-    pub p: f64,
-}
-
-/// Custom depolarizing noise configuration
-#[derive(Debug, Clone, Copy)]
-pub struct DepolarizingCustomNoise {
-    /// Preparation error probability
-    pub p_prep: f64,
-    /// Measurement error probability
-    pub p_meas: f64,
-    /// Single-qubit gate error probability
-    pub p1: f64,
-    /// Two-qubit gate error probability
-    pub p2: f64,
-}
-
-/// Biased depolarizing noise configuration
-#[derive(Debug, Clone, Copy)]
-pub struct BiasedDepolarizingNoise {
-    /// The depolarizing probability
-    pub p: f64,
-}
-
-// ============================================================================
-// Conversions to Box<dyn NoiseModel>
-// ============================================================================
-
-impl From<PassThroughNoise> for Box<dyn NoiseModel> {
-    fn from(_: PassThroughNoise) -> Self {
-        Box::new(PassThroughNoiseModel::new())
-    }
-}
-
-impl From<PassThroughNoiseModelBuilder> for Box<dyn NoiseModel> {
-    fn from(builder: PassThroughNoiseModelBuilder) -> Self {
-        Box::new(builder.build())
-    }
-}
-
-impl From<DepolarizingNoise> for Box<dyn NoiseModel> {
-    fn from(noise: DepolarizingNoise) -> Self {
-        Box::new(DepolarizingNoiseModel::new_uniform(noise.p))
-    }
-}
-
-impl From<DepolarizingNoiseModelBuilder> for Box<dyn NoiseModel> {
-    fn from(builder: DepolarizingNoiseModelBuilder) -> Self {
-        Box::new(builder.build())
-    }
-}
-
-impl From<DepolarizingCustomNoise> for Box<dyn NoiseModel> {
-    fn from(noise: DepolarizingCustomNoise) -> Self {
-        Box::new(DepolarizingNoiseModel::new(
-            noise.p_prep,
-            noise.p_meas,
-            noise.p1,
-            noise.p2,
-        ))
-    }
-}
-
-impl From<BiasedDepolarizingNoise> for Box<dyn NoiseModel> {
-    fn from(noise: BiasedDepolarizingNoise) -> Self {
-        Box::new(BiasedDepolarizingNoiseModel::new_uniform(noise.p))
-    }
-}
-
-impl From<BiasedDepolarizingNoiseModelBuilder> for Box<dyn NoiseModel> {
-    fn from(builder: BiasedDepolarizingNoiseModelBuilder) -> Self {
-        Box::new(builder.build())
-    }
-}
-
-impl From<GeneralNoiseModelBuilder> for Box<dyn NoiseModel> {
-    fn from(builder: GeneralNoiseModelBuilder) -> Self {
-        Box::new(builder.build())
-    }
-}
-
-// ============================================================================
-// IntoNoiseModel implementations for convenience structs
-// ============================================================================
-
-impl crate::noise::IntoNoiseModel for PassThroughNoise {
-    fn into_noise_model(self) -> Box<dyn NoiseModel> {
-        Box::new(PassThroughNoiseModel::new())
-    }
-}
-
-impl crate::noise::IntoNoiseModel for DepolarizingNoise {
-    fn into_noise_model(self) -> Box<dyn NoiseModel> {
-        Box::new(DepolarizingNoiseModel::new_uniform(self.p))
-    }
-}
-
-impl crate::noise::IntoNoiseModel for DepolarizingCustomNoise {
-    fn into_noise_model(self) -> Box<dyn NoiseModel> {
-        Box::new(DepolarizingNoiseModel::new(
-            self.p_prep,
-            self.p_meas,
-            self.p1,
-            self.p2,
-        ))
-    }
-}
-
-impl crate::noise::IntoNoiseModel for BiasedDepolarizingNoise {
-    fn into_noise_model(self) -> Box<dyn NoiseModel> {
-        Box::new(BiasedDepolarizingNoiseModel::new_uniform(self.p))
-    }
 }

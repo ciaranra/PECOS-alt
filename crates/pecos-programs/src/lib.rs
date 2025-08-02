@@ -131,7 +131,7 @@ impl LlvmProgram {
 impl fmt::Display for LlvmProgram {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.content {
-            LlvmContent::Ir(ir) => write!(f, "{}", ir),
+            LlvmContent::Ir(ir) => write!(f, "{ir}"),
             LlvmContent::Bitcode(bc) => write!(f, "LlvmProgram(bitcode, {} bytes)", bc.len()),
         }
     }
@@ -351,12 +351,12 @@ impl From<PhirJsonProgram> for Program {
 impl fmt::Display for Program {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Program::Qasm(p) => write!(f, "QASM: {}", p),
-            Program::Llvm(p) => write!(f, "LLVM: {}", p),
-            Program::Hugr(p) => write!(f, "{}", p),
-            Program::Wasm(p) => write!(f, "{}", p),
-            Program::Wat(p) => write!(f, "WAT: {}", p),
-            Program::PhirJson(p) => write!(f, "PHIR-JSON: {}", p),
+            Program::Qasm(p) => write!(f, "QASM: {p}"),
+            Program::Llvm(p) => write!(f, "LLVM: {p}"),
+            Program::Hugr(p) => write!(f, "{p}"),
+            Program::Wasm(p) => write!(f, "{p}"),
+            Program::Wat(p) => write!(f, "WAT: {p}"),
+            Program::PhirJson(p) => write!(f, "PHIR-JSON: {p}"),
         }
     }
 }

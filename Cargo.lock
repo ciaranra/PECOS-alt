@@ -2474,7 +2474,7 @@ dependencies = [
  "pecos-clib-pcg",
  "pecos-core",
  "pecos-engines",
- "pecos-hugr-llvm",
+ "pecos-hugr",
  "pecos-llvm-runtime",
  "pecos-llvm-sim",
  "pecos-phir",
@@ -2482,7 +2482,7 @@ dependencies = [
  "pecos-programs",
  "pecos-qasm",
  "pecos-qsim",
- "pecos-selene-ceng",
+ "pecos-selene",
  "serde_json",
  "tempfile",
 ]
@@ -2570,7 +2570,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pecos-hugr-llvm"
+name = "pecos-hugr"
 version = "0.1.1"
 dependencies = [
  "anyhow",
@@ -2625,7 +2625,7 @@ dependencies = [
  "log",
  "pecos-core",
  "pecos-engines",
- "pecos-hugr-llvm",
+ "pecos-hugr",
  "pecos-llvm-runtime",
  "pecos-programs",
  "serde_json",
@@ -2717,14 +2717,14 @@ dependencies = [
  "pecos",
  "pecos-core",
  "pecos-engines",
- "pecos-hugr-llvm",
+ "pecos-hugr",
  "pecos-llvm-runtime",
  "pecos-llvm-sim",
  "pecos-phir",
  "pecos-phir-json",
  "pecos-programs",
  "pecos-qasm",
- "pecos-selene-ceng",
+ "pecos-selene",
  "pyo3",
  "pyo3-build-config",
  "serde_json",
@@ -2732,7 +2732,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pecos-selene-ceng"
+name = "pecos-selene"
 version = "0.1.1"
 dependencies = [
  "anyhow",

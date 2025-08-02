@@ -3,8 +3,8 @@
 #[test]
 fn test_qasm_engine_builder_api() {
     use pecos_qasm::qasm_engine;
-    use pecos_engines::ClassicalControlEngineBuilder;
-    
+    use pecos_engines::sim_builder;
+        
     // Test that the builder has all the expected methods
     let builder = qasm_engine()
         .qasm("OPENQASM 2.0; include \"qelib1.inc\"; qreg q[1]; h q[0];")
@@ -13,7 +13,7 @@ fn test_qasm_engine_builder_api() {
         .allow_complex_conditionals(true);
     
     // Test that it converts to SimBuilder properly
-    let _sim_builder = builder.to_sim();
+    let _sim_builder = sim_builder().classical(builder);
 }
 
 #[test]
@@ -65,7 +65,7 @@ fn test_engine_specific_vs_common_methods() {
         .program(QasmProgram::from_string("OPENQASM 2.0; qreg q[1];"))  // Common: unified program input
         .allow_complex_conditionals(true);  // Engine-specific: parser option
     
-    // Common simulation methods on SimBuilder  
+    // Common simulation methods on TypedSimBuilder  
     let _sim_builder = engine_builder
         .to_sim()
         .seed(42)                          // Common: random seed

@@ -14,7 +14,7 @@ use pecos_engines::noise::{
 };
 use pecos_qasm::{qasm_engine, unified_engine_builder::QasmEngineBuilder};
 use pecos_llvm_sim::{llvm_engine, LlvmEngineBuilder};
-use pecos_selene_ceng::{selene_engine, SeleneEngineBuilder};
+use pecos_selene::{selene_engine, SeleneEngineBuilder};
 use pecos_programs::{QasmProgram, LlvmProgram};
 use crate::shot_results_bindings::PyShotVec;
 

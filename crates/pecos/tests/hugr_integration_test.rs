@@ -1,6 +1,7 @@
 //! Integration tests for HUGR compilation and execution pipelines
 
 use pecos::prelude::*;
+use pecos_engines::QuantumEngineBuilder;
 use tempfile::TempDir;
 
 // Real HUGR data from guppy compilation
@@ -10,7 +11,7 @@ const GHZ_STATE_HUGR: &[u8] = include_bytes!("test_data/hugr/ghz_state.hugr");
 
 #[test]
 fn test_hugr_to_llvm_to_execution() -> Result<(), PecosError> {
-    // Test the full pipeline: HUGR → pecos-hugr-llvm → LLVM IR → pecos-llvm-runtime execution
+    // Test the full pipeline: HUGR → pecos-hugr → LLVM IR → pecos-llvm-runtime execution
 
     // Step 1: Compile HUGR to LLVM IR
     let temp_dir = TempDir::new()?;
@@ -19,9 +20,17 @@ fn test_hugr_to_llvm_to_execution() -> Result<(), PecosError> {
 
     // Use the hugr module to compile and create engine
     let engine = pecos::hugr::run_hugr_llvm(&hugr_path, Some(1000))?;
+    let num_qubits = engine.num_qubits();
 
-    // Step 2: Run simulation
-    let results = run_sim(engine, 1000, Some(42), None, None, None)?;
+    // Step 2: Run simulation using MonteCarloEngine directly
+    let results = MonteCarloEngine::run_with_engines(
+        engine,
+        Box::new(PassThroughNoiseModel::builder().build()),
+        state_vector().qubits(num_qubits).build()?,
+        1000,  // shots
+        1,     // workers
+        Some(42), // seed
+    )?;
 
     // Step 3: Verify results
     assert_eq!(results.len(), 1000);
@@ -110,9 +119,17 @@ fn test_hugr_from_bytes() -> Result<(), PecosError> {
 
     // Use file-based compilation which we know works
     let engine = pecos::hugr::run_hugr_llvm(&hugr_path, Some(100))?;
+    let num_qubits = engine.num_qubits();
 
     // Run shots to verify it works
-    let results = run_sim(engine, 100, Some(42), None, None, None)?;
+    let results = MonteCarloEngine::run_with_engines(
+        engine,
+        Box::new(PassThroughNoiseModel::builder().build()),
+        state_vector().qubits(num_qubits).build()?,
+        100,  // shots
+        1,    // workers
+        Some(42), // seed
+    )?;
     assert_eq!(results.len(), 100);
 
     // Verify at least some results are valid
@@ -146,9 +163,17 @@ fn test_hugr_via_phir_pipeline() -> Result<(), PecosError> {
 
     // Use the phir module to compile via PHIR (now supports binary format)
     let engine = pecos::phir::run_phir_llvm(&hugr_path, Some(1000), None)?;
+    let num_qubits = engine.num_qubits();
 
     // Run simulation
-    let results = run_sim(engine, 1000, Some(42), None, None, None)?;
+    let results = MonteCarloEngine::run_with_engines(
+        engine,
+        Box::new(PassThroughNoiseModel::builder().build()),
+        state_vector().qubits(num_qubits).build()?,
+        1000,  // shots
+        1,     // workers
+        Some(42), // seed
+    )?;
 
     // Verify results
     assert_eq!(results.len(), 1000);
@@ -217,10 +242,18 @@ attributes #0 = { "EntryPoint" }
 
     // Test the setup function
     let engine = setup_llvm_engine(&llvm_path, Some(10))?;
+    let num_qubits = engine.num_qubits();
 
     // Verify engine was created successfully
     // We can't check shots directly on the trait object, but we can run it
-    let results = run_sim(engine, 10, None, None, None, None)?;
+    let results = MonteCarloEngine::run_with_engines(
+        engine,
+        Box::new(PassThroughNoiseModel::builder().build()),
+        state_vector().qubits(num_qubits).build()?,
+        10,    // shots
+        1,     // workers
+        None,  // seed
+    )?;
     assert_eq!(results.len(), 10);
 
     Ok(())
@@ -237,7 +270,15 @@ fn test_single_hadamard_execution() -> Result<(), PecosError> {
 
     // Run simulation with many shots
     let engine = pecos::hugr::run_hugr_llvm(&hugr_path, Some(1000))?;
-    let results = run_sim(engine, 1000, Some(42), None, None, None)?;
+    let num_qubits = engine.num_qubits();
+    let results = MonteCarloEngine::run_with_engines(
+        engine,
+        Box::new(PassThroughNoiseModel::builder().build()),
+        state_vector().qubits(num_qubits).build()?,
+        1000,  // shots
+        1,     // workers
+        Some(42), // seed
+    )?;
 
     // Count outcomes
     let mut outcome_0 = 0;
@@ -285,7 +326,15 @@ fn test_ghz_state_execution() -> Result<(), PecosError> {
 
     // Run simulation
     let engine = pecos::hugr::run_hugr_llvm(&hugr_path, Some(1000))?;
-    let results = run_sim(engine, 1000, Some(42), None, None, None)?;
+    let num_qubits = engine.num_qubits();
+    let results = MonteCarloEngine::run_with_engines(
+        engine,
+        Box::new(PassThroughNoiseModel::builder().build()),
+        state_vector().qubits(num_qubits).build()?,
+        1000,  // shots
+        1,     // workers
+        Some(42), // seed
+    )?;
 
     // Count outcomes - GHZ should only produce 000 or 111
     let mut outcome_000 = 0;

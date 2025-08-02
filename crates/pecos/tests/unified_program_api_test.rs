@@ -8,7 +8,7 @@ mod tests {
     use pecos_programs::{QasmProgram, LlvmProgram, HugrProgram};
     use pecos_qasm::qasm_engine;
     use pecos_llvm_sim::llvm_engine;
-    use pecos_selene_ceng::selene_engine;
+    use pecos_selene::selene_engine;
     use pecos_engines::sim;
 
     #[test]

@@ -1,7 +1,7 @@
 //! Thin PyO3 bindings that directly mirror the unified Rust Selene simulation API
 
 use pecos_engines::shot_results::ShotVec;
-use pecos_selene_ceng::{selene_engine, SeleneEngineBuilder};
+use pecos_selene::{selene_engine, SeleneEngineBuilder};
 use pecos_engines::{ClassicalControlEngineBuilder};
 use pecos_engines::noise::{
     DepolarizingNoiseModelBuilder, BiasedDepolarizingNoiseModelBuilder, 

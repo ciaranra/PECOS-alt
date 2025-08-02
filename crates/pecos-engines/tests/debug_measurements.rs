@@ -1,4 +1,5 @@
 use pecos_engines::byte_message::ByteMessage;
+use pecos_engines::ClassicalControlEngineBuilder;
 
 #[test]
 fn test_measurement_roundtrip() {

@@ -3,7 +3,7 @@
 // use pecos_engines::engine_system::MonteCarloEngine;
 // use pecos_engines::noise::DepolarizingNoiseModel;
 use pecos_llvm_sim::llvm_engine;
-use pecos_engines::{DepolarizingNoise, ClassicalControlEngineBuilder};
+use pecos_engines::{ClassicalControlEngineBuilder, DepolarizingNoise, sim_builder};
 use pecos_programs::LlvmProgram;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -60,9 +60,9 @@ fn test_llvm_unified_api_noiseless() {
     let shots = 100;
 
     // Run with unified API
-    let sim_shot_vec = llvm_engine()
-        .program(LlvmProgram::from_file(get_bell_path()).unwrap())
-        .to_sim()
+    let sim_shot_vec = sim_builder()
+        .classical(llvm_engine()
+        .program(LlvmProgram::from_file(get_bell_path()).unwrap()))
         .seed(seed)
         .workers(1) // Single worker for determinism
         .qubits(2)
@@ -107,9 +107,9 @@ fn test_llvm_unified_api_with_noise() {
     let noise_level = 0.1; // 10% depolarizing noise
 
     // Run with unified API and noise
-    let sim_shot_vec = llvm_engine()
-        .program(LlvmProgram::from_file(get_bell_path()).unwrap())
-        .to_sim()
+    let sim_shot_vec = sim_builder()
+        .classical(llvm_engine()
+        .program(LlvmProgram::from_file(get_bell_path()).unwrap()))
         .seed(seed)
         .workers(1)
         .noise(DepolarizingNoise { p: noise_level })
@@ -159,9 +159,9 @@ fn test_llvm_unified_api_advanced_features() {
     ];
 
     for (name, level) in noise_models {
-        let shot_vec = llvm_engine()
-            .program(LlvmProgram::from_file(get_bell_path()).unwrap())
-            .to_sim()
+        let shot_vec = sim_builder()
+            .classical(llvm_engine()
+            .program(LlvmProgram::from_file(get_bell_path()).unwrap()))
             .seed(42)
             .noise(DepolarizingNoise { p: level })
             .qubits(2)
@@ -186,9 +186,9 @@ fn test_llvm_unified_api_advanced_features() {
     for workers in worker_counts {
         let start = std::time::Instant::now();
 
-        let shot_vec = llvm_engine()
-            .program(LlvmProgram::from_file(get_bell_path()).unwrap())
-            .to_sim()
+        let shot_vec = sim_builder()
+            .classical(llvm_engine()
+            .program(LlvmProgram::from_file(get_bell_path()).unwrap()))
             .seed(42)
             .workers(workers)
             .qubits(2)
@@ -206,9 +206,9 @@ fn test_llvm_unified_api_advanced_features() {
     }
 
     // 3. Build once, run many with different configurations
-    let mut sim = llvm_engine()
-        .program(LlvmProgram::from_file(get_bell_path()).unwrap())
-        .to_sim()
+    let sim = sim_builder()
+        .classical(llvm_engine()
+        .program(LlvmProgram::from_file(get_bell_path()).unwrap()))
         .seed(42)
         .noise(DepolarizingNoise { p: 0.05 })
         .qubits(2)
@@ -216,6 +216,7 @@ fn test_llvm_unified_api_advanced_features() {
         .expect("Build should succeed");
 
     // Run multiple times with same configuration
+    let mut sim = sim;
     for i in 1..=5 {
         let shots = i * 100;
         let shot_vec = sim
@@ -224,9 +225,8 @@ fn test_llvm_unified_api_advanced_features() {
         assert_eq!(shot_vec.len(), shots);
     }
 
-    let (total_shots, total_runs) = sim.stats();
-    assert_eq!(total_shots, 1500); // 100 + 200 + 300 + 400 + 500
-    assert_eq!(total_runs, 5);
+    // MonteCarloEngine doesn't have a stats() method anymore
+    // Just verify the runs completed successfully
 }
 
 // Helper function to count occurrences

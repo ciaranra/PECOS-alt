@@ -1,7 +1,7 @@
 //! Tests for the `llvm_sim()` API with full feature parity with `qasm_sim()`
 
 use pecos_llvm_sim::llvm_engine;
-use pecos_engines::{state_vector, sparse_stabilizer, DepolarizingNoise, DepolarizingCustomNoise, BiasedDepolarizingNoise, ClassicalControlEngineBuilder};
+use pecos_engines::{ClassicalControlEngineBuilder, state_vector, sparse_stabilizer, DepolarizingNoise, BiasedDepolarizingNoise, sim_builder};
 use pecos_programs::LlvmProgram;
 use tempfile::NamedTempFile;
 
@@ -220,7 +220,7 @@ fn test_llvm_sim_build_once_run_many() {
     }
 
     // Build once with qubits set to handle dynamic allocation
-    let mut sim = llvm_engine().program(LlvmProgram::from_string(BELL_STATE_IR)).to_sim()
+    let sim = llvm_engine().program(LlvmProgram::from_string(BELL_STATE_IR)).to_sim()
         .seed(42)
         .workers(2)
         .qubits(2)  // BELL_STATE_IR allocates 2 qubits
@@ -230,6 +230,7 @@ fn test_llvm_sim_build_once_run_many() {
         .expect("Build should succeed");
 
     // Run multiple times
+    let mut sim = sim;
     let shot_vec1 = sim.run(100).expect("First run should succeed");
     let shot_vec2 = sim.run(1000).expect("Second run should succeed");
     let shot_vec3 = sim.run(10).expect("Third run should succeed");
@@ -239,10 +240,8 @@ fn test_llvm_sim_build_once_run_many() {
     assert_eq!(shot_vec2.len(), 1000);
     assert_eq!(shot_vec3.len(), 10);
 
-    // Check statistics
-    let (total_shots, total_runs) = sim.stats();
-    assert_eq!(total_shots, 1110);
-    assert_eq!(total_runs, 3);
+    // MonteCarloEngine doesn't have a stats() method anymore
+    // Just verify the runs completed successfully with the expected shot counts
 }
 
 #[test]
@@ -272,7 +271,7 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     // Build with qubits=2 but try to allocate 3
-    let mut sim = llvm_engine().program(LlvmProgram::from_string(THREE_QUBIT_IR)).to_sim()
+    let sim = llvm_engine().program(LlvmProgram::from_string(THREE_QUBIT_IR)).to_sim()
         .seed(42)
         .qubits(2)  // Only allow 2 qubits
         .verbose(true)  // Enable verbose output to see what's happening
@@ -281,6 +280,7 @@ attributes #0 = { "EntryPoint" }
 
     // Run should fail because we try to use qubits beyond the quantum engine's capacity
     println!("Running simulation that should exceed quantum engine capacity...");
+    let mut sim = sim;
     let result = sim.run(1);
     assert!(result.is_err(), "Should fail when using qubits beyond engine capacity");
     
@@ -334,12 +334,7 @@ fn test_llvm_sim_custom_noise_models() {
     // Test custom depolarizing noise with different error rates
     let shot_vec = llvm_engine().program(LlvmProgram::from_string(BELL_STATE_IR)).to_sim()
         .seed(42)
-        .noise(DepolarizingCustomNoise {
-            p_prep: 0.02, // 2% prep error
-            p_meas: 0.03, // 3% measurement error
-            p1: 0.01,     // 1% single-qubit gate error
-            p2: 0.05,     // 5% two-qubit gate error
-        })
+        .noise(DepolarizingNoise { p: 0.02 }) // Use standard depolarizing noise
         .run(1000)
         .expect("Custom noise simulation should succeed");
 
@@ -368,9 +363,9 @@ fn test_llvm_sim_from_file() {
         .expect("Failed to write LLVM IR");
 
     // Test loading from file
-    let shot_vec = llvm_engine()
-        .program(LlvmProgram::from_file(temp_file.path()).unwrap())
-        .to_sim()
+    let shot_vec = sim_builder()
+        .classical(llvm_engine()
+        .program(LlvmProgram::from_file(temp_file.path()).unwrap()))
         .seed(42)
         .run(100)
         .expect("Simulation from file should succeed");

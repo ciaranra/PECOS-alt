@@ -32,9 +32,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         measure q -> c;
     "#;
 
-    let shot_vec = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let shot_vec = sim_builder()
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .seed(42)
         .run(10)?;
     let shot_map = shot_vec.try_as_shot_map()?;

@@ -1,6 +1,6 @@
 // Test that verifies arbitrary-precision integer literals work in QASM
 
-use pecos_engines::{Data, ClassicalControlEngineBuilder};
+use pecos_engines::{Data, sim_builder};
 use pecos_qasm::qasm_engine;
 use pecos_programs::QasmProgram;
 
@@ -16,9 +16,9 @@ fn test_very_large_integer_literal() {
         c = 1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000;
     ";
 
-    let shot_vec = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let shot_vec = sim_builder()
+        .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];
@@ -57,9 +57,9 @@ fn test_large_integer_arithmetic() {
         sum = a + b;  // Should be 2^65 - 1
     ";
 
-    let shot_vec = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let shot_vec = sim_builder()
+        .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];
@@ -113,9 +113,9 @@ fn test_negative_large_literals() {
         neg_value = -value;  // Should be 2^64
     ";
 
-    let shot_vec = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let shot_vec = sim_builder()
+        .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];
@@ -169,9 +169,9 @@ fn test_extremely_large_literal() {
         huge = 1606938044258990275541962092341162602522202993782792835301376;
     ";
 
-    let shot_vec = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let shot_vec = sim_builder()
+        .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];
@@ -206,9 +206,9 @@ fn test_literal_display_and_parsing() {
         c = 1000000000000000000000000000000; // 10^30
     ";
 
-    let shot_vec = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let shot_vec = sim_builder()
+        .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];
@@ -263,9 +263,9 @@ fn test_mixed_size_literals_in_expressions() {
         test[2] = (18446744073709551616 > 1000);    // Should be true
     ";
 
-    let shot_vec = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let shot_vec = sim_builder()
+        .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];

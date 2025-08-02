@@ -10,7 +10,7 @@ use std::time::Instant;
 // In real usage, you would use actual engine builders:
 // - pecos_qasm::unified_engine_builder::qasm_engine()
 // - pecos_llvm_sim::engine_builder::llvm_engine()
-// - pecos_selene_ceng::engine_builder::selene_engine()
+// - pecos_selene::engine_builder::selene_engine()
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("This example demonstrates the reusable simulation pattern.\n");
@@ -18,14 +18,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("In real usage, you would create simulations like this:");
     println!("```rust");
     println!("use pecos_qasm::unified_engine_builder::qasm_engine;");
-    println!("use pecos_engines::DepolarizingNoise;");
+    println!("use pecos_engines::{{DepolarizingNoise, sim_builder}};");
     println!();
     println!("// Build a reusable simulation");
-    println!("let sim = qasm_engine()");
-    println!("    .qasm(qasm_code)");
-    println!("    .to_sim()");
+    println!("let sim = sim_builder()");
+    println!("    .classical(qasm_engine().qasm(qasm_code))");
     println!("    .seed(42)");
-    println!("    .noise(DepolarizingNoise {{ p: 0.01 }})");
+    println!("    .noise(DepolarizingNoise {{{{ p: 0.01 }}}});");
     println!("    .build()?;");
     println!();
     println!("// Run multiple times with different shot counts");
@@ -45,12 +44,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Pattern 2: Production Use ===");
     println!("Without a seed, each run produces different results.");
     println!("```rust");
-    println!("let sim = engine.to_sim()");
+    println!("let sim = sim_builder()");
+    println!("    .classical(engine)");
     println!("    .auto_workers()  // Use all CPU cores");
     println!("    .build()?;       // No seed = random");
     println!();
     println!("// Each API request gets different results");
-    println!("for request in requests {{");
+    println!("for request in requests {{{{");
     println!("    let results = sim.run(request.shots)?;");
     println!("}}");
     println!("```\n");
@@ -59,10 +59,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Pattern 3: Controlled Variation ===");
     println!("Use run_with_seed() for different but reproducible results:");
     println!("```rust");
-    println!("let sim = engine.to_sim().build()?;");
+    println!("let sim = sim_builder().classical(engine).build()?;");
     println!();
     println!("// Different seed for each experiment");
-    println!("for experiment_id in 0..10 {{");
+    println!("for experiment_id in 0..10 {{{{");
     println!("    let results = sim.run_with_seed(1000, Some(42 + experiment_id))?;");
     println!("}}");
     println!("```\n");
@@ -74,10 +74,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("let noise_levels = [0.001, 0.005, 0.01, 0.02];");
     println!();
     println!("let simulations: Vec<_> = noise_levels.iter()");
-    println!("    .map(|&p| {{");
-    println!("        engine.to_sim()");
+    println!("    .map(|&p| {{{{");
+    println!("        sim_builder()");
+    println!("            .classical(engine.clone())");
     println!("            .seed(42)  // Same seed for fair comparison");
-    println!("            .noise(DepolarizingNoise {{ p }})");
+    println!("            .noise(DepolarizingNoise {{{{ p }}}});");
     println!("            .build()");
     println!("    }})");
     println!("    .collect::<Result<_, _>>()?;");

@@ -23,8 +23,11 @@ env_logger.workspace = true
 log.workspace = true
 
 [features]
-default = []
+default = ["qasm", "llvm", "phir"]
 hugr-llvm-pipeline = []
+qasm = ["pecos/qasm"]
+llvm = ["pecos/llvm"]
+phir = ["pecos/phir"]
 
 [dev-dependencies]
 assert_cmd.workspace = true

@@ -4,7 +4,7 @@
 fn test_real_hugr_with_envelope_format() {
     use pecos_llvm_sim::llvm_engine;
     use pecos_programs::HugrProgram;
-    use pecos_engines::ClassicalControlEngineBuilder;
+    use pecos_engines::{ClassicalControlEngineBuilder, sim_builder};
     
     // HUGR uses an envelope format with a magic number header
     // Let's create a proper HUGR envelope
@@ -33,9 +33,8 @@ fn test_real_hugr_with_envelope_format() {
     let hugr_program = HugrProgram::from_bytes(buffer);
     
     // Test that we can create a builder with HUGR
-    let builder = llvm_engine()
-        .program(hugr_program)
-        .to_sim()
+    let builder = sim_builder().classical(llvm_engine()
+        .program(hugr_program))
         .qubits(1);
     
     // The actual compilation might still fail due to missing quantum operations
@@ -59,7 +58,7 @@ fn test_real_hugr_with_envelope_format() {
 fn test_real_hugr_compilation() {
     use pecos_llvm_sim::llvm_engine;
     use pecos_programs::HugrProgram;
-    use pecos_engines::ClassicalControlEngineBuilder;
+    use pecos_engines::{ClassicalControlEngineBuilder, sim_builder};
     
     // The error message shows it expects envelope format, not raw JSON
     // So this test documents the current behavior
@@ -67,9 +66,8 @@ fn test_real_hugr_compilation() {
     let hugr_bytes = hugr_json.as_bytes().to_vec();
     let hugr_program = HugrProgram::from_bytes(hugr_bytes);
     
-    let builder = llvm_engine()
-        .program(hugr_program)
-        .to_sim()
+    let builder = sim_builder().classical(llvm_engine()
+        .program(hugr_program))
         .qubits(1);
     
     match builder.build() {
@@ -92,7 +90,7 @@ fn test_real_hugr_compilation() {
 fn test_hugr_package_format() {
     use pecos_llvm_sim::llvm_engine;
     use pecos_programs::HugrProgram;
-    use pecos_engines::ClassicalControlEngineBuilder;
+    use pecos_engines::{ClassicalControlEngineBuilder, sim_builder};
     
     // Test with actual HUGR Package format used by tket2
     let hugr_package = r#"{
@@ -122,9 +120,8 @@ fn test_hugr_package_format() {
     
     let hugr_program = HugrProgram::from_bytes(hugr_package.as_bytes().to_vec());
     
-    match llvm_engine()
-        .program(hugr_program)
-        .to_sim()
+    match sim_builder().classical(llvm_engine()
+        .program(hugr_program))
         .build()
     {
         Ok(_) => println!("HUGR with quantum signature compiled successfully"),

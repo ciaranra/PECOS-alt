@@ -24,21 +24,18 @@ fn test_quantum_engine_builders() {
 #[test] 
 fn test_noise_conversions() {
     use pecos_engines::{
-        PassThroughNoise, DepolarizingNoise, DepolarizingCustomNoise, BiasedDepolarizingNoise,
+        PassThroughNoise, DepolarizingNoise, BiasedDepolarizingNoise,
         noise::{NoiseModel, GeneralNoiseModelBuilder},
     };
     
     // Test that all noise types can be converted
-    let _: Box<dyn NoiseModel> = PassThroughNoise.into();
-    let _: Box<dyn NoiseModel> = DepolarizingNoise { p: 0.01 }.into();
-    let _: Box<dyn NoiseModel> = DepolarizingCustomNoise { 
-        p_prep: 0.001,
-        p_meas: 0.002,
-        p1: 0.003,
-        p2: 0.004,
-    }.into();
-    let _: Box<dyn NoiseModel> = BiasedDepolarizingNoise { p: 0.01 }.into();
-    let _: Box<dyn NoiseModel> = GeneralNoiseModelBuilder::new().into();
+    // Test IntoNoiseModel trait
+    use pecos_engines::noise::IntoNoiseModel;
+    
+    let _: Box<dyn NoiseModel> = PassThroughNoise.into_noise_model();
+    let _: Box<dyn NoiseModel> = DepolarizingNoise { p: 0.01 }.into_noise_model();
+    let _: Box<dyn NoiseModel> = BiasedDepolarizingNoise { p: 0.01 }.into_noise_model();
+    let _: Box<dyn NoiseModel> = Box::new(GeneralNoiseModelBuilder::new().build());
 }
 
 #[test]

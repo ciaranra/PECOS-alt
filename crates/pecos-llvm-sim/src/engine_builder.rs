@@ -44,7 +44,7 @@ pub struct LlvmEngineBuilder {
 
 impl LlvmEngineBuilder {
     /// Create a new LLVM engine builder
-    pub fn new() -> Self {
+    #[must_use] pub fn new() -> Self {
         Self::default()
     }
 
@@ -85,7 +85,7 @@ impl LlvmEngineBuilder {
     }
 
     /// Set the source to HUGR bytes
-    pub fn hugr_bytes(mut self, bytes: Vec<u8>) -> Self {
+    #[must_use] pub fn hugr_bytes(mut self, bytes: Vec<u8>) -> Self {
         self.source = Some(LlvmSource::HugrBytes(bytes));
         self
     }
@@ -97,18 +97,18 @@ impl LlvmEngineBuilder {
     }
 
     /// Set number of qubits (used as both initial allocation and hard limit)
-    pub fn qubits(mut self, num_qubits: usize) -> Self {
+    #[must_use] pub fn qubits(mut self, num_qubits: usize) -> Self {
         self.num_qubits = Some(num_qubits);
         self
     }
 
     /// Enable verbose output
-    pub fn verbose(mut self, verbose: bool) -> Self {
+    #[must_use] pub fn verbose(mut self, verbose: bool) -> Self {
         self.verbose = verbose;
         self
     }
 
-    /// Set the source from an LlvmProgram
+    /// Set the source from an `LlvmProgram`
     pub fn program(mut self, program: impl Into<ProgramSource>) -> Self {
         match program.into() {
             ProgramSource::Llvm(p) => {
@@ -204,6 +204,6 @@ impl From<HugrProgram> for LlvmEngineBuilder {
 /// # Ok(())
 /// # }
 /// ```
-pub fn llvm_engine() -> LlvmEngineBuilder {
+#[must_use] pub fn llvm_engine() -> LlvmEngineBuilder {
     LlvmEngineBuilder::new()
 }

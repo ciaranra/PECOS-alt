@@ -21,12 +21,7 @@ fn test_sim_builder_api() {
     assert!(config.seed.is_none());
     assert!(!config.verbose);
     
-    // Test noise conversions work with From trait
-    let _: Box<dyn pecos_engines::noise::NoiseModel> = PassThroughNoise.into();
-    let _: Box<dyn pecos_engines::noise::NoiseModel> = DepolarizingNoise { p: 0.01 }.into();
-    let _: Box<dyn pecos_engines::noise::NoiseModel> = BiasedDepolarizingNoise { p: 0.01 }.into();
-    
-    // Test IntoNoiseModel trait as well
+    // Test noise conversions work with IntoNoiseModel trait
     use pecos_engines::noise::IntoNoiseModel;
     let _: Box<dyn pecos_engines::noise::NoiseModel> = PassThroughNoise.into_noise_model();
     let _: Box<dyn pecos_engines::noise::NoiseModel> = DepolarizingNoise { p: 0.01 }.into_noise_model();

@@ -1,4 +1,4 @@
-use pecos_engines::{ShotMap, ShotMapDisplayExt, ClassicalControlEngineBuilder};
+use pecos_engines::{ShotMap, ShotMapDisplayExt, ClassicalControlEngineBuilder, sim_builder};
 use pecos_qasm::qasm_engine;
 use pecos_programs::QasmProgram;
 
@@ -20,10 +20,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         measure q[0] -> ancilla[0];
     "#;
 
-    // Run simulation - qasm_engine returns ShotVec directly
-    let shot_vec = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    // Run simulation - sim_builder returns ShotVec directly
+    let shot_vec = sim_builder()
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .seed(42)
         .run(20)?;
 

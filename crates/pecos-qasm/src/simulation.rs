@@ -9,7 +9,7 @@ use pecos_engines::ClassicalControlEngineBuilder;
 
 /// Create a new QASM simulation builder
 ///
-/// This function now directly returns the unified `SimBuilder` with all the 
+/// This function now directly returns the unified `TypedSimBuilder` with all the 
 /// configuration methods available from the unified API.
 ///
 /// # Example
@@ -52,6 +52,6 @@ use pecos_engines::ClassicalControlEngineBuilder;
 ///     .unwrap();
 /// ```
 #[must_use]
-pub fn qasm_sim(qasm: impl Into<String>) -> pecos_engines::SimBuilder<crate::unified_engine_builder::QasmEngineBuilder> {
+pub fn qasm_sim(qasm: impl Into<String>) -> pecos_engines::SimBuilder {
     qasm_engine().program(QasmProgram::from_string(qasm)).to_sim()
 }

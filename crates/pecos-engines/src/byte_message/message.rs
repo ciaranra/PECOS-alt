@@ -269,7 +269,7 @@ impl ByteMessage {
                     
                     // Dump raw bytes in hex
                     let hex_bytes: Vec<String> = payload.iter()
-                        .map(|b| format!("{:02x}", b))
+                        .map(|b| format!("{b:02x}"))
                         .collect();
                     trace!("  Raw bytes: {}", hex_bytes.join(" "));
                 }
@@ -418,10 +418,10 @@ impl ByteMessage {
 
             // Add any gate we found to our commands list
             if let Some(gate) = maybe_gate {
-                trace!("quantum_ops: Message {} parsed as gate: {:?}", msg_idx, gate);
+                trace!("quantum_ops: Message {msg_idx} parsed as gate: {gate:?}");
                 commands.push(gate);
             } else {
-                trace!("quantum_ops: Message {} did not yield a gate", msg_idx);
+                trace!("quantum_ops: Message {msg_idx} did not yield a gate");
             }
         }
         
@@ -514,7 +514,7 @@ impl ByteMessage {
             return Ok(Vec::new());
         }
         
-        trace!("parse_gate_parameters: Gate {:?} requires {} parameters", gate_type, param_count);
+        trace!("parse_gate_parameters: Gate {gate_type:?} requires {param_count} parameters");
 
         // Validate the parameter size
         let required_size = param_count * size_of::<f64>();
@@ -530,7 +530,7 @@ impl ByteMessage {
         for i in 0..param_count {
             let param_offset = params_offset + i * size_of::<f64>();
             let param = Self::parse_f64_param(payload, param_offset);
-            trace!("parse_gate_parameters: Parameter {} at offset {}: {}", i, param_offset, param);
+            trace!("parse_gate_parameters: Parameter {i} at offset {param_offset}: {param}");
             params.push(param);
         }
         
@@ -580,8 +580,7 @@ impl ByteMessage {
         let has_params = header.has_params != 0;
         let gate_type = GateType::from(header.gate_type);
         
-        trace!("parse_gate_command: Parsing gate type {:?}, num_qubits: {}, has_params: {}", 
-            gate_type, num_qubits, has_params);
+        trace!("parse_gate_command: Parsing gate type {gate_type:?}, num_qubits: {num_qubits}, has_params: {has_params}");
 
         // Calculate sizes
         let qubits_byte_size = num_qubits * size_of::<u32>();
@@ -592,13 +591,13 @@ impl ByteMessage {
         // Parse qubit indices directly to QubitId
         let qubits = Self::parse_qubit_indices(payload, qubits_offset, num_qubits);
         
-        trace!("parse_gate_command: Parsed qubits: {:?}", qubits);
+        trace!("parse_gate_command: Parsed qubits: {qubits:?}");
 
         // Parse parameters if present
         let params = if has_params {
             let params_offset = qubits_offset + qubits_byte_size;
             let parsed_params = Self::parse_gate_parameters(payload, params_offset, gate_type)?;
-            trace!("parse_gate_command: Parsed parameters: {:?}", parsed_params);
+            trace!("parse_gate_command: Parsed parameters: {parsed_params:?}");
             parsed_params
         } else {
             Vec::new()

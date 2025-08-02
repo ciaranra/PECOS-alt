@@ -9,6 +9,7 @@ license.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "Zero-dependency program types for PECOS quantum simulation"
+readme = "README.md"
 
 [dependencies]
 # Zero dependencies - this crate only provides data types

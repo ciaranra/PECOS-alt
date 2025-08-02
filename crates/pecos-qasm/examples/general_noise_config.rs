@@ -6,7 +6,7 @@
 //! 3. Complex noise model configurations
 
 use pecos_engines::noise::{GeneralNoiseModel, DepolarizingNoiseModel, BiasedDepolarizingNoiseModel};
-use pecos_engines::ClassicalControlEngineBuilder;
+use pecos_engines::{ClassicalControlEngineBuilder, sim_builder};
 use pecos_qasm::qasm_engine;
 use pecos_programs::QasmProgram;
 
@@ -31,9 +31,8 @@ fn main() {
         .with_meas_1_probability(0.001)
         .with_seed(42);
 
-    let results = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let results = sim_builder()
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .noise(general_noise)
         .seed(42)
         .run(1000)
@@ -46,9 +45,8 @@ fn main() {
     let depolarizing = DepolarizingNoiseModel::builder()
         .with_uniform_probability(0.001);
     
-    let results = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let results = sim_builder()
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .noise(depolarizing)
         .seed(42)
         .run(1000)
@@ -64,9 +62,8 @@ fn main() {
         .with_p1_probability(0.001)
         .with_p2_probability(0.01);
     
-    let results = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let results = sim_builder()
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .noise(custom_depolarizing)
         .seed(42)
         .run(1000)
@@ -79,9 +76,8 @@ fn main() {
     let biased = BiasedDepolarizingNoiseModel::builder()
         .with_uniform_probability(0.001);
     
-    let results = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let results = sim_builder()
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .noise(biased)
         .seed(42)
         .workers(4)  // Use multiple workers
@@ -92,9 +88,8 @@ fn main() {
 
     // Example 5: No noise (ideal simulation)
     println!("\nExample 5: Ideal simulation (no noise)");
-    let results = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let results = sim_builder()
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .seed(42)
         .run(1000)
         .unwrap();

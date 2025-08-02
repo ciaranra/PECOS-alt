@@ -1,6 +1,7 @@
 // Tests for the result_formatter module
 
 use pecos_engines::shot_results::{Data, Shot, ShotVec};
+use pecos_engines::sim_builder;
 use pecos_qasm::QASMEngine;
 use pecos_qasm::result_formatter::{
     QASMResultFormatter, format_as_binary_strings, format_as_decimal_arrays,
@@ -220,8 +221,7 @@ fn test_large_register_values() {
 
 #[test]
 fn test_integration_with_actual_simulation() {
-    use pecos_engines::ClassicalControlEngineBuilder;
-    use pecos_qasm::qasm_engine;
+        use pecos_qasm::qasm_engine;
     use pecos_programs::QasmProgram;
 
     // Run an actual QASM simulation
@@ -246,9 +246,9 @@ fn test_integration_with_actual_simulation() {
     let _register_sizes = engine.classical_register_sizes().unwrap();
 
     // Run simulation
-    let shot_vec = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let shot_vec = sim_builder()
+        .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
         .seed(42)
         .run(5)
         .unwrap();
@@ -346,8 +346,7 @@ fn test_zero_width_registers() {
 #[test]
 fn test_bell_state_formatting() {
     // Test a real Bell state scenario
-    use pecos_engines::ClassicalControlEngineBuilder;
-    use pecos_qasm::qasm_engine;
+        use pecos_qasm::qasm_engine;
     use pecos_programs::QasmProgram;
 
     let qasm = r#"
@@ -366,9 +365,9 @@ fn test_bell_state_formatting() {
     let _register_sizes = engine.classical_register_sizes().unwrap();
 
     // Run with enough shots to likely see both outcomes
-    let shot_vec = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let shot_vec = sim_builder()
+        .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
         .seed(42)
         .run(20)
         .unwrap();

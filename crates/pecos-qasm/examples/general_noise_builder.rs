@@ -1,7 +1,7 @@
 //! Example of using `GeneralNoiseModelBuilder` with fluent API and the unified simulation API
 
 use pecos_engines::noise::GeneralNoiseModel;
-use pecos_engines::{ClassicalControlEngineBuilder, GateType, sparse_stabilizer};
+use pecos_engines::{ClassicalControlEngineBuilder, GateType, sparse_stabilizer, sim_builder};
 use pecos_qasm::qasm_engine;
 use pecos_programs::QasmProgram;
 use std::collections::BTreeMap;
@@ -27,9 +27,8 @@ fn main() {
         .with_meas_0_probability(0.002)
         .with_meas_1_probability(0.002);
 
-    let results = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let results = sim_builder()
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .seed(42)
         .noise(basic_noise)
         .run(1000)
@@ -73,9 +72,8 @@ fn main() {
         .with_leakage_scale(0.1)
         .with_emission_scale(0.8);
 
-    let _results = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let _results = sim_builder()
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .seed(123)
         .noise(complex_noise)
         .run(500)
@@ -93,9 +91,8 @@ fn main() {
         .with_noiseless_gate(pecos_core::prelude::GateType::H) // H gates have no noise
         .with_noiseless_gate(pecos_core::prelude::GateType::Measure); // Measurements have no noise
 
-    let _results = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let _results = sim_builder()
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .noise(selective_noise)
         .run(100)
         .unwrap();
@@ -124,9 +121,8 @@ fn main() {
         .with_noiseless_gate(GateType::CX);
 
     // Use with full simulation configuration
-    let results = qasm_engine()
-        .program(QasmProgram::from_string(qasm))
-        .to_sim()
+    let results = sim_builder()
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .seed(456)
         .workers(2)
         .noise(full_noise)

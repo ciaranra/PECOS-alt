@@ -30,7 +30,7 @@
 //!
 //! It also includes key functionality from the top-level PECOS crate:
 //!
-//! * Simulation functions (`run_sim`)
+//! * Simulation functions (`sim`, `sim_builder`)
 //! * Engine setup functions (`setup_qasm_engine`, `setup_llvm_engine`)
 //! * Program type detection and handling
 //!
@@ -51,7 +51,7 @@ pub use pecos_phir_json::prelude::*;
 pub use pecos_qasm::prelude::*;
 pub use pecos_qsim::prelude::*;
 #[cfg(feature = "selene")]
-pub use pecos_selene_ceng::prelude::*;
+pub use pecos_selene::prelude::*;
 
 // Re-export ShotVec directly from pecos_engines for easier access
 pub use pecos_engines::shot_results::ShotVec;
@@ -69,11 +69,13 @@ pub use crate::setup_llvm_engine;
 pub use pecos_phir_json::setup_phir_json_engine;
 pub use pecos_qasm::setup_qasm_engine;
 
-// Re-export run_sim from pecos-engines
-pub use pecos_engines::run_sim;
 
 // Re-export ClassicalControlEngine
 pub use pecos_engines::ClassicalControlEngine;
+
+// Re-export unified simulation API
+pub use crate::unified_sim::{sim, SimBuilderExt};
+pub use pecos_engines::sim_builder;
 
 // Re-export PCG RNG functions
 pub use pecos_clib_pcg::{

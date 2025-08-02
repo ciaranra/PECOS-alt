@@ -8,6 +8,7 @@
 //! 4. Statistical equivalence of simulation results
 
 use pecos::prelude::*;
+use pecos_engines::QuantumEngineBuilder;
 use std::collections::HashMap;
 use tempfile::TempDir;
 
@@ -455,7 +456,15 @@ fn run_hugr_llvm_pipeline(hugr_data: &[u8], shots: usize) -> PipelineResult {
     let execution_result = pecos::hugr::run_hugr_llvm(&hugr_path, Some(shots)).and_then(|engine| {
         let compile_time = start_time.elapsed();
         let exec_start = std::time::Instant::now();
-        let result = run_sim(engine, shots, Some(42), None, None, None);
+        let num_qubits = engine.num_qubits();
+        let result = MonteCarloEngine::run_with_engines(
+            engine,
+            Box::new(PassThroughNoiseModel::builder().build()),
+            state_vector().qubits(num_qubits).build().unwrap(),
+            shots,
+            1,
+            Some(42),
+        );
         let exec_time = exec_start.elapsed();
         result.map(|r| (r, compile_time + exec_time))
     });
@@ -505,7 +514,15 @@ fn run_phir_pipeline(hugr_data: &[u8], shots: usize) -> PipelineResult {
         pecos::phir::run_phir_llvm(&hugr_path, Some(shots), None).and_then(|engine| {
             let compile_time = start_time.elapsed();
             let exec_start = std::time::Instant::now();
-            let result = run_sim(engine, shots, Some(42), None, None, None);
+            let num_qubits = engine.num_qubits();
+            let result = MonteCarloEngine::run_with_engines(
+            engine,
+            Box::new(PassThroughNoiseModel::builder().build()),
+            state_vector().qubits(num_qubits).build().unwrap(),
+            shots,
+            1,
+            Some(42),
+        );
             let exec_time = exec_start.elapsed();
             result.map(|r| (r, compile_time + exec_time))
         });
@@ -768,7 +785,15 @@ fn test_debug_llvm_ir_comparison() {
     match pecos::hugr::run_hugr_llvm(&hugr_path, Some(10)) {
         Ok(engine) => {
             println!("   ✓ HUGR-LLVM compilation successful");
-            match run_sim(engine, 10, Some(42), None, None, None) {
+            let num_qubits = engine.num_qubits();
+            match MonteCarloEngine::run_with_engines(
+                engine,
+                Box::new(PassThroughNoiseModel::builder().build()),
+                state_vector().qubits(num_qubits).build().unwrap(),
+                10,
+                1,
+                Some(42),
+            ) {
                 Ok(results) => println!(
                     "   ✓ HUGR-LLVM execution successful: {} shots",
                     results.len()
@@ -828,14 +853,14 @@ fn test_debug_llvm_ir_comparison() {
     println!("\n=== Debug files saved to: {:?} ===", temp_dir.path());
 }
 
-/// Generate HUGR-LLVM IR directly using the pecos-hugr-llvm crate
+/// Generate HUGR-LLVM IR directly using the pecos-hugr crate
 fn generate_hugr_llvm_ir(hugr_path: &std::path::Path) -> Result<String, String> {
     // Read the HUGR file
     let hugr_data =
         std::fs::read(hugr_path).map_err(|e| format!("Failed to read HUGR file: {e}"))?;
 
-    // Use pecos-hugr-llvm to compile to LLVM IR
-    match pecos_hugr_llvm::compile_hugr_bytes_to_string(&hugr_data) {
+    // Use pecos-hugr to compile to LLVM IR
+    match pecos_hugr::compile_hugr_bytes_to_string(&hugr_data) {
         Ok(ir) => Ok(ir),
         Err(e) => Err(format!("HUGR-LLVM compilation failed: {e}")),
     }

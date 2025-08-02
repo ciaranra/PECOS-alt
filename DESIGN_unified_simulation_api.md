@@ -103,7 +103,8 @@ Methods accept only two types of inputs for consistency:
 
 ```rust
 // Phase 1: Configuration (everything is builders/POD)
-let sim_builder = engine.to_sim()
+let sim_builder = sim_builder()
+    .classical(engine)
     .seed(42)                    // Stores u64
     .quantum(sparse_stab()) // Stores builder
     .noise(depolarizing());        // Stores builder
@@ -135,9 +136,9 @@ Both Rust and Python use identical free function APIs:
 
 ```rust
 // Rust
-qasm_engine()
-    .program(QasmProgram::from_string(qasm))
-    .to_sim()
+sim_builder()
+    .classical(qasm_engine()
+        .program(QasmProgram::from_string(qasm)))
     .quantum(sparse_stab())
     .noise(depolarizing_noise().with_p1_probability(0.01))
     .run(1000)?;
@@ -145,9 +146,9 @@ qasm_engine()
 
 ```python
 # Python - identical to Rust!
-(qasm_engine()
-    .program(QasmProgram.from_string(qasm))
-    .to_sim()
+(sim_builder()
+    .classical(qasm_engine()
+        .program(QasmProgram.from_string(qasm)))
     .quantum(sparse_stab())
     .noise(depolarizing_noise().with_p1_probability(0.01))
     .run(1000))
@@ -159,9 +160,9 @@ For users who prefer explicit type construction:
 
 ##### Rust (with Builder suffix - idiomatic)
 ```rust
-QasmEngineBuilder::new()
-    .program(QasmProgram::from_string(qasm))
-    .to_sim()
+SimBuilder::new()
+    .classical(QasmEngineBuilder::new()
+        .program(QasmProgram::from_string(qasm)))
     .quantum(SparseStabBuilder::new())
     .noise(DepolarizingNoiseBuilder::new().with_p1_probability(0.01))
     .run(1000)?;
@@ -169,9 +170,9 @@ QasmEngineBuilder::new()
 
 ##### Python (without Builder suffix - concise)
 ```python
-(QasmEngine()
-    .program(QasmProgram.from_string(qasm))
-    .to_sim()
+(SimBuilder()
+    .classical(QasmEngine()
+        .program(QasmProgram.from_string(qasm)))
     .quantum(SparseStab())
     .noise(DepolarizingNoise().with_p1_probability(0.01))
     .run(1000))
@@ -180,7 +181,8 @@ QasmEngineBuilder::new()
 ### Free Functions Provided
 
 | Function | Returns | Purpose |
-|----------|---------|---------|
+|----------|---------|---------|  
+| `sim_builder()` | `SimBuilder` | Create simulation builder |
 | `qasm_engine()` | `QasmEngineBuilder` | Create QASM engine builder |
 | `llvm_engine()` | `LlvmEngineBuilder` | Create LLVM engine builder |
 | `selene_engine()` | `SeleneEngineBuilder` | Create Selene engine builder |
@@ -223,7 +225,7 @@ pecos/                    # Meta-crate (facade)
 ├── pecos-engines/       # Engine traits, quantum backends, noise
 ├── pecos-qasm/          # QASM parser and engine
 ├── pecos-llvm-sim/      # LLVM simulation engine
-├── pecos-selene-ceng/   # Selene control engine
+├── pecos-selene/        # Selene integration
 ├── pecos-programs/      # Shared program types
 └── pecos-decoders/      # Decoder implementations (optional)
 ```
@@ -324,6 +326,7 @@ impl QasmEngineBuilder {
         self
     }
     
+    // Deprecated: Use sim_builder() instead
     pub fn to_sim(self) -> SimBuilder<QasmEngine> { ... }
 }
 
@@ -333,7 +336,7 @@ pub fn qasm_engine() -> QasmEngineBuilder {
 }
 ```
 
-#### Example: Selene Engine (in `pecos-selene-ceng` crate)
+#### Example: Selene Engine (in `pecos-selene` crate)
 
 ```rust
 use pecos_programs::{HugrProgram, LlvmProgram};
@@ -400,6 +403,7 @@ impl SeleneEngineBuilder {
         self
     }
     
+    // Deprecated: Use sim_builder() instead
     pub fn to_sim(self) -> SimBuilder<SeleneEngine> { ... }
 }
 
@@ -450,15 +454,15 @@ impl UnifiedSimBuilder {
 from pecos_rslib import classical, quantum, noise, programs
 
 # Simple case (using namespaces - recommended)
-results = (classical.qasm()
-    .program(programs.QasmProgram.from_string(qasm))
-    .to_sim()
+results = (sim_builder()
+    .classical(classical.qasm()
+        .program(programs.QasmProgram.from_string(qasm)))
     .run(1000))
 
 # With configuration (using namespaces - recommended)
-results = (classical.qasm()
-    .program(programs.QasmProgram.from_string(qasm))
-    .to_sim()
+results = (sim_builder()
+    .classical(classical.qasm()
+        .program(programs.QasmProgram.from_string(qasm)))
     .quantum(quantum.sparse_stab())
     .noise(noise.depolarizing()
         .with_prep_probability(0.001)
@@ -470,16 +474,16 @@ results = (classical.qasm()
     .run(1000))
 
 # Builder pattern supports both styles
-sim = classical.qasm().program(prog).to_sim()
+sim = sim_builder().classical(classical.qasm().program(prog))
 sim.seed(42)        # In-place mutation
 sim.workers(4)      # Returns self for optional chaining
 results = sim.run(1000)
 
 # Alternative: Direct imports (backward compatible)
-from pecos_rslib import qasm_engine, sparse_stab, depolarizing_noise
-results = (qasm_engine()
-    .program(QasmProgram.from_string(qasm))
-    .to_sim()
+from pecos_rslib import sim_builder, qasm_engine, sparse_stab, depolarizing_noise
+results = (sim_builder()
+    .classical(qasm_engine()
+        .program(QasmProgram.from_string(qasm)))
     .quantum(sparse_stab())
     .noise(depolarizing_noise().with_p1_probability(0.01))
     .run(1000))
@@ -493,9 +497,9 @@ results = (qasm_engine()
 use pecos::{classical, quantum, noise, programs};
 
 // Clear, organized API
-let results = classical::qasm()
-    .program(programs::QasmProgram::from_string(qasm))
-    .to_sim()
+let results = sim_builder()
+    .classical(classical::qasm()
+        .program(programs::QasmProgram::from_string(qasm)))
     .quantum(quantum::sparse_stabilizer())
     .noise(noise::depolarizing()
         .with_prep_probability(0.001)
@@ -544,13 +548,13 @@ sim()
 
 ```rust
 // Direct engine API with all options (using free functions)
-selene_engine()
-    .program(
-        SeleneEngineProgram::from_llvm_ir(my_ir)
-            .with_optimization(OptLevel::Aggressive)
-            .with_debug_info(true)
-    )
-    .to_sim()
+sim_builder()
+    .classical(selene_engine()
+        .program(
+            SeleneEngineProgram::from_llvm_ir(my_ir)
+                .with_optimization(OptLevel::Aggressive)
+                .with_debug_info(true)
+        ))
     .seed(42)
     .workers(8)
     .quantum(state_vector())
@@ -558,26 +562,26 @@ selene_engine()
     .run(1000)?;
 
 // QASM with virtual includes
-qasm_engine()
-    .program(
-        QasmEngineProgram::from_file("circuit.qasm")
-            .with_virtual_includes(vec![
-                ("custom.inc", custom_gates_definition)
-            ])
-    )
-    .to_sim()
+sim_builder()
+    .classical(qasm_engine()
+        .program(
+            QasmEngineProgram::from_file("circuit.qasm")
+                .with_virtual_includes(vec![
+                    ("custom.inc", custom_gates_definition)
+                ])
+        ))
     .run(1000)?;
 
 // But engines also accept shared program types!
-qasm_engine()
-    .program(QasmProgram::from_file("circuit.qasm"))  // Automatic conversion
-    .to_sim()
+sim_builder()
+    .classical(qasm_engine()
+        .program(QasmProgram::from_file("circuit.qasm")))  // Automatic conversion
     .run(1000)?;
 
 // Alternative: Using direct instantiation
-SeleneEngineBuilder::new()
-    .program(HugrProgram::from_bytes(hugr_bytes))
-    .to_sim()
+SimBuilder::new()
+    .classical(SeleneEngineBuilder::new()
+        .program(HugrProgram::from_bytes(hugr_bytes)))
     .quantum(StateVectorBuilder::new())
     .run(1000)?;
 ```
@@ -586,12 +590,12 @@ SeleneEngineBuilder::new()
 
 ```rust
 // Engine-specific (using free functions)
-qasm_engine()
-    .programs(vec![
-        QasmEngineProgram::from_file("definitions.qasm"),
-        QasmEngineProgram::from_file("circuit.qasm"),
-    ])
-    .to_sim()
+sim_builder()
+    .classical(qasm_engine()
+        .programs(vec![
+            QasmEngineProgram::from_file("definitions.qasm"),
+            QasmEngineProgram::from_file("circuit.qasm"),
+        ]))
     .run(1000)?;
 
 // Or incremental
@@ -599,7 +603,7 @@ let mut engine = qasm_engine();
 for file in library_files {
     engine = engine.add_program(QasmEngineProgram::from_file(file));
 }
-engine.to_sim().run(1000)?;
+sim_builder().classical(engine).run(1000)?;
 ```
 
 ## Translation Layer
@@ -610,8 +614,8 @@ The shared program types from `pecos-programs` are automatically converted to en
 // Conversion traits implemented by engine crates
 impl From<pecos_programs::QasmProgram> for pecos_qasm::QasmEngineProgram { ... }
 impl From<pecos_programs::LlvmProgram> for pecos_llvm_sim::LlvmEngineProgram { ... }
-impl From<pecos_programs::LlvmProgram> for pecos_selene_ceng::SeleneEngineProgram { ... }
-impl From<pecos_programs::HugrProgram> for pecos_selene_ceng::SeleneEngineProgram { ... }
+impl From<pecos_programs::LlvmProgram> for pecos_selene::SeleneEngineProgram { ... }
+impl From<pecos_programs::HugrProgram> for pecos_selene::SeleneEngineProgram { ... }
 ```
 
 ## Default Engine Selection
@@ -680,7 +684,7 @@ The `pecos` meta-crate would provide namespace modules:
 pub mod classical {
     pub use pecos_qasm::{qasm_engine, QasmEngineBuilder};
     pub use pecos_llvm_sim::{llvm_engine, LlvmEngineBuilder};
-    pub use pecos_selene_ceng::{selene_engine, SeleneEngineBuilder};
+    pub use pecos_selene::{selene_engine, SeleneEngineBuilder};
     
     // Convenience aliases
     pub use qasm_engine as qasm;

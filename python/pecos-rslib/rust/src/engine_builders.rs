@@ -5,7 +5,7 @@
 
 use pecos_engines::ClassicalControlEngineBuilder;
 use pecos_llvm_sim::{llvm_engine as rust_llvm_engine, LlvmEngineBuilder as RustLlvmEngineBuilder};
-use pecos_selene_ceng::{selene_engine as rust_selene_engine, SeleneEngineBuilder as RustSeleneEngineBuilder};
+use pecos_selene::{selene_engine as rust_selene_engine, SeleneEngineBuilder as RustSeleneEngineBuilder};
 use pecos_qasm::{qasm_engine as rust_qasm_engine, QasmEngineBuilder as RustQasmEngineBuilder};
 use pecos_phir_json::{phir_json_engine as rust_phir_json_engine, PhirJsonEngineBuilder as RustPhirJsonEngineBuilder};
 use pecos_programs::{LlvmProgram, HugrProgram, QasmProgram, PhirJsonProgram};
@@ -333,12 +333,12 @@ impl PyQasmSimBuilder {
             })?;
         }
         
-        // Build the simulation
-        let simulation = sim_builder.build()
+        // Build the MonteCarloEngine
+        let engine = sim_builder.build()
             .map_err(|e| PyRuntimeError::new_err(format!("Failed to build simulation: {}", e)))?;
         
         Ok(PyQasmSimulation {
-            inner: Arc::new(simulation),
+            inner: Arc::new(Mutex::new(engine)),
         })
     }
 
@@ -416,14 +416,25 @@ impl PyQasmSimBuilder {
 /// Python wrapper for built QASM simulation
 #[pyclass(name = "QasmSimulation")]
 pub struct PyQasmSimulation {
-    inner: Arc<pecos_engines::Simulation<pecos_qasm::engine::QASMEngine>>,
+    inner: Arc<Mutex<pecos_engines::MonteCarloEngine>>,
 }
 
 #[pymethods]
 impl PyQasmSimulation {
     /// Run the simulation
     fn run(&self, shots: usize) -> PyResult<PyShotVec> {
-        match self.inner.run(shots) {
+        let mut engine = self.inner.lock().unwrap();
+        // Use workers from builder config or default (1)
+        match engine.run(shots) {
+            Ok(shot_vec) => Ok(PyShotVec::new(shot_vec)),
+            Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {}", e))),
+        }
+    }
+    
+    /// Run the simulation with specified number of workers
+    fn run_with_workers(&self, shots: usize, workers: usize) -> PyResult<PyShotVec> {
+        let mut engine = self.inner.lock().unwrap();
+        match engine.run_with_workers(shots, workers) {
             Ok(shot_vec) => Ok(PyShotVec::new(shot_vec)),
             Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {}", e))),
         }
@@ -433,14 +444,25 @@ impl PyQasmSimulation {
 /// Python wrapper for built PHIR JSON simulation
 #[pyclass(name = "PhirJsonSimulation")]
 pub struct PyPhirJsonSimulation {
-    inner: Arc<pecos_engines::Simulation<pecos_phir_json::PhirJsonEngine>>,
+    inner: Arc<Mutex<pecos_engines::MonteCarloEngine>>,
 }
 
 #[pymethods]
 impl PyPhirJsonSimulation {
     /// Run the simulation
     fn run(&self, shots: usize) -> PyResult<PyShotVec> {
-        match self.inner.run(shots) {
+        let mut engine = self.inner.lock().unwrap();
+        // Use workers from builder config or default (1)
+        match engine.run(shots) {
+            Ok(shot_vec) => Ok(PyShotVec::new(shot_vec)),
+            Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {}", e))),
+        }
+    }
+    
+    /// Run the simulation with specified number of workers
+    fn run_with_workers(&self, shots: usize, workers: usize) -> PyResult<PyShotVec> {
+        let mut engine = self.inner.lock().unwrap();
+        match engine.run_with_workers(shots, workers) {
             Ok(shot_vec) => Ok(PyShotVec::new(shot_vec)),
             Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {}", e))),
         }
@@ -808,12 +830,12 @@ impl PyPhirJsonSimBuilder {
             })?;
         }
         
-        // Build the simulation
-        let simulation = sim_builder.build()
+        // Build the MonteCarloEngine
+        let engine = sim_builder.build()
             .map_err(|e| PyRuntimeError::new_err(format!("Failed to build simulation: {}", e)))?;
         
         Ok(PyPhirJsonSimulation {
-            inner: Arc::new(simulation),
+            inner: Arc::new(Mutex::new(engine)),
         })
     }
 

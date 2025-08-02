@@ -41,9 +41,9 @@ pub use engine_builder::{llvm_engine, LlvmEngineBuilder};
 // Re-export from pecos-llvm-runtime for backward compatibility
 pub use pecos_llvm_runtime::LlvmEngine;
 
-/// Create a new LLVM simulation builder (thin wrapper around llvm_engine().program().to_sim())
+/// Create a new LLVM simulation builder (thin wrapper around `llvm_engine().program().to_sim()`)
 ///
-/// This function creates a SimBuilder that uses the unified simulation API.
+/// This function creates a `TypedSimBuilder` that uses the unified simulation API.
 /// 
 /// # Example
 /// ```rust,no_run
@@ -63,7 +63,7 @@ pub use pecos_llvm_runtime::LlvmEngine;
 /// # Ok::<(), pecos_core::errors::PecosError>(())
 /// ```
 #[must_use]
-pub fn llvm_sim(llvm_ir: impl Into<String>) -> pecos_engines::SimBuilder<LlvmEngineBuilder> {
+pub fn llvm_sim(llvm_ir: impl Into<String>) -> pecos_engines::SimBuilder {
     use pecos_programs::LlvmProgram;
     use pecos_engines::ClassicalControlEngineBuilder;
     
