@@ -15,6 +15,7 @@ readme = "README.md"
 pecos-core.workspace = true
 pecos-engines.workspace = true
 pecos-programs.workspace = true
+pecos-llvm-runtime.workspace = true
 
 # Selene dependencies - using path dependencies since they're not published
 selene-core = { path = "../../../selene/selene-core" }
@@ -33,6 +34,7 @@ hugr = { workspace = true, optional = true }
 tket2 = { workspace = true, optional = true }
 tket2-hseries = { workspace = true, features = ["llvm"], optional = true }
 inkwell = { workspace = true, optional = true }
+pecos-hugr = { workspace = true, optional = true }
 
 # Standard library extensions
 log.workspace = true
@@ -46,5 +48,5 @@ env_logger.workspace = true
 
 [features]
 default = ["hugr"]
-hugr = ["dep:hugr", "dep:tket2", "dep:tket2-hseries", "dep:inkwell"]
+hugr = ["dep:hugr", "dep:tket2", "dep:tket2-hseries", "dep:inkwell", "dep:pecos-hugr"]
 async = ["tokio"]

@@ -32,7 +32,7 @@ pub use pecos_llvm_runtime::LlvmEngine;
 // Program types
 pub use pecos_programs::LlvmProgram;
 
-// Engine traits - especially ClassicalControlEngineBuilder for .to_sim()
+// Engine traits - especially ClassicalControlEngineBuilder for .to_sim() (sim_builder() preferred)
 pub use pecos_engines::{
     ClassicalControlEngineBuilder,
     ClassicalEngine,
@@ -48,6 +48,9 @@ pub use pecos_engines::{
 
 // Quantum engine builders
 pub use pecos_engines::quantum_engine_builder::{state_vector, sparse_stabilizer};
+
+// Simulation builder for unified API
+pub use pecos_engines::sim_builder;
 
 // Result types
 pub use pecos_engines::{Shot, ShotVec, ShotMap};

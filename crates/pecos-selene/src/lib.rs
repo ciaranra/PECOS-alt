@@ -55,6 +55,7 @@ pub mod engine_builder;
 pub mod error;
 pub mod prelude;
 pub mod program;
+pub mod simulator_plugin_template;
 
 #[cfg(feature = "hugr")]
 pub mod hugr_compiler;

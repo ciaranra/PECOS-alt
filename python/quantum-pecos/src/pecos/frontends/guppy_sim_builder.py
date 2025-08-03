@@ -56,6 +56,7 @@ class GuppySimulationConfig:
     workers: Optional[int] = None
     noise_model: Optional[Any] = None
     engine: Optional[str] = None
+    quantum_engine_builder: Optional[Any] = None  # Direct engine builder object
     verbose: bool = False
     debug: bool = False
     optimize: bool = True
@@ -264,14 +265,16 @@ class GuppySimulation:
                     builder = builder.noise(noise_builder)
             
             # Configure quantum engine
-            if self._config.engine is not None:
+            if self._config.quantum_engine_builder is not None:
+                # Use the builder object directly
+                builder = builder.quantum(self._config.quantum_engine_builder)
+            elif self._config.engine is not None:
+                # Backward compatibility with string engine names
                 if self._config.engine.lower() == "statevector":
                     builder = builder.quantum(state_vector())
                 elif self._config.engine.lower() == "sparsestabilizer":
                     builder = builder.quantum(sparse_stabilizer())
-            else:
-                # Default to state vector engine to support all gates
-                builder = builder.quantum(state_vector())
+            # If not set, let the Rust side use its default (stabilizer)
             
             # Run simulation
             results = builder.run(shots)
@@ -455,6 +458,12 @@ class GuppySimulationBuilder:
     def engine(self, engine: str) -> "GuppySimulationBuilder":
         """Set quantum simulation engine (StateVector or SparseStabilizer)."""
         self._config.engine = engine
+        return self
+    
+    def quantum(self, engine_builder: Any) -> "GuppySimulationBuilder":
+        """Set quantum engine using a builder object (matches Rust API)."""
+        # Store the engine builder directly
+        self._config.quantum_engine_builder = engine_builder
         return self
     
     def verbose(self, enable: bool = True) -> "GuppySimulationBuilder":

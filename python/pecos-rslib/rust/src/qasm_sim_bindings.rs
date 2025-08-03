@@ -1,7 +1,7 @@
 //! Thin PyO3 bindings that directly mirror the unified Rust QASM simulation API
 
 use pecos_engines::shot_results::ShotVec;
-use pecos_qasm::{qasm_engine, unified_engine_builder::QasmEngineBuilder};
+use pecos_qasm::{qasm_engine, QasmEngineBuilder};
 use pecos_engines::{ClassicalControlEngineBuilder};
 use pecos_engines::noise::{
     DepolarizingNoiseModelBuilder, BiasedDepolarizingNoiseModelBuilder, 

@@ -2743,6 +2743,8 @@ dependencies = [
  "log",
  "pecos-core",
  "pecos-engines",
+ "pecos-hugr",
+ "pecos-llvm-runtime",
  "pecos-programs",
  "selene-core",
  "tempfile",

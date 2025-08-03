@@ -60,7 +60,7 @@ from pecos_rslib.programs import (
     WatProgram,
 )
 
-# Import the new unified sim API
+# Import the new sim API
 from pecos_rslib.sim import (
     sim,
     qasm_engine,
@@ -213,7 +213,7 @@ __all__ = [
     "PhirCompiler",
     # Backend information
     "get_compilation_backends",
-    # New unified sim API
+    # New sim API
     "sim",
     "qasm_engine",
     "llvm_engine",

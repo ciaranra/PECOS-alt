@@ -16,7 +16,7 @@ pub use crate::{
     ClassicalEngine, 
     ControlEngine,
     ClassicalControlEngine,
-    ClassicalControlEngineBuilder,  // Critical for .to_sim() method
+    ClassicalControlEngineBuilder,  // For .to_sim() method (sim_builder() preferred)
 };
 
 // Quantum engines and builders

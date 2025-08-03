@@ -48,7 +48,9 @@ except ImportError:
     GUPPY_AVAILABLE = False
 
 try:
-    from pecos.frontends import guppy_sim
+    from pecos.frontends.guppy_api import sim
+    from pecos.frontends.guppy_sim_builder import guppy_sim  # temporary, for migration
+    from pecos_rslib import state_vector
     PECOS_AVAILABLE = True
 except ImportError:
     PECOS_AVAILABLE = False
@@ -125,7 +127,7 @@ class TestBasicQuantumGates:
             
             return result1, result2, result3, result4
         
-        results = guppy_sim(single_qubit_test, max_qubits=10).run(100)
+        results = sim(single_qubit_test).qubits(10).run(100)
         
         # Decode integer-encoded results
         decoded_results = decode_integer_results(results["result"], 4)
@@ -187,7 +189,7 @@ class TestBasicQuantumGates:
             
             return r1, r2, r3, r4
         
-        results = guppy_sim(phase_test, max_qubits=10).run(100)
+        results = sim(phase_test).qubits(10).quantum(state_vector()).run(100)
         
         decoded_results = get_decoded_results(results, n_bits=4)
         for r in decoded_results:
@@ -215,7 +217,7 @@ class TestBasicQuantumGates:
             
             return r1, r2, r3
         
-        results = guppy_sim(rotation_test, max_qubits=10).run(100)
+        results = sim(rotation_test).qubits(10).quantum(state_vector()).run(100)
         
         decoded_results = get_decoded_results(results, n_bits=3)
         for r in decoded_results:
@@ -244,7 +246,7 @@ class TestBasicQuantumGates:
             
             return r1, r2, r3, r4
         
-        results = guppy_sim(two_qubit_test, max_qubits=10).run(100)
+        results = sim(two_qubit_test).qubits(10).run(100)
         
         decoded_results = get_decoded_results(results, n_bits=4)
         for r in decoded_results:
@@ -260,7 +262,7 @@ class TestBasicQuantumGates:
             ch(q1, q2)
             return measure(q1), measure(q2)
         
-        results = guppy_sim(ch_test, max_qubits=10).run(100)
+        results = sim(ch_test).qubits(10).quantum(state_vector()).run(100)
         
         decoded_results = get_decoded_results(results, n_bits=2)
         for r in decoded_results:
@@ -277,7 +279,7 @@ class TestBasicQuantumGates:
             toffoli(q1, q2, q3)
             return measure(q1), measure(q2), measure(q3)
         
-        results = guppy_sim(toffoli_test, max_qubits=10).run(100)
+        results = sim(toffoli_test).qubits(10).quantum(state_vector()).run(100)
         
         decoded_results = get_decoded_results(results, n_bits=3)
         for r in decoded_results:
@@ -297,7 +299,7 @@ class TestQuantumStateManagement:
             q = qubit()
             return measure(q)
         
-        results = guppy_sim(allocation_test, max_qubits=10).run(100)
+        results = sim(allocation_test).qubits(10).run(100)
         
         # New qubits should be in |0⟩
         decoded_results = get_decoded_results(results, n_bits=1)
@@ -339,7 +341,7 @@ class TestQuantumStateManagement:
             
             return m1, m2, m3
         
-        results = guppy_sim(measure_test, max_qubits=10).seed(42).run(100)
+        results = sim(measure_test).qubits(10).seed(42).run(100)
         
         # Check m1 is always True
         decoded_results = get_decoded_results(results, n_bits=3)
@@ -362,7 +364,7 @@ class TestQuantumStateManagement:
             x(q2)
             return measure(q2)
         
-        results = guppy_sim(discard_test, max_qubits=10).run(100)
+        results = sim(discard_test).qubits(10).run(100)
         
         # Should always measure True
         decoded_results = get_decoded_results(results, n_bits=1)
@@ -383,7 +385,7 @@ class TestQuantumStateManagement:
             
             return before, after
         
-        results = guppy_sim(reset_test, max_qubits=10).run(100)
+        results = sim(reset_test).qubits(10).run(100)
         
         decoded_results = get_decoded_results(results, n_bits=2)
         for r in decoded_results:
@@ -404,7 +406,7 @@ class TestLinearTypeSystem:
             h(q)  # Apply H directly instead of through function call
             return measure(q)
         
-        results = guppy_sim(ownership_test, max_qubits=10).seed(42).run(100)
+        results = sim(ownership_test).qubits(10).seed(42).run(100)
         
         # Should see both 0 and 1 from H gate
         decoded_results = get_decoded_results(results, n_bits=1)
@@ -422,7 +424,7 @@ class TestLinearTypeSystem:
             x(q)
             return measure(q)
         
-        results = guppy_sim(rebinding_test, max_qubits=10).run(100)
+        results = sim(rebinding_test).qubits(10).run(100)
         
         # Should always be True
         decoded_results = get_decoded_results(results, n_bits=1)
@@ -450,8 +452,8 @@ class TestLinearTypeSystem:
         def test_false() -> bool:
             return conditional_test(False)
         
-        results_true = guppy_sim(test_true, max_qubits=10).run(100)
-        results_false = guppy_sim(test_false, max_qubits=10).seed(42).run(100)
+        results_true = sim(test_true).qubits(10).run(100)
+        results_false = sim(test_false).qubits(10).seed(42).run(100)
         
         # With flag=True, always get 1
         assert all(r == True for r in results_true["result"])
@@ -494,7 +496,7 @@ class TestQuantumClassicalHybrid:
             
             return count
         
-        results = guppy_sim(hybrid_test, max_qubits=10).seed(42).run(100)
+        results = sim(hybrid_test).qubits(10).seed(42).run(100)
         
         # Should see all values 0-7
         # This returns integers, not bools, so no decoding needed
@@ -533,9 +535,9 @@ class TestQuantumClassicalHybrid:
         def test_n2() -> bool:
             return conditional_ops(2)
         
-        results0 = guppy_sim(test_n0, max_qubits=10).run(10)
-        results1 = guppy_sim(test_n1, max_qubits=10).run(10)
-        results2 = guppy_sim(test_n2, max_qubits=10).run(10)
+        results0 = sim(test_n0).qubits(10).run(10)
+        results1 = sim(test_n1).qubits(10).run(10)
+        results2 = sim(test_n2).qubits(10).run(10)
         
         assert all(not r for r in results0["result"])  # n=0: always 0
         assert all(r for r in results1["result"])      # n=1: always 1
@@ -564,7 +566,7 @@ class TestQuantumClassicalHybrid:
             
             return parity
         
-        results = guppy_sim(parity_test, max_qubits=10).seed(42).run(100)
+        results = sim(parity_test).qubits(10).seed(42).run(100)
         
         # Should see both even and odd parity roughly equally
         decoded_results = get_decoded_results(results, n_bits=1)
@@ -591,7 +593,7 @@ class TestQuantumCircuitPatterns:
             h(q)
             return measure(q)
         
-        results = guppy_sim(sequential_test, max_qubits=10).seed(42).run(100)
+        results = sim(sequential_test).qubits(10).seed(42).quantum(state_vector()).run(100)
         
         # Complex sequence should give some results in both states
         decoded_results = get_decoded_results(results, n_bits=1)
@@ -612,7 +614,7 @@ class TestQuantumCircuitPatterns:
             
             return measure(q1), measure(q2)
         
-        results = guppy_sim(bell_test, max_qubits=10).seed(42).run(100)
+        results = sim(bell_test).qubits(10).seed(42).run(100)
         
         # Should only see 00 and 11
         decoded_results = get_decoded_results(results, n_bits=2)
@@ -633,7 +635,7 @@ class TestQuantumCircuitPatterns:
             
             return measure(q1), measure(q2), measure(q3)
         
-        results = guppy_sim(ghz_test, max_qubits=10).seed(42).run(100)
+        results = sim(ghz_test).qubits(10).seed(42).run(100)
         
         # Should only see 000 and 111
         decoded_results = get_decoded_results(results, n_bits=3)
@@ -667,7 +669,7 @@ class TestQuantumCircuitPatterns:
             
             return tries
         
-        results = guppy_sim(repeat_test, max_qubits=10).run(100)
+        results = sim(repeat_test).qubits(10).run(100)
         
         # Should always succeed on first try since H² = I gives |0⟩
         # This returns integers (tries count), not booleans
@@ -694,7 +696,7 @@ class TestStructuredQuantumData:
             
             return measure(q1), measure(q2)
         
-        results = guppy_sim(tuple_test, max_qubits=10).seed(42).run(100)
+        results = sim(tuple_test).qubits(10).seed(42).run(100)
         
         # First qubit always 1, second follows first
         decoded_results = get_decoded_results(results, n_bits=2)
@@ -716,7 +718,7 @@ class TestStructuredQuantumData:
             q1, q2 = create_entangled_pair()
             return measure(q1), measure(q2)
         
-        results = guppy_sim(use_pair, max_qubits=10).seed(42).run(100)
+        results = sim(use_pair).qubits(10).seed(42).run(100)
         
         # Should see Bell state correlations
         decoded_results = get_decoded_results(results, n_bits=2)

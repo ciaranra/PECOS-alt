@@ -1,6 +1,6 @@
-"""Unified simulation API for all engine types.
+"""Simulation API for all engine types.
 
-This module provides the new unified API pattern:
+This module provides the new API pattern:
     engine().program(...).to_sim().run(shots)
 
 Examples:
@@ -38,10 +38,7 @@ from pecos_rslib._pecos_rslib import (
     LlvmEngineBuilder,
     SeleneEngineBuilder as _RustSeleneEngineBuilder,
     PhirJsonEngineBuilder,
-    QasmSimBuilder,
-    LlvmSimBuilder,
-    SeleneSimBuilder,
-    PhirJsonSimBuilder,
+    SimBuilder,
     QasmProgram,
     LlvmProgram,
     HugrProgram,
@@ -74,10 +71,6 @@ __all__ = [
     "SeleneEngineBuilder",
     "PhirJsonEngineBuilder",
     "SimBuilder",
-    "QasmSimBuilder",
-    "LlvmSimBuilder",
-    "SeleneSimBuilder",
-    "PhirJsonSimBuilder",
     "QasmProgram",
     "LlvmProgram",
     "HugrProgram",
@@ -95,29 +88,8 @@ __all__ = [
     "biased_depolarizing_noise",
 ]
 
-# Alias for functional style
-def sim(engine_builder):
-    """Create a simulation builder from an engine builder.
-    
-    This is an alias for the functional style API.
-    
-    Args:
-        engine_builder: An engine builder (e.g., from qasm_engine())
-        
-    Returns:
-        The engine builder (for chaining)
-        
-    Example:
-        >>> from pecos_rslib import sim, qasm_engine
-        >>> from pecos_rslib.programs import QasmProgram
-        >>> 
-        >>> results = sim(qasm_engine().program(QasmProgram.from_string("H q[0];"))).to_sim().run(1000)
-    """
-    return engine_builder
+# Import the sim function from Rust
+from pecos_rslib._pecos_rslib import sim as _rust_sim
 
-# Type alias for SimBuilder - we'll use the specific sim builders from Rust
-if TYPE_CHECKING:
-    from typing import Union
-    SimBuilder = Union[QasmSimBuilder, LlvmSimBuilder, SeleneSimBuilder]
-else:
-    SimBuilder = "SimBuilder"
+# Re-export the Rust sim function
+sim = _rust_sim

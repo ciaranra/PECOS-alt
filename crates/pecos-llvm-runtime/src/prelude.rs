@@ -51,6 +51,9 @@ pub use pecos_engines::{
     Shot, ShotMap, ShotMapDisplayExt, ShotMapDisplayOptions, ShotVec,
 };
 
+// Simulation builder for unified API
+pub use pecos_engines::sim_builder;
+
 // Error types
 pub use pecos_core::errors::PecosError;
 

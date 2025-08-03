@@ -166,6 +166,9 @@ pub fn compile_hugr_to_llvm<'c>(
         .run_passes(opt_str, target_machine, PassBuilderOptions::create())
         .map_err(|e| anyhow!("Optimization failed: {}", e))?;
     
+    // Add a main function wrapper if needed for Selene compatibility
+    add_main_wrapper_if_needed(&module, context)?;
+    
     // Verify
     module.verify().map_err(|e| anyhow!("Module verification failed: {}", e))?;
     
@@ -194,4 +197,78 @@ pub fn get_native_target_machine(opt_level: OptimizationLevel) -> Result<TargetM
 /// Get the extension registry for HUGR operations
 pub fn get_extension_registry() -> &'static ExtensionRegistry {
     &REGISTRY
+}
+
+/// Add a main function wrapper if there's no main function but there's an EntryPoint
+fn add_main_wrapper_if_needed<'ctx>(module: &Module<'ctx>, context: &'ctx Context) -> Result<()> {
+    // Check if main already exists
+    if module.get_function("main").is_some() {
+        return Ok(());
+    }
+    
+    // Convert module to string to find EntryPoint
+    let module_str = module.print_to_string().to_string();
+    
+    // Look for attribute definitions like: attributes #0 = { "EntryPoint" }
+    let mut entry_point_attrs = Vec::new();
+    for line in module_str.lines() {
+        if line.starts_with("attributes #") && line.contains("\"EntryPoint\"") {
+            // Extract attribute number
+            if let Some(attr_num) = line.split('#').nth(1).and_then(|s| s.split(' ').next()) {
+                entry_point_attrs.push(format!("#{attr_num}"));
+            }
+        }
+    }
+    
+    // Find the function with EntryPoint attribute
+    let mut entry_function_name: Option<String> = None;
+    for line in module_str.lines() {
+        if line.starts_with("define ") {
+            // Check if this function has any of the EntryPoint attributes
+            for attr in &entry_point_attrs {
+                if line.contains(attr) {
+                    // Extract function name
+                    if let Some(func_start) = line.find('@') {
+                        if let Some(func_end) = line[func_start + 1..].find('(') {
+                            let func_name = &line[func_start + 1..func_start + 1 + func_end];
+                            entry_function_name = Some(func_name.to_string());
+                            break;
+                        }
+                    }
+                }
+            }
+            if entry_function_name.is_some() {
+                break;
+            }
+        }
+    }
+    
+    // If we found an entry point function, create a main wrapper
+    if let Some(entry_name) = entry_function_name {
+        if let Some(entry_func) = module.get_function(&entry_name) {
+            // Create main function
+            let i32_type = context.i32_type();
+            let main_fn_type = i32_type.fn_type(&[], false);
+            let main_fn = module.add_function("main", main_fn_type, None);
+            
+            // Create entry block
+            let entry_block = context.append_basic_block(main_fn, "entry");
+            let builder = context.create_builder();
+            builder.position_at_end(entry_block);
+            
+            // Call the entry function
+            let _call_result = builder.build_call(entry_func, &[], "call_entry");
+            
+            // Return 0 from main
+            builder.build_return(Some(&i32_type.const_int(0, false)));
+            
+            // Add the EntryPoint attribute to main
+            main_fn.add_attribute(
+                inkwell::attributes::AttributeLoc::Function,
+                context.create_string_attribute("EntryPoint", ""),
+            );
+        }
+    }
+    
+    Ok(())
 }

@@ -61,6 +61,8 @@ pub struct SeleneEngine {
     enable_metrics: bool,
     #[allow(dead_code)] // May be used for debugging/metrics in the future
     shot_start_time: Option<SeleneInstant>,
+    
+    // Track if we're using simulator plugin for quantum programs
 }
 
 impl SeleneEngine {
@@ -157,6 +159,8 @@ impl SeleneEngine {
         if self.plugin_library_path.is_some() {
             return Ok(()); // Already compiled
         }
+        
+        log::info!("compile_to_plugin called");
 
         log::info!("Compiling program to Selene runtime plugin: {:?}", self.program);
         
@@ -441,10 +445,36 @@ anyhow = "1.0"
         fs::rename(&shim_file, &lib_file)
             .map_err(|e| SeleneError::CompilationError(format!("Failed to move shim: {}", e)))?;
         
+        // For quantum programs, we need to link the object file with our shim
+        let has_quantum = match &self.program {
+            SeleneProgram::LlvmIr(ir) => ir.contains("__quantum__qis__"),
+            _ => false,
+        };
+        
+        if has_quantum {
+            // Create a build script that links the LLVM object file
+            let build_rs = format!(r#"
+fn main() {{
+    println!("cargo:rustc-link-arg={}");
+    println!("cargo:rustc-cdylib-link-arg=-Wl,--allow-multiple-definition");
+}}
+"#, obj_file.display());
+            
+            let build_file = temp_dir.path().join("build.rs");
+            fs::write(&build_file, build_rs)
+                .map_err(|e| SeleneError::CompilationError(format!("Failed to write build.rs: {}", e)))?;
+        }
+        
         // Build the plugin using cargo
-        let plugin_output = Command::new("cargo")
-            .arg("build")
-            .arg("--release")
+        let mut cargo_cmd = Command::new("cargo");
+        cargo_cmd.arg("build").arg("--release");
+        
+        if has_quantum {
+            // Link the LLVM object file
+            cargo_cmd.env("RUSTFLAGS", format!("-C link-arg={}", obj_file.display()));
+        }
+        
+        let plugin_output = cargo_cmd
             .current_dir(temp_dir.path())
             .output()
             .map_err(|e| SeleneError::CompilationError(format!("Failed to run cargo: {}", e)))?;
@@ -483,7 +513,21 @@ anyhow = "1.0"
     /// Generate runtime shim that implements Selene plugin interface
     fn generate_runtime_shim(&self) -> Result<String, PecosError> {
         let metrics_enabled = self.enable_metrics;
-        Ok(format!(r#"
+        
+        // Check if this is a quantum program
+        let has_quantum = match &self.program {
+            SeleneProgram::LlvmIr(ir) => {
+                ir.contains("__quantum__qis__") || ir.contains("__quantum__rt__")
+            }
+            _ => false,
+        };
+        
+        if has_quantum {
+            // Generate a special simulator plugin that speaks PECOS byte messages
+            Ok(self.generate_simulator_plugin_shim()?)
+        } else {
+            // Generate standard Selene plugin
+            Ok(format!(r#"
 use std::collections::VecDeque;
 use anyhow::{{Result, bail}};
 use selene_core::{{
@@ -805,6 +849,7 @@ impl RuntimeInterfaceFactory for LlvmRuntimeFactory {{
 
 export_runtime_plugin!(crate::LlvmRuntimeFactory);
 "#))
+        }
     }
     
     /// Compile LLVM file to plugin
@@ -818,8 +863,63 @@ export_runtime_plugin!(crate::LlvmRuntimeFactory);
         // Use the standard compilation path
         self.compile_llvm_ir_to_plugin()
     }
+    
+    /// Generate a simulator plugin that translates quantum operations to PECOS byte messages
+    fn generate_simulator_plugin_shim(&self) -> Result<String, PecosError> {
+        // Extract entry point from LLVM IR
+        let entry_point = self.find_entry_point_in_llvm()?;
+        
+        // Use the template module to generate clean code
+        Ok(crate::simulator_plugin_template::generate_simulator_plugin_code(&entry_point, self.enable_metrics))
+    }
 
-    /// Create or get the runtime instance for this thread
+    /// Find the entry point function in LLVM IR
+    fn find_entry_point_in_llvm(&self) -> Result<String, PecosError> {
+        let ir = match &self.program {
+            SeleneProgram::LlvmIr(ir) => ir,
+            SeleneProgram::LlvmFile(_) => {
+                return Err(SeleneError::CompilationError("Cannot extract entry point from file".to_string()).into());
+            }
+            _ => return Err(SeleneError::CompilationError("Not an LLVM program".to_string()).into()),
+        };
+        
+        log::debug!("Looking for entry point in LLVM IR");
+        
+        // Look for function with EntryPoint attribute
+        let lines: Vec<&str> = ir.lines().collect();
+        for (i, line) in lines.iter().enumerate() {
+            if line.starts_with("define") && line.contains("@") {
+                // Extract function name
+                if let Some(start) = line.find('@') {
+                    if let Some(end) = line[start+1..].find('(') {
+                        let func_name = &line[start+1..start+1+end];
+                        log::debug!("Found function: {}", func_name);
+                        
+                        // Check if EntryPoint attribute is anywhere after the function
+                        // Look for the closing brace first
+                        let mut brace_found = false;
+                        for j in i+1..lines.len() {
+                            if lines[j].trim() == "}" {
+                                brace_found = true;
+                                continue;
+                            }
+                            if brace_found && lines[j].contains("attributes") && lines[j].contains("EntryPoint") {
+                                log::debug!("Found EntryPoint attribute for function {}", func_name);
+                                return Ok(func_name.to_string());
+                            }
+                            // Stop if we hit another function definition
+                            if lines[j].starts_with("define") {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        Err(SeleneError::CompilationError("No entry point found in LLVM IR".to_string()).into())
+    }
+    
     fn get_or_create_runtime(&mut self) -> Result<&mut Box<dyn RuntimeInterface>, PecosError> {
         if self.runtime.is_none() {
             self.create_runtime_instance()?;
@@ -1062,6 +1162,7 @@ impl ClassicalEngine for SeleneEngine {
     }
     
     fn generate_commands(&mut self) -> Result<ByteMessage, PecosError> {
+        // Get operations from the runtime (either standard Selene or simulator plugin)
         let operations = self.get_next_operations()?;
         
         if operations.is_empty() {
@@ -1075,6 +1176,7 @@ impl ClassicalEngine for SeleneEngine {
     }
     
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), PecosError> {
+        // Process measurement results from PECOS
         let outcomes = message.outcomes()?;
         self.process_measurement_results(&outcomes)
     }
@@ -1212,6 +1314,7 @@ unsafe impl Sync for SeleneEngine {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pecos_core::prelude::GateType;
     
     #[test]
     fn test_selene_engine_creation() {
@@ -1271,6 +1374,50 @@ entry:
         // Even if no actual quantum operations are present
         println!("Generated {} quantum operations from simple LLVM IR", 
                  ops_result.map(|ops| ops.len()).unwrap_or(0));
+        
+        Ok(())
+    }
+    
+    #[test]
+    fn test_quantum_intrinsics_detection() -> Result<(), PecosError> {
+        // Test that quantum intrinsics are properly detected
+        let quantum_llvm = r#"
+declare void @__quantum__qis__h__body(i64)
+declare i32 @__quantum__qis__m__body(i64, i64)
+
+define void @test_quantum() #0 {
+entry:
+    call void @__quantum__qis__h__body(i64 0)
+    %result = call i32 @__quantum__qis__m__body(i64 0, i64 0)
+    ret void
+}
+
+attributes #0 = { "EntryPoint" }
+"#;
+        
+        let mut engine = SeleneEngine::new(
+            SeleneProgram::LlvmIr(quantum_llvm.to_string()),
+            1,
+            false,
+        );
+        
+        // Compile should detect quantum intrinsics
+        engine.compile_to_plugin()?;
+        
+        // Check that quantum operations are detected
+        assert!(engine.plugin_library_path.is_some(), "Should have created a simulator plugin");
+        assert!(engine.plugin_interface.is_some(), "Should have loaded plugin interface");
+        
+        // Try to generate commands which should work even if process doesn't
+        let cmd = engine.generate_commands()?;
+        
+        // With quantum intrinsics, we should get quantum operations
+        let ops = cmd.quantum_ops()?;
+        println!("Generated {} quantum operations", ops.len());
+        
+        // Check that at least H gate is in the operations
+        assert!(ops.iter().any(|op| op.gate_type == GateType::H), "Should have H gate");
+        assert!(ops.iter().any(|op| op.gate_type == GateType::Measure), "Should have Measure");
         
         Ok(())
     }

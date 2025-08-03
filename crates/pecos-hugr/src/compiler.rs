@@ -260,7 +260,16 @@ impl HugrCompiler {
         let llvm_ir_string = llvm_module.print_to_string().to_string();
         let fixed_entry_point = fix_entry_point_signature(&llvm_ir_string);
         let fixed_alignment = fix_struct_alignment(&fixed_entry_point);
-        let fixed_llvm_ir = add_struct_return_wrappers(&fixed_alignment);
+        let with_wrappers = add_struct_return_wrappers(&fixed_alignment);
+        debug!("HUGR: Calling add_main_wrapper_if_needed");
+        let fixed_llvm_ir = add_main_wrapper_if_needed(&with_wrappers);
+        
+        // Double check if main was added
+        if fixed_llvm_ir.contains("@main") {
+            debug!("HUGR: Main function successfully added to LLVM IR");
+        } else {
+            debug!("HUGR: WARNING - Main function was NOT added to LLVM IR");
+        }
 
         trace!("HUGR: Generated LLVM IR:\n{fixed_llvm_ir}");
         debug!("HUGR: LLVM IR generation completed successfully");
@@ -606,6 +615,90 @@ fn fix_small_struct_returns(llvm_ir: &str) -> String {
         }
         
         return result;
+    }
+    
+    llvm_ir.to_string()
+}
+
+/// Add a main function wrapper if there's no main function but there's an EntryPoint
+fn add_main_wrapper_if_needed(llvm_ir: &str) -> String {
+    use log::debug;
+    
+    // Check if main already exists
+    if llvm_ir.contains("@main(") || llvm_ir.contains("@main ") {
+        debug!("HUGR: Main function already exists, skipping wrapper");
+        return llvm_ir.to_string();
+    }
+    
+    // For HUGR-generated code, we know the pattern: functions start with _hugr_
+    // and the entry point is the one without _wrapper, _get_ etc suffixes
+    let mut entry_function: Option<(&str, &str)> = None;
+    
+    for line in llvm_ir.lines() {
+        if line.starts_with("define ") && line.contains("@_hugr_") {
+            // Skip wrapper and accessor functions
+            if line.contains("_wrapper") || line.contains("_get_") {
+                continue;
+            }
+            
+            // This should be the main entry function
+            if let Some(func_start) = line.find('@') {
+                if let Some(func_end) = line[func_start + 1..].find('(') {
+                    let func_name = &line[func_start + 1..func_start + 1 + func_end];
+                    
+                    // Extract the return type
+                    let return_type = if let Some(define_end) = line.find("define ") {
+                        let after_define = &line[define_end + 7..];
+                        if let Some(at_pos) = after_define.find('@') {
+                            after_define[..at_pos].trim()
+                        } else {
+                            "void"
+                        }
+                    } else {
+                        "void"
+                    };
+                    
+                    entry_function = Some((func_name, return_type));
+                    break;
+                }
+            }
+        }
+    }
+    
+    debug!("HUGR: Entry function found: {:?}", entry_function);
+    
+    // If we found an entry point function, add a main wrapper
+    if let Some((entry_name, return_type)) = entry_function {
+        debug!("HUGR: Adding main wrapper for {} with return type {}", entry_name, return_type);
+        
+        // Create main wrapper that calls the entry function
+        let main_wrapper = format!(
+            r#"
+; Main wrapper for Selene compatibility
+define i32 @main() {{
+entry:
+  %result = call {return_type} @{entry_name}()
+  ret i32 0
+}}
+"#
+        );
+        
+        // Add the wrapper before the attributes section or at the end
+        // Look for attributes on its own line or after other content
+        if let Some(attr_pos) = llvm_ir.find("attributes ") {
+            // Find the start of the line
+            let line_start = llvm_ir[..attr_pos].rfind('\n').unwrap_or(0);
+            let mut result = String::new();
+            result.push_str(&llvm_ir[..line_start]);
+            result.push_str(&main_wrapper);
+            result.push_str(&llvm_ir[line_start..]);
+            debug!("HUGR: Inserted main wrapper before attributes section");
+            return result;
+        } else {
+            // Just append at the end
+            debug!("HUGR: Appending main wrapper at the end");
+            return format!("{llvm_ir}\n{main_wrapper}");
+        }
     }
     
     llvm_ir.to_string()

@@ -38,6 +38,7 @@ mod sparse_stab_bindings;
 mod sparse_stab_engine_bindings;
 mod state_vec_bindings;
 mod state_vec_engine_bindings;
+mod sim;
 
 use byte_message_bindings::{PyByteMessage, PyByteMessageBuilder};
 use shot_results_bindings::{PyShotMap, PyShotVec};
@@ -82,11 +83,14 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Register Selene simulation functions
     // selene_sim_bindings::register_selene_sim_module(m)?;
 
-    // Register unified engine builders
+    // Register engine builders
     engine_builders::register_engine_builders(m)?;
 
     // NOTE: sim_builder module disabled in favor of thin wrapper bindings
     // sim_builder::register_sim_builder_module(m)?;
+
+    // Register sim API
+    sim::register_sim(m)?;
 
     pcg_bindings::create_pcg_module(m)?;
     Ok(())

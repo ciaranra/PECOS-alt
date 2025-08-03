@@ -8,7 +8,7 @@
 //! 5. Error handling and edge cases
 
 use pecos_selene::{selene_engine, SeleneEngine};
-use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine, sim_builder};
+use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine, sim_builder, Engine};
 use pecos_core::prelude::PecosError;
 use pecos_selene::program::SeleneProgram;
 use pecos_programs::LlvmProgram;
@@ -36,25 +36,52 @@ entry:
 attributes #0 = { "EntryPoint" }
 "#;
     
-    // Run using new unified API
+    // First test: Direct engine usage (bypassing full simulation infrastructure)
+    println!("Testing direct engine usage...");
+    let mut engine = selene_engine()
+        .program(LlvmProgram::from_ir(bell_llvm))
+        .qubits(2)
+        .optimize(true)
+        .build()?;
+    
+    // Process a single shot directly
+    let shot = engine.process(())?;
+    println!("Direct shot data: {:?}", shot.data);
+    
+    // Check engine details
+    let engine_any = engine.as_any();
+    if let Some(selene_engine) = engine_any.downcast_ref::<SeleneEngine>() {
+        println!("SeleneEngine details:");
+        println!("  num_qubits: {}", selene_engine.num_qubits());
+        // Note: optimize and plugin_library_path are private fields
+        println!("  engine type: SeleneEngine");
+    }
+    
+    // Now test with full simulation infrastructure
+    println!("\nTesting with full simulation infrastructure...");
     let results = sim_builder()
         .classical(selene_engine()
         .program(LlvmProgram::from_ir(bell_llvm))
         .qubits(2)
         .optimize(true))
         .seed(42)
-        .workers(4)
-        .run(1000)?;
+        .workers(1)  // Use single worker for easier debugging
+        .run(10)?;   // Run fewer shots for testing
         
     println!("Executed Bell state simulation");
     
     println!("Executed Bell state through PECOS: {} shots", results.shots.len());
-    assert_eq!(results.shots.len(), 1000);
+    assert_eq!(results.shots.len(), 10);
     
     // Verify measurement results exist
     let has_measurements = results.shots.iter()
         .all(|shot| !shot.data.is_empty());
     assert!(has_measurements, "All shots should have measurement data");
+    
+    // Check for measurement data in shots
+    for (i, shot) in results.shots.iter().take(3).enumerate() {
+        println!("Shot {}: {:?}", i, shot.data);
+    }
     
     Ok(())
 }

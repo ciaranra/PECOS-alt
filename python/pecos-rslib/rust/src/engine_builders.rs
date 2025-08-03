@@ -1,9 +1,8 @@
-//! PyO3 wrappers for engine builders following the unified simulation API
+//! PyO3 wrappers for engine builders following the simulation API
 //!
 //! This module provides thin wrappers around the Rust engine builders,
-//! maintaining the same unified API pattern: engine().program(...).to_sim()
+//! maintaining the same API pattern: engine().program(...).to_sim()
 
-use pecos_engines::ClassicalControlEngineBuilder;
 use pecos_llvm_sim::{llvm_engine as rust_llvm_engine, LlvmEngineBuilder as RustLlvmEngineBuilder};
 use pecos_selene::{selene_engine as rust_selene_engine, SeleneEngineBuilder as RustSeleneEngineBuilder};
 use pecos_qasm::{qasm_engine as rust_qasm_engine, QasmEngineBuilder as RustQasmEngineBuilder};
@@ -22,6 +21,9 @@ use std::sync::{Arc, Mutex};
 // Import existing shot result types
 use crate::shot_results_bindings::PyShotVec;
 
+// Import the unified SimBuilder from sim.rs
+use crate::sim::{PySimBuilder, SimBuilderInner};
+
 // Noise builder wrappers
 use pecos_engines::noise::{
     GeneralNoiseModelBuilder,
@@ -33,7 +35,7 @@ use pecos_engines::noise::{
 #[pyclass(name = "QasmEngineBuilder")]
 #[derive(Clone)]
 pub struct PyQasmEngineBuilder {
-    inner: RustQasmEngineBuilder,
+    pub(crate) inner: RustQasmEngineBuilder,
 }
 
 #[pymethods]
@@ -61,14 +63,16 @@ impl PyQasmEngineBuilder {
     }
 
     /// Convert to simulation builder
-    fn to_sim(&self) -> PyResult<PyQasmSimBuilder> {
-        Ok(PyQasmSimBuilder {
-            engine_builder: Arc::new(Mutex::new(Some(self.inner.clone()))),
-            seed: None,
-            workers: None,
-            quantum_engine_builder: None,
-            noise_builder: None,
-            explicit_num_qubits: None,
+    fn to_sim(&self) -> PyResult<PySimBuilder> {
+        Ok(PySimBuilder {
+            inner: SimBuilderInner::Qasm(PyQasmSimBuilder {
+                engine_builder: Arc::new(Mutex::new(Some(self.inner.clone()))),
+                seed: None,
+                workers: None,
+                quantum_engine_builder: None,
+                noise_builder: None,
+                explicit_num_qubits: None,
+            }),
         })
     }
 }
@@ -77,7 +81,7 @@ impl PyQasmEngineBuilder {
 #[pyclass(name = "LlvmEngineBuilder")]
 #[derive(Clone)]
 pub struct PyLlvmEngineBuilder {
-    inner: RustLlvmEngineBuilder,
+    pub(crate) inner: RustLlvmEngineBuilder,
 }
 
 #[pymethods]
@@ -115,14 +119,16 @@ impl PyLlvmEngineBuilder {
     }
 
     /// Convert to simulation builder
-    fn to_sim(&self) -> PyResult<PyLlvmSimBuilder> {
-        Ok(PyLlvmSimBuilder {
-            engine_builder: Arc::new(Mutex::new(Some(self.inner.clone()))),
-            seed: None,
-            workers: None,
-            quantum_engine_builder: None,
-            noise_builder: None,
-            explicit_num_qubits: None,
+    fn to_sim(&self) -> PyResult<PySimBuilder> {
+        Ok(PySimBuilder {
+            inner: SimBuilderInner::Llvm(PyLlvmSimBuilder {
+                engine_builder: Arc::new(Mutex::new(Some(self.inner.clone()))),
+                seed: None,
+                workers: None,
+                quantum_engine_builder: None,
+                noise_builder: None,
+                explicit_num_qubits: None,
+            }),
         })
     }
 }
@@ -131,7 +137,7 @@ impl PyLlvmEngineBuilder {
 #[pyclass(name = "SeleneEngineBuilder")]
 #[derive(Clone)]
 pub struct PySeleneEngineBuilder {
-    inner: RustSeleneEngineBuilder,
+    pub(crate) inner: RustSeleneEngineBuilder,
 }
 
 #[pymethods]
@@ -163,14 +169,16 @@ impl PySeleneEngineBuilder {
     }
 
     /// Convert to simulation builder
-    fn to_sim(&self) -> PyResult<PySeleneSimBuilder> {
-        Ok(PySeleneSimBuilder {
-            engine_builder: Arc::new(Mutex::new(Some(self.inner.clone()))),
-            seed: None,
-            workers: None,
-            quantum_engine_builder: None,
-            noise_builder: None,
-            explicit_num_qubits: None,
+    fn to_sim(&self) -> PyResult<PySimBuilder> {
+        Ok(PySimBuilder {
+            inner: SimBuilderInner::Selene(PySeleneSimBuilder {
+                engine_builder: Arc::new(Mutex::new(Some(self.inner.clone()))),
+                seed: None,
+                workers: None,
+                quantum_engine_builder: None,
+                noise_builder: None,
+                explicit_num_qubits: None,
+            }),
         })
     }
 }
@@ -179,7 +187,7 @@ impl PySeleneEngineBuilder {
 #[pyclass(name = "PhirJsonEngineBuilder")]
 #[derive(Clone)]
 pub struct PyPhirJsonEngineBuilder {
-    inner: RustPhirJsonEngineBuilder,
+    pub(crate) inner: RustPhirJsonEngineBuilder,
 }
 
 #[pymethods]
@@ -199,230 +207,43 @@ impl PyPhirJsonEngineBuilder {
     }
 
     /// Convert to simulation builder
-    fn to_sim(&self) -> PyResult<PyPhirJsonSimBuilder> {
-        Ok(PyPhirJsonSimBuilder {
-            engine_builder: Arc::new(Mutex::new(Some(self.inner.clone()))),
-            seed: None,
-            workers: None,
-            quantum_engine_builder: None,
-            noise_builder: None,
-            explicit_num_qubits: None,
+    fn to_sim(&self) -> PyResult<PySimBuilder> {
+        Ok(PySimBuilder {
+            inner: SimBuilderInner::PhirJson(PyPhirJsonSimBuilder {
+                engine_builder: Arc::new(Mutex::new(Some(self.inner.clone()))),
+                seed: None,
+                workers: None,
+                quantum_engine_builder: None,
+                noise_builder: None,
+                explicit_num_qubits: None,
+            }),
         })
     }
 }
 
-/// Python wrapper for QASM simulation builder
+/// Internal QASM simulation builder state
 /// 
 /// This stores configuration and rebuilds the Rust SimBuilder when needed,
 /// avoiding the FnOnce + Sync issue while maintaining the same API
-#[pyclass(name = "QasmSimBuilder")]
 pub struct PyQasmSimBuilder {
-    engine_builder: Arc<Mutex<Option<RustQasmEngineBuilder>>>,
-    seed: Option<u64>,
-    workers: Option<usize>,
-    quantum_engine_builder: Option<PyObject>,
-    noise_builder: Option<PyObject>,
-    explicit_num_qubits: Option<usize>,
-}
-
-#[pymethods]
-impl PyQasmSimBuilder {
-    /// Set random seed
-    fn seed(slf: Py<Self>, seed: u64, py: Python) -> Py<Self> {
-        slf.borrow_mut(py).seed = Some(seed);
-        slf
-    }
-
-    /// Set number of worker threads
-    fn workers(slf: Py<Self>, workers: usize, py: Python) -> Py<Self> {
-        slf.borrow_mut(py).workers = Some(workers);
-        slf
-    }
-
-    /// Use automatic worker count based on available CPUs
-    fn auto_workers(slf: Py<Self>, py: Python) -> Py<Self> {
-        let workers = std::thread::available_parallelism()
-            .map(std::num::NonZero::get)
-            .unwrap_or(4);
-        slf.borrow_mut(py).workers = Some(workers);
-        slf
-    }
-
-    /// Set noise model builder
-    fn noise(slf: Py<Self>, noise_builder: PyObject, py: Python) -> Py<Self> {
-        slf.borrow_mut(py).noise_builder = Some(noise_builder);
-        slf
-    }
-
-    /// Set quantum simulator/engine
-    fn quantum(slf: Py<Self>, engine: PyObject, py: Python) -> PyResult<Py<Self>> {
-        // Store the quantum engine builder object
-        slf.borrow_mut(py).quantum_engine_builder = Some(engine);
-        Ok(slf)
-    }
-    
-    /// Set the number of qubits
-    fn qubits(slf: Py<Self>, num_qubits: usize, py: Python) -> Py<Self> {
-        slf.borrow_mut(py).explicit_num_qubits = Some(num_qubits);
-        slf
-    }
-
-    /// Build the simulation (for multiple runs)
-    fn build(&self) -> PyResult<PyQasmSimulation> {
-        let mut builder_lock = self.engine_builder.lock().unwrap();
-        let engine_builder = builder_lock.take()
-            .ok_or_else(|| PyRuntimeError::new_err("Builder already consumed"))?;
-        
-        // Create the Rust SimBuilder
-        let mut sim_builder = engine_builder.to_sim();
-        
-        // Apply configuration
-        if let Some(seed) = self.seed {
-            sim_builder = sim_builder.seed(seed);
-        }
-        if let Some(workers) = self.workers {
-            sim_builder = sim_builder.workers(workers);
-        }
-        if let Some(n) = self.explicit_num_qubits {
-            sim_builder = sim_builder.qubits(n);
-        }
-        
-        // Apply quantum engine builder if present
-        if let Some(ref qe_py) = self.quantum_engine_builder {
-            sim_builder = Python::with_gil(|py| -> PyResult<_> {
-                // Try to extract known quantum engine builder types
-                if let Ok(mut state_vec) = qe_py.extract::<PyStateVectorEngineBuilder>(py) {
-                    if let Some(inner) = state_vec.inner.take() {
-                        Ok(sim_builder.quantum(inner))
-                    } else {
-                        Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                            "Quantum engine builder has already been consumed"
-                        ))
-                    }
-                } else if let Ok(mut sparse_stab) = qe_py.extract::<PySparseStabilizerEngineBuilder>(py) {
-                    if let Some(inner) = sparse_stab.inner.take() {
-                        Ok(sim_builder.quantum(inner))
-                    } else {
-                        Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                            "Quantum engine builder has already been consumed"
-                        ))
-                    }
-                } else {
-                    Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                        "quantum_engine must be a valid quantum engine builder"
-                    ))
-                }
-            })?;
-        }
-        
-        // Apply noise builder if present
-        if let Some(ref noise_py) = self.noise_builder {
-            sim_builder = Python::with_gil(|py| -> PyResult<_> {
-                // Try to extract known noise builder types
-                if let Ok(general) = noise_py.extract::<PyGeneralNoiseModelBuilder>(py) {
-                    Ok(sim_builder.noise(general.inner.clone()))
-                } else if let Ok(depolarizing) = noise_py.extract::<PyDepolarizingNoiseModelBuilder>(py) {
-                    Ok(sim_builder.noise(depolarizing.inner.clone()))
-                } else if let Ok(biased) = noise_py.extract::<PyBiasedDepolarizingNoiseModelBuilder>(py) {
-                    Ok(sim_builder.noise(biased.inner.clone()))
-                } else {
-                    Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                        "noise must be a valid noise model builder"
-                    ))
-                }
-            })?;
-        }
-        
-        // Build the MonteCarloEngine
-        let engine = sim_builder.build()
-            .map_err(|e| PyRuntimeError::new_err(format!("Failed to build simulation: {}", e)))?;
-        
-        Ok(PyQasmSimulation {
-            inner: Arc::new(Mutex::new(engine)),
-        })
-    }
-
-    /// Run the simulation
-    fn run(&self, shots: usize) -> PyResult<PyShotVec> {
-        let mut builder_lock = self.engine_builder.lock().unwrap();
-        let engine_builder = builder_lock.take()
-            .ok_or_else(|| PyRuntimeError::new_err("Builder already consumed"))?;
-        
-        // Create the Rust SimBuilder
-        let mut sim_builder = engine_builder.to_sim();
-        
-        // Apply configuration
-        if let Some(seed) = self.seed {
-            sim_builder = sim_builder.seed(seed);
-        }
-        if let Some(workers) = self.workers {
-            sim_builder = sim_builder.workers(workers);
-        }
-        if let Some(n) = self.explicit_num_qubits {
-            sim_builder = sim_builder.qubits(n);
-        }
-        
-        // Apply quantum engine builder if present
-        if let Some(ref qe_py) = self.quantum_engine_builder {
-            sim_builder = Python::with_gil(|py| -> PyResult<_> {
-                // Try to extract known quantum engine builder types
-                if let Ok(mut state_vec) = qe_py.extract::<PyStateVectorEngineBuilder>(py) {
-                    if let Some(inner) = state_vec.inner.take() {
-                        Ok(sim_builder.quantum(inner))
-                    } else {
-                        Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                            "Quantum engine builder has already been consumed"
-                        ))
-                    }
-                } else if let Ok(mut sparse_stab) = qe_py.extract::<PySparseStabilizerEngineBuilder>(py) {
-                    if let Some(inner) = sparse_stab.inner.take() {
-                        Ok(sim_builder.quantum(inner))
-                    } else {
-                        Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                            "Quantum engine builder has already been consumed"
-                        ))
-                    }
-                } else {
-                    // For run(), we can skip unknown quantum engine types and use default
-                    Ok(sim_builder)
-                }
-            })?;
-        }
-        
-        // Apply noise builder if present
-        if let Some(ref noise_py) = self.noise_builder {
-            sim_builder = Python::with_gil(|py| -> PyResult<_> {
-                if let Ok(general) = noise_py.extract::<PyGeneralNoiseModelBuilder>(py) {
-                    Ok(sim_builder.noise(general.inner.clone()))
-                } else if let Ok(depolarizing) = noise_py.extract::<PyDepolarizingNoiseModelBuilder>(py) {
-                    Ok(sim_builder.noise(depolarizing.inner.clone()))
-                } else if let Ok(biased) = noise_py.extract::<PyBiasedDepolarizingNoiseModelBuilder>(py) {
-                    Ok(sim_builder.noise(biased.inner.clone()))
-                } else {
-                    // For run(), we can skip unknown noise types
-                    Ok(sim_builder)
-                }
-            })?;
-        }
-        
-        // Run directly
-        match sim_builder.run(shots) {
-            Ok(shot_vec) => Ok(PyShotVec::new(shot_vec)),
-            Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {}", e))),
-        }
-    }
+    pub(crate) engine_builder: Arc<Mutex<Option<RustQasmEngineBuilder>>>,
+    pub(crate) seed: Option<u64>,
+    pub(crate) workers: Option<usize>,
+    pub(crate) quantum_engine_builder: Option<PyObject>,
+    pub(crate) noise_builder: Option<PyObject>,
+    pub(crate) explicit_num_qubits: Option<usize>,
 }
 
 /// Python wrapper for built QASM simulation
 #[pyclass(name = "QasmSimulation")]
 pub struct PyQasmSimulation {
-    inner: Arc<Mutex<pecos_engines::MonteCarloEngine>>,
+    pub(crate) inner: Arc<Mutex<pecos_engines::MonteCarloEngine>>,
 }
 
 #[pymethods]
 impl PyQasmSimulation {
     /// Run the simulation
-    fn run(&self, shots: usize) -> PyResult<PyShotVec> {
+    pub fn run(&self, shots: usize) -> PyResult<PyShotVec> {
         let mut engine = self.inner.lock().unwrap();
         // Use workers from builder config or default (1)
         match engine.run(shots) {
@@ -444,13 +265,13 @@ impl PyQasmSimulation {
 /// Python wrapper for built PHIR JSON simulation
 #[pyclass(name = "PhirJsonSimulation")]
 pub struct PyPhirJsonSimulation {
-    inner: Arc<Mutex<pecos_engines::MonteCarloEngine>>,
+    pub(crate) inner: Arc<Mutex<pecos_engines::MonteCarloEngine>>,
 }
 
 #[pymethods]
 impl PyPhirJsonSimulation {
     /// Run the simulation
-    fn run(&self, shots: usize) -> PyResult<PyShotVec> {
+    pub fn run(&self, shots: usize) -> PyResult<PyShotVec> {
         let mut engine = self.inner.lock().unwrap();
         // Use workers from builder config or default (1)
         match engine.run(shots) {
@@ -469,446 +290,34 @@ impl PyPhirJsonSimulation {
     }
 }
 
-/// Python wrapper for LLVM simulation builder
-#[pyclass(name = "LlvmSimBuilder")]
+/// Internal LLVM simulation builder state
 pub struct PyLlvmSimBuilder {
-    engine_builder: Arc<Mutex<Option<RustLlvmEngineBuilder>>>,
-    seed: Option<u64>,
-    workers: Option<usize>,
-    quantum_engine_builder: Option<PyObject>,
-    noise_builder: Option<PyObject>,
-    explicit_num_qubits: Option<usize>,
+    pub(crate) engine_builder: Arc<Mutex<Option<RustLlvmEngineBuilder>>>,
+    pub(crate) seed: Option<u64>,
+    pub(crate) workers: Option<usize>,
+    pub(crate) quantum_engine_builder: Option<PyObject>,
+    pub(crate) noise_builder: Option<PyObject>,
+    pub(crate) explicit_num_qubits: Option<usize>,
 }
 
-#[pymethods]
-impl PyLlvmSimBuilder {
-    /// Set random seed
-    fn seed(slf: Py<Self>, seed: u64, py: Python) -> Py<Self> {
-        slf.borrow_mut(py).seed = Some(seed);
-        slf
-    }
-
-    /// Set number of worker threads
-    fn workers(slf: Py<Self>, workers: usize, py: Python) -> Py<Self> {
-        slf.borrow_mut(py).workers = Some(workers);
-        slf
-    }
-
-    /// Use automatic worker count based on available CPUs
-    fn auto_workers(slf: Py<Self>, py: Python) -> Py<Self> {
-        let workers = std::thread::available_parallelism()
-            .map(std::num::NonZero::get)
-            .unwrap_or(4);
-        slf.borrow_mut(py).workers = Some(workers);
-        slf
-    }
-
-    /// Set noise model builder
-    fn noise(slf: Py<Self>, noise_builder: PyObject, py: Python) -> Py<Self> {
-        slf.borrow_mut(py).noise_builder = Some(noise_builder);
-        slf
-    }
-
-    /// Set quantum simulator/engine
-    fn quantum(slf: Py<Self>, engine: PyObject, py: Python) -> PyResult<Py<Self>> {
-        // Store the quantum engine builder object
-        slf.borrow_mut(py).quantum_engine_builder = Some(engine);
-        Ok(slf)
-    }
-    
-    /// Set the number of qubits
-    fn qubits(slf: Py<Self>, num_qubits: usize, py: Python) -> Py<Self> {
-        slf.borrow_mut(py).explicit_num_qubits = Some(num_qubits);
-        slf
-    }
-
-    /// Run the simulation
-    fn run(&self, shots: usize) -> PyResult<PyShotVec> {
-        let mut builder_lock = self.engine_builder.lock().unwrap();
-        let engine_builder = builder_lock.take()
-            .ok_or_else(|| PyRuntimeError::new_err("Builder already consumed"))?;
-        
-        let mut sim_builder = engine_builder.to_sim();
-        
-        if let Some(seed) = self.seed {
-            sim_builder = sim_builder.seed(seed);
-        }
-        if let Some(workers) = self.workers {
-            sim_builder = sim_builder.workers(workers);
-        }
-        if let Some(n) = self.explicit_num_qubits {
-            sim_builder = sim_builder.qubits(n);
-        }
-        
-        // Apply quantum engine builder if present
-        if let Some(ref qe_py) = self.quantum_engine_builder {
-            sim_builder = Python::with_gil(|py| -> PyResult<_> {
-                // Try to extract known quantum engine builder types
-                if let Ok(mut state_vec) = qe_py.extract::<PyStateVectorEngineBuilder>(py) {
-                    if let Some(inner) = state_vec.inner.take() {
-                        Ok(sim_builder.quantum(inner))
-                    } else {
-                        Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                            "Quantum engine builder has already been consumed"
-                        ))
-                    }
-                } else if let Ok(mut sparse_stab) = qe_py.extract::<PySparseStabilizerEngineBuilder>(py) {
-                    if let Some(inner) = sparse_stab.inner.take() {
-                        Ok(sim_builder.quantum(inner))
-                    } else {
-                        Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                            "Quantum engine builder has already been consumed"
-                        ))
-                    }
-                } else {
-                    // For run(), we can skip unknown quantum engine types and use default
-                    Ok(sim_builder)
-                }
-            })?;
-        }
-        
-        // Note: LLVM engine might support different noise models
-        // For now, we'll handle the same ones as QASM
-        if let Some(ref noise_py) = self.noise_builder {
-            sim_builder = Python::with_gil(|py| -> PyResult<_> {
-                if let Ok(general) = noise_py.extract::<PyGeneralNoiseModelBuilder>(py) {
-                    Ok(sim_builder.noise(general.inner.clone()))
-                } else if let Ok(depolarizing) = noise_py.extract::<PyDepolarizingNoiseModelBuilder>(py) {
-                    Ok(sim_builder.noise(depolarizing.inner.clone()))
-                } else if let Ok(biased) = noise_py.extract::<PyBiasedDepolarizingNoiseModelBuilder>(py) {
-                    Ok(sim_builder.noise(biased.inner.clone()))
-                } else {
-                    // Skip unknown noise types
-                    Ok(sim_builder)
-                }
-            })?;
-        }
-        
-        match sim_builder.run(shots) {
-            Ok(shot_vec) => Ok(PyShotVec::new(shot_vec)),
-            Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {}", e))),
-        }
-    }
-}
-
-/// Python wrapper for Selene simulation builder
-#[pyclass(name = "SeleneSimBuilder")]
+/// Internal Selene simulation builder state
 pub struct PySeleneSimBuilder {
-    engine_builder: Arc<Mutex<Option<RustSeleneEngineBuilder>>>,
-    seed: Option<u64>,
-    workers: Option<usize>,
-    quantum_engine_builder: Option<PyObject>,
-    noise_builder: Option<PyObject>,
-    explicit_num_qubits: Option<usize>,
+    pub(crate) engine_builder: Arc<Mutex<Option<RustSeleneEngineBuilder>>>,
+    pub(crate) seed: Option<u64>,
+    pub(crate) workers: Option<usize>,
+    pub(crate) quantum_engine_builder: Option<PyObject>,
+    pub(crate) noise_builder: Option<PyObject>,
+    pub(crate) explicit_num_qubits: Option<usize>,
 }
 
-#[pymethods]
-impl PySeleneSimBuilder {
-    /// Set random seed
-    fn seed(slf: Py<Self>, seed: u64, py: Python) -> Py<Self> {
-        slf.borrow_mut(py).seed = Some(seed);
-        slf
-    }
-
-    /// Set number of worker threads
-    fn workers(slf: Py<Self>, workers: usize, py: Python) -> Py<Self> {
-        slf.borrow_mut(py).workers = Some(workers);
-        slf
-    }
-
-    /// Use automatic worker count based on available CPUs
-    fn auto_workers(slf: Py<Self>, py: Python) -> Py<Self> {
-        let workers = std::thread::available_parallelism()
-            .map(std::num::NonZero::get)
-            .unwrap_or(4);
-        slf.borrow_mut(py).workers = Some(workers);
-        slf
-    }
-
-    /// Set noise model builder
-    fn noise(slf: Py<Self>, noise_builder: PyObject, py: Python) -> Py<Self> {
-        slf.borrow_mut(py).noise_builder = Some(noise_builder);
-        slf
-    }
-
-    /// Set quantum simulator/engine
-    fn quantum(slf: Py<Self>, engine: PyObject, py: Python) -> PyResult<Py<Self>> {
-        // Store the quantum engine builder object
-        slf.borrow_mut(py).quantum_engine_builder = Some(engine);
-        Ok(slf)
-    }
-    
-    /// Set the number of qubits
-    fn qubits(slf: Py<Self>, num_qubits: usize, py: Python) -> Py<Self> {
-        slf.borrow_mut(py).explicit_num_qubits = Some(num_qubits);
-        slf
-    }
-
-    /// Run the simulation
-    fn run(&self, shots: usize) -> PyResult<PyShotVec> {
-        let mut builder_lock = self.engine_builder.lock().unwrap();
-        let engine_builder = builder_lock.take()
-            .ok_or_else(|| PyRuntimeError::new_err("Builder already consumed"))?;
-        
-        let mut sim_builder = engine_builder.to_sim();
-        
-        if let Some(seed) = self.seed {
-            sim_builder = sim_builder.seed(seed);
-        }
-        if let Some(workers) = self.workers {
-            sim_builder = sim_builder.workers(workers);
-        }
-        if let Some(n) = self.explicit_num_qubits {
-            sim_builder = sim_builder.qubits(n);
-        }
-        
-        // Apply quantum engine builder if present
-        if let Some(ref qe_py) = self.quantum_engine_builder {
-            sim_builder = Python::with_gil(|py| -> PyResult<_> {
-                // Try to extract known quantum engine builder types
-                if let Ok(mut state_vec) = qe_py.extract::<PyStateVectorEngineBuilder>(py) {
-                    if let Some(inner) = state_vec.inner.take() {
-                        Ok(sim_builder.quantum(inner))
-                    } else {
-                        Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                            "Quantum engine builder has already been consumed"
-                        ))
-                    }
-                } else if let Ok(mut sparse_stab) = qe_py.extract::<PySparseStabilizerEngineBuilder>(py) {
-                    if let Some(inner) = sparse_stab.inner.take() {
-                        Ok(sim_builder.quantum(inner))
-                    } else {
-                        Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                            "Quantum engine builder has already been consumed"
-                        ))
-                    }
-                } else {
-                    // For run(), we can skip unknown quantum engine types and use default
-                    Ok(sim_builder)
-                }
-            })?;
-        }
-        
-        // Selene might support different noise models
-        if let Some(ref noise_py) = self.noise_builder {
-            sim_builder = Python::with_gil(|py| -> PyResult<_> {
-                if let Ok(general) = noise_py.extract::<PyGeneralNoiseModelBuilder>(py) {
-                    Ok(sim_builder.noise(general.inner.clone()))
-                } else if let Ok(depolarizing) = noise_py.extract::<PyDepolarizingNoiseModelBuilder>(py) {
-                    Ok(sim_builder.noise(depolarizing.inner.clone()))
-                } else if let Ok(biased) = noise_py.extract::<PyBiasedDepolarizingNoiseModelBuilder>(py) {
-                    Ok(sim_builder.noise(biased.inner.clone()))
-                } else {
-                    // Skip unknown noise types
-                    Ok(sim_builder)
-                }
-            })?;
-        }
-        
-        match sim_builder.run(shots) {
-            Ok(shot_vec) => Ok(PyShotVec::new(shot_vec)),
-            Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {}", e))),
-        }
-    }
-}
-
-/// Python wrapper for PHIR JSON simulation builder
-#[pyclass(name = "PhirJsonSimBuilder")]
+/// Internal PHIR JSON simulation builder state
 pub struct PyPhirJsonSimBuilder {
-    engine_builder: Arc<Mutex<Option<RustPhirJsonEngineBuilder>>>,
-    seed: Option<u64>,
-    workers: Option<usize>,
-    quantum_engine_builder: Option<PyObject>,
-    noise_builder: Option<PyObject>,
-    explicit_num_qubits: Option<usize>,
-}
-
-#[pymethods]
-impl PyPhirJsonSimBuilder {
-    /// Set random seed
-    fn seed(slf: Py<Self>, seed: u64, py: Python) -> Py<Self> {
-        slf.borrow_mut(py).seed = Some(seed);
-        slf
-    }
-
-    /// Set number of worker threads
-    fn workers(slf: Py<Self>, workers: usize, py: Python) -> Py<Self> {
-        slf.borrow_mut(py).workers = Some(workers);
-        slf
-    }
-
-    /// Use automatic worker count based on available CPUs
-    fn auto_workers(slf: Py<Self>, py: Python) -> Py<Self> {
-        let workers = std::thread::available_parallelism()
-            .map(std::num::NonZero::get)
-            .unwrap_or(4);
-        slf.borrow_mut(py).workers = Some(workers);
-        slf
-    }
-
-    /// Set noise model builder
-    fn noise(slf: Py<Self>, noise_builder: PyObject, py: Python) -> Py<Self> {
-        slf.borrow_mut(py).noise_builder = Some(noise_builder);
-        slf
-    }
-
-    /// Set quantum simulator/engine
-    fn quantum(slf: Py<Self>, engine: PyObject, py: Python) -> PyResult<Py<Self>> {
-        slf.borrow_mut(py).quantum_engine_builder = Some(engine);
-        Ok(slf)
-    }
-    
-    /// Set the number of qubits
-    fn qubits(slf: Py<Self>, num_qubits: usize, py: Python) -> Py<Self> {
-        slf.borrow_mut(py).explicit_num_qubits = Some(num_qubits);
-        slf
-    }
-
-    /// Build the simulation (for multiple runs)
-    fn build(&self) -> PyResult<PyPhirJsonSimulation> {
-        let mut builder_lock = self.engine_builder.lock().unwrap();
-        let engine_builder = builder_lock.take()
-            .ok_or_else(|| PyRuntimeError::new_err("Builder already consumed"))?;
-        
-        // Create the Rust SimBuilder
-        let mut sim_builder = engine_builder.to_sim();
-        
-        // Apply configuration
-        if let Some(seed) = self.seed {
-            sim_builder = sim_builder.seed(seed);
-        }
-        if let Some(workers) = self.workers {
-            sim_builder = sim_builder.workers(workers);
-        }
-        if let Some(n) = self.explicit_num_qubits {
-            sim_builder = sim_builder.qubits(n);
-        }
-        
-        // Apply quantum engine builder if present
-        if let Some(ref qe_py) = self.quantum_engine_builder {
-            sim_builder = Python::with_gil(|py| -> PyResult<_> {
-                // Try to extract known quantum engine builder types
-                if let Ok(mut state_vec) = qe_py.extract::<PyStateVectorEngineBuilder>(py) {
-                    if let Some(inner) = state_vec.inner.take() {
-                        Ok(sim_builder.quantum(inner))
-                    } else {
-                        Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                            "Quantum engine builder has already been consumed"
-                        ))
-                    }
-                } else if let Ok(mut sparse_stab) = qe_py.extract::<PySparseStabilizerEngineBuilder>(py) {
-                    if let Some(inner) = sparse_stab.inner.take() {
-                        Ok(sim_builder.quantum(inner))
-                    } else {
-                        Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                            "Quantum engine builder has already been consumed"
-                        ))
-                    }
-                } else {
-                    Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                        "quantum_engine must be a valid quantum engine builder"
-                    ))
-                }
-            })?;
-        }
-        
-        // Apply noise builder if present
-        if let Some(ref noise_py) = self.noise_builder {
-            sim_builder = Python::with_gil(|py| -> PyResult<_> {
-                // Try to extract known noise builder types
-                if let Ok(general) = noise_py.extract::<PyGeneralNoiseModelBuilder>(py) {
-                    Ok(sim_builder.noise(general.inner.clone()))
-                } else if let Ok(depolarizing) = noise_py.extract::<PyDepolarizingNoiseModelBuilder>(py) {
-                    Ok(sim_builder.noise(depolarizing.inner.clone()))
-                } else if let Ok(biased) = noise_py.extract::<PyBiasedDepolarizingNoiseModelBuilder>(py) {
-                    Ok(sim_builder.noise(biased.inner.clone()))
-                } else {
-                    Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                        "noise must be a valid noise model builder"
-                    ))
-                }
-            })?;
-        }
-        
-        // Build the MonteCarloEngine
-        let engine = sim_builder.build()
-            .map_err(|e| PyRuntimeError::new_err(format!("Failed to build simulation: {}", e)))?;
-        
-        Ok(PyPhirJsonSimulation {
-            inner: Arc::new(Mutex::new(engine)),
-        })
-    }
-
-    /// Run the simulation immediately
-    fn run(&self, shots: usize) -> PyResult<PyShotVec> {
-        // Similar implementation to build() but calls run() instead
-        let mut builder_lock = self.engine_builder.lock().unwrap();
-        let engine_builder = builder_lock.take()
-            .ok_or_else(|| PyRuntimeError::new_err("Builder already consumed"))?;
-        
-        // Create the Rust SimBuilder
-        let mut sim_builder = engine_builder.to_sim();
-        
-        // Apply configuration
-        if let Some(seed) = self.seed {
-            sim_builder = sim_builder.seed(seed);
-        }
-        if let Some(workers) = self.workers {
-            sim_builder = sim_builder.workers(workers);
-        }
-        if let Some(n) = self.explicit_num_qubits {
-            sim_builder = sim_builder.qubits(n);
-        }
-        
-        // Apply quantum engine builder if present
-        if let Some(ref qe_py) = self.quantum_engine_builder {
-            sim_builder = Python::with_gil(|py| -> PyResult<_> {
-                // Try to extract known quantum engine builder types
-                if let Ok(mut state_vec) = qe_py.extract::<PyStateVectorEngineBuilder>(py) {
-                    if let Some(inner) = state_vec.inner.take() {
-                        Ok(sim_builder.quantum(inner))
-                    } else {
-                        Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                            "Quantum engine builder has already been consumed"
-                        ))
-                    }
-                } else if let Ok(mut sparse_stab) = qe_py.extract::<PySparseStabilizerEngineBuilder>(py) {
-                    if let Some(inner) = sparse_stab.inner.take() {
-                        Ok(sim_builder.quantum(inner))
-                    } else {
-                        Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                            "Quantum engine builder has already been consumed"
-                        ))
-                    }
-                } else {
-                    // For run(), we can skip unknown quantum engine types and use default
-                    Ok(sim_builder)
-                }
-            })?;
-        }
-        
-        // Apply noise builder if present
-        if let Some(ref noise_py) = self.noise_builder {
-            sim_builder = Python::with_gil(|py| -> PyResult<_> {
-                // Try to extract known noise builder types
-                if let Ok(general) = noise_py.extract::<PyGeneralNoiseModelBuilder>(py) {
-                    Ok(sim_builder.noise(general.inner.clone()))
-                } else if let Ok(depolarizing) = noise_py.extract::<PyDepolarizingNoiseModelBuilder>(py) {
-                    Ok(sim_builder.noise(depolarizing.inner.clone()))
-                } else if let Ok(biased) = noise_py.extract::<PyBiasedDepolarizingNoiseModelBuilder>(py) {
-                    Ok(sim_builder.noise(biased.inner.clone()))
-                } else {
-                    // Skip unknown noise types
-                    Ok(sim_builder)
-                }
-            })?;
-        }
-        
-        match sim_builder.run(shots) {
-            Ok(shot_vec) => Ok(PyShotVec::new(shot_vec)),
-            Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {}", e))),
-        }
-    }
+    pub(crate) engine_builder: Arc<Mutex<Option<RustPhirJsonEngineBuilder>>>,
+    pub(crate) seed: Option<u64>,
+    pub(crate) workers: Option<usize>,
+    pub(crate) quantum_engine_builder: Option<PyObject>,
+    pub(crate) noise_builder: Option<PyObject>,
+    pub(crate) explicit_num_qubits: Option<usize>,
 }
 
 /// Python wrapper for program types
@@ -1621,11 +1030,7 @@ pub fn register_engine_builders(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PySeleneEngineBuilder>()?;
     m.add_class::<PyPhirJsonEngineBuilder>()?;
     
-    // Simulation builders
-    m.add_class::<PyQasmSimBuilder>()?;
-    m.add_class::<PyLlvmSimBuilder>()?;
-    m.add_class::<PySeleneSimBuilder>()?;
-    m.add_class::<PyPhirJsonSimBuilder>()?;
+    // Simulation builders are now handled by the unified PySimBuilder in sim.rs
     
     // Built simulations
     m.add_class::<PyQasmSimulation>()?;

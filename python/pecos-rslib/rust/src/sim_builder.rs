@@ -1,4 +1,4 @@
-//! Python bindings for the unified simulation builder pattern
+//! Python bindings for the simulation builder pattern
 //!
 //! This module provides thin Python wrappers around the Rust engine().to_sim() pattern.
 
@@ -12,7 +12,7 @@ use pecos_engines::noise::{
     DepolarizingNoiseModelBuilder, BiasedDepolarizingNoiseModelBuilder,
     GeneralNoiseModelBuilder, PassThroughNoiseModelBuilder, IntoNoiseModel
 };
-use pecos_qasm::{qasm_engine, unified_engine_builder::QasmEngineBuilder};
+use pecos_qasm::{qasm_engine, QasmEngineBuilder};
 use pecos_llvm_sim::{llvm_engine, LlvmEngineBuilder};
 use pecos_selene::{selene_engine, SeleneEngineBuilder};
 use pecos_programs::{QasmProgram, LlvmProgram};
