@@ -33,7 +33,6 @@ jobs:
           ["PECOS.jl Project.toml"]="julia/PECOS.jl/Project.toml"
           ["pecos-julia-ffi Cargo.toml"]="julia/pecos-julia-ffi/Cargo.toml"
           ["build_tarballs.jl"]="julia/PECOS.jl/deps/build_tarballs.jl"
-          ["dev JLL Project.toml"]="julia/PECOS.jl/dev/PECOS_julia_jll/Project.toml"
         )
 
         # Extract versions
@@ -48,7 +47,7 @@ jobs:
         echo "pecos-julia-ffi version: $ffi_version"
 
         # build_tarballs.jl version
-        bt_version=$(grep -E 'version = v".*"' julia/PECOS.jl/deps/build_tarballs.jl | sed 's/.*version = v"\(.*\)".*/\1/')
+        bt_version=$(grep -E '^version = v".*"' julia/PECOS.jl/deps/build_tarballs.jl | sed 's/version = v"\([^"]*\)".*/\1/')
         echo "build_tarballs.jl version: $bt_version"
 
         # Check if all versions match
@@ -74,7 +73,7 @@ jobs:
         julia_compat=$(grep -E 'julia = ".*"' julia/PECOS.jl/Project.toml | sed 's/julia = "\(.*\)"/\1/')
         echo "PECOS.jl Julia compat: $julia_compat"
 
-        bt_julia_compat=$(grep -E 'julia_compat=".*"' julia/PECOS.jl/deps/build_tarballs.jl | sed 's/.*julia_compat="\(.*\)".*/\1/')
+        bt_julia_compat=$(grep -E 'julia_compat' julia/PECOS.jl/deps/build_tarballs.jl | grep -oE '"[0-9.]+"' | tr -d '"')
         echo "build_tarballs.jl Julia compat: $bt_julia_compat"
 
         if [ "$julia_compat" != "$bt_julia_compat" ]; then

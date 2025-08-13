@@ -52,7 +52,7 @@ println()
 # 5. Direct FFI demonstration
 println("5. Direct FFI Calls (Advanced):")
 result =
-    ccall((:add_two_numbers, PECOS_julia_jll.libpecos_julia), Int64, (Int64, Int64), 10, 32)
+    ccall((:add_two_numbers, PECOS.libpecos_julia), Int64, (Int64, Int64), 10, 32)
 println("   10 + 32 = $result (called via FFI)")
 println()
 

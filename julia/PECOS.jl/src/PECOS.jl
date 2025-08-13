@@ -16,7 +16,7 @@ Julia interface for PECOS quantum error correction library.
 """
 module PECOS
 
-export pecos_version, QubitId
+export pecos_version, QubitId, libpecos_julia
 
 # Determine library path based on environment
 const libpecos_julia = begin
