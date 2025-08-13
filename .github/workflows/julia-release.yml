@@ -211,9 +211,14 @@ jobs:
 
       - name: Set up test environment
         run: |
+          # Extract the tarball
+          cd julia-binary
+          tar -xzf *.tar.gz
+          cd ..
+
           # Create a temporary JLL structure
-          mkdir -p temp_jll/lib
-          cp julia-binary/* temp_jll/lib/
+          mkdir -p temp_jll
+          cp -r julia-binary/lib temp_jll/
 
           cd julia/PECOS.jl
 
