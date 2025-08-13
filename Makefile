@@ -109,6 +109,14 @@ lint: check fmt clippy  ## Run all quality checks / linting / reformatting (chec
 		echo "Julia not detected, skipping Julia linting"; \
 	fi
 
+.PHONY: normalize-line-endings
+normalize-line-endings:  ## Normalize line endings according to .gitattributes
+	@echo "Normalizing line endings according to .gitattributes..."
+	@echo "This will refresh all tracked files to apply .gitattributes rules"
+	@git rm --cached -r . >/dev/null 2>&1 || true
+	@git reset --hard >/dev/null 2>&1
+	@echo "Line endings normalized. Check 'git status' for any changes."
+
 .PHONY: lint-fix
 lint-fix:  ## Fix all auto-fixable linting issues (Rust, Python, Julia)
 	@echo "Fixing Rust formatting..."
