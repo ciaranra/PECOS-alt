@@ -16,6 +16,9 @@ Julia interface for PECOS quantum error correction library.
 """
 module PECOS
 
+# Artifacts will be used in future releases
+# using Pkg.Artifacts
+
 export pecos_version, QubitId, libpecos_julia
 
 # Determine library path based on environment
@@ -37,8 +40,7 @@ const libpecos_julia = begin
         # Development mode: use locally built library
         dev_lib
     else
-        # Production mode: would use JLL or system library
-        # For now, try debug build as fallback
+        # Try debug build as fallback
         debug_lib = joinpath(@__DIR__, "..", "..", "..", "target", "debug", lib_name)
         if isfile(debug_lib)
             debug_lib
@@ -46,10 +48,11 @@ const libpecos_julia = begin
             error("""
                 PECOS Julia library not found!
 
-                For development, build the library first:
+                Please build the library first:
                     cd julia/pecos-julia-ffi && cargo build --release
 
-                For production, install the PECOS_julia_jll package.
+                Or for debug mode:
+                    cd julia/pecos-julia-ffi && cargo build
             """)
         end
     end

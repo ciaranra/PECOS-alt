@@ -25,10 +25,10 @@ version = v"0.1.0"
 # Collection of sources required to build PECOS
 sources = [
     # For release, use a specific tag/commit
-    # Use environment variable or fallback to a specific commit
+    # Use environment variable or fallback to current branch/commit
     GitSource(
         "https://github.com/PECOS-packages/PECOS.git",
-        get(ENV, "PECOS_BUILD_COMMIT", "main"),
+        get(ENV, "PECOS_BUILD_COMMIT", "dev"),  # Will be replaced by workflow
     ),
 ]
 
@@ -54,6 +54,13 @@ cargo --version
 
 # Build the library
 cd julia/pecos-julia-ffi
+
+# BinaryBuilder sets CARGO_BUILD_TARGET for cross-compilation
+if [[ -n "${CARGO_BUILD_TARGET}" ]]; then
+    echo "Cross-compiling for: ${CARGO_BUILD_TARGET}"
+fi
+
+# BinaryBuilder handles --target automatically with CARGO_BUILD_TARGET
 cargo build --release
 
 # Find and install the built library
@@ -97,6 +104,7 @@ build_tarballs(
     platforms,
     products,
     dependencies;
+    compilers = [:rust, :c],  # Need Rust compiler support
     julia_compat = "1.10",
     preferred_gcc_version = v"8",
 )

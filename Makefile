@@ -274,14 +274,10 @@ julia-build-debug: ## Build Julia FFI library in debug mode
 	@echo "Julia library built at: target/debug/libpecos_julia.{so,dylib,dll}"
 
 .PHONY: julia-test
-julia-test: ## Run Julia tests (requires Julia installed)
+julia-test: julia-build ## Run Julia tests (requires Julia installed)
 	@echo "Running Julia tests..."
 	@if command -v julia >/dev/null 2>&1; then \
-		if [ ! -f "target/debug/libpecos_julia.so" ] && [ ! -f "target/debug/libpecos_julia.dylib" ] && [ ! -f "target/debug/pecos_julia.dll" ]; then \
-			echo "Julia FFI library not found, building..."; \
-			cd julia/pecos-julia-ffi && cargo build; \
-		fi; \
-		cd julia/PECOS.jl && julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.test()'; \
+		cd julia/PECOS.jl && julia --project=. -e 'using Pkg; Pkg.instantiate(); include("test/runtests.jl")'; \
 	else \
 		echo "Julia not found. Please install Julia to run tests."; \
 		exit 1; \
@@ -347,7 +343,7 @@ julia-format-check: ## Check Julia code formatting without modifying files
 julia-lint: julia-build ## Run Aqua.jl quality checks on Julia code
 	@echo "Running Julia code quality checks with Aqua.jl..."
 	@if command -v julia >/dev/null 2>&1; then \
-		cd julia/PECOS.jl && julia --project=. -e 'using Pkg; Pkg.add("Aqua"); using PECOS, Aqua; Aqua.test_all(PECOS; ambiguities=false, unbound_args=true, undefined_exports=true, project_extras=true, stale_deps=false, deps_compat=true, piracies=true, persistent_tasks=false)'; \
+		cd julia/PECOS.jl && julia --project=. test/aqua_tests.jl; \
 	else \
 		echo "Julia not found. Please install Julia to run linting."; \
 		exit 1; \
