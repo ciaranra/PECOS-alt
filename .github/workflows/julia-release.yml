@@ -98,6 +98,11 @@ jobs:
             elif [ "${{ matrix.os }}" = "macos-latest" ]; then
               rustup target add aarch64-apple-darwin
             fi
+          else
+            # For x86_64 builds on ARM64 macOS
+            if [ "${{ matrix.os }}" = "macos-latest" ]; then
+              rustup target add x86_64-apple-darwin
+            fi
           fi
 
       - name: Set up Visual Studio environment on Windows
@@ -138,8 +143,15 @@ jobs:
               target_dir="../../target/aarch64-apple-darwin/release"
             fi
           else
-            cargo build --release
-            target_dir="../../target/release"
+            # For x86_64 builds
+            if [ "${{ matrix.os }}" = "macos-latest" ]; then
+              # On ARM64 macOS, explicitly build for x86_64
+              cargo build --release --target x86_64-apple-darwin
+              target_dir="../../target/x86_64-apple-darwin/release"
+            else
+              cargo build --release
+              target_dir="../../target/release"
+            fi
           fi
 
           # Create artifact directory
