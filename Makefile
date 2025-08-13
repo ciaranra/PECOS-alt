@@ -113,6 +113,7 @@ lint: check fmt clippy  ## Run all quality checks / linting / reformatting (chec
 lint-fix:  ## Fix all auto-fixable linting issues (Rust, Python, Julia)
 	@echo "Fixing Rust formatting..."
 	cargo fmt --all
+	cargo clippy --fix --workspace --all-targets --all-features --allow-staged
 	@echo ""
 	@echo "Running pre-commit fixes..."
 	uv run pre-commit run --all-files || true
