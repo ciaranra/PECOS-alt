@@ -20,7 +20,7 @@
 using BinaryBuilder, Pkg
 
 name = "PECOS_julia"
-version = v"0.1.0"
+version = v"0.1.0-dev0"
 
 # Collection of sources required to build PECOS
 sources = [
