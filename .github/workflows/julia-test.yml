@@ -85,14 +85,7 @@ jobs:
     - name: Run Julia tests
       run: |
         cd julia/PECOS.jl
-        julia --project=. -e '
-          using Pkg
-
-          # Instantiate project
-          Pkg.instantiate()
-
-          # Run tests directly since package doesn't have UUID yet
-          include("test/runtests.jl")'
+        julia --project=. -e 'using Pkg; Pkg.instantiate(); include("test/runtests.jl")'
 
     - name: Run examples
       run: |
