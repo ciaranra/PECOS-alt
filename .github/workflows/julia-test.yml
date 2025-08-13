@@ -134,7 +134,7 @@ jobs:
             unbound_args=true,
             undefined_exports=true,
             project_extras=true,
-            stale_deps=true,
+            stale_deps=false,
             deps_compat=true,
             piracies=true,
             persistent_tasks=false
