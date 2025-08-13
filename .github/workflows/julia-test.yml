@@ -68,7 +68,16 @@ jobs:
       with:
         arch: x64
 
-    - name: Build Rust FFI library
+    - name: Build Rust FFI library (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        cd julia/pecos-julia-ffi
+        cargo build --release
+
+    - name: Build Rust FFI library (Unix)
+      if: runner.os != 'Windows'
+      shell: bash
       run: |
         cd julia/pecos-julia-ffi
         cargo build --release

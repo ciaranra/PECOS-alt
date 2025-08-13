@@ -106,7 +106,25 @@ jobs:
         with:
           arch: x64
 
-      - name: Build library
+      - name: Build library (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cd julia/pecos-julia-ffi
+          cargo build --release
+
+          # Create artifact directory
+          New-Item -ItemType Directory -Force -Path ..\..\artifacts
+
+          # Copy the built library
+          Copy-Item ..\..\target\release\pecos_julia.dll -Destination ..\..\artifacts\
+
+          # List artifacts
+          Get-ChildItem ..\..\artifacts\
+
+      - name: Build library (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
         run: |
           cd julia/pecos-julia-ffi
 
@@ -128,9 +146,7 @@ jobs:
           mkdir -p ../../artifacts
 
           # Copy the built library
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            cp $target_dir/pecos_julia.dll ../../artifacts/
-          elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
             cp $target_dir/libpecos_julia.dylib ../../artifacts/
           else
             cp $target_dir/libpecos_julia.so ../../artifacts/
