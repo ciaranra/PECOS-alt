@@ -19,3 +19,4 @@ class Language(Enum):
     QIR = 1
     QIRBC = 2
     GUPPY = 3
+    HUGR = 4

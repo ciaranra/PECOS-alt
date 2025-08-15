@@ -2,6 +2,9 @@
 name = "pecos-workspace"
 version = "0.7.0.dev0"
 dependencies = [
+    "guppylang",
+    "selene-sim~=0.2.0",  # Add selene-sim explicitly
+    "hugr>=0.13.0,<0.14",  # Use stable version compatible with guppylang
     "wasmer~=1.1.0",
     "wasmer-compiler-cranelift~=1.1.0",
 ]
@@ -12,18 +15,21 @@ members = [
     "python/quantum-pecos"
 ]
 
+[tool.uv.sources]
+guppylang = { path = "../guppylang" }
+
 [dependency-groups]
 dev = [
     "nanobind",
-    "maturin>=1.2,<2.0",  # For building (should match build requirements)
-    "setuptools>=62.6",      # Build system
-    "pre-commit",           # Git hooks
-    "black",               # Code formatting
-    "ruff",               # Fast Python linting
-    "mkdocs",              # Documentation framework
-    "mkdocs-material",     # Material theme for MkDocs
+    "maturin>=1.2,<2.0", # For building (should match build requirements)
+    "setuptools>=62.6", # Build system
+    "pre-commit", # Git hooks
+    "black", # Code formatting
+    "ruff", # Fast Python linting
+    "mkdocs", # Documentation framework
+    "mkdocs-material", # Material theme for MkDocs
     "mkdocstrings[python]", # Code documentation extraction
-    "markdown-exec[ansi]",  # Executable markdown blocks
+    "markdown-exec[ansi]", # Executable markdown blocks
     # Runtime dependencies for development
     "numpy>=1.15.0",
     "scipy>=1.1.0",
@@ -32,6 +38,7 @@ dev = [
     "phir>=0.3.3",
     # WebAssembly runtimes for testing
     "wasmtime>=13.0",
+    "jupyter>=1.1.1",
 ]
 test = [ # pinning testing environment
     "pytest==8.3.3", # 8.3.4 seems to be causing errors
@@ -41,6 +48,11 @@ test = [ # pinning testing environment
 
 [tool.uv]
 default-groups = ["dev", "test"]
+
+# Override dependencies to ensure correct versions
+override-dependencies = [
+    "hugr==0.13.0",
+]
 
 [tool.pytest.ini_options]
 markers = [

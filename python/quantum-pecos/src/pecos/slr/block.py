@@ -17,9 +17,12 @@ from pecos.slr.vars import Var, Vars
 class Block(Node):
     """A collection of other operations and blocks."""
 
-    def __init__(self, *args, ops=None, vargs=None, allow_no_ops=True) -> None:
+    def __init__(self, *args, ops=None, vargs=None, allow_no_ops=True, block_name=None) -> None:
         self.ops = []
         self.vars = Vars()
+        # Preserve the original block type name for code generation
+        self.block_name = block_name or self.__class__.__name__
+        self.block_module = self.__class__.__module__
 
         if args and ops:
             msg = "Can not use both *args for ops and the ops keyword argument."

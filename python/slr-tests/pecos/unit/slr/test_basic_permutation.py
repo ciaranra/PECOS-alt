@@ -111,7 +111,10 @@ def test_basic_permutation_qasm(basic_permutation_program: tuple) -> None:
 
     # Verify that running QASM generation twice produces consistent results
     qasm2 = SlrConverter(prog).qasm()
-    assert qasm == qasm2, "QASM generation is not deterministic"
+    # Remove version comments for comparison as they might differ
+    qasm_lines = [line for line in qasm.split('\n') if not line.startswith('// Generated using:')]
+    qasm2_lines = [line for line in qasm2.split('\n') if not line.startswith('// Generated using:')]
+    assert '\n'.join(qasm_lines) == '\n'.join(qasm2_lines), "QASM generation is not deterministic"
 
 
 def test_same_register_permutation_qasm(

@@ -87,6 +87,19 @@ class QASMGenerator(Generator):
         previous_scope = self.enter_block(block)
 
         block_name = type(block).__name__
+        
+        if block_name == "While":
+            raise NotImplementedError(
+                "While loops are not supported in QASM 2.0. "
+                "Consider using a different code generator (e.g., Guppy) "
+                "or restructuring your code to avoid loops."
+            )
+        elif block_name == "For":
+            raise NotImplementedError(
+                "For loops are not supported in QASM 2.0. "
+                "Consider using a different code generator (e.g., Guppy) "
+                "or unrolling the loop manually."
+            )
 
         if block_name == "If":
             # Generate the condition with permutations applied
@@ -199,6 +212,20 @@ class QASMGenerator(Generator):
 
             txt = [f"//{t}" if t.strip() != "" else t for t in txt]
             op_str = "\n".join(txt)
+            
+        elif op_name == "While":
+            raise NotImplementedError(
+                "While loops are not supported in QASM 2.0. "
+                "Consider using a different code generator (e.g., Guppy) "
+                "or restructuring your code to avoid loops."
+            )
+            
+        elif op_name == "For":
+            raise NotImplementedError(
+                "For loops are not supported in QASM 2.0. "
+                "Consider using a different code generator (e.g., Guppy) "
+                "or unrolling the loop manually."
+            )
 
         elif op_name == "Permute":
             # For Permute operations, we need to update the permutation_map
