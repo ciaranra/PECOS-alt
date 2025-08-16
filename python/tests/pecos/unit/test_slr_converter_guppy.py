@@ -99,8 +99,8 @@ def test_slr_converter_hugr_simple():
     
     # Basic checks that we got a valid HUGR object
     assert hugr is not None
-    # HUGR is now a ModulePointer with a package attribute
-    assert hasattr(hugr, 'package')
+    # HUGR is now a Package object with modules
+    assert hasattr(hugr, 'modules')
 
 
 def test_slr_converter_steane_guppy_generation():
@@ -154,6 +154,10 @@ def test_slr_converter_steane_hugr_compilation():
     - Excluding them from struct packing to keep them as separate arrays
     - Unpacking @owned ancilla arrays at the start of functions
     - Using the unpacked variables (e.g., c_a_0) instead of array access (c_a[0])
+    
+    Note: The guppy code generation itself works correctly, but the final
+    compilation to HUGR fails due to API mismatch between guppylang-internals
+    (expecting hugr.build module) and hugr 0.13.0 (which doesn't have it).
     """
     prog = Main(
         c := Steane("c"),
@@ -163,7 +167,7 @@ def test_slr_converter_steane_hugr_compilation():
     # This should work once guppylang supports the required patterns
     hugr = SlrConverter(prog).hugr()
     assert hugr is not None
-    assert hasattr(hugr, 'package')
+    assert hasattr(hugr, 'modules')
 
 
 def test_slr_converter_parallel_blocks_guppy():

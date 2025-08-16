@@ -12,11 +12,17 @@ if TYPE_CHECKING:
     from .generator import GuppyGenerator
 
 try:
+    # Try a minimal import to check if guppylang is importable at all
+    import guppylang
+    # Now try the specific imports we need
     from guppylang import guppy
     from guppylang.std import quantum
     from guppylang.std.builtins import array, owned, result
     GUPPY_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    # For debugging - we want to know what specific import failed
+    import warnings
+    warnings.warn(f"guppylang import failed: {e}")
     GUPPY_AVAILABLE = False
 
 
@@ -92,7 +98,8 @@ class HugrCompiler:
             
             # Compile to HUGR
             try:
-                hugr_module = guppy.compile(main_func)
+                # Use the new API: func.compile() instead of guppy.compile(func)
+                hugr_module = main_func.compile()
                 return hugr_module
             except Exception as e:
                 # Use the enhanced error handler

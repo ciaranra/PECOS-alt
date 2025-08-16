@@ -396,6 +396,7 @@ class IRBuilder:
         
         # Track unpacked variables (only if needed)
         self.unpacked_vars = {}  # Maps array_name -> [element_names]
+        self.replaced_qubits = {}  # Maps array_name -> set of replaced indices
         
         # Only add array unpacking for arrays that the analyzer determined need it
         # ALSO: Unpack ancilla arrays with @owned annotation to avoid MoveOutOfSubscriptError
@@ -555,24 +556,44 @@ class IRBuilder:
                     
                     # Include if: not in struct OR is an excluded ancilla
                     if not in_struct or is_excluded_ancilla:
-                        # For @owned arrays that are NOT ancillas, check if any elements remain unconsumed
-                        # Ancilla arrays should always be returned in full
-                        if "@owned" in ptype and name in consumed_in_function and not is_excluded_ancilla:
+                        # Check if any elements remain unconsumed for ALL arrays
+                        if name in consumed_in_function:
                             # Extract array size from type
                             import re
                             match = re.search(r'array\[quantum\.qubit, (\d+)\]', ptype)
                             if match:
                                 original_size = int(match.group(1))
                                 consumed_indices = consumed_in_function[name]
-                                remaining_count = original_size - len(consumed_indices)
+                                
+                                # Check if any consumed qubits were replaced
+                                replaced_indices = set()
+                                if hasattr(self, 'replaced_qubits') and name in self.replaced_qubits:
+                                    replaced_indices = self.replaced_qubits[name]
+                                
+                                # Only count as consumed if not replaced
+                                actually_consumed = consumed_indices - replaced_indices
+                                remaining_count = original_size - len(actually_consumed)
                                 
                                 if remaining_count > 0:
-                                    # Some qubits remain - return partial array
-                                    new_type = f"array[quantum.qubit, {remaining_count}]"
+                                    # Some qubits remain - return array
+                                    # If qubits were replaced, return full array
+                                    if replaced_indices:
+                                        new_type = ptype.replace(" @owned", "")
+                                    # Special case: ancilla arrays that are passed between functions
+                                    # In patterns like Steane code, ancillas are measured and replaced
+                                    # throughout multiple function calls, so return full array
+                                    elif (hasattr(self, 'ancilla_qubits') and name in self.ancilla_qubits 
+                                          and len(consumed_indices) > 0):
+                                        # Ancilla with some consumption - likely replaced in called functions
+                                        new_type = ptype.replace(" @owned", "")
+                                    elif remaining_count < original_size:
+                                        new_type = f"array[quantum.qubit, {remaining_count}]"
+                                    else:
+                                        new_type = ptype.replace(" @owned", "")
                                     quantum_returns.append((name, new_type))
                                 # If all consumed, don't add to returns
                         else:
-                            # No consumption tracked or not @owned or is ancilla - return full array
+                            # No consumption tracked - return full array
                             # Remove @owned annotation from return type
                             return_type = ptype.replace(" @owned", "")
                             quantum_returns.append((name, return_type))
@@ -1293,6 +1314,13 @@ class IRBuilder:
                             target=VariableRef(element_names[qubit_index]),
                             value=FunctionCall(func_name="quantum.qubit", args=[])
                         )
+                        
+                        # Track that this qubit was replaced (not consumed)
+                        if not hasattr(self, 'replaced_qubits'):
+                            self.replaced_qubits = {}
+                        if array_name not in self.replaced_qubits:
+                            self.replaced_qubits[array_name] = set()
+                        self.replaced_qubits[array_name].add(qubit_index)
                         
                         # Return a block with measurement followed by replacement
                         statements = [meas_stmt, replacement_stmt]
@@ -3219,8 +3247,14 @@ class IRBuilder:
         # Now add results, using decomposed variables where necessary
         self._add_results_with_decomposition(block, struct_decompositions)
         
+        # Track what arrays have been cleaned up to avoid double-discard
+        cleaned_up_arrays = set()
+        
         # Finally, clean up quantum arrays
-        self._add_cleanup_with_decomposition(block, struct_decompositions)
+        self._add_cleanup_with_decomposition(block, struct_decompositions, cleaned_up_arrays)
+        
+        # Also run the regular cleanup for non-struct arrays
+        self._add_cleanup(block, cleaned_up_arrays)
     
     def _add_results_with_decomposition(self, block, struct_decompositions) -> None:
         """Add result calls, using decomposed variables where necessary."""
@@ -3280,7 +3314,7 @@ class IRBuilder:
                     
                     self.current_block.statements.append(ExpressionStatement(call))
     
-    def _add_cleanup_with_decomposition(self, block, struct_decompositions) -> None:
+    def _add_cleanup_with_decomposition(self, block, struct_decompositions, cleaned_up_arrays) -> None:
         """Add cleanup for quantum arrays, using decomposed variables."""
         # First handle decomposed struct fields
         for prefix, fields in struct_decompositions.items():
@@ -3288,11 +3322,18 @@ class IRBuilder:
                 Comment(f"Discard quantum fields from {prefix}")
             )
             for suffix, decomposed_var, var_type, size in fields:
-                if var_type == 'qubit':
+                if var_type == 'qubit' and decomposed_var not in cleaned_up_arrays:
                     stmt = FunctionCall(
                         func_name="quantum.discard_array",
                         args=[VariableRef(decomposed_var)]
                     )
+                    cleaned_up_arrays.add(decomposed_var)
+                    # Also track the original variable name to prevent double cleanup
+                    if prefix in self.struct_info:
+                        info = self.struct_info[prefix]
+                        if suffix in info['var_names']:
+                            original_var = info['var_names'][suffix]
+                            cleaned_up_arrays.add(original_var)
                     
                     # Create expression statement wrapper
                     class ExpressionStatement(Statement):
@@ -3305,90 +3346,12 @@ class IRBuilder:
                     
                     self.current_block.statements.append(ExpressionStatement(stmt))
         
-        # Then handle non-struct quantum arrays
-        if hasattr(block, 'vars'):
-            for var in block.vars:
-                if type(var).__name__ == "QReg":
-                    var_name = var.sym
-                    
-                    # Skip if this array is part of a struct (but not if it's an excluded ancilla)
-                    in_struct = False
-                    is_excluded_ancilla = False
-                    
-                    # Check if this is an ancilla that was excluded from structs
-                    if hasattr(self, 'ancilla_qubits') and var_name in self.ancilla_qubits:
-                        is_excluded_ancilla = True
-                    
-                    for prefix, info in self.struct_info.items():
-                        if var_name in info['var_names'].values():
-                            in_struct = True
-                            break
-                    
-                    if in_struct and not is_excluded_ancilla:
-                        continue
-                        
-                    # Check for renaming
-                    actual_name = var_name
-                    if var_name in self.plan.renamed_variables:
-                        actual_name = self.plan.renamed_variables[var_name]
-                    
-                    # Check if consumed by @owned function or measurement
-                    was_consumed_by_function = hasattr(self, 'consumed_arrays') and var.sym in self.consumed_arrays
-                    was_consumed_by_measurement = hasattr(self, 'consumed_resources') and var.sym in self.consumed_resources
-                    was_dynamically_allocated = hasattr(self, 'dynamic_allocations') and var.sym in self.dynamic_allocations
-                    
-                    
-                    # For excluded ancillas, we need to discard them even if they were passed to functions
-                    # because they are returned back to main
-                    if (not was_consumed_by_function and not was_consumed_by_measurement) or is_excluded_ancilla:
-                        # Check if this was dynamically allocated
-                        if was_dynamically_allocated:
-                            # For dynamically allocated arrays, discard individual qubits
-                            self.current_block.statements.append(
-                                Comment(f"Discard dynamically allocated {var.sym}")
-                            )
-                            if hasattr(self, 'allocated_ancillas'):
-                                # Discard each allocated ancilla
-                                for i in range(var.size):
-                                    ancilla_var = f"{var.sym}_{i}"
-                                    if ancilla_var in self.allocated_ancillas:
-                                        discard_stmt = FunctionCall(
-                                            func_name="quantum.discard",
-                                            args=[VariableRef(ancilla_var)]
-                                        )
-                                        # Create expression statement wrapper
-                                        class ExpressionStatement(Statement):
-                                            def __init__(self, expr):
-                                                self.expr = expr
-                                            def analyze(self, context):
-                                                self.expr.analyze(context)
-                                            def render(self, context):
-                                                return self.expr.render(context)
-                                        self.current_block.statements.append(ExpressionStatement(discard_stmt))
-                        else:
-                            # Regular array discard
-                            self.current_block.statements.append(
-                                Comment(f"Discard {var.sym}")
-                            )
-                            
-                            stmt = FunctionCall(
-                                func_name="quantum.discard_array",
-                                args=[VariableRef(actual_name)]
-                            )
-                            
-                            # Create expression statement wrapper
-                            class ExpressionStatement(Statement):
-                                def __init__(self, expr):
-                                    self.expr = expr
-                                def analyze(self, context):
-                                    self.expr.analyze(context)
-                                def render(self, context):
-                                    return self.expr.render(context)
-                            
-                            self.current_block.statements.append(ExpressionStatement(stmt))
+        # Note: Non-struct arrays are handled in _add_cleanup, not here
     
-    def _add_cleanup(self, block) -> None:
+    def _add_cleanup(self, block, cleaned_up_arrays=None) -> None:
         """Add cleanup for unconsumed qubits."""
+        if cleaned_up_arrays is None:
+            cleaned_up_arrays = set()
         # Track consumed qubits during operation conversion
         consumed = {}  # qreg_name -> set of indices
         
@@ -3426,13 +3389,6 @@ class IRBuilder:
                     if var_type == 'qubit':
                         var_name = info['var_names'][suffix]
                         self.consumed_arrays.add(var_name)
-                
-                struct_cleanup_done.add(prefix)
-                # Mark arrays as handled
-                for suffix, var_type, size in info['fields']:
-                    if var_type == 'qubit':
-                        var_name = info['var_names'][suffix]
-                        self.consumed_arrays.add(var_name)
         
         # Check each quantum register not in structs
         if hasattr(block, 'vars'):
@@ -3460,8 +3416,30 @@ class IRBuilder:
                     was_consumed_by_measurement = hasattr(self, 'consumed_resources') and var.sym in self.consumed_resources
                     was_dynamically_allocated = hasattr(self, 'dynamic_allocations') and var.sym in self.dynamic_allocations
                     
+                    # Handle partially consumed arrays
+                    if len(consumed_indices) > 0 and len(consumed_indices) < var.size:
+                        # Array was partially consumed - need to discard entire array
+                        if var_name not in cleaned_up_arrays:
+                            self.current_block.statements.append(
+                                Comment(f"Discard {var.sym}")
+                            )
+                            stmt = FunctionCall(
+                                func_name="quantum.discard_array",
+                                args=[VariableRef(var_name)]
+                            )
+                            # Create expression statement wrapper
+                            class ExpressionStatement(Statement):
+                                def __init__(self, expr):
+                                    self.expr = expr
+                                def analyze(self, context):
+                                    self.expr.analyze(context)
+                                def render(self, context):
+                                    return self.expr.render(context)
+                            
+                            self.current_block.statements.append(ExpressionStatement(stmt))
+                            cleaned_up_arrays.add(var_name)
                     # Only discard arrays that weren't consumed by @owned functions or measurements
-                    if not was_consumed_by_function and not was_consumed_by_measurement:
+                    elif not was_consumed_by_function and not was_consumed_by_measurement:
                         if was_dynamically_allocated:
                             # For dynamically allocated arrays, discard individual qubits that weren't measured
                             self.current_block.statements.append(
@@ -3490,27 +3468,29 @@ class IRBuilder:
                                         self.current_block.statements.append(ExpressionStatement(discard_stmt))
                         else:
                             # Regular pre-allocated array
-                            self.current_block.statements.append(
-                                Comment(f"Discard {var.sym}")
-                            )
-                            
-                            # Use quantum.discard_array() for the whole array
-                            array_ref = VariableRef(var_name)
-                            stmt = FunctionCall(
-                                func_name="quantum.discard_array",
-                                args=[array_ref]
-                            )
-                            
-                            # Create expression statement wrapper
-                            class ExpressionStatement(Statement):
-                                def __init__(self, expr):
-                                    self.expr = expr
-                                def analyze(self, context):
-                                    self.expr.analyze(context)
-                                def render(self, context):
-                                    return self.expr.render(context)
-                            
-                            self.current_block.statements.append(ExpressionStatement(stmt))
+                            if var_name not in cleaned_up_arrays:
+                                self.current_block.statements.append(
+                                    Comment(f"Discard {var.sym}")
+                                )
+                                
+                                # Use quantum.discard_array() for the whole array
+                                array_ref = VariableRef(var_name)
+                                stmt = FunctionCall(
+                                    func_name="quantum.discard_array",
+                                    args=[array_ref]
+                                )
+                                
+                                # Create expression statement wrapper
+                                class ExpressionStatement(Statement):
+                                    def __init__(self, expr):
+                                        self.expr = expr
+                                    def analyze(self, context):
+                                        self.expr.analyze(context)
+                                    def render(self, context):
+                                        return self.expr.render(context)
+                                
+                                self.current_block.statements.append(ExpressionStatement(stmt))
+                                cleaned_up_arrays.add(var_name)
     
     def _check_has_element_operations(self, block, var_name: str) -> bool:
         """Check if a block has element-wise operations on a variable.

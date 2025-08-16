@@ -142,9 +142,13 @@ def test_parameterized_circuit():
     guppy_code = SlrConverter(prog).guppy()
     
     # Check parameterized behavior
-    assert "params[0] = True" in guppy_code
+    # The implementation unpacks arrays, so we get params_0 = True instead of params[0] = True
+    assert "params_0 = True" in guppy_code
+    assert "params_1 = False" in guppy_code
+    assert "params_2 = True" in guppy_code
     # IR generator unpacks params array
     assert "if params_0:" in guppy_code
+    assert "if params_1:" in guppy_code
     assert "if not params_1:" in guppy_code
     assert "results = quantum.measure_array(q)" in guppy_code
     # Multi-qubit measurement handling is different in IR generator
@@ -245,11 +249,14 @@ def test_complex_boolean_expressions():
     guppy_code = SlrConverter(prog).guppy()
     
     # Check that boolean operations are present
-    # Note: Current implementation uses function calls for bitwise ops
-    assert "c[3] = " in guppy_code
-    assert "c[4] = " in guppy_code
-    assert "c[5] = " in guppy_code
-    assert "if" in guppy_code and "c[" in guppy_code
+    # The implementation unpacks arrays, so we get c_3 = ... instead of c[3] = ...
+    assert "c_3 = " in guppy_code
+    assert "c_4 = " in guppy_code
+    assert "c_5 = " in guppy_code
+    assert "if" in guppy_code
+    
+    # Check unpacking happened
+    assert "c_0, c_1, c_2, c_3, c_4, c_5, c_6, c_7 = c" in guppy_code
 
 
 def test_empty_blocks_and_edge_cases():
@@ -398,11 +405,14 @@ def test_mixed_classical_quantum_complex():
     guppy_code = SlrConverter(prog).guppy()
     
     # Check that operations are present
-    # Note: Current implementation uses function calls for bitwise ops
-    assert "control[2] = " in guppy_code
-    assert "control[3] = " in guppy_code
+    # The implementation unpacks arrays that are accessed element-wise before operations
+    assert "control_2 = " in guppy_code
+    assert "control_3 = " in guppy_code
     assert "if" in guppy_code
     # IR generator unpacks q array
     assert "quantum.h(q_0)" in guppy_code
+    # Data array is NOT unpacked initially, uses array indexing
+    assert "data[2] = " in guppy_code
+    assert "data[3] = " in guppy_code
     assert "data[4] = " in guppy_code
     assert "data[5] = " in guppy_code
