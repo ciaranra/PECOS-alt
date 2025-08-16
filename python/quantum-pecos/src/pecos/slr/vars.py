@@ -27,12 +27,12 @@ class Vars:
         if isinstance(vars_obj, Vars):
             self.vars.extend(vars_obj.vars)
             # Preserve source class information if available
-            if hasattr(vars_obj, 'source_class') and vars_obj.source_class:
+            if hasattr(vars_obj, "source_class") and vars_obj.source_class:
                 # Store mapping of variables to their source class
-                if not hasattr(self, 'var_source_classes'):
+                if not hasattr(self, "var_source_classes"):
                     self.var_source_classes = {}
                 for var in vars_obj.vars:
-                    if hasattr(var, 'sym'):
+                    if hasattr(var, "sym"):
                         self.var_source_classes[var.sym] = vars_obj.source_class
         else:
             msg = f"Was expecting a Vars object. Instead got type: {type(vars_obj)}"

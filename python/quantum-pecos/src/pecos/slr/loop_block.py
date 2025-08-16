@@ -10,7 +10,7 @@
 # specific language governing permissions and limitations under the License.
 
 
-from typing import NoReturn, Optional, Any
+from typing import NoReturn
 
 from pecos.slr.block import Block
 from pecos.slr.cond_block import CondBlock
@@ -18,15 +18,16 @@ from pecos.slr.cond_block import CondBlock
 
 class While(CondBlock):
     """While loop block.
-    
+
     Usage:
         While(condition).Do(
             # operations
         )
     """
+
     def __init__(self, *args, cond=None):
         super().__init__(*args, cond=cond)
-        
+
     def Do(self, *args):  # noqa: N802
         """Add operations to the while loop body."""
         self._extend(*args)
@@ -35,32 +36,37 @@ class While(CondBlock):
 
 class For(Block):
     """For loop block with iteration variable.
-    
+
     Usage:
         For(i, range(n)).Do(
             # operations that can use i
         )
-        
+
         For(i, start, stop).Do(
             # operations
         )
-        
+
         For(i, start, stop, step).Do(
             # operations
         )
     """
+
     def __init__(self, var, *args, **kwargs):
         """Initialize For loop.
-        
+
         Args:
             var: Loop variable name (string or symbol)
             *args: Either a range object or start, stop, [step] values
+            **kwargs: Additional keyword arguments passed to parent Block
         """
-        super().__init__(ops=None, allow_no_ops=True)
+        # Extract any Block-specific kwargs
+        ops = kwargs.pop("ops", None)
+        allow_no_ops = kwargs.pop("allow_no_ops", True)
+        super().__init__(ops=ops, allow_no_ops=allow_no_ops, **kwargs)
         self.var = var
-        
+
         # Parse arguments
-        if len(args) == 1 and hasattr(args[0], '__iter__'):
+        if len(args) == 1 and hasattr(args[0], "__iter__"):
             # For(i, range(n)) or For(i, iterable)
             self.iterable = args[0]
             self.start = None
@@ -79,13 +85,15 @@ class For(Block):
             self.stop = args[1]
             self.step = args[2]
         else:
-            raise ValueError(f"Invalid arguments for For loop: {args}")
-            
+            msg = f"Invalid arguments for For loop: {args}"
+            raise ValueError(msg)
+
     def Do(self, *args):  # noqa: N802
         """Add operations to the for loop body."""
         super().extend(*args)
         return self
-    
+
     def extend(self, *ops) -> NoReturn:
         """Prevent direct extend - use Do() instead."""
-        raise NotImplementedError("Use Do() to add operations to For loop")
+        msg = "Use Do() to add operations to For loop"
+        raise NotImplementedError(msg)

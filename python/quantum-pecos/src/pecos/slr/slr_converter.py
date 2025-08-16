@@ -21,7 +21,9 @@ except ImportError:
     QIRGenerator = None
 
 try:
-    from pecos.slr.gen_codes.guppy.ir_generator import IRGuppyGenerator as GuppyGenerator
+    from pecos.slr.gen_codes.guppy.ir_generator import (
+        IRGuppyGenerator as GuppyGenerator,
+    )
 except ImportError:
     GuppyGenerator = None
 
@@ -113,29 +115,29 @@ class SlrConverter:
     def guppy(self):
         self._check_guppy_imported()
         return self.generate(Language.GUPPY)
-    
+
     def hugr(self):
         """Compile the SLR block to HUGR via Guppy.
-        
+
         Returns:
             The compiled HUGR module
-            
+
         Raises:
             ImportError: If guppylang is not available
             RuntimeError: If compilation fails
         """
         self._check_guppy_imported()
-        
+
         # First generate Guppy code
         generator = GuppyGenerator()
         generator.generate_block(self._block)
-        
+
         # Then compile to HUGR
         try:
             from pecos.slr.gen_codes.guppy.hugr_compiler import HugrCompiler
         except ImportError as e:
             msg = "Failed to import HugrCompiler. Make sure guppylang is installed."
             raise ImportError(msg) from e
-            
+
         compiler = HugrCompiler(generator)
         return compiler.compile_to_hugr()

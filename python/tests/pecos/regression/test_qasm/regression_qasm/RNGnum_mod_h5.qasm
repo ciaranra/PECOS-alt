@@ -16,20 +16,19 @@ RNGindex(JOB_shotnum);
 
 h q;
 hgates1[0] = 1;
-if (JOB_shotnum == 2) h q;
-if (JOB_shotnum == 4) h q;
-cond1 = JOB_shotnum + JOB_shotnum + 10;
-if (cond1 == 4) h q;
 
 cond1 = RNGnum();
+cond1 = cond1 % 7;
 if (cond1[0] != 0) h q;
 if (cond1[0] != 0) hgates1[1] = 1;
 
 cond1 = RNGnum();
+cond1 = cond1 % 7;
 if (cond1[1] != 0) h q;
 if (cond1[1] != 0) hgates1[2] = 1;
 
 cond1 = RNGnum();
+cond1 = cond1 % 7;
 if (cond1[3] != 0) h q;
 if (cond1[3] != 0) hgates1[3] = 1;
 
