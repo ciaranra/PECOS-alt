@@ -39,6 +39,7 @@ mod sparse_stab_engine_bindings;
 mod state_vec_bindings;
 mod state_vec_engine_bindings;
 mod sim;
+mod plugin_compiler_bindings;
 
 use byte_message_bindings::{PyByteMessage, PyByteMessageBuilder};
 use shot_results_bindings::{PyShotMap, PyShotVec};
@@ -91,6 +92,9 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Register sim API
     sim::register_sim(m)?;
+    
+    // Register plugin compiler
+    plugin_compiler_bindings::register_plugin_compiler_module(m)?;
 
     pcg_bindings::create_pcg_module(m)?;
     Ok(())

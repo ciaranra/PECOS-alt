@@ -1,0 +1,30 @@
+[package]
+name = "pecos-selene-plugins"
+version = "0.1.0"
+edition = "2021"
+description = "Runtime plugins for PECOS-Selene integration"
+authors = ["The PECOS Developers"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Selene core for RuntimeInterface trait
+selene-core = { git = "https://github.com/CQCL/selene.git", rev = "4bd8bce4c09b09f8e7e1b2ece04acf1b6d32819a", package = "selene-core" }
+
+# For error handling
+anyhow = "1.0"
+
+# For logging (optional)
+log = { version = "0.4", optional = true }
+
+# For plugin building
+tempfile = "3.0"
+
+# For PECOS integration (optional)
+pecos-engines = { path = "../pecos-engines", optional = true }
+
+[features]
+default = []
+logging = ["log"]
+pecos-integration = ["pecos-engines"]

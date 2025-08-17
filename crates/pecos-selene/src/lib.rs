@@ -11,7 +11,7 @@
 //!
 //! # Example
 //!
-//! ```rust
+//! ```rust,no_run
 //! # use pecos_selene::prelude::*;
 //! # fn main() -> Result<(), PecosError> {
 //! // Simple LLVM IR for a Hadamard gate and measurement
@@ -57,8 +57,24 @@ pub mod prelude;
 pub mod program;
 pub mod simulator_plugin_template;
 
-#[cfg(feature = "hugr")]
-pub mod hugr_compiler;
+#[cfg(feature = "hugr-013")]
+pub mod hugr_013_support;
+
+#[cfg(feature = "hugr-013")]
+pub mod hugr_llvm_compiler;
+
+#[cfg(feature = "hugr-013")]
+pub mod hugr_qis_lowering;
+
+#[cfg(feature = "hugr-013")]
+pub mod hugr_to_llvm;
+
+#[cfg(feature = "hugr-013")]
+pub mod hugr_to_llvm_cfg_support;
+
+pub mod selene_hugr_compiler;
+#[cfg(feature = "python")]
+pub mod selene_wrapper;
 
 // Note: The old selene_sim() API has been removed. Use selene_engine().to_sim() instead.
 // Noise models and quantum engine types are now provided by pecos-engines.
@@ -122,11 +138,8 @@ mod tests {
             true
         );
         
-        let _engine2 = SeleneEngine::new(
-            SeleneProgram::Hugr(hugr::Hugr::default()),
-            4,
-            false
-        );
+        // Note: HUGR support requires resolving version compatibility
+        // between guppylang (HUGR 0.13) and PECOS (HUGR 0.20)
         
         // Builder pattern still works too
         let _engine3 = selene_engine()

@@ -167,6 +167,20 @@ impl PySeleneEngineBuilder {
         }
         Ok(self.clone())
     }
+    
+    /// Set a plugin file for this engine
+    #[pyo3(signature = (path))]
+    fn plugin(&mut self, path: &str) -> PyResult<Self> {
+        self.inner = self.inner.clone().plugin(path);
+        Ok(self.clone())
+    }
+    
+    /// Set the number of qubits
+    #[pyo3(signature = (n))]
+    fn qubits(&mut self, n: usize) -> PyResult<Self> {
+        self.inner = self.inner.clone().qubits(n);
+        Ok(self.clone())
+    }
 
     /// Convert to simulation builder
     fn to_sim(&self) -> PyResult<PySimBuilder> {

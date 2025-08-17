@@ -45,6 +45,17 @@ from pecos_rslib._pecos_rslib import GeneralNoiseModelBuilder
 from pecos_rslib._pecos_rslib import execute_llvm
 from pecos_rslib._pecos_rslib import reset_llvm_runtime
 
+# HUGR to LLVM compilation
+# Note: compile_llvm_to_plugin has been removed - Selene uses native executables, not plugins
+
+# HUGR to LLVM compilation
+try:
+    from pecos_rslib._pecos_rslib import compile_hugr_to_llvm
+except ImportError:
+    # Not available if compiled without hugr-013 feature
+    def compile_hugr_to_llvm(*args, **kwargs):
+        raise ImportError("compile_hugr_to_llvm requires pecos-rslib to be compiled with hugr-013 feature")
+
 # LLVM and Selene are now part of the unified API
 
 # Guppy conversion utilities
@@ -184,6 +195,8 @@ __all__ = [
     # LLVM execution
     "execute_llvm",
     "reset_llvm_runtime",
+    # HUGR/LLVM compilation
+    "compile_hugr_to_llvm",
     # Guppy conversion
     "guppy_to_hugr",
     # Program types

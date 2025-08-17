@@ -362,12 +362,28 @@ fn compile_hugr_bytes_to_llvm(
     hugr_bytes: &Bound<'_, PyBytes>,
     output_path: Option<String>,
 ) -> PyResult<Option<String>> {
-    let compiler = PyHugrCompiler::new();
-    if let Some(path) = output_path {
-        compiler.compile_bytes_to_llvm_file(hugr_bytes, &path)?;
-        Ok(None)
-    } else {
-        Ok(Some(compiler.compile_bytes_to_llvm(hugr_bytes)?))
+    // Use the pecos-selene HUGR 0.13 compiler instead of PyHugrCompiler
+    use pecos_selene::hugr_to_llvm::GuppylangCompiler;
+    
+    let bytes = hugr_bytes.as_bytes();
+    let mut compiler = GuppylangCompiler::new();
+    
+    match compiler.compile_hugr_json(bytes) {
+        Ok(llvm_ir) => {
+            // If output path is provided, also write to file
+            if let Some(path) = output_path {
+                std::fs::write(&path, &llvm_ir)
+                    .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                        format!("Failed to write LLVM IR to file: {}", e)
+                    ))?;
+                Ok(None)
+            } else {
+                Ok(Some(llvm_ir))
+            }
+        }
+        Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+            format!("Failed to compile HUGR: {}", e)
+        ))
     }
 }
 

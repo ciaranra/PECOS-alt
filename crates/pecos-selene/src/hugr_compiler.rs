@@ -260,7 +260,7 @@ fn add_main_wrapper_if_needed<'ctx>(module: &Module<'ctx>, context: &'ctx Contex
             let _call_result = builder.build_call(entry_func, &[], "call_entry");
             
             // Return 0 from main
-            builder.build_return(Some(&i32_type.const_int(0, false)));
+            let _ = builder.build_return(Some(&i32_type.const_int(0, false)));
             
             // Add the EntryPoint attribute to main
             main_fn.add_attribute(

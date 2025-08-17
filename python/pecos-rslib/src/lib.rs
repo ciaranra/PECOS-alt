@@ -22,6 +22,7 @@ mod qasm;
 mod llvm; // LLVM simulation with full feature parity
 mod sparse_sim;
 mod state_vec;
+mod hugr_compiler;
 
 use byte_message::{PyByteMessage, PyByteMessageBuilder};
 use engines::{PySparseStabEngineRs, PyStateVecEngineRs};
@@ -76,6 +77,9 @@ fn _pecos_rslib(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Add engine builders for unified API
     engine_builders::register_engine_builders(&m)?;
+    
+    // Add HUGR compilation support
+    hugr_compiler::register_hugr_module(&m)?;
     
     // Add version info
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;

@@ -165,8 +165,13 @@ class TestBasicQuantumOperations:
         # Verify HUGR-LLVM pipeline results
         if results.get("hugr_llvm", {}).get("success"):
             measurements = results["hugr_llvm"]["result"]["results"]
-            # Decode integer-encoded results
-            decoded_measurements = decode_integer_results(measurements, 2)
+            # Check if measurements are already tuples or need decoding
+            if measurements and isinstance(measurements[0], tuple):
+                # Already decoded as tuples
+                decoded_measurements = measurements
+            else:
+                # Decode integer-encoded results
+                decoded_measurements = decode_integer_results(measurements, 2)
             correlated = sum(1 for (a, b) in decoded_measurements if a == b)
             correlation_rate = correlated / len(decoded_measurements)
             assert correlation_rate > 0.8, f"Bell state should be highly correlated, got {correlation_rate:.2%}"
@@ -477,8 +482,13 @@ class TestAdvancedAlgorithms:
         
         if results.get("hugr_llvm", {}).get("success"):
             measurements = results["hugr_llvm"]["result"]["results"]
-            # Decode integer-encoded results
-            decoded_measurements = decode_integer_results(measurements, 2)
+            # Check if measurements are already tuples or need decoding
+            if measurements and isinstance(measurements[0], tuple):
+                # Already decoded as tuples
+                decoded_measurements = measurements
+            else:
+                # Decode integer-encoded results
+                decoded_measurements = decode_integer_results(measurements, 2)
             # Should find |11⟩ with high probability after 1 Grover iteration
             found = sum(1 for (a, b) in decoded_measurements if a and b)
             print(f"Grover found |11⟩ in {found}/100 measurements")

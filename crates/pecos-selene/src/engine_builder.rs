@@ -50,8 +50,8 @@ impl SeleneEngineBuilder {
     }
     
     /// Set the program from a HUGR
-    #[cfg(feature = "hugr")]
-    pub fn hugr(mut self, hugr: hugr::Hugr) -> Self {
+    #[cfg(feature = "hugr-013")]
+    pub fn hugr(mut self, hugr: crate::hugr_013_support::Hugr) -> Self {
         self.program = Some(SeleneProgram::Hugr(hugr));
         self
     }
@@ -87,12 +87,17 @@ impl SeleneEngineBuilder {
     }
     
     /// Set the program from a HUGR file
-    #[cfg(feature = "hugr")]
+    #[cfg(feature = "hugr-013")]
     pub fn hugr_file(mut self, path: impl AsRef<Path>) -> Self {
         self.program = Some(SeleneProgram::HugrFile(path.as_ref().to_path_buf()));
         self
     }
     
+    /// Set the program from a compiled plugin file (.so)
+    pub fn plugin(mut self, path: impl AsRef<Path>) -> Self {
+        self.program = Some(SeleneProgram::Plugin(path.as_ref().to_path_buf()));
+        self
+    }
     
     /// Set the number of qubits to allocate
     pub fn qubits(mut self, n: usize) -> Self {
@@ -127,16 +132,16 @@ impl SeleneEngineBuilder {
             }
             ProgramSource::Hugr(p) => {
                 // Store HUGR bytes for later compilation
-                #[cfg(feature = "hugr")]
+                #[cfg(feature = "hugr-013")]
                 {
                     // We'll store the bytes and convert to HUGR during build
                     // For now, create a temporary placeholder that will be replaced in build()
                     self.program = Some(SeleneProgram::HugrBytes(p.hugr));
                 }
-                #[cfg(not(feature = "hugr"))]
+                #[cfg(not(feature = "hugr-013"))]
                 {
                     // Without HUGR feature, we can't handle HUGR programs
-                    panic!("HUGR support requires the 'hugr' feature to be enabled");
+                    panic!("HUGR support requires the 'hugr-013' feature to be enabled");
                 }
             }
         }

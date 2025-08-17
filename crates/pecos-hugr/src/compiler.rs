@@ -22,6 +22,7 @@ use super::extensions::const_bool_extension::ConstBoolExtension;
 use super::extensions::tket2_bool_extension::Tket2BoolExtension;
 use super::extensions::tket2_rotation_extension::Tket2RotationExtension;
 use super::generators::standard_llvm_generator::StandardLlvmExtension;
+use super::hugr_13_compat::convert_hugr_13_types;
 use super::result_extractor::ResultNameExtractor;
 
 /// Configuration for HUGR compilation
@@ -127,13 +128,24 @@ impl HugrCompiler {
         hugr_bytes: &[u8],
         output_path: &Path,
     ) -> Result<PathBuf, PecosError> {
-        debug!("HUGR: Compiling HUGR bytes to {}", output_path.display());
+        eprintln!("HUGR: Compiling HUGR bytes to {}", output_path.display());
+        eprintln!("HUGR: First 8 bytes: {:?}", &hugr_bytes[..8.min(hugr_bytes.len())]);
 
-        // Fix duplicate function names before processing
-        let fixed_hugr_bytes = fix_duplicate_functions(hugr_bytes)?;
+        // Check if this is binary HUGR format (starts with "HUGR" magic bytes)
+        let is_binary_hugr = hugr_bytes.len() >= 4 && &hugr_bytes[0..4] == b"HUGR";
         
-        // Preprocess HUGR to replace ConstBool with standard values
-        let preprocessed_hugr_bytes = preprocess_hugr_for_constbool(&fixed_hugr_bytes)?;
+        let preprocessed_hugr_bytes = if is_binary_hugr {
+            debug!("HUGR: Detected binary HUGR format");
+            // For binary HUGR, we'll pass it through and let Package::load handle it
+            preprocess_binary_hugr(hugr_bytes)?
+        } else {
+            debug!("HUGR: Detected JSON HUGR format, applying preprocessing");
+            // Fix duplicate function names before processing
+            let fixed_hugr_bytes = fix_duplicate_functions(hugr_bytes)?;
+            
+            // Preprocess HUGR to replace ConstBool with standard values
+            preprocess_hugr_for_constbool(&fixed_hugr_bytes)?
+        };
 
         // Create extension registry with tket2 extensions
         let registry = Self::create_extension_registry();
@@ -141,15 +153,54 @@ impl HugrCompiler {
         // Load HUGR package with the extension registry
         let _reader = std::io::Cursor::new(preprocessed_hugr_bytes.clone());
         
-        // Always try relaxed validation first for ConstBool handling
-        debug!("HUGR: Attempting to load package with relaxed validation for ConstBool support");
-        let mut hugr_package = load_package_with_relaxed_validation(&preprocessed_hugr_bytes, &registry)
-            .or_else(|e| {
-                debug!("HUGR: Relaxed validation failed: {e}, trying standard loading");
-                let reader = std::io::Cursor::new(preprocessed_hugr_bytes.clone());
-                Package::load(reader, Some(&registry))
-            })
-            .map_err(|e| PecosError::with_context(e, "Failed to parse HUGR"))?;
+        // Try loading based on format
+        let mut hugr_package = if is_binary_hugr {
+            // For binary HUGR, try loading without preprocessing first
+            debug!("HUGR: Attempting to load binary HUGR package directly");
+            debug!("HUGR: Using original bytes, length: {}", hugr_bytes.len());
+            let reader = std::io::Cursor::new(hugr_bytes);
+            Package::load(reader, Some(&registry))
+                .or_else(|e| {
+                    debug!("HUGR: Direct binary loading failed: {e}, trying with preprocessing");
+                    let reader = std::io::Cursor::new(&preprocessed_hugr_bytes);
+                    Package::load(reader, Some(&registry))
+                })
+                .map_err(|e| {
+                    let error_str = e.to_string();
+                    if error_str.contains("unknown variant `List`") {
+                        PecosError::with_context(
+                            e, 
+                            "HUGR version incompatibility: guppylang uses HUGR 0.13 which has 'List' types, \
+                            but PECOS requires HUGR 0.20 which uses 'Array' types instead. \
+                            This is a known incompatibility. Please either:\n\
+                            1. Update guppylang to use HUGR 0.20 (when available), or\n\
+                            2. Use PHIR format instead of HUGR for quantum compilation."
+                        )
+                    } else {
+                        PecosError::with_context(e, "Failed to parse HUGR")
+                    }
+                })?
+        } else {
+            // For text/JSON HUGR in envelope format
+            debug!("HUGR: Attempting to load text HUGR package");
+            let reader = std::io::Cursor::new(&preprocessed_hugr_bytes);
+            Package::load(reader, Some(&registry))
+                .map_err(|e| {
+                    let error_str = e.to_string();
+                    if error_str.contains("unknown variant `List`") {
+                        PecosError::with_context(
+                            e, 
+                            "HUGR version incompatibility: guppylang uses HUGR 0.13 which has 'List' types, \
+                            but PECOS requires HUGR 0.20 which uses 'Array' types instead. \
+                            This is a known incompatibility. Please either:\n\
+                            1. Update guppylang to use HUGR 0.20 (when available), or\n\
+                            2. Use PHIR format instead of HUGR for quantum compilation."
+                        )
+                    } else {
+                        PecosError::with_context(e, "Failed to parse HUGR")
+                    }
+                })?
+        };
 
         debug!(
             "HUGR: Parsed HUGR package with {} modules",
@@ -369,6 +420,134 @@ fn load_package_with_relaxed_validation(
     Ok(package)
 }
 
+/// Preprocess binary HUGR format
+fn preprocess_binary_hugr(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
+    use std::io::Cursor;
+    
+    // Try to detect if this is HUGR 0.13 by attempting to load it
+    // If it fails with a List type error, we know it's 0.13
+    let registry = HugrCompiler::create_extension_registry();
+    let reader = Cursor::new(hugr_bytes);
+    
+    match Package::load(reader, Some(&registry)) {
+        Ok(_) => {
+            // It loaded fine, no conversion needed
+            debug!("HUGR: Binary format loaded successfully, no conversion needed");
+            Ok(hugr_bytes.to_vec())
+        }
+        Err(e) => {
+            let error_str = e.to_string();
+            if error_str.contains("unknown variant `List`") {
+                debug!("HUGR: Detected HUGR 0.13 with List types, attempting conversion");
+                // This is HUGR 0.13, we need to convert it
+                convert_hugr_013_to_020(hugr_bytes)
+            } else {
+                // Some other error, pass it through
+                debug!("HUGR: Binary format failed to load: {}", error_str);
+                Ok(hugr_bytes.to_vec())
+            }
+        }
+    }
+}
+
+/// Convert HUGR 0.13 to 0.20
+fn convert_hugr_013_to_020(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
+    use std::io::{Read, Write};
+    
+    // Check envelope header
+    if hugr_bytes.len() < 10 {
+        return Err(PecosError::Input("HUGR envelope too short".to_string()));
+    }
+    
+    // Verify magic number
+    if &hugr_bytes[0..8] != b"HUGRiHJv" {
+        return Err(PecosError::Input("Invalid HUGR magic number".to_string()));
+    }
+    
+    let format_byte = hugr_bytes[8];
+    let flags = hugr_bytes[9];
+    let compressed = (flags & 1) != 0;
+    
+    debug!("HUGR envelope: format={}, compressed={}", format_byte, compressed);
+    
+    // Extract payload
+    let payload = &hugr_bytes[10..];
+    
+    // Decompress if needed
+    let decompressed = if compressed {
+        let mut decoder = zstd::Decoder::new(payload)
+            .map_err(|e| PecosError::with_context(e, "Failed to create zstd decoder"))?;
+        let mut decompressed = Vec::new();
+        decoder.read_to_end(&mut decompressed)
+            .map_err(|e| PecosError::with_context(e, "Failed to decompress HUGR payload"))?;
+        decompressed
+    } else {
+        payload.to_vec()
+    };
+    
+    // Convert based on format
+    let converted = match format_byte {
+        63 => { // PackageJson
+            // Convert JSON
+            convert_package_json(&decompressed)?
+        }
+        2 => { // ModelWithExtensions
+            // This is a binary capnproto format which is complex to parse and convert
+            return Err(PecosError::Input(
+                "HUGR version incompatibility detected: guppylang produces HUGR 0.13 with 'List' types, \
+                but PECOS requires HUGR 0.20 with 'Array' types.\n\n\
+                The HUGR is using ModelWithExtensions binary format which cannot be automatically converted.\n\n\
+                Workarounds:\n\
+                1. Update guppylang to a version that supports HUGR 0.20 (when available)\n\
+                2. Use a different intermediate format (e.g., PHIR) instead of HUGR\n\
+                3. Manually compile with a HUGR 0.20 compatible toolchain".to_string()
+            ));
+        }
+        _ => {
+            return Err(PecosError::Input(format!("Unsupported HUGR format: {}", format_byte)));
+        }
+    };
+    
+    // Re-compress if originally compressed
+    let final_payload = if compressed {
+        let mut encoder = zstd::Encoder::new(Vec::new(), 3)
+            .map_err(|e| PecosError::with_context(e, "Failed to create zstd encoder"))?;
+        encoder.write_all(&converted)
+            .map_err(|e| PecosError::with_context(e, "Failed to compress converted HUGR"))?;
+        encoder.finish()
+            .map_err(|e| PecosError::with_context(e, "Failed to finish compression"))?
+    } else {
+        converted
+    };
+    
+    // Reconstruct envelope
+    let mut result = Vec::new();
+    result.extend_from_slice(b"HUGRiHJv");
+    result.push(format_byte);
+    result.push(flags);
+    result.extend_from_slice(&final_payload);
+    
+    Ok(result)
+}
+
+/// Convert PackageJson format from HUGR 0.13 to 0.20
+fn convert_package_json(json_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
+    use serde_json::Value;
+    
+    let json_str = std::str::from_utf8(json_bytes)
+        .map_err(|e| PecosError::with_context(e, "Invalid UTF-8 in PackageJson"))?;
+    
+    let mut json: Value = serde_json::from_str(json_str)
+        .map_err(|e| PecosError::with_context(e, "Failed to parse PackageJson"))?;
+    
+    // Convert List to Array
+    convert_hugr_13_types(&mut json)?;
+    
+    // Serialize back
+    serde_json::to_vec(&json)
+        .map_err(|e| PecosError::with_context(e, "Failed to serialize converted PackageJson"))
+}
+
 /// Preprocess HUGR to fix `ConstBool` extension references
 fn preprocess_hugr_for_constbool(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
     use serde_json::Value;
@@ -384,6 +563,9 @@ fn preprocess_hugr_for_constbool(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosErro
     
     let mut json: Value = serde_json::from_str(json_str)
         .map_err(|e| PecosError::with_context(e, "Failed to parse HUGR JSON"))?;
+    
+    // First, convert HUGR 0.13 types to 0.20 equivalents (e.g., List -> Array)
+    convert_hugr_13_types(&mut json)?;
     
     // Process all modules to fix ConstBool values
     if let Some(modules) = json.get_mut("modules").and_then(|m| m.as_array_mut()) {

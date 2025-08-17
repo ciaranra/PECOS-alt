@@ -61,11 +61,15 @@ pest_derive = "2"
 tempfile = "3"
 assert_cmd = "2"
 wasmtime = "33"
+zstd = "0.13"
 serial_test = "3"
 cc = "1"
 hugr = "0.20"
+# HUGR dependencies - version 0.20 for pecos-hugr
 hugr-core = "0.20"
 hugr-llvm = "0.20"
+# HUGR 0.13 for pecos-selene (guppylang compatibility)
+hugr-core-013 = { package = "hugr-core", version = "=0.13.3" }
 ureq = { version = "3" }
 typetag = "0.2"
 lazy_static = "1"

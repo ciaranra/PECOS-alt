@@ -11,14 +11,20 @@ categories.workspace = true
 description = "Selene integration for PECOS quantum simulation"
 readme = "README.md"
 
+[[bin]]
+name = "pecos-hugr-013-cli"
+path = "src/bin/pecos-hugr-013-cli.rs"
+required-features = ["hugr-013", "binary"]
+
 [dependencies]
 pecos-core.workspace = true
 pecos-engines.workspace = true
 pecos-programs.workspace = true
 pecos-llvm-runtime.workspace = true
+pecos-selene-plugins = { path = "../pecos-selene-plugins" }
 
-# Selene dependencies - using path dependencies since they're not published
-selene-core = { path = "../../../selene/selene-core" }
+# Selene dependencies - using git dependencies since they're not published
+selene-core = { git = "https://github.com/CQCL/selene.git", rev = "4bd8bce4c09b09f8e7e1b2ece04acf1b6d32819a", package = "selene-core" }
 # TODO: Add hugr-qis-compiler when PyO3 version conflicts are resolved
 # selene-hugr-qis-compiler = { path = "../../../selene/selene-compilers/hugr_qis" }
 
@@ -29,24 +35,38 @@ anyhow.workspace = true
 # For async operations if needed
 tokio = { workspace = true, features = ["full"], optional = true }
 
-# For HUGR support
-hugr = { workspace = true, optional = true }
-tket2 = { workspace = true, optional = true }
-tket2-hseries = { workspace = true, features = ["llvm"], optional = true }
-inkwell = { workspace = true, optional = true }
-pecos-hugr = { workspace = true, optional = true }
+# For HUGR support - using HUGR 0.13 for guppylang compatibility
+hugr-core-013 = { workspace = true, optional = true }
+
+# For HUGR to LLVM compilation (optional)
+# Note: These versions need to be compatible with HUGR 0.13
+# tket2 = { version = "0.13", optional = true }
+# tket2-hseries = { version = "0.18", optional = true, features = ["llvm"] }
 
 # Standard library extensions
 log.workspace = true
+env_logger = { workspace = true, optional = true }
 
 # For dynamic library compilation and loading
 tempfile.workspace = true
 libloading.workspace = true
 
+# For HUGR decompression
+zstd = { workspace = true, optional = true }
+
+# For JSON parsing
+serde_json = { workspace = true }
+
+[build-dependencies]
+# Ensure the plugins are built before this crate
+pecos-selene-plugins = { path = "../pecos-selene-plugins" }
+
+
 [dev-dependencies]
 env_logger.workspace = true
 
 [features]
-default = ["hugr"]
-hugr = ["dep:hugr", "dep:tket2", "dep:tket2-hseries", "dep:inkwell", "dep:pecos-hugr"]
+default = ["hugr-013"]
+hugr-013 = ["dep:hugr-core-013", "dep:zstd"]
 async = ["tokio"]
+binary = ["dep:env_logger"]

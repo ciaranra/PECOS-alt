@@ -28,7 +28,7 @@ class SeleneEngineBuilder:
         self._pending_program = None
         self._is_guppy = False
     
-    def program(self, program: Union[str, Callable, bytes, "_RustLlvmProgram", "_RustHugrProgram"]) -> "SeleneEngineBuilder":
+    def program(self, program: Union[str, Path, Callable, bytes, "_RustLlvmProgram", "_RustHugrProgram"]) -> "SeleneEngineBuilder":
         """Set the program to execute.
         
         Args:
@@ -36,6 +36,7 @@ class SeleneEngineBuilder:
                 - LlvmProgram instance
                 - HugrProgram instance  
                 - Guppy function (will be converted to HUGR)
+                - Path to compiled plugin (.so file)
                 - Raw LLVM IR string (deprecated)
                 - Raw HUGR bytes (deprecated)
                 
@@ -45,21 +46,91 @@ class SeleneEngineBuilder:
         if isinstance(program, (_RustLlvmProgram, _RustHugrProgram)):
             # Already a program object, pass to Rust
             self._rust_builder = self._rust_builder.program(program)
+        elif isinstance(program, Path):
+            # Path to plugin file
+            self._rust_builder = self._rust_builder.plugin(str(program))
         elif callable(program):
             # Guppy function - store for conversion at build/run time
             self._pending_program = program
             self._is_guppy = True
         elif isinstance(program, str):
-            # Legacy: raw LLVM IR string
-            self._rust_builder = self._rust_builder.program(_RustLlvmProgram.from_string(program))
+            # Could be a path or LLVM IR
+            if program.endswith('.so') or program.endswith('.dll') or program.endswith('.dylib'):
+                # Treat as plugin path
+                self._rust_builder = self._rust_builder.plugin(program)
+            else:
+                # Legacy: raw LLVM IR string
+                self._rust_builder = self._rust_builder.program(_RustLlvmProgram.from_string(program))
         elif isinstance(program, bytes):
             # Legacy: raw HUGR bytes
             self._rust_builder = self._rust_builder.program(_RustHugrProgram.from_bytes(program))
         else:
             raise TypeError(
                 f"Program must be LlvmProgram, HugrProgram, Guppy function, "
-                f"LLVM IR string, or HUGR bytes, got {type(program)}"
+                f"plugin Path, LLVM IR string, or HUGR bytes, got {type(program)}"
             )
+        return self
+    
+    def plugin(self, path: Union[str, Path]) -> "SeleneEngineBuilder":
+        """Set a plugin file path directly.
+        
+        Args:
+            path: Path to compiled plugin (.so file)
+            
+        Returns:
+            Self for method chaining
+        """
+        self._rust_builder = self._rust_builder.plugin(str(path))
+        return self
+    
+    def llvm_file(self, path: Union[str, Path]) -> "SeleneEngineBuilder":
+        """Load LLVM IR from a file.
+        
+        Args:
+            path: Path to LLVM IR file (.ll)
+            
+        Returns:
+            Self for method chaining
+        """
+        path = Path(path)
+        if not path.exists():
+            raise FileNotFoundError(f"LLVM file not found: {path}")
+        
+        # Read LLVM IR from file
+        llvm_ir = path.read_text()
+        # Create LlvmProgram from string
+        self._rust_builder = self._rust_builder.program(_RustLlvmProgram.from_string(llvm_ir))
+        return self
+    
+    def hugr_file(self, path: Union[str, Path]) -> "SeleneEngineBuilder":
+        """Load HUGR from a file.
+        
+        Args:
+            path: Path to HUGR file (.hugr)
+            
+        Returns:
+            Self for method chaining
+        """
+        path = Path(path)
+        if not path.exists():
+            raise FileNotFoundError(f"HUGR file not found: {path}")
+        
+        # Read HUGR bytes from file
+        hugr_bytes = path.read_bytes()
+        # Create HugrProgram from bytes
+        self._rust_builder = self._rust_builder.program(_RustHugrProgram.from_bytes(hugr_bytes))
+        return self
+    
+    def qubits(self, n: int) -> "SeleneEngineBuilder":
+        """Set the number of qubits.
+        
+        Args:
+            n: Number of qubits to allocate
+            
+        Returns:
+            Self for method chaining
+        """
+        self._rust_builder = self._rust_builder.qubits(n)
         return self
     
     def to_sim(self):

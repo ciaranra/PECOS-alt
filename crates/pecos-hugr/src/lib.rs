@@ -38,6 +38,7 @@ let llvm_path = compiler.compile_hugr("input.hugr")?;
 pub mod compiler;
 pub mod extensions;
 pub mod generators;
+pub mod hugr_13_compat;
 pub mod result_extractor;
 
 // Re-export main types

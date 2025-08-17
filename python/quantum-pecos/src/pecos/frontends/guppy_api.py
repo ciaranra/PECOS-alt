@@ -88,7 +88,8 @@ def sim(program: Any):
     is_guppy = (
         hasattr(program, "_guppy_compiled") or
         hasattr(program, "name") or
-        str(type(program)).find("GuppyDefinition") != -1
+        str(type(program)).find("GuppyDefinition") != -1 or
+        str(type(program)).find("GuppyFunctionDefinition") != -1
     )
     
     if is_guppy:

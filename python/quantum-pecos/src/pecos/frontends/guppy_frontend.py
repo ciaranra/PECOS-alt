@@ -59,6 +59,7 @@ class GuppyFrontend:
         hugr_to_llvm_binary: Path | None = None,
         format_converter: Path | None = None,
         use_rust_backend: bool | None = None,
+        use_selene_backend: bool = False,
     ) -> None:
         """Initialize the Guppy frontend.
 
@@ -67,9 +68,11 @@ class GuppyFrontend:
             format_converter: Path to the HUGR format converter script (for external mode)
             use_rust_backend: Force use of Rust backend (True) or external tools (False).
                              If None, auto-detect best available option.
+            use_selene_backend: Use Selene backend (HUGR 0.13 compatible) instead of HUGR 0.20
         """
         # Initialize attributes first to avoid AttributeError in cleanup
         self._temp_dir = None
+        self.use_selene_backend = use_selene_backend
 
         if not GUPPY_AVAILABLE:
             msg = "guppylang is not available. Please install guppylang to use the Guppy frontend."
@@ -142,17 +145,37 @@ class GuppyFrontend:
             hasattr(func, "_guppy_compiled")
             or hasattr(func, "name")
             or str(type(func)).find("GuppyDefinition") != -1
+            or str(type(func)).find("GuppyFunctionDefinition") != -1
         )
 
         if not is_guppy:
             msg = "Function must be decorated with @guppy"
             raise ValueError(msg)
 
+        # If Selene backend is requested, use GuppySeleneCompiler
+        if self.use_selene_backend:
+            from pecos.frontends.guppy_selene_compiler import GuppySeleneCompiler
+            compiler = GuppySeleneCompiler()
+            return compiler.compile_function(func)
+
         # Step 1: Compile Guppy to HUGR
         try:
-            compiled = guppy.compile_function(func)
-            # compiled is a FuncDefnPointer with a .package attribute
-            hugr_bytes = compiled.package.to_bytes()
+            # Try both new and old API
+            if hasattr(func, 'compile'):
+                # New API: function.compile()
+                compiled = func.compile()
+            else:
+                # Old API: guppy.compile(function)
+                compiled = guppy.compile(func)
+            
+            # Handle the return value - it might be a FuncDefnPointer or similar
+            if hasattr(compiled, 'package'):
+                hugr_bytes = compiled.package.to_bytes()
+            elif hasattr(compiled, 'to_package'):
+                hugr_bytes = compiled.to_package().to_bytes()
+            else:
+                # Try to serialize directly
+                hugr_bytes = compiled.to_bytes()
         except Exception as e:
             msg = f"Failed to compile Guppy to HUGR: {e}"
             raise RuntimeError(msg) from e
