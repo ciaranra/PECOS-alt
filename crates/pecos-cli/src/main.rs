@@ -357,8 +357,17 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
         }
     };
 
-    // Output results to file or stdout
-    output_results(&results_str, args.output_file.as_ref(), program_type)?;
+    // Either write to the specified output file or print to stdout
+    match &args.output_file {
+        Some(file_path) => {
+            // Ensure parent directory exists
+            if let Some(parent) = std::path::Path::new(file_path).parent()
+                && !parent.exists()
+            {
+                std::fs::create_dir_all(parent).map_err(|e| {
+                    PecosError::Resource(format!("Failed to create directory: {e}"))
+                })?;
+            }
 
     // Force all output to be written
     let _ = std::io::stdout().flush();

@@ -15,7 +15,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quantum-pecos"
-version = "0.7.0.dev0"
+version = "0.7.0.dev4"
 authors = [
     {name = "The PECOS Developers"},
 ]
@@ -28,7 +28,7 @@ requires-python = ">=3.10"
 license = { file = "LICENSE"}
 keywords = ["quantum", "QEC", "simulation", "PECOS"]
 dependencies = [
-    "pecos-rslib==0.7.0.dev0",
+    "pecos-rslib==0.7.0.dev4",
     "phir>=0.3.3",
     "numpy>=1.15.0",
     "scipy>=1.1.0",
@@ -58,6 +58,11 @@ repository = "https://github.com/PECOS-packages/PECOS"
 qir = [
     "llvmlite==0.43.0; python_version < '3.13'"
 ]
+guppy = [
+    "guppylang>=0.21.0",  # Install guppylang first
+    "selene-sim~=0.2.0",  # Then selene-sim (dependency of guppylang)
+    "hugr>=0.13.0,<0.14",  # Use stable version compatible with guppylang
+]
 projectq = [  # State-vector sims using ProjectQ
     "pybind11>=2.2.3",
     "projectq>=0.5",
@@ -86,6 +91,7 @@ all = [
     "quantum-pecos[visualization]",
     "quantum-pecos[guppy]",
     "quantum-pecos[qir]",
+    "quantum-pecos[guppy]",
 ]
 # The following only work for some environments/Python versions:
 qulacs = [  # State-vector sims using Qulacs

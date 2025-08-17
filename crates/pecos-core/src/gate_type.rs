@@ -72,6 +72,7 @@ pub enum GateType {
     // MZ = 104
     Measure = 104,
     // MnZ = 105
+    MeasureLeaked = 105,
     // TODO: MPauli instead of the other variants?
 
     // PX = 130
@@ -106,6 +107,7 @@ impl From<u8> for GateType {
             58 => GateType::SZZdg,
             82 => GateType::RZZ,
             104 => GateType::Measure,
+            105 => GateType::MeasureLeaked,
             134 => GateType::Prep,
             200 => GateType::Idle,
             _ => panic!("Invalid gate type ID: {value}"),
@@ -136,6 +138,7 @@ impl GateType {
             | GateType::SZZ
             | GateType::SZZdg
             | GateType::Measure
+            | GateType::MeasureLeaked
             | GateType::Prep => 0,
 
             // Gates with one parameter
@@ -174,6 +177,7 @@ impl GateType {
             | GateType::R1XY
             | GateType::U
             | GateType::Measure
+            | GateType::MeasureLeaked
             | GateType::Prep
             | GateType::Idle => 1,
 
@@ -223,6 +227,7 @@ impl fmt::Display for GateType {
             GateType::SZZdg => write!(f, "SZZdg"),
             GateType::RZZ => write!(f, "RZZ"),
             GateType::Measure => write!(f, "Measure"),
+            GateType::MeasureLeaked => write!(f, "MeasureLeaked"),
             GateType::Prep => write!(f, "Prep"),
             GateType::Idle => write!(f, "Idle"),
         }
@@ -245,6 +250,7 @@ mod tests {
         assert_eq!(GateType::RZ as u8, 32);
         assert_eq!(GateType::R1XY as u8, 36);
         assert_eq!(GateType::Measure as u8, 104);
+        assert_eq!(GateType::MeasureLeaked as u8, 105);
 
         assert_eq!(GateType::from(0u8), GateType::I);
         assert_eq!(GateType::from(1u8), GateType::X);
@@ -256,6 +262,7 @@ mod tests {
         assert_eq!(GateType::from(32u8), GateType::RZ);
         assert_eq!(GateType::from(36u8), GateType::R1XY);
         assert_eq!(GateType::from(104u8), GateType::Measure);
+        assert_eq!(GateType::from(105u8), GateType::MeasureLeaked);
     }
 
     #[test]
@@ -270,6 +277,7 @@ mod tests {
         assert_eq!(GateType::SZZ.classical_arity(), 0);
         assert_eq!(GateType::SZZdg.classical_arity(), 0);
         assert_eq!(GateType::Measure.classical_arity(), 0);
+        assert_eq!(GateType::MeasureLeaked.classical_arity(), 0);
         assert_eq!(GateType::Prep.classical_arity(), 0);
 
         // Gates with one parameter
@@ -296,6 +304,7 @@ mod tests {
         assert_eq!(GateType::R1XY.quantum_arity(), 1);
         assert_eq!(GateType::U.quantum_arity(), 1);
         assert_eq!(GateType::Measure.quantum_arity(), 1);
+        assert_eq!(GateType::MeasureLeaked.quantum_arity(), 1);
         assert_eq!(GateType::Prep.quantum_arity(), 1);
         assert_eq!(GateType::Idle.quantum_arity(), 1);
 
@@ -318,6 +327,7 @@ mod tests {
         assert!(!GateType::SZZ.is_parameterized());
         assert!(!GateType::SZZdg.is_parameterized());
         assert!(!GateType::Measure.is_parameterized());
+        assert!(!GateType::MeasureLeaked.is_parameterized());
         assert!(!GateType::Prep.is_parameterized());
 
         // Parameterized gates
@@ -340,6 +350,7 @@ mod tests {
         assert!(GateType::R1XY.is_single_qubit());
         assert!(GateType::U.is_single_qubit());
         assert!(GateType::Measure.is_single_qubit());
+        assert!(GateType::MeasureLeaked.is_single_qubit());
         assert!(GateType::Prep.is_single_qubit());
         assert!(GateType::Idle.is_single_qubit());
 
@@ -362,6 +373,7 @@ mod tests {
         assert!(!GateType::R1XY.is_two_qubit());
         assert!(!GateType::U.is_two_qubit());
         assert!(!GateType::Measure.is_two_qubit());
+        assert!(!GateType::MeasureLeaked.is_two_qubit());
         assert!(!GateType::Prep.is_two_qubit());
         assert!(!GateType::Idle.is_two_qubit());
 

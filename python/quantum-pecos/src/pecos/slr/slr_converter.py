@@ -20,6 +20,13 @@ try:
 except ImportError:
     QIRGenerator = None
 
+try:
+    from pecos.slr.gen_codes.guppy.ir_generator import (
+        IRGuppyGenerator as GuppyGenerator,
+    )
+except ImportError:
+    GuppyGenerator = None
+
 
 class SlrConverter:
 
@@ -53,6 +60,13 @@ class SlrConverter:
         elif target in [Language.QIR, Language.QIRBC]:
             self._check_qir_imported()
             generator = QIRGenerator()
+        elif target == Language.GUPPY:
+            self._check_guppy_imported()
+            generator = GuppyGenerator()
+        elif target == Language.HUGR:
+            # HUGR is handled specially in the hugr() method
+            msg = "Use the hugr() method directly to compile to HUGR"
+            raise ValueError(msg)
         else:
             msg = f"Code gen target '{target}' is not supported."
             raise NotImplementedError(msg)
@@ -88,3 +102,42 @@ class SlrConverter:
     def qir_bc(self):
         self._check_qir_imported()
         return self.generate(Language.QIRBC)
+
+    @staticmethod
+    def _check_guppy_imported():
+        if GuppyGenerator is None:
+            msg = (
+                "Trying to compile to Guppy without the GuppyGenerator. "
+                "Make sure gen_guppy.py is available."
+            )
+            raise Exception(msg)
+
+    def guppy(self):
+        self._check_guppy_imported()
+        return self.generate(Language.GUPPY)
+
+    def hugr(self):
+        """Compile the SLR block to HUGR via Guppy.
+
+        Returns:
+            The compiled HUGR module
+
+        Raises:
+            ImportError: If guppylang is not available
+            RuntimeError: If compilation fails
+        """
+        self._check_guppy_imported()
+
+        # First generate Guppy code
+        generator = GuppyGenerator()
+        generator.generate_block(self._block)
+
+        # Then compile to HUGR
+        try:
+            from pecos.slr.gen_codes.guppy.hugr_compiler import HugrCompiler
+        except ImportError as e:
+            msg = "Failed to import HugrCompiler. Make sure guppylang is installed."
+            raise ImportError(msg) from e
+
+        compiler = HugrCompiler(generator)
+        return compiler.compile_to_hugr()

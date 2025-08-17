@@ -20,19 +20,10 @@ mod byte_message_bindings;
 mod engine_bindings;
 mod engine_builders;
 mod noise_helpers;
-mod pcg_bindings;
-mod phir_json_bridge;
-#[cfg(feature = "hugr-llvm-pipeline")]
-mod hugr_bindings;
-mod llvm_bindings;
-mod llvm_context_bindings;
-mod llvm_execution_guard;
-// mod llvm_sim_bindings;
-// mod selene_sim_bindings;
-mod phir_bindings;
-// mod qasm_sim_bindings;
-mod shot_results_bindings;
-// mod sim_builder; // Disabled in favor of thin wrapper bindings
+// mod pcg_bindings;
+mod pecos_rng_bindings;
+pub mod phir_bridge;
+mod qasm_sim_bindings;
 mod sparse_sim;
 mod sparse_stab_bindings;
 mod sparse_stab_engine_bindings;
@@ -42,13 +33,12 @@ mod sim;
 mod plugin_compiler_bindings;
 
 use byte_message_bindings::{PyByteMessage, PyByteMessageBuilder};
-use shot_results_bindings::{PyShotMap, PyShotVec};
+use pecos_rng_bindings::RngPcg;
+use pyo3::prelude::*;
 use sparse_stab_bindings::SparseSim;
 use sparse_stab_engine_bindings::PySparseStabEngine;
 use state_vec_bindings::RsStateVec;
 use state_vec_engine_bindings::PyStateVecEngine;
-
-use pyo3::prelude::*;
 
 /// A Python module implemented in Rust.
 #[pymodule]
@@ -60,42 +50,10 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyByteMessageBuilder>()?;
     m.add_class::<PyStateVecEngine>()?;
     m.add_class::<PySparseStabEngine>()?;
-    
-    // Shot result types
-    m.add_class::<PyShotVec>()?;
-    m.add_class::<PyShotMap>()?;
+    m.add_class::<RngPcg>()?;
 
     // Register QASM simulation functions
     // qasm_sim_bindings::register_qasm_sim_module(m)?;
 
-    // Register HUGR/QIR functions (only if hugr-llvm-pipeline feature is enabled)
-    #[cfg(feature = "hugr-llvm-pipeline")]
-    hugr_bindings::register_hugr_module(m)?;
-
-    // Register PHIR functions
-    phir_bindings::register_phir_module(m)?;
-
-    // Register LLVM execution functions
-    llvm_bindings::register_llvm_module(m)?;
-
-    // Register LlvmSim functions
-    // llvm_sim_bindings::register_llvm_sim_module(m)?;
-
-    // Register Selene simulation functions
-    // selene_sim_bindings::register_selene_sim_module(m)?;
-
-    // Register engine builders
-    engine_builders::register_engine_builders(m)?;
-
-    // NOTE: sim_builder module disabled in favor of thin wrapper bindings
-    // sim_builder::register_sim_builder_module(m)?;
-
-    // Register sim API
-    sim::register_sim(m)?;
-    
-    // Register plugin compiler
-    plugin_compiler_bindings::register_plugin_compiler_module(m)?;
-
-    pcg_bindings::create_pcg_module(m)?;
     Ok(())
 }
