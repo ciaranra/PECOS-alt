@@ -223,6 +223,7 @@ decoder-cache-clean: ## Clean decoder download cache
 pytest:  ## Run tests on the Python package (not including optional dependencies). ASSUMES: previous build command
 	uv run pytest ./python/tests/ --doctest-modules -m "not optional_dependency"
 	uv run pytest ./python/pecos-rslib/tests/
+	uv run pytest ./python/slr-tests/ -m "not optional_dependency"
 
 .PHONY: pytest-dep
 pytest-dep: ## Run tests on the Python package only for optional dependencies. ASSUMES: previous build command

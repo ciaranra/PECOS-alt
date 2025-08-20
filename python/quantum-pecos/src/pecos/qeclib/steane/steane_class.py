@@ -73,6 +73,8 @@ class Steane(Vars):
             ValueError: If provided ancilla register has fewer than 3 qubits.
         """
         super().__init__()
+        # Set the source class for code generation
+        self.source_class = self.__class__.__name__
         self.check_indices = [[2, 1, 3, 0], [5, 2, 1, 4], [6, 5, 2, 3]]
 
         self.d = QReg(f"{name}_d", 7)

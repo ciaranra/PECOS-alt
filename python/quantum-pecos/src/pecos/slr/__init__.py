@@ -11,6 +11,7 @@
 
 from pecos.slr.block import Block
 from pecos.slr.cond_block import If, Repeat
+from pecos.slr.loop_block import For, While
 from pecos.slr.main import Main
 from pecos.slr.main import Main as SLR  # noqa: N814
 from pecos.slr.misc import Barrier, Comment, Parallel, Permute
@@ -24,6 +25,7 @@ __all__ = [
     "Block",
     "CReg",
     "Comment",
+    "For",
     "If",
     "Main",
     "Parallel",
@@ -33,4 +35,5 @@ __all__ = [
     "Repeat",
     "SlrConverter",
     "Vars",
+    "While",
 ]
