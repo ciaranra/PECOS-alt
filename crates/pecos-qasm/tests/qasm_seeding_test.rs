@@ -156,7 +156,7 @@ fn test_qasm_engine_with_seed_reproducibility() {
 #[test]
 fn test_qasm_engine_noise_with_seed() {
     use pecos_qasm::qasm_engine;
-    use pecos_engines::{ClassicalControlEngineBuilder, DepolarizingNoise, sim_builder};
+    use pecos_engines::{DepolarizingNoise, sim_builder};
     
     let qasm = r#"
         OPENQASM 2.0;

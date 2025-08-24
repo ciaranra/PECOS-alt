@@ -82,11 +82,7 @@ fn test_general_noise_builder_with_pauli_models() {
         .run(1000)
         .unwrap();
 
-    let results = qasm_sim(qasm)
-        .seed(42)
-        .noise(noise_model)
-        .run(1000)
-        .unwrap();
+    assert_eq!(results.len(), 1000);
 
     let shot_map = results.try_as_shot_map().unwrap();
     let values = shot_map.try_bits_as_u64("c").unwrap();

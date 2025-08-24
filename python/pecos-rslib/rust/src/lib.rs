@@ -22,8 +22,9 @@ mod engine_builders;
 mod noise_helpers;
 // mod pcg_bindings;
 mod pecos_rng_bindings;
-pub mod phir_bridge;
-mod qasm_sim_bindings;
+pub mod phir_json_bridge;
+// mod qasm_sim_bindings;
+mod shot_results_bindings;
 mod sparse_sim;
 mod sparse_stab_bindings;
 mod sparse_stab_engine_bindings;
@@ -39,6 +40,7 @@ use sparse_stab_bindings::SparseSim;
 use sparse_stab_engine_bindings::PySparseStabEngine;
 use state_vec_bindings::RsStateVec;
 use state_vec_engine_bindings::PyStateVecEngine;
+use engine_builders::{PyQasmProgram, PyLlvmProgram, PyHugrProgram, PyPhirJsonProgram};
 
 /// A Python module implemented in Rust.
 #[pymodule]
@@ -48,12 +50,35 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RsStateVec>()?;
     m.add_class::<PyByteMessage>()?;
     m.add_class::<PyByteMessageBuilder>()?;
+    m.add_class::<shot_results_bindings::PyShotVec>()?;
+    m.add_class::<shot_results_bindings::PyShotMap>()?;
     m.add_class::<PyStateVecEngine>()?;
     m.add_class::<PySparseStabEngine>()?;
     m.add_class::<RngPcg>()?;
 
     // Register QASM simulation functions
     // qasm_sim_bindings::register_qasm_sim_module(m)?;
+    
+    // Register the unified sim() function
+    sim::register_sim(m)?;
+
+    // Register program types
+    m.add_class::<PyQasmProgram>()?;
+    m.add_class::<PyLlvmProgram>()?;
+    m.add_class::<PyHugrProgram>()?;
+    m.add_class::<PyPhirJsonProgram>()?;
+
+    // Register engine builder functions
+    m.add_function(wrap_pyfunction!(engine_builders::qasm_engine, m)?)?;
+    m.add_function(wrap_pyfunction!(engine_builders::llvm_engine, m)?)?;
+    m.add_function(wrap_pyfunction!(engine_builders::selene_engine, m)?)?;
+    m.add_function(wrap_pyfunction!(engine_builders::phir_json_engine, m)?)?;
+    m.add_function(wrap_pyfunction!(engine_builders::general_noise, m)?)?;
+    m.add_function(wrap_pyfunction!(engine_builders::depolarizing_noise, m)?)?;
+    m.add_function(wrap_pyfunction!(engine_builders::biased_depolarizing_noise, m)?)?;
+    m.add_function(wrap_pyfunction!(engine_builders::state_vector, m)?)?;
+    m.add_function(wrap_pyfunction!(engine_builders::sparse_stabilizer, m)?)?;
+    m.add_function(wrap_pyfunction!(engine_builders::sparse_stab, m)?)?;
 
     Ok(())
 }

@@ -369,6 +369,24 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
                 })?;
             }
 
+            // Write results to file
+            std::fs::write(file_path, results_str)
+                .map_err(|e| PecosError::Resource(format!("Failed to write output file: {e}")))?;
+            
+            // For QIR, ensure file is fully written before potential segfault
+            if program_type == ProgramType::QIR {
+                // Force sync to disk
+                if let Ok(file) = std::fs::OpenOptions::new().write(true).open(file_path) {
+                    let _ = file.sync_all();
+                }
+            }
+        }
+        None => {
+            // Print to stdout
+            println!("{}", results_str);
+        }
+    }
+
     // Force all output to be written
     let _ = std::io::stdout().flush();
     let _ = std::io::stderr().flush();

@@ -6,7 +6,8 @@ enabling custom classical computations within quantum circuits.
 
 import tempfile
 import os
-from pecos_rslib.qasm_sim import qasm_sim
+from pecos_rslib import sim, qasm_engine
+from pecos_rslib.programs import QasmProgram
 
 
 def create_math_wat():
@@ -75,7 +76,8 @@ def example_basic_wasm():
 
     try:
         # Run simulation with WASM
-        results = qasm_sim(qasm).wasm(wat_path).run(5)
+        engine_builder = qasm_engine().program(QasmProgram.from_string(qasm)).wasm(wat_path)
+        results = engine_builder.to_sim().run(5)
 
         # Display results
         for shot in range(5):

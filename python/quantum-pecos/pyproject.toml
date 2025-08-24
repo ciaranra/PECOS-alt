@@ -73,9 +73,6 @@ wasmtime = [
 visualization = [
     "plotly~=5.9.0",
 ]
-guppy = [  # Guppy quantum programming language integration
-    "guppylang==0.21.1",  # Pin to latest version for HUGR 0.20 compatibility
-]
 simulators = [
     "quantum-pecos[projectq]",
     "quantum-pecos[qulacs]; python_version < '3.13'",

@@ -198,10 +198,10 @@ impl LlvmLinker {
 
         // Check if the library file exists
         if library_file.exists() {
-            // Check if library is newer than QIR file
+            // Check if library is newer than LLVM file
             if let Ok(lib_metadata) = fs::metadata(&library_file)
                 && let Ok(lib_modified) = lib_metadata.modified()
-                && lib_modified >= qir_modified
+                && lib_modified >= llvm_modified
             {
                 return Ok(Some(library_file));
             }

@@ -608,7 +608,6 @@ pub struct PyDepolarizingNoiseModelBuilder {
             inner: self.inner.clone().with_p2_probability(p)
         })
     }
-}
 
     /// Set average error probability for two-qubit gates.
     ///
@@ -923,7 +922,7 @@ pub struct PyDepolarizingNoiseModelBuilder {
 
     #[allow(clippy::unused_self)]
     fn __repr__(&self) -> String {
-        "GeneralNoiseModelBuilder()".to_string()
+        "QasmSimBuilder(<configured>)".to_string()
     }
 }
 
