@@ -1,8 +1,9 @@
 //! Tests for Selene LLVM execution capabilities
 
-use pecos_selene::{SeleneEngine, SeleneProgram};
-use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine, ControlEngine, EngineStage};
+use pecos_selene::{SeleneExecutableEngine, SeleneProgram};
+use pecos_engines::{ClassicalEngine, ControlEngine, EngineStage};
 use pecos_core::prelude::PecosError;
+use pecos_programs::LlvmProgram;
 
 #[test]
 fn test_selene_llvm_ir_execution() -> Result<(), PecosError> {
@@ -35,14 +36,11 @@ entry:
 attributes #0 = { "EntryPoint" }
 "#;
     
-    // Create SeleneEngine with LLVM IR
-    let mut engine = SeleneEngine::new(
-        SeleneProgram::LlvmIr(bell_state_llvm.to_string()),
-        2, // 2 qubits
-        false, // no optimization
-    );
+    // Create SeleneExecutableEngine with LLVM IR
+    let mut engine = SeleneExecutableEngine::new(2)?
+        .with_llvm_program(LlvmProgram::from_ir(bell_state_llvm));
     
-    println!("Created SeleneEngine with Bell state LLVM IR");
+    println!("Created SeleneExecutableEngine with Bell state LLVM IR");
     
     // Test compilation
     engine.compile()?;
@@ -104,11 +102,8 @@ attributes #0 = { "EntryPoint" }
 "#;
     
     // Create engine as ControlEngine
-    let mut engine = SeleneEngine::new(
-        SeleneProgram::LlvmIr(adaptive_llvm.to_string()),
-        2,
-        false,
-    );
+    let mut engine = SeleneExecutableEngine::new(2)?
+        .with_llvm_program(LlvmProgram::from_ir(adaptive_llvm));
     
     // Start the control flow
     match engine.start(())? {
@@ -148,7 +143,7 @@ fn test_selene_llvm_parsing() -> Result<(), PecosError> {
     println!("=== Testing Selene LLVM IR Parsing ===");
     
     // Complex LLVM IR with various quantum operations
-    let complex_llvm = r#"
+    let mixed_llvm = r#"
 declare void @__quantum__qis__h__body(i64)
 declare void @__quantum__qis__x__body(i64)
 declare void @__quantum__qis__rz__body(double, i64)
@@ -181,11 +176,8 @@ entry:
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let mut engine = SeleneEngine::new(
-        SeleneProgram::LlvmIr(complex_llvm.to_string()),
-        2,
-        false,
-    );
+    let mut engine = SeleneExecutableEngine::new(2)?
+        .with_llvm_program(LlvmProgram::from_ir(mixed_llvm));
     
     // Generate commands
     let commands = engine.generate_commands()?;
@@ -253,11 +245,8 @@ define void @simple_test() #0 {
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let engine = SeleneEngine::new(
-        SeleneProgram::LlvmIr(simple_llvm.to_string()),
-        1,
-        false,
-    );
+    let engine = SeleneExecutableEngine::new(1)?
+        .with_llvm_program(LlvmProgram::from_ir(simple_llvm));
     
     // Verify it implements all required traits for HybridEngine
     fn assert_is_classical_engine<T: ClassicalEngine>(_: &T) {}
@@ -268,12 +257,12 @@ attributes #0 = { "EntryPoint" }
     assert_is_control_engine(&engine);
     assert_is_send_sync_clone(&engine);
     
-    println!("SeleneEngine satisfies all trait requirements for HybridEngine");
+    println!("SeleneExecutableEngine satisfies all trait requirements for HybridEngine");
     
     // Test cloning for parallel execution
     let cloned = engine.clone();
     assert_eq!(cloned.num_qubits(), engine.num_qubits());
-    println!("SeleneEngine can be cloned for parallel workers");
+    println!("SeleneExecutableEngine can be cloned for parallel workers");
     
     Ok(())
 }

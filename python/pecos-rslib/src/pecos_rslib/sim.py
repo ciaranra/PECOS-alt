@@ -59,6 +59,15 @@ from pecos_rslib._pecos_rslib import (
 # Import our Python wrapper for selene_engine with Guppy support
 from pecos_rslib.selene_engine import selene_engine, SeleneEngineBuilder
 
+# Automatically set up Bridge plugin integration for Selene
+try:
+    from pecos_rslib.selene_auto_bridge import _auto_patched
+    if _auto_patched:
+        import logging
+        logging.getLogger(__name__).info("Bridge plugin auto-integration enabled")
+except ImportError:
+    pass  # Bridge plugin not available
+
 # Re-export for convenience
 __all__ = [
     "qasm_engine",
@@ -88,8 +97,10 @@ __all__ = [
     "biased_depolarizing_noise",
 ]
 
-# Import the sim function from Rust
-from pecos_rslib._pecos_rslib import sim as _rust_sim
-
-# Re-export the Rust sim function
-sim = _rust_sim
+# Import the enhanced sim function that handles Guppy
+try:
+    from pecos_rslib.sim_wrapper import sim
+except ImportError:
+    # Fall back to Rust sim if wrapper not available
+    from pecos_rslib._pecos_rslib import sim as _rust_sim
+    sim = _rust_sim

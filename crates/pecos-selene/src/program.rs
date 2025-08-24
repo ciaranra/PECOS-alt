@@ -30,4 +30,6 @@ pub enum SeleneProgram {
     HugrFile(PathBuf),
     /// Compiled plugin file (.so)
     Plugin(PathBuf),
+    /// Compiled plugin bytes (for SeleneInterfaceProgram)
+    PluginBytes(Vec<u8>),
 }

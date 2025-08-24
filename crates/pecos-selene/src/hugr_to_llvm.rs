@@ -545,7 +545,7 @@ impl GuppylangCompiler {
         // Build edge map for dataflow tracking
         let mut edge_map: HashMap<usize, Vec<usize>> = HashMap::new();
         let mut reverse_edge_map: HashMap<usize, Vec<usize>> = HashMap::new(); // Maps target -> sources
-        for (i, edge) in edges.iter().enumerate() {
+        for (_i, edge) in edges.iter().enumerate() {
             // HUGR 0.13 edges are arrays: [[src_node, src_port], [tgt_node, tgt_port]]
             if let Some(edge_array) = edge.as_array() {
                 if edge_array.len() >= 2 {
@@ -798,7 +798,7 @@ impl GuppylangCompiler {
         Ok(())
     }
     
-    fn find_input_qubit(&self, node_id: usize, edge_map: &HashMap<usize, Vec<usize>>, nodes: &[serde_json::Value]) -> Option<String> {
+    fn find_input_qubit(&self, node_id: usize, edge_map: &HashMap<usize, Vec<usize>>, _nodes: &[serde_json::Value]) -> Option<String> {
         log::debug!("find_input_qubit called for node {}", node_id);
         
         // First check if we have this node in our dataflow map

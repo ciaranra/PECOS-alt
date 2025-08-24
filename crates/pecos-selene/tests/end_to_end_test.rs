@@ -7,10 +7,9 @@
 //! 4. Classical control flow
 //! 5. Error handling and edge cases
 
-use pecos_selene::{selene_engine, SeleneEngine};
+use pecos_selene::{selene_executable, SeleneExecutableEngine};
 use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine, sim_builder, Engine};
 use pecos_core::prelude::PecosError;
-use pecos_selene::program::SeleneProgram;
 use pecos_programs::LlvmProgram;
 
 #[test]
@@ -38,10 +37,9 @@ attributes #0 = { "EntryPoint" }
     
     // First test: Direct engine usage (bypassing full simulation infrastructure)
     println!("Testing direct engine usage...");
-    let mut engine = selene_engine()
+    let mut engine = selene_executable()
         .program(LlvmProgram::from_ir(bell_llvm))
         .qubits(2)
-        .optimize(true)
         .build()?;
     
     // Process a single shot directly
@@ -50,7 +48,7 @@ attributes #0 = { "EntryPoint" }
     
     // Check engine details
     let engine_any = engine.as_any();
-    if let Some(selene_engine) = engine_any.downcast_ref::<SeleneEngine>() {
+    if let Some(selene_engine) = engine_any.downcast_ref::<SeleneExecutableEngine>() {
         println!("SeleneEngine details:");
         println!("  num_qubits: {}", selene_engine.num_qubits());
         // Note: optimize and plugin_library_path are private fields
@@ -60,10 +58,9 @@ attributes #0 = { "EntryPoint" }
     // Now test with full simulation infrastructure
     println!("\nTesting with full simulation infrastructure...");
     let results = sim_builder()
-        .classical(selene_engine()
+        .classical(selene_executable()
         .program(LlvmProgram::from_ir(bell_llvm))
-        .qubits(2)
-        .optimize(true))
+        .qubits(2))
         .seed(42)
         .workers(1)  // Use single worker for easier debugging
         .run(10)?;   // Run fewer shots for testing
@@ -124,10 +121,9 @@ attributes #0 = { "EntryPoint" }
     
     // Execute with new unified API
     let results = sim_builder()
-        .classical(selene_engine()
+        .classical(selene_executable()
         .program(LlvmProgram::from_ir(adaptive_llvm))
-        .qubits(2)
-        .optimize(true))
+        .qubits(2))
         .seed(123)
         .workers(4)
         .run(500)?;
@@ -163,7 +159,7 @@ fn test_end_to_end_hugr_program() -> Result<(), PecosError> {
         println!("Creating SeleneEngine with HUGR program");
         
         // Try to run - expect HUGR compilation to fail due to missing main function
-        let results = sim_builder().classical(selene_engine()
+        let results = sim_builder().classical(selene_executable()
             .hugr(hugr)
             .qubits(1))
             .seed(456)
@@ -210,7 +206,7 @@ attributes #0 = { "EntryPoint" }
     
     // Run with seed
     let llvm_results = sim_builder()
-        .classical(selene_engine()
+        .classical(selene_executable()
         .program(LlvmProgram::from_ir(simple_llvm))
         .qubits(1))
         .seed(789)
@@ -233,7 +229,7 @@ fn test_end_to_end_error_recovery() -> Result<(), PecosError> {
     println!("=== End-to-End: Error Recovery ===");
     
     // Test 1: Empty program
-    let empty_engine = selene_engine()
+    let empty_engine = selene_executable()
         .program(LlvmProgram::from_ir(""))
         .qubits(1)
         .build();
@@ -256,7 +252,7 @@ define void @invalid() #0 {
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let invalid_result = selene_engine()
+    let invalid_result = selene_executable()
         .program(LlvmProgram::from_ir(invalid_llvm))
         .qubits(0) // Invalid: 0 qubits
         .build();
@@ -323,10 +319,10 @@ attributes #0 = { "EntryPoint" }
     let start = std::time::Instant::now();
     
     let results = sim_builder()
-        .classical(selene_engine()
+        .classical(selene_executable()
         .program(LlvmProgram::from_ir(large_llvm))
         .qubits(4)
-        .optimize(true))
+        )
         .seed(999)
         .workers(4)  // Use multiple workers
         .run(2000)?; // More shots
@@ -360,23 +356,19 @@ define void @direct_test() #0 {
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let engine = SeleneEngine::new(
-        SeleneProgram::LlvmIr(direct_llvm.to_string()),
-        1,
-        true, // optimize
-    );
+    let engine = SeleneExecutableEngine::new(1)?;
     
-    println!("Created SeleneEngine directly");
+    println!("Created SeleneExecutableEngine directly");
     
     // Verify it implements the required traits
     assert_eq!(engine.num_qubits(), 1);
     
     // Run through PECOS using the builder API instead
     let results = sim_builder()
-        .classical(selene_engine()
+        .classical(selene_executable()
         .program(LlvmProgram::from_ir(direct_llvm))
         .qubits(1)
-        .optimize(true))
+        )
         .seed(555)
         .workers(1)
         .run(100)?;

@@ -4,6 +4,8 @@
 //! - ByteMessage simulator plugin that collects quantum operations
 //! - HUGR to LLVM compilation utilities
 
+pub mod communication;
+
 use selene_core::{
     export_runtime_plugin,
     runtime::{BatchOperation, Operation, RuntimeInterface, interface::RuntimeInterfaceFactory},
@@ -12,6 +14,7 @@ use selene_core::{
 };
 use std::collections::{VecDeque, HashMap};
 use anyhow::{Result, anyhow};
+use communication::{FileChannel, COMM_DIR_ENV};
 
 /// A simulator that collects quantum operations for ByteMessage conversion
 pub struct ByteMessageSimulator {
@@ -200,16 +203,31 @@ impl RuntimeInterface for ByteMessageSimulator {
         Ok(())
     }
     
-    fn get_result(&mut self, result_id: u64) -> Result<Option<bool>> {
+    fn get_bool_result(&mut self, result_id: u64) -> Result<Option<bool>> {
         Ok(self.measurement_results.get(&result_id).copied())
     }
     
-    fn set_result(&mut self, result_id: u64, result: bool) -> Result<()> {
+    fn get_u64_result(&mut self, _result_id: u64) -> Result<Option<u64>> {
+        // We don't use u64 results in our simple simulator
+        Ok(None)
+    }
+    
+    fn set_bool_result(&mut self, result_id: u64, result: bool) -> Result<()> {
         #[cfg(feature = "logging")]
         log::debug!("ByteMessageSimulator: Set result {} = {}", result_id, result);
         
         self.measurement_results.insert(result_id, result);
         Ok(())
+    }
+    
+    fn set_u64_result(&mut self, _result_id: u64, _result: u64) -> Result<()> {
+        // We don't use u64 results in our simple simulator
+        Ok(())
+    }
+    
+    fn measure_leaked(&mut self, _qubit: u64) -> Result<u64> {
+        // Return 0 for non-leaked state (we don't model leakage)
+        Ok(0)
     }
 }
 

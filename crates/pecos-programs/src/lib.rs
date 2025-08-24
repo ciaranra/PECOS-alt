@@ -281,6 +281,63 @@ impl fmt::Display for PhirJsonProgram {
     }
 }
 
+/// A Selene Interface Program (compiled plugin)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SeleneInterfaceProgram {
+    /// The compiled plugin data (shared library bytes) or executable metadata
+    pub plugin: Vec<u8>,
+    /// Optional: Path to the Selene executable (for pre-compiled executables)
+    pub executable_path: Option<String>,
+    /// Optional: Path to the artifacts directory
+    pub artifacts_path: Option<String>,
+}
+
+impl SeleneInterfaceProgram {
+    /// Create a Selene Interface program from plugin bytes
+    pub fn from_bytes(bytes: Vec<u8>) -> Self {
+        Self { 
+            plugin: bytes,
+            executable_path: None,
+            artifacts_path: None,
+        }
+    }
+    
+    /// Create a Selene Interface program with executable paths
+    pub fn from_executable(executable_path: String, artifacts_path: String, plugin_bytes: Vec<u8>) -> Self {
+        Self {
+            plugin: plugin_bytes,
+            executable_path: Some(executable_path),
+            artifacts_path: Some(artifacts_path),
+        }
+    }
+
+    /// Create a Selene Interface program by reading from a file
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
+        let plugin = std::fs::read(path)?;
+        Ok(Self { 
+            plugin,
+            executable_path: None,
+            artifacts_path: None,
+        })
+    }
+
+    /// Get the plugin bytes
+    pub fn bytes(&self) -> &[u8] {
+        &self.plugin
+    }
+
+    /// Get the plugin bytes as a Vec (consuming self)
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.plugin
+    }
+}
+
+impl fmt::Display for SeleneInterfaceProgram {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "SeleneInterfaceProgram({} bytes)", self.plugin.len())
+    }
+}
+
 /// Enum for runtime dispatch of program types
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Program {
@@ -296,6 +353,8 @@ pub enum Program {
     Wat(WatProgram),
     /// A PHIR JSON program
     PhirJson(PhirJsonProgram),
+    /// A Selene Interface program (compiled plugin)
+    SeleneInterface(SeleneInterfaceProgram),
 }
 
 impl Program {
@@ -308,6 +367,7 @@ impl Program {
             Program::Wasm(_) => "WASM",
             Program::Wat(_) => "WAT",
             Program::PhirJson(_) => "PHIR-JSON",
+            Program::SeleneInterface(_) => "SELENE-INTERFACE",
         }
     }
 }
@@ -348,6 +408,12 @@ impl From<PhirJsonProgram> for Program {
     }
 }
 
+impl From<SeleneInterfaceProgram> for Program {
+    fn from(program: SeleneInterfaceProgram) -> Self {
+        Program::SeleneInterface(program)
+    }
+}
+
 impl fmt::Display for Program {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -357,6 +423,7 @@ impl fmt::Display for Program {
             Program::Wasm(p) => write!(f, "{p}"),
             Program::Wat(p) => write!(f, "WAT: {p}"),
             Program::PhirJson(p) => write!(f, "PHIR-JSON: {p}"),
+            Program::SeleneInterface(p) => write!(f, "{p}"),
         }
     }
 }

@@ -10,7 +10,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # Selene core for RuntimeInterface trait
-selene-core = { git = "https://github.com/CQCL/selene.git", rev = "4bd8bce4c09b09f8e7e1b2ece04acf1b6d32819a", package = "selene-core" }
+selene-core = { git = "https://github.com/CQCL/selene.git", rev = "f9e14c4c218feea85ba7c23048eb5118d6a4ed8c" }
 
 # For error handling
 anyhow = "1.0"

@@ -4,10 +4,14 @@
 //! maintaining the same API pattern: engine().program(...).to_sim()
 
 use pecos_llvm_sim::{llvm_engine as rust_llvm_engine, LlvmEngineBuilder as RustLlvmEngineBuilder};
-use pecos_selene::{selene_engine as rust_selene_engine, SeleneEngineBuilder as RustSeleneEngineBuilder};
+use pecos_selene::{
+    selene_executable as rust_selene_executable, 
+    SeleneExecutableEngineBuilder as RustSeleneEngineBuilder,
+    SeleneInProcessEngine,
+};
 use pecos_qasm::{qasm_engine as rust_qasm_engine, QasmEngineBuilder as RustQasmEngineBuilder};
 use pecos_phir_json::{phir_json_engine as rust_phir_json_engine, PhirJsonEngineBuilder as RustPhirJsonEngineBuilder};
-use pecos_programs::{LlvmProgram, HugrProgram, QasmProgram, PhirJsonProgram};
+use pecos_programs::{LlvmProgram, HugrProgram, QasmProgram, PhirJsonProgram, SeleneInterfaceProgram};
 use pecos_engines::quantum_engine_builder::{
     StateVectorEngineBuilder as RustStateVectorEngineBuilder,
     SparseStabilizerEngineBuilder as RustSparseStabilizerEngineBuilder,
@@ -145,7 +149,7 @@ impl PySeleneEngineBuilder {
     #[new]
     fn new() -> Self {
         Self {
-            inner: rust_selene_engine(),
+            inner: rust_selene_executable(),
         }
     }
 
@@ -169,8 +173,12 @@ impl PySeleneEngineBuilder {
     }
     
     /// Set a plugin file for this engine
+    /// Note: SeleneExecutableEngine uses the built-in PecosSeleneBridgeSimulator by default,
+    /// but you can override it with a custom plugin path if needed.
     #[pyo3(signature = (path))]
     fn plugin(&mut self, path: &str) -> PyResult<Self> {
+        // While the bridge approach uses the built-in PecosSeleneBridgeSimulator by default,
+        // we allow specifying a custom plugin path for flexibility
         self.inner = self.inner.clone().plugin(path);
         Ok(self.clone())
     }
@@ -334,6 +342,36 @@ pub struct PyPhirJsonSimBuilder {
     pub(crate) explicit_num_qubits: Option<usize>,
 }
 
+/// Internal Selene Runtime simulation builder state (for SeleneInterfaceProgram)
+pub struct PySeleneRuntimeSimBuilder {
+    pub(crate) engine_builder: Arc<Mutex<Option<pecos_selene::selene_simple_runtime_builder::SeleneSimpleRuntimeEngineBuilder>>>,
+    pub(crate) seed: Option<u64>,
+    pub(crate) workers: Option<usize>,
+    pub(crate) quantum_engine_builder: Option<PyObject>,
+    pub(crate) noise_builder: Option<PyObject>,
+    pub(crate) explicit_num_qubits: Option<usize>,
+}
+
+/// Builder for Selene executable engine with bridge approach
+pub struct PySeleneExecutableSimBuilder {
+    pub(crate) engine_builder: Arc<Mutex<Option<pecos_selene::selene_executable_builder::SeleneExecutableEngineBuilder>>>,
+    pub(crate) seed: Option<u64>,
+    pub(crate) workers: Option<usize>,
+    pub(crate) quantum_engine_builder: Option<PyObject>,
+    pub(crate) noise_builder: Option<PyObject>,
+    pub(crate) explicit_num_qubits: Option<usize>,
+}
+
+/// Builder for Selene library engine (newest approach for HUGR/Guppy)
+pub struct PySeleneLibrarySimBuilder {
+    pub(crate) program: Option<PyObject>,  // Store the Python program (Guppy or HUGR)
+    pub(crate) seed: Option<u64>,
+    pub(crate) workers: Option<usize>,
+    pub(crate) quantum_engine_builder: Option<PyObject>,
+    pub(crate) noise_builder: Option<PyObject>,
+    pub(crate) explicit_num_qubits: Option<usize>,
+}
+
 /// Python wrapper for program types
 #[pyclass(name = "QasmProgram")]
 #[derive(Clone)]
@@ -413,6 +451,44 @@ impl PyPhirJsonProgram {
     }
 }
 
+#[pyclass(name = "SeleneInterfaceProgram")]
+#[derive(Clone)]
+pub struct PySeleneInterfaceProgram {
+    pub(crate) inner: SeleneInterfaceProgram,
+}
+
+#[pymethods]
+impl PySeleneInterfaceProgram {
+    #[staticmethod]
+    fn from_bytes(plugin_bytes: Vec<u8>) -> Self {
+        PySeleneInterfaceProgram {
+            inner: SeleneInterfaceProgram::from_bytes(plugin_bytes),
+        }
+    }
+    
+    #[staticmethod]
+    fn from_executable(executable_path: String, artifacts_path: String, plugin_bytes: Vec<u8>) -> Self {
+        PySeleneInterfaceProgram {
+            inner: SeleneInterfaceProgram::from_executable(executable_path, artifacts_path, plugin_bytes),
+        }
+    }
+    
+    /// Get the plugin bytes
+    fn bytes(&self) -> Vec<u8> {
+        self.inner.bytes().to_vec()
+    }
+    
+    /// Get the executable path if available
+    fn executable_path(&self) -> Option<String> {
+        self.inner.executable_path.clone()
+    }
+    
+    /// Get the artifacts path if available  
+    fn artifacts_path(&self) -> Option<String> {
+        self.inner.artifacts_path.clone()
+    }
+}
+
 /// Create a QASM engine builder
 #[pyfunction]
 pub fn qasm_engine() -> PyQasmEngineBuilder {
@@ -433,7 +509,7 @@ pub fn llvm_engine() -> PyLlvmEngineBuilder {
 #[pyfunction]
 pub fn selene_engine() -> PySeleneEngineBuilder {
     PySeleneEngineBuilder {
-        inner: rust_selene_engine(),
+        inner: rust_selene_executable(),
     }
 }
 
@@ -1036,6 +1112,120 @@ pub fn sparse_stab() -> PySparseStabilizerEngineBuilder {
     sparse_stabilizer()
 }
 
+/// Configuration for SeleneExecutableEngine
+#[pyclass(name = "SeleneExecutableConfig")]
+#[derive(Clone)]
+pub struct PySeleneExecutableConfig {
+    pub executable_path: String,
+    pub runtime_plugin_path: String,
+    pub error_model_plugin_path: String,
+    pub bridge_simulator_plugin_path: String,
+    pub working_dir: String,
+    pub num_qubits: usize,
+}
+
+#[pymethods]
+impl PySeleneExecutableConfig {
+    #[new]
+    fn new(
+        executable_path: String,
+        runtime_plugin_path: String,
+        error_model_plugin_path: String,
+        bridge_simulator_plugin_path: String,
+        working_dir: String,
+        num_qubits: usize,
+    ) -> Self {
+        Self {
+            executable_path,
+            runtime_plugin_path,
+            error_model_plugin_path,
+            bridge_simulator_plugin_path,
+            working_dir,
+            num_qubits,
+        }
+    }
+}
+
+/// Python wrapper for SeleneExecutableEngine
+#[pyclass(name = "SeleneExecutableEngine")]
+#[derive(Clone)]
+pub struct PySeleneExecutableEngine {
+    pub num_qubits: usize,
+    pub config: Option<PySeleneExecutableConfig>,
+}
+
+#[pymethods]
+impl PySeleneExecutableEngine {
+    #[staticmethod]
+    fn new(num_qubits: usize) -> Self {
+        Self {
+            num_qubits,
+            config: None,
+        }
+    }
+    
+    fn with_config(&mut self, config: PySeleneExecutableConfig) -> Self {
+        self.config = Some(config);
+        self.clone()
+    }
+}
+
+/// Python wrapper for SeleneInProcessEngine
+#[pyclass(name = "SeleneInProcessEngine")]
+pub struct PySeleneInProcessEngine {
+    inner: SeleneInProcessEngine,
+}
+
+#[pymethods]
+impl PySeleneInProcessEngine {
+    #[new]
+    fn new(num_qubits: usize) -> PyResult<Self> {
+        let engine = SeleneInProcessEngine::new(num_qubits)
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to create engine: {}", e)))?;
+        Ok(PySeleneInProcessEngine { inner: engine })
+    }
+    
+    /// Set the Selene Interface Program
+    fn with_program(&mut self, program: &PySeleneInterfaceProgram) -> PyResult<()> {
+        let num_qubits = 1; // We'll use 1 for now
+        let new_engine = SeleneInProcessEngine::new(num_qubits)
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to create engine: {}", e)))?
+            .with_program(program.inner.clone());
+        self.inner = new_engine;
+        Ok(())
+    }
+    
+    /// Process a single shot
+    fn process(&mut self, _input: &Bound<'_, PyAny>) -> PyResult<PyObject> {
+        use pecos_engines::Engine;
+        let shot = self.inner.process(())
+            .map_err(|e| PyRuntimeError::new_err(format!("Processing failed: {}", e)))?;
+        
+        Python::with_gil(|py| {
+            let dict = pyo3::types::PyDict::new(py);
+            for (key, value) in shot.data.iter() {
+                match value {
+                    pecos_engines::shot_results::Data::U32(v) => {
+                        dict.set_item(key, v)?;
+                    }
+                    _ => {
+                        // Handle other data types if needed
+                    }
+                }
+            }
+            Ok(dict.into())
+        })
+    }
+}
+
+/// Create a SimBuilder from scratch without a program
+#[pyfunction]
+pub fn sim_builder() -> PySimBuilder {
+    PySimBuilder {
+        inner: SimBuilderInner::Empty,
+    }
+}
+
 /// Register the engine builder module with PyO3
 pub fn register_engine_builders(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Engine builders
@@ -1043,6 +1233,11 @@ pub fn register_engine_builders(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyLlvmEngineBuilder>()?;
     m.add_class::<PySeleneEngineBuilder>()?;
     m.add_class::<PyPhirJsonEngineBuilder>()?;
+    
+    // Selene Executable Engine
+    m.add_class::<PySeleneExecutableConfig>()?;
+    m.add_class::<PySeleneExecutableEngine>()?;
+    m.add_class::<PySeleneInProcessEngine>()?;
     
     // Simulation builders are now handled by the unified PySimBuilder in sim.rs
     
@@ -1070,6 +1265,9 @@ pub fn register_engine_builders(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(llvm_engine, m)?)?;
     m.add_function(wrap_pyfunction!(selene_engine, m)?)?;
     m.add_function(wrap_pyfunction!(phir_json_engine, m)?)?;
+    
+    // SimBuilder function
+    m.add_function(wrap_pyfunction!(sim_builder, m)?)?;
     
     // Noise builder functions
     m.add_function(wrap_pyfunction!(general_noise, m)?)?;

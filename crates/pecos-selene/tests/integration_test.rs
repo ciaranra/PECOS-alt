@@ -1,6 +1,6 @@
 //! Integration tests for pecos-selene-eng
 
-use pecos_selene::selene_engine;
+use pecos_selene::selene_executable;
 use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine, ControlEngine, sim_builder};
 use pecos_programs::LlvmProgram;
 
@@ -25,7 +25,7 @@ attributes #0 = { "EntryPoint" }
 "#;
     
     let result = sim_builder()
-        .classical(selene_engine()
+        .classical(selene_executable()
         .program(LlvmProgram::from_ir(llvm_ir))
         .qubits(1))
         .run(1);
@@ -56,7 +56,7 @@ attributes #0 = { "EntryPoint" }
 "#;
     
     let results = sim_builder()
-        .classical(selene_engine()
+        .classical(selene_executable()
         .program(LlvmProgram::from_ir(bell_llvm))
         .qubits(2))
         .run(2);  // Reduced from 100 to 2 for debugging
@@ -90,10 +90,10 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     let results = sim_builder()
-        .classical(selene_engine()
+        .classical(selene_executable()
         .program(LlvmProgram::from_ir(simple_llvm))
         .qubits(1)
-        .optimize(true))
+        )
         .run(1);
     
     assert!(results.is_ok());
@@ -115,7 +115,7 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     let results = sim_builder()
-        .classical(selene_engine()
+        .classical(selene_executable()
         .program(LlvmProgram::from_ir(test_llvm))
         .qubits(1))
         .seed(12345)
@@ -140,7 +140,7 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     let results = sim_builder()
-        .classical(selene_engine()
+        .classical(selene_executable()
         .program(LlvmProgram::from_ir(parallel_llvm))
         .qubits(1))
         .workers(4)
@@ -162,7 +162,7 @@ define void @traits() #0 {
 attributes #0 = { "EntryPoint" }
 "#;
 
-    let engine = selene_engine()
+    let engine = selene_executable()
         .program(LlvmProgram::from_ir(trait_llvm))
         .qubits(1)
         .build();
@@ -176,7 +176,7 @@ attributes #0 = { "EntryPoint" }
 
 #[test]
 fn test_invalid_program() {
-    let engine = selene_engine()
+    let engine = selene_executable()
         .program(LlvmProgram::from_ir("")) // Empty IR
         .qubits(1)
         .build();
@@ -189,12 +189,14 @@ fn test_invalid_program() {
 
 #[test]
 fn test_missing_qubits() {
+    // Builder defaults to 10 qubits if not specified
     let result = sim_builder()
-        .classical(selene_engine()
+        .classical(selene_executable()
         .program(LlvmProgram::from_ir("test")))
         .build();
     
-    assert!(result.is_err());
+    // This should succeed with the default 10 qubits
+    assert!(result.is_ok());
 }
 
 #[test]
@@ -218,7 +220,7 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     let result = sim_builder()
-        .classical(selene_engine()
+        .classical(selene_executable()
         .program(LlvmProgram::from_ir(control_llvm))
         .qubits(2)
         .verbose(true))
@@ -244,7 +246,7 @@ define void @adaptive() #0 {
 attributes #0 = { "EntryPoint" }
 "#;
 
-    let mut engine = selene_engine()
+    let mut engine = selene_executable()
         .program(LlvmProgram::from_ir(adaptive_llvm))
         .qubits(1)
         .build()

@@ -75,7 +75,7 @@ impl CFGAwareCompiler {
                         edge_array[0].as_array(),
                         edge_array[1].as_array()
                     ) {
-                        if let (Some(src_node), Some(src_port), Some(tgt_node), Some(tgt_port)) = (
+                        if let (Some(src_node), Some(src_port), Some(tgt_node), Some(_tgt_port)) = (
                             src_arr.get(0).and_then(|n| n.as_u64()),
                             src_arr.get(1).and_then(|n| n.as_u64()),
                             tgt_arr.get(0).and_then(|n| n.as_u64()),
@@ -121,7 +121,7 @@ impl CFGAwareCompiler {
     }
 
     /// Find the successor of an Entry node
-    fn find_entry_successor(&self, nodes: &[Value], edges: &[Value], entry_id: usize) -> Option<usize> {
+    fn find_entry_successor(&self, _nodes: &[Value], edges: &[Value], entry_id: usize) -> Option<usize> {
         for edge in edges {
             if let Some(edge_array) = edge.as_array() {
                 if edge_array.len() >= 2 {
@@ -270,7 +270,7 @@ impl CFGAwareCompiler {
     }
 
     /// Find input qubit for an operation
-    fn find_input_qubit(&self, target_id: usize, edges: &[Value], nodes: &[Value]) -> Option<String> {
+    fn find_input_qubit(&self, target_id: usize, edges: &[Value], _nodes: &[Value]) -> Option<String> {
         // Similar to existing implementation but check our stored qubit_vars
         for edge in edges {
             if let Some(edge_array) = edge.as_array() {
@@ -296,7 +296,7 @@ impl CFGAwareCompiler {
     }
 
     /// Find input result (measurement) for a branch
-    fn find_input_result(&self, target_id: usize, edges: &[Value], nodes: &[Value]) -> Option<String> {
+    fn find_input_result(&self, target_id: usize, edges: &[Value], _nodes: &[Value]) -> Option<String> {
         for edge in edges {
             if let Some(edge_array) = edge.as_array() {
                 if edge_array.len() >= 2 {

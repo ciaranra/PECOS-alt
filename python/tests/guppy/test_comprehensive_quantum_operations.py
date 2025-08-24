@@ -66,7 +66,6 @@ except ImportError:
 
 try:
     from pecos.frontends.guppy_api import sim
-    from pecos.frontends.guppy_sim_builder import guppy_sim  # temporary, for migration
     from pecos_rslib import state_vector
     PECOS_AVAILABLE = True
 except ImportError:
@@ -76,7 +75,7 @@ except ImportError:
 def decode_integer_results(results: List[int], n_bits: int) -> List[Tuple[bool, ...]]:
     """Decode integer-encoded results back to tuples of booleans.
     
-    When guppy functions return tuples of bools, guppy_sim encodes them 
+    When guppy functions return tuples of bools, sim encodes them 
     as integers where bit i represents the i-th boolean in the tuple.
     """
     decoded = []
@@ -89,7 +88,7 @@ def decode_integer_results(results: List[int], n_bits: int) -> List[Tuple[bool, 
 
 
 def get_decoded_results(results: Dict[str, Any], key: str = "result", n_bits: int = None) -> List:
-    """Get decoded results from guppy_sim output.
+    """Get decoded results from sim output.
     
     Args:
         results: The results dictionary from guppy_sim
@@ -99,10 +98,30 @@ def get_decoded_results(results: Dict[str, Any], key: str = "result", n_bits: in
     Returns:
         List of decoded values (tuples if n_bits specified, raw values otherwise)
     """
-    # Handle new sim() API format with result_0, result_1, etc.
+    # Handle different result formats from sim()
     if key not in results and n_bits is not None:
-        # Try to reconstruct tuple results from individual result_N keys
-        if n_bits == 1:
+        # Try measurement_N format (new Selene format)
+        if "measurement_1" in results:
+            if n_bits == 1:
+                # For single bit, return the first measurement result
+                return [bool(v) for v in results["measurement_1"]]
+            else:
+                # For multiple bits, combine measurement_1, measurement_2, etc.
+                tuple_results = []
+                num_shots = len(results.get("measurement_1", []))
+                for shot_idx in range(num_shots):
+                    shot_result = []
+                    for bit_idx in range(n_bits):
+                        measurement_key = f"measurement_{bit_idx + 1}"
+                        if measurement_key in results:
+                            shot_result.append(bool(results[measurement_key][shot_idx]))
+                        else:
+                            shot_result.append(False)  # Default to False if missing
+                    tuple_results.append(tuple(shot_result))
+                return tuple_results
+        
+        # Try to reconstruct tuple results from individual result_N keys (old format)
+        elif n_bits == 1:
             # For single bit, return list of booleans, not tuples
             result_key = "result_0"
             if result_key in results:
@@ -343,6 +362,10 @@ class TestQuantumStateManagement:
             return measure(q)
         
         results = sim(allocation_test).qubits(10).run(100)
+        
+        # Debug: print what results we actually get
+        print(f"DEBUG: Actual results keys: {list(results.keys())}")
+        print(f"DEBUG: Results content: {results}")
         
         # New qubits should be in |0⟩
         decoded_results = get_decoded_results(results, n_bits=1)

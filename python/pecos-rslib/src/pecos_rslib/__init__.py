@@ -17,11 +17,39 @@ components within the PECOS framework, enabling efficient quantum circuit simula
 
 # ruff: noqa: TID252
 from importlib.metadata import PackageNotFoundError, version
+import os
+import ctypes
+from pathlib import Path
+
+# Load the actual Selene runtime library
+try:
+    selene_paths = [
+        # Use the real libselene.so from Selene repo
+        "../selene/target/debug/libselene.so",
+        "../selene/target/release/libselene.so",
+        # Fallback paths
+        "target/debug/libselene.so",
+        "target/release/libselene.so",
+    ]
+    selene_loaded = False
+    for path in selene_paths:
+        if os.path.exists(path):
+            ctypes.CDLL(path, mode=ctypes.RTLD_GLOBAL)
+            print(f"Loaded Selene runtime from: {path}")
+            selene_loaded = True
+            break
+    
+    if not selene_loaded:
+        print("Warning: Could not load Selene runtime library")
+except Exception as e:
+    print(f"Warning: Could not load Selene runtime: {e}")
 
 from pecos_rslib.rssparse_sim import SparseSimRs
 from pecos_rslib.rsstate_vec import StateVecRs
 from pecos_rslib._pecos_rslib import ByteMessage
 from pecos_rslib._pecos_rslib import ByteMessageBuilder
+
+# Note: Bridge plugin is now in quantum-pecos (pecos.engines.selene_bridge_plugin)
 from pecos_rslib._pecos_rslib import StateVecEngineRs
 from pecos_rslib._pecos_rslib import SparseStabEngineRs
 
@@ -57,6 +85,9 @@ from pecos_rslib._pecos_rslib import ShotMap
 #         raise ImportError("compile_hugr_to_llvm requires pecos-rslib to be compiled with hugr-013 feature")
 
 # LLVM and Selene are now part of the unified API
+
+# Selene library engine
+from pecos_rslib._pecos_rslib import SeleneLibraryEngine
 
 # Guppy conversion utilities - try importing but don't fail
 try:
@@ -107,12 +138,25 @@ except ImportError:
         def from_string(wat):
             raise ImportError("WatProgram not available")
 
-# Import the new sim API - directly from Rust module
+# Import the new sim API - use Python wrapper that handles Guppy
+# Note: We explicitly override the sim module with the sim function
 try:
-    from pecos_rslib._pecos_rslib import sim
+    # Try to import the wrapper that handles Guppy programs
+    from pecos_rslib.sim_wrapper import sim as _sim_func
+    sim = _sim_func  # Override any module import with the function
 except ImportError:
-    def sim(*args, **kwargs):
-        raise ImportError("sim() function not available - ensure pecos-rslib is built with sim support")
+    # Fall back to sim from sim.py module (which re-exports Rust sim)
+    try:
+        from pecos_rslib.sim import sim as _sim_func
+        sim = _sim_func  # Override any module import with the function
+    except ImportError:
+        # Last resort - try directly from Rust
+        try:
+            from pecos_rslib._pecos_rslib import sim as _sim_func
+            sim = _sim_func  # Override any module import with the function
+        except ImportError:
+            def sim(*args, **kwargs):
+                raise ImportError("sim() function not available - ensure pecos-rslib is built with sim support")
 
 # Try to import other sim-related functions but don't fail if unavailable
 try:

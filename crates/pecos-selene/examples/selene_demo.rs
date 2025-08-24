@@ -1,10 +1,10 @@
-//! Demonstration of the SeleneEngine
+//! Demonstration of the SeleneExecutableEngine
 //!
-//! This example shows how to use the SeleneEngine as a working
+//! This example shows how to use the SeleneExecutableEngine as a working
 //! Classical/Control Engine that implements PECOS traits.
 
 use env_logger;
-use pecos_selene::selene_engine;
+use pecos_selene::{selene_executable, SeleneExecutableEngine};
 use pecos_engines::{ClassicalEngine, Engine, ClassicalControlEngineBuilder, sim_builder};
 use pecos_programs::LlvmProgram;
 
@@ -42,11 +42,9 @@ entry:
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let engine = selene_engine()
+    let engine = selene_executable()
         .program(LlvmProgram::from_ir(bell_state_llvm))
         .qubits(2)
-        .optimize(true)
-        .verbose(true)
         .build()?;
 
     println!("✓ Successfully created SeleneEngine");
@@ -72,7 +70,7 @@ attributes #0 = { "EntryPoint" }
     // Run multiple shots
     println!("4. Running multiple shots...");
     let results = sim_builder()
-        .classical(selene_engine()
+        .classical(selene_executable()
             .program(LlvmProgram::from_ir(bell_state_llvm))
             .qubits(2))
         .seed(42)
@@ -90,16 +88,11 @@ attributes #0 = { "EntryPoint" }
 
     // Demonstrate direct construction
     println!("5. Direct engine construction...");
-    use pecos_selene::{SeleneEngine, program::SeleneProgram};
     
-    let _direct_engine = SeleneEngine::new(
-        SeleneProgram::LlvmIr(bell_state_llvm.to_string()),
-        2,
-        true, // optimize
-    );
+    let _direct_engine = SeleneExecutableEngine::new(2)?;
     
     println!("✓ Created engine directly");
-    println!("  Engine type: Selene");
+    println!("  Engine type: SeleneExecutable");
     println!("  Classical control: Yes");
     println!("  LLVM IR support: Yes");
     println!();

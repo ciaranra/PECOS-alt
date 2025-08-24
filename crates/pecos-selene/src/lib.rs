@@ -13,6 +13,8 @@
 //!
 //! ```rust,no_run
 //! # use pecos_selene::prelude::*;
+//! # use pecos_selene::{selene_executable, SeleneExecutableEngine};
+//! # use pecos_engines::Engine;
 //! # fn main() -> Result<(), PecosError> {
 //! // Simple LLVM IR for a Hadamard gate and measurement
 //! let simple_llvm = r#"
@@ -29,19 +31,14 @@
 //! "#;
 //!
 //! // Method 1: Using the builder pattern with LLVM IR  
-//! let engine = selene_engine()
+//! let engine = selene_executable()
 //!     .program(LlvmProgram::from_ir(simple_llvm))
 //!     .qubits(1)
-//!     .optimize(true)
-//!     .to_sim()
 //!     .build()?;
 //!
-//! // Method 2: Direct construction using real Selene components
-//! let mut engine2 = SeleneEngine::new(
-//!     SeleneProgram::LlvmIr(simple_llvm.to_string()),
-//!     1, // num_qubits
-//!     true // optimize
-//! );
+//! // Method 2: Direct construction 
+//! let mut engine2 = SeleneExecutableEngine::new(1)?
+//!     .with_llvm_program(LlvmProgram::from_ir(simple_llvm));
 //!
 //! // Use with PECOS quantum engines
 //! let shot = engine2.process(())?;
@@ -50,8 +47,18 @@
 //! ```
 
 
-pub mod selene_engine;
-pub mod engine_builder;
+// Selene FFI to ByteMessage bridge - provides the FFI functions that plugins expect
+// and converts them directly to ByteMessages for PECOS
+pub mod selene_ffi_to_bytemessage;
+
+pub mod selene_fast_engine;
+pub mod selene_simple_runtime_engine;
+pub mod selene_simple_runtime_builder;
+pub mod selene_executable_engine;
+pub mod selene_executable_builder;
+pub mod selene_in_process_engine;
+pub mod selene_runtime_init;
+pub mod selene_library_engine;
 pub mod error;
 pub mod prelude;
 pub mod program;
@@ -76,10 +83,32 @@ pub mod selene_hugr_compiler;
 #[cfg(feature = "python")]
 pub mod selene_wrapper;
 
+// Use Selene's SeleneInstance directly - this is the natural way to use Selene
+// SeleneInstance provides all FFI functions and manages the execution context
+
 // Note: The old selene_sim() API has been removed. Use selene_engine().to_sim() instead.
 // Noise models and quantum engine types are now provided by pecos-engines.
-pub use engine_builder::{selene_engine, SeleneEngineBuilder};
-pub use selene_engine::SeleneEngine;
+pub use selene_simple_runtime_builder::{selene_simple_runtime, SeleneSimpleRuntimeEngineBuilder};
+pub use selene_simple_runtime_engine::SeleneSimpleRuntimeEngine;
+
+// Export the new bridge-based approach
+pub use selene_executable_engine::{SeleneExecutableEngine, SeleneExecutableConfig};
+pub use selene_executable_builder::{selene_executable, SeleneExecutableEngineBuilder};
+
+// Export the in-process engine
+pub use selene_in_process_engine::{SeleneInProcessEngine, SeleneInProcessConfig};
+
+// Deprecated aliases for backward compatibility
+#[deprecated(note = "Use selene_simple_runtime() instead")]
+pub fn selene_engine() -> SeleneSimpleRuntimeEngineBuilder {
+    selene_simple_runtime()
+}
+
+#[deprecated(note = "Use SeleneSimpleRuntimeEngineBuilder instead")]
+pub type SeleneEngineBuilder = SeleneSimpleRuntimeEngineBuilder;
+
+#[deprecated(note = "Use SeleneExecutableEngine instead")]
+pub type SeleneEngine = SeleneSimpleRuntimeEngine;
 pub use error::SeleneError;
 pub use program::SeleneProgram;
 
@@ -89,65 +118,9 @@ mod tests {
     use pecos_engines::ClassicalControlEngineBuilder;
 
     #[test]
-    fn test_selene_sim_builder_creation() {
-        let builder = selene_engine();
+    fn test_selene_simple_runtime_builder_creation() {
+        let builder = selene_simple_runtime();
         assert!(builder.build().is_err()); // Should fail without program
-    }
-    
-    #[test]
-    fn test_selene_engine_integration() {
-        use pecos_engines::{Engine, ClassicalEngine, ControlEngine};
-        use crate::program::SeleneProgram;
-        
-        // Create the Selene engine using real selene-core components
-        let engine = SeleneEngine::new(
-            SeleneProgram::LlvmIr("bell_state_llvm_ir".to_string()),
-            2,
-            true,
-        );
-        
-        // Verify it implements all required PECOS traits
-        fn assert_is_engine<T: Engine>(_: &T) {}
-        fn assert_is_classical<T: ClassicalEngine>(_: &T) {}
-        fn assert_is_control<T: ControlEngine>(_: &T) {}
-        fn assert_is_send_sync<T: Send + Sync>(_: &T) {}
-        fn assert_is_clone<T: Clone>(_: &T) {}
-        
-        assert_is_engine(&engine);
-        assert_is_classical(&engine);
-        assert_is_control(&engine);
-        assert_is_send_sync(&engine);
-        assert_is_clone(&engine);
-        
-        // Verify basic properties
-        assert_eq!(engine.num_qubits(), 2);
-        
-        // Test that compilation works
-        assert!(engine.compile().is_ok());
-    }
-    
-    #[test]
-    fn test_clean_api_demonstration() {
-        use crate::program::SeleneProgram;
-        use pecos_programs::LlvmProgram;
-        
-        // Demonstrate the clean, simple API  
-        let _engine1 = SeleneEngine::new(
-            SeleneProgram::LlvmIr("bell_state".to_string()),
-            2,
-            true
-        );
-        
-        // Note: HUGR support requires resolving version compatibility
-        // between guppylang (HUGR 0.13) and PECOS (HUGR 0.20)
-        
-        // Builder pattern still works too
-        let _engine3 = selene_engine()
-            .program(LlvmProgram::from_ir("simple_circuit"))
-            .qubits(1)
-            .to_sim()
-            .build()
-            .expect("Should build successfully");
     }
 
 }

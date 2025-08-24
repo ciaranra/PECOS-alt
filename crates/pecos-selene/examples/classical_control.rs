@@ -4,7 +4,7 @@
 //! - Selene handles classical control flow and command generation
 //! - PECOS QuantumEngine handles the actual quantum simulation
 
-use pecos_selene::selene_engine;
+use pecos_selene::selene_executable;
 use pecos_programs::LlvmProgram;
 use pecos_engines::{ControlEngine, EngineStage, ByteMessageBuilder, ClassicalControlEngineBuilder, sim_builder};
 use pecos_core::prelude::PecosError;
@@ -60,11 +60,10 @@ attributes #0 = { "EntryPoint" }
 "#;
     
     // Create a Selene classical control engine
-    let mut engine = selene_engine()
+    let mut engine = selene_executable()
         .program(LlvmProgram::from_ir(feedback_llvm))
         .qubits(2)
-        .optimize(true)
-        .verbose(true)
+                .verbose(true)
         .build()?;
     
     println!("✓ Created SeleneEngine with feedback circuit");
@@ -150,7 +149,7 @@ attributes #0 = { "EntryPoint" }
     
     // Run adaptive algorithm using unified API
     let results = sim_builder()
-        .classical(selene_engine()
+        .classical(selene_executable()
             .program(LlvmProgram::from_ir(adaptive_llvm))
             .qubits(3))
         .run(10)?;

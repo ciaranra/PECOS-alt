@@ -147,6 +147,19 @@ pub fn load_hugr_013_package(hugr_bytes: &[u8]) -> Result<Package, crate::Selene
             
             // This is guppylang format - extract the first module directly
             if let Some(modules) = json_value.get("modules").and_then(|v| v.as_array()) {
+                if modules.is_empty() {
+                    // Empty modules array - create an empty package with no modules
+                    eprintln!("DEBUG: Empty modules array - creating empty package");
+                    
+                    // Create a truly empty package by constructing it directly
+                    // Package::from_hugr would add the hugr as a module
+                    let empty_package = Package {
+                        modules: vec![],
+                        extensions: vec![],
+                    };
+                    return Ok(empty_package);
+                }
+                
                 if let Some(first_module) = modules.first() {
                     eprintln!("DEBUG: Found module in modules array");
                     
@@ -156,9 +169,9 @@ pub fn load_hugr_013_package(hugr_bytes: &[u8]) -> Result<Package, crate::Selene
                     eprintln!("DEBUG: Creating placeholder HUGR for testing");
                     
                     // Extract metadata to understand the circuit
-                    let metadata = first_module.get("metadata");
+                    let _metadata = first_module.get("metadata");
                     let nodes = first_module.get("nodes");
-                    let edges = first_module.get("edges");
+                    let _edges = first_module.get("edges");
                     
                     // Log what we found in the module
                     if let Some(nodes_array) = nodes.and_then(|n| n.as_array()) {

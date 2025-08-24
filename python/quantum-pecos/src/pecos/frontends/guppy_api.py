@@ -1,8 +1,7 @@
 """Unified API for Guppy programs following the sim(program) pattern."""
 
 from typing import Any, Callable, TYPE_CHECKING
-from pecos_rslib import sim as rslib_sim, HugrProgram
-from pecos.compilation_pipeline import compile_guppy_to_hugr
+from pecos_rslib.sim_wrapper import sim as sim_wrapper
 
 if TYPE_CHECKING:
     from pecos_rslib import SimBuilder
@@ -57,7 +56,7 @@ def sim(program: Any):
     """Create a simulation builder for a program.
     
     This function detects the program type and creates the appropriate builder.
-    For Guppy functions, it converts them to HUGR and uses the Selene engine.
+    For Guppy functions, it uses the Python-side Selene compilation pipeline.
     
     Args:
         program: A Guppy function or other supported program type
@@ -84,25 +83,9 @@ def sim(program: Any):
         # Explicitly use state vector for non-Clifford gates
         results = sim(bell_state).qubits(2).quantum(state_vector()).run(1000)
     """
-    # Check if it's a Guppy function
-    is_guppy = (
-        hasattr(program, "_guppy_compiled") or
-        hasattr(program, "name") or
-        str(type(program)).find("GuppyDefinition") != -1 or
-        str(type(program)).find("GuppyFunctionDefinition") != -1
-    )
+    # Pass all programs to sim_wrapper for proper detection and routing
+    # This handles all program types including Guppy functions with Python-side Selene compilation
+    builder = sim_wrapper(program)
     
-    if is_guppy:
-        # Convert Guppy to HUGR and use PECOS infrastructure
-        # Selene will be used as the classical control engine on the Rust side
-        hugr_bytes = compile_guppy_to_hugr(program)
-        hugr_program = HugrProgram.from_bytes(hugr_bytes)
-        builder = rslib_sim(hugr_program)
-        
-        # Wrap the builder for compatibility
-        return GuppySimBuilderWrapper(builder)
-    else:
-        # Pass through to the standard sim for other program types
-        builder = rslib_sim(program)
-        # Also wrap non-Guppy programs for consistency
-        return GuppySimBuilderWrapper(builder)
+    # Wrap the builder for compatibility
+    return GuppySimBuilderWrapper(builder)

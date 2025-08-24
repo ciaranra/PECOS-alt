@@ -5,7 +5,7 @@
 //! - HybridEngine coordinates between classical and quantum execution
 //! - StateVecEngine (or other quantum engine) handles quantum operations
 
-use pecos_selene::selene_engine;
+use pecos_selene::selene_executable;
 use pecos_programs::LlvmProgram;
 use pecos_engines::{ClassicalControlEngineBuilder, 
     Engine,
@@ -41,11 +41,10 @@ entry:
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let selene_engine = selene_engine()
+    let selene_executable = selene_executable()
         .program(LlvmProgram::from_ir(bell_llvm))
         .qubits(2)
-        .optimize(true)
-        .verbose(true)
+                .verbose(true)
         .build()?;
     
     println!("Created SeleneEngine for Bell state");
@@ -56,7 +55,7 @@ attributes #0 = { "EntryPoint" }
     
     // Create hybrid engine combining classical and quantum
     let mut hybrid_engine = HybridEngineBuilder::new()
-        .with_classical_engine(Box::new(selene_engine))
+        .with_classical_engine(Box::new(selene_executable))
         .with_quantum_engine(Box::new(quantum_engine))
         .build();
     
@@ -118,7 +117,7 @@ entry:
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let selene_engine = selene_engine()
+    let selene_executable = selene_executable()
         .program(LlvmProgram::from_ir(adaptive_llvm))
         .qubits(2)
         .verbose(true)
@@ -127,7 +126,7 @@ attributes #0 = { "EntryPoint" }
     let quantum_engine = StateVecEngine::new(2);
     
     let mut hybrid_engine = HybridEngineBuilder::new()
-        .with_classical_engine(Box::new(selene_engine))
+        .with_classical_engine(Box::new(selene_executable))
         .with_quantum_engine(Box::new(quantum_engine))
         .build();
     
@@ -187,7 +186,7 @@ entry:
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let selene_engine = selene_engine()
+    let selene_executable = selene_executable()
         .program(LlvmProgram::from_ir(multi_qubit_llvm))
         .qubits(3)
         .build()?;
@@ -195,7 +194,7 @@ attributes #0 = { "EntryPoint" }
     let quantum_engine = StateVecEngine::new(3);
     
     let mut hybrid_engine = HybridEngineBuilder::new()
-        .with_classical_engine(Box::new(selene_engine))
+        .with_classical_engine(Box::new(selene_executable))
         .with_quantum_engine(Box::new(quantum_engine))
         .build();
     
@@ -216,7 +215,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
-fn test_selene_engine_reset() -> Result<(), PecosError> {
+fn test_selene_executable_reset() -> Result<(), PecosError> {
     env_logger::try_init().ok();
     
     println!("=== Testing SeleneEngine Reset Functionality ===");
@@ -235,7 +234,7 @@ define void @reset_test() #0 {
 attributes #0 = { "EntryPoint" }
 "#;
     
-    let selene_engine = selene_engine()
+    let selene_executable = selene_executable()
         .program(LlvmProgram::from_ir(reset_llvm))
         .qubits(1)
         .build()?;
@@ -243,7 +242,7 @@ attributes #0 = { "EntryPoint" }
     let quantum_engine = StateVecEngine::new(1);
     
     let mut hybrid_engine = HybridEngineBuilder::new()
-        .with_classical_engine(Box::new(selene_engine))
+        .with_classical_engine(Box::new(selene_executable))
         .with_quantum_engine(Box::new(quantum_engine))
         .build();
     
@@ -272,7 +271,7 @@ fn test_selene_error_handling() -> Result<(), PecosError> {
     println!("=== Testing SeleneEngine Error Handling ===");
     
     // Try to create engine with invalid configuration
-    let mut engine = selene_engine()
+    let mut engine = selene_executable()
         .program(LlvmProgram::from_ir("")) // Empty IR should cause error
         .qubits(1) // Valid qubit count (0 qubits would be rejected by builder)
         .build()?;
@@ -284,7 +283,7 @@ fn test_selene_error_handling() -> Result<(), PecosError> {
     println!("Correctly rejected empty program");
     
     // Also test zero qubits case
-    let result = selene_engine()
+    let result = selene_executable()
         .program(LlvmProgram::from_ir("define void @main() { ret void }"))
         .qubits(0)
         .build();

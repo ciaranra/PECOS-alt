@@ -76,3 +76,6 @@ try:
 except ImportError:
     CuStateVec = None
     MPS = None
+
+
+# Note: Selene Bridge Plugin moved to pecos.selene_plugins.simulators

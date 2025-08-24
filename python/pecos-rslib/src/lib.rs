@@ -23,6 +23,7 @@ mod llvm; // LLVM simulation with full feature parity
 mod sparse_sim;
 mod state_vec;
 mod hugr_compiler;
+mod selene_engine;
 
 use byte_message::{PyByteMessage, PyByteMessageBuilder};
 use engines::{PySparseStabEngineRs, PyStateVecEngineRs};
@@ -32,6 +33,7 @@ use qasm::{
 use llvm::{llvm_sim_builder, LlvmNoiseModel, LlvmQuantumEngine};
 use sparse_sim::PySparseSimRs;
 use state_vec::PyStateVecRs;
+use selene_engine::PySeleneLibraryEngine;
 
 /// Python bindings for PECOS Rust implementations
 #[pymodule]
@@ -80,6 +82,9 @@ fn _pecos_rslib(m: &Bound<'_, PyModule>) -> PyResult<()> {
     
     // Add HUGR compilation support
     hugr_compiler::register_hugr_module(&m)?;
+    
+    // Add Selene library engine
+    m.add_class::<PySeleneLibraryEngine>()?;
     
     // Add version info
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;

@@ -7,7 +7,7 @@ use pecos_engines::{SimBuilder, sim_builder, ClassicalControlEngineBuilder, Mont
 use pecos_programs::Program;
 use pecos_qasm::qasm_engine;
 use pecos_llvm_sim::llvm_engine;
-use pecos_selene::selene_engine;
+use pecos_selene::selene_executable;
 use pecos_core::errors::PecosError;
 
 /// Extension trait for `SimBuilder` to add program-based methods
@@ -67,7 +67,7 @@ impl ProgrammedSimBuilder {
                 Program::Hugr(hugr) => {
                     // Selene can handle HUGR via LLVM compilation
                     self.base_builder
-                        .classical(selene_engine().program(hugr))
+                        .classical(selene_executable().program(hugr))
                         .build()
                 }
                 Program::Wasm(_) => {
@@ -78,6 +78,9 @@ impl ProgrammedSimBuilder {
                 }
                 Program::PhirJson(_) => {
                     Err(PecosError::Input("PHIR JSON programs are not yet supported in unified simulation".to_string()))
+                }
+                Program::SeleneInterface(_) => {
+                    Err(PecosError::Input("SeleneInterface programs are not yet supported in unified simulation".to_string()))
                 }
             }
         }
@@ -107,7 +110,7 @@ impl ProgrammedSimBuilder {
                 Program::Hugr(hugr) => {
                     // Selene can handle HUGR via LLVM compilation
                     self.base_builder
-                        .classical(selene_engine().program(hugr))
+                        .classical(selene_executable().program(hugr))
                         .run(shots)
                 }
                 Program::Wasm(_) => {
@@ -118,6 +121,9 @@ impl ProgrammedSimBuilder {
                 }
                 Program::PhirJson(_) => {
                     Err(PecosError::Input("PHIR JSON programs are not yet supported in unified simulation".to_string()))
+                }
+                Program::SeleneInterface(_) => {
+                    Err(PecosError::Input("SeleneInterface programs are not yet supported in unified simulation".to_string()))
                 }
             }
         }
