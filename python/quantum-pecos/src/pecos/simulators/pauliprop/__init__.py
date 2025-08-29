@@ -14,5 +14,10 @@ This package provides a simulator for propagating Pauli faults through quantum c
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-from pecos.simulators.paulifaultprop import bindings
-from pecos.simulators.paulifaultprop.state import PauliFaultProp
+from pecos.simulators.pauliprop import bindings
+from pecos.simulators.pauliprop.state import PauliProp
+from pecos.simulators.pauliprop.state import (
+    PauliProp as PauliFaultProp,
+)  # Backward compatibility
+
+__all__ = ["PauliFaultProp", "PauliProp", "bindings"]
