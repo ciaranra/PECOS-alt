@@ -389,9 +389,9 @@ def test_all_gate_circ(simulator: str) -> None:
     "simulator",
     [
         "StateVec",
-        "MPS",
         "Qulacs",
         "CuStateVec",
+        "MPS",
     ],
 )
 def test_hybrid_engine_no_noise(simulator: str) -> None:
@@ -420,9 +420,9 @@ def test_hybrid_engine_no_noise(simulator: str) -> None:
     "simulator",
     [
         "StateVec",
-        "MPS",
         "Qulacs",
         "CuStateVec",
+        "MPS",
     ],
 )
 def test_hybrid_engine_noisy(simulator: str) -> None:
