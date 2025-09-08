@@ -50,7 +50,7 @@ fn test_sim_with_qasm_engine() -> Result<(), PecosError> {
         // For a 2-qubit register, each shot result should be 0 or 3 (binary 00 or 11)
         assert!(*result == 0 || *result == 3);
     }
-    
+
     Ok(())
 }
 
@@ -78,7 +78,7 @@ fn test_sim_with_qasm_program() -> Result<(), PecosError> {
         // For a 2-qubit register, each shot result should be 0 or 3 (binary 00 or 11)
         assert!(*result == 0 || *result == 3);
     }
-    
+
     Ok(())
 }
 
@@ -101,7 +101,7 @@ fn test_sim_workers_parameter() -> Result<(), PecosError> {
         .filter_map(|shot| shot.data.get("c").and_then(pecos::prelude::Data::as_u32))
         .collect();
     assert_eq!(c_values.len(), 100);
-    
+
     Ok(())
 }
 
@@ -127,7 +127,7 @@ fn test_sim_with_custom_noise_model() -> Result<(), PecosError> {
         .filter_map(|shot| shot.data.get("c").and_then(pecos::prelude::Data::as_u32))
         .collect();
     assert_eq!(c_values.len(), 100);
-    
+
     Ok(())
 }
 
@@ -150,7 +150,7 @@ fn test_sim_with_custom_quantum_engine() -> Result<(), PecosError> {
         .filter_map(|shot| shot.data.get("c").and_then(pecos::prelude::Data::as_u32))
         .collect();
     assert_eq!(c_values.len(), 100);
-    
+
     Ok(())
 }
 
@@ -180,7 +180,7 @@ fn test_sim_determinism() -> Result<(), PecosError> {
     // We're checking if the measurements are completely identical, which is
     // extremely unlikely with different seeds over 100 shots
     assert!(results1 != results3);
-    
+
     Ok(())
 }
 
@@ -215,6 +215,6 @@ fn test_sim_different_shots() -> Result<(), PecosError> {
         .collect();
     assert_eq!(c_values1.len(), 50);
     assert_eq!(c_values2.len(), 200);
-    
+
     Ok(())
 }

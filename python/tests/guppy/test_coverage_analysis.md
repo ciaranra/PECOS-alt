@@ -3,10 +3,10 @@
 ## Current Test Coverage
 
 ### 1. Test Infrastructure
-- **guppy_sim()**: ✅ Uses llvm_sim() underneath via `rust_execute_llvm` 
+- **guppy_sim()**: ✅ Uses llvm_sim() underneath via `rust_execute_llvm`
 - **Builder Pattern**: ✅ Well tested in `test_guppy_sim_builder.py`
   - Seed control
-  - Worker configuration  
+  - Worker configuration
   - Multiple runs
   - Config dictionary
   - Intermediate file handling
@@ -56,11 +56,11 @@
   - `project_z` (projective measurement)
   - `measure_array`, `discard_array` (batch operations)
   - Quantum memory operations (`owned`, `borrowed`)
-  
+
 ### 2. Advanced Language Features
 - **Arrays and collections**: Limited testing of array operations
 - **String handling**: No string tests
-- **Advanced control flow**: 
+- **Advanced control flow**:
   - List/array comprehensions
   - Pattern matching
   - Exception handling with quantum resources
@@ -88,7 +88,7 @@
 3. Add tests for all quantum measurement variants
 4. Test error handling with quantum resources
 
-### Medium Priority  
+### Medium Priority
 1. Add control flow complexity tests (nested loops, comprehensions)
 2. Test different quantum engine backends
 3. Add performance benchmarks

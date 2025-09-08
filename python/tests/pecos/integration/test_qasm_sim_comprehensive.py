@@ -46,12 +46,14 @@ class TestQasmSimComprehensive:
         """
 
         # GeneralNoise uses default configuration
-        results = (qasm_engine()
-                  .program(QasmProgram.from_string(qasm))
-                  .to_sim()
-                  .seed(42)
-                  .noise(GeneralNoiseModelBuilder())
-                  .run(1000))
+        results = (
+            qasm_engine()
+            .program(QasmProgram.from_string(qasm))
+            .to_sim()
+            .seed(42)
+            .noise(GeneralNoiseModelBuilder())
+            .run(1000)
+        )
 
         results_dict = results.to_dict()
         assert isinstance(results_dict, dict)
@@ -249,12 +251,14 @@ class TestQasmSimComprehensive:
         """
 
         # With 50% depolarizing noise
-        results = (qasm_engine()
-                  .program(QasmProgram.from_string(qasm))
-                  .to_sim()
-                  .seed(42)
-                  .noise(depolarizing_noise().with_uniform_probability(0.5))
-                  .run(1000))
+        results = (
+            qasm_engine()
+            .program(QasmProgram.from_string(qasm))
+            .to_sim()
+            .seed(42)
+            .noise(depolarizing_noise().with_uniform_probability(0.5))
+            .run(1000)
+        )
 
         results_dict = results.to_dict()
         zeros = sum(1 for val in results_dict["c"] if val == 0)
@@ -264,9 +268,9 @@ class TestQasmSimComprehensive:
     def test_all_noise_models_builder(self) -> None:
         """Test all noise models through builder pattern."""
         from pecos_rslib import (
+            GeneralNoiseModelBuilder,
             biased_depolarizing_noise,
             depolarizing_noise,
-            GeneralNoiseModelBuilder,
             qasm_engine,
         )
         from pecos_rslib.programs import QasmProgram
@@ -286,14 +290,16 @@ class TestQasmSimComprehensive:
             depolarizing_noise().with_uniform_probability(0.1),
             biased_depolarizing_noise().with_uniform_probability(0.033),
             depolarizing_noise()
-                .with_prep_probability(0.1)
-                .with_meas_probability(0.1)
-                .with_p1_probability(0.1)
-                .with_p2_probability(0.1),
+            .with_prep_probability(0.1)
+            .with_meas_probability(0.1)
+            .with_p1_probability(0.1)
+            .with_p2_probability(0.1),
         ]
 
         for noise_builder in noise_builders:
-            sim_builder = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().seed(42)
+            sim_builder = (
+                qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().seed(42)
+            )
             if noise_builder is not None:
                 sim_builder = sim_builder.noise(noise_builder)
             sim = sim_builder.build()
@@ -336,8 +342,22 @@ class TestQasmSimComprehensive:
         noise1 = depolarizing_noise().with_uniform_probability(0.01)
         noise2 = depolarizing_noise().with_uniform_probability(0.01)
 
-        sim1 = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().seed(123).noise(noise1).build()
-        sim2 = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().seed(123).noise(noise2).build()
+        sim1 = (
+            qasm_engine()
+            .program(QasmProgram.from_string(qasm))
+            .to_sim()
+            .seed(123)
+            .noise(noise1)
+            .build()
+        )
+        sim2 = (
+            qasm_engine()
+            .program(QasmProgram.from_string(qasm))
+            .to_sim()
+            .seed(123)
+            .noise(noise2)
+            .build()
+        )
 
         results1 = sim1.run(1000)
         results2 = sim2.run(1000)
@@ -346,7 +366,14 @@ class TestQasmSimComprehensive:
         assert results1.to_dict()["c"] == results2.to_dict()["c"]
 
         # Run with different seed
-        sim3 = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().seed(456).noise(depolarizing_noise().with_uniform_probability(0.01)).build()
+        sim3 = (
+            qasm_engine()
+            .program(QasmProgram.from_string(qasm))
+            .to_sim()
+            .seed(456)
+            .noise(depolarizing_noise().with_uniform_probability(0.01))
+            .build()
+        )
         results3 = sim3.run(1000)
 
         # Should produce different results (with very high probability)
@@ -391,4 +418,6 @@ class TestQasmSimComprehensive:
         """
 
         with pytest.raises(RuntimeError):
-            qasm_engine().program(QasmProgram.from_string(invalid_qasm)).to_sim().run(10)
+            qasm_engine().program(QasmProgram.from_string(invalid_qasm)).to_sim().run(
+                10,
+            )

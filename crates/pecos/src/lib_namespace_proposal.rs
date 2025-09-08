@@ -6,19 +6,19 @@
 // Proposed namespace organization:
 pub mod engines {
     //! Classical control engines
-    
+
     // Re-export engine builders
     pub use pecos_qasm::{qasm_engine, QasmEngine, QasmEngineBuilder};
     pub use pecos_llvm_sim::{llvm_engine, LlvmEngine, LlvmEngineBuilder};
     pub use pecos_selene::{selene_engine, SeleneEngine, SeleneEngineBuilder};
-    
+
     // Re-export the trait
     pub use pecos_engines::ClassicalControlEngine;
 }
 
 pub mod quantum {
     //! Quantum simulation backends
-    
+
     pub use pecos_engines::quantum_engine_builder::{
         state_vector,
         sparse_stabilizer,
@@ -28,30 +28,30 @@ pub mod quantum {
         QuantumEngineBuilder,
         IntoQuantumEngine,
     };
-    
+
     pub use pecos_engines::quantum::{QuantumEngine, StateVecEngine, SparseStabEngine};
 }
 
 pub mod noise {
     //! Noise models and builders
-    
+
     pub use pecos_engines::noise::{
         // Free functions (when implemented)
         general_noise,
         depolarizing_noise,
         biased_depolarizing_noise,
-        
+
         // Builder types
         GeneralNoiseModelBuilder,
         DepolarizingNoiseModelBuilder,
         BiasedDepolarizingNoiseModelBuilder,
-        
+
         // Model types
         NoiseModel,
         PassThroughNoiseModel,
         DepolarizingNoiseModel,
         BiasedDepolarizingNoiseModel,
-        
+
         // Traits
         IntoNoiseModel,
     };
@@ -59,7 +59,7 @@ pub mod noise {
 
 pub mod programs {
     //! Program types for different engines
-    
+
     pub use pecos_programs::{
         QasmProgram,
         LlvmProgram,
@@ -70,13 +70,13 @@ pub mod programs {
 
 pub mod sim {
     //! Simulation builders and runners
-    
+
     pub use pecos_engines::{
         sim,
         SimBuilder,
         Simulation,
         SimConfig,
-        
+
         // Re-export engine builders for convenience
         sim_builder::QuantumEngineType,
     };
@@ -84,7 +84,7 @@ pub mod sim {
 
 pub mod results {
     //! Simulation results and data types
-    
+
     pub use pecos_core::shot_results::{
         ShotVec,
         ShotMap,

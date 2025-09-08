@@ -34,7 +34,6 @@ except ImportError as e:
     def is_hugr_support_available() -> bool:
         return False
 
-
     def compile_hugr_bytes_to_llvm(*args: object, **kwargs: object) -> None:
         raise ImportError("Rust HUGR backend not available")
 
@@ -82,8 +81,6 @@ class RustHugrCompiler:
         self._compiler.compile_file_to_llvm(hugr_path, llvm_path)
 
 
-
-
 class RustHugrLlvmEngine:
     """
     High-performance LLVM engine created from HUGR using Rust backend.
@@ -129,9 +126,7 @@ class RustHugrLlvmEngine:
             raise ImportError("Rust HUGR backend not available")
 
         instance = cls.__new__(cls)
-        instance._engine = HugrLlvmEngine.from_file(
-            hugr_path, shots
-        )
+        instance._engine = HugrLlvmEngine.from_file(hugr_path, shots)
         return instance
 
     def get_shots(self) -> int:
@@ -183,9 +178,7 @@ def compile_hugr_to_llvm_rust(
                 hugr_bytes = f.read()
             return compile_hugr_bytes_to_llvm(hugr_bytes, None)
         else:
-            compile_hugr_file_to_llvm(
-                hugr_data, output_path
-            )
+            compile_hugr_file_to_llvm(hugr_data, output_path)
             return None
 
 
@@ -206,9 +199,7 @@ def create_llvm_engine_from_hugr_rust(
     if isinstance(hugr_data, bytes):
         return RustHugrLlvmEngine(hugr_data, shots)
     else:
-        return RustHugrLlvmEngine.from_file(
-            hugr_data, shots
-        )
+        return RustHugrLlvmEngine.from_file(hugr_data, shots)
 
 
 def check_rust_hugr_availability() -> Tuple[bool, str]:

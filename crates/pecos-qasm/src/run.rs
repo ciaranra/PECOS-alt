@@ -1,14 +1,14 @@
 //! Simple function interface for QASM simulation
 //!
-//! This module provides convenience functions for users who prefer 
+//! This module provides convenience functions for users who prefer
 //! function calls over builder patterns.
 
 use crate::qasm_engine;
 use pecos_core::errors::PecosError;
-use pecos_engines::shot_results::ShotVec;
+use pecos_engines::ClassicalControlEngineBuilder;
 use pecos_engines::noise::IntoNoiseModel;
 use pecos_engines::quantum_engine_builder::IntoQuantumEngineBuilder;
-use pecos_engines::ClassicalControlEngineBuilder;
+use pecos_engines::shot_results::ShotVec;
 use pecos_programs::QasmProgram;
 
 /// Run a QASM simulation with a simple function interface
@@ -54,7 +54,9 @@ where
     Q::Builder: Send + 'static,
 {
     // Use the SimBuilder for conditional configuration
-    let mut builder = qasm_engine().program(QasmProgram::from_string(qasm)).to_sim();
+    let mut builder = qasm_engine()
+        .program(QasmProgram::from_string(qasm))
+        .to_sim();
 
     if let Some(noise) = noise {
         builder = builder.noise(noise);

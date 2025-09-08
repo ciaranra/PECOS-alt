@@ -174,7 +174,7 @@ def build_hugr_llvm_compiler() -> bool:
 
     try:
         # Build in release mode
-        subprocess.run(  # noqa: S603
+        subprocess.run(
             ["cargo", "build", "--release"],  # noqa: S607
             cwd=source_dir,
             check=True,

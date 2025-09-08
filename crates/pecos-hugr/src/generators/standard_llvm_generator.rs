@@ -93,15 +93,11 @@ impl CodegenExtension for StandardLlvmExtension {
             })
             // Add support for tket2.quantum.Reset
             .extension_op(ext_id.clone(), "Reset".into(), {
-                move |ctx, args| {
-                    emit_reset_standard(ctx, args).map_err(anyhow::Error::new)
-                }
+                move |ctx, args| emit_reset_standard(ctx, args).map_err(anyhow::Error::new)
             })
             // Add support for tket2.quantum.QFree (discard)
             .extension_op(ext_id.clone(), "QFree".into(), {
-                move |ctx, args| {
-                    emit_qfree_standard(ctx, args).map_err(anyhow::Error::new)
-                }
+                move |ctx, args| emit_qfree_standard(ctx, args).map_err(anyhow::Error::new)
             })
             .extension_op(ext_id.clone(), "X".into(), {
                 move |ctx, args| {
@@ -301,7 +297,7 @@ fn emit_rotation_gate_standard<'c, H: HugrView<Node = Node>>(
     // Get the angle parameter (should be a float in half-turns from tket2.rotation)
     let angle_halfturns = args.inputs[1].into_float_value();
     let f64_type = llvm_context.f64_type();
-    
+
     // Convert half-turns to radians (multiply by π)
     // tket2.rotation uses half-turns where 1.0 = π radians
     let pi = f64_type.const_float(std::f64::consts::PI);
@@ -333,7 +329,7 @@ fn emit_controlled_rotation_gate_standard<'c, H: HugrView<Node = Node>>(
     // Get the angle parameter (in half-turns from tket2.rotation)
     let angle_halfturns = args.inputs[2].into_float_value();
     let f64_type = llvm_context.f64_type();
-    
+
     // Convert half-turns to radians (multiply by π)
     let pi = f64_type.const_float(std::f64::consts::PI);
     let angle_radians = builder.build_float_mul(angle_halfturns, pi, "angle_radians")?;
@@ -442,7 +438,7 @@ fn emit_reset_standard<'c, H: HugrView<Node = Node>>(
     let reset_func = context.get_extern_func("__quantum__qis__reset__body", reset_func_type)?;
 
     builder.build_call(reset_func, &[qubit_i64.into()], "")?;
-    
+
     // Reset returns the same qubit
     args.outputs.finish(builder, [args.inputs[0]])?;
     Ok(())
@@ -462,10 +458,11 @@ fn emit_qfree_standard<'c, H: HugrView<Node = Node>>(
     // PECOS QIR discard/release: void @__quantum__rt__qubit_release(i64)
     let void_type = llvm_context.void_type();
     let release_func_type = void_type.fn_type(&[i64_type.into()], false);
-    let release_func = context.get_extern_func("__quantum__rt__qubit_release", release_func_type)?;
+    let release_func =
+        context.get_extern_func("__quantum__rt__qubit_release", release_func_type)?;
 
     builder.build_call(release_func, &[qubit_i64.into()], "")?;
-    
+
     // QFree (discard) has no outputs - qubit is consumed
     args.outputs.finish(builder, [])?;
     Ok(())
@@ -503,11 +500,7 @@ fn emit_measure_with_qubit_return<'c, H: HugrView<Node = Node>>(
     let measure_func = context.get_extern_func("__quantum__qis__m__body", measure_func_type)?;
 
     // Record the measurement (ignore return value as it's always 0)
-    builder.build_call(
-        measure_func,
-        &[qubit_i64.into(), result_id_val.into()],
-        "",
-    )?;
+    builder.build_call(measure_func, &[qubit_i64.into(), result_id_val.into()], "")?;
 
     // Record the result (same as MeasureFree)
     let measurement_node = args.node.node();
@@ -541,14 +534,15 @@ fn emit_measure_with_qubit_return<'c, H: HugrView<Node = Node>>(
     // Get the actual measurement result using __quantum__rt__result_get_one
     // This is necessary because __quantum__qis__m__body always returns 0 in deferred mode
     let get_result_func_type = i32_type.fn_type(&[i64_type.into()], false);
-    let get_result_func = context.get_extern_func("__quantum__rt__result_get_one", get_result_func_type)?;
-    
+    let get_result_func =
+        context.get_extern_func("__quantum__rt__result_get_one", get_result_func_type)?;
+
     let actual_result = builder.build_call(
         get_result_func,
         &[result_id_val.into()],
         "actual_measurement_result",
     )?;
-    
+
     // Convert i32 result to bool for HUGR
     let measurement_i32 = actual_result
         .try_as_basic_value()
@@ -564,7 +558,8 @@ fn emit_measure_with_qubit_return<'c, H: HugrView<Node = Node>>(
     )?;
 
     // Measure returns (qubit, bool) unlike MeasureFree which just returns bool
-    args.outputs.finish(builder, [args.inputs[0], is_one.into()])?;
+    args.outputs
+        .finish(builder, [args.inputs[0], is_one.into()])?;
     Ok(())
 }
 
@@ -601,11 +596,7 @@ fn emit_measure_standard<'c, H: HugrView<Node = Node>>(
     let measure_func = context.get_extern_func("__quantum__qis__m__body", measure_func_type)?;
 
     // Record the measurement (ignore return value as it's always 0)
-    builder.build_call(
-        measure_func,
-        &[qubit_i64.into(), result_id_val.into()],
-        "",
-    )?;
+    builder.build_call(measure_func, &[qubit_i64.into(), result_id_val.into()], "")?;
 
     // IMPORTANT: Record the result with __quantum__rt__result_record_output
     // Get the result name for this measurement node
@@ -642,14 +633,15 @@ fn emit_measure_standard<'c, H: HugrView<Node = Node>>(
     // Get the actual measurement result using __quantum__rt__result_get_one
     // This is necessary because __quantum__qis__m__body always returns 0 in deferred mode
     let get_result_func_type = i32_type.fn_type(&[i64_type.into()], false);
-    let get_result_func = context.get_extern_func("__quantum__rt__result_get_one", get_result_func_type)?;
-    
+    let get_result_func =
+        context.get_extern_func("__quantum__rt__result_get_one", get_result_func_type)?;
+
     let actual_result = builder.build_call(
         get_result_func,
         &[result_id_val.into()],
         "actual_measurement_result",
     )?;
-    
+
     // Convert i32 result to bool for HUGR
     let measurement_i32 = actual_result
         .try_as_basic_value()
@@ -667,7 +659,8 @@ fn emit_measure_standard<'c, H: HugrView<Node = Node>>(
     // MeasureFree consumes the qubit, so we need to release it
     // Call __quantum__rt__qubit_release(i64)
     let release_func_type = void_type.fn_type(&[i64_type.into()], false);
-    let release_func = context.get_extern_func("__quantum__rt__qubit_release", release_func_type)?;
+    let release_func =
+        context.get_extern_func("__quantum__rt__qubit_release", release_func_type)?;
     builder.build_call(release_func, &[qubit_i64.into()], "")?;
 
     args.outputs.finish(builder, [is_one.into()])?;

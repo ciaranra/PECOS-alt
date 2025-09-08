@@ -1,6 +1,6 @@
 use log::debug;
-use pecos::prelude::*;
 use pecos::DynamicEngineBuilder;
+use pecos::prelude::*;
 use std::path::Path;
 
 /// Sets up a classical engine for the CLI based on the program type
@@ -47,24 +47,29 @@ pub fn setup_cli_engine(
 /// Sets up a classical engine builder for the CLI based on the program type
 ///
 /// This function returns a `DynamicEngineBuilder` that can be used with `sim_builder`
-pub fn setup_cli_engine_builder(
-    program_path: &Path,
-) -> Result<DynamicEngineBuilder, PecosError> {
-    debug!("Setting up engine builder for path: {}", program_path.display());
+pub fn setup_cli_engine_builder(program_path: &Path) -> Result<DynamicEngineBuilder, PecosError> {
+    debug!(
+        "Setting up engine builder for path: {}",
+        program_path.display()
+    );
 
     let program_type = detect_program_type(program_path)?;
-    
+
     match program_type {
         ProgramType::QIR => {
             debug!("Setting up QIR engine builder");
             #[cfg(feature = "llvm")]
             {
                 use pecos::llvm_engine;
-                Ok(DynamicEngineBuilder::new(llvm_engine().llvm_file(program_path)))
+                Ok(DynamicEngineBuilder::new(
+                    llvm_engine().llvm_file(program_path),
+                ))
             }
             #[cfg(not(feature = "llvm"))]
             {
-                Err(PecosError::Input("LLVM support not compiled in".to_string()))
+                Err(PecosError::Input(
+                    "LLVM support not compiled in".to_string(),
+                ))
             }
         }
         ProgramType::PHIR => {
@@ -72,11 +77,15 @@ pub fn setup_cli_engine_builder(
             #[cfg(feature = "phir")]
             {
                 use pecos::phir_json_engine;
-                Ok(DynamicEngineBuilder::new(phir_json_engine().file(program_path)?))
+                Ok(DynamicEngineBuilder::new(
+                    phir_json_engine().file(program_path)?,
+                ))
             }
             #[cfg(not(feature = "phir"))]
             {
-                Err(PecosError::Input("PHIR support not compiled in".to_string()))
+                Err(PecosError::Input(
+                    "PHIR support not compiled in".to_string(),
+                ))
             }
         }
         ProgramType::QASM => {
@@ -90,7 +99,9 @@ pub fn setup_cli_engine_builder(
             }
             #[cfg(not(feature = "qasm"))]
             {
-                Err(PecosError::Input("QASM support not compiled in".to_string()))
+                Err(PecosError::Input(
+                    "QASM support not compiled in".to_string(),
+                ))
             }
         }
     }

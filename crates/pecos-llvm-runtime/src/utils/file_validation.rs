@@ -54,4 +54,3 @@ pub fn validate_library_file(path: &Path) -> Result<u64, PecosError> {
 
     Ok(file_size)
 }
-

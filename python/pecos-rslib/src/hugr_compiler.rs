@@ -7,14 +7,14 @@ use pyo3::exceptions::PyRuntimeError;
 #[pyfunction]
 #[pyo3(signature = (hugr_bytes, output_path=None))]
 pub fn compile_hugr_to_llvm_rust(
-    hugr_bytes: &[u8], 
+    hugr_bytes: &[u8],
     output_path: Option<String>
 ) -> PyResult<String> {
     // Use the pecos-selene HUGR 0.13 compiler instead of pecos-hugr
     use pecos_selene::hugr_to_llvm::GuppylangCompiler;
-    
+
     let mut compiler = GuppylangCompiler::new();
-    
+
     match compiler.compile_hugr_json(hugr_bytes) {
         Ok(llvm_ir) => {
             // If output path is provided, also write to file

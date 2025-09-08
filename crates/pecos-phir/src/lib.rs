@@ -150,16 +150,16 @@ fn compile_module_to_output(module: Module, config: &PhirConfig) -> Result<Strin
                     &instr.operation
                 {
                     eprintln!("  Function: {}", func.name);
-                    if let Some(region) = func.body.first() {
-                        if let Some(block) = region.blocks.first() {
-                            for (j, op) in block.operations.iter().enumerate() {
-                                eprintln!("    Instruction {}: {:?}", j, op.operation);
-                                eprintln!("      Operands: {:?}", op.operands);
-                                eprintln!("      Results: {:?}", op.results);
-                            }
-                            if let Some(term) = &block.terminator {
-                                eprintln!("    Terminator: {term:?}");
-                            }
+                    if let Some(region) = func.body.first()
+                        && let Some(block) = region.blocks.first()
+                    {
+                        for (j, op) in block.operations.iter().enumerate() {
+                            eprintln!("    Instruction {}: {:?}", j, op.operation);
+                            eprintln!("      Operands: {:?}", op.operands);
+                            eprintln!("      Results: {:?}", op.results);
+                        }
+                        if let Some(term) = &block.terminator {
+                            eprintln!("    Terminator: {term:?}");
                         }
                     }
                 }

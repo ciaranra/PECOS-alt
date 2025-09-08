@@ -2,9 +2,9 @@
 //!
 //! This example demonstrates the full pipeline from HUGR to simulation results.
 
+use pecos_engines::{BiasedDepolarizingNoise, DepolarizingNoise, sim_builder, state_vector};
 use pecos_llvm_sim::llvm_engine;
-use pecos_engines::{DepolarizingNoise, BiasedDepolarizingNoise, state_vector, sim_builder};
-use pecos_programs::{LlvmProgram, HugrProgram};
+use pecos_programs::{HugrProgram, LlvmProgram};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 1: Using LLVM IR directly
@@ -13,10 +13,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Simple LLVM IR that allocates qubits
     let llvm_ir = r"
         ; ModuleID = 'quantum_example'
-        
+
         declare i8* @__pecos__new_array(i64)
         declare void @__pecos__end_array(i8*)
-        
+
         define void @main() {
         entry:
             ; Allocate 2 qubits

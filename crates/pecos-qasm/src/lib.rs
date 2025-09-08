@@ -82,8 +82,8 @@ pub use preprocessor::Preprocessor;
 pub use program::QASMProgram;
 #[cfg(feature = "wasm")]
 pub use program::QasmEngineWasmProgram;
+pub use unified_engine_builder::{QasmEngineBuilder, qasm_engine};
 pub use util::{count_qubits_in_file, count_qubits_in_str};
-pub use unified_engine_builder::{qasm_engine, QasmEngineBuilder};
 
 /// List of built-in mathematical functions that cannot be overridden by WASM
 pub const BUILTIN_FUNCTIONS: &[&str] = &["sin", "cos", "tan", "exp", "ln", "sqrt"];

@@ -1,4 +1,4 @@
-//! PyO3 bindings for ShotVec and ShotMap types
+//! `PyO3` bindings for `ShotVec` and `ShotMap` types
 //!
 //! This module provides Python-friendly wrappers around the Rust shot result types,
 //! allowing direct access to the data and providing convenient conversion methods.
@@ -8,14 +8,14 @@ use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList};
 
-/// Python wrapper for ShotVec
+/// Python wrapper for `ShotVec`
 #[pyclass(name = "ShotVec", module = "pecos_rslib._pecos_rslib")]
 pub struct PyShotVec {
     pub(crate) inner: ShotVec,
 }
 
 impl PyShotVec {
-    /// Create a new PyShotVec from a Rust ShotVec
+    /// Create a new `PyShotVec` from a Rust `ShotVec`
     pub fn new(inner: ShotVec) -> Self {
         PyShotVec { inner }
     }
@@ -34,13 +34,13 @@ impl PyShotVec {
         self.inner.is_empty()
     }
 
-    /// Convert to ShotMap for columnar access
+    /// Convert to `ShotMap` for columnar access
     ///
     /// Returns:
-    ///     ShotMap: A columnar representation of the shot data
+    ///     `ShotMap`: A columnar representation of the shot data
     ///
     /// Raises:
-    ///     RuntimeError: If conversion fails
+    ///     `RuntimeError`: If conversion fails
     fn to_shot_map(&self) -> PyResult<PyShotMap> {
         let shot_map = self
             .inner
@@ -78,7 +78,7 @@ impl PyShotVec {
     }
 }
 
-/// Python wrapper for ShotMap
+/// Python wrapper for `ShotMap`
 #[pyclass(name = "ShotMap", module = "pecos_rslib._pecos_rslib")]
 pub struct PyShotMap {
     inner: ShotMap,
@@ -89,7 +89,11 @@ impl PyShotMap {
     /// Get all register names
     #[getter]
     fn register_names(&self) -> Vec<String> {
-        self.inner.register_names().into_iter().map(|s| s.to_string()).collect()
+        self.inner
+            .register_names()
+            .into_iter()
+            .map(std::string::ToString::to_string)
+            .collect()
     }
 
     /// Get the number of shots
@@ -107,7 +111,7 @@ impl PyShotMap {
     ///     list[int]: List of integer values
     ///
     /// Raises:
-    ///     RuntimeError: If register doesn't exist or contains non-integer data
+    ///     `RuntimeError`: If register doesn't exist or contains non-integer data
     fn get_integers(&self, register: &str) -> PyResult<Vec<i64>> {
         // Try different integer types in order
         if let Ok(u64_values) = self.inner.try_bits_as_u64(register) {
@@ -115,11 +119,10 @@ impl PyShotMap {
         } else if let Ok(i64_values) = self.inner.try_i64s(register) {
             Ok(i64_values)
         } else if let Ok(u32_values) = self.inner.try_u32s(register) {
-            Ok(u32_values.into_iter().map(|v| v as i64).collect())
+            Ok(u32_values.into_iter().map(i64::from).collect())
         } else {
             Err(PyRuntimeError::new_err(format!(
-                "Register '{}' doesn't exist or contains non-integer data",
-                register
+                "Register '{register}' doesn't exist or contains non-integer data"
             )))
         }
     }
@@ -133,7 +136,7 @@ impl PyShotMap {
     ///     list[str]: List of binary string values (e.g., ["0101", "1010"])
     ///
     /// Raises:
-    ///     RuntimeError: If register doesn't exist or contains non-bit data
+    ///     `RuntimeError`: If register doesn't exist or contains non-bit data
     fn get_binary_strings(&self, register: &str) -> PyResult<Vec<String>> {
         self.inner
             .try_bits_as_binary(register)
@@ -149,7 +152,7 @@ impl PyShotMap {
     ///     list[str]: List of decimal string values
     ///
     /// Raises:
-    ///     RuntimeError: If register doesn't exist or contains non-bit data
+    ///     `RuntimeError`: If register doesn't exist or contains non-bit data
     fn get_decimal_strings(&self, register: &str) -> PyResult<Vec<String>> {
         self.inner
             .try_bits_as_decimal(register)
@@ -165,7 +168,7 @@ impl PyShotMap {
     ///     list[str]: List of hex string values
     ///
     /// Raises:
-    ///     RuntimeError: If register doesn't exist or contains non-bit data
+    ///     `RuntimeError`: If register doesn't exist or contains non-bit data
     fn get_hex_strings(&self, register: &str) -> PyResult<Vec<String>> {
         self.inner
             .try_bits_as_hex(register)
@@ -190,13 +193,17 @@ impl PyShotMap {
 
     fn __repr__(&self) -> String {
         let registers = self.inner.register_names().join(", ");
-        format!("ShotMap(shots={}, registers=[{}])", self.inner.num_shots(), registers)
+        format!(
+            "ShotMap(shots={}, registers=[{}])",
+            self.inner.num_shots(),
+            registers
+        )
     }
 }
 
 // Helper functions for conversion
 
-/// Convert ShotVec to Python dict with integer values
+/// Convert `ShotVec` to Python dict with integer values
 pub(crate) fn shot_vec_to_dict_integers(py: Python<'_>, shot_vec: &ShotVec) -> PyResult<PyObject> {
     let shot_map = shot_vec
         .try_as_shot_map()
@@ -204,7 +211,7 @@ pub(crate) fn shot_vec_to_dict_integers(py: Python<'_>, shot_vec: &ShotVec) -> P
     shot_map_to_dict_integers(py, &shot_map)
 }
 
-/// Convert ShotVec to Python dict with binary string values
+/// Convert `ShotVec` to Python dict with binary string values
 pub(crate) fn shot_vec_to_dict_binary(py: Python<'_>, shot_vec: &ShotVec) -> PyResult<PyObject> {
     let shot_map = shot_vec
         .try_as_shot_map()
@@ -212,15 +219,15 @@ pub(crate) fn shot_vec_to_dict_binary(py: Python<'_>, shot_vec: &ShotVec) -> PyR
     shot_map_to_dict_binary(py, &shot_map)
 }
 
-/// Convert ShotMap to Python dict with integer values
+/// Convert `ShotMap` to Python dict with integer values
 pub(crate) fn shot_map_to_dict_integers(py: Python<'_>, shot_map: &ShotMap) -> PyResult<PyObject> {
     let py_dict = PyDict::new(py);
-    
+
     for reg_name in shot_map.register_names() {
         let py_list = PyList::empty(py);
-        
+
         // Try different data types in order
-        if let Ok(biguint_values) = shot_map.try_bits_as_biguint(&reg_name) {
+        if let Ok(biguint_values) = shot_map.try_bits_as_biguint(reg_name) {
             // Convert BigUint to Python integers
             for val in biguint_values {
                 let bytes = val.to_bytes_le();
@@ -236,22 +243,22 @@ pub(crate) fn shot_map_to_dict_integers(py: Python<'_>, shot_map: &ShotMap) -> P
                 py_list.append(py_int)?;
             }
             py_dict.set_item(reg_name, py_list)?;
-        } else if let Ok(u32_values) = shot_map.try_u32s(&reg_name) {
+        } else if let Ok(u32_values) = shot_map.try_u32s(reg_name) {
             for val in u32_values {
                 py_list.append(val)?;
             }
             py_dict.set_item(reg_name, py_list)?;
-        } else if let Ok(i64_values) = shot_map.try_i64s(&reg_name) {
+        } else if let Ok(i64_values) = shot_map.try_i64s(reg_name) {
             for val in i64_values {
                 py_list.append(val)?;
             }
             py_dict.set_item(reg_name, py_list)?;
-        } else if let Ok(f64_values) = shot_map.try_f64s(&reg_name) {
+        } else if let Ok(f64_values) = shot_map.try_f64s(reg_name) {
             for val in f64_values {
                 py_list.append(val)?;
             }
             py_dict.set_item(reg_name, py_list)?;
-        } else if let Ok(bool_values) = shot_map.try_bools(&reg_name) {
+        } else if let Ok(bool_values) = shot_map.try_bools(reg_name) {
             for val in bool_values {
                 py_list.append(val)?;
             }
@@ -259,40 +266,40 @@ pub(crate) fn shot_map_to_dict_integers(py: Python<'_>, shot_map: &ShotMap) -> P
         }
         // Skip registers we can't handle
     }
-    
+
     Ok(py_dict.into())
 }
 
-/// Convert ShotMap to Python dict with binary string values
+/// Convert `ShotMap` to Python dict with binary string values
 pub(crate) fn shot_map_to_dict_binary(py: Python<'_>, shot_map: &ShotMap) -> PyResult<PyObject> {
     let py_dict = PyDict::new(py);
-    
+
     for reg_name in shot_map.register_names() {
         let py_list = PyList::empty(py);
-        
+
         // Try to get as binary strings
-        if let Ok(binary_values) = shot_map.try_bits_as_binary(&reg_name) {
+        if let Ok(binary_values) = shot_map.try_bits_as_binary(reg_name) {
             for val in binary_values {
                 py_list.append(val.into_pyobject(py)?)?;
             }
             py_dict.set_item(reg_name, py_list)?;
-        } else if let Ok(u32_values) = shot_map.try_u32s(&reg_name) {
+        } else if let Ok(u32_values) = shot_map.try_u32s(reg_name) {
             // Fallback for non-bit data
             for val in u32_values {
                 py_list.append(val)?;
             }
             py_dict.set_item(reg_name, py_list)?;
-        } else if let Ok(i64_values) = shot_map.try_i64s(&reg_name) {
+        } else if let Ok(i64_values) = shot_map.try_i64s(reg_name) {
             for val in i64_values {
                 py_list.append(val)?;
             }
             py_dict.set_item(reg_name, py_list)?;
-        } else if let Ok(f64_values) = shot_map.try_f64s(&reg_name) {
+        } else if let Ok(f64_values) = shot_map.try_f64s(reg_name) {
             for val in f64_values {
                 py_list.append(val)?;
             }
             py_dict.set_item(reg_name, py_list)?;
-        } else if let Ok(bool_values) = shot_map.try_bools(&reg_name) {
+        } else if let Ok(bool_values) = shot_map.try_bools(reg_name) {
             for val in bool_values {
                 py_list.append(val)?;
             }
@@ -300,7 +307,7 @@ pub(crate) fn shot_map_to_dict_binary(py: Python<'_>, shot_map: &ShotMap) -> PyR
         }
         // Skip registers we can't handle
     }
-    
+
     Ok(py_dict.into())
 }
 

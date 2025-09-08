@@ -1,9 +1,6 @@
 """Test qasm_sim structured configuration functionality."""
 
-import json
 from collections import Counter
-
-import pytest
 
 
 class TestQasmSimStructuredConfig:
@@ -24,7 +21,13 @@ class TestQasmSimStructuredConfig:
             measure q -> c;
             """
 
-        sim = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().seed(42).build()
+        sim = (
+            qasm_engine()
+            .program(QasmProgram.from_string(qasm))
+            .to_sim()
+            .seed(42)
+            .build()
+        )
         results = sim.run(1000)
 
         # Convert ShotVec to dict
@@ -39,7 +42,7 @@ class TestQasmSimStructuredConfig:
 
     def test_config_with_noise(self) -> None:
         """Test configuration with noise model."""
-        from pecos_rslib import qasm_engine, depolarizing_noise
+        from pecos_rslib import depolarizing_noise, qasm_engine
         from pecos_rslib.programs import QasmProgram
 
         qasm = """
@@ -51,12 +54,14 @@ class TestQasmSimStructuredConfig:
             measure q[0] -> c[0];
             """
 
-        sim = (qasm_engine()
-               .program(QasmProgram.from_string(qasm))
-               .to_sim()
-               .seed(42)
-               .noise(depolarizing_noise().with_uniform_probability(0.1))
-               .build())
+        sim = (
+            qasm_engine()
+            .program(QasmProgram.from_string(qasm))
+            .to_sim()
+            .seed(42)
+            .noise(depolarizing_noise().with_uniform_probability(0.1))
+            .build()
+        )
         results = sim.run(1000)
 
         # Should see some errors due to noise
@@ -66,7 +71,11 @@ class TestQasmSimStructuredConfig:
 
     def test_full_config(self) -> None:
         """Test configuration with all options."""
-        from pecos_rslib import qasm_engine, biased_depolarizing_noise, sparse_stabilizer
+        from pecos_rslib import (
+            biased_depolarizing_noise,
+            qasm_engine,
+            sparse_stabilizer,
+        )
         from pecos_rslib.programs import QasmProgram
 
         qasm = """
@@ -80,14 +89,16 @@ class TestQasmSimStructuredConfig:
             measure q -> c;
             """
 
-        sim = (qasm_engine()
-               .program(QasmProgram.from_string(qasm))
-               .to_sim()
-               .seed(42)
-               .workers(2)
-               .noise(biased_depolarizing_noise().with_uniform_probability(0.003))
-               .quantum(sparse_stabilizer())
-               .build())
+        sim = (
+            qasm_engine()
+            .program(QasmProgram.from_string(qasm))
+            .to_sim()
+            .seed(42)
+            .workers(2)
+            .noise(biased_depolarizing_noise().with_uniform_probability(0.003))
+            .quantum(sparse_stabilizer())
+            .build()
+        )
         results = sim.run(100)
 
         results_dict = results.to_binary_dict()
@@ -115,7 +126,13 @@ class TestQasmSimStructuredConfig:
             measure q -> c;
             """
 
-        sim = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().auto_workers().build()
+        sim = (
+            qasm_engine()
+            .program(QasmProgram.from_string(qasm))
+            .to_sim()
+            .auto_workers()
+            .build()
+        )
         results = sim.run(100)
 
         results_dict = results.to_dict()
@@ -123,7 +140,7 @@ class TestQasmSimStructuredConfig:
 
     def test_custom_noise_config(self) -> None:
         """Test configuration with custom noise parameters."""
-        from pecos_rslib import qasm_engine, depolarizing_noise
+        from pecos_rslib import depolarizing_noise, qasm_engine
         from pecos_rslib.programs import QasmProgram
 
         qasm = """
@@ -136,16 +153,20 @@ class TestQasmSimStructuredConfig:
             measure q -> c;
             """
 
-        sim = (qasm_engine()
-               .program(QasmProgram.from_string(qasm))
-               .to_sim()
-               .seed(42)
-               .noise(depolarizing_noise()
-                      .with_prep_probability(0.001)
-                      .with_meas_probability(0.002)
-                      .with_p1_probability(0.003)
-                      .with_p2_probability(0.004))
-               .build())
+        sim = (
+            qasm_engine()
+            .program(QasmProgram.from_string(qasm))
+            .to_sim()
+            .seed(42)
+            .noise(
+                depolarizing_noise()
+                .with_prep_probability(0.001)
+                .with_meas_probability(0.002)
+                .with_p1_probability(0.003)
+                .with_p2_probability(0.004),
+            )
+            .build()
+        )
         results = sim.run(100)
 
         results_dict = results.to_dict()
@@ -168,7 +189,7 @@ class TestQasmSimStructuredConfig:
 
     def test_builder_pattern_serialization(self) -> None:
         """Test the new builder pattern approach."""
-        from pecos_rslib import qasm_engine, depolarizing_noise, sparse_stabilizer
+        from pecos_rslib import depolarizing_noise, qasm_engine, sparse_stabilizer
         from pecos_rslib.programs import QasmProgram
 
         qasm = """
@@ -182,14 +203,16 @@ class TestQasmSimStructuredConfig:
             """
 
         # Builder pattern is the new approach
-        sim = (qasm_engine()
-               .program(QasmProgram.from_string(qasm))
-               .to_sim()
-               .seed(42)
-               .workers(4)
-               .noise(depolarizing_noise().with_uniform_probability(0.01))
-               .quantum(sparse_stabilizer())
-               .build())
+        sim = (
+            qasm_engine()
+            .program(QasmProgram.from_string(qasm))
+            .to_sim()
+            .seed(42)
+            .workers(4)
+            .noise(depolarizing_noise().with_uniform_probability(0.01))
+            .quantum(sparse_stabilizer())
+            .build()
+        )
         results = sim.run(100)
 
         results_dict = results.to_dict()
@@ -269,7 +292,14 @@ class TestQasmSimStructuredConfig:
             # .with_p1_pauli_model(x=0.5, y=0.3, z=0.2)
         )
 
-        sim = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().seed(42).noise(noise_builder).build()
+        sim = (
+            qasm_engine()
+            .program(QasmProgram.from_string(qasm))
+            .to_sim()
+            .seed(42)
+            .noise(noise_builder)
+            .build()
+        )
         results = sim.run(100)
 
         results_dict = results.to_dict()

@@ -7,7 +7,7 @@ quantum programs on PECOS. This API is provided for backward compatibility.
 NOTE: For new code, consider using the unified API instead:
     from pecos_rslib import selene_engine
     from pecos_rslib.programs import HugrProgram
-    
+
     # Convert Guppy to HUGR and run
     hugr_program = HugrProgram.from_bytes(guppy_to_hugr_bytes(my_func))
     results = selene_engine().program(hugr_program).to_sim().run(shots)
@@ -175,12 +175,14 @@ def demo_comparison_with_qasm() -> None:
     print("from pecos_rslib.qasm_sim import qasm_sim")
     print("results = qasm_sim(qasm_code).run(shots=1000)")
     print("```")
-    
+
     print("\nPECOS Unified API (New):")
     print("```python")
     print("from pecos_rslib import qasm_engine")
     print("from pecos_rslib.programs import QasmProgram")
-    print("results = qasm_engine().program(QasmProgram.from_string(qasm_code)).to_sim().run(1000)")
+    print(
+        "results = qasm_engine().program(QasmProgram.from_string(qasm_code)).to_sim().run(1000)",
+    )
     print("```")
 
     print("\nPECOS Guppy API (Old - Backward Compatibility):")
@@ -196,7 +198,7 @@ def demo_comparison_with_qasm() -> None:
     print("")
     print("results = run_guppy(my_circuit, shots=1000)")
     print("```")
-    
+
     print("\nPECOS Guppy API (New - Unified):")
     print("```python")
     print("from pecos_rslib import selene_engine")

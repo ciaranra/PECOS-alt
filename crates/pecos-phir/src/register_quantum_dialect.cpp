@@ -19,22 +19,22 @@ std::unique_ptr<OperationPass<ModuleOp>> createConvertQuantumToLLVMPass();
 
 int main(int argc, char **argv) {
   mlir::DialectRegistry registry;
-  
+
   // Register all standard dialects
   mlir::registerAllDialects(registry);
-  
+
   // Register our quantum dialect
   registry.insert<mlir::quantum::QuantumDialect>();
-  
+
   // Register all standard passes
   mlir::registerAllPasses();
-  
+
   // Register our quantum to LLVM lowering pass
   mlir::PassRegistration<> quantumToLLVMPass(
       "convert-quantum-to-llvm",
       "Convert Quantum dialect to LLVM dialect",
       []() { return mlir::createConvertQuantumToLLVMPass(); });
-  
+
   return mlir::asMainReturnOnFailure(
       mlir::MlirOptMain(argc, argv, "Quantum MLIR optimizer driver\n", registry));
 }

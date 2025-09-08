@@ -516,12 +516,11 @@ impl PhirProcessor {
 
                         // Get the Bool value from the measurement SSA ID
                         if let Some(TypedValue::Bool(bit_value)) = self.ssa_values.get(&meas_ssa_id)
+                            && *bit_value
                         {
-                            if *bit_value {
-                                combined_value |= 1 << bit_offset;
-                            }
-                            // Found bit value for variable
+                            combined_value |= 1 << bit_offset;
                         }
+                        // Found bit value for variable
                     }
                 }
 
@@ -716,11 +715,11 @@ impl PhirProcessor {
             // Get the export name from attributes
             let mut export_name = None;
             for (key, value) in &instruction.attributes {
-                if key.starts_with("export_name") {
-                    if let crate::phir::AttributeValue::String(name) = value {
-                        export_name = Some(name.clone());
-                        break;
-                    }
+                if key.starts_with("export_name")
+                    && let crate::phir::AttributeValue::String(name) = value
+                {
+                    export_name = Some(name.clone());
+                    break;
                 }
             }
 

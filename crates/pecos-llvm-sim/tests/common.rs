@@ -3,7 +3,10 @@
 use pecos_engines::shot_results::ShotMap;
 
 /// Helper to get register values as i64 from `ShotMap`
-pub fn get_register_i64(shot_map: &ShotMap, register: &str) -> Result<Vec<i64>, Box<dyn std::error::Error>> {
+pub fn get_register_i64(
+    shot_map: &ShotMap,
+    register: &str,
+) -> Result<Vec<i64>, Box<dyn std::error::Error>> {
     // Try to get as BitVec first (most common for quantum registers)
     if let Ok(values) = shot_map.try_bits_as_u64(register) {
         Ok(values.into_iter().map(|v| v as i64).collect())
@@ -14,9 +17,8 @@ pub fn get_register_i64(shot_map: &ShotMap, register: &str) -> Result<Vec<i64>, 
     }
     // Try as u32 and convert
     else if let Ok(values) = shot_map.try_u32s(register) {
-        Ok(values.into_iter().map(|v| i64::from(v)).collect())
-    }
-    else {
-        Err(format!("Cannot get register '{}' as i64 values", register).into())
+        Ok(values.into_iter().map(i64::from).collect())
+    } else {
+        Err(format!("Cannot get register '{register}' as i64 values").into())
     }
 }

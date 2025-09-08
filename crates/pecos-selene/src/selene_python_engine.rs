@@ -81,24 +81,24 @@ impl SelenePythonEngine {
     fn execute_with_python(&mut self) -> Result<(), PecosError> {
         let config = self.config.as_ref()
             .ok_or_else(|| SeleneError::ConfigurationError("No configuration provided".to_string()))?;
-        
+
         let program = self.program.as_ref()
             .ok_or_else(|| SeleneError::ConfigurationError("No program loaded".to_string()))?;
 
         // Build the Selene executable from the Interface Plugin
         // This is where we'd need to integrate with the existing build process
-        
+
         // For now, log what we would do
-        log::info!("Would execute Selene with {} qubits using {} simulator", 
+        log::info!("Would execute Selene with {} qubits using {} simulator",
                    config.num_qubits, config.simulator);
-        
+
         // Placeholder: simulate some results
         // In reality, this would call Python via PyO3
         self.results = vec![
             std::collections::HashMap::from([("qubit1".to_string(), 0), ("qubit2".to_string(), 0)]),
             std::collections::HashMap::from([("qubit1".to_string(), 1), ("qubit2".to_string(), 1)]),
         ];
-        
+
         Ok(())
     }
 
@@ -107,21 +107,21 @@ impl SelenePythonEngine {
         if self.result_index >= self.results.len() {
             return Ok(ByteMessage::create_empty());
         }
-        
+
         let result = &self.results[self.result_index];
         self.result_index += 1;
-        
+
         // Convert the Python result dictionary to operations
         let mut builder = ByteMessageBuilder::new();
         let _ = builder.for_quantum_operations();
-        
+
         // For each measurement result, add it as a measurement operation
         for (key, value) in result {
             log::debug!("Result: {} = {}", key, value);
             // In reality, we'd need to convert this properly to PECOS operations
             // For now, just log it
         }
-        
+
         Ok(builder.build())
     }
 }
@@ -157,9 +157,9 @@ impl ClassicalEngine for SelenePythonEngine {
             // Execute the program using Python API
             self.execute_with_python()?;
         }
-        
+
         self.shot_count += 1;
-        
+
         // Convert Python results to ByteMessage
         self.python_results_to_byte_message()
     }

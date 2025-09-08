@@ -229,7 +229,12 @@ impl NoiseUtils {
             }
             GateType::U if gate.params.len() >= 3 => {
                 let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| **q).collect();
-                builder.add_u(gate.params[0], gate.params[1], gate.params[2], &qubits_usize);
+                builder.add_u(
+                    gate.params[0],
+                    gate.params[1],
+                    gate.params[2],
+                    &qubits_usize,
+                );
             }
 
             // Measurement gates

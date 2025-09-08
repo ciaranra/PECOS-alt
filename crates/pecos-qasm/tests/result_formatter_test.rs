@@ -221,8 +221,8 @@ fn test_large_register_values() {
 
 #[test]
 fn test_integration_with_actual_simulation() {
-        use pecos_qasm::qasm_engine;
     use pecos_programs::QasmProgram;
+    use pecos_qasm::qasm_engine;
 
     // Run an actual QASM simulation
     let qasm = r#"
@@ -247,8 +247,7 @@ fn test_integration_with_actual_simulation() {
 
     // Run simulation
     let shot_vec = sim_builder()
-        .classical(qasm_engine()
-        .program(QasmProgram::from_string(qasm)))
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .seed(42)
         .run(5)
         .unwrap();
@@ -346,8 +345,8 @@ fn test_zero_width_registers() {
 #[test]
 fn test_bell_state_formatting() {
     // Test a real Bell state scenario
-        use pecos_qasm::qasm_engine;
     use pecos_programs::QasmProgram;
+    use pecos_qasm::qasm_engine;
 
     let qasm = r#"
         OPENQASM 2.0;
@@ -366,8 +365,7 @@ fn test_bell_state_formatting() {
 
     // Run with enough shots to likely see both outcomes
     let shot_vec = sim_builder()
-        .classical(qasm_engine()
-        .program(QasmProgram::from_string(qasm)))
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .seed(42)
         .run(20)
         .unwrap();

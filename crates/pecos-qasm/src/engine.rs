@@ -344,7 +344,10 @@ impl QASMEngine {
         qubits: &[usize],
         params: &[f64],
     ) -> Result<(), PecosError> {
-        eprintln!("DEBUG QASM: handle_rz called with angle={}, qubit={}", params[0], qubits[0]);
+        eprintln!(
+            "DEBUG QASM: handle_rz called with angle={}, qubit={}",
+            params[0], qubits[0]
+        );
         engine.message_builder.add_rz(params[0], &[qubits[0]]);
         Ok(())
     }
@@ -596,9 +599,12 @@ impl QASMEngine {
             GateType::CX | GateType::SZZ | GateType::SZZdg => {
                 self.process_two_qubit_gate(gate.gate_type, &qubits)
             }
-            GateType::RX | GateType::RY | GateType::RZ | GateType::RZZ | GateType::R1XY | GateType::U => {
-                self.process_parameterized_gate(gate.gate_type, &qubits, &gate.params)
-            }
+            GateType::RX
+            | GateType::RY
+            | GateType::RZ
+            | GateType::RZZ
+            | GateType::R1XY
+            | GateType::U => self.process_parameterized_gate(gate.gate_type, &qubits, &gate.params),
             GateType::Measure | GateType::MeasureLeaked => Err(PecosError::Processing(
                 "Measure and MeasureLeaked gates should be handled by MeasureWithMapping operation"
                     .to_string(),
@@ -974,7 +980,9 @@ impl QASMEngine {
                     debug!("Evaluating if condition: {condition:?}");
                     // Use evaluate_expression_bitvec_with_width to support WASM functions
                     // For conditions, we don't need a specific width - just evaluate as boolean
-                    let condition_value = self.evaluate_expression_bitvec_with_width(condition, 1)?.as_i64();
+                    let condition_value = self
+                        .evaluate_expression_bitvec_with_width(condition, 1)?
+                        .as_i64();
                     debug!("Condition value: {condition_value}");
 
                     if condition_value != 0 {
@@ -1135,14 +1143,13 @@ impl QASMEngine {
         Ok(Some(self.message_builder.build()))
     }
 
-
     fn evaluate_expression_bitvec_with_width(
         &mut self,
         expr: &Expression,
         target_width: usize,
     ) -> Result<ExpressionValue, PecosError> {
-        eprintln!("DEBUG: evaluate_expression_bitvec_with_width called with expr: {:?}", expr);
-        
+        eprintln!("DEBUG: evaluate_expression_bitvec_with_width called with expr: {expr:?}");
+
         // Check if this is a WASM function call
         #[cfg(feature = "wasm")]
         if let Expression::FunctionCall { name, args } = expr
@@ -1183,19 +1190,23 @@ impl QASMEngine {
         }
 
         // Use target width as hint for expression evaluation
-        debug!("Falling back to regular evaluate_expression_bitvec for expr: {:?}", expr);
-        
+        debug!("Falling back to regular evaluate_expression_bitvec for expr: {expr:?}");
+
         // If this is a function call and we reached here, it means:
         // 1. Either WASM feature is disabled, or
-        // 2. No foreign object is set, or  
+        // 2. No foreign object is set, or
         // 3. It's a built-in function
         #[cfg(feature = "wasm")]
-        if let Expression::FunctionCall { name, .. } = expr {
-            if !crate::BUILTIN_FUNCTIONS.contains(&name.as_str()) {
-                debug!("WASM function '{}' called but foreign_object is {:?}", name, self.foreign_object.is_some());
-            }
+        if let Expression::FunctionCall { name, .. } = expr
+            && !crate::BUILTIN_FUNCTIONS.contains(&name.as_str())
+        {
+            debug!(
+                "WASM function '{}' called but foreign_object is {:?}",
+                name,
+                self.foreign_object.is_some()
+            );
         }
-        
+
         evaluate_expression_bitvec(expr, self, target_width)
     }
 }

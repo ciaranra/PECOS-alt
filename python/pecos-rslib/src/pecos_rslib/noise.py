@@ -5,20 +5,20 @@ discoverable through IDE autocomplete and documentation.
 
 Examples:
     >>> from pecos_rslib import noise
-    >>> 
+    >>>
     >>> # Available noise models via namespace
     >>> general = noise.general()
     >>> depolarizing = noise.depolarizing()
     >>> biased_depolarizing = noise.biased_depolarizing()
-    >>> 
+    >>>
     >>> # Configure noise models
     >>> depolarizing_noise = noise.depolarizing().with_p1_probability(0.01)
-    >>> 
+    >>>
     >>> # Direct class instantiation also available
     >>> general = noise.GeneralNoiseModelBuilder()
     >>> depolarizing = noise.DepolarizingNoiseModelBuilder()
     >>> biased = noise.BiasedDepolarizingNoiseModelBuilder()
-    >>> 
+    >>>
     >>> # Use in simulation
     >>> from pecos_rslib import engines
     >>> results = engines.qasm()\\
@@ -42,63 +42,75 @@ from pecos_rslib.sim import (
 #     biased_depolarizing_noise,
 # )
 
+
 # For now, create factory functions until free functions are exposed from Rust
 def general():
     """Create a general noise model builder.
-    
+
     Returns:
         GeneralNoiseModelBuilder: A new general noise model builder
     """
     return GeneralNoiseModelBuilder()
 
+
 def depolarizing():
     """Create a depolarizing noise model builder.
-    
+
     Returns:
         DepolarizingNoiseModelBuilder: A new depolarizing noise model builder
     """
     return DepolarizingNoiseModelBuilder()
 
+
 def biased_depolarizing():
     """Create a biased depolarizing noise model builder.
-    
+
     Returns:
         BiasedDepolarizingNoiseModelBuilder: A new biased depolarizing noise model builder
     """
     return BiasedDepolarizingNoiseModelBuilder()
 
+
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Any
+from typing import Optional
 
 # Simple noise model dataclasses for backward compatibility
 # These are being replaced by the builder pattern but kept for existing code
 
+
 @dataclass
 class PassThroughNoise:
     """No noise - ideal quantum simulation."""
+
     pass
+
 
 @dataclass
 class DepolarizingNoise:
     """Standard depolarizing noise with uniform probability.
-    
+
     Args:
         p: Uniform error probability for all operations
     """
+
     p: float = 0.001
+
 
 @dataclass
 class BiasedDepolarizingNoise:
     """Biased depolarizing noise model.
-    
+
     Args:
         p: Uniform probability for all operations
     """
+
     p: float = 0.001
+
 
 @dataclass
 class GeneralNoise:
     """General noise model with full parameter configuration."""
+
     # Global parameters
     seed: Optional[int] = None
     scale: Optional[float] = None
@@ -107,6 +119,7 @@ class GeneralNoise:
     p2: Optional[float] = None
     p_meas: Optional[float] = None
     p_prep: Optional[float] = None
+
 
 __all__ = [
     # Free functions

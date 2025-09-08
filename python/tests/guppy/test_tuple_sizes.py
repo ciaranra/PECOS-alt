@@ -2,10 +2,9 @@
 """Test different tuple sizes to find segfault threshold."""
 
 import sys
-from typing import List, Tuple
 
 
-def decode_integer_results(results: List[int], n_bits: int) -> List[Tuple[bool, ...]]:
+def decode_integer_results(results: list[int], n_bits: int) -> list[tuple[bool, ...]]:
     """Decode integer-encoded results back to tuples of booleans."""
     decoded = []
     for val in results:
@@ -15,10 +14,11 @@ def decode_integer_results(results: List[int], n_bits: int) -> List[Tuple[bool, 
         decoded.append(tuple(bits))
     return decoded
 
+
 sys.path.append("python/quantum-pecos/src")
 
 from guppylang import guppy
-from guppylang.std.quantum import qubit, measure, x
+from guppylang.std.quantum import measure, qubit, x
 from pecos.frontends.guppy_api import sim
 from pecos_rslib import state_vector
 
@@ -30,6 +30,7 @@ def circuit_1_tuple() -> tuple[bool]:
     x(q)
     return (measure(q),)
 
+
 @guppy
 def circuit_2_tuple() -> tuple[bool, bool]:
     q1 = qubit()
@@ -38,6 +39,7 @@ def circuit_2_tuple() -> tuple[bool, bool]:
     q2 = qubit()
     r2 = measure(q2)
     return (r1, r2)
+
 
 @guppy
 def circuit_3_tuple() -> tuple[bool, bool, bool]:
@@ -50,6 +52,7 @@ def circuit_3_tuple() -> tuple[bool, bool, bool]:
     x(q3)
     r3 = measure(q3)
     return (r1, r2, r3)
+
 
 @guppy
 def circuit_4_tuple() -> tuple[bool, bool, bool, bool]:
@@ -64,6 +67,7 @@ def circuit_4_tuple() -> tuple[bool, bool, bool, bool]:
     q4 = qubit()
     r4 = measure(q4)
     return (r1, r2, r3, r4)
+
 
 @guppy
 def circuit_5_tuple() -> tuple[bool, bool, bool, bool, bool]:
@@ -81,6 +85,7 @@ def circuit_5_tuple() -> tuple[bool, bool, bool, bool, bool]:
     x(q5)
     r5 = measure(q5)
     return (r1, r2, r3, r4, r5)
+
 
 @guppy
 def circuit_6_tuple() -> tuple[bool, bool, bool, bool, bool, bool]:
@@ -100,6 +105,7 @@ def circuit_6_tuple() -> tuple[bool, bool, bool, bool, bool, bool]:
     q6 = qubit()
     r6 = measure(q6)
     return (r1, r2, r3, r4, r5, r6)
+
 
 @guppy
 def circuit_7_tuple() -> tuple[bool, bool, bool, bool, bool, bool, bool]:
@@ -122,6 +128,7 @@ def circuit_7_tuple() -> tuple[bool, bool, bool, bool, bool, bool, bool]:
     x(q7)
     r7 = measure(q7)
     return (r1, r2, r3, r4, r5, r6, r7)
+
 
 @guppy
 def circuit_8_tuple() -> tuple[bool, bool, bool, bool, bool, bool, bool, bool]:
@@ -148,64 +155,67 @@ def circuit_8_tuple() -> tuple[bool, bool, bool, bool, bool, bool, bool, bool]:
     return (r1, r2, r3, r4, r5, r6, r7, r8)
 
 
-def run_tuple_size_test(n: int, test_func):
+def run_tuple_size_test(n: int, test_func) -> bool | None:
     """Helper to test returning n-tuple of bools."""
     print(f"\nTesting {n}-tuple of bools...")
-    
+
     try:
         results = sim(test_func).qubits(10).quantum(state_vector()).run(5)
-        print(f"  Success! Results: {results.get("measurements", results.get("measurement_1", []))[:3]}...")
+        print(
+            f"  Success! Results: {results.get("measurements", results.get("measurement_1", []))[:3]}...",
+        )
         return True
     except Exception as e:
         print(f"  Failed with error: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
 
-def test_tuple_size_1():
+def test_tuple_size_1() -> None:
     """Test 1-tuple returns."""
     assert run_tuple_size_test(1, circuit_1_tuple)
 
 
-def test_tuple_size_2():
+def test_tuple_size_2() -> None:
     """Test 2-tuple returns."""
     assert run_tuple_size_test(2, circuit_2_tuple)
 
 
-def test_tuple_size_3():
+def test_tuple_size_3() -> None:
     """Test 3-tuple returns."""
     assert run_tuple_size_test(3, circuit_3_tuple)
 
 
-def test_tuple_size_4():
+def test_tuple_size_4() -> None:
     """Test 4-tuple returns."""
     assert run_tuple_size_test(4, circuit_4_tuple)
 
 
-def test_tuple_size_5():
+def test_tuple_size_5() -> None:
     """Test 5-tuple returns."""
     assert run_tuple_size_test(5, circuit_5_tuple)
 
 
-def test_tuple_size_6():
+def test_tuple_size_6() -> None:
     """Test 6-tuple returns."""
     assert run_tuple_size_test(6, circuit_6_tuple)
 
 
-def test_tuple_size_7():
+def test_tuple_size_7() -> None:
     """Test 7-tuple returns."""
     assert run_tuple_size_test(7, circuit_7_tuple)
 
 
-def test_tuple_size_8():
+def test_tuple_size_8() -> None:
     """Test 8-tuple returns."""
     assert run_tuple_size_test(8, circuit_8_tuple)
 
 
 if __name__ == "__main__":
     print("Testing different tuple sizes...")
-    
+
     # Map of tuple sizes to circuit functions
     test_functions = {
         1: circuit_1_tuple,
@@ -217,7 +227,7 @@ if __name__ == "__main__":
         7: circuit_7_tuple,
         8: circuit_8_tuple,
     }
-    
+
     # Test progressively larger tuples
     for size in [1, 2, 3, 4, 5, 6, 7, 8]:
         success = run_tuple_size_test(size, test_functions[size])

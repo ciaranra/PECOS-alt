@@ -46,19 +46,19 @@ fn _pecos_rslib(m: &Bound<'_, PyModule>) -> PyResult<()> {
             .filter_level(LevelFilter::Warn)
             .try_init();
     }
-    
+
     // Original engine classes
     m.add_class::<PyStateVecRs>()?;
     m.add_class::<PySparseSimRs>()?;
-    
+
     // Byte message classes
     m.add_class::<PyByteMessage>()?;
     m.add_class::<PyByteMessageBuilder>()?;
-    
+
     // Engine classes
     m.add_class::<PyStateVecEngineRs>()?;
     m.add_class::<PySparseStabEngineRs>()?;
-    
+
     // QASM simulation enums and functions
     m.add_class::<NoiseModel>()?;
     m.add_class::<QuantumEngine>()?;
@@ -66,12 +66,12 @@ fn _pecos_rslib(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_noise_models, m)?)?;
     m.add_function(wrap_pyfunction!(get_quantum_engines, m)?)?;
     m.add_function(wrap_pyfunction!(qasm_sim_builder, m)?)?;
-    
+
     // LLVM simulation
     m.add_class::<LlvmNoiseModel>()?;
     m.add_class::<LlvmQuantumEngine>()?;
     m.add_function(wrap_pyfunction!(llvm_sim_builder, m)?)?;
-    
+
     // Add PHIR compilation submodule
     let phir_module = PyModule::new(m.py(), "phir")?;
     phir::register_phir_module(&phir_module)?;
@@ -79,15 +79,15 @@ fn _pecos_rslib(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Add engine builders for unified API
     engine_builders::register_engine_builders(&m)?;
-    
+
     // Add HUGR compilation support
     hugr_compiler::register_hugr_module(&m)?;
-    
+
     // Add Selene library engine
     m.add_class::<PySeleneLibraryEngine>()?;
-    
+
     // Add version info
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
-    
+
     Ok(())
 }

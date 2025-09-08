@@ -62,7 +62,7 @@ def test_simple_classical() -> None:
         # Just verify the function can be defined
         print(f" Function defined successfully: {add_numbers}")
         print(" Classical function compilation test passed (function definition only)")
-        
+
         # Note: Actual execution would require a classical executor, not quantum sim
 
         # QIR generation not available with deprecated API
@@ -118,12 +118,12 @@ def test_quantum_if_available() -> None:
         # Use the new sim() API for quantum functions
         from pecos.frontends.guppy_api import sim
         from pecos_rslib import state_vector
-        
+
         result = sim(quantum_coin).qubits(1).quantum(state_vector()).run(10)
         print(f" Quantum function executed successfully: {result}")
-        
+
         # Verify we get both 0s and 1s (probabilistic behavior)
-        values = list(result.values())[0]
+        values = next(iter(result.values()))
         assert 0 in values or 1 in values, "Should get measurement results"
 
         # Quantum function test passed

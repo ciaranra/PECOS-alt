@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Static Engine Selection (Compile-time)
     // =========================================================================
     println!("1. Static Engine Selection (best performance):");
-    
+
     // Traditional .to_sim() pattern
     let results_traditional = qasm_engine()
         .program(QasmProgram::from_string(qasm_code))
@@ -39,33 +39,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .seed(42)
         .noise(DepolarizingNoise { p: 0.01 })
         .run(1000)?;
-    
+
     println!("   Traditional pattern: {} shots completed", results_traditional.len());
-    
+
     // New sim() pattern - functionally equivalent
     let results_functional = sim(qasm_engine().program(QasmProgram::from_string(qasm_code)))
         .seed(42)
         .noise(DepolarizingNoise { p: 0.01 })
         .run(1000)?;
-    
+
     println!("   Functional pattern: {} shots completed", results_functional.len());
-    
+
     // Using From trait explicitly
     let results_from = SimBuilder::from(qasm_engine().program(QasmProgram::from_string(qasm_code)))
         .seed(42)
         .noise(DepolarizingNoise { p: 0.01 })
         .run(1000)?;
-    
+
     println!("   From trait pattern: {} shots completed\n", results_from.len());
 
     // =========================================================================
     // 2. Dynamic Engine Selection (Runtime)
     // =========================================================================
     println!("2. Dynamic Engine Selection (runtime flexibility):");
-    
+
     // Simulate getting engine type from user input or config
     let user_choice = "qasm"; // Could come from CLI args, config file, etc.
-    
+
     // Create engine based on runtime selection
     let dynamic_builder = match user_choice {
         "qasm" => {
@@ -86,30 +86,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => panic!("Unknown engine type: {}", user_choice),
     };
-    
+
     // Use the dynamically selected engine
     let results_dynamic = sim_dynamic(dynamic_builder)
         .seed(42)
         .noise(DepolarizingNoise { p: 0.01 })
         .run(1000)?;
-    
+
     println!("   Dynamic selection: {} shots completed\n", results_dynamic.len());
 
     // =========================================================================
     // 3. Advanced: Storing Multiple Engines
     // =========================================================================
     println!("3. Advanced: Managing multiple engines:");
-    
+
     use std::collections::HashMap;
-    
+
     // Create a collection of engines (useful for benchmarking, A/B testing, etc.)
     let mut engines: HashMap<&str, DynamicEngineBuilder> = HashMap::new();
-    
+
     // Add different engine configurations
     engines.insert("qasm_basic", DynamicEngineBuilder::new(
         qasm_engine().program(QasmProgram::from_string(qasm_code))
     ));
-    
+
     engines.insert("qasm_with_includes", DynamicEngineBuilder::new(
         qasm_engine()
             .program(QasmProgram::from_string(qasm_code))
@@ -117,7 +117,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ("custom.inc".to_string(), "// Custom gates".to_string())
             ])
     ));
-    
+
     // Run simulations with different engines
     for (name, engine) in engines {
         let results = sim_dynamic(engine)
@@ -125,9 +125,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .run(100)?;
         println!("   Engine '{}': {} shots completed", name, results.len());
     }
-    
+
     println!("\n=== Example Complete ===");
-    
+
     Ok(())
 }
 
@@ -139,7 +139,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[allow(dead_code)]
 fn create_engine_from_file(path: &str) -> Result<DynamicEngineBuilder, Box<dyn std::error::Error>> {
     let content = std::fs::read_to_string(path)?;
-    
+
     let builder = if path.ends_with(".qasm") {
         DynamicEngineBuilder::new(qasm_engine().program(QasmProgram::from_string(&content)))
     } else if path.ends_with(".ll") {
@@ -153,7 +153,7 @@ fn create_engine_from_file(path: &str) -> Result<DynamicEngineBuilder, Box<dyn s
     } else {
         return Err("Unknown file type".into());
     };
-    
+
     Ok(builder)
 }
 

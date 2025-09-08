@@ -5,12 +5,12 @@ discoverable through IDE autocomplete and documentation.
 
 Examples:
     >>> from pecos_rslib import classical
-    >>> 
+    >>>
     >>> # Available classical engines via namespace
     >>> qasm_builder = classical.qasm()
     >>> llvm_builder = classical.llvm()
     >>> selene_builder = classical.selene()
-    >>> 
+    >>>
     >>> # Direct class instantiation also available
     >>> qasm_builder = classical.QasmEngineBuilder()
     >>> llvm_builder = classical.LlvmEngineBuilder()
@@ -35,7 +35,7 @@ selene = selene_engine
 __all__ = [
     # Free functions
     "qasm",
-    "llvm", 
+    "llvm",
     "selene",
     # Builder classes
     "QasmEngineBuilder",

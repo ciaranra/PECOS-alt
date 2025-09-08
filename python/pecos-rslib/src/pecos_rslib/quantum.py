@@ -5,16 +5,16 @@ discoverable through IDE autocomplete and documentation.
 
 Examples:
     >>> from pecos_rslib import quantum
-    >>> 
+    >>>
     >>> # Available quantum simulators via namespace
     >>> state_vector_engine = quantum.state_vector()
     >>> sparse_stabilizer_engine = quantum.sparse_stabilizer()
     >>> sparse_stab_engine = quantum.sparse_stab()  # alias
-    >>> 
+    >>>
     >>> # Direct class instantiation also available
     >>> state_vector_engine = quantum.StateVectorEngineBuilder()
     >>> sparse_stabilizer_engine = quantum.SparseStabilizerEngineBuilder()
-    >>> 
+    >>>
     >>> # Use in simulation
     >>> from pecos_rslib import classical
     >>> results = classical.qasm()\\

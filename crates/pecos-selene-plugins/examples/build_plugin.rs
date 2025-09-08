@@ -30,17 +30,17 @@ define i32 @main() {
 entry:
     ; Allocate a qubit
     %q = call %Qubit* @__quantum__rt__qubit_allocate()
-    
+
     ; Apply Hadamard gate
     call void @__quantum__qis__h__body(%Qubit* %q)
-    
+
     ; Measure the qubit
     %result = alloca %Result*
     call void @__quantum__qis__mz__body(%Qubit* %q, %Result** %result)
-    
+
     ; Release the qubit
     call void @__quantum__rt__qubit_release(%Qubit* %q)
-    
+
     ret i32 0
 }
 "#;
@@ -48,7 +48,7 @@ entry:
     // Plugin building functionality is not yet implemented
     println!("Plugin building example - not yet implemented");
     println!("LLVM IR length: {} characters", llvm_ir.len());
-    
+
     // TODO: Implement plugin building functionality
     /*
     // Configure the plugin build

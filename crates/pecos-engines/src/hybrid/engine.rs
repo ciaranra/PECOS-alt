@@ -152,9 +152,7 @@ impl HybridEngine {
                 iteration_count,
                 std::thread::current().id()
             );
-            debug!(
-                "Processing quantum commands, iteration {iteration_count}"
-            );
+            debug!("Processing quantum commands, iteration {iteration_count}");
 
             // Process through engine (could be QuantumEngine or EngineSystem)
             let measurement_message = self.quantum_system.process(command_message)?;

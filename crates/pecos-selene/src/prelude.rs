@@ -24,38 +24,31 @@
 //! ```
 
 // Main entry points for Selene engines
-pub use crate::{selene_simple_runtime, SeleneSimpleRuntimeEngine, SeleneSimpleRuntimeEngineBuilder};
+pub use crate::{
+    SeleneSimpleRuntimeEngine, SeleneSimpleRuntimeEngineBuilder, selene_simple_runtime,
+};
 
 // Program types
 pub use crate::program::SeleneProgram;
-pub use pecos_programs::{LlvmProgram, HugrProgram};
+pub use pecos_programs::{HugrProgram, LlvmProgram};
 
 // Engine traits - especially ClassicalControlEngineBuilder for .to_sim() (sim_builder() preferred)
-pub use pecos_engines::{
-    ClassicalControlEngineBuilder,
-    ClassicalEngine,
-    ControlEngine,
-    Engine,
-};
+pub use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine, ControlEngine, Engine};
 
 // For hybrid engines
 pub use pecos_engines::hybrid::HybridEngineBuilder;
 
 // Noise models - convenience structs
-pub use pecos_engines::{
-    DepolarizingNoise,
-    BiasedDepolarizingNoise,
-    PassThroughNoise,
-};
+pub use pecos_engines::{BiasedDepolarizingNoise, DepolarizingNoise, PassThroughNoise};
 
 // Quantum engines
-pub use pecos_engines::quantum::{StateVecEngine, SparseStabEngine};
+pub use pecos_engines::quantum::{SparseStabEngine, StateVecEngine};
 
 // Simulation builder for unified API
 pub use pecos_engines::sim_builder;
 
 // Result types
-pub use pecos_engines::{Shot, ShotVec, ShotMap};
+pub use pecos_engines::{Shot, ShotMap, ShotVec};
 
 // Error types
 pub use crate::error::SeleneError;

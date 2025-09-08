@@ -15,7 +15,7 @@ use tempfile::NamedTempFile;
 pub struct MlirToolchainConfig {
     /// Path to mlir-opt binary
     pub mlir_opt_path: Option<String>,
-    /// Path to mlir-translate binary  
+    /// Path to mlir-translate binary
     pub mlir_translate_path: Option<String>,
     /// Additional passes for mlir-opt
     pub optimization_passes: Vec<String>,
@@ -48,7 +48,7 @@ impl Default for MlirToolchainConfig {
 ///
 /// Returns `PecosError` if:
 /// - Failed to create or write temporary files
-/// - MLIR tools are not found or fail to execute  
+/// - MLIR tools are not found or fail to execute
 /// - MLIR optimization or translation fails
 ///
 /// Convert MLIR text to LLVM IR using external MLIR tools

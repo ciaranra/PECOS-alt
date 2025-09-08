@@ -4,8 +4,8 @@
 use std::error::Error;
 
 use pecos_engines::ClassicalControlEngineBuilder;
-use pecos_qasm::qasm_engine;
 use pecos_programs::QasmProgram;
+use pecos_qasm::qasm_engine;
 
 #[test]
 fn test_conditional_execution() -> Result<(), Box<dyn Error>> {

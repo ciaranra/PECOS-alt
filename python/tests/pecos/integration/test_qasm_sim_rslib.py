@@ -15,9 +15,9 @@ class TestQasmSimRslib:
     def test_import_noise_models(self) -> None:
         """Test that we can import noise models from pecos_rslib."""
         from pecos_rslib import (
+            GeneralNoiseModelBuilder,
             biased_depolarizing_noise,
             depolarizing_noise,
-            GeneralNoiseModelBuilder,
         )
 
         # Test that we can create noise builders
@@ -27,7 +27,7 @@ class TestQasmSimRslib:
 
     def test_import_utilities(self) -> None:
         """Test that we can import utility functions from pecos_rslib."""
-        from pecos_rslib import state_vector, sparse_stabilizer
+        from pecos_rslib import sparse_stabilizer, state_vector
 
         # Test quantum engine builders
         assert callable(state_vector)
@@ -48,7 +48,13 @@ class TestQasmSimRslib:
         measure q -> c;
         """
 
-        results = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().seed(42).run(1000)
+        results = (
+            qasm_engine()
+            .program(QasmProgram.from_string(qasm))
+            .to_sim()
+            .seed(42)
+            .run(1000)
+        )
         results_dict = results.to_dict()
 
         assert isinstance(results_dict, dict)
@@ -75,12 +81,14 @@ class TestQasmSimRslib:
         """
 
         # With noise
-        results = (qasm_engine()
-                  .program(QasmProgram.from_string(qasm))
-                  .to_sim()
-                  .seed(42)
-                  .noise(depolarizing_noise().with_uniform_probability(0.1))
-                  .run(1000))
+        results = (
+            qasm_engine()
+            .program(QasmProgram.from_string(qasm))
+            .to_sim()
+            .seed(42)
+            .noise(depolarizing_noise().with_uniform_probability(0.1))
+            .run(1000)
+        )
         results_dict = results.to_dict()
 
         assert isinstance(results_dict, dict)
@@ -93,7 +101,11 @@ class TestQasmSimRslib:
 
     def test_builder_pattern(self) -> None:
         """Test the builder pattern using pecos_rslib imports."""
-        from pecos_rslib import biased_depolarizing_noise, qasm_engine, sparse_stabilizer
+        from pecos_rslib import (
+            biased_depolarizing_noise,
+            qasm_engine,
+            sparse_stabilizer,
+        )
         from pecos_rslib.programs import QasmProgram
 
         qasm = """
@@ -122,7 +134,7 @@ class TestQasmSimRslib:
         # Run multiple times
         results1 = sim.run(100)
         results2 = sim.run(200)
-        
+
         results1_dict = results1.to_dict()
         results2_dict = results2.to_dict()
 
@@ -186,7 +198,13 @@ class TestQasmSimRslib:
         """
 
         # This should use all available CPU cores
-        results = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().auto_workers().run(1000)
+        results = (
+            qasm_engine()
+            .program(QasmProgram.from_string(qasm))
+            .to_sim()
+            .auto_workers()
+            .run(1000)
+        )
         results_dict = results.to_dict()
 
         assert isinstance(results_dict, dict)
@@ -256,7 +274,9 @@ class TestQasmSimRslib:
         assert all(val == expected for val in results_dict["c"])
 
         # Test with binary string format
-        results_binary = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().run(5)
+        results_binary = (
+            qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().run(5)
+        )
         results_binary_dict = results_binary.to_binary_dict()
 
         assert all(len(val) == 100 for val in results_binary_dict["c"])

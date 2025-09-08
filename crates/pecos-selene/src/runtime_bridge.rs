@@ -161,7 +161,7 @@ pub extern "C" fn __quantum__qis__read_result__body(result_id: u64) -> bool {
         if let Err(e) = runtime.force_result(result_id) {
             log::error!("Force result failed: {}", e);
         }
-        
+
         // Then get the result
         match runtime.get_bool_result(result_id) {
             Ok(Some(value)) => value,
@@ -194,7 +194,7 @@ pub extern "C" fn __quantum__qis__result_record_output(result_id: u64, tag: *con
                 .unwrap_or("invalid")
         }
     };
-    
+
     let value = __quantum__qis__read_result__body(result_id);
     log::info!("Result output: {} = {}", tag_str, value as i32);
 }

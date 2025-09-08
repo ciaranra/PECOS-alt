@@ -16,7 +16,7 @@ define void @main() #0 {
     ; IMMEDIATE measurements - get results right away
     %result0 = call i32 @__quantum__qis__m__body(i64 0, i64 0)
     %result1 = call i32 @__quantum__qis__m__body(i64 1, i64 1)
-    
+
     ; Record both results to "c" register (just like the original Bell examples)
     call void @__quantum__rt__result_record_output(i64 0, i8* getelementptr inbounds ([2 x i8], [2 x i8]* @.str.c, i32 0, i32 0))
     call void @__quantum__rt__result_record_output(i64 1, i8* getelementptr inbounds ([2 x i8], [2 x i8]* @.str.c, i32 0, i32 0))

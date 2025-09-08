@@ -12,59 +12,44 @@
 
 // Core traits - these are fundamental to using the unified API
 pub use crate::{
-    Engine,
-    ClassicalEngine, 
-    ControlEngine,
     ClassicalControlEngine,
-    ClassicalControlEngineBuilder,  // For .to_sim() method (sim_builder() preferred)
+    ClassicalControlEngineBuilder, // For .to_sim() method (sim_builder() preferred)
+    ClassicalEngine,
+    ControlEngine,
+    Engine,
 };
 
 // Quantum engines and builders
-pub use crate::quantum::{SparseStabEngine, StateVecEngine, new_quantum_engine_arbitrary_qgate, QuantumEngine};
-pub use crate::quantum_engine_builder::{state_vector, sparse_stabilizer, IntoQuantumEngineBuilder};
+pub use crate::quantum::{
+    QuantumEngine, SparseStabEngine, StateVecEngine, new_quantum_engine_arbitrary_qgate,
+};
+pub use crate::quantum_engine_builder::{
+    IntoQuantumEngineBuilder, sparse_stabilizer, state_vector,
+};
 
 // Noise models - both traits and common implementations
 pub use crate::noise::{
-    NoiseModel,
-    IntoNoiseModel,  // Needed for .noise() method to work smoothly
-    PassThroughNoiseModel,
     DepolarizingNoiseModel,
+    IntoNoiseModel, // Needed for .noise() method to work smoothly
+    NoiseModel,
+    PassThroughNoiseModel,
     general::GeneralNoiseModel,
 };
 
 // Convenience structs for noise configuration
-pub use crate::{
-    PassThroughNoise,
-    DepolarizingNoise,
-    BiasedDepolarizingNoise,
-};
+pub use crate::{BiasedDepolarizingNoise, DepolarizingNoise, PassThroughNoise};
 
 // Engine system and stages
-pub use crate::{
-    EngineStage,
-    EngineSystem,
-    HybridEngine,
-    MonteCarloEngine,
-    QuantumSystem,
-};
+pub use crate::{EngineStage, EngineSystem, HybridEngine, MonteCarloEngine, QuantumSystem};
 
 // Message passing
-pub use crate::{
-    ByteMessage,
-    ByteMessageBuilder,
-    byte_message::dump_batch,
-};
+pub use crate::{ByteMessage, ByteMessageBuilder, byte_message::dump_batch};
 
 // Results and data structures
-pub use crate::shot_results::{Data, Shot, ShotVec, ShotMap};
-pub use crate::{
-    ShotMapDisplay,
-    ShotMapDisplayExt,
-    ShotMapDisplayOptions,
-    BitVecDisplayFormat,
-};
+pub use crate::shot_results::{Data, Shot, ShotMap, ShotVec};
+pub use crate::{BitVecDisplayFormat, ShotMapDisplay, ShotMapDisplayExt, ShotMapDisplayOptions};
 
 // Simulation builders
-pub use crate::sim_builder::{sim, SimBuilder, sim_builder};  // For unified API
+pub use crate::sim_builder::{SimBuilder, sim, sim_builder}; // For unified API
 
 pub use serde_json::Value;

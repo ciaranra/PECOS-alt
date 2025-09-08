@@ -12,7 +12,7 @@
 //! fn main() -> Result<(), PecosError> {
 //!     // Create an LLVM engine
 //!     let engine = LlvmEngine::new(PathBuf::from("program.ll"));
-//!     
+//!
 //!     // Option 1: Run simulation with MonteCarloEngine
 //!     let results = MonteCarloEngine::run_with_engines(
 //!         Box::new(engine.clone()),
@@ -22,22 +22,22 @@
 //!         1,     // workers
 //!         Some(42),  // seed
 //!     )?;
-//!     
+//!
 //!     // Work with shot results
 //!     println!("Got {} shots", results.len());
 //!     for (i, shot) in results.shots.iter().take(5).enumerate() {
 //!         println!("Shot {}: {:?}", i, shot);
 //!     }
-//!     
+//!
 //!     // Option 2: Run a single shot directly
 //!     let mut engine_single = engine;
 //!     let shot = engine_single.process(())?;
 //!     println!("Single shot result: {:?}", shot);
-//!     
+//!
 //!     // Note: For more advanced LLVM simulation features (e.g., compiling from HUGR,
 //!     // managing temporary files, etc.), consider using the `pecos-llvm-sim` crate
 //!     // which provides a builder pattern through `LlvmSim`.
-//!     
+//!
 //!     Ok(())
 //! }
 //! ```
@@ -47,8 +47,8 @@ pub use crate::LlvmEngine;
 
 // Common types from pecos-engines for working with results
 pub use pecos_engines::{
-    BitVecDisplayFormat, ByteMessage, ClassicalEngine, ClassicalControlEngine, Engine, MonteCarloEngine, 
-    Shot, ShotMap, ShotMapDisplayExt, ShotMapDisplayOptions, ShotVec,
+    BitVecDisplayFormat, ByteMessage, ClassicalControlEngine, ClassicalEngine, Engine,
+    MonteCarloEngine, Shot, ShotMap, ShotMapDisplayExt, ShotMapDisplayOptions, ShotVec,
 };
 
 // Simulation builder for unified API

@@ -64,7 +64,7 @@ static int stub_send_operation(void *context, const uint8_t *data, size_t len) {
 
 static int stub_receive_measurements(void *context, uint8_t **data, size_t *len) {
     printf("*** WRAPPER: Bridge requesting measurements ***\n");
-    
+
     // Return NULL/0 to trigger fallback in bridge
     *data = NULL;
     *len = 0;
@@ -99,7 +99,7 @@ static void init_wrapper() {
         "libselene.so",
         NULL
     };
-    
+
     for (int i = 0; selene_paths[i] != NULL; i++) {
         selene_lib_handle = dlopen(selene_paths[i], RTLD_NOW | RTLD_LOCAL);
         if (selene_lib_handle) {
@@ -107,12 +107,12 @@ static void init_wrapper() {
             break;
         }
     }
-    
+
     if (!selene_lib_handle) {
         printf("*** WRAPPER: WARNING - Could not load real libselene.so, using stub behavior ***\n");
         return;
     }
-    
+
     // Load function pointers
     real_selene_qalloc = dlsym(selene_lib_handle, "selene_qalloc");
     real_selene_qfree = dlsym(selene_lib_handle, "selene_qfree");
@@ -129,9 +129,9 @@ static void init_wrapper() {
     real_selene_on_shot_start = dlsym(selene_lib_handle, "selene_on_shot_start");
     real_selene_on_shot_end = dlsym(selene_lib_handle, "selene_on_shot_end");
     real_selene_exit = dlsym(selene_lib_handle, "selene_exit");
-    
+
     printf("*** WRAPPER: Function pointers loaded ***\n");
-    
+
     // Also try to load the bridge plugin and set up callbacks
     void *bridge_handle = dlopen("/home/ciaranra/Repos/cl_projects/gup/PECOS/target/debug/libpecos_selene_bridge.so", RTLD_NOW | RTLD_GLOBAL);
     if (bridge_handle) {
@@ -162,7 +162,7 @@ static void ensure_initialized() {
     if (!instance_initialized && real_selene_load_config) {
         // Create a minimal config file matching Selene's expected format
         // Using Quest simulator plugin with proper format
-        const char *config_content = 
+        const char *config_content =
             "n_qubits: 10\n"
             "shots:\n"
             "  count: 1\n"
@@ -177,28 +177,28 @@ static void ensure_initialized() {
             "  file: \"/home/ciaranra/Repos/cl_projects/gup/PECOS/.venv/lib/python3.12/site-packages/selene_ideal_error_model_plugin/_dist/lib/libselene_ideal_plugin.so\"\n"
             "  args: []\n"
             "runtime:\n"
-            "  name: \"selene_simple_runtime_plugin.plugin.SimpleRuntimePlugin\"\n" 
+            "  name: \"selene_simple_runtime_plugin.plugin.SimpleRuntimePlugin\"\n"
             "  file: \"/home/ciaranra/Repos/cl_projects/gup/PECOS/.venv/lib/python3.12/site-packages/selene_simple_runtime_plugin/_dist/lib/libselene_simple_runtime.so\"\n"
             "  args: []\n"
             "artifact_dir: \"/tmp/selene_artifacts\"\n"
             "output_stream: \"file:///tmp/selene_output.log\"\n"  // File output stream
             "event_hooks:\n"
             "  metrics: false\n";
-        
+
         // Write config to temp file
         char config_path[] = "/tmp/selene_config_XXXXXX.yaml";
         int fd = mkstemps(config_path, 5);
         if (fd != -1) {
             write(fd, config_content, strlen(config_content));
             close(fd);
-            
+
             // Initialize Selene
             struct selene_void_result_t result = real_selene_load_config(&current_instance, config_path);
             if (result.error_code == 0 && current_instance) {
                 printf("*** WRAPPER: Successfully initialized Selene with real libselene.so! ***\n");
                 printf("*** WRAPPER: Config file: %s ***\n", config_path);
                 printf("*** WRAPPER: Instance pointer: %p ***\n", current_instance);
-                
+
                 // Start the first shot
                 real_selene_on_shot_start(current_instance, 0);
                 instance_initialized = true;
@@ -220,13 +220,13 @@ void selene_wrapper_set_instance(SeleneInstance *instance) {
 
 struct selene_u64_result_t selene_qalloc(struct SeleneInstance *instance) {
     ensure_initialized();
-    
+
     if (!real_selene_qalloc || !current_instance) {
         fprintf(stderr, "*** WRAPPER ERROR: Selene not initialized, cannot allocate qubit ***\n");
         struct selene_u64_result_t result = { .error_code = 1, .value = 0 };
         return result;
     }
-    
+
     return real_selene_qalloc(current_instance);
 }
 
@@ -236,7 +236,7 @@ struct selene_void_result_t selene_qfree(struct SeleneInstance *instance, uint64
         struct selene_void_result_t result = { .error_code = 1 };
         return result;
     }
-    
+
     return real_selene_qfree(current_instance, q);
 }
 
@@ -246,7 +246,7 @@ struct selene_void_result_t selene_qubit_reset(struct SeleneInstance *instance, 
         struct selene_void_result_t result = { .error_code = 1 };
         return result;
     }
-    
+
     return real_selene_qubit_reset(current_instance, q);
 }
 
@@ -256,7 +256,7 @@ struct selene_bool_result_t selene_qubit_measure(struct SeleneInstance *instance
         struct selene_bool_result_t result = { .error_code = 1, .value = false };
         return result;
     }
-    
+
     return real_selene_qubit_measure(current_instance, q);
 }
 
@@ -266,7 +266,7 @@ struct selene_future_result_t selene_qubit_lazy_measure(struct SeleneInstance *i
         struct selene_future_result_t result = { .error_code = 1, .reference = 0 };
         return result;
     }
-    
+
     return real_selene_qubit_lazy_measure(current_instance, q);
 }
 
@@ -276,7 +276,7 @@ struct selene_bool_result_t selene_future_read_bool(struct SeleneInstance *insta
         struct selene_bool_result_t result = { .error_code = 1, .value = false };
         return result;
     }
-    
+
     return real_selene_future_read_bool(current_instance, r);
 }
 
@@ -286,7 +286,7 @@ struct selene_void_result_t selene_rxy(struct SeleneInstance *instance, uint64_t
         struct selene_void_result_t result = { .error_code = 1 };
         return result;
     }
-    
+
     return real_selene_rxy(current_instance, q, theta, phi);
 }
 
@@ -296,7 +296,7 @@ struct selene_void_result_t selene_rz(struct SeleneInstance *instance, uint64_t 
         struct selene_void_result_t result = { .error_code = 1 };
         return result;
     }
-    
+
     return real_selene_rz(current_instance, q, theta);
 }
 
@@ -306,7 +306,7 @@ struct selene_void_result_t selene_rzz(struct SeleneInstance *instance, uint64_t
         struct selene_void_result_t result = { .error_code = 1 };
         return result;
     }
-    
+
     return real_selene_rzz(current_instance, q1, q2, theta);
 }
 
@@ -316,7 +316,7 @@ struct selene_u64_result_t selene_get_tc(struct SeleneInstance *instance) {
         struct selene_u64_result_t result = { .error_code = 0, .value = 0 };
         return result;
     }
-    
+
     return real_selene_get_tc(current_instance);
 }
 
@@ -326,7 +326,7 @@ struct selene_void_result_t selene_set_tc(struct SeleneInstance *instance, uint6
         struct selene_void_result_t result = { .error_code = 0 };
         return result;
     }
-    
+
     return real_selene_set_tc(current_instance, tc);
 }
 

@@ -5,9 +5,9 @@ This module provides functionality to compile HUGR (Hierarchical Unified Graph R
 files to LLVM IR. It contains no execution engine dependencies - only compilation logic.
 */
 
-use hugr_core::package::Package;
 use hugr_core::Hugr;
 use hugr_core::extension::ExtensionRegistry;
+use hugr_core::package::Package;
 use hugr_llvm::emit::EmitHugr;
 use hugr_llvm::extension::{int::IntCodegenExtension, prelude::DefaultPreludeCodegen};
 use hugr_llvm::inkwell::context::Context;
@@ -31,7 +31,6 @@ pub struct HugrCompilerConfig {
     /// Output file path for the generated LLVM IR
     pub output_path: Option<PathBuf>,
 }
-
 
 /// Pure HUGR to LLVM IR compiler
 pub struct HugrCompiler {
@@ -59,7 +58,6 @@ impl HugrCompiler {
         self.config.output_path = Some(path.into());
         self
     }
-
 
     /// Compile a HUGR file to LLVM IR
     ///
@@ -105,8 +103,7 @@ impl HugrCompiler {
         // - arithmetic.int.types, arithmetic.float.types
         // - collections.array
         // - logic, ptr, etc.
-        
-        
+
         // The HUGR package includes its own tket2 extension definitions
         // We don't need to add them here - just return the standard registry
         hugr_core::std_extensions::std_reg()
@@ -129,11 +126,14 @@ impl HugrCompiler {
         output_path: &Path,
     ) -> Result<PathBuf, PecosError> {
         eprintln!("HUGR: Compiling HUGR bytes to {}", output_path.display());
-        eprintln!("HUGR: First 8 bytes: {:?}", &hugr_bytes[..8.min(hugr_bytes.len())]);
+        eprintln!(
+            "HUGR: First 8 bytes: {:?}",
+            &hugr_bytes[..8.min(hugr_bytes.len())]
+        );
 
         // Check if this is binary HUGR format (starts with "HUGR" magic bytes)
         let is_binary_hugr = hugr_bytes.len() >= 4 && &hugr_bytes[0..4] == b"HUGR";
-        
+
         let preprocessed_hugr_bytes = if is_binary_hugr {
             debug!("HUGR: Detected binary HUGR format");
             // For binary HUGR, we'll pass it through and let Package::load handle it
@@ -142,7 +142,7 @@ impl HugrCompiler {
             debug!("HUGR: Detected JSON HUGR format, applying preprocessing");
             // Fix duplicate function names before processing
             let fixed_hugr_bytes = fix_duplicate_functions(hugr_bytes)?;
-            
+
             // Preprocess HUGR to replace ConstBool with standard values
             preprocess_hugr_for_constbool(&fixed_hugr_bytes)?
         };
@@ -152,7 +152,7 @@ impl HugrCompiler {
 
         // Load HUGR package with the extension registry
         let _reader = std::io::Cursor::new(preprocessed_hugr_bytes.clone());
-        
+
         // Try loading based on format
         let mut hugr_package = if is_binary_hugr {
             // For binary HUGR, try loading without preprocessing first
@@ -169,7 +169,7 @@ impl HugrCompiler {
                     let error_str = e.to_string();
                     if error_str.contains("unknown variant `List`") {
                         PecosError::with_context(
-                            e, 
+                            e,
                             "HUGR version incompatibility: guppylang uses HUGR 0.13 which has 'List' types, \
                             but PECOS requires HUGR 0.20 which uses 'Array' types instead. \
                             This is a known incompatibility. Please either:\n\
@@ -189,7 +189,7 @@ impl HugrCompiler {
                     let error_str = e.to_string();
                     if error_str.contains("unknown variant `List`") {
                         PecosError::with_context(
-                            e, 
+                            e,
                             "HUGR version incompatibility: guppylang uses HUGR 0.13 which has 'List' types, \
                             but PECOS requires HUGR 0.20 which uses 'Array' types instead. \
                             This is a known incompatibility. Please either:\n\
@@ -314,7 +314,7 @@ impl HugrCompiler {
         let with_wrappers = add_struct_return_wrappers(&fixed_alignment);
         debug!("HUGR: Calling add_main_wrapper_if_needed");
         let fixed_llvm_ir = add_main_wrapper_if_needed(&with_wrappers);
-        
+
         // Double check if main was added
         if fixed_llvm_ir.contains("@main") {
             debug!("HUGR: Main function successfully added to LLVM IR");
@@ -361,27 +361,22 @@ fn fix_duplicate_functions(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
         for module in modules {
             if let Some(nodes) = module.get_mut("nodes").and_then(|n| n.as_array_mut()) {
                 for node in nodes {
-                    if let Some(op) = node.get("op").and_then(|o| o.as_str()) {
-                        if op == "FuncDefn" || op == "FuncDecl" {
-                            if let Some(name_value) = node.get("name") {
-                                if let Some(name) = name_value.as_str() {
-                                    let name_owned = name.to_string();
-                                    if seen_names.contains(&name_owned) {
-                                        // Generate a unique name
-                                        let count =
-                                            name_counter.entry(name_owned.clone()).or_insert(1);
-                                        *count += 1;
-                                        let new_name = format!("{name_owned}_{count}");
-                                        debug!(
-                                            "Renamed duplicate function '{name_owned}' to '{new_name}'"
-                                        );
-                                        node["name"] = serde_json::Value::String(new_name);
-                                    } else {
-                                        seen_names.insert(name_owned.clone());
-                                        name_counter.insert(name_owned, 1);
-                                    }
-                                }
-                            }
+                    if let Some(op) = node.get("op").and_then(|o| o.as_str())
+                        && (op == "FuncDefn" || op == "FuncDecl")
+                        && let Some(name_value) = node.get("name")
+                        && let Some(name) = name_value.as_str()
+                    {
+                        let name_owned = name.to_string();
+                        if seen_names.contains(&name_owned) {
+                            // Generate a unique name
+                            let count = name_counter.entry(name_owned.clone()).or_insert(1);
+                            *count += 1;
+                            let new_name = format!("{name_owned}_{count}");
+                            debug!("Renamed duplicate function '{name_owned}' to '{new_name}'");
+                            node["name"] = serde_json::Value::String(new_name);
+                        } else {
+                            seen_names.insert(name_owned.clone());
+                            name_counter.insert(name_owned, 1);
                         }
                     }
                 }
@@ -406,16 +401,16 @@ fn load_package_with_relaxed_validation(
 ) -> Result<Package, hugr_core::envelope::EnvelopeError> {
     use hugr_core::envelope::read_envelope;
     use hugr_core::extension::ExtensionRegistry;
-    
+
     debug!("HUGR: Loading package with minimal extension validation");
-    
+
     // Create a minimal extension registry that only includes basic types
     let minimal_registry = ExtensionRegistry::new(std::iter::empty());
-    
+
     // Read the envelope with minimal validation to bypass ConstBool issues
     let reader = std::io::Cursor::new(hugr_bytes);
     let (_, package) = read_envelope(reader, &minimal_registry)?;
-    
+
     debug!("HUGR: Package loaded successfully with relaxed validation");
     Ok(package)
 }
@@ -423,12 +418,12 @@ fn load_package_with_relaxed_validation(
 /// Preprocess binary HUGR format
 fn preprocess_binary_hugr(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
     use std::io::Cursor;
-    
+
     // Try to detect if this is HUGR 0.13 by attempting to load it
     // If it fails with a List type error, we know it's 0.13
     let registry = HugrCompiler::create_extension_registry();
     let reader = Cursor::new(hugr_bytes);
-    
+
     match Package::load(reader, Some(&registry)) {
         Ok(_) => {
             // It loaded fine, no conversion needed
@@ -443,7 +438,7 @@ fn preprocess_binary_hugr(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
                 convert_hugr_013_to_020(hugr_bytes)
             } else {
                 // Some other error, pass it through
-                debug!("HUGR: Binary format failed to load: {}", error_str);
+                debug!("HUGR: Binary format failed to load: {error_str}");
                 Ok(hugr_bytes.to_vec())
             }
         }
@@ -453,45 +448,48 @@ fn preprocess_binary_hugr(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
 /// Convert HUGR 0.13 to 0.20
 fn convert_hugr_013_to_020(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
     use std::io::{Read, Write};
-    
+
     // Check envelope header
     if hugr_bytes.len() < 10 {
         return Err(PecosError::Input("HUGR envelope too short".to_string()));
     }
-    
+
     // Verify magic number
     if &hugr_bytes[0..8] != b"HUGRiHJv" {
         return Err(PecosError::Input("Invalid HUGR magic number".to_string()));
     }
-    
+
     let format_byte = hugr_bytes[8];
     let flags = hugr_bytes[9];
     let compressed = (flags & 1) != 0;
-    
-    debug!("HUGR envelope: format={}, compressed={}", format_byte, compressed);
-    
+
+    debug!("HUGR envelope: format={format_byte}, compressed={compressed}");
+
     // Extract payload
     let payload = &hugr_bytes[10..];
-    
+
     // Decompress if needed
     let decompressed = if compressed {
         let mut decoder = zstd::Decoder::new(payload)
             .map_err(|e| PecosError::with_context(e, "Failed to create zstd decoder"))?;
         let mut decompressed = Vec::new();
-        decoder.read_to_end(&mut decompressed)
+        decoder
+            .read_to_end(&mut decompressed)
             .map_err(|e| PecosError::with_context(e, "Failed to decompress HUGR payload"))?;
         decompressed
     } else {
         payload.to_vec()
     };
-    
+
     // Convert based on format
     let converted = match format_byte {
-        63 => { // PackageJson
+        63 => {
+            // PackageJson
             // Convert JSON
             convert_package_json(&decompressed)?
         }
-        2 => { // ModelWithExtensions
+        2 => {
+            // ModelWithExtensions
             // This is a binary capnproto format which is complex to parse and convert
             return Err(PecosError::Input(
                 "HUGR version incompatibility detected: guppylang produces HUGR 0.13 with 'List' types, \
@@ -504,45 +502,49 @@ fn convert_hugr_013_to_020(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
             ));
         }
         _ => {
-            return Err(PecosError::Input(format!("Unsupported HUGR format: {}", format_byte)));
+            return Err(PecosError::Input(format!(
+                "Unsupported HUGR format: {format_byte}"
+            )));
         }
     };
-    
+
     // Re-compress if originally compressed
     let final_payload = if compressed {
         let mut encoder = zstd::Encoder::new(Vec::new(), 3)
             .map_err(|e| PecosError::with_context(e, "Failed to create zstd encoder"))?;
-        encoder.write_all(&converted)
+        encoder
+            .write_all(&converted)
             .map_err(|e| PecosError::with_context(e, "Failed to compress converted HUGR"))?;
-        encoder.finish()
+        encoder
+            .finish()
             .map_err(|e| PecosError::with_context(e, "Failed to finish compression"))?
     } else {
         converted
     };
-    
+
     // Reconstruct envelope
     let mut result = Vec::new();
     result.extend_from_slice(b"HUGRiHJv");
     result.push(format_byte);
     result.push(flags);
     result.extend_from_slice(&final_payload);
-    
+
     Ok(result)
 }
 
-/// Convert PackageJson format from HUGR 0.13 to 0.20
+/// Convert `PackageJson` format from HUGR 0.13 to 0.20
 fn convert_package_json(json_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
     use serde_json::Value;
-    
+
     let json_str = std::str::from_utf8(json_bytes)
         .map_err(|e| PecosError::with_context(e, "Invalid UTF-8 in PackageJson"))?;
-    
+
     let mut json: Value = serde_json::from_str(json_str)
         .map_err(|e| PecosError::with_context(e, "Failed to parse PackageJson"))?;
-    
+
     // Convert List to Array
     convert_hugr_13_types(&mut json)?;
-    
+
     // Serialize back
     serde_json::to_vec(&json)
         .map_err(|e| PecosError::with_context(e, "Failed to serialize converted PackageJson"))
@@ -551,29 +553,29 @@ fn convert_package_json(json_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
 /// Preprocess HUGR to fix `ConstBool` extension references
 fn preprocess_hugr_for_constbool(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
     use serde_json::Value;
-    
+
     // Find JSON start
     let json_start = hugr_bytes.iter().position(|&b| b == b'{').unwrap_or(0);
     let prefix = &hugr_bytes[..json_start];
     let json_bytes = &hugr_bytes[json_start..];
-    
+
     // Parse JSON
     let json_str = std::str::from_utf8(json_bytes)
         .map_err(|e| PecosError::with_context(e, "Invalid UTF-8 in HUGR data"))?;
-    
+
     let mut json: Value = serde_json::from_str(json_str)
         .map_err(|e| PecosError::with_context(e, "Failed to parse HUGR JSON"))?;
-    
+
     // First, convert HUGR 0.13 types to 0.20 equivalents (e.g., List -> Array)
     convert_hugr_13_types(&mut json)?;
-    
+
     // Process all modules to fix ConstBool values
     if let Some(modules) = json.get_mut("modules").and_then(|m| m.as_array_mut()) {
         for module in modules {
             fix_constbool_in_module(module);
         }
     }
-    
+
     // Remove tket2.bool from required extensions in any nodes that use it
     // This is crucial to avoid the "requires extensions" error
     if let Some(modules) = json.get_mut("modules").and_then(|m| m.as_array_mut()) {
@@ -581,14 +583,14 @@ fn preprocess_hugr_for_constbool(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosErro
             remove_tket2_bool_references(module);
         }
     }
-    
+
     // Serialize back to bytes
     let fixed_json = serde_json::to_string(&json)
         .map_err(|e| PecosError::with_context(e, "Failed to serialize fixed JSON"))?;
-    
+
     let mut result = prefix.to_vec();
     result.extend_from_slice(fixed_json.as_bytes());
-    
+
     Ok(result)
 }
 
@@ -602,38 +604,37 @@ fn fix_constbool_in_module(module: &mut serde_json::Value) {
                 Some(serde_json::Value::Object(obj)) => obj.get("op").is_some_and(|v| v == "Const"),
                 _ => false,
             };
-            
+
             if is_const {
                 // Handle Const nodes with ConstBool values
-                if let Some(v) = node.get_mut("v") {
-                    if let Some(v_type) = v.get("v").and_then(|vt| vt.as_str()) {
-                        if v_type == "Extension" {
-                            if let Some(value) = v.get_mut("value") {
-                                if let Some(c) = value.get("c") {
-                                    if c == "ConstBool" {
-                                        debug!("Found ConstBool value: {value:?}");
-                                        
-                                        // Get the boolean value
-                                        let bool_val = value.get("v").and_then(serde_json::Value::as_bool).unwrap_or(false);
-                                        
-                                        // Replace the entire const value with a Sum constant
-                                        *v = serde_json::json!({
-                                            "v": "Sum",
-                                            "tag": i32::from(bool_val),
-                                            "typ": {
-                                                "t": "Sum",
-                                                "s": "Unit", 
-                                                "size": 2
-                                            },
-                                            "vs": []
-                                        });
-                                        
-                                        debug!("Fixed ConstBool to Sum constant");
-                                    }
-                                }
-                            }
-                        }
-                    }
+                if let Some(v) = node.get_mut("v")
+                    && let Some(v_type) = v.get("v").and_then(|vt| vt.as_str())
+                    && v_type == "Extension"
+                    && let Some(value) = v.get_mut("value")
+                    && let Some(c) = value.get("c")
+                    && c == "ConstBool"
+                {
+                    debug!("Found ConstBool value: {value:?}");
+
+                    // Get the boolean value
+                    let bool_val = value
+                        .get("v")
+                        .and_then(serde_json::Value::as_bool)
+                        .unwrap_or(false);
+
+                    // Replace the entire const value with a Sum constant
+                    *v = serde_json::json!({
+                        "v": "Sum",
+                        "tag": i32::from(bool_val),
+                        "typ": {
+                            "t": "Sum",
+                            "s": "Unit",
+                            "size": 2
+                        },
+                        "vs": []
+                    });
+
+                    debug!("Fixed ConstBool to Sum constant");
                 }
             }
         }
@@ -645,40 +646,39 @@ fn remove_tket2_bool_references(module: &mut serde_json::Value) {
     if let Some(nodes) = module.get_mut("nodes").and_then(|n| n.as_array_mut()) {
         for node in nodes {
             // Remove tket2.bool from type references
-            if let Some(op) = node.get_mut("op") {
-                if let Some(op_obj) = op.as_object_mut() {
-                    // Check LoadConstant nodes
-                    if let Some(datatype) = op_obj.get_mut("datatype") {
-                        if let Some(dt_obj) = datatype.as_object_mut() {
-                            if dt_obj.get("extension").and_then(|e| e.as_str()) == Some("tket2.bool") {
-                                // Convert to standard bool type
-                                *datatype = serde_json::json!({
-                                    "t": "Sum",
-                                    "s": "Unit",
-                                    "size": 2
-                                });
-                            }
-                        }
-                    }
-                    
-                    // Check function signatures
-                    if let Some(signature) = op_obj.get_mut("signature") {
-                        update_signature_types(signature);
-                    }
+            if let Some(op) = node.get_mut("op")
+                && let Some(op_obj) = op.as_object_mut()
+            {
+                // Check LoadConstant nodes
+                if let Some(datatype) = op_obj.get_mut("datatype")
+                    && let Some(dt_obj) = datatype.as_object_mut()
+                    && dt_obj.get("extension").and_then(|e| e.as_str()) == Some("tket2.bool")
+                {
+                    // Convert to standard bool type
+                    *datatype = serde_json::json!({
+                        "t": "Sum",
+                        "s": "Unit",
+                        "size": 2
+                    });
+                }
+
+                // Check function signatures
+                if let Some(signature) = op_obj.get_mut("signature") {
+                    update_signature_types(signature);
                 }
             }
-            
+
             // Check Input/Output nodes
             if let Some(types) = node.get_mut("types").and_then(|t| t.as_array_mut()) {
                 for typ in types {
-                    if let Some(t_obj) = typ.as_object_mut() {
-                        if t_obj.get("extension").and_then(|e| e.as_str()) == Some("tket2.bool") {
-                            *typ = serde_json::json!({
-                                "t": "Sum",
-                                "s": "Unit",
-                                "size": 2
-                            });
-                        }
+                    if let Some(t_obj) = typ.as_object_mut()
+                        && t_obj.get("extension").and_then(|e| e.as_str()) == Some("tket2.bool")
+                    {
+                        *typ = serde_json::json!({
+                            "t": "Sum",
+                            "s": "Unit",
+                            "size": 2
+                        });
                     }
                 }
             }
@@ -704,74 +704,70 @@ fn update_signature_types(sig: &mut serde_json::Value) {
 
 /// Replace a tket2.bool type reference with standard bool type
 fn replace_tket2_bool_type(typ: &mut serde_json::Value) {
-    if let Some(t_obj) = typ.as_object_mut() {
-        if t_obj.get("extension").and_then(|e| e.as_str()) == Some("tket2.bool") {
-            *typ = serde_json::json!({
-                "t": "Sum",
-                "s": "Unit",
-                "size": 2
-            });
-        }
+    if let Some(t_obj) = typ.as_object_mut()
+        && t_obj.get("extension").and_then(|e| e.as_str()) == Some("tket2.bool")
+    {
+        *typ = serde_json::json!({
+            "t": "Sum",
+            "s": "Unit",
+            "size": 2
+        });
     }
 }
 
 /// Fix struct store alignment mismatches in LLVM IR
-/// 
+///
 /// The hugr-llvm crate generates struct stores with align 1, but LLVM allocates
 /// structs with their natural alignment (typically 8 bytes). This mismatch causes
 /// segmentation faults when accessing the misaligned memory.
 fn fix_struct_alignment(llvm_ir: &str) -> String {
     use regex::Regex;
-    
+
     // Fix alignment mismatches for struct stores
     // Pattern: store { i1, ... } %value, { i1, ... }* %ptr, align 1
     // Should be: store { i1, ... } %value, { i1, ... }* %ptr, align 8
-    let struct_store_pattern = Regex::new(
-        r"store\s+(\{[^}]+\})\s+([^,]+),\s+(\{[^}]+\}\*)\s+([^,]+),\s+align\s+1\b"
-    ).unwrap();
-    
+    let struct_store_pattern =
+        Regex::new(r"store\s+(\{[^}]+\})\s+([^,]+),\s+(\{[^}]+\}\*)\s+([^,]+),\s+align\s+1\b")
+            .unwrap();
+
     let result = struct_store_pattern.replace_all(llvm_ir, "store $1 $2, $3 $4, align 8");
-    
+
     // Also fix empty struct stores: store {} %value, {}* %ptr, align 1
-    let empty_struct_pattern = Regex::new(
-        r"store\s+(\{\})\s+([^,]+),\s+(\{\}\*)\s+([^,]+),\s+align\s+1\b"
-    ).unwrap();
-    
-    empty_struct_pattern.replace_all(&result, "store $1 $2, $3 $4, align 8").to_string()
+    let empty_struct_pattern =
+        Regex::new(r"store\s+(\{\})\s+([^,]+),\s+(\{\}\*)\s+([^,]+),\s+align\s+1\b").unwrap();
+
+    empty_struct_pattern
+        .replace_all(&result, "store $1 $2, $3 $4, align 8")
+        .to_string()
 }
 
 /// Convert small struct returns to integer returns for ABI compatibility
-/// 
+///
 /// LLVM functions that return { i1, i1, i1, i1 } cause issues with FFI.
 /// This converts them to return i8 instead, packing the bits.
 #[allow(dead_code)]
 fn fix_small_struct_returns(llvm_ir: &str) -> String {
     use regex::Regex;
-    
+
     // Check if this function returns a small struct of booleans
-    let func_sig_pattern = Regex::new(
-        r"define\s+\{\s*i1,\s*i1,\s*i1,\s*i1\s*\}\s+@(\w+)"
-    ).unwrap();
-    
+    let func_sig_pattern = Regex::new(r"define\s+\{\s*i1,\s*i1,\s*i1,\s*i1\s*\}\s+@(\w+)").unwrap();
+
     if let Some(captures) = func_sig_pattern.captures(llvm_ir) {
         let func_name = &captures[1];
         debug!("Found function {func_name} returning {{ i1, i1, i1, i1 }}, converting to i8");
-        
+
         // Replace the function signature
-        let mut result = func_sig_pattern.replace(
-            llvm_ir, 
-            format!("define i8 @{func_name}")
-        ).to_string();
-        
+        let mut result = func_sig_pattern
+            .replace(llvm_ir, format!("define i8 @{func_name}"))
+            .to_string();
+
         // Find the return statement and convert it
         // Pattern: ret { i1, i1, i1, i1 } %value
-        let ret_pattern = Regex::new(
-            r"ret\s+\{\s*i1,\s*i1,\s*i1,\s*i1\s*\}\s+(%\w+)"
-        ).unwrap();
-        
+        let ret_pattern = Regex::new(r"ret\s+\{\s*i1,\s*i1,\s*i1,\s*i1\s*\}\s+(%\w+)").unwrap();
+
         if let Some(ret_captures) = ret_pattern.captures(&result) {
             let ret_var = &ret_captures[1];
-            
+
             // Insert code to pack the struct into an i8
             // We need to extract each field and pack them
             let pack_code = format!(
@@ -792,79 +788,79 @@ fn fix_small_struct_returns(llvm_ir: &str) -> String {
   %packed = or i8 %pack012, %pack3_shift
   ret i8 %packed"
             );
-            
+
             result = ret_pattern.replace(&result, &pack_code).to_string();
         }
-        
+
         return result;
     }
-    
+
     llvm_ir.to_string()
 }
 
-/// Add a main function wrapper if there's no main function but there's an EntryPoint
+/// Add a main function wrapper if there's no main function but there's an `EntryPoint`
 fn add_main_wrapper_if_needed(llvm_ir: &str) -> String {
     use log::debug;
-    
+
     // Check if main already exists
     if llvm_ir.contains("@main(") || llvm_ir.contains("@main ") {
         debug!("HUGR: Main function already exists, skipping wrapper");
         return llvm_ir.to_string();
     }
-    
+
     // For HUGR-generated code, we know the pattern: functions start with _hugr_
     // and the entry point is the one without _wrapper, _get_ etc suffixes
     let mut entry_function: Option<(&str, &str)> = None;
-    
+
     for line in llvm_ir.lines() {
         if line.starts_with("define ") && line.contains("@_hugr_") {
             // Skip wrapper and accessor functions
             if line.contains("_wrapper") || line.contains("_get_") {
                 continue;
             }
-            
+
             // This should be the main entry function
-            if let Some(func_start) = line.find('@') {
-                if let Some(func_end) = line[func_start + 1..].find('(') {
-                    let func_name = &line[func_start + 1..func_start + 1 + func_end];
-                    
-                    // Extract the return type
-                    let return_type = if let Some(define_end) = line.find("define ") {
-                        let after_define = &line[define_end + 7..];
-                        if let Some(at_pos) = after_define.find('@') {
-                            after_define[..at_pos].trim()
-                        } else {
-                            "void"
-                        }
+            if let Some(func_start) = line.find('@')
+                && let Some(func_end) = line[func_start + 1..].find('(')
+            {
+                let func_name = &line[func_start + 1..func_start + 1 + func_end];
+
+                // Extract the return type
+                let return_type = if let Some(define_end) = line.find("define ") {
+                    let after_define = &line[define_end + 7..];
+                    if let Some(at_pos) = after_define.find('@') {
+                        after_define[..at_pos].trim()
                     } else {
                         "void"
-                    };
-                    
-                    entry_function = Some((func_name, return_type));
-                    break;
-                }
+                    }
+                } else {
+                    "void"
+                };
+
+                entry_function = Some((func_name, return_type));
+                break;
             }
         }
     }
-    
-    debug!("HUGR: Entry function found: {:?}", entry_function);
-    
+
+    debug!("HUGR: Entry function found: {entry_function:?}");
+
     // If we found an entry point function, add a main wrapper
     if let Some((entry_name, return_type)) = entry_function {
-        debug!("HUGR: Adding main wrapper for {} with return type {}", entry_name, return_type);
-        
+        debug!("HUGR: Adding main wrapper for {entry_name} with return type {return_type}");
+
         // Create main wrapper that calls the entry function
         let main_wrapper = format!(
-            r#"
+            r"
 ; Main wrapper for Selene compatibility
 define i32 @main() {{
 entry:
   %result = call {return_type} @{entry_name}()
   ret i32 0
 }}
-"#
+"
         );
-        
+
         // Add the wrapper before the attributes section or at the end
         // Look for attributes on its own line or after other content
         if let Some(attr_pos) = llvm_ir.find("attributes ") {
@@ -876,13 +872,12 @@ entry:
             result.push_str(&llvm_ir[line_start..]);
             debug!("HUGR: Inserted main wrapper before attributes section");
             return result;
-        } else {
-            // Just append at the end
-            debug!("HUGR: Appending main wrapper at the end");
-            return format!("{llvm_ir}\n{main_wrapper}");
         }
+        // Just append at the end
+        debug!("HUGR: Appending main wrapper at the end");
+        return format!("{llvm_ir}\n{main_wrapper}");
     }
-    
+
     llvm_ir.to_string()
 }
 
@@ -890,29 +885,29 @@ entry:
 /// This creates a global variable to hold the struct and a wrapper that returns a pointer
 fn add_struct_return_wrappers(llvm_ir: &str) -> String {
     use regex::Regex;
-    
+
     // Find functions that return structs
     let func_pattern = Regex::new(r"define\s+(\{[^}]+\})\s+@(\w+)\(\)\s+").unwrap();
-    
+
     let mut result = llvm_ir.to_string();
     let mut wrappers = String::new();
-    
+
     // Process each function that returns a struct
     for cap in func_pattern.captures_iter(llvm_ir) {
         let struct_type = &cap[1];
         let func_name = &cap[2];
-        
+
         // Skip if it's not a struct with multiple elements
         if !struct_type.contains(',') {
             continue;
         }
-        
+
         // Create a global variable to hold the result
         wrappers.push_str(&format!(
             "\n; Global storage for {func_name} result\n\
              @{func_name}_result = internal global {struct_type} zeroinitializer, align 8\n"
         ));
-        
+
         // Create a wrapper function that stores to global and returns pointer
         wrappers.push_str(&format!(
             "\n; FFI-safe wrapper for {func_name}\n\
@@ -922,14 +917,14 @@ fn add_struct_return_wrappers(llvm_ir: &str) -> String {
                ret {struct_type}* @{func_name}_result\n\
              }}\n"
         ));
-        
+
         // Also create accessor functions to get individual elements
         // Count elements in the struct
-        let elements: Vec<&str> = struct_type[1..struct_type.len()-1]
+        let elements: Vec<&str> = struct_type[1..struct_type.len() - 1]
             .split(',')
             .map(str::trim)
             .collect();
-        
+
         for (i, elem_type) in elements.iter().enumerate() {
             wrappers.push_str(&format!(
                 "\n; Accessor for element {i} of {func_name} result\n\
@@ -941,12 +936,12 @@ fn add_struct_return_wrappers(llvm_ir: &str) -> String {
             ));
         }
     }
-    
+
     // Add wrappers at the end of the module
     if !wrappers.is_empty() {
         result.push_str(&wrappers);
     }
-    
+
     result
 }
 
@@ -1013,8 +1008,7 @@ mod tests {
 
     #[test]
     fn test_hugr_compiler_configuration() {
-        let compiler = HugrCompiler::new()
-            .with_output_path("/tmp/test.ll");
+        let compiler = HugrCompiler::new().with_output_path("/tmp/test.ll");
 
         assert_eq!(
             compiler.config.output_path,

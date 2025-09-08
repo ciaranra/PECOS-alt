@@ -219,7 +219,7 @@ pub struct SourceLocation {
     pub file: String,
     /// Line number (1-based)
     pub line: usize,
-    /// Column number (1-based)  
+    /// Column number (1-based)
     pub column: usize,
     /// Character span in source
     pub span: Span,

@@ -38,16 +38,21 @@ impl LlvmSource {
                 use std::fs;
                 use std::process::Command;
                 use tempfile::TempDir;
-                
+
                 // Create temporary directory
-                let temp_dir = TempDir::new()
-                    .map_err(|e| PecosError::with_context(e, "Failed to create temp directory for bitcode conversion"))?;
-                
+                let temp_dir = TempDir::new().map_err(|e| {
+                    PecosError::with_context(
+                        e,
+                        "Failed to create temp directory for bitcode conversion",
+                    )
+                })?;
+
                 // Write bitcode to temporary file
                 let bc_file = temp_dir.path().join("input.bc");
-                fs::write(&bc_file, &bitcode)
-                    .map_err(|e| PecosError::with_context(e, "Failed to write bitcode to temp file"))?;
-                
+                fs::write(&bc_file, &bitcode).map_err(|e| {
+                    PecosError::with_context(e, "Failed to write bitcode to temp file")
+                })?;
+
                 // Use llvm-dis to convert bitcode to IR
                 let ir_file = temp_dir.path().join("output.ll");
                 let output = Command::new("llvm-dis")
@@ -55,20 +60,25 @@ impl LlvmSource {
                     .arg(&ir_file)
                     .arg(&bc_file)
                     .output()
-                    .map_err(|e| PecosError::with_context(e, "Failed to execute llvm-dis. Make sure LLVM tools are installed"))?;
-                
+                    .map_err(|e| {
+                        PecosError::with_context(
+                            e,
+                            "Failed to execute llvm-dis. Make sure LLVM tools are installed",
+                        )
+                    })?;
+
                 if !output.status.success() {
                     let stderr = String::from_utf8_lossy(&output.stderr);
-                    return Err(PecosError::Input(
-                        format!("llvm-dis failed to convert bitcode: {}", stderr)
-                    ));
+                    return Err(PecosError::Input(format!(
+                        "llvm-dis failed to convert bitcode: {stderr}"
+                    )));
                 }
-                
+
                 // Read the resulting IR
                 fs::read_to_string(&ir_file)
                     .map_err(|e| PecosError::with_context(e, "Failed to read converted LLVM IR"))
             }
-            
+
             Self::LlvmFile(path) => {
                 // Auto-detect based on extension
                 match path.extension().and_then(|s| s.to_str()) {
@@ -79,20 +89,23 @@ impl LlvmSource {
                         std::fs::read_to_string(&path).map_err(|e| {
                             PecosError::with_context(
                                 e,
-                                format!("Failed to read LLVM file: {}. Expected .ll or .bc extension.", path.display()),
+                                format!(
+                                    "Failed to read LLVM file: {}. Expected .ll or .bc extension.",
+                                    path.display()
+                                ),
                             )
                         })
                     }
                 }
             }
-            
+
             Self::LlvmIrFile(path) => std::fs::read_to_string(&path).map_err(|e| {
                 PecosError::with_context(
                     e,
                     format!("Failed to read LLVM IR file: {}", path.display()),
                 )
             }),
-            
+
             Self::LlvmBitcodeFile(path) => {
                 // Read bitcode file and convert to IR
                 let bitcode = std::fs::read(&path).map_err(|e| {
@@ -101,7 +114,7 @@ impl LlvmSource {
                         format!("Failed to read LLVM bitcode file: {}", path.display()),
                     )
                 })?;
-                
+
                 // Convert using the same logic as in-memory bitcode
                 Self::LlvmBitcode(bitcode).to_llvm_ir()
             }

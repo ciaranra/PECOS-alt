@@ -1,6 +1,6 @@
 use pecos_engines::{shot_results::Data, sim_builder, state_vector};
-use pecos_qasm::qasm_engine;
 use pecos_programs::QasmProgram;
+use pecos_qasm::qasm_engine;
 
 #[test]
 fn test_float_in_classical_expression_error() {
@@ -13,8 +13,7 @@ fn test_float_in_classical_expression_error() {
     ";
 
     let result = sim_builder()
-        .classical(qasm_engine()
-        .program(QasmProgram::from_string(qasm)))
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .run(1);
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -32,8 +31,7 @@ fn test_pi_in_classical_expression_error() {
     ";
 
     let result = sim_builder()
-        .classical(qasm_engine()
-        .program(QasmProgram::from_string(qasm)))
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .run(1);
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -52,8 +50,7 @@ fn test_bitwise_in_gate_parameter_error() {
     "#;
 
     let result = sim_builder()
-        .classical(qasm_engine()
-        .program(QasmProgram::from_string(qasm)))
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .run(1);
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -80,8 +77,7 @@ fn test_float_expressions_in_gates_work() {
     "#;
 
     let result = sim_builder()
-        .classical(qasm_engine()
-        .program(QasmProgram::from_string(qasm)))
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .quantum(state_vector())
         .run(1);
     match result {
@@ -111,8 +107,7 @@ fn test_integer_expressions_in_classical_work() {
     ";
 
     let shot_vec = sim_builder()
-        .classical(qasm_engine()
-        .program(QasmProgram::from_string(qasm)))
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];

@@ -3,10 +3,9 @@
 
 import sys
 from pathlib import Path
-from typing import List, Tuple
 
 
-def decode_integer_results(results: List[int], n_bits: int) -> List[Tuple[bool, ...]]:
+def decode_integer_results(results: list[int], n_bits: int) -> list[tuple[bool, ...]]:
     """Decode integer-encoded results back to tuples of booleans."""
     decoded = []
     for val in results:
@@ -139,18 +138,18 @@ def test_complete_pipeline() -> None:
         # First test HUGR to LLVM compilation directly
         # Use to_json() instead of to_bytes() to get JSON format
         hugr_json = simple_quantum.compile().to_json()
-        hugr_bytes = hugr_json.encode('utf-8')
+        hugr_bytes = hugr_json.encode("utf-8")
         try:
             llvm_ir = compile_hugr_to_llvm(hugr_bytes)
-            print(f"[PASS] HUGR to LLVM compilation succeeded")
+            print("[PASS] HUGR to LLVM compilation succeeded")
             print(f"  Generated {len(llvm_ir)} characters of LLVM IR")
-            
+
             # Check for quantum operations
             if any(op in llvm_ir for op in ["__quantum__", "EntryPoint"]):
                 print("[PASS] Generated IR contains quantum operations")
             else:
                 print("[WARNING] Generated IR may not contain quantum operations")
-                
+
         except Exception as e:
             print(f"[WARNING] Direct HUGR to LLVM compilation failed: {e}")
             print("[INFO] This is expected with the placeholder implementation")
@@ -158,7 +157,7 @@ def test_complete_pipeline() -> None:
     except (RuntimeError, ImportError) as e:
         print(f"[WARNING] GuppySeleneCompiler integration failed: {e}")
         # This is now expected to work with HUGR 0.13
-        
+
     # Test 3b: Test legacy GuppyFrontend (optional, expected to fail with HUGR incompatibility)
     print("\n3b. Testing legacy GuppyFrontend (expected to fail)...")
     try:
@@ -226,22 +225,24 @@ def test_complete_pipeline() -> None:
 
         # Compile using GuppySeleneCompiler for HUGR 0.13 compatibility
         compiler = GuppySeleneCompiler()
-        
+
         # First try direct HUGR to LLVM compilation
         # Use to_json() instead of to_bytes() to get JSON format
         hugr_json = bell_state.compile().to_json()
-        hugr_bytes = hugr_json.encode('utf-8')
+        hugr_bytes = hugr_json.encode("utf-8")
         try:
             llvm_ir = compile_hugr_to_llvm(hugr_bytes)
-            print(f"[PASS] Bell state HUGR to LLVM compilation succeeded")
+            print("[PASS] Bell state HUGR to LLVM compilation succeeded")
             print(f"  Generated {len(llvm_ir)} characters of LLVM IR")
-            
+
             # Check for quantum operations
             if "__quantum__qis__cx__body" in llvm_ir or "__quantum__" in llvm_ir:
                 print("[PASS] Bell state contains quantum operations")
             else:
-                print("[WARNING] Bell state may not contain expected quantum operations")
-                
+                print(
+                    "[WARNING] Bell state may not contain expected quantum operations",
+                )
+
         except Exception as e:
             print(f"[WARNING] Bell state HUGR to LLVM failed: {e}")
             print("[INFO] This is expected with the placeholder implementation")

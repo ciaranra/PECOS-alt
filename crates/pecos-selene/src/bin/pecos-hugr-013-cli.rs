@@ -11,34 +11,34 @@ use hugr_core_013::hugr::views::HugrView;
 
 fn main() -> Result<()> {
     env_logger::init();
-    
+
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 2 {
         eprintln!("Usage: {} <hugr-file>", args[0]);
         std::process::exit(1);
     }
-    
+
     let hugr_path = PathBuf::from(&args[1]);
-    
+
     #[cfg(feature = "hugr-013")]
     {
         println!("Loading HUGR 0.13 file: {}", hugr_path.display());
-        
+
         let hugr_bytes = fs::read(&hugr_path)?;
         println!("Read {} bytes", hugr_bytes.len());
-        
+
         match load_hugr_013_package(&hugr_bytes) {
             Ok(package) => {
                 println!("✓ Successfully loaded HUGR 0.13 package!");
-                
+
                 // Print some basic info about the package
                 println!("  Modules: {}", package.modules.len());
                 println!("  Extensions: {}", package.extensions.len());
-                
+
                 for (idx, module) in package.modules.iter().enumerate() {
                     println!("    - Module {}: {} nodes", idx, module.node_count());
                 }
-                
+
                 Ok(())
             }
             Err(e) => {
@@ -47,7 +47,7 @@ fn main() -> Result<()> {
             }
         }
     }
-    
+
     #[cfg(not(feature = "hugr-013"))]
     {
         eprintln!("HUGR 0.13 support not enabled. Rebuild with --features hugr-013");

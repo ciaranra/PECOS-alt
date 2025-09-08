@@ -63,8 +63,8 @@ pub use crate::setup_qasm_engine;
 
 // Re-export engine traits and types from pecos-engines
 pub use pecos_engines::{
-    BitVecDisplayFormat, ClassicalEngine, ClassicalControlEngineBuilder, MonteCarloEngine, 
-    Shot, ShotMap, ShotMapDisplayExt, ShotMapDisplayOptions, ShotVec, sim_builder,
+    BitVecDisplayFormat, ClassicalControlEngineBuilder, ClassicalEngine, MonteCarloEngine, Shot,
+    ShotMap, ShotMapDisplayExt, ShotMapDisplayOptions, ShotVec, sim_builder,
 };
 
 // Re-export core error type and traits

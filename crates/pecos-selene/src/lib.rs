@@ -20,23 +20,23 @@
 //! let simple_llvm = r#"
 //! declare void @__quantum__qis__h__body(i64)
 //! declare i32 @__quantum__qis__m__body(i64, i64)
-//! 
+//!
 //! define void @test() #0 {
 //!     call void @__quantum__qis__h__body(i64 0)
 //!     %r = call i32 @__quantum__qis__m__body(i64 0, i64 0)
 //!     ret void
 //! }
-//! 
+//!
 //! attributes #0 = { "EntryPoint" }
 //! "#;
 //!
-//! // Method 1: Using the builder pattern with LLVM IR  
+//! // Method 1: Using the builder pattern with LLVM IR
 //! let engine = selene_executable()
 //!     .program(LlvmProgram::from_ir(simple_llvm))
 //!     .qubits(1)
 //!     .build()?;
 //!
-//! // Method 2: Direct construction 
+//! // Method 2: Direct construction
 //! let mut engine2 = SeleneExecutableEngine::new(1)?
 //!     .with_llvm_program(LlvmProgram::from_ir(simple_llvm));
 //!
@@ -46,22 +46,21 @@
 //! # }
 //! ```
 
-
 // Selene FFI to ByteMessage bridge - provides the FFI functions that plugins expect
 // and converts them directly to ByteMessages for PECOS
 pub mod selene_ffi_to_bytemessage;
 
-pub mod selene_fast_engine;
-pub mod selene_simple_runtime_engine;
-pub mod selene_simple_runtime_builder;
-pub mod selene_executable_engine;
-pub mod selene_executable_builder;
-pub mod selene_in_process_engine;
-pub mod selene_runtime_init;
-pub mod selene_library_engine;
 pub mod error;
 pub mod prelude;
 pub mod program;
+pub mod selene_executable_builder;
+pub mod selene_executable_engine;
+pub mod selene_fast_engine;
+pub mod selene_in_process_engine;
+pub mod selene_library_engine;
+pub mod selene_runtime_init;
+pub mod selene_simple_runtime_builder;
+pub mod selene_simple_runtime_engine;
 pub mod simulator_plugin_template;
 
 #[cfg(feature = "hugr-013")]
@@ -88,15 +87,15 @@ pub mod selene_wrapper;
 
 // Note: The old selene_sim() API has been removed. Use selene_engine().to_sim() instead.
 // Noise models and quantum engine types are now provided by pecos-engines.
-pub use selene_simple_runtime_builder::{selene_simple_runtime, SeleneSimpleRuntimeEngineBuilder};
+pub use selene_simple_runtime_builder::{SeleneSimpleRuntimeEngineBuilder, selene_simple_runtime};
 pub use selene_simple_runtime_engine::SeleneSimpleRuntimeEngine;
 
 // Export the new bridge-based approach
-pub use selene_executable_engine::{SeleneExecutableEngine, SeleneExecutableConfig};
-pub use selene_executable_builder::{selene_executable, SeleneExecutableEngineBuilder};
+pub use selene_executable_builder::{SeleneExecutableEngineBuilder, selene_executable};
+pub use selene_executable_engine::{SeleneExecutableConfig, SeleneExecutableEngine};
 
 // Export the in-process engine
-pub use selene_in_process_engine::{SeleneInProcessEngine, SeleneInProcessConfig};
+pub use selene_in_process_engine::{SeleneInProcessConfig, SeleneInProcessEngine};
 
 // Deprecated aliases for backward compatibility
 #[deprecated(note = "Use selene_simple_runtime() instead")]
@@ -122,5 +121,4 @@ mod tests {
         let builder = selene_simple_runtime();
         assert!(builder.build().is_err()); // Should fail without program
     }
-
 }

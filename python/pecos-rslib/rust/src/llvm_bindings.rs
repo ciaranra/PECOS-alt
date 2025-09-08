@@ -157,7 +157,7 @@ fn execute_llvm_safe(
 
     // Execute simulation with MonteCarloEngine directly to support max_qubits
     let workers = workers.unwrap_or(1);
-    
+
     // Use MonteCarloEngine directly to have control over max_qubits
     let results = if let Some(max_q) = max_qubits {
         // When max_qubits is specified, use the new method
@@ -175,7 +175,7 @@ fn execute_llvm_safe(
         let static_qubits = classical_engine.num_qubits();
         // Use 3x the static count or 10, whichever is larger, to handle dynamic allocation
         let default_max_qubits = std::cmp::max(static_qubits * 3, 10);
-        
+
         pecos_engines::monte_carlo::MonteCarloEngine::run_with_noise_model_and_max_qubits(
             classical_engine,
             noise_model,
@@ -351,7 +351,7 @@ pub fn py_reset_llvm_runtime() {
     thread::sleep(Duration::from_millis(10));
 }
 
-/// Register LLVM Python module  
+/// Register LLVM Python module
 pub fn register_llvm_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyLlvmEngine>()?;
     m.add_function(wrap_pyfunction!(py_execute_llvm, m)?)?;

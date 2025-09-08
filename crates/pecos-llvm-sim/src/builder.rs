@@ -29,7 +29,7 @@ impl LlvmSim {
         self.source = Some(LlvmSource::LlvmIr(ir.into()));
         self
     }
-    
+
     /// Set the source to LLVM bitcode (binary format).
     pub fn llvm_bitcode(mut self, bitcode: impl Into<Vec<u8>>) -> Self {
         self.source = Some(LlvmSource::LlvmBitcode(bitcode.into()));
@@ -41,13 +41,13 @@ impl LlvmSim {
         self.source = Some(LlvmSource::LlvmFile(path.as_ref().to_path_buf()));
         self
     }
-    
+
     /// Set the source to LLVM IR text file (.ll).
     pub fn llvm_ir_file(mut self, path: impl AsRef<Path>) -> Self {
         self.source = Some(LlvmSource::LlvmIrFile(path.as_ref().to_path_buf()));
         self
     }
-    
+
     /// Set the source to LLVM bitcode file (.bc).
     pub fn llvm_bitcode_file(mut self, path: impl AsRef<Path>) -> Self {
         self.source = Some(LlvmSource::LlvmBitcodeFile(path.as_ref().to_path_buf()));
@@ -148,7 +148,7 @@ impl LlvmSim {
 
     /// Set the number of qubits for the quantum engine.
     ///
-    /// This sets both the quantum engine size and enforces a limit on 
+    /// This sets both the quantum engine size and enforces a limit on
     /// dynamic qubit allocation to prevent out-of-memory issues.
     #[must_use]
     pub fn qubits(mut self, num_qubits: usize) -> Self {

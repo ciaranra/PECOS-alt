@@ -26,19 +26,19 @@ use pecos_selene_bridge::callback_interface::{
 pub struct SeleneCallbackEngine {
     /// Path to the Selene executable
     executable_path: std::path::PathBuf,
-    
+
     /// The running Selene process
     selene_process: Option<Child>,
-    
+
     /// Thread that monitors the Selene process
     monitor_thread: Option<thread::JoinHandle<()>>,
-    
+
     /// TCP stream for capturing final results
     result_stream: Option<TCPResultCapture>,
-    
+
     /// Current state of the engine
     state: Arc<Mutex<EngineState>>,
-    
+
     /// Number of qubits
     num_qubits: usize,
 }
@@ -73,16 +73,16 @@ impl SeleneCallbackEngine {
             num_qubits,
         }
     }
-    
+
     /// Start the Selene executable process
     fn start_selene_process(&mut self) -> Result<(), PecosError> {
         // Reset callback state for new shot
         pecos_reset_callback_state();
-        
+
         // Create TCP stream for results
         // let result_stream = TCPResultCapture::new()?;
         // let result_uri = result_stream.get_uri();
-        
+
         // Build Selene configuration
         let config = serde_json::json!({
             "simulator": {
@@ -93,68 +93,68 @@ impl SeleneCallbackEngine {
             "shots": {"count": 1},
             // "output_stream": result_uri,
         });
-        
+
         // Start Selene process
         let mut cmd = Command::new(&self.executable_path);
         cmd.arg("--configuration").arg("config.json");
-        
+
         let child = cmd.spawn()
             .map_err(|e| PecosError::Processing(format!("Failed to start Selene: {}", e)))?;
-        
+
         self.selene_process = Some(child);
-        
+
         // Start monitor thread
         let state = self.state.clone();
         self.monitor_thread = Some(thread::spawn(move || {
             Self::monitor_execution(state);
         }));
-        
+
         // Update state
         *self.state.lock().unwrap() = EngineState::Running;
-        
+
         Ok(())
     }
-    
+
     /// Monitor thread that watches for operations and completion
     fn monitor_execution(state: Arc<Mutex<EngineState>>) {
         loop {
             thread::sleep(Duration::from_millis(10));
-            
+
             // Check if execution is complete
             if pecos_is_execution_complete() {
                 *state.lock().unwrap() = EngineState::Complete;
                 break;
             }
-            
+
             // Check if Bridge is waiting for measurements
             if pecos_is_bridge_waiting() {
                 *state.lock().unwrap() = EngineState::WaitingForMeasurements;
             }
         }
     }
-    
+
     /// Get the next batch of operations from the Bridge
     fn get_next_operations(&mut self) -> Option<ByteMessage> {
         // Check if there are pending operations from the Bridge
         pecos_get_pending_operations()
     }
-    
+
     /// Provide measurement results to the Bridge
     fn provide_measurements(&mut self, measurements: ByteMessage) -> Result<(), PecosError> {
         pecos_provide_measurements(measurements);
-        
+
         // Update state - Bridge should continue processing
         *self.state.lock().unwrap() = EngineState::Running;
-        
+
         Ok(())
     }
-    
+
     /// Get final results from the TCP stream
     fn get_final_results(&mut self) -> Result<Shot, PecosError> {
         // Read from TCP result stream
         // Parse tagged results
         // Convert to Shot format
-        
+
         // For now, return empty shot
         Ok(Shot::default())
     }
@@ -164,39 +164,39 @@ impl ClassicalEngine for SeleneCallbackEngine {
     fn num_qubits(&self) -> usize {
         self.num_qubits
     }
-    
+
     fn generate_commands(&mut self) -> Result<ByteMessage, PecosError> {
         // This is called by ClassicalEngine trait but we use ControlEngine instead
         // Return empty message
         Ok(ByteMessage::create_empty())
     }
-    
+
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), PecosError> {
         // Forward to Bridge via callbacks
         self.provide_measurements(message)
     }
-    
+
     fn get_results(&self) -> Result<Shot, PecosError> {
         // Results are obtained via TCP stream when complete
         Ok(Shot::default())
     }
-    
+
     fn compile(&self) -> Result<(), PecosError> {
         // Compilation already done by Selene build process
         Ok(())
     }
-    
+
     fn reset(&mut self) -> Result<(), PecosError> {
         // Reset for new shot
         pecos_reset_callback_state();
         *self.state.lock().unwrap() = EngineState::Idle;
         Ok(())
     }
-    
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-    
+
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }
@@ -207,18 +207,18 @@ impl ControlEngine for SeleneCallbackEngine {
     type Output = Shot;
     type EngineInput = ByteMessage;
     type EngineOutput = ByteMessage;
-    
+
     fn start(&mut self, _input: ()) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
         println!("[Engine] Starting Selene execution");
-        
+
         // Start the Selene process if not already running
         if self.selene_process.is_none() {
             self.start_selene_process()?;
         }
-        
+
         // Wait a moment for Selene to initialize
         thread::sleep(Duration::from_millis(100));
-        
+
         // Check if there are operations ready
         if let Some(operations) = self.get_next_operations() {
             println!("[Engine] Got initial operations from Bridge");
@@ -229,7 +229,7 @@ impl ControlEngine for SeleneCallbackEngine {
             loop {
                 thread::sleep(Duration::from_millis(50));
                 wait_count += 1;
-                
+
                 // Check state
                 let state = self.state.lock().unwrap().clone();
                 match state {
@@ -242,13 +242,13 @@ impl ControlEngine for SeleneCallbackEngine {
                     }
                     _ => {}
                 }
-                
+
                 // Check for operations
                 if let Some(operations) = self.get_next_operations() {
                     println!("[Engine] Got operations after waiting");
                     return Ok(EngineStage::NeedsProcessing(operations));
                 }
-                
+
                 // Timeout check
                 if wait_count > 100 { // 5 seconds
                     return Err(PecosError::Processing("Timeout waiting for operations".to_string()));
@@ -256,19 +256,19 @@ impl ControlEngine for SeleneCallbackEngine {
             }
         }
     }
-    
+
     fn continue_processing(
         &mut self,
         measurements: ByteMessage
     ) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
         println!("[Engine] Providing measurements to Bridge");
-        
+
         // Send measurements to the Bridge
         self.provide_measurements(measurements)?;
-        
+
         // Wait for Bridge to process and generate more operations
         thread::sleep(Duration::from_millis(50));
-        
+
         // Check if there are more operations
         if let Some(operations) = self.get_next_operations() {
             println!("[Engine] Got more operations after measurements");
@@ -299,7 +299,7 @@ impl ControlEngine for SeleneCallbackEngine {
             }
         }
     }
-    
+
     fn reset(&mut self) -> Result<(), PecosError> {
         <Self as ClassicalEngine>::reset(self)
     }

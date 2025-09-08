@@ -6,8 +6,12 @@ noise models and quantum engines.
 """
 
 from collections import Counter
-from pecos_rslib import qasm_engine, DepolarizingNoiseModelBuilder, BiasedDepolarizingNoiseModelBuilder
-from pecos_rslib import StateVectorBuilder, SparseStabilizerBuilder, state_vector, sparse_stabilizer
+from pecos_rslib import (
+    qasm_engine,
+    DepolarizingNoiseModelBuilder,
+    BiasedDepolarizingNoiseModelBuilder,
+)
+from pecos_rslib import state_vector, sparse_stabilizer
 from pecos_rslib.programs import QasmProgram
 
 
@@ -35,12 +39,21 @@ def example_bell_state():
         print(f"  |{outcome:02b}⟩: {count} times")
 
     # Run with depolarizing noise
-    noise = (DepolarizingNoiseModelBuilder()
-             .with_prep_probability(0.001)
-             .with_meas_probability(0.002)
-             .with_p1_probability(0.02)
-             .with_p2_probability(0.02))
-    results_noisy = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().seed(42).noise(noise).run(1000)
+    noise = (
+        DepolarizingNoiseModelBuilder()
+        .with_prep_probability(0.001)
+        .with_meas_probability(0.002)
+        .with_p1_probability(0.02)
+        .with_p2_probability(0.02)
+    )
+    results_noisy = (
+        qasm_engine()
+        .program(QasmProgram.from_string(qasm))
+        .to_sim()
+        .seed(42)
+        .noise(noise)
+        .run(1000)
+    )
     results_noisy_dict = results_noisy.to_dict()
     counts_noisy = Counter(results_noisy_dict["c"])
 
@@ -65,11 +78,13 @@ def example_ghz_state():
     """
 
     # Run with custom depolarizing noise
-    noise = (DepolarizingNoiseModelBuilder()
-             .with_prep_probability(0.001)  # Low preparation error
-             .with_meas_probability(0.005)  # Moderate measurement error
-             .with_p1_probability(0.001)    # Low single-qubit gate error
-             .with_p2_probability(0.01))    # Higher two-qubit gate error
+    noise = (
+        DepolarizingNoiseModelBuilder()
+        .with_prep_probability(0.001)  # Low preparation error
+        .with_meas_probability(0.005)  # Moderate measurement error
+        .with_p1_probability(0.001)  # Low single-qubit gate error
+        .with_p2_probability(0.01)
+    )  # Higher two-qubit gate error
 
     # Different ways to specify quantum engine:
     # 1. Using builder function (recommended)
@@ -78,15 +93,17 @@ def example_ghz_state():
     #    .quantum_engine(SparseStabilizerBuilder())
     # 3. Using string (backward compatibility)
     #    .quantum_engine("sparsestabilizer")
-    
-    results = (qasm_engine()
-               .program(QasmProgram.from_string(qasm))
-               .to_sim()
-               .seed(42)
-               .noise(noise)
-               .quantum_engine(sparse_stabilizer())
-               .run(1000))
-    
+
+    results = (
+        qasm_engine()
+        .program(QasmProgram.from_string(qasm))
+        .to_sim()
+        .seed(42)
+        .noise(noise)
+        .quantum_engine(sparse_stabilizer())
+        .run(1000)
+    )
+
     results_dict = results.to_dict()
     counts = Counter(results_dict["c"])
     print("GHZ state measurements (custom noise):")
@@ -109,19 +126,30 @@ def example_biased_depolarizing():
     """
 
     # Perfect measurements
-    results_ideal = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().run(1000)
+    results_ideal = (
+        qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().run(1000)
+    )
     results_ideal_dict = results_ideal.to_dict()
     ideal_counts = Counter(results_ideal_dict["c"])
 
     # Biased depolarizing noise
-    noise = (BiasedDepolarizingNoiseModelBuilder()
-             .with_prep_probability(0.1)
-             .with_meas_0_probability(0.1)
-             .with_meas_1_probability(0.1)
-             .with_p1_probability(0.1)
-             .with_p2_probability(0.1))
+    noise = (
+        BiasedDepolarizingNoiseModelBuilder()
+        .with_prep_probability(0.1)
+        .with_meas_0_probability(0.1)
+        .with_meas_1_probability(0.1)
+        .with_p1_probability(0.1)
+        .with_p2_probability(0.1)
+    )
 
-    results_biased = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().seed(42).noise(noise).run(1000)
+    results_biased = (
+        qasm_engine()
+        .program(QasmProgram.from_string(qasm))
+        .to_sim()
+        .seed(42)
+        .noise(noise)
+        .run(1000)
+    )
     results_biased_dict = results_biased.to_dict()
     biased_counts = Counter(results_biased_dict["c"])
 
@@ -149,12 +177,14 @@ def example_quantum_engines():
 
     # State vector engine (can handle arbitrary gates)
     try:
-        results_sv = (qasm_engine()
-                     .program(QasmProgram.from_string(qasm))
-                     .to_sim()
-                     .seed(42)
-                     .quantum_engine(state_vector())
-                     .run(100))
+        results_sv = (
+            qasm_engine()
+            .program(QasmProgram.from_string(qasm))
+            .to_sim()
+            .seed(42)
+            .quantum_engine(state_vector())
+            .run(100)
+        )
         sv_dict = results_sv.to_dict()
         sv_counts = Counter(sv_dict["c"])
         print(f"StateVector engine: {dict(sv_counts)}")
@@ -164,12 +194,14 @@ def example_quantum_engines():
     # Sparse stabilizer engine (efficient for Clifford circuits)
     # This will fail for non-Clifford gates like rz(0.5)
     try:
-        results_stab = (qasm_engine()
-                       .program(QasmProgram.from_string(qasm))
-                       .to_sim()
-                       .seed(42)
-                       .quantum_engine(sparse_stabilizer())
-                       .run(100))
+        results_stab = (
+            qasm_engine()
+            .program(QasmProgram.from_string(qasm))
+            .to_sim()
+            .seed(42)
+            .quantum_engine(sparse_stabilizer())
+            .run(100)
+        )
         stab_dict = results_stab.to_dict()
         stab_counts = Counter(stab_dict["c"])
         print(f"SparseStabilizer engine: {dict(stab_counts)}")
@@ -194,20 +226,24 @@ def example_builder_pattern():
     """
 
     # Build once, run multiple times with different shot counts
-    noise = (DepolarizingNoiseModelBuilder()
-             .with_prep_probability(0.01)
-             .with_meas_probability(0.01)
-             .with_p1_probability(0.01)
-             .with_p2_probability(0.01))
-    
-    sim = (qasm_engine()
-           .program(QasmProgram.from_string(qasm))
-           .to_sim()
-           .seed(42)
-           .noise(noise)
-           .quantum_engine(sparse_stabilizer())
-           .workers(4)
-           .build())
+    noise = (
+        DepolarizingNoiseModelBuilder()
+        .with_prep_probability(0.01)
+        .with_meas_probability(0.01)
+        .with_p1_probability(0.01)
+        .with_p2_probability(0.01)
+    )
+
+    sim = (
+        qasm_engine()
+        .program(QasmProgram.from_string(qasm))
+        .to_sim()
+        .seed(42)
+        .noise(noise)
+        .quantum_engine(sparse_stabilizer())
+        .workers(4)
+        .build()
+    )
 
     print("Running same circuit with different shot counts:")
     for shots in [10, 100, 1000]:
@@ -217,19 +253,23 @@ def example_builder_pattern():
         print(f"  {shots} shots: {dict(counts)}")
 
     # Or run directly without building
-    noise_biased = (BiasedDepolarizingNoiseModelBuilder()
-                    .with_prep_probability(0.005)
-                    .with_meas_0_probability(0.005)
-                    .with_meas_1_probability(0.005)
-                    .with_p1_probability(0.005)
-                    .with_p2_probability(0.005))
-    
-    results = (qasm_engine()
-               .program(QasmProgram.from_string(qasm))
-               .to_sim()
-               .noise(noise_biased)
-               .run(500))
-    
+    noise_biased = (
+        BiasedDepolarizingNoiseModelBuilder()
+        .with_prep_probability(0.005)
+        .with_meas_0_probability(0.005)
+        .with_meas_1_probability(0.005)
+        .with_p1_probability(0.005)
+        .with_p2_probability(0.005)
+    )
+
+    results = (
+        qasm_engine()
+        .program(QasmProgram.from_string(qasm))
+        .to_sim()
+        .noise(noise_biased)
+        .run(500)
+    )
+
     results_dict = results.to_dict()
     counts = Counter(results_dict["c"])
     print(f"\nDirect run with biased depolarizing noise: {dict(counts)}")
@@ -296,32 +336,38 @@ def example_parallel_execution():
 
     import time
 
-    noise = (DepolarizingNoiseModelBuilder()
-             .with_prep_probability(0.001)
-             .with_meas_probability(0.001)
-             .with_p1_probability(0.001)
-             .with_p2_probability(0.001))
+    noise = (
+        DepolarizingNoiseModelBuilder()
+        .with_prep_probability(0.001)
+        .with_meas_probability(0.001)
+        .with_p1_probability(0.001)
+        .with_p2_probability(0.001)
+    )
 
     # Single worker
     start = time.time()
-    (qasm_engine()
-     .program(QasmProgram.from_string(qasm))
-     .to_sim()
-     .seed(42)
-     .noise(noise)
-     .workers(1)
-     .run(10000))
+    (
+        qasm_engine()
+        .program(QasmProgram.from_string(qasm))
+        .to_sim()
+        .seed(42)
+        .noise(noise)
+        .workers(1)
+        .run(10000)
+    )
     single_time = time.time() - start
 
     # Multiple workers
     start = time.time()
-    (qasm_engine()
-     .program(QasmProgram.from_string(qasm))
-     .to_sim()
-     .seed(42)
-     .noise(noise)
-     .workers(4)
-     .run(10000))
+    (
+        qasm_engine()
+        .program(QasmProgram.from_string(qasm))
+        .to_sim()
+        .seed(42)
+        .noise(noise)
+        .workers(4)
+        .run(10000)
+    )
     parallel_time = time.time() - start
 
     print("Execution time comparison (10,000 shots):")

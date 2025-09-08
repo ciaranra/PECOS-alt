@@ -7,9 +7,9 @@
 //! This is NOT a stub - it's the actual implementation that bridges
 //! between Selene's FFI interface and PECOS's ByteMessage system.
 
-use std::sync::{Arc, Mutex};
 use once_cell::sync::OnceCell;
 use pecos_engines::{ByteMessage, ByteMessageBuilder};
+use std::sync::{Arc, Mutex};
 
 // Global engine interface for communication with SeleneExecutableEngine
 static ENGINE_INTERFACE: OnceCell<Arc<Mutex<dyn EngineInterface + Send + Sync>>> = OnceCell::new();
@@ -18,7 +18,7 @@ static ENGINE_INTERFACE: OnceCell<Arc<Mutex<dyn EngineInterface + Send + Sync>>>
 pub trait EngineInterface {
     /// Queue an operation to be returned by generate_commands()
     fn queue_operation(&mut self, message: ByteMessage);
-    
+
     /// Get measurement results
     fn get_measurement(&mut self, qubit: usize) -> bool;
 }
@@ -64,10 +64,10 @@ fn get_next_qubit() -> u64 {
 
 /// Queue a ByteMessage operation to the engine
 fn queue_operation(message: ByteMessage) {
-    if let Some(engine) = ENGINE_INTERFACE.get() {
-        if let Ok(mut engine) = engine.lock() {
-            engine.queue_operation(message);
-        }
+    if let Some(engine) = ENGINE_INTERFACE.get()
+        && let Ok(mut engine) = engine.lock()
+    {
+        engine.queue_operation(message);
     }
 }
 
@@ -76,14 +76,17 @@ fn queue_operation(message: ByteMessage) {
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_qalloc(_instance: *mut SeleneInstance) -> SeleneU64Result {
     let qubit = get_next_qubit();
-    
+
     // Prepare qubit in |0⟩ state
     let mut builder = ByteMessageBuilder::new();
     let _ = builder.for_quantum_operations();
     builder.add_prep(&[qubit as usize]);
     queue_operation(builder.build());
-    
-    SeleneU64Result { error_code: 0, value: qubit }
+
+    SeleneU64Result {
+        error_code: 0,
+        value: qubit,
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -93,13 +96,16 @@ pub extern "C" fn selene_qfree(_instance: *mut SeleneInstance, _qubit: u64) -> S
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn selene_qubit_reset(_instance: *mut SeleneInstance, qubit: u64) -> SeleneVoidResult {
+pub extern "C" fn selene_qubit_reset(
+    _instance: *mut SeleneInstance,
+    qubit: u64,
+) -> SeleneVoidResult {
     // Prepare qubit in |0⟩ state
     let mut builder = ByteMessageBuilder::new();
     let _ = builder.for_quantum_operations();
     builder.add_prep(&[qubit as usize]);
     queue_operation(builder.build());
-    
+
     SeleneVoidResult { error_code: 0 }
 }
 
@@ -114,7 +120,7 @@ pub extern "C" fn selene_rxy(
     let _ = builder.for_quantum_operations();
     builder.add_r1xy(theta, phi, &[qubit as usize]);
     queue_operation(builder.build());
-    
+
     SeleneVoidResult { error_code: 0 }
 }
 
@@ -128,7 +134,7 @@ pub extern "C" fn selene_rz(
     let _ = builder.for_quantum_operations();
     builder.add_rz(theta, &[qubit as usize]);
     queue_operation(builder.build());
-    
+
     SeleneVoidResult { error_code: 0 }
 }
 
@@ -143,7 +149,7 @@ pub extern "C" fn selene_rzz(
     let _ = builder.for_quantum_operations();
     builder.add_rzz(theta, &[q1 as usize], &[q2 as usize]);
     queue_operation(builder.build());
-    
+
     SeleneVoidResult { error_code: 0 }
 }
 
@@ -157,7 +163,7 @@ pub extern "C" fn selene_qubit_measure(
     let _ = builder.for_quantum_operations();
     builder.add_measurements(&[qubit as usize]);
     queue_operation(builder.build());
-    
+
     // Get result from engine
     let result = if let Some(engine) = ENGINE_INTERFACE.get() {
         if let Ok(mut engine) = engine.lock() {
@@ -168,8 +174,11 @@ pub extern "C" fn selene_qubit_measure(
     } else {
         false
     };
-    
-    SeleneBoolResult { error_code: 0, value: result }
+
+    SeleneBoolResult {
+        error_code: 0,
+        value: result,
+    }
 }
 
 // Lazy measurement (returns a future reference)
@@ -183,15 +192,21 @@ pub extern "C" fn selene_qubit_lazy_measure(
     let _ = builder.for_quantum_operations();
     builder.add_measurements(&[qubit as usize]);
     queue_operation(builder.build());
-    
+
     // Return the qubit ID as the reference (simple mapping)
-    SeleneU64Result { error_code: 0, value: qubit }
+    SeleneU64Result {
+        error_code: 0,
+        value: qubit,
+    }
 }
 
 // Time cursor functions (no-op for now)
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_get_tc(_instance: *mut SeleneInstance) -> SeleneU64Result {
-    SeleneU64Result { error_code: 0, value: 0 }
+    SeleneU64Result {
+        error_code: 0,
+        value: 0,
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -206,13 +221,16 @@ pub extern "C" fn selene_load_config(
     _config_file: *const std::ffi::c_char,
 ) -> SeleneVoidResult {
     unsafe {
-        *instance = 0x1 as *mut SeleneInstance; // Non-null dummy pointer
+        *instance = std::ptr::dangling_mut::<SeleneInstance>(); // Non-null dummy pointer
     }
     SeleneVoidResult { error_code: 0 }
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn selene_on_shot_start(_instance: *mut SeleneInstance, _shot: u64) -> SeleneVoidResult {
+pub extern "C" fn selene_on_shot_start(
+    _instance: *mut SeleneInstance,
+    _shot: u64,
+) -> SeleneVoidResult {
     // Reset qubit counter for new shot
     if let Some(counter) = NEXT_QUBIT.get() {
         *counter.lock().unwrap() = 0;
@@ -227,7 +245,10 @@ pub extern "C" fn selene_on_shot_end(_instance: *mut SeleneInstance) -> SeleneVo
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_shot_count(_instance: *mut SeleneInstance) -> SeleneU64Result {
-    SeleneU64Result { error_code: 0, value: 1 }
+    SeleneU64Result {
+        error_code: 0,
+        value: 1,
+    }
 }
 
 #[unsafe(no_mangle)]

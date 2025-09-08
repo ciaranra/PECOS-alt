@@ -1,5 +1,5 @@
 //! HUGR to LLVM compiler for pecos-selene
-//! 
+//!
 //! This module provides HUGR to LLVM compilation functionality for HUGR 0.13,
 //! generating LLVM IR that follows the QIS (Quantum Instruction Set) conventions.
 
@@ -39,33 +39,30 @@ pub struct CompilationResult {
 }
 
 /// Process a HUGR for quantum compilation
-/// 
+///
 /// This applies quantum-specific optimization passes similar to Selene's QSystemPass
 #[cfg(feature = "hugr-013")]
 pub fn process_hugr(_hugr: &mut Hugr) -> Result<()> {
     // TODO: Apply quantum-specific passes
     // For now, we'll just validate the HUGR
-    
+
     // In Selene, this would:
     // 1. Run QSystemPass for quantum optimizations
     // 2. Inline constant functions
     // 3. Other quantum-specific transformations
-    
+
     Ok(())
 }
 
 /// Compile HUGR to LLVM IR
-/// 
+///
 /// This is the main entry point for HUGR to LLVM compilation.
 /// Currently returns a placeholder as we need to implement the actual compilation.
 #[cfg(feature = "hugr-013")]
-pub fn compile_hugr_to_llvm(
-    hugr: &mut Hugr,
-    _config: &CompileConfig,
-) -> Result<CompilationResult> {
+pub fn compile_hugr_to_llvm(hugr: &mut Hugr, _config: &CompileConfig) -> Result<CompilationResult> {
     // Process the HUGR
     process_hugr(hugr)?;
-    
+
     // TODO: Implement actual HUGR to LLVM compilation
     // This would involve:
     // 1. Creating an LLVM context
@@ -73,7 +70,7 @@ pub fn compile_hugr_to_llvm(
     // 3. Emitting LLVM IR for the HUGR
     // 4. Adding entry point wrapper if needed
     // 5. Running optimization passes
-    
+
     // For now, return a placeholder
     Err(anyhow!(
         "HUGR to LLVM compilation not yet implemented. \
@@ -83,12 +80,12 @@ pub fn compile_hugr_to_llvm(
 }
 
 /// Get quantum operation mappings for LLVM code generation
-/// 
+///
 /// This maps quantum operations to their LLVM implementations.
 /// Based on Selene's QIS (Quantum Instruction Set).
 pub fn get_quantum_op_mappings() -> HashMap<String, String> {
     let mut mappings = HashMap::new();
-    
+
     // Basic quantum gates
     mappings.insert("H".to_string(), "__quantum__qis__h__body".to_string());
     mappings.insert("X".to_string(), "__quantum__qis__x__body".to_string());
@@ -96,25 +93,37 @@ pub fn get_quantum_op_mappings() -> HashMap<String, String> {
     mappings.insert("Z".to_string(), "__quantum__qis__z__body".to_string());
     mappings.insert("CNOT".to_string(), "__quantum__qis__cnot__body".to_string());
     mappings.insert("CZ".to_string(), "__quantum__qis__cz__body".to_string());
-    
+
     // Rotation gates
     mappings.insert("RX".to_string(), "__quantum__qis__rx__body".to_string());
     mappings.insert("RY".to_string(), "__quantum__qis__ry__body".to_string());
     mappings.insert("RZ".to_string(), "__quantum__qis__rz__body".to_string());
-    
+
     // Measurement
-    mappings.insert("Measure".to_string(), "__quantum__qis__mz__body".to_string());
-    mappings.insert("Reset".to_string(), "__quantum__qis__reset__body".to_string());
-    
+    mappings.insert(
+        "Measure".to_string(),
+        "__quantum__qis__mz__body".to_string(),
+    );
+    mappings.insert(
+        "Reset".to_string(),
+        "__quantum__qis__reset__body".to_string(),
+    );
+
     // Allocation/deallocation
-    mappings.insert("Qalloc".to_string(), "__quantum__qis__qalloc__body".to_string());
-    mappings.insert("Qfree".to_string(), "__quantum__qis__qfree__body".to_string());
-    
+    mappings.insert(
+        "Qalloc".to_string(),
+        "__quantum__qis__qalloc__body".to_string(),
+    );
+    mappings.insert(
+        "Qfree".to_string(),
+        "__quantum__qis__qfree__body".to_string(),
+    );
+
     mappings
 }
 
 /// Generate LLVM IR for quantum operations
-/// 
+///
 /// This would be used by the compiler to generate appropriate LLVM calls
 /// for quantum operations in the HUGR.
 pub fn generate_quantum_llvm_ir() -> String {
@@ -141,20 +150,27 @@ declare i1 @__quantum__qis__read_result__body(%Result*)
 ; Qubit type (opaque)
 %Qubit = type opaque
 %Result = type opaque
-"#.to_string()
+"#
+    .to_string()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_quantum_op_mappings() {
         let mappings = get_quantum_op_mappings();
-        assert_eq!(mappings.get("H"), Some(&"__quantum__qis__h__body".to_string()));
-        assert_eq!(mappings.get("CNOT"), Some(&"__quantum__qis__cnot__body".to_string()));
+        assert_eq!(
+            mappings.get("H"),
+            Some(&"__quantum__qis__h__body".to_string())
+        );
+        assert_eq!(
+            mappings.get("CNOT"),
+            Some(&"__quantum__qis__cnot__body".to_string())
+        );
     }
-    
+
     #[test]
     fn test_compile_config_default() {
         let config = CompileConfig::default();

@@ -3,7 +3,10 @@
 //! The unified simulation API returns `ShotVec`, which can be converted
 //! to other formats as needed for compatibility or specific use cases.
 
-use pecos_engines::{shots_to_columnar, shot_results::{ShotVec, Shot, Data}};
+use pecos_engines::{
+    shot_results::{Data, Shot, ShotVec},
+    shots_to_columnar,
+};
 use std::collections::BTreeMap;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -14,49 +17,49 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     //
     // This example focuses on the result format conversions rather than
     // the engine implementation details.
-    
+
     // For this example, we'll create a sample ShotVec directly
     let mut shot_vec = ShotVec::new();
-    
+
     // Add some sample shots with different registers
     for i in 0..10 {
         let mut shot = Shot::default();
-        
+
         // Add measurement results for two registers
         let mut data = BTreeMap::new();
         data.insert("q0".to_string(), Data::U32(i % 2));
         data.insert("q1".to_string(), Data::U32((i / 2) % 2));
-        data.insert("phase".to_string(), Data::F64(i as f64 * 0.1));
-        
+        data.insert("phase".to_string(), Data::F64(f64::from(i) * 0.1));
+
         shot.data = data;
         shot_vec.shots.push(shot);
     }
-    
+
     // Convert to ShotMap (for display, analysis, etc.)
     match shot_vec.try_as_shot_map() {
         Ok(shot_map) => {
-            println!("ShotMap format: {:?}", shot_map);
+            println!("ShotMap format: {shot_map:?}");
             // Use shot_map.display() for pretty printing
             // Use shot_map.iter() for analysis
         }
         Err(e) => {
-            println!("Cannot convert to ShotMap: {}", e);
+            println!("Cannot convert to ShotMap: {e}");
             // This happens when shots have different register structures
         }
     }
-    
+
     // Convert to columnar format (HashMap<String, Vec<i64>>)
     // This format is used by llvm_sim() for compatibility
     let columnar = shots_to_columnar(shot_vec.clone());
-    println!("Columnar format: {:?}", columnar);
+    println!("Columnar format: {columnar:?}");
     // Each register name maps to a vector of values across all shots
-    
+
     // Direct access to shots
     for shot in shot_vec.shots.iter().take(5) {
-        println!("Shot: {:?}", shot);
+        println!("Shot: {shot:?}");
         // Access individual shot data
     }
-    
+
     // Example: Working with individual register data
     println!("\n=== Direct Register Access ===");
     if let Ok(shot_map) = shot_vec.try_as_shot_map() {
@@ -64,12 +67,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Some(q0_values) = shot_map.get("q0") {
             println!("q0 register has {} values", q0_values.len());
         }
-        
+
         // Iterate over all registers
         for (register_name, values) in shot_map.iter() {
             println!("Register '{}': {} values", register_name, values.len());
         }
     }
-    
+
     Ok(())
 }

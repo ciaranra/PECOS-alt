@@ -1,8 +1,8 @@
 // Test that verifies arbitrary-precision integer literals work in QASM
 
 use pecos_engines::{Data, sim_builder};
-use pecos_qasm::qasm_engine;
 use pecos_programs::QasmProgram;
+use pecos_qasm::qasm_engine;
 
 #[test]
 fn test_very_large_integer_literal() {
@@ -17,8 +17,7 @@ fn test_very_large_integer_literal() {
     ";
 
     let shot_vec = sim_builder()
-        .classical(qasm_engine()
-        .program(QasmProgram::from_string(qasm)))
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];
@@ -58,8 +57,7 @@ fn test_large_integer_arithmetic() {
     ";
 
     let shot_vec = sim_builder()
-        .classical(qasm_engine()
-        .program(QasmProgram::from_string(qasm)))
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];
@@ -114,8 +112,7 @@ fn test_negative_large_literals() {
     ";
 
     let shot_vec = sim_builder()
-        .classical(qasm_engine()
-        .program(QasmProgram::from_string(qasm)))
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];
@@ -170,8 +167,7 @@ fn test_extremely_large_literal() {
     ";
 
     let shot_vec = sim_builder()
-        .classical(qasm_engine()
-        .program(QasmProgram::from_string(qasm)))
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];
@@ -207,8 +203,7 @@ fn test_literal_display_and_parsing() {
     ";
 
     let shot_vec = sim_builder()
-        .classical(qasm_engine()
-        .program(QasmProgram::from_string(qasm)))
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];
@@ -264,8 +259,7 @@ fn test_mixed_size_literals_in_expressions() {
     ";
 
     let shot_vec = sim_builder()
-        .classical(qasm_engine()
-        .program(QasmProgram::from_string(qasm)))
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];

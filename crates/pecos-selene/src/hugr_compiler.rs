@@ -132,10 +132,10 @@ pub fn compile_hugr_to_llvm<'c>(
 ) -> Result<Module<'c>> {
     // Process the HUGR
     process_hugr(hugr)?;
-    
+
     // Create namer
     let namer = Rc::new(Namer::new("__hugr__.", true));
-    
+
     // Generate LLVM module
     let module = get_hugr_llvm_module(
         context,
@@ -144,7 +144,7 @@ pub fn compile_hugr_to_llvm<'c>(
         &config.name,
         Rc::new(codegen_extensions()),
     )?;
-    
+
     // Set target information
     let (data_layout, triple) = {
         (
@@ -154,7 +154,7 @@ pub fn compile_hugr_to_llvm<'c>(
     };
     module.set_triple(&triple);
     module.set_data_layout(&data_layout);
-    
+
     // Optimize
     let opt_str = match config.opt_level {
         OptimizationLevel::Aggressive => "default<O3>",
@@ -165,13 +165,13 @@ pub fn compile_hugr_to_llvm<'c>(
     module
         .run_passes(opt_str, target_machine, PassBuilderOptions::create())
         .map_err(|e| anyhow!("Optimization failed: {}", e))?;
-    
+
     // Add a main function wrapper if needed for Selene compatibility
     add_main_wrapper_if_needed(&module, context)?;
-    
+
     // Verify
     module.verify().map_err(|e| anyhow!("Module verification failed: {}", e))?;
-    
+
     Ok(module)
 }
 
@@ -205,10 +205,10 @@ fn add_main_wrapper_if_needed<'ctx>(module: &Module<'ctx>, context: &'ctx Contex
     if module.get_function("main").is_some() {
         return Ok(());
     }
-    
+
     // Convert module to string to find EntryPoint
     let module_str = module.print_to_string().to_string();
-    
+
     // Look for attribute definitions like: attributes #0 = { "EntryPoint" }
     let mut entry_point_attrs = Vec::new();
     for line in module_str.lines() {
@@ -219,7 +219,7 @@ fn add_main_wrapper_if_needed<'ctx>(module: &Module<'ctx>, context: &'ctx Contex
             }
         }
     }
-    
+
     // Find the function with EntryPoint attribute
     let mut entry_function_name: Option<String> = None;
     for line in module_str.lines() {
@@ -242,7 +242,7 @@ fn add_main_wrapper_if_needed<'ctx>(module: &Module<'ctx>, context: &'ctx Contex
             }
         }
     }
-    
+
     // If we found an entry point function, create a main wrapper
     if let Some(entry_name) = entry_function_name {
         if let Some(entry_func) = module.get_function(&entry_name) {
@@ -250,18 +250,18 @@ fn add_main_wrapper_if_needed<'ctx>(module: &Module<'ctx>, context: &'ctx Contex
             let i32_type = context.i32_type();
             let main_fn_type = i32_type.fn_type(&[], false);
             let main_fn = module.add_function("main", main_fn_type, None);
-            
+
             // Create entry block
             let entry_block = context.append_basic_block(main_fn, "entry");
             let builder = context.create_builder();
             builder.position_at_end(entry_block);
-            
+
             // Call the entry function
             let _call_result = builder.build_call(entry_func, &[], "call_entry");
-            
+
             // Return 0 from main
             let _ = builder.build_return(Some(&i32_type.const_int(0, false)));
-            
+
             // Add the EntryPoint attribute to main
             main_fn.add_attribute(
                 inkwell::attributes::AttributeLoc::Function,
@@ -269,6 +269,6 @@ fn add_main_wrapper_if_needed<'ctx>(module: &Module<'ctx>, context: &'ctx Contex
             );
         }
     }
-    
+
     Ok(())
 }

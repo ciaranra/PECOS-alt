@@ -1,13 +1,12 @@
 """Subprocess-based Selene engine for PECOS integration."""
 
-import tempfile
-import json
-import subprocess
-import yaml
-from pathlib import Path
-from typing import Any, Dict, List, Optional
-from dataclasses import dataclass
 import logging
+import subprocess
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -15,127 +14,129 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SeleneSubprocessConfig:
     """Configuration for running Selene as a subprocess."""
+
     executable_path: Path
     working_dir: Path
     num_qubits: int
     shots: int = 1
-    runtime_plugin: Optional[Path] = None
+    runtime_plugin: Path | None = None
     simulator: str = "Quest"
     verbose: bool = False
 
 
 class SeleneSubprocessEngine:
-    """
-    Runs Selene as a subprocess and captures results.
-    
+    """Runs Selene as a subprocess and captures results.
+
     This engine:
     1. Builds a Selene executable from Guppy/HUGR
     2. Runs it as a subprocess with proper configuration
     3. Captures and parses the results
     """
-    
-    def __init__(self, config: SeleneSubprocessConfig):
+
+    def __init__(self, config: SeleneSubprocessConfig) -> None:
         self.config = config
         self.results = []
-        
-    def run(self) -> List[Dict[str, Any]]:
+
+    def run(self) -> list[dict[str, Any]]:
         """Run the Selene executable and collect results."""
-        
         # Create configuration file for Selene
         config_path = self.config.working_dir / "selene_config.yaml"
-        
+
         # Build configuration
         selene_config = {
             "n_qubits": self.config.num_qubits,
             "shots": {
                 "count": self.config.shots,
                 "offset": 0,
-                "increment": 1
+                "increment": 1,
             },
             "simulator": {
                 "name": f"selene_sim.{self.config.simulator}",
                 # Don't include "file" key if None - Selene will use bundled
-                "args": []
+                "args": [],
             },
             "error_model": {
                 "name": "selene_sim.IdealErrorModel",
                 # Don't include "file" key if None
-                "args": []
+                "args": [],
             },
             "runtime": {
                 "name": "selene_sim.SimpleRuntime",
                 # Don't include "file" key if None
-                "args": []
+                "args": [],
             },
             "event_hooks": {},
             "output_stream": "stdout",  # Output to stdout for capture
-            "artifact_dir": str(self.config.working_dir / "artifacts")
+            "artifact_dir": str(self.config.working_dir / "artifacts"),
         }
-        
+
         # If we have a custom runtime plugin, use it
         if self.config.runtime_plugin and self.config.runtime_plugin.exists():
             selene_config["runtime"] = {
                 "name": "pecos_selene_plugins.ByteMessageSimulatorFactory",
                 "file": str(self.config.runtime_plugin),
-                "args": []
+                "args": [],
             }
-        
+
         # Write configuration
-        with open(config_path, 'w') as f:
+        with open(config_path, "w") as f:
             yaml.dump(selene_config, f)
-        
+
         logger.info(f"Running Selene executable: {self.config.executable_path}")
         logger.debug(f"Configuration: {selene_config}")
-        
+
         # Run Selene executable
         try:
             # Don't use text=True as the output might contain binary data
             result = subprocess.run(
                 [str(self.config.executable_path), "--configuration", str(config_path)],
+                check=False,
                 capture_output=True,
                 text=False,  # Binary mode
                 cwd=str(self.config.working_dir),
-                timeout=30  # 30 second timeout
+                timeout=30,  # 30 second timeout
             )
-            
+
             if result.returncode != 0:
                 logger.error(f"Selene returned error code {result.returncode}")
-                stderr_text = result.stderr.decode('utf-8', errors='replace')
+                stderr_text = result.stderr.decode("utf-8", errors="replace")
                 logger.error(f"Stderr: {stderr_text}")
-                raise RuntimeError(f"Selene execution failed: {stderr_text}")
-            
+                msg = f"Selene execution failed: {stderr_text}"
+                raise RuntimeError(msg)
+
             # Parse stdout for results (decode from bytes)
-            stdout_text = result.stdout.decode('utf-8', errors='replace')
+            stdout_text = result.stdout.decode("utf-8", errors="replace")
             results = self._parse_results(stdout_text)
-            
+
             if self.config.verbose:
                 logger.info(f"Stdout: {stdout_text}")
-                stderr_text = result.stderr.decode('utf-8', errors='replace')
+                stderr_text = result.stderr.decode("utf-8", errors="replace")
                 logger.info(f"Stderr: {stderr_text}")
-            
+
             return results
-            
+
         except subprocess.TimeoutExpired:
-            logger.error("Selene execution timed out")
-            raise RuntimeError("Selene execution timed out after 30 seconds")
+            logger.exception("Selene execution timed out")
+            msg = "Selene execution timed out after 30 seconds"
+            raise RuntimeError(msg)
         except Exception as e:
-            logger.error(f"Error running Selene: {e}")
+            logger.exception(f"Error running Selene: {e}")
             raise
-    
-    def _parse_results(self, output: str) -> List[Dict[str, Any]]:
+
+    def _parse_results(self, output: str) -> list[dict[str, Any]]:
         """Parse Selene output for results."""
         results = []
         current_shot = {}
-        
-        for line in output.split('\n'):
+
+        for line in output.split("\n"):
             line = line.strip()
             if not line:
                 continue
-                
+
             # Look for result tags
             if line.startswith("USER:INT:"):
                 # Parse user output: USER:INT:name:value
-                parts = line.split(':')
+                parts = line.split(":")
                 if len(parts) >= 4:
                     name = parts[2]
                     try:
@@ -143,48 +144,49 @@ class SeleneSubprocessEngine:
                         current_shot[name] = value
                     except ValueError:
                         logger.warning(f"Could not parse value: {parts[3]}")
-                        
+
             elif line.startswith("SHOT:END"):
                 # End of shot, save results
                 if current_shot:
                     results.append(current_shot)
                     current_shot = {}
-        
+
         # Save any remaining results
         if current_shot:
             results.append(current_shot)
-        
+
         return results
 
 
-def run_selene_subprocess(executable_path: Path, 
-                         num_qubits: int = 10,
-                         shots: int = 1,
-                         runtime_plugin: Optional[Path] = None,
-                         verbose: bool = False) -> List[Dict[str, Any]]:
-    """
-    Convenience function to run Selene as a subprocess.
-    
+def run_selene_subprocess(
+    executable_path: Path,
+    num_qubits: int = 10,
+    shots: int = 1,
+    runtime_plugin: Path | None = None,
+    verbose: bool = False,
+) -> list[dict[str, Any]]:
+    """Convenience function to run Selene as a subprocess.
+
     Args:
         executable_path: Path to the Selene executable
         num_qubits: Number of qubits to simulate
         shots: Number of shots to run
         runtime_plugin: Optional path to custom runtime plugin
         verbose: Whether to print verbose output
-        
+
     Returns:
         List of result dictionaries, one per shot
     """
     working_dir = executable_path.parent
-    
+
     config = SeleneSubprocessConfig(
         executable_path=executable_path,
         working_dir=working_dir,
         num_qubits=num_qubits,
         shots=shots,
         runtime_plugin=runtime_plugin,
-        verbose=verbose
+        verbose=verbose,
     )
-    
+
     engine = SeleneSubprocessEngine(config)
     return engine.run()

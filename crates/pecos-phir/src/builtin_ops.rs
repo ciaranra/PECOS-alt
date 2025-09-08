@@ -79,10 +79,10 @@ impl ModuleOp {
     pub fn find_function(&self, name: &str) -> Option<&FuncOp> {
         if let Some(block) = self.body.blocks.first() {
             for inst in &block.operations {
-                if let Operation::Builtin(BuiltinOp::Func(func)) = &inst.operation {
-                    if func.name == name {
-                        return Some(func);
-                    }
+                if let Operation::Builtin(BuiltinOp::Func(func)) = &inst.operation
+                    && func.name == name
+                {
+                    return Some(func);
                 }
             }
         }

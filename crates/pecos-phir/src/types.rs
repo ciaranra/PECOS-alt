@@ -27,7 +27,7 @@ pub enum Type {
     Bool,
     /// Signed integer with specified width
     Int(IntWidth),
-    /// Unsigned integer with specified width  
+    /// Unsigned integer with specified width
     UInt(IntWidth),
     /// Floating point with specified precision
     Float(FloatPrecision),
@@ -111,7 +111,7 @@ pub enum ArraySize {
 pub struct FunctionType {
     /// Input parameter types
     pub inputs: Vec<Type>,
-    /// Output/return types  
+    /// Output/return types
     pub outputs: Vec<Type>,
     /// Whether function is variadic
     pub variadic: bool,

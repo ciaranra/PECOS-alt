@@ -4,7 +4,7 @@ use pecos_engines::shot_results::ShotVec;
 use pecos_selene::{selene_engine, SeleneEngineBuilder};
 use pecos_engines::{ClassicalControlEngineBuilder};
 use pecos_engines::noise::{
-    DepolarizingNoiseModelBuilder, BiasedDepolarizingNoiseModelBuilder, 
+    DepolarizingNoiseModelBuilder, BiasedDepolarizingNoiseModelBuilder,
     GeneralNoiseModelBuilder, PassThroughNoiseModelBuilder, IntoNoiseModel
 };
 use pecos_engines::quantum_engine_builder::{state_vector, sparse_stab};
@@ -24,7 +24,7 @@ fn convert_shot_vec_to_binary_dict(shot_vec: ShotVec) -> HashMap<String, Vec<Str
         // Fallback for empty results
         HashMap::new().into()
     });
-    
+
     shot_map.registers().iter().map(|(name, bit_vectors)| {
         let binary_strings: Vec<String> = bit_vectors.iter()
             .map(|bv| bv.iter().map(|bit| if *bit { '1' } else { '0' }).collect())
@@ -34,7 +34,7 @@ fn convert_shot_vec_to_binary_dict(shot_vec: ShotVec) -> HashMap<String, Vec<Str
 }
 
 /// Python wrapper for the unified SimBuilder<SeleneEngineBuilder>
-/// 
+///
 /// This directly mirrors the Rust SimBuilder API
 #[pyclass(name = "SeleneSimBuilder", module = "pecos_rslib._pecos_rslib")]
 pub struct PySeleneSimBuilder {
@@ -128,7 +128,7 @@ pub fn py_selene_sim(llvm_ir: &str, qubits: usize) -> PyResult<PySeleneSimBuilde
         .program(LlvmProgram::from_string(llvm_ir))
         .qubits(qubits)
         .to_sim();
-    
+
     Ok(PySeleneSimBuilder {
         inner: Some(sim_builder)
     })

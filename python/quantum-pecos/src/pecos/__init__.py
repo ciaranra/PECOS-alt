@@ -77,9 +77,11 @@ except ImportError:
             msg,
         )
 
+
 # Import Selene Bridge Plugin (with graceful fallback)
 try:
     from pecos.selene_plugins.simulators import PecosBridgePlugin
+
     SELENE_BRIDGE_AVAILABLE = True
 except ImportError:
     SELENE_BRIDGE_AVAILABLE = False

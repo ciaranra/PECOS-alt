@@ -3,20 +3,20 @@
 //! This module provides a convenience wrapper around the lower-level `sim_builder`
 //! from pecos-engines, adding automatic engine selection based on program type.
 
-use pecos_engines::{SimBuilder, sim_builder, ClassicalControlEngineBuilder, MonteCarloEngine};
+use pecos_core::errors::PecosError;
+use pecos_engines::{ClassicalControlEngineBuilder, MonteCarloEngine, SimBuilder, sim_builder};
+use pecos_llvm_sim::llvm_engine;
 use pecos_programs::Program;
 use pecos_qasm::qasm_engine;
-use pecos_llvm_sim::llvm_engine;
 use pecos_selene::selene_executable;
-use pecos_core::errors::PecosError;
 
 /// Extension trait for `SimBuilder` to add program-based methods
 pub trait SimBuilderExt {
     /// Set the program and automatically select an appropriate engine
-    /// 
+    ///
     /// This method inspects the program type and selects:
     /// - QASM programs → QASM engine
-    /// - LLVM programs → LLVM engine  
+    /// - LLVM programs → LLVM engine
     /// - HUGR programs → Selene engine
     /// - WASM/WAT programs → Error (not yet supported)
     /// - PHIR JSON programs → Error (not yet supported)
@@ -54,38 +54,37 @@ impl ProgrammedSimBuilder {
         } else {
             // Auto-select engine based on program type
             match self.program {
-                Program::Qasm(qasm) => {
-                    self.base_builder
-                        .classical(qasm_engine().program(qasm))
-                        .build()
-                }
-                Program::Llvm(llvm) => {
-                    self.base_builder
-                        .classical(llvm_engine().program(llvm))
-                        .build()
-                }
+                Program::Qasm(qasm) => self
+                    .base_builder
+                    .classical(qasm_engine().program(qasm))
+                    .build(),
+                Program::Llvm(llvm) => self
+                    .base_builder
+                    .classical(llvm_engine().program(llvm))
+                    .build(),
                 Program::Hugr(hugr) => {
                     // Selene can handle HUGR via LLVM compilation
                     self.base_builder
                         .classical(selene_executable().program(hugr))
                         .build()
                 }
-                Program::Wasm(_) => {
-                    Err(PecosError::Input("WASM programs are not yet supported in unified simulation".to_string()))
-                }
-                Program::Wat(_) => {
-                    Err(PecosError::Input("WAT programs are not yet supported in unified simulation".to_string()))
-                }
-                Program::PhirJson(_) => {
-                    Err(PecosError::Input("PHIR JSON programs are not yet supported in unified simulation".to_string()))
-                }
-                Program::SeleneInterface(_) => {
-                    Err(PecosError::Input("SeleneInterface programs are not yet supported in unified simulation".to_string()))
-                }
+                Program::Wasm(_) => Err(PecosError::Input(
+                    "WASM programs are not yet supported in unified simulation".to_string(),
+                )),
+                Program::Wat(_) => Err(PecosError::Input(
+                    "WAT programs are not yet supported in unified simulation".to_string(),
+                )),
+                Program::PhirJson(_) => Err(PecosError::Input(
+                    "PHIR JSON programs are not yet supported in unified simulation".to_string(),
+                )),
+                Program::SeleneInterface(_) => Err(PecosError::Input(
+                    "SeleneInterface programs are not yet supported in unified simulation"
+                        .to_string(),
+                )),
             }
         }
     }
-    
+
     /// Build and run the simulation with automatic engine selection
     ///
     /// This selects an engine based on the program type and runs the simulation,
@@ -97,34 +96,33 @@ impl ProgrammedSimBuilder {
         } else {
             // Auto-select engine based on program type
             match self.program {
-                Program::Qasm(qasm) => {
-                    self.base_builder
-                        .classical(qasm_engine().program(qasm))
-                        .run(shots)
-                }
-                Program::Llvm(llvm) => {
-                    self.base_builder
-                        .classical(llvm_engine().program(llvm))
-                        .run(shots)
-                }
+                Program::Qasm(qasm) => self
+                    .base_builder
+                    .classical(qasm_engine().program(qasm))
+                    .run(shots),
+                Program::Llvm(llvm) => self
+                    .base_builder
+                    .classical(llvm_engine().program(llvm))
+                    .run(shots),
                 Program::Hugr(hugr) => {
                     // Selene can handle HUGR via LLVM compilation
                     self.base_builder
                         .classical(selene_executable().program(hugr))
                         .run(shots)
                 }
-                Program::Wasm(_) => {
-                    Err(PecosError::Input("WASM programs are not yet supported in unified simulation".to_string()))
-                }
-                Program::Wat(_) => {
-                    Err(PecosError::Input("WAT programs are not yet supported in unified simulation".to_string()))
-                }
-                Program::PhirJson(_) => {
-                    Err(PecosError::Input("PHIR JSON programs are not yet supported in unified simulation".to_string()))
-                }
-                Program::SeleneInterface(_) => {
-                    Err(PecosError::Input("SeleneInterface programs are not yet supported in unified simulation".to_string()))
-                }
+                Program::Wasm(_) => Err(PecosError::Input(
+                    "WASM programs are not yet supported in unified simulation".to_string(),
+                )),
+                Program::Wat(_) => Err(PecosError::Input(
+                    "WAT programs are not yet supported in unified simulation".to_string(),
+                )),
+                Program::PhirJson(_) => Err(PecosError::Input(
+                    "PHIR JSON programs are not yet supported in unified simulation".to_string(),
+                )),
+                Program::SeleneInterface(_) => Err(PecosError::Input(
+                    "SeleneInterface programs are not yet supported in unified simulation"
+                        .to_string(),
+                )),
             }
         }
     }
@@ -132,7 +130,10 @@ impl ProgrammedSimBuilder {
     /// Override the classical engine selection
     ///
     /// This allows you to specify a different engine than the auto-selected one.
-    pub fn classical<B: ClassicalControlEngineBuilder + Send + 'static>(mut self, engine_builder: B) -> Self 
+    pub fn classical<B: ClassicalControlEngineBuilder + Send + 'static>(
+        mut self,
+        engine_builder: B,
+    ) -> Self
     where
         B::Engine: 'static,
     {
@@ -142,25 +143,29 @@ impl ProgrammedSimBuilder {
     }
 
     /// Set the random seed (delegates to base builder)
-    #[must_use] pub fn seed(mut self, seed: u64) -> Self {
+    #[must_use]
+    pub fn seed(mut self, seed: u64) -> Self {
         self.base_builder = self.base_builder.seed(seed);
         self
     }
 
     /// Set the number of worker threads (delegates to base builder)
-    #[must_use] pub fn workers(mut self, workers: usize) -> Self {
+    #[must_use]
+    pub fn workers(mut self, workers: usize) -> Self {
         self.base_builder = self.base_builder.workers(workers);
         self
     }
 
     /// Use automatic worker count (delegates to base builder)
-    #[must_use] pub fn auto_workers(mut self) -> Self {
+    #[must_use]
+    pub fn auto_workers(mut self) -> Self {
         self.base_builder = self.base_builder.auto_workers();
         self
     }
 
     /// Enable verbose output (delegates to base builder)
-    #[must_use] pub fn verbose(mut self, verbose: bool) -> Self {
+    #[must_use]
+    pub fn verbose(mut self, verbose: bool) -> Self {
         self.base_builder = self.base_builder.verbose(verbose);
         self
     }
@@ -185,12 +190,12 @@ impl ProgrammedSimBuilder {
     }
 
     /// Set the number of qubits (delegates to base builder)
-    #[must_use] pub fn qubits(mut self, num_qubits: usize) -> Self {
+    #[must_use]
+    pub fn qubits(mut self, num_qubits: usize) -> Self {
         self.base_builder = self.base_builder.qubits(num_qubits);
         self
     }
 }
-
 
 /// Create a simulation builder with a program and automatic engine selection
 ///
@@ -198,9 +203,9 @@ impl ProgrammedSimBuilder {
 /// It automatically selects the appropriate classical engine based on the program type.
 ///
 /// # Automatic Engine Selection
-/// 
+///
 /// - QASM programs → QASM engine
-/// - LLVM programs → LLVM engine  
+/// - LLVM programs → LLVM engine
 /// - HUGR programs → Selene engine
 /// - Other formats → Error (not yet supported)
 ///
@@ -233,5 +238,3 @@ pub fn sim<P: Into<Program>>(program: P) -> ProgrammedSimBuilder {
         override_classical: false,
     }
 }
-
-

@@ -71,10 +71,10 @@ fn emit_bool_read<'c, H: HugrView<Node = Node>>(
     args: EmitOpArgs<'c, '_, ExtensionOp, H>,
 ) -> Result<(), PecosError> {
     let builder = context.builder();
-    
+
     // Input is i1 (opaque bool)
     let bool_value = args.inputs[0].into_int_value();
-    
+
     // For now, keep as i1 to avoid type mismatches in conditionals
     // This is a workaround until the HUGR type system is updated
     args.outputs.finish(builder, [bool_value.into()])?;
@@ -88,10 +88,10 @@ fn emit_bool_make_opaque<'c, H: HugrView<Node = Node>>(
     args: EmitOpArgs<'c, '_, ExtensionOp, H>,
 ) -> Result<(), PecosError> {
     let builder = context.builder();
-    
+
     // Input should already be i1 with our workaround
     let bool_value = args.inputs[0].into_int_value();
-    
+
     // Pass through as-is
     args.outputs.finish(builder, [bool_value.into()])?;
     Ok(())
@@ -104,14 +104,14 @@ fn emit_bool_not<'c, H: HugrView<Node = Node>>(
     args: EmitOpArgs<'c, '_, ExtensionOp, H>,
 ) -> Result<(), PecosError> {
     let builder = context.builder();
-    
+
     // Input is i1 (boolean)
     let bool_value = args.inputs[0].into_int_value();
-    
+
     // Build NOT operation (XOR with true)
     let true_val = context.iw_context().bool_type().const_int(1, false);
     let not_value = builder.build_xor(bool_value, true_val, "bool_not")?;
-    
+
     args.outputs.finish(builder, [not_value.into()])?;
     Ok(())
 }
@@ -123,17 +123,17 @@ fn emit_bool_eq<'c, H: HugrView<Node = Node>>(
     args: EmitOpArgs<'c, '_, ExtensionOp, H>,
 ) -> Result<(), PecosError> {
     let builder = context.builder();
-    
+
     // Inputs are two i1 (boolean) values
     let bool1 = args.inputs[0].into_int_value();
     let bool2 = args.inputs[1].into_int_value();
-    
+
     // Build equality comparison (XNOR - equivalent values)
     // a == b is equivalent to NOT(a XOR b)
     let xor_value = builder.build_xor(bool1, bool2, "bool_xor")?;
     let true_val = context.iw_context().bool_type().const_int(1, false);
     let eq_value = builder.build_xor(xor_value, true_val, "bool_eq")?;
-    
+
     args.outputs.finish(builder, [eq_value.into()])?;
     Ok(())
 }

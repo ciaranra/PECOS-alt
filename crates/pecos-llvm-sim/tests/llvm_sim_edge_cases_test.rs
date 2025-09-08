@@ -1,7 +1,9 @@
 //! Edge case and advanced feature tests for LLVM simulation unified API
 
+use pecos_engines::{
+    BiasedDepolarizingNoise, ClassicalControlEngineBuilder, DepolarizingNoise, sim_builder,
+};
 use pecos_llvm_sim::llvm_engine;
-use pecos_engines::{ClassicalControlEngineBuilder, DepolarizingNoise, BiasedDepolarizingNoise, sim_builder};
 use pecos_programs::LlvmProgram;
 use std::io::Write;
 use tempfile::NamedTempFile;
@@ -51,14 +53,18 @@ ret void
 attributes #0 = { "EntryPoint" }
 "#;
 
-    let result = llvm_engine().program(LlvmProgram::from_string(empty_ir)).to_sim().qubits(1).run(10);
+    let result = llvm_engine()
+        .program(LlvmProgram::from_string(empty_ir))
+        .to_sim()
+        .qubits(1)
+        .run(10);
 
     // Empty circuit with no operations should succeed but produce no meaningful results
     // Note: The unified API requires specifying qubits, so this is actually valid now
     match result {
         Ok(_) => println!("Empty circuit succeeded"),
         Err(e) => {
-            println!("Empty circuit failed with error: {}", e);
+            println!("Empty circuit failed with error: {e}");
             panic!("Empty circuit should succeed with unified API");
         }
     }
@@ -90,8 +96,7 @@ attributes #0 = { "EntryPoint" }
     // Test with large shot count
     let start = std::time::Instant::now();
     let shot_vec = sim_builder()
-        .classical(llvm_engine()
-        .program(LlvmProgram::from_string(simple_ir)))
+        .classical(llvm_engine().program(LlvmProgram::from_string(simple_ir)))
         .seed(42)
         .workers(8) // Use multiple workers for speed
         .qubits(1)
@@ -104,7 +109,9 @@ attributes #0 = { "EntryPoint" }
     assert_eq!(shot_vec.len(), 10000);
 
     // Convert to ShotMap for analysis
-    let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+    let shot_map = shot_vec
+        .try_as_shot_map()
+        .expect("Should convert to ShotMap");
     let r_values = get_register_i64(&shot_map, "r").expect("Should have r register");
 
     // Check distribution
@@ -150,22 +157,23 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     let shot_vec = sim_builder()
-        .classical(llvm_engine()
-        .program(LlvmProgram::from_string(multi_reg_ir)))
+        .classical(llvm_engine().program(LlvmProgram::from_string(multi_reg_ir)))
         .seed(42)
         .qubits(3)
         .run(100)
         .expect("Multiple registers should work");
 
     // Convert to ShotMap
-    let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+    let shot_map = shot_vec
+        .try_as_shot_map()
+        .expect("Should convert to ShotMap");
     let registers = shot_map.register_names();
 
     // Should have three registers
     assert_eq!(registers.len(), 3);
-    assert!(registers.iter().any(|r| *r == "a"));
-    assert!(registers.iter().any(|r| *r == "b"));
-    assert!(registers.iter().any(|r| *r == "c"));
+    assert!(registers.contains(&"a"));
+    assert!(registers.contains(&"b"));
+    assert!(registers.contains(&"c"));
 
     // Each should have 100 values
     assert_eq!(shot_map.num_shots(), 100);
@@ -208,8 +216,7 @@ attributes #0 = { "EntryPoint" }
 
     // Run with biased depolarizing noise
     let shot_vec = sim_builder()
-        .classical(llvm_engine()
-        .program(LlvmProgram::from_string(ghz_ir)))
+        .classical(llvm_engine().program(LlvmProgram::from_string(ghz_ir)))
         .seed(42)
         .noise(BiasedDepolarizingNoise { p: 0.05 }) // 5% biased noise
         .qubits(3)
@@ -217,9 +224,11 @@ attributes #0 = { "EntryPoint" }
         .expect("Biased noise simulation should work");
 
     // Convert to ShotMap and get GHZ values
-    let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+    let shot_map = shot_vec
+        .try_as_shot_map()
+        .expect("Should convert to ShotMap");
     let ghz_values = get_register_i64(&shot_map, "ghz").expect("Should have ghz register");
-    
+
     // Count GHZ outcomes
     let mut counts = std::collections::HashMap::new();
     for &val in &ghz_values {
@@ -273,8 +282,7 @@ attributes #0 = { "EntryPoint" }
 
     // Run from string
     let shot_vec_string = sim_builder()
-        .classical(llvm_engine()
-        .program(LlvmProgram::from_string(llvm_ir)))
+        .classical(llvm_engine().program(LlvmProgram::from_string(llvm_ir)))
         .seed(42)
         .qubits(1)
         .run(100)
@@ -282,8 +290,7 @@ attributes #0 = { "EntryPoint" }
 
     // Run from file
     let shot_vec_file = sim_builder()
-        .classical(llvm_engine()
-        .program(LlvmProgram::from_file(temp_file.path()).unwrap()))
+        .classical(llvm_engine().program(LlvmProgram::from_file(temp_file.path()).unwrap()))
         .seed(42)
         .qubits(1)
         .run(100)
@@ -292,7 +299,7 @@ attributes #0 = { "EntryPoint" }
     // Convert to ShotMaps for comparison
     let shot_map_string = shot_vec_string.try_as_shot_map().expect("Should convert");
     let shot_map_file = shot_vec_file.try_as_shot_map().expect("Should convert");
-    
+
     // Get x values from both
     let x_string = get_register_i64(&shot_map_string, "x").expect("Should have x register");
     let x_file = get_register_i64(&shot_map_file, "x").expect("Should have x register");
@@ -339,8 +346,7 @@ attributes #0 = { "EntryPoint" }
 
     // Test with 50% noise - should be almost random
     let shot_vec = sim_builder()
-        .classical(llvm_engine()
-        .program(LlvmProgram::from_string(simple_ir)))
+        .classical(llvm_engine().program(LlvmProgram::from_string(simple_ir)))
         .seed(42)
         .noise(DepolarizingNoise { p: 0.5 }) // 50% error rate!
         .qubits(2)
@@ -348,7 +354,9 @@ attributes #0 = { "EntryPoint" }
         .expect("Extreme noise should still work");
 
     // Convert to ShotMap and get n values
-    let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+    let shot_map = shot_vec
+        .try_as_shot_map()
+        .expect("Should convert to ShotMap");
     let n_values = get_register_i64(&shot_map, "n").expect("Should have n register");
 
     // Count outcomes
@@ -433,14 +441,10 @@ attributes #0 = { "EntryPoint" }
     // Should panic when trying to run with 0 shots
     let result = std::panic::catch_unwind(|| {
         sim_builder()
-            .classical(llvm_engine()
-            .program(LlvmProgram::from_string(simple_ir)))
+            .classical(llvm_engine().program(LlvmProgram::from_string(simple_ir)))
             .qubits(1)
             .run(0)
     });
-    
-    assert!(
-        result.is_err(),
-        "Running with 0 shots should panic"
-    );
+
+    assert!(result.is_err(), "Running with 0 shots should panic");
 }

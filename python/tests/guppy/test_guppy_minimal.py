@@ -4,7 +4,6 @@
 from pathlib import Path
 
 import pytest
-from guppylang import guppy as guppy_compiler
 from guppylang.decorator import guppy
 from guppylang.std.quantum import h, measure, qubit
 

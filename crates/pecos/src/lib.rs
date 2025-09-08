@@ -89,13 +89,16 @@ pub mod prelude;
 pub mod program;
 pub mod unified_sim;
 
-pub use engine_type::{EngineType, DynamicEngineBuilder, sim_dynamic};
+pub use engine_type::{DynamicEngineBuilder, EngineType, sim_dynamic};
+pub use pecos_engines::{
+    DepolarizingNoise, GeneralNoiseModelBuilder, PassThroughNoiseModel, SimInput, sim_builder,
+    sparse_stabilizer, state_vector,
+};
 pub use pecos_qasm::run_qasm;
-pub use unified_sim::{sim, SimBuilderExt, ProgrammedSimBuilder};
-pub use pecos_engines::{sim_builder, SimInput, state_vector, sparse_stabilizer, DepolarizingNoise, GeneralNoiseModelBuilder, PassThroughNoiseModel};
+pub use unified_sim::{ProgrammedSimBuilder, SimBuilderExt, sim};
 
 // Re-export program types from pecos-programs
-pub use pecos_programs::{QasmProgram, LlvmProgram, HugrProgram, Program};
+pub use pecos_programs::{HugrProgram, LlvmProgram, Program, QasmProgram};
 
 // Re-export engine builders from individual crates
 #[cfg(feature = "qasm")]
@@ -169,8 +172,11 @@ pub fn setup_llvm_engine_with_config(
     shots: Option<usize>,
     max_qubits: Option<usize>,
 ) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
-    log::debug!("Setting up LLVM engine for: {} with max_qubits: {:?}", 
-        llvm_ir_path.display(), max_qubits);
+    log::debug!(
+        "Setting up LLVM engine for: {} with max_qubits: {:?}",
+        llvm_ir_path.display(),
+        max_qubits
+    );
 
     // Create config with max_qubits
     let config = pecos_llvm_runtime::LlvmEngineConfig {
@@ -180,10 +186,8 @@ pub fn setup_llvm_engine_with_config(
     };
 
     // Create LLVM engine with config
-    let mut engine = pecos_llvm_runtime::LlvmEngine::with_config(
-        llvm_ir_path.to_path_buf(), 
-        config
-    );
+    let mut engine =
+        pecos_llvm_runtime::LlvmEngine::with_config(llvm_ir_path.to_path_buf(), config);
 
     // Pre-compile the LLVM library for efficient execution
     engine.pre_compile()?;

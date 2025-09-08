@@ -15,10 +15,10 @@ define void @main() #0 {
     call void @__quantum__qis__rx__body(double 3.14159265359, i64 1)
     call void @__quantum__qis__ry__body(double 1.07, i64 1)
     call void @__quantum__qis__zz__body(i64 0, i64 1)
-    
+
     ; IMMEDIATE measurement for adaptive algorithm
     %intermediate_result = call i32 @__quantum__qis__m__body(i64 0, i64 2)
-    
+
     ; Classical feedback: adapt based on measurement result
     %should_apply_x = icmp eq i32 %intermediate_result, 1
     br i1 %should_apply_x, label %apply_x, label %skip_x
@@ -36,7 +36,7 @@ final_measurements:
     ; Final measurements of both qubits
     %final_result0 = call i32 @__quantum__qis__m__body(i64 0, i64 0)
     %final_result1 = call i32 @__quantum__qis__m__body(i64 1, i64 1)
-    
+
     ; Record the results
     call void @__quantum__rt__result_record_output(i64 0, i8* null)
     call void @__quantum__rt__result_record_output(i64 1, i8* null)

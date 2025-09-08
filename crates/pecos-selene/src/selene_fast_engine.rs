@@ -5,13 +5,11 @@
 
 use crate::error::SeleneError;
 use pecos_core::prelude::PecosError;
-use pecos_engines::{
-    ByteMessage, ByteMessageBuilder, ClassicalEngine, Engine, Shot,
-};
+use pecos_engines::{ByteMessage, ByteMessageBuilder, ClassicalEngine, Engine, Shot};
 use pecos_programs::SeleneInterfaceProgram;
+use std::io::Write;
 use std::{any::Any, collections::BTreeMap, path::PathBuf};
 use tempfile::NamedTempFile;
-use std::io::Write;
 
 /// Configuration for fast Selene engine
 #[derive(Clone)]
@@ -28,7 +26,7 @@ pub struct SeleneFastConfig {
 pub struct SeleneFastEngine {
     /// Configuration
     config: Option<SeleneFastConfig>,
-    /// The loaded program (Selene Interface plugin)  
+    /// The loaded program (Selene Interface plugin)
     program: Option<SeleneInterfaceProgram>,
     /// Current shot number
     shot_count: u64,
@@ -66,10 +64,13 @@ impl SeleneFastEngine {
 
     /// Initialize Selene instance using our configuration
     fn initialize_selene(&mut self) -> Result<(), PecosError> {
-        let config = self.config.as_ref()
-            .ok_or_else(|| SeleneError::CompilationError("No configuration provided".to_string()))?;
-        
-        let program = self.program.as_ref()
+        let config = self.config.as_ref().ok_or_else(|| {
+            SeleneError::CompilationError("No configuration provided".to_string())
+        })?;
+
+        let program = self
+            .program
+            .as_ref()
             .ok_or_else(|| SeleneError::CompilationError("No program loaded".to_string()))?;
 
         log::info!("Initializing Selene with {} qubits", config.num_qubits);
@@ -77,16 +78,17 @@ impl SeleneFastEngine {
         // Create a temporary file for the Interface Plugin
         let mut temp_file = NamedTempFile::new()
             .map_err(|e| SeleneError::RuntimeError(format!("Failed to create temp file: {}", e)))?;
-        
-        temp_file.write_all(&program.plugin)
-            .map_err(|e| SeleneError::RuntimeError(format!("Failed to write Interface Plugin: {}", e)))?;
+
+        temp_file.write_all(&program.plugin).map_err(|e| {
+            SeleneError::RuntimeError(format!("Failed to write Interface Plugin: {}", e))
+        })?;
 
         let plugin_path = temp_file.into_temp_path();
 
         // Create Selene configuration
         // This is where we'd use selene-sim's Configuration struct
         // For now, this is a placeholder showing the approach
-        
+
         log::info!("Would create Selene configuration with:");
         log::info!("  Interface Plugin: {:?}", plugin_path);
         log::info!("  Runtime Plugin: {:?}", config.runtime_plugin_path);
@@ -98,17 +100,11 @@ impl SeleneFastEngine {
         // 2. Setting up simulator, error_model, runtime plugins
         // 3. Creating selene_sim::selene_instance::SeleneInstance::new(config)
         // 4. Storing it in self.selene_instance
-        
+
         // For now, simulate execution results
         self.execution_results = vec![
-            BTreeMap::from([
-                ("qubit1".to_string(), 0),
-                ("qubit2".to_string(), 0),
-            ]),
-            BTreeMap::from([
-                ("qubit1".to_string(), 1), 
-                ("qubit2".to_string(), 1),
-            ]),
+            BTreeMap::from([("qubit1".to_string(), 0), ("qubit2".to_string(), 0)]),
+            BTreeMap::from([("qubit1".to_string(), 1), ("qubit2".to_string(), 1)]),
         ];
 
         Ok(())
@@ -165,7 +161,7 @@ impl Default for SeleneFastEngine {
 impl Engine for SeleneFastEngine {
     type Input = ();
     type Output = Shot;
-    
+
     fn process(&mut self, _input: Self::Input) -> Result<Self::Output, PecosError> {
         <Self as ClassicalEngine>::reset(self)?;
         // Process all commands until done
@@ -236,7 +232,7 @@ impl Clone for SeleneFastEngine {
         Self {
             config: self.config.clone(),
             program: self.program.clone(),
-            shot_count: 0, // Reset for cloned instance
+            shot_count: 0,         // Reset for cloned instance
             selene_instance: None, // Each clone gets fresh instance
             execution_results: Vec::new(),
             result_index: 0,

@@ -42,7 +42,13 @@ def basic_factory_example() -> None:
     noise = factory.create_from_dict(config)
 
     # Run simulation
-    results = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().noise(noise).run(1000)
+    results = (
+        qasm_engine()
+        .program(QasmProgram.from_string(qasm))
+        .to_sim()
+        .noise(noise)
+        .run(1000)
+    )
     results_dict = results.to_dict()
 
     # Analyze results
@@ -279,7 +285,13 @@ def advanced_noise_example() -> None:
     }
 
     noise = factory.create_from_dict(config)
-    results = qasm_engine().program(QasmProgram.from_string(qasm)).to_sim().noise(noise).run(1000)
+    results = (
+        qasm_engine()
+        .program(QasmProgram.from_string(qasm))
+        .to_sim()
+        .noise(noise)
+        .run(1000)
+    )
     results_dict = results.to_dict()
 
     counts = Counter(results_dict["c"])

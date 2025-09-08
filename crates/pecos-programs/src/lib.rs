@@ -295,15 +295,19 @@ pub struct SeleneInterfaceProgram {
 impl SeleneInterfaceProgram {
     /// Create a Selene Interface program from plugin bytes
     pub fn from_bytes(bytes: Vec<u8>) -> Self {
-        Self { 
+        Self {
             plugin: bytes,
             executable_path: None,
             artifacts_path: None,
         }
     }
-    
+
     /// Create a Selene Interface program with executable paths
-    pub fn from_executable(executable_path: String, artifacts_path: String, plugin_bytes: Vec<u8>) -> Self {
+    pub fn from_executable(
+        executable_path: String,
+        artifacts_path: String,
+        plugin_bytes: Vec<u8>,
+    ) -> Self {
         Self {
             plugin: plugin_bytes,
             executable_path: Some(executable_path),
@@ -314,7 +318,7 @@ impl SeleneInterfaceProgram {
     /// Create a Selene Interface program by reading from a file
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
         let plugin = std::fs::read(path)?;
-        Ok(Self { 
+        Ok(Self {
             plugin,
             executable_path: None,
             artifacts_path: None,
@@ -447,7 +451,7 @@ mod tests {
         let program = LlvmProgram::from_string(ir);
         assert_eq!(program.ir(), Some(ir));
         assert_eq!(program.to_string(), ir);
-        
+
         // Test bitcode
         let bitcode = vec![0xDE, 0xC0, 0xDE, 0xCA, 0xFE];
         let program = LlvmProgram::from_bitcode(bitcode.clone());
@@ -470,7 +474,7 @@ mod tests {
         let program = WasmProgram::from_bytes(wasm_bytes.clone());
         assert_eq!(program.bytes(), &wasm_bytes[..]);
         assert_eq!(program.to_string(), "WasmProgram(4 bytes)");
-        
+
         let program2 = WasmProgram::from_bytes(&wasm_bytes[..]);
         assert_eq!(program2.bytes(), &wasm_bytes[..]);
     }
@@ -530,12 +534,12 @@ mod tests {
 
         let llvm_program = LlvmProgram::from_file(&llvm_path)?;
         assert!(llvm_program.ir().unwrap().contains("define void @main()"));
-        
+
         // Test LLVM bitcode from file
         let bc_path = temp_dir.path().join("test.bc");
         let bitcode_data = vec![0xDE, 0xC0, 0xDE, 0x42, 0x01, 0x0C];
         std::fs::write(&bc_path, &bitcode_data)?;
-        
+
         let bc_program = LlvmProgram::from_file(&bc_path)?;
         assert!(bc_program.is_bitcode());
         assert_eq!(bc_program.bitcode(), Some(&bitcode_data[..]));

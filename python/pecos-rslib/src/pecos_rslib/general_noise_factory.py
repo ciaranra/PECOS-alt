@@ -37,9 +37,11 @@ class MethodMapping:
             # Normal single-value application
             if self.converter:
                 value = self.converter(value)
-            
+
             # Special handling for methods that expect unpacked tuples
-            if self.method_name == "with_p2_angle_params" and isinstance(value, (tuple, list)):
+            if self.method_name == "with_p2_angle_params" and isinstance(
+                value, (tuple, list)
+            ):
                 # Unpack the tuple/list as separate arguments
                 return method(*value)
             else:
@@ -342,11 +344,17 @@ class GeneralNoiseFactory:
                 if "PanicException" in type(e).__name__ or "panicked" in error_msg:
                     # Extract the meaningful part of the panic message
                     if "must be between 0 and 1" in error_msg:
-                        raise ValueError(f"Error applying '{key}': Probability must be between 0 and 1") from e
+                        raise ValueError(
+                            f"Error applying '{key}': Probability must be between 0 and 1"
+                        ) from e
                     elif "must be non-negative" in error_msg:
-                        raise ValueError(f"Error applying '{key}': Value must be non-negative") from e
+                        raise ValueError(
+                            f"Error applying '{key}': Value must be non-negative"
+                        ) from e
                     elif "must be positive" in error_msg:
-                        raise ValueError(f"Error applying '{key}': Value must be positive") from e
+                        raise ValueError(
+                            f"Error applying '{key}': Value must be positive"
+                        ) from e
                     else:
                         raise ValueError(f"Error applying '{key}': {error_msg}") from e
                 else:

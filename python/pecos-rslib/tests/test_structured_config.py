@@ -43,7 +43,7 @@ class TestDirectMethodChaining:
 
         # Note: scale doesn't have validation in the current implementation
         # with_scale accepts any float value
-        
+
         with pytest.raises(BaseException, match="must be between 0 and 1"):
             builder.with_leakage_scale(2.0)
 

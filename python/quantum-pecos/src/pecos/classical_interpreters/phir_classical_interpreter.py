@@ -23,10 +23,10 @@ import warnings
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from pecos.types import PhirModel
 
 from pecos.reps.pyphir import PyPHIR, signed_data_types, unsigned_data_types
 from pecos.reps.pyphir import types as pt
+from pecos.types import PhirModel
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Sequence

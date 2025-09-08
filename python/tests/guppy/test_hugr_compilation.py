@@ -11,7 +11,7 @@ def test_rust_hugr_compilation() -> None:
     print("=== Testing Rust HUGR Compilation ===")
 
     # Test 1: Check if HUGR support compiles in the new pecos-hugr crate
-    result = subprocess.run(  # noqa: S603
+    result = subprocess.run(
         ["cargo", "check", "-p", "pecos-hugr"],  # noqa: S607
         capture_output=True,
         text=True,
@@ -27,7 +27,7 @@ def test_rust_hugr_compilation() -> None:
         raise AssertionError(msg)
 
     # Test 2: Run HUGR-specific unit tests
-    result = subprocess.run(  # noqa: S603
+    result = subprocess.run(
         [  # noqa: S607
             "cargo",
             "test",
@@ -71,13 +71,13 @@ declare void @__quantum__rt__result_record_output(i64, i8*)
 define void @main() #0 {
     ; Apply H to qubit 0
     call void @__quantum__qis__h__body(i64 0)
-    
+
     ; Immediate measurement - returns i32 result
     %result = call i32 @__quantum__qis__m__body(i64 0, i64 0)
-    
+
     ; Record result
     call void @__quantum__rt__result_record_output(i64 0, i8* getelementptr inbounds ([2 x i8], [2 x i8]* @.str.c, i32 0, i32 0))
-    
+
     ret void
 }
 
@@ -121,10 +121,10 @@ def test_qir_examples() -> None:
     project_root = (
         test_dir.parent.parent.parent
     )  # tests/guppy -> tests -> python -> PECOS
-    
+
     # Look for LLVM IR examples (HUGR convention, not QIR)
     llvm_examples = project_root / "examples" / "llvm"
-    
+
     if not llvm_examples.exists():
         print(f"[SKIP] LLVM examples directory not found at {llvm_examples}")
         print("[INFO] This test requires LLVM IR examples to be present")
@@ -134,11 +134,11 @@ def test_qir_examples() -> None:
 
     # Look for .ll files in the examples directory and subdirectories
     llvm_files = list(llvm_examples.glob("*.ll"))
-    
+
     # Also check for .ll files in the parent examples directory
     parent_ll_files = list((llvm_examples.parent).glob("*.ll"))
     llvm_files.extend(parent_ll_files)
-    
+
     print(f"Found {len(llvm_files)} LLVM IR example files:")
 
     for llvm_file in llvm_files:
@@ -146,7 +146,7 @@ def test_qir_examples() -> None:
 
         # Check if it contains HUGR convention LLVM IR patterns
         content = llvm_file.read_text()
-        
+
         # HUGR convention LLVM IR characteristics:
         # - Uses __quantum__qis__ intrinsics for quantum operations
         # - Uses i64 for qubit indices (not opaque %Qubit type)
@@ -154,12 +154,16 @@ def test_qir_examples() -> None:
         # - Has @main entry point with EntryPoint attribute
         has_quantum_intrinsics = "__quantum__qis__" in content
         has_i64_params = "i64" in content
-        has_immediate_measurements = "__quantum__qis__m__body" in content and "i32" in content
+        has_immediate_measurements = (
+            "__quantum__qis__m__body" in content and "i32" in content
+        )
         has_entry_point = "@main" in content or "EntryPoint" in content
-        
+
         if has_quantum_intrinsics and has_i64_params and has_entry_point:
             if has_immediate_measurements:
-                print("    [PASS] Valid HUGR convention LLVM IR (with immediate measurements)")
+                print(
+                    "    [PASS] Valid HUGR convention LLVM IR (with immediate measurements)",
+                )
             else:
                 print("    [PASS] Valid HUGR convention LLVM IR")
         else:

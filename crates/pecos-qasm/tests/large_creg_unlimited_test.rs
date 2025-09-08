@@ -1,8 +1,8 @@
 // Test that verifies arbitrary-precision BitVec expressions work without limitations
 
 use pecos_engines::{Data, sim_builder};
-use pecos_qasm::qasm_engine;
 use pecos_programs::QasmProgram;
+use pecos_qasm::qasm_engine;
 
 #[test]
 fn test_large_register_full_value_assignment() {
@@ -25,8 +25,7 @@ fn test_large_register_full_value_assignment() {
     ";
 
     let shot_vec = sim_builder()
-        .classical(qasm_engine()
-        .program(QasmProgram::from_string(qasm)))
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];
@@ -76,8 +75,7 @@ fn test_large_register_full_arithmetic() {
     ";
 
     let shot_vec = sim_builder()
-        .classical(qasm_engine()
-        .program(QasmProgram::from_string(qasm)))
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];
@@ -146,8 +144,7 @@ fn test_large_register_comparisons() {
     ";
 
     let shot_vec = sim_builder()
-        .classical(qasm_engine()
-        .program(QasmProgram::from_string(qasm)))
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];
@@ -187,8 +184,7 @@ fn test_large_register_shift_full_width() {
     ";
 
     let shot_vec = sim_builder()
-        .classical(qasm_engine()
-        .program(QasmProgram::from_string(qasm)))
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];
@@ -250,8 +246,7 @@ fn test_complex_expression_chain() {
     ";
 
     let shot_vec = sim_builder()
-        .classical(qasm_engine()
-        .program(QasmProgram::from_string(qasm)))
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];
@@ -295,8 +290,7 @@ fn test_negative_numbers_full_width() {
     ";
 
     let shot_vec = sim_builder()
-        .classical(qasm_engine()
-        .program(QasmProgram::from_string(qasm)))
+        .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .run(1)
         .unwrap();
     let shot = &shot_vec.shots[0];

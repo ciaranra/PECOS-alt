@@ -70,7 +70,7 @@ impl IntoWasmProgram for String {
     fn into_wasm_program(self) -> Result<crate::QasmEngineWasmProgram, PecosError> {
         // Load from file path
         let bytes = std::fs::read(&self)
-            .map_err(|e| PecosError::Input(format!("Failed to read WASM file '{}': {}", self, e)))?;
+            .map_err(|e| PecosError::Input(format!("Failed to read WASM file '{self}': {e}")))?;
         Ok(crate::QasmEngineWasmProgram::from_bytes(bytes).with_source_path(self))
     }
 }
@@ -84,7 +84,8 @@ impl IntoWasmProgram for &str {
 
 impl QasmEngineBuilder {
     /// Create a new QASM engine builder
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self::default()
     }
 
@@ -108,14 +109,16 @@ impl QasmEngineBuilder {
     }
 
     /// Add a virtual include (filename -> content)
-    #[must_use] pub fn with_virtual_include(mut self, filename: &str, content: &str) -> Self {
+    #[must_use]
+    pub fn with_virtual_include(mut self, filename: &str, content: &str) -> Self {
         self.virtual_includes
             .push((filename.to_string(), content.to_string()));
         self
     }
 
     /// Add multiple virtual includes
-    #[must_use] pub fn with_virtual_includes(mut self, includes: &[(&str, &str)]) -> Self {
+    #[must_use]
+    pub fn with_virtual_includes(mut self, includes: &[(&str, &str)]) -> Self {
         for (filename, content) in includes {
             self.virtual_includes
                 .push(((*filename).to_string(), (*content).to_string()));
@@ -124,13 +127,15 @@ impl QasmEngineBuilder {
     }
 
     /// Add an include search path
-    #[must_use] pub fn with_include_path(mut self, path: &str) -> Self {
+    #[must_use]
+    pub fn with_include_path(mut self, path: &str) -> Self {
         self.include_paths.push(path.to_string());
         self
     }
 
     /// Add multiple include search paths
-    #[must_use] pub fn with_include_paths(mut self, paths: &[&str]) -> Self {
+    #[must_use]
+    pub fn with_include_paths(mut self, paths: &[&str]) -> Self {
         for path in paths {
             self.include_paths.push((*path).to_string());
         }
@@ -138,13 +143,14 @@ impl QasmEngineBuilder {
     }
 
     /// Enable or disable complex conditionals
-    #[must_use] pub fn allow_complex_conditionals(mut self, allow: bool) -> Self {
+    #[must_use]
+    pub fn allow_complex_conditionals(mut self, allow: bool) -> Self {
         self.allow_complex_conditionals = allow;
         self
     }
 
     /// Set the WebAssembly program for foreign function calls
-    /// 
+    ///
     /// This method accepts:
     /// - `WasmProgram` - pre-loaded WASM binary
     /// - `WatProgram` - WebAssembly text format (parsed by wasmtime)
@@ -158,7 +164,7 @@ impl QasmEngineBuilder {
             }
             Err(e) => {
                 // Store error for later reporting during build
-                log::warn!("Failed to load WASM program: {}", e);
+                log::warn!("Failed to load WASM program: {e}");
             }
         }
         self
@@ -172,14 +178,12 @@ impl ClassicalControlEngineBuilder for QasmEngineBuilder {
         // Get the QASM content
         let qasm_content = match self.source {
             Some(QasmSource::String(s)) => s,
-            Some(QasmSource::File(path)) => {
-                std::fs::read_to_string(&path)
-                    .map_err(|e| PecosError::Input(format!("Failed to read QASM file: {e}")))?
-            }
+            Some(QasmSource::File(path)) => std::fs::read_to_string(&path)
+                .map_err(|e| PecosError::Input(format!("Failed to read QASM file: {e}")))?,
             None => {
                 return Err(PecosError::Input(
                     "No QASM source specified. Use .qasm() or .qasm_file()".to_string(),
-                ))
+                ));
             }
         };
 
@@ -219,8 +223,7 @@ impl ClassicalControlEngineBuilder for QasmEngineBuilder {
             for func_name in non_builtin_calls {
                 if !exported_functions.contains(&func_name) {
                     return Err(PecosError::Input(format!(
-                        "Function '{}' is called in QASM but not exported by WebAssembly module. Available functions: {:?}",
-                        func_name, exported_functions
+                        "Function '{func_name}' is called in QASM but not exported by WebAssembly module. Available functions: {exported_functions:?}"
                     )));
                 }
             }
@@ -276,6 +279,7 @@ impl From<QasmProgram> for QasmEngineBuilder {
 /// # Ok(())
 /// # }
 /// ```
-#[must_use] pub fn qasm_engine() -> QasmEngineBuilder {
+#[must_use]
+pub fn qasm_engine() -> QasmEngineBuilder {
     QasmEngineBuilder::new()
 }

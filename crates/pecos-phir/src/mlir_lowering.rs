@@ -104,26 +104,26 @@ fn convert_function_to_mlir(func: &crate::builtin_ops::FuncOp) -> Result<String>
     output.push_str(") {\n");
 
     // Function body
-    if let Some(entry_region) = func.entry_region() {
-        if let Some(block) = entry_region.blocks.first() {
-            // Track SSA value to qubit mapping
-            let mut ssa_to_qubit: std::collections::HashMap<u32, u32> =
-                std::collections::HashMap::new();
+    if let Some(entry_region) = func.entry_region()
+        && let Some(block) = entry_region.blocks.first()
+    {
+        // Track SSA value to qubit mapping
+        let mut ssa_to_qubit: std::collections::HashMap<u32, u32> =
+            std::collections::HashMap::new();
 
-            // Convert instructions
-            for instruction in &block.operations {
-                output.push_str(&convert_instruction_to_mlir_with_mapping(
-                    instruction,
-                    &mut ssa_to_qubit,
-                )?);
-                output.push('\n');
-            }
+        // Convert instructions
+        for instruction in &block.operations {
+            output.push_str(&convert_instruction_to_mlir_with_mapping(
+                instruction,
+                &mut ssa_to_qubit,
+            )?);
+            output.push('\n');
+        }
 
-            // Convert terminator
-            if let Some(terminator) = &block.terminator {
-                output.push_str(&convert_terminator_to_mlir(terminator)?);
-                output.push('\n');
-            }
+        // Convert terminator
+        if let Some(terminator) = &block.terminator {
+            output.push_str(&convert_terminator_to_mlir(terminator)?);
+            output.push('\n');
         }
     }
 

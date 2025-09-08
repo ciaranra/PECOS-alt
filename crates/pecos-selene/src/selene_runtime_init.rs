@@ -3,11 +3,10 @@
 //! This module provides proper initialization of the Selene runtime
 //! by creating a configuration file and calling selene_load_config.
 
-use std::ffi::{c_char, CString};
-use std::os::raw::c_void;
-use std::path::PathBuf;
+use std::ffi::{CString, c_char};
 use std::fs;
 use std::io::Write;
+use std::path::PathBuf;
 
 /// Represents a Selene instance
 #[repr(C)]
@@ -33,23 +32,14 @@ unsafe extern "C" {
         instance: *mut *mut SeleneInstance,
         config_file: *const c_char,
     ) -> SeleneVoidResult;
-    
-    fn selene_on_shot_start(
-        instance: *mut SeleneInstance,
-        shot_index: u64,
-    ) -> SeleneVoidResult;
-    
-    fn selene_on_shot_end(
-        instance: *mut SeleneInstance,
-    ) -> SeleneVoidResult;
-    
-    fn selene_shot_count(
-        instance: *mut SeleneInstance,
-    ) -> SeleneU64Result;
-    
-    fn selene_exit(
-        instance: *mut SeleneInstance,
-    ) -> SeleneVoidResult;
+
+    fn selene_on_shot_start(instance: *mut SeleneInstance, shot_index: u64) -> SeleneVoidResult;
+
+    fn selene_on_shot_end(instance: *mut SeleneInstance) -> SeleneVoidResult;
+
+    fn selene_shot_count(instance: *mut SeleneInstance) -> SeleneU64Result;
+
+    fn selene_exit(instance: *mut SeleneInstance) -> SeleneVoidResult;
 }
 
 /// Wrapper for initialized Selene runtime
@@ -63,11 +53,11 @@ impl SeleneRuntime {
     /// Initialize Selene runtime with configuration
     pub fn new(num_qubits: usize, num_shots: usize) -> Result<Self, String> {
         // Create temp directory for configuration
-        let temp_dir = tempfile::tempdir()
-            .map_err(|e| format!("Failed to create temp dir: {}", e))?;
-        
+        let temp_dir =
+            tempfile::tempdir().map_err(|e| format!("Failed to create temp dir: {}", e))?;
+
         let config_path = temp_dir.path().join("selene_config.yaml");
-        
+
         // Create configuration YAML
         let config_yaml = format!(
             r#"# Selene configuration for PECOS
@@ -97,85 +87,92 @@ event_hooks:
             num_shots,
             temp_dir.path().join("artifacts").display()
         );
-        
+
         // Write configuration file
         let mut file = fs::File::create(&config_path)
             .map_err(|e| format!("Failed to create config file: {}", e))?;
         file.write_all(config_yaml.as_bytes())
             .map_err(|e| format!("Failed to write config file: {}", e))?;
-        
+
         // Create artifacts directory
         fs::create_dir_all(temp_dir.path().join("artifacts"))
             .map_err(|e| format!("Failed to create artifacts dir: {}", e))?;
-        
+
         // Convert path to C string
         let config_cstring = CString::new(config_path.to_str().unwrap())
             .map_err(|e| format!("Failed to create C string: {}", e))?;
-        
+
         // Initialize Selene
         let mut instance: *mut SeleneInstance = std::ptr::null_mut();
-        let result = unsafe {
-            selene_load_config(&mut instance, config_cstring.as_ptr())
-        };
-        
+        let result = unsafe { selene_load_config(&mut instance, config_cstring.as_ptr()) };
+
         if result.error_code != 0 {
-            return Err(format!("selene_load_config failed with error code: {}", result.error_code));
+            return Err(format!(
+                "selene_load_config failed with error code: {}",
+                result.error_code
+            ));
         }
-        
+
         if instance.is_null() {
             return Err("selene_load_config returned null instance".to_string());
         }
-        
-        println!("*** SELENE RUNTIME: Initialized with {} qubits, {} shots ***", num_qubits, num_shots);
-        
+
+        println!(
+            "*** SELENE RUNTIME: Initialized with {} qubits, {} shots ***",
+            num_qubits, num_shots
+        );
+
         Ok(Self {
             instance,
             config_path,
             temp_dir: Some(temp_dir),
         })
     }
-    
+
     /// Get the Selene instance pointer
     pub fn instance_ptr(&self) -> *mut SeleneInstance {
         self.instance
     }
-    
+
     /// Start a shot
     pub fn start_shot(&mut self, shot_index: u64) -> Result<(), String> {
-        let result = unsafe {
-            selene_on_shot_start(self.instance, shot_index)
-        };
-        
+        let result = unsafe { selene_on_shot_start(self.instance, shot_index) };
+
         if result.error_code != 0 {
-            return Err(format!("selene_on_shot_start failed with error code: {}", result.error_code));
+            return Err(format!(
+                "selene_on_shot_start failed with error code: {}",
+                result.error_code
+            ));
         }
-        
+
         Ok(())
     }
-    
+
     /// End a shot
     pub fn end_shot(&mut self) -> Result<(), String> {
-        let result = unsafe {
-            selene_on_shot_end(self.instance)
-        };
-        
+        let result = unsafe { selene_on_shot_end(self.instance) };
+
         if result.error_code != 0 {
-            return Err(format!("selene_on_shot_end failed with error code: {}", result.error_code));
+            return Err(format!(
+                "selene_on_shot_end failed with error code: {}",
+                result.error_code
+            ));
         }
-        
+
         Ok(())
     }
-    
+
     /// Get the number of shots configured
     pub fn shot_count(&self) -> Result<u64, String> {
-        let result = unsafe {
-            selene_shot_count(self.instance)
-        };
-        
+        let result = unsafe { selene_shot_count(self.instance) };
+
         if result.error_code != 0 {
-            return Err(format!("selene_shot_count failed with error code: {}", result.error_code));
+            return Err(format!(
+                "selene_shot_count failed with error code: {}",
+                result.error_code
+            ));
         }
-        
+
         Ok(result.value)
     }
 }
@@ -194,7 +191,7 @@ impl Drop for SeleneRuntime {
 /// Thread-local storage for the current Selene instance
 /// This allows the plugin to access the instance via extern functions
 thread_local! {
-    static CURRENT_INSTANCE: std::cell::RefCell<Option<*mut SeleneInstance>> = std::cell::RefCell::new(None);
+    static CURRENT_INSTANCE: std::cell::RefCell<Option<*mut SeleneInstance>> = const { std::cell::RefCell::new(None) };
 }
 
 /// Set the current Selene instance for this thread
@@ -206,9 +203,7 @@ pub fn set_current_instance(instance: *mut SeleneInstance) {
 
 /// Get the current Selene instance for this thread
 pub fn get_current_instance() -> *mut SeleneInstance {
-    CURRENT_INSTANCE.with(|i| {
-        i.borrow().unwrap_or(std::ptr::null_mut())
-    })
+    CURRENT_INSTANCE.with(|i| i.borrow().unwrap_or(std::ptr::null_mut()))
 }
 
 /// Clear the current Selene instance for this thread

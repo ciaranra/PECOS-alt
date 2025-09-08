@@ -255,7 +255,11 @@ impl MonteCarloEngine {
     /// # Panics
     /// - If `num_shots` is zero.
     /// - If `num_workers` is zero.
-    pub fn run_with_workers(&mut self, num_shots: usize, num_workers: usize) -> Result<ShotVec, PecosError> {
+    pub fn run_with_workers(
+        &mut self,
+        num_shots: usize,
+        num_workers: usize,
+    ) -> Result<ShotVec, PecosError> {
         assert!(num_shots > 0, "num_shots cannot be zero");
         assert!(num_workers > 0, "num_workers cannot be zero");
 
@@ -308,12 +312,12 @@ impl MonteCarloEngine {
 
                 for shot_idx in 0..shots_this_worker {
                     engine.reset()?;
-                    
+
                     // Catch panics during shot execution and convert to PecosError
                     let shot_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         engine.run_shot()
                     }));
-                    
+
                     let shot_result = match shot_result {
                         Ok(Ok(result)) => result,
                         Ok(Err(e)) => return Err(e),
@@ -326,7 +330,7 @@ impl MonteCarloEngine {
                             } else {
                                 "Unknown panic occurred during shot execution".to_string()
                             };
-                            
+
                             return Err(PecosError::Processing(format!(
                                 "Shot execution failed: {panic_msg}"
                             )));

@@ -140,7 +140,7 @@ impl LlvmLinker {
             RuntimeBuilder::build_runtime()?;
         }
 
-        info!("Starting compilation: {:?}", llvm_file);
+        info!("Starting compilation: {llvm_file:?}");
 
         // Step 4: Build LLVM executable
         // Get the runtime library path (already built in steps above)
@@ -550,17 +550,15 @@ impl LlvmLinker {
                 }
                 Err(e) if e.kind() == ErrorKind::AlreadyExists => {
                     // Check if lock file is stale (older than 5 minutes)
-                    if let Ok(metadata) = fs::metadata(lock_path) {
-                        if let Ok(modified) = metadata.modified() {
-                            if let Ok(elapsed) = SystemTime::now().duration_since(modified) {
-                                if elapsed > Duration::from_secs(300) {
-                                    // Stale lock, try to remove it
-                                    warn!("Removing stale lock file: {lock_path:?}");
-                                    let _ = fs::remove_file(lock_path);
-                                    continue;
-                                }
-                            }
-                        }
+                    if let Ok(metadata) = fs::metadata(lock_path)
+                        && let Ok(modified) = metadata.modified()
+                        && let Ok(elapsed) = SystemTime::now().duration_since(modified)
+                        && elapsed > Duration::from_secs(300)
+                    {
+                        // Stale lock, try to remove it
+                        warn!("Removing stale lock file: {lock_path:?}");
+                        let _ = fs::remove_file(lock_path);
+                        continue;
                     }
 
                     if attempt < MAX_RETRIES - 1 {

@@ -289,11 +289,11 @@ fn test_bell_state_using_helper_phir_engine() -> Result<(), PecosError> {
     // Convert to PHIR module and create PhirEngine
     let phir_module = phir_json_to_module(bell_json)?;
     let engine = PhirEngine::new(phir_module).map_err(convert_phir_error)?;
-    
+
     // Create hybrid engine with quantum backend
     let num_qubits = engine.num_qubits();
     let quantum_engine = Box::new(StateVecEngine::new(num_qubits));
-    
+
     let mut hybrid = HybridEngineBuilder::new()
         .with_classical_engine(Box::new(engine))
         .with_quantum_engine(quantum_engine)
@@ -403,25 +403,25 @@ fn test_bell_state_direct_comparison() -> Result<(), PecosError> {
     // Generate commands and compare
     let _json_commands = json_engine.generate_commands()?;
     let _phir_commands = phir_engine.generate_commands()?;
-    
+
     println!("PhirJsonEngine generated commands");
     println!("PhirEngine generated commands");
 
     // Execute multiple shots and compare results
     for shot_num in 0..10 {
         println!("\n--- Shot {} ---", shot_num);
-        
+
         // Reset both engines
         Engine::reset(&mut json_engine)?;
         Engine::reset(&mut phir_engine)?;
-        
+
         // Execute both
         let json_shot = json_engine.process(())?;
         let phir_shot = phir_engine.process(())?;
-        
+
         println!("PhirJsonEngine shot data: {:?}", json_shot.data);
         println!("PhirEngine shot data: {:?}", phir_shot.data);
-        
+
         // Compare the structure of results
         println!("JSON keys: {:?}", json_shot.data.keys().collect::<Vec<_>>());
         println!("PHIR keys: {:?}", phir_shot.data.keys().collect::<Vec<_>>());
@@ -453,27 +453,27 @@ fn test_command_generation_comparison() -> Result<(), PecosError> {
     let program: PHIRProgram = serde_json::from_str(test_json)
         .map_err(|e| PecosError::Input(format!("Failed to parse PHIR program: {}", e)))?;
     let mut json_engine = PhirJsonEngine::from_program(program.clone())?;
-    
+
     let phir_module = phir_json_to_module(test_json)?;
     let mut phir_engine = PhirEngine::new(phir_module).map_err(convert_phir_error)?;
 
     println!("=== COMMAND GENERATION COMPARISON ===");
-    
+
     // Test command generation multiple times
     for round in 0..3 {
         println!("\n--- Round {} ---", round);
-        
+
         // Reset both engines
         Engine::reset(&mut json_engine)?;
         Engine::reset(&mut phir_engine)?;
-        
+
         // Generate commands
         let _json_commands = json_engine.generate_commands()?;
         let _phir_commands = phir_engine.generate_commands()?;
-        
+
         println!("PhirJsonEngine: Generated commands (round {})", round);
         println!("PhirEngine: Generated commands (round {})", round);
-        
+
         // Test that both engines can compile
         assert!(json_engine.compile().is_ok(), "PhirJsonEngine should compile");
         assert!(phir_engine.compile().is_ok(), "PhirEngine should compile");
@@ -506,7 +506,7 @@ fn test_measurement_detailed_comparison() -> Result<(), PecosError> {
     let program: PHIRProgram = serde_json::from_str(measurement_json)
         .map_err(|e| PecosError::Input(format!("Failed to parse PHIR program: {}", e)))?;
     let mut json_engine = PhirJsonEngine::from_program(program.clone())?;
-    
+
     let phir_module = phir_json_to_module(measurement_json)?;
     let mut phir_engine = PhirEngine::new(phir_module).map_err(convert_phir_error)?;
 
@@ -525,7 +525,7 @@ fn test_measurement_detailed_comparison() -> Result<(), PecosError> {
 
     // Handle measurements in both engines
     println!("Sending measurement outcomes: [1, 0, 1]");
-    
+
     let json_result = json_engine.handle_measurements(measurement_msg.clone());
     let phir_result = phir_engine.handle_measurements(measurement_msg);
 
@@ -549,7 +549,7 @@ fn test_measurement_detailed_comparison() -> Result<(), PecosError> {
     // Compare the keys available in both results
     let json_keys: Vec<_> = json_final.data.keys().collect();
     let phir_keys: Vec<_> = phir_final.data.keys().collect();
-    
+
     println!("PhirJsonEngine result keys: {:?}", json_keys);
     println!("PhirEngine result keys: {:?}", phir_keys);
 

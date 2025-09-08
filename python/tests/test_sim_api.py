@@ -1,12 +1,17 @@
 """Test the new sim(program) API."""
 
-import pytest
+from pecos_rslib import (
+    LlvmProgram,
+    QasmProgram,
+    depolarizing_noise,
+    qasm_engine,
+    sparse_stabilizer,
+    state_vector,
+)
 from pecos_rslib.sim import sim
-from pecos_rslib import QasmProgram, LlvmProgram, HugrProgram, PhirJsonProgram
-from pecos_rslib import qasm_engine, llvm_engine, selene_engine, phir_json_engine
-from pecos_rslib import state_vector, sparse_stabilizer, depolarizing_noise
 
-def test_sim_with_qasm_program():
+
+def test_sim_with_qasm_program() -> None:
     """Test sim() with QASM program auto-detection."""
     qasm_code = """
     OPENQASM 2.0;
@@ -16,26 +21,26 @@ def test_sim_with_qasm_program():
     h q[0];
     measure q[0] -> c[0];
     """
-    
+
     # Test auto-detection
     results = sim(QasmProgram.from_string(qasm_code)).run(100)
     assert len(results) == 100
-    
+
     # Test with configuration
     results = sim(QasmProgram.from_string(qasm_code)).seed(42).workers(2).run(100)
     assert len(results) == 100
-    
+
     # Test with noise
     noise_model = depolarizing_noise().with_uniform_probability(0.01)
     results = sim(QasmProgram.from_string(qasm_code)).noise(noise_model).run(100)
     assert len(results) == 100
-    
+
     # Test with quantum engine selection
     results = sim(QasmProgram.from_string(qasm_code)).quantum(state_vector()).run(100)
     assert len(results) == 100
-    
 
-def test_sim_with_llvm_program():
+
+def test_sim_with_llvm_program() -> None:
     """Test sim() with LLVM program auto-detection."""
     llvm_ir = """define void @main() #0 {
   %qubit = call i64 @__quantum__rt__qubit_allocate()
@@ -49,13 +54,13 @@ declare void @__quantum__qis__h__body(i64)
 declare i32 @__quantum__qis__m__body(i64, i64)
 
 attributes #0 = { "EntryPoint" }"""
-    
+
     # Test auto-detection
     results = sim(LlvmProgram.from_string(llvm_ir)).qubits(1).run(100)
     assert len(results) == 100
-    
 
-def test_sim_with_explicit_engine_override():
+
+def test_sim_with_explicit_engine_override() -> None:
     """Test overriding auto-selected engine with classical()."""
     qasm_code = """
     OPENQASM 2.0;
@@ -65,19 +70,19 @@ def test_sim_with_explicit_engine_override():
     h q[0];
     measure q[0] -> c[0];
     """
-    
+
     # Override with custom engine configuration
     # (Note: without actual WASM file this would fail, so we just test the API)
     builder = sim(QasmProgram.from_string(qasm_code)).classical(
-        qasm_engine().program(QasmProgram.from_string(qasm_code))
+        qasm_engine().program(QasmProgram.from_string(qasm_code)),
     )
-    
+
     # This verifies the API works, even if execution would fail without WASM
     results = builder.run(100)
     assert len(results) == 100
-    
 
-def test_sim_with_different_quantum_engines():
+
+def test_sim_with_different_quantum_engines() -> None:
     """Test sim() with different quantum engine backends."""
     qasm_code = """
     OPENQASM 2.0;
@@ -89,17 +94,21 @@ def test_sim_with_different_quantum_engines():
     measure q[0] -> c[0];
     measure q[1] -> c[1];
     """
-    
-    # State vector backend
-    results_sv = sim(QasmProgram.from_string(qasm_code)).quantum(state_vector()).run(100)
-    assert len(results_sv) == 100
-    
-    # Sparse stabilizer backend (only works for Clifford circuits)
-    results_ss = sim(QasmProgram.from_string(qasm_code)).quantum(sparse_stabilizer()).run(100)
-    assert len(results_ss) == 100
-    
 
-def test_sim_builder_chaining():
+    # State vector backend
+    results_sv = (
+        sim(QasmProgram.from_string(qasm_code)).quantum(state_vector()).run(100)
+    )
+    assert len(results_sv) == 100
+
+    # Sparse stabilizer backend (only works for Clifford circuits)
+    results_ss = (
+        sim(QasmProgram.from_string(qasm_code)).quantum(sparse_stabilizer()).run(100)
+    )
+    assert len(results_ss) == 100
+
+
+def test_sim_builder_chaining() -> None:
     """Test that all builder methods can be chained."""
     qasm_code = """
     OPENQASM 2.0;
@@ -109,7 +118,7 @@ def test_sim_builder_chaining():
     h q[0];
     measure q[0] -> c[0];
     """
-    
+
     results = (
         sim(QasmProgram.from_string(qasm_code))
         .seed(12345)
@@ -119,9 +128,9 @@ def test_sim_builder_chaining():
         .qubits(1)
         .run(100)
     )
-    
+
     assert len(results) == 100
-    
+
 
 if __name__ == "__main__":
     test_sim_with_qasm_program()

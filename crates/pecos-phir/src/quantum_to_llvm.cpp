@@ -21,7 +21,7 @@ static Type getQubitPtrType(MLIRContext *context) {
       LLVM::LLVMStructType::getOpaque("Qubit", context));
 }
 
-/// Returns the LLVM type for opaque Result pointer  
+/// Returns the LLVM type for opaque Result pointer
 static Type getResultPtrType(MLIRContext *context) {
   return LLVM::LLVMPointerType::get(
       LLVM::LLVMStructType::getOpaque("Result", context));
@@ -39,7 +39,7 @@ struct AllocOpLowering : public OpConversionPattern<AllocOp> {
                                 ConversionPatternRewriter &rewriter) const override {
     auto loc = op.getLoc();
     auto module = op->getParentOfType<ModuleOp>();
-    
+
     // Get or insert the allocation function
     auto allocFunc = module.lookupSymbol<LLVM::LLVMFuncOp>("__quantum__rt__qubit_allocate");
     if (!allocFunc) {
@@ -49,7 +49,7 @@ struct AllocOpLowering : public OpConversionPattern<AllocOp> {
       rewriter.setInsertionPointToStart(module.getBody());
       allocFunc = rewriter.create<LLVM::LLVMFuncOp>(loc, "__quantum__rt__qubit_allocate", funcTy);
     }
-    
+
     // Create the call
     auto call = rewriter.create<LLVM::CallOp>(loc, allocFunc, ValueRange{});
     rewriter.replaceOp(op, call.getResult());
@@ -65,7 +65,7 @@ struct DeallocOpLowering : public OpConversionPattern<DeallocOp> {
                                 ConversionPatternRewriter &rewriter) const override {
     auto loc = op.getLoc();
     auto module = op->getParentOfType<ModuleOp>();
-    
+
     // Get or insert the deallocation function
     auto deallocFunc = module.lookupSymbol<LLVM::LLVMFuncOp>("__quantum__rt__qubit_release");
     if (!deallocFunc) {
@@ -76,7 +76,7 @@ struct DeallocOpLowering : public OpConversionPattern<DeallocOp> {
       rewriter.setInsertionPointToStart(module.getBody());
       deallocFunc = rewriter.create<LLVM::LLVMFuncOp>(loc, "__quantum__rt__qubit_release", funcTy);
     }
-    
+
     // Create the call
     rewriter.create<LLVM::CallOp>(loc, deallocFunc, adaptor.getQubit());
     rewriter.eraseOp(op);
@@ -88,14 +88,14 @@ struct DeallocOpLowering : public OpConversionPattern<DeallocOp> {
 template <typename QuantumOp>
 struct SingleQubitGateLowering : public OpConversionPattern<QuantumOp> {
   using OpConversionPattern<QuantumOp>::OpConversionPattern;
-  
+
   StringRef getFunctionName() const;
 
   LogicalResult matchAndRewrite(QuantumOp op, typename QuantumOp::Adaptor adaptor,
                                 ConversionPatternRewriter &rewriter) const override {
     auto loc = op.getLoc();
     auto module = op->template getParentOfType<ModuleOp>();
-    
+
     // Get or insert the gate function
     auto funcName = getFunctionName();
     auto gateFunc = module.lookupSymbol<LLVM::LLVMFuncOp>(funcName);
@@ -107,7 +107,7 @@ struct SingleQubitGateLowering : public OpConversionPattern<QuantumOp> {
       rewriter.setInsertionPointToStart(module.getBody());
       gateFunc = rewriter.create<LLVM::LLVMFuncOp>(loc, funcName, funcTy);
     }
-    
+
     // Create the call
     rewriter.create<LLVM::CallOp>(loc, gateFunc, adaptor.getQubit());
     rewriter.eraseOp(op);
@@ -116,17 +116,17 @@ struct SingleQubitGateLowering : public OpConversionPattern<QuantumOp> {
 };
 
 // Specializations for each gate
-template <> StringRef SingleQubitGateLowering<HOp>::getFunctionName() const { 
-  return "__quantum__qis__h__body"; 
+template <> StringRef SingleQubitGateLowering<HOp>::getFunctionName() const {
+  return "__quantum__qis__h__body";
 }
-template <> StringRef SingleQubitGateLowering<XOp>::getFunctionName() const { 
-  return "__quantum__qis__x__body"; 
+template <> StringRef SingleQubitGateLowering<XOp>::getFunctionName() const {
+  return "__quantum__qis__x__body";
 }
-template <> StringRef SingleQubitGateLowering<YOp>::getFunctionName() const { 
-  return "__quantum__qis__y__body"; 
+template <> StringRef SingleQubitGateLowering<YOp>::getFunctionName() const {
+  return "__quantum__qis__y__body";
 }
-template <> StringRef SingleQubitGateLowering<ZOp>::getFunctionName() const { 
-  return "__quantum__qis__z__body"; 
+template <> StringRef SingleQubitGateLowering<ZOp>::getFunctionName() const {
+  return "__quantum__qis__z__body";
 }
 
 /// Lower quantum.cx to @__quantum__qis__cnot__body()
@@ -137,7 +137,7 @@ struct CXOpLowering : public OpConversionPattern<CXOp> {
                                 ConversionPatternRewriter &rewriter) const override {
     auto loc = op.getLoc();
     auto module = op->getParentOfType<ModuleOp>();
-    
+
     // Get or insert the CNOT function
     auto cnotFunc = module.lookupSymbol<LLVM::LLVMFuncOp>("__quantum__qis__cnot__body");
     if (!cnotFunc) {
@@ -148,9 +148,9 @@ struct CXOpLowering : public OpConversionPattern<CXOp> {
       rewriter.setInsertionPointToStart(module.getBody());
       cnotFunc = rewriter.create<LLVM::LLVMFuncOp>(loc, "__quantum__qis__cnot__body", funcTy);
     }
-    
+
     // Create the call
-    rewriter.create<LLVM::CallOp>(loc, cnotFunc, 
+    rewriter.create<LLVM::CallOp>(loc, cnotFunc,
                                   ValueRange{adaptor.getControl(), adaptor.getTarget()});
     rewriter.eraseOp(op);
     return success();
@@ -165,7 +165,7 @@ struct MeasureOpLowering : public OpConversionPattern<MeasureOp> {
                                 ConversionPatternRewriter &rewriter) const override {
     auto loc = op.getLoc();
     auto module = op->getParentOfType<ModuleOp>();
-    
+
     // Get or insert result allocation function
     auto getZeroFunc = module.lookupSymbol<LLVM::LLVMFuncOp>("__quantum__rt__result_get_zero");
     if (!getZeroFunc) {
@@ -175,7 +175,7 @@ struct MeasureOpLowering : public OpConversionPattern<MeasureOp> {
       rewriter.setInsertionPointToStart(module.getBody());
       getZeroFunc = rewriter.create<LLVM::LLVMFuncOp>(loc, "__quantum__rt__result_get_zero", funcTy);
     }
-    
+
     // Get or insert measurement function
     auto measureFunc = module.lookupSymbol<LLVM::LLVMFuncOp>("__quantum__qis__mz__body");
     if (!measureFunc) {
@@ -187,10 +187,10 @@ struct MeasureOpLowering : public OpConversionPattern<MeasureOp> {
       rewriter.setInsertionPointToStart(module.getBody());
       measureFunc = rewriter.create<LLVM::LLVMFuncOp>(loc, "__quantum__qis__mz__body", funcTy);
     }
-    
+
     // Allocate result and perform measurement
     auto resultAlloc = rewriter.create<LLVM::CallOp>(loc, getZeroFunc, ValueRange{});
-    rewriter.create<LLVM::CallOp>(loc, measureFunc, 
+    rewriter.create<LLVM::CallOp>(loc, measureFunc,
                                   ValueRange{adaptor.getQubit(), resultAlloc.getResult()});
     rewriter.replaceOp(op, resultAlloc.getResult());
     return success();
@@ -205,7 +205,7 @@ struct ReadResultOpLowering : public OpConversionPattern<ReadResultOp> {
                                 ConversionPatternRewriter &rewriter) const override {
     auto loc = op.getLoc();
     auto module = op->getParentOfType<ModuleOp>();
-    
+
     // Get or insert read result function
     auto readFunc = module.lookupSymbol<LLVM::LLVMFuncOp>("__quantum__qis__read_result__body");
     if (!readFunc) {
@@ -216,7 +216,7 @@ struct ReadResultOpLowering : public OpConversionPattern<ReadResultOp> {
       rewriter.setInsertionPointToStart(module.getBody());
       readFunc = rewriter.create<LLVM::LLVMFuncOp>(loc, "__quantum__qis__read_result__body", funcTy);
     }
-    
+
     // Create the call
     auto call = rewriter.create<LLVM::CallOp>(loc, readFunc, adaptor.getResult());
     rewriter.replaceOp(op, call.getResult());

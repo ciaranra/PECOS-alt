@@ -24,7 +24,7 @@
 //! ```
 
 // Main entry points for LLVM simulation
-pub use crate::{llvm_engine, llvm_sim, LlvmEngineBuilder};
+pub use crate::{LlvmEngineBuilder, llvm_engine, llvm_sim};
 
 // Re-export LlvmEngine from pecos-llvm-runtime
 pub use pecos_llvm_runtime::LlvmEngine;
@@ -33,27 +33,19 @@ pub use pecos_llvm_runtime::LlvmEngine;
 pub use pecos_programs::LlvmProgram;
 
 // Engine traits - especially ClassicalControlEngineBuilder for .to_sim() (sim_builder() preferred)
-pub use pecos_engines::{
-    ClassicalControlEngineBuilder,
-    ClassicalEngine,
-    Engine,
-};
+pub use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine, Engine};
 
 // Noise models - convenience structs
-pub use pecos_engines::{
-    DepolarizingNoise,
-    BiasedDepolarizingNoise,
-    PassThroughNoise,
-};
+pub use pecos_engines::{BiasedDepolarizingNoise, DepolarizingNoise, PassThroughNoise};
 
 // Quantum engine builders
-pub use pecos_engines::quantum_engine_builder::{state_vector, sparse_stabilizer};
+pub use pecos_engines::quantum_engine_builder::{sparse_stabilizer, state_vector};
 
 // Simulation builder for unified API
 pub use pecos_engines::sim_builder;
 
 // Result types
-pub use pecos_engines::{Shot, ShotVec, ShotMap};
+pub use pecos_engines::{Shot, ShotMap, ShotVec};
 
 // Error type
 pub use pecos_core::errors::PecosError;

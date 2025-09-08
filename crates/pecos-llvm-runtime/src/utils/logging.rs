@@ -18,7 +18,6 @@ impl ComponentLogger {
         debug!("{}: {}", self.component, message.as_ref());
     }
 
-
     /// Log a warning with component prefix
     pub fn warn(&self, message: impl AsRef<str>) {
         warn!("{}: {}", self.component, message.as_ref());

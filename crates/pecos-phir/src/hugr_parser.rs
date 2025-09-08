@@ -115,45 +115,45 @@ fn convert_function_flat(
     let output_count = func.function_type.outputs.len();
 
     // Add all instructions to entry block
-    if let Some(entry_region) = func.entry_region_mut() {
-        if let Some(entry_block) = entry_region.entry_block_mut() {
-            for instr in instructions {
-                entry_block.add_instruction(instr);
+    if let Some(entry_region) = func.entry_region_mut()
+        && let Some(entry_block) = entry_region.entry_block_mut()
+    {
+        for instr in instructions {
+            entry_block.add_instruction(instr);
+        }
+
+        // Add return terminator if needed
+        if entry_block.terminator.is_none() {
+            // Find the last measurement results to use as return values
+            let mut return_values = Vec::new();
+
+            // Scan backwards through instructions to find measurement results
+            for instr in entry_block.operations.iter().rev() {
+                if let Operation::Quantum(QuantumOp::Measure) = &instr.operation
+                    && !instr.results.is_empty()
+                {
+                    return_values.push(instr.results[0]);
+                }
+                if return_values.len() >= output_count {
+                    break;
+                }
             }
 
-            // Add return terminator if needed
-            if entry_block.terminator.is_none() {
-                // Find the last measurement results to use as return values
-                let mut return_values = Vec::new();
+            // Reverse to get correct order
+            return_values.reverse();
 
-                // Scan backwards through instructions to find measurement results
-                for instr in entry_block.operations.iter().rev() {
-                    if let Operation::Quantum(QuantumOp::Measure) = &instr.operation {
-                        if !instr.results.is_empty() {
-                            return_values.push(instr.results[0]);
-                        }
-                    }
-                    if return_values.len() >= output_count {
-                        break;
-                    }
-                }
-
-                // Reverse to get correct order
-                return_values.reverse();
-
-                // If we didn't find enough measurements, fill with dummy values
-                while return_values.len() < output_count {
-                    return_values.push(SSAValue {
-                        id: next_ssa_id,
-                        version: 0,
-                    });
-                    next_ssa_id += 1;
-                }
-
-                entry_block.terminator = Some(Terminator::Return {
-                    values: return_values,
+            // If we didn't find enough measurements, fill with dummy values
+            while return_values.len() < output_count {
+                return_values.push(SSAValue {
+                    id: next_ssa_id,
+                    version: 0,
                 });
+                next_ssa_id += 1;
             }
+
+            entry_block.terminator = Some(Terminator::Return {
+                values: return_values,
+            });
         }
     }
 
@@ -224,12 +224,11 @@ fn convert_node_to_instruction_flat(
     // Get input values by tracing edges
     let mut operands = vec![];
     for in_port in hugr.node_inputs(node) {
-        if let Some((src_node, src_port)) = hugr.linked_outputs(node, in_port).next() {
-            if let Some(src_values) = node_values.get(&src_node) {
-                if let Some(ssa_val) = src_values.get(src_port.index()) {
-                    operands.push(*ssa_val);
-                }
-            }
+        if let Some((src_node, src_port)) = hugr.linked_outputs(node, in_port).next()
+            && let Some(src_values) = node_values.get(&src_node)
+            && let Some(ssa_val) = src_values.get(src_port.index())
+        {
+            operands.push(*ssa_val);
         }
     }
 
@@ -268,7 +267,7 @@ fn get_operation_result_types(operation: &Operation) -> Vec<Type> {
     }
 }
 
-/// Convert HUGR function type to PHIR function type  
+/// Convert HUGR function type to PHIR function type
 fn convert_function_type(sig: hugr_core::types::PolyFuncType) -> Result<FunctionType> {
     let func_type = sig.body();
 
@@ -353,11 +352,11 @@ fn parse_simplified_hugr_json(json_str: &str) -> Result<ModuleOp> {
 
     // Find function definitions
     for (idx, node) in nodes.iter().enumerate() {
-        if let Some(op) = node.get("op").and_then(|o| o.as_str()) {
-            if op == "FuncDefn" {
-                let func = parse_simplified_function(nodes, idx, module)?;
-                phir_module.add_function(func);
-            }
+        if let Some(op) = node.get("op").and_then(|o| o.as_str())
+            && op == "FuncDefn"
+        {
+            let func = parse_simplified_function(nodes, idx, module)?;
+            phir_module.add_function(func);
         }
     }
 
@@ -379,31 +378,30 @@ fn parse_simplified_function(nodes: &[Value], func_idx: usize, module: &Value) -
 
     // Process nodes that have this function as parent
     for (idx, node) in nodes.iter().enumerate() {
-        if let Some(parent) = node.get("parent").and_then(serde_json::Value::as_u64) {
-            if parent as usize == func_idx {
-                if let Some(op) = node.get("op").and_then(|o| o.as_str()) {
-                    match op {
-                        "Extension" => {
-                            if let Some(name) = node.get("name").and_then(|n| n.as_str()) {
-                                if let Some(instr) = create_quantum_instruction(
-                                    name,
-                                    idx,
-                                    &mut ssa_counter,
-                                    &node_to_ssa,
-                                    nodes,
-                                    module,
-                                )? {
-                                    // Store the output SSA value for edge resolution
-                                    if !instr.results.is_empty() {
-                                        node_to_ssa.insert(idx, instr.results[0]);
-                                    }
-                                    operations.push(instr);
-                                }
-                            }
+        if let Some(parent) = node.get("parent").and_then(serde_json::Value::as_u64)
+            && parent as usize == func_idx
+            && let Some(op) = node.get("op").and_then(|o| o.as_str())
+        {
+            match op {
+                "Extension" => {
+                    if let Some(name) = node.get("name").and_then(|n| n.as_str())
+                        && let Some(instr) = create_quantum_instruction(
+                            name,
+                            idx,
+                            &mut ssa_counter,
+                            &node_to_ssa,
+                            nodes,
+                            module,
+                        )?
+                    {
+                        // Store the output SSA value for edge resolution
+                        if !instr.results.is_empty() {
+                            node_to_ssa.insert(idx, instr.results[0]);
                         }
-                        _ => {} // Ignore Input/Output nodes for now
+                        operations.push(instr);
                     }
                 }
+                _ => {} // Ignore Input/Output nodes for now
             }
         }
     }
@@ -419,18 +417,18 @@ fn parse_simplified_function(nodes: &[Value], func_idx: usize, module: &Value) -
     let mut func = FuncOp::new(func_name.to_string(), func_type);
 
     // Add operations to function
-    if let Some(entry_region) = func.entry_region_mut() {
-        if let Some(entry_block) = entry_region.entry_block_mut() {
-            for op in operations {
-                entry_block.add_instruction(op);
-            }
-
-            // Add return terminator
-            let return_values = find_measurement_results(entry_block);
-            entry_block.terminator = Some(Terminator::Return {
-                values: return_values,
-            });
+    if let Some(entry_region) = func.entry_region_mut()
+        && let Some(entry_block) = entry_region.entry_block_mut()
+    {
+        for op in operations {
+            entry_block.add_instruction(op);
         }
+
+        // Add return terminator
+        let return_values = find_measurement_results(entry_block);
+        entry_block.terminator = Some(Terminator::Return {
+            values: return_values,
+        });
     }
 
     Ok(func)
@@ -461,23 +459,17 @@ fn create_quantum_instruction(
     let mut operands = Vec::new();
     if let Some(edges) = module.get("edges").and_then(|e| e.as_array()) {
         for edge in edges {
-            if let Some(edge_arr) = edge.as_array() {
-                if edge_arr.len() == 2 {
-                    if let (Some(dst), Some(src)) = (edge_arr[1].as_array(), edge_arr[0].as_array())
-                    {
-                        if !dst.is_empty() && !src.is_empty() {
-                            if let (Some(dst_node), Some(src_node)) =
-                                (dst[0].as_u64(), src[0].as_u64())
-                            {
-                                if dst_node as usize == node_idx {
-                                    // This edge points to our node
-                                    if let Some(&ssa_val) = node_to_ssa.get(&(src_node as usize)) {
-                                        operands.push(ssa_val);
-                                    }
-                                }
-                            }
-                        }
-                    }
+            if let Some(edge_arr) = edge.as_array()
+                && edge_arr.len() == 2
+                && let (Some(dst), Some(src)) = (edge_arr[1].as_array(), edge_arr[0].as_array())
+                && !dst.is_empty()
+                && !src.is_empty()
+                && let (Some(dst_node), Some(src_node)) = (dst[0].as_u64(), src[0].as_u64())
+                && dst_node as usize == node_idx
+            {
+                // This edge points to our node
+                if let Some(&ssa_val) = node_to_ssa.get(&(src_node as usize)) {
+                    operands.push(ssa_val);
                 }
             }
         }

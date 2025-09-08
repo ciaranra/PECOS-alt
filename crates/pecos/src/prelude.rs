@@ -62,19 +62,18 @@ pub use crate::program::{
 };
 
 // Re-export program types from pecos-programs
-pub use pecos_programs::{QasmProgram, LlvmProgram, HugrProgram, Program};
+pub use pecos_programs::{HugrProgram, LlvmProgram, Program, QasmProgram};
 
 // Re-export setup functions from format-specific crates
 pub use crate::setup_llvm_engine;
 pub use pecos_phir_json::setup_phir_json_engine;
 pub use pecos_qasm::setup_qasm_engine;
 
-
 // Re-export ClassicalControlEngine
 pub use pecos_engines::ClassicalControlEngine;
 
 // Re-export unified simulation API
-pub use crate::unified_sim::{sim, SimBuilderExt};
+pub use crate::unified_sim::{SimBuilderExt, sim};
 pub use pecos_engines::sim_builder;
 
 // Re-export PCG RNG functions

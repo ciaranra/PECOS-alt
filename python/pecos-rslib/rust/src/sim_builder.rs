@@ -35,7 +35,7 @@ impl PyQasmEngineBuilder {
             Err(PyRuntimeError::new_err("Builder already consumed"))
         }
     }
-    
+
     /// Convert to simulation builder
     pub fn to_sim(&mut self) -> PyResult<PySimBuilder> {
         if let Some(builder) = self.builder.take() {
@@ -65,7 +65,7 @@ impl PyLlvmEngineBuilder {
             Err(PyRuntimeError::new_err("Builder already consumed"))
         }
     }
-    
+
     /// Convert to simulation builder
     pub fn to_sim(&mut self) -> PyResult<PySimBuilder> {
         if let Some(builder) = self.builder.take() {
@@ -95,7 +95,7 @@ impl PySeleneEngineBuilder {
             Err(PyRuntimeError::new_err("Builder already consumed"))
         }
     }
-    
+
     /// Set number of qubits
     pub fn qubits(&mut self, n: usize) -> PyResult<&mut Self> {
         if let Some(builder) = self.builder.take() {
@@ -105,7 +105,7 @@ impl PySeleneEngineBuilder {
             Err(PyRuntimeError::new_err("Builder already consumed"))
         }
     }
-    
+
     /// Enable optimization
     pub fn optimize(&mut self, opt: bool) -> PyResult<&mut Self> {
         if let Some(builder) = self.builder.take() {
@@ -115,7 +115,7 @@ impl PySeleneEngineBuilder {
             Err(PyRuntimeError::new_err("Builder already consumed"))
         }
     }
-    
+
     /// Convert to simulation builder
     pub fn to_sim(&mut self) -> PyResult<PySimBuilder> {
         if let Some(builder) = self.builder.take() {
@@ -164,7 +164,7 @@ impl PySimBuilder {
         }
         Ok(self)
     }
-    
+
     /// Set number of workers
     pub fn workers(&mut self, workers: usize) -> PyResult<&mut Self> {
         match &mut self.inner {
@@ -186,7 +186,7 @@ impl PySimBuilder {
         }
         Ok(self)
     }
-    
+
     /// Use automatic worker count
     pub fn auto_workers(&mut self) -> PyResult<&mut Self> {
         match &mut self.inner {
@@ -208,7 +208,7 @@ impl PySimBuilder {
         }
         Ok(self)
     }
-    
+
     /// Set quantum engine type
     pub fn quantum_engine(&mut self, engine: &str) -> PyResult<&mut Self> {
         let engine_type = match engine.to_lowercase().as_str() {
@@ -216,7 +216,7 @@ impl PySimBuilder {
             "sparsestabilizer" | "sparse_stabilizer" => QuantumEngineType::SparseStabilizer,
             _ => return Err(PyValueError::new_err(format!("Unknown quantum engine: {}", engine))),
         };
-        
+
         match &mut self.inner {
             SimBuilderInner::Qasm(builder) => {
                 if let Some(b) = builder.take() {
@@ -236,7 +236,7 @@ impl PySimBuilder {
         }
         Ok(self)
     }
-    
+
     /// Set number of qubits for quantum engine and allocation limit
     pub fn qubits(&mut self, num_qubits: usize) -> PyResult<&mut Self> {
         match &mut self.inner {
@@ -258,7 +258,7 @@ impl PySimBuilder {
         }
         Ok(self)
     }
-    
+
     /// Set verbose mode
     pub fn verbose(&mut self, verbose: bool) -> PyResult<&mut Self> {
         match &mut self.inner {
@@ -280,13 +280,13 @@ impl PySimBuilder {
         }
         Ok(self)
     }
-    
+
     /// Set depolarizing noise
     pub fn noise_depolarizing(&mut self, p: f64) -> PyResult<&mut Self> {
         let noise_builder = DepolarizingNoiseModelBuilder::new()
             .with_p1_probability(p)
             .with_p2_probability(p);
-            
+
         match &mut self.inner {
             SimBuilderInner::Qasm(builder) => {
                 if let Some(b) = builder.take() {
@@ -306,7 +306,7 @@ impl PySimBuilder {
         }
         Ok(self)
     }
-    
+
     /// Run the simulation
     pub fn run(&mut self, shots: usize) -> PyResult<PyShotVec> {
         let result = match &mut self.inner {
@@ -332,7 +332,7 @@ impl PySimBuilder {
                 }
             }
         }?;
-        
+
         Ok(PyShotVec::from(result))
     }
 }
@@ -398,11 +398,11 @@ pub fn register_sim_builder_module(parent_module: &Bound<'_, PyModule>) -> PyRes
     parent_module.add_class::<PyLlvmEngineBuilder>()?;
     parent_module.add_class::<PySeleneEngineBuilder>()?;
     parent_module.add_class::<PySimBuilder>()?;
-    
+
     parent_module.add_function(wrap_pyfunction!(py_qasm_engine, parent_module)?)?;
     parent_module.add_function(wrap_pyfunction!(py_llvm_engine, parent_module)?)?;
     parent_module.add_function(wrap_pyfunction!(py_selene_engine, parent_module)?)?;
     parent_module.add_function(wrap_pyfunction!(py_sim, parent_module)?)?;
-    
+
     Ok(())
 }

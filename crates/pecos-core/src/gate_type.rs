@@ -37,7 +37,6 @@ pub enum GateType {
     // F3dg = 21
     // F4 = 22
     // F4dg = 23
-
     RX = 30,
     RY = 31,
     RZ = 32,

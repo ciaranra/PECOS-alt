@@ -114,7 +114,7 @@ class TestDirectBuilder:
         # Scale validation happens at build time, not when setting the value
         # So we need to build and use the noise model to trigger validation
         # For now, just test that we can set negative scale (validation may happen later)
-        builder = GeneralNoiseModelBuilder().with_scale(-1)
+        GeneralNoiseModelBuilder().with_scale(-1)
         # The actual validation might happen when building the noise model
         # which is done internally when using it with a simulation
 

@@ -226,44 +226,46 @@ def test_register_mapping_simulation() -> None:
             ],
         },
     )
-    
+
     # Create engine with validation disabled
     engine = PhirJsonEngine.create_with_validation_disabled(phir)
-    
+
     # Process the program to get quantum commands
     commands = engine.process_program()
-    
+
     print(f"Got {len(commands)} commands")
-    
+
     # We expect at least 1 measurement command
-    assert len(commands) >= 1, f"Expected at least 1 quantum command, got {len(commands)}"
-    
+    assert (
+        len(commands) >= 1
+    ), f"Expected at least 1 quantum command, got {len(commands)}"
+
     # Verify we have a measurement
     assert commands[0]["gate_type"] == "Measure", "First command should be Measure"
     assert commands[0]["qubits"] == [0], "First measure should be on qubit 0"
-    
+
     # Handle first measurement
     engine.handle_measurement(0)  # First qubit measures 0
-    
+
     # Try to get more commands
     more_commands = engine.process_program()
-    
+
     # If we get another measurement, handle it
     if len(more_commands) > 0 and more_commands[0]["gate_type"] == "Measure":
         if more_commands[0]["qubits"] == [1]:
             engine.handle_measurement(0)  # Second qubit measures 0
-    
+
     # Get results
     results = engine.get_results()
-    
+
     # Verify we got results
     assert results is not None, "Expected measurement results"
     assert len(results) > 0, "Expected non-empty results"
-    
+
     print(f"Measurement results: {results}")
-    
+
     # Check that we have results for the "m" register
     assert "m" in results, "Expected 'm' register in results"
-    
+
     # The value should be 0 as per the test's special handling
     assert results["m"] == 0, f"Expected m=0, got m={results['m']}"

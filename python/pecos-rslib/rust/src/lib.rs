@@ -26,17 +26,17 @@ mod pauli_prop_bindings;
 // mod pcg_bindings;
 mod pecos_rng_bindings;
 mod phir_json_bridge;
+mod plugin_compiler_bindings;
 mod quest_bindings;
 mod qulacs_bindings;
+mod selene_library_bindings;
 mod shot_results_bindings;
+mod sim;
 mod sparse_sim;
 mod sparse_stab_bindings;
 mod sparse_stab_engine_bindings;
 mod state_vec_bindings;
 mod state_vec_engine_bindings;
-mod sim;
-mod plugin_compiler_bindings;
-mod selene_library_bindings;
 
 #[cfg(feature = "hugr-llvm-pipeline")]
 mod hugr_bindings;
@@ -44,17 +44,20 @@ mod hugr_bindings;
 use byte_message_bindings::{PyByteMessage, PyByteMessageBuilder};
 use coin_toss_bindings::RsCoinToss;
 use cpp_sparse_sim_bindings::CppSparseSim;
+use engine_builders::{
+    PyHugrProgram, PyLlvmProgram, PyPhirJsonProgram, PyQasmProgram, PySeleneExecutableConfig,
+    PySeleneExecutableEngine, PySeleneInProcessEngine, PySeleneInterfaceProgram,
+};
 use pauli_prop_bindings::PyPauliProp;
 use pecos_rng_bindings::RngPcg;
 use pyo3::prelude::*;
 use quest_bindings::{QuestDensityMatrix, QuestStateVec};
 use qulacs_bindings::RsQulacs;
+use selene_library_bindings::PySeleneLibraryEngine;
 use sparse_stab_bindings::SparseSim;
 use sparse_stab_engine_bindings::PySparseStabEngine;
 use state_vec_bindings::RsStateVec;
 use state_vec_engine_bindings::PyStateVecEngine;
-use engine_builders::{PyQasmProgram, PyLlvmProgram, PyHugrProgram, PyPhirJsonProgram, PySeleneInterfaceProgram, PySeleneExecutableConfig, PySeleneExecutableEngine, PySeleneInProcessEngine};
-use selene_library_bindings::PySeleneLibraryEngine;
 
 /// A Python module implemented in Rust.
 #[pymodule]
@@ -76,10 +79,10 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RngPcg>()?;
     m.add_class::<QuestStateVec>()?;
     m.add_class::<QuestDensityMatrix>()?;
-    
+
     // Register the unified sim() function
     sim::register_sim(m)?;
-    
+
     // Register engine builders (QasmEngineBuilder, etc.)
     engine_builders::register_engine_builders(m)?;
 
@@ -89,7 +92,7 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyHugrProgram>()?;
     m.add_class::<PyPhirJsonProgram>()?;
     m.add_class::<PySeleneInterfaceProgram>()?;
-    
+
     // Register Selene Executable Engine types
     m.add_class::<PySeleneExecutableConfig>()?;
     m.add_class::<PySeleneExecutableEngine>()?;
@@ -104,7 +107,10 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(engine_builders::sim_builder, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::general_noise, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::depolarizing_noise, m)?)?;
-    m.add_function(wrap_pyfunction!(engine_builders::biased_depolarizing_noise, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        engine_builders::biased_depolarizing_noise,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(engine_builders::state_vector, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::sparse_stabilizer, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::sparse_stab, m)?)?;

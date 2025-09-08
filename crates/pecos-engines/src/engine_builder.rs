@@ -23,33 +23,33 @@ pub trait ClassicalControlEngineBuilder {
     /// Convert this engine builder to a simulation builder
     ///
     /// **Deprecated**: Use `sim_builder()` instead for the preferred API pattern:
-    /// 
+    ///
     /// ```no_run
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # // This is a conceptual example showing the API pattern
     /// # // In practice, you would use the actual engine builders from specific crates
     /// # use pecos_engines::{ClassicalControlEngineBuilder, sim_builder};
-    /// # 
+    /// #
     /// # // Example using a hypothetical qasm_engine function
     /// # // In real code, use: use pecos_qasm::qasm_engine;
     /// # mod example {
     /// #     use pecos_engines::{ClassicalControlEngineBuilder, SimBuilder};
     /// #     use pecos_engines::monte_carlo::engine::ExternalClassicalEngine;
-    /// #     
+    /// #
     /// #     pub struct QasmEngineBuilder;
-    /// #     
+    /// #
     /// #     impl ClassicalControlEngineBuilder for QasmEngineBuilder {
     /// #         type Engine = ExternalClassicalEngine;
-    /// #         
+    /// #
     /// #         fn build(self) -> Result<Self::Engine, pecos_core::errors::PecosError> {
     /// #             Ok(ExternalClassicalEngine::new())
     /// #         }
     /// #     }
-    /// #     
+    /// #
     /// #     impl QasmEngineBuilder {
     /// #         pub fn qasm(self, _qasm: &str) -> Self { self }
     /// #     }
-    /// #     
+    /// #
     /// #     pub fn qasm_engine() -> QasmEngineBuilder { QasmEngineBuilder }
     /// # }
     /// # use example::qasm_engine;
@@ -64,7 +64,7 @@ pub trait ClassicalControlEngineBuilder {
     /// # }
     /// ```
     fn to_sim(self) -> crate::sim_builder::SimBuilder
-    where 
+    where
         Self: Sized + Send + 'static,
         Self::Engine: 'static,
     {

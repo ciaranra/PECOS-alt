@@ -123,7 +123,7 @@ struct selene_u64_result_t selene_future_read_u64(struct SeleneInstance *instanc
 
 // Gate operations
 struct selene_void_result_t selene_rxy(struct SeleneInstance *instance, uint64_t qubit_id, double theta, double phi) {
-    printf("=== SELENE STUB: selene_rxy called with instance=%p, qubit=%lu, theta=%f, phi=%f ===\n", 
+    printf("=== SELENE STUB: selene_rxy called with instance=%p, qubit=%lu, theta=%f, phi=%f ===\n",
            instance, qubit_id, theta, phi);
     fflush(stdout);
     struct selene_void_result_t result = { .error_code = 0 };
@@ -131,7 +131,7 @@ struct selene_void_result_t selene_rxy(struct SeleneInstance *instance, uint64_t
 }
 
 struct selene_void_result_t selene_rz(struct SeleneInstance *instance, uint64_t qubit_id, double theta) {
-    printf("=== SELENE STUB: selene_rz called with instance=%p, qubit=%lu, theta=%f ===\n", 
+    printf("=== SELENE STUB: selene_rz called with instance=%p, qubit=%lu, theta=%f ===\n",
            instance, qubit_id, theta);
     fflush(stdout);
     struct selene_void_result_t result = { .error_code = 0 };
@@ -139,7 +139,7 @@ struct selene_void_result_t selene_rz(struct SeleneInstance *instance, uint64_t 
 }
 
 struct selene_void_result_t selene_rzz(struct SeleneInstance *instance, uint64_t qubit_id, uint64_t qubit_id2, double theta) {
-    printf("=== SELENE STUB: selene_rzz called with instance=%p, qubit1=%lu, qubit2=%lu, theta=%f ===\n", 
+    printf("=== SELENE STUB: selene_rzz called with instance=%p, qubit1=%lu, qubit2=%lu, theta=%f ===\n",
            instance, qubit_id, qubit_id2, theta);
     fflush(stdout);
     struct selene_void_result_t result = { .error_code = 0 };
@@ -148,7 +148,7 @@ struct selene_void_result_t selene_rzz(struct SeleneInstance *instance, uint64_t
 
 // Shot management
 struct selene_void_result_t selene_on_shot_start(struct SeleneInstance *instance, uint64_t shot_index) {
-    printf("=== SELENE STUB: selene_on_shot_start called with instance=%p, shot_index=%lu ===\n", 
+    printf("=== SELENE STUB: selene_on_shot_start called with instance=%p, shot_index=%lu ===\n",
            instance, shot_index);
     fflush(stdout);
     current_shot = shot_index;
@@ -196,7 +196,7 @@ struct selene_void_result_t selene_set_tc(struct SeleneInstance *instance, uint6
 
 // Barrier operations
 struct selene_void_result_t selene_local_barrier(struct SeleneInstance *instance, const uint64_t *qubit_ids, uint64_t qubit_ids_length, uint64_t sleep_time) {
-    printf("=== SELENE STUB: selene_local_barrier called with instance=%p, num_qubits=%lu, sleep_time=%lu ===\n", 
+    printf("=== SELENE STUB: selene_local_barrier called with instance=%p, num_qubits=%lu, sleep_time=%lu ===\n",
            instance, qubit_ids_length, sleep_time);
     fflush(stdout);
     struct selene_void_result_t result = { .error_code = 0 };
@@ -204,7 +204,7 @@ struct selene_void_result_t selene_local_barrier(struct SeleneInstance *instance
 }
 
 struct selene_void_result_t selene_global_barrier(struct SeleneInstance *instance, uint64_t sleep_time) {
-    printf("=== SELENE STUB: selene_global_barrier called with instance=%p, sleep_time=%lu ===\n", 
+    printf("=== SELENE STUB: selene_global_barrier called with instance=%p, sleep_time=%lu ===\n",
            instance, sleep_time);
     fflush(stdout);
     struct selene_void_result_t result = { .error_code = 0 };
@@ -213,7 +213,7 @@ struct selene_void_result_t selene_global_barrier(struct SeleneInstance *instanc
 
 // Print functions
 struct selene_void_result_t selene_print_bool(struct SeleneInstance *instance, struct selene_string_t tag, bool value) {
-    printf("=== SELENE STUB: selene_print_bool called with instance=%p, value=%s ===\n", 
+    printf("=== SELENE STUB: selene_print_bool called with instance=%p, value=%s ===\n",
            instance, value ? "true" : "false");
     fflush(stdout);
     struct selene_void_result_t result = { .error_code = 0 };
@@ -302,7 +302,7 @@ struct selene_f64_result_t selene_random_f64(struct SeleneInstance *instance) {
 
 // Custom runtime call
 struct selene_u64_result_t selene_custom_runtime_call(struct SeleneInstance *instance, uint64_t tag, const uint8_t *data, uint64_t data_length) {
-    printf("=== SELENE STUB: selene_custom_runtime_call called with instance=%p, tag=%lu, data_length=%lu ===\n", 
+    printf("=== SELENE STUB: selene_custom_runtime_call called with instance=%p, tag=%lu, data_length=%lu ===\n",
            instance, tag, data_length);
     fflush(stdout);
     struct selene_u64_result_t result = { .error_code = 1, .value = 0 }; // Not supported

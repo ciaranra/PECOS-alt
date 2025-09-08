@@ -23,7 +23,7 @@ pub enum Operation {
     Builtin(crate::builtin_ops::BuiltinOp),
     /// Quantum operations (gates, measurements, state preparation)
     Quantum(QuantumOp),
-    /// Classical arithmetic and logic operations  
+    /// Classical arithmetic and logic operations
     Classical(ClassicalOp),
     /// Control flow operations (branches, loops, function calls)
     ControlFlow(ControlFlowOp),
@@ -43,7 +43,7 @@ pub enum QuantumOp {
     H,
     /// Pauli-X gate
     X,
-    /// Pauli-Y gate  
+    /// Pauli-Y gate
     Y,
     /// Pauli-Z gate
     Z,
@@ -99,7 +99,7 @@ pub enum QuantumOp {
     // State preparation
     /// Initialize qubit to |0⟩
     InitZero,
-    /// Initialize qubit to |1⟩  
+    /// Initialize qubit to |1⟩
     InitOne,
     /// Initialize qubit to |+⟩
     InitPlus,

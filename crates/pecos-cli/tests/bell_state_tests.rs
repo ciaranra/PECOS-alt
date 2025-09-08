@@ -342,7 +342,6 @@ fn analyze_noisy_bell_state(
         *counts.entry(*outcome).or_insert(0) += 1;
     }
 
-
     // Print the distribution of outcomes
     println!("{model_name} noise model outcome distribution:");
     let mut total = 0;

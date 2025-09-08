@@ -14,7 +14,6 @@ pub fn log_error<E: Display>(component: &str, context: &str, error: E) -> PecosE
     PecosError::Processing(format!("{component} operation failed - {context}: {error}"))
 }
 
-
 /// Retry an operation with exponential backoff
 ///
 /// # Errors

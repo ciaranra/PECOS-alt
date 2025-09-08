@@ -4,7 +4,7 @@ use pecos_engines::shot_results::ShotVec;
 use pecos_llvm_sim::{llvm_engine, LlvmEngineBuilder};
 use pecos_engines::{ClassicalControlEngineBuilder};
 use pecos_engines::noise::{
-    DepolarizingNoiseModelBuilder, BiasedDepolarizingNoiseModelBuilder, 
+    DepolarizingNoiseModelBuilder, BiasedDepolarizingNoiseModelBuilder,
     GeneralNoiseModelBuilder, PassThroughNoiseModelBuilder, IntoNoiseModel
 };
 use pecos_engines::quantum_engine_builder::{state_vector, sparse_stab};
@@ -24,7 +24,7 @@ fn convert_shot_vec_to_binary_dict(shot_vec: ShotVec) -> HashMap<String, Vec<Str
         // Fallback for empty results
         HashMap::new().into()
     });
-    
+
     shot_map.registers().iter().map(|(name, bit_vectors)| {
         let binary_strings: Vec<String> = bit_vectors.iter()
             .map(|bv| bv.iter().map(|bit| if *bit { '1' } else { '0' }).collect())
@@ -34,7 +34,7 @@ fn convert_shot_vec_to_binary_dict(shot_vec: ShotVec) -> HashMap<String, Vec<Str
 }
 
 /// Python wrapper for the unified SimBuilder<LlvmEngineBuilder>
-/// 
+///
 /// This directly mirrors the Rust SimBuilder API
 #[pyclass(name = "LlvmSimBuilder", module = "pecos_rslib._pecos_rslib")]
 pub struct PyLlvmSimBuilder {
@@ -127,7 +127,7 @@ pub fn py_llvm_sim(llvm_ir: &str) -> PyResult<PyLlvmSimBuilder> {
     let sim_builder = llvm_engine()
         .program(LlvmProgram::from_string(llvm_ir))
         .to_sim();
-    
+
     Ok(PyLlvmSimBuilder {
         inner: Some(sim_builder)
     })

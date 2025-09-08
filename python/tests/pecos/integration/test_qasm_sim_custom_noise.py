@@ -1,7 +1,5 @@
 """Test custom noise model registration and from_config pattern."""
 
-import pytest
-
 
 class TestCustomNoiseModels:
     """Test custom noise model registration and configuration."""
@@ -9,9 +7,9 @@ class TestCustomNoiseModels:
     def test_built_in_noise_builders(self) -> None:
         """Test that all built-in noise models have builder methods."""
         from pecos_rslib import (
+            GeneralNoiseModelBuilder,
             biased_depolarizing_noise,
             depolarizing_noise,
-            GeneralNoiseModelBuilder,
         )
 
         # Test depolarizing noise builder
@@ -19,11 +17,13 @@ class TestCustomNoiseModels:
         assert dep is not None
 
         # Test depolarizing noise with multiple parameters
-        dep_custom = (depolarizing_noise()
-                     .with_prep_probability(0.002)
-                     .with_meas_probability(0.001)
-                     .with_p1_probability(0.003)
-                     .with_p2_probability(0.002))
+        dep_custom = (
+            depolarizing_noise()
+            .with_prep_probability(0.002)
+            .with_meas_probability(0.001)
+            .with_p1_probability(0.003)
+            .with_p2_probability(0.002)
+        )
         assert dep_custom is not None
 
         # Test BiasedDepolarizingNoise
@@ -61,11 +61,13 @@ class TestCustomNoiseModels:
             """
 
         # Use builder pattern with explicit probability
-        sim = (qasm_engine()
-               .program(QasmProgram.from_string(qasm))
-               .to_sim()
-               .noise(depolarizing_noise().with_uniform_probability(0.001))
-               .build())
+        sim = (
+            qasm_engine()
+            .program(QasmProgram.from_string(qasm))
+            .to_sim()
+            .noise(depolarizing_noise().with_uniform_probability(0.001))
+            .build()
+        )
         results = sim.run(1000)
         results_dict = results.to_dict()
 
@@ -89,25 +91,31 @@ class TestCustomNoiseModels:
             """
 
         # Test DepolarizingNoise with valid p
-        sim = (qasm_engine()
-               .program(QasmProgram.from_string(qasm_valid))
-               .to_sim()
-               .noise(depolarizing_noise().with_uniform_probability(0.5))
-               .build())
+        sim = (
+            qasm_engine()
+            .program(QasmProgram.from_string(qasm_valid))
+            .to_sim()
+            .noise(depolarizing_noise().with_uniform_probability(0.5))
+            .build()
+        )
         results = sim.run(10)
         results_dict = results.to_dict()
         assert len(results_dict["c"]) == 10
 
         # Test DepolarizingNoise with multiple parameters
-        sim = (qasm_engine()
-               .program(QasmProgram.from_string(qasm_valid))
-               .to_sim()
-               .noise(depolarizing_noise()
-                      .with_prep_probability(0.1)
-                      .with_meas_probability(0.2)
-                      .with_p1_probability(0.3)
-                      .with_p2_probability(0.4))
-               .build())
+        sim = (
+            qasm_engine()
+            .program(QasmProgram.from_string(qasm_valid))
+            .to_sim()
+            .noise(
+                depolarizing_noise()
+                .with_prep_probability(0.1)
+                .with_meas_probability(0.2)
+                .with_p1_probability(0.3)
+                .with_p2_probability(0.4),
+            )
+            .build()
+        )
         results = sim.run(10)
         results_dict = results.to_dict()
         assert len(results_dict["c"]) == 10

@@ -351,12 +351,12 @@ mod tests {
     use super::*;
     use crate::builtin_ops::ModuleOp;
     use crate::region_kinds::RegionKind;
-    
+
     #[test]
     fn test_module_to_phir_json() {
         let module = ModuleOp::new("test_module");
         let phir = module_to_phir_json(&module).unwrap();
-        
+
         assert_eq!(phir.format, "PHIR/JSON");
         assert_eq!(phir.version, PHIR_JSON_VERSION);
         assert_eq!(phir.module.name, "test_module");

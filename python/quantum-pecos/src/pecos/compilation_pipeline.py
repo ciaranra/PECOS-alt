@@ -51,32 +51,29 @@ def compile_guppy_to_hugr(guppy_function: Callable) -> bytes:
 
     try:
         # Compile the function - try both new and old API
-        if hasattr(guppy_function, 'compile'):
+        if hasattr(guppy_function, "compile"):
             # New API: function.compile()
             compiled = guppy_function.compile()
         else:
             # Old API: guppy.compile(function)
             compiled = guppy_module.compile(guppy_function)
-        
+
         # Handle the return value - it might be a FuncDefnPointer or similar
         # Use JSON format for HUGR 0.13 compatibility with our compiler
-        if hasattr(compiled, 'to_json'):
+        if hasattr(compiled, "to_json"):
             # Use JSON format for compatibility with HUGR 0.13 compiler
-            return compiled.to_json().encode('utf-8')
-        elif hasattr(compiled, 'package'):
-            if hasattr(compiled.package, 'to_json'):
-                return compiled.package.to_json().encode('utf-8')
-            else:
-                return compiled.package.to_bytes()
-        elif hasattr(compiled, 'to_package'):
+            return compiled.to_json().encode("utf-8")
+        if hasattr(compiled, "package"):
+            if hasattr(compiled.package, "to_json"):
+                return compiled.package.to_json().encode("utf-8")
+            return compiled.package.to_bytes()
+        if hasattr(compiled, "to_package"):
             package = compiled.to_package()
-            if hasattr(package, 'to_json'):
-                return package.to_json().encode('utf-8')
-            else:
-                return package.to_bytes()
-        else:
-            # Try to serialize directly
-            return compiled.to_bytes()
+            if hasattr(package, "to_json"):
+                return package.to_json().encode("utf-8")
+            return package.to_bytes()
+        # Try to serialize directly
+        return compiled.to_bytes()
     except Exception as e:
         msg = f"Failed to compile Guppy to HUGR: {e}"
         raise RuntimeError(msg) from e
@@ -123,7 +120,7 @@ def compile_hugr_to_llvm(
                 # Use our updated hugr_compiler that handles HUGR 0.13 compatibility
                 try:
                     from pecos_rslib import compile_hugr_to_llvm
-                    
+
                     # Try the updated compiler that uses pecos-selene backend
                     return compile_hugr_to_llvm(hugr_bytes)
                 except Exception as selene_error:
@@ -174,13 +171,15 @@ def execute_llvm(
     # If llvm_ir is a string content, write to temporary file
     if isinstance(llvm_ir, str) and not Path(llvm_ir).exists():
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.ll', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".ll", delete=False) as f:
             f.write(llvm_ir)
             temp_path = f.name
         try:
             result = execute_llvm(temp_path, shots)
         finally:
             import os
+
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
     else:

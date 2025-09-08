@@ -18,7 +18,7 @@ static RUNTIME_INSTANCE: Mutex<Option<Box<dyn RuntimeInterface>>> = Mutex::new(N
 pub fn initialize_ffi_bridge(runtime_plugin_path: &std::path::Path, n_qubits: u64) -> Result<()> {
     // Load the runtime plugin
     let runtime_plugin = RuntimePluginInterface::new_from_file(runtime_plugin_path)?;
-    
+
     // Create runtime instance using the plugin factory
     use std::sync::Arc;
     let factory = Arc::new(runtime_plugin);
@@ -27,11 +27,11 @@ pub fn initialize_ffi_bridge(runtime_plugin_path: &std::path::Path, n_qubits: u6
         selene_core::time::Instant::from(0),
         &Vec::<String>::new(),
     )?;
-    
+
     // Store it globally
     let mut guard = RUNTIME_INSTANCE.lock().unwrap();
     *guard = Some(runtime);
-    
+
     Ok(())
 }
 
@@ -198,7 +198,7 @@ pub extern "C" fn selene_future_read_bool(_instance: *mut c_void, future_id: u64
     if let Some(runtime) = guard.as_mut() {
         // Force the result
         let _ = runtime.force_result(future_id);
-        
+
         // Get the result
         match runtime.get_bool_result(future_id) {
             Ok(Some(value)) => value as u8,
@@ -215,7 +215,7 @@ pub extern "C" fn selene_future_read_u64(_instance: *mut c_void, future_id: u64)
     if let Some(runtime) = guard.as_mut() {
         // Force the result
         let _ = runtime.force_result(future_id);
-        
+
         // Get the result
         match runtime.get_u64_result(future_id) {
             Ok(Some(value)) => value,

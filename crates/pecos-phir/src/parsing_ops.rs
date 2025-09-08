@@ -253,10 +253,10 @@ impl NameResolver {
 /// func @factorial(%n: i32) -> i32 {
 ///     %cond = cmpi "eq", %n, %zero : i32
 ///     cond_br %cond, ^base, ^recursive
-///   
+///
 ///   ^base:
 ///     return %one : i32
-///   
+///
 ///   ^recursive:
 ///     %n_minus_1 = subi %n, %one : i32
 ///     %rec = call @factorial(%n_minus_1) : (i32) -> i32  // Forward ref!

@@ -27,8 +27,8 @@ fn test_hugr_to_llvm_to_execution() -> Result<(), PecosError> {
         engine,
         Box::new(PassThroughNoiseModel::builder().build()),
         state_vector().qubits(num_qubits).build()?,
-        1000,  // shots
-        1,     // workers
+        1000,     // shots
+        1,        // workers
         Some(42), // seed
     )?;
 
@@ -43,8 +43,11 @@ fn test_hugr_to_llvm_to_execution() -> Result<(), PecosError> {
 
     for shot in &results.shots {
         // Debug: print what keys we have
-        eprintln!("DEBUG test: Shot data keys: {:?}", shot.data.keys().collect::<Vec<_>>());
-        
+        eprintln!(
+            "DEBUG test: Shot data keys: {:?}",
+            shot.data.keys().collect::<Vec<_>>()
+        );
+
         // Get the measurement results - could be Vec or I64 (bit-packed)
         match shot.data.get("result") {
             Some(pecos_engines::shot_results::Data::Vec(vec)) => {
@@ -58,7 +61,7 @@ fn test_hugr_to_llvm_to_execution() -> Result<(), PecosError> {
                         pecos_engines::shot_results::Data::I32(n) => *n,
                         _ => panic!("Expected I32 in Vec"),
                     };
-                    
+
                     match (c, c1) {
                         (0, 0) => outcome_00 += 1,
                         (1, 1) => outcome_11 += 1,
@@ -72,7 +75,7 @@ fn test_hugr_to_llvm_to_execution() -> Result<(), PecosError> {
                 // Bit-packed format: bits represent measurements
                 let c = (packed & 1) as i32;
                 let c1 = ((packed >> 1) & 1) as i32;
-                
+
                 match (c, c1) {
                     (0, 0) => outcome_00 += 1,
                     (1, 1) => outcome_11 += 1,
@@ -80,7 +83,10 @@ fn test_hugr_to_llvm_to_execution() -> Result<(), PecosError> {
                 }
             }
             _ => {
-                eprintln!("DEBUG test: Expected 'result' key with Vec or I64 data, but got: {:?}", shot.data);
+                eprintln!(
+                    "DEBUG test: Expected 'result' key with Vec or I64 data, but got: {:?}",
+                    shot.data
+                );
                 panic!("Expected 'result' key with Vec or I64 data");
             }
         }
@@ -126,8 +132,8 @@ fn test_hugr_from_bytes() -> Result<(), PecosError> {
         engine,
         Box::new(PassThroughNoiseModel::builder().build()),
         state_vector().qubits(num_qubits).build()?,
-        100,  // shots
-        1,    // workers
+        100,      // shots
+        1,        // workers
         Some(42), // seed
     )?;
     assert_eq!(results.len(), 100);
@@ -135,7 +141,7 @@ fn test_hugr_from_bytes() -> Result<(), PecosError> {
     // Verify at least some results are valid
     let first_shot = &results.shots[0];
     assert!(first_shot.data.contains_key("result"));
-    
+
     // Verify it's either a Vec with at least 2 elements or a bit-packed I64
     match first_shot.data.get("result") {
         Some(pecos_engines::shot_results::Data::Vec(vec)) => {
@@ -170,8 +176,8 @@ fn test_hugr_via_phir_pipeline() -> Result<(), PecosError> {
         engine,
         Box::new(PassThroughNoiseModel::builder().build()),
         state_vector().qubits(num_qubits).build()?,
-        1000,  // shots
-        1,     // workers
+        1000,     // shots
+        1,        // workers
         Some(42), // seed
     )?;
 
@@ -250,9 +256,9 @@ attributes #0 = { "EntryPoint" }
         engine,
         Box::new(PassThroughNoiseModel::builder().build()),
         state_vector().qubits(num_qubits).build()?,
-        10,    // shots
-        1,     // workers
-        None,  // seed
+        10,   // shots
+        1,    // workers
+        None, // seed
     )?;
     assert_eq!(results.len(), 10);
 
@@ -275,8 +281,8 @@ fn test_single_hadamard_execution() -> Result<(), PecosError> {
         engine,
         Box::new(PassThroughNoiseModel::builder().build()),
         state_vector().qubits(num_qubits).build()?,
-        1000,  // shots
-        1,     // workers
+        1000,     // shots
+        1,        // workers
         Some(42), // seed
     )?;
 
@@ -331,8 +337,8 @@ fn test_ghz_state_execution() -> Result<(), PecosError> {
         engine,
         Box::new(PassThroughNoiseModel::builder().build()),
         state_vector().qubits(num_qubits).build()?,
-        1000,  // shots
-        1,     // workers
+        1000,     // shots
+        1,        // workers
         Some(42), // seed
     )?;
 
@@ -366,10 +372,10 @@ fn test_ghz_state_execution() -> Result<(), PecosError> {
         if values.len() == 1 {
             // Packed format: bits represent measurements
             let packed = values[0];
-            let m0 = (packed >> 0) & 1;
+            let m0 = packed & 1;
             let m1 = (packed >> 1) & 1;
             let m2 = (packed >> 2) & 1;
-            
+
             match (m0, m1, m2) {
                 (0, 0, 0) => outcome_000 += 1,
                 (1, 1, 1) => outcome_111 += 1,

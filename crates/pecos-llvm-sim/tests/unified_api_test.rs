@@ -1,7 +1,7 @@
 //! Test the unified API `sim_builder().classical(llvm_engine())`
 
+use pecos_engines::{DepolarizingNoise, sim_builder};
 use pecos_llvm_sim::llvm_engine;
-use pecos_engines::{sim_builder, DepolarizingNoise};
 use pecos_programs::LlvmProgram;
 
 const SIMPLE_IR: &str = r#"
@@ -65,21 +65,22 @@ fn test_unified_api_basic() {
 
     // Test the unified API
     let shot_vec = sim_builder()
-        .classical(llvm_engine()
-        .program(LlvmProgram::from_string(SIMPLE_IR)))
+        .classical(llvm_engine().program(LlvmProgram::from_string(SIMPLE_IR)))
         .seed(42)
         .qubits(2)
         .run(100)
         .expect("Unified API should work");
-    
+
     assert_eq!(shot_vec.len(), 100);
-    
+
     // Convert to ShotMap for analysis
-    let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+    let shot_map = shot_vec
+        .try_as_shot_map()
+        .expect("Should convert to ShotMap");
     let registers = shot_map.register_names();
-    
+
     // Should have register 'c'
-    assert!(registers.iter().any(|r| *r == "c"));
+    assert!(registers.contains(&"c"));
     assert_eq!(shot_map.num_shots(), 100);
 }
 
@@ -92,21 +93,22 @@ fn test_unified_api_with_noise() {
 
     // Test the unified API with noise
     let shot_vec = sim_builder()
-        .classical(llvm_engine()
-        .program(LlvmProgram::from_string(SIMPLE_IR)))
+        .classical(llvm_engine().program(LlvmProgram::from_string(SIMPLE_IR)))
         .seed(42)
         .noise(DepolarizingNoise { p: 0.01 })
         .qubits(2)
         .run(100)
         .expect("Unified API with noise should work");
-    
+
     assert_eq!(shot_vec.len(), 100);
-    
+
     // Convert to ShotMap for analysis
-    let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
-    
+    let shot_map = shot_vec
+        .try_as_shot_map()
+        .expect("Should convert to ShotMap");
+
     // Should have register 'c'
-    assert!(shot_map.register_names().iter().any(|r| *r == "c"));
+    assert!(shot_map.register_names().contains(&"c"));
     assert_eq!(shot_map.num_shots(), 100);
 }
 
@@ -122,8 +124,7 @@ fn test_unified_api_deterministic_behavior() {
 
     // Test with first builder instance
     let shot_vec_sim = sim_builder()
-        .classical(llvm_engine()
-        .program(LlvmProgram::from_string(SIMPLE_IR)))
+        .classical(llvm_engine().program(LlvmProgram::from_string(SIMPLE_IR)))
         .seed(seed)
         .workers(1) // Single worker for determinism
         .qubits(2)
@@ -132,26 +133,29 @@ fn test_unified_api_deterministic_behavior() {
 
     // Test with second builder instance for comparison
     let shot_vec_unified = sim_builder()
-        .classical(llvm_engine()
-        .program(LlvmProgram::from_string(SIMPLE_IR)))
+        .classical(llvm_engine().program(LlvmProgram::from_string(SIMPLE_IR)))
         .seed(seed)
         .workers(1) // Single worker for determinism
         .qubits(2)
         .run(shots)
         .expect("Second instance should work");
-    
+
     // Both should have same number of shots
     assert_eq!(shot_vec_sim.len(), shots);
     assert_eq!(shot_vec_unified.len(), shots);
-    
+
     // Convert to ShotMaps
-    let shot_map_first = shot_vec_sim.try_as_shot_map().expect("Should convert first");
-    let shot_map_second = shot_vec_unified.try_as_shot_map().expect("Should convert second");
-    
+    let shot_map_first = shot_vec_sim
+        .try_as_shot_map()
+        .expect("Should convert first");
+    let shot_map_second = shot_vec_unified
+        .try_as_shot_map()
+        .expect("Should convert second");
+
     // Both should have 'c' register
-    assert!(shot_map_first.register_names().iter().any(|r| *r == "c"));
-    assert!(shot_map_second.register_names().iter().any(|r| *r == "c"));
-    
+    assert!(shot_map_first.register_names().contains(&"c"));
+    assert!(shot_map_second.register_names().contains(&"c"));
+
     // Both should have same number of shots
     assert_eq!(shot_map_first.num_shots(), shots);
     assert_eq!(shot_map_second.num_shots(), shots);

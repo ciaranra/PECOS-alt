@@ -38,7 +38,7 @@ try:
             print(f"Loaded Selene runtime from: {path}")
             selene_loaded = True
             break
-    
+
     if not selene_loaded:
         print("Warning: Could not load Selene runtime library")
 except Exception as e:
@@ -98,8 +98,10 @@ from pecos_rslib._pecos_rslib import SeleneLibraryEngine
 try:
     from pecos_rslib.guppy_conversion import guppy_to_hugr
 except ImportError:
+
     def guppy_to_hugr(*args, **kwargs):
         raise ImportError("guppy_to_hugr not available")
+
 
 # Program types - try importing but don't fail
 try:
@@ -117,51 +119,59 @@ except ImportError:
         @staticmethod
         def from_string(qasm):
             raise ImportError("QasmProgram not available")
-    
+
     class LlvmProgram:
         @staticmethod
         def from_string(llvm):
             raise ImportError("LlvmProgram not available")
-    
+
     class HugrProgram:
         @staticmethod
         def from_bytes(bytes):
             raise ImportError("HugrProgram not available")
-    
+
     class PhirJsonProgram:
         @staticmethod
         def from_json(json):
             raise ImportError("PhirJsonProgram not available")
-    
+
     class WasmProgram:
         @staticmethod
         def from_bytes(bytes):
             raise ImportError("WasmProgram not available")
-    
+
     class WatProgram:
         @staticmethod
         def from_string(wat):
             raise ImportError("WatProgram not available")
+
 
 # Import the new sim API - use Python wrapper that handles Guppy
 # Note: We explicitly override the sim module with the sim function
 try:
     # Try to import the wrapper that handles Guppy programs
     from pecos_rslib.sim_wrapper import sim as _sim_func
+
     sim = _sim_func  # Override any module import with the function
 except ImportError:
     # Fall back to sim from sim.py module (which re-exports Rust sim)
     try:
         from pecos_rslib.sim import sim as _sim_func
+
         sim = _sim_func  # Override any module import with the function
     except ImportError:
         # Last resort - try directly from Rust
         try:
             from pecos_rslib._pecos_rslib import sim as _sim_func
+
             sim = _sim_func  # Override any module import with the function
         except ImportError:
+
             def sim(*args, **kwargs):
-                raise ImportError("sim() function not available - ensure pecos-rslib is built with sim support")
+                raise ImportError(
+                    "sim() function not available - ensure pecos-rslib is built with sim support"
+                )
+
 
 # Try to import other sim-related functions but don't fail if unavailable
 try:
@@ -183,48 +193,49 @@ except ImportError:
     # Provide stubs if not available
     def qasm_engine(*args, **kwargs):
         raise ImportError("qasm_engine not available")
-    
+
     def llvm_engine(*args, **kwargs):
         raise ImportError("llvm_engine not available")
-    
+
     def selene_engine(*args, **kwargs):
         raise ImportError("selene_engine not available")
-    
+
     def phir_json_engine(*args, **kwargs):
         raise ImportError("phir_json_engine not available")
-    
+
     # Builder classes
     class QasmEngineBuilder:
         def __init__(self):
             raise ImportError("QasmEngineBuilder not available")
-    
+
     class LlvmEngineBuilder:
         def __init__(self):
             raise ImportError("LlvmEngineBuilder not available")
-    
+
     class SeleneEngineBuilder:
         def __init__(self):
             raise ImportError("SeleneEngineBuilder not available")
-    
+
     class PhirJsonEngineBuilder:
         def __init__(self):
             raise ImportError("PhirJsonEngineBuilder not available")
-    
+
     class SimBuilder:
         def __init__(self):
             raise ImportError("SimBuilder not available")
-    
+
     class GeneralNoiseModelBuilder:
         def __init__(self):
             raise ImportError("GeneralNoiseModelBuilder not available")
-    
+
     class DepolarizingNoiseModelBuilder:
         def __init__(self):
             raise ImportError("DepolarizingNoiseModelBuilder not available")
-    
+
     class BiasedDepolarizingNoiseModelBuilder:
         def __init__(self):
             raise ImportError("BiasedDepolarizingNoiseModelBuilder not available")
+
 
 # Import quantum engine builders from sim module - try but don't fail
 try:
@@ -243,28 +254,29 @@ except ImportError:
     class StateVectorEngineBuilder:
         def __init__(self):
             raise ImportError("StateVectorEngineBuilder not available")
-    
+
     class SparseStabilizerEngineBuilder:
         def __init__(self):
             raise ImportError("SparseStabilizerEngineBuilder not available")
-    
+
     def state_vector(*args, **kwargs):
         raise ImportError("state_vector not available")
-    
+
     def sparse_stabilizer(*args, **kwargs):
         raise ImportError("sparse_stabilizer not available")
-    
+
     def sparse_stab(*args, **kwargs):
         raise ImportError("sparse_stab not available")
-    
+
     def general_noise(*args, **kwargs):
         raise ImportError("general_noise not available")
-    
+
     def depolarizing_noise(*args, **kwargs):
         raise ImportError("depolarizing_noise not available")
-    
+
     def biased_depolarizing_noise(*args, **kwargs):
         raise ImportError("biased_depolarizing_noise not available")
+
 
 # Import GeneralNoiseFactory and convenience functions - try but don't fail
 try:
@@ -279,16 +291,17 @@ except ImportError:
     class GeneralNoiseFactory:
         def __init__(self):
             raise ImportError("GeneralNoiseFactory not available")
-    
+
     def create_noise_from_dict(*args, **kwargs):
         raise ImportError("create_noise_from_dict not available")
-    
+
     def create_noise_from_json(*args, **kwargs):
         raise ImportError("create_noise_from_json not available")
-    
+
     class IonTrapNoiseFactory:
         def __init__(self):
             raise ImportError("IonTrapNoiseFactory not available")
+
 
 # Import namespace modules for better discoverability - try but don't fail
 try:
@@ -296,31 +309,41 @@ try:
 except ImportError:
     # Create empty namespace objects
     import types
-    noise = types.ModuleType('noise')
-    quantum = types.ModuleType('quantum')
-    programs = types.ModuleType('programs')
+
+    noise = types.ModuleType("noise")
+    quantum = types.ModuleType("quantum")
+    programs = types.ModuleType("programs")
 
 # HUGR-LLVM pipeline is not currently available
 RUST_HUGR_AVAILABLE = False
 HUGR_LLVM_PIPELINE_AVAILABLE = False
 
+
 def check_rust_hugr_availability():
     return False, "HUGR-LLVM pipeline not available"
+
 
 def RustHugrCompiler(*args, **kwargs):
     raise ImportError("HUGR-LLVM pipeline not available")
 
+
 def RustHugrLlvmEngine(*args, **kwargs):
     raise ImportError("HUGR-LLVM pipeline not available")
+
 
 def compile_hugr_to_llvm_rust(*args, **kwargs):
     raise ImportError("HUGR-LLVM pipeline not available")
 
+
 def create_llvm_engine_from_hugr_rust(*args, **kwargs):
     raise ImportError("HUGR-LLVM pipeline not available")
 
+
 def compile_hugr_to_llvm(*args, **kwargs):
-    raise ImportError("compile_hugr_to_llvm requires pecos-rslib to be compiled with hugr-013 feature")
+    raise ImportError(
+        "compile_hugr_to_llvm requires pecos-rslib to be compiled with hugr-013 feature"
+    )
+
 
 # Import PHIR pipeline functionality (core part of PECOS) - try but don't fail
 try:
@@ -334,13 +357,13 @@ except ImportError:
     # Provide stubs
     def hugr_to_phir_mlir(*args, **kwargs):
         raise ImportError("hugr_to_phir_mlir not available")
-    
+
     def compile_hugr_via_phir(*args, **kwargs):
         raise ImportError("compile_hugr_via_phir not available")
-    
+
     def compile_and_execute_via_phir(*args, **kwargs):
         raise ImportError("compile_and_execute_via_phir not available")
-    
+
     class PhirCompiler:
         def __init__(self):
             raise ImportError("PhirCompiler not available")
@@ -348,7 +371,7 @@ except ImportError:
 
 def get_compilation_backends():
     """Get information about available compilation backends.
-    
+
     Returns:
         dict: Dictionary with backend availability information
     """
@@ -358,14 +381,14 @@ def get_compilation_backends():
             "phir": {
                 "available": True,
                 "description": "PHIR pipeline: HUGR → PHIR → LLVM IR",
-                "dependencies": ["MLIR tools"]
+                "dependencies": ["MLIR tools"],
             },
             "hugr-llvm": {
                 "available": HUGR_LLVM_PIPELINE_AVAILABLE,
                 "description": "HUGR-LLVM pipeline: HUGR → LLVM IR (via hugr-llvm)",
-                "dependencies": ["hugr-llvm"]
-            }
-        }
+                "dependencies": ["hugr-llvm"],
+            },
+        },
     }
 
 
@@ -421,7 +444,7 @@ __all__ = [
     "IonTrapNoiseFactory",
     # HUGR-LLVM pipeline functionality
     "RustHugrCompiler",
-    "RustHugrLlvmEngine", 
+    "RustHugrLlvmEngine",
     "compile_hugr_to_llvm_rust",
     "create_llvm_engine_from_hugr_rust",
     "check_rust_hugr_availability",

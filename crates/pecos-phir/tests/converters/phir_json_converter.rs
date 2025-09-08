@@ -31,51 +31,51 @@ fn test_bell_state_with_improved_converter() -> Result<(), PecosError> {
 
     // Use the improved converter
     let module = phir_json_to_module(bell_json)?;
-    
+
     // Create PhirEngine with the improved module
     let engine = PhirEngine::new(module)
         .map_err(|e| PecosError::Input(format!("Failed to create PhirEngine: {}", e)))?;
-    
+
     let num_qubits = engine.num_qubits();
     let quantum_engine = Box::new(StateVecEngine::new(num_qubits));
-    
+
     let mut hybrid_engine = HybridEngineBuilder::new()
         .with_classical_engine(Box::new(engine))
         .with_quantum_engine(quantum_engine)
         .build();
-    
+
     // Run multiple shots to verify Bell state behavior
     let mut counts: HashMap<u32, usize> = HashMap::new();
-    
+
     for i in 0..1 {  // Changed to just 1 shot for debugging
         eprintln!("=== Running shot {} ===", i);
         let shot = hybrid_engine.run_shot()?;
         eprintln!("Shot result: {:?}", shot.data);
-        
+
         if let Some(Data::U32(value)) = shot.data.get("c") {
             *counts.entry(*value).or_insert(0) += 1;
         } else {
             eprintln!("WARNING: No 'c' key in shot data!");
         }
-        
+
         Engine::reset(&mut hybrid_engine)?;
     }
-    
+
     // Verify we got valid Bell state results
     println!("Bell state results with improved converter:");
     for (value, count) in &counts {
         println!("  |{:02b}⟩: {}", value, count);
     }
-    
+
     // Should only get 00 (0) or 11 (3)
     assert!(counts.len() <= 2, "Should have at most 2 outcomes");
     assert!(counts.contains_key(&0) || counts.contains_key(&3), "Should produce |00⟩ or |11⟩");
-    
+
     // Check no intermediate values
     for &value in counts.keys() {
         assert!(value == 0 || value == 3, "Should only produce 0 or 3, got {}", value);
     }
-    
+
     Ok(())
 }
 
@@ -100,19 +100,19 @@ fn test_three_bit_measurement_with_improved_converter() -> Result<(), PecosError
 
     // Use the improved converter
     let module = phir_json_to_module(json)?;
-    
+
     // Create PhirEngine with the improved module
     let engine = PhirEngine::new(module)
         .map_err(|e| PecosError::Input(format!("Failed to create PhirEngine: {}", e)))?;
-    
+
     let num_qubits = engine.num_qubits();
     let quantum_engine = Box::new(StateVecEngine::new(num_qubits));
-    
+
     let mut hybrid_engine = HybridEngineBuilder::new()
         .with_classical_engine(Box::new(engine))
         .with_quantum_engine(quantum_engine)
         .build();
-    
+
     // Debug: Print the module to see SSA IDs
     println!("Three-bit test module operations:");
     let module_for_debug = phir_json_to_module(json)?;
@@ -125,20 +125,20 @@ fn test_three_bit_measurement_with_improved_converter() -> Result<(), PecosError
             println!("    Results: {:?}", op.results);
         }
     }
-    
+
     // Run a shot
     println!("About to run shot...");
     let shot = hybrid_engine.run_shot()?;
     println!("Shot completed!");
-    
+
     println!("Shot data: {:?}", shot.data);
-    
+
     if let Some(Data::U32(value)) = shot.data.get("result") {
         println!("Three-bit measurement result: {:03b}", value);
         assert!(*value <= 7, "Three-bit value should be 0-7");
     } else {
         panic!("Expected 'result' key in output, got keys: {:?}", shot.data.keys().collect::<Vec<_>>());
     }
-    
+
     Ok(())
 }

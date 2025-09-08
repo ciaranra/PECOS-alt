@@ -77,26 +77,26 @@ impl PluginBuilder {
 
         // Get path to LLVM source file
         let llvm_file = self.prepare_llvm_source()?;
-        
+
         // Compile LLVM to object file
         let object_file = self.compile_to_object(&llvm_file)?;
-        
+
         // Create plugin wrapper
         let wrapper_file = self.create_plugin_wrapper()?;
-        
+
         // Compile wrapper
         let wrapper_object = self.compile_wrapper(&wrapper_file)?;
-        
+
         // Link everything into a shared library
         let plugin_lib = self.link_plugin(&object_file, &wrapper_object)?;
-        
+
         Ok(plugin_lib)
     }
 
     /// Prepare LLVM source file from various input formats
     fn prepare_llvm_source(&self) -> Result<PathBuf> {
         let temp_dir = self.temp_dir.as_ref().unwrap().path();
-        
+
         match &self.config.llvm_source {
             LLVMSource::IRFile(path) => Ok(path.clone()),
             LLVMSource::IRString(ir) => {
@@ -119,7 +119,7 @@ impl PluginBuilder {
     fn compile_to_object(&self, llvm_file: &Path) -> Result<PathBuf> {
         let temp_dir = self.temp_dir.as_ref().unwrap().path();
         let object_file = temp_dir.join("program.o");
-        
+
         if self.config.verbose {
             println!("Compiling LLVM to object file: {:?}", object_file);
         }
@@ -149,10 +149,10 @@ impl PluginBuilder {
     fn create_plugin_wrapper(&self) -> Result<PathBuf> {
         let temp_dir = self.temp_dir.as_ref().unwrap().path();
         let wrapper_path = temp_dir.join("plugin_wrapper.rs");
-        
+
         // Convert name to PascalCase for Rust types
         let type_name = to_pascal_case(&self.config.name);
-        
+
         let wrapper_code = format!(r#"
 use selene_core::{{
     runtime::{{BatchOperation, RuntimeInterface, interface::RuntimeInterfaceFactory}},
@@ -207,7 +207,7 @@ impl RuntimeInterface for {type_name}Plugin {{
         }}
 
         buffer.truncate(bytes_written);
-        
+
         // Parse the buffer into BatchOperation
         // This is a simplified version - real implementation would parse the actual format
         // Create an empty batch operation
@@ -342,7 +342,7 @@ export_runtime_plugin!(crate::{type_name}PluginFactory);
 
         fs::write(&wrapper_path, wrapper_code)
             .context("Failed to write plugin wrapper")?;
-        
+
         Ok(wrapper_path)
     }
 
@@ -350,7 +350,7 @@ export_runtime_plugin!(crate::{type_name}PluginFactory);
     fn compile_wrapper(&self, wrapper_file: &Path) -> Result<PathBuf> {
         let temp_dir = self.temp_dir.as_ref().unwrap().path();
         let wrapper_object = temp_dir.join("wrapper.o");
-        
+
         if self.config.verbose {
             println!("Compiling plugin wrapper: {:?}", wrapper_object);
         }
@@ -358,7 +358,7 @@ export_runtime_plugin!(crate::{type_name}PluginFactory);
         // Create a temporary Cargo project
         let cargo_dir = temp_dir.join("plugin_crate");
         fs::create_dir_all(&cargo_dir)?;
-        
+
         // Write Cargo.toml
         let cargo_toml = format!(r#"
 [package]
@@ -375,12 +375,12 @@ anyhow = "1.0"
 "#, self.config.name, env!("HOME"));
 
         fs::write(cargo_dir.join("Cargo.toml"), cargo_toml)?;
-        
+
         // Copy wrapper to src/lib.rs
         let src_dir = cargo_dir.join("src");
         fs::create_dir_all(&src_dir)?;
         fs::copy(wrapper_file, src_dir.join("lib.rs"))?;
-        
+
         // Build with cargo
         let output = Command::new("cargo")
             .arg("build")
@@ -397,7 +397,7 @@ anyhow = "1.0"
         // Extract the compiled library
         let lib_name = format!("lib{}_plugin.so", self.config.name.replace('-', "_"));
         let lib_path = cargo_dir.join("target/release").join(&lib_name);
-        
+
         Ok(lib_path)
     }
 
@@ -405,7 +405,7 @@ anyhow = "1.0"
     fn link_plugin(&self, object_file: &Path, wrapper_lib: &Path) -> Result<PathBuf> {
         let plugin_name = format!("lib{}_plugin.so", self.config.name);
         let plugin_path = self.config.output_dir.join(&plugin_name);
-        
+
         if self.config.verbose {
             println!("Linking plugin: {:?}", plugin_path);
         }
@@ -414,7 +414,7 @@ anyhow = "1.0"
         // In a real implementation, we'd link the LLVM object file with the wrapper
         fs::copy(wrapper_lib, &plugin_path)
             .context("Failed to copy plugin library")?;
-        
+
         Ok(plugin_path)
     }
 }
@@ -427,10 +427,10 @@ pub fn build_plugin_from_hugr(
     verbose: bool,
 ) -> Result<PathBuf> {
     use crate::hugr_compiler::compile_hugr_to_llvm;
-    
+
     // Compile HUGR to LLVM
     let llvm_ir = compile_hugr_to_llvm(hugr_bytes)?;
-    
+
     // Build plugin
     let config = PluginBuildConfig {
         name: name.to_string(),
@@ -440,7 +440,7 @@ pub fn build_plugin_from_hugr(
         link_flags: vec![],
         target_triple: None,
     };
-    
+
     let mut builder = PluginBuilder::new(config);
     builder.build()
 }
@@ -459,7 +459,7 @@ mod tests {
             link_flags: vec![],
             target_triple: None,
         };
-        
+
         let builder = PluginBuilder::new(config);
         assert_eq!(builder.config.name, "test_plugin");
     }

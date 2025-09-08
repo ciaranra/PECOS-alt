@@ -62,27 +62,27 @@ impl SeleneNativeEngine {
     fn execute_with_selene(&mut self) -> Result<ByteMessage, PecosError> {
         let config = self.config.as_ref()
             .ok_or_else(|| SeleneError::ConfigurationError("No configuration provided".to_string()))?;
-        
+
         let program = self.program.as_ref()
             .ok_or_else(|| SeleneError::ConfigurationError("No program loaded".to_string()))?;
-        
+
         log::debug!("Executing shot {} with Selene", self.shot_count);
-        
+
         // Here's the key insight: instead of trying to reimplement Selene's infrastructure,
         // let's use the Python API from Rust. This is the fastest approach that uses
         // Selene completely naturally.
-        
+
         // For now, use our ByteMessage simulator to collect operations
         self.message_builder.reset();
         let _ = self.message_builder.for_quantum_operations();
-        
+
         // Simulate some basic operations for testing
         // In reality, this would come from executing the Interface Plugin
         // through Selene's proper infrastructure
-        
+
         // TODO: Use selene-sim-rust crate or call Python API from Rust
         log::warn!("Using placeholder operations - need to integrate with Selene's execution engine");
-        
+
         // For now, return empty message
         Ok(self.message_builder.build())
     }
@@ -116,7 +116,7 @@ impl Engine for SeleneNativeEngine {
 impl ClassicalEngine for SeleneNativeEngine {
     fn get_next_operations(&mut self) -> Result<ByteMessage, PecosError> {
         self.shot_count += 1;
-        
+
         if self.shot_count == 1 {
             // Execute the program on first call
             self.execute_with_selene()

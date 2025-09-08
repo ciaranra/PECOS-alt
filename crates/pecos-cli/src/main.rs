@@ -2,7 +2,9 @@ use clap::{Args, Parser, Subcommand};
 use env_logger::Env;
 use log::debug;
 use pecos::prelude::*;
-use pecos::{sim_builder, state_vector, sparse_stabilizer, DepolarizingNoise, GeneralNoiseModelBuilder};
+use pecos::{
+    DepolarizingNoise, GeneralNoiseModelBuilder, sim_builder, sparse_stabilizer, state_vector,
+};
 use std::io::Write;
 
 mod engine_setup;
@@ -245,12 +247,11 @@ fn output_results(
 ) -> Result<(), PecosError> {
     if let Some(file_path) = output_file {
         // Ensure parent directory exists
-        if let Some(parent) = std::path::Path::new(file_path).parent() {
-            if !parent.exists() {
-                std::fs::create_dir_all(parent).map_err(|e| {
-                    PecosError::Resource(format!("Failed to create directory: {e}"))
-                })?;
-            }
+        if let Some(parent) = std::path::Path::new(file_path).parent()
+            && !parent.exists()
+        {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| PecosError::Resource(format!("Failed to create directory: {e}")))?;
         }
 
         // Write results to file
@@ -303,11 +304,11 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
     let mut builder = sim_builder()
         .classical(classical_engine_builder)
         .workers(args.workers);
-    
+
     if let Some(seed) = args.seed {
         builder = builder.seed(seed);
     }
-    
+
     // Set noise model based on type
     match args.noise_model {
         NoiseModelType::Depolarizing => {
@@ -323,11 +324,11 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
                     .with_meas_0_probability(meas_0)
                     .with_meas_1_probability(meas_1)
                     .with_p1_probability(single_qubit)
-                    .with_p2_probability(two_qubit)
+                    .with_p2_probability(two_qubit),
             );
         }
     }
-    
+
     // Set quantum engine based on simulator type
     match args.simulator {
         SimulatorType::StateVector => {
@@ -337,7 +338,7 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
             builder = builder.quantum(sparse_stabilizer());
         }
     }
-    
+
     let results = builder.run(args.shots)?;
 
     // Convert to ShotMap for better display formatting
@@ -372,7 +373,7 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
             // Write results to file
             std::fs::write(file_path, results_str)
                 .map_err(|e| PecosError::Resource(format!("Failed to write output file: {e}")))?;
-            
+
             // For QIR, ensure file is fully written before potential segfault
             if program_type == ProgramType::QIR {
                 // Force sync to disk
@@ -383,7 +384,7 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
         }
         None => {
             // Print to stdout
-            println!("{}", results_str);
+            println!("{results_str}");
         }
     }
 

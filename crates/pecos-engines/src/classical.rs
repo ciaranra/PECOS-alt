@@ -183,14 +183,14 @@ dyn_clone::clone_trait_object!(ClassicalEngine);
 ///     fn generate_commands(&mut self) -> Result<ByteMessage, PecosError> {
 ///         let mut builder = ByteMessageBuilder::new();
 ///         builder.for_quantum_operations();
-///         
+///
 ///         // Generate commands only once in this example
 ///         if !self.commands_generated {
 ///             // Add quantum operations (e.g., H gate on qubit 0)
 ///             builder.add_h(&[0]);
 ///             self.commands_generated = true;
 ///         }
-///         
+///
 ///         Ok(builder.build())
 ///     }
 ///
@@ -225,11 +225,11 @@ dyn_clone::clone_trait_object!(ClassicalEngine);
 ///     type Output = Shot;
 ///     type EngineInput = ByteMessage;
 ///     type EngineOutput = ByteMessage;
-///     
+///
 ///     fn start(&mut self, _: ()) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
 ///         // Generate initial quantum commands
 ///         let commands = self.generate_commands()?;
-///         
+///
 ///         if commands.is_empty()? {
 ///             // No commands to execute, return results
 ///             Ok(EngineStage::Complete(self.get_results()?))
@@ -238,15 +238,15 @@ dyn_clone::clone_trait_object!(ClassicalEngine);
 ///             Ok(EngineStage::NeedsProcessing(commands))
 ///         }
 ///     }
-///     
+///
 ///     fn continue_processing(&mut self, measurements: ByteMessage)
 ///         -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
 ///         // Handle measurements from quantum engine
 ///         self.handle_measurements(measurements)?;
-///         
+///
 ///         // Check if there are more commands to execute
 ///         let commands = self.generate_commands()?;
-///         
+///
 ///         if commands.is_empty()? {
 ///             // All done, return final results
 ///             Ok(EngineStage::Complete(self.get_results()?))
@@ -255,7 +255,7 @@ dyn_clone::clone_trait_object!(ClassicalEngine);
 ///             Ok(EngineStage::NeedsProcessing(commands))
 ///         }
 ///     }
-///     
+///
 ///     fn reset(&mut self) -> Result<(), PecosError> {
 ///         // Reset control engine state
 ///         self.commands_generated = false;
@@ -267,7 +267,7 @@ dyn_clone::clone_trait_object!(ClassicalEngine);
 /// // Verify the implementation
 /// let mut engine = MyEngine::new(2);
 /// assert_eq!(engine.num_qubits(), 2);
-/// 
+///
 /// // Test compilation
 /// engine.compile().unwrap();
 ///

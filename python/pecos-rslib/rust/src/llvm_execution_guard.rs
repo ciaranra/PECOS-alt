@@ -129,7 +129,7 @@ pub fn _mark_llvm_shutting_down() {
     LlvmExecutionGuard::mark_shutting_down();
 }
 
-/// Wait for LLVM executions to complete (called from Python atexit)  
+/// Wait for LLVM executions to complete (called from Python atexit)
 #[pyo3::pyfunction]
 pub fn _wait_for_llvm_completion() {
     LlvmExecutionGuard::wait_for_completion();

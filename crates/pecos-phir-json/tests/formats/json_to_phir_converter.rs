@@ -25,21 +25,21 @@ fn test_converter_bell_state_ssa_flow() -> Result<(), PecosError> {
     }"#;
 
     let module = phir_json_to_module(bell_json)?;
-    
+
     // Verify the module structure
     assert!(!module.body.blocks.is_empty(), "Module should have at least one block");
     let operations = &module.body.blocks[0].operations;
-    
+
     // The converter should generate additional operations for bit combining
     // Original has 7 ops, but converter adds bitwise operations for measurements
     assert!(operations.len() > 7, "Converter should add bit-combining operations");
-    
+
     // Count measurement operations and verify they have proper SSA values
     let mut measure_count = 0;
     let mut has_bitcast = false;
     let mut has_shift = false;
     let mut has_or = false;
-    
+
     for op in operations {
         match &op.operation {
             pecos_phir::ops::Operation::Quantum(pecos_phir::ops::QuantumOp::Measure) => {
@@ -59,12 +59,12 @@ fn test_converter_bell_state_ssa_flow() -> Result<(), PecosError> {
             _ => {}
         }
     }
-    
+
     assert_eq!(measure_count, 2, "Should have 2 measurement operations");
     assert!(has_bitcast, "Should have bitcast operations for type conversion");
     assert!(has_shift, "Should have shift operation for bit positioning");
     assert!(has_or, "Should have OR operation for bit combining");
-    
+
     Ok(())
 }
 
@@ -84,14 +84,14 @@ fn test_converter_single_qubit_circuit() -> Result<(), PecosError> {
     }"#;
 
     let module = phir_json_to_module(single_qubit_json)?;
-    
+
     // Verify basic structure
     assert!(!module.body.blocks.is_empty());
     let operations = &module.body.blocks[0].operations;
-    
+
     // Should have at least the original operations
     assert!(operations.len() >= 5, "Should have at least 5 operations");
-    
+
     // Verify we have the expected quantum operations
     let quantum_ops: Vec<_> = operations.iter()
         .filter_map(|op| match &op.operation {
@@ -99,10 +99,10 @@ fn test_converter_single_qubit_circuit() -> Result<(), PecosError> {
             _ => None
         })
         .collect();
-    
+
     assert!(quantum_ops.iter().any(|op| matches!(op, pecos_phir::ops::QuantumOp::H)));
     assert!(quantum_ops.iter().any(|op| matches!(op, pecos_phir::ops::QuantumOp::Measure)));
-    
+
     Ok(())
 }
 

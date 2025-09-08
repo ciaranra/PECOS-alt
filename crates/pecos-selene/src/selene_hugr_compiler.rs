@@ -1,5 +1,5 @@
 //! Wrapper around Selene's HUGR to LLVM compiler
-//! 
+//!
 //! This module shows how to use Selene's HUGR compiler from pure Rust.
 //! Note: This requires adding selene-hugr-qis-compiler as a dependency,
 //! which currently has PyO3 conflicts.
@@ -30,22 +30,22 @@ pub fn compile_hugr_with_selene<'c>(
 ) -> Result<Module<'c>> {
     // Process the HUGR (applies quantum-specific passes)
     process_hugr(hugr)?;
-    
+
     // Get target machine
     let target_machine = get_native_target_machine(opt_level)?;
-    
+
     // Set up compilation arguments
     let args = CompileArgs::new(name, &target_machine, opt_level);
-    
+
     // Compile to LLVM
     let module = selene_compile(&args, context, hugr)?;
-    
+
     Ok(module)
 }
 */
 
 // For now, we document how Selene's compiler works:
-// 
+//
 // 1. Selene uses `tket` which bundles its own version of HUGR with LLVM support
 // 2. The compiler is in selene-compilers/hugr_qis/rust/lib.rs
 // 3. Key functions:

@@ -1,18 +1,18 @@
 //! Tests to verify all LlvmProgram features work correctly
 
-use pecos_programs::{LlvmProgram, LlvmContent};
+use pecos_programs::{LlvmContent, LlvmProgram};
 
 #[test]
 fn test_llvm_ir_methods() {
     let ir = "define void @main() { ret void }";
-    
+
     // Test from_string
     let prog1 = LlvmProgram::from_string(ir);
     assert!(prog1.is_ir());
     assert!(!prog1.is_bitcode());
     assert_eq!(prog1.ir(), Some(ir));
     assert_eq!(prog1.bitcode(), None);
-    
+
     // Test from_ir (alias)
     let prog2 = LlvmProgram::from_ir(ir);
     assert_eq!(prog1, prog2);
@@ -21,7 +21,7 @@ fn test_llvm_ir_methods() {
 #[test]
 fn test_llvm_bitcode_methods() {
     let bitcode = vec![0xDE, 0xC0, 0xDE, 0x42, 0x01, 0x0C];
-    
+
     // Test from_bitcode
     let prog = LlvmProgram::from_bitcode(bitcode.clone());
     assert!(!prog.is_ir());
@@ -33,58 +33,58 @@ fn test_llvm_bitcode_methods() {
 #[test]
 fn test_llvm_file_auto_detection() -> Result<(), Box<dyn std::error::Error>> {
     let temp_dir = tempfile::tempdir()?;
-    
+
     // Test .ll file (IR text)
     let ll_path = temp_dir.path().join("test.ll");
     let ir_content = "define void @test() { ret void }";
     std::fs::write(&ll_path, ir_content)?;
-    
+
     let ll_prog = LlvmProgram::from_file(&ll_path)?;
     assert!(ll_prog.is_ir());
     assert_eq!(ll_prog.ir(), Some(ir_content));
-    
+
     // Test .bc file (bitcode)
     let bc_path = temp_dir.path().join("test.bc");
     let bc_content = vec![0xDE, 0xC0, 0xDE, 0x42];
     std::fs::write(&bc_path, &bc_content)?;
-    
+
     let bc_prog = LlvmProgram::from_file(&bc_path)?;
     assert!(bc_prog.is_bitcode());
     assert_eq!(bc_prog.bitcode(), Some(bc_content.as_slice()));
-    
+
     // Test file with no extension (defaults to IR)
     let no_ext_path = temp_dir.path().join("test");
     std::fs::write(&no_ext_path, ir_content)?;
-    
+
     let no_ext_prog = LlvmProgram::from_file(&no_ext_path)?;
     assert!(no_ext_prog.is_ir());
     assert_eq!(no_ext_prog.ir(), Some(ir_content));
-    
+
     Ok(())
 }
 
 #[test]
 fn test_llvm_specific_file_methods() -> Result<(), Box<dyn std::error::Error>> {
     let temp_dir = tempfile::tempdir()?;
-    
+
     // Test from_ir_file
     let ir_path = temp_dir.path().join("test.ll");
     let ir_content = "define void @test() { ret void }";
     std::fs::write(&ir_path, ir_content)?;
-    
+
     let ir_prog = LlvmProgram::from_ir_file(&ir_path)?;
     assert!(ir_prog.is_ir());
     assert_eq!(ir_prog.ir(), Some(ir_content));
-    
+
     // Test from_bitcode_file
     let bc_path = temp_dir.path().join("test.bc");
     let bc_content = vec![0xBC, 0xC0, 0xDE, 0x35, 0x14];
     std::fs::write(&bc_path, &bc_content)?;
-    
+
     let bc_prog = LlvmProgram::from_bitcode_file(&bc_path)?;
     assert!(bc_prog.is_bitcode());
     assert_eq!(bc_prog.bitcode(), Some(bc_content.as_slice()));
-    
+
     Ok(())
 }
 
@@ -94,7 +94,7 @@ fn test_llvm_display() {
     let ir = "define void @main() { ret void }";
     let ir_prog = LlvmProgram::from_ir(ir);
     assert_eq!(format!("{}", ir_prog), ir);
-    
+
     // Bitcode display shows size info
     let bc = vec![0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE];
     let bc_prog = LlvmProgram::from_bitcode(bc);
@@ -105,15 +105,15 @@ fn test_llvm_display() {
 fn test_llvm_content_enum() {
     let ir = "define void @main() {}";
     let prog1 = LlvmProgram::from_ir(ir);
-    
+
     match &prog1.content {
         LlvmContent::Ir(content) => assert_eq!(content, ir),
         LlvmContent::Bitcode(_) => panic!("Expected IR, got bitcode"),
     }
-    
+
     let bc = vec![1, 2, 3, 4];
     let prog2 = LlvmProgram::from_bitcode(bc.clone());
-    
+
     match &prog2.content {
         LlvmContent::Ir(_) => panic!("Expected bitcode, got IR"),
         LlvmContent::Bitcode(content) => assert_eq!(content, &bc),

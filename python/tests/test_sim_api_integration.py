@@ -2,7 +2,7 @@
 """Test the unified sim API with different program types."""
 
 import pytest
-from pecos_rslib import sim, QasmProgram, LlvmProgram, HugrProgram, PhirJsonProgram
+from pecos_rslib import HugrProgram, QasmProgram, sim
 
 
 def test_sim_api_with_qasm() -> None:
@@ -15,10 +15,10 @@ def test_sim_api_with_qasm() -> None:
     h q[0];
     measure q[0] -> c[0];
     """
-    
+
     program = QasmProgram.from_string(qasm_str)
     results = sim(program).run(1000)
-    
+
     assert len(results) == 1000
     print(f"QASM sim results: got {len(results)} shots")
 
@@ -39,14 +39,14 @@ def test_sim_api_with_hugr() -> None:
         # Create a dummy HUGR program
         hugr_bytes = b"HUGR" + b"\x00" * 100  # Dummy bytes
         program = HugrProgram.from_bytes(hugr_bytes)
-        
+
         # This should create a Selene engine internally
         builder = sim(program)
         print(f"Created sim builder for HUGR program: {type(builder)}")
-        
+
         # Actual execution would fail without proper HUGR parsing
         # but the routing should work
-        
+
     except Exception as e:
         print(f"Expected error (HUGR parsing not implemented): {e}")
 
@@ -69,17 +69,12 @@ def test_sim_builder_chaining() -> None:
     h q[0];
     measure q[0] -> c[0];
     """
-    
+
     program = QasmProgram.from_string(qasm_str)
-    
+
     # Test chaining
-    results = (
-        sim(program)
-        .seed(42)
-        .workers(4)
-        .run(1000)
-    )
-    
+    results = sim(program).seed(42).workers(4).run(1000)
+
     assert len(results) == 1000
     print(f"Chained sim results: got {len(results)} shots")
 

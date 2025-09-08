@@ -2,10 +2,9 @@
 ///
 /// This module provides FFI-safe functions that allow the Bridge simulator
 /// (running inside Selene executable) to communicate with PECOS via callbacks.
-
-use pecos_engines::{ByteMessage, ByteMessageBuilder};
-use std::sync::Mutex;
+use pecos_engines::ByteMessage;
 use std::collections::VecDeque;
+use std::sync::Mutex;
 
 /// Global state for managing the callback communication
 pub(crate) static CALLBACK_STATE: Mutex<Option<CallbackState>> = Mutex::new(None);
@@ -14,13 +13,13 @@ pub(crate) static CALLBACK_STATE: Mutex<Option<CallbackState>> = Mutex::new(None
 pub(crate) struct CallbackState {
     /// Queue of operations from Bridge to PECOS (H, CNOT, etc.)
     outgoing_operations: VecDeque<ByteMessage>,
-    
+
     /// Queue of measurements from PECOS to Bridge
     incoming_measurements: VecDeque<ByteMessage>,
-    
+
     /// Indicates if Bridge is waiting for measurements
     waiting_for_measurements: bool,
-    
+
     /// Indicates if the program has completed
     execution_complete: bool,
 }
@@ -39,17 +38,14 @@ pub fn pecos_bridge_init() {
 
 /// Bridge simulator calls this to send quantum operations to PECOS
 /// Returns 0 on success, -1 on error
-pub fn pecos_bridge_send_operations(
-    data: *const u8,
-    len: usize
-) -> i32 {
+pub fn pecos_bridge_send_operations(data: *const u8, len: usize) -> i32 {
     if data.is_null() {
         return -1;
     }
-    
+
     let bytes = unsafe { std::slice::from_raw_parts(data, len) };
     let message = ByteMessage::new(bytes);
-    
+
     let mut state = CALLBACK_STATE.lock().unwrap();
     if let Some(ref mut state) = *state {
         state.outgoing_operations.push_back(message);
@@ -63,10 +59,7 @@ pub fn pecos_bridge_send_operations(
 
 /// Bridge simulator calls this to request measurement results
 /// Returns number of bytes written, 0 if no measurements available, -1 on error
-pub fn pecos_bridge_receive_measurements(
-    data_out: *mut u8,
-    max_len: usize
-) -> i32 {
+pub fn pecos_bridge_receive_measurements(data_out: *mut u8, max_len: usize) -> i32 {
     let mut state = CALLBACK_STATE.lock().unwrap();
     if let Some(ref mut state) = *state {
         // Check if measurements are available
@@ -78,12 +71,12 @@ pub fn pecos_bridge_receive_measurements(
                 state.incoming_measurements.push_front(message);
                 return -1;
             }
-            
+
             // Copy to output buffer
             unsafe {
                 std::ptr::copy_nonoverlapping(bytes.as_ptr(), data_out, bytes.len());
             }
-            
+
             eprintln!("[Bridge] Returned measurements ({} bytes)", bytes.len());
             state.waiting_for_measurements = false;
             bytes.len() as i32

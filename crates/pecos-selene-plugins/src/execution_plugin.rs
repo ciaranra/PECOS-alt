@@ -42,7 +42,7 @@ impl ExecutionState {
 pub extern "C" fn setup() -> i32 {
     let mut state = EXECUTION_STATE.lock().unwrap();
     *state = Some(ExecutionState::new());
-    
+
     if let Some(state) = state.as_mut() {
         state.active = true;
         0 // Success
@@ -57,7 +57,7 @@ pub extern "C" fn setup() -> i32 {
 #[no_mangle]
 pub extern "C" fn teardown() -> i32 {
     let mut state = EXECUTION_STATE.lock().unwrap();
-    
+
     if let Some(state) = state.as_mut() {
         state.active = false;
         state.operation_queue.clear();
@@ -73,7 +73,7 @@ pub extern "C" fn teardown() -> i32 {
 #[no_mangle]
 pub extern "C" fn get_tc() -> f64 {
     let state = EXECUTION_STATE.lock().unwrap();
-    
+
     if let Some(state) = state.as_ref() {
         state.time_cursor
     } else {
@@ -84,11 +84,11 @@ pub extern "C" fn get_tc() -> f64 {
 /// Get the next batch of quantum operations
 ///
 /// This function is called by the runtime interface to get operations to execute
-/// 
+///
 /// # Parameters
 /// - `buffer`: Pointer to buffer to write operations
 /// - `buffer_size`: Size of the buffer
-/// 
+///
 /// # Returns
 /// - Number of bytes written, or -1 on error
 #[no_mangle]
@@ -96,15 +96,15 @@ pub extern "C" fn get_next_operations(buffer: *mut u8, buffer_size: i64) -> i64 
     if buffer.is_null() || buffer_size <= 0 {
         return -1;
     }
-    
+
     let mut state = EXECUTION_STATE.lock().unwrap();
-    
+
     if let Some(state) = state.as_mut() {
         if let Some(_batch) = state.operation_queue.pop_front() {
             // Serialize the batch operation to the buffer
             // This is a simplified implementation - real implementation would
             // properly serialize according to Selene's protocol
-            
+
             // For now, return 0 to indicate no operations
             // TODO: Implement proper serialization
             0
@@ -121,7 +121,7 @@ pub extern "C" fn get_next_operations(buffer: *mut u8, buffer_size: i64) -> i64 
 /// This is called by the quantum intrinsics to queue operations
 pub fn queue_operation(op: Operation) {
     let mut state = EXECUTION_STATE.lock().unwrap();
-    
+
     if let Some(state) = state.as_mut() {
         // Create a single-operation batch
         // Note: We can't use Instant::now() as it's not available in selene_core
@@ -229,7 +229,7 @@ pub extern "C" fn __quantum__rt__result_get_zero() -> u64 {
 
 #[no_mangle]
 pub extern "C" fn __quantum__rt__result_get_one() -> u64 {
-    // Return a result ID representing one/true  
+    // Return a result ID representing one/true
     1
 }
 
@@ -243,18 +243,18 @@ pub extern "C" fn __quantum__rt__result_equal(result1: u64, result2: u64) -> boo
 pub mod pecos_integration {
     use super::*;
     use pecos_engines::ByteMessage;
-    
+
     /// Get all queued operations as ByteMessages
     pub fn get_byte_messages() -> Vec<ByteMessage> {
         let mut state = EXECUTION_STATE.lock().unwrap();
         let mut messages = Vec::new();
-        
+
         if let Some(state) = state.as_mut() {
             while let Some(batch) = state.operation_queue.pop_front() {
                 // Convert batch to ByteMessage
                 let mut builder = ByteMessage::builder();
                 builder.for_quantum_operations();
-                
+
                 for op in batch.iter_ops() {
                     match op {
                         Operation::RXYGate { qubit_id, theta, phi } => {
@@ -275,14 +275,14 @@ pub mod pecos_integration {
                         _ => {} // Skip other operations
                     }
                 }
-                
+
                 messages.push(builder.build());
             }
         }
-        
+
         messages
     }
-    
+
     /// Reset the execution state
     pub fn reset() {
         let mut state = EXECUTION_STATE.lock().unwrap();

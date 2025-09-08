@@ -69,7 +69,7 @@ pub struct LlvmEngine {
 
     /// Entry point function name (detected from LLVM IR file)
     entry_point: Option<String>,
-    
+
     /// Track if measurements have been processed via interactive execution
     measurements_processed_interactively: bool,
 }
@@ -154,10 +154,10 @@ impl LlvmEngine {
         // Reset the LLVM runtime state through the library if it exists
         if let Some(ref library) = self.library {
             // Check if reset function exists (might not for empty circuits)
-            if library.has_function(b"llvm_runtime_reset").unwrap_or(false) {
-                if let Err(e) = library.reset() {
-                    debug!("LLVM: Failed to reset LLVM runtime: {e}");
-                }
+            if library.has_function(b"llvm_runtime_reset").unwrap_or(false)
+                && let Err(e) = library.reset()
+            {
+                debug!("LLVM: Failed to reset LLVM runtime: {e}");
             }
         }
     }
@@ -250,36 +250,49 @@ impl LlvmEngine {
                 "Failed to extract measurements from ByteMessage: {e}"
             ))
         })?;
-        
-        debug!("LLVM: Raw outcomes from quantum engine: {:?}", outcomes);
+
+        debug!("LLVM: Raw outcomes from quantum engine: {outcomes:?}");
         debug!("LLVM: Number of outcomes: {}", outcomes.len());
-        
+
         // Check if all measurements have already been processed interactively
-        if let Some(library) = &self.library {
-            if let Ok(executed_count) = library.get_measurements_executed() {
-                if let Ok(all_ids) = library.get_measurement_result_ids() {
-                    if executed_count >= all_ids.len() {
-                        debug!("LLVM: All {} measurements already processed interactively, skipping", executed_count);
-                        return Ok(());
-                    }
-                }
-            }
+        if let Some(library) = &self.library
+            && let Ok(executed_count) = library.get_measurements_executed()
+            && let Ok(all_ids) = library.get_measurement_result_ids()
+            && executed_count >= all_ids.len()
+        {
+            debug!(
+                "LLVM: All {executed_count} measurements already processed interactively, skipping"
+            );
+            return Ok(());
         }
 
         // Get the result IDs from the runtime state
         let (result_ids, previously_executed) = if let Some(library) = &self.library {
             // Get the measurement result IDs that were tracked during execution
-            if library.has_function(b"llvm_runtime_get_measurement_result_ids").unwrap_or(false) &&
-               library.has_function(b"llvm_runtime_get_measurements_executed").unwrap_or(false) {
-                if let (Ok(all_ids), Ok(executed_count)) = (library.get_measurement_result_ids(), library.get_measurements_executed()) {
-                    debug!("LLVM: Got {} result IDs from runtime: {:?}", all_ids.len(), all_ids);
-                    debug!("LLVM: Previously executed measurements: {}", executed_count);
+            if library
+                .has_function(b"llvm_runtime_get_measurement_result_ids")
+                .unwrap_or(false)
+                && library
+                    .has_function(b"llvm_runtime_get_measurements_executed")
+                    .unwrap_or(false)
+            {
+                if let (Ok(all_ids), Ok(executed_count)) = (
+                    library.get_measurement_result_ids(),
+                    library.get_measurements_executed(),
+                ) {
+                    debug!(
+                        "LLVM: Got {} result IDs from runtime: {:?}",
+                        all_ids.len(),
+                        all_ids
+                    );
+                    debug!("LLVM: Previously executed measurements: {executed_count}");
                     // Only take the result IDs for the NEW measurements
-                    let new_ids: Vec<usize> = all_ids.into_iter()
+                    let new_ids: Vec<usize> = all_ids
+                        .into_iter()
                         .skip(executed_count)
                         .take(outcomes.len())
                         .collect();
-                    debug!("LLVM: Using result IDs for new measurements: {:?}", new_ids);
+                    debug!("LLVM: Using result IDs for new measurements: {new_ids:?}");
                     (new_ids, executed_count)
                 } else {
                     debug!("LLVM: Failed to get measurement tracking info");
@@ -305,14 +318,11 @@ impl LlvmEngine {
         }
 
         // Create measurements with the correct result IDs
-        debug!("LLVM: About to zip result_ids={:?} with outcomes={:?}", result_ids, outcomes);
-        debug!("LLVM: Previously executed: {}", previously_executed);
-        let measurements: Vec<(usize, u32)> = result_ids
-            .into_iter()
-            .zip(outcomes.into_iter())
-            .collect();
-        
-        debug!("LLVM: Zipped measurements (result_id, outcome): {:?}", measurements);
+        debug!("LLVM: About to zip result_ids={result_ids:?} with outcomes={outcomes:?}");
+        debug!("LLVM: Previously executed: {previously_executed}");
+        let measurements: Vec<(usize, u32)> = result_ids.into_iter().zip(outcomes).collect();
+
+        debug!("LLVM: Zipped measurements (result_id, outcome): {measurements:?}");
 
         self.measurement_results.clear();
         // Convert u32 measurements to i64 for LLVM standard
@@ -342,8 +352,13 @@ impl LlvmEngine {
                 // The runtime expects pairs of (result_id, value)
                 let mut results_data = Vec::with_capacity(measurements.len() * 2);
                 for (idx, (result_id, value)) in measurements.iter().enumerate() {
-                    debug!("LLVM: Measurement[{}] result_id={} value={} ({})", 
-                           idx, result_id, value, if *value == 0 { "False" } else { "True" });
+                    debug!(
+                        "LLVM: Measurement[{}] result_id={} value={} ({})",
+                        idx,
+                        result_id,
+                        value,
+                        if *value == 0 { "False" } else { "True" }
+                    );
                     results_data.push(u32::try_from(*result_id).map_err(|_| {
                         PecosError::Resource(format!(
                             "Result ID {result_id} is too large to fit in u32"
@@ -358,7 +373,9 @@ impl LlvmEngine {
                 // Now finalize the shot with the measurement results
                 library.finalize_shot()?;
             } else {
-                debug!("LLVM: Runtime update/finalize functions not found, skipping measurement update");
+                debug!(
+                    "LLVM: Runtime update/finalize functions not found, skipping measurement update"
+                );
             }
         }
 
@@ -606,7 +623,7 @@ impl LlvmEngine {
             debug!("LLVM: Already processed one shot in this run_shot call, returning None");
             return Ok(None);
         }
-        
+
         // Reset the runtime state at the beginning of command generation
         // This ensures each shot starts with a clean state
         if let Some(ref library) = self.library {
@@ -691,18 +708,18 @@ impl LlvmEngine {
 
         // Pattern 2: Integer-based qubit references in LLVM IR calls
         // We need to be more careful here to avoid matching result IDs in measurement calls
-        
+
         // Pattern 2a: Single-qubit gates (h, x, y, z, s, t, etc.)
         let single_qubit_pattern =
             Regex::new(r"__quantum__qis__(?:h|x|y|z|s|t|sdg|tdg)__body\s*\(i64\s+(\d+)\)")
                 .expect("Invalid regex for single-qubit gates");
         for cap in single_qubit_pattern.captures_iter(content) {
-            if let Some(index_match) = cap.get(1) {
-                if let Ok(index) = index_match.as_str().parse::<usize>() {
-                    debug!("Pattern 2a: Found single-qubit gate on qubit {}", index);
-                    max_qubit_index = max_qubit_index.max(index);
-                    found_allocation = true;
-                }
+            if let Some(index_match) = cap.get(1)
+                && let Ok(index) = index_match.as_str().parse::<usize>()
+            {
+                debug!("Pattern 2a: Found single-qubit gate on qubit {index}");
+                max_qubit_index = max_qubit_index.max(index);
+                found_allocation = true;
             }
         }
 
@@ -711,19 +728,19 @@ impl LlvmEngine {
             Regex::new(r"__quantum__qis__(?:cx|cnot|cz)__body\s*\(i64\s+(\d+),\s*i64\s+(\d+)\)")
                 .expect("Invalid regex for two-qubit gates");
         for cap in two_qubit_pattern.captures_iter(content) {
-            if let Some(control_match) = cap.get(1) {
-                if let Ok(control) = control_match.as_str().parse::<usize>() {
-                    debug!("Pattern 2b: Found two-qubit gate control qubit {}", control);
-                    max_qubit_index = max_qubit_index.max(control);
-                    found_allocation = true;
-                }
+            if let Some(control_match) = cap.get(1)
+                && let Ok(control) = control_match.as_str().parse::<usize>()
+            {
+                debug!("Pattern 2b: Found two-qubit gate control qubit {control}");
+                max_qubit_index = max_qubit_index.max(control);
+                found_allocation = true;
             }
-            if let Some(target_match) = cap.get(2) {
-                if let Ok(target) = target_match.as_str().parse::<usize>() {
-                    debug!("Pattern 2b: Found two-qubit gate target qubit {}", target);
-                    max_qubit_index = max_qubit_index.max(target);
-                    found_allocation = true;
-                }
+            if let Some(target_match) = cap.get(2)
+                && let Ok(target) = target_match.as_str().parse::<usize>()
+            {
+                debug!("Pattern 2b: Found two-qubit gate target qubit {target}");
+                max_qubit_index = max_qubit_index.max(target);
+                found_allocation = true;
             }
         }
 
@@ -732,12 +749,12 @@ impl LlvmEngine {
             Regex::new(r"__quantum__qis__m__body\s*\(i64\s+(\d+),\s*i64\s+\d+\)")
                 .expect("Invalid regex for measurements");
         for cap in measurement_pattern.captures_iter(content) {
-            if let Some(qubit_match) = cap.get(1) {
-                if let Ok(qubit) = qubit_match.as_str().parse::<usize>() {
-                    debug!("Pattern 2c: Found measurement on qubit {}", qubit);
-                    max_qubit_index = max_qubit_index.max(qubit);
-                    found_allocation = true;
-                }
+            if let Some(qubit_match) = cap.get(1)
+                && let Ok(qubit) = qubit_match.as_str().parse::<usize>()
+            {
+                debug!("Pattern 2c: Found measurement on qubit {qubit}");
+                max_qubit_index = max_qubit_index.max(qubit);
+                found_allocation = true;
             }
         }
 
@@ -746,12 +763,12 @@ impl LlvmEngine {
             Regex::new(r"__quantum__qis__(?:rx|ry|rz)__body\s*\(double\s+[^,]+,\s*i64\s+(\d+)\)")
                 .expect("Invalid regex for rotation gates");
         for cap in rotation_pattern.captures_iter(content) {
-            if let Some(qubit_match) = cap.get(1) {
-                if let Ok(qubit) = qubit_match.as_str().parse::<usize>() {
-                    debug!("Pattern 2d: Found rotation gate on qubit {}", qubit);
-                    max_qubit_index = max_qubit_index.max(qubit);
-                    found_allocation = true;
-                }
+            if let Some(qubit_match) = cap.get(1)
+                && let Ok(qubit) = qubit_match.as_str().parse::<usize>()
+            {
+                debug!("Pattern 2d: Found rotation gate on qubit {qubit}");
+                max_qubit_index = max_qubit_index.max(qubit);
+                found_allocation = true;
             }
         }
 

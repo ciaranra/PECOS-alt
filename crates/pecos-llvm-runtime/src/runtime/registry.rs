@@ -115,12 +115,11 @@ impl RuntimeRegistry {
 
         CURRENT_RUNTIME_ID.with(|current| {
             // Check if we already have a runtime ID set for this thread
-            if let Some(id) = *current.borrow() {
-                if let Some(runtime) = Self::get_runtime(id) {
-                    if let Ok(mut state) = runtime.lock() {
-                        return Some(f(&mut state));
-                    }
-                }
+            if let Some(id) = *current.borrow()
+                && let Some(runtime) = Self::get_runtime(id)
+                && let Ok(mut state) = runtime.lock()
+            {
+                return Some(f(&mut state));
             }
 
             // Don't auto-initialize if we're shutting down
@@ -155,12 +154,11 @@ impl RuntimeRegistry {
     {
         CURRENT_RUNTIME_ID.with(|current| {
             // Check if we already have a runtime ID set for this thread
-            if let Some(id) = *current.borrow() {
-                if let Some(runtime) = Self::get_runtime(id) {
-                    if let Ok(mut state) = runtime.lock() {
-                        return Some(f(&mut state));
-                    }
-                }
+            if let Some(id) = *current.borrow()
+                && let Some(runtime) = Self::get_runtime(id)
+                && let Ok(mut state) = runtime.lock()
+            {
+                return Some(f(&mut state));
             }
             // Don't auto-initialize - just return None
             None

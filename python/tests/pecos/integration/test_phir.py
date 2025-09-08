@@ -38,7 +38,9 @@ this_dir = Path(__file__).parent
 add_wat = this_dir / "wat/add.wat"
 math_wat = this_dir / "wat/math.wat"
 example1_phir = json.load(Path.open(this_dir / "phir/example1.phir.json"))
-example1_no_wasm_phir = json.load(Path.open(this_dir / "phir/example1_no_wasm.phir.json"))
+example1_no_wasm_phir = json.load(
+    Path.open(this_dir / "phir/example1_no_wasm.phir.json"),
+)
 spec_example_phir = json.load(Path.open(this_dir / "phir/spec_example.phir.json"))
 
 
@@ -213,7 +215,9 @@ def test_example1_no_wasm_noisy() -> None:
 def test_record_random_bit() -> None:
     """Applying H and recording both 0 and 1."""
     results = HybridEngine(qsim="stabilizer").run(
-        program=json.load(Path.open(this_dir / "phir" / "recording_random_meas.phir.json")),
+        program=json.load(
+            Path.open(this_dir / "phir" / "recording_random_meas.phir.json"),
+        ),
         shots=100,
     )
 
@@ -279,7 +283,9 @@ def test_bell_qparallel_cliff() -> None:
     interp.phir_validate = False
 
     results = HybridEngine(qsim="stabilizer", cinterp=interp).run(
-        program=json.load(Path.open(this_dir / "phir" / "bell_qparallel_cliff.phir.json")),
+        program=json.load(
+            Path.open(this_dir / "phir" / "bell_qparallel_cliff.phir.json"),
+        ),
         shots=20,
     )
 

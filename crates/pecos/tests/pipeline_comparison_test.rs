@@ -298,7 +298,7 @@ impl CircuitValidator for HadamardValidator {
     }
 }
 
-/// GHZ state validator: expects only 000 or 111 outcomes with ~50/50 distribution  
+/// GHZ state validator: expects only 000 or 111 outcomes with ~50/50 distribution
 struct GhzStateValidator;
 
 impl CircuitValidator for GhzStateValidator {
@@ -516,13 +516,13 @@ fn run_phir_pipeline(hugr_data: &[u8], shots: usize) -> PipelineResult {
             let exec_start = std::time::Instant::now();
             let num_qubits = engine.num_qubits();
             let result = MonteCarloEngine::run_with_engines(
-            engine,
-            Box::new(PassThroughNoiseModel::builder().build()),
-            state_vector().qubits(num_qubits).build().unwrap(),
-            shots,
-            1,
-            Some(42),
-        );
+                engine,
+                Box::new(PassThroughNoiseModel::builder().build()),
+                state_vector().qubits(num_qubits).build().unwrap(),
+                shots,
+                1,
+                Some(42),
+            );
             let exec_time = exec_start.elapsed();
             result.map(|r| (r, compile_time + exec_time))
         });
@@ -1059,37 +1059,37 @@ fn analyze_qubit_usage(llvm_ir: &str) {
     }
 
     // Look for the main function definition
-    if let Some(main_start) = llvm_ir.find("define") {
-        if let Some(main_section) = llvm_ir[main_start..].split("\n}").next() {
-            println!("\nMain function analysis:");
+    if let Some(main_start) = llvm_ir.find("define")
+        && let Some(main_section) = llvm_ir[main_start..].split("\n}").next()
+    {
+        println!("\nMain function analysis:");
 
-            // Count how many qubits are used in operations
-            let h_gates = main_section.matches("__quantum__qis__h__body").count();
-            let cnot_gates = main_section.matches("__quantum__qis__cnot__body").count();
-            let measurements = main_section.matches("__quantum__qis__m__body").count();
+        // Count how many qubits are used in operations
+        let h_gates = main_section.matches("__quantum__qis__h__body").count();
+        let cnot_gates = main_section.matches("__quantum__qis__cnot__body").count();
+        let measurements = main_section.matches("__quantum__qis__m__body").count();
 
-            println!("  H gates: {h_gates}");
-            println!("  CNOT gates: {cnot_gates}");
-            println!("  Measurements: {measurements}");
+        println!("  H gates: {h_gates}");
+        println!("  CNOT gates: {cnot_gates}");
+        println!("  Measurements: {measurements}");
 
-            // For Bell state, we expect:
-            // - 2 qubit allocations (for q0 and q1)
-            // - 1 H gate on q0
-            // - 1 CNOT gate (q0 -> q1)
-            // - 2 measurements (q0 and q1)
+        // For Bell state, we expect:
+        // - 2 qubit allocations (for q0 and q1)
+        // - 1 H gate on q0
+        // - 1 CNOT gate (q0 -> q1)
+        // - 2 measurements (q0 and q1)
 
-            if alloc_count != 2 {
-                println!("  ⚠️  Expected 2 qubit allocations for Bell state, found {alloc_count}");
-            }
-            if h_gates != 1 {
-                println!("  ⚠️  Expected 1 H gate for Bell state, found {h_gates}");
-            }
-            if cnot_gates != 1 {
-                println!("  ⚠️  Expected 1 CNOT gate for Bell state, found {cnot_gates}");
-            }
-            if measurements != 2 {
-                println!("  ⚠️  Expected 2 measurements for Bell state, found {measurements}");
-            }
+        if alloc_count != 2 {
+            println!("  ⚠️  Expected 2 qubit allocations for Bell state, found {alloc_count}");
+        }
+        if h_gates != 1 {
+            println!("  ⚠️  Expected 1 H gate for Bell state, found {h_gates}");
+        }
+        if cnot_gates != 1 {
+            println!("  ⚠️  Expected 1 CNOT gate for Bell state, found {cnot_gates}");
+        }
+        if measurements != 2 {
+            println!("  ⚠️  Expected 2 measurements for Bell state, found {measurements}");
         }
     }
 }

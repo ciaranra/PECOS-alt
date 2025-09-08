@@ -8,7 +8,7 @@ use hugr_core::Hugr;
 use pecos_core::errors::PecosError;
 use pecos_engines::ClassicalControlEngineBuilder;
 use pecos_llvm_runtime::{LlvmEngine, LlvmEngineConfig};
-use pecos_programs::{LlvmProgram, HugrProgram};
+use pecos_programs::{HugrProgram, LlvmProgram};
 use std::io::Write;
 use std::path::Path;
 use tempfile::NamedTempFile;
@@ -44,7 +44,8 @@ pub struct LlvmEngineBuilder {
 
 impl LlvmEngineBuilder {
     /// Create a new LLVM engine builder
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self::default()
     }
 
@@ -53,7 +54,7 @@ impl LlvmEngineBuilder {
         self.source = Some(LlvmSource::LlvmIr(ir.into()));
         self
     }
-    
+
     /// Set the source to LLVM bitcode (binary format)
     pub fn llvm_bitcode(mut self, bitcode: impl Into<Vec<u8>>) -> Self {
         self.source = Some(LlvmSource::LlvmBitcode(bitcode.into()));
@@ -65,13 +66,13 @@ impl LlvmEngineBuilder {
         self.source = Some(LlvmSource::LlvmFile(path.as_ref().to_path_buf()));
         self
     }
-    
+
     /// Set the source to LLVM IR text file (.ll)
     pub fn llvm_ir_file(mut self, path: impl AsRef<Path>) -> Self {
         self.source = Some(LlvmSource::LlvmIrFile(path.as_ref().to_path_buf()));
         self
     }
-    
+
     /// Set the source to LLVM bitcode file (.bc)
     pub fn llvm_bitcode_file(mut self, path: impl AsRef<Path>) -> Self {
         self.source = Some(LlvmSource::LlvmBitcodeFile(path.as_ref().to_path_buf()));
@@ -85,7 +86,8 @@ impl LlvmEngineBuilder {
     }
 
     /// Set the source to HUGR bytes
-    #[must_use] pub fn hugr_bytes(mut self, bytes: Vec<u8>) -> Self {
+    #[must_use]
+    pub fn hugr_bytes(mut self, bytes: Vec<u8>) -> Self {
         self.source = Some(LlvmSource::HugrBytes(bytes));
         self
     }
@@ -97,13 +99,15 @@ impl LlvmEngineBuilder {
     }
 
     /// Set number of qubits (used as both initial allocation and hard limit)
-    #[must_use] pub fn qubits(mut self, num_qubits: usize) -> Self {
+    #[must_use]
+    pub fn qubits(mut self, num_qubits: usize) -> Self {
         self.num_qubits = Some(num_qubits);
         self
     }
 
     /// Enable verbose output
-    #[must_use] pub fn verbose(mut self, verbose: bool) -> Self {
+    #[must_use]
+    pub fn verbose(mut self, verbose: bool) -> Self {
         self.verbose = verbose;
         self
     }
@@ -111,16 +115,14 @@ impl LlvmEngineBuilder {
     /// Set the source from an `LlvmProgram`
     pub fn program(mut self, program: impl Into<ProgramSource>) -> Self {
         match program.into() {
-            ProgramSource::Llvm(p) => {
-                match p.content {
-                    pecos_programs::LlvmContent::Ir(ir) => {
-                        self.source = Some(LlvmSource::LlvmIr(ir));
-                    }
-                    pecos_programs::LlvmContent::Bitcode(bc) => {
-                        self.source = Some(LlvmSource::LlvmBitcode(bc));
-                    }
+            ProgramSource::Llvm(p) => match p.content {
+                pecos_programs::LlvmContent::Ir(ir) => {
+                    self.source = Some(LlvmSource::LlvmIr(ir));
                 }
-            }
+                pecos_programs::LlvmContent::Bitcode(bc) => {
+                    self.source = Some(LlvmSource::LlvmBitcode(bc));
+                }
+            },
             ProgramSource::Hugr(p) => {
                 self.source = Some(LlvmSource::HugrBytes(p.hugr));
             }
@@ -136,7 +138,8 @@ impl ClassicalControlEngineBuilder for LlvmEngineBuilder {
         // Get source or error
         let source = self.source.ok_or_else(|| {
             PecosError::Input(
-                "No source specified. Use .llvm_ir(), .llvm_bitcode(), .hugr(), or similar method.".to_string(),
+                "No source specified. Use .llvm_ir(), .llvm_bitcode(), .hugr(), or similar method."
+                    .to_string(),
             )
         })?;
 
@@ -204,6 +207,7 @@ impl From<HugrProgram> for LlvmEngineBuilder {
 /// # Ok(())
 /// # }
 /// ```
-#[must_use] pub fn llvm_engine() -> LlvmEngineBuilder {
+#[must_use]
+pub fn llvm_engine() -> LlvmEngineBuilder {
     LlvmEngineBuilder::new()
 }

@@ -42,7 +42,7 @@ impl hugr_core::ops::constant::CustomConst for ConstBool {
         use hugr_core::extension::ExtensionId;
         use hugr_core::types::{CustomType, TypeBound, TypeName};
         use std::sync::Weak;
-        
+
         let ext_id = ExtensionId::new("tket2.bool").unwrap();
         let type_name: TypeName = "bool".into();
         let bool_type = CustomType::new(

@@ -1,6 +1,6 @@
 // Using the prelude - all common types are available with one import
-use pecos_qasm::prelude::*;
 use pecos_programs::QasmProgram;
+use pecos_qasm::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // No need to import Shot, ShotVec, ShotMap, or ShotMapDisplayExt

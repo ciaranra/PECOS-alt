@@ -19,8 +19,8 @@ fn is_gate_with_name(op: &Operation, gate_name: &str) -> bool {
 }
 
 use pecos_engines::ClassicalControlEngineBuilder;
-use pecos_qasm::qasm_engine;
 use pecos_programs::QasmProgram;
+use pecos_qasm::qasm_engine;
 
 #[test]
 fn test_x_gate_and_measure() {

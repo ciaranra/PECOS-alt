@@ -32,27 +32,28 @@ def test_hugr_compiler_creation() -> None:
 
         # Test default creation
         compiler = RustHugrCompiler()
-        
+
         # Test that compiler has the expected methods
-        assert hasattr(compiler, 'compile_bytes_to_llvm')
+        assert hasattr(compiler, "compile_bytes_to_llvm")
         assert callable(compiler.compile_bytes_to_llvm)
-        
+
         # Test that compiler handles None/empty input appropriately
         with pytest.raises((RuntimeError, TypeError, ValueError)):
             compiler.compile_bytes_to_llvm(None)
-            
+
         with pytest.raises(RuntimeError):
             compiler.compile_bytes_to_llvm(b"")
-            
+
         # Test that compiler provides meaningful error for invalid JSON
         with pytest.raises(RuntimeError) as exc_info:
             compiler.compile_bytes_to_llvm(b"not json")
-        assert "json" in str(exc_info.value).lower() or "parse" in str(exc_info.value).lower()
+        assert (
+            "json" in str(exc_info.value).lower()
+            or "parse" in str(exc_info.value).lower()
+        )
 
     except ImportError:
         pytest.skip("Rust HUGR backend not available")
-
-
 
 
 def test_hugr_compilation_with_invalid_data() -> None:
@@ -219,9 +220,9 @@ def test_hugr_compiler_with_valid_data() -> None:
     try:
         from pecos_rslib import RustHugrCompiler
         import json
-        
+
         compiler = RustHugrCompiler()
-        
+
         # Create a minimal valid HUGR structure
         # This represents an empty module with proper HUGR format
         valid_hugr = {
@@ -230,20 +231,14 @@ def test_hugr_compiler_with_valid_data() -> None:
             "modules": [
                 {
                     "name": "main",
-                    "nodes": [
-                        {
-                            "id": "root",
-                            "op": "Module",
-                            "children": []
-                        }
-                    ],
-                    "edges": []
+                    "nodes": [{"id": "root", "op": "Module", "children": []}],
+                    "edges": [],
                 }
-            ]
+            ],
         }
-        
-        hugr_bytes = json.dumps(valid_hugr).encode('utf-8')
-        
+
+        hugr_bytes = json.dumps(valid_hugr).encode("utf-8")
+
         # This should either compile successfully or fail with a specific HUGR error
         # (not a JSON parsing error)
         try:
@@ -256,9 +251,10 @@ def test_hugr_compiler_with_valid_data() -> None:
         except RuntimeError as e:
             # If it fails, it should be due to HUGR validation, not JSON parsing
             error_msg = str(e).lower()
-            assert "json" not in error_msg or "hugr" in error_msg, \
-                f"Expected HUGR validation error, not JSON parsing error: {e}"
-                
+            assert (
+                "json" not in error_msg or "hugr" in error_msg
+            ), f"Expected HUGR validation error, not JSON parsing error: {e}"
+
     except ImportError:
         pytest.skip("Rust HUGR backend not available")
 

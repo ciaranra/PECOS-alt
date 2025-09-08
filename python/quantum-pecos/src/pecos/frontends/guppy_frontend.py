@@ -93,7 +93,7 @@ class GuppyFrontend:
         self.hugr_to_llvm_binary = hugr_to_llvm_binary
         self.format_converter = format_converter
 
-        # Rust backend configuration  
+        # Rust backend configuration
         # Only HUGR convention is supported after removing QIR convention support
         if self.use_rust_backend:
             # Verify Rust backend is working
@@ -103,13 +103,12 @@ class GuppyFrontend:
                 if use_rust_backend is True:
                     msg = f"Rust backend explicitly requested but not available: {message}"
                     raise ImportError(msg)
-                else:
-                    # Only fallback if auto-detection was used
-                    warnings.warn(
-                        f"Rust backend not fully available: {message}",
-                        stacklevel=2,
-                    )
-                    self.use_rust_backend = False
+                # Only fallback if auto-detection was used
+                warnings.warn(
+                    f"Rust backend not fully available: {message}",
+                    stacklevel=2,
+                )
+                self.use_rust_backend = False
 
     def get_backend_info(self) -> dict:
         """Get information about the backend being used."""
@@ -155,23 +154,24 @@ class GuppyFrontend:
         # If Selene backend is requested, use GuppySeleneCompiler
         if self.use_selene_backend:
             from pecos.frontends.guppy_selene_compiler import GuppySeleneCompiler
+
             compiler = GuppySeleneCompiler()
             return compiler.compile_function(func)
 
         # Step 1: Compile Guppy to HUGR
         try:
             # Try both new and old API
-            if hasattr(func, 'compile'):
+            if hasattr(func, "compile"):
                 # New API: function.compile()
                 compiled = func.compile()
             else:
                 # Old API: guppy.compile(function)
                 compiled = guppy.compile(func)
-            
+
             # Handle the return value - it might be a FuncDefnPointer or similar
-            if hasattr(compiled, 'package'):
+            if hasattr(compiled, "package"):
                 hugr_bytes = compiled.package.to_bytes()
-            elif hasattr(compiled, 'to_package'):
+            elif hasattr(compiled, "to_package"):
                 hugr_bytes = compiled.to_package().to_bytes()
             else:
                 # Try to serialize directly
@@ -333,7 +333,6 @@ class GuppyFrontend:
                 raise RuntimeError(msg)
             else:
                 return qir_file
-
 
     def cleanup(self) -> None:
         """Clean up temporary files."""

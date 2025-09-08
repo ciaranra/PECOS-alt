@@ -147,12 +147,11 @@ impl ImprovedConverter {
                 .as_object()
                 .and_then(|o| o.get("cop"))
                 .and_then(|v| v.as_str())
+                && cop == "Result"
             {
-                if cop == "Result" {
-                    // Save Result operations for later
-                    result_operations.push(op.clone());
-                    continue;
-                }
+                // Save Result operations for later
+                result_operations.push(op.clone());
+                continue;
             }
 
             if let Some(instruction) = self.convert_operation(op)? {
@@ -401,16 +400,15 @@ impl ImprovedConverter {
         let mut operands = Vec::new();
         if let Some(args) = obj.get("args").and_then(|v| v.as_array()) {
             for arg in args {
-                if let Some(arr) = arg.as_array() {
-                    if arr.len() == 2 {
-                        if let (Some(_var), Some(idx)) = (arr[0].as_str(), arr[1].as_u64()) {
-                            // For quantum operations, the operand is the qubit index directly
-                            operands.push(SSAValue {
-                                id: idx as u32,
-                                version: 0,
-                            });
-                        }
-                    }
+                if let Some(arr) = arg.as_array()
+                    && arr.len() == 2
+                    && let (Some(_var), Some(idx)) = (arr[0].as_str(), arr[1].as_u64())
+                {
+                    // For quantum operations, the operand is the qubit index directly
+                    operands.push(SSAValue {
+                        id: idx as u32,
+                        version: 0,
+                    });
                 }
             }
         }
@@ -422,35 +420,35 @@ impl ImprovedConverter {
         if let Some(returns) = obj.get("returns").and_then(|v| v.as_array()) {
             for ret in returns {
                 if let Some(arr) = ret.as_array() {
-                    if arr.len() == 2 {
-                        if let (Some(var), Some(idx)) = (arr[0].as_str(), arr[1].as_u64()) {
-                            // For measurements with bit-indexed returns, allocate a new SSA ID
-                            if qop == "Measure" {
-                                let result_ssa = SSAValue {
-                                    id: self.new_ssa_id(),
-                                    version: 0,
-                                };
-                                results.push(result_ssa);
-                                result_types.push(Type::Bit);
+                    if arr.len() == 2
+                        && let (Some(var), Some(idx)) = (arr[0].as_str(), arr[1].as_u64())
+                    {
+                        // For measurements with bit-indexed returns, allocate a new SSA ID
+                        if qop == "Measure" {
+                            let result_ssa = SSAValue {
+                                id: self.new_ssa_id(),
+                                version: 0,
+                            };
+                            results.push(result_ssa);
+                            result_types.push(Type::Bit);
 
-                                // Track this bit-indexed write
-                                let write = BitIndexedWrite {
-                                    bit_index: idx as u32,
-                                    ssa_value: result_ssa,
-                                };
-                                self.bit_indexed_writes
-                                    .entry(var.to_string())
-                                    .or_default()
-                                    .push(write);
-                            } else {
-                                // Non-measurement operations
-                                let ssa_id = self.get_ssa_id(var);
-                                results.push(SSAValue {
-                                    id: ssa_id + idx as u32,
-                                    version: 0,
-                                });
-                                result_types.push(Type::Qubit);
-                            }
+                            // Track this bit-indexed write
+                            let write = BitIndexedWrite {
+                                bit_index: idx as u32,
+                                ssa_value: result_ssa,
+                            };
+                            self.bit_indexed_writes
+                                .entry(var.to_string())
+                                .or_default()
+                                .push(write);
+                        } else {
+                            // Non-measurement operations
+                            let ssa_id = self.get_ssa_id(var);
+                            results.push(SSAValue {
+                                id: ssa_id + idx as u32,
+                                version: 0,
+                            });
+                            result_types.push(Type::Qubit);
                         }
                     }
                 } else if let Some(_var) = ret.as_str() {
@@ -531,13 +529,13 @@ impl ImprovedConverter {
 
                 // Create attributes to store the export names
                 let mut attributes = HashMap::new();
-                if let Some(returns) = obj.get("returns").and_then(|v| v.as_array()) {
-                    if let Some(export_name) = returns.first().and_then(|v| v.as_str()) {
-                        attributes.insert(
-                            "export_name".to_string(),
-                            pecos_phir::phir::AttributeValue::String(export_name.to_string()),
-                        );
-                    }
+                if let Some(returns) = obj.get("returns").and_then(|v| v.as_array())
+                    && let Some(export_name) = returns.first().and_then(|v| v.as_str())
+                {
+                    attributes.insert(
+                        "export_name".to_string(),
+                        pecos_phir::phir::AttributeValue::String(export_name.to_string()),
+                    );
                 }
 
                 let instruction = Instruction {

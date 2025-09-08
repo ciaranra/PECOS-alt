@@ -46,17 +46,17 @@ impl PhirRon {
             module,
         }
     }
-    
+
     /// Extract the module
     pub fn into_module(self) -> ModuleOp {
         self.module
     }
-    
+
     /// Serialize to RON string
     pub fn to_ron_string(&self) -> Result<String, ron::Error> {
         ron::to_string(self)
     }
-    
+
     /// Pretty-print to RON string
     pub fn to_ron_pretty(&self) -> Result<String, ron::Error> {
         let pretty = ron::ser::PrettyConfig::default()
@@ -64,7 +64,7 @@ impl PhirRon {
             .with_enumerate_arrays(true);
         ron::ser::to_string_pretty(self, pretty)
     }
-    
+
     /// Deserialize from RON string
     pub fn from_ron_str(s: &str) -> Result<Self, ron::de::Error> {
         ron::from_str(s)
@@ -102,9 +102,9 @@ impl<'de> Deserialize<'de> for RegionKind {
 }
 
 /// Example RON representation of a quantum circuit
-/// 
+///
 /// This is much more concise than JSON and naturally represents Rust types:
-/// 
+///
 /// ```ron
 /// PhirRon(
 ///     format: "PHIR/RON",
@@ -143,14 +143,14 @@ impl<'de> Deserialize<'de> for RegionKind {
 pub mod conversion {
     use super::*;
     use crate::serialization::{PhirJson, PhirModule, PhirRegion, PhirBlock, PhirOperation};
-    
+
     /// Convert PHIR-RON to PHIR-JSON
     pub fn ron_to_json(ron: PhirRon) -> Result<PhirJson, serde_json::Error> {
         // This is where we translate from RON's natural Rust representation
         // to JSON's more structured format
         crate::serialization::module_to_phir_json(&ron.module)
     }
-    
+
     /// Convert PHIR-JSON to PHIR-RON
     pub fn json_to_ron(json: PhirJson) -> Result<PhirRon, Box<dyn std::error::Error>> {
         // This would need to parse the JSON structure back into PHIR types
@@ -164,12 +164,12 @@ mod tests {
     use super::*;
     use crate::phir::*;
     use crate::ops::SSAValue;
-    
+
     #[test]
     fn test_ron_serialization() {
         // Create a simple module
         let mut module = ModuleOp::new("test");
-        
+
         // Create a function
         let func_type = FunctionType {
             inputs: vec![Type::Qubit, Type::Qubit],
@@ -177,7 +177,7 @@ mod tests {
             variadic: false,
         };
         let func = FuncOp::new("bell_circuit", func_type);
-        
+
         // Add to module
         let func_inst = Instruction::new(
             Operation::Builtin(BuiltinOp::Func(func)),
@@ -186,27 +186,27 @@ mod tests {
             vec![],
         );
         module.add_operation(func_inst);
-        
+
         // Create PHIR-RON
         let phir_ron = PhirRon::from_module(module);
-        
+
         // Serialize to RON
         let ron_string = phir_ron.to_ron_pretty().unwrap();
         println!("RON representation:\n{}", ron_string);
-        
+
         // Verify it contains expected content
         assert!(ron_string.contains("PHIR/RON"));
         assert!(ron_string.contains("bell_circuit"));
-        
+
         // Test round-trip
         let deserialized = PhirRon::from_ron_str(&ron_string).unwrap();
         assert_eq!(deserialized.module.name, "test");
     }
-    
+
     #[test]
     fn test_ron_quantum_ops() {
         let mut block = Block::new(Some("quantum_ops"));
-        
+
         // Add some quantum operations
         let h_op = Instruction::new(
             Operation::Quantum(QuantumOp::H),
@@ -215,22 +215,22 @@ mod tests {
             vec![Type::Qubit],
         );
         block.add_instruction(h_op);
-        
+
         // RON can naturally represent the enum variants
         let ron_string = ron::to_string(&block).unwrap();
         assert!(ron_string.contains("Quantum(H)"));
     }
-    
-    #[test] 
+
+    #[test]
     fn test_ron_attributes() {
         let mut attrs = HashMap::new();
         attrs.insert("qec.code".to_string(), AttributeValue::String("steane".to_string()));
         attrs.insert("qec.distance".to_string(), AttributeValue::Int(7));
         attrs.insert("verified".to_string(), AttributeValue::Bool(true));
-        
+
         let ron_string = ron::ser::to_string_pretty(&attrs, Default::default()).unwrap();
         println!("Attributes in RON:\n{}", ron_string);
-        
+
         // RON handles nested structures elegantly
         assert!(ron_string.contains("String(\"steane\")"));
         assert!(ron_string.contains("Int(7)"));

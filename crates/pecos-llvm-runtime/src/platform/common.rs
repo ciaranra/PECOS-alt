@@ -54,7 +54,7 @@ pub fn execute_command(
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
-        
+
         return Err(PecosError::Compilation(format!(
             "{} failed with exit code: {:?}\nstderr: {}\nstdout: {}",
             operation, output.status.code(), stderr, stdout

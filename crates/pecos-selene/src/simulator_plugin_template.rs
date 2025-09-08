@@ -1,46 +1,45 @@
 /// Template for generating Selene simulator runtime plugins
-/// 
+///
 /// This module provides a clean way to generate the plugin code without
 /// format string escaping issues.
-
 use std::fmt::Write as FmtWrite;
 
 /// Generate the complete simulator plugin code
 pub fn generate_simulator_plugin_code(entry_point: &str, _enable_metrics: bool) -> String {
     let mut code = String::with_capacity(16 * 1024); // Pre-allocate ~16KB
-    
+
     // Add imports
     code.push_str(IMPORTS);
     code.push('\n');
-    
+
     // Add global state
     code.push_str(GLOBAL_STATE);
     code.push('\n');
-    
+
     // Add entry point extern declaration
     writeln!(&mut code, "// Entry point function from LLVM").unwrap();
     writeln!(&mut code, "extern \"C\" {{ fn {}(); }}", entry_point).unwrap();
     code.push('\n');
-    
+
     // Add quantum intrinsics
     code.push_str(QUANTUM_INTRINSICS);
     code.push('\n');
-    
+
     // Add SimulatorRuntimePlugin struct
     code.push_str(SIMULATOR_RUNTIME_PLUGIN_STRUCT);
     code.push('\n');
-    
+
     // Add SimulatorRuntimePlugin implementation with entry point
     add_simulator_impl(&mut code, entry_point);
     code.push('\n');
-    
+
     // Add RuntimeInterface implementation
     code.push_str(RUNTIME_INTERFACE_IMPL);
     code.push('\n');
-    
+
     // Add factory and export
     code.push_str(FACTORY_AND_EXPORT);
-    
+
     code
 }
 
@@ -117,15 +116,15 @@ pub unsafe extern "C" fn __quantum__qis__cx__body(control: i64, target: i64) {
 pub unsafe extern "C" fn __quantum__qis__m__body(qubit: i64, result_id: i64) -> i32 {
     let mut queue = OPERATION_QUEUE.lock().unwrap();
     let mut counter = MEASUREMENT_COUNTER.lock().unwrap();
-    
+
     let measurement_id = *counter;
     *counter += 1;
-    
+
     queue.push_back(Operation::Measure {
         qubit_id: qubit as u64,
         result_id: measurement_id,
     });
-    
+
     // Return a placeholder value - actual results come from PECOS
     0
 }
@@ -169,7 +168,11 @@ const SIMULATOR_RUNTIME_PLUGIN_STRUCT: &str = r#"struct SimulatorRuntimePlugin {
 
 fn add_simulator_impl(code: &mut String, entry_point: &str) {
     writeln!(code, "impl SimulatorRuntimePlugin {{").unwrap();
-    writeln!(code, "    pub fn new(start: selene_core::time::Instant) -> Self {{").unwrap();
+    writeln!(
+        code,
+        "    pub fn new(start: selene_core::time::Instant) -> Self {{"
+    )
+    .unwrap();
     writeln!(code, "        Self {{").unwrap();
     writeln!(code, "            measurements: Vec::new(),").unwrap();
     writeln!(code, "            start,").unwrap();
@@ -183,7 +186,11 @@ fn add_simulator_impl(code: &mut String, entry_point: &str) {
     writeln!(code, "        *MEASUREMENT_COUNTER.lock().unwrap() = 0;").unwrap();
     writeln!(code, "        ").unwrap();
     writeln!(code, "        // Call the entry point function").unwrap();
-    writeln!(code, "        // This will populate the operation queue via our overridden intrinsics").unwrap();
+    writeln!(
+        code,
+        "        // This will populate the operation queue via our overridden intrinsics"
+    )
+    .unwrap();
     writeln!(code, "        unsafe {{").unwrap();
     writeln!(code, "            {}();", entry_point).unwrap();
     writeln!(code, "        }}").unwrap();
@@ -203,15 +210,15 @@ const RUNTIME_INTERFACE_IMPL: &str = r#"impl RuntimeInterface for SimulatorRunti
         if OPERATION_QUEUE.lock().unwrap().is_empty() {
             self.execute_llvm_program();
         }
-        
+
         // Get all operations from the queue
         let mut queue = OPERATION_QUEUE.lock().unwrap();
         if queue.is_empty() {
             return Ok(None);
         }
-        
+
         let operations: Vec<Operation> = queue.drain(..).collect();
-        
+
         Ok(Some(BatchOperation::new(
             operations,
             self.start,
@@ -265,7 +272,7 @@ const RUNTIME_INTERFACE_IMPL: &str = r#"impl RuntimeInterface for SimulatorRunti
         let result_id = self.current_result_id;
         self.current_result_id += 1;
         self.measurements.resize(result_id as usize + 1, false);
-        
+
         OPERATION_QUEUE.lock().unwrap().push_back(Operation::Measure { qubit_id, result_id });
         Ok(result_id)
     }

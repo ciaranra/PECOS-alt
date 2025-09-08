@@ -36,15 +36,14 @@ impl ResultNameExtractor {
         let mut result_nodes_with_names = HashMap::new();
 
         for node in hugr.nodes() {
-            if let Some(op) = hugr.get_optype(node).as_extension_op() {
-                if op.def().name() == "result_bool"
+            if let Some(op) = hugr.get_optype(node).as_extension_op()
+                && (op.def().name() == "result_bool"
                     || op.def().name() == "result_int"
-                    || op.def().name() == "result_f64"
-                {
-                    // Extract the string argument from the result operation
-                    if let Some(result_name) = Self::extract_string_arg_from_result_op(op) {
-                        result_nodes_with_names.insert(node, result_name);
-                    }
+                    || op.def().name() == "result_f64")
+            {
+                // Extract the string argument from the result operation
+                if let Some(result_name) = Self::extract_string_arg_from_result_op(op) {
+                    result_nodes_with_names.insert(node, result_name);
                 }
             }
         }
@@ -59,15 +58,15 @@ impl ResultNameExtractor {
         // If no explicit result operations were found, generate automatic names for ALL measurements
         if result_mapping.is_empty() {
             let mut measurement_count = 0;
-            
+
             // Find all measurement operations and assign automatic names
             for node in hugr.nodes() {
-                if let Some(op) = hugr.get_optype(node).as_extension_op() {
-                    if op.def().name() == "MeasureFree" || op.def().name() == "Measure" {
-                        let default_name = format!("_result_{measurement_count}");
-                        result_mapping.insert(node, default_name);
-                        measurement_count += 1;
-                    }
+                if let Some(op) = hugr.get_optype(node).as_extension_op()
+                    && (op.def().name() == "MeasureFree" || op.def().name() == "Measure")
+                {
+                    let default_name = format!("_result_{measurement_count}");
+                    result_mapping.insert(node, default_name);
+                    measurement_count += 1;
                 }
             }
         }
@@ -111,10 +110,10 @@ impl ResultNameExtractor {
                     visited.insert(source_node);
 
                     // Check if this is a measurement operation
-                    if let Some(op) = hugr.get_optype(source_node).as_extension_op() {
-                        if op.def().name() == "MeasureFree" {
-                            return Some(source_node);
-                        }
+                    if let Some(op) = hugr.get_optype(source_node).as_extension_op()
+                        && op.def().name() == "MeasureFree"
+                    {
+                        return Some(source_node);
                     }
 
                     // Continue searching backwards

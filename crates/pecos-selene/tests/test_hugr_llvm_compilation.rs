@@ -4,19 +4,19 @@
 #[test]
 fn test_hugr_to_llvm_generation() {
     use pecos_selene::hugr_qis_lowering::{generate_bell_state_llvm, generate_quantum_llvm_ir};
-    
+
     // Test Bell state generation
     let bell_llvm = generate_bell_state_llvm().unwrap();
     println!("Generated Bell state LLVM IR:");
     println!("{}", bell_llvm);
-    
+
     // Verify it contains expected elements
     assert!(bell_llvm.contains("%Qubit = type opaque"));
     assert!(bell_llvm.contains("@__quantum__qis__h__body"));
     assert!(bell_llvm.contains("@__quantum__qis__cnot__body"));
     assert!(bell_llvm.contains("@bell_state()"));
     assert!(bell_llvm.contains("EntryPoint"));
-    
+
     // Test general quantum LLVM IR generation
     let quantum_llvm = generate_quantum_llvm_ir("test_module", "quantum_main").unwrap();
     assert!(quantum_llvm.contains("ModuleID = 'test_module'"));
@@ -27,17 +27,17 @@ fn test_hugr_to_llvm_generation() {
 #[test]
 fn test_qis_lowering() {
     use pecos_selene::hugr_qis_lowering::get_qis_op_mapping;
-    
+
     let mapping = get_qis_op_mapping();
-    
+
     // Test basic gates
     assert_eq!(mapping.get("h"), Some(&"__quantum__qis__h__body"));
     assert_eq!(mapping.get("x"), Some(&"__quantum__qis__x__body"));
-    
+
     // Test CNOT aliases
     assert_eq!(mapping.get("cnot"), Some(&"__quantum__qis__cnot__body"));
     assert_eq!(mapping.get("cx"), Some(&"__quantum__qis__cnot__body"));
-    
+
     // Test measurement
     assert_eq!(mapping.get("measure"), Some(&"__quantum__qis__mz__body"));
 }
@@ -45,23 +45,21 @@ fn test_qis_lowering() {
 #[cfg(all(feature = "hugr-013", not(target_os = "windows")))]
 #[test]
 fn test_hugr_compilation_in_engine() {
-    use pecos_selene::selene_executable;
     use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine};
+    use pecos_selene::selene_executable;
     use std::env;
-    
+
     // Skip if compilation is disabled
     if env::var("PECOS_SKIP_PLUGIN_COMPILATION").is_ok() {
         println!("Skipping HUGR compilation test due to PECOS_SKIP_PLUGIN_COMPILATION");
         return;
     }
-    
+
     // This test demonstrates that HUGR programs can be compiled
     // NOTE: hugr_file() method not available in SeleneExecutableEngine yet
     // For now, just create a basic engine
-    let result = selene_executable()
-        .qubits(2)
-        .build();
-    
+    let result = selene_executable().qubits(2).build();
+
     match result {
         Ok(engine) => {
             // Try to compile
@@ -79,7 +77,7 @@ fn test_hugr_compilation_in_engine() {
 #[test]
 fn test_hugr_llvm_compilation_availability() {
     println!("HUGR to LLVM compilation status in pecos-selene:");
-    
+
     #[cfg(feature = "hugr-013")]
     {
         println!("✓ HUGR 0.13 support is enabled");
@@ -93,7 +91,7 @@ fn test_hugr_llvm_compilation_availability() {
         println!();
         println!("TODO: Full HUGR parsing and traversal for complete compilation");
     }
-    
+
     #[cfg(not(feature = "hugr-013"))]
     {
         println!("✗ HUGR 0.13 support is not enabled");

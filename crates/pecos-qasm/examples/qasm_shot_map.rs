@@ -1,6 +1,6 @@
-use pecos_engines::{ShotMap, ShotMapDisplayExt, ClassicalControlEngineBuilder, sim_builder};
-use pecos_qasm::qasm_engine;
+use pecos_engines::{ShotMap, ShotMapDisplayExt, sim_builder};
 use pecos_programs::QasmProgram;
+use pecos_qasm::qasm_engine;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Run a simple QASM circuit

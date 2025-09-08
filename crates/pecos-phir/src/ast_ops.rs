@@ -1,5 +1,5 @@
 //! AST-like operations for source language representation
-//! 
+//!
 //! Inspired by pliron's approach: operations are just data with traits for behavior
 
 use std::fmt;
@@ -66,7 +66,7 @@ macro_rules! def_ast_op {
             }
         }
     };
-    
+
     (@count_regions) => { 0 };
     (@count_regions $n:expr) => { $n };
 }
@@ -186,7 +186,7 @@ pub mod qasm3 {
     }
 }
 
-/// Guppy-specific operations  
+/// Guppy-specific operations
 pub mod guppy {
     use super::*;
 
@@ -273,20 +273,20 @@ impl AstBuilder {
         body: impl FnOnce(&mut Self),
     ) -> &mut Self {
         let mut for_op = ForLoop::new();
-        
+
         // Build each region
         self.with_region(|b| init(b));
         for_op.regions[0] = self.take_region();
-        
+
         self.with_region(|b| { cond(b); });
         for_op.regions[1] = self.take_region();
-        
+
         self.with_region(|b| update(b));
         for_op.regions[2] = self.take_region();
-        
+
         self.with_region(|b| body(b));
         for_op.regions[3] = self.take_region();
-        
+
         self.push_op(for_op);
         self
     }
@@ -297,10 +297,10 @@ impl AstBuilder {
             name.to_string(),
             type_expr.map(|s| s.to_string()),
         );
-        
+
         let value = Value::new_ssa();
         op.results = vec![Type::Unknown]; // Will be resolved later
-        
+
         self.push_op(op);
         value
     }
@@ -311,10 +311,10 @@ impl AstBuilder {
             name.to_string(),
             None, // Could add scope hint
         );
-        
+
         let value = Value::new_ssa();
         op.results = vec![Type::Unknown];
-        
+
         self.push_op(op);
         value
     }
@@ -323,7 +323,7 @@ impl AstBuilder {
     pub fn qasm_gate(&mut self, gate: &str, qubits: Vec<&str>) -> &mut Self {
         let op = qasm3::GateCall::new(gate.to_string())
             .with_qubits(qubits.into_iter().map(|s| s.to_string()).collect());
-        
+
         self.push_op(op);
         self
     }
@@ -336,18 +336,18 @@ impl AstBuilder {
         iterator: impl FnOnce(&mut Self) -> Value,
     ) -> Value {
         let mut op = guppy::ListComp::new(target.to_string());
-        
+
         // Build element expression
         self.with_region(|b| { element(b); });
         op.regions[0] = self.take_region();
-        
+
         // Build iterator
         self.with_region(|b| { iterator(b); });
         op.regions[1] = self.take_region();
-        
+
         let value = Value::new_ssa();
         op.results = vec![Type::Unknown]; // List type
-        
+
         self.push_op(op);
         value
     }
@@ -390,7 +390,7 @@ impl LoweringPattern for ResolveNames {
     fn rewrite(&self, op: &dyn Operation) -> Box<dyn Operation> {
         let unresolved = op.downcast_ref::<UnresolvedRef>().unwrap();
         let symbol = self.symbol_table.lookup(&unresolved.name).unwrap();
-        
+
         // Create resolved reference
         Box::new(ValueRef {
             value: symbol.value,
@@ -410,7 +410,7 @@ mod tests {
     #[test]
     fn test_ast_building() {
         let mut builder = AstBuilder::new();
-        
+
         // Build a simple for loop AST
         builder.for_loop(
             |b| { b.var_decl("i", Some("int")); },
@@ -420,7 +420,7 @@ mod tests {
                 b.qasm_gate("h", vec!["q[i]"]);
             }
         );
-        
+
         // Build Guppy list comprehension
         let results = builder.guppy_list_comp(
             "results",

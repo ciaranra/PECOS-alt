@@ -1,6 +1,6 @@
 use pecos_engines::ClassicalControlEngineBuilder;
-use pecos_qasm::qasm_engine;
 use pecos_programs::QasmProgram;
+use pecos_qasm::qasm_engine;
 
 #[test]
 fn test_bell_qasm() {

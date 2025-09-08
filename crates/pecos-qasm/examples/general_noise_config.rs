@@ -5,10 +5,12 @@
 //! 2. Different types of noise models
 //! 3. Complex noise model configurations
 
-use pecos_engines::noise::{GeneralNoiseModel, DepolarizingNoiseModel, BiasedDepolarizingNoiseModel};
-use pecos_engines::{ClassicalControlEngineBuilder, sim_builder};
-use pecos_qasm::qasm_engine;
+use pecos_engines::noise::{
+    BiasedDepolarizingNoiseModel, DepolarizingNoiseModel, GeneralNoiseModel,
+};
+use pecos_engines::sim_builder;
 use pecos_programs::QasmProgram;
+use pecos_qasm::qasm_engine;
 
 fn main() {
     let qasm = r#"
@@ -37,21 +39,20 @@ fn main() {
         .seed(42)
         .run(1000)
         .unwrap();
-    
+
     println!("Got {} shots with general noise", results.shots.len());
 
     // Example 2: Simple depolarizing noise
     println!("\nExample 2: Simple depolarizing noise");
-    let depolarizing = DepolarizingNoiseModel::builder()
-        .with_uniform_probability(0.001);
-    
+    let depolarizing = DepolarizingNoiseModel::builder().with_uniform_probability(0.001);
+
     let results = sim_builder()
         .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .noise(depolarizing)
         .seed(42)
         .run(1000)
         .unwrap();
-    
+
     println!("Got {} shots with depolarizing noise", results.shots.len());
 
     // Example 3: Custom depolarizing noise with different rates
@@ -61,30 +62,35 @@ fn main() {
         .with_meas_probability(0.002)
         .with_p1_probability(0.001)
         .with_p2_probability(0.01);
-    
+
     let results = sim_builder()
         .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .noise(custom_depolarizing)
         .seed(42)
         .run(1000)
         .unwrap();
-    
-    println!("Got {} shots with custom depolarizing noise", results.shots.len());
+
+    println!(
+        "Got {} shots with custom depolarizing noise",
+        results.shots.len()
+    );
 
     // Example 4: Biased depolarizing noise
     println!("\nExample 4: Biased depolarizing noise");
-    let biased = BiasedDepolarizingNoiseModel::builder()
-        .with_uniform_probability(0.001);
-    
+    let biased = BiasedDepolarizingNoiseModel::builder().with_uniform_probability(0.001);
+
     let results = sim_builder()
         .classical(qasm_engine().program(QasmProgram::from_string(qasm)))
         .noise(biased)
         .seed(42)
-        .workers(4)  // Use multiple workers
+        .workers(4) // Use multiple workers
         .run(1000)
         .unwrap();
-    
-    println!("Got {} shots with biased depolarizing noise", results.shots.len());
+
+    println!(
+        "Got {} shots with biased depolarizing noise",
+        results.shots.len()
+    );
 
     // Example 5: No noise (ideal simulation)
     println!("\nExample 5: Ideal simulation (no noise)");
@@ -93,6 +99,6 @@ fn main() {
         .seed(42)
         .run(1000)
         .unwrap();
-    
+
     println!("Got {} shots with no noise", results.shots.len());
 }

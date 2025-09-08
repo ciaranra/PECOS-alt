@@ -61,7 +61,7 @@ use pecos::{classical, quantum, noise, programs};
 
 // Same organization as Python
 classical::qasm()            // Classical control engines
-quantum::sparse_stabilizer() // Quantum backends  
+quantum::sparse_stabilizer() // Quantum backends
 noise::depolarizing()        // Noise models
 programs::QasmProgram        // Program types
 ```
@@ -181,7 +181,7 @@ SimBuilder::new()
 ### Free Functions Provided
 
 | Function | Returns | Purpose |
-|----------|---------|---------|  
+|----------|---------|---------|
 | `sim_builder()` | `SimBuilder` | Create simulation builder |
 | `qasm_engine()` | `QasmEngineBuilder` | Create QASM engine builder |
 | `llvm_engine()` | `LlvmEngineBuilder` | Create LLVM engine builder |
@@ -294,7 +294,7 @@ impl QasmEngineProgram {
     pub fn from_string(s: impl Into<String>) -> Self { ... }
     pub fn from_file(path: impl AsRef<Path>) -> Self { ... }
     pub fn from_bytes(bytes: Vec<u8>) -> Self { ... }
-    
+
     // Configuration methods
     pub fn with_virtual_includes(mut self, includes: Vec<(String, String)>) -> Self { ... }
     pub fn allow_complex_conditionals(mut self, allow: bool) -> Self { ... }
@@ -319,13 +319,13 @@ impl QasmEngineBuilder {
     pub fn new() -> Self {
         Self { program: None }
     }
-    
+
     // Can accept both QasmProgram and QasmEngineProgram
-    pub fn program<P: Into<QasmEngineProgram>>(mut self, program: P) -> Self { 
+    pub fn program<P: Into<QasmEngineProgram>>(mut self, program: P) -> Self {
         self.program = Some(program.into());
         self
     }
-    
+
     // Deprecated: Use sim_builder() instead
     pub fn to_sim(self) -> SimBuilder<QasmEngine> { ... }
 }
@@ -361,7 +361,7 @@ impl SeleneEngineProgram {
     pub fn from_hugr_bytes(bytes: Vec<u8>) -> Self { ... }
     pub fn from_llvm_ir(ir: impl Into<String>) -> Self { ... }
     pub fn from_llvm_file(path: impl AsRef<Path>) -> Self { ... }
-    
+
     // Configuration
     pub fn with_optimization(mut self, level: OptLevel) -> Self { ... }
     pub fn with_debug_info(mut self, enabled: bool) -> Self { ... }
@@ -396,13 +396,13 @@ impl SeleneEngineBuilder {
     pub fn new() -> Self {
         Self { program: None }
     }
-    
+
     // Can accept HugrProgram, LlvmProgram, or SeleneEngineProgram
     pub fn program<P: Into<SeleneEngineProgram>>(mut self, program: P) -> Self {
         self.program = Some(program.into());
         self
     }
-    
+
     // Deprecated: Use sim_builder() instead
     pub fn to_sim(self) -> SimBuilder<SeleneEngine> { ... }
 }
@@ -641,7 +641,7 @@ impl From<pecos_programs::HugrProgram> for pecos_selene::SeleneEngineProgram { .
    ```python
    def qasm_engine() -> QasmEngineBuilder:
        return QasmEngineBuilder()
-   
+
    def sparse_stab() -> SparseStabBuilder:
        return SparseStabBuilder()
    ```
@@ -665,7 +665,7 @@ Python now has namespace modules that organize functionality:
 ```python
 pecos_rslib/
 ├── classical.py    # Classical control engine builders
-├── noise.py        # Noise model builders  
+├── noise.py        # Noise model builders
 ├── quantum.py      # Quantum engine builders
 └── programs.py     # Program types
 ```
@@ -685,7 +685,7 @@ pub mod classical {
     pub use pecos_qasm::{qasm_engine, QasmEngineBuilder};
     pub use pecos_llvm_sim::{llvm_engine, LlvmEngineBuilder};
     pub use pecos_selene::{selene_engine, SeleneEngineBuilder};
-    
+
     // Convenience aliases
     pub use qasm_engine as qasm;
     pub use llvm_engine as llvm;
@@ -704,7 +704,7 @@ pub mod noise {
         GeneralNoiseModelBuilder, DepolarizingNoiseModelBuilder,
         BiasedDepolarizingNoiseModelBuilder,
     };
-    
+
     // Convenience functions
     pub fn general() -> GeneralNoiseModelBuilder { ... }
     pub fn depolarizing() -> DepolarizingNoiseModelBuilder { ... }

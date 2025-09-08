@@ -1,25 +1,27 @@
-//! PyO3 wrappers for engine builders following the simulation API
+//! `PyO3` wrappers for engine builders following the simulation API
 //!
 //! This module provides thin wrappers around the Rust engine builders,
-//! maintaining the same API pattern: engine().program(...).to_sim()
+//! maintaining the same API pattern: `engine().program(...).to_sim()`
 
-use pecos_llvm_sim::{llvm_engine as rust_llvm_engine, LlvmEngineBuilder as RustLlvmEngineBuilder};
-use pecos_selene::{
-    selene_executable as rust_selene_executable, 
-    SeleneExecutableEngineBuilder as RustSeleneEngineBuilder,
-    SeleneInProcessEngine,
-};
-use pecos_qasm::{qasm_engine as rust_qasm_engine, QasmEngineBuilder as RustQasmEngineBuilder};
-use pecos_phir_json::{phir_json_engine as rust_phir_json_engine, PhirJsonEngineBuilder as RustPhirJsonEngineBuilder};
-use pecos_programs::{LlvmProgram, HugrProgram, QasmProgram, PhirJsonProgram, SeleneInterfaceProgram};
 use pecos_engines::quantum_engine_builder::{
-    StateVectorEngineBuilder as RustStateVectorEngineBuilder,
     SparseStabilizerEngineBuilder as RustSparseStabilizerEngineBuilder,
-    state_vector as rust_state_vector,
-    sparse_stabilizer as rust_sparse_stabilizer,
+    StateVectorEngineBuilder as RustStateVectorEngineBuilder,
+    sparse_stabilizer as rust_sparse_stabilizer, state_vector as rust_state_vector,
 };
-use pyo3::prelude::*;
+use pecos_llvm_sim::{LlvmEngineBuilder as RustLlvmEngineBuilder, llvm_engine as rust_llvm_engine};
+use pecos_phir_json::{
+    PhirJsonEngineBuilder as RustPhirJsonEngineBuilder, phir_json_engine as rust_phir_json_engine,
+};
+use pecos_programs::{
+    HugrProgram, LlvmProgram, PhirJsonProgram, QasmProgram, SeleneInterfaceProgram,
+};
+use pecos_qasm::{QasmEngineBuilder as RustQasmEngineBuilder, qasm_engine as rust_qasm_engine};
+use pecos_selene::{
+    SeleneExecutableEngineBuilder as RustSeleneEngineBuilder, SeleneInProcessEngine,
+    selene_executable as rust_selene_executable,
+};
 use pyo3::exceptions::PyRuntimeError;
+use pyo3::prelude::*;
 use std::sync::{Arc, Mutex};
 
 // Import existing shot result types
@@ -30,9 +32,7 @@ use crate::sim::{PySimBuilder, SimBuilderInner};
 
 // Noise builder wrappers
 use pecos_engines::noise::{
-    GeneralNoiseModelBuilder,
-    DepolarizingNoiseModelBuilder, 
-    BiasedDepolarizingNoiseModelBuilder,
+    BiasedDepolarizingNoiseModelBuilder, DepolarizingNoiseModelBuilder, GeneralNoiseModelBuilder,
 };
 
 /// Python wrapper for QASM engine builder
@@ -107,10 +107,9 @@ impl PyLlvmEngineBuilder {
         // Check if it's a HugrProgram
         else if let Ok(hugr_prog) = program.extract::<PyHugrProgram>(py) {
             self.inner = self.inner.clone().program(hugr_prog.inner);
-        }
-        else {
+        } else {
             return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                "program must be either an LlvmProgram or HugrProgram instance"
+                "program must be either an LlvmProgram or HugrProgram instance",
             ));
         }
         Ok(self.clone())
@@ -163,17 +162,16 @@ impl PySeleneEngineBuilder {
         // Check if it's a HugrProgram
         else if let Ok(hugr_prog) = program.extract::<PyHugrProgram>(py) {
             self.inner = self.inner.clone().program(hugr_prog.inner);
-        }
-        else {
+        } else {
             return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                "program must be either an LlvmProgram or HugrProgram instance"
+                "program must be either an LlvmProgram or HugrProgram instance",
             ));
         }
         Ok(self.clone())
     }
-    
+
     /// Set a plugin file for this engine
-    /// Note: SeleneExecutableEngine uses the built-in PecosSeleneBridgeSimulator by default,
+    /// Note: `SeleneExecutableEngine` uses the built-in `PecosSeleneBridgeSimulator` by default,
     /// but you can override it with a custom plugin path if needed.
     #[pyo3(signature = (path))]
     fn plugin(&mut self, path: &str) -> PyResult<Self> {
@@ -182,7 +180,7 @@ impl PySeleneEngineBuilder {
         self.inner = self.inner.clone().plugin(path);
         Ok(self.clone())
     }
-    
+
     /// Set the number of qubits
     #[pyo3(signature = (n))]
     fn qubits(&mut self, n: usize) -> PyResult<Self> {
@@ -244,9 +242,9 @@ impl PyPhirJsonEngineBuilder {
 }
 
 /// Internal QASM simulation builder state
-/// 
-/// This stores configuration and rebuilds the Rust SimBuilder when needed,
-/// avoiding the FnOnce + Sync issue while maintaining the same API
+///
+/// This stores configuration and rebuilds the Rust `SimBuilder` when needed,
+/// avoiding the `FnOnce` + Sync issue while maintaining the same API
 pub struct PyQasmSimBuilder {
     pub(crate) engine_builder: Arc<Mutex<Option<RustQasmEngineBuilder>>>,
     pub(crate) seed: Option<u64>,
@@ -270,16 +268,16 @@ impl PyQasmSimulation {
         // Use workers from builder config or default (1)
         match engine.run(shots) {
             Ok(shot_vec) => Ok(PyShotVec::new(shot_vec)),
-            Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {}", e))),
+            Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {e}"))),
         }
     }
-    
+
     /// Run the simulation with specified number of workers
     fn run_with_workers(&self, shots: usize, workers: usize) -> PyResult<PyShotVec> {
         let mut engine = self.inner.lock().unwrap();
         match engine.run_with_workers(shots, workers) {
             Ok(shot_vec) => Ok(PyShotVec::new(shot_vec)),
-            Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {}", e))),
+            Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {e}"))),
         }
     }
 }
@@ -298,16 +296,16 @@ impl PyPhirJsonSimulation {
         // Use workers from builder config or default (1)
         match engine.run(shots) {
             Ok(shot_vec) => Ok(PyShotVec::new(shot_vec)),
-            Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {}", e))),
+            Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {e}"))),
         }
     }
-    
+
     /// Run the simulation with specified number of workers
     fn run_with_workers(&self, shots: usize, workers: usize) -> PyResult<PyShotVec> {
         let mut engine = self.inner.lock().unwrap();
         match engine.run_with_workers(shots, workers) {
             Ok(shot_vec) => Ok(PyShotVec::new(shot_vec)),
-            Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {}", e))),
+            Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {e}"))),
         }
     }
 }
@@ -342,9 +340,13 @@ pub struct PyPhirJsonSimBuilder {
     pub(crate) explicit_num_qubits: Option<usize>,
 }
 
-/// Internal Selene Runtime simulation builder state (for SeleneInterfaceProgram)
+/// Internal Selene Runtime simulation builder state (for `SeleneInterfaceProgram`)
 pub struct PySeleneRuntimeSimBuilder {
-    pub(crate) engine_builder: Arc<Mutex<Option<pecos_selene::selene_simple_runtime_builder::SeleneSimpleRuntimeEngineBuilder>>>,
+    pub(crate) engine_builder: Arc<
+        Mutex<
+            Option<pecos_selene::selene_simple_runtime_builder::SeleneSimpleRuntimeEngineBuilder>,
+        >,
+    >,
     pub(crate) seed: Option<u64>,
     pub(crate) workers: Option<usize>,
     pub(crate) quantum_engine_builder: Option<PyObject>,
@@ -354,8 +356,9 @@ pub struct PySeleneRuntimeSimBuilder {
 
 /// Builder for Selene executable engine with bridge approach
 pub struct PySeleneExecutableSimBuilder {
-    pub(crate) program: Option<PyObject>,  // Guppy function or HUGR to compile to executable
-    pub(crate) engine_builder: Arc<Mutex<Option<pecos_selene::selene_executable_builder::SeleneExecutableEngineBuilder>>>,
+    pub(crate) program: Option<PyObject>, // Guppy function or HUGR to compile to executable
+    pub(crate) engine_builder:
+        Arc<Mutex<Option<pecos_selene::selene_executable_builder::SeleneExecutableEngineBuilder>>>,
     pub(crate) seed: Option<u64>,
     pub(crate) workers: Option<usize>,
     pub(crate) quantum_engine_builder: Option<PyObject>,
@@ -365,7 +368,7 @@ pub struct PySeleneExecutableSimBuilder {
 
 /// Builder for Selene library engine (newest approach for HUGR/Guppy)
 pub struct PySeleneLibrarySimBuilder {
-    pub(crate) program: Option<PyObject>,  // Store the Python program (Guppy or HUGR)
+    pub(crate) program: Option<PyObject>, // Store the Python program (Guppy or HUGR)
     pub(crate) seed: Option<u64>,
     pub(crate) workers: Option<usize>,
     pub(crate) quantum_engine_builder: Option<PyObject>,
@@ -404,7 +407,7 @@ impl PyLlvmProgram {
             inner: LlvmProgram::from_string(source),
         }
     }
-    
+
     #[staticmethod]
     fn from_ir(source: String) -> Self {
         PyLlvmProgram {
@@ -443,7 +446,7 @@ impl PyPhirJsonProgram {
             inner: PhirJsonProgram::from_string(source),
         }
     }
-    
+
     #[staticmethod]
     fn from_json(source: String) -> Self {
         PyPhirJsonProgram {
@@ -466,25 +469,33 @@ impl PySeleneInterfaceProgram {
             inner: SeleneInterfaceProgram::from_bytes(plugin_bytes),
         }
     }
-    
+
     #[staticmethod]
-    fn from_executable(executable_path: String, artifacts_path: String, plugin_bytes: Vec<u8>) -> Self {
+    fn from_executable(
+        executable_path: String,
+        artifacts_path: String,
+        plugin_bytes: Vec<u8>,
+    ) -> Self {
         PySeleneInterfaceProgram {
-            inner: SeleneInterfaceProgram::from_executable(executable_path, artifacts_path, plugin_bytes),
+            inner: SeleneInterfaceProgram::from_executable(
+                executable_path,
+                artifacts_path,
+                plugin_bytes,
+            ),
         }
     }
-    
+
     /// Get the plugin bytes
     fn bytes(&self) -> Vec<u8> {
         self.inner.bytes().to_vec()
     }
-    
+
     /// Get the executable path if available
     fn executable_path(&self) -> Option<String> {
         self.inner.executable_path.clone()
     }
-    
-    /// Get the artifacts path if available  
+
+    /// Get the artifacts path if available
     fn artifacts_path(&self) -> Option<String> {
         self.inner.artifacts_path.clone()
     }
@@ -540,7 +551,7 @@ pub fn biased_depolarizing_noise() -> PyBiasedDepolarizingNoiseModelBuilder {
     PyBiasedDepolarizingNoiseModelBuilder::new()
 }
 
-/// Python wrapper for GeneralNoiseModelBuilder  
+/// Python wrapper for `GeneralNoiseModelBuilder`
 #[pyclass(name = "GeneralNoiseModelBuilder")]
 #[derive(Clone)]
 pub struct PyGeneralNoiseModelBuilder {
@@ -552,126 +563,130 @@ impl PyGeneralNoiseModelBuilder {
     #[new]
     fn new() -> Self {
         Self {
-            inner: GeneralNoiseModelBuilder::new()
+            inner: GeneralNoiseModelBuilder::new(),
         }
     }
 
     /// Set single-qubit gate error probability
     fn with_p1_probability(&self, p: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p1_probability(p)
+            inner: self.inner.clone().with_p1_probability(p),
         })
     }
 
     /// Set two-qubit gate error probability
     fn with_p2_probability(&self, p: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p2_probability(p)
+            inner: self.inner.clone().with_p2_probability(p),
         })
     }
-    
+
     /// Set preparation error probability
     fn with_prep_probability(&self, p: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_prep_probability(p)
+            inner: self.inner.clone().with_prep_probability(p),
         })
     }
-    
+
     /// Set measurement error probability for |0⟩ state
     fn with_meas_0_probability(&self, p: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_meas_0_probability(p)
+            inner: self.inner.clone().with_meas_0_probability(p),
         })
     }
-    
+
     /// Set measurement error probability for |1⟩ state
     fn with_meas_1_probability(&self, p: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_meas_1_probability(p)
+            inner: self.inner.clone().with_meas_1_probability(p),
         })
     }
-    
+
     /// Set seed for reproducibility
     fn with_seed(&self, seed: u64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_seed(seed)
+            inner: self.inner.clone().with_seed(seed),
         })
     }
-    
+
     /// Set global scale factor
     fn with_scale(&self, scale: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_scale(scale)
+            inner: self.inner.clone().with_scale(scale),
         })
     }
-    
+
     /// Set leakage scale factor
     fn with_leakage_scale(&self, scale: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_leakage_scale(scale)
+            inner: self.inner.clone().with_leakage_scale(scale),
         })
     }
-    
+
     /// Set emission scale factor
     fn with_emission_scale(&self, scale: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_emission_scale(scale)
+            inner: self.inner.clone().with_emission_scale(scale),
         })
     }
-    
+
     /// Set single-qubit Pauli error model
     fn with_p1_pauli_model(&self, model: std::collections::HashMap<String, f64>) -> PyResult<Self> {
         use std::collections::BTreeMap;
         let btree_map: BTreeMap<String, f64> = model.into_iter().collect();
         Ok(Self {
-            inner: self.inner.clone().with_p1_pauli_model(&btree_map)
+            inner: self.inner.clone().with_p1_pauli_model(&btree_map),
         })
     }
-    
+
     /// Set two-qubit Pauli error model
     fn with_p2_pauli_model(&self, model: std::collections::HashMap<String, f64>) -> PyResult<Self> {
         use std::collections::BTreeMap;
         let btree_map: BTreeMap<String, f64> = model.into_iter().collect();
         Ok(Self {
-            inner: self.inner.clone().with_p2_pauli_model(&btree_map)
+            inner: self.inner.clone().with_p2_pauli_model(&btree_map),
         })
     }
-    
+
     /// Set average single-qubit gate error probability
     fn with_average_p1_probability(&self, p: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_average_p1_probability(p)
+            inner: self.inner.clone().with_average_p1_probability(p),
         })
     }
-    
+
     /// Set average two-qubit gate error probability
     fn with_average_p2_probability(&self, p: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_average_p2_probability(p)
+            inner: self.inner.clone().with_average_p2_probability(p),
         })
     }
-    
+
     /// Set measurement error probability (symmetric)
     fn with_meas_probability(&self, p: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_meas_probability(p)
+            inner: self.inner.clone().with_meas_probability(p),
         })
     }
-    
+
     /// Set preparation error probability
     fn with_preparation_probability(&self, p: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_prep_probability(p)
+            inner: self.inner.clone().with_prep_probability(p),
         })
     }
-    
+
     /// Set measurement error probability (asymmetric)
     fn with_measurement_probability(&self, p0: f64, p1: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_meas_0_probability(p0).with_meas_1_probability(p1)
+            inner: self
+                .inner
+                .clone()
+                .with_meas_0_probability(p0)
+                .with_meas_1_probability(p1),
         })
     }
-    
+
     /// Add a noiseless gate
     fn with_noiseless_gate(&self, gate_name: &str) -> PyResult<Self> {
         use pecos_core::gate_type::GateType;
@@ -681,9 +696,9 @@ impl PyGeneralNoiseModelBuilder {
             "X" => GateType::X,
             "Y" => GateType::Y,
             "Z" => GateType::Z,
-            "S" => GateType::SZ,  // S gate is SZ in GateType
+            "S" => GateType::SZ, // S gate is SZ in GateType
             "SZ" => GateType::SZ,
-            "SDG" => GateType::SZdg,  // S dagger
+            "SDG" => GateType::SZdg, // S dagger
             "SZDG" => GateType::SZdg,
             "H" => GateType::H,
             "RX" => GateType::RX,
@@ -700,210 +715,226 @@ impl PyGeneralNoiseModelBuilder {
             "MEASURE" => GateType::Measure,
             "PREP" => GateType::Prep,
             "IDLE" => GateType::Idle,
-            _ => return Err(pyo3::exceptions::PyValueError::new_err(format!("Invalid gate type: {}", gate_name))),
+            _ => {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "Invalid gate type: {gate_name}"
+                )));
+            }
         };
         Ok(Self {
-            inner: self.inner.clone().with_noiseless_gate(gate_type)
+            inner: self.inner.clone().with_noiseless_gate(gate_type),
         })
     }
-    
+
     /// Set seepage probability
     fn with_seepage_prob(&self, prob: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_seepage_prob(prob)
+            inner: self.inner.clone().with_seepage_prob(prob),
         })
     }
-    
+
     /// Set whether to use coherent dephasing for idle errors
     fn with_p_idle_coherent(&self, use_coherent: bool) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p_idle_coherent(use_coherent)
+            inner: self.inner.clone().with_p_idle_coherent(use_coherent),
         })
     }
-    
+
     /// Set the idling noise error rate for the linear term
     fn with_p_idle_linear_rate(&self, rate: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p_idle_linear_rate(rate)
+            inner: self.inner.clone().with_p_idle_linear_rate(rate),
         })
     }
-    
+
     /// Set the idling noise error rate for the quadratic term
     fn with_p_idle_quadratic_rate(&self, rate: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p_idle_quadratic_rate(rate)
+            inner: self.inner.clone().with_p_idle_quadratic_rate(rate),
         })
     }
-    
+
     /// Set the stochastic model for idling that is linearly dependent on time
-    fn with_p_idle_linear_model(&self, model: std::collections::HashMap<String, f64>) -> PyResult<Self> {
+    fn with_p_idle_linear_model(
+        &self,
+        model: std::collections::HashMap<String, f64>,
+    ) -> PyResult<Self> {
         use std::collections::BTreeMap;
         let btree_map: BTreeMap<String, f64> = model.into_iter().collect();
         Ok(Self {
-            inner: self.inner.clone().with_p_idle_linear_model(&btree_map)
+            inner: self.inner.clone().with_p_idle_linear_model(&btree_map),
         })
     }
-    
+
     /// Set coherent to incoherent noise conversion factor
     fn with_p_idle_coherent_to_incoherent_factor(&self, factor: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p_idle_coherent_to_incoherent_factor(factor)
+            inner: self
+                .inner
+                .clone()
+                .with_p_idle_coherent_to_incoherent_factor(factor),
         })
     }
-    
+
     /// Set the average idling noise error rate per channel for the linear term
     fn with_average_p_idle_linear_rate(&self, rate: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_average_p_idle_linear_rate(rate)
+            inner: self.inner.clone().with_average_p_idle_linear_rate(rate),
         })
     }
-    
+
     /// Set the average idling noise error rate per channel for the quadratic term
     fn with_average_p_idle_quadratic_rate(&self, rate: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_average_p_idle_quadratic_rate(rate)
+            inner: self.inner.clone().with_average_p_idle_quadratic_rate(rate),
         })
     }
-    
+
     /// Set idle scale factor
     fn with_idle_scale(&self, scale: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_idle_scale(scale)
+            inner: self.inner.clone().with_idle_scale(scale),
         })
     }
-    
+
     /// Set the preparation leakage ratio
     fn with_prep_leak_ratio(&self, ratio: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_prep_leak_ratio(ratio)
+            inner: self.inner.clone().with_prep_leak_ratio(ratio),
         })
     }
-    
+
     /// Set the probability of crosstalk during initialization operations
     fn with_p_prep_crosstalk(&self, prob: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p_prep_crosstalk(prob)
+            inner: self.inner.clone().with_p_prep_crosstalk(prob),
         })
     }
-    
+
     /// Set the scaling factor for initialization errors
     fn with_prep_scale(&self, scale: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_prep_scale(scale)
+            inner: self.inner.clone().with_prep_scale(scale),
         })
     }
-    
+
     /// Set the scaling factor for initialization crosstalk probability
     fn with_p_prep_crosstalk_scale(&self, scale: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p_prep_crosstalk_scale(scale)
+            inner: self.inner.clone().with_p_prep_crosstalk_scale(scale),
         })
     }
-    
+
     /// Set the emission-to-absorption ratio for single-qubit gates
     fn with_p1_emission_ratio(&self, ratio: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p1_emission_ratio(ratio)
+            inner: self.inner.clone().with_p1_emission_ratio(ratio),
         })
     }
-    
+
     /// Set the emission model for single-qubit gates
-    fn with_p1_emission_model(&self, model: std::collections::HashMap<String, f64>) -> PyResult<Self> {
+    fn with_p1_emission_model(
+        &self,
+        model: std::collections::HashMap<String, f64>,
+    ) -> PyResult<Self> {
         use std::collections::BTreeMap;
         let btree_map: BTreeMap<String, f64> = model.into_iter().collect();
         Ok(Self {
-            inner: self.inner.clone().with_p1_emission_model(&btree_map)
+            inner: self.inner.clone().with_p1_emission_model(&btree_map),
         })
     }
-    
+
     /// Set the seepage probability for single-qubit gates
     fn with_p1_seepage_prob(&self, prob: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p1_seepage_prob(prob)
+            inner: self.inner.clone().with_p1_seepage_prob(prob),
         })
     }
-    
+
     /// Set the scaling factor for single-qubit gate errors
     fn with_p1_scale(&self, scale: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p1_scale(scale)
+            inner: self.inner.clone().with_p1_scale(scale),
         })
     }
-    
+
     /// Set angle-dependent parameters for two-qubit gates
     fn with_p2_angle_params(&self, a: f64, b: f64, c: f64, d: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p2_angle_params(a, b, c, d)
+            inner: self.inner.clone().with_p2_angle_params(a, b, c, d),
         })
     }
-    
+
     /// Set angle-dependent power for two-qubit gates
     fn with_p2_angle_power(&self, power: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p2_angle_power(power)
+            inner: self.inner.clone().with_p2_angle_power(power),
         })
     }
-    
+
     /// Set the emission-to-absorption ratio for two-qubit gates
     fn with_p2_emission_ratio(&self, ratio: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p2_emission_ratio(ratio)
+            inner: self.inner.clone().with_p2_emission_ratio(ratio),
         })
     }
-    
+
     /// Set the emission model for two-qubit gates
-    fn with_p2_emission_model(&self, model: std::collections::HashMap<String, f64>) -> PyResult<Self> {
+    fn with_p2_emission_model(
+        &self,
+        model: std::collections::HashMap<String, f64>,
+    ) -> PyResult<Self> {
         use std::collections::BTreeMap;
         let btree_map: BTreeMap<String, f64> = model.into_iter().collect();
         Ok(Self {
-            inner: self.inner.clone().with_p2_emission_model(&btree_map)
+            inner: self.inner.clone().with_p2_emission_model(&btree_map),
         })
     }
-    
+
     /// Set the seepage probability for two-qubit gates
     fn with_p2_seepage_prob(&self, prob: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p2_seepage_prob(prob)
+            inner: self.inner.clone().with_p2_seepage_prob(prob),
         })
     }
-    
+
     /// Set idle probability for two-qubit gates
     fn with_p2_idle(&self, probability: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p2_idle(probability)
+            inner: self.inner.clone().with_p2_idle(probability),
         })
     }
-    
+
     /// Set the scaling factor for two-qubit gate errors
     fn with_p2_scale(&self, scale: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p2_scale(scale)
+            inner: self.inner.clone().with_p2_scale(scale),
         })
     }
-    
+
     /// Set the probability of crosstalk during measurement operations
     fn with_p_meas_crosstalk(&self, prob: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p_meas_crosstalk(prob)
+            inner: self.inner.clone().with_p_meas_crosstalk(prob),
         })
     }
-    
+
     /// Set the scaling factor for measurement errors
     fn with_meas_scale(&self, scale: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_meas_scale(scale)
+            inner: self.inner.clone().with_meas_scale(scale),
         })
     }
-    
+
     /// Set the scaling factor for measurement crosstalk probability
     fn with_p_meas_crosstalk_scale(&self, scale: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p_meas_crosstalk_scale(scale)
+            inner: self.inner.clone().with_p_meas_crosstalk_scale(scale),
         })
     }
 }
 
-/// Python wrapper for DepolarizingNoiseModelBuilder
+/// Python wrapper for `DepolarizingNoiseModelBuilder`
 #[pyclass(name = "DepolarizingNoiseModelBuilder")]
 #[derive(Clone)]
 pub struct PyDepolarizingNoiseModelBuilder {
@@ -915,59 +946,59 @@ impl PyDepolarizingNoiseModelBuilder {
     #[new]
     fn new() -> Self {
         Self {
-            inner: DepolarizingNoiseModelBuilder::new()
+            inner: DepolarizingNoiseModelBuilder::new(),
         }
     }
 
     /// Set preparation error probability
     fn with_prep_probability(&self, p: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_prep_probability(p)
+            inner: self.inner.clone().with_prep_probability(p),
         })
     }
 
     /// Set measurement error probability
     fn with_meas_probability(&self, p: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_meas_probability(p)
+            inner: self.inner.clone().with_meas_probability(p),
         })
     }
 
     /// Set single-qubit gate error probability
     fn with_p1_probability(&self, p: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p1_probability(p)
+            inner: self.inner.clone().with_p1_probability(p),
         })
     }
 
     /// Set two-qubit gate error probability
     fn with_p2_probability(&self, p: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p2_probability(p)
+            inner: self.inner.clone().with_p2_probability(p),
         })
     }
-    
+
     /// Set uniform probability for all error types
     fn with_uniform_probability(&self, p: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_uniform_probability(p)
+            inner: self.inner.clone().with_uniform_probability(p),
         })
     }
-    
+
     /// Set seed for reproducibility
     fn with_seed(&self, seed: u64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_seed(seed)
+            inner: self.inner.clone().with_seed(seed),
         })
     }
-    
-    /// Set preparation error probability (alias for with_prep_probability)
+
+    /// Set preparation error probability (alias for `with_prep_probability`)
     fn with_preparation_probability(&self, p: f64) -> PyResult<Self> {
         self.with_prep_probability(p)
     }
 }
 
-/// Python wrapper for BiasedDepolarizingNoiseModelBuilder
+/// Python wrapper for `BiasedDepolarizingNoiseModelBuilder`
 #[pyclass(name = "BiasedDepolarizingNoiseModelBuilder")]
 #[derive(Clone)]
 pub struct PyBiasedDepolarizingNoiseModelBuilder {
@@ -979,61 +1010,61 @@ impl PyBiasedDepolarizingNoiseModelBuilder {
     #[new]
     fn new() -> Self {
         Self {
-            inner: BiasedDepolarizingNoiseModelBuilder::new()
+            inner: BiasedDepolarizingNoiseModelBuilder::new(),
         }
     }
 
     /// Set preparation error probability
     fn with_prep_probability(&self, p: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_prep_probability(p)
+            inner: self.inner.clone().with_prep_probability(p),
         })
     }
 
     /// Set measurement 0->1 flip probability
     fn with_meas_0_probability(&self, p: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_meas_0_probability(p)
+            inner: self.inner.clone().with_meas_0_probability(p),
         })
     }
 
     /// Set measurement 1->0 flip probability
     fn with_meas_1_probability(&self, p: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_meas_1_probability(p)
+            inner: self.inner.clone().with_meas_1_probability(p),
         })
     }
 
     /// Set single-qubit gate error probability
     fn with_p1_probability(&self, p: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p1_probability(p)
+            inner: self.inner.clone().with_p1_probability(p),
         })
     }
-    
+
     /// Set two-qubit gate error probability
     fn with_p2_probability(&self, p: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_p2_probability(p)
+            inner: self.inner.clone().with_p2_probability(p),
         })
     }
-    
+
     /// Set uniform probability for all error types
     fn with_uniform_probability(&self, p: f64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_uniform_probability(p)
+            inner: self.inner.clone().with_uniform_probability(p),
         })
     }
-    
+
     /// Set seed for reproducibility
     fn with_seed(&self, seed: u64) -> PyResult<Self> {
         Ok(Self {
-            inner: self.inner.clone().with_seed(seed)
+            inner: self.inner.clone().with_seed(seed),
         })
     }
 }
 
-/// Python wrapper for StateVectorEngineBuilder
+/// Python wrapper for `StateVectorEngineBuilder`
 #[pyclass(name = "StateVectorEngineBuilder")]
 #[derive(Clone)]
 pub struct PyStateVectorEngineBuilder {
@@ -1045,10 +1076,10 @@ impl PyStateVectorEngineBuilder {
     #[new]
     fn new() -> Self {
         Self {
-            inner: Some(rust_state_vector())
+            inner: Some(rust_state_vector()),
         }
     }
-    
+
     /// Set the number of qubits
     fn qubits(slf: Py<Self>, num_qubits: usize, py: Python) -> PyResult<Py<Self>> {
         let mut borrowed = slf.borrow_mut(py);
@@ -1058,13 +1089,13 @@ impl PyStateVectorEngineBuilder {
             Ok(slf)
         } else {
             Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                "Builder has already been consumed"
+                "Builder has already been consumed",
             ))
         }
     }
 }
 
-/// Python wrapper for SparseStabilizerEngineBuilder
+/// Python wrapper for `SparseStabilizerEngineBuilder`
 #[pyclass(name = "SparseStabilizerEngineBuilder")]
 #[derive(Clone)]
 pub struct PySparseStabilizerEngineBuilder {
@@ -1076,10 +1107,10 @@ impl PySparseStabilizerEngineBuilder {
     #[new]
     fn new() -> Self {
         Self {
-            inner: Some(rust_sparse_stabilizer())
+            inner: Some(rust_sparse_stabilizer()),
         }
     }
-    
+
     /// Set the number of qubits
     fn qubits(slf: Py<Self>, num_qubits: usize, py: Python) -> PyResult<Py<Self>> {
         let mut borrowed = slf.borrow_mut(py);
@@ -1089,7 +1120,7 @@ impl PySparseStabilizerEngineBuilder {
             Ok(slf)
         } else {
             Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                "Builder has already been consumed"
+                "Builder has already been consumed",
             ))
         }
     }
@@ -1107,13 +1138,13 @@ pub fn sparse_stabilizer() -> PySparseStabilizerEngineBuilder {
     PySparseStabilizerEngineBuilder::new()
 }
 
-/// Alias for sparse_stabilizer
+/// Alias for `sparse_stabilizer`
 #[pyfunction]
 pub fn sparse_stab() -> PySparseStabilizerEngineBuilder {
     sparse_stabilizer()
 }
 
-/// Configuration for SeleneExecutableEngine
+/// Configuration for `SeleneExecutableEngine`
 #[pyclass(name = "SeleneExecutableConfig")]
 #[derive(Clone)]
 pub struct PySeleneExecutableConfig {
@@ -1147,7 +1178,7 @@ impl PySeleneExecutableConfig {
     }
 }
 
-/// Python wrapper for SeleneExecutableEngine
+/// Python wrapper for `SeleneExecutableEngine`
 #[pyclass(name = "SeleneExecutableEngine")]
 #[derive(Clone)]
 pub struct PySeleneExecutableEngine {
@@ -1164,14 +1195,14 @@ impl PySeleneExecutableEngine {
             config: None,
         }
     }
-    
+
     fn with_config(&mut self, config: PySeleneExecutableConfig) -> Self {
         self.config = Some(config);
         self.clone()
     }
 }
 
-/// Python wrapper for SeleneInProcessEngine
+/// Python wrapper for `SeleneInProcessEngine`
 #[pyclass(name = "SeleneInProcessEngine")]
 pub struct PySeleneInProcessEngine {
     inner: SeleneInProcessEngine,
@@ -1182,36 +1213,35 @@ impl PySeleneInProcessEngine {
     #[new]
     fn new(num_qubits: usize) -> PyResult<Self> {
         let engine = SeleneInProcessEngine::new(num_qubits)
-            .map_err(|e| PyRuntimeError::new_err(format!("Failed to create engine: {}", e)))?;
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to create engine: {e}")))?;
         Ok(PySeleneInProcessEngine { inner: engine })
     }
-    
+
     /// Set the Selene Interface Program
     fn with_program(&mut self, program: &PySeleneInterfaceProgram) -> PyResult<()> {
         let num_qubits = 1; // We'll use 1 for now
         let new_engine = SeleneInProcessEngine::new(num_qubits)
-            .map_err(|e| PyRuntimeError::new_err(format!("Failed to create engine: {}", e)))?
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to create engine: {e}")))?
             .with_program(program.inner.clone());
         self.inner = new_engine;
         Ok(())
     }
-    
+
     /// Process a single shot
     fn process(&mut self, _input: &Bound<'_, PyAny>) -> PyResult<PyObject> {
         use pecos_engines::Engine;
-        let shot = self.inner.process(())
-            .map_err(|e| PyRuntimeError::new_err(format!("Processing failed: {}", e)))?;
-        
+        let shot = self
+            .inner
+            .process(())
+            .map_err(|e| PyRuntimeError::new_err(format!("Processing failed: {e}")))?;
+
         Python::with_gil(|py| {
             let dict = pyo3::types::PyDict::new(py);
-            for (key, value) in shot.data.iter() {
-                match value {
-                    pecos_engines::shot_results::Data::U32(v) => {
-                        dict.set_item(key, v)?;
-                    }
-                    _ => {
-                        // Handle other data types if needed
-                    }
+            for (key, value) in &shot.data {
+                if let pecos_engines::shot_results::Data::U32(v) = value {
+                    dict.set_item(key, v)?;
+                } else {
+                    // Handle other data types if needed
                 }
             }
             Ok(dict.into())
@@ -1219,7 +1249,7 @@ impl PySeleneInProcessEngine {
     }
 }
 
-/// Create a SimBuilder from scratch without a program
+/// Create a `SimBuilder` from scratch without a program
 #[pyfunction]
 pub fn sim_builder() -> PySimBuilder {
     PySimBuilder {
@@ -1227,58 +1257,58 @@ pub fn sim_builder() -> PySimBuilder {
     }
 }
 
-/// Register the engine builder module with PyO3
+/// Register the engine builder module with `PyO3`
 pub fn register_engine_builders(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Engine builders
     m.add_class::<PyQasmEngineBuilder>()?;
     m.add_class::<PyLlvmEngineBuilder>()?;
     m.add_class::<PySeleneEngineBuilder>()?;
     m.add_class::<PyPhirJsonEngineBuilder>()?;
-    
+
     // Selene Executable Engine
     m.add_class::<PySeleneExecutableConfig>()?;
     m.add_class::<PySeleneExecutableEngine>()?;
     m.add_class::<PySeleneInProcessEngine>()?;
-    
+
     // Simulation builders are now handled by the unified PySimBuilder in sim.rs
-    
+
     // Built simulations
     m.add_class::<PyQasmSimulation>()?;
     m.add_class::<PyPhirJsonSimulation>()?;
-    
+
     // Program types
     m.add_class::<PyQasmProgram>()?;
     m.add_class::<PyLlvmProgram>()?;
     m.add_class::<PyHugrProgram>()?;
     m.add_class::<PyPhirJsonProgram>()?;
-    
+
     // Noise builders
     m.add_class::<PyGeneralNoiseModelBuilder>()?;
     m.add_class::<PyDepolarizingNoiseModelBuilder>()?;
     m.add_class::<PyBiasedDepolarizingNoiseModelBuilder>()?;
-    
+
     // Quantum engine builders
     m.add_class::<PyStateVectorEngineBuilder>()?;
     m.add_class::<PySparseStabilizerEngineBuilder>()?;
-    
+
     // Engine functions
     m.add_function(wrap_pyfunction!(qasm_engine, m)?)?;
     m.add_function(wrap_pyfunction!(llvm_engine, m)?)?;
     m.add_function(wrap_pyfunction!(selene_engine, m)?)?;
     m.add_function(wrap_pyfunction!(phir_json_engine, m)?)?;
-    
+
     // SimBuilder function
     m.add_function(wrap_pyfunction!(sim_builder, m)?)?;
-    
+
     // Noise builder functions
     m.add_function(wrap_pyfunction!(general_noise, m)?)?;
     m.add_function(wrap_pyfunction!(depolarizing_noise, m)?)?;
     m.add_function(wrap_pyfunction!(biased_depolarizing_noise, m)?)?;
-    
+
     // Quantum engine builder functions
     m.add_function(wrap_pyfunction!(state_vector, m)?)?;
     m.add_function(wrap_pyfunction!(sparse_stabilizer, m)?)?;
     m.add_function(wrap_pyfunction!(sparse_stab, m)?)?;
-    
+
     Ok(())
 }

@@ -6,10 +6,9 @@ This tests the new Standard QIR+ architecture implementation.
 
 import sys
 from pathlib import Path
-from typing import List, Tuple
 
 
-def decode_integer_results(results: List[int], n_bits: int) -> List[Tuple[bool, ...]]:
+def decode_integer_results(results: list[int], n_bits: int) -> list[tuple[bool, ...]]:
     """Decode integer-encoded results back to tuples of booleans."""
     decoded = []
     for val in results:
@@ -162,8 +161,15 @@ def test_rust_compilation() -> None:
 
     try:
         # Check if pecos-llvm-runtime compiled with hugr
-        result = subprocess.run(  # noqa: S603
-            ["cargo", "check", "-p", "pecos-llvm-runtime", "--features", "hugr"],  # noqa: S607
+        result = subprocess.run(
+            [
+                "cargo",
+                "check",
+                "-p",
+                "pecos-llvm-runtime",
+                "--features",
+                "hugr",
+            ],
             capture_output=True,
             text=True,
             cwd=Path(__file__).resolve().parent,

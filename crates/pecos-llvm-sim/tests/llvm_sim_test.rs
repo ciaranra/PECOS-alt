@@ -1,7 +1,10 @@
 //! Tests for the `llvm_sim()` API with full feature parity with `qasm_sim()`
 
+use pecos_engines::{
+    BiasedDepolarizingNoise, ClassicalControlEngineBuilder, DepolarizingNoise, sim_builder,
+    sparse_stabilizer, state_vector,
+};
 use pecos_llvm_sim::llvm_engine;
-use pecos_engines::{ClassicalControlEngineBuilder, state_vector, sparse_stabilizer, DepolarizingNoise, BiasedDepolarizingNoise, sim_builder};
 use pecos_programs::LlvmProgram;
 use tempfile::NamedTempFile;
 
@@ -93,9 +96,11 @@ fn test_basic_llvm_sim() {
     }
 
     // Basic usage - should work like the simple v2 version
-    let shot_vec = llvm_engine().program(LlvmProgram::from_string(SIMPLE_HADAMARD_IR)).to_sim()
+    let shot_vec = llvm_engine()
+        .program(LlvmProgram::from_string(SIMPLE_HADAMARD_IR))
+        .to_sim()
         .seed(42)
-        .qubits(1)  // SIMPLE_HADAMARD_IR allocates 1 qubit
+        .qubits(1) // SIMPLE_HADAMARD_IR allocates 1 qubit
         .run(100)
         .expect("Simulation should succeed");
 
@@ -103,11 +108,13 @@ fn test_basic_llvm_sim() {
     assert_eq!(shot_vec.len(), 100);
 
     // Convert to ShotMap for columnar access
-    let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+    let shot_map = shot_vec
+        .try_as_shot_map()
+        .expect("Should convert to ShotMap");
 
     // Check that we have some register data
     assert!(!shot_map.register_names().is_empty());
-    
+
     // Verify we got 100 measurements for each register
     assert_eq!(shot_map.num_shots(), 100);
 }
@@ -120,16 +127,20 @@ fn test_llvm_sim_with_noise() {
     }
 
     // Run with depolarizing noise
-    let shot_vec = llvm_engine().program(LlvmProgram::from_string(BELL_STATE_IR)).to_sim()
+    let shot_vec = llvm_engine()
+        .program(LlvmProgram::from_string(BELL_STATE_IR))
+        .to_sim()
         .seed(42)
         .workers(2)
-        .qubits(2)  // BELL_STATE_IR allocates 2 qubits
+        .qubits(2) // BELL_STATE_IR allocates 2 qubits
         .noise(DepolarizingNoise { p: 0.1 }) // 10% error rate
         .run(1000)
         .expect("Simulation with noise should succeed");
 
     // Convert to ShotMap for columnar access
-    let shot_map = shot_vec.try_as_shot_map().expect("Should convert to ShotMap");
+    let shot_map = shot_vec
+        .try_as_shot_map()
+        .expect("Should convert to ShotMap");
 
     // With noise, we should see some non-perfect correlations in Bell state
     // Count the results
@@ -178,7 +189,9 @@ fn test_llvm_sim_parallelization() {
 
     // Test with multiple workers
     let start = std::time::Instant::now();
-    let results = llvm_engine().program(LlvmProgram::from_string(SIMPLE_HADAMARD_IR)).to_sim()
+    let results = llvm_engine()
+        .program(LlvmProgram::from_string(SIMPLE_HADAMARD_IR))
+        .to_sim()
         .seed(42)
         .workers(4) // Use 4 parallel workers
         .run(10000)
@@ -202,7 +215,9 @@ fn test_llvm_sim_auto_workers() {
     }
 
     // Test with auto workers
-    let shot_vec = llvm_engine().program(LlvmProgram::from_string(SIMPLE_HADAMARD_IR)).to_sim()
+    let shot_vec = llvm_engine()
+        .program(LlvmProgram::from_string(SIMPLE_HADAMARD_IR))
+        .to_sim()
         .seed(42)
         .auto_workers() // Automatically detect CPU cores
         .run(1000)
@@ -220,10 +235,12 @@ fn test_llvm_sim_build_once_run_many() {
     }
 
     // Build once with qubits set to handle dynamic allocation
-    let sim = llvm_engine().program(LlvmProgram::from_string(BELL_STATE_IR)).to_sim()
+    let sim = llvm_engine()
+        .program(LlvmProgram::from_string(BELL_STATE_IR))
+        .to_sim()
         .seed(42)
         .workers(2)
-        .qubits(2)  // BELL_STATE_IR allocates 2 qubits
+        .qubits(2) // BELL_STATE_IR allocates 2 qubits
         .noise(DepolarizingNoise { p: 0.01 })
         .verbose(true)
         .build()
@@ -271,10 +288,12 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     // Build with qubits=2 but try to allocate 3
-    let sim = llvm_engine().program(LlvmProgram::from_string(THREE_QUBIT_IR)).to_sim()
+    let sim = llvm_engine()
+        .program(LlvmProgram::from_string(THREE_QUBIT_IR))
+        .to_sim()
         .seed(42)
-        .qubits(2)  // Only allow 2 qubits
-        .verbose(true)  // Enable verbose output to see what's happening
+        .qubits(2) // Only allow 2 qubits
+        .verbose(true) // Enable verbose output to see what's happening
         .build()
         .expect("Build should succeed");
 
@@ -282,17 +301,19 @@ attributes #0 = { "EntryPoint" }
     println!("Running simulation that should exceed quantum engine capacity...");
     let mut sim = sim;
     let result = sim.run(1);
-    assert!(result.is_err(), "Should fail when using qubits beyond engine capacity");
-    
+    assert!(
+        result.is_err(),
+        "Should fail when using qubits beyond engine capacity"
+    );
+
     let err = result.unwrap_err();
     let err_msg = err.to_string();
     assert!(
-        err_msg.contains("index out of bounds") || 
-        err_msg.contains("qubit") ||
-        err_msg.contains("bound") ||
-        err_msg.contains("limit"),
-        "Error should indicate a bounds/qubit issue, got: {}", 
-        err_msg
+        err_msg.contains("index out of bounds")
+            || err_msg.contains("qubit")
+            || err_msg.contains("bound")
+            || err_msg.contains("limit"),
+        "Error should indicate a bounds/qubit issue, got: {err_msg}"
     );
 }
 
@@ -304,7 +325,9 @@ fn test_llvm_sim_quantum_engines() {
     }
 
     // Test with state vector engine (default)
-    let shot_vec_sv = llvm_engine().program(LlvmProgram::from_string(SIMPLE_HADAMARD_IR)).to_sim()
+    let shot_vec_sv = llvm_engine()
+        .program(LlvmProgram::from_string(SIMPLE_HADAMARD_IR))
+        .to_sim()
         .seed(42)
         .qubits(1)
         .quantum(state_vector())
@@ -312,7 +335,9 @@ fn test_llvm_sim_quantum_engines() {
         .expect("State vector simulation should succeed");
 
     // Test with sparse stabilizer engine
-    let shot_vec_ss = llvm_engine().program(LlvmProgram::from_string(SIMPLE_HADAMARD_IR)).to_sim()
+    let shot_vec_ss = llvm_engine()
+        .program(LlvmProgram::from_string(SIMPLE_HADAMARD_IR))
+        .to_sim()
         .seed(42)
         .qubits(1)
         .quantum(sparse_stabilizer())
@@ -332,7 +357,9 @@ fn test_llvm_sim_custom_noise_models() {
     }
 
     // Test custom depolarizing noise with different error rates
-    let shot_vec = llvm_engine().program(LlvmProgram::from_string(BELL_STATE_IR)).to_sim()
+    let shot_vec = llvm_engine()
+        .program(LlvmProgram::from_string(BELL_STATE_IR))
+        .to_sim()
         .seed(42)
         .noise(DepolarizingNoise { p: 0.02 }) // Use standard depolarizing noise
         .run(1000)
@@ -341,7 +368,9 @@ fn test_llvm_sim_custom_noise_models() {
     assert_eq!(shot_vec.len(), 1000);
 
     // Test biased depolarizing noise
-    let shot_vec_biased = llvm_engine().program(LlvmProgram::from_string(BELL_STATE_IR)).to_sim()
+    let shot_vec_biased = llvm_engine()
+        .program(LlvmProgram::from_string(BELL_STATE_IR))
+        .to_sim()
         .seed(42)
         .noise(BiasedDepolarizingNoise { p: 0.02 })
         .run(1000)
@@ -364,8 +393,7 @@ fn test_llvm_sim_from_file() {
 
     // Test loading from file
     let shot_vec = sim_builder()
-        .classical(llvm_engine()
-        .program(LlvmProgram::from_file(temp_file.path()).unwrap()))
+        .classical(llvm_engine().program(LlvmProgram::from_file(temp_file.path()).unwrap()))
         .seed(42)
         .run(100)
         .expect("Simulation from file should succeed");
@@ -403,7 +431,10 @@ fn test_llvm_sim_error_handling() {
 
     // Test with invalid LLVM IR
     let invalid_ir = "This is not valid LLVM IR";
-    let result = llvm_engine().program(LlvmProgram::from_string(invalid_ir)).to_sim().run(100);
+    let result = llvm_engine()
+        .program(LlvmProgram::from_string(invalid_ir))
+        .to_sim()
+        .run(100);
 
     assert!(result.is_err(), "Invalid LLVM IR should fail");
 
@@ -414,6 +445,9 @@ fn test_llvm_sim_error_handling() {
     }
     ";
 
-    let result = llvm_engine().program(LlvmProgram::from_string(no_entry_ir)).to_sim().run(100);
+    let result = llvm_engine()
+        .program(LlvmProgram::from_string(no_entry_ir))
+        .to_sim()
+        .run(100);
     assert!(result.is_err(), "LLVM IR without entry point should fail");
 }

@@ -35,12 +35,12 @@ pub(crate) fn find_entry_point(llvm_file: &Path) -> Result<Option<String>, Pecos
             for attr in &entry_point_attrs {
                 if line.contains(attr) {
                     // Extract function name
-                    if let Some(func_start) = line.find('@') {
-                        if let Some(func_end) = line[func_start + 1..].find('(') {
-                            let func_name = &line[func_start + 1..func_start + 1 + func_end];
-                            debug!("Found entry point function: {func_name}");
-                            return Ok(Some(func_name.to_string()));
-                        }
+                    if let Some(func_start) = line.find('@')
+                        && let Some(func_end) = line[func_start + 1..].find('(')
+                    {
+                        let func_name = &line[func_start + 1..func_start + 1 + func_end];
+                        debug!("Found entry point function: {func_name}");
+                        return Ok(Some(func_name.to_string()));
                     }
                 }
             }

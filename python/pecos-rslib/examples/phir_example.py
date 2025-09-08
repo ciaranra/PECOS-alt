@@ -23,12 +23,12 @@ def create_bell_state_hugr():
         "nodes": [
             {"op": {"type": "AllocQubit"}},  # Node 0
             {"op": {"type": "AllocQubit"}},  # Node 1
-            {"op": {"type": "H"}},           # Node 2
-            {"op": {"type": "CX"}},          # Node 3
-            {"op": {"type": "Measure"}},     # Node 4
-            {"op": {"type": "Measure"}},     # Node 5
+            {"op": {"type": "H"}},  # Node 2
+            {"op": {"type": "CX"}},  # Node 3
+            {"op": {"type": "Measure"}},  # Node 4
+            {"op": {"type": "Measure"}},  # Node 5
             {"op": {"type": "Output", "port": 0}},  # Node 6
-            {"op": {"type": "Output", "port": 1}}   # Node 7
+            {"op": {"type": "Output", "port": 1}},  # Node 7
         ],
         "edges": [
             {"src": [0, 0], "dst": [2, 0]},  # Qubit 0 -> H
@@ -37,48 +37,52 @@ def create_bell_state_hugr():
             {"src": [3, 0], "dst": [4, 0]},  # CX control -> Measure
             {"src": [3, 1], "dst": [5, 0]},  # CX target -> Measure
             {"src": [4, 0], "dst": [6, 0]},  # Measure -> Output
-            {"src": [5, 0], "dst": [7, 0]}   # Measure -> Output
-        ]
+            {"src": [5, 0], "dst": [7, 0]},  # Measure -> Output
+        ],
     }
 
 
 def main():
     print("PHIR (PECOS High-level IR) Compilation Pipeline Example")
     print("=" * 60)
-    
+
     # Create Bell state circuit
     hugr = create_bell_state_hugr()
     hugr_json = json.dumps(hugr, indent=2)
-    
+
     print("\n1. Original HUGR JSON:")
     print(hugr_json)
-    
+
     # Convert to PHIR (MLIR text)
     print("\n2. Converting HUGR to PHIR (MLIR text)...")
     phir_mlir = hugr_to_phir_mlir(hugr_json, debug_output=True, optimization_level=2)
     print("PHIR as MLIR:")
     print(phir_mlir)
-    
+
     # Try to compile to LLVM IR (requires MLIR tools)
     print("\n3. Attempting to compile to LLVM IR via MLIR tools...")
     try:
-        llvm_ir = compile_hugr_via_phir(hugr_json, debug_output=True, optimization_level=2, target_triple=None)
+        llvm_ir = compile_hugr_via_phir(
+            hugr_json, debug_output=True, optimization_level=2, target_triple=None
+        )
         print("Success! Generated LLVM IR (first 1000 chars):")
         print(llvm_ir[:1000] + "..." if len(llvm_ir) > 1000 else llvm_ir)
     except RuntimeError as e:
         print(f"Note: Compilation failed - {e}")
-        print("This is expected if MLIR tools (mlir-opt, mlir-translate) are not installed.")
+        print(
+            "This is expected if MLIR tools (mlir-opt, mlir-translate) are not installed."
+        )
         print("The PHIR generation still works and produces valid MLIR text.")
-    
+
     # Demonstrate the high-level compiler interface
     print("\n4. Using PhirCompiler convenience class...")
     compiler = PhirCompiler(debug_output=False, optimization_level=2)
-    
+
     # Get PHIR representation
     phir = compiler.get_phir(hugr_json)
-    
+
     print(f"PHIR size: {len(phir)} characters")
-    
+
     # Try execution (if compilation works)
     print("\n5. Attempting execution via PHIR pipeline...")
     try:
@@ -89,7 +93,7 @@ def main():
     except (RuntimeError, NotImplementedError) as e:
         print(f"Note: Execution failed - {e}")
         print("This is expected - execution via PHIR is not yet implemented.")
-    
+
     print("\n" + "=" * 60)
     print("Summary:")
     print("- HUGR → PHIR (MLIR) generation: ✓ Working")

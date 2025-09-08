@@ -63,21 +63,26 @@ class TestQasmSimDefaults:
     def test_noise_model_defaults(self) -> None:
         """Test and document default parameters for noise models."""
         from pecos_rslib import (
+            GeneralNoiseModelBuilder,
             biased_depolarizing_noise,
             depolarizing_noise,
-            GeneralNoiseModelBuilder,
         )
 
         # Test default values for noise models using builder pattern
         # Note: depolarizing_noise() builder requires explicit probability
-        dep = depolarizing_noise().with_p1_probability(0.001)
+        depolarizing_noise().with_p1_probability(0.001)
         # Can't directly assert on builder properties
 
         # General noise model has defaults that can be overridden
-        general = GeneralNoiseModelBuilder()
+        GeneralNoiseModelBuilder()
         # Default values are set when building
 
-        biased = biased_depolarizing_noise().with_p1_probability(0.001).with_p2_probability(0.001).with_prep_probability(0.001)
+        (
+            biased_depolarizing_noise()
+            .with_p1_probability(0.001)
+            .with_p2_probability(0.001)
+            .with_prep_probability(0.001)
+        )
         # Builder pattern requires explicit values
 
     def test_builder_defaults_new_api(self) -> None:

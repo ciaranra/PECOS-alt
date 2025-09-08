@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 
 /// Program formats that Selene can accept in pure Rust
-/// 
+///
 /// Note: Guppy programs require Python compilation (Guppy → HUGR) which
 /// should be handled in Python via guppy_selene_sim(), not here.
 #[derive(Debug, Clone)]

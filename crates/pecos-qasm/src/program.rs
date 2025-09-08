@@ -215,7 +215,8 @@ pub struct QasmEngineWasmProgram {
 #[cfg(feature = "wasm")]
 impl QasmEngineWasmProgram {
     /// Create from WASM bytes
-    #[must_use] pub fn from_bytes(bytes: Vec<u8>) -> Self {
+    #[must_use]
+    pub fn from_bytes(bytes: Vec<u8>) -> Self {
         Self {
             wasm_bytes: bytes,
             source_path: None,
@@ -225,7 +226,7 @@ impl QasmEngineWasmProgram {
     /// Create from WAT source (uses the wat crate for parsing)
     pub fn from_wat(wat: &str) -> Result<Self, PecosError> {
         let wasm_bytes = wat::parse_str(wat)
-            .map_err(|e| PecosError::Processing(format!("Failed to parse WAT: {}", e)))?;
+            .map_err(|e| PecosError::Processing(format!("Failed to parse WAT: {e}")))?;
         Ok(Self {
             wasm_bytes,
             source_path: None,

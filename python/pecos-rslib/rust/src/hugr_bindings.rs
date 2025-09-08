@@ -107,13 +107,12 @@ impl PyHugrCompiler {
         Ok(())
     }
 
-
-    /// Compile HUGR bytes to QIR string (deprecated, use compile_bytes_to_llvm)
+    /// Compile HUGR bytes to QIR string (deprecated, use `compile_bytes_to_llvm`)
     fn compile_bytes_to_qir(&self, hugr_bytes: &Bound<'_, PyBytes>) -> PyResult<String> {
         self.compile_bytes_to_llvm(hugr_bytes)
     }
 
-    /// Compile HUGR file to QIR file (deprecated, use compile_file_to_llvm)
+    /// Compile HUGR file to QIR file (deprecated, use `compile_file_to_llvm`)
     fn compile_file_to_qir(&self, hugr_path: &str, qir_path: &str) -> PyResult<()> {
         self.compile_file_to_llvm(hugr_path, qir_path)
     }
@@ -134,10 +133,7 @@ impl PyHugrLlvmEngine {
     /// * `hugr_bytes` - HUGR data as bytes
     /// * `shots` - Number of shots to assign to the engine
     #[new]
-    fn new(
-        hugr_bytes: &Bound<'_, PyBytes>,
-        shots: Option<usize>,
-    ) -> PyResult<Self> {
+    fn new(hugr_bytes: &Bound<'_, PyBytes>, shots: Option<usize>) -> PyResult<Self> {
         let bytes = hugr_bytes.as_bytes();
         let shots = shots.unwrap_or(1000);
 
@@ -230,7 +226,10 @@ impl PyHugrLlvmEngine {
     /// # Returns
     /// List of measurement results (0 or 1)
     fn run(&self) -> PyResult<Vec<u8>> {
-        use pecos_engines::{MonteCarloEngine, PassThroughNoiseModel, state_vector, QuantumEngineBuilder, ClassicalEngine};
+        use pecos_engines::{
+            ClassicalEngine, MonteCarloEngine, PassThroughNoiseModel, QuantumEngineBuilder,
+            state_vector,
+        };
 
         let mut engines = PYTHON_LLVM_ENGINES.lock().unwrap();
         let entry = engines.get_mut(&self.engine_id).ok_or_else(|| {
@@ -248,7 +247,10 @@ impl PyHugrLlvmEngine {
         let results = MonteCarloEngine::run_with_engines(
             Box::new(engine_clone),
             Box::new(PassThroughNoiseModel::builder().build()),
-            state_vector().qubits(num_qubits).build().map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?,
+            state_vector()
+                .qubits(num_qubits)
+                .build()
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?,
             self.shots,
             1,    // workers
             None, // seed
@@ -316,7 +318,7 @@ impl PyHugrLlvmEngine {
         Self::new(hugr_bytes, shots)
     }
 
-    /// Create QIR engine from HUGR file (deprecated, use from_file)
+    /// Create QIR engine from HUGR file (deprecated, use `from_file`)
     #[classmethod]
     fn from_hugr_file(
         cls: &Bound<'_, PyType>,
@@ -364,35 +366,33 @@ fn compile_hugr_bytes_to_llvm(
 ) -> PyResult<Option<String>> {
     // Use the pecos-selene HUGR 0.13 compiler instead of PyHugrCompiler
     use pecos_selene::hugr_to_llvm::GuppylangCompiler;
-    
+
     let bytes = hugr_bytes.as_bytes();
     let mut compiler = GuppylangCompiler::new();
-    
+
     match compiler.compile_hugr_json(bytes) {
         Ok(llvm_ir) => {
             // If output path is provided, also write to file
             if let Some(path) = output_path {
-                std::fs::write(&path, &llvm_ir)
-                    .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                        format!("Failed to write LLVM IR to file: {}", e)
-                    ))?;
+                std::fs::write(&path, &llvm_ir).map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                        "Failed to write LLVM IR to file: {e}"
+                    ))
+                })?;
                 Ok(None)
             } else {
                 Ok(Some(llvm_ir))
             }
         }
-        Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-            format!("Failed to compile HUGR: {}", e)
-        ))
+        Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+            "Failed to compile HUGR: {e}"
+        ))),
     }
 }
 
 /// Compile HUGR file to LLVM IR file
 #[pyfunction]
-fn compile_hugr_file_to_llvm(
-    hugr_path: &str,
-    llvm_path: &str,
-) -> PyResult<()> {
+fn compile_hugr_file_to_llvm(hugr_path: &str, llvm_path: &str) -> PyResult<()> {
     let compiler = PyHugrCompiler::new();
     compiler.compile_file_to_llvm(hugr_path, llvm_path)
 }

@@ -1,9 +1,9 @@
 //! Example of using `GeneralNoiseModelBuilder` with fluent API and the unified simulation API
 
 use pecos_engines::noise::GeneralNoiseModel;
-use pecos_engines::{ClassicalControlEngineBuilder, GateType, sparse_stabilizer, sim_builder};
-use pecos_qasm::qasm_engine;
+use pecos_engines::{GateType, sim_builder, sparse_stabilizer};
 use pecos_programs::QasmProgram;
+use pecos_qasm::qasm_engine;
 use std::collections::BTreeMap;
 
 fn main() {

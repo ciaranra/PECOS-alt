@@ -37,12 +37,14 @@ impl PhirJsonEngineProgram {
     }
 
     /// Get the JSON content
-    #[must_use] pub fn json(&self) -> &str {
+    #[must_use]
+    pub fn json(&self) -> &str {
         &self.json_content
     }
 
     /// Get the detected version
-    #[must_use] pub fn version(&self) -> PhirJsonVersion {
+    #[must_use]
+    pub fn version(&self) -> PhirJsonVersion {
         self.version
     }
 }
@@ -65,7 +67,6 @@ impl From<PhirJsonProgram> for PhirJsonEngineProgram {
     }
 }
 
-
 /// Builder for PHIR JSON engines
 #[derive(Clone)]
 pub struct PhirJsonEngineBuilder {
@@ -74,7 +75,8 @@ pub struct PhirJsonEngineBuilder {
 
 impl PhirJsonEngineBuilder {
     /// Create a new builder
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self { program: None }
     }
 
@@ -125,7 +127,7 @@ impl ClassicalControlEngineBuilder for PhirJsonEngineBuilder {
 /// use pecos_phir_json::phir_json_engine;
 /// use pecos_programs::PhirJsonProgram;
 /// use pecos_engines::engine_builder::ClassicalControlEngineBuilder;
-/// 
+///
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let json = r#"{
 ///     "format": "PHIR/JSON",
@@ -152,24 +154,25 @@ impl ClassicalControlEngineBuilder for PhirJsonEngineBuilder {
 ///         {"cop": "Result", "args": ["m"], "returns": ["c"]}
 ///     ]
 /// }"#;
-/// 
+///
 /// let results = phir_json_engine()
 ///     .program(PhirJsonProgram::from_json(json))
 ///     .to_sim()
 ///     .run(100)?;
-/// 
+///
 /// // Verify we got the expected number of shots
 /// assert_eq!(results.len(), 100);
-/// 
+///
 /// // Convert to columnar format and verify the result register exists
 /// let shot_map = results.try_as_shot_map()?;
 /// let register_names = shot_map.register_names();
-/// assert!(register_names.iter().any(|n| *n == "c"), 
+/// assert!(register_names.iter().any(|n| *n == "c"),
 ///         "Expected 'c' register in results, found: {:?}", register_names);
 /// # Ok(())
 /// # }
 /// ```
-#[must_use] pub fn phir_json_engine() -> PhirJsonEngineBuilder {
+#[must_use]
+pub fn phir_json_engine() -> PhirJsonEngineBuilder {
     PhirJsonEngineBuilder::new()
 }
 
@@ -249,11 +252,11 @@ mod tests {
         }"#;
 
         let program = PhirJsonProgram::from_json(json);
-        
+
         // This tests that the builder can be used with .to_sim()
         let _sim_builder = phir_json_engine().program(program).to_sim();
-        
-        // We can't actually run it without quantum backend setup, 
+
+        // We can't actually run it without quantum backend setup,
         // but this verifies the API compiles correctly
     }
 }

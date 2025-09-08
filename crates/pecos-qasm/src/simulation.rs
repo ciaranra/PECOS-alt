@@ -4,12 +4,12 @@
 //! around the unified simulation API (`qasm_engine().program().to_sim()`).
 
 use crate::unified_engine_builder::qasm_engine;
-use pecos_programs::QasmProgram;
 use pecos_engines::ClassicalControlEngineBuilder;
+use pecos_programs::QasmProgram;
 
 /// Create a new QASM simulation builder
 ///
-/// This function now directly returns the unified `TypedSimBuilder` with all the 
+/// This function now directly returns the unified `TypedSimBuilder` with all the
 /// configuration methods available from the unified API.
 ///
 /// # Example
@@ -53,5 +53,7 @@ use pecos_engines::ClassicalControlEngineBuilder;
 /// ```
 #[must_use]
 pub fn qasm_sim(qasm: impl Into<String>) -> pecos_engines::SimBuilder {
-    qasm_engine().program(QasmProgram::from_string(qasm)).to_sim()
+    qasm_engine()
+        .program(QasmProgram::from_string(qasm))
+        .to_sim()
 }
