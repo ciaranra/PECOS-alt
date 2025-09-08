@@ -17,13 +17,18 @@
 // the License.
 
 mod byte_message_bindings;
+mod coin_toss_bindings;
+mod cpp_sparse_sim_bindings;
 mod engine_bindings;
 mod engine_builders;
 mod noise_helpers;
+mod pauli_prop_bindings;
 // mod pcg_bindings;
 mod pecos_rng_bindings;
-pub mod phir_json_bridge;
-// mod qasm_sim_bindings;
+pub mod phir_bridge;
+mod qasm_sim_bindings;
+mod quest_bindings;
+mod qulacs_bindings;
 mod shot_results_bindings;
 mod sparse_sim;
 mod sparse_stab_bindings;
@@ -38,8 +43,13 @@ mod selene_library_bindings;
 mod hugr_bindings;
 
 use byte_message_bindings::{PyByteMessage, PyByteMessageBuilder};
+use coin_toss_bindings::RsCoinToss;
+use cpp_sparse_sim_bindings::CppSparseSim;
+use pauli_prop_bindings::PyPauliProp;
 use pecos_rng_bindings::RngPcg;
 use pyo3::prelude::*;
+use quest_bindings::{QuestDensityMatrix, QuestStateVec};
+use qulacs_bindings::RsQulacs;
 use sparse_stab_bindings::SparseSim;
 use sparse_stab_engine_bindings::PySparseStabEngine;
 use state_vec_bindings::RsStateVec;
@@ -53,7 +63,12 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     eprintln!("DEBUG: _pecos_rslib module initializing (version 2)...");
     m.add_class::<SparseSim>()?;
     m.add_class::<phir_json_bridge::PhirJsonEngine>()?;
+    m.add_class::<CppSparseSim>()?;
+    m.add_class::<phir_bridge::PHIREngine>()?;
     m.add_class::<RsStateVec>()?;
+    m.add_class::<RsQulacs>()?;
+    m.add_class::<RsCoinToss>()?;
+    m.add_class::<PyPauliProp>()?;
     m.add_class::<PyByteMessage>()?;
     m.add_class::<PyByteMessageBuilder>()?;
     m.add_class::<shot_results_bindings::PyShotVec>()?;
@@ -61,6 +76,8 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyStateVecEngine>()?;
     m.add_class::<PySparseStabEngine>()?;
     m.add_class::<RngPcg>()?;
+    m.add_class::<QuestStateVec>()?;
+    m.add_class::<QuestDensityMatrix>()?;
 
     // Register QASM simulation functions
     // qasm_sim_bindings::register_qasm_sim_module(m)?;
