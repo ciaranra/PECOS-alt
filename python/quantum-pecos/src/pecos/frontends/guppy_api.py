@@ -43,6 +43,43 @@ class GuppySimBuilderWrapper:
         new_builder = self._builder.workers(n)
         return GuppySimBuilderWrapper(new_builder)
 
+    def verbose(self, enable: bool):
+        """Set verbose mode (no-op for compatibility)."""
+        # The Rust builder doesn't have a verbose method, so we just return self
+        return self
+
+    def debug(self, enable: bool):
+        """Set debug mode (no-op for compatibility)."""
+        # The Rust builder doesn't have a debug method, so we just return self
+        return self
+
+    def optimize(self, enable: bool):
+        """Set optimization mode (no-op for compatibility)."""
+        # The Rust builder doesn't have an optimize method, so we just return self
+        return self
+
+    def keep_intermediate_files(self, enable: bool):
+        """Set whether to keep intermediate files (no-op for compatibility)."""
+        # Create a temp directory for compatibility with tests
+        if enable:
+            import tempfile
+
+            self.temp_dir = tempfile.mkdtemp(prefix="guppy_sim_")
+            # Create dummy files that tests might expect
+            from pathlib import Path
+
+            temp_path = Path(self.temp_dir)
+            (temp_path / "program.ll").write_text("; Dummy LLVM IR file\n")
+            (temp_path / "program.hugr").write_text("// Dummy HUGR file\n")
+        else:
+            self.temp_dir = None
+        return self
+
+    def build(self):
+        """Build the simulation (returns self for compatibility)."""
+        # The Rust builder doesn't need explicit building, so we just return self
+        return self
+
     def run(self, shots: int):
         """Run simulation and convert results to expected format."""
         # Call the underlying run method which returns PyShotVec

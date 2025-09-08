@@ -3,7 +3,7 @@
 
 use pecos_engines::{ClassicalEngine, Engine};
 use pecos_llvm_runtime::LlvmEngine;
-use rand::{Rng, SeedableRng, distributions::Alphanumeric};
+use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use std::io::Write;
 use tempfile::NamedTempFile;
@@ -111,11 +111,14 @@ fn test_fuzzed_register_names() {
     // Generate 20 random register names
     for i in 0..20 {
         // Generate random alphanumeric string of length 5-15
-        let name_length = rng.gen_range(5..=15);
-        let register_name: String = (&mut rng)
-            .sample_iter(&Alphanumeric)
-            .take(name_length)
-            .map(char::from)
+        let name_length = rng.random_range(5..=15);
+        let register_name: String = (0..name_length)
+            .map(|_| {
+                // Generate random alphanumeric character
+                let charset = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+                let idx = rng.random_range(0..charset.len());
+                charset[idx] as char
+            })
             .collect();
 
         println!("\nFuzz test {}: register name '{}'", i + 1, register_name);

@@ -25,14 +25,14 @@ def test_selene_compilation_pipeline() -> None:
     pytest.importorskip("guppylang")
 
     from guppylang import guppy
-    from guppylang.prelude.quantum import H, Measure, Qubit
+    from guppylang.std.quantum import h, measure, qubit
 
     # Simple Guppy function
     @guppy
     def simple_hadamard() -> bool:
-        q = Qubit()
-        H(q)
-        return Measure(q)
+        q = qubit()
+        h(q)
+        return measure(q)
 
     # Try to compile to Selene Interface
     try:
@@ -64,7 +64,7 @@ def test_selene_compilation_pipeline() -> None:
 def test_sim_with_selene_interface() -> None:
     """Test that sim() can handle SeleneInterfaceProgram."""
     try:
-        from pecos_rslib import sim
+        from pecos.frontends.guppy_api import sim
         from pecos_rslib._pecos_rslib import SeleneInterfaceProgram
     except ImportError:
         pytest.skip("sim or SeleneInterfaceProgram not available")
@@ -86,12 +86,18 @@ def test_sim_with_selene_interface() -> None:
             # If this succeeds, we have a real plugin somehow
             assert result is not None
         except (RuntimeError, OSError) as e:
-            # Expected - dummy plugin can't be loaded
-            assert (
-                "runtime" in str(e).lower()
-                or "library" in str(e).lower()
-                or "load" in str(e).lower()
-            )
+            # Expected - dummy plugin can't be loaded or no program set
+            error_msg = str(e).lower()
+            assert any(
+                keyword in error_msg
+                for keyword in [
+                    "runtime",
+                    "library",
+                    "load",
+                    "no program",
+                    "program specified",
+                ]
+            ), f"Unexpected error message: {e}"
 
     except TypeError as e:
         if "cannot convert" in str(e):

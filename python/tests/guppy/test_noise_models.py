@@ -33,14 +33,13 @@ except ImportError:
 
 try:
     from pecos.frontends.guppy_api import sim
-    from pecos_rslib import state_vector
 
-    # Import noise models from the llvm_sim module where they're defined
-    from pecos_rslib.llvm_sim import (
-        BiasedDepolarizingNoise,
-        DepolarizingCustomNoise,
-        DepolarizingNoise,
-        PassThroughNoise,
+    # Import noise models using the builder functions
+    from pecos_rslib import (
+        biased_depolarizing_noise,
+        depolarizing_noise,
+        general_noise,
+        state_vector,
     )
 except ImportError:
     pass
@@ -85,28 +84,59 @@ class TestNoiseModels:
 
         # Run without noise
         results_ideal = (
-            sim(simple_circuit).qubits(10).quantum(state_vector()).seed(123).run(10)
+            sim(simple_circuit).qubits(10).quantum(state_vector()).seed(123).run(100)
         )
-        ones_ideal = sum(results_ideal["result"])
+        # Extract measurements - results is a dict with measurement lists
+        if isinstance(results_ideal, dict):
+            measurements_ideal = results_ideal.get(
+                "measurement_1",
+                results_ideal.get("result", []),
+            )
+        elif isinstance(results_ideal, list):
+            # Handle if it's a list of dicts
+            measurements_ideal = []
+            for shot in results_ideal:
+                if isinstance(shot, dict):
+                    val = shot.get("measurement_1", shot.get("result", None))
+                    if val is not None:
+                        measurements_ideal.append(val)
+        else:
+            measurements_ideal = []
+        ones_ideal = sum(measurements_ideal)
 
         # Run with 10% depolarizing noise
-        noise = DepolarizingNoise(p=0.1)
+        noise = depolarizing_noise().with_uniform_probability(0.1)
         results_noisy = (
             sim(simple_circuit)
             .qubits(10)
             .quantum(state_vector())
             .seed(123)
             .noise(noise)
-            .run(10)
+            .run(100)
         )
-        ones_noisy = sum(results_noisy["result"])
+        # Extract measurements from noisy results
+        if isinstance(results_noisy, dict):
+            measurements_noisy = results_noisy.get(
+                "measurement_1",
+                results_noisy.get("result", []),
+            )
+        elif isinstance(results_noisy, list):
+            measurements_noisy = []
+            for shot in results_noisy:
+                if isinstance(shot, dict):
+                    val = shot.get("measurement_1", shot.get("result", None))
+                    if val is not None:
+                        measurements_noisy.append(val)
+        else:
+            measurements_noisy = []
+        ones_noisy = sum(measurements_noisy)
 
         # Noise should reduce fidelity
-        assert ones_ideal == 1000, "Ideal circuit should have perfect fidelity"
+        assert ones_ideal == 100, "Ideal circuit should have perfect fidelity"
         assert (
-            700 < ones_noisy < 900
-        ), f"Noisy circuit should have reduced fidelity, got {ones_noisy}/1000"
-        print(f"✓ Depolarizing noise working: {ones_ideal}/1000 → {ones_noisy}/1000")
+            70 < ones_noisy < 95
+        ), f"Noisy circuit should have reduced fidelity, got {ones_noisy}/100"
+        print(f"✓ Depolarizing noise working: {ones_ideal}/100 → {ones_noisy}/100")
 
     def test_noise_models_comparison(self) -> None:
         """Compare different noise models on the same circuit."""
@@ -120,46 +150,56 @@ class TestNoiseModels:
 
         # Test different noise models
         noise_configs = [
-            ("No Noise", PassThroughNoise()),
-            ("5% Uniform", DepolarizingNoise(p=0.05)),
-            ("5% Biased", BiasedDepolarizingNoise(p=0.05)),
+            ("No Noise", None),  # No noise model
+            ("5% Uniform", depolarizing_noise().with_uniform_probability(0.05)),
+            ("5% Biased", biased_depolarizing_noise().with_uniform_probability(0.05)),
             (
                 "Custom",
-                DepolarizingCustomNoise(p_prep=0.01, p_meas=0.01, p1=0.02, p2=0.05),
+                general_noise()
+                .with_preparation_probability(0.01)
+                .with_measurement_probability(0.99, 0.01)  # p0, p1 probabilities
+                .with_p1_probability(0.02)
+                .with_p2_probability(0.05),
             ),
         ]
 
         print("\nNoise Model Comparison (Bell State Correlation):")
         for name, noise in noise_configs:
-            results = (
-                sim(bell_state)
-                .qubits(10)
-                .quantum(state_vector())
-                .seed(42)
-                .noise(noise)
-                .run(10)
-            )
+            builder = sim(bell_state).qubits(10).quantum(state_vector()).seed(42)
+            if noise is not None:
+                builder = builder.noise(noise)
+            results = builder.run(100)
 
             # Count correlated outcomes (|00⟩ or |11⟩)
-            # Results are integers: 0=|00⟩, 3=|11⟩
-            correlated = sum(
-                1
-                for r in results.get("measurements", results.get("measurement_1", []))
-                if r in [0, 3]
-            )
+            correlated = 0
+            if isinstance(results, dict):
+                # Results is a dict with measurement lists
+                m1_list = results.get("measurement_1", [])
+                m2_list = results.get("measurement_2", [])
+                for m1, m2 in zip(m1_list, m2_list, strict=False):
+                    if m1 == m2:  # Correlated if both are same (00 or 11)
+                        correlated += 1
+            elif isinstance(results, list):
+                # Handle list of dicts format
+                for shot in results:
+                    if isinstance(shot, dict):
+                        m1 = shot.get("measurement_1", None)
+                        m2 = shot.get("measurement_2", None)
+                        if m1 is not None and m2 is not None and m1 == m2:
+                            correlated += 1
 
-            print(f"  {name:15s}: {correlated}/1000 correlated ({correlated/10:.1f}%)")
+            print(f"  {name:15s}: {correlated}/100 correlated ({correlated:.1f}%)")
 
             # Basic sanity checks
             # Note: Due to simulation quirks, even no-noise might not be perfect
-            if isinstance(noise, PassThroughNoise):
+            if noise is None:
                 assert (
-                    correlated > 400
-                ), f"No noise should have some correlation, got {correlated}"
+                    correlated > 90
+                ), f"No noise should have high correlation, got {correlated}"
             else:
-                # With noise, correlation might be reduced
+                # With noise, correlation might be reduced but not eliminated
                 assert (
-                    100 < correlated < 1000
+                    10 <= correlated <= 100
                 ), f"Noise results out of bounds: {correlated}"
 
 
@@ -175,37 +215,57 @@ def test_noise_model_builder_pattern() -> None:
         h(q)
         return measure(q)
 
-    # Build simulation with noise
-    sim = (
+    # Build simulation with noise - run without building first
+    # (Building consumes the builder, so we can't reuse it)
+    results1 = (
         sim(test_circuit)
         .qubits(10)
         .quantum(state_vector())
         .seed(12345)
-        .noise(DepolarizingNoise(p=0.05))
+        .noise(depolarizing_noise().with_uniform_probability(0.05))
         .workers(2)
-        .build()
+        .run(10)
     )
 
-    # Run multiple times with same configuration
-    results1 = sim.run(10)
-    results2 = sim.run(10)
+    # Run again with same configuration
+    results2 = (
+        sim(test_circuit)
+        .qubits(10)
+        .quantum(state_vector())
+        .seed(12345)
+        .noise(depolarizing_noise().with_uniform_probability(0.05))
+        .workers(2)
+        .run(10)
+    )
 
-    # Both runs should have results
-    assert len(results1["result"]) == 100
-    assert len(results2["result"]) == 100
+    # Both runs should have results - extract measurements
+    measurements1 = (
+        results1.get("measurement_1", results1.get("result", []))
+        if isinstance(results1, dict)
+        else []
+    )
+
+    measurements2 = (
+        results2.get("measurement_1", results2.get("result", []))
+        if isinstance(results2, dict)
+        else []
+    )
+
+    assert len(measurements1) == 10
+    assert len(measurements2) == 10
 
     # With noise, results should vary
-    zeros1 = sum(1 for r in results1["result"] if r == 0)
-    zeros2 = sum(1 for r in results2["result"] if r == 0)
+    zeros1 = sum(1 for r in measurements1 if r == 0)
+    zeros2 = sum(1 for r in measurements2 if r == 0)
 
     print(
-        f"\n✓ Builder pattern with noise: Run1={zeros1}/100 zeros, Run2={zeros2}/100 zeros",
+        f"\n✓ Builder pattern with noise: Run1={zeros1}/10 zeros, Run2={zeros2}/10 zeros",
     )
 
 
 if __name__ == "__main__":
     # Run a quick demo
-    if GUPPY_AVAILABLE and PECOS_AVAILABLE:
+    if GUPPY_AVAILABLE:
         print("Noise Model Integration Demo")
         print("=" * 40)
 

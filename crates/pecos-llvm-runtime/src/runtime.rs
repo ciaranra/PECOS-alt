@@ -486,7 +486,8 @@ pub mod core_runtime {
                         let mut paired_results = Vec::new();
                         for (idx, &outcome) in measurement_outcomes.iter().enumerate() {
                             if idx < measurement_result_ids.len() {
-                                let result_id = measurement_result_ids[idx] as u32;
+                                let result_id = u32::try_from(measurement_result_ids[idx])
+                                    .expect("Result ID exceeds u32 range");
                                 paired_results.push(result_id);
                                 paired_results.push(outcome);
 
@@ -1138,11 +1139,11 @@ pub unsafe extern "C" fn __quantum__rt__result_get_one(result: i64) -> i32 {
                             let mut paired_results = Vec::new();
                             let outcomes_to_process = measurement_outcomes.len();
 
-                            for idx in 0..outcomes_to_process {
+                            for (idx, &outcome) in measurement_outcomes.iter().enumerate().take(outcomes_to_process) {
                                 let actual_idx = previously_executed + idx;
                                 if actual_idx < measurement_result_ids.len() {
-                                    let mapped_result_id = measurement_result_ids[actual_idx] as u32;
-                                    let outcome = measurement_outcomes[idx];
+                                    let mapped_result_id = u32::try_from(measurement_result_ids[actual_idx])
+                                        .expect("Result ID exceeds u32 range");
                                     paired_results.push(mapped_result_id);
                                     paired_results.push(outcome);
 

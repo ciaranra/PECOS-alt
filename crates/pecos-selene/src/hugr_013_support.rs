@@ -27,10 +27,7 @@ pub fn load_hugr_013_package(hugr_bytes: &[u8]) -> Result<Package, crate::Selene
         let payload = &hugr_bytes[10..];
 
         log::debug!(
-            "HUGR envelope: format_byte={}, flags={}, compressed={}",
-            format_byte,
-            flags,
-            compressed
+            "HUGR envelope: format_byte={format_byte}, flags={flags}, compressed={compressed}"
         );
 
         // Check format type
@@ -42,8 +39,7 @@ pub fn load_hugr_013_package(hugr_bytes: &[u8]) -> Result<Package, crate::Selene
         } else if format_byte != 63 {
             // 63 is PackageJson format
             return Err(crate::SeleneError::HugrError(format!(
-                "Unknown HUGR envelope format: {}",
-                format_byte
+                "Unknown HUGR envelope format: {format_byte}"
             )));
         }
 
@@ -61,8 +57,7 @@ pub fn load_hugr_013_package(hugr_bytes: &[u8]) -> Result<Package, crate::Selene
                 }
                 Err(e) => {
                     return Err(crate::SeleneError::HugrError(format!(
-                        "Failed to decompress HUGR envelope: {}",
-                        e
+                        "Failed to decompress HUGR envelope: {e}"
                     )));
                 }
             }
@@ -74,13 +69,13 @@ pub fn load_hugr_013_package(hugr_bytes: &[u8]) -> Result<Package, crate::Selene
         if !json_bytes.is_empty() {
             let preview =
                 String::from_utf8_lossy(&json_bytes[..std::cmp::min(100, json_bytes.len())]);
-            log::debug!("JSON preview: {}", preview);
+            log::debug!("JSON preview: {preview}");
         }
 
         // Parse as JSON first to add missing fields
         let json_str = String::from_utf8_lossy(&json_bytes);
         let mut json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::SeleneError::HugrError(format!("Invalid JSON: {}", e)))?;
+            .map_err(|e| crate::SeleneError::HugrError(format!("Invalid JSON: {e}")))?;
 
         // If it looks like a Package but missing extension_reqs, add it
         if json_value.is_object()
@@ -118,7 +113,7 @@ pub fn load_hugr_013_package(hugr_bytes: &[u8]) -> Result<Package, crate::Selene
             Ok(package) => Ok(package),
             Err(e) => {
                 // If Package fails, try loading the modules directly
-                log::debug!("Package load failed: {}, trying direct module loading", e);
+                log::debug!("Package load failed: {e}, trying direct module loading");
 
                 // If it has modules field, extract the first module
                 if let Some(modules) = json_value.get("modules").and_then(|v| v.as_array()) {
@@ -127,16 +122,14 @@ pub fn load_hugr_013_package(hugr_bytes: &[u8]) -> Result<Package, crate::Selene
                         let hugr: Hugr =
                             serde_json::from_value(first_module.clone()).map_err(|e| {
                                 crate::SeleneError::HugrError(format!(
-                                    "Failed to deserialize module as HUGR: {}",
-                                    e
+                                    "Failed to deserialize module as HUGR: {e}"
                                 ))
                             })?;
 
                         // Create a package with single module
                         Package::from_hugr(hugr).map_err(|e| {
                             crate::SeleneError::HugrError(format!(
-                                "Failed to create package from HUGR: {}",
-                                e
+                                "Failed to create package from HUGR: {e}"
                             ))
                         })
                     } else {
@@ -147,16 +140,12 @@ pub fn load_hugr_013_package(hugr_bytes: &[u8]) -> Result<Package, crate::Selene
                 } else {
                     // Try loading as single HUGR
                     let hugr: Hugr = serde_json::from_value(json_value).map_err(|e| {
-                        crate::SeleneError::HugrError(format!(
-                            "Failed to deserialize as HUGR: {}",
-                            e
-                        ))
+                        crate::SeleneError::HugrError(format!("Failed to deserialize as HUGR: {e}"))
                     })?;
 
                     Package::from_hugr(hugr).map_err(|e| {
                         crate::SeleneError::HugrError(format!(
-                            "Failed to create package from HUGR: {}",
-                            e
+                            "Failed to create package from HUGR: {e}"
                         ))
                     })
                 }
@@ -170,7 +159,7 @@ pub fn load_hugr_013_package(hugr_bytes: &[u8]) -> Result<Package, crate::Selene
         // Parse as JSON first
         let json_str = String::from_utf8_lossy(hugr_bytes);
         let json_value: serde_json::Value = serde_json::from_str(&json_str)
-            .map_err(|e| crate::SeleneError::HugrError(format!("Invalid JSON: {}", e)))?;
+            .map_err(|e| crate::SeleneError::HugrError(format!("Invalid JSON: {e}")))?;
 
         eprintln!("DEBUG: Raw JSON is_object: {}", json_value.is_object());
         eprintln!(
@@ -229,19 +218,18 @@ pub fn load_hugr_013_package(hugr_bytes: &[u8]) -> Result<Package, crate::Selene
                         // Look for function definitions and operations
                         for (i, node) in nodes_array.iter().enumerate() {
                             if let Some(op) = node.get("op") {
-                                eprintln!("DEBUG: Node {}: op = {:?}", i, op);
+                                eprintln!("DEBUG: Node {i}: op = {op:?}");
 
                                 // Look for Extension operations more deeply
                                 if op == "Extension" {
                                     // For Extension ops, look at the actual extension data
                                     if let Some(extension_name) = node.get("extension_name") {
                                         eprintln!(
-                                            "DEBUG: Node {} is Extension with name: {:?}",
-                                            i, extension_name
+                                            "DEBUG: Node {i} is Extension with name: {extension_name:?}"
                                         );
                                     }
                                     if let Some(op_def) = node.get("op_def") {
-                                        eprintln!("DEBUG: Node {} has op_def: {:?}", i, op_def);
+                                        eprintln!("DEBUG: Node {i} has op_def: {op_def:?}");
                                     }
                                     // Also look at the whole node to understand its structure
                                     if i == 9 || i == 10 || i == 11 || i == 12 {
@@ -261,8 +249,7 @@ pub fn load_hugr_013_package(hugr_bytes: &[u8]) -> Result<Package, crate::Selene
                     let empty_hugr = Hugr::default();
                     Package::from_hugr(empty_hugr).map_err(|e| {
                         crate::SeleneError::HugrError(format!(
-                            "Failed to create package from HUGR: {}",
-                            e
+                            "Failed to create package from HUGR: {e}"
                         ))
                     })
                 } else {
@@ -284,7 +271,7 @@ pub fn load_hugr_013_package(hugr_bytes: &[u8]) -> Result<Package, crate::Selene
                     Ok(package)
                 }
                 Err(e) => {
-                    eprintln!("DEBUG: Failed to load as Package: {}", e);
+                    eprintln!("DEBUG: Failed to load as Package: {e}");
 
                     // Last resort - try as a single HUGR
                     match serde_json::from_value::<Hugr>(json_value) {
@@ -292,14 +279,12 @@ pub fn load_hugr_013_package(hugr_bytes: &[u8]) -> Result<Package, crate::Selene
                             eprintln!("DEBUG: Successfully loaded as single HUGR");
                             Package::from_hugr(hugr).map_err(|e| {
                                 crate::SeleneError::HugrError(format!(
-                                    "Failed to create package from HUGR: {}",
-                                    e
+                                    "Failed to create package from HUGR: {e}"
                                 ))
                             })
                         }
                         Err(hugr_err) => Err(crate::SeleneError::HugrError(format!(
-                            "Failed to load as Package: {}, or as HUGR: {}",
-                            e, hugr_err
+                            "Failed to load as Package: {e}, or as HUGR: {hugr_err}"
                         ))),
                     }
                 }

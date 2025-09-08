@@ -239,56 +239,6 @@ fn parse_general_noise_probabilities(noise_str_opt: Option<&String>) -> (f64, f6
 
 /// Create quantum engine based on user arguments
 
-/// Write results to file or stdout
-fn output_results(
-    results_str: &str,
-    output_file: Option<&String>,
-    program_type: ProgramType,
-) -> Result<(), PecosError> {
-    if let Some(file_path) = output_file {
-        // Ensure parent directory exists
-        if let Some(parent) = std::path::Path::new(file_path).parent()
-            && !parent.exists()
-        {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| PecosError::Resource(format!("Failed to create directory: {e}")))?;
-        }
-
-        // Write results to file
-        std::fs::write(file_path, results_str)
-            .map_err(|e| PecosError::Resource(format!("Failed to write output file: {e}")))?;
-
-        // For QIR, ensure file is fully written before potential segfault
-        if program_type == ProgramType::QIR {
-            // Force sync to disk
-            if let Ok(file) = std::fs::OpenOptions::new().write(true).open(file_path) {
-                let _ = file.sync_all();
-            }
-        }
-
-        println!("Results written to {file_path}");
-    } else {
-        // Print results to stdout
-        // For QIR, we need to ensure output is written immediately
-        if program_type == ProgramType::QIR {
-            // Write directly to stdout with immediate flush
-            use std::io::Write;
-            let stdout = std::io::stdout();
-            let mut handle = stdout.lock();
-            let _ = handle.write_all(results_str.as_bytes());
-            let _ = handle.write_all(b"\n");
-            let _ = handle.flush();
-            drop(handle); // Explicitly drop to ensure flush
-        } else {
-            print!("{results_str}");
-            // Immediately flush stdout to ensure output is written before any potential cleanup issues
-            std::io::stdout().flush().unwrap_or(());
-            println!(); // Add newline after flush
-        }
-    }
-    Ok(())
-}
-
 fn run_program(args: &RunArgs) -> Result<(), PecosError> {
     // get_program_path now includes proper context in its errors
     let program_path = get_program_path(&args.program)?;

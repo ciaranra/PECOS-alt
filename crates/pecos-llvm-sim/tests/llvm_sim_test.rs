@@ -261,15 +261,8 @@ fn test_llvm_sim_build_once_run_many() {
     // Just verify the runs completed successfully with the expected shot counts
 }
 
-#[test]
-fn test_llvm_sim_qubits_exceeded() {
-    if !is_llvm_available() {
-        println!("Skipping test: LLVM tools not available");
-        return;
-    }
-
-    // LLVM IR that tries to allocate 3 qubits
-    const THREE_QUBIT_IR: &str = r#"
+// LLVM IR that tries to allocate 3 qubits
+const THREE_QUBIT_IR: &str = r#"
 define void @main() #0 {
 %q0 = call i64 @__quantum__rt__qubit_allocate()
 %q1 = call i64 @__quantum__rt__qubit_allocate()
@@ -286,6 +279,13 @@ declare void @__quantum__qis__cx__body(i64, i64)
 
 attributes #0 = { "EntryPoint" }
 "#;
+
+#[test]
+fn test_llvm_sim_qubits_exceeded() {
+    if !is_llvm_available() {
+        println!("Skipping test: LLVM tools not available");
+        return;
+    }
 
     // Build with qubits=2 but try to allocate 3
     let sim = llvm_engine()

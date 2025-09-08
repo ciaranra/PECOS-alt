@@ -16,7 +16,8 @@ except ImportError:
     GUPPY_AVAILABLE = False
 
 try:
-    from pecos.frontends.run_guppy import get_guppy_backends, run_guppy
+    from pecos.frontends import get_guppy_backends, sim
+    from pecos_rslib import state_vector
 
     PECOS_FRONTEND_AVAILABLE = True
 except ImportError:
@@ -46,9 +47,10 @@ def test_quick_pipeline_check() -> None:
     if backends.get("rust_backend", False):
         print("\nTesting HUGR-LLVM backend...")
         try:
-            result = run_guppy(test_h, shots=1, backend="rust", verbose=False)
+            result = sim(test_h).qubits(10).quantum(state_vector()).run(1)
             results["hugr_llvm"] = "✅ PASS"
-            print(f"  Result: {result.get('results', [])}")
+            measurements = result.get("measurements", result.get("result", []))
+            print(f"  Result: {measurements}")
         except Exception as e:
             results["hugr_llvm"] = f"❌ FAIL: {str(e)[:50]}"
             print(f"  Error: {str(e)[:100]}")
@@ -56,9 +58,10 @@ def test_quick_pipeline_check() -> None:
     # Test PHIR
     print("\nTesting PHIR backend...")
     try:
-        result = run_guppy(test_h, shots=1, backend="external", verbose=False)
+        result = sim(test_h).qubits(10).quantum(state_vector()).run(1)
         results["phir"] = "✅ PASS"
-        print(f"  Result: {result.get('results', [])}")
+        measurements = result.get("measurements", result.get("result", []))
+        print(f"  Result: {measurements}")
     except Exception as e:
         results["phir"] = f"❌ FAIL: {str(e)[:50]}"
         print(f"  Error: {str(e)[:100]}")

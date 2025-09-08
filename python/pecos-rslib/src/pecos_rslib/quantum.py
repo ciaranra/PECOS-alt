@@ -17,11 +17,13 @@ Examples:
     >>>
     >>> # Use in simulation
     >>> from pecos_rslib import classical
-    >>> results = classical.qasm()\\
-    >>>     .program(program)\\
-    >>>     .to_sim()\\
-    >>>     .quantum(state_vector_engine)\\
-    >>>     .run(1000)
+    >>> results = (
+    ...     classical.qasm()
+    ...     .program(program)
+    ...     .to_sim()
+    ...     .quantum(state_vector_engine)
+    ...     .run(1000)
+    ... )
 """
 
 # Import from the unified sim module (Rust-backed)

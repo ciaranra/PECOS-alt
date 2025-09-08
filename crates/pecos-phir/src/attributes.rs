@@ -260,7 +260,10 @@ pub mod helpers {
 
     /// Check if a region/operation has a specific semantic tag
     #[must_use]
-    pub fn has_tag(attrs: &HashMap<String, crate::phir::AttributeValue>, tag: &str) -> bool {
+    pub fn has_tag<S: std::hash::BuildHasher>(
+        attrs: &HashMap<String, crate::phir::AttributeValue, S>,
+        tag: &str,
+    ) -> bool {
         attrs
             .get(keys::SEMANTIC_TAG)
             .and_then(|v| match v {
@@ -272,7 +275,9 @@ pub mod helpers {
 
     /// Get the algorithm name if specified
     #[must_use]
-    pub fn get_algorithm(attrs: &HashMap<String, crate::phir::AttributeValue>) -> Option<String> {
+    pub fn get_algorithm<S: std::hash::BuildHasher>(
+        attrs: &HashMap<String, crate::phir::AttributeValue, S>,
+    ) -> Option<String> {
         attrs.get(keys::ALGORITHM).and_then(|v| match v {
             crate::phir::AttributeValue::String(s) => Some(s.clone()),
             _ => None,
@@ -281,7 +286,9 @@ pub mod helpers {
 
     /// Check if marked as parallelizable
     #[must_use]
-    pub fn is_parallelizable(attrs: &HashMap<String, crate::phir::AttributeValue>) -> bool {
+    pub fn is_parallelizable<S: std::hash::BuildHasher>(
+        attrs: &HashMap<String, crate::phir::AttributeValue, S>,
+    ) -> bool {
         attrs
             .get(keys::PARALLELIZABLE)
             .and_then(|v| match v {
@@ -293,8 +300,8 @@ pub mod helpers {
 
     /// Get any string attribute by key
     #[must_use]
-    pub fn get_string_attr(
-        attrs: &HashMap<String, crate::phir::AttributeValue>,
+    pub fn get_string_attr<S: std::hash::BuildHasher>(
+        attrs: &HashMap<String, crate::phir::AttributeValue, S>,
         key: &str,
     ) -> Option<String> {
         attrs.get(key).and_then(|v| match v {
@@ -305,8 +312,8 @@ pub mod helpers {
 
     /// Get any integer attribute by key
     #[must_use]
-    pub fn get_int_attr(
-        attrs: &HashMap<String, crate::phir::AttributeValue>,
+    pub fn get_int_attr<S: std::hash::BuildHasher>(
+        attrs: &HashMap<String, crate::phir::AttributeValue, S>,
         key: &str,
     ) -> Option<i64> {
         attrs.get(key).and_then(|v| match v {
@@ -317,8 +324,8 @@ pub mod helpers {
 
     /// Get any boolean attribute by key
     #[must_use]
-    pub fn get_bool_attr(
-        attrs: &HashMap<String, crate::phir::AttributeValue>,
+    pub fn get_bool_attr<S: std::hash::BuildHasher>(
+        attrs: &HashMap<String, crate::phir::AttributeValue, S>,
         key: &str,
     ) -> Option<bool> {
         attrs.get(key).and_then(|v| match v {

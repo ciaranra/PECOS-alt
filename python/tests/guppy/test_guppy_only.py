@@ -40,7 +40,7 @@ def test_guppy_available() -> None:
 
 def test_backend_detection_minimal() -> None:
     """Test backend detection without full PECOS."""
-    from pecos.frontends.run_guppy import get_guppy_backends
+    from pecos.frontends import get_guppy_backends
 
     backends = get_guppy_backends()
 

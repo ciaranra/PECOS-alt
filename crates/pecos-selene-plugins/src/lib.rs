@@ -1,21 +1,22 @@
 //! Runtime plugins for PECOS-Selene integration
 //!
 //! This crate provides:
-//! - ByteMessage simulator plugin that collects quantum operations
+//! - `ByteMessage` simulator plugin that collects quantum operations
 //! - HUGR to LLVM compilation utilities
 
 pub mod communication;
+pub mod plugin_builder;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use selene_core::{
     export_runtime_plugin,
-    runtime::{interface::RuntimeInterfaceFactory, BatchOperation, Operation, RuntimeInterface},
+    runtime::{BatchOperation, Operation, RuntimeInterface, interface::RuntimeInterfaceFactory},
     time::Instant,
     utils::MetricValue,
 };
 use std::collections::{HashMap, VecDeque};
 
-/// A simulator that collects quantum operations for ByteMessage conversion
+/// A simulator that collects quantum operations for `ByteMessage` conversion
 pub struct ByteMessageSimulator {
     /// Queue of operations to be returned
     operation_queue: VecDeque<BatchOperation>,
@@ -34,6 +35,7 @@ pub struct ByteMessageSimulator {
 }
 
 impl ByteMessageSimulator {
+    #[must_use]
     pub fn new(start: Instant) -> Self {
         #[cfg(feature = "logging")]
         log::debug!("Creating new ByteMessageSimulator");
@@ -79,7 +81,7 @@ impl RuntimeInterface for ByteMessageSimulator {
 
     fn shot_start(&mut self, _shot_id: u64, _seed: u64) -> Result<()> {
         #[cfg(feature = "logging")]
-        log::debug!("ByteMessageSimulator: Starting shot {}", _shot_id);
+        log::debug!("ByteMessageSimulator: Starting shot {_shot_id}");
 
         // Clear state for new shot
         self.operation_queue.clear();
@@ -116,7 +118,7 @@ impl RuntimeInterface for ByteMessageSimulator {
         self.allocated_qubits.push(qubit_id);
 
         #[cfg(feature = "logging")]
-        log::debug!("ByteMessageSimulator: Allocated qubit {}", qubit_id);
+        log::debug!("ByteMessageSimulator: Allocated qubit {qubit_id}");
 
         Ok(qubit_id)
     }
@@ -125,7 +127,7 @@ impl RuntimeInterface for ByteMessageSimulator {
         if let Some(pos) = self.allocated_qubits.iter().position(|&q| q == qubit_id) {
             self.allocated_qubits.remove(pos);
             #[cfg(feature = "logging")]
-            log::debug!("ByteMessageSimulator: Freed qubit {}", qubit_id);
+            log::debug!("ByteMessageSimulator: Freed qubit {qubit_id}");
             Ok(())
         } else {
             Err(anyhow!("Attempted to free unallocated qubit {}", qubit_id))
@@ -135,10 +137,7 @@ impl RuntimeInterface for ByteMessageSimulator {
     fn rxy_gate(&mut self, qubit_id: u64, theta: f64, phi: f64) -> Result<()> {
         #[cfg(feature = "logging")]
         log::debug!(
-            "ByteMessageSimulator: RXY gate on qubit {} with theta={}, phi={}",
-            qubit_id,
-            theta,
-            phi
+            "ByteMessageSimulator: RXY gate on qubit {qubit_id} with theta={theta}, phi={phi}"
         );
 
         self.current_batch.push(Operation::RXYGate {
@@ -152,10 +151,7 @@ impl RuntimeInterface for ByteMessageSimulator {
     fn rzz_gate(&mut self, qubit_id_1: u64, qubit_id_2: u64, theta: f64) -> Result<()> {
         #[cfg(feature = "logging")]
         log::debug!(
-            "ByteMessageSimulator: RZZ gate on qubits {} and {} with theta={}",
-            qubit_id_1,
-            qubit_id_2,
-            theta
+            "ByteMessageSimulator: RZZ gate on qubits {qubit_id_1} and {qubit_id_2} with theta={theta}"
         );
 
         self.current_batch.push(Operation::RZZGate {
@@ -168,11 +164,7 @@ impl RuntimeInterface for ByteMessageSimulator {
 
     fn rz_gate(&mut self, qubit_id: u64, theta: f64) -> Result<()> {
         #[cfg(feature = "logging")]
-        log::debug!(
-            "ByteMessageSimulator: RZ gate on qubit {} with theta={}",
-            qubit_id,
-            theta
-        );
+        log::debug!("ByteMessageSimulator: RZ gate on qubit {qubit_id} with theta={theta}");
 
         self.current_batch
             .push(Operation::RZGate { qubit_id, theta });
@@ -184,11 +176,7 @@ impl RuntimeInterface for ByteMessageSimulator {
         self.next_result_id += 1;
 
         #[cfg(feature = "logging")]
-        log::debug!(
-            "ByteMessageSimulator: Measure qubit {} -> result {}",
-            qubit_id,
-            result_id
-        );
+        log::debug!("ByteMessageSimulator: Measure qubit {qubit_id} -> result {result_id}");
 
         self.current_batch.push(Operation::Measure {
             result_id,
@@ -199,7 +187,7 @@ impl RuntimeInterface for ByteMessageSimulator {
 
     fn reset(&mut self, qubit_id: u64) -> Result<()> {
         #[cfg(feature = "logging")]
-        log::debug!("ByteMessageSimulator: Reset qubit {}", qubit_id);
+        log::debug!("ByteMessageSimulator: Reset qubit {qubit_id}");
 
         self.current_batch.push(Operation::Reset { qubit_id });
         Ok(())
@@ -207,7 +195,7 @@ impl RuntimeInterface for ByteMessageSimulator {
 
     fn force_result(&mut self, _result_id: u64) -> Result<()> {
         #[cfg(feature = "logging")]
-        log::debug!("ByteMessageSimulator: Force result {}", _result_id);
+        log::debug!("ByteMessageSimulator: Force result {_result_id}");
 
         // Flush operations to ensure measurement is processed
         self.flush_batch();
@@ -245,11 +233,7 @@ impl RuntimeInterface for ByteMessageSimulator {
 
     fn set_bool_result(&mut self, result_id: u64, result: bool) -> Result<()> {
         #[cfg(feature = "logging")]
-        log::debug!(
-            "ByteMessageSimulator: Set result {} = {}",
-            result_id,
-            result
-        );
+        log::debug!("ByteMessageSimulator: Set result {result_id} = {result}");
 
         self.measurement_results.insert(result_id, result);
         Ok(())
@@ -266,7 +250,7 @@ impl RuntimeInterface for ByteMessageSimulator {
     }
 }
 
-/// Factory for creating ByteMessageSimulator instances
+/// Factory for creating `ByteMessageSimulator` instances
 #[derive(Default)]
 pub struct ByteMessageSimulatorFactory;
 

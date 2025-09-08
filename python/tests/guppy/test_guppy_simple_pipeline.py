@@ -15,8 +15,8 @@ def test_infrastructure() -> None:
 
     # Check imports
     try:
+        from pecos.frontends import get_guppy_backends
         from pecos.frontends.guppy_frontend import GuppyFrontend  # noqa: F401
-        from pecos.frontends.run_guppy import get_guppy_backends
 
         print(" PECOS imports successful")
     except ImportError as e:

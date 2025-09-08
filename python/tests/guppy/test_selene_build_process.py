@@ -51,7 +51,18 @@ def test_selene_build_from_hugr():
     print(f"\nStep 1: Compiled to HUGR ({len(hugr_bytes)} bytes)")
 
     # Parse HUGR to understand structure
-    hugr_json = json.loads(hugr_bytes.decode("utf-8"))
+    # The HUGR bytes might be in envelope format with header
+    hugr_str = hugr_bytes.decode("utf-8")
+    if hugr_str.startswith("HUGRiHJv"):
+        # Skip header and find JSON start
+        json_start = hugr_str.find("{", 9)
+        if json_start != -1:
+            hugr_str = hugr_str[json_start:]
+        else:
+            msg = "Could not find JSON start in HUGR envelope"
+            raise ValueError(msg)
+
+    hugr_json = json.loads(hugr_str)
     print(
         f"HUGR structure: modules={len(hugr_json.get('modules', []))}, "
         f"extensions={len(hugr_json.get('extensions', []))}",

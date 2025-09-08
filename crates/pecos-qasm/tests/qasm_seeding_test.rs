@@ -108,23 +108,26 @@ fn test_qasm_engine_with_seed_reproducibility() {
         .seed(42)
         .build()
         .unwrap();
-    let results1a = sim1.run(100).unwrap();
+    let results_first = sim1.run(100).unwrap();
 
     let mut sim2 = sim_builder()
         .classical(qasm_engine().qasm(qasm))
         .seed(42)
         .build()
         .unwrap();
-    let results1b = sim2.run(100).unwrap();
+    let results_second = sim2.run(100).unwrap();
 
     // Same seed should give same results
-    assert_eq!(results1a.len(), 100);
-    assert_eq!(results1b.len(), 100);
+    assert_eq!(results_first.len(), 100);
+    assert_eq!(results_second.len(), 100);
 
-    if let (Ok(map1a), Ok(map1b)) = (results1a.try_as_shot_map(), results1b.try_as_shot_map()) {
+    if let (Ok(map_first), Ok(map_second)) = (
+        results_first.try_as_shot_map(),
+        results_second.try_as_shot_map(),
+    ) {
         // Verify identical distributions
-        for (register, values1) in map1a.iter() {
-            if let Some(values2) = map1b.get(register) {
+        for (register, values1) in map_first.iter() {
+            if let Some(values2) = map_second.get(register) {
                 assert_eq!(
                     values1.len(),
                     values2.len(),

@@ -14,6 +14,8 @@ Key design principles:
 PHIR leverages MLIR's flexibility to handle both parsing and transformations in a single representation.
 */
 
+use std::fmt::Write;
+
 use crate::error::SourceLocation;
 use crate::ops::Operation;
 pub use crate::ops::SSAValue;
@@ -157,7 +159,7 @@ pub struct SwitchCase {
 }
 
 /// Function/variable visibility
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum Visibility {
     Public,
     Private,
@@ -228,6 +230,7 @@ impl Region {
     }
 
     /// Builder-style method to add an attribute
+    #[must_use]
     pub fn with_attr(mut self, key: impl Into<String>, value: AttributeValue) -> Self {
         self.attributes.insert(key.into(), value);
         self
@@ -293,6 +296,7 @@ impl Block {
     }
 
     /// Builder-style method to add an attribute
+    #[must_use]
     pub fn with_attr(mut self, key: impl Into<String>, value: AttributeValue) -> Self {
         self.attributes.insert(key.into(), value);
         self
@@ -306,16 +310,16 @@ impl Block {
 
         // Block header with arguments
         if let Some(label) = &self.label {
-            output.push_str(&format!("{indent_str}^{label}("));
+            write!(output, "{indent_str}^{label}(").unwrap();
         } else {
-            output.push_str(&format!("{indent_str}^bb0("));
+            write!(output, "{indent_str}^bb0(").unwrap();
         }
 
         for (i, arg) in self.arguments.iter().enumerate() {
             if i > 0 {
                 output.push_str(", ");
             }
-            output.push_str(&format!("{}: {}", arg.value, arg.ty));
+            write!(output, "{}: {}", arg.value, arg.ty).unwrap();
         }
         output.push_str("):\n");
 
@@ -387,7 +391,7 @@ impl Instruction {
                 if i > 0 {
                     output.push_str(", ");
                 }
-                output.push_str(&format!("{result}"));
+                write!(output, "{result}").unwrap();
             }
             output.push_str(" = ");
         }
@@ -407,7 +411,7 @@ impl Instruction {
                 if i > 0 {
                     output.push_str(", ");
                 }
-                output.push_str(&format!("{operand}"));
+                write!(output, "{operand}").unwrap();
             }
             output.push(')');
         }
@@ -422,14 +426,14 @@ impl Instruction {
                 output.push_str(" -> ");
             }
             if self.result_types.len() == 1 {
-                output.push_str(&format!("{}", self.result_types[0]));
+                write!(output, "{}", self.result_types[0]).unwrap();
             } else {
                 output.push('(');
                 for (i, ty) in self.result_types.iter().enumerate() {
                     if i > 0 {
                         output.push_str(", ");
                     }
-                    output.push_str(&format!("{ty}"));
+                    write!(output, "{ty}").unwrap();
                 }
                 output.push(')');
             }
@@ -440,11 +444,11 @@ impl Instruction {
             output.push_str(" {\n");
             for (i, region) in self.regions.iter().enumerate() {
                 if i > 0 {
-                    output.push_str(&format!("{}}} {{\n", "  ".repeat(indent + 1)));
+                    writeln!(output, "{}}} {{", "  ".repeat(indent + 1)).unwrap();
                 }
                 output.push_str(&region.to_mlir_text(indent + 1));
             }
-            output.push_str(&format!("{indent_str}}}"));
+            write!(output, "{indent_str}}}").unwrap();
         }
 
         output.push('\n');
@@ -467,7 +471,7 @@ impl Terminator {
                         if i > 0 {
                             output.push_str(", ");
                         }
-                        output.push_str(&format!("{value}"));
+                        write!(output, "{value}").unwrap();
                     }
                 }
                 output.push('\n');
@@ -483,7 +487,7 @@ impl Terminator {
                         if i > 0 {
                             output.push_str(", ");
                         }
-                        output.push_str(&format!("{arg}"));
+                        write!(output, "{arg}").unwrap();
                     }
                     output.push(')');
                 }
@@ -506,7 +510,7 @@ impl Terminator {
                         if i > 0 {
                             output.push_str(", ");
                         }
-                        output.push_str(&format!("{arg}"));
+                        write!(output, "{arg}").unwrap();
                     }
                     output.push(')');
                 }
@@ -518,7 +522,7 @@ impl Terminator {
                         if i > 0 {
                             output.push_str(", ");
                         }
-                        output.push_str(&format!("{arg}"));
+                        write!(output, "{arg}").unwrap();
                     }
                     output.push(')');
                 }
@@ -540,14 +544,14 @@ impl Terminator {
                         if i > 0 {
                             output.push_str(", ");
                         }
-                        output.push_str(&format!("{arg}"));
+                        write!(output, "{arg}").unwrap();
                     }
                     output.push(')');
                 }
                 output.push_str(" [\n");
 
                 for case in cases {
-                    output.push_str(&format!("{}  {}: ", indent_str, case.value));
+                    write!(output, "{}  {}: ", indent_str, case.value).unwrap();
                     output.push_str(&case.target.to_string());
                     if !case.args.is_empty() {
                         output.push('(');
@@ -555,14 +559,14 @@ impl Terminator {
                             if i > 0 {
                                 output.push_str(", ");
                             }
-                            output.push_str(&format!("{arg}"));
+                            write!(output, "{arg}").unwrap();
                         }
                         output.push(')');
                     }
                     output.push('\n');
                 }
 
-                output.push_str(&format!("{indent_str}]\n"));
+                writeln!(output, "{indent_str}]").unwrap();
                 output
             }
 

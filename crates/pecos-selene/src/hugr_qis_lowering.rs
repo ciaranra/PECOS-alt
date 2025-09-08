@@ -16,8 +16,8 @@ pub fn generate_quantum_llvm_ir(module_name: &str, entry_point: &str) -> Result<
     let mut llvm_ir = String::new();
 
     // Module header
-    writeln!(&mut llvm_ir, "; ModuleID = '{}'", module_name)?;
-    writeln!(&mut llvm_ir, "source_filename = \"{}.hugr\"", module_name)?;
+    writeln!(&mut llvm_ir, "; ModuleID = '{module_name}'")?;
+    writeln!(&mut llvm_ir, "source_filename = \"{module_name}.hugr\"")?;
     writeln!(&mut llvm_ir)?;
 
     // Type declarations
@@ -31,7 +31,7 @@ pub fn generate_quantum_llvm_ir(module_name: &str, entry_point: &str) -> Result<
 
     // Entry point function
     writeln!(&mut llvm_ir, "; Entry point")?;
-    writeln!(&mut llvm_ir, "define void @{}() #0 {{", entry_point)?;
+    writeln!(&mut llvm_ir, "define void @{entry_point}() #0 {{")?;
     writeln!(&mut llvm_ir, "entry:")?;
 
     // Example: Simple quantum circuit
@@ -159,6 +159,7 @@ fn append_qis_declarations(llvm_ir: &mut String) -> Result<()> {
 }
 
 /// Map from quantum operation names to QIS function names
+#[must_use]
 pub fn get_qis_op_mapping() -> HashMap<&'static str, &'static str> {
     let mut map = HashMap::new();
 

@@ -87,10 +87,11 @@ class TestGuppySimBuilder:
         """Test direct run() without explicit build()."""
         results = sim(self.single_qubit).qubits(10).quantum(state_vector()).run(10)
 
-        # Check that we have measurement results (new format uses measurements key)
-        assert "measurements" in results
-        assert len(results["measurements"]) == 10
-        assert all(r in [0, 1] for r in results["measurements"])
+        # Check that we have measurement results
+        # Single qubit function returns single bool, so we get measurement_1
+        assert "measurement_1" in results
+        assert len(results["measurement_1"]) == 10
+        assert all(r in [0, 1] for r in results["measurement_1"])
 
     def test_builder_methods(self) -> None:
         """Test various builder configuration methods."""
@@ -98,6 +99,7 @@ class TestGuppySimBuilder:
         builder = (
             sim(self.bell_state)
             .qubits(10)
+            .quantum(state_vector())
             .seed(42)
             .workers(2)
             .verbose(True)
@@ -106,7 +108,7 @@ class TestGuppySimBuilder:
         )
 
         # Build and run
-        builder.build()
+        sim_obj = builder.build()
         results = sim_obj.run(100)
 
         measurements = results.get(
@@ -167,16 +169,18 @@ class TestGuppySimBuilder:
             sim(self.bell_state).qubits(10).quantum(state_vector()).seed(42).run(1000)
         )
 
-        # Bell state should produce only |00⟩ and |11⟩
-        measurements = results.get(
-            "measurements",
-            results.get("measurement_1", results.get("result", [])),
+        # Bell state returns tuple[bool, bool], so we have measurement_1 and measurement_2
+        assert "measurement_1" in results
+        assert "measurement_2" in results
+
+        # Pair up the measurements
+        measurements = list(
+            zip(results["measurement_1"], results["measurement_2"], strict=False),
         )
-        # Decode the integer-encoded results
-        decoded = decode_integer_results(measurements, 2)
+
         # Check all results are correlated (both qubits same)
-        correlated = sum(1 for (a, b) in decoded if a == b)
-        assert correlated == len(decoded), "Bell state should be 100% correlated"
+        correlated = sum(1 for (a, b) in measurements if a == b)
+        assert correlated == len(measurements), "Bell state should be 100% correlated"
 
     def test_keep_intermediate_files(self) -> None:
         """Test keeping intermediate compilation files."""

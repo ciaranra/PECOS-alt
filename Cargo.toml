@@ -78,6 +78,7 @@ pest_derive = "2"
 tempfile = "3"
 assert_cmd = "2"
 wasmtime = "33"
+wat = "1"
 zstd = "0.13"
 serial_test = "3"
 cc = "1"
@@ -90,7 +91,7 @@ hugr-core-013 = { package = "hugr-core", version = "=0.13.3" }
 ureq = { version = "3" }
 typetag = "0.2"
 lazy_static = "1"
-ron = "0.8"
+ron = "0.11"
 inkwell = "0.6"
 tket2 = "0.12"
 tket2-hseries = "0.16"
@@ -106,6 +107,10 @@ flate2 = "1"
 bzip2 = "0.4"
 sha2 = "0.10"
 dirs = "6"
+once_cell = "1"
+chrono = "0.4"
+backtrace = "0.3"
+atty = "0.2"
 
 pecos-core = { version = "0.1.1", path = "crates/pecos-core" }
 pecos-programs = { version = "0.1.1", path = "crates/pecos-programs" }
@@ -123,15 +128,20 @@ pecos-llvm-sim = { version = "0.1.1", path = "crates/pecos-llvm-sim" }
 pecos-hugr = { version = "0.1.1", path = "crates/pecos-hugr" }
 pecos-selene = { version = "0.1.1", path = "crates/pecos-selene" }
 pecos-rslib = { version = "0.1.1", path = "python/pecos-rslib/rust" }
+pecos-build-utils = { version = "0.1.1", path = "crates/pecos-build-utils" }
 
 # Decoder crates
 pecos-decoder-core = { version = "0.1.1", path = "crates/pecos-decoder-core" }
-pecos-build-utils = { version = "0.1.1", path = "crates/pecos-build-utils" }
-pecos-ldpc-decoders = { version = "0.1.1", path = "crates/pecos-ldpc-decoders" }
 pecos-decoders = { version = "0.1.1", path = "crates/pecos-decoders" }
 
-# QuEST simulator wrapper
+# ldpc decoder wrapper (https://github.com/quantumgizmos/ldpc)
+pecos-ldpc-decoders = { version = "0.1.1", path = "crates/pecos-ldpc-decoders" }
+
+# QuEST simulator wrapper (https://github.com/quest-kit/QuEST)
 pecos-quest = { version = "0.1.1", path = "crates/pecos-quest" }
+
+# Qulacs simulator wrapper (https://github.com/qulacs/qulacs)
+pecos-qulacs = { version = "0.1.1", path = "crates/pecos-qulacs" }
 
 # Optimize build times
 [profile.dev]

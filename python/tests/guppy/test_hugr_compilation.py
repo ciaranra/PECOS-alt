@@ -188,7 +188,7 @@ def test_python_api() -> None:
 
         sys.path.append("python/quantum-pecos/src")
 
-        from pecos.frontends.run_guppy import get_guppy_backends
+        from pecos.frontends import get_guppy_backends
 
         print("[PASS] Python imports successful")
 

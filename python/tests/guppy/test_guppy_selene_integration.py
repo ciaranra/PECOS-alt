@@ -28,14 +28,22 @@ def test_guppy_to_selene_plugin() -> None:
         # Note: cx not imported, use basic gates only
         return measure(q1), measure(q2)
 
-    # Compile to plugin
+    # Compile to Selene artifacts (HUGR and LLVM IR)
     with tempfile.TemporaryDirectory() as tmpdir:
         compiler = GuppySeleneCompiler(output_dir=Path(tmpdir))
-        plugin_path = compiler.compile_function(bell_state)
+        output_dir = compiler.compile_function(bell_state)
 
-        assert plugin_path.exists()
-        assert plugin_path.suffix == ".so"
-        assert plugin_path.stat().st_size > 0
+        assert output_dir.exists()
+        assert output_dir.is_dir()
+
+        # Check that LLVM and HUGR files were created
+        llvm_files = list(output_dir.glob("*.ll"))
+        hugr_files = list(output_dir.glob("*.hugr"))
+
+        assert len(llvm_files) > 0, "Should have created LLVM IR file"
+        assert len(hugr_files) > 0, "Should have created HUGR file"
+        assert llvm_files[0].stat().st_size > 0
+        assert hugr_files[0].stat().st_size > 0
 
 
 def test_guppy_hugr_to_selene() -> None:

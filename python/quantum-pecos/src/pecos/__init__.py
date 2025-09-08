@@ -52,30 +52,24 @@ from pecos.engines.hybrid_engine_old import HybridEngine
 try:
     from pecos.frontends import (
         get_guppy_backends,
-        guppy_sim,
-        run_guppy,
-        run_guppy_batch,
+        sim,
     )
 
     GUPPY_INTEGRATION_AVAILABLE = True
 except ImportError:
     GUPPY_INTEGRATION_AVAILABLE = False
 
-    def run_guppy(*args: object, **kwargs: object) -> NoReturn:
-        """Stub for run_guppy when Guppy integration is not available."""
+    def sim(*args: object, **kwargs: object) -> NoReturn:
+        """Stub for sim when Guppy integration is not available."""
         del args, kwargs  # Unused
         msg = "Guppy integration not available. Install with: pip install quantum-pecos[guppy]"
         raise ImportError(
             msg,
         )
 
-    def guppy_sim(*args: object, **kwargs: object) -> NoReturn:
-        """Stub for guppy_sim when Guppy integration is not available."""
-        del args, kwargs  # Unused
-        msg = "Guppy integration not available. Install with: pip install quantum-pecos[guppy]"
-        raise ImportError(
-            msg,
-        )
+    def get_guppy_backends() -> dict:
+        """Stub for get_guppy_backends."""
+        return {"guppy_available": False, "rust_backend": False}
 
 
 # Import Selene Bridge Plugin (with graceful fallback)
@@ -86,14 +80,6 @@ try:
 except ImportError:
     SELENE_BRIDGE_AVAILABLE = False
     PecosBridgePlugin = None
-
-    def run_guppy_batch(*args: object, **kwargs: object) -> NoReturn:
-        """Stub for run_guppy_batch when Guppy integration is not available."""
-        del args, kwargs  # Unused
-        msg = "Guppy integration not available. Install with: pip install quantum-pecos[guppy]"
-        raise ImportError(
-            msg,
-        )
 
     def get_guppy_backends() -> dict[str, object]:
         """Stub for get_guppy_backends when Guppy integration is not available."""
@@ -114,14 +100,12 @@ __all__ = [
     "error_models",
     "frontends",
     "get_guppy_backends",
-    "guppy_sim",
     "misc",
     "protocols",
     "qeccs",
     "rslib",
     # Guppy integration
-    "run_guppy",
-    "run_guppy_batch",
+    "sim",
     "simulators",
     "tools",
 ]

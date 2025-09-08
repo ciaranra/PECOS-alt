@@ -1,6 +1,6 @@
-//! End-to-end integration tests for SeleneEngine with PECOS
+//! End-to-end integration tests for `SeleneEngine` with PECOS
 //!
-//! These tests verify that SeleneEngine works correctly in realistic scenarios:
+//! These tests verify that `SeleneEngine` works correctly in realistic scenarios:
 //! 1. Real quantum programs (LLVM IR, HUGR)
 //! 2. Integration with PECOS infrastructure
 //! 3. Multi-shot execution
@@ -12,7 +12,14 @@ use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine, Engine, sim_
 use pecos_programs::LlvmProgram;
 use pecos_selene::{SeleneExecutableEngine, selene_executable};
 
+// NOTE: These tests originally used LLVM IR directly with LlvmProgram::from_ir().
+// We've removed direct LLVM execution support in favor of HUGR compilation through Selene.
+// The proper execution path is now: Guppy -> HUGR -> Selene Plugin -> Execution
+// These tests are kept as documentation of the old architecture but marked as ignored.
+// For working examples, see the Python tests that use the Guppy API.
+
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path instead"]
 fn test_end_to_end_bell_state_pecos() -> Result<(), PecosError> {
     println!("=== End-to-End: Bell State with PECOS Infrastructure ===");
 
@@ -164,18 +171,27 @@ fn test_end_to_end_hugr_program() -> Result<(), PecosError> {
     println!("=== End-to-End: HUGR Program Format ===");
 
     // Test with HUGR program format (when available)
-    #[cfg(feature = "hugr")]
+    #[cfg(feature = "hugr-013")]
     {
-        use hugr::Hugr;
+        use hugr_core_013::Hugr;
+        use pecos_programs::HugrProgram;
 
         // Create a simple HUGR program
         let hugr = Hugr::default(); // Simplified for test
 
         println!("Creating SeleneEngine with HUGR program");
 
+        // Convert HUGR to bytes first
+        let hugr_bytes = serde_json::to_vec(&hugr)
+            .map_err(|e| PecosError::with_context(e, "Failed to serialize HUGR"))?;
+
         // Try to run - expect HUGR compilation to fail due to missing main function
         let results = sim_builder()
-            .classical(selene_executable().hugr(hugr).qubits(1))
+            .classical(
+                selene_executable()
+                    .hugr(HugrProgram::from_bytes(hugr_bytes))
+                    .qubits(1),
+            )
             .seed(456)
             .workers(2)
             .run(100);
@@ -189,7 +205,7 @@ fn test_end_to_end_hugr_program() -> Result<(), PecosError> {
         }
     }
 
-    #[cfg(not(feature = "hugr"))]
+    #[cfg(not(feature = "hugr-013"))]
     {
         println!("HUGR feature not enabled, skipping HUGR test");
     }
@@ -198,6 +214,7 @@ fn test_end_to_end_hugr_program() -> Result<(), PecosError> {
 }
 
 #[test]
+#[ignore = "Direct LLVM execution removed - use HUGR compilation instead"]
 fn test_end_to_end_multi_format_consistency() -> Result<(), PecosError> {
     println!("=== End-to-End: Multi-Format Consistency ===");
 
@@ -292,6 +309,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
+#[ignore = "Direct LLVM execution removed - use HUGR compilation instead"]
 fn test_end_to_end_large_circuit() -> Result<(), PecosError> {
     println!("=== End-to-End: Large Circuit Performance ===");
 
@@ -371,6 +389,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
+#[ignore = "Direct LLVM execution removed - use HUGR compilation instead"]
 fn test_end_to_end_direct_engine_construction() -> Result<(), PecosError> {
     println!("=== End-to-End: Direct Engine Construction ===");
 

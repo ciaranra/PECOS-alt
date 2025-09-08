@@ -16,7 +16,7 @@ pub struct CFGAwareCompiler {
     qubit_vars: HashMap<usize, String>,
     result_vars: HashMap<usize, String>,
     block_labels: HashMap<usize, String>,
-    current_block: Option<String>,
+    _current_block: Option<String>,
 }
 
 impl Default for CFGAwareCompiler {
@@ -26,6 +26,7 @@ impl Default for CFGAwareCompiler {
 }
 
 impl CFGAwareCompiler {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             llvm_ir: String::new(),
@@ -35,7 +36,7 @@ impl CFGAwareCompiler {
             qubit_vars: HashMap::new(),
             result_vars: HashMap::new(),
             block_labels: HashMap::new(),
-            current_block: None,
+            _current_block: None,
         }
     }
 
@@ -46,7 +47,7 @@ impl CFGAwareCompiler {
         cfg_node_id: usize,
         edges: &[Value],
     ) -> Result<(), SeleneError> {
-        log::info!("Processing CFG at node {}", cfg_node_id);
+        log::info!("Processing CFG at node {cfg_node_id}");
 
         // Find all DataflowBlock children of this CFG
         let mut dataflow_blocks = Vec::new();
@@ -54,7 +55,7 @@ impl CFGAwareCompiler {
         let mut exit_blocks = Vec::new();
 
         for (node_id, node) in nodes.iter().enumerate() {
-            if let Some(parent) = node.get("parent").and_then(|p| p.as_u64())
+            if let Some(parent) = node.get("parent").and_then(serde_json::Value::as_u64)
                 && parent as usize == cfg_node_id
                 && let Some(op) = node.get("op").and_then(|o| o.as_str())
             {
@@ -84,10 +85,10 @@ impl CFGAwareCompiler {
                 && let (Some(src_arr), Some(tgt_arr)) =
                     (edge_array[0].as_array(), edge_array[1].as_array())
                 && let (Some(src_node), Some(src_port), Some(tgt_node), Some(_tgt_port)) = (
-                    src_arr.first().and_then(|n| n.as_u64()),
-                    src_arr.get(1).and_then(|n| n.as_u64()),
-                    tgt_arr.first().and_then(|n| n.as_u64()),
-                    tgt_arr.get(1).and_then(|n| n.as_u64()),
+                    src_arr.first().and_then(serde_json::Value::as_u64),
+                    src_arr.get(1).and_then(serde_json::Value::as_u64),
+                    tgt_arr.first().and_then(serde_json::Value::as_u64),
+                    tgt_arr.get(1).and_then(serde_json::Value::as_u64),
                 )
             {
                 let src_id = src_node as usize;
@@ -117,7 +118,7 @@ impl CFGAwareCompiler {
                 if block_id != start_block {
                     // Add label for this block
                     if let Some(label) = self.block_labels.get(&block_id) {
-                        writeln!(&mut self.llvm_ir, "{}:", label)?;
+                        writeln!(&mut self.llvm_ir, "{label}:")?;
                     }
                     self.process_dataflow_block(nodes, edges, block_id)?;
                 }
@@ -138,10 +139,10 @@ impl CFGAwareCompiler {
             if let Some(edge_array) = edge.as_array()
                 && edge_array.len() >= 2
                 && let Some(src_arr) = edge_array[0].as_array()
-                && let Some(src_node) = src_arr.first().and_then(|n| n.as_u64())
+                && let Some(src_node) = src_arr.first().and_then(serde_json::Value::as_u64)
                 && src_node as usize == entry_id
                 && let Some(tgt_arr) = edge_array[1].as_array()
-                && let Some(tgt_node) = tgt_arr.first().and_then(|n| n.as_u64())
+                && let Some(tgt_node) = tgt_arr.first().and_then(serde_json::Value::as_u64)
             {
                 return Some(tgt_node as usize);
             }
@@ -149,21 +150,21 @@ impl CFGAwareCompiler {
         None
     }
 
-    /// Process a single DataflowBlock
+    /// Process a single `DataflowBlock`
     pub fn process_dataflow_block(
         &mut self,
         nodes: &[Value],
         edges: &[Value],
         block_id: usize,
     ) -> Result<(), SeleneError> {
-        log::info!("Processing DataflowBlock at node {}", block_id);
+        log::info!("Processing DataflowBlock at node {block_id}");
 
         // Find all operations within this block
         let mut block_ops = Vec::new();
         let mut block_branches = Vec::new();
 
         for (node_id, node) in nodes.iter().enumerate() {
-            if let Some(parent) = node.get("parent").and_then(|p| p.as_u64())
+            if let Some(parent) = node.get("parent").and_then(serde_json::Value::as_u64)
                 && parent as usize == block_id
                 && let Some(op) = node.get("op").and_then(|o| o.as_str())
             {
@@ -210,20 +211,14 @@ impl CFGAwareCompiler {
             let extension = node.get("extension").and_then(|e| e.as_str()).unwrap_or("");
             let name = node.get("name").and_then(|n| n.as_str()).unwrap_or("");
 
-            log::info!(
-                "Processing operation: {}::{} at node {}",
-                extension,
-                name,
-                op_id
-            );
+            log::info!("Processing operation: {extension}::{name} at node {op_id}");
 
             match (extension, name) {
                 ("tket.quantum", "QAlloc") => {
                     let qubit_var = format!("%q{}", self.qubit_counter);
                     writeln!(
                         &mut self.llvm_ir,
-                        "  {} = call i64 @__quantum__rt__qubit_allocate()",
-                        qubit_var
+                        "  {qubit_var} = call i64 @__quantum__rt__qubit_allocate()"
                     )?;
                     self.qubit_vars.insert(op_id, qubit_var);
                     self.qubit_counter += 1;
@@ -232,8 +227,7 @@ impl CFGAwareCompiler {
                     if let Some(qubit_var) = self.find_input_qubit(op_id, edges, nodes) {
                         writeln!(
                             &mut self.llvm_ir,
-                            "  call void @__quantum__qis__h__body(i64 {})",
-                            qubit_var
+                            "  call void @__quantum__qis__h__body(i64 {qubit_var})"
                         )?;
                     }
                 }
@@ -241,8 +235,7 @@ impl CFGAwareCompiler {
                     if let Some(qubit_var) = self.find_input_qubit(op_id, edges, nodes) {
                         writeln!(
                             &mut self.llvm_ir,
-                            "  call void @__quantum__qis__x__body(i64 {})",
-                            qubit_var
+                            "  call void @__quantum__qis__x__body(i64 {qubit_var})"
                         )?;
                     }
                 }
@@ -251,15 +244,14 @@ impl CFGAwareCompiler {
                         let result_var = format!("%r{}", self.result_counter);
                         writeln!(
                             &mut self.llvm_ir,
-                            "  {} = call i1 @__quantum__qis__mz__body(i64 {})",
-                            result_var, qubit_var
+                            "  {result_var} = call i1 @__quantum__qis__mz__body(i64 {qubit_var})"
                         )?;
                         self.result_vars.insert(op_id, result_var);
                         self.result_counter += 1;
                     }
                 }
                 _ => {
-                    log::warn!("Unhandled quantum operation: {}::{}", extension, name);
+                    log::warn!("Unhandled quantum operation: {extension}::{name}");
                 }
             }
         }
@@ -274,7 +266,7 @@ impl CFGAwareCompiler {
         edges: &[Value],
         branch_id: usize,
     ) -> Result<(), SeleneError> {
-        log::info!("Processing branch at node {}", branch_id);
+        log::info!("Processing branch at node {branch_id}");
 
         // Find the condition input
         if let Some(condition_var) = self.find_input_result(branch_id, edges, nodes) {
@@ -285,10 +277,10 @@ impl CFGAwareCompiler {
                 if let Some(edge_array) = edge.as_array()
                     && edge_array.len() >= 2
                     && let Some(src_arr) = edge_array[0].as_array()
-                    && let Some(src_node) = src_arr.first().and_then(|n| n.as_u64())
+                    && let Some(src_node) = src_arr.first().and_then(serde_json::Value::as_u64)
                     && src_node as usize == branch_id
                     && let Some(tgt_arr) = edge_array[1].as_array()
-                    && let Some(tgt_node) = tgt_arr.first().and_then(|n| n.as_u64())
+                    && let Some(tgt_node) = tgt_arr.first().and_then(serde_json::Value::as_u64)
                 {
                     branch_targets.push(tgt_node as usize);
                 }
@@ -308,8 +300,7 @@ impl CFGAwareCompiler {
 
                 writeln!(
                     &mut self.llvm_ir,
-                    "  br i1 {}, label %{}, label %{}",
-                    condition_var, true_label, false_label
+                    "  br i1 {condition_var}, label %{true_label}, label %{false_label}"
                 )?;
             }
         }
@@ -329,10 +320,10 @@ impl CFGAwareCompiler {
             if let Some(edge_array) = edge.as_array()
                 && edge_array.len() >= 2
                 && let Some(tgt_arr) = edge_array[1].as_array()
-                && let Some(tgt_node) = tgt_arr.first().and_then(|n| n.as_u64())
+                && let Some(tgt_node) = tgt_arr.first().and_then(serde_json::Value::as_u64)
                 && tgt_node as usize == target_id
                 && let Some(src_arr) = edge_array[0].as_array()
-                && let Some(src_node) = src_arr.first().and_then(|n| n.as_u64())
+                && let Some(src_node) = src_arr.first().and_then(serde_json::Value::as_u64)
             {
                 let src_id = src_node as usize;
                 if let Some(qubit) = self.qubit_vars.get(&src_id) {
@@ -354,10 +345,10 @@ impl CFGAwareCompiler {
             if let Some(edge_array) = edge.as_array()
                 && edge_array.len() >= 2
                 && let Some(tgt_arr) = edge_array[1].as_array()
-                && let Some(tgt_node) = tgt_arr.first().and_then(|n| n.as_u64())
+                && let Some(tgt_node) = tgt_arr.first().and_then(serde_json::Value::as_u64)
                 && tgt_node as usize == target_id
                 && let Some(src_arr) = edge_array[0].as_array()
-                && let Some(src_node) = src_arr.first().and_then(|n| n.as_u64())
+                && let Some(src_node) = src_arr.first().and_then(serde_json::Value::as_u64)
             {
                 let src_id = src_node as usize;
                 if let Some(result) = self.result_vars.get(&src_id) {

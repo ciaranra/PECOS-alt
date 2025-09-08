@@ -7,6 +7,7 @@ and other dataflow analyses that are essential for optimizations.
 
 use crate::ops::SSAValue;
 use crate::phir::{BlockRef, Function, Region};
+use crate::traits::OperationInterface;
 use std::collections::{HashMap, HashSet};
 
 /// Dominance information for a function
@@ -247,7 +248,6 @@ impl DeadCodeInfo {
                     };
 
                     // Check if instruction can be eliminated
-                    use crate::traits::OperationInterface;
                     if inst.is_dead_if_unused() {
                         // Check if any results are used
                         let all_dead = inst.results.iter().all(|result| !use_def.has_uses(result));

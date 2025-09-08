@@ -40,7 +40,7 @@ bitvec.workspace = true
 
 # Optional WebAssembly support
 wasmtime = { workspace = true, optional = true }
-wat = { version = "1.235", optional = true }
+wat = { workspace = true, optional = true }
 
 [dev-dependencies]
 # Testing

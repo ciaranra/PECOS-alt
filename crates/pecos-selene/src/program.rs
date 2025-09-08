@@ -7,7 +7,7 @@ use std::path::PathBuf;
 /// Program formats that Selene can accept in pure Rust
 ///
 /// Note: Guppy programs require Python compilation (Guppy → HUGR) which
-/// should be handled in Python via guppy_selene_sim(), not here.
+/// should be handled in Python via `guppy_selene_sim()`, not here.
 #[derive(Debug, Clone)]
 pub enum SeleneProgram {
     /// HUGR 0.13 (for guppylang compatibility)
@@ -30,6 +30,6 @@ pub enum SeleneProgram {
     HugrFile(PathBuf),
     /// Compiled plugin file (.so)
     Plugin(PathBuf),
-    /// Compiled plugin bytes (for SeleneInterfaceProgram)
+    /// Compiled plugin bytes (for `SeleneInterfaceProgram`)
     PluginBytes(Vec<u8>),
 }

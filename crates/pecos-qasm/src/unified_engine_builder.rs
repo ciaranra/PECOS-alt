@@ -40,6 +40,10 @@ enum QasmSource {
 #[cfg(feature = "wasm")]
 pub trait IntoWasmProgram {
     /// Convert to a `QasmEngineWasmProgram`
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the conversion fails
     fn into_wasm_program(self) -> Result<crate::QasmEngineWasmProgram, PecosError>;
 }
 
@@ -90,18 +94,21 @@ impl QasmEngineBuilder {
     }
 
     /// Set the QASM source from a string
+    #[must_use]
     pub fn qasm(mut self, qasm: impl Into<String>) -> Self {
         self.source = Some(QasmSource::String(qasm.into()));
         self
     }
 
     /// Set the QASM source from a file path
+    #[must_use]
     pub fn qasm_file(mut self, path: impl AsRef<Path>) -> Self {
         self.source = Some(QasmSource::File(path.as_ref().to_path_buf()));
         self
     }
 
     /// Set the QASM source from a `QasmProgram`
+    #[must_use]
     pub fn program(mut self, program: impl Into<QasmProgram>) -> Self {
         let program = program.into();
         self.source = Some(QasmSource::String(program.source));
@@ -149,6 +156,12 @@ impl QasmEngineBuilder {
         self
     }
 
+    /// Check if this builder has a QASM source configured
+    #[must_use]
+    pub fn has_source(&self) -> bool {
+        self.source.is_some()
+    }
+
     /// Set the WebAssembly program for foreign function calls
     ///
     /// This method accepts:
@@ -157,6 +170,7 @@ impl QasmEngineBuilder {
     /// - `QasmEngineWasmProgram` - engine-specific WASM program
     /// - `&str` or `String` - path to a .wasm or .wat file
     #[cfg(feature = "wasm")]
+    #[must_use]
     pub fn wasm(mut self, wasm: impl IntoWasmProgram) -> Self {
         match wasm.into_wasm_program() {
             Ok(program) => {

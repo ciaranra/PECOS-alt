@@ -1,7 +1,7 @@
 //! In-process Selene execution engine
 //!
 //! This engine loads and executes Selene Interface Plugins in-process,
-//! allowing the PecosSeleneBridgeSimulator to communicate directly via EngineInterface.
+//! allowing the `PecosSeleneBridgeSimulator` to communicate directly via `EngineInterface`.
 
 use crate::SeleneError;
 use pecos_core::prelude::PecosError;
@@ -40,9 +40,9 @@ pub struct SeleneInProcessEngine {
     operation_queue: Vec<ByteMessage>,
     measurement_results: BTreeMap<String, Data>,
     shot_count: u64,
-    message_builder: ByteMessageBuilder,
+    _message_builder: ByteMessageBuilder,
     // Dynamic library and entry point
-    plugin_lib: Option<libloading::Library>,
+    _plugin_lib: Option<libloading::Library>,
     entry_point: Option<libloading::Symbol<'static, unsafe extern "C" fn()>>,
 }
 
@@ -57,12 +57,13 @@ impl SeleneInProcessEngine {
             operation_queue: Vec::new(),
             measurement_results: BTreeMap::new(),
             shot_count: 0,
-            message_builder: ByteMessageBuilder::new(),
-            plugin_lib: None,
+            _message_builder: ByteMessageBuilder::new(),
+            _plugin_lib: None,
             entry_point: None,
         })
     }
 
+    #[must_use]
     pub fn with_program(mut self, program: SeleneInterfaceProgram) -> Self {
         self.program = Some(program);
         self
@@ -79,14 +80,14 @@ impl SeleneInProcessEngine {
 
         // Write the plugin to a temporary file
         let temp_dir = tempfile::tempdir()
-            .map_err(|e| PecosError::Processing(format!("Failed to create temp dir: {}", e)))?;
+            .map_err(|e| PecosError::Processing(format!("Failed to create temp dir: {e}")))?;
 
         let plugin_obj_path = temp_dir.path().join("plugin.o");
         let plugin_so_path = temp_dir.path().join("plugin.so");
 
         // Write the .o file
         std::fs::write(&plugin_obj_path, &program.plugin)
-            .map_err(|e| PecosError::Processing(format!("Failed to write plugin: {}", e)))?;
+            .map_err(|e| PecosError::Processing(format!("Failed to write plugin: {e}")))?;
 
         // Find the Selene runtime library
         let selene_lib_path = std::env::var("SELENE_LIB_PATH").unwrap_or_else(|_| {
@@ -102,10 +103,10 @@ impl SeleneInProcessEngine {
                 .map(|s| s.trim().to_string())
                 .unwrap_or_default();
 
-            if !python_site.is_empty() {
-                format!("{python_site}/_dist/lib")
-            } else {
+            if python_site.is_empty() {
                 String::from("/usr/local/lib")
+            } else {
+                format!("{python_site}/_dist/lib")
             }
         });
 
@@ -114,12 +115,12 @@ impl SeleneInProcessEngine {
             .args(["-shared", "-o"])
             .arg(&plugin_so_path)
             .arg(&plugin_obj_path)
-            .arg(format!("-L{}", selene_lib_path))
+            .arg(format!("-L{selene_lib_path}"))
             .arg("-lselene")
             .arg("-Wl,-rpath")
             .arg(&selene_lib_path)
             .output()
-            .map_err(|e| PecosError::Processing(format!("Failed to run gcc: {}", e)))?;
+            .map_err(|e| PecosError::Processing(format!("Failed to run gcc: {e}")))?;
 
         if !output.status.success() {
             return Err(PecosError::Processing(format!(
@@ -128,7 +129,7 @@ impl SeleneInProcessEngine {
             )));
         }
 
-        log::info!("Created shared library at {:?}", plugin_so_path);
+        log::info!("Created shared library at {plugin_so_path:?}");
 
         // Initialize the engine interface so the bridge can communicate with us
         initialize_engine_interface(Arc::new(Mutex::new(self.clone())));
@@ -136,7 +137,7 @@ impl SeleneInProcessEngine {
         // Load the shared library
         unsafe {
             let lib = libloading::Library::new(&plugin_so_path)
-                .map_err(|e| PecosError::Processing(format!("Failed to load plugin: {}", e)))?;
+                .map_err(|e| PecosError::Processing(format!("Failed to load plugin: {e}")))?;
 
             // We need to leak the library to get a 'static lifetime for the symbol
             let lib_boxed = Box::new(lib);
@@ -145,7 +146,7 @@ impl SeleneInProcessEngine {
             // Find the qmain entry point
             let entry: libloading::Symbol<unsafe extern "C" fn()> = lib_static
                 .get(b"qmain")
-                .map_err(|e| PecosError::Processing(format!("Failed to find qmain: {}", e)))?;
+                .map_err(|e| PecosError::Processing(format!("Failed to find qmain: {e}")))?;
 
             log::info!("Found qmain entry point");
 
@@ -166,7 +167,7 @@ impl SeleneInProcessEngine {
     fn generate_test_operations(&mut self) {
         // Create a simple quantum circuit
         let mut builder = ByteMessageBuilder::new();
-        builder.for_quantum_operations();
+        let _ = builder.for_quantum_operations();
 
         // H gate on qubit 0
         builder.add_h(&[0]);
@@ -229,10 +230,10 @@ impl ClassicalEngine for SeleneInProcessEngine {
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), PecosError> {
         let outcomes = message
             .outcomes()
-            .map_err(|e| PecosError::Processing(format!("Failed to extract outcomes: {}", e)))?;
+            .map_err(|e| PecosError::Processing(format!("Failed to extract outcomes: {e}")))?;
 
         for (i, value) in outcomes.iter().enumerate() {
-            let result_key = format!("measurement_{}", i);
+            let result_key = format!("measurement_{i}");
             self.measurement_results
                 .insert(result_key, Data::U32(*value));
         }
@@ -336,8 +337,8 @@ impl Clone for SeleneInProcessEngine {
             operation_queue: Vec::new(),
             measurement_results: BTreeMap::new(),
             shot_count: 0,
-            message_builder: ByteMessageBuilder::new(),
-            plugin_lib: None,
+            _message_builder: ByteMessageBuilder::new(),
+            _plugin_lib: None,
             entry_point: None,
         }
     }
@@ -354,7 +355,7 @@ impl EngineInterface for SeleneInProcessEngine {
     fn receive_measurements(&mut self) -> Result<ByteMessage, anyhow::Error> {
         // Return measurement results
         let mut builder = ByteMessageBuilder::new();
-        builder.for_outcomes();
+        let _ = builder.for_outcomes();
 
         // Add some test results
         builder.add_outcomes(&[0]);

@@ -9,6 +9,7 @@ use crate::ops::Operation;
 use crate::phir::{AttributeValue, Attributes, Instruction, Region};
 use crate::types::FunctionType;
 use std::collections::HashMap;
+use std::fmt::Write;
 
 /// Builtin operations that define IR structure
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -96,6 +97,10 @@ impl ModuleOp {
     }
 
     /// Validate module structure
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the module structure is invalid
     pub fn validate(&self) -> crate::error::Result<()> {
         // TODO: Implement validation
         Ok(())
@@ -256,13 +261,14 @@ pub fn builtin_op_to_mlir_text(op: &BuiltinOp, indent: usize) -> String {
     match op {
         BuiltinOp::Module(module_op) => {
             let mut output = String::new();
-            output.push_str(&format!("module @{} {{\n", module_op.name));
+            use std::fmt::Write;
+            writeln!(output, "module @{} {{", module_op.name).unwrap();
 
             // Module attributes
             if !module_op.attributes.is_empty() {
                 output.push_str("  attributes {\n");
                 for (key, value) in &module_op.attributes {
-                    output.push_str(&format!("    {key} = {value:?}\n"));
+                    writeln!(output, "    {key} = {value:?}").unwrap();
                 }
                 output.push_str("  }\n");
             }
@@ -278,7 +284,7 @@ pub fn builtin_op_to_mlir_text(op: &BuiltinOp, indent: usize) -> String {
             let indent_str = "  ".repeat(indent);
 
             // Function header
-            output.push_str(&format!("{}func.func @{}", indent_str, func_op.name));
+            write!(output, "{}func.func @{}", indent_str, func_op.name).unwrap();
 
             // Function signature
             output.push('(');
@@ -286,7 +292,7 @@ pub fn builtin_op_to_mlir_text(op: &BuiltinOp, indent: usize) -> String {
                 if i > 0 {
                     output.push_str(", ");
                 }
-                output.push_str(&format!("%arg{i}: {input}"));
+                write!(output, "%arg{i}: {input}").unwrap();
             }
             output.push_str(") -> ");
 

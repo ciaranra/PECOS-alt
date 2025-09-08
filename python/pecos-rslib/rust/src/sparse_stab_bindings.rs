@@ -318,22 +318,22 @@ impl SparseSim {
             let destab_lines: Vec<String> = destabs.lines().map(String::from).collect();
 
             if verbose {
-                println!("Stabilizers:");
+                log::debug!("Stabilizers:");
                 for line in &stab_lines {
-                    println!("{line}");
+                    log::debug!("{line}");
                 }
-                println!("Destabilizers:");
+                log::debug!("Destabilizers:");
                 for line in &destab_lines {
-                    println!("{line}");
+                    log::debug!("{line}");
                 }
             }
 
             [stab_lines, destab_lines].concat()
         } else {
             if verbose {
-                println!("Stabilizers:");
+                log::debug!("Stabilizers:");
                 for line in &stab_lines {
-                    println!("{line}");
+                    log::debug!("{line}");
                 }
             }
 

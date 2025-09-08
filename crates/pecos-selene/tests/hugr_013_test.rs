@@ -22,7 +22,7 @@ fn test_hugr_013_in_selene() {
             assert_eq!(package.extensions.len(), 0);
         }
         Err(e) => {
-            panic!("Failed to load HUGR 0.13 package: {}", e);
+            panic!("Failed to load HUGR 0.13 package: {e}");
         }
     }
 }

@@ -1,6 +1,6 @@
 //! Test the new consistent LLVM format support
 
-use pecos_engines::{ClassicalControlEngineBuilder, PassThroughNoise, sim_builder};
+use pecos_engines::{PassThroughNoise, sim_builder};
 use pecos_llvm_sim::llvm_engine;
 use pecos_programs::LlvmProgram;
 use std::fs;

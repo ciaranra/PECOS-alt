@@ -59,8 +59,7 @@ pub mod selene_fast_engine;
 pub mod selene_in_process_engine;
 pub mod selene_library_engine;
 pub mod selene_runtime_init;
-pub mod selene_simple_runtime_builder;
-pub mod selene_simple_runtime_engine;
+// Simple runtime removed - use selene_executable instead
 pub mod simulator_plugin_template;
 
 #[cfg(feature = "hugr-013")]
@@ -79,16 +78,12 @@ pub mod hugr_to_llvm;
 pub mod hugr_to_llvm_cfg_support;
 
 pub mod selene_hugr_compiler;
-#[cfg(feature = "python")]
-pub mod selene_wrapper;
 
 // Use Selene's SeleneInstance directly - this is the natural way to use Selene
 // SeleneInstance provides all FFI functions and manages the execution context
 
-// Note: The old selene_sim() API has been removed. Use selene_engine().to_sim() instead.
+// Note: The old selene_sim() API has been removed. Use selene_executable() instead.
 // Noise models and quantum engine types are now provided by pecos-engines.
-pub use selene_simple_runtime_builder::{SeleneSimpleRuntimeEngineBuilder, selene_simple_runtime};
-pub use selene_simple_runtime_engine::SeleneSimpleRuntimeEngine;
 
 // Export the new bridge-based approach
 pub use selene_executable_builder::{SeleneExecutableEngineBuilder, selene_executable};
@@ -97,28 +92,45 @@ pub use selene_executable_engine::{SeleneExecutableConfig, SeleneExecutableEngin
 // Export the in-process engine
 pub use selene_in_process_engine::{SeleneInProcessConfig, SeleneInProcessEngine};
 
-// Deprecated aliases for backward compatibility
-#[deprecated(note = "Use selene_simple_runtime() instead")]
-pub fn selene_engine() -> SeleneSimpleRuntimeEngineBuilder {
-    selene_simple_runtime()
-}
-
-#[deprecated(note = "Use SeleneSimpleRuntimeEngineBuilder instead")]
-pub type SeleneEngineBuilder = SeleneSimpleRuntimeEngineBuilder;
-
-#[deprecated(note = "Use SeleneExecutableEngine instead")]
-pub type SeleneEngine = SeleneSimpleRuntimeEngine;
+// Legacy aliases removed - use selene_executable() instead
 pub use error::SeleneError;
 pub use program::SeleneProgram;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pecos_engines::ClassicalControlEngineBuilder;
+    use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine};
 
     #[test]
-    fn test_selene_simple_runtime_builder_creation() {
-        let builder = selene_simple_runtime();
-        assert!(builder.build().is_err()); // Should fail without program
+    fn test_selene_executable_builder_creation() {
+        // Test that builder can be created
+        let builder = selene_executable();
+
+        // Build should fail without a program
+        let result = builder.build();
+        assert!(result.is_err());
+
+        // Check the error message
+        if let Err(e) = result {
+            let error_msg = e.to_string();
+            assert!(error_msg.contains("No program specified"));
+        }
+    }
+
+    #[test]
+    fn test_selene_executable_builder_with_program() {
+        use pecos_programs::LlvmProgram;
+
+        // Test that builder succeeds with a program
+        let builder = selene_executable()
+            .program(LlvmProgram::from_string("define void @main() { ret void }"))
+            .qubits(5);
+
+        let result = builder.build();
+        assert!(result.is_ok());
+
+        // Verify the engine has the correct number of qubits
+        let engine = result.unwrap();
+        assert_eq!(engine.num_qubits(), 5);
     }
 }

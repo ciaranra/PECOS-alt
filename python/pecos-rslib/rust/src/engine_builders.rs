@@ -66,6 +66,11 @@ impl PyQasmEngineBuilder {
         Ok(self.clone())
     }
 
+    /// Check if this builder has a QASM source configured
+    pub fn has_source(&self) -> bool {
+        self.inner.has_source()
+    }
+
     /// Convert to simulation builder
     fn to_sim(&self) -> PyResult<PySimBuilder> {
         Ok(PySimBuilder {
@@ -340,20 +345,6 @@ pub struct PyPhirJsonSimBuilder {
     pub(crate) explicit_num_qubits: Option<usize>,
 }
 
-/// Internal Selene Runtime simulation builder state (for `SeleneInterfaceProgram`)
-pub struct PySeleneRuntimeSimBuilder {
-    pub(crate) engine_builder: Arc<
-        Mutex<
-            Option<pecos_selene::selene_simple_runtime_builder::SeleneSimpleRuntimeEngineBuilder>,
-        >,
-    >,
-    pub(crate) seed: Option<u64>,
-    pub(crate) workers: Option<usize>,
-    pub(crate) quantum_engine_builder: Option<PyObject>,
-    pub(crate) noise_builder: Option<PyObject>,
-    pub(crate) explicit_num_qubits: Option<usize>,
-}
-
 /// Builder for Selene executable engine with bridge approach
 pub struct PySeleneExecutableSimBuilder {
     pub(crate) program: Option<PyObject>, // Guppy function or HUGR to compile to executable
@@ -517,7 +508,8 @@ pub fn llvm_engine() -> PyLlvmEngineBuilder {
     }
 }
 
-/// Create a Selene engine builder
+/// Create a Selene executable engine builder
+/// Note: This uses the executable/bridge approach, not the simple runtime
 #[pyfunction]
 pub fn selene_engine() -> PySeleneEngineBuilder {
     PySeleneEngineBuilder {

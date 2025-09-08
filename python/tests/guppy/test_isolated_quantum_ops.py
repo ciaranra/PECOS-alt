@@ -72,7 +72,7 @@ class TestIsolatedOps:
             h(q)
             return measure(q)
 
-        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         assert len(results.get("measurements", results.get("measurement_1", []))) == 10
 
     def test_single_x_gate(self) -> None:
@@ -84,7 +84,7 @@ class TestIsolatedOps:
             x(q)
             return measure(q)
 
-        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         assert all(
             r for r in results.get("measurements", results.get("measurement_1", []))
         )
@@ -98,7 +98,7 @@ class TestIsolatedOps:
             y(q)
             return measure(q)
 
-        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         assert all(
             r for r in results.get("measurements", results.get("measurement_1", []))
         )
@@ -112,7 +112,7 @@ class TestIsolatedOps:
             z(q)
             return measure(q)
 
-        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         assert all(
             not r for r in results.get("measurements", results.get("measurement_1", []))
         )
@@ -128,7 +128,7 @@ class TestIsolatedOps:
             sdg(q)
             return measure(q)
 
-        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         assert all(
             r for r in results.get("measurements", results.get("measurement_1", []))
         )
@@ -144,7 +144,7 @@ class TestIsolatedOps:
             tdg(q)
             return measure(q)
 
-        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         assert all(
             r for r in results.get("measurements", results.get("measurement_1", []))
         )
@@ -158,7 +158,7 @@ class TestIsolatedOps:
             rx(q, pi)
             return measure(q)
 
-        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         print(
             f"RX test results: {results.get("measurements", results.get("measurement_1", []))}",
         )
@@ -175,7 +175,7 @@ class TestIsolatedOps:
             ry(q, pi)
             return measure(q)
 
-        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         assert all(
             r for r in results.get("measurements", results.get("measurement_1", []))
         )
@@ -189,7 +189,7 @@ class TestIsolatedOps:
             rz(q, pi)
             return measure(q)
 
-        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         assert all(
             not r for r in results.get("measurements", results.get("measurement_1", []))
         )
@@ -205,14 +205,14 @@ class TestIsolatedOps:
             cx(q1, q2)
             return measure(q1), measure(q2)
 
-        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         # Should get (True, True) for both qubits
-        # Decode integer-encoded results
-        decoded_results = decode_integer_results(
-            results.get("measurements", results.get("measurement_1", [])),
-            2,
+        assert "measurement_1" in results
+        assert "measurement_2" in results
+        measurements = list(
+            zip(results["measurement_1"], results["measurement_2"], strict=False),
         )
-        assert all(r == (True, True) for r in decoded_results)
+        assert all(r == (1, 1) for r in measurements)
 
     def test_two_qubit_cy(self) -> None:
         """Test CY gate."""
@@ -225,14 +225,14 @@ class TestIsolatedOps:
             cy(q1, q2)
             return measure(q1), measure(q2)
 
-        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         # CY with control=1 should flip target
-        # Decode integer-encoded results
-        decoded_results = decode_integer_results(
-            results.get("measurements", results.get("measurement_1", [])),
-            2,
+        assert "measurement_1" in results
+        assert "measurement_2" in results
+        measurements = list(
+            zip(results["measurement_1"], results["measurement_2"], strict=False),
         )
-        assert all(r == (True, True) for r in decoded_results)
+        assert all(r == (1, 1) for r in measurements)
 
     def test_two_qubit_cz(self) -> None:
         """Test CZ gate."""
@@ -246,14 +246,14 @@ class TestIsolatedOps:
             cz(q1, q2)
             return measure(q1), measure(q2)
 
-        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         # Both qubits should be |1⟩
-        # Decode integer-encoded results
-        decoded_results = decode_integer_results(
-            results.get("measurements", results.get("measurement_1", [])),
-            2,
+        assert "measurement_1" in results
+        assert "measurement_2" in results
+        measurements = list(
+            zip(results["measurement_1"], results["measurement_2"], strict=False),
         )
-        assert all(r == (True, True) for r in decoded_results)
+        assert all(r == (1, 1) for r in measurements)
 
     def test_two_qubit_ch(self) -> None:
         """Test CH gate."""
@@ -265,14 +265,14 @@ class TestIsolatedOps:
             ch(q1, q2)
             return measure(q1), measure(q2)
 
-        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         # CH with control=0 does nothing
-        # Decode integer-encoded results
-        decoded_results = decode_integer_results(
-            results.get("measurements", results.get("measurement_1", [])),
-            2,
+        assert "measurement_1" in results
+        assert "measurement_2" in results
+        measurements = list(
+            zip(results["measurement_1"], results["measurement_2"], strict=False),
         )
-        assert all(r == (False, False) for r in decoded_results)
+        assert all(r == (0, 0) for r in measurements)
 
     def test_toffoli(self) -> None:
         """Test Toffoli gate."""
@@ -287,14 +287,20 @@ class TestIsolatedOps:
             toffoli(q1, q2, q3)
             return measure(q1), measure(q2), measure(q3)
 
-        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         # Both controls at |1⟩, target flips to |1⟩
-        # Decode integer-encoded results
-        decoded_results = decode_integer_results(
-            results.get("measurements", results.get("measurement_1", [])),
-            3,
+        assert "measurement_1" in results
+        assert "measurement_2" in results
+        assert "measurement_3" in results
+        measurements = list(
+            zip(
+                results["measurement_1"],
+                results["measurement_2"],
+                results["measurement_3"],
+                strict=False,
+            ),
         )
-        assert all(r == (True, True, True) for r in decoded_results)
+        assert all(r == (1, 1, 1) for r in measurements)
 
     def test_reset_operation(self) -> None:
         """Test reset operation."""
@@ -306,7 +312,7 @@ class TestIsolatedOps:
             reset(q)
             return measure(q)
 
-        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         assert all(
             not r for r in results.get("measurements", results.get("measurement_1", []))
         )
@@ -323,7 +329,7 @@ class TestIsolatedOps:
             x(q2)
             return measure(q2)
 
-        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         assert all(
             r for r in results.get("measurements", results.get("measurement_1", []))
         )
@@ -354,19 +360,18 @@ class TestIsolatedOps:
 
             return result1, result2, result3, result4
 
-        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         # Check tuple values directly
-        # Decode integer-encoded results
-        decoded_results = decode_integer_results(
-            results.get("measurements", results.get("measurement_1", [])),
-            4,
+        assert all(f"measurement_{i}" in results for i in range(1, 5))
+        measurements = list(
+            zip(*[results[f"measurement_{i}"] for i in range(1, 5)], strict=False),
         )
-        for r in decoded_results:
+        for r in measurements:
             # r is now a tuple like (r1, r2, r3, r4)
             _, r2, r3, r4 = r
-            assert r2  # Y on |0⟩ gives |1⟩
-            assert not r3  # Z on |0⟩ doesn't change
-            assert r4  # X on |0⟩ gives |1⟩
+            assert r2 == 1  # Y on |0⟩ gives |1⟩
+            assert r3 == 0  # Z on |0⟩ doesn't change
+            assert r4 == 1  # X on |0⟩ gives |1⟩
 
 
 if __name__ == "__main__":

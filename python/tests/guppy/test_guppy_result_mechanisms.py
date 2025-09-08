@@ -86,7 +86,18 @@ def analyze_program(name: str, program: Any) -> None:
     hugr_bytes = compile_guppy_to_hugr(program)
     print(f"\n1. HUGR: {len(hugr_bytes)} bytes")
 
-    hugr_json = json.loads(hugr_bytes.decode("utf-8"))
+    # The HUGR bytes might be in envelope format with header
+    hugr_str = hugr_bytes.decode("utf-8")
+    if hugr_str.startswith("HUGRiHJv"):
+        # Skip header and find JSON start
+        json_start = hugr_str.find("{", 9)
+        if json_start != -1:
+            hugr_str = hugr_str[json_start:]
+        else:
+            msg = "Could not find JSON start in HUGR envelope"
+            raise ValueError(msg)
+
+    hugr_json = json.loads(hugr_str)
 
     # Look for interesting operations in HUGR
     print("\n2. HUGR Operations Analysis:")

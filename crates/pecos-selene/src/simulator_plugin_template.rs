@@ -5,6 +5,7 @@
 use std::fmt::Write as FmtWrite;
 
 /// Generate the complete simulator plugin code
+#[must_use]
 pub fn generate_simulator_plugin_code(entry_point: &str, _enable_metrics: bool) -> String {
     let mut code = String::with_capacity(16 * 1024); // Pre-allocate ~16KB
 
@@ -18,7 +19,7 @@ pub fn generate_simulator_plugin_code(entry_point: &str, _enable_metrics: bool) 
 
     // Add entry point extern declaration
     writeln!(&mut code, "// Entry point function from LLVM").unwrap();
-    writeln!(&mut code, "extern \"C\" {{ fn {}(); }}", entry_point).unwrap();
+    writeln!(&mut code, "extern \"C\" {{ fn {entry_point}(); }}").unwrap();
     code.push('\n');
 
     // Add quantum intrinsics
@@ -43,7 +44,7 @@ pub fn generate_simulator_plugin_code(entry_point: &str, _enable_metrics: bool) 
     code
 }
 
-const IMPORTS: &str = r#"use std::collections::VecDeque;
+const IMPORTS: &str = r"use std::collections::VecDeque;
 use anyhow::{Result, bail};
 use selene_core::{
     export_runtime_plugin,
@@ -51,11 +52,11 @@ use selene_core::{
     utils::MetricValue,
     encoder::{OutputStream, OutputStreamError},
 };
-use std::sync::Mutex;"#;
+use std::sync::Mutex;";
 
-const GLOBAL_STATE: &str = r#"// Global state to track operations that will be converted to byte messages
+const GLOBAL_STATE: &str = r"// Global state to track operations that will be converted to byte messages
 static OPERATION_QUEUE: Mutex<VecDeque<Operation>> = Mutex::new(VecDeque::new());
-static MEASUREMENT_COUNTER: Mutex<u64> = Mutex::new(0);"#;
+static MEASUREMENT_COUNTER: Mutex<u64> = Mutex::new(0);";
 
 const QUANTUM_INTRINSICS: &str = r#"// Override the quantum intrinsics to capture operations
 #[no_mangle]
@@ -160,11 +161,11 @@ pub unsafe extern "C" fn __quantum__qis__rx__body(theta: f64, qubit: i64) {
     });
 }"#;
 
-const SIMULATOR_RUNTIME_PLUGIN_STRUCT: &str = r#"struct SimulatorRuntimePlugin {
+const SIMULATOR_RUNTIME_PLUGIN_STRUCT: &str = r"struct SimulatorRuntimePlugin {
     measurements: Vec<bool>,
     start: selene_core::time::Instant,
     current_result_id: u64,
-}"#;
+}";
 
 fn add_simulator_impl(code: &mut String, entry_point: &str) {
     writeln!(code, "impl SimulatorRuntimePlugin {{").unwrap();
@@ -192,13 +193,13 @@ fn add_simulator_impl(code: &mut String, entry_point: &str) {
     )
     .unwrap();
     writeln!(code, "        unsafe {{").unwrap();
-    writeln!(code, "            {}();", entry_point).unwrap();
+    writeln!(code, "            {entry_point}();").unwrap();
     writeln!(code, "        }}").unwrap();
     writeln!(code, "    }}").unwrap();
     writeln!(code, "}}").unwrap();
 }
 
-const RUNTIME_INTERFACE_IMPL: &str = r#"impl RuntimeInterface for SimulatorRuntimePlugin {
+const RUNTIME_INTERFACE_IMPL: &str = r"impl RuntimeInterface for SimulatorRuntimePlugin {
     fn exit(&mut self) -> Result<()> {
         OPERATION_QUEUE.lock().unwrap().clear();
         self.measurements.clear();
@@ -312,9 +313,9 @@ const RUNTIME_INTERFACE_IMPL: &str = r#"impl RuntimeInterface for SimulatorRunti
     fn get_metric(&mut self, _nth_metric: u8) -> Result<Option<(String, MetricValue)>> {
         Ok(None)
     }
-}"#;
+}";
 
-const FACTORY_AND_EXPORT: &str = r#"#[derive(Default)]
+const FACTORY_AND_EXPORT: &str = r"#[derive(Default)]
 struct SimulatorRuntimeFactory;
 
 impl RuntimeInterfaceFactory for SimulatorRuntimeFactory {
@@ -330,4 +331,4 @@ impl RuntimeInterfaceFactory for SimulatorRuntimeFactory {
     }
 }
 
-export_runtime_plugin!(crate::SimulatorRuntimeFactory);"#;
+export_runtime_plugin!(crate::SimulatorRuntimeFactory);";

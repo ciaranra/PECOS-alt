@@ -26,7 +26,7 @@ mod pauli_prop_bindings;
 // mod pcg_bindings;
 mod pecos_rng_bindings;
 mod phir_json_bridge;
-mod plugin_compiler_bindings;
+mod plugin_bindings;
 mod quest_bindings;
 mod qulacs_bindings;
 mod selene_library_bindings;
@@ -62,7 +62,7 @@ use state_vec_engine_bindings::PyStateVecEngine;
 /// A Python module implemented in Rust.
 #[pymodule]
 fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    eprintln!("DEBUG: _pecos_rslib module initializing (version 2)...");
+    log::debug!("_pecos_rslib module initializing (version 2)...");
     m.add_class::<SparseSim>()?;
     m.add_class::<phir_json_bridge::PhirJsonEngine>()?;
     m.add_class::<CppSparseSim>()?;
@@ -85,6 +85,9 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Register engine builders (QasmEngineBuilder, etc.)
     engine_builders::register_engine_builders(m)?;
+
+    // Register plugin compilation functions
+    plugin_bindings::register_plugin_functions(m)?;
 
     // Register program types
     m.add_class::<PyQasmProgram>()?;

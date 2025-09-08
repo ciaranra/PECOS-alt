@@ -613,113 +613,115 @@ impl QASMEngine {
     }
 
     /// Get the gate table for table-driven processing
+    #[allow(clippy::too_many_lines)]
     fn get_gate_table() -> Vec<GateInfo> {
+        use GateInfo as G;
         vec![
             // Single-qubit gates
-            GateInfo {
+            G {
                 name: "h",
                 required_qubits: 1,
                 required_params: 0,
                 handler: Self::handle_h,
             },
-            GateInfo {
+            G {
                 name: "x",
                 required_qubits: 1,
                 required_params: 0,
                 handler: Self::handle_x,
             },
-            GateInfo {
+            G {
                 name: "y",
                 required_qubits: 1,
                 required_params: 0,
                 handler: Self::handle_y,
             },
-            GateInfo {
+            G {
                 name: "z",
                 required_qubits: 1,
                 required_params: 0,
                 handler: Self::handle_z,
             },
-            GateInfo {
+            G {
                 name: "s",
                 required_qubits: 1,
                 required_params: 0,
                 handler: Self::handle_s,
             },
-            GateInfo {
+            G {
                 name: "sdg",
                 required_qubits: 1,
                 required_params: 0,
                 handler: Self::handle_sdg,
             },
-            GateInfo {
+            G {
                 name: "t",
                 required_qubits: 1,
                 required_params: 0,
                 handler: Self::handle_t,
             },
-            GateInfo {
+            G {
                 name: "tdg",
                 required_qubits: 1,
                 required_params: 0,
                 handler: Self::handle_tdg,
             },
-            GateInfo {
+            G {
                 name: "rz",
                 required_qubits: 1,
                 required_params: 1,
                 handler: Self::handle_rz,
             },
-            GateInfo {
+            G {
                 name: "rx",
                 required_qubits: 1,
                 required_params: 1,
                 handler: Self::handle_rx,
             },
-            GateInfo {
+            G {
                 name: "ry",
                 required_qubits: 1,
                 required_params: 1,
                 handler: Self::handle_ry,
             },
-            GateInfo {
+            G {
                 name: "r1xy",
                 required_qubits: 1,
                 required_params: 2,
                 handler: Self::handle_r1xy,
             },
             // Two-qubit gates
-            GateInfo {
+            G {
                 name: "cx",
                 required_qubits: 2,
                 required_params: 0,
                 handler: Self::handle_cx,
             },
-            GateInfo {
+            G {
                 name: "cy",
                 required_qubits: 2,
                 required_params: 0,
                 handler: Self::handle_cy,
             },
-            GateInfo {
+            G {
                 name: "cz",
                 required_qubits: 2,
                 required_params: 0,
                 handler: Self::handle_cz,
             },
-            GateInfo {
+            G {
                 name: "rzz",
                 required_qubits: 2,
                 required_params: 1,
                 handler: Self::handle_rzz,
             },
-            GateInfo {
+            G {
                 name: "szz",
                 required_qubits: 2,
                 required_params: 0,
                 handler: Self::handle_szz,
             },
-            GateInfo {
+            G {
                 name: "swap",
                 required_qubits: 2,
                 required_params: 0,
@@ -1148,7 +1150,7 @@ impl QASMEngine {
         expr: &Expression,
         target_width: usize,
     ) -> Result<ExpressionValue, PecosError> {
-        eprintln!("DEBUG: evaluate_expression_bitvec_with_width called with expr: {expr:?}");
+        log::debug!(" evaluate_expression_bitvec_with_width called with expr: {expr:?}");
 
         // Check if this is a WASM function call
         #[cfg(feature = "wasm")]

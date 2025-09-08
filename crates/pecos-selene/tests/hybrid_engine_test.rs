@@ -1,9 +1,9 @@
-//! Tests for SeleneEngine integration with HybridEngine
+//! Tests for `SeleneEngine` integration with `HybridEngine`
 //!
 //! This demonstrates the most realistic usage pattern where:
-//! - SeleneEngine provides classical control and command generation
-//! - HybridEngine coordinates between classical and quantum execution
-//! - StateVecEngine (or other quantum engine) handles quantum operations
+//! - `SeleneEngine` provides classical control and command generation
+//! - `HybridEngine` coordinates between classical and quantum execution
+//! - `StateVecEngine` (or other quantum engine) handles quantum operations
 
 use pecos_core::prelude::PecosError;
 use pecos_engines::{
@@ -14,6 +14,7 @@ use pecos_programs::LlvmProgram;
 use pecos_selene::selene_executable;
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path instead"]
 fn test_selene_with_hybrid_engine_bell_state() -> Result<(), PecosError> {
     env_logger::try_init().ok();
 
@@ -86,6 +87,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path instead"]
 fn test_selene_adaptive_algorithm() -> Result<(), PecosError> {
     env_logger::try_init().ok();
 
@@ -144,6 +146,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path instead"]
 fn test_selene_multi_qubit_operations() -> Result<(), PecosError> {
     env_logger::try_init().ok();
 
@@ -215,6 +218,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path instead"]
 fn test_selene_executable_reset() -> Result<(), PecosError> {
     env_logger::try_init().ok();
 
@@ -265,6 +269,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path instead"]
 fn test_selene_error_handling() -> Result<(), PecosError> {
     env_logger::try_init().ok();
 

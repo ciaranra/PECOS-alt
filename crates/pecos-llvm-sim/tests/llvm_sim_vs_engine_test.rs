@@ -2,7 +2,7 @@
 
 // use pecos_engines::engine_system::MonteCarloEngine;
 // use pecos_engines::noise::DepolarizingNoiseModel;
-use pecos_engines::{ClassicalControlEngineBuilder, DepolarizingNoise, sim_builder};
+use pecos_engines::{DepolarizingNoise, sim_builder};
 use pecos_llvm_sim::llvm_engine;
 use pecos_programs::LlvmProgram;
 use std::collections::HashMap;

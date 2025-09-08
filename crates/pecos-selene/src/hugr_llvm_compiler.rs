@@ -40,7 +40,7 @@ pub struct CompilationResult {
 
 /// Process a HUGR for quantum compilation
 ///
-/// This applies quantum-specific optimization passes similar to Selene's QSystemPass
+/// This applies quantum-specific optimization passes similar to Selene's `QSystemPass`
 #[cfg(feature = "hugr-013")]
 pub fn process_hugr(_hugr: &mut Hugr) -> Result<()> {
     // TODO: Apply quantum-specific passes
@@ -83,6 +83,7 @@ pub fn compile_hugr_to_llvm(hugr: &mut Hugr, _config: &CompileConfig) -> Result<
 ///
 /// This maps quantum operations to their LLVM implementations.
 /// Based on Selene's QIS (Quantum Instruction Set).
+#[must_use]
 pub fn get_quantum_op_mappings() -> HashMap<String, String> {
     let mut mappings = HashMap::new();
 
@@ -126,9 +127,10 @@ pub fn get_quantum_op_mappings() -> HashMap<String, String> {
 ///
 /// This would be used by the compiler to generate appropriate LLVM calls
 /// for quantum operations in the HUGR.
+#[must_use]
 pub fn generate_quantum_llvm_ir() -> String {
     // Example LLVM IR declarations for quantum operations
-    r#"
+    r"
 ; Quantum operation declarations
 declare void @__quantum__qis__h__body(%Qubit*)
 declare void @__quantum__qis__x__body(%Qubit*)
@@ -150,7 +152,7 @@ declare i1 @__quantum__qis__read_result__body(%Result*)
 ; Qubit type (opaque)
 %Qubit = type opaque
 %Result = type opaque
-"#
+"
     .to_string()
 }
 

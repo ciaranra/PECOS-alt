@@ -1,4 +1,10 @@
 //! Tests for Selene LLVM execution capabilities
+//!
+//! NOTE: These tests originally used LLVM IR directly with `LlvmProgram::from_ir()`.
+//! We've removed direct LLVM execution support in favor of HUGR compilation through Selene.
+//! The proper execution path is now: Guppy -> HUGR -> Selene Plugin -> Execution
+//! These tests are kept as documentation of the old architecture but marked as ignored.
+//! For working examples, see the Python tests that use the Guppy API.
 
 use pecos_core::prelude::PecosError;
 use pecos_engines::{ClassicalEngine, ControlEngine, EngineStage};
@@ -6,6 +12,7 @@ use pecos_programs::LlvmProgram;
 use pecos_selene::SeleneExecutableEngine;
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_selene_llvm_ir_execution() -> Result<(), PecosError> {
     println!("=== Testing Selene LLVM IR Execution ===");
 
@@ -70,6 +77,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_selene_control_engine_trait() -> Result<(), PecosError> {
     println!("=== Testing Selene as ControlEngine ===");
 
@@ -141,6 +149,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_selene_llvm_parsing() -> Result<(), PecosError> {
     println!("=== Testing Selene LLVM IR Parsing ===");
 
@@ -212,11 +221,11 @@ attributes #0 = { "EntryPoint" }
         }
     }
 
-    println!("  - Hadamard gates: {}", h_count);
-    println!("  - Pauli-X gates: {}", x_count);
-    println!("  - RZ rotations: {}", rz_count);
-    println!("  - CNOT gates: {}", cx_count);
-    println!("  - Measurements: {}", measure_count);
+    println!("  - Hadamard gates: {h_count}");
+    println!("  - Pauli-X gates: {x_count}");
+    println!("  - RZ rotations: {rz_count}");
+    println!("  - CNOT gates: {cx_count}");
+    println!("  - Measurements: {measure_count}");
 
     // Verify counts match LLVM IR (when plugin compilation works)
     if !ops.is_empty() {
@@ -231,6 +240,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_selene_engine_in_hybrid_setup() -> Result<(), PecosError> {
     println!("=== Testing SeleneEngine for HybridEngine Compatibility ===");
 

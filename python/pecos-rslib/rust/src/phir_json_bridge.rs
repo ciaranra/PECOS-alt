@@ -68,14 +68,14 @@ impl PhirJsonEngine {
             // For specific test cases that require hardcoded behavior, use None
             let rust_engine = if is_specific_test_case {
                 // Specific test case that needs the Python interpreter behavior
-                eprintln!("Detected test case that requires Python interpreter behavior.");
+                log::debug!("Detected test case that requires Python interpreter behavior.");
                 None
             } else {
                 match pecos::prelude::PhirJsonEngine::from_json(phir_json) {
                     Ok(engine) => Some(Mutex::new(engine)),
                     Err(e) => {
                         // Log the error but continue with Python interpreter
-                        eprintln!(
+                        log::debug!(
                             "Warning: Failed to create Rust PHIR-JSON engine: {e}. Using Python fallback."
                         );
                         None
@@ -129,14 +129,14 @@ impl PhirJsonEngine {
             // For specific test cases that require hardcoded behavior, use None
             let rust_engine = if is_specific_test_case {
                 // Specific test case that needs the Python interpreter behavior
-                eprintln!("Detected test case that requires Python interpreter behavior.");
+                log::debug!("Detected test case that requires Python interpreter behavior.");
                 None
             } else {
                 match pecos::prelude::PhirJsonEngine::from_json(phir_json) {
                     Ok(engine) => Some(Mutex::new(engine)),
                     Err(e) => {
                         // Log the error but continue with Python interpreter
-                        eprintln!(
+                        log::debug!(
                             "Warning: Failed to create Rust PHIR-JSON engine: {e}. Using Python fallback."
                         );
                         None
@@ -254,7 +254,7 @@ impl PhirJsonEngine {
                             }
                             Err(e) => {
                                 // Log the error and fall back to Python
-                                eprintln!(
+                                log::debug!(
                                     "Error parsing operations from ByteMessage: {e}. Falling back to Python."
                                 );
                                 // We'll fall through to the Python fallback below
@@ -263,7 +263,7 @@ impl PhirJsonEngine {
                     }
                     Err(e) => {
                         // Log the error and fall back to Python
-                        eprintln!(
+                        log::debug!(
                             "Error generating commands from Rust engine: {e}. Falling back to Python."
                         );
                         // We'll fall through to the Python fallback below
@@ -313,7 +313,7 @@ impl PhirJsonEngine {
                 }
 
                 // Otherwise, fall through to the Python implementation
-                eprintln!("Rust engine measurement handling failed, falling back to Python.");
+                log::debug!("Rust engine measurement handling failed, falling back to Python.");
             }
 
             // Python implementation - handles both fallback cases and special test behaviors
@@ -470,7 +470,7 @@ impl PhirJsonEngine {
                     }
                     Err(e) => {
                         // Log the error and fall back to Python
-                        eprintln!(
+                        log::debug!(
                             "Error getting results from Rust engine: {e}. Falling back to Python."
                         );
                     }
@@ -739,7 +739,7 @@ fn convert_to_py_commands(py: Python<'_>, commands: &PyObject) -> PyResult<Vec<P
                             } else {
                                 // Handle extremely large values (unlikely in practice)
                                 // by using the largest u32 value as a fallback
-                                eprintln!(
+                                log::debug!(
                                     "Warning: result_id {i} is too large for u32, using max value"
                                 );
                                 u32::MAX
@@ -874,7 +874,9 @@ fn process_py_command(py_cmd: &Bound<PyAny>) -> Result<(String, Vec<usize>, Vec<
             id32
         } else {
             // Handle extremely large values (unlikely in practice)
-            eprintln!("Warning: result_id {result_id_usize} is too large for u32, using max value");
+            log::debug!(
+                "Warning: result_id {result_id_usize} is too large for u32, using max value"
+            );
             u32::MAX
         };
 
@@ -979,7 +981,7 @@ impl ClassicalEngine for PhirJsonEngine {
                             // We use a safe approach by handling potential truncation and sign loss
                             let result_id_f64 = params[0];
                             if result_id_f64 < 0.0 || result_id_f64 > f64::from(u32::MAX) {
-                                eprintln!("Warning: Invalid result_id {result_id_f64}, using 0");
+                                log::debug!("Warning: Invalid result_id {result_id_f64}, using 0");
                                 builder.add_measurements(&qubits);
                             } else {
                                 // Safe to convert to u32 and then usize

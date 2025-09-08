@@ -2,9 +2,9 @@
 
 import pytest
 from collections import Counter
-from pecos_rslib.qasm_sim import (
-    qasm_sim,
-    QuantumEngine,
+from pecos_rslib.sim import sim
+from pecos_rslib._pecos_rslib import (
+    QasmProgram,
     GeneralNoiseModelBuilder,
 )
 
@@ -34,9 +34,9 @@ class TestDirectBuilder:
             .with_meas_1_probability(0.002)
         )
 
-        # Use builder directly with .noise() method
-        sim = qasm_sim(qasm).noise(builder).build()
-        results = sim.run(1000)
+        # Use sim() with noise builder
+        prog = QasmProgram.from_string(qasm)
+        results = sim(prog).noise(builder).run(1000).to_dict()
 
         assert len(results["c"]) == 1000
         counts = Counter(results["c"])
@@ -62,7 +62,8 @@ class TestDirectBuilder:
             .with_p1_pauli_model({"X": 0.5, "Y": 0.3, "Z": 0.2})
         )
 
-        results = qasm_sim(qasm).noise(builder).run(1000)
+        prog = QasmProgram.from_string(qasm)
+        results = sim(prog).noise(builder).run(1000).to_dict()
 
         # Should see some errors due to high p1 error rate
         zeros = sum(1 for val in results["c"] if val == 0)
@@ -85,25 +86,17 @@ class TestDirectBuilder:
         measure q -> c;
         """
 
+        prog = QasmProgram.from_string(qasm)
+
         # Create builder with fluent API
         builder = GeneralNoiseModelBuilder().with_seed(42).with_p2_probability(0.01)
 
-        # Use with direct method chaining
-        sim = (
-            qasm_sim(qasm)
-            .seed(42)
-            .workers(2)
-            .noise(builder)
-            .quantum_engine(QuantumEngine.StateVector)
-            .with_binary_string_format()
-            .build()
-        )
-        results = sim.run(100)
+        # Use sim() with direct method chaining
+        results = sim(prog).seed(42).noise(builder).run(100).to_dict()
 
         assert len(results["c"]) == 100
-        # Check binary string format
-        assert all(isinstance(val, str) for val in results["c"])
-        assert all(len(val) == 2 for val in results["c"])
+        # Results are integers, not binary strings in the new API
+        assert all(isinstance(val, int) for val in results["c"])
 
     def test_builder_chaining_validation(self):
         """Test that builder methods validate parameters."""
@@ -134,6 +127,8 @@ class TestDirectBuilder:
         measure q -> c;
         """
 
+        prog = QasmProgram.from_string(qasm)
+
         # Create builder
         builder = GeneralNoiseModelBuilder()
         builder.with_seed(42)
@@ -141,8 +136,7 @@ class TestDirectBuilder:
         builder.with_p2_probability(0.01)
 
         # Test that builder can be used directly in .noise() method
-        sim = qasm_sim(qasm).noise(builder).seed(42).build()
-        results = sim.run(100)
+        results = sim(prog).noise(builder).seed(42).run(100).to_dict()
 
         assert len(results["c"]) == 100
         counts = Counter(results["c"])

@@ -7,6 +7,10 @@ use pecos_core::errors::PecosError;
 use serde_json::Value;
 
 /// Convert HUGR 0.13 types to HUGR 0.20 equivalents
+///
+/// # Errors
+///
+/// Returns an error if the HUGR JSON is not an object or if type conversion fails
 pub fn convert_hugr_13_types(hugr_json: &mut Value) -> Result<(), PecosError> {
     // Convert List types to Array types
     convert_list_to_array(hugr_json)?;

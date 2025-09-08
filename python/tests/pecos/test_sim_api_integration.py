@@ -2,7 +2,8 @@
 """Test the unified sim API with different program types."""
 
 import pytest
-from pecos_rslib import HugrProgram, QasmProgram, sim
+from pecos.frontends.guppy_api import sim
+from pecos_rslib import HugrProgram, QasmProgram
 
 
 def test_sim_api_with_qasm() -> None:
@@ -19,8 +20,10 @@ def test_sim_api_with_qasm() -> None:
     program = QasmProgram.from_string(qasm_str)
     results = sim(program).run(1000)
 
-    assert len(results) == 1000
-    print(f"QASM sim results: got {len(results)} shots")
+    # Results is a dict with register names as keys, values are shot arrays
+    assert "c" in results
+    assert len(results["c"]) == 1000
+    print(f"QASM sim results: got {len(results['c'])} shots for register 'c'")
 
 
 def test_sim_api_with_llvm() -> None:
@@ -75,8 +78,10 @@ def test_sim_builder_chaining() -> None:
     # Test chaining
     results = sim(program).seed(42).workers(4).run(1000)
 
-    assert len(results) == 1000
-    print(f"Chained sim results: got {len(results)} shots")
+    # Results is a dict with register names as keys, values are shot arrays
+    assert "c" in results
+    assert len(results["c"]) == 1000
+    print(f"Chained sim results: got {len(results['c'])} shots for register 'c'")
 
 
 if __name__ == "__main__":

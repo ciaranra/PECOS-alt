@@ -8,89 +8,121 @@ This module provides comprehensive error handling for all PHIR operations includ
 - Compilation and optimization errors
 - QEC-specific errors
 
-Follows Rust error handling best practices with detailed error information
-and user-friendly error messages.
+Uses the `thiserror` crate for ergonomic error handling.
 */
 
-use std::fmt;
+use thiserror::Error;
 
 /// Main error type for PHIR operations
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Error)]
 pub enum PhirError {
     /// Parsing errors from input formats
-    Parse(ParseError),
+    #[error("Parse error: {0}")]
+    Parse(#[from] Box<ParseError>),
+
     /// Type system errors
-    Type(TypeError),
+    #[error("Type error: {0}")]
+    Type(#[from] Box<TypeError>),
+
     /// Validation errors (semantic analysis)
-    Validation(ValidationError),
+    #[error("Validation error: {0}")]
+    Validation(#[from] Box<ValidationError>),
+
     /// Runtime execution errors
-    Runtime(RuntimeError),
+    #[error("Runtime error: {0}")]
+    Runtime(#[from] Box<RuntimeError>),
+
     /// Compilation/optimization errors
-    Compilation(CompilationError),
+    #[error("Compilation error: {0}")]
+    Compilation(#[from] Box<CompilationError>),
+
     /// I/O errors
+    #[error("I/O error: {0}")]
     IO(String),
+
     /// Internal errors (bugs)
+    #[error("Internal error: {0}")]
     Internal(String),
 }
 
 /// Parsing errors from various input formats
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Error)]
 pub enum ParseError {
     /// Syntax error in input
+    #[error("Syntax error at {location}: {message}")]
     Syntax {
         message: String,
         location: SourceLocation,
         expected: Option<String>,
         found: Option<String>,
     },
+
     /// Unsupported feature in input format
+    #[error("Unsupported feature '{feature}' in {format} at {location}")]
     Unsupported {
         feature: String,
         format: String,
         location: SourceLocation,
     },
+
     /// Invalid structure (e.g., malformed HUGR)
+    #[error("Invalid structure at {location}: {message}")]
     InvalidStructure {
         message: String,
         location: SourceLocation,
     },
+
     /// JSON/serialization errors
+    #[error("Serialization error in {format}: {message}")]
     Serialization { message: String, format: String },
+
     /// File I/O errors during parsing
+    #[error("File I/O error for '{path}': {message}")]
     FileIO { path: String, message: String },
 }
 
 /// Type system errors
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Error)]
 pub enum TypeError {
     /// Type mismatch
+    #[error("Type mismatch at {location}: expected {expected:?}, found {found:?}")]
     Mismatch {
         expected: crate::types::Type,
         found: crate::types::Type,
         location: SourceLocation,
     },
+
     /// Undefined type
+    #[error("Undefined type '{type_name}' at {location}")]
     Undefined {
         type_name: String,
         location: SourceLocation,
     },
+
     /// Incompatible types in operation
+    #[error("Incompatible types for operation '{op_name}' at {location}: {types:?}")]
     Incompatible {
         op_name: String,
         types: Vec<crate::types::Type>,
         location: SourceLocation,
     },
+
     /// Type inference failure
+    #[error("Type inference failed at {location}: {message}")]
     InferenceFailed {
         message: String,
         location: SourceLocation,
     },
+
     /// Quantum no-cloning violation
+    #[error("Quantum no-cloning violation for variable '{variable}' at {location}")]
     NoCloning {
         variable: String,
         location: SourceLocation,
     },
+
     /// Invalid type parameters
+    #[error("Invalid type parameters for '{type_name}' at {location}: {message}")]
     InvalidParameters {
         type_name: String,
         message: String,
@@ -99,106 +131,151 @@ pub enum TypeError {
 }
 
 /// Semantic validation errors
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Error)]
 pub enum ValidationError {
     /// Undefined variable or function
+    #[error("Undefined {kind:?} '{name}' at {location}")]
     Undefined {
         name: String,
         kind: DefinitionKind,
         location: SourceLocation,
     },
+
+    /// Duplicate definition
+    #[error("Duplicate definition of '{name}' at {location}")]
+    DuplicateDefinition {
+        name: String,
+        location: SourceLocation,
+        previous: SourceLocation,
+    },
+
+    /// Invalid structure (e.g., CFG violations)
+    #[error("Invalid structure at {location}: {message}")]
+    InvalidStructure {
+        message: String,
+        location: SourceLocation,
+    },
+
+    /// Missing required component
+    #[error("Missing {component} at {location}")]
+    MissingComponent {
+        component: String,
+        location: SourceLocation,
+    },
+
+    /// SSA violation
+    #[error("SSA violation for variable '{variable}' at {location}")]
+    SSAViolation {
+        variable: String,
+        location: SourceLocation,
+    },
+
+    /// Ownership/borrowing violation
+    #[error("Ownership violation for '{resource}' at {location}: {message}")]
+    OwnershipViolation {
+        resource: String,
+        message: String,
+        location: SourceLocation,
+    },
+
     /// Variable used before definition
+    #[error("Variable '{variable}' used before definition at {use_location}")]
     UseBeforeDefine {
         variable: String,
         use_location: SourceLocation,
         define_location: Option<SourceLocation>,
     },
+
     /// Multiple definitions of same name
+    #[error(
+        "Redefinition of {kind:?} '{name}' at {second_location} (first defined at {first_location})"
+    )]
     Redefinition {
         name: String,
         kind: DefinitionKind,
         first_location: SourceLocation,
         second_location: SourceLocation,
     },
+
     /// Invalid control flow
+    #[error("Invalid control flow at {location}: {message}")]
     ControlFlow {
         message: String,
         location: SourceLocation,
     },
+
     /// Quantum circuit violations
+    #[error("Quantum violation '{rule}' at {location}: {message}")]
     QuantumViolation {
         rule: String,
         message: String,
         location: SourceLocation,
     },
-    /// Function signature mismatch
-    SignatureMismatch {
-        function: String,
-        expected_args: usize,
-        found_args: usize,
-        location: SourceLocation,
-    },
+
     /// Unknown dialect
+    #[error("Unknown dialect: {0}")]
     UnknownDialect(String),
-    /// Unknown operation in dialect
+
+    /// Unknown operation
+    #[error("Unknown operation: {0}")]
     UnknownOperation(String),
 }
 
 /// Runtime execution errors
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Error)]
 pub enum RuntimeError {
     /// Division by zero
+    #[error("Division by zero at {location}")]
     DivisionByZero { location: SourceLocation },
-    /// Array index out of bounds
+
+    /// Index out of bounds
+    #[error("Index {index} out of bounds for array of size {size} at {location}")]
     IndexOutOfBounds {
-        index: i64,
+        index: usize,
         size: usize,
         location: SourceLocation,
     },
-    /// Null pointer dereference
-    NullDereference { location: SourceLocation },
-    /// Quantum measurement error
-    MeasurementError {
+
+    /// External function call failed
+    #[error("External function '{function}' failed at {location}: {message}")]
+    ExternalCall {
+        function: String,
         message: String,
         location: SourceLocation,
     },
-    /// Insufficient quantum resources
-    InsufficientResources {
-        requested: usize,
-        available: usize,
-        resource_type: String,
+
+    /// Resource exhausted (e.g., memory, qubits)
+    #[error("Resource exhausted at {location}: {resource}")]
+    ResourceExhausted {
+        resource: String,
         location: SourceLocation,
     },
-    /// Stack overflow
-    StackOverflow { location: SourceLocation },
-    /// External function call failed
-    ExternalCall {
-        function: String,
+
+    /// Execution failed with custom message
+    #[error("Execution failed at {location}: {message}")]
+    ExecutionFailed {
         message: String,
         location: SourceLocation,
     },
 }
 
 /// Compilation and optimization errors
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Error)]
 pub enum CompilationError {
     /// Optimization pass failed
-    OptimizationFailed {
-        pass_name: String,
-        message: String,
-        location: Option<SourceLocation>,
-    },
+    #[error("Optimization pass '{pass}' failed: {message}")]
+    OptimizationFailed { pass: String, message: String },
+
     /// Code generation failed
-    CodegenFailed {
-        target: String,
-        message: String,
-        location: Option<SourceLocation>,
-    },
-    /// Unsupported target
-    UnsupportedTarget { target: String, feature: String },
-    /// Resource estimation failed
+    #[error("Code generation failed for target '{target}': {message}")]
+    CodeGenFailed { target: String, message: String },
+
+    /// Resource estimation exceeded limits
+    #[error("Resource estimation failed: {message}")]
     ResourceEstimation { message: String },
+
     /// Circuit routing failed
+    #[error("Circuit routing failed for topology '{topology}': {message}")]
     RoutingFailed { topology: String, message: String },
 }
 
@@ -237,15 +314,17 @@ pub struct Span {
 /// Result type alias for PHIR operations
 pub type Result<T> = std::result::Result<T, PhirError>;
 
+// Helper constructors
 impl PhirError {
     /// Create a parse error
     pub fn parse_error(message: impl Into<String>, location: SourceLocation) -> Self {
-        PhirError::Parse(ParseError::Syntax {
+        Box::new(ParseError::Syntax {
             message: message.into(),
             location,
             expected: None,
             found: None,
         })
+        .into()
     }
 
     /// Create a type error
@@ -255,29 +334,32 @@ impl PhirError {
         found: crate::types::Type,
         location: SourceLocation,
     ) -> Self {
-        PhirError::Type(TypeError::Mismatch {
+        Box::new(TypeError::Mismatch {
             expected,
             found,
             location,
         })
+        .into()
     }
 
     /// Create a validation error
     pub fn undefined_variable(name: impl Into<String>, location: SourceLocation) -> Self {
-        PhirError::Validation(ValidationError::Undefined {
+        Box::new(ValidationError::Undefined {
             name: name.into(),
             kind: DefinitionKind::Variable,
             location,
         })
+        .into()
     }
 
     /// Create a runtime error
     pub fn runtime_error(message: impl Into<String>, location: SourceLocation) -> Self {
-        PhirError::Runtime(RuntimeError::ExternalCall {
+        Box::new(RuntimeError::ExternalCall {
             function: "unknown".to_string(),
             message: message.into(),
             location,
         })
+        .into()
     }
 
     /// Create an internal error (for bugs)
@@ -285,339 +367,44 @@ impl PhirError {
         PhirError::Internal(message.into())
     }
 
-    /// Get the source location associated with this error (if any)
-    #[must_use]
-    pub fn location(&self) -> Option<&SourceLocation> {
-        match self {
-            PhirError::Parse(e) => e.location(),
-            PhirError::Type(e) => e.location(),
-            PhirError::Validation(e) => e.location(),
-            PhirError::Runtime(e) => e.location(),
-            PhirError::Compilation(e) => e.location(),
-            PhirError::IO(_) | PhirError::Internal(_) => None,
-        }
-    }
-
-    /// Check if this is a recoverable error
-    #[must_use]
-    pub fn is_recoverable(&self) -> bool {
-        match self {
-            PhirError::Parse(_) | PhirError::Type(_) | PhirError::Validation(_) => false,
-            PhirError::Runtime(_) => true,
-            PhirError::Compilation(_) => true,
-            PhirError::IO(_) => true,
-            PhirError::Internal(_) => false,
-        }
-    }
-}
-
-impl ParseError {
-    #[must_use]
-    pub fn location(&self) -> Option<&SourceLocation> {
-        match self {
-            ParseError::Syntax { location, .. }
-            | ParseError::Unsupported { location, .. }
-            | ParseError::InvalidStructure { location, .. } => Some(location),
-            ParseError::Serialization { .. } | ParseError::FileIO { .. } => None,
-        }
-    }
-}
-
-impl TypeError {
-    #[must_use]
-    pub fn location(&self) -> Option<&SourceLocation> {
-        match self {
-            TypeError::Mismatch { location, .. }
-            | TypeError::Undefined { location, .. }
-            | TypeError::Incompatible { location, .. }
-            | TypeError::InferenceFailed { location, .. }
-            | TypeError::NoCloning { location, .. }
-            | TypeError::InvalidParameters { location, .. } => Some(location),
-        }
-    }
-}
-
-impl ValidationError {
-    #[must_use]
-    pub fn location(&self) -> Option<&SourceLocation> {
-        match self {
-            ValidationError::Undefined { location, .. }
-            | ValidationError::UseBeforeDefine {
-                use_location: location,
-                ..
-            }
-            | ValidationError::Redefinition {
-                second_location: location,
-                ..
-            }
-            | ValidationError::ControlFlow { location, .. }
-            | ValidationError::QuantumViolation { location, .. }
-            | ValidationError::SignatureMismatch { location, .. } => Some(location),
-            ValidationError::UnknownDialect(_) | ValidationError::UnknownOperation(_) => None,
-        }
-    }
-}
-
-impl RuntimeError {
-    #[must_use]
-    pub fn location(&self) -> Option<&SourceLocation> {
-        match self {
-            RuntimeError::DivisionByZero { location }
-            | RuntimeError::IndexOutOfBounds { location, .. }
-            | RuntimeError::NullDereference { location }
-            | RuntimeError::MeasurementError { location, .. }
-            | RuntimeError::InsufficientResources { location, .. }
-            | RuntimeError::StackOverflow { location }
-            | RuntimeError::ExternalCall { location, .. } => Some(location),
-        }
-    }
-}
-
-impl CompilationError {
-    #[must_use]
-    pub fn location(&self) -> Option<&SourceLocation> {
-        match self {
-            CompilationError::OptimizationFailed { location, .. }
-            | CompilationError::CodegenFailed { location, .. } => location.as_ref(),
-            CompilationError::UnsupportedTarget { .. }
-            | CompilationError::ResourceEstimation { .. }
-            | CompilationError::RoutingFailed { .. } => None,
-        }
+    /// Create an I/O error
+    pub fn io_error(message: impl Into<String>) -> Self {
+        PhirError::IO(message.into())
     }
 }
 
 impl SourceLocation {
-    /// Create a new source location
-    pub fn new(file: impl Into<String>, line: usize, column: usize, span: Span) -> Self {
-        Self {
-            file: file.into(),
-            line,
-            column,
-            span,
-        }
-    }
-
-    /// Create an unknown/dummy location
+    /// Create an unknown source location
     #[must_use]
     pub fn unknown() -> Self {
         Self {
             file: "<unknown>".to_string(),
-            line: 1,
-            column: 1,
+            line: 0,
+            column: 0,
+            span: Span { start: 0, end: 0 },
+        }
+    }
+
+    /// Create a source location from file, line, and column
+    #[must_use]
+    pub fn new(file: impl Into<String>, line: usize, column: usize) -> Self {
+        Self {
+            file: file.into(),
+            line,
+            column,
             span: Span { start: 0, end: 0 },
         }
     }
 }
 
-impl Span {
-    /// Create a new span
-    #[must_use]
-    pub fn new(start: usize, end: usize) -> Self {
-        Self { start, end }
-    }
-
-    /// Get the length of this span
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.end.saturating_sub(self.start)
-    }
-
-    /// Check if span is empty
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.start >= self.end
+impl std::fmt::Display for SourceLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}:{}", self.file, self.line, self.column)
     }
 }
 
-// Display implementations for user-friendly error messages
-
-impl fmt::Display for PhirError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            PhirError::Parse(e) => write!(f, "Parse error: {e}"),
-            PhirError::Type(e) => write!(f, "Type error: {e}"),
-            PhirError::Validation(e) => write!(f, "Validation error: {e}"),
-            PhirError::Runtime(e) => write!(f, "Runtime error: {e}"),
-            PhirError::Compilation(e) => write!(f, "Compilation error: {e}"),
-            PhirError::IO(msg) => write!(f, "I/O error: {msg}"),
-            PhirError::Internal(msg) => write!(f, "Internal error: {msg}"),
-        }
-    }
-}
-
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ParseError::Syntax {
-                message,
-                expected,
-                found,
-                ..
-            } => {
-                write!(f, "{message}")?;
-                if let (Some(exp), Some(fnd)) = (expected, found) {
-                    write!(f, " (expected {exp}, found {fnd})")?;
-                }
-                Ok(())
-            }
-            ParseError::Unsupported {
-                feature, format, ..
-            } => {
-                write!(f, "Unsupported feature '{feature}' in format '{format}'")
-            }
-            ParseError::InvalidStructure { message, .. } => {
-                write!(f, "Invalid structure: {message}")
-            }
-            ParseError::Serialization { message, format } => {
-                write!(f, "Serialization error in {format}: {message}")
-            }
-            ParseError::FileIO { path, message } => {
-                write!(f, "File I/O error for '{path}': {message}")
-            }
-        }
-    }
-}
-
-impl fmt::Display for TypeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TypeError::Mismatch {
-                expected, found, ..
-            } => {
-                write!(f, "Type mismatch: expected {expected}, found {found}")
-            }
-            TypeError::Undefined { type_name, .. } => {
-                write!(f, "Undefined type '{type_name}'")
-            }
-            TypeError::Incompatible { op_name, types, .. } => {
-                write!(f, "Incompatible types for operation '{op_name}': {types:?}")
-            }
-            TypeError::InferenceFailed { message, .. } => {
-                write!(f, "Type inference failed: {message}")
-            }
-            TypeError::NoCloning { variable, .. } => {
-                write!(
-                    f,
-                    "Quantum no-cloning violation: variable '{variable}' used multiple times"
-                )
-            }
-            TypeError::InvalidParameters {
-                type_name, message, ..
-            } => {
-                write!(f, "Invalid type parameters for '{type_name}': {message}")
-            }
-        }
-    }
-}
-
-impl fmt::Display for ValidationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ValidationError::Undefined { name, kind, .. } => {
-                write!(f, "Undefined {kind}: '{name}'")
-            }
-            ValidationError::UseBeforeDefine { variable, .. } => {
-                write!(f, "Variable '{variable}' used before definition")
-            }
-            ValidationError::Redefinition { name, kind, .. } => {
-                write!(f, "Redefinition of {kind} '{name}'")
-            }
-            ValidationError::ControlFlow { message, .. } => {
-                write!(f, "Control flow error: {message}")
-            }
-            ValidationError::QuantumViolation { rule, message, .. } => {
-                write!(f, "Quantum rule '{rule}' violated: {message}")
-            }
-            ValidationError::SignatureMismatch {
-                function,
-                expected_args,
-                found_args,
-                ..
-            } => {
-                write!(
-                    f,
-                    "Function '{function}' expects {expected_args} arguments, found {found_args}"
-                )
-            }
-            ValidationError::UnknownDialect(dialect) => {
-                write!(f, "Unknown dialect: '{dialect}'")
-            }
-            ValidationError::UnknownOperation(op) => {
-                write!(f, "Unknown operation: '{op}'")
-            }
-        }
-    }
-}
-
-impl fmt::Display for RuntimeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            RuntimeError::DivisionByZero { .. } => {
-                write!(f, "Division by zero")
-            }
-            RuntimeError::IndexOutOfBounds { index, size, .. } => {
-                write!(f, "Index {index} out of bounds for array of size {size}")
-            }
-            RuntimeError::NullDereference { .. } => {
-                write!(f, "Null pointer dereference")
-            }
-            RuntimeError::MeasurementError { message, .. } => {
-                write!(f, "Measurement error: {message}")
-            }
-            RuntimeError::InsufficientResources {
-                requested,
-                available,
-                resource_type,
-                ..
-            } => {
-                write!(
-                    f,
-                    "Insufficient {resource_type}: requested {requested}, available {available}"
-                )
-            }
-            RuntimeError::StackOverflow { .. } => {
-                write!(f, "Stack overflow")
-            }
-            RuntimeError::ExternalCall {
-                function, message, ..
-            } => {
-                write!(f, "External function '{function}' failed: {message}")
-            }
-        }
-    }
-}
-
-impl fmt::Display for CompilationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            CompilationError::OptimizationFailed {
-                pass_name, message, ..
-            } => {
-                write!(f, "Optimization pass '{pass_name}' failed: {message}")
-            }
-            CompilationError::CodegenFailed {
-                target, message, ..
-            } => {
-                write!(f, "Code generation for '{target}' failed: {message}")
-            }
-            CompilationError::UnsupportedTarget { target, feature } => {
-                write!(f, "Target '{target}' does not support feature '{feature}'")
-            }
-            CompilationError::ResourceEstimation { message } => {
-                write!(f, "Resource estimation failed: {message}")
-            }
-            CompilationError::RoutingFailed { topology, message } => {
-                write!(
-                    f,
-                    "Circuit routing for '{topology}' topology failed: {message}"
-                )
-            }
-        }
-    }
-}
-
-impl fmt::Display for DefinitionKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for DefinitionKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             DefinitionKind::Variable => write!(f, "variable"),
             DefinitionKind::Function => write!(f, "function"),
@@ -628,70 +415,63 @@ impl fmt::Display for DefinitionKind {
     }
 }
 
-impl std::error::Error for PhirError {}
-impl std::error::Error for ParseError {}
-impl std::error::Error for TypeError {}
-impl std::error::Error for ValidationError {}
-impl std::error::Error for RuntimeError {}
-impl std::error::Error for CompilationError {}
-
-// Conversion from external error types
-
+// Convert from std::io::Error
 impl From<std::io::Error> for PhirError {
     fn from(err: std::io::Error) -> Self {
         PhirError::IO(err.to_string())
     }
 }
 
-impl From<serde_json::Error> for PhirError {
-    fn from(err: serde_json::Error) -> Self {
-        PhirError::Parse(ParseError::Serialization {
-            message: err.to_string(),
-            format: "JSON".to_string(),
-        })
+// Convert to PecosError for interoperability with other PECOS crates
+impl From<PhirError> for pecos_core::errors::PecosError {
+    fn from(err: PhirError) -> Self {
+        use pecos_core::errors::PecosError;
+
+        match err {
+            PhirError::Parse(e) => PecosError::ParseSyntax {
+                language: "PHIR".to_string(),
+                message: e.to_string(),
+            },
+            PhirError::Type(e) => PecosError::Compilation(format!("Type error: {e}")),
+            PhirError::Validation(e) => match e.as_ref() {
+                ValidationError::Undefined { name, kind, .. } => {
+                    PecosError::CompileUndefinedReference {
+                        kind: format!("{kind:?}"),
+                        name: name.clone(),
+                    }
+                }
+                ValidationError::UnknownDialect(d) => {
+                    PecosError::Compilation(format!("Unknown dialect: {d}"))
+                }
+                ValidationError::UnknownOperation(op) => {
+                    PecosError::Compilation(format!("Unknown operation: {op}"))
+                }
+                ValidationError::ControlFlow { message, .. } => {
+                    PecosError::ValidationInvalidCircuitStructure(message.clone())
+                }
+                _ => PecosError::Compilation(format!("Validation error: {e}")),
+            },
+            PhirError::Runtime(e) => match e.as_ref() {
+                RuntimeError::DivisionByZero { .. } => PecosError::RuntimeDivisionByZero,
+                RuntimeError::IndexOutOfBounds { index, size, .. } => {
+                    PecosError::RuntimeIndexOutOfBounds {
+                        index: *index,
+                        length: *size,
+                    }
+                }
+                _ => PecosError::Processing(format!("Runtime error: {e}")),
+            },
+            PhirError::Compilation(e) => PecosError::Compilation(e.to_string()),
+            PhirError::IO(msg) => PecosError::Resource(msg),
+            PhirError::Internal(msg) => PecosError::Generic(format!("Internal PHIR error: {msg}")),
+        }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::*;
-
-    #[test]
-    fn test_error_creation() {
-        let loc = SourceLocation::unknown();
-
-        let type_err = PhirError::type_error(qubit_type(), int_type(), loc.clone());
-        assert!(matches!(
-            type_err,
-            PhirError::Type(TypeError::Mismatch { .. })
-        ));
-
-        let var_err = PhirError::undefined_variable("x", loc.clone());
-        assert!(matches!(
-            var_err,
-            PhirError::Validation(ValidationError::Undefined { .. })
-        ));
-    }
-
-    #[test]
-    fn test_error_display() {
-        let loc = SourceLocation::unknown();
-        let err = PhirError::type_error(qubit_type(), int_type(), loc);
-        let msg = err.to_string();
-        assert!(msg.contains("Type mismatch"));
-        assert!(msg.contains("quantum.qubit"));
-        assert!(msg.contains("int"));
-    }
-
-    #[test]
-    fn test_span_operations() {
-        let span = Span::new(10, 20);
-        assert_eq!(span.len(), 10);
-        assert!(!span.is_empty());
-
-        let empty_span = Span::new(5, 5);
-        assert_eq!(empty_span.len(), 0);
-        assert!(empty_span.is_empty());
+// Allow converting PecosError to PhirError when needed
+impl From<pecos_core::errors::PecosError> for PhirError {
+    fn from(err: pecos_core::errors::PecosError) -> Self {
+        // For now, wrap it as an Internal error with the message
+        PhirError::Internal(err.to_string())
     }
 }

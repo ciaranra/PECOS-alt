@@ -48,10 +48,10 @@ Both Python and Rust organize functionality into logical namespaces for better d
 from pecos_rslib import classical, quantum, noise, programs
 
 # Clear, organized access
-classical.qasm()            # Classical control engines
-quantum.sparse_stabilizer() # Quantum backends
-noise.depolarizing()        # Noise models
-programs.QasmProgram        # Program types
+classical.qasm()  # Classical control engines
+quantum.sparse_stabilizer()  # Quantum backends
+noise.depolarizing()  # Noise models
+programs.QasmProgram  # Program types
 ```
 
 #### Rust Namespaces (Proposed)
@@ -146,12 +146,13 @@ sim_builder()
 
 ```python
 # Python - identical to Rust!
-(sim_builder()
-    .classical(qasm_engine()
-        .program(QasmProgram.from_string(qasm)))
+(
+    sim_builder()
+    .classical(qasm_engine().program(QasmProgram.from_string(qasm)))
     .quantum(sparse_stab())
     .noise(depolarizing_noise().with_p1_probability(0.01))
-    .run(1000))
+    .run(1000)
+)
 ```
 
 #### Alternative API: Direct Instantiation
@@ -170,12 +171,13 @@ SimBuilder::new()
 
 ##### Python (without Builder suffix - concise)
 ```python
-(SimBuilder()
-    .classical(QasmEngine()
-        .program(QasmProgram.from_string(qasm)))
+(
+    SimBuilder()
+    .classical(QasmEngine().program(QasmProgram.from_string(qasm)))
     .quantum(SparseStab())
     .noise(DepolarizingNoise().with_p1_probability(0.01))
-    .run(1000))
+    .run(1000)
+)
 ```
 
 ### Free Functions Provided
@@ -454,39 +456,45 @@ impl UnifiedSimBuilder {
 from pecos_rslib import classical, quantum, noise, programs
 
 # Simple case (using namespaces - recommended)
-results = (sim_builder()
-    .classical(classical.qasm()
-        .program(programs.QasmProgram.from_string(qasm)))
-    .run(1000))
+results = (
+    sim_builder()
+    .classical(classical.qasm().program(programs.QasmProgram.from_string(qasm)))
+    .run(1000)
+)
 
 # With configuration (using namespaces - recommended)
-results = (sim_builder()
-    .classical(classical.qasm()
-        .program(programs.QasmProgram.from_string(qasm)))
+results = (
+    sim_builder()
+    .classical(classical.qasm().program(programs.QasmProgram.from_string(qasm)))
     .quantum(quantum.sparse_stab())
-    .noise(noise.depolarizing()
+    .noise(
+        noise.depolarizing()
         .with_prep_probability(0.001)
         .with_meas_probability(0.001)
         .with_p1_probability(0.01)
-        .with_p2_probability(0.01))
+        .with_p2_probability(0.01)
+    )
     .seed(42)
     .workers(4)
-    .run(1000))
+    .run(1000)
+)
 
 # Builder pattern supports both styles
 sim = sim_builder().classical(classical.qasm().program(prog))
-sim.seed(42)        # In-place mutation
-sim.workers(4)      # Returns self for optional chaining
+sim.seed(42)  # In-place mutation
+sim.workers(4)  # Returns self for optional chaining
 results = sim.run(1000)
 
 # Alternative: Direct imports (backward compatible)
 from pecos_rslib import sim_builder, qasm_engine, sparse_stab, depolarizing_noise
-results = (sim_builder()
-    .classical(qasm_engine()
-        .program(QasmProgram.from_string(qasm)))
+
+results = (
+    sim_builder()
+    .classical(qasm_engine().program(QasmProgram.from_string(qasm)))
     .quantum(sparse_stab())
     .noise(depolarizing_noise().with_p1_probability(0.01))
-    .run(1000))
+    .run(1000)
+)
 ```
 
 ### Rust Usage Examples
@@ -642,6 +650,7 @@ impl From<pecos_programs::HugrProgram> for pecos_selene::SeleneEngineProgram { .
    def qasm_engine() -> QasmEngineBuilder:
        return QasmEngineBuilder()
 
+
    def sparse_stab() -> SparseStabBuilder:
        return SparseStabBuilder()
    ```
@@ -649,7 +658,11 @@ impl From<pecos_programs::HugrProgram> for pecos_selene::SeleneEngineProgram { .
 2. **Keep Class API**: Python classes remain available without "Builder" suffix
    ```python
    class QasmEngine:  # Wraps QasmEngineBuilder
+       pass
+
+
    class SparseStab:  # Wraps SparseStabBuilder
+       pass
    ```
 
 #### Documentation
@@ -662,7 +675,7 @@ impl From<pecos_programs::HugrProgram> for pecos_selene::SeleneEngineProgram { .
 
 Python now has namespace modules that organize functionality:
 
-```python
+```
 pecos_rslib/
 ├── classical.py    # Classical control engine builders
 ├── noise.py        # Noise model builders

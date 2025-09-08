@@ -14,8 +14,7 @@ use log::info;
 use pecos_engines::noise::general::GeneralNoiseModel;
 use pecos_engines::quantum::{QuantumEngine, StateVecEngine};
 use pecos_engines::{
-    ClassicalControlEngineBuilder, Engine, QuantumSystem, byte_message::ByteMessage,
-    engine_system::ControlEngine,
+    Engine, QuantumSystem, byte_message::ByteMessage, engine_system::ControlEngine,
 };
 use std::collections::BTreeMap;
 

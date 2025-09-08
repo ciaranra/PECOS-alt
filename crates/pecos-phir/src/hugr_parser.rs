@@ -379,7 +379,7 @@ fn parse_simplified_function(nodes: &[Value], func_idx: usize, module: &Value) -
     // Process nodes that have this function as parent
     for (idx, node) in nodes.iter().enumerate() {
         if let Some(parent) = node.get("parent").and_then(serde_json::Value::as_u64)
-            && parent as usize == func_idx
+            && usize::try_from(parent).ok() == Some(func_idx)
             && let Some(op) = node.get("op").and_then(|o| o.as_str())
         {
             match op {
@@ -465,10 +465,11 @@ fn create_quantum_instruction(
                 && !dst.is_empty()
                 && !src.is_empty()
                 && let (Some(dst_node), Some(src_node)) = (dst[0].as_u64(), src[0].as_u64())
-                && dst_node as usize == node_idx
+                && usize::try_from(dst_node).ok() == Some(node_idx)
             {
                 // This edge points to our node
-                if let Some(&ssa_val) = node_to_ssa.get(&(src_node as usize)) {
+                let src_idx = usize::try_from(src_node).expect("Node index should fit in usize");
+                if let Some(&ssa_val) = node_to_ssa.get(&src_idx) {
                     operands.push(ssa_val);
                 }
             }

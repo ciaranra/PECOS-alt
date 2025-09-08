@@ -1,8 +1,8 @@
 use libloading::{Library, Symbol};
-/// Production implementation of SeleneExecutableEngine using library loading and callbacks
+/// Production implementation of `SeleneExecutableEngine` using library loading and callbacks
 ///
 /// This engine loads Selene-compiled shared libraries and communicates via callbacks
-/// for ByteMessage exchange while using TCP streams for final results.
+/// for `ByteMessage` exchange while using TCP streams for final results.
 use pecos_core::prelude::PecosError;
 use pecos_engines::{ByteMessage, ClassicalEngine, ControlEngine, Data, Engine, EngineStage, Shot};
 use std::collections::{BTreeMap, VecDeque};
@@ -64,14 +64,14 @@ impl ResultStreamCapture {
     fn new() -> Result<Self, PecosError> {
         // Bind to any available port on localhost
         let listener = TcpListener::bind("127.0.0.1:0")
-            .map_err(|e| PecosError::Processing(format!("Failed to create TCP listener: {}", e)))?;
+            .map_err(|e| PecosError::Processing(format!("Failed to create TCP listener: {e}")))?;
 
         let port = listener
             .local_addr()
-            .map_err(|e| PecosError::Processing(format!("Failed to get listener address: {}", e)))?
+            .map_err(|e| PecosError::Processing(format!("Failed to get listener address: {e}")))?
             .port();
 
-        log::info!("Created TCP result stream listener on port {}", port);
+        log::info!("Created TCP result stream listener on port {port}");
 
         Ok(Self {
             listener,
@@ -90,7 +90,7 @@ impl ResultStreamCapture {
         let listener = self
             .listener
             .try_clone()
-            .map_err(|e| PecosError::Processing(format!("Failed to clone listener: {}", e)))?;
+            .map_err(|e| PecosError::Processing(format!("Failed to clone listener: {e}")))?;
 
         self.result_thread = Some(thread::spawn(move || {
             let mut results = Vec::new();
@@ -103,7 +103,7 @@ impl ResultStreamCapture {
 
                 // Read all data from the stream
                 if let Err(e) = stream.read_to_end(&mut buffer) {
-                    log::error!("Failed to read from result stream: {}", e);
+                    log::error!("Failed to read from result stream: {e}");
                     return results;
                 }
 
@@ -123,7 +123,7 @@ impl ResultStreamCapture {
                         };
 
                         if let Some(val) = parsed_value {
-                            log::debug!("Captured result: {} = {:?}", name, val);
+                            log::debug!("Captured result: {name} = {val:?}");
                             results.push((name.to_string(), val));
                         }
                     }
@@ -148,6 +148,7 @@ impl ResultStreamCapture {
 
 impl SeleneLibraryEngine {
     /// Create a new engine for the given library
+    #[must_use]
     pub fn new(library_path: std::path::PathBuf, num_qubits: usize) -> Self {
         Self {
             library_path,
@@ -172,7 +173,7 @@ impl SeleneLibraryEngine {
         // Create TCP result stream first
         let mut result_stream = ResultStreamCapture::new()?;
         let result_uri = result_stream.get_uri();
-        log::info!("Result stream URI: {}", result_uri);
+        log::info!("Result stream URI: {result_uri}");
 
         // Start capturing results
         result_stream.start_capture()?;
@@ -181,7 +182,7 @@ impl SeleneLibraryEngine {
         // Load the shared library
         let lib = unsafe {
             Library::new(&self.library_path)
-                .map_err(|e| PecosError::Processing(format!("Failed to load library: {}", e)))?
+                .map_err(|e| PecosError::Processing(format!("Failed to load library: {e}")))?
         };
 
         // Get the callback setup function
@@ -193,32 +194,31 @@ impl SeleneLibraryEngine {
             ),
         > = unsafe {
             lib.get(b"pecos_bridge_set_engine_callbacks").map_err(|e| {
-                PecosError::Processing(format!("Failed to get callback function: {}", e))
+                PecosError::Processing(format!("Failed to get callback function: {e}"))
             })?
         };
 
         // Register our callbacks
         let state_ptr = Arc::as_ptr(&self.callback_state) as *mut c_void;
-        unsafe {
-            set_callbacks(
-                state_ptr,
-                Self::handle_send_operation,
-                Self::handle_receive_measurements,
-            );
-        }
+        set_callbacks(
+            state_ptr,
+            Self::handle_send_operation,
+            Self::handle_receive_measurements,
+        );
 
         // Configure Selene with the result stream URI
         // Check if library has a configuration function
-        if let Ok(configure_fn) = unsafe {
-            lib.get::<extern "C" fn(*const std::os::raw::c_char)>(b"pecos_bridge_configure_output")
-        } {
-            use std::ffi::CString;
-            let uri_cstr = CString::new(result_uri)
-                .map_err(|e| PecosError::Processing(format!("Failed to create CString: {}", e)))?;
-            unsafe {
+        unsafe {
+            if let Ok(configure_fn) = lib
+                .get::<extern "C" fn(*const std::os::raw::c_char)>(b"pecos_bridge_configure_output")
+            {
+                use std::ffi::CString;
+                let uri_cstr = CString::new(result_uri).map_err(|e| {
+                    PecosError::Processing(format!("Failed to create CString: {e}"))
+                })?;
                 configure_fn(uri_cstr.as_ptr());
+                log::info!("Configured output stream URI");
             }
-            log::info!("Configured output stream URI");
         }
 
         log::info!("Callbacks registered successfully");
@@ -237,7 +237,7 @@ impl SeleneLibraryEngine {
         let qmain: Symbol<extern "C" fn() -> i32> = unsafe {
             lib.get(b"qmain")
                 .or_else(|_| lib.get(b"main"))
-                .map_err(|e| PecosError::Processing(format!("Failed to get entry point: {}", e)))?
+                .map_err(|e| PecosError::Processing(format!("Failed to get entry point: {e}")))?
         };
 
         // Clone what we need for the thread
@@ -257,8 +257,7 @@ impl SeleneLibraryEngine {
                 Ok(())
             } else {
                 Err(PecosError::Processing(format!(
-                    "Program exited with code {}",
-                    result
+                    "Program exited with code {result}"
                 )))
             }
         }));
@@ -273,7 +272,7 @@ impl SeleneLibraryEngine {
         let message = ByteMessage::new(bytes);
 
         state.lock().unwrap().operation_queue.push_back(message);
-        log::debug!("Received operation from Bridge ({} bytes)", len);
+        log::debug!("Received operation from Bridge ({len} bytes)");
         0 // Success
     }
 
@@ -292,7 +291,7 @@ impl SeleneLibraryEngine {
             // Allocate memory for the result
             let buffer = bytes.to_vec().into_boxed_slice();
             let len = buffer.len();
-            let ptr = Box::into_raw(buffer) as *mut u8;
+            let ptr = Box::into_raw(buffer).cast::<u8>();
 
             unsafe {
                 *data_out = ptr;
@@ -300,7 +299,7 @@ impl SeleneLibraryEngine {
             }
 
             state_lock.is_waiting = false;
-            log::debug!("Provided measurements to Bridge ({} bytes)", len);
+            log::debug!("Provided measurements to Bridge ({len} bytes)");
             len as i32
         } else {
             state_lock.is_waiting = true;
@@ -340,7 +339,7 @@ impl SeleneLibraryEngine {
     /// Wait for operations with timeout
     fn wait_for_operations(&mut self, timeout_ms: u64) -> Option<ByteMessage> {
         let start = std::time::Instant::now();
-        while start.elapsed().as_millis() < timeout_ms as u128 {
+        while start.elapsed().as_millis() < u128::from(timeout_ms) {
             if let Some(ops) = self.get_pending_operations() {
                 return Some(ops);
             }
@@ -520,7 +519,7 @@ impl Engine for SeleneLibraryEngine {
         // Use the ControlEngine implementation
         match self.start(())? {
             EngineStage::Complete(shot) => Ok(shot),
-            EngineStage::NeedsProcessing(ops) => {
+            EngineStage::NeedsProcessing(_ops) => {
                 // This shouldn't happen for library engine
                 Err(PecosError::Processing(
                     "Unexpected NeedsProcessing state".to_string(),

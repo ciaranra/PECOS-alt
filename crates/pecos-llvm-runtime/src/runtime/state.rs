@@ -433,6 +433,7 @@ impl LlvmRuntimeState {
                 result_registers.sort_by_key(|(idx, _)| *idx);
 
                 // Convert to i32 values
+                #[allow(clippy::cast_possible_truncation)]
                 let values: Vec<i32> = result_registers
                     .iter()
                     .map(|(_, value)| *value as i32)

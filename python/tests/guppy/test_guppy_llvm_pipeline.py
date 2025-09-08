@@ -21,8 +21,9 @@ def decode_integer_results(results: list[int], n_bits: int) -> list[tuple[bool, 
 
 sys.path.append("python/quantum-pecos/src")
 
+from pecos.frontends import get_guppy_backends, sim
 from pecos.frontends.guppy_frontend import GuppyFrontend
-from pecos.frontends.run_guppy import get_guppy_backends, run_guppy
+from pecos_rslib import state_vector
 
 
 def test_backend_availability() -> None:
@@ -124,22 +125,37 @@ def test_bell_state_function() -> None:
         print("[PASS] Bell state function defined")
 
         try:
-            # Test using run_guppy API
-            result = run_guppy(bell_state, shots=10, verbose=True)
+            # Test using sim() API
+            result = sim(bell_state).qubits(10).quantum(state_vector()).run(10)
             print("\n[PASS] Execution completed!")
-            print(f"  Function: {result['function_name']}")
-            print("  Backend: Rust (only backend available)")
-            print(f"  Results (first 10): {result['results'][:10]}")
-            print(f"  QIR file: {result['qir_file']}")
+            print("  Function: bell_state")
+            print("  Backend: Unified sim() API with state_vector")
+            measurements = result.get(
+                "measurements",
+                result.get("measurement_1", result.get("result", [])),
+            )
+            print(f"  Results (first 10): {measurements[:10]}")
 
             # Check correlation
-            if result["results"]:
-                # Decode integer-encoded results
-                decoded_results = decode_integer_results(result["results"], 2)
-                correlated = sum(1 for (a, b) in decoded_results if a == b)
-                print(
-                    f"  Correlation: {correlated}/{len(result['results'])} = {correlated/len(result['results']):.2%}",
-                )
+            if measurements:
+                # For Bell state, check if measurements are correlated
+                if "measurement_1" in result and "measurement_2" in result:
+                    # Tuple returns
+                    correlated = sum(
+                        1
+                        for i in range(len(result["measurement_1"]))
+                        if result["measurement_1"][i] == result["measurement_2"][i]
+                    )
+                    total = len(result["measurement_1"])
+                    print(
+                        f"  Correlation: {correlated}/{total} = {correlated/total:.2%}",
+                    )
+                elif isinstance(measurements[0], tuple):
+                    # Tuple format
+                    correlated = sum(1 for m in measurements if m[0] == m[1])
+                    print(
+                        f"  Correlation: {correlated}/{len(measurements)} = {correlated/len(measurements):.2%}",
+                    )
 
         except (RuntimeError, ImportError) as e:
             print(f"[FAIL] Execution failed: {e}")

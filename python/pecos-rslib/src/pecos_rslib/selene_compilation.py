@@ -55,56 +55,11 @@ def compile_hugr_to_selene_plugin(hugr_bytes: bytes) -> bytes:
     Raises:
         RuntimeError: If compilation fails
     """
-    try:
-        # Use Selene's build infrastructure
-        from selene_sim.build import build
-        import json
-
-        # Parse HUGR bytes as JSON to get the HUGR package
-        hugr_package = json.loads(hugr_bytes)
-
-        # Build using Selene's infrastructure
-        # This creates a complete executable, not just a plugin
-        with tempfile.TemporaryDirectory() as build_dir:
-            build_dir = Path(build_dir)
-
-            # Build the Selene instance
-            build(hugr_package, name="pecos_plugin", build_dir=build_dir, verbose=False)
-
-            # The instance contains the compiled executable
-            # For PECOS integration, we need to extract the compiled object/library
-            # Look for the compiled artifacts in the build directory
-            plugin_path = build_dir / "pecos_plugin"
-            if not plugin_path.exists():
-                # Try to find the executable or shared library
-                for ext in [".so", ".dylib", ".dll", ""]:
-                    test_path = build_dir / f"pecos_plugin{ext}"
-                    if test_path.exists():
-                        plugin_path = test_path
-                        break
-
-            if plugin_path.exists():
-                return plugin_path.read_bytes()
-            else:
-                # If we can't find a standalone plugin, return a marker
-                # The actual execution will use the SeleneInstance directly
-                return b"SELENE_INSTANCE_MARKER"
-
-    except ImportError:
-        # Try alternative Selene compiler functions
-        try:
-            from selene_hugr_qis_compiler import compile_to_bitcode
-
-            # Compile HUGR to LLVM bitcode
-            bitcode = compile_to_bitcode(hugr_bytes)
-
-            # Link bitcode to create a plugin
-            return compile_bitcode_to_shared_library(bitcode)
-
-        except ImportError:
-            # Fallback: Compile via LLVM IR
-            logger.info("Selene build infrastructure not available, using LLVM IR path")
-            return compile_hugr_via_llvm(hugr_bytes)
+    # For now, skip the selene_sim.build approach which requires a Package object
+    # that we can't properly construct. Instead, use the LLVM compilation path.
+    # This is a temporary workaround until we can properly create Package objects
+    # from HUGR JSON that selene_sim.build can accept.
+    return compile_hugr_via_llvm(hugr_bytes)
 
 
 def compile_hugr_via_llvm(hugr_bytes: bytes) -> bytes:

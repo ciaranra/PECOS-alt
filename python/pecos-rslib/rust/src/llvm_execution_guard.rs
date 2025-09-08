@@ -81,7 +81,7 @@ impl LlvmExecutionGuard {
         while state.active_executions.load(Ordering::Acquire) > 0 {
             // Check for timeout
             if start_time.elapsed() > timeout {
-                eprintln!(
+                log::warn!(
                     "Warning: LlvmExecutionGuard timeout waiting for {} active executions to complete",
                     state.active_executions.load(Ordering::Acquire)
                 );
@@ -104,7 +104,7 @@ impl Drop for LlvmExecutionGuard {
 
             // Defensive check - prevent underflow
             if prev_count == 0 {
-                eprintln!(
+                log::warn!(
                     "Warning: LlvmExecutionGuard underflow detected - execution counter was already 0"
                 );
                 // Reset to 0 to be safe

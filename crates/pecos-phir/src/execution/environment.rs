@@ -94,10 +94,10 @@ impl TypedValue {
     /// Convert to u64 for measurement results
     pub fn to_u64(&self) -> Result<u64> {
         match self {
-            TypedValue::I8(v) => Ok(*v as u64),
-            TypedValue::I16(v) => Ok(*v as u64),
-            TypedValue::I32(v) => Ok(*v as u64),
-            TypedValue::I64(v) => Ok(*v as u64),
+            TypedValue::I8(v) => Ok(u64::try_from(*v).unwrap_or(0)),
+            TypedValue::I16(v) => Ok(u64::try_from(*v).unwrap_or(0)),
+            TypedValue::I32(v) => Ok(u64::try_from(*v).unwrap_or(0)),
+            TypedValue::I64(v) => Ok(u64::try_from(*v).unwrap_or(0)),
             TypedValue::U8(v) => Ok(u64::from(*v)),
             TypedValue::U16(v) => Ok(u64::from(*v)),
             TypedValue::U32(v) => Ok(u64::from(*v)),

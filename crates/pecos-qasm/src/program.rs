@@ -224,6 +224,10 @@ impl QasmEngineWasmProgram {
     }
 
     /// Create from WAT source (uses the wat crate for parsing)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the WAT source cannot be parsed
     pub fn from_wat(wat: &str) -> Result<Self, PecosError> {
         let wasm_bytes = wat::parse_str(wat)
             .map_err(|e| PecosError::Processing(format!("Failed to parse WAT: {e}")))?;
@@ -234,6 +238,7 @@ impl QasmEngineWasmProgram {
     }
 
     /// Set the source path for debugging
+    #[must_use]
     pub fn with_source_path(mut self, path: impl Into<String>) -> Self {
         self.source_path = Some(path.into());
         self

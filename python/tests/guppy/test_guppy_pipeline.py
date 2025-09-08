@@ -8,7 +8,7 @@ import sys
 
 sys.path.insert(0, "python/quantum-pecos/src")
 
-from pecos.frontends.run_guppy import get_guppy_backends
+from pecos.frontends import get_guppy_backends
 
 # Check what's available
 print(" Checking backends...")

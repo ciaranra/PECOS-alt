@@ -86,7 +86,10 @@ impl LlvmEngine {
     /// A new LLVM engine instance with default configuration
     #[must_use]
     pub fn new(llvm_file: PathBuf) -> Self {
-        debug!("LLVM: Creating new engine with program path: {llvm_file:?}");
+        debug!(
+            "LLVM: Creating new engine with program path: {}",
+            llvm_file.display()
+        );
         Self {
             library: None,
             measurement_results: HashMap::new(),
@@ -112,7 +115,10 @@ impl LlvmEngine {
     /// A new LLVM engine instance with the specified configuration
     #[must_use]
     pub fn with_config(llvm_file: PathBuf, config: LlvmEngineConfig) -> Self {
-        debug!("LLVM: Creating new engine with program path: {llvm_file:?} and custom config");
+        debug!(
+            "LLVM: Creating new engine with program path: {} and custom config",
+            llvm_file.display()
+        );
         Self {
             library: None,
             measurement_results: HashMap::new(),
@@ -154,7 +160,7 @@ impl LlvmEngine {
         // Reset the LLVM runtime state through the library if it exists
         if let Some(ref library) = self.library {
             // Check if reset function exists (might not for empty circuits)
-            if library.has_function(b"llvm_runtime_reset").unwrap_or(false)
+            if library.has_function(b"llvm_runtime_reset")
                 && let Err(e) = library.reset()
             {
                 debug!("LLVM: Failed to reset LLVM runtime: {e}");
@@ -177,7 +183,7 @@ impl LlvmEngine {
 
         // Get or compile the library
         let library_path = if let Some(ref library_path) = self.library_path {
-            debug!("LLVM: Using existing library at {library_path:?}");
+            debug!("LLVM: Using existing library at {}", library_path.display());
 
             // Verify the library still exists
             if library_path.exists() {
@@ -209,7 +215,7 @@ impl LlvmEngine {
         };
 
         // Load the library
-        debug!("LLVM: Loading library from {library_path:?}");
+        debug!("LLVM: Loading library from {}", library_path.display());
 
         let library = LlvmLibrary::load(&library_path)
             .map_err(|e| log_error("LLVM Engine", "Failed to load LLVM library", e))?;
@@ -255,6 +261,46 @@ impl LlvmEngine {
         debug!("LLVM: Number of outcomes: {}", outcomes.len());
 
         // Check if all measurements have already been processed interactively
+        if self.all_measurements_processed() {
+            return Ok(());
+        }
+
+        // Get the result IDs from the runtime state
+        let (result_ids, _previously_executed) = self.get_measurement_result_ids(&outcomes);
+
+        // Verify we have the same number of result IDs as outcomes
+        if result_ids.len() != outcomes.len() {
+            return Err(PecosError::Processing(format!(
+                "Mismatch between number of measurement outcomes ({}) and result IDs ({})",
+                outcomes.len(),
+                result_ids.len()
+            )));
+        }
+
+        // Create measurements with the correct result IDs
+        let measurements: Vec<(usize, u32)> = result_ids.into_iter().zip(outcomes).collect();
+        debug!("LLVM: Zipped measurements (result_id, outcome): {measurements:?}");
+
+        self.measurement_results.clear();
+        // Convert u32 measurements to i64 for LLVM standard
+        self.measurement_results.extend(
+            measurements
+                .iter()
+                .map(|(id, value)| (*id, i64::from(*value))),
+        );
+
+        // Update the runtime with measurement results
+        self.update_runtime_measurements(&measurements)?;
+
+        self.commands_generated = false;
+        self.shot_count += 1;
+
+        debug!("LLVM: Completed shot {}", self.shot_count);
+        Ok(())
+    }
+
+    /// Check if all measurements have already been processed interactively
+    fn all_measurements_processed(&self) -> bool {
         if let Some(library) = &self.library
             && let Ok(executed_count) = library.get_measurements_executed()
             && let Ok(all_ids) = library.get_measurement_result_ids()
@@ -263,18 +309,17 @@ impl LlvmEngine {
             debug!(
                 "LLVM: All {executed_count} measurements already processed interactively, skipping"
             );
-            return Ok(());
+            return true;
         }
+        false
+    }
 
-        // Get the result IDs from the runtime state
-        let (result_ids, previously_executed) = if let Some(library) = &self.library {
+    /// Get measurement result IDs from runtime or generate sequential IDs
+    fn get_measurement_result_ids(&self, outcomes: &[u32]) -> (Vec<usize>, usize) {
+        if let Some(library) = &self.library {
             // Get the measurement result IDs that were tracked during execution
-            if library
-                .has_function(b"llvm_runtime_get_measurement_result_ids")
-                .unwrap_or(false)
-                && library
-                    .has_function(b"llvm_runtime_get_measurements_executed")
-                    .unwrap_or(false)
+            if library.has_function(b"llvm_runtime_get_measurement_result_ids")
+                && library.has_function(b"llvm_runtime_get_measurements_executed")
             {
                 if let (Ok(all_ids), Ok(executed_count)) = (
                     library.get_measurement_result_ids(),
@@ -293,46 +338,17 @@ impl LlvmEngine {
                         .take(outcomes.len())
                         .collect();
                     debug!("LLVM: Using result IDs for new measurements: {new_ids:?}");
-                    (new_ids, executed_count)
-                } else {
-                    debug!("LLVM: Failed to get measurement tracking info");
-                    // Fallback to sequential IDs
-                    ((0..outcomes.len()).collect(), 0)
+                    return (new_ids, executed_count);
                 }
-            } else {
-                // Fallback to sequential IDs if function not available
-                ((0..outcomes.len()).collect(), 0)
+                debug!("LLVM: Failed to get measurement tracking info");
             }
-        } else {
-            // No library, use sequential IDs
-            ((0..outcomes.len()).collect(), 0)
-        };
-
-        // Verify we have the same number of result IDs as outcomes
-        if result_ids.len() != outcomes.len() {
-            return Err(PecosError::Processing(format!(
-                "Mismatch between number of measurement outcomes ({}) and result IDs ({})",
-                outcomes.len(),
-                result_ids.len()
-            )));
         }
+        // Fallback to sequential IDs
+        ((0..outcomes.len()).collect(), 0)
+    }
 
-        // Create measurements with the correct result IDs
-        debug!("LLVM: About to zip result_ids={result_ids:?} with outcomes={outcomes:?}");
-        debug!("LLVM: Previously executed: {previously_executed}");
-        let measurements: Vec<(usize, u32)> = result_ids.into_iter().zip(outcomes).collect();
-
-        debug!("LLVM: Zipped measurements (result_id, outcome): {measurements:?}");
-
-        self.measurement_results.clear();
-        // Convert u32 measurements to i64 for LLVM standard
-        self.measurement_results.extend(
-            measurements
-                .iter()
-                .map(|(id, value)| (*id, i64::from(*value))),
-        );
-
-        // Update the runtime with measurement results
+    /// Update runtime with measurement results
+    fn update_runtime_measurements(&self, measurements: &[(usize, u32)]) -> Result<(), PecosError> {
         if let Some(library) = &self.library {
             debug!(
                 "LLVM: Updating runtime with {} measurement results",
@@ -340,12 +356,8 @@ impl LlvmEngine {
             );
 
             // Check if runtime update functions exist (might not for empty circuits)
-            let has_update = library
-                .has_function(b"llvm_runtime_update_measurement_results")
-                .unwrap_or(false);
-            let has_finalize = library
-                .has_function(b"llvm_runtime_finalize_shot")
-                .unwrap_or(false);
+            let has_update = library.has_function(b"llvm_runtime_update_measurement_results");
+            let has_finalize = library.has_function(b"llvm_runtime_finalize_shot");
 
             if has_update && has_finalize {
                 // Convert measurements to the format expected by the runtime
@@ -378,11 +390,6 @@ impl LlvmEngine {
                 );
             }
         }
-
-        self.commands_generated = false;
-        self.shot_count += 1;
-
-        debug!("LLVM: Completed shot {}", self.shot_count);
         Ok(())
     }
 
@@ -401,9 +408,7 @@ impl LlvmEngine {
         // Get shot results from the runtime - this should always work
         if let Some(library) = &self.library {
             // Check if get_shot_results function exists (might not for empty circuits)
-            let has_get_shot_results = library
-                .has_function(b"llvm_runtime_get_shot_results")
-                .unwrap_or(false);
+            let has_get_shot_results = library.has_function(b"llvm_runtime_get_shot_results");
 
             if has_get_shot_results {
                 match library.get_shot_results() {
@@ -480,7 +485,8 @@ impl LlvmEngine {
 
         // We don't need to load the library here, as each thread will get its own copy
         debug!(
-            "LLVM: [Thread {thread_id}] Library pre-compiled successfully (path: {library_path:?})"
+            "LLVM: [Thread {thread_id}] Library pre-compiled successfully (path: {})",
+            library_path.display()
         );
 
         Ok(())
@@ -541,10 +547,7 @@ impl LlvmEngine {
         };
 
         // Check if the entry point function exists in the library
-        if !library
-            .has_function(entry_point.as_bytes())
-            .unwrap_or(false)
-        {
+        if !library.has_function(entry_point.as_bytes()) {
             return Err(PecosError::Input(format!(
                 "Entry point function '{entry_point}' was marked with EntryPoint attribute but was not found \
                  in the compiled library. This may indicate a compilation error or that the function \
@@ -569,9 +572,7 @@ impl LlvmEngine {
 
         // Check if the LLVM runtime symbols are available
         // For empty circuits, these symbols might not be linked in
-        let has_runtime_symbols = library
-            .has_function(b"llvm_runtime_get_binary_commands")
-            .unwrap_or(false);
+        let has_runtime_symbols = library.has_function(b"llvm_runtime_get_binary_commands");
 
         let runtime_message = if has_runtime_symbols {
             // Get the binary message generated by the LLVM runtime
@@ -628,7 +629,7 @@ impl LlvmEngine {
         // This ensures each shot starts with a clean state
         if let Some(ref library) = self.library {
             // Check if reset function exists (might not for empty circuits)
-            if library.has_function(b"llvm_runtime_reset").unwrap_or(false) {
+            if library.has_function(b"llvm_runtime_reset") {
                 if let Err(e) = library.reset() {
                     debug!("LLVM: Failed to reset runtime before shot: {e}");
                 } else {
@@ -784,7 +785,10 @@ impl LlvmEngine {
     /// - The LLVM IR cannot be parsed
     /// - No qubit allocations are found in the file
     pub fn analyze_llvm_file(&self) -> Result<usize, PecosError> {
-        debug!("LLVM Engine: Analyzing LLVM IR file: {:?}", self.llvm_file);
+        debug!(
+            "LLVM Engine: Analyzing LLVM IR file: {}",
+            self.llvm_file.display()
+        );
 
         // Check if the file exists
         if !self.llvm_file.exists() {
@@ -828,7 +832,10 @@ impl LlvmEngine {
 
     /// Helper method to compile the LLVM IR file to a library
     fn compile_library(&self, output_dir: &Path) -> Result<PathBuf, PecosError> {
-        debug!("LLVM: Compiling LLVM IR program to library in {output_dir:?}");
+        debug!(
+            "LLVM: Compiling LLVM IR program to library in {}",
+            output_dir.display()
+        );
 
         let output_dir_path = output_dir.to_path_buf();
         LlvmLinker::compile(&self.llvm_file, Some(&output_dir_path))
@@ -850,8 +857,9 @@ impl ClassicalEngine for LlvmEngine {
             }
             Err(e) => {
                 warn!(
-                    "LLVM Engine: Could not determine qubit count from file {:?}: {}",
-                    self.llvm_file, e
+                    "LLVM Engine: Could not determine qubit count from file {}: {}",
+                    self.llvm_file.display(),
+                    e
                 );
                 // Fallback: check if we have measurement results from current execution
                 if !self.measurement_results.is_empty() {
@@ -864,7 +872,7 @@ impl ClassicalEngine for LlvmEngine {
                 error!(
                     "LLVM Engine: CRITICAL - Returning 0 qubits, this will cause runtime errors!"
                 );
-                error!("LLVM Engine: File path was: {:?}", self.llvm_file);
+                error!("LLVM Engine: File path was: {}", self.llvm_file.display());
                 error!("LLVM Engine: Error was: {e}");
                 0
             }

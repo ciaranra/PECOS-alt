@@ -1,4 +1,10 @@
 //! Integration tests for pecos-selene-eng
+//!
+//! NOTE: These tests originally used LLVM IR directly with `LlvmProgram::from_ir()`.
+//! We've removed direct LLVM execution support in favor of HUGR compilation through Selene.
+//! The proper execution path is now: Guppy -> HUGR -> Selene Plugin -> Execution
+//! These tests are kept as documentation of the old architecture but marked as ignored.
+//! For working examples, see the Python tests that use the Guppy API.
 
 use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine, ControlEngine, sim_builder};
 use pecos_programs::LlvmProgram;
@@ -7,6 +13,7 @@ use pecos_selene::selene_executable;
 mod common;
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_basic_simulation() {
     // Create a simple quantum program using LLVM IR
     let llvm_ir = r#"
@@ -38,6 +45,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_bell_state_simulation() {
     let bell_llvm = r#"
 ; Bell state LLVM IR
@@ -79,6 +87,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_with_optimization() {
     let simple_llvm = r#"
 declare void @__quantum__qis__h__body(i64)
@@ -105,6 +114,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_with_seed() {
     let test_llvm = r#"
 declare void @__quantum__qis__h__body(i64)
@@ -132,6 +142,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_parallel_execution() {
     let parallel_llvm = r#"
 declare void @__quantum__qis__h__body(i64)
@@ -159,6 +170,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_engine_traits() {
     let trait_llvm = r#"
 declare void @__quantum__qis__h__body(i64)
@@ -184,6 +196,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_invalid_program() {
     let engine = selene_executable()
         .program(LlvmProgram::from_ir("")) // Empty IR
@@ -208,6 +221,7 @@ fn test_missing_qubits() {
 }
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_classical_control() {
     let control_llvm = r#"
 declare void @__quantum__qis__h__body(i64)
@@ -240,6 +254,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_engine_as_control_engine() {
     use pecos_engines::EngineStage;
 

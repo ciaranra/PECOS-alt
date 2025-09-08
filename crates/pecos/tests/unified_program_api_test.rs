@@ -9,7 +9,7 @@ mod tests {
     use pecos_llvm_sim::llvm_engine;
     use pecos_programs::{HugrProgram, LlvmProgram, QasmProgram};
     use pecos_qasm::qasm_engine;
-    use pecos_selene::selene_engine;
+    use pecos_selene::selene_executable;
 
     #[test]
     fn test_qasm_engine_accepts_shared_program() {
@@ -36,11 +36,11 @@ mod tests {
     fn test_selene_engine_accepts_shared_programs() {
         // Test with LlvmProgram
         let llvm_program = LlvmProgram::from_string("define void @main() { ret void }");
-        let _ = selene_engine().program(llvm_program).qubits(1);
+        let _ = selene_executable().program(llvm_program).qubits(1);
 
         // Test with HugrProgram
         let hugr_program = HugrProgram::from_bytes(vec![1, 2, 3, 4]);
-        let _ = selene_engine().program(hugr_program).qubits(1);
+        let _ = selene_executable().program(hugr_program).qubits(1);
     }
 
     #[test]

@@ -10,7 +10,7 @@ use pecos::{EngineType, DynamicEngineBuilder, sim_dynamic};
 use pecos_engines::{sim, SimBuilder, DepolarizingNoise};
 use pecos_qasm::qasm_engine;
 use pecos_llvm_sim::llvm_engine;
-use pecos_selene::selene_engine;
+use pecos_selene::selene_executable;
 use pecos_programs::QasmProgram;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -82,7 +82,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("   User selected Selene engine");
             // In real code, you'd have HUGR here
             use pecos_programs::HugrProgram;
-            DynamicEngineBuilder::new(selene_engine().program(HugrProgram::from_bytes(vec![])).qubits(2))
+            DynamicEngineBuilder::new(selene_executable().program(HugrProgram::from_bytes(vec![])).qubits(2))
         }
         _ => panic!("Unknown engine type: {}", user_choice),
     };
@@ -149,7 +149,7 @@ fn create_engine_from_file(path: &str) -> Result<DynamicEngineBuilder, Box<dyn s
         // In real code, you'd parse HUGR here
         use pecos_programs::HugrProgram;
         let hugr_bytes = std::fs::read(path)?;
-        DynamicEngineBuilder::new(selene_engine().program(HugrProgram::from_bytes(hugr_bytes)).qubits(2))
+        DynamicEngineBuilder::new(selene_executable().program(HugrProgram::from_bytes(hugr_bytes)).qubits(2))
     } else {
         return Err("Unknown file type".into());
     };
@@ -172,7 +172,7 @@ fn create_engine_from_type(
         EngineType::Selene => {
             // In real code, you'd parse HUGR from source
             use pecos_programs::HugrProgram;
-            DynamicEngineBuilder::new(selene_engine().program(HugrProgram::from_bytes(vec![])).qubits(2))
+            DynamicEngineBuilder::new(selene_executable().program(HugrProgram::from_bytes(vec![])).qubits(2))
         }
     }
 }

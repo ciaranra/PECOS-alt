@@ -11,10 +11,6 @@ categories.workspace = true
 description = "HUGR (Hierarchical Unified Graph Representation) support for PECOS quantum programs."
 readme = "README.md"
 
-[[bin]]
-name = "pecos-hugr-cli"
-path = "src/bin/pecos-hugr-cli.rs"
-
 [dependencies]
 log.workspace = true
 pecos-core = { workspace = true, features = ["anyhow", "hugr-llvm"] }
@@ -28,7 +24,6 @@ zstd.workspace = true
 hugr-core.workspace = true
 hugr-llvm.workspace = true
 anyhow.workspace = true
-clap = { version = "4.0", features = ["derive"] }
 
 [dev-dependencies]
 tempfile.workspace = true

@@ -2,7 +2,7 @@
 
 #[test]
 fn test_real_hugr_with_envelope_format() {
-    use pecos_engines::{ClassicalControlEngineBuilder, sim_builder};
+    use pecos_engines::sim_builder;
     use pecos_llvm_sim::llvm_engine;
     use pecos_programs::HugrProgram;
 
@@ -56,7 +56,7 @@ fn test_real_hugr_with_envelope_format() {
 
 #[test]
 fn test_real_hugr_compilation() {
-    use pecos_engines::{ClassicalControlEngineBuilder, sim_builder};
+    use pecos_engines::sim_builder;
     use pecos_llvm_sim::llvm_engine;
     use pecos_programs::HugrProgram;
 
@@ -88,7 +88,7 @@ fn test_real_hugr_compilation() {
 
 #[test]
 fn test_hugr_package_format() {
-    use pecos_engines::{ClassicalControlEngineBuilder, sim_builder};
+    use pecos_engines::sim_builder;
     use pecos_llvm_sim::llvm_engine;
     use pecos_programs::HugrProgram;
 

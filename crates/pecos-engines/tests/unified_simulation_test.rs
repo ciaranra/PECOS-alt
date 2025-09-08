@@ -38,7 +38,7 @@ fn test_columnar_conversion() {
 
     // Test empty shot vec
     let empty = ShotVec::new();
-    let columnar = shots_to_columnar(empty);
+    let columnar = shots_to_columnar(&empty);
     assert!(columnar.is_empty());
 
     // Test with data
@@ -50,11 +50,11 @@ fn test_columnar_conversion() {
     shot2.insert("q0".to_string(), Data::U32(1));
     shot2.insert("q1".to_string(), Data::U32(0));
 
-    let shots = ShotVec {
+    let shot_vector = ShotVec {
         shots: vec![Shot { data: shot1 }, Shot { data: shot2 }],
     };
 
-    let columnar = shots_to_columnar(shots);
+    let columnar = shots_to_columnar(&shot_vector);
     assert_eq!(columnar.len(), 2);
     assert_eq!(columnar["q0"], vec![0, 1]);
     assert_eq!(columnar["q1"], vec![1, 0]);

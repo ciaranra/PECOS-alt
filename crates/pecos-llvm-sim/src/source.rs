@@ -29,6 +29,13 @@ impl LlvmSource {
     /// This handles all necessary compilation steps:
     /// - Reading files if needed
     /// - Compiling HUGR to LLVM IR
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - File I/O operations fail
+    /// - LLVM tools (llvm-dis) fail to execute
+    /// - HUGR compilation fails
     pub fn to_llvm_ir(self) -> Result<String, PecosError> {
         match self {
             Self::LlvmIr(ir) => Ok(ir),
@@ -131,10 +138,10 @@ impl LlvmSource {
                 write_envelope(&mut buffer, &package, EnvelopeConfig::default())
                     .map_err(|e| PecosError::with_context(e, "Failed to serialize HUGR package"))?;
 
-                compile_hugr_bytes(buffer)
+                compile_hugr_bytes(&buffer)
             }
 
-            Self::HugrBytes(bytes) => compile_hugr_bytes(bytes),
+            Self::HugrBytes(bytes) => compile_hugr_bytes(&bytes),
 
             Self::HugrFile(path) => {
                 // Use pecos-hugr to compile file directly
@@ -157,7 +164,7 @@ impl LlvmSource {
 }
 
 /// Compile HUGR bytes to LLVM IR string
-fn compile_hugr_bytes(hugr_bytes: Vec<u8>) -> Result<String, PecosError> {
+fn compile_hugr_bytes(hugr_bytes: &[u8]) -> Result<String, PecosError> {
     use pecos_hugr::compile_hugr_bytes_to_string;
-    compile_hugr_bytes_to_string(&hugr_bytes)
+    compile_hugr_bytes_to_string(hugr_bytes)
 }

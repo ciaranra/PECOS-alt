@@ -21,14 +21,14 @@ def test_guppy_compilation_simple() -> None:
     print("Testing Guppy compilation...")
 
     # Compile the function
-    compiled = guppy.compile_function(random_bit)
+    package = random_bit.compile()
     print("Guppy function compiled successfully!")
 
     # Show the HUGR
-    print(f"\nCompiled function: {compiled}")
-    print(f"Package: {compiled.package}")
+    print(f"\nCompiled package: {package}")
+    print(f"Package type: {type(package)}")
 
     # Try to get HUGR bytes
-    hugr_bytes = compiled.package.to_bytes()
+    hugr_bytes = package.to_bytes()
     print(f"\nHUGR bytes generated: {len(hugr_bytes)} bytes")
     assert len(hugr_bytes) > 0

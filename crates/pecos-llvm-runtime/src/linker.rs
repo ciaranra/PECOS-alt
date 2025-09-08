@@ -140,7 +140,7 @@ impl LlvmLinker {
             RuntimeBuilder::build_runtime()?;
         }
 
-        info!("Starting compilation: {llvm_file:?}");
+        info!("Starting compilation: {}", llvm_file.display());
 
         // Step 4: Build LLVM executable
         // Get the runtime library path (already built in steps above)
@@ -163,7 +163,8 @@ impl LlvmLinker {
 
             if cached_mtime >= runtime_mtime {
                 debug!(
-                    "Another process compiled the library while waiting for lock: {cached_lib:?}"
+                    "Another process compiled the library while waiting for lock: {}",
+                    cached_lib.display()
                 );
                 return Ok(cached_lib);
             }
@@ -542,7 +543,7 @@ impl LlvmLinker {
                 .open(lock_path)
             {
                 Ok(file) => {
-                    debug!("Acquired compilation lock: {lock_path:?}");
+                    debug!("Acquired compilation lock: {}", lock_path.display());
                     return Ok(FileLock {
                         _file: file,
                         path: lock_path.to_path_buf(),
@@ -556,7 +557,7 @@ impl LlvmLinker {
                         && elapsed > Duration::from_secs(300)
                     {
                         // Stale lock, try to remove it
-                        warn!("Removing stale lock file: {lock_path:?}");
+                        warn!("Removing stale lock file: {}", lock_path.display());
                         let _ = fs::remove_file(lock_path);
                         continue;
                     }
@@ -593,7 +594,7 @@ struct FileLock {
 
 impl Drop for FileLock {
     fn drop(&mut self) {
-        debug!("Releasing compilation lock: {:?}", self.path);
+        debug!("Releasing compilation lock: {}", self.path.display());
         let _ = fs::remove_file(&self.path);
     }
 }

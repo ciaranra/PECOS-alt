@@ -250,7 +250,10 @@ impl ClassicalEngine for PhirEngine {
         })?;
 
         // Convert u32 outcomes to u8 for the processor
-        let outcomes_u8: Vec<u8> = outcomes.iter().map(|&x| x as u8).collect();
+        let outcomes_u8: Vec<u8> = outcomes
+            .iter()
+            .map(|&x| u8::try_from(x).expect("Measurement outcome should fit in u8"))
+            .collect();
 
         // Process the measurement results
         self.processor

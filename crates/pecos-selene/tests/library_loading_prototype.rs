@@ -8,12 +8,12 @@ use std::ffi::c_void;
 /// Key insight: The Selene "executable" is actually a shared library we can dlopen!
 /// This allows us to:
 /// 1. Load it in our process
-/// 2. Call functions on it (like pecos_bridge_set_engine_callbacks)
+/// 2. Call functions on it (like `pecos_bridge_set_engine_callbacks`)
 /// 3. Have it call back to us via function pointers
 /// 4. All in the same process - no IPC needed!
 use std::sync::{Arc, Mutex};
 
-/// Simulates what SeleneExecutableEngine would look like
+/// Simulates what `SeleneExecutableEngine` would look like
 struct PrototypeSeleneEngine {
     /// Path to the Selene "executable" (actually a shared library)
     executable_path: std::path::PathBuf,
@@ -52,7 +52,7 @@ impl PrototypeSeleneEngine {
         // Load the library (in reality, this would be the compiled HUGR program)
         let lib = unsafe {
             Library::new(&self.executable_path)
-                .map_err(|e| PecosError::Processing(format!("Failed to load library: {}", e)))?
+                .map_err(|e| PecosError::Processing(format!("Failed to load library: {e}")))?
         };
 
         // Get the callback setup function that Bridge simulator exports
@@ -64,7 +64,7 @@ impl PrototypeSeleneEngine {
             ),
         > = unsafe {
             lib.get(b"pecos_bridge_set_engine_callbacks").map_err(|e| {
-                PecosError::Processing(format!("Failed to get callback function: {}", e))
+                PecosError::Processing(format!("Failed to get callback function: {e}"))
             })?
         };
 
@@ -72,7 +72,7 @@ impl PrototypeSeleneEngine {
 
         // Set up callbacks that will be called by Bridge simulator
         set_callbacks(
-            self as *mut _ as *mut c_void,
+            std::ptr::from_mut(self).cast::<c_void>(),
             Self::handle_send_operation,
             Self::handle_receive_measurements,
         );
@@ -92,23 +92,23 @@ impl PrototypeSeleneEngine {
         let qmain: Symbol<extern "C" fn() -> i32> = unsafe {
             lib.get(b"qmain")
                 .or_else(|_| lib.get(b"main"))
-                .map_err(|e| PecosError::Processing(format!("Failed to get entry point: {}", e)))?
+                .map_err(|e| PecosError::Processing(format!("Failed to get entry point: {e}")))?
         };
 
         // Run the quantum program directly (not in a separate thread to avoid lifetime issues)
         // (In reality, this would be the HUGR-compiled program)
         println!("[Quantum Program] Starting execution");
         let result = qmain();
-        println!("[Quantum Program] Execution complete with code: {}", result);
+        println!("[Quantum Program] Execution complete with code: {result}");
 
         Ok(())
     }
 
     /// Callback when Bridge wants to send quantum operations
     extern "C" fn handle_send_operation(context: *mut c_void, data: *const u8, len: usize) -> i32 {
-        println!("[Callback] Bridge sending operations ({} bytes)", len);
+        println!("[Callback] Bridge sending operations ({len} bytes)");
 
-        let engine = unsafe { &mut *(context as *mut Self) };
+        let engine = unsafe { &mut *context.cast::<Self>() };
         let bytes = unsafe { std::slice::from_raw_parts(data, len) };
         let message = ByteMessage::new(bytes);
 
@@ -124,7 +124,7 @@ impl PrototypeSeleneEngine {
     ) -> i32 {
         println!("[Callback] Bridge requesting measurements");
 
-        let engine = unsafe { &mut *(context as *mut Self) };
+        let engine = unsafe { &mut *context.cast::<Self>() };
         let mut queue = engine.measurement_queue.lock().unwrap();
 
         if let Some(message) = queue.pop_front() {
@@ -133,14 +133,14 @@ impl PrototypeSeleneEngine {
             // Allocate memory for the result
             let buffer = bytes.to_vec().into_boxed_slice();
             let len = buffer.len();
-            let ptr = Box::into_raw(buffer) as *mut u8;
+            let ptr = Box::into_raw(buffer).cast::<u8>();
 
             unsafe {
                 *data_out = ptr;
                 *len_out = len;
             }
 
-            println!("[Callback] Returned measurements ({} bytes)", len);
+            println!("[Callback] Returned measurements ({len} bytes)");
             len as i32
         } else {
             println!("[Callback] No measurements available");
@@ -149,7 +149,7 @@ impl PrototypeSeleneEngine {
     }
 }
 
-/// Implementation of ControlEngine trait
+/// Implementation of `ControlEngine` trait
 impl PrototypeSeleneEngine {
     fn start(&mut self) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
         println!("\n[Engine] ControlEngine::start()");
@@ -237,19 +237,19 @@ fn test_library_loading_mechanism() {
             // Continue processing
             match engine.continue_processing(measurements) {
                 Ok(EngineStage::Complete(shot)) => {
-                    println!("Complete! Shot: {:?}", shot);
+                    println!("Complete! Shot: {shot:?}");
                 }
                 Ok(EngineStage::NeedsProcessing(_)) => {
                     println!("Would continue processing...");
                 }
-                Err(e) => panic!("Error: {}", e),
+                Err(e) => panic!("Error: {e}"),
             }
         }
         Ok(EngineStage::Complete(shot)) => {
-            println!("Complete immediately: {:?}", shot);
+            println!("Complete immediately: {shot:?}");
         }
         Err(e) => {
-            println!("Expected error (no library file): {}", e);
+            println!("Expected error (no library file): {e}");
         }
     }
 }
@@ -311,7 +311,7 @@ extern "C" int qmain() {
 "#;
 
     println!("Mock library C code:");
-    println!("{}", mock_library_code);
+    println!("{mock_library_code}");
 
     println!("\nTo compile this mock library:");
     println!("gcc -shared -fPIC mock_selene.c -o test_quantum_program.so");

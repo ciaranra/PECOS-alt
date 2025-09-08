@@ -16,7 +16,8 @@ except ImportError:
     GUPPY_AVAILABLE = False
 
 try:
-    from pecos.frontends.run_guppy import get_guppy_backends, run_guppy
+    from pecos.frontends import get_guppy_backends, sim
+    from pecos_rslib import state_vector
 
     PECOS_FRONTEND_AVAILABLE = True
 except ImportError:
@@ -41,10 +42,11 @@ def test_simple_hadamard() -> None:
     # Test with Rust backend (the only backend)
     if backends.get("rust_backend", False):
         try:
-            result = run_guppy(test_h, shots=1, verbose=True)
-            print(f"Rust backend result: {result}")
-            assert "results" in result, "Execution failed - no results"
-            assert len(result["results"]) > 0, "Execution failed - empty results"
+            result = sim(test_h).qubits(10).quantum(state_vector()).run(1)
+            measurements = result.get("measurements", result.get("result", []))
+            print(f"Rust backend result: {measurements}")
+            assert measurements is not None, "Execution failed - no results"
+            assert len(measurements) > 0, "Execution failed - empty results"
         except Exception as e:
             pytest.skip(f"Rust backend not working: {e}")
     else:

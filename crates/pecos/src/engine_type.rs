@@ -238,7 +238,7 @@ impl DynamicEngineBuilder {
         match engine_type {
             EngineType::Qasm => Self::new(pecos_qasm::qasm_engine()),
             EngineType::Llvm => Self::new(pecos_llvm_sim::llvm_engine()),
-            EngineType::Selene => Self::new(pecos_selene::selene_engine()),
+            EngineType::Selene => Self::new(pecos_selene::selene_executable()),
         }
     }
 }
@@ -335,7 +335,7 @@ macro_rules! create_engine_builder {
             $crate::EngineType::Selene => {
                 #[cfg(feature = "selene")]
                 {
-                    $crate::DynamicEngineBuilder::new(pecos_selene::selene_engine())
+                    $crate::DynamicEngineBuilder::new(pecos_selene::selene_executable())
                 }
                 #[cfg(not(feature = "selene"))]
                 {

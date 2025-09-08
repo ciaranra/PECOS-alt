@@ -23,6 +23,11 @@ python-source = "src"
 module-name = "pecos_rslib._pecos_rslib"
 manifest-path = "rust/Cargo.toml"
 
+[dependency-groups]
+dev = [
+    "patchelf",  # For setting rpath in shared libraries during development
+]
+
 [tool.uv.sources]
 pecos-rslib = { workspace = true }
 

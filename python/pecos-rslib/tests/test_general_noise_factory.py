@@ -694,7 +694,8 @@ class TestIntegration:
 
     def test_factory_with_simulation(self):
         """Test using factory-created noise with actual simulation."""
-        from pecos_rslib import sim
+        from pecos_rslib import sim, qasm_engine
+        from pecos_rslib._pecos_rslib import QasmProgram
 
         qasm = """
         OPENQASM 2.0;
@@ -718,8 +719,12 @@ class TestIntegration:
             }
         )
 
+        # Create program and engine
+        program = QasmProgram.from_string(qasm)
+        engine = qasm_engine().program(program)
+
         # Run simulation
-        results = sim(qasm).noise(noise).run(100)
+        results = sim(program).classical(engine).noise(noise).run(100).to_dict()
 
         # Should get results
         assert "c" in results

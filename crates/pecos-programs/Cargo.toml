@@ -17,3 +17,6 @@ readme = "README.md"
 [dev-dependencies]
 # For testing
 tempfile.workspace = true
+
+[lints]
+workspace = true

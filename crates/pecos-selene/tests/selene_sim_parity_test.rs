@@ -1,6 +1,6 @@
-//! Test that selene_executable() with to_sim() is on par with llvm_sim()
+//! Test that `selene_executable()` with `to_sim()` is on par with `llvm_sim()`
 //!
-//! This test verifies that sim_builder().classical(selene_executable()) supports the same features as llvm_sim(),
+//! This test verifies that `sim_builder().classical(selene_executable())` supports the same features as `llvm_sim()`,
 //! including noise models, quantum engines, and full simulation capabilities.
 
 use pecos_engines::noise::GeneralNoiseModelBuilder;
@@ -14,6 +14,7 @@ use pecos_selene::selene_executable;
 mod common;
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_selene_sim_with_noise_models() {
     let llvm_ir = r#"
     declare void @__quantum__qis__h__body(i64)
@@ -96,6 +97,7 @@ fn test_selene_sim_with_noise_models() {
 }
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_selene_executable_with_quantum_engines() {
     let llvm_ir = r#"
     declare void @__quantum__qis__h__body(i64)
@@ -139,6 +141,7 @@ fn test_selene_executable_with_quantum_engines() {
 }
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_selene_executable_full_configuration() {
     let llvm_ir = r#"
     declare void @__quantum__qis__h__body(i64)
@@ -195,6 +198,7 @@ fn test_selene_executable_full_configuration() {
 }
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_selene_executable_build_once_run_multiple() {
     let llvm_ir = r#"
     declare void @__quantum__qis__x__body(i64)
@@ -233,6 +237,7 @@ fn test_selene_executable_build_once_run_multiple() {
 }
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_selene_executable_api_matches_llvm_sim() {
     // This test demonstrates that sim_builder().classical(selene_executable()) has the same API as llvm_sim()
     let llvm_ir = r#"

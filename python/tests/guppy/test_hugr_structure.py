@@ -23,9 +23,22 @@ def test_hugr_json_structure() -> None:
     # Compile to HUGR
     hugr = simple_circuit.compile()
 
-    # Get JSON representation
-    hugr_json = hugr.to_json()
-    hugr_dict = json.loads(hugr_json)
+    # Get JSON/string representation (use to_str if available)
+    if hasattr(hugr, "to_str"):
+        hugr_str = hugr.to_str()
+        # Check if it's the envelope format with header
+        if hugr_str.startswith("HUGRiHJv"):
+            # Skip header (8 bytes), format byte (1 byte), and find JSON start
+            json_start = hugr_str.find("{", 9)
+            if json_start != -1:
+                hugr_str = hugr_str[json_start:]
+            else:
+                msg = "Could not find JSON start in HUGR envelope"
+                raise ValueError(msg)
+    else:
+        hugr_str = hugr.to_json()
+
+    hugr_dict = json.loads(hugr_str)
 
     print("\n=== HUGR JSON Structure ===")
     print(f"Keys: {list(hugr_dict.keys())}")

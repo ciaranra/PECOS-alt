@@ -1,6 +1,6 @@
 #[cfg(feature = "wasm")]
 mod wasm_tests {
-    use pecos_engines::{ClassicalControlEngineBuilder, sim_builder, state_vector};
+    use pecos_engines::{sim_builder, state_vector};
     use pecos_programs::QasmProgram;
     use pecos_qasm::qasm_engine;
     use std::io::Write;

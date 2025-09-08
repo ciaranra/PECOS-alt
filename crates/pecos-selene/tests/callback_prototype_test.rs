@@ -3,8 +3,8 @@ use pecos_engines::{ByteMessage, ByteMessageBuilder, EngineStage};
 ///
 /// This test validates:
 /// 1. FFI callbacks work
-/// 2. ByteMessage exchange works
-/// 3. EngineStage flow is correct
+/// 2. `ByteMessage` exchange works
+/// 3. `EngineStage` flow is correct
 /// 4. Synchronization between processes
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -71,6 +71,7 @@ mod engine {
     }
 
     /// Check if bridge is waiting
+    #[allow(dead_code)]
     pub fn is_waiting() -> bool {
         CALLBACK_STATE.lock().unwrap().waiting
     }
@@ -103,7 +104,7 @@ fn simulate_selene_process() {
         println!("[Selene Process] Waiting for measurement");
         loop {
             thread::sleep(Duration::from_millis(10));
-            if let Some(meas) = bridge_simulator::receive_measurements() {
+            if let Some(_meas) = bridge_simulator::receive_measurements() {
                 println!("[Selene Process] Got measurement result");
                 break;
             }
@@ -115,7 +116,7 @@ fn simulate_selene_process() {
     });
 }
 
-/// Simulate the Engine with EngineStage flow
+/// Simulate the Engine with `EngineStage` flow
 struct PrototypeEngine;
 
 impl PrototypeEngine {
@@ -137,9 +138,7 @@ impl PrototypeEngine {
 
             thread::sleep(Duration::from_millis(50));
             attempts += 1;
-            if attempts > 20 {
-                panic!("Timeout waiting for operations");
-            }
+            assert!((attempts <= 20), "Timeout waiting for operations");
         }
     }
 
@@ -183,7 +182,7 @@ fn test_callback_prototype() {
 
     loop {
         match stage {
-            EngineStage::NeedsProcessing(ops) => {
+            EngineStage::NeedsProcessing(_ops) => {
                 println!("[Test] Processing operations");
 
                 // Simulate quantum engine processing
@@ -199,7 +198,7 @@ fn test_callback_prototype() {
                 stage = engine.continue_processing(measurements);
             }
             EngineStage::Complete(result) => {
-                println!("[Test] Complete: {}", result);
+                println!("[Test] Complete: {result}");
                 assert_eq!(result, "Success");
                 break;
             }

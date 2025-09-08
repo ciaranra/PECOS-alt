@@ -38,7 +38,7 @@ thiserror.workspace = true
 anyhow.workspace = true
 
 # For global state in stubs
-once_cell = "1.19"
+once_cell.workspace = true
 
 # For async operations if needed
 tokio = { workspace = true, features = ["full"], optional = true }
@@ -58,7 +58,7 @@ env_logger = { workspace = true, optional = true }
 # For dynamic library loading
 tempfile.workspace = true
 libloading.workspace = true
-libc = "0.2"
+libc.workspace = true
 
 # For HUGR decompression
 zstd = { workspace = true, optional = true }
@@ -73,8 +73,7 @@ dyn-clone = { workspace = true }
 rand = { workspace = true }
 
 [build-dependencies]
-# Ensure the plugins are built before this crate
-pecos-selene-plugins = { path = "../pecos-selene-plugins" }
+# Build script doesn't need the plugins crate, just tracks its changes
 
 
 [dev-dependencies]
@@ -85,3 +84,6 @@ default = ["hugr-013"]
 hugr-013 = ["dep:hugr-core-013", "dep:zstd"]
 async = ["tokio"]
 binary = ["dep:env_logger"]
+
+[lints]
+workspace = true

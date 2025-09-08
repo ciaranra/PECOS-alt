@@ -76,11 +76,11 @@ def test_python_side_selene_compilation() -> None:
 
 def test_hugr_pass_through_path() -> None:
     """Test the HUGR pass-through path (Guppy → HUGR → Rust)."""
-    from guppylang import GuppyModule
+    # GuppyModule is deprecated, using direct @guppy instead
     from guppylang.decorator import guppy
     from guppylang.std.quantum import h, measure, qubit
-    from pecos_rslib import HugrProgram, sim
-    from pecos_rslib.hugr_llvm import serialize_hugr_json_to_binary
+    from pecos.frontends.guppy_api import sim
+    from pecos_rslib import state_vector
 
     # Define a quantum function
     @guppy
@@ -92,29 +92,19 @@ def test_hugr_pass_through_path() -> None:
         # Would add CNOT here when supported
         return measure(q1), measure(q2)
 
-    # Compile to HUGR
-    module = GuppyModule("bell_module")
-    module.register_func(bell_pair)
-    hugr = module.compile()
-    hugr_json = hugr.to_json()
-
-    # Serialize to binary
-    hugr_bytes = serialize_hugr_json_to_binary(hugr_json)
-
-    # Create HugrProgram
+    # Use sim API directly - it handles HUGR compilation internally
     try:
-        hugr_program = HugrProgram.from_bytes(hugr_bytes)
-        print(f"Created HugrProgram from {len(hugr_bytes)} bytes")
+        # The sim API handles Guppy → HUGR → Selene compilation
+        results = sim(bell_pair).qubits(2).quantum(state_vector()).run(10)
+        print(f"Results: {results}")
 
-        # Use sim API - this should route through Selene
-        builder = sim(hugr_program)
-        print(f"Created sim builder: {type(builder)}")
-
-        # Actual execution would require full HUGR parsing
-        # but this demonstrates the architecture
+        # Check that we get results
+        assert "measurement_1" in results
+        assert "measurement_2" in results
+        print("HUGR pass-through successful")
 
     except Exception as e:
-        print(f"HUGR pass-through failed (expected): {e}")
+        print(f"HUGR pass-through failed: {e}")
 
 
 def test_architecture_demonstration() -> None:

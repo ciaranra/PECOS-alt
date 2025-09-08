@@ -399,9 +399,6 @@ class TestQuantumStateManagement:
         decoded_results = get_decoded_results(results, n_bits=1)
         assert all(not r for r in decoded_results)
 
-    @pytest.mark.skip(
-        reason="KNOWN BUG: Quantum ops in measurement-based conditionals are not applied (Guppy/HUGR/LLVM limitation)",
-    )
     def test_measurement_operations(self) -> None:
         """Test different measurement patterns.
 
@@ -497,7 +494,6 @@ class TestQuantumStateManagement:
 class TestLinearTypeSystem:
     """Test Guppy's linear type system for qubits."""
 
-    @pytest.mark.skip(reason="Test hangs during execution - needs investigation")
     def test_basic_ownership(self) -> None:
         """Test basic ownership passing."""
 
@@ -512,15 +508,13 @@ class TestLinearTypeSystem:
 
         # Should see both 0 and 1 from H gate
         decoded_results = get_decoded_results(results, n_bits=1)
-        sum(1 for r in decoded_results if not r)
-        sum(1 for r in decoded_results if r)
+        zeros = sum(1 for r in decoded_results if not r)
+        ones = sum(1 for r in decoded_results if r)
 
-        # Due to the deterministic measurement bug in SeleneEngine, results are deterministic
-        # TODO: When the bug is fixed, this should produce a mix of 0s and 1s
-        # assert zeros > 0 and ones > 0
-        assert all(
-            r == decoded_results[0] for r in decoded_results
-        ), "Results should be deterministic"
+        # H gate now produces proper randomness
+        assert (
+            zeros > 0 and ones > 0
+        ), f"Should see mix of 0s and 1s, got {zeros} zeros and {ones} ones"
 
     def test_linear_rebinding(self) -> None:
         """Test linear rebinding patterns."""
@@ -560,17 +554,16 @@ class TestLinearTypeSystem:
         decoded_x = get_decoded_results(results_x, n_bits=1)
         assert all(r for r in decoded_x)
 
-        # Test H gate - currently produces deterministic results due to SeleneEngine bug
-        results_h = sim(test_with_h).qubits(10).quantum(state_vector()).run(10)
+        # Test H gate - should produce a mix of 0s and 1s
+        results_h = sim(test_with_h).qubits(10).quantum(state_vector()).run(100)
         decoded_h = get_decoded_results(results_h, n_bits=1)
-        # TODO: When SeleneEngine deterministic bug is fixed, should produce a mix of 0s and 1s
-        # zeros = sum(1 for r in decoded_h if not r)
-        # ones = sum(1 for r in decoded_h if r)
-        # assert zeros > 0 and ones > 0
-        # Currently produces deterministic results - either all True or all False
-        assert all(
-            r == decoded_h[0] for r in decoded_h
-        ), "Results should be deterministic (all same value)"
+        # H gate should produce roughly 50/50 distribution of 0s and 1s
+        zeros = sum(1 for r in decoded_h if not r)
+        ones = sum(1 for r in decoded_h if r)
+        # Allow for statistical variation - at least 20% of each
+        assert (
+            zeros > 20 and ones > 20
+        ), f"H gate should produce mixed results, got {zeros} zeros and {ones} ones"
 
 
 # ============================================================================
@@ -631,9 +624,6 @@ class TestQuantumClassicalHybrid:
         )
         assert len(results2["result"]) == 10
 
-    @pytest.mark.skip(
-        reason="KNOWN BUG: Quantum ops in measurement-based conditionals are not applied (Guppy/HUGR/LLVM limitation)",
-    )
     def test_parity_accumulation(self) -> None:
         """Test accumulating measurement results (parity).
 
@@ -657,13 +647,13 @@ class TestQuantumClassicalHybrid:
 
         results = sim(parity_test).qubits(10).quantum(state_vector()).run(10)
 
-        # Due to deterministic bug, H gates produce all zeros, so parity is always False
+        # H gates now produce proper randomness, so parity should vary
         decoded_results = get_decoded_results(results, n_bits=1)
-        # TODO: When bug is fixed, should see both even and odd parity
-        # false_count = sum(1 for r in decoded_results if not r)
-        # true_count = sum(1 for r in decoded_results if r)
-        # assert false_count > 0 and true_count > 0
-        assert all(not r for r in decoded_results)  # Currently broken
+        # Should see both even and odd parity
+        false_count = sum(1 for r in decoded_results if not r)
+        true_count = sum(1 for r in decoded_results if r)
+        assert false_count > 0
+        assert true_count > 0
 
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
@@ -694,9 +684,6 @@ class TestQuantumCircuitPatterns:
         assert len(decoded_results) == 10
         assert all(isinstance(r, bool) for r in decoded_results)
 
-    @pytest.mark.skip(
-        reason="KNOWN BUG: Selene engine produces deterministic results for H gate",
-    )
     def test_bell_state_creation(self) -> None:
         """Test Bell state creation."""
 
@@ -717,9 +704,6 @@ class TestQuantumCircuitPatterns:
         for r in decoded_results:
             assert r == (False, False) or r == (True, True)
 
-    @pytest.mark.skip(
-        reason="KNOWN BUG: Selene engine produces deterministic results for H gate",
-    )
     def test_ghz_state(self) -> None:
         """Test three-qubit GHZ state."""
 
@@ -742,41 +726,42 @@ class TestQuantumCircuitPatterns:
         for r in decoded_results:
             assert r == (False, False, False) or r == (True, True, True)
 
-    @pytest.mark.skip(
-        reason="KNOWN BUG: Test logic is flawed - H² = I always gives |0⟩, no repetition needed",
-    )
     def test_repeat_until_success(self) -> None:
-        """Test repeat-until-success pattern.
+        """Test simplified repeat pattern.
 
-        NOTE: This test has a logic error - applying H twice (H²) equals the identity
-        operation, so the qubit always returns to |0⟩. The test expects this to require
-        multiple attempts, but it will always succeed on the first try.
-
-        Additionally, even if the logic were corrected, this test would likely fail due
-        to the measurement-based conditional bug where quantum operations inside
-        conditionals are not applied.
+        Since while loops with probabilistic conditions create variable
+        measurement patterns (which is not supported), we test a simpler
+        pattern that demonstrates the concept.
         """
 
         @guppy
-        def repeat_test() -> int:
-            tries = 0
-            success = False
+        def simplified_repeat() -> tuple[bool, bool, bool]:
+            # Try three times to get |1⟩
+            q1 = qubit()
+            h(q1)
+            r1 = measure(q1)
 
-            while not success and tries < 10:
-                tries += 1
-                q = qubit()
-                h(q)
-                h(q)  # H² = I, so should get |0⟩
-                result = measure(q)
-                success = not result  # Success when we get |0⟩
+            q2 = qubit()
+            h(q2)
+            r2 = measure(q2)
 
-            return tries
+            q3 = qubit()
+            h(q3)
+            r3 = measure(q3)
 
-        results = sim(repeat_test).qubits(10).quantum(state_vector()).run(10)
+            # In a real RUS pattern, we'd stop when we get |1⟩
+            # Here we just measure all three
+            return r1, r2, r3
 
-        # Should always succeed on first try since H² = I gives |0⟩
-        # This returns integers (tries count), not booleans
-        assert all(r == 1 for r in results["result"])
+        results = sim(simplified_repeat).qubits(10).quantum(state_vector()).run(100)
+
+        # With H gate producing 50/50, we should see various patterns
+        decoded_results = get_decoded_results(results, n_bits=3)
+
+        # Count how many shots have at least one |1⟩ (would have succeeded)
+        success_count = sum(1 for r in decoded_results if any(r))
+        # Probability of at least one |1⟩ in 3 tries = 1 - (0.5)^3 = 0.875
+        assert success_count > 80  # Should be around 87-88 out of 100
 
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")

@@ -453,17 +453,14 @@ impl Operation {
         use crate::builtin_ops::BuiltinOp;
         match self {
             Operation::Builtin(op) => match op {
-                BuiltinOp::Module(_) => Some(0),
-                BuiltinOp::Func(_) => Some(0),
                 BuiltinOp::Return(ret) => Some(ret.operands.len()),
-                BuiltinOp::VarDefine(_) => Some(0),
+                BuiltinOp::Module(_) | BuiltinOp::Func(_) | BuiltinOp::VarDefine(_) => Some(0),
             },
             Operation::Quantum(op) => op.operand_count(),
             Operation::Classical(op) => op.operand_count(),
             Operation::ControlFlow(op) => op.operand_count(),
             Operation::Memory(op) => op.operand_count(),
-            Operation::Custom(_) => None,  // Variable
-            Operation::Parsing(_) => None, // Variable for parsing ops
+            Operation::Custom(_) | Operation::Parsing(_) => None, // Variable
         }
     }
 }
@@ -525,7 +522,8 @@ impl QuantumOp {
             | QuantumOp::Measure
             | QuantumOp::MeasurePauli(_)
             | QuantumOp::Reset
-            | QuantumOp::Dealloc => Some(1),
+            | QuantumOp::Dealloc
+            | QuantumOp::U3(_, _, _) => Some(1),
 
             // Two-qubit gates
             QuantumOp::CX
@@ -533,9 +531,6 @@ impl QuantumOp {
             | QuantumOp::SWAP
             | QuantumOp::CPhase(_)
             | QuantumOp::RZZ(_) => Some(2),
-
-            // Three-qubit gates
-            QuantumOp::U3(_, _, _) => Some(1),
             QuantumOp::Toffoli | QuantumOp::Fredkin => Some(3),
 
             // Multi-qubit gates (variable)
@@ -556,20 +551,20 @@ impl QuantumOp {
     /// Check if operation is unitary (reversible)
     #[must_use]
     pub fn is_unitary(&self) -> bool {
-        match self {
+        !matches!(
+            self,
             QuantumOp::Measure
-            | QuantumOp::MeasurePauli(_)
-            | QuantumOp::MeasureExpectation(_)
-            | QuantumOp::Reset
-            | QuantumOp::Alloc
-            | QuantumOp::Dealloc
-            | QuantumOp::InitZero
-            | QuantumOp::InitOne
-            | QuantumOp::InitPlus
-            | QuantumOp::InitMinus
-            | QuantumOp::InitState(_) => false,
-            _ => true,
-        }
+                | QuantumOp::MeasurePauli(_)
+                | QuantumOp::MeasureExpectation(_)
+                | QuantumOp::Reset
+                | QuantumOp::Alloc
+                | QuantumOp::Dealloc
+                | QuantumOp::InitZero
+                | QuantumOp::InitOne
+                | QuantumOp::InitPlus
+                | QuantumOp::InitMinus
+                | QuantumOp::InitState(_)
+        )
     }
 }
 
@@ -642,6 +637,7 @@ impl ClassicalOp {
             | ClassicalOp::Ge => Some(2),
 
             // Unary operations
+            // Unary operations
             ClassicalOp::Neg
             | ClassicalOp::FNeg
             | ClassicalOp::Not
@@ -651,10 +647,10 @@ impl ClassicalOp {
             | ClassicalOp::Tan
             | ClassicalOp::IntToFloat
             | ClassicalOp::FloatToInt
-            | ClassicalOp::Bitcast => Some(1),
-
-            // Shift operations
-            ClassicalOp::Shl(_) | ClassicalOp::Shr(_) => Some(1),
+            | ClassicalOp::Bitcast
+            | ClassicalOp::Shl(_)
+            | ClassicalOp::Shr(_)
+            | ClassicalOp::Assign => Some(1),
 
             // Constants (no operands)
             ClassicalOp::ConstInt(_)
@@ -664,9 +660,6 @@ impl ClassicalOp {
 
             // Result operation (variable number of operands)
             ClassicalOp::Result => None,
-
-            // Assignment operation
-            ClassicalOp::Assign => Some(1),
         }
     }
 }
@@ -689,12 +682,9 @@ impl ControlFlowOp {
     pub fn operand_count(&self) -> Option<usize> {
         match self {
             ControlFlowOp::Call(call) => Some(call.args.len()),
-            ControlFlowOp::Return => None,       // Variable
-            ControlFlowOp::Branch(_) => Some(1), // Condition
-            ControlFlowOp::Jump(_) => Some(0),
-            ControlFlowOp::Loop(_) => None, // Variable
-            ControlFlowOp::Parallel => Some(0),
-            ControlFlowOp::Barrier => Some(0),
+            ControlFlowOp::Return | ControlFlowOp::Loop(_) => None, // Variable
+            ControlFlowOp::Branch(_) => Some(1),                    // Condition
+            ControlFlowOp::Jump(_) | ControlFlowOp::Parallel | ControlFlowOp::Barrier => Some(0),
         }
     }
 }
@@ -718,13 +708,10 @@ impl MemoryOp {
     pub fn operand_count(&self) -> Option<usize> {
         match self {
             MemoryOp::Alloc(_) => Some(0),
-            MemoryOp::Load => Some(1),     // address
-            MemoryOp::Store => Some(2),    // address, value
-            MemoryOp::Copy => Some(3),     // src, dst, size
-            MemoryOp::ArrayGet => Some(2), // array, index
-            MemoryOp::ArraySet => Some(3), // array, index, value
-            MemoryOp::ArrayLen => Some(1), // array
-            MemoryOp::ArrayCreate => None, // Variable number of elements
+            MemoryOp::Load | MemoryOp::ArrayLen => Some(1), // address/array
+            MemoryOp::Store | MemoryOp::ArrayGet => Some(2), // address+value/array+index
+            MemoryOp::Copy | MemoryOp::ArraySet => Some(3), // src+dst+size/array+index+value
+            MemoryOp::ArrayCreate => None,                  // Variable number of elements
         }
     }
 }

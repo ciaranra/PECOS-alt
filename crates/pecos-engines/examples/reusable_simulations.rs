@@ -10,9 +10,9 @@ use std::time::Instant;
 // In real usage, you would use actual engine builders:
 // - pecos_qasm::unified_engine_builder::qasm_engine()
 // - pecos_llvm_sim::engine_builder::llvm_engine()
-// - pecos_selene::engine_builder::selene_engine()
+// - pecos_selene::selene_executable()
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     println!("This example demonstrates the reusable simulation pattern.\n");
 
     println!("In real usage, you would create simulations like this:");
@@ -108,6 +108,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("  {shots} shots: {run_time:?} (simulated)");
     }
     println!("\nTotal time saved by reusing the built simulation!");
-
-    Ok(())
 }

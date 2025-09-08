@@ -1,7 +1,7 @@
-//! SeleneExecutableEngine - A ClassicalControlEngine that runs Selene instances directly
+//! `SeleneExecutableEngine` - A `ClassicalControlEngine` that runs Selene instances directly
 //!
-//! This engine uses Selene's build() API to create SeleneInstance objects and runs them
-//! in-process with the PecosSeleneBridgeSimulator to communicate with PECOS via ByteMessages.
+//! This engine uses Selene's `build()` API to create `SeleneInstance` objects and runs them
+//! in-process with the `PecosSeleneBridgeSimulator` to communicate with PECOS via `ByteMessages`.
 
 use pecos_core::prelude::PecosError;
 use pecos_engines::{
@@ -40,7 +40,8 @@ pub struct SeleneInstance {
 }
 
 impl SeleneInstance {
-    /// Create a new SeleneInstance from paths
+    /// Create a new `SeleneInstance` from paths
+    #[must_use]
     pub fn new(
         executable: std::path::PathBuf,
         artifacts: std::path::PathBuf,
@@ -65,7 +66,7 @@ impl SeleneInstance {
 
         // Create a temporary directory for the config
         let temp_dir = tempdir()
-            .map_err(|e| PecosError::Processing(format!("Failed to create temp dir: {}", e)))?;
+            .map_err(|e| PecosError::Processing(format!("Failed to create temp dir: {e}")))?;
         let config_path = temp_dir.path().join("selene_config.json");
 
         // Find the bridge plugin - check multiple locations
@@ -94,7 +95,7 @@ impl SeleneInstance {
             ));
         };
 
-        log::info!("Using Bridge plugin at: {:?}", bridge_plugin);
+        log::info!("Using Bridge plugin at: {bridge_plugin:?}");
 
         // Find the ideal error model plugin - check multiple locations
         let ideal_plugin = if std::path::Path::new(
@@ -153,11 +154,11 @@ impl SeleneInstance {
         // eprintln!("*** ENGINE: Writing Selene config with n_qubits={} ***", self.num_qubits);
         // eprintln!("*** ENGINE: Config JSON: {} ***", config_json.to_string());
         let mut file = File::create(&config_path)
-            .map_err(|e| PecosError::Processing(format!("Failed to create config file: {}", e)))?;
+            .map_err(|e| PecosError::Processing(format!("Failed to create config file: {e}")))?;
         file.write_all(config_json.to_string().as_bytes())
-            .map_err(|e| PecosError::Processing(format!("Failed to write config: {}", e)))?;
+            .map_err(|e| PecosError::Processing(format!("Failed to write config: {e}")))?;
         file.sync_all()
-            .map_err(|e| PecosError::Processing(format!("Failed to sync config file: {}", e)))?;
+            .map_err(|e| PecosError::Processing(format!("Failed to sync config file: {e}")))?;
         drop(file);
 
         log::debug!(
@@ -211,11 +212,10 @@ impl SeleneInstance {
             // Selene executable expects the HUGR program to be available
             // The executable was built with this HUGR program compiled in
             log::debug!(
-                "Selene executable should have HUGR program compiled in from: {:?}",
-                selene_yaml
+                "Selene executable should have HUGR program compiled in from: {selene_yaml:?}"
             );
         } else {
-            log::warn!("No selene.yaml found at: {:?}", selene_yaml);
+            log::warn!("No selene.yaml found at: {selene_yaml:?}");
         }
 
         // Start the Selene executable with configuration
@@ -232,10 +232,10 @@ impl SeleneInstance {
         // Create IPC marker file BEFORE starting the process to signal Bridge plugin to use IPC mode
         let ipc_marker = self.artifacts.join("pecos_ipc_mode");
         std::fs::write(&ipc_marker, "1")
-            .map_err(|e| PecosError::Processing(format!("Failed to create IPC marker: {}", e)))?;
+            .map_err(|e| PecosError::Processing(format!("Failed to create IPC marker: {e}")))?;
 
         // eprintln!("*** ENGINE: Created IPC marker at {:?} ***", ipc_marker);
-        log::info!("IPC mode enabled: created marker at {:?}", ipc_marker);
+        log::info!("IPC mode enabled: created marker at {ipc_marker:?}");
 
         // Write a config file with the correct number of qubits for Bridge to read
         let config_path = self.artifacts.join("pecos_config.json");
@@ -243,15 +243,14 @@ impl SeleneInstance {
             "n_qubits": self.num_qubits,
         });
         std::fs::write(&config_path, config_json.to_string()).map_err(|e| {
-            PecosError::Processing(format!("Failed to write pecos_config.json: {}", e))
+            PecosError::Processing(format!("Failed to write pecos_config.json: {e}"))
         })?;
         // eprintln!("*** ENGINE: Created config with n_qubits={} at {:?} ***", self.num_qubits, config_path);
 
         // Verify the marker file was created
         if !ipc_marker.exists() {
             return Err(PecosError::Processing(format!(
-                "IPC marker file not found after creation: {:?}",
-                ipc_marker
+                "IPC marker file not found after creation: {ipc_marker:?}"
             )));
         }
 
@@ -265,10 +264,7 @@ impl SeleneInstance {
 
         // eprintln!("*** ENGINE: Set SELENE_ARTIFACTS_DIR='{}' for Bridge plugin ***", artifacts_str);
         // eprintln!("*** ENGINE: Set SELENE_IPC='1' to enable IPC mode ***");
-        log::info!(
-            "Set SELENE_ARTIFACTS_DIR='{}' for Bridge plugin",
-            artifacts_str
-        );
+        log::info!("Set SELENE_ARTIFACTS_DIR='{artifacts_str}' for Bridge plugin");
         log::info!("Set SELENE_IPC='1' to enable IPC mode");
 
         // Configure stdio for IPC communication
@@ -278,7 +274,7 @@ impl SeleneInstance {
 
         // Start the process
         let mut child = cmd.spawn().map_err(|e| {
-            PecosError::Processing(format!("Failed to start Selene executable: {}", e))
+            PecosError::Processing(format!("Failed to start Selene executable: {e}"))
         })?;
 
         // Get handles for IPC communication
@@ -299,10 +295,8 @@ impl SeleneInstance {
         std::thread::spawn(move || {
             use std::io::{BufRead, BufReader};
             let reader = BufReader::new(stderr);
-            for line in reader.lines() {
-                if let Ok(line) = line {
-                    // eprintln!("SELENE: {}", line);
-                }
+            for line in reader.lines().flatten() {
+                eprintln!("SELENE: {line}");
             }
         });
 
@@ -310,8 +304,8 @@ impl SeleneInstance {
         self.stdout = Some(BufReader::new(stdout));
         self.process = Some(child);
 
-        // Give the process a moment to start
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        // Process should be ready immediately with proper IPC setup
+        // No sleep needed here
 
         log::info!("Selene executable started successfully");
         Ok(())
@@ -328,8 +322,9 @@ impl SeleneInstance {
                 let _ = stdin.flush();
             }
 
-            // Wait a bit for graceful shutdown
-            std::thread::sleep(std::time::Duration::from_millis(100));
+            // Give process a small chance to exit gracefully
+            // but don't wait too long
+            std::thread::sleep(std::time::Duration::from_millis(10));
 
             // Force kill if still running
             let _ = process.kill();
@@ -346,7 +341,7 @@ impl SeleneInstance {
         // eprintln!("*** ENGINE: SeleneInstance.run_shot({}) called ***", shot_id);
         std::io::stderr().flush().unwrap(); // Force flush
         // panic!("DEBUG: run_shot was called!");  // Uncomment to verify
-        log::debug!("SeleneInstance::run_shot({}) called", shot_id);
+        log::debug!("SeleneInstance::run_shot({shot_id}) called");
 
         // For proper isolation, always stop any existing process and start fresh
         // This ensures each shot gets a clean subprocess
@@ -369,7 +364,7 @@ impl SeleneInstance {
         Ok(())
     }
 
-    /// Try to read ByteMessages from the subprocess stdout (IPC)
+    /// Try to read `ByteMessages` from the subprocess stdout (IPC)
     fn try_read_ipc_messages(&mut self) -> Result<Vec<ByteMessage>, PecosError> {
         use std::io::Read;
 
@@ -385,20 +380,17 @@ impl SeleneInstance {
                         log::info!("Selene subprocess completed successfully");
                         self.process = None; // Clear the process handle
                         return Ok(messages); // Return any messages we've collected (empty)
-                    } else {
-                        return Err(PecosError::Processing(format!(
-                            "Selene subprocess failed with status: {}",
-                            status
-                        )));
                     }
+                    return Err(PecosError::Processing(format!(
+                        "Selene subprocess failed with status: {status}"
+                    )));
                 }
                 Ok(None) => {
                     // Process is still running - good
                 }
                 Err(e) => {
                     return Err(PecosError::Processing(format!(
-                        "Failed to check subprocess status: {}",
-                        e
+                        "Failed to check subprocess status: {e}"
                     )));
                 }
             }
@@ -414,14 +406,14 @@ impl SeleneInstance {
 
                 // Use non-blocking read to avoid infinite waits
                 match stdout.read_exact(&mut len_bytes) {
-                    Ok(_) => {
+                    Ok(()) => {
                         let msg_len = u32::from_le_bytes(len_bytes) as usize;
-                        log::trace!("Message length: {} bytes", msg_len);
+                        log::trace!("Message length: {msg_len} bytes");
 
                         // Read the message data
                         let mut msg_bytes = vec![0u8; msg_len];
                         match stdout.read_exact(&mut msg_bytes) {
-                            Ok(_) => {
+                            Ok(()) => {
                                 log::trace!("Read {} bytes of message data", msg_bytes.len());
 
                                 // Create ByteMessage from the data
@@ -433,16 +425,16 @@ impl SeleneInstance {
                                 break;
                             }
                             Err(e) => {
-                                log::debug!("Failed to read message data: {}", e);
+                                log::debug!("Failed to read message data: {e}");
                                 break;
                             }
                         }
                     }
                     Err(e) => {
                         if messages.is_empty() {
-                            log::trace!("No data available from subprocess: {}", e);
+                            log::trace!("No data available from subprocess: {e}");
                         } else {
-                            log::trace!("No more messages available: {}", e);
+                            log::trace!("No more messages available: {e}");
                         }
                         break;
                     }
@@ -456,15 +448,14 @@ impl SeleneInstance {
         Ok(messages)
     }
 
-    /// Send a ByteMessage to the subprocess via stdin (IPC)
+    /// Send a `ByteMessage` to the subprocess via stdin (IPC)
     pub fn send_ipc_message(&mut self, message: &ByteMessage) -> Result<(), PecosError> {
         // Check if process is still running before sending
         if let Some(ref mut process) = self.process {
             match process.try_wait() {
                 Ok(Some(status)) => {
                     return Err(PecosError::Processing(format!(
-                        "Cannot send message - subprocess exited with status: {}",
-                        status
+                        "Cannot send message - subprocess exited with status: {status}"
                     )));
                 }
                 Ok(None) => {
@@ -472,8 +463,7 @@ impl SeleneInstance {
                 }
                 Err(e) => {
                     return Err(PecosError::Processing(format!(
-                        "Failed to check subprocess status: {}",
-                        e
+                        "Failed to check subprocess status: {e}"
                     )));
                 }
             }
@@ -487,18 +477,18 @@ impl SeleneInstance {
             // Send message with simple length prefix (matching Bridge simulator protocol)
             // Write length as 4 bytes
             let len_bytes = (bytes.len() as u32).to_le_bytes();
-            stdin.write_all(&len_bytes).map_err(|e| {
-                PecosError::Processing(format!("Failed to write IPC length: {}", e))
-            })?;
+            stdin
+                .write_all(&len_bytes)
+                .map_err(|e| PecosError::Processing(format!("Failed to write IPC length: {e}")))?;
 
             // Write the actual message bytes
-            stdin.write_all(bytes).map_err(|e| {
-                PecosError::Processing(format!("Failed to write IPC message: {}", e))
-            })?;
+            stdin
+                .write_all(bytes)
+                .map_err(|e| PecosError::Processing(format!("Failed to write IPC message: {e}")))?;
 
-            stdin.flush().map_err(|e| {
-                PecosError::Processing(format!("Failed to flush IPC message: {}", e))
-            })?;
+            stdin
+                .flush()
+                .map_err(|e| PecosError::Processing(format!("Failed to flush IPC message: {e}")))?;
 
             log::trace!("Sent {} bytes via IPC (length-prefixed)", bytes.len());
             Ok(())
@@ -532,7 +522,7 @@ pub struct SeleneExecutableConfig {
     pub artifacts_path: Option<std::path::PathBuf>,
 }
 
-/// A ClassicalControlEngine that runs Selene instances directly with PecosSeleneBridgeSimulator
+/// A `ClassicalControlEngine` that runs Selene instances directly with `PecosSeleneBridgeSimulator`
 pub struct SeleneExecutableEngine {
     /// Configuration for the Selene instance
     config: SeleneExecutableConfig,
@@ -543,13 +533,13 @@ pub struct SeleneExecutableEngine {
     /// LLVM program (for backward compatibility)
     llvm_program: Option<LlvmProgram>,
 
-    /// Built Selene instance (created from HUGR via build() API)
+    /// Built Selene instance (created from HUGR via `build()` API)
     selene_instance: Option<SeleneInstance>,
 
     /// The initialized Selene runtime (when using real libselene.so)
     selene_runtime: Option<SeleneRuntime>,
 
-    /// ByteMessage queue for operations sent from bridge simulator
+    /// `ByteMessage` queue for operations sent from bridge simulator
     operation_queue: Vec<ByteMessage>,
 
     /// Current measurement results
@@ -559,19 +549,25 @@ pub struct SeleneExecutableEngine {
     shot_count: u64,
 
     /// Reusable message builder
-    message_builder: ByteMessageBuilder,
+    _message_builder: ByteMessageBuilder,
 
     /// Whether the Interface Plugin has been executed for this shot
     plugin_executed: bool,
 
-    /// Flag to indicate if we're in ControlEngine mode (with QuantumSystem)
+    /// Flag to indicate if we're in `ControlEngine` mode (with `QuantumSystem`)
     control_engine_mode: bool,
+
+    /// Quantum simulator for standalone mode (when not using `QuantumSystem`)
+    quantum_sim: Option<Box<dyn pecos_engines::quantum::QuantumEngine>>,
+
+    /// Counter for tracking total measurements across IPC calls
+    total_measurement_count: usize,
 }
 
 impl SeleneExecutableEngine {
     /// Create a new engine
     pub fn new(num_qubits: usize) -> Result<Self, PecosError> {
-        log::debug!("SeleneExecutableEngine::new({}) called", num_qubits);
+        log::debug!("SeleneExecutableEngine::new({num_qubits}) called");
 
         // Validate num_qubits
         if num_qubits == 0 {
@@ -598,13 +594,16 @@ impl SeleneExecutableEngine {
             operation_queue: Vec::new(),
             measurement_results: BTreeMap::new(),
             shot_count: 0,
-            message_builder: ByteMessageBuilder::new(),
+            _message_builder: ByteMessageBuilder::new(),
             plugin_executed: false,
             control_engine_mode: false,
+            quantum_sim: None,
+            total_measurement_count: 0,
         })
     }
 
     /// Set the program to execute
+    #[must_use]
     pub fn with_program(mut self, program: SeleneInterfaceProgram) -> Self {
         // If the program contains executable paths, store them in config
         if let Some(exec_path) = &program.executable_path {
@@ -618,24 +617,28 @@ impl SeleneExecutableEngine {
     }
 
     /// Set an LLVM program (for backward compatibility)
+    #[must_use]
     pub fn with_llvm_program(mut self, program: LlvmProgram) -> Self {
         self.llvm_program = Some(program);
         self
     }
 
     /// Set the working directory
+    #[must_use]
     pub fn with_working_dir(mut self, dir: std::path::PathBuf) -> Self {
         self.config.working_dir = Some(dir);
         self
     }
 
     /// Enable verbose output
+    #[must_use]
     pub fn with_verbose(mut self, verbose: bool) -> Self {
         self.config.verbose = verbose;
         self
     }
 
     /// Set the plugin path
+    #[must_use]
     pub fn with_plugin_path(mut self, path: std::path::PathBuf) -> Self {
         self.config.plugin_path = Some(path);
         self
@@ -668,8 +671,8 @@ impl SeleneExecutableEngine {
         if let (Some(exec_path), Some(artifacts_path)) =
             (&self.config.executable_path, &self.config.artifacts_path)
         {
-            log::info!("Using pre-compiled Selene executable at: {:?}", exec_path);
-            log::info!("  Artifacts at: {:?}", artifacts_path);
+            log::info!("Using pre-compiled Selene executable at: {exec_path:?}");
+            log::info!("  Artifacts at: {artifacts_path:?}");
             println!("*** ENGINE: Creating NEW SeleneInstance for executable ***");
 
             // Create a real SeleneInstance with the pre-compiled executable
@@ -698,11 +701,10 @@ impl SeleneExecutableEngine {
             // Try to find the bridge plugin library
             // Use absolute paths based on the workspace root
             let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            let workspace_root = manifest_dir
-                .parent()
-                .and_then(|p| p.parent())
-                .map(|p| p.to_path_buf())
-                .unwrap_or_else(|| std::path::PathBuf::from("."));
+            let workspace_root = manifest_dir.parent().and_then(|p| p.parent()).map_or_else(
+                || std::path::PathBuf::from("."),
+                std::path::Path::to_path_buf,
+            );
 
             let possible_paths = vec![
                 // Development build
@@ -722,7 +724,7 @@ impl SeleneExecutableEngine {
                 ))?
         };
 
-        log::info!("Using bridge plugin at: {:?}", bridge_plugin_path);
+        log::info!("Using bridge plugin at: {bridge_plugin_path:?}");
 
         // Initialize the engine interface so the bridge can communicate with us
         use pecos_selene_bridge::initialize_engine_interface;
@@ -769,23 +771,34 @@ impl SeleneExecutableEngine {
             // Run a shot on the Selene executable
             match instance.run_shot(self.shot_count) {
                 Ok(()) => {
-                    // eprintln!("*** ENGINE: run_shot succeeded ***");
+                    eprintln!("*** ENGINE: run_shot succeeded, continuing... ***");
                 }
                 Err(e) => {
-                    // eprintln!("*** ENGINE: run_shot failed: {:?} ***", e);
+                    eprintln!("*** ENGINE: run_shot failed: {e:?} ***");
                     return Err(e);
                 }
             }
 
-            // The Bridge simulator in the executable will communicate back via the EngineInterface
-            // The results will be collected through that interface
+            eprintln!("*** ENGINE: After run_shot, subprocess started ***");
+            // The IPC communication with the Bridge will happen in the main process() loop
 
-            println!("*** ENGINE: Shot command sent to Selene executable ***");
-            log::info!("Shot command sent to Selene executable");
+            // The Bridge simulator in the executable will communicate via IPC
+            // The results will be collected through the send_measurements() calls
+
+            eprintln!("*** ENGINE: Subprocess started, Bridge will communicate via IPC ***");
+            eprintln!("*** ENGINE: DEBUG MARKER 12345 ***");
+            log::info!("Selene subprocess started for IPC communication");
 
             // Check if we're in control engine mode (with QuantumSystem)
+            eprintln!(
+                "*** ENGINE: control_engine_mode = {} ***",
+                self.control_engine_mode
+            );
             if self.control_engine_mode {
-                // eprintln!("*** ENGINE: In ControlEngine mode - skipping IPC loop, let QuantumSystem handle operations ***");
+                eprintln!(
+                    "*** ENGINE: In ControlEngine mode - IPC handled by start()/continue_processing() ***"
+                );
+
                 // In control engine mode, don't handle IPC here
                 // The start() and continue_processing() methods will handle it
                 self.plugin_executed = true;
@@ -793,7 +806,7 @@ impl SeleneExecutableEngine {
             }
 
             // In standalone mode (no QuantumSystem), handle IPC directly
-            // eprintln!("*** ENGINE: In standalone mode - handling IPC directly ***");
+            eprintln!("*** ENGINE: In standalone mode - handling IPC directly ***");
 
             // In IPC mode, we need to initiate the communication
             // Send an empty "start" message to the Bridge to begin execution
@@ -819,11 +832,12 @@ impl SeleneExecutableEngine {
                         return Ok(());
                     }
 
-                    // No messages yet, wait a bit
-                    std::thread::sleep(std::time::Duration::from_millis(10));
+                    // No messages yet, brief yield to avoid busy-waiting
+                    std::thread::sleep(std::time::Duration::from_millis(1));
                     timeout_counter += 1;
 
-                    if timeout_counter > MAX_TIMEOUT_ITERATIONS {
+                    if timeout_counter > MAX_TIMEOUT_ITERATIONS * 10 {
+                        // Adjust for shorter sleep
                         return Err(PecosError::Processing(
                             "Timeout waiting for Bridge response".to_string(),
                         ));
@@ -864,30 +878,54 @@ impl SeleneExecutableEngine {
                                 }
                             }
                             eprintln!(
-                                "*** ENGINE: Total measurements found: {} ***",
-                                measurement_count
+                                "*** ENGINE: Total measurements found: {measurement_count} ***"
                             );
 
                             if measurement_count > 0 {
                                 eprintln!(
-                                    "*** ENGINE: Sending {} measurement results back to Bridge ***",
-                                    measurement_count
+                                    "*** ENGINE: Sending {measurement_count} measurement results back to Bridge ***"
                                 );
 
-                                // For the X gate test, we expect one measurement that should return 1
+                                // Execute the quantum operations to get real measurement results
+                                // Create a quantum simulator for this shot
+                                use pecos_engines::quantum::StateVecEngine;
+                                let mut quantum_sim = StateVecEngine::new(self.config.num_qubits);
+
+                                // Execute all the operations and collect measurement results
+                                let mut outcomes: Vec<usize> = Vec::new();
+
+                                // Build a ByteMessage with all the operations
+                                let mut msg_builder = ByteMessage::builder();
+                                let _ = msg_builder.for_quantum_operations();
+                                for op in &ops {
+                                    msg_builder.add_gate_command(op);
+                                }
+                                let ops_message = msg_builder.build();
+
+                                // Execute all operations and get measurement results
+                                let result_msg = quantum_sim.process(ops_message)?;
+                                if let Ok(meas_outcomes) = result_msg.outcomes() {
+                                    // Convert u32 outcomes to usize
+                                    outcomes.extend(meas_outcomes.iter().map(|&x| x as usize));
+                                }
+
+                                eprintln!(
+                                    "*** ENGINE: Got {} real measurement outcomes from quantum simulator ***",
+                                    outcomes.len()
+                                );
+
                                 let mut builder = ByteMessage::builder();
-                                builder.for_outcomes();
-                                // Add measurement outcomes (1 for X gate test)
-                                let outcomes: Vec<usize> = vec![1; measurement_count];
+                                let _ = builder.for_outcomes();
                                 builder.add_outcomes(&outcomes);
                                 let measurements = builder.build();
 
                                 // Store the measurement results for later retrieval
-                                for (i, &outcome) in outcomes.iter().enumerate() {
-                                    let key = format!("measurement_{}", i + 1); // Use 1-based indexing
+                                for &outcome in &outcomes {
+                                    self.total_measurement_count += 1;
+                                    let key =
+                                        format!("measurement_{}", self.total_measurement_count);
                                     eprintln!(
-                                        "*** ENGINE: Storing measurement {} = {} ***",
-                                        key, outcome
+                                        "*** ENGINE: Storing measurement {key} = {outcome} ***"
                                     );
                                     self.measurement_results
                                         .insert(key, Data::U32(outcome as u32));
@@ -901,7 +939,7 @@ impl SeleneExecutableEngine {
                             }
                         }
                         Err(e) => {
-                            eprintln!("*** ENGINE: Failed to parse quantum ops: {} ***", e);
+                            eprintln!("*** ENGINE: Failed to parse quantum ops: {e} ***");
                             // Send empty measurements as fallback
                             let measurements = ByteMessage::builder().for_outcomes().build();
                             instance.send_ipc_message(&measurements)?;
@@ -914,7 +952,9 @@ impl SeleneExecutableEngine {
         // Clone the program to avoid borrowing issues
         if let Some(program) = self.program.clone() {
             // Only try to load plugin if we have plugin bytes
-            if !program.plugin.is_empty() {
+            if program.plugin.is_empty() {
+                log::warn!("No plugin bytes available - cannot execute plugin");
+            } else {
                 log::info!(
                     "Executing Interface Plugin in-process for shot {}",
                     self.shot_count
@@ -927,8 +967,6 @@ impl SeleneExecutableEngine {
                     "Interface Plugin execution completed for shot {}",
                     self.shot_count
                 );
-            } else {
-                log::warn!("No plugin bytes available - cannot execute plugin");
             }
         } else if let Some(_llvm_program) = &self.llvm_program {
             // For LLVM programs, we need a different execution path
@@ -964,7 +1002,7 @@ impl SeleneExecutableEngine {
             );
             let runtime = SeleneRuntime::new(self.config.num_qubits, 1) // 1 shot per call
                 .map_err(|e| {
-                    SeleneError::RuntimeError(format!("Failed to initialize Selene: {}", e))
+                    SeleneError::RuntimeError(format!("Failed to initialize Selene: {e}"))
                 })?;
             self.selene_runtime = Some(runtime);
         }
@@ -975,13 +1013,13 @@ impl SeleneExecutableEngine {
 
         // Write plugin bytes to a temporary .o file and convert to .so
         let temp_dir = tempfile::tempdir()
-            .map_err(|e| SeleneError::RuntimeError(format!("Failed to create temp dir: {}", e)))?;
+            .map_err(|e| SeleneError::RuntimeError(format!("Failed to create temp dir: {e}")))?;
         let temp_o_path = temp_dir.path().join("plugin.o");
         let temp_so_path = temp_dir.path().join("plugin.so");
 
         // Write the plugin bytes
         std::fs::write(&temp_o_path, &program.plugin)
-            .map_err(|e| SeleneError::RuntimeError(format!("Failed to write plugin: {}", e)))?;
+            .map_err(|e| SeleneError::RuntimeError(format!("Failed to write plugin: {e}")))?;
 
         // Convert .o to .so using gcc
         let output = std::process::Command::new("gcc")
@@ -989,7 +1027,7 @@ impl SeleneExecutableEngine {
             .arg(&temp_so_path)
             .arg(&temp_o_path)
             .output()
-            .map_err(|e| SeleneError::RuntimeError(format!("Failed to run gcc: {}", e)))?;
+            .map_err(|e| SeleneError::RuntimeError(format!("Failed to run gcc: {e}")))?;
 
         if !output.status.success() {
             return Err(SeleneError::RuntimeError(format!(
@@ -1002,7 +1040,7 @@ impl SeleneExecutableEngine {
         // Load the shared library
         let library = unsafe {
             Library::new(&temp_so_path).map_err(|e| {
-                SeleneError::RuntimeError(format!("Failed to load plugin library: {}", e))
+                SeleneError::RuntimeError(format!("Failed to load plugin library: {e}"))
             })?
         };
 
@@ -1012,14 +1050,14 @@ impl SeleneExecutableEngine {
         let qmain_symbol: Symbol<unsafe extern "C" fn(u64) -> u64> = unsafe {
             library
                 .get(b"qmain")
-                .map_err(|e| SeleneError::RuntimeError(format!("Failed to find qmain: {}", e)))?
+                .map_err(|e| SeleneError::RuntimeError(format!("Failed to find qmain: {e}")))?
         };
 
         // Start the shot in Selene runtime
         if let Some(runtime) = &mut self.selene_runtime {
             runtime
                 .start_shot(self.shot_count)
-                .map_err(|e| SeleneError::RuntimeError(format!("Failed to start shot: {}", e)))?;
+                .map_err(|e| SeleneError::RuntimeError(format!("Failed to start shot: {e}")))?;
         }
 
         log::info!("Calling Interface Plugin qmain(0)");
@@ -1028,17 +1066,14 @@ impl SeleneExecutableEngine {
         // Call qmain - this will execute the quantum program and call our bridge simulator
         let result = unsafe { qmain_symbol(0) };
 
-        log::info!("Interface Plugin qmain returned: {}", result);
-        println!(
-            "*** ENGINE: Interface Plugin qmain returned: {} ***",
-            result
-        );
+        log::info!("Interface Plugin qmain returned: {result}");
+        println!("*** ENGINE: Interface Plugin qmain returned: {result} ***");
 
         // End the shot in Selene runtime
         if let Some(runtime) = &mut self.selene_runtime {
             runtime
                 .end_shot()
-                .map_err(|e| SeleneError::RuntimeError(format!("Failed to end shot: {}", e)))?;
+                .map_err(|e| SeleneError::RuntimeError(format!("Failed to end shot: {e}")))?;
         }
 
         // Clear the instance from thread-local storage
@@ -1088,25 +1123,60 @@ impl SeleneExecutableEngine {
     /// Send measurement results to the bridge simulator via IPC
     fn send_measurements(&mut self, message: ByteMessage) -> Result<(), PecosError> {
         // Extract and store outcomes locally for later retrieval
-        let outcomes = message
+        let new_outcomes = message
             .outcomes()
-            .map_err(|e| PecosError::Processing(format!("Failed to extract outcomes: {}", e)))?;
+            .map_err(|e| PecosError::Processing(format!("Failed to extract outcomes: {e}")))?;
 
-        for (i, value) in outcomes.iter().enumerate() {
-            let result_key = format!("measurement_{}", i + 1); // Use 1-based indexing
+        eprintln!(
+            "*** ENGINE: send_measurements storing {} new outcomes starting at index {} ***",
+            new_outcomes.len(),
+            self.total_measurement_count + 1
+        );
+
+        // Store the new outcomes in our accumulated list
+        for value in &new_outcomes {
+            self.total_measurement_count += 1;
+            let result_key = format!("measurement_{}", self.total_measurement_count);
+            eprintln!("*** ENGINE: Storing {result_key} = {value} ***");
             self.measurement_results
                 .insert(result_key, Data::U32(*value));
         }
 
-        // Send the measurement results to the Bridge simulator subprocess via IPC
+        eprintln!(
+            "*** ENGINE: Total measurements stored so far: {} ***",
+            self.total_measurement_count
+        );
+
+        // Build a message with ALL accumulated measurements (not just the new ones)
+        // The Bridge expects all measurements up to this point
+        let mut all_outcomes: Vec<usize> = Vec::new();
+        for i in 1..=self.total_measurement_count {
+            let key = format!("measurement_{i}");
+            if let Some(Data::U32(value)) = self.measurement_results.get(&key) {
+                all_outcomes.push(*value as usize);
+            }
+        }
+
+        eprintln!(
+            "*** ENGINE: Sending ALL {} accumulated outcomes to Bridge ***",
+            all_outcomes.len()
+        );
+
+        // Create a new message with all accumulated outcomes
+        let mut builder = ByteMessage::builder();
+        let _ = builder.for_outcomes();
+        builder.add_outcomes(&all_outcomes);
+        let accumulated_message = builder.build();
+
+        // Send the accumulated measurement results to the Bridge simulator subprocess via IPC
         if let Some(ref mut instance) = self.selene_instance {
-            log::debug!("Sending measurement results to Bridge simulator via IPC");
-            instance.send_ipc_message(&message)?;
+            log::debug!("Sending all accumulated measurement results to Bridge simulator via IPC");
+            instance.send_ipc_message(&accumulated_message)?;
         } else {
             println!("*** ENGINE: No subprocess available for sending measurements ***");
         }
 
-        log::debug!("Sent measurement results to PecosSeleneBridgeSimulator via IPC");
+        log::debug!("Sent accumulated measurement results to PecosSeleneBridgeSimulator via IPC");
         Ok(())
     }
 }
@@ -1126,18 +1196,12 @@ impl Engine for SeleneExecutableEngine {
         // Build the Selene instance (direct approach - no subprocess)
         self.build_selene_instance()?;
 
-        // If we have an LLVM program, just return dummy results for testing
+        // LLVM programs are not supported directly - must use HUGR
         if self.llvm_program.is_some() {
-            println!("*** ENGINE: LLVM program - returning test shot ***");
-            self.shot_count += 1;
-
-            // Create a shot with some dummy measurement data
-            let mut shot = Shot::default();
-            shot.data.insert("measurements".to_string(), Data::U32(0));
-            shot.data.insert("measurement_1".to_string(), Data::U32(0)); // 1-based indexing
-            shot.data.insert("measurement_2".to_string(), Data::U32(0)); // 1-based indexing
-
-            return Ok(shot);
+            return Err(PecosError::Processing(
+                "Direct LLVM execution not supported. Please compile from HUGR using Selene."
+                    .to_string(),
+            ));
         }
 
         // Execute the Selene instance directly (no subprocess management)
@@ -1153,16 +1217,38 @@ impl Engine for SeleneExecutableEngine {
             // eprintln!("*** ENGINE: Start message sent, waiting for operations from Bridge ***");
         }
 
+        // Create quantum simulator for executing operations
+        use pecos_engines::quantum::StateVecEngine;
+        eprintln!(
+            "*** ENGINE: Creating StateVecEngine quantum simulator for {} qubits ***",
+            self.config.num_qubits
+        );
+        self.quantum_sim = Some(Box::new(StateVecEngine::new(self.config.num_qubits)));
+
         // Process operations from the bridge until complete
+        let mut iteration = 0;
         loop {
             let commands = self.receive_operations()?;
             if commands.is_empty()? {
+                eprintln!("*** ENGINE: No more operations from Bridge, completing ***");
                 break;
             }
 
-            // In a real system, these would be sent to a quantum engine
-            // For now, we simulate empty measurements
-            let measurements = ByteMessage::builder().for_outcomes().build();
+            iteration += 1;
+            eprintln!("*** ENGINE: Iteration {iteration}: Received operations from Bridge ***");
+
+            // Execute operations on the quantum simulator (maintains state across iterations)
+            let sim = self.quantum_sim.as_mut().ok_or_else(|| {
+                PecosError::Processing("Quantum simulator not initialized".to_string())
+            })?;
+
+            eprintln!("*** ENGINE: Executing quantum operations on simulator ***");
+            let measurements = sim.process(commands)?;
+
+            let num_outcomes = measurements.outcomes().map(|o| o.len()).unwrap_or(0);
+            eprintln!("*** ENGINE: Got {num_outcomes} measurement outcomes from simulator ***");
+
+            // Send measurements back to Bridge for conditional logic
             self.send_measurements(measurements)?;
         }
 
@@ -1213,6 +1299,7 @@ impl ClassicalEngine for SeleneExecutableEngine {
 
     fn generate_commands(&mut self) -> Result<ByteMessage, PecosError> {
         println!("*** ENGINE: generate_commands() called ***");
+        eprintln!("*** ENGINE: generate_commands() - CLASSICAL PATH ***");
 
         // First check if we have queued operations from a previous execution
         if !self.operation_queue.is_empty() {
@@ -1233,29 +1320,11 @@ impl ClassicalEngine for SeleneExecutableEngine {
                     println!("*** ENGINE: Operations queued by bridge, returning them ***");
                     return self.receive_operations();
                 }
-            } else if let Some(llvm_program) = &self.llvm_program {
-                // Check if LLVM program is empty
-                match &llvm_program.content {
-                    pecos_programs::LlvmContent::Ir(ir) => {
-                        if ir.trim().is_empty() {
-                            return Err(PecosError::Processing(
-                                "Cannot generate commands from empty LLVM IR".to_string(),
-                            ));
-                        }
-                    }
-                    pecos_programs::LlvmContent::Bitcode(bc) => {
-                        if bc.is_empty() {
-                            return Err(PecosError::Processing(
-                                "Cannot generate commands from empty LLVM bitcode".to_string(),
-                            ));
-                        }
-                    }
-                }
-
-                // For LLVM programs, return empty commands for now
-                println!("*** ENGINE: LLVM program - returning empty commands ***");
-                self.plugin_executed = true;
-                return Ok(ByteMessage::builder().for_quantum_operations().build());
+            } else if self.llvm_program.is_some() {
+                return Err(PecosError::Processing(
+                    "Direct LLVM execution not supported. Please use HUGR compilation with Selene."
+                        .to_string(),
+                ));
             }
         }
 
@@ -1267,51 +1336,104 @@ impl ClassicalEngine for SeleneExecutableEngine {
         // Extract outcomes first before moving the message
         let outcomes = message
             .outcomes()
-            .map_err(|e| PecosError::Processing(format!("Failed to extract outcomes: {}", e)))?;
+            .map_err(|e| PecosError::Processing(format!("Failed to extract outcomes: {e}")))?;
 
-        // Send measurements to the bridge simulator
+        eprintln!(
+            "*** ENGINE: handle_measurements received {} outcomes ***",
+            outcomes.len()
+        );
+
+        // Send measurements to the bridge simulator - this also stores them
         self.send_measurements(message)?;
 
-        for (i, value) in outcomes.iter().enumerate() {
-            let result_key = format!("measurement_{}", i + 1); // Use 1-based indexing
-            self.measurement_results
-                .insert(result_key, Data::U32(*value));
-        }
+        // No need to store again - send_measurements already does this with proper indexing
+
+        eprintln!(
+            "*** ENGINE: Total stored measurements: {} ***",
+            self.measurement_results.len()
+        );
 
         Ok(())
     }
 
     fn get_results(&self) -> Result<Shot, PecosError> {
-        // eprintln!("*** ENGINE: get_results() called, have {} stored measurements ***", self.measurement_results.len());
+        eprintln!(
+            "*** ENGINE: get_results() called, have {} stored measurements ***",
+            self.measurement_results.len()
+        );
 
-        // For LLVM programs in test mode, return dummy measurements
+        // LLVM programs are not supported
         if self.llvm_program.is_some() {
-            println!("*** ENGINE: get_results() for LLVM program - returning dummy shot ***");
-            let mut shot = Shot::default();
-            shot.data.insert("measurements".to_string(), Data::U32(0));
-            shot.data.insert("measurement_1".to_string(), Data::U32(0)); // 1-based indexing
-            shot.data.insert("measurement_2".to_string(), Data::U32(0)); // 1-based indexing
-            return Ok(shot);
+            return Err(PecosError::Processing(
+                "Cannot get results for LLVM program. Use HUGR compilation.".to_string(),
+            ));
         }
 
         // Check if we have measurement results from the Bridge
         if !self.measurement_results.is_empty() {
-            // eprintln!("*** ENGINE: Returning {} measurement results from Bridge ***", self.measurement_results.len());
+            eprintln!(
+                "*** ENGINE: Returning {} measurement results from Bridge ***",
+                self.measurement_results.len()
+            );
             let mut shot = Shot::default();
 
             // Add each measurement result to the shot
-            for (key, result) in self.measurement_results.iter() {
+            eprintln!(
+                "*** ENGINE: measurement_results contains {} entries ***",
+                self.measurement_results.len()
+            );
+            for (key, result) in &self.measurement_results {
+                eprintln!("    Adding: {key} = {result:?}");
                 shot.data.insert(key.clone(), result.clone());
             }
+            eprintln!(
+                "*** ENGINE: shot now has {} entries before filtering ***",
+                shot.data.len()
+            );
 
-            // Also add a combined measurements value
-            if self.measurement_results.len() == 1 {
-                // For single measurement, just use the value
-                let result = self.measurement_results.values().next().unwrap().clone();
-                shot.data.insert("measurements".to_string(), result);
+            // Don't add a combined measurements array for now - it causes issues with nested vectors
+            // The individual measurement_1, measurement_2, etc. are sufficient
+
+            // Check for Data::Vec entries that would cause issues
+            let mut filtered_shot = Shot::default();
+            for (key, value) in shot.data {
+                match &value {
+                    Data::Vec(vec_data) => {
+                        eprintln!(
+                            "*** WARNING: Skipping Data::Vec entry '{}' with {} items ***",
+                            key,
+                            vec_data.len()
+                        );
+                        // Data::Vec causes issues with to_dict conversion
+                        // For now, we'll flatten single-element vectors
+                        if vec_data.len() == 1
+                            && let Some(single_value) = vec_data.first()
+                        {
+                            // Convert single-element vec to its value
+                            filtered_shot.data.insert(key, single_value.clone());
+                        }
+                        // Skip multi-element vectors to avoid nested vector error
+                    }
+                    _ => {
+                        filtered_shot.data.insert(key, value);
+                    }
+                }
             }
 
-            return Ok(shot);
+            eprintln!(
+                "*** ENGINE: Final shot has {} entries after filtering ***",
+                filtered_shot.data.len()
+            );
+            for (key, value) in &filtered_shot.data {
+                match value {
+                    Data::Bool(b) => eprintln!("    - {key} = Bool({b})"),
+                    Data::U32(u) => eprintln!("    - {key} = U32({u})"),
+                    Data::I32(i) => eprintln!("    - {key} = I32({i})"),
+                    _ => eprintln!("    - {key} = other type"),
+                }
+            }
+
+            return Ok(filtered_shot);
         }
 
         // Otherwise try to get results from the LLVM runtime registry
@@ -1329,15 +1451,29 @@ impl ClassicalEngine for SeleneExecutableEngine {
         })
         .flatten()
         {
-            log::debug!(
-                "SeleneExecutableEngine: Got shot from runtime registry: {:?}",
-                shot
-            );
+            log::debug!("SeleneExecutableEngine: Got shot from runtime registry: {shot:?}");
             println!(
                 "*** SELENE ENGINE: Got shot from runtime registry with {} entries ***",
                 shot.data.len()
             );
-            final_shot = shot;
+            eprintln!("*** Registry shot contents: ***");
+            for (key, value) in &shot.data {
+                match value {
+                    Data::Vec(vec_data) => {
+                        eprintln!("    - {} = Data::Vec with {} items", key, vec_data.len());
+                    }
+                    Data::Bool(b) => eprintln!("    - {key} = Bool({b})"),
+                    Data::U32(u) => eprintln!("    - {key} = U32({u})"),
+                    _ => eprintln!("    - {key} = other type"),
+                }
+            }
+            // The registry shot might have Data::Vec entries that cause issues
+            // Don't use it directly, only merge in non-Vec entries
+            for (key, value) in shot.data {
+                if !matches!(value, Data::Vec(_)) {
+                    final_shot.data.insert(key, value);
+                }
+            }
         } else {
             log::warn!("SeleneExecutableEngine: No results available from runtime registry");
             println!("*** SELENE ENGINE: No results available from runtime registry ***");
@@ -1353,9 +1489,14 @@ impl ClassicalEngine for SeleneExecutableEngine {
 
     fn reset(&mut self) -> Result<(), PecosError> {
         log::debug!("Resetting SeleneExecutableEngine for next shot");
+        eprintln!(
+            "*** ENGINE: reset() called - clearing {} measurements ***",
+            self.measurement_results.len()
+        );
 
         // Reset shot-specific state
         self.measurement_results.clear();
+        self.total_measurement_count = 0; // Reset measurement counter
         self.shot_count += 1;
         self.plugin_executed = false;
         self.operation_queue.clear();
@@ -1393,7 +1534,7 @@ impl SeleneExecutableEngine {
         // Parse the quantum operations
         let ops = operations.quantum_ops().map_err(|e| {
             // eprintln!("*** CONTROL ENGINE: Failed to parse operations: {} ***", e);
-            PecosError::Processing(format!("Failed to parse operations: {}", e))
+            PecosError::Processing(format!("Failed to parse operations: {e}"))
         })?;
 
         // eprintln!("*** CONTROL ENGINE: Parsed {} operations ***", ops.len());
@@ -1416,7 +1557,7 @@ impl SeleneExecutableEngine {
 
         // Build new operations with conversions
         let mut builder = ByteMessageBuilder::new();
-        builder.for_quantum_operations();
+        let _ = builder.for_quantum_operations();
 
         for op in ops {
             // Convert QubitId to usize
@@ -1458,7 +1599,10 @@ impl SeleneExecutableEngine {
                 }
                 GateType::RZ => {
                     // RZ(theta) gate
-                    if !op.params.is_empty() {
+                    if op.params.is_empty() {
+                        // No parameters, keep original
+                        builder.add_rz(0.0, &qubits);
+                    } else {
                         let theta = op.params[0];
 
                         if theta.abs() < 1e-10 {
@@ -1479,12 +1623,9 @@ impl SeleneExecutableEngine {
                             builder.add_szdg(&qubits);
                         } else {
                             // Can't convert to Clifford, keep original
-                            eprintln!("*** CONTROL ENGINE: Keeping RZ({}) as-is ***", theta);
+                            eprintln!("*** CONTROL ENGINE: Keeping RZ({theta}) as-is ***");
                             builder.add_rz(theta, &qubits);
                         }
-                    } else {
-                        // No parameters, keep original
-                        builder.add_rz(0.0, &qubits);
                     }
                 }
                 GateType::Prep => {
@@ -1539,7 +1680,9 @@ impl ControlEngine for SeleneExecutableEngine {
     type EngineOutput = ByteMessage;
 
     fn start(&mut self, _input: ()) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
-        // eprintln!("*** CONTROL ENGINE: start() called - PROPER INTEGRATION WITH QUANTUM SYSTEM ***");
+        eprintln!(
+            "*** CONTROL ENGINE: start() called - PROPER INTEGRATION WITH QUANTUM SYSTEM ***"
+        );
         log::info!("SeleneExecutableEngine: start() called - implementing back-and-forth IPC");
         log::info!("Starting back-and-forth communication with Bridge plugin");
 
@@ -1549,6 +1692,7 @@ impl ControlEngine for SeleneExecutableEngine {
         // Reset state for new shot
         self.operation_queue.clear();
         self.measurement_results.clear();
+        self.total_measurement_count = 0; // Reset measurement counter
 
         // Build the Selene instance (creates Bridge subprocess with IPC pipes)
         self.build_selene_instance()?;
@@ -1606,28 +1750,8 @@ impl ControlEngine for SeleneExecutableEngine {
         // eprintln!("*** CONTROL ENGINE: continue_processing() called with measurements ***");
         log::debug!("continue_processing() called with measurements");
 
-        // Parse the measurements from QuantumSystem
-        if !measurements.is_empty()? {
-            match measurements.outcomes() {
-                Ok(outcomes) => {
-                    // eprintln!("*** CONTROL ENGINE: Received {} measurement outcomes from QuantumSystem ***", outcomes.len());
-                    // Store the real measurement results
-                    for (i, &outcome) in outcomes.iter().enumerate() {
-                        let key = format!("measurement_{}", i + 1); // Use 1-based indexing
-                        eprintln!(
-                            "*** CONTROL ENGINE: Storing real measurement {} = {} ***",
-                            key, outcome
-                        );
-                        self.measurement_results.insert(key, Data::U32(outcome));
-                    }
-                }
-                Err(e) => {
-                    // eprintln!("*** CONTROL ENGINE: Failed to parse measurements: {} ***", e);
-                }
-            }
-        }
-
         // Send the real measurement results to Bridge plugin via IPC
+        // send_measurements will also store them with proper indexing
         self.send_measurements(measurements)?;
 
         // Wait for Bridge plugin to process measurements and send back more operations
@@ -1663,9 +1787,11 @@ impl Clone for SeleneExecutableEngine {
             operation_queue: Vec::new(), // Each clone gets its own queue
             measurement_results: BTreeMap::new(),
             shot_count: 0,
-            message_builder: ByteMessageBuilder::new(),
+            _message_builder: ByteMessageBuilder::new(),
             plugin_executed: false,
-            control_engine_mode: false, // Start in standalone mode by default
+            control_engine_mode: false,
+            quantum_sim: None, // Start in standalone mode by default
+            total_measurement_count: 0,
         }
     }
 }
@@ -1676,7 +1802,7 @@ impl FFIEngineInterface for SeleneExecutableEngine {
         self.operation_queue.push(message);
     }
 
-    fn get_measurement(&mut self, qubit: usize) -> bool {
+    fn get_measurement(&mut self, _qubit: usize) -> bool {
         // For now, return false - in production, this would get actual results
         // from the quantum engine
         false

@@ -6,19 +6,7 @@ use pecos_programs::QasmProgram;
 use pecos_qasm::qasm_engine;
 use std::collections::BTreeMap;
 
-fn main() {
-    let qasm = r#"
-        OPENQASM 2.0;
-        include "qelib1.inc";
-        qreg q[3];
-        creg c[3];
-        h q[0];
-        cx q[0], q[1];
-        cx q[1], q[2];
-        measure q -> c;
-    "#;
-
-    // Example 1: Basic noise configuration with fluent API
+fn run_basic_noise_example(qasm: &str) {
     println!("Example 1: Basic noise configuration");
     let basic_noise = GeneralNoiseModel::builder()
         .with_seed(42)
@@ -44,6 +32,22 @@ fn main() {
         *state_counts.entry(val).or_insert(0) += 1;
     }
     println!("State distribution: {state_counts:?}\n");
+}
+
+fn main() {
+    let qasm = r#"
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[3];
+        creg c[3];
+        h q[0];
+        cx q[0], q[1];
+        cx q[1], q[2];
+        measure q -> c;
+    "#;
+
+    // Example 1: Basic noise configuration
+    run_basic_noise_example(qasm);
 
     // Example 2: Complex noise with Pauli models
     println!("Example 2: Complex noise with Pauli error models");

@@ -1,8 +1,8 @@
 //! PECOS-Selene Bridge Simulator Plugin
 //!
 //! This plugin acts as a bridge between Selene's simulator interface and PECOS's
-//! ByteMessage system. It allows Selene programs to run naturally while converting
-//! operations directly to ByteMessages for integration with PECOS quantum engines.
+//! `ByteMessage` system. It allows Selene programs to run naturally while converting
+//! operations directly to `ByteMessages` for integration with PECOS quantum engines.
 
 // Static initialization to log when library is loaded
 static INIT: std::sync::Once = std::sync::Once::new();
@@ -24,7 +24,7 @@ fn is_subprocess_with_piped_stdio() -> bool {
     if let Ok(artifacts_dir) = std::env::var("SELENE_ARTIFACTS_DIR") {
         let ipc_marker = std::path::Path::new(&artifacts_dir).join("pecos_ipc_mode");
         if ipc_marker.exists() {
-            eprintln!("Bridge: Found IPC marker file at {:?}", ipc_marker);
+            eprintln!("Bridge: Found IPC marker file at {}", ipc_marker.display());
             return true;
         }
     }
@@ -42,12 +42,12 @@ pub mod callback_interface;
 // Global reference to the ClassicalControlEngine for direct ByteMessage communication
 static ENGINE_INTERFACE: OnceLock<Arc<Mutex<dyn EngineInterface + Send + Sync>>> = OnceLock::new();
 
-/// Trait for the ClassicalControlEngine to receive operations from the bridge simulator
+/// Trait for the `ClassicalControlEngine` to receive operations from the bridge simulator
 pub trait EngineInterface {
-    /// Send a quantum operation as a ByteMessage to PECOS
+    /// Send a quantum operation as a `ByteMessage` to PECOS
     fn send_operation(&mut self, message: ByteMessage) -> Result<()>;
 
-    /// Receive measurement results as a ByteMessage from PECOS
+    /// Receive measurement results as a `ByteMessage` from PECOS
     fn receive_measurements(&mut self) -> Result<ByteMessage>;
 
     /// Get named results from the bridge simulator
@@ -73,7 +73,7 @@ unsafe impl Sync for Callbacks {}
 
 /// Setup function that PECOS calls to register callbacks
 /// This is the main entry point for establishing communication
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn pecos_bridge_set_engine_callbacks(
     context: *mut std::ffi::c_void,
     send_op: extern "C" fn(*mut std::ffi::c_void, *const u8, usize) -> i32,
@@ -101,13 +101,13 @@ pub enum BridgeState {
     Complete,
 }
 
-/// The PECOS-Selene Bridge Simulator that converts between Selene operations and ByteMessages
-/// Implements proper back-and-forth communication using EngineStage pattern.
+/// The PECOS-Selene Bridge Simulator that converts between Selene operations and `ByteMessages`
+/// Implements proper back-and-forth communication using `EngineStage` pattern.
 pub struct PecosSeleneBridgeSimulator {
     /// Number of qubits
     n_qubits: usize,
 
-    /// Message builder for creating ByteMessages
+    /// Message builder for creating `ByteMessages`
     message_builder: ByteMessageBuilder,
 
     /// Current execution state for back-and-forth communication
@@ -122,13 +122,10 @@ pub struct PecosSeleneBridgeSimulator {
     /// Cache of measurement results received from PECOS
     measurement_results: BTreeMap<usize, bool>,
 
-    /// Named measurement results for RuntimeInterface (captures result_id)
-    named_results: BTreeMap<String, bool>,
-
     /// Flag to indicate if we're in IPC mode (buffering operations)
     ipc_mode: bool,
 
-    /// Single ByteMessage builder that accumulates all operations during shot
+    /// Single `ByteMessage` builder that accumulates all operations during shot
     shot_operations: ByteMessageBuilder,
 
     /// Track if we've started building operations for this shot
@@ -137,39 +134,34 @@ pub struct PecosSeleneBridgeSimulator {
 
 impl PecosSeleneBridgeSimulator {
     fn new(n_qubits: u64) -> Self {
-        eprintln!(
-            "Bridge: PecosSeleneBridgeSimulator::new({}) called",
-            n_qubits
-        );
+        eprintln!("Bridge: PecosSeleneBridgeSimulator::new({n_qubits}) called");
 
         // Don't try to read config here - it doesn't exist at build time
         // We'll read it in shot_start() instead
         let ipc_mode = is_subprocess_with_piped_stdio();
-        eprintln!("Bridge: IPC mode detected = {}", ipc_mode);
+        eprintln!("Bridge: IPC mode detected = {ipc_mode}");
 
-        // Use a placeholder value - will be updated in shot_start()
+        // Initialize with the provided value, but note it may be updated from config at runtime
         eprintln!(
-            "Bridge: Using placeholder n_qubits={} (will read actual value at runtime)",
-            n_qubits
+            "Bridge: Initializing with n_qubits={n_qubits} (may be updated from config at runtime)"
         );
 
         Self {
-            n_qubits: n_qubits as usize, // Placeholder - will be updated in shot_start()
+            n_qubits: n_qubits as usize, // Initial value - may be updated from config
             message_builder: ByteMessageBuilder::new(),
             execution_state: BridgeState::Initial,
             shot_id: 0,
             measurement_count: 0,
             measurement_results: BTreeMap::new(),
-            named_results: BTreeMap::new(),
             ipc_mode,
             shot_operations: ByteMessageBuilder::new(),
             operations_started: false,
         }
     }
 
-    /// Try to send ByteMessage via IPC (stdout) - returns true if IPC is available
+    /// Try to send `ByteMessage` via IPC (stdout) - returns true if IPC is available
     fn try_send_via_ipc(&mut self, message: &ByteMessage) -> Result<bool> {
-        use std::io::{stdout, Write};
+        use std::io::{Write, stdout};
 
         // Simple heuristic: if SELENE_IPC env var is set, use IPC mode
         if std::env::var("SELENE_IPC").is_err() {
@@ -257,13 +249,15 @@ impl PecosSeleneBridgeSimulator {
 
     /// Generate initial quantum operations to send to PECOS
     fn generate_initial_operations(&mut self) -> Result<()> {
-        log::trace!("[Bridge] generate_initial_operations called - operations handled via shot_start/shot_end");
+        log::trace!(
+            "[Bridge] generate_initial_operations called - operations handled via shot_start/shot_end"
+        );
         // In IPC mode, operations are buffered during shot execution
         // and sent at shot_end
         Ok(())
     }
 
-    /// Send buffered operations via IPC (no longer used - operations sent at shot_end)
+    /// Send buffered operations via IPC (no longer used - operations sent at `shot_end`)
     fn send_pending_operations(&mut self) -> Result<()> {
         log::trace!("[Bridge] send_pending_operations called - operations now handled at shot_end");
         Ok(())
@@ -278,12 +272,7 @@ impl PecosSeleneBridgeSimulator {
             for (i, &outcome) in outcomes.iter().enumerate() {
                 let bool_result = outcome != 0;
                 self.measurement_results.insert(i, bool_result);
-                log::trace!(
-                    "[Bridge] Measurement {}: raw_value={}, bool={}",
-                    i,
-                    outcome,
-                    bool_result
-                );
+                log::trace!("[Bridge] Measurement {i}: raw_value={outcome}, bool={bool_result}");
             }
         }
 
@@ -304,9 +293,9 @@ impl PecosSeleneBridgeSimulator {
         Ok(())
     }
 
-    /// Try to receive ByteMessage via IPC (stdin) - returns None if no data available
+    /// Try to receive `ByteMessage` via IPC (stdin) - returns None if no data available
     fn try_receive_via_ipc(&mut self) -> Result<Option<ByteMessage>> {
-        use std::io::{stdin, Read};
+        use std::io::{Read, stdin};
 
         // Check if we're in IPC mode
         if std::env::var("SELENE_IPC").is_err() {
@@ -321,14 +310,14 @@ impl PecosSeleneBridgeSimulator {
         // Try to read the length prefix (4 bytes)
         let mut len_bytes = [0u8; 4];
         match reader.read_exact(&mut len_bytes) {
-            Ok(_) => {
+            Ok(()) => {
                 let msg_len = u32::from_le_bytes(len_bytes) as usize;
-                log::trace!("[Bridge] Message length: {} bytes", msg_len);
+                log::trace!("[Bridge] Message length: {msg_len} bytes");
 
                 // Read the message data
                 let mut msg_bytes = vec![0u8; msg_len];
                 match reader.read_exact(&mut msg_bytes) {
-                    Ok(_) => {
+                    Ok(()) => {
                         log::trace!("[Bridge] Read {} bytes of message data", msg_bytes.len());
 
                         // Create ByteMessage from the data
@@ -336,22 +325,19 @@ impl PecosSeleneBridgeSimulator {
                         return Ok(Some(message));
                     }
                     Err(e) => {
-                        log::trace!("[Bridge] Failed to read message data: {}", e);
+                        log::trace!("[Bridge] Failed to read message data: {e}");
                     }
                 }
             }
             Err(e) => {
-                log::trace!(
-                    "[Bridge] Failed to read message length (no data available): {}",
-                    e
-                );
+                log::trace!("[Bridge] Failed to read message length (no data available): {e}");
             }
         }
 
         Ok(None)
     }
 
-    /// Send a ByteMessage to PECOS using callbacks or IPC
+    /// Send a `ByteMessage` to PECOS using callbacks or IPC
     fn send_to_pecos(&mut self, message: ByteMessage) -> Result<()> {
         // Check if we have callbacks registered (in-process mode)
         let callbacks = CALLBACKS.lock().unwrap();
@@ -370,8 +356,9 @@ impl PecosSeleneBridgeSimulator {
         } else {
             // Fallback to callback_interface if no callbacks registered and no IPC
             let bytes = message.as_bytes();
-            let result =
-                callback_interface::pecos_bridge_send_operations(bytes.as_ptr(), bytes.len());
+            let result = unsafe {
+                callback_interface::pecos_bridge_send_operations(bytes.as_ptr(), bytes.len())
+            };
 
             if result == 0 {
                 Ok(())
@@ -390,7 +377,7 @@ impl PecosSeleneBridgeSimulator {
             let mut data_ptr: *mut u8 = std::ptr::null_mut();
             let mut len: usize = 0;
 
-            let result = (cb.recv_meas)(cb.context, &mut data_ptr, &mut len);
+            let result = (cb.recv_meas)(cb.context, &raw mut data_ptr, &raw mut len);
 
             if result > 0 && !data_ptr.is_null() {
                 // Create ByteMessage from the returned data
@@ -413,10 +400,12 @@ impl PecosSeleneBridgeSimulator {
         } else {
             // Fallback to callback_interface if no callbacks registered
             let mut buffer = vec![0u8; 4096];
-            let result = callback_interface::pecos_bridge_receive_measurements(
-                buffer.as_mut_ptr(),
-                buffer.len(),
-            );
+            let result = unsafe {
+                callback_interface::pecos_bridge_receive_measurements(
+                    buffer.as_mut_ptr(),
+                    buffer.len(),
+                )
+            };
 
             if result > 0 {
                 buffer.truncate(result as usize);
@@ -442,7 +431,7 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
     }
 
     fn shot_start(&mut self, shot_id: u64, _seed: u64) -> Result<()> {
-        eprintln!("Bridge: shot_start({}) called", shot_id);
+        eprintln!("Bridge: shot_start({shot_id}) called");
 
         // Write to file to bypass any stdio issues
         use std::io::Write;
@@ -463,11 +452,14 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
         let artifacts_dir = std::env::var("SELENE_ARTIFACTS_DIR").unwrap_or_default();
         if !artifacts_dir.is_empty() {
             let config_path = std::path::Path::new(&artifacts_dir).join("pecos_config.json");
-            eprintln!("Bridge: Looking for runtime config at {:?}", config_path);
+            eprintln!(
+                "Bridge: Looking for runtime config at {}",
+                config_path.display()
+            );
             if config_path.exists() {
                 match std::fs::read_to_string(&config_path) {
                     Ok(contents) => {
-                        eprintln!("Bridge: Found runtime config: '{}'", contents);
+                        eprintln!("Bridge: Found runtime config: '{contents}'");
                         // Simple JSON parsing for n_qubits
                         if let Some(n_qubits_pos) = contents.find("\"n_qubits\":") {
                             let after_key = &contents[n_qubits_pos + 11..]; // Skip past "n_qubits":
@@ -483,20 +475,26 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
                                 }
                             }
 
-                            if end_pos > 0 {
-                                if let Ok(n) = after_colon[..end_pos].parse::<usize>() {
-                                    eprintln!("Bridge: Updating n_qubits from {} to {} based on runtime config", self.n_qubits, n);
-                                    self.n_qubits = n;
-                                }
+                            if end_pos > 0
+                                && let Ok(n) = after_colon[..end_pos].parse::<usize>()
+                            {
+                                eprintln!(
+                                    "Bridge: Updating n_qubits from {} to {} based on runtime config",
+                                    self.n_qubits, n
+                                );
+                                self.n_qubits = n;
                             }
                         }
                     }
                     Err(e) => {
-                        eprintln!("Bridge: Failed to read runtime config: {}", e);
+                        eprintln!("Bridge: Failed to read runtime config: {e}");
                     }
                 }
             } else {
-                eprintln!("Bridge: Runtime config not found at {:?}", config_path);
+                eprintln!(
+                    "Bridge: Runtime config not found at {}",
+                    config_path.display()
+                );
             }
         }
 
@@ -518,7 +516,7 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
             self.shot_operations.reset();
             let _ = self.shot_operations.for_quantum_operations();
             self.operations_started = true;
-            log::trace!("Bridge: Started buffering operations for shot {}", shot_id);
+            log::trace!("Bridge: Started buffering operations for shot {shot_id}");
 
             // IMPORTANT: In IPC mode, the quantum program execution happens HERE
             // We need to explicitly trigger it since Selene won't auto-execute with piped stdio
@@ -551,21 +549,18 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
             .unwrap_or_else(|_| "/tmp".to_string());
 
         {
-            let debug_file = format!("{}/bridge_debug.log", temp_dir);
+            let debug_file = format!("{temp_dir}/bridge_debug.log");
             if let Ok(mut file) = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
                 .open(&debug_file)
             {
                 use std::io::Write;
-                let _ = writeln!(file, "*** BRIDGE: shot_start({}) called ***", shot_id);
+                let _ = writeln!(file, "*** BRIDGE: shot_start({shot_id}) called ***");
             }
         }
 
-        log::info!(
-            "Bridge: shot_start({}) - Starting back-and-forth communication",
-            shot_id
-        );
+        log::info!("Bridge: shot_start({shot_id}) - Starting back-and-forth communication");
 
         // Initialize callback interface for this shot
         callback_interface::pecos_bridge_init();
@@ -586,8 +581,11 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
                 .open("/tmp/bridge_plugin_global.log")
             {
                 use std::io::Write;
-                let _ = writeln!(file, "[{}] shot_start: No PECOS engine available (no callbacks, no IPC) - skipping communication",
-                    chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f"));
+                let _ = writeln!(
+                    file,
+                    "[{}] shot_start: No PECOS engine available (no callbacks, no IPC) - skipping communication",
+                    chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f")
+                );
             }
 
             log::info!("Bridge: No PECOS engine available - running in standalone mode");
@@ -598,15 +596,12 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
         // Start the back-and-forth communication loop
         log::info!("Bridge: Beginning back-and-forth communication with PECOS");
         loop {
-            match self.execute_communication_round()? {
-                true => {
-                    log::debug!("Bridge: Communication round complete, continuing");
-                    // Continue with more communication rounds
-                }
-                false => {
-                    log::info!("Bridge: All communication rounds complete");
-                    break;
-                }
+            if self.execute_communication_round()? {
+                log::debug!("Bridge: Communication round complete, continuing");
+                // Continue with more communication rounds
+            } else {
+                log::info!("Bridge: All communication rounds complete");
+                break;
             }
         }
 
@@ -627,59 +622,35 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
         );
 
         if self.ipc_mode && self.operations_started {
-            // Send all buffered operations to SeleneExecutableEngine
-            eprintln!("Bridge: shot_end - sending buffered operations");
-            log::trace!("Bridge: Sending buffered operations at shot_end");
+            // Check if there are any remaining operations to send
+            // (operations after the last measurement)
+            let has_remaining_ops = self.shot_operations.build().as_bytes().len() > 16; // More than just header
 
-            let operations_msg = self.shot_operations.build();
-            eprintln!(
-                "Bridge: Built operations message with {} bytes",
-                operations_msg.as_bytes().len()
-            );
+            if has_remaining_ops {
+                eprintln!("Bridge: shot_end - sending remaining buffered operations");
+                log::trace!("Bridge: Sending remaining buffered operations at shot_end");
 
-            // Send via stdout for IPC (non-blocking write)
-            self.try_send_via_ipc(&operations_msg)?;
-            eprintln!("Bridge: Sent operations, now waiting for results from stdin");
+                let operations_msg = self.shot_operations.build();
+                eprintln!(
+                    "Bridge: Built final operations message with {} bytes",
+                    operations_msg.as_bytes().len()
+                );
 
-            // Wait to receive measurement results back via stdin
-            // This blocks until SeleneExecutableEngine sends results
-            log::trace!("Bridge: Waiting for measurement results from SeleneExecutableEngine");
+                // Send via stdout for IPC
+                self.try_send_via_ipc(&operations_msg)?;
+                eprintln!("Bridge: Sent final operations");
 
-            // Use a blocking read since we need results before the shot can complete
-            use std::io::{stdin, Read};
-            let stdin = stdin();
-            let mut reader = stdin.lock();
-
-            // Read length prefix
-            let mut len_bytes = [0u8; 4];
-            reader.read_exact(&mut len_bytes).map_err(|e| {
-                eprintln!("Bridge: Failed to read length prefix: {}", e);
-                anyhow::anyhow!("Failed to read length prefix: {}", e)
-            })?;
-
-            let msg_len = u32::from_le_bytes(len_bytes) as usize;
-            eprintln!("Bridge: Expecting {} bytes of results", msg_len);
-
-            // Read message data
-            let mut msg_bytes = vec![0u8; msg_len];
-            reader.read_exact(&mut msg_bytes).map_err(|e| {
-                eprintln!("Bridge: Failed to read message data: {}", e);
-                anyhow::anyhow!("Failed to read message data: {}", e)
-            })?;
-
-            let results_msg = ByteMessage::new(&msg_bytes);
-
-            eprintln!("Bridge: Received results message");
-
-            // Process and store measurement results
-            if let Ok(outcomes) = results_msg.outcomes() {
-                log::trace!("Bridge: Received {} measurement results", outcomes.len());
-                eprintln!("Bridge: Got {} measurement results", outcomes.len());
-                for (i, &outcome) in outcomes.iter().enumerate() {
-                    self.measurement_results.insert(i, outcome != 0);
-                    eprintln!("Bridge:   measurement[{}] = {}", i, outcome != 0);
-                }
+                // We don't need to wait for results here since measurements
+                // were already handled during the shot
+            } else {
+                eprintln!("Bridge: shot_end - no remaining operations to send");
             }
+
+            // The measurement results have already been collected during the shot
+            eprintln!(
+                "Bridge: Shot complete with {} measurements collected",
+                self.measurement_results.len()
+            );
         }
 
         // Store results for retrieval
@@ -691,7 +662,7 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
 
         // Write debug log
         if let Ok(temp_dir) = std::env::var("SELENE_TEMP_DIR") {
-            let debug_file = format!("{}/bridge_debug.log", temp_dir);
+            let debug_file = format!("{temp_dir}/bridge_debug.log");
             if let Ok(mut file) = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
@@ -704,30 +675,20 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
                     self.measurement_results.len()
                 );
                 for (idx, result) in &self.measurement_results {
-                    let _ = writeln!(file, "  measurement_{} = {}", idx, result);
+                    let _ = writeln!(file, "  measurement_{idx} = {result}");
                 }
             }
         }
 
-        // Write measurement results to a file for Python to read
-        if let Ok(temp_dir) = std::env::var("SELENE_TEMP_DIR") {
-            let results_file = format!("{}/bridge_results_shot_{}.json", temp_dir, self.shot_id);
-            if let Ok(mut file) = std::fs::File::create(&results_file) {
-                use std::io::Write;
+        // Measurement results are now passed via IPC, not JSON files
+        eprintln!(
+            "Bridge: Shot complete with {} measurements collected",
+            self.measurement_results.len()
+        );
 
-                // Create JSON representation of results
-                let mut json = String::from("{");
-                for (idx, result) in &self.measurement_results {
-                    if json.len() > 1 {
-                        json.push(',');
-                    }
-                    json.push_str(&format!("\"measurement_{}\":{}", idx, result));
-                }
-                json.push('}');
-
-                let _ = file.write_all(json.as_bytes());
-                log::trace!("*** BRIDGE: Wrote results to {} ***", results_file);
-            }
+        // Debug print all measurement results
+        for (idx, value) in &self.measurement_results {
+            eprintln!("  Bridge: measurement[{idx}] = {value}");
         }
 
         // Signal completion via callback
@@ -744,7 +705,20 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
     }
 
     fn rz(&mut self, qubit: u64, theta: f64) -> Result<()> {
-        eprintln!("Bridge: rz({}, {}) called", qubit, theta);
+        eprintln!("Bridge: rz({qubit}, {theta}) called");
+
+        // Validate qubit index
+        if qubit >= self.n_qubits as u64 {
+            let err_msg = format!(
+                "Qubit index {} out of range. Only {} qubits allocated (0-{})",
+                qubit,
+                self.n_qubits,
+                self.n_qubits - 1
+            );
+            eprintln!("Bridge: ERROR - {err_msg}");
+            return Err(anyhow::anyhow!(err_msg));
+        }
+
         use std::io::Write;
         let _ = std::io::stderr().flush();
 
@@ -762,8 +736,8 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
                 std::time::SystemTime::now()
             );
         }
-        log::debug!("PecosSeleneBridgeSimulator: rz({}, {})", qubit, theta);
-        log::trace!("*** BRIDGE SIMULATOR: rz({}, {}) called ***", qubit, theta);
+        log::debug!("PecosSeleneBridgeSimulator: rz({qubit}, {theta})");
+        log::trace!("*** BRIDGE SIMULATOR: rz({qubit}, {theta}) called ***");
 
         if self.ipc_mode && self.operations_started {
             // In IPC mode, add to the single shot operations builder
@@ -782,13 +756,21 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
     }
 
     fn rxy(&mut self, qubit: u64, theta: f64, phi: f64) -> Result<()> {
-        eprintln!("Bridge: rxy({}, {}, {}) called", qubit, theta, phi);
-        log::debug!(
-            "PecosSeleneBridgeSimulator: rxy({}, {}, {})",
-            qubit,
-            theta,
-            phi
-        );
+        eprintln!("Bridge: rxy({qubit}, {theta}, {phi}) called");
+
+        // Validate qubit index
+        if qubit >= self.n_qubits as u64 {
+            let err_msg = format!(
+                "Qubit index {} out of range. Only {} qubits allocated (0-{})",
+                qubit,
+                self.n_qubits,
+                self.n_qubits - 1
+            );
+            eprintln!("Bridge: ERROR - {err_msg}");
+            return Err(anyhow::anyhow!(err_msg));
+        }
+
+        log::debug!("PecosSeleneBridgeSimulator: rxy({qubit}, {theta}, {phi})");
 
         if self.ipc_mode && self.operations_started {
             // In IPC mode, add to the single shot operations builder
@@ -806,12 +788,20 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
     }
 
     fn rzz(&mut self, qubit1: u64, qubit2: u64, theta: f64) -> Result<()> {
-        log::debug!(
-            "PecosSeleneBridgeSimulator: rzz({}, {}, {})",
-            qubit1,
-            qubit2,
-            theta
-        );
+        // Validate qubit indices
+        if qubit1 >= self.n_qubits as u64 || qubit2 >= self.n_qubits as u64 {
+            let err_msg = format!(
+                "Qubit index out of range. Qubits ({}, {}) but only {} qubits allocated (0-{})",
+                qubit1,
+                qubit2,
+                self.n_qubits,
+                self.n_qubits - 1
+            );
+            eprintln!("Bridge: ERROR - {err_msg}");
+            return Err(anyhow::anyhow!(err_msg));
+        }
+
+        log::debug!("PecosSeleneBridgeSimulator: rzz({qubit1}, {qubit2}, {theta})");
 
         if self.ipc_mode && self.operations_started {
             // In IPC mode, add to the single shot operations builder
@@ -831,14 +821,27 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
     }
 
     fn measure(&mut self, qubit: u64) -> Result<bool> {
-        eprintln!("Bridge: measure({}) called", qubit);
+        eprintln!("Bridge: measure({qubit}) called");
+
+        // Validate qubit index
+        if qubit >= self.n_qubits as u64 {
+            let err_msg = format!(
+                "Qubit index {} out of range. Only {} qubits allocated (0-{})",
+                qubit,
+                self.n_qubits,
+                self.n_qubits - 1
+            );
+            eprintln!("Bridge: ERROR - {err_msg}");
+            return Err(anyhow::anyhow!(err_msg));
+        }
+
         eprintln!(
             "Bridge: measure({}) - n_qubits={}, ipc_mode={}, operations_started={}",
             qubit, self.n_qubits, self.ipc_mode, self.operations_started
         );
         use std::io::Write;
         let _ = std::io::stderr().flush();
-        log::debug!("PecosSeleneBridgeSimulator: measure({})", qubit);
+        log::debug!("PecosSeleneBridgeSimulator: measure({qubit})");
         log::trace!(
             "Bridge: measure({}) called, ipc_mode={}",
             qubit,
@@ -846,24 +849,79 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
         );
 
         if self.ipc_mode && self.operations_started {
-            // In IPC mode, buffer the measurement but still execute normally
-            // The Selene runtime expects immediate results, so we need to provide them
-            // We'll send the buffered operations to PECOS at shot_end for verification
+            // In IPC mode, we need to do proper back-and-forth communication
+            // to get real measurement results for conditional logic
 
+            // Add this measurement to the operations
             self.shot_operations.add_measurements(&[qubit as usize]);
-            eprintln!("Bridge: Added measurement to buffer for qubit {}", qubit);
+            eprintln!("Bridge: Added measurement to buffer for qubit {qubit}");
 
-            // For now, return a deterministic result based on measurement count
-            // This allows the Selene program to complete normally
-            // The real quantum execution will happen via IPC at shot_end
-            let placeholder_result = self.measurement_count % 2 == 0; // Alternating pattern
+            // Send all buffered operations to PECOS for execution up to this point
+            eprintln!("Bridge: Sending operations to PECOS for measurement");
+            let operations_msg = self.shot_operations.build();
+            eprintln!(
+                "Bridge: Sending {} bytes for measurement",
+                operations_msg.as_bytes().len()
+            );
+
+            // Send via IPC and wait for results
+            self.try_send_via_ipc(&operations_msg)?;
+            eprintln!("Bridge: Sent operations, waiting for measurement result from PECOS");
+
+            // Wait for measurement result from PECOS (blocking read)
+            use std::io::{Read, stdin};
+            let stdin = stdin();
+            let mut reader = stdin.lock();
+
+            // Read length prefix
+            let mut len_bytes = [0u8; 4];
+            reader.read_exact(&mut len_bytes).map_err(|e| {
+                anyhow::anyhow!("Failed to read measurement result from PECOS: {}. This indicates a communication problem between Bridge and SeleneExecutableEngine.", e)
+            })?;
+
+            let msg_len = u32::from_le_bytes(len_bytes) as usize;
+            eprintln!("Bridge: Expecting {msg_len} bytes of measurement results");
+
+            let mut msg_bytes = vec![0u8; msg_len];
+            reader.read_exact(&mut msg_bytes).map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to read measurement data from PECOS: {}. Expected {} bytes.",
+                    e,
+                    msg_len
+                )
+            })?;
+
+            let results_msg = ByteMessage::new(&msg_bytes);
+            let outcomes = results_msg.outcomes().unwrap_or_default();
+            eprintln!("Bridge: Received {} measurement outcomes", outcomes.len());
+
+            // Get the real measurement result for this qubit
+            // The outcomes should contain all measurements up to this point
+            let real_result = if self.measurement_count < outcomes.len() {
+                outcomes[self.measurement_count] != 0
+            } else {
+                eprintln!("Bridge: Warning - not enough outcomes, using default false");
+                false
+            };
+
+            // Store the measurement result
+            self.measurement_results
+                .insert(self.measurement_count, real_result);
             self.measurement_count += 1;
 
             eprintln!(
-                "Bridge: Returning placeholder {} for measurement",
-                placeholder_result
+                "Bridge: Returning REAL result {} for measurement {} (total measurements: {})",
+                real_result,
+                self.measurement_count - 1,
+                self.measurement_results.len()
             );
-            Ok(placeholder_result)
+
+            // Reset the operations builder for subsequent operations
+            self.shot_operations.reset();
+            let _ = self.shot_operations.for_quantum_operations();
+            self.operations_started = true; // Keep flag set
+
+            Ok(real_result)
         } else if !self.ipc_mode {
             // In direct mode (no IPC), handle measurement directly
             let callbacks_available = CALLBACKS.lock().unwrap().is_some();
@@ -871,14 +929,14 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
             if !callbacks_available {
                 // Standalone mode - generate random result
                 use rand::Rng;
-                let mut rng = rand::thread_rng();
-                let result = rng.gen_bool(0.5);
+                let mut rng = rand::rng();
+                let result = rng.random_bool(0.5);
 
                 self.measurement_results
                     .insert(self.measurement_count, result);
                 self.measurement_count += 1;
 
-                log::trace!("Bridge: measure({}) = {} (standalone)", qubit, result);
+                log::trace!("Bridge: measure({qubit}) = {result} (standalone)");
                 return Ok(result);
             }
 
@@ -905,11 +963,7 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
                 .insert(self.measurement_count, result);
             self.measurement_count += 1;
 
-            log::debug!(
-                "PecosSeleneBridgeSimulator: measure({}) = {}",
-                qubit,
-                result
-            );
+            log::debug!("PecosSeleneBridgeSimulator: measure({qubit}) = {result}");
             Ok(result)
         } else {
             // IPC mode but operations not started yet
@@ -919,12 +973,25 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
     }
 
     fn reset(&mut self, qubit: u64) -> Result<()> {
-        eprintln!("Bridge: reset({}) called", qubit);
+        eprintln!("Bridge: reset({qubit}) called");
+
+        // Validate qubit index
+        if qubit >= self.n_qubits as u64 {
+            let err_msg = format!(
+                "Qubit index {} out of range. Only {} qubits allocated (0-{})",
+                qubit,
+                self.n_qubits,
+                self.n_qubits - 1
+            );
+            eprintln!("Bridge: ERROR - {err_msg}");
+            return Err(anyhow::anyhow!(err_msg));
+        }
+
         eprintln!(
             "Bridge: reset({}) - n_qubits={}, ipc_mode={}, operations_started={}",
             qubit, self.n_qubits, self.ipc_mode, self.operations_started
         );
-        log::debug!("PecosSeleneBridgeSimulator: reset({})", qubit);
+        log::debug!("PecosSeleneBridgeSimulator: reset({qubit})");
 
         if self.ipc_mode && self.operations_started {
             // In IPC mode, add to the single shot operations builder
@@ -950,6 +1017,7 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
 // Add additional methods to allow result retrieval
 impl PecosSeleneBridgeSimulator {
     /// Get the measurement results from the last shot
+    #[must_use]
     pub fn get_measurement_results(&self) -> Vec<bool> {
         let mut results = Vec::new();
         for i in 0..self.measurement_count {
@@ -959,12 +1027,13 @@ impl PecosSeleneBridgeSimulator {
     }
 
     /// Get the measurement results as a map
+    #[must_use]
     pub fn get_measurement_map(&self) -> &BTreeMap<usize, bool> {
         &self.measurement_results
     }
 }
 
-/// Factory for creating PecosSeleneBridgeSimulator instances
+/// Factory for creating `PecosSeleneBridgeSimulator` instances
 #[derive(Default)]
 pub struct PecosSeleneBridgeSimulatorFactory;
 
@@ -976,10 +1045,7 @@ impl SimulatorInterfaceFactory for PecosSeleneBridgeSimulatorFactory {
         n_qubits: u64,
         args: &[impl AsRef<str>],
     ) -> Result<Box<Self::Interface>> {
-        log::info!(
-            "Initializing PecosSeleneBridgeSimulator with {} qubits",
-            n_qubits
-        );
+        log::info!("Initializing PecosSeleneBridgeSimulator with {n_qubits} qubits");
 
         // Write to global debug file
         if let Ok(mut file) = std::fs::OpenOptions::new()
@@ -997,11 +1063,13 @@ impl SimulatorInterfaceFactory for PecosSeleneBridgeSimulatorFactory {
             let _ = writeln!(
                 file,
                 "  Args: {:?}",
-                args.iter().map(|a| a.as_ref()).collect::<Vec<_>>()
+                args.iter()
+                    .map(std::convert::AsRef::as_ref)
+                    .collect::<Vec<_>>()
             );
             let _ = writeln!(file, "  Stack trace:");
             let bt = backtrace::Backtrace::new();
-            let _ = writeln!(file, "{:?}", bt);
+            let _ = writeln!(file, "{bt:?}");
         }
 
         Ok(Box::new(PecosSeleneBridgeSimulator::new(n_qubits)))
@@ -1012,9 +1080,9 @@ impl SimulatorInterfaceFactory for PecosSeleneBridgeSimulatorFactory {
 export_simulator_plugin!(crate::PecosSeleneBridgeSimulatorFactory);
 
 // Library initialization function - called when library is loaded
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[used]
-#[link_section = ".init_array"]
+#[unsafe(link_section = ".init_array")]
 static INIT_FUNC: extern "C" fn() = init_library;
 
 extern "C" fn init_library() {

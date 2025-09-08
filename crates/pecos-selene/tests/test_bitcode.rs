@@ -1,8 +1,8 @@
-//! Test LLVM bitcode support in selene_sim
+//! Test LLVM bitcode support in `selene_sim`
 
-use pecos_engines::{ClassicalControlEngineBuilder, PassThroughNoise, sim_builder};
+use pecos_engines::{PassThroughNoise, sim_builder};
 use pecos_programs::LlvmProgram;
-use pecos_selene::selene_simple_runtime;
+use pecos_selene::selene_executable;
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
@@ -56,12 +56,11 @@ fn test_selene_bitcode_in_memory() {
         .output()
         .unwrap();
 
-    if !output.status.success() {
-        panic!(
-            "llvm-as failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
+    assert!(
+        output.status.success(),
+        "llvm-as failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     // Read the bitcode
     let bitcode = fs::read(&bc_file).unwrap();
@@ -69,7 +68,7 @@ fn test_selene_bitcode_in_memory() {
     // Test with in-memory bitcode
     let builder = sim_builder()
         .classical(
-            selene_simple_runtime()
+            selene_executable()
                 .program(LlvmProgram::from_bitcode(bitcode))
                 .qubits(2),
         )
@@ -80,11 +79,12 @@ fn test_selene_bitcode_in_memory() {
         Ok(_) => println!("Successfully built Selene simulation from bitcode"),
         Err(e) => {
             // Check if it's just a compilation error (expected) vs conversion error (unexpected)
-            if e.to_string().contains("llvm-dis") {
-                panic!("Bitcode conversion failed: {}", e);
-            }
+            assert!(
+                !e.to_string().contains("llvm-dis"),
+                "Bitcode conversion failed: {e}"
+            );
             // Other errors (like missing quantum runtime) are expected
-            println!("Build failed as expected: {}", e);
+            println!("Build failed as expected: {e}");
         }
     }
 }
@@ -112,16 +112,15 @@ fn test_selene_bitcode_file() {
         .output()
         .unwrap();
 
-    if !output.status.success() {
-        panic!(
-            "llvm-as failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
+    assert!(
+        output.status.success(),
+        "llvm-as failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     // Test with bitcode file path
     let builder = sim_builder().classical(
-        selene_simple_runtime()
+        selene_executable()
             .program(LlvmProgram::from_bitcode_file(&bc_file).unwrap())
             .qubits(2),
     );
@@ -130,10 +129,11 @@ fn test_selene_bitcode_file() {
     match builder.build() {
         Ok(_) => println!("Successfully built Selene simulation from bitcode file"),
         Err(e) => {
-            if e.to_string().contains("llvm-dis") {
-                panic!("Bitcode conversion failed: {}", e);
-            }
-            println!("Build failed as expected: {}", e);
+            assert!(
+                !e.to_string().contains("llvm-dis"),
+                "Bitcode conversion failed: {e}"
+            );
+            println!("Build failed as expected: {e}");
         }
     }
 }
@@ -163,7 +163,7 @@ fn test_selene_auto_detection() {
 
     // Test auto-detection with .ll file
     let builder_ll = sim_builder().classical(
-        selene_simple_runtime()
+        selene_executable()
             .program(LlvmProgram::from_file(&ll_file).unwrap())
             .qubits(2),
     );
@@ -171,17 +171,18 @@ fn test_selene_auto_detection() {
 
     // Test auto-detection with .bc file
     let builder_bc = sim_builder().classical(
-        selene_simple_runtime()
+        selene_executable()
             .program(LlvmProgram::from_file(&bc_file).unwrap())
             .qubits(2),
     );
     match builder_bc.build() {
         Ok(_) => println!("Successfully built from auto-detected .bc file"),
         Err(e) => {
-            if e.to_string().contains("llvm-dis") {
-                panic!("Bitcode auto-detection failed: {}", e);
-            }
-            println!("Build failed as expected: {}", e);
+            assert!(
+                !e.to_string().contains("llvm-dis"),
+                "Bitcode auto-detection failed: {e}"
+            );
+            println!("Build failed as expected: {e}");
         }
     }
 }
@@ -192,13 +193,12 @@ fn test_selene_llvm_dis_error() {
     let fake_bitcode = vec![0x42, 0x43]; // BC magic number but invalid content
 
     let builder = sim_builder().classical(
-        selene_simple_runtime()
-            .default_runtime()
+        selene_executable()
             .program(LlvmProgram::from_bitcode(fake_bitcode))
             .qubits(1),
     );
 
-    // SeleneSimpleRuntimeEngine doesn't validate bitcode until execution
+    // SeleneExecutableEngine doesn't validate bitcode until execution
     // So this will succeed at build time but fail later
     match builder.build() {
         Ok(_engine) => {
@@ -206,7 +206,7 @@ fn test_selene_llvm_dis_error() {
             println!("Build succeeded as expected - invalid bitcode not validated at build time");
         }
         Err(e) => {
-            println!("Build failed (possibly missing runtime): {}", e);
+            println!("Build failed (possibly missing runtime): {e}");
             // If build fails, it's likely due to missing runtime, not invalid bitcode
             // This is acceptable for this test environment
         }

@@ -1,4 +1,3 @@
-use pecos_engines::ClassicalControlEngineBuilder;
 use pecos_engines::byte_message::ByteMessage;
 
 #[test]

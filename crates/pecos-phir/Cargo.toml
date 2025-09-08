@@ -23,6 +23,9 @@ hugr-core.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 
+# Error handling
+thiserror.workspace = true
+
 # Regular expressions for text processing
 regex.workspace = true
 

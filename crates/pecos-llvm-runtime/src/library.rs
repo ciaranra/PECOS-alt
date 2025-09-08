@@ -57,7 +57,7 @@ pub struct LlvmLibrary {
 
 impl Clone for LlvmLibrary {
     fn clone(&self) -> Self {
-        debug!("LLVM Library: Cloning library from {:?}", self.path);
+        debug!("LLVM Library: Cloning library from {}", self.path.display());
 
         // Share the same library instance via Arc - no need to reload
         Self {
@@ -163,11 +163,11 @@ impl LlvmLibrary {
     /// # Panics
     ///
     /// Panics if the mutex is poisoned
-    pub fn has_function(&self, name: &[u8]) -> Result<bool, PecosError> {
+    pub fn has_function(&self, name: &[u8]) -> bool {
         let library_guard = self.library.lock().unwrap();
         let result: Result<Symbol<unsafe extern "C" fn() -> i32>, _> =
             unsafe { library_guard.get(name) };
-        Ok(result.is_ok())
+        result.is_ok()
     }
 
     /// Calls a function in the loaded library
@@ -199,163 +199,50 @@ impl LlvmLibrary {
             let name_str = String::from_utf8_lossy(name);
             debug!("LLVM Library: Attempting to call function: {name_str}");
 
-            // Check if this is a struct-returning function by looking for a wrapper
-            // If wrapper exists, we call the original function through the wrapper
-            // to avoid ABI issues, but we DON'T use store_tuple_return since
-            // the shot results are already recorded via __quantum__rt__result_record_output
-            let wrapper_name = format!("{name_str}_wrapper");
-            if let Ok(wrapper_func) = library_guard
-                .get::<Symbol<unsafe extern "C" fn() -> *const u8>>(wrapper_name.as_bytes())
-            {
-                debug!(
-                    "LLVM Library: Found wrapper function for {name_str}, calling it for ABI safety"
-                );
-                // Call the wrapper which internally calls the original function
-                // This ensures the shot results are recorded properly
-                let struct_ptr = wrapper_func();
-
-                // DEBUG: Let's see what's in the returned structure
-                if !struct_ptr.is_null() {
-                    // Cast to { i1, i1 }* which is what the wrapper returns
-                    let tuple_ptr = struct_ptr.cast::<(bool, bool)>();
-                    let (a, b) = *tuple_ptr;
-
-                    // Store the values for debugging
-                    crate::runtime::core_runtime::store_tuple_return(&[i32::from(a), i32::from(b)]);
-                }
-
-                // Don't extract values or call store_tuple_return
-                // The shot results have already been recorded by the original function
-                debug!("LLVM Library: Wrapper function completed, shot results recorded");
-                return Ok(0);
+            // Try wrapper function first
+            if let Some(result) = Self::try_wrapper_function(&library_guard, &name_str) {
+                return Ok(result);
             }
 
             // Try standard QIR signature (returns i32)
             if let Ok(func) = library_guard.get::<Symbol<unsafe extern "C" fn() -> i32>>(name) {
                 let result = func();
                 debug!("LLVM Library: Function call returned i32: {result}");
-                Ok(result)
+                return Ok(result);
             }
-            // Try HUGR tuple signatures
-            else if let Ok(func) =
-                library_guard.get::<Symbol<unsafe extern "C" fn() -> (i32, i32)>>(name)
-            {
-                let (a, b) = func();
-                debug!("LLVM Library: Function returned 2-tuple ({a}, {b})");
-                debug!("LLVM Library: Binary representation: a={a:032b}, b={b:032b}");
 
-                // DEBUGGING: Check if values are already wrong here
-                if a == 1 && b == 1 {
-                    debug!("LLVM Library: WARNING - Both values are 1, expected (1, 0)!");
-                }
+            // Try tuple signatures
+            if let Some(result) = Self::try_tuple_signatures(&library_guard, name) {
+                return Ok(result);
+            }
 
-                // Store the tuple values, including placeholders (0) for unexecuted measurements
-                // The actual measurement values will be filled in by update_measurement_results
-                // when the EngineSystem executes the quantum operations
-                crate::runtime::core_runtime::store_tuple_return(&[a, b]);
-                Ok(0) // Return 0 to indicate success
-            } else if let Ok(func) =
-                library_guard.get::<Symbol<unsafe extern "C" fn() -> (i32, i32, i32)>>(name)
-            {
-                let (a, b, c) = func();
-                debug!("LLVM Library: Function returned 3-tuple ({a}, {b}, {c})");
+            // Try packed signatures
+            if let Some(result) = Self::try_packed_signatures(&library_guard, name) {
+                return Ok(result);
+            }
 
-                // Store the tuple values, including placeholders (-1) for unexecuted measurements
-                crate::runtime::core_runtime::store_tuple_return(&[a, b, c]);
-                Ok(0) // Return 0 to indicate success
-            } else if let Ok(func) =
-                library_guard.get::<Symbol<unsafe extern "C" fn() -> (i32, i32, i32, i32)>>(name)
-            {
-                let (a, b, c, d) = func();
-                debug!("LLVM Library: Function returned 4-i32-tuple ({a}, {b}, {c}, {d})");
-
-                // Check for degenerate values
-                if a == b && b == c && c == d && a == -1 {
-                    debug!(
-                        "LLVM Library: All values are placeholders (-1), measurements will be resolved later"
-                    );
-                }
-
-                // Store the tuple values, including placeholders (-1) for unexecuted measurements
-                crate::runtime::core_runtime::store_tuple_return(&[a, b, c, d]);
-                Ok(0) // Return 0 to indicate success
-            } else if let Ok(func) = library_guard
-                .get::<Symbol<unsafe extern "C" fn() -> (bool, bool, bool, bool)>>(name)
-            {
-                let (a, b, c, d) = func();
-                debug!("LLVM Library: Function returned 4-bool-tuple ({a}, {b}, {c}, {d})");
-
-                // Convert bool values to i32
-                let values = [i32::from(a), i32::from(b), i32::from(c), i32::from(d)];
-
-                // Check if all values are placeholders
-                if values.iter().all(|&v| v == -1) {
-                    debug!(
-                        "LLVM Library: All values are placeholders, measurements will be resolved later"
-                    );
-                }
-
-                crate::runtime::core_runtime::store_tuple_return(&values);
-                Ok(0) // Return 0 to indicate success
-            } else if let Ok(func) = library_guard.get::<Symbol<unsafe extern "C" fn() -> u8>>(name)
-            {
-                // Try as u8 - struct { i1, i1, i1, i1 } might be returned as packed byte
-                let packed = func();
-                debug!("LLVM Library: Function returned packed u8: {packed:08b}");
-                // Extract individual bits
-                let values = [
-                    i32::from(packed & 0x01),
-                    i32::from((packed >> 1) & 0x01),
-                    i32::from((packed >> 2) & 0x01),
-                    i32::from((packed >> 3) & 0x01),
-                ];
-                crate::runtime::core_runtime::store_tuple_return(&values);
-                Ok(0) // Return 0 to indicate success
-            } else if let Ok(func) =
-                library_guard.get::<Symbol<unsafe extern "C" fn() -> u32>>(name)
-            {
-                // Try as u32 - struct { i1, i1, i1, i1 } might be returned as 32-bit value
-                let packed = func();
-                debug!("LLVM Library: Function returned u32: {packed:#010x}");
-                // Extract individual bytes as bools
-                let values = [
-                    (packed & 0xFF) as i32,
-                    ((packed >> 8) & 0xFF) as i32,
-                    ((packed >> 16) & 0xFF) as i32,
-                    ((packed >> 24) & 0xFF) as i32,
-                ];
-                crate::runtime::core_runtime::store_tuple_return(&values);
-                Ok(0) // Return 0 to indicate success
-            } else if let Ok(func) =
-                library_guard.get::<Symbol<unsafe extern "C" fn() -> u64>>(name)
-            {
-                // Try as u64 - struct might be returned in a single register
-                let packed = func();
-                debug!("LLVM Library: Function returned u64: {packed:#018x}");
-                // Extract individual bits
-                let values = [
-                    (packed & 0x01) as i32,
-                    ((packed >> 1) & 0x01) as i32,
-                    ((packed >> 2) & 0x01) as i32,
-                    ((packed >> 3) & 0x01) as i32,
-                ];
-                crate::runtime::core_runtime::store_tuple_return(&values);
-                Ok(0) // Return 0 to indicate success
-            } else if let Ok(func) = library_guard
+            // Try larger tuple signatures (5 and 6 tuples)
+            if let Ok(func) = library_guard
                 .get::<Symbol<unsafe extern "C" fn() -> (i32, i32, i32, i32, i32)>>(name)
             {
-                let (a, b, c, d, e) = func();
-                debug!("LLVM Library: Function returned 5-tuple ({a}, {b}, {c}, {d}, {e})");
+                let (val1, val2, val3, val4, val5) = func();
+                debug!(
+                    "LLVM Library: Function returned 5-tuple ({val1}, {val2}, {val3}, {val4}, {val5})"
+                );
                 // For now, always use the direct function return values
-                crate::runtime::core_runtime::store_tuple_return(&[a, b, c, d, e]);
+                crate::runtime::core_runtime::store_tuple_return(&[val1, val2, val3, val4, val5]);
                 Ok(0) // Return 0 to indicate success
             } else if let Ok(func) = library_guard
                 .get::<Symbol<unsafe extern "C" fn() -> (i32, i32, i32, i32, i32, i32)>>(name)
             {
-                let (a, b, c, d, e, f) = func();
-                debug!("LLVM Library: Function returned 6-tuple ({a}, {b}, {c}, {d}, {e}, {f})");
+                let (val1, val2, val3, val4, val5, val6) = func();
+                debug!(
+                    "LLVM Library: Function returned 6-tuple ({val1}, {val2}, {val3}, {val4}, {val5}, {val6})"
+                );
                 // For now, always use the direct function return values
-                crate::runtime::core_runtime::store_tuple_return(&[a, b, c, d, e, f]);
+                crate::runtime::core_runtime::store_tuple_return(&[
+                    val1, val2, val3, val4, val5, val6,
+                ]);
                 Ok(0) // Return 0 to indicate success
             }
             // Try void signature
@@ -402,6 +289,143 @@ impl LlvmLibrary {
     ///
     /// # Panics
     ///
+    /// Try to call a wrapper function for struct-returning functions
+    unsafe fn try_wrapper_function(
+        library_guard: &libloading::Library,
+        name_str: &str,
+    ) -> Option<i32> {
+        unsafe {
+            let wrapper_name = format!("{name_str}_wrapper");
+            if let Ok(wrapper_func) = library_guard
+                .get::<Symbol<unsafe extern "C" fn() -> *const u8>>(wrapper_name.as_bytes())
+            {
+                debug!(
+                    "LLVM Library: Found wrapper function for {name_str}, calling it for ABI safety"
+                );
+                // Call the wrapper which internally calls the original function
+                let struct_ptr = wrapper_func();
+
+                // DEBUG: Let's see what's in the returned structure
+                if !struct_ptr.is_null() {
+                    // Cast to { i1, i1 }* which is what the wrapper returns
+                    let tuple_ptr = struct_ptr.cast::<(bool, bool)>();
+                    let (a, b) = *tuple_ptr;
+
+                    // Store the values for debugging
+                    crate::runtime::core_runtime::store_tuple_return(&[i32::from(a), i32::from(b)]);
+                }
+
+                debug!("LLVM Library: Wrapper function completed, shot results recorded");
+                return Some(0);
+            }
+            None
+        }
+    }
+
+    /// Try calling function with tuple return signatures
+    unsafe fn try_tuple_signatures(
+        library_guard: &libloading::Library,
+        name: &[u8],
+    ) -> Option<i32> {
+        unsafe {
+            // Try 2-tuple
+            if let Ok(func) =
+                library_guard.get::<Symbol<unsafe extern "C" fn() -> (i32, i32)>>(name)
+            {
+                let (a, b) = func();
+                debug!("LLVM Library: Function returned 2-tuple ({a}, {b})");
+                crate::runtime::core_runtime::store_tuple_return(&[a, b]);
+                return Some(0);
+            }
+
+            // Try 3-tuple
+            if let Ok(func) =
+                library_guard.get::<Symbol<unsafe extern "C" fn() -> (i32, i32, i32)>>(name)
+            {
+                let (a, b, c) = func();
+                debug!("LLVM Library: Function returned 3-tuple ({a}, {b}, {c})");
+                crate::runtime::core_runtime::store_tuple_return(&[a, b, c]);
+                return Some(0);
+            }
+
+            // Try 4-tuple i32
+            if let Ok(func) =
+                library_guard.get::<Symbol<unsafe extern "C" fn() -> (i32, i32, i32, i32)>>(name)
+            {
+                let (a, b, c, d) = func();
+                debug!("LLVM Library: Function returned 4-i32-tuple ({a}, {b}, {c}, {d})");
+                crate::runtime::core_runtime::store_tuple_return(&[a, b, c, d]);
+                return Some(0);
+            }
+
+            // Try 4-tuple bool
+            if let Ok(func) = library_guard
+                .get::<Symbol<unsafe extern "C" fn() -> (bool, bool, bool, bool)>>(name)
+            {
+                let (a, b, c, d) = func();
+                debug!("LLVM Library: Function returned 4-bool-tuple ({a}, {b}, {c}, {d})");
+                let values = [i32::from(a), i32::from(b), i32::from(c), i32::from(d)];
+                crate::runtime::core_runtime::store_tuple_return(&values);
+                return Some(0);
+            }
+
+            None
+        }
+    }
+
+    /// Try calling function with packed return signatures
+    unsafe fn try_packed_signatures(
+        library_guard: &libloading::Library,
+        name: &[u8],
+    ) -> Option<i32> {
+        unsafe {
+            // Try u8
+            if let Ok(func) = library_guard.get::<Symbol<unsafe extern "C" fn() -> u8>>(name) {
+                let packed = func();
+                debug!("LLVM Library: Function returned packed u8: {packed:08b}");
+                let values = [
+                    i32::from(packed & 0x01),
+                    i32::from((packed >> 1) & 0x01),
+                    i32::from((packed >> 2) & 0x01),
+                    i32::from((packed >> 3) & 0x01),
+                ];
+                crate::runtime::core_runtime::store_tuple_return(&values);
+                return Some(0);
+            }
+
+            // Try u32
+            if let Ok(func) = library_guard.get::<Symbol<unsafe extern "C" fn() -> u32>>(name) {
+                let packed = func();
+                debug!("LLVM Library: Function returned u32: {packed:#010x}");
+                #[allow(clippy::cast_possible_wrap)]
+                let values = [
+                    (packed & 0xFF) as i32,
+                    ((packed >> 8) & 0xFF) as i32,
+                    ((packed >> 16) & 0xFF) as i32,
+                    ((packed >> 24) & 0xFF) as i32,
+                ];
+                crate::runtime::core_runtime::store_tuple_return(&values);
+                return Some(0);
+            }
+
+            // Try u64
+            if let Ok(func) = library_guard.get::<Symbol<unsafe extern "C" fn() -> u64>>(name) {
+                let packed = func();
+                debug!("LLVM Library: Function returned u64: {packed:#018x}");
+                let values = [
+                    (packed & 0x01) as i32,
+                    ((packed >> 1) & 0x01) as i32,
+                    ((packed >> 2) & 0x01) as i32,
+                    ((packed >> 3) & 0x01) as i32,
+                ];
+                crate::runtime::core_runtime::store_tuple_return(&values);
+                return Some(0);
+            }
+
+            None
+        }
+    }
+
     /// This function will panic if the internal mutex is poisoned.
     pub fn reset(&self) -> Result<(), PecosError> {
         debug!("LLVM Library: Resetting LLVM runtime");

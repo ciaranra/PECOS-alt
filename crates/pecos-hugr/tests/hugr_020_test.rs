@@ -18,7 +18,7 @@ fn test_hugr_020_in_pecos_hugr() {
     let outputs = vec![input];
 
     // Build the HUGR
-    let hugr = builder.finish_hugr_with_outputs(outputs).unwrap();
+    let _hugr = builder.finish_hugr_with_outputs(outputs).unwrap();
 
     println!("Successfully created HUGR 0.20");
 

@@ -1,14 +1,15 @@
-//! Example demonstrating full PECOS infrastructure integration with SeleneEngine
+//! Example demonstrating full PECOS infrastructure integration with `SeleneEngine`
 //!
-//! This example shows SeleneEngine working with:
-//! - MonteCarloEngine for parallel execution
-//! - HybridEngine for classical-quantum coordination
-//! - StateVecEngine for quantum simulation
+//! This example shows `SeleneEngine` working with:
+//! - `MonteCarloEngine` for parallel execution
+//! - `HybridEngine` for classical-quantum coordination
+//! - `StateVecEngine` for quantum simulation
 //! - Real Bell state creation and analysis
 
+use pecos_core::prelude::PecosError;
 use pecos_engines::sim_builder;
 use pecos_programs::LlvmProgram;
-use pecos_selene::selene_engine;
+use pecos_selene::selene_executable;
 use std::collections::HashMap;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -32,7 +33,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Bell state using HybridEngine
+/// Bell state using `HybridEngine`
 fn bell_state_example() -> Result<(), Box<dyn std::error::Error>> {
     println!("1. Bell State with HybridEngine");
     println!("================================");
@@ -65,7 +66,7 @@ attributes #0 = { "EntryPoint" }
     // Use new unified API to run Bell state simulation
     let results = sim_builder()
         .classical(
-            selene_engine()
+            selene_executable()
                 .program(LlvmProgram::from_ir(bell_llvm))
                 .qubits(2)
                 .optimize(true),
@@ -126,7 +127,7 @@ attributes #0 = { "EntryPoint" }
     // Use new unified API for adaptive circuit
     let results = sim_builder()
         .classical(
-            selene_engine()
+            selene_executable()
                 .program(LlvmProgram::from_ir(adaptive_llvm))
                 .qubits(3),
         )
@@ -165,7 +166,7 @@ attributes #0 = { "EntryPoint" }
     println!("\nTesting with MonteCarloEngine (parallel execution):");
     let results = sim_builder()
         .classical(
-            selene_engine()
+            selene_executable()
                 .program(LlvmProgram::from_ir(llvm_llvm))
                 .qubits(1),
         )
@@ -176,12 +177,20 @@ attributes #0 = { "EntryPoint" }
     println!("✓ Created engine with LLVM IR format");
 
     // Test HUGR format (if available)
-    #[cfg(feature = "hugr")]
+    #[cfg(feature = "hugr-013")]
     {
-        use hugr::Hugr;
+        use hugr_core_013::Hugr;
+        use pecos_programs::HugrProgram;
         let hugr = Hugr::default();
+        // Convert HUGR to bytes first
+        let hugr_bytes = serde_json::to_vec(&hugr)
+            .map_err(|e| PecosError::with_context(e, "Failed to serialize HUGR"))?;
         let _results = sim_builder()
-            .classical(selene_engine().hugr(hugr).qubits(1))
+            .classical(
+                selene_executable()
+                    .hugr(HugrProgram::from_bytes(hugr_bytes))
+                    .qubits(1),
+            )
             .run(10)?;
         println!("✓ Created and ran engine with HUGR format");
     }
@@ -190,14 +199,14 @@ attributes #0 = { "EntryPoint" }
 
     // Analyze results
     let mut outcome_counts: HashMap<String, usize> = HashMap::new();
-    for shot in results.shots.iter() {
+    for shot in &results.shots {
         let outcome = format!("{:?}", shot.data);
         *outcome_counts.entry(outcome).or_insert(0) += 1;
     }
 
     println!("\nOutcome distribution:");
     for (outcome, count) in outcome_counts {
-        println!("  {}: {} times", outcome, count);
+        println!("  {outcome}: {count} times");
     }
 
     Ok(())

@@ -1,15 +1,15 @@
-//! Builder for SeleneExecutableEngine
+//! Builder for `SeleneExecutableEngine`
 //!
-//! This builder configures and creates SeleneExecutableEngine instances,
-//! using Selene's build() API and the PecosSeleneBridgeSimulator.
+//! This builder configures and creates `SeleneExecutableEngine` instances,
+//! using Selene's `build()` API and the `PecosSeleneBridgeSimulator`.
 
 use crate::selene_executable_engine::SeleneExecutableEngine;
 use pecos_core::prelude::PecosError;
 use pecos_engines::ClassicalControlEngineBuilder;
-use pecos_programs::{LlvmProgram, Program, SeleneInterfaceProgram};
+use pecos_programs::{HugrProgram, LlvmProgram, Program, SeleneInterfaceProgram};
 use std::path::PathBuf;
 
-/// Builder for creating SeleneExecutableEngine instances
+/// Builder for creating `SeleneExecutableEngine` instances
 #[derive(Clone)]
 pub struct SeleneExecutableEngineBuilder {
     /// The program to execute
@@ -17,6 +17,9 @@ pub struct SeleneExecutableEngineBuilder {
 
     /// LLVM program (for backwards compatibility)
     llvm_program: Option<LlvmProgram>,
+
+    /// HUGR program (will be compiled to LLVM IR)
+    hugr_program: Option<HugrProgram>,
 
     /// Number of qubits
     num_qubits: Option<usize>,
@@ -33,10 +36,12 @@ pub struct SeleneExecutableEngineBuilder {
 
 impl SeleneExecutableEngineBuilder {
     /// Create a new builder
+    #[must_use]
     pub fn new() -> Self {
         Self {
             program: None,
             llvm_program: None,
+            hugr_program: None,
             num_qubits: None,
             working_dir: None,
             verbose: false,
@@ -54,45 +59,62 @@ impl SeleneExecutableEngineBuilder {
                 // Store LLVM program for later processing
                 self.llvm_program = Some(llvm_prog);
             }
+            Program::Hugr(hugr_prog) => {
+                // Store HUGR program for compilation during build
+                log::info!("HUGR program will be compiled to LLVM IR during build");
+                self.hugr_program = Some(hugr_prog);
+            }
             _ => {
                 log::warn!(
-                    "SeleneExecutableEngine only supports SeleneInterfaceProgram and LlvmProgram"
+                    "SeleneExecutableEngine only supports SeleneInterfaceProgram, LlvmProgram, and HugrProgram"
                 );
             }
         }
         self
     }
 
-    /// Set a SeleneInterfaceProgram directly
+    /// Set a `SeleneInterfaceProgram` directly
+    #[must_use]
     pub fn selene_interface_program(mut self, program: SeleneInterfaceProgram) -> Self {
         self.program = Some(program);
         self
     }
 
+    /// Set a HUGR program directly
+    pub fn hugr(mut self, hugr: impl Into<HugrProgram>) -> Self {
+        self.hugr_program = Some(hugr.into());
+        self
+    }
+
     /// Set the number of qubits
+    #[must_use]
     pub fn qubits(mut self, n: usize) -> Self {
         self.num_qubits = Some(n);
         self
     }
 
     /// Alias for qubits
+    #[must_use]
     pub fn num_qubits(self, n: usize) -> Self {
         self.qubits(n)
     }
 
     /// Set the working directory
+    #[must_use]
     pub fn working_dir(mut self, dir: PathBuf) -> Self {
         self.working_dir = Some(dir);
         self
     }
 
     /// Enable verbose output
+    #[must_use]
     pub fn verbose(mut self, verbose: bool) -> Self {
         self.verbose = verbose;
         self
     }
 
     /// Set optimization flag (for API compatibility - currently ignored)
+    #[must_use]
     pub fn optimize(self, _optimize: bool) -> Self {
         // Note: This method is provided for API compatibility with existing code.
         // The SeleneExecutableEngine doesn't have configurable optimization settings,
@@ -117,10 +139,16 @@ impl ClassicalControlEngineBuilder for SeleneExecutableEngineBuilder {
     type Engine = SeleneExecutableEngine;
 
     fn build(self) -> Result<Self::Engine, PecosError> {
+        // Check if we have a program - this is required
+        if self.program.is_none() && self.llvm_program.is_none() && self.hugr_program.is_none() {
+            return Err(PecosError::Input(
+                "No program specified. Use .program() to set a SeleneInterface, LLVM, or HUGR program.".to_string()
+            ));
+        }
+
         let num_qubits = self.num_qubits.unwrap_or(10);
         println!(
-            "*** BUILDER: SeleneExecutableEngineBuilder.build() called with {} qubits ***",
-            num_qubits
+            "*** BUILDER: SeleneExecutableEngineBuilder.build() called with {num_qubits} qubits ***"
         );
 
         let mut engine = SeleneExecutableEngine::new(num_qubits)?.with_verbose(self.verbose);
@@ -135,8 +163,16 @@ impl ClassicalControlEngineBuilder for SeleneExecutableEngineBuilder {
 
         if let Some(program) = self.program {
             engine = engine.with_program(program);
+        } else if let Some(hugr_prog) = self.hugr_program {
+            // Compile HUGR to LLVM IR
+            use crate::hugr_to_llvm::compile_hugr_to_llvm;
+            let llvm_ir = compile_hugr_to_llvm(hugr_prog.bytes())
+                .map_err(|e| PecosError::Input(format!("Failed to compile HUGR to LLVM: {e}")))?;
+
+            log::info!("Successfully compiled HUGR to LLVM IR");
+            engine = engine.with_llvm_program(LlvmProgram::from_ir(llvm_ir));
         } else if let Some(llvm_prog) = self.llvm_program {
-            // Handle LLVM program by storing it directly in the engine
+            // Regular LLVM program
             engine = engine.with_llvm_program(llvm_prog);
         }
 
@@ -144,7 +180,8 @@ impl ClassicalControlEngineBuilder for SeleneExecutableEngineBuilder {
     }
 }
 
-/// Create a new SeleneExecutableEngineBuilder
+/// Create a new `SeleneExecutableEngineBuilder`
+#[must_use]
 pub fn selene_executable() -> SeleneExecutableEngineBuilder {
     SeleneExecutableEngineBuilder::new()
 }

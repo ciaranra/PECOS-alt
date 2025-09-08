@@ -337,7 +337,8 @@ impl PhirProcessor {
             }
             ClassicalOp::Shl(shift_amount) => {
                 // Handle shift left operation
-                self.process_shl_operation(*shift_amount as u8, instruction)
+                let shift_u8 = u8::try_from(*shift_amount).expect("Shift amount should fit in u8");
+                self.process_shl_operation(shift_u8, instruction)
             }
             ClassicalOp::Or => {
                 // Handle bitwise OR operation
@@ -750,8 +751,9 @@ impl PhirProcessor {
         if !instruction.results.is_empty() {
             let result_ssa_id = instruction.results[0].id;
             // Store the constant value as U32 for bit operations
+            let value_u32 = u32::try_from(value).expect("Constant value should fit in u32");
             self.ssa_values
-                .insert(result_ssa_id, TypedValue::U32(value as u32));
+                .insert(result_ssa_id, TypedValue::U32(value_u32));
         }
         Ok(())
     }

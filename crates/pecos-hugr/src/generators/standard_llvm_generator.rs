@@ -48,7 +48,9 @@ impl CodegenExtension for StandardLlvmExtension {
     where
         Self: 'a,
     {
-        let ext_id = hugr_core::extension::ExtensionId::new("tket2.quantum").unwrap();
+        // Support both tket.quantum (newer guppylang) and tket2.quantum (legacy)
+        let ext_id_tket = hugr_core::extension::ExtensionId::new("tket.quantum").unwrap();
+        let ext_id_tket2 = hugr_core::extension::ExtensionId::new("tket2.quantum").unwrap();
 
         // Pre-compute all function names before moving self.result_names
         let h_func = Self::get_function_name("__quantum__qis__h__body");
@@ -64,124 +66,151 @@ impl CodegenExtension for StandardLlvmExtension {
 
         let result_names = std::rc::Rc::new(self.result_names);
 
+        // Register QAlloc for both extension IDs
         builder
-            .extension_op(ext_id.clone(), "QAlloc".into(), {
+            .extension_op(ext_id_tket.clone(), "QAlloc".into(), {
                 move |ctx, args| emit_qalloc_standard(ctx, args).map_err(anyhow::Error::new)
             })
-            .extension_op(ext_id.clone(), "H".into(), {
+            .extension_op(ext_id_tket2.clone(), "QAlloc".into(), {
+                move |ctx, args| emit_qalloc_standard(ctx, args).map_err(anyhow::Error::new)
+            })
+            // H gate for both
+            .extension_op(ext_id_tket.clone(), "H".into(), {
+                let h_func_clone = h_func.clone();
+                move |ctx, args| {
+                    emit_single_qubit_gate_standard(ctx, args, &h_func_clone)
+                        .map_err(anyhow::Error::new)
+                }
+            })
+            .extension_op(ext_id_tket2.clone(), "H".into(), {
                 move |ctx, args| {
                     emit_single_qubit_gate_standard(ctx, args, &h_func).map_err(anyhow::Error::new)
                 }
             })
-            .extension_op(ext_id.clone(), "CX".into(), {
+            // CX gate for both
+            .extension_op(ext_id_tket.clone(), "CX".into(), {
+                let cx_func_clone = cx_func.clone();
+                move |ctx, args| {
+                    emit_two_qubit_gate_standard(ctx, args, &cx_func_clone)
+                        .map_err(anyhow::Error::new)
+                }
+            })
+            .extension_op(ext_id_tket2.clone(), "CX".into(), {
                 move |ctx, args| {
                     emit_two_qubit_gate_standard(ctx, args, &cx_func).map_err(anyhow::Error::new)
                 }
             })
-            .extension_op(ext_id.clone(), "MeasureFree".into(), {
+            // MeasureFree for both
+            .extension_op(ext_id_tket.clone(), "MeasureFree".into(), {
+                let names_clone = result_names.clone();
+                move |ctx, args| {
+                    emit_measure_standard(ctx, args, &names_clone).map_err(anyhow::Error::new)
+                }
+            })
+            .extension_op(ext_id_tket2.clone(), "MeasureFree".into(), {
                 let names = result_names.clone();
                 move |ctx, args| {
                     emit_measure_standard(ctx, args, &names).map_err(anyhow::Error::new)
                 }
             })
             // Add support for tket2.quantum.Measure (returns qubit and bool)
-            .extension_op(ext_id.clone(), "Measure".into(), {
+            .extension_op(ext_id_tket.clone(), "Measure".into(), {
                 let names = result_names.clone();
                 move |ctx, args| {
                     emit_measure_with_qubit_return(ctx, args, &names).map_err(anyhow::Error::new)
                 }
             })
             // Add support for tket2.quantum.Reset
-            .extension_op(ext_id.clone(), "Reset".into(), {
+            .extension_op(ext_id_tket.clone(), "Reset".into(), {
                 move |ctx, args| emit_reset_standard(ctx, args).map_err(anyhow::Error::new)
             })
             // Add support for tket2.quantum.QFree (discard)
-            .extension_op(ext_id.clone(), "QFree".into(), {
+            .extension_op(ext_id_tket.clone(), "QFree".into(), {
                 move |ctx, args| emit_qfree_standard(ctx, args).map_err(anyhow::Error::new)
             })
-            .extension_op(ext_id.clone(), "X".into(), {
+            .extension_op(ext_id_tket.clone(), "X".into(), {
                 move |ctx, args| {
                     emit_single_qubit_gate_standard(ctx, args, &x_func).map_err(anyhow::Error::new)
                 }
             })
-            .extension_op(ext_id.clone(), "Y".into(), {
+            .extension_op(ext_id_tket.clone(), "Y".into(), {
                 move |ctx, args| {
                     emit_single_qubit_gate_standard(ctx, args, &y_func).map_err(anyhow::Error::new)
                 }
             })
-            .extension_op(ext_id.clone(), "Z".into(), {
+            .extension_op(ext_id_tket.clone(), "Z".into(), {
                 move |ctx, args| {
                     emit_single_qubit_gate_standard(ctx, args, &z_func).map_err(anyhow::Error::new)
                 }
             })
             // Rotation gates
-            .extension_op(ext_id.clone(), "Rx".into(), {
+            .extension_op(ext_id_tket.clone(), "Rx".into(), {
                 move |ctx, args| {
                     emit_rotation_gate_standard(ctx, args, &rotation_x_func)
                         .map_err(anyhow::Error::new)
                 }
             })
-            .extension_op(ext_id.clone(), "Ry".into(), {
+            .extension_op(ext_id_tket.clone(), "Ry".into(), {
                 move |ctx, args| {
                     emit_rotation_gate_standard(ctx, args, &rotation_y_func)
                         .map_err(anyhow::Error::new)
                 }
             })
-            .extension_op(ext_id.clone(), "Rz".into(), {
+            .extension_op(ext_id_tket.clone(), "Rz".into(), {
                 move |ctx, args| {
                     emit_rotation_gate_standard(ctx, args, &rotation_z_func)
                         .map_err(anyhow::Error::new)
                 }
             })
             // Pauli gates - S/SZ, T, and their adjoints
-            .extension_op(ext_id.clone(), "S".into(), {
+            .extension_op(ext_id_tket.clone(), "S".into(), {
                 move |ctx, args| {
                     emit_single_qubit_gate_standard(ctx, args, "__quantum__qis__s__body")
                         .map_err(anyhow::Error::new)
                 }
             })
-            .extension_op(ext_id.clone(), "Sdg".into(), {
+            .extension_op(ext_id_tket.clone(), "Sdg".into(), {
                 move |ctx, args| {
                     emit_single_qubit_gate_standard(ctx, args, "__quantum__qis__sdg__body")
                         .map_err(anyhow::Error::new)
                 }
             })
-            .extension_op(ext_id.clone(), "T".into(), {
+            .extension_op(ext_id_tket.clone(), "T".into(), {
                 move |ctx, args| {
                     emit_single_qubit_gate_standard(ctx, args, "__quantum__qis__t__body")
                         .map_err(anyhow::Error::new)
                 }
             })
-            .extension_op(ext_id.clone(), "Tdg".into(), {
+            .extension_op(ext_id_tket.clone(), "Tdg".into(), {
                 move |ctx, args| {
                     emit_single_qubit_gate_standard(ctx, args, "__quantum__qis__tdg__body")
                         .map_err(anyhow::Error::new)
                 }
             })
             // Two-qubit gates
-            .extension_op(ext_id.clone(), "CY".into(), {
+            .extension_op(ext_id_tket.clone(), "CY".into(), {
                 move |ctx, args| {
                     emit_two_qubit_gate_standard(ctx, args, "__quantum__qis__cy__body")
                         .map_err(anyhow::Error::new)
                 }
             })
-            .extension_op(ext_id.clone(), "CZ".into(), {
+            .extension_op(ext_id_tket.clone(), "CZ".into(), {
                 move |ctx, args| {
                     emit_two_qubit_gate_standard(ctx, args, "__quantum__qis__cz__body")
                         .map_err(anyhow::Error::new)
                 }
             })
-            .extension_op(ext_id.clone(), "CH".into(), {
+            .extension_op(ext_id_tket.clone(), "CH".into(), {
                 move |ctx, args| emit_ch_decomposed(ctx, args).map_err(anyhow::Error::new)
             })
             // Controlled rotation gates
-            .extension_op(ext_id.clone(), "CRz".into(), {
+            .extension_op(ext_id_tket.clone(), "CRz".into(), {
                 move |ctx, args| {
                     emit_controlled_rotation_gate_standard(ctx, args, "__quantum__qis__crz__body")
                         .map_err(anyhow::Error::new)
                 }
             })
-            .extension_op(ext_id.clone(), "Toffoli".into(), {
+            .extension_op(ext_id_tket.clone(), "Toffoli".into(), {
                 move |ctx, args| {
                     emit_toffoli_gate_standard(ctx, args, "__quantum__qis__ccx__body")
                         .map_err(anyhow::Error::new)
@@ -286,6 +315,12 @@ fn emit_rotation_gate_standard<'c, H: HugrView<Node = Node>>(
     args: EmitOpArgs<'c, '_, ExtensionOp, H>,
     func_name: &str,
 ) -> Result<(), PecosError> {
+    eprintln!("DEBUG: emit_rotation_gate_standard called for {func_name}");
+    eprintln!("DEBUG: Number of inputs: {}", args.inputs.len());
+    for (i, input) in args.inputs.iter().enumerate() {
+        eprintln!("DEBUG: Input {}: {:?}", i, input.get_type());
+    }
+
     let llvm_context = context.iw_context();
     let builder = context.builder();
 
@@ -294,7 +329,8 @@ fn emit_rotation_gate_standard<'c, H: HugrView<Node = Node>>(
     let i64_type = llvm_context.i64_type();
     let qubit_i64 = convert_qubit_to_i64(builder, args.inputs[0], i64_type, "qubit_i64")?;
 
-    // Get the angle parameter (should be a float in half-turns from tket2.rotation)
+    // Get the angle parameter - it's a tket.rotation type which should be mapped to float
+    // by our TketRotationExtension
     let angle_halfturns = args.inputs[1].into_float_value();
     let f64_type = llvm_context.f64_type();
 

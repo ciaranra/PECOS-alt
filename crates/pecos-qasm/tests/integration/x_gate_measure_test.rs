@@ -1,4 +1,5 @@
 use pecos_core::prelude::GateType;
+use pecos_engines::ClassicalControlEngineBuilder;
 use pecos_qasm::{Operation, parser::QASMParser};
 
 // Helper function to check if an operation is a specific gate
@@ -18,7 +19,6 @@ fn is_gate_with_name(op: &Operation, gate_name: &str) -> bool {
     }
 }
 
-use pecos_engines::ClassicalControlEngineBuilder;
 use pecos_programs::QasmProgram;
 use pecos_qasm::qasm_engine;
 

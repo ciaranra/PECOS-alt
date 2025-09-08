@@ -2,7 +2,7 @@
 //!
 //! This module shows how to use Selene's HUGR compiler from pure Rust.
 //! Note: This requires adding selene-hugr-qis-compiler as a dependency,
-//! which currently has PyO3 conflicts.
+//! which currently has `PyO3` conflicts.
 
 // Example of how to use Selene's HUGR compiler from Rust
 // (Currently not functional due to dependency conflicts)
@@ -70,6 +70,7 @@ pub fn compile_hugr_with_selene<'c>(
 // 3. Call the selene Python module from Rust via PyO3
 
 /// Check if Selene HUGR compiler is available
+#[must_use]
 pub fn is_selene_hugr_compiler_available() -> bool {
     // Currently always false due to dependency conflicts
     false

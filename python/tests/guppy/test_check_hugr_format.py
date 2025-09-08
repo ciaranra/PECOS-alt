@@ -28,9 +28,24 @@ def test_check_hugr_format() -> None:
     print(f"Header: {hugr_bytes[:8]}")
     print(f"Format byte: {hugr_bytes[8] if len(hugr_bytes) > 8 else 'N/A'}")
 
-    # Check JSON format
-    hugr_json = hugr.to_json()
-    hugr_dict = json.loads(hugr_json)
+    # Check JSON/string format
+    # Note: to_str() returns HUGR envelope format with header, while to_json() returns pure JSON
+    if hasattr(hugr, "to_str"):
+        hugr_str = hugr.to_str()
+        # Check if it's the envelope format with header
+        if hugr_str.startswith("HUGRiHJv"):
+            print("Format: HUGR envelope (header + JSON)")
+            # Skip header (8 bytes), format byte (1 byte), and extra byte (1 byte)
+            json_start = hugr_str.find("{", 9)  # Find the start of JSON after header
+            if json_start != -1:
+                hugr_str = hugr_str[json_start:]
+            else:
+                msg = "Could not find JSON start in HUGR envelope"
+                raise ValueError(msg)
+    else:
+        hugr_str = hugr.to_json()
+
+    hugr_dict = json.loads(hugr_str)
 
     print(f"\nJSON keys: {list(hugr_dict.keys())}")
 

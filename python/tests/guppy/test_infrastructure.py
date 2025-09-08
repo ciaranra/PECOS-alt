@@ -23,7 +23,7 @@ def test_python_imports() -> None:
 
 def test_backend_detection() -> None:
     """Test backend detection functionality."""
-    from pecos.frontends.run_guppy import get_guppy_backends
+    from pecos.frontends import get_guppy_backends
 
     backends = get_guppy_backends()
 

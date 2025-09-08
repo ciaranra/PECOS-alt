@@ -1,8 +1,8 @@
-//! Example demonstrating Selene as a ClassicalControlEngine
+//! Example demonstrating Selene as a `ClassicalControlEngine`
 //!
 //! This shows the proper separation of concerns:
 //! - Selene handles classical control flow and command generation
-//! - PECOS QuantumEngine handles the actual quantum simulation
+//! - PECOS `QuantumEngine` handles the actual quantum simulation
 
 use pecos_core::prelude::PecosError;
 use pecos_engines::{

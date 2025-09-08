@@ -43,11 +43,11 @@ pub mod engines {
     //!
     //! - **QASM**: OpenQASM 2.0 support via [`qasm_engine()`]
     //! - **LLVM**: LLVM IR quantum programs via [`llvm_engine()`]
-    //! - **Selene**: High-performance engine via [`selene_engine()`]
+    //! - **Selene**: High-performance engine via [`selene_executable()`]
 
     pub use pecos_qasm::{qasm_engine, QasmEngine, QasmEngineBuilder};
     pub use pecos_llvm_sim::{llvm_engine, LlvmEngine, LlvmEngineBuilder};
-    pub use pecos_selene::{selene_engine, SeleneEngine, SeleneEngineBuilder};
+    pub use pecos_selene::{selene_executable, SeleneExecutableEngine, SeleneExecutableEngineBuilder};
 
     // Export the main trait
     pub use pecos_engines::ClassicalControlEngine;

@@ -42,7 +42,7 @@ fn main() -> Result<()> {
                 Ok(())
             }
             Err(e) => {
-                eprintln!("✗ Failed to load HUGR 0.13: {}", e);
+                eprintln!("✗ Failed to load HUGR 0.13: {e}");
                 std::process::exit(1);
             }
         }

@@ -39,11 +39,28 @@ except ImportError:
     GUPPY_AVAILABLE = False
 
 try:
-    from pecos.frontends.run_guppy import get_guppy_backends, run_guppy
+    from pecos.frontends.guppy_api import sim
+    from pecos_rslib import check_rust_hugr_availability, state_vector
 
     PECOS_FRONTEND_AVAILABLE = True
 except ImportError:
     PECOS_FRONTEND_AVAILABLE = False
+
+
+def get_guppy_backends():
+    """Get available backends (replacement for run_guppy version)."""
+    result = {"guppy_available": False, "rust_backend": False}
+    try:
+        import guppylang
+
+        result["guppy_available"] = True
+        rust_available, msg = check_rust_hugr_availability()
+        result["rust_backend"] = rust_available
+        result["rust_message"] = msg
+    except ImportError:
+        pass
+    return result
+
 
 try:
     from pecos_rslib import HUGR_LLVM_PIPELINE_AVAILABLE
@@ -70,13 +87,77 @@ class GuppyPipelineTest:
         # Test with Rust backend (the only backend)
         if self.backends.get("rust_backend", False):
             try:
-                result = run_guppy(
+                # Use sim() API instead of run_guppy
+                n_qubits = kwargs.get("n_qubits", kwargs.get("max_qubits", 10))
+                builder = sim(func).qubits(n_qubits).quantum(state_vector())
+                if seed is not None:
+                    builder = builder.seed(seed)
+                result_dict = builder.run(shots)
+
+                # Format results to match expected structure
+                measurements = []
+                if "measurements" in result_dict:
+                    measurements = result_dict["measurements"]
+                elif "measurement_1" in result_dict:
+                    # Handle multiple measurements
+                    num_shots = len(result_dict["measurement_1"])
+                    measurement_keys = sorted(
+                        [k for k in result_dict if k.startswith("measurement_")],
+                    )
+                    num_measurements = len(measurement_keys)
+
+                    for i in range(num_shots):
+                        result_tuple = []
+                        for key in measurement_keys:
+                            result_tuple.append(bool(result_dict[key][i]))
+
+                        # Check function signature to determine if it returns a tuple
+                        # For now, if there's more than one measurement but function returns single bool,
+                        # take the last measurement as the return value
+                        import inspect
+
+                        # For Guppy functions, we need to check the wrapped function
+                        actual_func = func
+                        if hasattr(func, "wrapped") and hasattr(
+                            func.wrapped,
+                            "python_func",
+                        ):
+                            actual_func = func.wrapped.python_func
+
+                        sig = inspect.signature(actual_func)
+                        return_type = sig.return_annotation
+
+                        # Check if return type is a tuple
+                        is_tuple_return = (
+                            hasattr(return_type, "__origin__")
+                            and return_type.__origin__ == tuple
+                        )
+
+                        if is_tuple_return or num_measurements == 1:
+                            # For tuple returns or single measurement, use all measurements
+                            measurements.append(
+                                (
+                                    tuple(result_tuple)
+                                    if len(result_tuple) > 1
+                                    else result_tuple[0]
+                                ),
+                            )
+                        else:
+                            # For single bool return with multiple measurements, take the last one
+                            measurements.append(result_tuple[-1])
+                elif "result" in result_dict:
+                    measurements = result_dict["result"]
+
+                func_name = getattr(
                     func,
-                    shots=shots,
-                    verbose=False,
-                    seed=seed,
-                    **kwargs,
+                    "__name__",
+                    getattr(func, "name", "quantum_func"),
                 )
+                result = {
+                    "results": measurements,
+                    "shots": shots,
+                    "function_name": func_name,
+                }
                 results["hugr_llvm"] = {
                     "success": True,
                     "result": result,
@@ -337,7 +418,8 @@ class TestHybridPrograms:
             measurements = results["hugr_llvm"]["result"]["results"]
             # Results are boolean values, count True values
             ones_count = sum(1 for r in measurements if r)
-            # Since condition is never true, should measure mostly 0s
+            # When HUGR to LLVM compilation is properly implemented,
+            # this should assert:
             assert ones_count < 5, f"Conditional gate failed, got {ones_count}/20 ones"
 
     def test_measurement_feedback(self, pipeline_tester) -> None:

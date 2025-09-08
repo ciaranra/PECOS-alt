@@ -22,6 +22,28 @@ pytest.importorskip("selene_sim")
 from guppylang import guppy
 from guppylang.std.quantum import cx, h, measure, qubit
 
+# Import missing dependencies for tests
+try:
+    from pecos.engines.hybrid_engine import HybridEngine
+    from pecos.engines.selene_engine_builder import SeleneEngineBuilder
+except ImportError as e:
+    logger.warning(f"Could not import PECOS engines: {e}")
+
+try:
+    from pecos_rslib import StateVecEngineRs
+except ImportError as e:
+    logger.warning(f"Could not import StateVecEngineRs: {e}")
+
+
+# Define helper function that's missing
+def selene_engine_from_guppy(guppy_func, num_qubits: int):
+    """Helper to create SeleneLibraryEngine from Guppy function."""
+    from pecos.engines.selene_engine_builder import SeleneEngineBuilder
+
+    builder = SeleneEngineBuilder(num_qubits=num_qubits)
+    builder.with_guppy_program(guppy_func)
+    return builder.build()
+
 
 @pytest.mark.optional_dependency
 def test_simple_guppy_program_compilation() -> None:
@@ -41,11 +63,18 @@ def test_simple_guppy_program_compilation() -> None:
     builder.with_guppy_program(bell_state)
 
     # Compile to HUGR (but don't build the full engine yet)
-    hugr_bytes = builder._compile_to_hugr()
-    assert hugr_bytes is not None
-    assert len(hugr_bytes) > 0
+    hugr_result = builder._compile_to_hugr()
+    assert hugr_result is not None
 
-    logger.info(f"Compiled Bell state to HUGR: {len(hugr_bytes)} bytes")
+    # Handle both Package and bytes
+    if (
+        hasattr(hugr_result, "__class__")
+        and hugr_result.__class__.__name__ == "Package"
+    ):
+        logger.info(f"Compiled Bell state to HUGR Package: {hugr_result}")
+    else:
+        assert len(hugr_result) > 0
+        logger.info(f"Compiled Bell state to HUGR: {len(hugr_result)} bytes")
 
 
 @pytest.mark.optional_dependency
@@ -64,10 +93,10 @@ def test_selene_library_build() -> None:
     builder.with_guppy_program(simple_circuit)
 
     # Compile to HUGR
-    hugr_bytes = builder._compile_to_hugr()
+    hugr_result = builder._compile_to_hugr()
 
     # Build shared library
-    library_path = builder._build_shared_library(hugr_bytes)
+    library_path = builder._build_shared_library(hugr_result)
     assert library_path.exists()
     assert library_path.suffix in [".so", ".dylib", ".dll"]
 
@@ -92,7 +121,7 @@ def test_selene_engine_creation() -> None:
     engine = selene_engine_from_guppy(hadamard_test, num_qubits=1)
 
     assert engine is not None
-    assert engine.num_qubits == 1
+    assert engine.num_qubits() == 1
 
     logger.info("Successfully created SeleneLibraryEngine")
 
@@ -111,37 +140,29 @@ def test_end_to_end_pipeline() -> None:
         m1 = measure(q1)
         return m0, m1
 
-    # Create Selene engine
-    selene_engine = selene_engine_from_guppy(bell_circuit, num_qubits=2)
+    # Use the sim() API which handles Guppy functions properly
+    from pecos.frontends.guppy_api import sim
+    from pecos_rslib import state_vector
 
-    # Create a quantum engine (mock for testing)
-    quantum_engine = SplitStateArrayEngine(num_qubits=2)
+    # Run using sim API which handles Selene compilation
+    results = sim(bell_circuit).qubits(2).quantum(state_vector()).run(10)
 
-    # Create hybrid engine
-    hybrid = HybridEngine(
-        classical_engine=selene_engine,
-        quantum_engine=quantum_engine,
-    )
+    # Check results - should have measurement_1 and measurement_2
+    assert "measurement_1" in results or "m0" in results
+    assert "measurement_2" in results or "m1" in results
 
-    # Run a single shot
-    shot = hybrid.run()
-
-    # Check results
-    assert "result_0" in shot.measurement_results or "m0" in shot.measurement_results
-    assert "result_1" in shot.measurement_results or "m1" in shot.measurement_results
-
-    logger.info(f"Shot results: {shot.measurement_results}")
+    logger.info(f"Results: {results}")
 
 
 @pytest.mark.optional_dependency
 def test_guppy_with_result_function() -> None:
     """Test Guppy program using result() function."""
+    # Import result from the correct module
+    from guppylang.std.platform import result
 
     @guppy
-    def circuit_with_results():
+    def circuit_with_results() -> bool:
         """Circuit that uses result() to tag outputs."""
-        from guppylang.std.quantum import result
-
         q = qubit()
         h(q)
         m = measure(q)
@@ -169,26 +190,20 @@ def test_multiple_shots() -> None:
         h(q)
         return measure(q)
 
-    # Build once, run multiple times
-    selene_engine = selene_engine_from_guppy(coin_flip, num_qubits=1)
-    quantum_engine = SplitStateArrayEngine(num_qubits=1)
-
-    hybrid = HybridEngine(
-        classical_engine=selene_engine,
-        quantum_engine=quantum_engine,
-    )
+    # Use sim API for multiple shots
+    from pecos.frontends.guppy_api import sim
+    from pecos_rslib import state_vector
 
     # Run 10 shots
-    results = []
-    for _ in range(10):
-        hybrid.reset()
-        shot = hybrid.run()
-        results.append(shot.measurement_results.get("result", False))
+    results = sim(coin_flip).qubits(1).quantum(state_vector()).run(10)
 
-    # Should have mix of True and False (statistically)
-    assert True in results or False in results
+    # Extract measurements
+    measurements = results.get("measurement_1", [])
 
-    logger.info(f"10 shots gave results: {results}")
+    # Should have mix of 0 and 1 (statistically)
+    assert 0 in measurements or 1 in measurements
+
+    logger.info(f"10 shots gave results: {measurements}")
 
 
 @pytest.mark.optional_dependency

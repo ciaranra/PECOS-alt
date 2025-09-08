@@ -5,6 +5,8 @@ This module provides functionality to compile HUGR (Hierarchical Unified Graph R
 files to LLVM IR. It contains no execution engine dependencies - only compilation logic.
 */
 
+use std::fmt::Write as FmtWrite;
+
 use hugr_core::Hugr;
 use hugr_core::extension::ExtensionRegistry;
 use hugr_core::package::Package;
@@ -19,6 +21,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use super::extensions::const_bool_extension::ConstBoolExtension;
+use super::extensions::tket_rotation_extension::TketRotationExtension;
 use super::extensions::tket2_bool_extension::Tket2BoolExtension;
 use super::extensions::tket2_rotation_extension::Tket2RotationExtension;
 use super::generators::standard_llvm_generator::StandardLlvmExtension;
@@ -75,7 +78,7 @@ impl HugrCompiler {
     /// - File I/O operations fail
     pub fn compile_hugr<P: AsRef<Path>>(&self, hugr_path: P) -> Result<PathBuf, PecosError> {
         let hugr_path = hugr_path.as_ref();
-        debug!("HUGR: Compiling HUGR file: {hugr_path:?}");
+        debug!("HUGR: Compiling HUGR file: {}", hugr_path.display());
 
         // Read HUGR file
         let hugr_bytes = fs::read(hugr_path).map_err(|e| {
@@ -269,13 +272,15 @@ impl HugrCompiler {
         // Create extensions with appropriate QIR quantum support based on naming convention
         let mut builder = hugr_llvm::CodegenExtsBuilder::<Hugr>::default();
 
-        // Add our custom extensions FIRST (before standard extensions)
-        // This ensures our tket2.bool handler takes precedence
+        // Add rotation extensions FIRST - they define the tket.rotation type mapping
+        builder = builder.add_extension(Tket2RotationExtension::new());
+        builder = builder.add_extension(TketRotationExtension::new());
+
+        // Then add bool extensions
         builder = builder.add_extension(ConstBoolExtension::new());
         builder = builder.add_extension(Tket2BoolExtension::new());
-        builder = builder.add_extension(Tket2RotationExtension::new());
 
-        // Use HUGR-style format with integer types
+        // Finally add the standard LLVM extension that uses these types
         builder = builder.add_extension(StandardLlvmExtension::new(result_names));
 
         // Add all standard extensions
@@ -392,27 +397,6 @@ fn fix_duplicate_functions(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
     result.extend_from_slice(fixed_json.as_bytes());
 
     Ok(result)
-}
-
-/// Load package with relaxed validation for `ConstBool` issues
-fn load_package_with_relaxed_validation(
-    hugr_bytes: &[u8],
-    _registry: &ExtensionRegistry,
-) -> Result<Package, hugr_core::envelope::EnvelopeError> {
-    use hugr_core::envelope::read_envelope;
-    use hugr_core::extension::ExtensionRegistry;
-
-    debug!("HUGR: Loading package with minimal extension validation");
-
-    // Create a minimal extension registry that only includes basic types
-    let minimal_registry = ExtensionRegistry::new(std::iter::empty());
-
-    // Read the envelope with minimal validation to bypass ConstBool issues
-    let reader = std::io::Cursor::new(hugr_bytes);
-    let (_, package) = read_envelope(reader, &minimal_registry)?;
-
-    debug!("HUGR: Package loaded successfully with relaxed validation");
-    Ok(package)
 }
 
 /// Preprocess binary HUGR format
@@ -903,20 +887,16 @@ fn add_struct_return_wrappers(llvm_ir: &str) -> String {
         }
 
         // Create a global variable to hold the result
-        wrappers.push_str(&format!(
-            "\n; Global storage for {func_name} result\n\
-             @{func_name}_result = internal global {struct_type} zeroinitializer, align 8\n"
-        ));
+        writeln!(
+            wrappers,
+            "\n; Global storage for {func_name} result\n@{func_name}_result = internal global {struct_type} zeroinitializer, align 8"
+        ).unwrap();
 
         // Create a wrapper function that stores to global and returns pointer
-        wrappers.push_str(&format!(
-            "\n; FFI-safe wrapper for {func_name}\n\
-             define {struct_type}* @{func_name}_wrapper() {{\n\
-               %1 = call {struct_type} @{func_name}()\n\
-               store {struct_type} %1, {struct_type}* @{func_name}_result, align 8\n\
-               ret {struct_type}* @{func_name}_result\n\
-             }}\n"
-        ));
+        writeln!(
+            wrappers,
+            "\n; FFI-safe wrapper for {func_name}\ndefine {struct_type}* @{func_name}_wrapper() {{\n  %1 = call {struct_type} @{func_name}()\n  store {struct_type} %1, {struct_type}* @{func_name}_result, align 8\n  ret {struct_type}* @{func_name}_result\n}}"
+        ).unwrap();
 
         // Also create accessor functions to get individual elements
         // Count elements in the struct
@@ -926,14 +906,10 @@ fn add_struct_return_wrappers(llvm_ir: &str) -> String {
             .collect();
 
         for (i, elem_type) in elements.iter().enumerate() {
-            wrappers.push_str(&format!(
-                "\n; Accessor for element {i} of {func_name} result\n\
-                 define {elem_type} @{func_name}_get_{i}() {{\n\
-                   %1 = load {struct_type}, {struct_type}* @{func_name}_result, align 8\n\
-                   %2 = extractvalue {struct_type} %1, {i}\n\
-                   ret {elem_type} %2\n\
-                 }}\n"
-            ));
+            writeln!(
+                wrappers,
+                "\n; Accessor for element {i} of {func_name} result\ndefine {elem_type} @{func_name}_get_{i}() {{\n  %1 = load {struct_type}, {struct_type}* @{func_name}_result, align 8\n  %2 = extractvalue {struct_type} %1, {i}\n  ret {elem_type} %2\n}}"
+            ).unwrap();
         }
     }
 

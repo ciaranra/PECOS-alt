@@ -9,11 +9,11 @@ use pecos_engines::{
 };
 use std::collections::BTreeMap;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     // Note: In real usage, you would use actual engine builders from the crates:
     // - pecos_qasm::unified_engine_builder::qasm_engine()
     // - pecos_llvm_sim::engine_builder::llvm_engine()
-    // - pecos_selene::engine_builder::selene_engine()
+    // - pecos_selene::selene_executable()
     //
     // This example focuses on the result format conversions rather than
     // the engine implementation details.
@@ -50,7 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Convert to columnar format (HashMap<String, Vec<i64>>)
     // This format is used by llvm_sim() for compatibility
-    let columnar = shots_to_columnar(shot_vec.clone());
+    let columnar = shots_to_columnar(&shot_vec);
     println!("Columnar format: {columnar:?}");
     // Each register name maps to a vector of values across all shots
 
@@ -73,6 +73,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Register '{}': {} values", register_name, values.len());
         }
     }
-
-    Ok(())
 }

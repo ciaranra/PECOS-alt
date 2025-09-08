@@ -1,4 +1,4 @@
-//! Tests to verify all LlvmProgram features work correctly
+//! Tests to verify all `LlvmProgram` features work correctly
 
 use pecos_programs::{LlvmContent, LlvmProgram};
 
@@ -93,12 +93,12 @@ fn test_llvm_display() {
     // IR display shows the content
     let ir = "define void @main() { ret void }";
     let ir_prog = LlvmProgram::from_ir(ir);
-    assert_eq!(format!("{}", ir_prog), ir);
+    assert_eq!(format!("{ir_prog}"), ir);
 
     // Bitcode display shows size info
     let bc = vec![0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE];
     let bc_prog = LlvmProgram::from_bitcode(bc);
-    assert_eq!(format!("{}", bc_prog), "LlvmProgram(bitcode, 6 bytes)");
+    assert_eq!(format!("{bc_prog}"), "LlvmProgram(bitcode, 6 bytes)");
 }
 
 #[test]

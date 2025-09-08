@@ -1,4 +1,4 @@
-/// Callback interface for ByteMessage communication between PECOS and Selene
+/// Callback interface for `ByteMessage` communication between PECOS and Selene
 ///
 /// This module provides FFI-safe functions that allow the Bridge simulator
 /// (running inside Selene executable) to communicate with PECOS via callbacks.
@@ -9,7 +9,7 @@ use std::sync::Mutex;
 /// Global state for managing the callback communication
 pub(crate) static CALLBACK_STATE: Mutex<Option<CallbackState>> = Mutex::new(None);
 
-/// State that manages the ByteMessage queues and synchronization
+/// State that manages the `ByteMessage` queues and synchronization
 pub(crate) struct CallbackState {
     /// Queue of operations from Bridge to PECOS (H, CNOT, etc.)
     outgoing_operations: VecDeque<ByteMessage>,
@@ -25,6 +25,10 @@ pub(crate) struct CallbackState {
 }
 
 /// Initialize the callback state
+///
+/// # Panics
+///
+/// Panics if the mutex is poisoned
 pub fn pecos_bridge_init() {
     let mut state = CALLBACK_STATE.lock().unwrap();
     *state = Some(CallbackState {
@@ -38,7 +42,15 @@ pub fn pecos_bridge_init() {
 
 /// Bridge simulator calls this to send quantum operations to PECOS
 /// Returns 0 on success, -1 on error
-pub fn pecos_bridge_send_operations(data: *const u8, len: usize) -> i32 {
+///
+/// # Safety
+///
+/// The caller must ensure that `data` points to a valid memory region of at least `len` bytes
+///
+/// # Panics
+///
+/// Panics if the mutex is poisoned
+pub unsafe fn pecos_bridge_send_operations(data: *const u8, len: usize) -> i32 {
     if data.is_null() {
         return -1;
     }
@@ -49,7 +61,7 @@ pub fn pecos_bridge_send_operations(data: *const u8, len: usize) -> i32 {
     let mut state = CALLBACK_STATE.lock().unwrap();
     if let Some(ref mut state) = *state {
         state.outgoing_operations.push_back(message);
-        eprintln!("[Bridge] Queued operations ByteMessage ({} bytes)", len);
+        eprintln!("[Bridge] Queued operations ByteMessage ({len} bytes)");
         0
     } else {
         eprintln!("[Bridge] ERROR: Callback state not initialized");
@@ -59,7 +71,15 @@ pub fn pecos_bridge_send_operations(data: *const u8, len: usize) -> i32 {
 
 /// Bridge simulator calls this to request measurement results
 /// Returns number of bytes written, 0 if no measurements available, -1 on error
-pub fn pecos_bridge_receive_measurements(data_out: *mut u8, max_len: usize) -> i32 {
+///
+/// # Safety
+///
+/// The caller must ensure that `data_out` points to a valid writable memory region of at least `max_len` bytes
+///
+/// # Panics
+///
+/// Panics if the mutex is poisoned
+pub unsafe fn pecos_bridge_receive_measurements(data_out: *mut u8, max_len: usize) -> i32 {
     let mut state = CALLBACK_STATE.lock().unwrap();
     if let Some(ref mut state) = *state {
         // Check if measurements are available
@@ -73,9 +93,7 @@ pub fn pecos_bridge_receive_measurements(data_out: *mut u8, max_len: usize) -> i
             }
 
             // Copy to output buffer
-            unsafe {
-                std::ptr::copy_nonoverlapping(bytes.as_ptr(), data_out, bytes.len());
-            }
+            unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), data_out, bytes.len()) };
 
             eprintln!("[Bridge] Returned measurements ({} bytes)", bytes.len());
             state.waiting_for_measurements = false;
@@ -93,6 +111,10 @@ pub fn pecos_bridge_receive_measurements(data_out: *mut u8, max_len: usize) -> i
 }
 
 /// Bridge simulator calls this to signal it's waiting for measurements
+///
+/// # Panics
+///
+/// Panics if the mutex is poisoned
 pub fn pecos_bridge_wait_for_measurements() {
     let mut state = CALLBACK_STATE.lock().unwrap();
     if let Some(ref mut state) = *state {
@@ -102,6 +124,10 @@ pub fn pecos_bridge_wait_for_measurements() {
 }
 
 /// Bridge simulator calls this to signal execution is complete
+///
+/// # Panics
+///
+/// Panics if the mutex is poisoned
 pub fn pecos_bridge_signal_complete() {
     let mut state = CALLBACK_STATE.lock().unwrap();
     if let Some(ref mut state) = *state {
@@ -116,6 +142,10 @@ pub fn pecos_bridge_signal_complete() {
 
 /// PECOS calls this to get pending operations from the Bridge
 /// Returns None if no operations available
+///
+/// # Panics
+///
+/// Panics if the mutex is poisoned
 pub fn pecos_get_pending_operations() -> Option<ByteMessage> {
     let mut state = CALLBACK_STATE.lock().unwrap();
     if let Some(ref mut state) = *state {
@@ -126,6 +156,10 @@ pub fn pecos_get_pending_operations() -> Option<ByteMessage> {
 }
 
 /// PECOS calls this to provide measurement results to the Bridge
+///
+/// # Panics
+///
+/// Panics if the mutex is poisoned
 pub fn pecos_provide_measurements(message: ByteMessage) {
     let mut state = CALLBACK_STATE.lock().unwrap();
     if let Some(ref mut state) = *state {
@@ -135,6 +169,10 @@ pub fn pecos_provide_measurements(message: ByteMessage) {
 }
 
 /// PECOS calls this to check if Bridge is waiting for measurements
+///
+/// # Panics
+///
+/// Panics if the mutex is poisoned
 pub fn pecos_is_bridge_waiting() -> bool {
     let state = CALLBACK_STATE.lock().unwrap();
     if let Some(ref state) = *state {
@@ -145,6 +183,10 @@ pub fn pecos_is_bridge_waiting() -> bool {
 }
 
 /// PECOS calls this to check if execution is complete
+///
+/// # Panics
+///
+/// Panics if the mutex is poisoned
 pub fn pecos_is_execution_complete() -> bool {
     let state = CALLBACK_STATE.lock().unwrap();
     if let Some(ref state) = *state {
@@ -155,6 +197,10 @@ pub fn pecos_is_execution_complete() -> bool {
 }
 
 /// Reset the callback state for a new shot
+///
+/// # Panics
+///
+/// Panics if the mutex is poisoned
 pub fn pecos_reset_callback_state() {
     let mut state = CALLBACK_STATE.lock().unwrap();
     if let Some(ref mut state) = *state {

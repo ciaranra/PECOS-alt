@@ -120,11 +120,11 @@ class SeleneEngineBuilder:
         self.verbose = verbose
         return self
 
-    def _compile_to_hugr(self) -> bytes:
+    def _compile_to_hugr(self):
         """Compile Guppy program to HUGR.
 
         Returns:
-            HUGR bytes
+            HUGR Package or bytes
 
         Raises:
             RuntimeError: If compilation fails
@@ -133,25 +133,32 @@ class SeleneEngineBuilder:
             msg = "No Guppy program provided"
             raise ValueError(msg)
 
-        if not COMPILATION_AVAILABLE:
-            msg = "Compilation pipeline not available"
-            raise ImportError(msg)
-
         logger.info("Compiling Guppy program to HUGR...")
 
         try:
-            hugr_bytes = compile_guppy_to_hugr(self.guppy_program)
-            logger.info(f"Compiled to HUGR: {len(hugr_bytes)} bytes")
-            return hugr_bytes
+            # Compile directly to Package for Selene
+            if hasattr(self.guppy_program, "compile"):
+                package = self.guppy_program.compile()
+                logger.info(f"Compiled to HUGR Package: {package}")
+                return package
+
+            # Fallback to bytes if needed
+            if COMPILATION_AVAILABLE:
+                hugr_bytes = compile_guppy_to_hugr(self.guppy_program)
+                logger.info(f"Compiled to HUGR: {len(hugr_bytes)} bytes")
+                return hugr_bytes
+
+            msg = "Could not compile Guppy program"
+            raise RuntimeError(msg)
         except Exception as e:
             msg = f"Failed to compile Guppy to HUGR: {e}"
             raise RuntimeError(msg)
 
-    def _build_shared_library(self, hugr_bytes: bytes) -> Path:
+    def _build_shared_library(self, hugr_input) -> Path:
         """Use Selene to build a shared library from HUGR.
 
         Args:
-            hugr_bytes: HUGR program bytes
+            hugr_input: HUGR Package or bytes
 
         Returns:
             Path to the built shared library
@@ -169,29 +176,32 @@ class SeleneEngineBuilder:
 
         logger.info(f"Building Selene library in {self.build_dir}")
 
-        # Save HUGR to file
-        hugr_file = self.build_dir / "program.hugr"
-        hugr_file.write_bytes(hugr_bytes)
-
-        # Create HUGR artifact for Selene
-        from selene_core.build_utils.builtins.hugr import HUGRPackageKind
-        from selene_core.build_utils.types import Artifact
-
-        hugr_artifact = Artifact(
-            kind=HUGRPackageKind,
-            resource=hugr_bytes,
-            metadata={},
-        )
-
         try:
-            # Build with Selene to create an executable
-            instance = build(
-                src=hugr_artifact,
-                name="quantum_program",
-                build_dir=self.build_dir,
-                interface=selene_sim.interfaces.HeliosInterface(),  # QIS interface
-                verbose=self.verbose,
-            )
+            # Build with Selene - it accepts Package objects directly
+            if (
+                hasattr(hugr_input, "__class__")
+                and hugr_input.__class__.__name__ == "Package"
+            ):
+                # It's a Package object, use directly
+                instance = build(
+                    src=hugr_input,
+                    name="quantum_program",
+                    build_dir=self.build_dir,
+                    interface=selene_sim.HeliosInterface(),  # QIS interface
+                    verbose=self.verbose,
+                )
+            else:
+                # It's bytes, save to file first
+                hugr_file = self.build_dir / "program.hugr"
+                hugr_file.write_bytes(hugr_input)
+
+                instance = build(
+                    src=str(hugr_file),
+                    name="quantum_program",
+                    build_dir=self.build_dir,
+                    interface=selene_sim.HeliosInterface(),  # QIS interface
+                    verbose=self.verbose,
+                )
 
             # Find the built library
             lib_patterns = ["*.so", "*.dylib", "*.dll"]
@@ -270,12 +280,15 @@ class SeleneEngineBuilder:
             RuntimeError: If build fails
         """
         # Compile Guppy to HUGR
-        if self.guppy_program is not None and not self.hugr_bytes:
-            self.hugr_bytes = self._compile_to_hugr()
+        hugr_data = None
+        if self.guppy_program is not None:
+            hugr_data = self._compile_to_hugr()
+        elif self.hugr_bytes is not None:
+            hugr_data = self.hugr_bytes
 
         # Build shared library from HUGR
-        if self.hugr_bytes is not None and self.library_path is None:
-            self.library_path = self._build_shared_library(self.hugr_bytes)
+        if hugr_data is not None and self.library_path is None:
+            self.library_path = self._build_shared_library(hugr_data)
 
         if not self.library_path:
             msg = "No library path - compilation failed"

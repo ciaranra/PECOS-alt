@@ -3,7 +3,7 @@ use pecos_engines::noise::{
     BiasedDepolarizingNoiseModel, DepolarizingNoiseModel, NoiseModel, PassThroughNoiseModel,
 };
 use pecos_engines::quantum::StateVecEngine;
-use pecos_engines::{ClassicalControlEngineBuilder, Engine, EngineSystem, QuantumSystem};
+use pecos_engines::{Engine, EngineSystem, QuantumSystem};
 use std::collections::BTreeMap;
 
 // Helper function to count measurement results from multiple shots

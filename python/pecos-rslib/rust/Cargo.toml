@@ -38,32 +38,34 @@ hugr = ["hugr-llvm-pipeline"]
 hugr-013 = ["pecos-selene/hugr-013"]
 
 [dependencies]
-pyo3 = { workspace=true, features = ["extension-module", "abi3-py310", "generate-import-lib"] }
-pecos = { workspace = true }
-pecos-core = { workspace = true }
-pecos-programs = { workspace = true }
+pecos.workspace = true
+
+pecos-core.workspace = true
+pecos-programs.workspace = true
 pecos-qasm = { workspace = true, features = ["wasm"] }
-pecos-engines = { workspace = true }
-pecos-qsim = { workspace = true }
+pecos-engines.workspace = true
+pecos-qsim.workspace = true
 pecos-cppsparsesim = { path = "../../../crates/pecos-cppsparsesim" }
 pecos-quest = { path = "../../../crates/pecos-quest", features = ["cpu"] }
 pecos-qulacs = { path = "../../../crates/pecos-qulacs" }
-pecos-llvm-runtime = { workspace = true }
-pecos-llvm-sim = { workspace = true }
+pecos-llvm-runtime.workspace = true
+pecos-llvm-sim.workspace = true
 pecos-selene = { path = "../../../crates/pecos-selene" }
 pecos-selene-plugins = { path = "../../../crates/pecos-selene-plugins" }
 pecos-phir = { path = "../../../crates/pecos-phir" }
 pecos-phir-json = { path = "../../../crates/pecos-phir-json" }
 pecos-hugr = { path = "../../../crates/pecos-hugr", optional = true }
-hugr = { version = "0.20", optional = true }
-parking_lot = { workspace = true}
-serde_json = { workspace = true }
-tempfile = { workspace = true }
-log = { workspace = true }
-env_logger = { workspace = true }
+
+pyo3 = { workspace=true, features = ["extension-module", "abi3-py310", "generate-import-lib"] }
+hugr = { workspace = true, optional = true }
+parking_lot.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+log.workspace = true
+env_logger.workspace = true
+
+[build-dependencies]
+pyo3-build-config.workspace = true
 
 [lints]
 workspace = true
-
-[build-dependencies]
-pyo3-build-config = { workspace = true }

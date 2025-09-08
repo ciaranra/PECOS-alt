@@ -1,5 +1,7 @@
 //! Test HUGR to LLVM compilation in pecos-selene
 
+use pecos_engines::ClassicalControlEngineBuilder;
+
 #[cfg(feature = "hugr-013")]
 #[test]
 fn test_hugr_to_llvm_generation() {
@@ -8,7 +10,7 @@ fn test_hugr_to_llvm_generation() {
     // Test Bell state generation
     let bell_llvm = generate_bell_state_llvm().unwrap();
     println!("Generated Bell state LLVM IR:");
-    println!("{}", bell_llvm);
+    println!("{bell_llvm}");
 
     // Verify it contains expected elements
     assert!(bell_llvm.contains("%Qubit = type opaque"));
@@ -45,7 +47,7 @@ fn test_qis_lowering() {
 #[cfg(all(feature = "hugr-013", not(target_os = "windows")))]
 #[test]
 fn test_hugr_compilation_in_engine() {
-    use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine};
+    use pecos_engines::ClassicalEngine;
     use pecos_selene::selene_executable;
     use std::env;
 
@@ -64,12 +66,12 @@ fn test_hugr_compilation_in_engine() {
         Ok(engine) => {
             // Try to compile
             match engine.compile() {
-                Ok(_) => println!("HUGR compilation succeeded (generated placeholder IR)"),
-                Err(e) => println!("HUGR compilation failed as expected: {}", e),
+                Ok(()) => println!("HUGR compilation succeeded (generated placeholder IR)"),
+                Err(e) => println!("HUGR compilation failed as expected: {e}"),
             }
         }
         Err(e) => {
-            println!("Engine creation failed: {}", e);
+            println!("Engine creation failed: {e}");
         }
     }
 }

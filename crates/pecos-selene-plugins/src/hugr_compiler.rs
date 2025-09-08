@@ -14,6 +14,10 @@ use std::path::PathBuf;
 /// 1. Fork/patch selene-hugr-qis-compiler to also export as rlib
 /// 2. Use the existing pecos-hugr compiler (but it uses HUGR 0.20)
 /// 3. Create a thin wrapper that calls the Selene compiler via FFI
+///
+/// # Errors
+///
+/// Currently unimplemented - will always panic with todo!()
 pub fn compile_hugr_to_llvm(_hugr_bytes: &[u8]) -> Result<String> {
     // TODO: Implement one of the above options
     todo!("Implement HUGR to LLVM compilation")
@@ -22,7 +26,11 @@ pub fn compile_hugr_to_llvm(_hugr_bytes: &[u8]) -> Result<String> {
 /// Compile HUGR to a Selene plugin
 ///
 /// This would compile HUGR -> LLVM IR -> object file -> shared library
-/// that implements Selene's RuntimeInterface
+/// that implements Selene's `RuntimeInterface`
+///
+/// # Errors
+///
+/// Currently unimplemented - will always panic with todo!()
 pub fn compile_hugr_to_plugin(_hugr_bytes: &[u8], _output_path: PathBuf) -> Result<PathBuf> {
     // TODO: Implement full compilation pipeline
     todo!("Implement HUGR to plugin compilation")

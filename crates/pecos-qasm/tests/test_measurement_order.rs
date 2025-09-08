@@ -1,7 +1,7 @@
 // Test to verify that measurements are tracked by order, not by explicit IDs
 
 use pecos_core::prelude::*;
-use pecos_engines::{ByteMessage, ClassicalControlEngineBuilder, ClassicalEngine};
+use pecos_engines::{ByteMessage, ClassicalEngine};
 use pecos_qasm::QASMEngine;
 
 #[test]

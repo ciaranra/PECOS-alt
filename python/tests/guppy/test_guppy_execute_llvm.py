@@ -118,9 +118,10 @@ def test_guppy_execute_llvm() -> None:
 
     # Instead, just verify the run_guppy import works
     try:
-        from pecos.frontends.run_guppy import run_guppy
+        from pecos.frontends import sim
+        from pecos_rslib import state_vector
 
-        print("[PASS] run_guppy API is available")
+        print("[PASS] sim() API is available")
     except ImportError:
         print("[WARNING] run_guppy API not available")
 

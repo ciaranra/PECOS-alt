@@ -19,9 +19,17 @@ pub trait Dialect: Send + Sync {
     fn description(&self) -> &'static str;
 
     /// Initialize the dialect (register operations, types, etc.)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if dialect initialization fails
     fn initialize(&self, registry: &mut DialectRegistry) -> Result<()>;
 
     /// Verify an operation from this dialect
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the operation is invalid
     fn verify_operation(&self, _op: &CustomOp) -> Result<()> {
         // Default: no additional verification
         Ok(())
@@ -109,6 +117,12 @@ impl DialectRegistry {
     }
 
     /// Register a dialect
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The dialect is already registered
+    /// - Dialect initialization fails
     pub fn register_dialect<D: Dialect + 'static>(&mut self, dialect: D) -> Result<()> {
         let namespace = dialect.namespace().to_string();
 
@@ -128,6 +142,10 @@ impl DialectRegistry {
     }
 
     /// Register an operation for a dialect
+    ///
+    /// # Errors
+    ///
+    /// Currently always succeeds, but returns Result for future extensibility
     pub fn register_operation(&mut self, dialect: &str, op: OperationDef) -> Result<()> {
         self.operations
             .entry(dialect.to_string())
@@ -137,6 +155,10 @@ impl DialectRegistry {
     }
 
     /// Register a type for a dialect
+    ///
+    /// # Errors
+    ///
+    /// Currently always succeeds, but returns Result for future extensibility
     pub fn register_type(&mut self, dialect: &str, ty: TypeDef) -> Result<()> {
         self.types
             .entry(dialect.to_string())
@@ -158,18 +180,28 @@ impl DialectRegistry {
     }
 
     /// Verify a custom operation
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The dialect is not registered
+    /// - The operation is unknown
+    /// - Operation parameters are invalid
     pub fn verify_custom_operation(&self, op: &CustomOp) -> Result<()> {
         // Get the dialect
         let dialect = self.get_dialect(&op.dialect).ok_or_else(|| {
-            crate::error::PhirError::Validation(crate::error::ValidationError::UnknownDialect(
-                op.dialect.clone(),
+            crate::error::PhirError::Validation(Box::new(
+                crate::error::ValidationError::UnknownDialect(op.dialect.clone()),
             ))
         })?;
 
         // Check if operation is registered
         let _op_def = self.get_operation(&op.dialect, &op.name).ok_or_else(|| {
-            crate::error::PhirError::Validation(crate::error::ValidationError::UnknownOperation(
-                format!("{}.{}", op.dialect, op.name),
+            crate::error::PhirError::Validation(Box::new(
+                crate::error::ValidationError::UnknownOperation(format!(
+                    "{}.{}",
+                    op.dialect, op.name
+                )),
             ))
         })?;
 

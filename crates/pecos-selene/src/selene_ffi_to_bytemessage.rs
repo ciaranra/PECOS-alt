@@ -1,11 +1,11 @@
-//! Selene FFI to ByteMessage Bridge
+//! Selene FFI to `ByteMessage` Bridge
 //!
 //! This module provides the Selene FFI functions that plugins expect,
-//! but instead of using Selene's simulator, it directly creates ByteMessages
+//! but instead of using Selene's simulator, it directly creates `ByteMessages`
 //! and communicates with the PECOS infrastructure.
 //!
 //! This is NOT a stub - it's the actual implementation that bridges
-//! between Selene's FFI interface and PECOS's ByteMessage system.
+//! between Selene's FFI interface and PECOS's `ByteMessage` system.
 
 use once_cell::sync::OnceCell;
 use pecos_engines::{ByteMessage, ByteMessageBuilder};
@@ -14,9 +14,9 @@ use std::sync::{Arc, Mutex};
 // Global engine interface for communication with SeleneExecutableEngine
 static ENGINE_INTERFACE: OnceCell<Arc<Mutex<dyn EngineInterface + Send + Sync>>> = OnceCell::new();
 
-/// Interface for communicating with the SeleneExecutableEngine
+/// Interface for communicating with the `SeleneExecutableEngine`
 pub trait EngineInterface {
-    /// Queue an operation to be returned by generate_commands()
+    /// Queue an operation to be returned by `generate_commands()`
     fn queue_operation(&mut self, message: ByteMessage);
 
     /// Get measurement results
@@ -62,7 +62,7 @@ fn get_next_qubit() -> u64 {
     current
 }
 
-/// Queue a ByteMessage operation to the engine
+/// Queue a `ByteMessage` operation to the engine
 fn queue_operation(message: ByteMessage) {
     if let Some(engine) = ENGINE_INTERFACE.get()
         && let Ok(mut engine) = engine.lock()

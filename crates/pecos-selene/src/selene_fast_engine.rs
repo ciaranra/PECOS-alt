@@ -1,7 +1,7 @@
-//! Fast Selene Engine using SeleneInstance directly
+//! Fast Selene Engine using `SeleneInstance` directly
 //!
 //! This is the fastest and most natural way to use Selene - directly using
-//! SeleneInstance from the selene-sim crate with our ByteMessage runtime.
+//! `SeleneInstance` from the selene-sim crate with our `ByteMessage` runtime.
 
 use crate::error::SeleneError;
 use pecos_core::prelude::PecosError;
@@ -16,13 +16,13 @@ use tempfile::NamedTempFile;
 pub struct SeleneFastConfig {
     /// Number of qubits
     pub num_qubits: usize,
-    /// Path to ByteMessage runtime plugin
+    /// Path to `ByteMessage` runtime plugin
     pub runtime_plugin_path: PathBuf,
     /// Verbose logging
     pub verbose: bool,
 }
 
-/// The fastest Selene engine - uses SeleneInstance directly in the same process
+/// The fastest Selene engine - uses `SeleneInstance` directly in the same process
 pub struct SeleneFastEngine {
     /// Configuration
     config: Option<SeleneFastConfig>,
@@ -39,6 +39,7 @@ pub struct SeleneFastEngine {
 }
 
 impl SeleneFastEngine {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             config: None,
@@ -50,12 +51,13 @@ impl SeleneFastEngine {
         }
     }
 
+    #[must_use]
     pub fn with_config(mut self, config: SeleneFastConfig) -> Self {
         self.config = Some(config);
         self
     }
 
-    /// Load a SeleneInterfaceProgram
+    /// Load a `SeleneInterfaceProgram`
     pub fn load_program(&mut self, program: SeleneInterfaceProgram) -> Result<(), PecosError> {
         log::info!("Loading SeleneInterfaceProgram for fast execution");
         self.program = Some(program);
@@ -77,10 +79,10 @@ impl SeleneFastEngine {
 
         // Create a temporary file for the Interface Plugin
         let mut temp_file = NamedTempFile::new()
-            .map_err(|e| SeleneError::RuntimeError(format!("Failed to create temp file: {}", e)))?;
+            .map_err(|e| SeleneError::RuntimeError(format!("Failed to create temp file: {e}")))?;
 
         temp_file.write_all(&program.plugin).map_err(|e| {
-            SeleneError::RuntimeError(format!("Failed to write Interface Plugin: {}", e))
+            SeleneError::RuntimeError(format!("Failed to write Interface Plugin: {e}"))
         })?;
 
         let plugin_path = temp_file.into_temp_path();
@@ -90,7 +92,7 @@ impl SeleneFastEngine {
         // For now, this is a placeholder showing the approach
 
         log::info!("Would create Selene configuration with:");
-        log::info!("  Interface Plugin: {:?}", plugin_path);
+        log::info!("  Interface Plugin: {plugin_path:?}");
         log::info!("  Runtime Plugin: {:?}", config.runtime_plugin_path);
         log::info!("  Qubits: {}", config.num_qubits);
 
@@ -128,7 +130,7 @@ impl SeleneFastEngine {
         Ok(())
     }
 
-    /// Convert Selene results to ByteMessage
+    /// Convert Selene results to `ByteMessage`
     fn results_to_byte_message(&mut self) -> Result<ByteMessage, PecosError> {
         if self.result_index >= self.execution_results.len() {
             return Ok(ByteMessage::create_empty());
@@ -143,7 +145,7 @@ impl SeleneFastEngine {
 
         // Add measurement results
         for (key, &value) in result {
-            log::debug!("Result: {} = {}", key, value);
+            log::debug!("Result: {key} = {value}");
             // In a real implementation, we'd add appropriate operations
             // For now, just create an empty operation set
         }
@@ -184,7 +186,7 @@ impl Engine for SeleneFastEngine {
 
 impl ClassicalEngine for SeleneFastEngine {
     fn num_qubits(&self) -> usize {
-        self.config.as_ref().map(|c| c.num_qubits).unwrap_or(1)
+        self.config.as_ref().map_or(1, |c| c.num_qubits)
     }
 
     fn generate_commands(&mut self) -> Result<ByteMessage, PecosError> {

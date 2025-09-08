@@ -21,11 +21,9 @@ Examples:
     >>>
     >>> # Use in simulation
     >>> from pecos_rslib import engines
-    >>> results = engines.qasm()\\
-    >>>     .program(program)\\
-    >>>     .to_sim()\\
-    >>>     .noise(depolarizing_noise)\\
-    >>>     .run(1000)
+    >>> results = (
+    ...     engines.qasm().program(program).to_sim().noise(depolarizing_noise).run(1000)
+    ... )
 """
 
 # Import from the unified sim module

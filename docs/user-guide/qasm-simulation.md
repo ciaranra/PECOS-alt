@@ -319,15 +319,13 @@ PECOS provides different engines optimized for different types of circuits:
 === "Python"
 
     ```python
-    from pecos_rslib import quantum
+    from pecos_rslib import quantum, qasm_engine
 
     # Sparse stabilizer (default, efficient for Clifford circuits)
-    .qubits(num_qubits)
-    .quantum(quantum.sparse_stabilizer())
+    engine = qasm_engine().qubits(num_qubits).quantum(quantum.sparse_stabilizer())
 
     # State vector (for non-Clifford circuits)
-    .qubits(num_qubits)
-    .quantum(quantum.state_vector())
+    engine = qasm_engine().qubits(num_qubits).quantum(quantum.state_vector())
     ```
 
 ## Understanding Your Results

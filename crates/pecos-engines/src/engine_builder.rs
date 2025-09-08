@@ -18,6 +18,11 @@ pub trait ClassicalControlEngineBuilder {
     /// Build the classical control engine
     ///
     /// This method is called internally by `SimBuilder` when `.build()` or `.run()` is called.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the engine cannot be built due to missing configuration,
+    /// invalid program, or resource allocation failure
     fn build(self) -> Result<Self::Engine, PecosError>;
 
     /// Convert this engine builder to a simulation builder

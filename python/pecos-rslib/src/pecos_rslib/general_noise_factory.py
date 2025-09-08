@@ -66,7 +66,7 @@ class GeneralNoiseFactory:
         ... }
         >>> factory = GeneralNoiseFactory()
         >>> builder = factory.create_from_dict(config)
-        >>> sim = qasm_sim(qasm).noise(builder).build()
+        >>> results = sim(program).classical(engine).noise(builder).run(1000)
     """
 
     # Standard parameter mappings - extracted as class constant for clarity
@@ -524,7 +524,7 @@ def create_noise_from_dict(
         >>> noise = create_noise_from_dict(
         ...     {"seed": 42, "p1": 0.001, "p2": 0.01, "scale": 1.2}
         ... )
-        >>> sim = qasm_sim(qasm).noise(noise).run(1000)
+        >>> results = sim(program).classical(engine).noise(noise).run(1000)
     """
     return _get_default_factory().create_from_dict(config, **kwargs)
 

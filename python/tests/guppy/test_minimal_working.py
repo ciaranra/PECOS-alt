@@ -12,7 +12,7 @@ sys.path.insert(0, "python/quantum-pecos/src")
 # Test 1: Check if the infrastructure works
 print("1. Testing infrastructure...")
 try:
-    from pecos.frontends.run_guppy import get_guppy_backends
+    from pecos.frontends import get_guppy_backends
 
     backends = get_guppy_backends()
     print(f"Guppy available: {backends['guppy_available']}")
@@ -54,11 +54,12 @@ try:
 except (ImportError, RuntimeError) as e:
     print(f"HUGR test skipped: {e}")
 
-# Test 3: Show how to use run_guppy API
-print("\n3. Demonstrating run_guppy API...")
+# Test 3: Show how to use sim API
+print("\n3. Demonstrating sim() API...")
 print(
     """
-from pecos.frontends.run_guppy import run_guppy
+from pecos.frontends import sim
+from pecos_rslib import state_vector
 from guppylang.decorator import guppy
 
 @guppy
@@ -66,10 +67,11 @@ def my_quantum_function() -> bool:
     # Your quantum code here
     return True
 
-# Run with PECOS
-results = run_guppy(my_quantum_function, shots=1000)
-print(f"Results: {results['results']}")
-print(f"Backend used: {results['backend_used']}")
+# Run with PECOS using sim() API
+result_dict = sim(my_quantum_function).qubits(10).quantum(state_vector()).run(1000)
+measurements = result_dict.get('measurements', result_dict.get('result', []))
+print(f"Results: {measurements}")
+print(f"Backend: Unified sim() API with state_vector")
 """,
 )
 

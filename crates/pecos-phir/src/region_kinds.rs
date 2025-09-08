@@ -40,9 +40,8 @@ impl RegionKind {
     #[must_use]
     pub fn allows_multiple_blocks(&self) -> bool {
         match self {
-            RegionKind::SSACFG => true,
-            RegionKind::Graph => false,    // Currently restricted
-            RegionKind::Custom(_) => true, // Let dialect decide
+            RegionKind::Graph => false, // Currently restricted
+            RegionKind::SSACFG | RegionKind::Custom(_) => true, // Let dialect decide
         }
     }
 
@@ -50,9 +49,8 @@ impl RegionKind {
     #[must_use]
     pub fn is_order_significant(&self) -> bool {
         match self {
-            RegionKind::SSACFG => true,
             RegionKind::Graph => false,
-            RegionKind::Custom(_) => true, // Conservative default
+            RegionKind::SSACFG | RegionKind::Custom(_) => true, // Conservative default
         }
     }
 }
@@ -81,15 +79,17 @@ pub fn verify_region(region: &Region, kind: RegionKind) -> Result<()> {
             // All blocks must end with terminator
             for (idx, block) in region.blocks.iter().enumerate() {
                 if !block.has_terminator() {
-                    return Err(PhirError::Validation(ValidationError::ControlFlow {
-                        message: format!("Block {idx} in SSACFG region missing terminator"),
-                        location: SourceLocation {
-                            file: String::new(),
-                            line: 0,
-                            column: 0,
-                            span: crate::error::Span { start: 0, end: 0 },
+                    return Err(PhirError::Validation(Box::new(
+                        ValidationError::ControlFlow {
+                            message: format!("Block {idx} in SSACFG region missing terminator"),
+                            location: SourceLocation {
+                                file: String::new(),
+                                line: 0,
+                                column: 0,
+                                span: crate::error::Span { start: 0, end: 0 },
+                            },
                         },
-                    }));
+                    )));
                 }
             }
 
@@ -99,18 +99,20 @@ pub fn verify_region(region: &Region, kind: RegionKind) -> Result<()> {
         RegionKind::Graph => {
             // Must have exactly one block
             if region.blocks.len() != 1 {
-                return Err(PhirError::Validation(ValidationError::ControlFlow {
-                    message: format!(
-                        "Graph region must have exactly one block, found {}",
-                        region.blocks.len()
-                    ),
-                    location: SourceLocation {
-                        file: String::new(),
-                        line: 0,
-                        column: 0,
-                        span: crate::error::Span { start: 0, end: 0 },
+                return Err(PhirError::Validation(Box::new(
+                    ValidationError::ControlFlow {
+                        message: format!(
+                            "Graph region must have exactly one block, found {}",
+                            region.blocks.len()
+                        ),
+                        location: SourceLocation {
+                            file: String::new(),
+                            line: 0,
+                            column: 0,
+                            span: crate::error::Span { start: 0, end: 0 },
+                        },
                     },
-                }));
+                )));
             }
 
             // The single block should not have a terminator

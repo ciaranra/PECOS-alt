@@ -89,9 +89,8 @@ class GuppySeleneCompiler:
         """Compile a Guppy function to HUGR bytes."""
         # Compile the function directly
         hugr = func.compile()
-        # Use JSON format instead of binary envelope for HUGR 0.13 compatibility
-        hugr_json = hugr.to_json()
-        return hugr_json.encode("utf-8")
+        # Convert to HUGR envelope format (binary) that Selene expects
+        return hugr.to_bytes()
 
     def _generate_llvm_ir_from_hugr_bytes(
         self,
@@ -100,74 +99,46 @@ class GuppySeleneCompiler:
     ) -> str:
         """Generate LLVM IR from HUGR.
 
-        This uses pecos-selene's HUGR to LLVM compiler if available,
-        otherwise falls back to placeholder LLVM IR.
+        This uses Selene's HUGR to LLVM compiler which properly handles
+        control flow and conditionals.
         """
         try:
-            # Use our internal HUGR to LLVM compiler
-            from pecos_rslib import compile_hugr_to_llvm
-
-            return compile_hugr_to_llvm(hugr_bytes)
-        except (ImportError, Exception) as e:
-            # If compile_hugr_to_llvm fails, fall back to placeholder
-            print(f"Warning: compile_hugr_to_llvm failed: {e}")
-
-        try:
-            # Try to use selene's HUGR compiler if available
+            # Use Selene's HUGR compiler which properly handles conditionals
             from selene_hugr_qis_compiler import compile_to_llvm_ir
 
             # selene_hugr_qis_compiler expects HUGR envelope format (binary)
-            # We need to convert our JSON to the binary envelope format
+            # which we now provide directly from _compile_to_hugr
+            llvm_ir = compile_to_llvm_ir(hugr_bytes)
+            print(f"Selene HUGR compiler produced {len(llvm_ir)} chars of LLVM IR")
+            return llvm_ir
+        except ImportError as e:
+            print(f"Warning: Selene HUGR compiler not available: {e}")
+            # Fall back to trying our internal compiler
             try:
-                # Try to create a proper HUGR envelope
-                import json
+                from pecos_rslib import compile_hugr_to_llvm
 
-                json.loads(hugr_bytes.decode("utf-8"))
+                return compile_hugr_to_llvm(hugr_bytes)
+            except (ImportError, Exception) as e2:
+                print(f"Warning: Internal HUGR compiler also failed: {e2}")
+        except Exception as e:
+            print(f"Warning: Selene HUGR compiler failed: {e}")
+            # Fall back to trying our internal compiler
+            try:
+                from pecos_rslib import compile_hugr_to_llvm
 
-                # Create a minimal HUGR envelope
-                # Magic number: 0x4855475269484A76 ("HUGRiHJv")
-                import struct
+                return compile_hugr_to_llvm(hugr_bytes)
+            except (ImportError, Exception) as e2:
+                print(f"Warning: Internal HUGR compiler also failed: {e2}")
 
-                magic = b"HUGRiHJv"
-
-                # For now, create a test envelope (this won't work but shows the approach)
-                # In a real implementation, we'd serialize the JSON to MessagePack format
-                envelope = magic + b"\x00" * 100  # Placeholder
-
-                llvm_ir = compile_to_llvm_ir(envelope)
-                print(f"Selene HUGR compiler produced {len(llvm_ir)} chars of LLVM IR")
-                return llvm_ir
-            except Exception as e:
-                print(f"Warning: Selene HUGR compiler failed: {e}")
-                # Fall through to placeholder
-        except ImportError:
-            pass
-
-        # For now, generate a simple placeholder
-        return f"""
-; Placeholder LLVM IR for {func_name}
-; TODO: Implement full HUGR to LLVM compilation
-
-declare i64 @__quantum__rt__qubit_allocate()
-declare i64 @__quantum__rt__result_allocate()
-declare void @__quantum__qis__h__body(i64)
-declare i32 @__quantum__qis__m__body(i64, i64)
-declare void @__quantum__rt__result_record_output(i8*, i8*)
-
-define void @{func_name}() #0 {{
-entry:
-  ; Placeholder implementation
-  %q = call i64 @__quantum__rt__qubit_allocate()
-  call void @__quantum__qis__h__body(i64 %q)
-  %result = call i64 @__quantum__rt__result_allocate()
-  %m = call i32 @__quantum__qis__m__body(i64 %q, i64 %result)
-  %result_ptr = inttoptr i64 %result to i8*
-  call void @__quantum__rt__result_record_output(i8* %result_ptr, i8* null)
-  ret void
-}}
-
-attributes #0 = {{ "EntryPoint" }}
-"""
+        # No fallback - if we can't compile HUGR, fail properly
+        msg = (
+            "Failed to compile HUGR to LLVM: Neither Selene's hugr_qis compiler nor "
+            "the internal HUGR compiler is available. Please ensure Selene is properly "
+            "installed with: pip install selene-hugr-qis-compiler"
+        )
+        raise RuntimeError(
+            msg,
+        )
 
     # Removed _compile_llvm_to_plugin - we don't compile to plugins
 

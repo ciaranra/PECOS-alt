@@ -136,8 +136,11 @@ def test_complete_pipeline() -> None:
         print("[PASS] GuppySeleneCompiler created")
 
         # First test HUGR to LLVM compilation directly
-        # Use to_json() instead of to_bytes() to get JSON format
-        hugr_json = simple_quantum.compile().to_json()
+        # Use to_str() if available, otherwise to_json() for compatibility
+        compiled = simple_quantum.compile()
+        hugr_json = (
+            compiled.to_str() if hasattr(compiled, "to_str") else compiled.to_json()
+        )
         hugr_bytes = hugr_json.encode("utf-8")
         try:
             llvm_ir = compile_hugr_to_llvm(hugr_bytes)
@@ -180,17 +183,18 @@ def test_complete_pipeline() -> None:
     except (RuntimeError, ImportError) as e:
         print(f"[INFO] GuppyFrontend not available or failed as expected: {e}")
 
-    # Test 4: Test run_guppy API
-    print("\n4. Testing run_guppy API...")
+    # Test 4: Test sim() API
+    print("\n4. Testing sim() API...")
     try:
-        from pecos.frontends.run_guppy import run_guppy
+        from pecos.frontends import sim
+        from pecos_rslib import state_vector
 
         # Test compilation (execution may fail but compilation should work)
         try:
-            results = run_guppy(simple_quantum, shots=5, verbose=True)
-            print(f"[PASS] run_guppy succeeded: {len(results['results'])} results")
-            print("  Backend: Rust (only backend available)")
-            print(f"  Compilation time: {results['compilation_time']:.4f}s")
+            results = sim(simple_quantum).qubits(10).quantum(state_vector()).run(5)
+            measurements = results.get("measurements", results.get("result", []))
+            print(f"[PASS] sim() succeeded: {len(measurements)} results")
+            print("  Backend: Unified sim() API with state_vector")
 
         except RuntimeError as e:
             if "PECOS" in str(e):
@@ -227,8 +231,11 @@ def test_complete_pipeline() -> None:
         compiler = GuppySeleneCompiler()
 
         # First try direct HUGR to LLVM compilation
-        # Use to_json() instead of to_bytes() to get JSON format
-        hugr_json = bell_state.compile().to_json()
+        # Use to_str() if available, otherwise to_json() for compatibility
+        compiled = bell_state.compile()
+        hugr_json = (
+            compiled.to_str() if hasattr(compiled, "to_str") else compiled.to_json()
+        )
         hugr_bytes = hugr_json.encode("utf-8")
         try:
             llvm_ir = compile_hugr_to_llvm(hugr_bytes)

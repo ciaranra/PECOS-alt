@@ -50,36 +50,42 @@ impl LlvmEngineBuilder {
     }
 
     /// Set the source to LLVM IR text (human-readable format)
+    #[must_use]
     pub fn llvm_ir(mut self, ir: impl Into<String>) -> Self {
         self.source = Some(LlvmSource::LlvmIr(ir.into()));
         self
     }
 
     /// Set the source to LLVM bitcode (binary format)
+    #[must_use]
     pub fn llvm_bitcode(mut self, bitcode: impl Into<Vec<u8>>) -> Self {
         self.source = Some(LlvmSource::LlvmBitcode(bitcode.into()));
         self
     }
 
     /// Set the source to LLVM file (auto-detects .ll or .bc extension)
+    #[must_use]
     pub fn llvm_file(mut self, path: impl AsRef<Path>) -> Self {
         self.source = Some(LlvmSource::LlvmFile(path.as_ref().to_path_buf()));
         self
     }
 
     /// Set the source to LLVM IR text file (.ll)
+    #[must_use]
     pub fn llvm_ir_file(mut self, path: impl AsRef<Path>) -> Self {
         self.source = Some(LlvmSource::LlvmIrFile(path.as_ref().to_path_buf()));
         self
     }
 
     /// Set the source to LLVM bitcode file (.bc)
+    #[must_use]
     pub fn llvm_bitcode_file(mut self, path: impl AsRef<Path>) -> Self {
         self.source = Some(LlvmSource::LlvmBitcodeFile(path.as_ref().to_path_buf()));
         self
     }
 
     /// Set the source to HUGR
+    #[must_use]
     pub fn hugr(mut self, hugr: Hugr) -> Self {
         self.source = Some(LlvmSource::Hugr(Box::new(hugr)));
         self
@@ -93,6 +99,7 @@ impl LlvmEngineBuilder {
     }
 
     /// Set the source to HUGR file
+    #[must_use]
     pub fn hugr_file(mut self, path: impl AsRef<Path>) -> Self {
         self.source = Some(LlvmSource::HugrFile(path.as_ref().to_path_buf()));
         self
@@ -113,6 +120,7 @@ impl LlvmEngineBuilder {
     }
 
     /// Set the source from an `LlvmProgram`
+    #[must_use]
     pub fn program(mut self, program: impl Into<ProgramSource>) -> Self {
         match program.into() {
             ProgramSource::Llvm(p) => match p.content {

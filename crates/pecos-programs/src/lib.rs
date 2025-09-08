@@ -21,12 +21,17 @@ impl QasmProgram {
     }
 
     /// Create a QASM program by reading from a file
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
         let source = std::fs::read_to_string(path)?;
         Ok(Self { source })
     }
 
     /// Get the source code
+    #[must_use]
     pub fn source(&self) -> &str {
         &self.source
     }
@@ -62,7 +67,7 @@ impl LlvmProgram {
         }
     }
 
-    /// Create an LLVM program from IR text (alias for from_string)
+    /// Create an LLVM program from IR text (alias for `from_string`)
     pub fn from_ir(s: impl Into<String>) -> Self {
         Self::from_string(s)
     }
@@ -76,6 +81,10 @@ impl LlvmProgram {
 
     /// Create an LLVM program by reading from a file
     /// Auto-detects format based on extension (.ll for IR, .bc for bitcode)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
         let path = path.as_ref();
         if path.extension().and_then(|s| s.to_str()) == Some("bc") {
@@ -90,18 +99,27 @@ impl LlvmProgram {
     }
 
     /// Create an LLVM program from an IR text file
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read
     pub fn from_ir_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
         let ir = std::fs::read_to_string(path)?;
         Ok(Self::from_ir(ir))
     }
 
     /// Create an LLVM program from a bitcode file
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read
     pub fn from_bitcode_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
         let bitcode = std::fs::read(path)?;
         Ok(Self::from_bitcode(bitcode))
     }
 
     /// Get the IR source code (if this is IR text)
+    #[must_use]
     pub fn ir(&self) -> Option<&str> {
         match &self.content {
             LlvmContent::Ir(ir) => Some(ir),
@@ -110,6 +128,7 @@ impl LlvmProgram {
     }
 
     /// Get the bitcode (if this is bitcode)
+    #[must_use]
     pub fn bitcode(&self) -> Option<&[u8]> {
         match &self.content {
             LlvmContent::Ir(_) => None,
@@ -118,11 +137,13 @@ impl LlvmProgram {
     }
 
     /// Check if this is IR text
+    #[must_use]
     pub fn is_ir(&self) -> bool {
         matches!(self.content, LlvmContent::Ir(_))
     }
 
     /// Check if this is bitcode
+    #[must_use]
     pub fn is_bitcode(&self) -> bool {
         matches!(self.content, LlvmContent::Bitcode(_))
     }
@@ -146,22 +167,29 @@ pub struct HugrProgram {
 
 impl HugrProgram {
     /// Create a HUGR program from bytes
+    #[must_use]
     pub fn from_bytes(bytes: Vec<u8>) -> Self {
         Self { hugr: bytes }
     }
 
     /// Create a HUGR program by reading from a file
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
         let hugr = std::fs::read(path)?;
         Ok(Self { hugr })
     }
 
     /// Get the HUGR bytes
+    #[must_use]
     pub fn bytes(&self) -> &[u8] {
         &self.hugr
     }
 
     /// Get the HUGR bytes as a Vec (consuming self)
+    #[must_use]
     pub fn into_bytes(self) -> Vec<u8> {
         self.hugr
     }
@@ -187,17 +215,23 @@ impl WasmProgram {
     }
 
     /// Create a WASM program by reading from a file
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
         let wasm = std::fs::read(path)?;
         Ok(Self { wasm })
     }
 
     /// Get the WASM bytes
+    #[must_use]
     pub fn bytes(&self) -> &[u8] {
         &self.wasm
     }
 
     /// Get the WASM bytes as a Vec (consuming self)
+    #[must_use]
     pub fn into_bytes(self) -> Vec<u8> {
         self.wasm
     }
@@ -223,12 +257,17 @@ impl WatProgram {
     }
 
     /// Create a WAT program by reading from a file
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
         let source = std::fs::read_to_string(path)?;
         Ok(Self { source })
     }
 
     /// Get the source code
+    #[must_use]
     pub fn source(&self) -> &str {
         &self.source
     }
@@ -253,23 +292,29 @@ impl PhirJsonProgram {
         Self { source: s.into() }
     }
 
-    /// Create a PHIR JSON program from JSON (alias for from_string)
+    /// Create a PHIR JSON program from JSON (alias for `from_string`)
     pub fn from_json(s: impl Into<String>) -> Self {
         Self::from_string(s)
     }
 
     /// Create a PHIR JSON program by reading from a file
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
         let source = std::fs::read_to_string(path)?;
         Ok(Self { source })
     }
 
     /// Get the source code
+    #[must_use]
     pub fn source(&self) -> &str {
         &self.source
     }
 
     /// Get the JSON source (alias for source)
+    #[must_use]
     pub fn json(&self) -> &str {
         &self.source
     }
@@ -294,6 +339,7 @@ pub struct SeleneInterfaceProgram {
 
 impl SeleneInterfaceProgram {
     /// Create a Selene Interface program from plugin bytes
+    #[must_use]
     pub fn from_bytes(bytes: Vec<u8>) -> Self {
         Self {
             plugin: bytes,
@@ -303,6 +349,7 @@ impl SeleneInterfaceProgram {
     }
 
     /// Create a Selene Interface program with executable paths
+    #[must_use]
     pub fn from_executable(
         executable_path: String,
         artifacts_path: String,
@@ -316,6 +363,10 @@ impl SeleneInterfaceProgram {
     }
 
     /// Create a Selene Interface program by reading from a file
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
         let plugin = std::fs::read(path)?;
         Ok(Self {
@@ -326,11 +377,13 @@ impl SeleneInterfaceProgram {
     }
 
     /// Get the plugin bytes
+    #[must_use]
     pub fn bytes(&self) -> &[u8] {
         &self.plugin
     }
 
     /// Get the plugin bytes as a Vec (consuming self)
+    #[must_use]
     pub fn into_bytes(self) -> Vec<u8> {
         self.plugin
     }
@@ -363,6 +416,7 @@ pub enum Program {
 
 impl Program {
     /// Get the program type as a string
+    #[must_use]
     pub fn program_type(&self) -> &'static str {
         match self {
             Program::Qasm(_) => "QASM",

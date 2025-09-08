@@ -1,4 +1,4 @@
-//! Test the ergonomic noise API for selene_executable()
+//! Test the ergonomic noise API for `selene_executable()`
 
 use pecos_engines::noise::GeneralNoiseModelBuilder;
 use pecos_engines::{
@@ -119,6 +119,7 @@ fn test_noise_method_with_enum() {
 }
 
 #[test]
+#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_noise_api_matches_qasm_sim() {
     // This test demonstrates that selene_executable() has the same noise API as qasm_sim()
     let llvm_ir = r#"

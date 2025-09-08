@@ -167,6 +167,7 @@ impl SimBuilder {
     }
 
     /// Set the classical control engine builder
+    #[must_use]
     pub fn classical<B>(mut self, engine_builder: B) -> Self
     where
         B: ClassicalControlEngineBuilder + Send + 'static,
@@ -193,6 +194,7 @@ impl SimBuilder {
     }
 
     /// Use automatic worker count based on available CPUs
+    #[must_use]
     pub fn auto_workers(mut self) -> Self {
         self.config.workers = std::thread::available_parallelism()
             .map(std::num::NonZero::get)
@@ -208,6 +210,7 @@ impl SimBuilder {
     }
 
     /// Set the noise model
+    #[must_use]
     pub fn noise<N>(mut self, noise: N) -> Self
     where
         N: IntoNoiseModel + Send + 'static,
@@ -217,6 +220,7 @@ impl SimBuilder {
     }
 
     /// Set the quantum engine
+    #[must_use]
     pub fn quantum<Q>(mut self, quantum_builder: Q) -> Self
     where
         Q: IntoQuantumEngineBuilder + 'static,
@@ -228,6 +232,7 @@ impl SimBuilder {
     }
 
     /// Alias for `quantum` method
+    #[must_use]
     pub fn quantum_engine<Q>(self, quantum_builder: Q) -> Self
     where
         Q: IntoQuantumEngineBuilder + 'static,
@@ -322,6 +327,10 @@ impl SimBuilder {
     ///
     /// This is a convenience method that builds and runs in one step.
     /// Uses the configured number of workers (default: 1).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the simulation cannot be built or if execution fails
     pub fn run(self, shots: usize) -> Result<ShotVec, PecosError> {
         let mut engine = self.build()?;
         engine.run(shots)
@@ -458,9 +467,13 @@ impl crate::noise::IntoNoiseModel for BiasedDepolarizingNoise {
 /// Convert `ShotVec` to columnar format
 ///
 /// This is a helper for engines that need to return `HashMap`<String, Vec<i64>>
+///
+/// # Panics
+///
+/// Panics if a register name exists in the first shot but not in subsequent shots
 #[must_use]
 pub fn shots_to_columnar(
-    shots: crate::shot_results::ShotVec,
+    shots: &crate::shot_results::ShotVec,
 ) -> std::collections::HashMap<String, Vec<i64>> {
     use std::collections::HashMap;
 
@@ -490,6 +503,7 @@ pub fn shots_to_columnar(
                 let value = match data {
                     Data::U32(v) => i64::from(*v),
                     Data::I64(v) => *v,
+                    #[allow(clippy::cast_possible_truncation)]
                     Data::F64(v) => *v as i64,
                     Data::Bool(v) => i64::from(*v),
                     _ => 0,

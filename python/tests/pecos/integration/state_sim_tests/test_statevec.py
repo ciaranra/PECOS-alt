@@ -390,6 +390,23 @@ def test_hybrid_engine_no_noise(simulator: str) -> None:
     """Test that HybridEngine can use these simulators."""
     check_dependencies(simulator)
 
+    n_shots = 1000
+    phir_folder = Path(__file__).parent.parent / "phir"
+
+    sim = HybridEngine(qsim=simulator)
+    results = sim.run(
+        program=json.load(open(phir_folder / "bell_qparallel.phir.json")),
+        shots=n_shots,
+    )
+
+    register = "c" if "c" in results else "m"
+    result_values = results[register]
+    assert np.isclose(
+        result_values.count("00") / n_shots,
+        result_values.count("11") / n_shots,
+        atol=0.1,
+    )
+
     # @pytest.mark.parametrize(
     #     "simulator",
     #     [
@@ -468,6 +485,6 @@ def test_hybrid_engine_noisy(simulator: str) -> None:
     )
     sim = HybridEngine(qsim=simulator, error_model=generic_errors)
     sim.run(
-        program=json.load(Path.open(phir_folder / "example1_no_wasm.json")),
+        program=json.load(open(phir_folder / "example1_no_wasm.phir.json")),
         shots=n_shots,
     )

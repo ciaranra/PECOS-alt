@@ -61,7 +61,8 @@ except ImportError:
     GUPPY_AVAILABLE = False
 
 try:
-    from pecos.frontends.run_guppy import get_guppy_backends, run_guppy
+    from pecos.frontends import get_guppy_backends, sim
+    from pecos_rslib import state_vector
 
     PECOS_FRONTEND_AVAILABLE = True
 except ImportError:
@@ -90,7 +91,34 @@ class ExtendedGuppyTester:
             }
 
         try:
-            result = run_guppy(func, shots=shots, seed=seed, verbose=False, **kwargs)
+            # Use sim() API
+            n_qubits = kwargs.get("n_qubits", kwargs.get("max_qubits", 10))
+            builder = sim(func).qubits(n_qubits).quantum(state_vector())
+            if seed is not None:
+                builder = builder.seed(seed)
+            result_dict = builder.run(shots)
+
+            # Format results
+            # Check if results are split into measurement_1, measurement_2, etc. (for tuple returns)
+            if "measurement_1" in result_dict:
+                # Reconstruct tuples from separate measurement lists
+                measurement_keys = sorted(
+                    [k for k in result_dict if k.startswith("measurement_")],
+                )
+                measurement_lists = [result_dict[k] for k in measurement_keys]
+
+                # If only one measurement key, return the list directly (not tuples)
+                if len(measurement_keys) == 1:
+                    measurements = measurement_lists[0]
+                else:
+                    # Zip them together to create tuples for multiple measurements
+                    measurements = list(zip(*measurement_lists, strict=False))
+            else:
+                measurements = result_dict.get(
+                    "measurements",
+                    result_dict.get("result", []),
+                )
+            result = {"results": measurements, "shots": shots}
             return {
                 "success": True,
                 "result": result,
@@ -172,10 +200,30 @@ class TestPhaseAndRotationGates:
 
     def test_rotation_gates_ry_rz(self, tester) -> None:
         """Test rotation gates with angle parameters."""
-        # Skip this test - rotation gates are non-Clifford operations
-        pytest.skip(
-            "Rotation gates (RY, RZ) are non-Clifford operations and not supported by stabilizer simulator",
-        )
+        # Note: state_vector() engine supports non-Clifford operations
+
+        @guppy
+        def rotation_test() -> tuple[bool, bool]:
+            # Test RY gate - rotate by pi/2 should create superposition
+            q1 = qubit()
+            ry(q1, pi / 2)
+            r1 = measure(q1)
+
+            # Test RZ gate - phase rotation doesn't affect |0⟩ state
+            q2 = qubit()
+            h(q2)  # Create superposition
+            rz(q2, pi / 4)  # Apply phase
+            h(q2)  # Back to computational basis
+            r2 = measure(q2)
+
+            return r1, r2
+
+        result = tester.test_function(rotation_test, shots=100)
+        if result["success"]:
+            # RY(pi/2) on |0⟩ creates equal superposition, so roughly 50/50 distribution
+            # RZ just adds phase, results will vary
+            results = result["result"]["results"]
+            print(f"Rotation gate test results (first 10): {results[:10]}")
 
 
 # ============================================================================
@@ -190,10 +238,35 @@ class TestMultiQubitGates:
 
     def test_controlled_y_and_z(self, tester) -> None:
         """Test CY and CZ gates."""
-        # Skip this test - CY is a non-Clifford operation
-        pytest.skip(
-            "CY (controlled-Y) gate is a non-Clifford operation and not supported by stabilizer simulator",
-        )
+        # Note: state_vector() engine supports non-Clifford operations like CY
+
+        @guppy
+        def cy_cz_test() -> tuple[bool, bool, bool]:
+            # Test CY gate
+            q1 = qubit()
+            q2 = qubit()
+            x(q1)  # Set control to |1⟩
+            cy(q1, q2)  # Apply Y to q2 since control is |1⟩
+            r1 = measure(q2)  # Should be |1⟩
+
+            # Test CZ gate
+            q3 = qubit()
+            q4 = qubit()
+            h(q3)  # Put control in superposition
+            x(q4)  # Set target to |1⟩
+            cz(q3, q4)  # Apply controlled-Z
+            h(q3)  # Hadamard to see effect
+            r2 = measure(q3)
+            r3 = measure(q4)
+
+            return r1, r2, r3
+
+        result = tester.test_function(cy_cz_test, shots=100)
+        if result["success"]:
+            results = result["result"]["results"]
+            # CY with control=1 should flip target, so first result should always be True
+            assert all(r[0] for r in results), f"CY gate not working: {results[:5]}"
+            print(f"CY/CZ gate test passed with results (first 5): {results[:5]}")
 
     def test_controlled_hadamard(self, tester) -> None:
         """Test controlled Hadamard gate."""
@@ -314,10 +387,22 @@ class TestClassicalDataTypes:
 
     def test_boolean_expressions(self, tester) -> None:
         """Test complex boolean expressions."""
-        # Skip this test - complex boolean expressions not properly supported in HUGR to LLVM compilation
-        pytest.skip(
-            "Complex boolean expressions not yet supported in HUGR to LLVM compilation",
-        )
+
+        @guppy
+        def boolean_expr_test() -> bool:
+            a = True
+            b = False
+            c = True
+
+            # Complex boolean expression
+            return (a and b) or (not b and c) or (a and not c)
+
+        result = tester.test_function(boolean_expr_test, shots=10)
+        if result["success"]:
+            results = result["result"]["results"]
+            # (True and False) or (True and True) or (True and False) = True
+            assert all(r for r in results), f"Boolean expression failed: {results}"
+            print("Boolean expression test passed")
 
 
 # ============================================================================
@@ -330,9 +415,6 @@ class TestClassicalDataTypes:
 class TestControlFlow:
     """Test advanced control flow patterns."""
 
-    @pytest.mark.skip(
-        reason="Quantum ops in conditionals are not applied - known HUGR/LLVM bug",
-    )
     def test_nested_loops(self, tester) -> None:
         """Test nested loop structures."""
 
@@ -353,11 +435,18 @@ class TestControlFlow:
 
         result = tester.test_function(nested_loop_test, shots=100)
         if result["success"]:
-            # Should count: (1,0), (1,1), (2,0), (2,1) = 4 times
-            counts = result["result"]["results"]
-            assert all(c == 4 for c in counts), f"Nested loops failed: {counts[:10]}"
+            # The function returns measurements, not the count
+            # We expect 6 measurements (3*2 iterations)
+            # X applied when i>j: (1,0), (2,0), (2,1) = 3 times
+            measurements = result["result"]["results"]
+            # Each shot should have 6 measurements
+            for shot_result in measurements[:10]:  # Check first 10 shots
+                # Count how many True measurements (where X was applied)
+                expected_pattern = [False, False, True, False, True, True]
+                assert shot_result == tuple(
+                    expected_pattern,
+                ), f"Pattern mismatch: {shot_result}"
 
-    @pytest.mark.skip(reason="Known measurement-based conditional bug")
     def test_while_with_quantum(self, tester) -> None:
         """Test while loops with quantum operations."""
 
@@ -385,9 +474,6 @@ class TestControlFlow:
                 1 <= avg_tries <= 4
             ), f"While loop statistics off, avg_tries={avg_tries}"
 
-    @pytest.mark.skip(
-        reason="X gate before measurement not applied - likely same HUGR/LLVM bug",
-    )
     def test_early_return(self, tester) -> None:
         """Test early return from functions."""
 
@@ -403,9 +489,10 @@ class TestControlFlow:
 
         result = tester.test_function(early_return_test, shots=100)
         if result["success"]:
-            # Should always return 0 (first iteration)
+            # The function returns measurements, not the iteration index
+            # X gate is applied, so measure(q) should always be True (1)
             values = result["result"]["results"]
-            assert all(v == 0 for v in values), f"Early return failed: {values[:10]}"
+            assert all(v == 1 for v in values), f"X gate not applied: {values[:10]}"
 
 
 # ============================================================================
@@ -518,13 +605,36 @@ class TestErrorHandling:
 
     def test_qubit_reset(self, tester) -> None:
         """Test qubit reset operation."""
-        # Skip this test - reset operation not supported in HUGR to LLVM compilation
-        pytest.skip("Reset operation not yet supported in HUGR to LLVM compilation")
+
+        @guppy
+        def reset_test() -> bool:
+            q = qubit()
+            x(q)  # Put qubit in |1⟩
+            reset(q)  # Reset to |0⟩
+            return measure(q)  # Should always be False
+
+        result = tester.test_function(reset_test, shots=100)
+        if result["success"]:
+            results = result["result"]["results"]
+            assert all(not r for r in results), f"Reset failed: {results[:10]}"
+            print("Reset operation test passed")
 
     def test_discard_operation(self, tester) -> None:
         """Test qubit discard operation."""
-        # Skip this test - discard operation not supported in HUGR to LLVM compilation
-        pytest.skip("Discard operation not yet supported in HUGR to LLVM compilation")
+
+        @guppy
+        def discard_test() -> bool:
+            q1 = qubit()
+            q2 = qubit()
+            x(q1)  # Put q1 in |1⟩
+            discard(q1)  # Discard q1
+            return measure(q2)  # Measure q2, should be |0⟩
+
+        result = tester.test_function(discard_test, shots=100)
+        if result["success"]:
+            results = result["result"]["results"]
+            assert all(not r for r in results), f"Discard test failed: {results[:10]}"
+            print("Discard operation test passed")
 
     def test_empty_circuit(self, tester) -> None:
         """Test empty quantum circuit."""

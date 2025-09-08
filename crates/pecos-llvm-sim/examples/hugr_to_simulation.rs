@@ -2,6 +2,9 @@
 //!
 //! This example demonstrates the full pipeline from HUGR to simulation results.
 
+use hugr_core::builder::{DFGBuilder, Dataflow, DataflowHugr};
+use hugr_core::extension::prelude::qb_t;
+use hugr_core::types::Signature;
 use pecos_engines::{BiasedDepolarizingNoise, DepolarizingNoise, sim_builder, state_vector};
 use pecos_llvm_sim::llvm_engine;
 use pecos_programs::{HugrProgram, LlvmProgram};
@@ -42,9 +45,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n=== Example 2: HUGR Input ===");
 
     // Create a simple HUGR
-    use hugr_core::builder::{DFGBuilder, Dataflow, DataflowHugr};
-    use hugr_core::extension::prelude::qb_t;
-    use hugr_core::types::Signature;
 
     let _hugr = {
         let builder = DFGBuilder::new(Signature::new(vec![qb_t()], vec![qb_t()]))?;

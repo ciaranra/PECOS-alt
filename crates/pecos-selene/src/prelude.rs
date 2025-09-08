@@ -24,9 +24,7 @@
 //! ```
 
 // Main entry points for Selene engines
-pub use crate::{
-    SeleneSimpleRuntimeEngine, SeleneSimpleRuntimeEngineBuilder, selene_simple_runtime,
-};
+pub use crate::{SeleneExecutableEngine, SeleneExecutableEngineBuilder, selene_executable};
 
 // Program types
 pub use crate::program::SeleneProgram;

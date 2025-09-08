@@ -1,13 +1,12 @@
+use anyhow::{Context, Result, anyhow};
 /// Plugin builder for creating Selene-compatible plugins from LLVM programs
 /// This replicates Selene's Python build process in Rust
-
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use anyhow::{Context, Result, anyhow};
 use tempfile::TempDir;
 
-/// Convert a string to PascalCase
+/// Convert a string to `PascalCase`
 fn to_pascal_case(s: &str) -> String {
     s.split('_')
         .map(|word| {
@@ -57,6 +56,7 @@ pub struct PluginBuilder {
 
 impl PluginBuilder {
     /// Create a new plugin builder
+    #[must_use]
     pub fn new(config: PluginBuildConfig) -> Self {
         Self {
             config,
@@ -65,14 +65,16 @@ impl PluginBuilder {
     }
 
     /// Build the plugin library
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if compilation or linking fails
     pub fn build(&mut self) -> Result<PathBuf> {
         // Create output directory
-        fs::create_dir_all(&self.config.output_dir)
-            .context("Failed to create output directory")?;
+        fs::create_dir_all(&self.config.output_dir).context("Failed to create output directory")?;
 
         // Create temporary directory for intermediate files
-        let temp_dir = TempDir::new()
-            .context("Failed to create temporary directory")?;
+        let temp_dir = TempDir::new().context("Failed to create temporary directory")?;
         self.temp_dir = Some(temp_dir);
 
         // Get path to LLVM source file
@@ -98,18 +100,15 @@ impl PluginBuilder {
         let temp_dir = self.temp_dir.as_ref().unwrap().path();
 
         match &self.config.llvm_source {
-            LLVMSource::IRFile(path) => Ok(path.clone()),
+            LLVMSource::IRFile(path) | LLVMSource::BitcodeFile(path) => Ok(path.clone()),
             LLVMSource::IRString(ir) => {
                 let ir_path = temp_dir.join("program.ll");
-                fs::write(&ir_path, ir)
-                    .context("Failed to write LLVM IR to file")?;
+                fs::write(&ir_path, ir).context("Failed to write LLVM IR to file")?;
                 Ok(ir_path)
             }
-            LLVMSource::BitcodeFile(path) => Ok(path.clone()),
             LLVMSource::BitcodeBytes(bytes) => {
                 let bc_path = temp_dir.join("program.bc");
-                fs::write(&bc_path, bytes)
-                    .context("Failed to write LLVM bitcode to file")?;
+                fs::write(&bc_path, bytes).context("Failed to write LLVM bitcode to file")?;
                 Ok(bc_path)
             }
         }
@@ -121,21 +120,17 @@ impl PluginBuilder {
         let object_file = temp_dir.join("program.o");
 
         if self.config.verbose {
-            println!("Compiling LLVM to object file: {:?}", object_file);
+            println!("Compiling LLVM to object file: {}", object_file.display());
         }
 
         let mut cmd = Command::new("clang");
-        cmd.arg("-c")
-           .arg(llvm_file)
-           .arg("-o")
-           .arg(&object_file);
+        cmd.arg("-c").arg(llvm_file).arg("-o").arg(&object_file);
 
         if let Some(target) = &self.config.target_triple {
             cmd.arg("-target").arg(target);
         }
 
-        let output = cmd.output()
-            .context("Failed to execute clang")?;
+        let output = cmd.output().context("Failed to execute clang")?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -145,7 +140,7 @@ impl PluginBuilder {
         Ok(object_file)
     }
 
-    /// Create the plugin wrapper that implements RuntimeInterface
+    /// Create the plugin wrapper that implements `RuntimeInterface`
     fn create_plugin_wrapper(&self) -> Result<PathBuf> {
         let temp_dir = self.temp_dir.as_ref().unwrap().path();
         let wrapper_path = temp_dir.join("plugin_wrapper.rs");
@@ -153,7 +148,8 @@ impl PluginBuilder {
         // Convert name to PascalCase for Rust types
         let type_name = to_pascal_case(&self.config.name);
 
-        let wrapper_code = format!(r#"
+        let wrapper_code = format!(
+            r#"
 use selene_core::{{
     runtime::{{BatchOperation, RuntimeInterface, interface::RuntimeInterfaceFactory}},
     utils::MetricValue,
@@ -338,10 +334,10 @@ impl RuntimeInterfaceFactory for {type_name}PluginFactory {{
 
 // Export the plugin
 export_runtime_plugin!(crate::{type_name}PluginFactory);
-"#, type_name = type_name);
+"#
+        );
 
-        fs::write(&wrapper_path, wrapper_code)
-            .context("Failed to write plugin wrapper")?;
+        fs::write(&wrapper_path, wrapper_code).context("Failed to write plugin wrapper")?;
 
         Ok(wrapper_path)
     }
@@ -352,7 +348,7 @@ export_runtime_plugin!(crate::{type_name}PluginFactory);
         let wrapper_object = temp_dir.join("wrapper.o");
 
         if self.config.verbose {
-            println!("Compiling plugin wrapper: {:?}", wrapper_object);
+            println!("Compiling plugin wrapper: {}", wrapper_object.display());
         }
 
         // Create a temporary Cargo project
@@ -360,7 +356,8 @@ export_runtime_plugin!(crate::{type_name}PluginFactory);
         fs::create_dir_all(&cargo_dir)?;
 
         // Write Cargo.toml
-        let cargo_toml = format!(r#"
+        let cargo_toml = format!(
+            r#"
 [package]
 name = "{}-plugin"
 version = "0.1.0"
@@ -372,7 +369,10 @@ crate-type = ["cdylib"]
 [dependencies]
 selene-core = {{ path = "{}/Repos/cl_projects/gup/selene/selene-core" }}
 anyhow = "1.0"
-"#, self.config.name, env!("HOME"));
+"#,
+            self.config.name,
+            env!("HOME")
+        );
 
         fs::write(cargo_dir.join("Cargo.toml"), cargo_toml)?;
 
@@ -402,24 +402,27 @@ anyhow = "1.0"
     }
 
     /// Link the LLVM object and wrapper into final plugin
-    fn link_plugin(&self, object_file: &Path, wrapper_lib: &Path) -> Result<PathBuf> {
+    fn link_plugin(&self, _object_file: &Path, wrapper_lib: &Path) -> Result<PathBuf> {
         let plugin_name = format!("lib{}_plugin.so", self.config.name);
         let plugin_path = self.config.output_dir.join(&plugin_name);
 
         if self.config.verbose {
-            println!("Linking plugin: {:?}", plugin_path);
+            println!("Linking plugin: {}", plugin_path.display());
         }
 
         // For now, just copy the wrapper library as it already includes everything
         // In a real implementation, we'd link the LLVM object file with the wrapper
-        fs::copy(wrapper_lib, &plugin_path)
-            .context("Failed to copy plugin library")?;
+        fs::copy(wrapper_lib, &plugin_path).context("Failed to copy plugin library")?;
 
         Ok(plugin_path)
     }
 }
 
 /// Build a plugin from HUGR
+///
+/// # Errors
+///
+/// Currently unimplemented - will always panic with todo!()
 pub fn build_plugin_from_hugr(
     name: &str,
     hugr_bytes: &[u8],
@@ -453,7 +456,7 @@ mod tests {
     fn test_plugin_builder_creation() {
         let config = PluginBuildConfig {
             name: "test_plugin".to_string(),
-            llvm_source: LLVMSource::IRString("".to_string()),
+            llvm_source: LLVMSource::IRString(String::new()),
             output_dir: PathBuf::from("/tmp/test"),
             verbose: false,
             link_flags: vec![],

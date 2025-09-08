@@ -15,7 +15,7 @@ mod tests {
             use pecos_llvm_sim::llvm_engine;
             use pecos_programs::QasmProgram;
             use pecos_qasm::qasm_engine;
-            use pecos_selene::selene_engine;
+            use pecos_selene::selene_executable;
 
             // QASM engine with unified API
             let _results = sim_builder()
@@ -46,7 +46,7 @@ mod tests {
             // Selene engine with unified API
             let _results = sim_builder()
                 .classical(
-                    selene_engine()
+                    selene_executable()
                         .program(LlvmProgram::from_string("define void @main() { ret void }"))
                         .qubits(2),
                 )
@@ -64,7 +64,7 @@ mod tests {
         let _ = || {
             use pecos_llvm_sim::llvm_engine;
             use pecos_qasm::qasm_engine;
-            use pecos_selene::selene_engine;
+            use pecos_selene::selene_executable;
 
             // QASM-specific inputs
             use pecos_programs::QasmProgram;
@@ -80,14 +80,14 @@ mod tests {
             // let _l3 = llvm_engine().program(LlvmProgram::from_file("circuit.ll")?);
 
             // Selene inputs (supports multiple formats)
-            let _s1 = selene_engine()
+            let _s1 = selene_executable()
                 .program(LlvmProgram::from_string("..."))
                 .qubits(1);
-            let _s2 = selene_engine()
+            let _s2 = selene_executable()
                 .program(LlvmProgram::from_bitcode(vec![]))
                 .qubits(1);
             // Note: from_file returns Result, so in real code you'd handle the error
-            // let _s3 = selene_engine().program(LlvmProgram::from_file("circuit.ll")?).qubits(1);
+            // let _s3 = selene_executable().program(LlvmProgram::from_file("circuit.ll")?).qubits(1);
 
             // Common simulation methods
             use pecos_engines::{BiasedDepolarizingNoise, PassThroughNoise, sim_builder};

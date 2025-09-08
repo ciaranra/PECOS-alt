@@ -1,9 +1,13 @@
 [package]
 name = "pecos-selene-plugins"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 description = "Runtime plugins for PECOS-Selene integration"
-authors = ["The PECOS Developers"]
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -13,13 +17,13 @@ crate-type = ["cdylib", "rlib"]
 selene-core = { git = "https://github.com/CQCL/selene.git", rev = "f9e14c4c218feea85ba7c23048eb5118d6a4ed8c" }
 
 # For error handling
-anyhow = "1.0"
+anyhow.workspace = true
 
 # For logging (optional)
-log = { version = "0.4", optional = true }
+log = { workspace = true, optional = true }
 
 # For plugin building
-tempfile = "3.0"
+tempfile.workspace = true
 
 # For PECOS integration (optional)
 pecos-engines = { path = "../pecos-engines", optional = true }
@@ -28,3 +32,6 @@ pecos-engines = { path = "../pecos-engines", optional = true }
 default = []
 logging = ["log"]
 pecos-integration = ["pecos-engines"]
+
+[lints]
+workspace = true

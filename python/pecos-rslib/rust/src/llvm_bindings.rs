@@ -234,7 +234,7 @@ pub fn py_execute_llvm(
     // Check for pytest environment and warn about potential segfaults
     if std::env::var("PYTEST_CURRENT_TEST").is_ok() {
         // We're running in pytest - execution works but may segfault during cleanup
-        eprintln!(
+        log::warn!(
             "Warning: LLVM execution in pytest may segfault during cleanup (output will be produced first)"
         );
 

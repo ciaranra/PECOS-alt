@@ -31,7 +31,8 @@ except ImportError:
     GUPPY_AVAILABLE = False
 
 try:
-    from pecos.frontends.run_guppy import get_guppy_backends, run_guppy
+    from pecos.frontends import get_guppy_backends, sim
+    from pecos_rslib import state_vector
 
     PECOS_FRONTEND_AVAILABLE = True
 except ImportError:
@@ -92,12 +93,24 @@ def test_pipeline_capabilities() -> None:
         # Test with Rust backend (the only backend)
         if backends.get("rust_backend", False):
             try:
-                result = run_guppy(test_func, shots=1, verbose=False)
+                # Use sim() API instead of run_guppy
+                result_dict = sim(test_func).qubits(10).quantum(state_vector()).run(1)
+                # Extract measurement result
+                if "measurements" in result_dict:
+                    result_val = result_dict["measurements"][0]
+                elif "measurement_1" in result_dict:
+                    # Handle tuple returns
+                    result_val = tuple(
+                        bool(result_dict[f"measurement_{i}"][0])
+                        for i in range(1, 10)
+                        if f"measurement_{i}" in result_dict
+                    )
+                else:
+                    result_val = result_dict.get("result", [None])[0]
+
                 results[test_name]["hugr_llvm"] = {
                     "success": True,
-                    "result": (
-                        result.get("results", [])[0] if result.get("results") else None
-                    ),
+                    "result": result_val,
                 }
                 print(f"  ✅ HUGR-LLVM: {results[test_name]['hugr_llvm']['result']}")
             except Exception as e:
@@ -107,16 +120,28 @@ def test_pipeline_capabilities() -> None:
                 }
                 print(f"  ❌ HUGR-LLVM: {str(e)[:80]}")
 
-        # PHIR pipeline no longer exists - using same Rust backend
+        # PHIR pipeline no longer exists - using same sim() backend
         try:
-            result = run_guppy(test_func, shots=1, verbose=False)
+            # Use sim() API for consistency
+            result_dict = sim(test_func).qubits(10).quantum(state_vector()).run(1)
+            # Extract measurement result
+            if "measurements" in result_dict:
+                result_val = result_dict["measurements"][0]
+            elif "measurement_1" in result_dict:
+                # Handle tuple returns
+                result_val = tuple(
+                    bool(result_dict[f"measurement_{i}"][0])
+                    for i in range(1, 10)
+                    if f"measurement_{i}" in result_dict
+                )
+            else:
+                result_val = result_dict.get("result", [None])[0]
+
             results[test_name]["phir"] = {
                 "success": True,
-                "result": (
-                    result.get("results", [])[0] if result.get("results") else None
-                ),
+                "result": result_val,
             }
-            print(f"  ✅ PHIR (via Rust): {results[test_name]['phir']['result']}")
+            print(f"  ✅ PHIR (via sim): {results[test_name]['phir']['result']}")
         except Exception as e:
             results[test_name]["phir"] = {
                 "success": False,

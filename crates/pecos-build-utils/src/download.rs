@@ -12,6 +12,10 @@ pub struct DownloadInfo {
 }
 
 /// Download a file with caching and integrity verification
+///
+/// # Errors
+///
+/// Returns an error if unable to download the file or if verification fails
 pub fn download_cached(info: &DownloadInfo) -> Result<Vec<u8>> {
     let cache_dir = get_cache_dir()?;
     let cache_file = cache_dir.join(format!("{}-{}.tar.gz", info.name, &info.sha256[..8]));
@@ -22,13 +26,11 @@ pub fn download_cached(info: &DownloadInfo) -> Result<Vec<u8>> {
         match fs::read(&cache_file) {
             Ok(data) => {
                 // Verify integrity
-                match verify_sha256(&data, info.sha256) {
-                    Ok(_) => return Ok(data),
-                    Err(_) => {
-                        println!("cargo:warning=Cached file corrupted, re-downloading");
-                        let _ = fs::remove_file(&cache_file); // Ignore removal errors
-                    }
+                if verify_sha256(&data, info.sha256).is_ok() {
+                    return Ok(data);
                 }
+                println!("cargo:warning=Cached file corrupted, re-downloading");
+                let _ = fs::remove_file(&cache_file); // Ignore removal errors
             }
             Err(e) => {
                 println!("cargo:warning=Failed to read cached file: {e}, re-downloading");
@@ -84,6 +86,14 @@ fn verify_sha256(data: &[u8], expected: &str) -> Result<String> {
 }
 
 /// Download multiple files concurrently
+///
+/// # Errors
+///
+/// Returns an error if any download fails
+///
+/// # Panics
+///
+/// Panics if the mutex is poisoned
 pub fn download_all_cached(downloads: Vec<DownloadInfo>) -> Result<Vec<(String, Vec<u8>)>> {
     use std::sync::{Arc, Mutex};
     use std::thread;

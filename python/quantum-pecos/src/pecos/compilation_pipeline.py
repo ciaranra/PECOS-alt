@@ -59,19 +59,29 @@ def compile_guppy_to_hugr(guppy_function: Callable) -> bytes:
             compiled = guppy_module.compile(guppy_function)
 
         # Handle the return value - it might be a FuncDefnPointer or similar
-        # Use JSON format for HUGR 0.13 compatibility with our compiler
+        # Use the new HUGR envelope methods (to_str/to_bytes) instead of deprecated to_json
+        if hasattr(compiled, "to_str"):
+            # Use string format for JSON compatibility with HUGR 0.13 compiler
+            return compiled.to_str().encode("utf-8")
         if hasattr(compiled, "to_json"):
-            # Use JSON format for compatibility with HUGR 0.13 compiler
+            # Fallback to to_json for older versions (with deprecation warning)
             return compiled.to_json().encode("utf-8")
+
         if hasattr(compiled, "package"):
+            if hasattr(compiled.package, "to_str"):
+                return compiled.package.to_str().encode("utf-8")
             if hasattr(compiled.package, "to_json"):
                 return compiled.package.to_json().encode("utf-8")
             return compiled.package.to_bytes()
+
         if hasattr(compiled, "to_package"):
             package = compiled.to_package()
+            if hasattr(package, "to_str"):
+                return package.to_str().encode("utf-8")
             if hasattr(package, "to_json"):
                 return package.to_json().encode("utf-8")
             return package.to_bytes()
+
         # Try to serialize directly
         return compiled.to_bytes()
     except Exception as e:

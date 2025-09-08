@@ -1,7 +1,7 @@
 //! Proper initialization of Selene runtime
 //!
 //! This module provides proper initialization of the Selene runtime
-//! by creating a configuration file and calling selene_load_config.
+//! by creating a configuration file and calling `selene_load_config`.
 
 use std::ffi::{CString, c_char};
 use std::fs;
@@ -45,8 +45,8 @@ unsafe extern "C" {
 /// Wrapper for initialized Selene runtime
 pub struct SeleneRuntime {
     instance: *mut SeleneInstance,
-    config_path: PathBuf,
-    temp_dir: Option<tempfile::TempDir>,
+    _config_path: PathBuf,
+    _temp_dir: Option<tempfile::TempDir>,
 }
 
 impl SeleneRuntime {
@@ -54,7 +54,7 @@ impl SeleneRuntime {
     pub fn new(num_qubits: usize, num_shots: usize) -> Result<Self, String> {
         // Create temp directory for configuration
         let temp_dir =
-            tempfile::tempdir().map_err(|e| format!("Failed to create temp dir: {}", e))?;
+            tempfile::tempdir().map_err(|e| format!("Failed to create temp dir: {e}"))?;
 
         let config_path = temp_dir.path().join("selene_config.yaml");
 
@@ -90,21 +90,21 @@ event_hooks:
 
         // Write configuration file
         let mut file = fs::File::create(&config_path)
-            .map_err(|e| format!("Failed to create config file: {}", e))?;
+            .map_err(|e| format!("Failed to create config file: {e}"))?;
         file.write_all(config_yaml.as_bytes())
-            .map_err(|e| format!("Failed to write config file: {}", e))?;
+            .map_err(|e| format!("Failed to write config file: {e}"))?;
 
         // Create artifacts directory
         fs::create_dir_all(temp_dir.path().join("artifacts"))
-            .map_err(|e| format!("Failed to create artifacts dir: {}", e))?;
+            .map_err(|e| format!("Failed to create artifacts dir: {e}"))?;
 
         // Convert path to C string
         let config_cstring = CString::new(config_path.to_str().unwrap())
-            .map_err(|e| format!("Failed to create C string: {}", e))?;
+            .map_err(|e| format!("Failed to create C string: {e}"))?;
 
         // Initialize Selene
         let mut instance: *mut SeleneInstance = std::ptr::null_mut();
-        let result = unsafe { selene_load_config(&mut instance, config_cstring.as_ptr()) };
+        let result = unsafe { selene_load_config(&raw mut instance, config_cstring.as_ptr()) };
 
         if result.error_code != 0 {
             return Err(format!(
@@ -117,19 +117,17 @@ event_hooks:
             return Err("selene_load_config returned null instance".to_string());
         }
 
-        println!(
-            "*** SELENE RUNTIME: Initialized with {} qubits, {} shots ***",
-            num_qubits, num_shots
-        );
+        println!("*** SELENE RUNTIME: Initialized with {num_qubits} qubits, {num_shots} shots ***");
 
         Ok(Self {
             instance,
-            config_path,
-            temp_dir: Some(temp_dir),
+            _config_path: config_path,
+            _temp_dir: Some(temp_dir),
         })
     }
 
     /// Get the Selene instance pointer
+    #[must_use]
     pub fn instance_ptr(&self) -> *mut SeleneInstance {
         self.instance
     }
@@ -188,8 +186,8 @@ impl Drop for SeleneRuntime {
     }
 }
 
-/// Thread-local storage for the current Selene instance
-/// This allows the plugin to access the instance via extern functions
+// Thread-local storage for the current Selene instance
+// This allows the plugin to access the instance via extern functions
 thread_local! {
     static CURRENT_INSTANCE: std::cell::RefCell<Option<*mut SeleneInstance>> = const { std::cell::RefCell::new(None) };
 }
@@ -202,6 +200,7 @@ pub fn set_current_instance(instance: *mut SeleneInstance) {
 }
 
 /// Get the current Selene instance for this thread
+#[must_use]
 pub fn get_current_instance() -> *mut SeleneInstance {
     CURRENT_INSTANCE.with(|i| i.borrow().unwrap_or(std::ptr::null_mut()))
 }

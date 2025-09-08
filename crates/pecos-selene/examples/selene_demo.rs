@@ -1,6 +1,6 @@
-//! Demonstration of the SeleneExecutableEngine
+//! Demonstration of the `SeleneExecutableEngine`
 //!
-//! This example shows how to use the SeleneExecutableEngine as a working
+//! This example shows how to use the `SeleneExecutableEngine` as a working
 //! Classical/Control Engine that implements PECOS traits.
 
 use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine, Engine, sim_builder};

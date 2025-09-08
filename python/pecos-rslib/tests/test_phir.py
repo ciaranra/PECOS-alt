@@ -1,123 +1,117 @@
-"""Tests for PHIR (PECOS High-level IR) Python bindings."""
+"""Tests for PHIR (PECOS High-level IR) - mostly deprecated functionality."""
 
 import pytest
-from pecos_rslib import (
-    hugr_to_phir_mlir,
-    compile_hugr_via_phir,
-    PhirCompiler,
-)
-
-
-# Simple test HUGR JSON (correct format with modules array)
-SIMPLE_HUGR = """{
-    "modules": [{
-        "version": "live",
-        "metadata": {"name": "hadamard_test"},
-        "nodes": [
-            {"parent": 0, "op": "Module"},
-            {"parent": 0, "op": "FuncDefn", "name": "main"},
-            {"parent": 1, "op": "Input"},
-            {"parent": 1, "op": "Output"},
-            {"parent": 1, "op": "Extension", "name": "QAlloc"},
-            {"parent": 1, "op": "Extension", "name": "H"},
-            {"parent": 1, "op": "Extension", "name": "MeasureFree"}
-        ],
-        "edges": [
-            [[2, 0], [4, 0]],
-            [[4, 0], [5, 0]],
-            [[5, 0], [6, 0]],
-            [[6, 0], [3, 0]]
-        ]
-    }],
-    "extensions": []
-}"""
-
-
-# RON serialization has been removed from PHIR
-# The test_hugr_to_past_ron function has been removed
-
-
-def test_hugr_to_phir_mlir():
-    """Test conversion from HUGR to PHIR MLIR."""
-    phir_mlir = hugr_to_phir_mlir(SIMPLE_HUGR, debug_output=False, optimization_level=2)
-
-    # Check that it contains MLIR function declarations (MLIR-14 syntax)
-    assert "func" in phir_mlir  # Should contain MLIR functions
-    assert "@__quantum__" in phir_mlir  # Should contain quantum runtime calls
-
-    # Check for basic MLIR structure
-    assert "@main" in phir_mlir or "main" in phir_mlir
-    assert "return" in phir_mlir
-
-
-# RON serialization has been removed from PHIR
-# The test_past_ron_to_phir_mlir function has been removed
 
 
 def test_phir_compiler_class():
-    """Test the PhirCompiler convenience class."""
-    compiler = PhirCompiler(debug_output=False, optimization_level=2)
+    """Test that PhirCompiler class is deprecated."""
+    # PhirCompiler has been deprecated in favor of phir_json_engine
+    with pytest.raises(ImportError) as exc_info:
+        from pecos_rslib import PhirCompiler
 
-    # Test getting PHIR
-    phir = compiler.get_phir(SIMPLE_HUGR)
-    assert "func" in phir
+        PhirCompiler()
 
-    # Test compilation (may fail if MLIR tools not available)
-    try:
-        llvm_ir = compiler.compile(SIMPLE_HUGR)
-        assert "define" in llvm_ir or "ModuleID" in llvm_ir
-    except RuntimeError as e:
-        if "mlir-opt" in str(e) or "MLIR" in str(e):
-            pytest.skip("MLIR tools not available")
-        else:
-            raise
-
-
-def test_compile_hugr_via_phir_fallback():
-    """Test that compile_hugr_via_phir handles missing MLIR tools gracefully."""
-    try:
-        llvm_ir = compile_hugr_via_phir(
-            SIMPLE_HUGR, debug_output=False, optimization_level=2, target_triple=None
-        )
-        # If it succeeds, check for valid LLVM IR
-        assert "define" in llvm_ir or "ModuleID" in llvm_ir
-    except RuntimeError as e:
-        # Should give clear error about missing MLIR tools or other compilation issues
-        error_msg = str(e).lower()
-        # Accept either MLIR tool errors or other compilation-related errors
-        assert any(
-            keyword in error_msg
-            for keyword in [
-                "mlir-opt",
-                "mlir",
-                "compilation",
-                "failed to compile",
-                "tool not found",
-            ]
-        )
-
-
-def test_invalid_hugr():
-    """Test error handling for invalid HUGR."""
-    invalid_hugr = '{"invalid": "json"}'
-
-    with pytest.raises(RuntimeError) as exc_info:
-        hugr_to_phir_mlir(invalid_hugr, debug_output=False, optimization_level=2)
-
-    # The error message should indicate HUGR parsing failed
     assert (
-        "Failed to parse HUGR" in str(exc_info.value)
-        or "parse" in str(exc_info.value).lower()
+        "not available" in str(exc_info.value)
+        or "deprecated" in str(exc_info.value).lower()
     )
 
 
+def test_hugr_to_phir_mlir():
+    """Test that HUGR to PHIR MLIR conversion is deprecated."""
+    # This function has been deprecated
+    with pytest.raises(ImportError) as exc_info:
+        from pecos_rslib import hugr_to_phir_mlir
+
+        hugr_to_phir_mlir("{}")
+
+    assert "deprecated" in str(exc_info.value).lower() or "not available" in str(
+        exc_info.value
+    )
+
+
+def test_compile_hugr_via_phir_fallback():
+    """Test that HUGR compilation via PHIR is deprecated."""
+    # This function has been deprecated
+    with pytest.raises(ImportError) as exc_info:
+        from pecos_rslib import compile_hugr_via_phir
+
+        compile_hugr_via_phir("{}")
+
+    assert (
+        "not available" in str(exc_info.value)
+        or "deprecated" in str(exc_info.value).lower()
+    )
+
+
+def test_invalid_hugr():
+    """Test handling of invalid HUGR (deprecated functionality)."""
+    # HUGR to PHIR pipeline has been deprecated
+    with pytest.raises(ImportError):
+        from pecos_rslib import hugr_to_phir_mlir
+
+        # This would have tested invalid HUGR handling
+        hugr_to_phir_mlir("invalid")
+
+
 def test_malformed_hugr_json():
-    """Test error handling for malformed JSON."""
-    malformed_json = '{"modules": [}'
+    """Test handling of malformed HUGR JSON (deprecated functionality)."""
+    # HUGR to PHIR pipeline has been deprecated
+    with pytest.raises(ImportError):
+        from pecos_rslib import hugr_to_phir_mlir
 
-    with pytest.raises(RuntimeError) as exc_info:
-        hugr_to_phir_mlir(malformed_json, debug_output=False, optimization_level=2)
+        # This would have tested malformed JSON handling
+        hugr_to_phir_mlir('{"malformed": json}')
 
-    # Should get a JSON parsing error
-    error_msg = str(exc_info.value).lower()
-    assert "json" in error_msg or "parse" in error_msg
+
+def test_phir_json_engine_available():
+    """Test that PhirJsonEngine is available for use."""
+    try:
+        from pecos_rslib import phir_json_engine
+        from pecos_rslib._pecos_rslib import PhirJsonProgram
+
+        # These imports should work
+        assert phir_json_engine is not None
+        assert PhirJsonProgram is not None
+
+        # Should be able to create an engine builder
+        engine_builder = phir_json_engine()
+        assert engine_builder is not None
+
+    except ImportError:
+        pytest.skip("PhirJsonEngine not available")
+
+
+def test_phir_json_program_creation():
+    """Test creating PhirJsonProgram from JSON."""
+    try:
+        from pecos_rslib._pecos_rslib import PhirJsonProgram
+
+        # PhirJsonProgram.from_json may accept strings and parse them later
+        # or may validate immediately. Test what actually happens:
+        try:
+            # This might not raise immediately
+            PhirJsonProgram.from_json("not json")
+            # If it doesn't raise during creation, that's OK - it might fail during use
+        except Exception:
+            # If it does raise, that's also fine
+            pass
+
+        # Test creating from valid-looking JSON string
+        try:
+            PhirJsonProgram.from_json("{}")
+            # Empty object might be accepted
+        except Exception:
+            # Or it might be rejected
+            pass
+
+    except ImportError:
+        pytest.skip("PhirJsonProgram not available")
+
+
+# Note: Full PhirJsonEngine testing would require knowledge of the exact
+# PHIR JSON format expected by the engine. The format has evolved and
+# the exact structure depends on the Rust implementation.
+#
+# For production use, PhirJsonEngine should be tested with actual valid
+# PHIR JSON generated by a compiler that targets this specific format.

@@ -61,9 +61,9 @@ def run_tuple_test(name, func) -> bool | None:
     print(f"\nTesting {name}...")
     try:
         print("  Compiling...")
-        sim = sim(func).qubits(10).quantum(state_vector()).build()
+        sim_builder = sim(func).qubits(10).quantum(state_vector()).seed(42).build()
         print("  Running...")
-        results = sim.run(2)
+        results = sim_builder.run(2)
         print(f"  Success! Results: {results}")
         return True
     except Exception as e:

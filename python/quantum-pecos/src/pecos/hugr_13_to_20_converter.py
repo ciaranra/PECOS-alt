@@ -55,8 +55,8 @@ def fix_hugr_13_to_20(package) -> None:
     Args:
         package: A hugr.package.Package object
     """
-    # Convert to JSON
-    json_str = package.to_json()
+    # Convert to JSON (use to_str if available, otherwise to_json)
+    json_str = package.to_str() if hasattr(package, "to_str") else package.to_json()
     json_obj = json.loads(json_str)
 
     # Apply conversions

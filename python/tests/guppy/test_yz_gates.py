@@ -30,8 +30,8 @@ def test_y_gate_only() -> None:
     for i, val in enumerate(
         results.get("measurements", results.get("measurement_1", [])),
     ):
-        print(f"Shot {i}: Y|0⟩ = {val} (should be True)")
-        assert val
+        print(f"Shot {i}: Y|0⟩ = {val} (should be 1)")
+        assert val == 1  # Y|0⟩ should give |1⟩
 
 
 def test_z_gate_only() -> None:
@@ -47,8 +47,8 @@ def test_z_gate_only() -> None:
     for i, val in enumerate(
         results.get("measurements", results.get("measurement_1", [])),
     ):
-        print(f"Shot {i}: Z|0⟩ = {val} (should be False)")
-        assert not val
+        print(f"Shot {i}: Z|0⟩ = {val} (should be 0)")
+        assert val == 0  # Z|0⟩ should give |0⟩
 
 
 def test_y_and_z_tuple() -> None:
@@ -67,18 +67,17 @@ def test_y_and_z_tuple() -> None:
         return r1, r2
 
     results = sim(yz_tuple).qubits(2).quantum(state_vector()).run(5)
-    # Decode integer-encoded results
-    decoded_results = decode_integer_results(
-        results.get("measurements", results.get("measurement_1", [])),
-        2,
-    )
-    for i, val in enumerate(decoded_results):
-        r1, r2 = val
-        print(f"Shot {i}: Y|0⟩ = {r1} (should be True), Z|0⟩ = {r2} (should be False)")
+    # Get results from separate measurement keys
+    m1 = results.get("measurement_1", [])
+    m2 = results.get("measurement_2", [])
+
+    for i in range(5):
+        r1, r2 = m1[i], m2[i]
+        print(f"Shot {i}: Y|0⟩ = {r1} (should be 1), Z|0⟩ = {r2} (should be 0)")
         if r1 == r2:
             print(f"  ERROR: Both values are {r1}!")
-        assert r1
-        assert not r2
+        assert r1 == 1  # Y|0⟩ should give |1⟩
+        assert r2 == 0  # Z|0⟩ should give |0⟩
 
 
 def test_xyz_tuple() -> None:
@@ -101,18 +100,18 @@ def test_xyz_tuple() -> None:
         return r1, r2, r3
 
     results = sim(xyz_tuple).qubits(3).quantum(state_vector()).run(5)
-    # Decode integer-encoded results
-    decoded_results = decode_integer_results(
-        results.get("measurements", results.get("measurement_1", [])),
-        3,
-    )
-    for i, val in enumerate(decoded_results):
-        r1, r2, r3 = val
+    # Get results from separate measurement keys
+    m1 = results.get("measurement_1", [])
+    m2 = results.get("measurement_2", [])
+    m3 = results.get("measurement_3", [])
+
+    for i in range(5):
+        r1, r2, r3 = m1[i], m2[i], m3[i]
         print(f"Shot {i}: X|0⟩ = {r1}, Y|0⟩ = {r2}, Z|0⟩ = {r3}")
-        print("  Expected: (True, True, False)")
-        assert r1
-        assert r2
-        assert not r3
+        print("  Expected: (1, 1, 0)")
+        assert r1 == 1  # X|0⟩ should give |1⟩
+        assert r2 == 1  # Y|0⟩ should give |1⟩
+        assert r3 == 0  # Z|0⟩ should give |0⟩
 
 
 if __name__ == "__main__":

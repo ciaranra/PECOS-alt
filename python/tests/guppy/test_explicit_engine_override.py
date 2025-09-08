@@ -1,0 +1,197 @@
+#!/usr/bin/env python3
+"""Test explicit engine override using .classical() method with sim() API."""
+
+import pytest
+from guppylang import guppy
+from guppylang.std.quantum import cx, h, measure, qubit
+from pecos_rslib import llvm_engine, qasm_engine, selene_engine
+from pecos_rslib.sim_wrapper import sim
+
+
+def test_guppy_with_explicit_selene_override() -> None:
+    """Test that Guppy functions can use explicit selene_engine() override."""
+
+    @guppy
+    def bell_state() -> tuple[bool, bool]:
+        q0 = qubit()
+        q1 = qubit()
+        h(q0)
+        cx(q0, q1)
+        return measure(q0), measure(q1)
+
+    # Test 1: Default auto-detection (should use SeleneExecutable with Bridge)
+    # Use state vector to avoid stabilizer issues with decomposed gates
+    from pecos_rslib import state_vector
+
+    results_auto = sim(bell_state).quantum(state_vector()).run(100).to_binary_dict()
+    assert "measurement_0" in results_auto or "measurement_1" in results_auto
+
+    # Test 2: Explicit selene_engine() override with configuration
+    results_explicit = (
+        sim(bell_state)
+        .classical(selene_engine().qubits(2))
+        .quantum(state_vector())
+        .run(100)
+        .to_binary_dict()
+    )
+    assert "measurement_0" in results_explicit or "measurement_1" in results_explicit
+
+    # Both should produce correlated results for Bell state
+    for results in [results_auto, results_explicit]:
+        if "measurement_0" in results and "measurement_1" in results:
+            # Check correlation
+            m0_list = results["measurement_0"]
+            m1_list = results["measurement_1"]
+            for m0, m1 in zip(m0_list, m1_list, strict=False):
+                assert m0 == m1, "Bell state measurements should be correlated"
+
+
+def test_qasm_with_explicit_override() -> None:
+    """Test QASM program with explicit qasm_engine() override."""
+    import os
+
+    from pecos_rslib import QasmProgram
+
+    # Set include path for QASM parser
+    os.environ["PECOS_QASM_INCLUDES"] = (
+        "/home/ciaranra/Repos/cl_projects/gup/PECOS/crates/pecos-qasm/includes"
+    )
+
+    # Use standard QASM 2.0 with include
+    qasm_code = """OPENQASM 2.0;
+include "qelib1.inc";
+qreg q[2];
+creg c[2];
+h q[0];
+cx q[0], q[1];
+measure q[0] -> c[0];
+measure q[1] -> c[1];"""
+
+    program = QasmProgram.from_string(qasm_code)
+
+    # Test 1: Default auto-detection
+    results_auto = sim(program).run(100).to_binary_dict()
+    assert "c" in results_auto
+
+    # Test 2: Explicit qasm_engine() override (redundant but should work)
+    results_explicit = sim(program).classical(qasm_engine()).run(100).to_binary_dict()
+    assert "c" in results_explicit
+
+    # Check correlation in both cases
+    for results in [results_auto, results_explicit]:
+        c_values = results["c"]
+        for bits in c_values:
+            # Bell state should have correlated bits (both "00" or both "11")
+            assert bits in [
+                "00",
+                "11",
+            ], f"Bell state bits should be correlated, got {bits}"
+
+
+def test_llvm_with_explicit_override() -> None:
+    """Test LLVM program with explicit llvm_engine() or selene_engine() override."""
+    from pecos_rslib import LlvmProgram
+
+    # Skip LLVM test for now - LLVM compilation requires proper setup
+    # This would need a properly formatted LLVM IR with all required types
+    pytest.skip("LLVM compilation requires proper environment setup")
+    return
+
+    program = LlvmProgram.from_string(llvm_code)
+
+    # Test 1: Default auto-detection (should use llvm_engine)
+    results_auto = sim(program).run(100)
+    assert "bell" in results_auto
+
+    # Test 2: Explicit llvm_engine() override (redundant but should work)
+    results_llvm = sim(program).classical(llvm_engine()).run(100)
+    assert "bell" in results_llvm
+
+    # Test 3: Explicit selene_engine() override (alternative engine)
+    results_selene = sim(program).classical(selene_engine().qubits(2)).run(100)
+    assert "bell" in results_selene
+
+    # Check correlation in all cases
+    for results in [results_auto, results_llvm, results_selene]:
+        bell_values = results["bell"]
+        for bits in bell_values:
+            # Bell state should have correlated bits
+            assert (
+                bits[0] == bits[1]
+            ), f"Bell state bits should be correlated, got {bits}"
+
+
+def test_invalid_engine_override_rejected() -> None:
+    """Test that invalid engine overrides are properly rejected."""
+    from pecos_rslib import LlvmProgram, QasmProgram
+
+    # QASM program should reject non-QASM engines
+    qasm_program = QasmProgram.from_string("OPENQASM 3.0; qubit q;")
+
+    with pytest.raises(Exception) as exc_info:
+        sim(qasm_program).classical(llvm_engine()).run(1)
+    assert "QasmEngineBuilder" in str(exc_info.value)
+
+    # LLVM program should reject QASM engine
+    llvm_program = LlvmProgram.from_string("define void @main() { ret void }")
+
+    with pytest.raises(Exception) as exc_info:
+        sim(llvm_program).classical(qasm_engine()).run(1)
+    assert "LlvmEngineBuilder" in str(exc_info.value) or "SeleneEngineBuilder" in str(
+        exc_info.value,
+    )
+
+
+def test_engine_override_with_noise() -> None:
+    """Test that noise models work with explicit engine overrides."""
+    from guppylang import guppy
+    from guppylang.std.quantum import h, measure, qubit
+    from pecos_rslib import depolarizing_noise
+
+    @guppy
+    def simple_h() -> bool:
+        q = qubit()
+        h(q)
+        return measure(q)
+
+    # Test with explicit engine and noise
+    # Use state vector to avoid stabilizer issues with decomposed gates
+    from pecos_rslib import state_vector
+
+    noise = depolarizing_noise().with_uniform_probability(0.1)
+    results = (
+        sim(simple_h)
+        .classical(selene_engine().qubits(1))
+        .quantum(state_vector())
+        .noise(noise)
+        .run(1000)
+        .to_binary_dict()
+    )
+
+    # With noise, we should see both 0 and 1 outcomes
+    assert "measurement_0" in results or "measurement_1" in results
+    if "measurement_0" in results:
+        values = results["measurement_0"]
+        zeros = sum(1 for v in values if v == "0")
+        ones = sum(1 for v in values if v == "1")
+        # With noise, both outcomes should occur
+        assert zeros > 0 and ones > 0, "Noise should cause mixed outcomes"
+
+
+if __name__ == "__main__":
+    test_guppy_with_explicit_selene_override()
+    print("✓ Guppy with explicit selene_engine() override")
+
+    test_qasm_with_explicit_override()
+    print("✓ QASM with explicit engine override")
+
+    test_llvm_with_explicit_override()
+    print("✓ LLVM with explicit engine override")
+
+    test_invalid_engine_override_rejected()
+    print("✓ Invalid engine overrides properly rejected")
+
+    test_engine_override_with_noise()
+    print("✓ Engine override with noise models")
+
+    print("\nAll tests passed!")
