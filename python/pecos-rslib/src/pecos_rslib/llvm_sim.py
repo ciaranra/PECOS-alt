@@ -76,11 +76,10 @@ def llvm_sim(
     return result
 
 
-# Re-export noise models from qasm_sim for backward compatibility
-from pecos_rslib.qasm_sim import (
+# Import noise models from the noise module
+from pecos_rslib.noise import (
     DepolarizingNoise,
     BiasedDepolarizingNoise,
-    DepolarizingCustomNoise,
     PassThroughNoise,
     GeneralNoise
 )

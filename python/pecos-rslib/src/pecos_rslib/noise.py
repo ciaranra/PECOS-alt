@@ -67,6 +67,47 @@ def biased_depolarizing():
     """
     return BiasedDepolarizingNoiseModelBuilder()
 
+from dataclasses import dataclass
+from typing import List, Dict, Optional, Any
+
+# Simple noise model dataclasses for backward compatibility
+# These are being replaced by the builder pattern but kept for existing code
+
+@dataclass
+class PassThroughNoise:
+    """No noise - ideal quantum simulation."""
+    pass
+
+@dataclass
+class DepolarizingNoise:
+    """Standard depolarizing noise with uniform probability.
+    
+    Args:
+        p: Uniform error probability for all operations
+    """
+    p: float = 0.001
+
+@dataclass
+class BiasedDepolarizingNoise:
+    """Biased depolarizing noise model.
+    
+    Args:
+        p: Uniform probability for all operations
+    """
+    p: float = 0.001
+
+@dataclass
+class GeneralNoise:
+    """General noise model with full parameter configuration."""
+    # Global parameters
+    seed: Optional[int] = None
+    scale: Optional[float] = None
+    # Gate error probabilities
+    p1: Optional[float] = None
+    p2: Optional[float] = None
+    p_meas: Optional[float] = None
+    p_prep: Optional[float] = None
+
 __all__ = [
     # Free functions
     "general",
@@ -76,4 +117,9 @@ __all__ = [
     "GeneralNoiseModelBuilder",
     "DepolarizingNoiseModelBuilder",
     "BiasedDepolarizingNoiseModelBuilder",
+    # Legacy dataclasses for compatibility
+    "PassThroughNoise",
+    "DepolarizingNoise",
+    "BiasedDepolarizingNoise",
+    "GeneralNoise",
 ]

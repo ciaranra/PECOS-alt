@@ -5,6 +5,7 @@ use pecos_engines::sim_builder;
 use pecos_engines::noise::GeneralNoiseModel;
 use pecos_engines::prelude::{state_vector, sparse_stabilizer};
 use pecos_qasm::prelude::*;
+use pecos_qasm::qasm_engine;
 use pecos_programs::QasmProgram;
 use std::collections::BTreeMap;
 
@@ -79,12 +80,6 @@ fn test_general_noise_builder_with_pauli_models() {
         .program(QasmProgram::from_string(qasm)))
         .noise(noise_builder)
         .seed(42)
-        .run(1000)
-        .unwrap();
-
-    let results = qasm_sim(qasm)
-        .seed(42)
-        .noise(noise_model)
         .run(1000)
         .unwrap();
 

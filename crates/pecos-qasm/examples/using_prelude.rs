@@ -1,6 +1,5 @@
 // Using the prelude - all common types are available with one import
 use pecos_qasm::prelude::*;
-use pecos_engines::ClassicalControlEngineBuilder;
 use pecos_programs::QasmProgram;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

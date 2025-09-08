@@ -25,8 +25,7 @@ mod noise_helpers;
 mod pauli_prop_bindings;
 // mod pcg_bindings;
 mod pecos_rng_bindings;
-pub mod phir_bridge;
-mod qasm_sim_bindings;
+mod phir_json_bridge;
 mod quest_bindings;
 mod qulacs_bindings;
 mod shot_results_bindings;
@@ -64,7 +63,6 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SparseSim>()?;
     m.add_class::<phir_json_bridge::PhirJsonEngine>()?;
     m.add_class::<CppSparseSim>()?;
-    m.add_class::<phir_bridge::PHIREngine>()?;
     m.add_class::<RsStateVec>()?;
     m.add_class::<RsQulacs>()?;
     m.add_class::<RsCoinToss>()?;
@@ -78,9 +76,6 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RngPcg>()?;
     m.add_class::<QuestStateVec>()?;
     m.add_class::<QuestDensityMatrix>()?;
-
-    // Register QASM simulation functions
-    // qasm_sim_bindings::register_qasm_sim_module(m)?;
     
     // Register the unified sim() function
     sim::register_sim(m)?;

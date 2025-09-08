@@ -387,13 +387,13 @@ __all__ = [
     # QuEST simulators
     "QuestStateVec",
     "QuestDensityMatrix",
-    # QASM simulation
-    "NoiseModel",
-    "QuantumEngine",
-    "run_qasm",
-    "get_noise_models",
-    "get_quantum_engines",
-    "qasm_sim",
+    # QASM simulation - DEPRECATED: Use sim() instead
+    # "NoiseModel",  # Deprecated
+    # "QuantumEngine",  # Deprecated
+    # "run_qasm",  # Deprecated - use sim()
+    # "get_noise_models",  # Deprecated
+    # "get_quantum_engines",  # Deprecated
+    # "qasm_sim",  # Deprecated - use sim()
     # Shot result types
     "ShotVec",
     "ShotMap",

@@ -126,7 +126,7 @@ fn get_values(json_output: &str) -> Vec<String> {
         .map_or(json_output.trim(), str::trim);
 
     // Parse the JSON - expecting an object with register names as keys
-    if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_output)
+    if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_part)
         && let Some(obj) = json.as_object()
     {
         // For each register, collect its values

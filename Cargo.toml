@@ -14,7 +14,6 @@ default-members = [
     "crates/pecos-qsim",
     "crates/pecos-qasm",
     "crates/pecos-phir",
-    "crates/pecos-qir",
     "crates/pecos-qec",
     "crates/pecos-rng",
     "crates/pecos",

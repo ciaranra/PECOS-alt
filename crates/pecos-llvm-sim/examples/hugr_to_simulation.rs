@@ -3,7 +3,7 @@
 //! This example demonstrates the full pipeline from HUGR to simulation results.
 
 use pecos_llvm_sim::llvm_engine;
-use pecos_engines::{DepolarizingNoise, BiasedDepolarizingNoise, state_vector, ClassicalControlEngineBuilder, sim_builder};
+use pecos_engines::{DepolarizingNoise, BiasedDepolarizingNoise, state_vector, sim_builder};
 use pecos_programs::{LlvmProgram, HugrProgram};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

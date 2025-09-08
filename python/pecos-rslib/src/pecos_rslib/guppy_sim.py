@@ -322,7 +322,7 @@ def guppy_sim(guppy_func: Callable) -> GuppySimulationBuilder:
         >>> results = guppy_sim(simple_circuit).seed(42).run(1000)
         >>>
         >>> # With noise model (when implemented in Rust)
-        >>> from pecos_rslib.qasm_sim import DepolarizingNoise
+        >>> from pecos_rslib.noise import DepolarizingNoise
         >>> results = (
         ...     guppy_sim(simple_circuit)
         ...     .noise(DepolarizingNoise(p=0.01))
