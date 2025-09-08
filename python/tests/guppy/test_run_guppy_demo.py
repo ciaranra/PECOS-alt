@@ -8,7 +8,9 @@ Shows that we have successfully implemented the requested API:
 import pytest
 from guppylang import guppy
 from guppylang.std.quantum import cx, h, measure, qubit
-from pecos import get_guppy_backends, guppy_sim, run_guppy, run_guppy_batch
+from pecos import get_guppy_backends, run_guppy, run_guppy_batch
+from pecos.frontends.guppy_api import sim
+from pecos_rslib import state_vector
 from typing import List, Tuple
 
 
@@ -86,22 +88,28 @@ def test_run_guppy() -> None:
             raise
 
 
-def test_guppy_sim() -> None:
-    """Test guppy_sim() alias with bell_state."""
-    print("\nTesting guppy_sim() alias with bell_state:")
+def test_sim() -> None:
+    """Test sim() alias with bell_state."""
+    print("\nTesting sim() alias with bell_state:")
     try:
-        result = guppy_sim(bell_state, max_qubits=10).run(200)
-        assert "result" in result
-        assert len(result["result"]) == 200
+        result = sim(bell_state).qubits(10).quantum(state_vector()).run(10)
+        # Results can be in different keys depending on the backend
+        measurements = result.get("measurements", result.get("measurement_1", result.get("result", [])))
+        assert measurements is not None and len(measurements) > 0
+        # For bell_state with 2 qubits, we get one integer per shot encoding both measurements
+        assert len(measurements) == 10  # 10 shots, each with an integer encoding 2 qubits
 
         # Convert integer results back to check correlation
-        # 0 = (0,0), 3 = (1,1) are correlated
-        correlated = sum(1 for r in result["result"] if r == 0 or r == 3)
-        print(f"   [OK] Got {len(result['result'])} results")
+        # 0 = (0,0), 3 = (1,1) are correlated for Bell state
+        # But with current encoding, results might be 0 (both 0) or 1 (both 1)
+        # Let's decode to check
+        decoded = decode_integer_results(measurements, 2)
+        correlated = sum(1 for (a, b) in decoded if a == b)
+        print(f"   [OK] Got {len(measurements)} results")
         print(
-            f"   Correlation rate: {correlated/200:.1%} (expect ~100% for Bell state)",
+            f"   Correlation rate: {correlated/len(measurements):.1%} (expect ~100% for Bell state)",
         )
-        print(f"   Sample results: {result['result'][:5]}")
+        print(f"   Sample results: {measurements[:5]}")
     except RuntimeError as e:
         if "Unknown type:" in str(e):
             print(f"   [INFO] Expected error: {e}")

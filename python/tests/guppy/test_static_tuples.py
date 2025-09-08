@@ -19,7 +19,8 @@ sys.path.append("python/quantum-pecos/src")
 
 from guppylang import guppy
 from guppylang.std.quantum import qubit, measure, x
-from pecos.frontends import guppy_sim
+from pecos.frontends.guppy_api import sim
+from pecos_rslib import state_vector
 
 
 @guppy
@@ -103,8 +104,8 @@ def run_function_test(name: str, func):
     """Helper to test a function and report results."""
     print(f"\nTesting {name}...")
     try:
-        results = guppy_sim(func, max_qubits=10).run(5)
-        print(f"  Success! Results: {results['result']}")
+        results = sim(func).qubits(10).quantum(state_vector()).run(5)
+        print(f"  Success! Results: {results.get("measurements", results.get("measurement_1", []))}")
         return True
     except Exception as e:
         print(f"  Failed with error: {e}")

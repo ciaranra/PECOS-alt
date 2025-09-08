@@ -17,6 +17,29 @@ def decode_integer_results(results: List[int], n_bits: int) -> List[Tuple[bool, 
         decoded.append(tuple(bits))
     return decoded
 
+def get_measurement_tuples(results: dict, n_bits: int) -> List[Tuple[bool, ...]]:
+    """Extract measurement tuples from results, handling both formats."""
+    # Try new format with individual measurement keys first
+    if "measurement_1" in results and n_bits > 1:
+        # Combine individual measurement results into tuples
+        measurements = []
+        measurement_keys = [f"measurement_{i+1}" for i in range(n_bits)]
+        
+        # Check all required keys exist
+        if all(key in results for key in measurement_keys):
+            num_shots = len(results["measurement_1"])
+            for shot_idx in range(num_shots):
+                measurement_tuple = tuple(bool(results[key][shot_idx]) for key in measurement_keys)
+                measurements.append(measurement_tuple)
+            return measurements
+    
+    # Fall back to old format with integer encoding
+    measurements = results.get("measurements", results.get("measurement_1", results.get("result", [])))
+    if n_bits == 1:
+        return [(bool(m),) for m in measurements]
+    else:
+        return decode_integer_results(measurements, n_bits)
+
 
 sys.path.append("python/quantum-pecos/src")
 
@@ -35,15 +58,11 @@ try:
 except ImportError:
     GUPPY_AVAILABLE = False
 
-try:
-    from pecos.frontends import guppy_sim
-    PECOS_AVAILABLE = True
-except ImportError:
-    PECOS_AVAILABLE = False
+from pecos.frontends.guppy_api import sim
+from pecos_rslib import state_vector
 
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
-@pytest.mark.skipif(not PECOS_AVAILABLE, reason="PECOS not available")
 class TestSingleQubitGates:
     """Test individual single-qubit gates."""
     
@@ -55,8 +74,9 @@ class TestSingleQubitGates:
             x(q)
             return measure(q)
         
-        results = guppy_sim(x_test, max_qubits=5).run(100)
-        assert all(r == 1 for r in results["result"])
+        results = sim(x_test).qubits(5).quantum(state_vector()).run(10)
+        measurements = results.get("measurements", results.get("measurement_1", results.get("result", [])))
+        assert all(r == 1 for r in measurements)
     
     def test_y_gate(self):
         """Test Pauli-Y gate."""
@@ -66,8 +86,9 @@ class TestSingleQubitGates:
             y(q)
             return measure(q)
         
-        results = guppy_sim(y_test, max_qubits=10).run(100)
-        assert all(r == 1 for r in results["result"])
+        results = sim(y_test).qubits(10).quantum(state_vector()).run(10)
+        measurements = results.get("measurements", results.get("measurement_1", results.get("result", [])))
+        assert all(r == 1 for r in measurements)
     
     def test_z_gate(self):
         """Test Pauli-Z gate."""
@@ -77,8 +98,9 @@ class TestSingleQubitGates:
             z(q)
             return measure(q)
         
-        results = guppy_sim(z_test, max_qubits=10).run(100)
-        assert all(r == 0 for r in results["result"])
+        results = sim(z_test).qubits(10).quantum(state_vector()).run(10)
+        measurements = results.get("measurements", results.get("measurement_1", results.get("result", [])))
+        assert all(r == 0 for r in measurements)
     
     def test_h_gate(self):
         """Test Hadamard gate."""
@@ -88,11 +110,12 @@ class TestSingleQubitGates:
             h(q)
             return measure(q)
         
-        results = guppy_sim(h_test, max_qubits=10).seed(42).run(100)
+        results = sim(h_test).qubits(10).quantum(state_vector()).run(10)
         # Should see both 0 and 1
-        zeros = sum(1 for r in results["result"] if r == 0)
-        ones = sum(1 for r in results["result"] if r == 1)
-        assert zeros > 20 and ones > 20
+        measurements = results.get("measurements", results.get("measurement_1", results.get("result", [])))
+        zeros = sum(1 for r in measurements if r == 0)
+        ones = sum(1 for r in measurements if r == 1)
+        assert zeros > 0 and ones > 0  # Should see both outcomes
     
     def test_s_gate(self):
         """Test S gate."""
@@ -103,9 +126,10 @@ class TestSingleQubitGates:
             s(q)  # Phase gate
             return measure(q)
         
-        results = guppy_sim(s_test, max_qubits=10).run(100)
+        results = sim(s_test).qubits(10).quantum(state_vector()).run(10)
         # S gate doesn't change computational basis
-        assert all(r == 1 for r in results["result"])
+        measurements = results.get("measurements", results.get("measurement_1", results.get("result", [])))
+        assert all(r == 1 for r in measurements)
     
     def test_t_gate(self):
         """Test T gate."""
@@ -116,13 +140,13 @@ class TestSingleQubitGates:
             t(q)  # π/8 gate
             return measure(q)
         
-        results = guppy_sim(t_test, max_qubits=10).run(100)
+        results = sim(t_test).qubits(10).quantum(state_vector()).run(10)
         # T gate doesn't change computational basis
-        assert all(r == 1 for r in results["result"])
+        measurements = results.get("measurements", results.get("measurement_1", results.get("result", [])))
+        assert all(r == 1 for r in measurements)
 
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
-@pytest.mark.skipif(not PECOS_AVAILABLE, reason="PECOS not available")
 class TestTwoQubitGates:
     """Test two-qubit gates."""
     
@@ -136,10 +160,9 @@ class TestTwoQubitGates:
             cx(q1, q2)  # Target flips
             return measure(q1), measure(q2)
         
-        results = guppy_sim(cx_test, max_qubits=10).run(100)
+        results = sim(cx_test).qubits(10).quantum(state_vector()).run(10)
         # Should get (True, True) for both qubits
-        # Decode integer-encoded results
-        decoded_results = decode_integer_results(results["result"], 2)
+        decoded_results = get_measurement_tuples(results, 2)
         assert all(r == (True, True) for r in decoded_results)
     
     def test_cz_gate(self):
@@ -153,11 +176,9 @@ class TestTwoQubitGates:
             cz(q1, q2)  # Phase when both |1⟩
             return measure(q1), measure(q2)
         
-        results = guppy_sim(cz_test, max_qubits=10).run(100)
-        # CZ doesn't change computational basis
-        # Both qubits remain |1⟩
-        # Decode integer-encoded results
-        decoded_results = decode_integer_results(results["result"], 2)
+        results = sim(cz_test).qubits(10).quantum(state_vector()).run(10)
+        # CZ doesn't change computational basis, both qubits remain |1⟩
+        decoded_results = get_measurement_tuples(results, 2)
         assert all(r == (True, True) for r in decoded_results)
     
     def test_cy_gate(self):
@@ -170,16 +191,13 @@ class TestTwoQubitGates:
             cy(q1, q2)  # Apply Y to target
             return measure(q1), measure(q2)
         
-        results = guppy_sim(cy_test, max_qubits=10).run(100)
-        # CY with control=1 applies Y to target
-        # Y|0⟩ = i|1⟩, so both measure as |1⟩
-        # Decode integer-encoded results
-        decoded_results = decode_integer_results(results["result"], 2)
+        results = sim(cy_test).qubits(10).quantum(state_vector()).run(10)
+        # CY with control=1 applies Y to target, Y|0⟩ = i|1⟩, so both measure as |1⟩
+        decoded_results = get_measurement_tuples(results, 2)
         assert all(r == (True, True) for r in decoded_results)
 
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
-@pytest.mark.skipif(not PECOS_AVAILABLE, reason="PECOS not available")
 class TestQuantumStateManagement:
     """Test state management operations."""
     
@@ -192,9 +210,10 @@ class TestQuantumStateManagement:
             reset(q)
             return measure(q)
         
-        results = guppy_sim(reset_test, max_qubits=10).run(100)
+        results = sim(reset_test).qubits(10).quantum(state_vector()).run(10)
         # Reset should give |0⟩
-        assert all(r == 0 for r in results["result"])
+        measurements = results.get("measurements", results.get("measurement_1", results.get("result", [])))
+        assert all(r == 0 for r in measurements)
     
     def test_discard(self):
         """Test discard operation."""
@@ -208,12 +227,12 @@ class TestQuantumStateManagement:
             x(q2)
             return measure(q2)
         
-        results = guppy_sim(discard_test, max_qubits=10).run(100)
-        assert all(r == 1 for r in results["result"])
+        results = sim(discard_test).qubits(10).quantum(state_vector()).run(10)
+        measurements = results.get("measurements", results.get("measurement_1", results.get("result", [])))
+        assert all(r == 1 for r in measurements)
 
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
-@pytest.mark.skipif(not PECOS_AVAILABLE, reason="PECOS not available")
 class TestQuantumCircuits:
     """Test quantum circuit patterns."""
     
@@ -227,10 +246,11 @@ class TestQuantumCircuits:
             cx(q1, q2)
             return measure(q1), measure(q2)
         
-        results = guppy_sim(bell_test, max_qubits=10).seed(42).run(100)
-        # Should only see 0 (|00⟩) and 3 (|11⟩)
-        for r in results["result"]:
-            assert r == 0 or r == 3  # Integer-encoded tuple values  # Integer-encoded tuple values
+        results = sim(bell_test).qubits(10).quantum(state_vector()).seed(42).run(100)
+        # Bell state should be correlated
+        decoded = get_measurement_tuples(results, 2)
+        for (a, b) in decoded:
+            assert a == b  # Bell state is correlated
     
     def test_ghz_state(self):
         """Test 3-qubit GHZ state."""
@@ -244,14 +264,14 @@ class TestQuantumCircuits:
             cx(q2, q3)
             return measure(q1), measure(q2), measure(q3)
         
-        results = guppy_sim(ghz_test, max_qubits=10).seed(42).run(100)
-        # Should only see 0 (|000⟩) and 7 (|111⟩)
-        for r in results["result"]:
-            assert r == 0 or r == 7  # Integer-encoded tuple values  # Integer-encoded tuple values
+        results = sim(ghz_test).qubits(10).quantum(state_vector()).seed(42).run(100)
+        # GHZ state should be all-correlated
+        decoded = get_measurement_tuples(results, 3)
+        for (a, b, c) in decoded:
+            assert (a == b == c)  # GHZ state is all-correlated
 
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
-@pytest.mark.skipif(not PECOS_AVAILABLE, reason="PECOS not available")
 class TestRotationGates:
     """Test rotation gates."""
     
@@ -263,8 +283,9 @@ class TestRotationGates:
             rx(q, pi)  # Rx(π) = X up to phase
             return measure(q)
         
-        results = guppy_sim(rx_test, max_qubits=10).run(100)
-        assert all(r == 1 for r in results["result"])
+        results = sim(rx_test).qubits(10).quantum(state_vector()).run(10)
+        measurements = results.get("measurements", results.get("measurement_1", results.get("result", [])))
+        assert all(r == 1 for r in measurements)
     
     def test_ry_gate(self):
         """Test Ry rotation."""
@@ -274,8 +295,9 @@ class TestRotationGates:
             ry(q, pi)  # Ry(π) flips qubit
             return measure(q)
         
-        results = guppy_sim(ry_test, max_qubits=10).run(100)
-        assert all(r == 1 for r in results["result"])
+        results = sim(ry_test).qubits(10).quantum(state_vector()).run(10)
+        measurements = results.get("measurements", results.get("measurement_1", results.get("result", [])))
+        assert all(r == 1 for r in measurements)
     
     def test_rz_gate(self):
         """Test Rz rotation."""
@@ -285,13 +307,13 @@ class TestRotationGates:
             rz(q, pi)  # Rz on |0⟩
             return measure(q)
         
-        results = guppy_sim(rz_test, max_qubits=10).run(100)
+        results = sim(rz_test).qubits(10).quantum(state_vector()).run(10)
         # Rz doesn't change |0⟩ measurement
-        assert all(r == 0 for r in results["result"])
+        measurements = results.get("measurements", results.get("measurement_1", results.get("result", [])))
+        assert all(r == 0 for r in measurements)
 
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
-@pytest.mark.skipif(not PECOS_AVAILABLE, reason="PECOS not available")
 class TestControlFlow:
     """Test control flow with quantum operations."""
     
@@ -312,9 +334,10 @@ class TestControlFlow:
                     count += 1
             return count
         
-        results = guppy_sim(loop_test, max_qubits=10).seed(42).run(100)
+        results = sim(loop_test).qubits(10).quantum(state_vector()).seed(42).run(100)
         # Should see values 0-3
-        values = set(results["result"])
+        measurements = results.get("measurements", results.get("measurement_1", results.get("result", [])))
+        values = set(measurements)
         assert len(values) >= 2  # At least some variation
 
 

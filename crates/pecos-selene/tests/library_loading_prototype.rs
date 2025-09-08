@@ -66,13 +66,11 @@ impl PrototypeSeleneEngine {
         println!("[Engine] Found callback setup function");
         
         // Set up callbacks that will be called by Bridge simulator
-        unsafe {
-            set_callbacks(
-                self as *mut _ as *mut c_void,
-                Self::handle_send_operation,
-                Self::handle_receive_measurements,
-            );
-        }
+        set_callbacks(
+            self as *mut _ as *mut c_void,
+            Self::handle_send_operation,
+            Self::handle_receive_measurements,
+        );
         
         println!("[Engine] Callbacks registered");
         
@@ -92,13 +90,11 @@ impl PrototypeSeleneEngine {
                 .map_err(|e| PecosError::Processing(format!("Failed to get entry point: {}", e)))?
         };
         
-        // Run the quantum program in a separate thread
+        // Run the quantum program directly (not in a separate thread to avoid lifetime issues)
         // (In reality, this would be the HUGR-compiled program)
-        std::thread::spawn(move || {
-            println!("[Quantum Program] Starting execution");
-            let result = qmain();
-            println!("[Quantum Program] Execution complete with code: {}", result);
-        });
+        println!("[Quantum Program] Starting execution");
+        let result = qmain();
+        println!("[Quantum Program] Execution complete with code: {}", result);
         
         Ok(())
     }
@@ -222,8 +218,8 @@ fn test_library_loading_mechanism() {
     
     // Test the EngineStage flow
     match engine.start() {
-        Ok(EngineStage::NeedsProcessing(ops)) => {
-            println!("Got operations: {:?}", ops);
+        Ok(EngineStage::NeedsProcessing(_ops)) => {
+            println!("Got operations (ByteMessage)");
             
             // Simulate quantum processing
             let mut builder = ByteMessageBuilder::new();

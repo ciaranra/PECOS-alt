@@ -1,7 +1,8 @@
 """Debug test to see raw shot results."""
 from guppylang import guppy
 from guppylang.std.quantum import qubit, measure, x, y, z
-from pecos.frontends import guppy_sim
+from pecos.frontends.guppy_api import sim
+from pecos_rslib import state_vector
 from typing import List, Tuple
 
 
@@ -39,25 +40,25 @@ def test_raw_results():
         return r1, r2, r3, r4
     
     # Run simulation
-    sim = guppy_sim(simple_test, max_qubits=4)
-    results = sim.run(2)
+    sim_instance = sim(simple_test).qubits(4).quantum(state_vector())
+    results = sim_instance.run(2)
     
-    print("Raw results from guppy_sim:")
+    print("Raw results from sim:")
     print(f"Type: {type(results)}")
     print(f"Keys: {results.keys()}")
     print(f"Contents: {results}")
     
     # Check what we got
     if "_result" in results:
-        print(f"\n_result type: {type(results['result'])}")
-        print(f"_result length: {len(results['result'])}")
-        if len(results['result']) > 0:
-            print(f"First shot type: {type(results['result'][0])}")
-            print(f"First shot value: {results['result'][0]}")
+        print(f"\n_result type: {type(results.get("measurements", results.get("measurement_1", [])))}")
+        print(f"_result length: {len(results.get("measurements", results.get("measurement_1", [])))}")
+        if len(results.get("measurements", results.get("measurement_1", []))) > 0:
+            print(f"First shot type: {type(results.get("measurements", results.get("measurement_1", []))[0])}")
+            print(f"First shot value: {results.get("measurements", results.get("measurement_1", []))[0]}")
             
             # Decode if tuple
-            if isinstance(results['result'][0], tuple):
-                r1, r2, r3, r4 = results['result'][0]
+            if isinstance(results.get("measurements", results.get("measurement_1", []))[0], tuple):
+                r1, r2, r3, r4 = results.get("measurements", results.get("measurement_1", []))[0]
                 print(f"\nDecoded first shot:")
                 print(f"  r1 (|0⟩) = {r1} (expected False)")
                 print(f"  r2 (X|0⟩) = {r2} (expected True)")

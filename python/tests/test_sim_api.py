@@ -1,7 +1,8 @@
 """Test the new sim(program) API."""
 
 import pytest
-from pecos_rslib import sim, QasmProgram, LlvmProgram, HugrProgram, PhirJsonProgram
+from pecos_rslib.sim import sim
+from pecos_rslib import QasmProgram, LlvmProgram, HugrProgram, PhirJsonProgram
 from pecos_rslib import qasm_engine, llvm_engine, selene_engine, phir_json_engine
 from pecos_rslib import state_vector, sparse_stabilizer, depolarizing_noise
 

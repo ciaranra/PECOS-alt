@@ -5,10 +5,11 @@ import pytest
 from guppylang import guppy
 from guppylang.std.quantum import h, measure, qubit
 
-pytestmark = pytest.mark.optional_dependency
+# pytestmark = pytest.mark.optional_dependency  # Enable tests
 
 # Import sim - it now handles Guppy programs via the wrapper
-from pecos_rslib.sim import sim
+from pecos.frontends.guppy_api import sim
+from pecos_rslib import state_vector
 
 
 def test_integer_arithmetic() -> None:
@@ -32,7 +33,7 @@ def test_integer_arithmetic() -> None:
     try:
         results = sim(quantum_add) \
             .qubits(1) \
-            .seed(42) \
+            .quantum(state_vector()) \
             .run(10)
         
         # Verify execution succeeded
@@ -91,7 +92,7 @@ def test_boolean_operations() -> None:
     try:
         results = sim(quantum_bool_logic) \
             .qubits(2) \
-            .seed(42) \
+            .quantum(state_vector()) \
             .run(10)
         
         # Verify execution succeeded
@@ -144,7 +145,7 @@ def test_integer_constant() -> None:
     try:
         results = sim(quantum_with_constant) \
             .qubits(1) \
-            .seed(42) \
+            .quantum(state_vector()) \
             .run(10)
         
         # Verify execution succeeded
@@ -197,8 +198,10 @@ def test_mixed_quantum_classical() -> None:
 
     # Execute through sim() - it now auto-detects and handles Guppy functions
     try:
+        from pecos_rslib import state_vector
         results = sim(quantum_with_classical) \
             .qubits(1) \
+            .quantum(state_vector()) \
             .seed(42) \
             .run(10)
         

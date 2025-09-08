@@ -34,7 +34,7 @@ if backends["guppy_available"]:
             """Add two integers."""
             return x + y
 
-        compiled = guppy_compiler.compile(add)
+        compiled = add.compile()
         print(" Classical function compiled successfully!")
 
     except (ImportError, AttributeError, RuntimeError) as e:

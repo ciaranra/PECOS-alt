@@ -56,9 +56,8 @@ def test_guppy_execute_llvm() -> None:
     # Test 4: Compile to HUGR
     print("\n4. Compiling Guppy to HUGR...")
     try:
-        from guppylang.decorator import guppy as guppy_decorator
-        compiled = guppy_decorator.compile_function(simple_quantum)
-        hugr_bytes = compiled.package.to_bytes()
+        compiled = simple_quantum.compile()
+        hugr_bytes = compiled.to_bytes()
         print(f"[PASS] HUGR compilation successful, {len(hugr_bytes)} bytes")
     except Exception as e:
         print(f"[ERROR] HUGR compilation failed: {e}")

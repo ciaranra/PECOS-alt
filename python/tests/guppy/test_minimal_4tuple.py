@@ -19,7 +19,8 @@ sys.path.append("python/quantum-pecos/src")
 
 from guppylang import guppy
 from guppylang.std.quantum import qubit, measure
-from pecos.frontends import guppy_sim
+from pecos.frontends.guppy_api import sim
+from pecos_rslib import state_vector
 
 
 @guppy
@@ -60,7 +61,7 @@ def run_tuple_test(name, func):
     print(f"\nTesting {name}...")
     try:
         print("  Compiling...")
-        sim = guppy_sim(func, max_qubits=10).build()
+        sim = sim(func).qubits(10).quantum(state_vector()).build()
         print("  Running...")
         results = sim.run(2)
         print(f"  Success! Results: {results}")

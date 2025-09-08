@@ -1,7 +1,8 @@
 """Test Y and Z gates specifically."""
 from guppylang import guppy
 from guppylang.std.quantum import qubit, measure, x, y, z
-from pecos.frontends import guppy_sim
+from pecos.frontends.guppy_api import sim
+from pecos_rslib import state_vector
 from typing import List, Tuple
 
 
@@ -25,8 +26,8 @@ def test_y_gate_only():
         y(q)
         return measure(q)
     
-    results = guppy_sim(y_only, max_qubits=1).run(5)
-    for i, val in enumerate(results["result"]):
+    results = sim(y_only).qubits(1).quantum(state_vector()).run(5)
+    for i, val in enumerate(results.get("measurements", results.get("measurement_1", []))):
         print(f"Shot {i}: Y|0⟩ = {val} (should be True)")
         assert val == True
 
@@ -39,8 +40,8 @@ def test_z_gate_only():
         z(q)
         return measure(q)
     
-    results = guppy_sim(z_only, max_qubits=1).run(5)
-    for i, val in enumerate(results["result"]):
+    results = sim(z_only).qubits(1).quantum(state_vector()).run(5)
+    for i, val in enumerate(results.get("measurements", results.get("measurement_1", []))):
         print(f"Shot {i}: Z|0⟩ = {val} (should be False)")
         assert val == False
 
@@ -59,9 +60,9 @@ def test_y_and_z_tuple():
         
         return r1, r2
     
-    results = guppy_sim(yz_tuple, max_qubits=2).run(5)
+    results = sim(yz_tuple).qubits(2).quantum(state_vector()).run(5)
     # Decode integer-encoded results
-    decoded_results = decode_integer_results(results["result"], 2)
+    decoded_results = decode_integer_results(results.get("measurements", results.get("measurement_1", [])), 2)
     for i, val in enumerate(decoded_results):
         r1, r2 = val
         print(f"Shot {i}: Y|0⟩ = {r1} (should be True), Z|0⟩ = {r2} (should be False)")
@@ -89,9 +90,9 @@ def test_xyz_tuple():
         
         return r1, r2, r3
     
-    results = guppy_sim(xyz_tuple, max_qubits=3).run(5)
+    results = sim(xyz_tuple).qubits(3).quantum(state_vector()).run(5)
     # Decode integer-encoded results
-    decoded_results = decode_integer_results(results["result"], 3)
+    decoded_results = decode_integer_results(results.get("measurements", results.get("measurement_1", [])), 3)
     for i, val in enumerate(decoded_results):
         r1, r2, r3 = val
         print(f"Shot {i}: X|0⟩ = {r1}, Y|0⟩ = {r2}, Z|0⟩ = {r3}")

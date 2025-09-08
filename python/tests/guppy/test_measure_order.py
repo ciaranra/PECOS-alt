@@ -1,7 +1,8 @@
 """Test measurement ordering."""
 from guppylang import guppy
 from guppylang.std.quantum import qubit, measure, x
-from pecos.frontends import guppy_sim
+from pecos.frontends.guppy_api import sim
+from pecos_rslib import state_vector
 from typing import List, Tuple
 
 
@@ -40,10 +41,10 @@ def test_measure_order():
         
         return r1, r2, r3, r4
     
-    results = guppy_sim(measure_order_test, max_qubits=4).run(5)
+    results = sim(measure_order_test).qubits(4).quantum(state_vector()).run(5)
     
     # Decode integer-encoded results
-    decoded_results = decode_integer_results(results["result"], 4)
+    decoded_results = decode_integer_results(results.get("measurements", results.get("measurement_1", [])), 4)
     for i, val in enumerate(decoded_results):
         r1, r2, r3, r4 = val
         print(f"Shot {i}: ({r1}, {r2}, {r3}, {r4})")

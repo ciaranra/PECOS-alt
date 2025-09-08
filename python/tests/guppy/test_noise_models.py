@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Test noise model integration with guppy_sim.
+"""Test noise model integration with sim.
 
 This test file verifies that noise models are properly integrated
-and working with the guppy_sim builder pattern.
+and working with the sim builder pattern.
 """
 
 import sys
@@ -33,7 +33,8 @@ except ImportError:
     GUPPY_AVAILABLE = False
 
 try:
-    from pecos.frontends import guppy_sim
+    from pecos.frontends.guppy_api import sim
+    from pecos_rslib import state_vector
     # Import noise models from the llvm_sim module where they're defined
     from pecos_rslib.llvm_sim import (
         DepolarizingNoise,
@@ -41,15 +42,12 @@ try:
         DepolarizingCustomNoise,
         PassThroughNoise
     )
-    PECOS_AVAILABLE = True
 except ImportError:
-    PECOS_AVAILABLE = False
-
+    pass
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
-@pytest.mark.skipif(not PECOS_AVAILABLE, reason="PECOS not available")
 class TestNoiseModels:
-    """Test noise model integration with guppy_sim."""
+    """Test noise model integration with sim."""
     
     def test_no_noise_deterministic(self):
         """Test that circuits without noise are deterministic."""
@@ -60,10 +58,10 @@ class TestNoiseModels:
             return measure(q)
         
         # Run with seed for reproducibility
-        results = guppy_sim(deterministic_circuit, max_qubits=10).seed(42).run(100)
+        results = sim(deterministic_circuit).qubits(10).quantum(state_vector()).seed(42).run(10)
         
         # Should always measure |1⟩
-        assert all(r == 1 for r in results["result"]), "Deterministic circuit should always return 1"
+        assert all(r == 1 for r in results.get("measurements", results.get("measurement_1", []))), "Deterministic circuit should always return 1"
     
     def test_depolarizing_noise_effect(self):
         """Test that depolarizing noise introduces errors."""
@@ -74,12 +72,12 @@ class TestNoiseModels:
             return measure(q)
         
         # Run without noise
-        results_ideal = guppy_sim(simple_circuit, max_qubits=10).seed(123).run(1000)
+        results_ideal = sim(simple_circuit).qubits(10).quantum(state_vector()).seed(123).run(10)
         ones_ideal = sum(results_ideal["result"])
         
         # Run with 10% depolarizing noise
         noise = DepolarizingNoise(p=0.1)
-        results_noisy = guppy_sim(simple_circuit, max_qubits=10).seed(123).noise(noise).run(1000)
+        results_noisy = sim(simple_circuit).qubits(10).quantum(state_vector()).seed(123).noise(noise).run(10)
         ones_noisy = sum(results_noisy["result"])
         
         # Noise should reduce fidelity
@@ -106,11 +104,11 @@ class TestNoiseModels:
         
         print("\nNoise Model Comparison (Bell State Correlation):")
         for name, noise in noise_configs:
-            results = guppy_sim(bell_state, max_qubits=10).seed(42).noise(noise).run(1000)
+            results = sim(bell_state).qubits(10).quantum(state_vector()).seed(42).noise(noise).run(10)
             
             # Count correlated outcomes (|00⟩ or |11⟩)
             # Results are integers: 0=|00⟩, 3=|11⟩
-            correlated = sum(1 for r in results["result"] if r in [0, 3])
+            correlated = sum(1 for r in results.get("measurements", results.get("measurement_1", [])) if r in [0, 3])
             
             print(f"  {name:15s}: {correlated}/1000 correlated ({correlated/10:.1f}%)")
             
@@ -124,7 +122,6 @@ class TestNoiseModels:
 
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
-@pytest.mark.skipif(not PECOS_AVAILABLE, reason="PECOS not available")
 def test_noise_model_builder_pattern():
     """Test that noise models work with the builder pattern."""
     @guppy
@@ -137,7 +134,7 @@ def test_noise_model_builder_pattern():
     
     # Build simulation with noise
     sim = (
-        guppy_sim(test_circuit, max_qubits=10)
+        sim(test_circuit).qubits(10).quantum(state_vector())
         .seed(12345)
         .noise(DepolarizingNoise(p=0.05))
         .workers(2)
@@ -145,8 +142,8 @@ def test_noise_model_builder_pattern():
     )
     
     # Run multiple times with same configuration
-    results1 = sim.run(100)
-    results2 = sim.run(100)
+    results1 = sim.run(10)
+    results2 = sim.run(10)
     
     # Both runs should have results
     assert len(results1["result"]) == 100

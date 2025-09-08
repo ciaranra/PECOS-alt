@@ -65,10 +65,8 @@ def test_guppy_phir_execute_pipeline() -> None:
     # Test 4: Compile to HUGR
     print("\n4. Compiling Guppy to HUGR...")
     try:
-        from guppylang.decorator import guppy as guppy_decorator
-        
-        compiled = guppy_decorator.compile_function(random_bit)
-        hugr_bytes = compiled.package.to_bytes()
+        compiled = random_bit.compile()
+        hugr_bytes = compiled.to_bytes()
         print(f"[PASS] HUGR compilation successful, {len(hugr_bytes)} bytes")
         
         # Convert to JSON for PHIR

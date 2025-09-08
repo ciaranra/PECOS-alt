@@ -19,7 +19,8 @@ sys.path.append("python/quantum-pecos/src")
 
 from guppylang import guppy
 from guppylang.std.quantum import qubit, measure, h, x, y, z
-from pecos.frontends import guppy_sim
+from pecos.frontends.guppy_api import sim
+from pecos_rslib import state_vector
 
 
 def test_multiple_measurements():
@@ -36,7 +37,7 @@ def test_multiple_measurements():
         
         return r1, r2
     
-    results = guppy_sim(test, max_qubits=10).run(10)
+    results = sim(test).qubits(10).quantum(state_vector()).run(10)
     print("Test passed: multiple measurements")
 
 
@@ -58,7 +59,7 @@ def test_three_measurements():
         
         return r1, r2, r3
     
-    results = guppy_sim(test, max_qubits=10).run(10)
+    results = sim(test).qubits(10).quantum(state_vector()).run(10)
     print("Test passed: three measurements")
 
 
@@ -84,7 +85,7 @@ def test_four_measurements():
         
         return r1, r2, r3, r4
     
-    results = guppy_sim(test, max_qubits=10).run(10)
+    results = sim(test).qubits(10).quantum(state_vector()).run(10)
     print("Test passed: four measurements")
 
 
@@ -112,7 +113,7 @@ def test_four_with_extra_gates():
         
         return result1, result2, result3, result4
     
-    results = guppy_sim(test, max_qubits=10).run(10)
+    results = sim(test).qubits(10).quantum(state_vector()).run(10)
     print("Test passed: four measurements with extra gates")
 
 

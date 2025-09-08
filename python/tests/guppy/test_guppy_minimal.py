@@ -23,13 +23,13 @@ def test_guppy_compilation() -> None:
     """Test that Guppy functions can be compiled."""
     print("Compiling Guppy function...")
 
-    # Compile the function directly
-    compiled = guppy_compiler.compile_function(random_bit)
+    # Compile the function directly using the correct API
+    compiled = random_bit.compile()
     assert compiled is not None
     print(f"Function compiled: {type(compiled)}")
 
     # Get HUGR bytes
-    hugr_bytes = compiled.package.to_bytes()
+    hugr_bytes = compiled.to_bytes()
     assert len(hugr_bytes) > 0
     print(f"HUGR bytes: {len(hugr_bytes)} bytes")
 

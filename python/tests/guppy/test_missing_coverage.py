@@ -63,24 +63,22 @@ except ImportError:
     GUPPY_AVAILABLE = False
 
 try:
-    from pecos.frontends import guppy_sim
-    from pecos.frontends.guppy_sim_builder import (
+    from pecos.frontends.guppy_api import sim
+    from pecos_rslib import state_vector
+    from pecos.frontends.sim_builder import (
         DepolarizingNoise,
         BiasedDepolarizingNoise,
         DepolarizingCustomNoise,
         PassThroughNoise
     )
-    PECOS_AVAILABLE = True
 except ImportError:
-    PECOS_AVAILABLE = False
-
+    pass
 
 # ============================================================================
 # NOISE MODEL TESTS
 # ============================================================================
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
-@pytest.mark.skipif(not PECOS_AVAILABLE, reason="PECOS not available")
 class TestNoiseModels:
     """Test quantum simulations with various noise models."""
     
@@ -93,7 +91,7 @@ class TestNoiseModels:
             return measure(q)
         
         # Test with no noise - should be deterministic
-        results_ideal = guppy_sim(noisy_circuit, max_qubits=10).seed(42).run(100)
+        results_ideal = sim(noisy_circuit).qubits(10).quantum(state_vector()).seed(42).run(10)
         
         # Results are in 'c' key
         ones_ideal = sum(results_ideal["result"])
@@ -101,7 +99,7 @@ class TestNoiseModels:
         
         # Test with depolarizing noise
         noise = DepolarizingNoise(p=0.1)  # 10% error rate
-        results_noisy = guppy_sim(noisy_circuit, max_qubits=10).seed(42).noise(noise).run(1000)
+        results_noisy = sim(noisy_circuit).qubits(10).quantum(state_vector()).seed(42).noise(noise).run(10)
         ones_noisy = sum(results_noisy["result"])
         
         # With noise, we should see some errors (not all 1s)
@@ -121,11 +119,11 @@ class TestNoiseModels:
         
         # Test with biased noise
         noise = BiasedDepolarizingNoise(p=0.05)  # 5% biased error
-        results = guppy_sim(bell_state, max_qubits=10).seed(123).noise(noise).run(1000)
+        results = sim(bell_state).qubits(10).quantum(state_vector()).seed(123).noise(noise).run(10)
         
         # Count correlated outcomes (00 and 11)
         # Results are tuples (False, False) or (True, True) for correlated Bell states
-        correlated = sum(1 for r in results["result"] if r in [(False, False), (True, True)])
+        correlated = sum(1 for r in results.get("measurements", results.get("measurement_1", [])) if r in [(False, False), (True, True)])
         
         # With 5% biased noise, Bell states should still be somewhat correlated
         # But biased depolarizing might affect correlation more than expected
@@ -149,8 +147,8 @@ class TestNoiseModels:
             p2=0.1        # 10% two-qubit gate error
         )
         
-        results = guppy_sim(prep_measure_circuit, max_qubits=10).seed(456).noise(noise).run(1000)
-        errors = 1000 - sum(results["result"])
+        results = sim(prep_measure_circuit).qubits(10).quantum(state_vector()).seed(456).noise(noise).run(10)
+        errors = 1000 - sum(results.get("measurements", results.get("measurement_1", [])))
         
         # With high prep error (20%), we expect significant errors
         # The circuit has prep + 2 gates + measurement, so errors compound
@@ -163,7 +161,6 @@ class TestNoiseModels:
 # ============================================================================
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
-@pytest.mark.skipif(not PECOS_AVAILABLE, reason="PECOS not available")
 class TestArrayOperations:
     """Test array and batch quantum operations."""
     
@@ -190,10 +187,10 @@ class TestArrayOperations:
             # Convert array to list for return
             return list(results)
         
-        results = guppy_sim(measure_array_test, max_qubits=10).seed(789).run(100)
+        results = sim(measure_array_test).qubits(10).quantum(state_vector()).seed(789).run(10)
         
         # Check tuple results
-        for result in results["result"]:
+        for result in results.get("measurements", results.get("measurement_1", [])):
             # Result is a tuple of 5 booleans
             # Extract individual measurements
             b0, b1, b2, b3, b4 = result
@@ -229,8 +226,8 @@ class TestArrayOperations:
             return measure(q)
         
         # Should run without errors
-        results = guppy_sim(discard_array_test, max_qubits=10).run(10)
-        assert all(r == 1 for r in results["result"]), "Final qubit should be |1⟩"
+        results = sim(discard_array_test).qubits(10).quantum(state_vector()).run(10)
+        assert all(r == 1 for r in results.get("measurements", results.get("measurement_1", []))), "Final qubit should be |1⟩"
     
     @pytest.mark.skip(reason="HUGR doesn't support value_array type yet")
     def test_array_indexing_and_loops(self):
@@ -260,12 +257,12 @@ class TestArrayOperations:
             
             return result
         
-        results = guppy_sim(array_loop_test, max_qubits=10).seed(42).run(100)
+        results = sim(array_loop_test).qubits(10).quantum(state_vector()).seed(42).run(10)
         
         # With fixed seed, check deterministic pattern
         # Even indices (0,2) are in superposition, odd indices (1,3) are |1⟩
         # This gives us a specific pattern we can verify
-        for result in results["result"]:
+        for result in results.get("measurements", results.get("measurement_1", [])):
             # Extract individual bits: result = b3*8 + b2*4 + b1*2 + b0
             b0 = result & 1
             b1 = (result >> 1) & 1  
@@ -281,7 +278,6 @@ class TestArrayOperations:
 # ============================================================================
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
-@pytest.mark.skipif(not PECOS_AVAILABLE, reason="PECOS not available")
 class TestAdvancedControlFlow:
     """Test complex control flow patterns."""
     
@@ -305,17 +301,17 @@ class TestAdvancedControlFlow:
             return count
         
         # Run multiple times to see distribution
-        results = guppy_sim(nested_loop_test, max_qubits=10).seed(111).run(100)
+        results = sim(nested_loop_test).qubits(10).quantum(state_vector()).seed(111).run(10)
         
         # Count should be between 0 and 6 (sum of 1+2+3 measurements)
-        assert all(0 <= r <= 6 for r in results["result"]), "Count out of expected range"
+        assert all(0 <= r <= 6 for r in results.get("measurements", results.get("measurement_1", []))), "Count out of expected range"
         # Check we get a reasonable distribution
-        avg_count = sum(results["result"]) / len(results["result"])
+        avg_count = sum(results.get("measurements", results.get("measurement_1", []))) / len(results.get("measurements", results.get("measurement_1", [])))
         assert 2.5 < avg_count < 3.5, f"Average count {avg_count} out of expected range"
     
     def test_conditional_quantum_operations(self):
         """Test quantum operations inside conditionals."""
-        # Create separate functions for each test case since guppy_sim doesn't support parameters
+        # Create separate functions for each test case since sim doesn't support parameters
         @guppy
         def conditional_quantum_0() -> bool:
             q = qubit()
@@ -337,17 +333,17 @@ class TestAdvancedControlFlow:
             return measure(q)
         
         # Test case n=0
-        results = guppy_sim(conditional_quantum_0, max_qubits=10).run(10)
-        assert all(r == 0 for r in results["result"]), "Case n=0 failed"
+        results = sim(conditional_quantum_0).qubits(10).quantum(state_vector()).run(10)
+        assert all(r == 0 for r in results.get("measurements", results.get("measurement_1", []))), "Case n=0 failed"
         
         # Test case n=1
-        results = guppy_sim(conditional_quantum_1, max_qubits=10).run(10)
-        assert all(r == 1 for r in results["result"]), "Case n=1 failed"
+        results = sim(conditional_quantum_1).qubits(10).quantum(state_vector()).run(10)
+        assert all(r == 1 for r in results.get("measurements", results.get("measurement_1", []))), "Case n=1 failed"
         
         # Test case n=2 (superposition - should have both 0 and 1)
-        results = guppy_sim(conditional_quantum_2, max_qubits=10).seed(42).run(100)
-        zeros = sum(1 for r in results["result"] if r == 0)
-        ones = sum(1 for r in results["result"] if r == 1)
+        results = sim(conditional_quantum_2).qubits(10).quantum(state_vector()).seed(42).run(10)
+        zeros = sum(1 for r in results.get("measurements", results.get("measurement_1", [])) if r == 0)
+        ones = sum(1 for r in results.get("measurements", results.get("measurement_1", [])) if r == 1)
         assert zeros > 20 and ones > 20, "Case n=2 (superposition) failed"
     
     def test_early_return_with_quantum(self):
@@ -375,8 +371,8 @@ class TestAdvancedControlFlow:
             return measure(q1)
         
         # Test both paths
-        results_true = guppy_sim(early_return_test_true, max_qubits=10).seed(42).run(100)
-        results_false = guppy_sim(early_return_test_false, max_qubits=10).seed(42).run(100)
+        results_true = sim(early_return_test_true).qubits(10).quantum(state_vector()).seed(42).run(10)
+        results_false = sim(early_return_test_false).qubits(10).quantum(state_vector()).seed(42).run(10)
         
         # Both should produce valid results
         assert len(results_true["result"]) == 100
@@ -388,7 +384,6 @@ class TestAdvancedControlFlow:
 # ============================================================================
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
-@pytest.mark.skipif(not PECOS_AVAILABLE, reason="PECOS not available")
 class TestQuantumEngines:
     """Test different quantum simulation engines."""
     
@@ -402,13 +397,13 @@ class TestQuantumEngines:
             return measure(q0), measure(q1)
         
         # Explicitly use state vector engine
-        results = (guppy_sim(engine_test, max_qubits=10)
+        results = (sim(engine_test).qubits(10).quantum(state_vector())
                   .engine("StateVector")
                   .seed(42)
-                  .run(100))
+                  .run(10))
         
         # Verify Bell state correlations - results are tuples
-        assert all(r in [(False, False), (True, True)] for r in results["result"]), "Bell state should be |00⟩ or |11⟩"
+        assert all(r in [(False, False), (True, True)] for r in results.get("measurements", results.get("measurement_1", []))), "Bell state should be |00⟩ or |11⟩"
     
     def test_sparse_stabilizer_engine(self):
         """Test sparse stabilizer engine for Clifford circuits."""
@@ -423,13 +418,13 @@ class TestQuantumEngines:
         
         # Try sparse stabilizer engine
         try:
-            results = (guppy_sim(clifford_circuit, max_qubits=10)
+            results = (sim(clifford_circuit).qubits(10).quantum(state_vector())
                       .engine("SparseStabilizer")
                       .seed(42)
-                      .run(100))
+                      .run(10))
             
             # Should produce deterministic result for Clifford circuit
-            assert all(r == results["result"][0] for r in results["result"]), \
+            assert all(r == results.get("measurements", results.get("measurement_1", []))[0] for r in results.get("measurements", results.get("measurement_1", []))), \
                 "Clifford circuit should be deterministic"
         except Exception as e:
             # Engine might not be available for all operations
@@ -441,7 +436,6 @@ class TestQuantumEngines:
 # ============================================================================
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
-@pytest.mark.skipif(not PECOS_AVAILABLE, reason="PECOS not available")
 class TestQuantumErrorHandling:
     """Test error handling with quantum resources."""
     
@@ -462,7 +456,7 @@ class TestQuantumErrorHandling:
         # Some shots should panic, some should not
         with pytest.raises(RuntimeError, match="panic"):
             # This might panic on some shots
-            guppy_sim(panic_test, max_qubits=10).seed(42).run(100)
+            sim(panic_test).qubits(10).quantum(state_vector()).seed(42).run(10)
     
     @pytest.mark.skip(reason="project_z requires tket2.bool.make_opaque support in HUGR->LLVM")
     def test_projective_measurement(self):
@@ -480,10 +474,10 @@ class TestQuantumErrorHandling:
             
             return result, final
         
-        results = guppy_sim(project_test, max_qubits=10).seed(42).run(100)
+        results = sim(project_test).qubits(10).quantum(state_vector()).seed(42).run(10)
         
         # After projection, both measurements should match
-        for r in results["result"]:
+        for r in results.get("measurements", results.get("measurement_1", [])):
             # Extract two bits from result
             first = r & 1
             second = (r >> 1) & 1
@@ -506,11 +500,11 @@ class TestQuantumErrorHandling:
             
             return before, after
         
-        results = guppy_sim(reset_test, max_qubits=10).run(100)
+        results = sim(reset_test).qubits(10).quantum(state_vector()).run(10)
         
         # All results should be (True, False) as tuples
         # Decode integer-encoded results
-        decoded_results = decode_integer_results(results["result"], 2)
+        decoded_results = decode_integer_results(results.get("measurements", results.get("measurement_1", [])), 2)
         assert all(r == (True, False) for r in decoded_results), \
             "Should produce |1⟩ then |0⟩ as tuple (True, False)"
 

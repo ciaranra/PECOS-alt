@@ -2,7 +2,8 @@
 import pytest
 from guppylang import guppy
 from guppylang.std.quantum import qubit, measure, x, y, z
-from pecos.frontends import guppy_sim
+from pecos.frontends.guppy_api import sim
+from pecos_rslib import state_vector
 from typing import List, Tuple
 
 
@@ -26,8 +27,8 @@ def test_single_measurements():
         y(q)  # Y on |0⟩ gives |1⟩
         return measure(q)
     
-    results = guppy_sim(single_y, max_qubits=1).run(10)
-    for val in results["result"]:
+    results = sim(single_y).qubits(1).quantum(state_vector()).run(10)
+    for val in results.get("measurements", results.get("measurement_1", [])):
         assert val == True, f"Y on |0⟩ should give True, got {val}"
 
 
@@ -46,9 +47,9 @@ def test_simple_tuple():
         
         return r1, r2
     
-    results = guppy_sim(simple_tuple, max_qubits=2).run(10)
+    results = sim(simple_tuple).qubits(2).quantum(state_vector()).run(10)
     # Decode integer-encoded results
-    decoded_results = decode_integer_results(results["result"], 2)
+    decoded_results = decode_integer_results(results.get("measurements", results.get("measurement_1", [])), 2)
     for i, val in enumerate(decoded_results):
         r1, r2 = val
         print(f"Shot {i}: r1={r1} (X|0⟩, expect True), r2={r2} (|0⟩, expect False)")
@@ -70,9 +71,9 @@ def test_direct_tuple_return():
         
         return measure(q1), measure(q2)
     
-    results = guppy_sim(direct_tuple, max_qubits=2).run(10)
+    results = sim(direct_tuple).qubits(2).quantum(state_vector()).run(10)
     # Decode integer-encoded results
-    decoded_results = decode_integer_results(results["result"], 2)
+    decoded_results = decode_integer_results(results.get("measurements", results.get("measurement_1", [])), 2)
     for i, val in enumerate(decoded_results):
         r1, r2 = val
         print(f"Shot {i}: Direct return r1={r1} (X|0⟩, expect True), r2={r2} (|0⟩, expect False)")
@@ -94,9 +95,9 @@ def test_y_gate_tuple():
         
         return r1, r2
     
-    results = guppy_sim(y_tuple, max_qubits=2).run(10)
+    results = sim(y_tuple).qubits(2).quantum(state_vector()).run(10)
     # Decode integer-encoded results
-    decoded_results = decode_integer_results(results["result"], 2)
+    decoded_results = decode_integer_results(results.get("measurements", results.get("measurement_1", [])), 2)
     for i, val in enumerate(decoded_results):
         r1, r2 = val
         print(f"Shot {i}: Y gate r1={r1} (Y|0⟩, expect True), r2={r2} (Z|0⟩, expect False)")

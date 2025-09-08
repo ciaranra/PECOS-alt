@@ -1,7 +1,8 @@
 """Test to check if tuple values are in wrong order."""
 from guppylang import guppy
 from guppylang.std.quantum import qubit, measure, x, y, z
-from pecos.frontends import guppy_sim
+from pecos.frontends.guppy_api import sim
+from pecos_rslib import state_vector
 from typing import List, Tuple
 
 
@@ -38,9 +39,9 @@ def test_tuple_order():
         
         return r1, r2, r3, r4
     
-    results = guppy_sim(tuple_order_test, max_qubits=4).run(1)
+    results = sim(tuple_order_test).qubits(4).quantum(state_vector()).run(1)
     # Decode integer-encoded results
-    decoded_results = decode_integer_results(results["result"], 4)
+    decoded_results = decode_integer_results(results.get("measurements", results.get("measurement_1", [])), 4)
     val = decoded_results[0]
     r1, r2, r3, r4 = val
     
@@ -86,9 +87,9 @@ def test_different_gates():
         
         return r1, r2, r3, r4
     
-    results = guppy_sim(gate_test, max_qubits=4).run(1)
+    results = sim(gate_test).qubits(4).quantum(state_vector()).run(1)
     # Decode integer-encoded results
-    decoded_results = decode_integer_results(results["result"], 4)
+    decoded_results = decode_integer_results(results.get("measurements", results.get("measurement_1", [])), 4)
     val = decoded_results[0]
     r1, r2, r3, r4 = val
     

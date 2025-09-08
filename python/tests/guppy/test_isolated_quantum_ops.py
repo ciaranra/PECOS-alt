@@ -28,15 +28,11 @@ try:
 except ImportError:
     GUPPY_AVAILABLE = False
 
-try:
-    from pecos.frontends import guppy_sim
-    PECOS_AVAILABLE = True
-except ImportError:
-    PECOS_AVAILABLE = False
+from pecos.frontends.guppy_api import sim
+from pecos_rslib import state_vector
 
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
-@pytest.mark.skipif(not PECOS_AVAILABLE, reason="PECOS not available")
 
 
 def decode_integer_results(results: List[int], n_bits: int) -> List[Tuple[bool, ...]]:
@@ -61,8 +57,8 @@ class TestIsolatedOps:
             h(q)
             return measure(q)
         
-        results = guppy_sim(test, max_qubits=10).run(10)
-        assert len(results["result"]) == 10
+        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        assert len(results.get("measurements", results.get("measurement_1", []))) == 10
     
     def test_single_x_gate(self):
         """Test just X gate."""
@@ -72,8 +68,8 @@ class TestIsolatedOps:
             x(q)
             return measure(q)
         
-        results = guppy_sim(test, max_qubits=10).run(10)
-        assert all(r == True for r in results["result"])
+        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        assert all(r == True for r in results.get("measurements", results.get("measurement_1", [])))
     
     def test_single_y_gate(self):
         """Test just Y gate."""
@@ -83,8 +79,8 @@ class TestIsolatedOps:
             y(q)
             return measure(q)
         
-        results = guppy_sim(test, max_qubits=10).run(10)
-        assert all(r == True for r in results["result"])
+        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        assert all(r == True for r in results.get("measurements", results.get("measurement_1", [])))
     
     def test_single_z_gate(self):
         """Test just Z gate."""
@@ -94,8 +90,8 @@ class TestIsolatedOps:
             z(q)
             return measure(q)
         
-        results = guppy_sim(test, max_qubits=10).run(10)
-        assert all(r == False for r in results["result"])
+        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        assert all(r == False for r in results.get("measurements", results.get("measurement_1", [])))
     
     def test_phase_gates_s_sdg(self):
         """Test S and S-dagger gates."""
@@ -107,8 +103,8 @@ class TestIsolatedOps:
             sdg(q)
             return measure(q)
         
-        results = guppy_sim(test, max_qubits=10).run(10)
-        assert all(r == True for r in results["result"])
+        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        assert all(r == True for r in results.get("measurements", results.get("measurement_1", [])))
     
     def test_phase_gates_t_tdg(self):
         """Test T and T-dagger gates."""
@@ -120,8 +116,8 @@ class TestIsolatedOps:
             tdg(q)
             return measure(q)
         
-        results = guppy_sim(test, max_qubits=10).run(10)
-        assert all(r == True for r in results["result"])
+        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        assert all(r == True for r in results.get("measurements", results.get("measurement_1", [])))
     
     def test_rotation_rx(self):
         """Test Rx rotation."""
@@ -131,9 +127,9 @@ class TestIsolatedOps:
             rx(q, pi)
             return measure(q)
         
-        results = guppy_sim(test, max_qubits=10).run(10)
-        print(f"RX test results: {results['result']}")
-        assert all(r == True for r in results["result"])
+        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        print(f"RX test results: {results.get("measurements", results.get("measurement_1", []))}")
+        assert all(r == True for r in results.get("measurements", results.get("measurement_1", [])))
     
     def test_rotation_ry(self):
         """Test Ry rotation."""
@@ -143,8 +139,8 @@ class TestIsolatedOps:
             ry(q, pi)
             return measure(q)
         
-        results = guppy_sim(test, max_qubits=10).run(10)
-        assert all(r == True for r in results["result"])
+        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        assert all(r == True for r in results.get("measurements", results.get("measurement_1", [])))
     
     def test_rotation_rz(self):
         """Test Rz rotation."""
@@ -154,8 +150,8 @@ class TestIsolatedOps:
             rz(q, pi)
             return measure(q)
         
-        results = guppy_sim(test, max_qubits=10).run(10)
-        assert all(r == False for r in results["result"])
+        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        assert all(r == False for r in results.get("measurements", results.get("measurement_1", [])))
     
     def test_two_qubit_cx(self):
         """Test CX gate."""
@@ -167,10 +163,10 @@ class TestIsolatedOps:
             cx(q1, q2)
             return measure(q1), measure(q2)
         
-        results = guppy_sim(test, max_qubits=10).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).run(10)
         # Should get (True, True) for both qubits
         # Decode integer-encoded results
-        decoded_results = decode_integer_results(results["result"], 2)
+        decoded_results = decode_integer_results(results.get("measurements", results.get("measurement_1", [])), 2)
         assert all(r == (True, True) for r in decoded_results)
     
     def test_two_qubit_cy(self):
@@ -183,10 +179,10 @@ class TestIsolatedOps:
             cy(q1, q2)
             return measure(q1), measure(q2)
         
-        results = guppy_sim(test, max_qubits=10).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).run(10)
         # CY with control=1 should flip target
         # Decode integer-encoded results
-        decoded_results = decode_integer_results(results["result"], 2)
+        decoded_results = decode_integer_results(results.get("measurements", results.get("measurement_1", [])), 2)
         assert all(r == (True, True) for r in decoded_results)
     
     def test_two_qubit_cz(self):
@@ -200,10 +196,10 @@ class TestIsolatedOps:
             cz(q1, q2)
             return measure(q1), measure(q2)
         
-        results = guppy_sim(test, max_qubits=10).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).run(10)
         # Both qubits should be |1⟩
         # Decode integer-encoded results
-        decoded_results = decode_integer_results(results["result"], 2)
+        decoded_results = decode_integer_results(results.get("measurements", results.get("measurement_1", [])), 2)
         assert all(r == (True, True) for r in decoded_results)
     
     def test_two_qubit_ch(self):
@@ -215,10 +211,10 @@ class TestIsolatedOps:
             ch(q1, q2)
             return measure(q1), measure(q2)
         
-        results = guppy_sim(test, max_qubits=10).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).run(10)
         # CH with control=0 does nothing
         # Decode integer-encoded results
-        decoded_results = decode_integer_results(results["result"], 2)
+        decoded_results = decode_integer_results(results.get("measurements", results.get("measurement_1", [])), 2)
         assert all(r == (False, False) for r in decoded_results)
     
     def test_toffoli(self):
@@ -233,10 +229,10 @@ class TestIsolatedOps:
             toffoli(q1, q2, q3)
             return measure(q1), measure(q2), measure(q3)
         
-        results = guppy_sim(test, max_qubits=10).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).run(10)
         # Both controls at |1⟩, target flips to |1⟩
         # Decode integer-encoded results
-        decoded_results = decode_integer_results(results["result"], 3)
+        decoded_results = decode_integer_results(results.get("measurements", results.get("measurement_1", [])), 3)
         assert all(r == (True, True, True) for r in decoded_results)
     
     def test_reset_operation(self):
@@ -248,8 +244,8 @@ class TestIsolatedOps:
             reset(q)
             return measure(q)
         
-        results = guppy_sim(test, max_qubits=10).run(10)
-        assert all(r == False for r in results["result"])
+        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        assert all(r == False for r in results.get("measurements", results.get("measurement_1", [])))
     
     def test_discard_operation(self):
         """Test discard operation."""
@@ -262,8 +258,8 @@ class TestIsolatedOps:
             x(q2)
             return measure(q2)
         
-        results = guppy_sim(test, max_qubits=10).run(10)
-        assert all(r == True for r in results["result"])
+        results = sim(test).qubits(10).quantum(state_vector()).run(10)
+        assert all(r == True for r in results.get("measurements", results.get("measurement_1", [])))
     
     def test_complex_sequence(self):
         """Test a more complex sequence of operations."""
@@ -290,10 +286,10 @@ class TestIsolatedOps:
             
             return result1, result2, result3, result4
         
-        results = guppy_sim(test, max_qubits=10).run(10)
+        results = sim(test).qubits(10).quantum(state_vector()).run(10)
         # Check tuple values directly
         # Decode integer-encoded results
-        decoded_results = decode_integer_results(results["result"], 4)
+        decoded_results = decode_integer_results(results.get("measurements", results.get("measurement_1", [])), 4)
         for r in decoded_results:
             # r is now a tuple like (r1, r2, r3, r4)
             _, r2, r3, r4 = r

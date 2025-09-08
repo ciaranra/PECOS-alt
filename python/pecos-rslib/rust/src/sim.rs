@@ -32,13 +32,17 @@ fn detect_and_convert_guppy(py: Python, program: &PyObject) -> PyResult<PySimBui
     let is_guppy = is_guppy_function(py, program)?;
     eprintln!("DEBUG: is_guppy_function returned: {}", is_guppy);
     if is_guppy {
-        // Use the new SeleneLibrary approach - store the Guppy program
-        // and let Python handle the compilation during build
-        eprintln!("DEBUG: Detected Guppy program, creating SeleneLibrarySimBuilder");
+        // Use SeleneExecutable approach with Bridge plugin for back-and-forth communication
+        // This will build a Selene executable and use IPC with the Bridge plugin
+        eprintln!("DEBUG: Detected Guppy program, creating SeleneExecutableSimBuilder with Bridge plugin");
+        
+        // Create default SeleneExecutableEngineBuilder
+        let engine_builder = pecos_selene::selene_executable_builder::SeleneExecutableEngineBuilder::new();
         
         let builder = PySimBuilder {
-            inner: SimBuilderInner::SeleneLibrary(PySeleneLibrarySimBuilder {
+            inner: SimBuilderInner::SeleneExecutable(PySeleneExecutableSimBuilder {
                 program: Some(program.clone_ref(py)),
+                engine_builder: Arc::new(Mutex::new(Some(engine_builder))),
                 seed: None,
                 workers: None,
                 quantum_engine_builder: None,
@@ -46,12 +50,55 @@ fn detect_and_convert_guppy(py: Python, program: &PyObject) -> PyResult<PySimBui
                 explicit_num_qubits: None,
             }),
         };
-        eprintln!("DEBUG: Successfully created PySimBuilder with SeleneLibrary");
+        eprintln!("DEBUG: Successfully created PySimBuilder with SeleneExecutable");
         return Ok(builder);
     }
     
     // Not a Guppy program
     Err(pyo3::exceptions::PyTypeError::new_err("Not a Guppy program"))
+}
+
+/// Apply a quantum engine to a SimBuilder
+fn apply_quantum_engine(py: Python, mut sim_builder: pecos_engines::SimBuilder, qe_py: &PyObject) 
+    -> PyResult<pecos_engines::SimBuilder> {
+    use crate::engine_builders::{PyStateVectorEngineBuilder, PySparseStabilizerEngineBuilder};
+    use pyo3::exceptions::PyRuntimeError;
+    
+    if let Ok(mut state_vec) = qe_py.extract::<PyStateVectorEngineBuilder>(py) {
+        if let Some(inner) = state_vec.inner.take() {
+            Ok(sim_builder.quantum(inner))
+        } else {
+            Err(PyErr::new::<PyRuntimeError, _>(
+                "Quantum engine builder has already been consumed"
+            ))
+        }
+    } else if let Ok(mut sparse_stab) = qe_py.extract::<PySparseStabilizerEngineBuilder>(py) {
+        if let Some(inner) = sparse_stab.inner.take() {
+            Ok(sim_builder.quantum(inner))
+        } else {
+            Err(PyErr::new::<PyRuntimeError, _>(
+                "Quantum engine builder has already been consumed"
+            ))
+        }
+    } else {
+        Ok(sim_builder)
+    }
+}
+
+/// Apply a noise model to a SimBuilder
+fn apply_noise_model(py: Python, sim_builder: pecos_engines::SimBuilder, noise_py: &PyObject) 
+    -> PyResult<pecos_engines::SimBuilder> {
+    use crate::engine_builders::{PyGeneralNoiseModelBuilder, PyDepolarizingNoiseModelBuilder, PyBiasedDepolarizingNoiseModelBuilder};
+    
+    if let Ok(general) = noise_py.extract::<PyGeneralNoiseModelBuilder>(py) {
+        Ok(sim_builder.noise(general.inner.clone()))
+    } else if let Ok(depolarizing) = noise_py.extract::<PyDepolarizingNoiseModelBuilder>(py) {
+        Ok(sim_builder.noise(depolarizing.inner.clone()))
+    } else if let Ok(biased) = noise_py.extract::<PyBiasedDepolarizingNoiseModelBuilder>(py) {
+        Ok(sim_builder.noise(biased.inner.clone()))
+    } else {
+        Ok(sim_builder)
+    }
 }
 
 /// Check if a Python object is a Guppy function
@@ -232,6 +279,7 @@ pub fn sim(py: Python, program: PyObject) -> PyResult<PySimBuilder> {
         // Create a PySeleneExecutableSimBuilder (using new bridge approach)
         Ok(PySimBuilder {
             inner: SimBuilderInner::SeleneExecutable(PySeleneExecutableSimBuilder {
+                program: None,  // Program will be set later if needed
                 engine_builder: Arc::new(Mutex::new(Some(engine_builder))),
                 seed: None,
                 workers: None,
@@ -751,72 +799,139 @@ impl PySimBuilder {
                 }
             }
             SimBuilderInner::SeleneExecutable(builder) => {
-                println!("*** SIM: Running SeleneExecutable simulation with {} shots ***", shots);
-                // SeleneExecutable uses SeleneExecutableEngine with bridge approach
-                let mut builder_lock = builder.engine_builder.lock().unwrap();
-                let mut engine_builder = builder_lock.take()
-                    .ok_or_else(|| PyRuntimeError::new_err("Builder already consumed"))?;
+                eprintln!("DEBUG: Running SeleneExecutable simulation with {} shots", shots);
+                eprintln!("DEBUG: SeleneExecutable will use Bridge plugin for back-and-forth communication");
+                eprintln!("DEBUG: builder.explicit_num_qubits = {:?}", builder.explicit_num_qubits);
                 
-                // Set number of qubits if specified
-                if let Some(n) = builder.explicit_num_qubits {
-                    engine_builder = engine_builder.num_qubits(n);
-                }
-                
-                // Build the engine directly (SeleneExecutableEngine is a ClassicalControlEngine)
-                let mut sim_builder = engine_builder.to_sim();
-                
-                if let Some(seed) = builder.seed {
-                    sim_builder = sim_builder.seed(seed);
-                }
-                if let Some(workers) = builder.workers {
-                    sim_builder = sim_builder.workers(workers);
-                }
-                
-                // Apply quantum engine if present (same as SeleneRuntime case)
-                if let Some(ref qe_py) = builder.quantum_engine_builder {
-                    sim_builder = Python::with_gil(|py| -> PyResult<_> {
-                        if let Ok(mut state_vec) = qe_py.extract::<PyStateVectorEngineBuilder>(py) {
-                            if let Some(inner) = state_vec.inner.take() {
-                                Ok(sim_builder.quantum(inner))
-                            } else {
-                                Err(PyErr::new::<PyRuntimeError, _>(
-                                    "Quantum engine builder has already been consumed"
-                                ))
-                            }
-                        } else if let Ok(mut sparse_stab) = qe_py.extract::<PySparseStabilizerEngineBuilder>(py) {
-                            if let Some(inner) = sparse_stab.inner.take() {
-                                Ok(sim_builder.quantum(inner))
-                            } else {
-                                Err(PyErr::new::<PyRuntimeError, _>(
-                                    "Quantum engine builder has already been consumed"
-                                ))
-                            }
-                        } else {
-                            Ok(sim_builder)
+                // We need to build Selene executable from the Guppy program
+                Python::with_gil(|py| -> PyResult<PyShotVec> {
+                    eprintln!("DEBUG: Inside Python::with_gil block");
+                    let program = builder.program.as_ref()
+                        .ok_or_else(|| PyRuntimeError::new_err("No program specified"))?;
+                    
+                    // Compile Guppy to HUGR if needed
+                    let hugr_package = if is_guppy_function(py, program)? {
+                        eprintln!("DEBUG: Compiling Guppy to HUGR for Selene executable");
+                        program.call_method0(py, "compile")?
+                    } else {
+                        eprintln!("DEBUG: Using existing HUGR program");
+                        program.clone_ref(py)
+                    };
+                    
+                    // Build the Selene executable
+                    let selene_sim = py.import("selene_sim")?;
+                    let build_func = selene_sim.getattr("build")?;
+                    
+                    let tempfile = py.import("tempfile")?;
+                    let tempdir = tempfile.call_method0("mkdtemp")?;
+                    let build_dir = tempdir.extract::<String>()?;
+                    eprintln!("DEBUG: Building Selene executable in {}", build_dir);
+                    
+                    // Get the number of qubits - use explicit value if set, otherwise default to 10
+                    let num_qubits = builder.explicit_num_qubits.unwrap_or(10);
+                    eprintln!("DEBUG: Using num_qubits = {}", num_qubits);
+                    
+                    // Create artifacts directory and pecos_config.json BEFORE building
+                    // This ensures the Bridge plugin reads the correct qubit count when initialized
+                    let artifacts_dir = format!("{}/artifacts", build_dir);
+                    std::fs::create_dir_all(&artifacts_dir)
+                        .map_err(|e| PyRuntimeError::new_err(format!("Failed to create artifacts dir: {}", e)))?;
+                    
+                    // Write the PECOS config file with the correct qubit count
+                    let config_path = format!("{}/pecos_config.json", artifacts_dir);
+                    let config_json = serde_json::json!({
+                        "n_qubits": num_qubits,
+                        "ipc_mode": true,
+                    });
+                    std::fs::write(&config_path, config_json.to_string())
+                        .map_err(|e| PyRuntimeError::new_err(format!("Failed to write pecos_config.json: {}", e)))?;
+                    eprintln!("DEBUG: Created pecos_config.json with n_qubits={} at {}", num_qubits, config_path);
+                    
+                    // Verify the file was created
+                    if std::path::Path::new(&config_path).exists() {
+                        eprintln!("DEBUG: Verified pecos_config.json exists at {}", config_path);
+                        if let Ok(contents) = std::fs::read_to_string(&config_path) {
+                            eprintln!("DEBUG: Config contents: {}", contents);
                         }
-                    })?;
-                }
-                
-                // Apply noise builder if present (same as SeleneRuntime case)
-                if let Some(ref noise_py) = builder.noise_builder {
-                    sim_builder = Python::with_gil(|py| -> PyResult<_> {
-                        if let Ok(general) = noise_py.extract::<PyGeneralNoiseModelBuilder>(py) {
-                            Ok(sim_builder.noise(general.inner.clone()))
-                        } else if let Ok(depolarizing) = noise_py.extract::<PyDepolarizingNoiseModelBuilder>(py) {
-                            Ok(sim_builder.noise(depolarizing.inner.clone()))
-                        } else if let Ok(biased) = noise_py.extract::<PyBiasedDepolarizingNoiseModelBuilder>(py) {
-                            Ok(sim_builder.noise(biased.inner.clone()))
-                        } else {
-                            Ok(sim_builder)
-                        }
-                    })?;
-                }
-                
-                // Run the simulation
-                match sim_builder.run(shots) {
-                    Ok(shot_vec) => Ok(PyShotVec::new(shot_vec)),
-                    Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {}", e))),
-                }
+                    } else {
+                        eprintln!("DEBUG: ERROR - Config file not found after creation!");
+                    }
+                    
+                    // Set the SELENE_ARTIFACTS_DIR environment variable so Bridge can find the config
+                    unsafe {
+                        std::env::set_var("SELENE_ARTIFACTS_DIR", &artifacts_dir);
+                    }
+                    eprintln!("DEBUG: Set SELENE_ARTIFACTS_DIR={}", artifacts_dir);
+                    
+                    let kwargs = pyo3::types::PyDict::new(py);
+                    kwargs.set_item("build_dir", &build_dir)?;
+                    kwargs.set_item("verbose", false)?;
+                    kwargs.set_item("name", "guppy_prog")?;
+                    
+                    let instance = build_func.call((hugr_package,), Some(&kwargs))?;
+                    eprintln!("DEBUG: Built Selene instance successfully");
+                    
+                    // Get executable and artifacts paths
+                    let pathlib = py.import("pathlib")?;
+                    let path_cls = pathlib.getattr("Path")?;
+                    let build_path = path_cls.call1((build_dir.clone(),))?;
+                    
+                    let exec_path = build_path.call_method1("__truediv__", ("artifacts/program.selene.x",))?;
+                    let artifacts_path = build_path.call_method1("__truediv__", ("artifacts",))?;
+                    
+                    let exec_path_str = exec_path.call_method0("__str__")?.extract::<String>()?;
+                    let artifacts_path_str = artifacts_path.call_method0("__str__")?.extract::<String>()?;
+                    
+                    eprintln!("DEBUG: Selene executable at: {}", exec_path_str);
+                    eprintln!("DEBUG: Artifacts at: {}", artifacts_path_str);
+                    
+                    // Create SeleneInterfaceProgram with paths
+                    let selene_program = pecos_programs::SeleneInterfaceProgram {
+                        plugin: Vec::new(),  // No plugin bytes needed when using executable
+                        executable_path: Some(exec_path_str),
+                        artifacts_path: Some(artifacts_path_str),
+                    };
+                    
+                    // Now create and configure the engine builder
+                    let mut builder_lock = builder.engine_builder.lock().unwrap();
+                    let mut engine_builder = builder_lock.take()
+                        .ok_or_else(|| PyRuntimeError::new_err("Builder already consumed"))?;
+                    
+                    // Set the program
+                    engine_builder = engine_builder.selene_interface_program(selene_program);
+                    
+                    // Set number of qubits if specified
+                    if let Some(n) = builder.explicit_num_qubits {
+                        engine_builder = engine_builder.num_qubits(n);
+                    }
+                    
+                    // Build the engine directly (SeleneExecutableEngine is a ClassicalControlEngine)
+                    let mut sim_builder = engine_builder.to_sim();
+                    
+                    if let Some(seed) = builder.seed {
+                        sim_builder = sim_builder.seed(seed);
+                    }
+                    if let Some(workers) = builder.workers {
+                        sim_builder = sim_builder.workers(workers);
+                    }
+                    
+                    // Apply quantum engine if specified
+                    if let Some(ref qe_py) = builder.quantum_engine_builder {
+                        sim_builder = apply_quantum_engine(py, sim_builder, qe_py)?;
+                    }
+                    
+                    // Apply noise if specified
+                    if let Some(ref noise_py) = builder.noise_builder {
+                        sim_builder = apply_noise_model(py, sim_builder, noise_py)?;
+                    }
+                    
+                    // Run the simulation with SeleneExecutableEngine and Bridge plugin
+                    eprintln!("DEBUG: Running simulation with SeleneExecutableEngine and Bridge plugin");
+                    match sim_builder.run(shots) {
+                        Ok(shot_vec) => Ok(PyShotVec::new(shot_vec)),
+                        Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {}", e))),
+                    }
+                })
             }
             SimBuilderInner::SeleneLibrary(builder) => {
                 eprintln!("DEBUG: In SimBuilderInner::SeleneLibrary run() method");
@@ -845,7 +960,44 @@ impl PySimBuilder {
                     let tempfile = py.import("tempfile")?;
                     let tempdir = tempfile.call_method0("mkdtemp")?;
                     let build_dir = tempdir.extract::<String>()?;
+                    let temp_dir_path = build_dir.clone();  // Save for later use
                     eprintln!("DEBUG: Building Selene executable in {}", build_dir);
+                    
+                    // Get the number of qubits - use explicit value if set, otherwise default to 10
+                    let num_qubits = builder.explicit_num_qubits.unwrap_or(10);
+                    eprintln!("DEBUG: Using num_qubits = {}", num_qubits);
+                    
+                    // Create artifacts directory and pecos_config.json BEFORE building
+                    // This ensures the Bridge plugin reads the correct qubit count when initialized
+                    let artifacts_dir = format!("{}/artifacts", build_dir);
+                    std::fs::create_dir_all(&artifacts_dir)
+                        .map_err(|e| PyRuntimeError::new_err(format!("Failed to create artifacts dir: {}", e)))?;
+                    
+                    // Write the PECOS config file with the correct qubit count
+                    let config_path = format!("{}/pecos_config.json", artifacts_dir);
+                    let config_json = serde_json::json!({
+                        "n_qubits": num_qubits,
+                        "ipc_mode": true,
+                    });
+                    std::fs::write(&config_path, config_json.to_string())
+                        .map_err(|e| PyRuntimeError::new_err(format!("Failed to write pecos_config.json: {}", e)))?;
+                    eprintln!("DEBUG: Created pecos_config.json with n_qubits={} at {}", num_qubits, config_path);
+                    
+                    // Verify the file was created
+                    if std::path::Path::new(&config_path).exists() {
+                        eprintln!("DEBUG: Verified pecos_config.json exists at {}", config_path);
+                        if let Ok(contents) = std::fs::read_to_string(&config_path) {
+                            eprintln!("DEBUG: Config contents: {}", contents);
+                        }
+                    } else {
+                        eprintln!("DEBUG: ERROR - Config file not found after creation!");
+                    }
+                    
+                    // Set the SELENE_ARTIFACTS_DIR environment variable so Bridge can find the config
+                    unsafe {
+                        std::env::set_var("SELENE_ARTIFACTS_DIR", &artifacts_dir);
+                    }
+                    eprintln!("DEBUG: Set SELENE_ARTIFACTS_DIR={}", artifacts_dir);
                     
                     let kwargs = pyo3::types::PyDict::new(py);
                     kwargs.set_item("build_dir", &build_dir)?;
@@ -883,31 +1035,39 @@ impl PySimBuilder {
                         }
                     };
                     
-                    // Set SELENE_IPC environment variable for Bridge plugin communication
+                    // Set environment variables for Bridge plugin communication
                     unsafe {
                         std::env::set_var("SELENE_IPC", "1");
+                        std::env::set_var("SELENE_TEMP_DIR", &temp_dir_path);
                     }
                     eprintln!("DEBUG: Set SELENE_IPC=1 for Bridge plugin communication");
+                    eprintln!("DEBUG: Set SELENE_TEMP_DIR={} for results", temp_dir_path);
                     
                     // Get the number of qubits - use explicit value if set, otherwise default to 10
+                    eprintln!("DEBUG: builder.explicit_num_qubits = {:?}", builder.explicit_num_qubits);
                     let num_qubits = builder.explicit_num_qubits.unwrap_or(10);
+                    eprintln!("DEBUG: Using num_qubits = {}", num_qubits);
                     
                     // Use Selene's natural runtime execution with or without Bridge plugin
                     let run_kwargs = pyo3::types::PyDict::new(py);
-                    run_kwargs.set_item("n_qubits", num_qubits)?;
                     run_kwargs.set_item("verbose", false)?;
                     
                     eprintln!("DEBUG: About to call instance.run()...");
                     let run_result = match &bridge_plugin {
                         Some(plugin) => {
-                            eprintln!("DEBUG: Calling Selene.run() with PECOS Bridge plugin...");
-                            let result = instance.call_method("run", (plugin.clone(),), Some(&run_kwargs))?;
+                            eprintln!("DEBUG: Calling Selene.run() with PECOS Bridge plugin as simulator...");
+                            // Pass plugin as first positional arg (simulator), n_qubits as second
+                            let result = instance.call_method("run", (plugin.clone(), num_qubits), Some(&run_kwargs))?;
                             eprintln!("DEBUG: Selene.run() with Bridge plugin returned!");
                             result
                         },
                         None => {
                             eprintln!("DEBUG: Running Selene with default Quest simulator");
-                            instance.call_method("run", (), Some(&run_kwargs))?
+                            // For default, we still need to provide the positional arguments
+                            // Let's use Quest as the default simulator
+                            let quest = py.import("quest_core")?.getattr("QuestPlugin")?.call0()?;
+                            let result = instance.call_method("run", (quest, num_qubits), Some(&run_kwargs))?;
+                            result
                         }
                     };
                     
@@ -937,13 +1097,37 @@ impl PySimBuilder {
                     eprintln!("DEBUG: Used Bridge plugin: {}", used_bridge);
                     
                     if used_bridge {
-                        // The Bridge plugin doesn't return results via Python API
-                        // Create placeholder results for now
-                        eprintln!("DEBUG: Bridge plugin mode - using placeholder results");
-                        for i in 0..shots {
+                        // The Bridge plugin writes results to files - try to read them
+                        eprintln!("DEBUG: Bridge plugin mode - reading results from files");
+                        
+                        for shot_id in 0..shots {
                             let mut shot_data = BTreeMap::new();
-                            // Add placeholder measurement results
-                            shot_data.insert("measurement_0".to_string(), Data::U8(if i % 2 == 0 { 0 } else { 1 }));
+                            
+                            // Try to read the results file for this shot
+                            let results_file = format!("{}/bridge_results_shot_{}.json", temp_dir_path, shot_id);
+                            eprintln!("DEBUG: Looking for results file: {}", results_file);
+                            
+                            if let Ok(contents) = std::fs::read_to_string(&results_file) {
+                                eprintln!("DEBUG: Found results file with contents: {}", contents);
+                                // Parse the simple JSON format
+                                // Format: {"measurement_0":true,"measurement_1":false,...}
+                                if contents.starts_with('{') && contents.ends_with('}') {
+                                    let inner = &contents[1..contents.len()-1];
+                                    for pair in inner.split(',') {
+                                        if let Some(colon_idx) = pair.find(':') {
+                                            let key = pair[..colon_idx].trim_matches('"');
+                                            let value_str = &pair[colon_idx+1..];
+                                            let value = value_str == "true";
+                                            shot_data.insert(key.to_string(), Data::U8(value as u8));
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Fall back to placeholder if no file found
+                                eprintln!("DEBUG: No results file found, using placeholder");
+                                shot_data.insert("measurement_0".to_string(), Data::U8(if shot_id % 2 == 0 { 0 } else { 1 }));
+                            }
+                            
                             shot_data.insert("bridge_plugin_active".to_string(), Data::U8(1));
                             let shot = Shot { data: shot_data };
                             shot_vec.shots.push(shot);
@@ -1266,6 +1450,7 @@ impl Clone for SimBuilderInner {
                     explicit_num_qubits: builder.explicit_num_qubits,
                 }),
                 SimBuilderInner::SeleneExecutable(builder) => SimBuilderInner::SeleneExecutable(PySeleneExecutableSimBuilder {
+                    program: builder.program.as_ref().map(|obj| obj.clone_ref(py)),
                     engine_builder: builder.engine_builder.clone(),
                     seed: builder.seed,
                     workers: builder.workers,

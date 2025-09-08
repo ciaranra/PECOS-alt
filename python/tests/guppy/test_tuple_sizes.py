@@ -19,7 +19,8 @@ sys.path.append("python/quantum-pecos/src")
 
 from guppylang import guppy
 from guppylang.std.quantum import qubit, measure, x
-from pecos.frontends import guppy_sim
+from pecos.frontends.guppy_api import sim
+from pecos_rslib import state_vector
 
 
 # Pre-define functions for each tuple size instead of using exec
@@ -152,8 +153,8 @@ def run_tuple_size_test(n: int, test_func):
     print(f"\nTesting {n}-tuple of bools...")
     
     try:
-        results = guppy_sim(test_func, max_qubits=10).run(5)
-        print(f"  Success! Results: {results['result'][:3]}...")
+        results = sim(test_func).qubits(10).quantum(state_vector()).run(5)
+        print(f"  Success! Results: {results.get("measurements", results.get("measurement_1", []))[:3]}...")
         return True
     except Exception as e:
         print(f"  Failed with error: {e}")

@@ -227,6 +227,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
+name = "atty"
+version = "0.2.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9b39be18770d11421cdb1b9947a45dd3f37e93092cbf377614828a319d5fee8"
+dependencies = [
+ "hermit-abi",
+ "libc",
+ "winapi",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -422,8 +433,10 @@ checksum = "c469d952047f47f91b68d1cba3f10d63c11d73e4636f24f08daf0278abf01c4d"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
+ "js-sys",
  "num-traits",
  "serde",
+ "wasm-bindgen",
  "windows-link",
 ]
 
@@ -1460,6 +1473,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
+name = "hermit-abi"
+version = "0.1.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62b467343b94ba476dcb2500d242dadbb39557df889310ac77c5d99100aaac33"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2464,6 +2486,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pecos-debug-bridge"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "rand 0.8.5",
+ "rand_pcg 0.3.1",
+ "selene-core",
+]
+
+[[package]]
 name = "pecos-decoder-core"
 version = "0.1.1"
 dependencies = [
@@ -2710,10 +2742,14 @@ name = "pecos-selene-bridge"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "atty",
+ "backtrace",
+ "chrono",
  "crossbeam-channel",
  "log",
  "once_cell",
  "pecos-engines",
+ "rand 0.8.5",
  "selene-core",
 ]
 
@@ -3215,6 +3251,15 @@ dependencies = [
 
 [[package]]
 name = "rand_pcg"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59cad018caf63deb318e5a4586d99a24424a364f40f1e5778c29aca23f4fc73e"
+dependencies = [
+ "rand_core 0.6.4",
+]
+
+[[package]]
+name = "rand_pcg"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b48ac3f7ffaab7fac4d2376632268aa5f89abdb55f7ebf8f4d11fffccb2320f7"
@@ -3597,7 +3642,7 @@ source = "git+https://github.com/CQCL/selene.git?rev=f9e14c4c218feea85ba7c23048e
 dependencies = [
  "anyhow",
  "rand 0.9.2",
- "rand_pcg",
+ "rand_pcg 0.9.0",
  "selene-core",
  "serde",
  "serde_yml",

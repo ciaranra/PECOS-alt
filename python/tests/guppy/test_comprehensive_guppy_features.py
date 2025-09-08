@@ -18,7 +18,7 @@ sys.path.append("python/quantum-pecos/src")
 def decode_integer_results(results: List[int], n_bits: int) -> List[Tuple[bool, ...]]:
     """Decode integer-encoded results back to tuples of booleans.
     
-    When guppy functions return tuples of bools, guppy_sim encodes them 
+    When guppy functions return tuples of bools, sim encodes them 
     as integers where bit i represents the i-th boolean in the tuple.
     """
     decoded = []

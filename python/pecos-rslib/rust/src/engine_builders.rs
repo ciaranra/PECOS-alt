@@ -354,6 +354,7 @@ pub struct PySeleneRuntimeSimBuilder {
 
 /// Builder for Selene executable engine with bridge approach
 pub struct PySeleneExecutableSimBuilder {
+    pub(crate) program: Option<PyObject>,  // Guppy function or HUGR to compile to executable
     pub(crate) engine_builder: Arc<Mutex<Option<pecos_selene::selene_executable_builder::SeleneExecutableEngineBuilder>>>,
     pub(crate) seed: Option<u64>,
     pub(crate) workers: Option<usize>,
