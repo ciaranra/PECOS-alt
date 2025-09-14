@@ -1,264 +1,149 @@
-#!/usr/bin/env python3
-"""Test arithmetic and boolean type support in Guppy->HUGR->Selene pipeline."""
+"""Test arithmetic and boolean type support in Guppy->Selene pipeline."""
 
-import pytest
 from guppylang import guppy
 from guppylang.std.quantum import h, measure, qubit
-
-# pytestmark = pytest.mark.optional_dependency  # Enable tests
-# Import sim - it now handles Guppy programs via the wrapper
 from pecos.frontends.guppy_api import sim
 from pecos_rslib import state_vector
 
 
 def test_integer_arithmetic() -> None:
-    """Test that integer arithmetic works through Selene simulation."""
+    """Test integer arithmetic operations."""
 
     @guppy
     def quantum_add() -> bool:
-        """Add numbers and use result to conditionally apply quantum gate."""
         q = qubit()
         x = 3
         y = 2
         result = x + y  # result = 5
 
-        # Use the result to decide whether to apply H gate
         if result > 3:  # 5 > 3, so H gate applied
             h(q)
 
         return measure(q)
 
-    # Execute through sim() - it now auto-detects and handles Guppy functions
-    try:
-        results = sim(quantum_add).qubits(1).quantum(state_vector()).run(10)
+    results = sim(quantum_add).qubits(1).quantum(state_vector()).run(10)
 
-        # Verify execution succeeded
-        assert results is not None, "Execution should return results"
-
-        # Results is a dict with counts
-        if isinstance(results, dict):
-            # Check we have some results
-            total_shots = sum(results.values()) if results else 0
-            assert total_shots == 10, f"Should have 10 shots, got {total_shots}"
-            print(
-                f"Success! Integer arithmetic executed through Selene - got {results}",
-            )
-        else:
-            # Might be a different format
-            assert hasattr(results, "__len__"), "Results should be countable"
-            print("Success! Integer arithmetic executed through Selene")
-
-    except Exception as e:
-        error_msg = str(e)
-        # Check for known issues
-        if "Unknown type: int" in error_msg:
-            pytest.fail(
-                f"Arithmetic extension not working - still getting Unknown type error: {e}",
-            )
-        elif "program must be" in error_msg:
-            # sim() doesn't recognize Guppy functions yet
-            pytest.fail(f"sim() doesn't auto-detect Guppy functions yet: {e}")
-        elif "could not get source code" in error_msg:
-            # This is expected in test context where functions are defined inline
-            pytest.xfail(f"Guppy compilation issue in test context: {e}")
-        elif (
-            "not yet implemented" in error_msg.lower()
-            or "unsupported" in error_msg.lower()
-        ):
-            pytest.xfail(f"Feature not yet implemented: {e}")
-        else:
-            pytest.fail(f"Unexpected error during execution: {e}")
+    assert "measurement_1" in results
+    measurements = results["measurement_1"]
+    assert len(measurements) == 10
+    # H gate should give mix of 0s and 1s
+    assert 0 in measurements
+    assert 1 in measurements
 
 
 def test_boolean_operations() -> None:
-    """Test that boolean operations work through Selene simulation."""
+    """Test boolean logic operations."""
 
     @guppy
     def quantum_bool_logic() -> bool:
-        """Use boolean logic with quantum operations."""
         q1 = qubit()
         q2 = qubit()
-
-        # Apply H to first qubit
         h(q1)
-
-        # Measure both
         m1 = measure(q1)
         m2 = measure(q2)
-
-        # Use boolean logic on measurement results
         return m1 and not m2
 
-    # Execute through sim() - it now auto-detects and handles Guppy functions
-    try:
-        results = sim(quantum_bool_logic).qubits(2).quantum(state_vector()).run(10)
+    results = sim(quantum_bool_logic).qubits(2).quantum(state_vector()).run(10)
 
-        # Verify execution succeeded
-        assert results is not None, "Execution should return results"
-
-        # Results is a dict with counts
-        if isinstance(results, dict):
-            total_shots = sum(results.values()) if results else 0
-            assert total_shots == 10, f"Should have 10 shots, got {total_shots}"
-            print(
-                f"Success! Boolean operations executed through Selene - got {results}",
-            )
-        else:
-            assert hasattr(results, "__len__"), "Results should be countable"
-            print("Success! Boolean operations executed through Selene")
-
-    except Exception as e:
-        error_msg = str(e)
-        if "Unknown type: bool" in error_msg or "Unknown type: int" in error_msg:
-            pytest.fail(
-                f"Type extension not working - still getting Unknown type error: {e}",
-            )
-        elif "program must be" in error_msg:
-            # sim() doesn't recognize Guppy functions yet
-            pytest.fail(f"sim() doesn't auto-detect Guppy functions yet: {e}")
-        elif "could not get source code" in error_msg:
-            # This is expected in test context where functions are defined inline
-            pytest.xfail(f"Guppy compilation issue in test context: {e}")
-        elif (
-            "not yet implemented" in error_msg.lower()
-            or "unsupported" in error_msg.lower()
-        ):
-            pytest.xfail(f"Feature not yet implemented: {e}")
-        else:
-            pytest.fail(f"Unexpected error during execution: {e}")
+    assert "measurement_1" in results
+    assert len(results["measurement_1"]) == 10
 
 
-def test_integer_constant() -> None:
-    """Test integer constants through Selene."""
+def test_integer_comparisons() -> None:
+    """Test integer comparison operations."""
 
     @guppy
-    def quantum_with_constant() -> bool:
-        """Use integer constant in quantum context."""
+    def quantum_compare() -> bool:
         q = qubit()
         threshold = 42
         value = 50
 
-        # Use constant in comparison
         if value > threshold:
             h(q)
 
         return measure(q)
 
-    # Execute through sim() - it now auto-detects and handles Guppy functions
-    try:
-        results = sim(quantum_with_constant).qubits(1).quantum(state_vector()).run(10)
+    results = sim(quantum_compare).qubits(1).quantum(state_vector()).run(10)
 
-        # Verify execution succeeded
-        assert results is not None, "Execution should return results"
-
-        # Results is a dict with counts
-        if isinstance(results, dict):
-            total_shots = sum(results.values()) if results else 0
-            assert total_shots == 10, f"Should have 10 shots, got {total_shots}"
-            # Since 50 > 42, H gate should be applied, giving mix of 0 and 1
-            print(f"Success! Integer constants work through Selene - got {results}")
-        else:
-            assert hasattr(results, "__len__"), "Results should be countable"
-            print("Success! Integer constants work through Selene")
-
-    except Exception as e:
-        error_msg = str(e)
-        if "Unknown type: int" in error_msg:
-            pytest.fail(
-                f"Arithmetic extension not working - still getting Unknown type error: {e}",
-            )
-        elif "could not get source code" in error_msg:
-            # This is expected in test context where functions are defined inline
-            pytest.xfail(f"Guppy compilation issue in test context: {e}")
-        elif (
-            "not yet implemented" in error_msg.lower()
-            or "unsupported" in error_msg.lower()
-            or "no program specified" in error_msg.lower()
-        ):
-            pytest.xfail(f"Selene HUGR integration not yet complete: {e}")
-        else:
-            pytest.fail(f"Unexpected error during Selene execution: {e}")
+    assert "measurement_1" in results
+    measurements = results["measurement_1"]
+    assert len(measurements) == 10
+    assert 0 in measurements
+    assert 1 in measurements
 
 
-def test_mixed_quantum_classical() -> None:
-    """Test mixing quantum and classical operations."""
+def test_arithmetic_in_loop() -> None:
+    """Test arithmetic in loop control."""
 
     @guppy
-    def quantum_with_classical() -> bool:
-        """Mix classical computation with quantum operations."""
-        # Classical computation
-        n = 5
-        x = n + 1  # x = 6
-
-        # Quantum operation
+    def quantum_loop() -> bool:
         q = qubit()
+        count = 0
+        max_count = 3
 
-        # Use classical result to control quantum gate
-        if x > 0:
+        while count < max_count:
+            if count == 1:  # Only apply H on second iteration
+                h(q)
+            count = count + 1
+
+        return measure(q)
+
+    results = sim(quantum_loop).qubits(1).quantum(state_vector()).run(10)
+
+    assert "measurement_1" in results
+    measurements = results["measurement_1"]
+    assert len(measurements) == 10
+    assert 0 in measurements
+    assert 1 in measurements
+
+
+def test_chained_comparisons() -> None:
+    """Test multiple chained comparisons."""
+
+    @guppy
+    def quantum_chain() -> bool:
+        q = qubit()
+        a = 10
+        b = 20
+        c = 15
+
+        if a < c and c < b:  # 10 < 15 < 20 is True
             h(q)
 
         return measure(q)
 
-        # Return quantum measurement result
+    results = sim(quantum_chain).qubits(1).quantum(state_vector()).run(10)
 
-    # Execute through sim() - it now auto-detects and handles Guppy functions
-    try:
-        from pecos_rslib import state_vector
-
-        results = (
-            sim(quantum_with_classical)
-            .qubits(1)
-            .quantum(state_vector())
-            .seed(42)
-            .run(10)
-        )
-
-        # Verify execution succeeded
-        assert results is not None, "Execution should return results"
-
-        # Results is a dict with counts
-        if isinstance(results, dict):
-            total_shots = sum(results.values()) if results else 0
-            assert total_shots == 10, f"Should have 10 shots, got {total_shots}"
-            # Since x=6 > 0, H gate is applied, giving mix of 0 and 1
-            print(
-                f"Success! Mixed quantum-classical works through Selene - got {results}",
-            )
-        else:
-            assert hasattr(results, "__len__"), "Results should be countable"
-            print("Success! Mixed quantum-classical works through Selene")
-
-    except Exception as e:
-        error_msg = str(e)
-        if "Unknown type: int" in error_msg or "Unknown type: bool" in error_msg:
-            pytest.fail(
-                f"Type extension not working - still getting Unknown type error: {e}",
-            )
-        elif "could not get source code" in error_msg:
-            # This is expected in test context where functions are defined inline
-            pytest.xfail(f"Guppy compilation issue in test context: {e}")
-        elif (
-            "not yet implemented" in error_msg.lower()
-            or "unsupported" in error_msg.lower()
-            or "no program specified" in error_msg.lower()
-        ):
-            pytest.xfail(f"Selene HUGR integration not yet complete: {e}")
-        else:
-            pytest.fail(f"Unexpected error during Selene execution: {e}")
+    assert "measurement_1" in results
+    measurements = results["measurement_1"]
+    assert len(measurements) == 10
+    assert 0 in measurements
+    assert 1 in measurements
 
 
-if __name__ == "__main__":
-    import sys
+def test_arithmetic_with_measurements() -> None:
+    """Test using measurement results in arithmetic."""
 
-    print("Testing arithmetic and boolean type support with Selene...")
+    @guppy
+    def quantum_measure_math() -> bool:
+        q1 = qubit()
+        q2 = qubit()
+        h(q1)
+        h(q2)
 
-    if not SIM_AVAILABLE:
-        print("ERROR: sim() and Selene components not available")
-        print("Please install with: uv pip install guppylang selene-sim")
-        sys.exit(1)
+        m1 = measure(q1)
+        m2 = measure(q2)
 
-    test_integer_arithmetic()
-    test_boolean_operations()
-    test_integer_constant()
-    test_mixed_quantum_classical()
-    print("All tests completed!")
+        # Use measurements in arithmetic (bools as ints)
+        q3 = qubit()
+        if m1 or m2:  # At least one is True
+            h(q3)
+
+        return measure(q3)
+
+    results = sim(quantum_measure_math).qubits(3).quantum(state_vector()).run(20)
+
+    assert "measurement_1" in results
+    measurements = results["measurement_1"]
+    assert len(measurements) == 20
+    # Should have mix unless both m1 and m2 are 0 (25% chance)

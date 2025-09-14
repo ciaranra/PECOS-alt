@@ -53,6 +53,7 @@ impl PyHugrCompiler {
     ///
     /// # Returns
     /// LLVM IR as a string
+    #[allow(clippy::unused_self)] // PyO3 method convention
     fn compile_bytes_to_llvm(&self, hugr_bytes: &Bound<'_, PyBytes>) -> PyResult<String> {
         let bytes = hugr_bytes.as_bytes();
 
@@ -69,6 +70,7 @@ impl PyHugrCompiler {
     /// # Arguments
     /// * `hugr_bytes` - HUGR data as bytes
     /// * `llvm_path` - Path for output LLVM IR file
+    #[allow(clippy::unused_self)] // PyO3 method convention
     fn compile_bytes_to_llvm_file(
         &self,
         hugr_bytes: &Bound<'_, PyBytes>,
@@ -94,6 +96,7 @@ impl PyHugrCompiler {
     /// # Arguments
     /// * `hugr_path` - Path to HUGR file
     /// * `llvm_path` - Path for output LLVM IR file
+    #[allow(clippy::unused_self)] // PyO3 method convention
     fn compile_file_to_llvm(&self, hugr_path: &str, llvm_path: &str) -> PyResult<()> {
         let config = HugrCompilerConfig {
             output_path: Some(PathBuf::from(llvm_path)),

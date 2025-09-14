@@ -167,7 +167,8 @@ fn test_selene_auto_detection() {
             .program(LlvmProgram::from_file(&ll_file).unwrap())
             .qubits(2),
     );
-    assert!(builder_ll.build().is_ok() || true); // Allow failure for missing runtime
+    // Allow failure for missing runtime
+    let _ = builder_ll.build();
 
     // Test auto-detection with .bc file
     let builder_bc = sim_builder().classical(

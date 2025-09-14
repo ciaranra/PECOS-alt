@@ -43,9 +43,6 @@ def test_permute_reverse() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("Reverse permutation code:")
-    print(code)
-
     # Should generate swaps
     assert "_temp_swap" in code
     assert "# Permute 5 elements" in code
@@ -63,9 +60,6 @@ def test_permute_rotate() -> None:
     gen = IRGuppyGenerator()
     gen.generate_block(prog)
     code = gen.get_output()
-
-    print("\nRotation permutation code:")
-    print(code)
 
     # Should generate a cycle
     assert "_temp_cycle" in code
@@ -89,9 +83,6 @@ def test_permute_complex_pattern() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("\nComplex pattern permutation code:")
-    print(code)
-
     # Should have permutation operations
     assert "# Permute 6 elements" in code
     assert "_temp_" in code  # Either swap or cycle
@@ -111,9 +102,6 @@ def test_permute_partial_registers() -> None:
     gen = IRGuppyGenerator()
     gen.generate_block(prog)
     code = gen.get_output()
-
-    print("\nPartial register permutation code:")
-    print(code)
 
     # Should handle cross-register permutations
     assert "# Permute 4 elements" in code
@@ -139,9 +127,6 @@ def test_permute_with_gates() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("\nPermutation with gates code:")
-    print(code)
-
     # Should have multiple permutations
     assert code.count("# Permute") >= 2
 
@@ -160,9 +145,6 @@ def test_permute_error_mismatched_elements() -> None:
     gen = IRGuppyGenerator()
     gen.generate_block(prog)
     code = gen.get_output()
-
-    print("\nError case - mismatched elements:")
-    print(code)
 
     # Should generate error comment
     assert "ERROR: Invalid permutation" in code
@@ -184,22 +166,7 @@ def test_permute_single_cycle() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("\nSingle large cycle permutation:")
-    print(code)
-
     # Should use cycle temporary
     assert "_temp_cycle" in code
     # Should have exactly 7 assignments in the cycle
     assert code.count(" = q[") == 7  # 6 shifts + 1 from temp
-
-
-if __name__ == "__main__":
-    test_permute_identity()
-    test_permute_reverse()
-    test_permute_rotate()
-    test_permute_complex_pattern()
-    test_permute_partial_registers()
-    test_permute_with_gates()
-    test_permute_error_mismatched_elements()
-    test_permute_single_cycle()
-    print("\nAll complex permutation tests completed!")

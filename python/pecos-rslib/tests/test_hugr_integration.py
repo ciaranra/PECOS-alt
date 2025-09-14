@@ -1,20 +1,20 @@
-"""
-Tests for HUGR/LLVM PyO3 integration
+"""Tests for HUGR/LLVM PyO3 integration
 
 Tests the Rust backend for HUGR compilation and LLVM engine creation.
 Note: Many of these features have been deprecated in favor of the unified sim() API.
 """
 
-import pytest
 import tempfile
 from pathlib import Path
+
+import pytest
 
 
 # Test availability checks
 def test_hugr_backend_availability() -> None:
     """Test that we can check HUGR backend availability."""
     try:
-        from pecos_rslib import check_rust_hugr_availability, RUST_HUGR_AVAILABLE
+        from pecos_rslib import RUST_HUGR_AVAILABLE, check_rust_hugr_availability
 
         available, message = check_rust_hugr_availability()
         assert isinstance(available, bool)
@@ -120,16 +120,16 @@ def test_hugr_qir_engine_from_file() -> None:
 
         # RustHugrLlvmEngine is deprecated and should not have from_file method
         # This should raise ImportError or AttributeError
-        with pytest.raises((ImportError, AttributeError)):
-            # Create a temporary file with dummy HUGR data
-            with tempfile.NamedTemporaryFile(suffix=".hugr", delete=False) as f:
-                f.write(b"dummy hugr data")
-                temp_path = f.name
+        # Create a temporary file with dummy HUGR data
+        with tempfile.NamedTemporaryFile(suffix=".hugr", delete=False) as f:
+            f.write(b"dummy hugr data")
+            temp_path = f.name
 
-            try:
+        try:
+            with pytest.raises((ImportError, AttributeError)):
                 RustHugrLlvmEngine.from_file(temp_path, shots=100)
-            finally:
-                Path(temp_path).unlink()  # Clean up
+        finally:
+            Path(temp_path).unlink()  # Clean up
 
     except ImportError as e:
         # This is expected - HUGR-LLVM pipeline has been deprecated
@@ -142,7 +142,7 @@ def test_hugr_qir_engine_from_file() -> None:
 def test_convenience_functions() -> None:
     """Test convenience functions for HUGR compilation."""
     try:
-        from pecos_rslib import compile_hugr_to_llvm_rust, check_rust_hugr_availability
+        from pecos_rslib import check_rust_hugr_availability, compile_hugr_to_llvm_rust
 
         available, message = check_rust_hugr_availability()
         if not available:
@@ -208,8 +208,8 @@ def test_guppy_frontend_rust_backend() -> None:
 def test_guppy_frontend_backend_selection() -> None:
     """Test that Guppy frontend backend selection works."""
     try:
-        from pecos.frontends.guppy_frontend import GuppyFrontend
         from pecos.frontends import get_guppy_backends
+        from pecos.frontends.guppy_frontend import GuppyFrontend
 
         frontend = GuppyFrontend()
 

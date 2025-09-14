@@ -270,7 +270,6 @@ impl NameResolver {
 /// 2. Use `UnresolvedCall` for the recursive call
 /// 3. After the function is complete, resolve the call
 /// 4. Type check and verify
-
 #[cfg(test)]
 mod tests {
     use super::*;

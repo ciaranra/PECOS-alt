@@ -261,14 +261,13 @@ pub fn builtin_op_to_mlir_text(op: &BuiltinOp, indent: usize) -> String {
     match op {
         BuiltinOp::Module(module_op) => {
             let mut output = String::new();
-            use std::fmt::Write;
-            writeln!(output, "module @{} {{", module_op.name).unwrap();
+            writeln!(&mut output, "module @{} {{", module_op.name).unwrap();
 
             // Module attributes
             if !module_op.attributes.is_empty() {
                 output.push_str("  attributes {\n");
                 for (key, value) in &module_op.attributes {
-                    writeln!(output, "    {key} = {value:?}").unwrap();
+                    writeln!(&mut output, "    {key} = {value:?}").unwrap();
                 }
                 output.push_str("  }\n");
             }
@@ -284,7 +283,7 @@ pub fn builtin_op_to_mlir_text(op: &BuiltinOp, indent: usize) -> String {
             let indent_str = "  ".repeat(indent);
 
             // Function header
-            write!(output, "{}func.func @{}", indent_str, func_op.name).unwrap();
+            write!(&mut output, "{}func.func @{}", indent_str, func_op.name).unwrap();
 
             // Function signature
             output.push('(');
@@ -292,7 +291,7 @@ pub fn builtin_op_to_mlir_text(op: &BuiltinOp, indent: usize) -> String {
                 if i > 0 {
                     output.push_str(", ");
                 }
-                write!(output, "%arg{i}: {input}").unwrap();
+                write!(&mut output, "%arg{i}: {input}").unwrap();
             }
             output.push_str(") -> ");
 
@@ -318,7 +317,7 @@ pub fn builtin_op_to_mlir_text(op: &BuiltinOp, indent: usize) -> String {
                     if i > 0 {
                         output.push_str(", ");
                     }
-                    output.push_str(&format!("{key} = {value:?}"));
+                    write!(&mut output, "{key} = {value:?}").unwrap();
                 }
                 output.push('}');
             }
@@ -330,7 +329,7 @@ pub fn builtin_op_to_mlir_text(op: &BuiltinOp, indent: usize) -> String {
                 output.push_str(&region.to_mlir_text(indent + 1));
             }
 
-            output.push_str(&format!("{indent_str}}}\n"));
+            writeln!(&mut output, "{indent_str}}}").unwrap();
             output
         }
 

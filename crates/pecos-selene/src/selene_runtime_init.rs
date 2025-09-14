@@ -51,6 +51,17 @@ pub struct SeleneRuntime {
 
 impl SeleneRuntime {
     /// Initialize Selene runtime with configuration
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Failed to create temporary directory
+    /// - Failed to write configuration file
+    /// - Selene initialization failed
+    ///
+    /// # Panics
+    ///
+    /// Panics if the configuration path contains invalid UTF-8 characters
     pub fn new(num_qubits: usize, num_shots: usize) -> Result<Self, String> {
         // Create temp directory for configuration
         let temp_dir =
@@ -117,7 +128,7 @@ event_hooks:
             return Err("selene_load_config returned null instance".to_string());
         }
 
-        println!("*** SELENE RUNTIME: Initialized with {num_qubits} qubits, {num_shots} shots ***");
+        log::info!("SELENE RUNTIME: Initialized with {num_qubits} qubits, {num_shots} shots ");
 
         Ok(Self {
             instance,
@@ -133,6 +144,10 @@ event_hooks:
     }
 
     /// Start a shot
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the Selene runtime fails to start the shot
     pub fn start_shot(&mut self, shot_index: u64) -> Result<(), String> {
         let result = unsafe { selene_on_shot_start(self.instance, shot_index) };
 
@@ -147,6 +162,10 @@ event_hooks:
     }
 
     /// End a shot
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the Selene runtime fails to end the shot
     pub fn end_shot(&mut self) -> Result<(), String> {
         let result = unsafe { selene_on_shot_end(self.instance) };
 
@@ -161,6 +180,10 @@ event_hooks:
     }
 
     /// Get the number of shots configured
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the Selene runtime fails to retrieve the shot count
     pub fn shot_count(&self) -> Result<u64, String> {
         let result = unsafe { selene_shot_count(self.instance) };
 

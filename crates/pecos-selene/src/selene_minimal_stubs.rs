@@ -30,9 +30,9 @@ pub struct SeleneFutureResult {
 // Only the essential quantum operations that we know are called
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_qalloc(_instance: *mut c_void) -> SeleneU64Result {
-    println!("=== SELENE STUB: selene_qalloc called with instance={:?} ===", _instance);
+    log::trace!("SELENE STUB: selene_qalloc called with instance={:?} ===", _instance);
     let qubit_id = NEXT_QUBIT_ID.fetch_add(1, Ordering::SeqCst);
-    println!("=== SELENE STUB: selene_qalloc returning qubit_id={} ===", qubit_id);
+    log::trace!("SELENE STUB: selene_qalloc returning qubit_id={} ===", qubit_id);
     SeleneU64Result {
         error_code: 0,
         value: qubit_id
@@ -41,21 +41,21 @@ pub extern "C" fn selene_qalloc(_instance: *mut c_void) -> SeleneU64Result {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_qfree(_instance: *mut c_void, q: u64) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_qfree called with instance={:?}, qubit={} ===", _instance, q);
+    log::trace!("SELENE STUB: selene_qfree called with instance={:?}, qubit={} ===", _instance, q);
     SeleneVoidResult { error_code: 0 }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_qubit_reset(_instance: *mut c_void, q: u64) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_qubit_reset called with instance={:?}, qubit={} ===", _instance, q);
+    log::trace!("SELENE STUB: selene_qubit_reset called with instance={:?}, qubit={} ===", _instance, q);
     SeleneVoidResult { error_code: 0 }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_qubit_lazy_measure(_instance: *mut c_void, q: u64) -> SeleneFutureResult {
-    println!("=== SELENE STUB: selene_qubit_lazy_measure called with instance={:?}, qubit={} ===", _instance, q);
+    log::trace!("SELENE STUB: selene_qubit_lazy_measure called with instance={:?}, qubit={} ===", _instance, q);
     let reference = NEXT_RESULT_ID.fetch_add(1, Ordering::SeqCst);
-    println!("=== SELENE STUB: selene_qubit_lazy_measure returning reference={} ===", reference);
+    log::trace!("SELENE STUB: selene_qubit_lazy_measure returning reference={} ===", reference);
     SeleneFutureResult {
         error_code: 0,
         reference
@@ -65,7 +65,7 @@ pub extern "C" fn selene_qubit_lazy_measure(_instance: *mut c_void, q: u64) -> S
 // Note: selene_get_tc and selene_set_tc are provided by selene-core dependency
 // #[unsafe(no_mangle)]
 // pub extern "C" fn selene_get_tc(_instance: *mut c_void) -> SeleneU64Result {
-//     println!("=== SELENE STUB: selene_get_tc called with instance={:?} ===", _instance);
+//     log::trace!("SELENE STUB: selene_get_tc called with instance={:?} ===", _instance);
 //     let tc = TIME_CURSOR.load(Ordering::SeqCst);
 //     SeleneU64Result {
 //         error_code: 0,
@@ -75,7 +75,7 @@ pub extern "C" fn selene_qubit_lazy_measure(_instance: *mut c_void, q: u64) -> S
 
 // #[unsafe(no_mangle)]
 // pub extern "C" fn selene_set_tc(_instance: *mut c_void, tc: u64) -> SeleneVoidResult {
-//     println!("=== SELENE STUB: selene_set_tc called with instance={:?}, tc={} ===", _instance, tc);
+//     log::trace!("SELENE STUB: selene_set_tc called with instance={:?}, tc={} ===", _instance, tc);
 //     TIME_CURSOR.store(tc, Ordering::SeqCst);
 //     SeleneVoidResult { error_code: 0 }
 // }

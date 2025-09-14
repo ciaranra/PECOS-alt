@@ -42,7 +42,7 @@ def create_test_bell_program() -> str:
                 {"qop": "Measure", "args": [["q", 0]], "returns": [["m", 0]]},
                 {"qop": "Measure", "args": [["q", 1]], "returns": [["m", 1]]},
             ],
-        }
+        },
     )
 
 
@@ -152,16 +152,11 @@ def test_phir_full_circuit() -> None:
     # Create engine
     engine = PhirJsonEngine(phir)
 
-    # Process the program and get commands
-    commands = engine.process_program()
-    print(f"Got {len(commands)} commands")
-
     # Handle example measurements
     engine.handle_measurement(1)
 
     # Get final results
     results = engine.get_results()
-    print(f"Got results: {results}")
 
     assert len(results) > 0, "Expected measurement results"
 
@@ -233,8 +228,6 @@ def test_register_mapping_simulation() -> None:
     # Process the program to get quantum commands
     commands = engine.process_program()
 
-    print(f"Got {len(commands)} commands")
-
     # We expect at least 1 measurement command
     assert (
         len(commands) >= 1
@@ -261,8 +254,6 @@ def test_register_mapping_simulation() -> None:
     # Verify we got results
     assert results is not None, "Expected measurement results"
     assert len(results) > 0, "Expected non-empty results"
-
-    print(f"Measurement results: {results}")
 
     # Check that we have results for the "m" register
     assert "m" in results, "Expected 'm' register in results"

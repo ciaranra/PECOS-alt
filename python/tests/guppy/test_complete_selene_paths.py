@@ -175,4 +175,6 @@ def test_full_guppy_to_selene_execution() -> None:
     except Exception as e:
         # Expected until HUGR parsing is complete
         # But should not be version error
-        assert "HUGR version incompatibility" not in str(e)
+        error_msg = str(e)
+        if "HUGR version incompatibility" in error_msg:
+            pytest.fail(f"Unexpected HUGR version error: {error_msg}")

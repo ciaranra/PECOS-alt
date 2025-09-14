@@ -101,6 +101,10 @@ pub fn measure(qubit: SSAValue) -> (Instruction, SSAValue) {
 
 /// Create a logical Pauli X gate block (Steane code example)
 /// This mirrors the pattern from `qeclib/steane/gates_sq/paulis.py`
+///
+/// # Panics
+///
+/// Panics if `data_qubits` does not contain exactly 7 qubits
 #[must_use]
 pub fn logical_x_steane(data_qubits: &[SSAValue]) -> Block {
     assert_eq!(data_qubits.len(), 7, "Steane code requires 7 qubits");
@@ -115,6 +119,10 @@ pub fn logical_x_steane(data_qubits: &[SSAValue]) -> Block {
 }
 
 /// Create a logical Pauli Z gate block (Steane code example)
+///
+/// # Panics
+///
+/// Panics if `data_qubits` does not contain exactly 7 qubits
 #[must_use]
 pub fn logical_z_steane(data_qubits: &[SSAValue]) -> Block {
     assert_eq!(data_qubits.len(), 7, "Steane code requires 7 qubits");

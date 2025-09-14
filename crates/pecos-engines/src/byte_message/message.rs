@@ -1,6 +1,7 @@
 use crate::byte_message::builder::ByteMessageBuilder;
 use crate::byte_message::protocol::{
-    BatchHeader, GateHeader, MessageHeader, MessageType, OutcomeHeader, calc_padding,
+    BatchHeader, GateHeader, MessageHeader, MessageType, OutcomeHeader, ReturnValueHeader,
+    calc_padding,
 };
 use log::trace;
 use pecos_core::QubitId;
@@ -460,6 +461,99 @@ impl ByteMessage {
         }
 
         Ok(measurements)
+    }
+
+    /// Extract return value from the message.
+    ///
+    /// # Returns
+    ///
+    /// Returns the return value if found, or None if no return value is present.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the message is malformed.
+    pub fn return_value(&self) -> Result<Option<i64>, PecosError> {
+        // Parse and validate the batch header
+        let batch_header = self.parse_batch_header()?;
+
+        let mut offset = size_of::<BatchHeader>();
+
+        // Process each message
+        for _ in 0..batch_header.msg_count {
+            // Try to process this message for return value
+            let (new_offset, maybe_value) = self.process_return_value_message(offset)?;
+            offset = new_offset;
+
+            // If we found a return value, return it immediately
+            if let Some(value) = maybe_value {
+                return Ok(Some(value));
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Process a single message to extract return value if it's a `ReturnValue` message
+    fn process_return_value_message(
+        &self,
+        offset: usize,
+    ) -> Result<(usize, Option<i64>), PecosError> {
+        // Parse message header
+        let Ok((msg_header, new_offset)) = self.parse_message_header(offset) else {
+            // If we can't parse the header, just return the current offset with no value
+            return Ok((offset, None));
+        };
+        let offset = new_offset;
+
+        // Get message type
+        let Ok(msg_type) = msg_header.get_type() else {
+            // Skip invalid message types
+            trace!("Skipping message with invalid type");
+
+            // Calculate the new offset after this message
+            let payload_size = msg_header.payload_size as usize;
+            let payload_end = offset + payload_size;
+            let padding = calc_padding(payload_size, 4);
+            let new_offset = payload_end + (if padding > 0 { padding } else { 0 });
+
+            return Ok((new_offset, None));
+        };
+
+        // Check payload bounds
+        let payload_size = msg_header.payload_size as usize;
+        let payload_end = offset + payload_size;
+
+        // Make sure the payload fits within the buffer
+        if payload_end > self.byte_len {
+            return Err(PecosError::Input(format!(
+                "Message payload extends beyond message bounds: offset={}, size={}, total_len={}",
+                offset, payload_size, self.byte_len
+            )));
+        }
+
+        // Extract the payload
+        let payload = &self.as_bytes()[offset..payload_end];
+
+        // Process based on message type - we only care about ReturnValue messages here
+        let result = if msg_type == MessageType::ReturnValue {
+            if payload.len() >= size_of::<ReturnValueHeader>() {
+                // ReturnValueHeader at aligned payload start
+                let return_header = *bytemuck::from_bytes::<ReturnValueHeader>(
+                    &payload[0..size_of::<ReturnValueHeader>()],
+                );
+                Some(return_header.value)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Calculate the new offset after this message
+        let padding = calc_padding(payload_size, 4);
+        let new_offset = payload_end + (if padding > 0 { padding } else { 0 });
+
+        Ok((new_offset, result))
     }
 
     /// Validate if the payload has enough bytes for the gate header

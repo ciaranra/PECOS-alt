@@ -1,10 +1,10 @@
-"""Integration tests for qasm_sim using pecos_rslib imports."""
+"""Integration tests for QASM simulations using pecos_rslib imports."""
 
 from collections import Counter
 
 
 class TestQasmSimRslib:
-    """Test qasm_sim functionality using pecos_rslib imports."""
+    """Test QASM simulation functionality using pecos_rslib imports."""
 
     def test_import_qasm_engine(self) -> None:
         """Test that we can import qasm_engine from pecos_rslib."""

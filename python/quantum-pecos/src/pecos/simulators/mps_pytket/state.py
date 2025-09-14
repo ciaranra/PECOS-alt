@@ -58,7 +58,7 @@ class MPS(StateTN):
 
         # Configure the simulator
         self.config = Config(**mps_params)
-        self.dtype = self.config._complex_t  # noqa: SLF001
+        self.dtype = self.config._complex_t
 
         # cuTensorNet handle initialization
         self.libhandle = CuTensorNetHandle()
@@ -70,7 +70,7 @@ class MPS(StateTN):
         """Reset the quantum state to all 0 for another run."""
         qubits = [Qubit(q) for q in range(self.num_qubits)]
         self.mps = MPSxGate(self.libhandle, qubits, self.config)
-        self.mps._logger.info("Resetting MPS...")  # noqa: SLF001
+        self.mps._logger.info("Resetting MPS...")
         return self
 
     def __del__(self) -> None:

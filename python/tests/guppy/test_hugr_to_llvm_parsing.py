@@ -35,15 +35,10 @@ def test_hugr_to_llvm_compilation() -> None:
                 raise ValueError(msg)
     else:
         hugr_str = hugr.to_json()
-    print(f"\nHUGR length: {len(hugr_str)}")
-    print(f"First 100 chars: {hugr_str[:100]}")
     hugr_bytes = hugr_str.encode("utf-8")
 
     # Compile HUGR to LLVM using pecos-selene
     llvm_ir = compile_hugr_to_llvm(hugr_bytes)
-
-    print("\n=== Generated LLVM IR ===")
-    print(llvm_ir)
 
     # Verify basic structure - updated for new LLVM format
     # The new implementation uses i64 for qubits instead of opaque types
@@ -93,9 +88,6 @@ def test_simple_hadamard_circuit() -> None:
     # Compile HUGR to LLVM
     llvm_ir = compile_hugr_to_llvm(hugr_bytes)
 
-    print("\n=== Hadamard Circuit LLVM IR ===")
-    print(llvm_ir)
-
     # Verify operations - updated for new LLVM format
     assert (
         "@__quantum__rt__qubit_allocate()" in llvm_ir
@@ -103,8 +95,3 @@ def test_simple_hadamard_circuit() -> None:
     )
     assert "@__quantum__qis__h__body" in llvm_ir
     assert "@__quantum__qis__mz__body" in llvm_ir
-
-
-if __name__ == "__main__":
-    test_hugr_to_llvm_compilation()
-    test_simple_hadamard_circuit()

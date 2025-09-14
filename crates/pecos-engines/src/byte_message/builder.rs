@@ -5,7 +5,8 @@
 
 use crate::byte_message::message::ByteMessage;
 use crate::byte_message::protocol::{
-    BatchHeader, GateHeader, MessageFlags, MessageHeader, MessageType, OutcomeHeader, calc_padding,
+    BatchHeader, GateHeader, MessageFlags, MessageHeader, MessageType, OutcomeHeader,
+    ReturnValueHeader, calc_padding,
 };
 use bytemuck::bytes_of;
 use pecos_core::QubitId;
@@ -23,6 +24,7 @@ pub enum BuilderMode {
     Empty,               // No operations added yet
     QuantumOperations,   // Contains quantum operations
     MeasurementOutcomes, // Contains measurement outcomes
+    ReturnValue,         // Contains return value
 }
 
 /// Helper for building binary messages
@@ -145,12 +147,21 @@ impl ByteMessageBuilder {
             MessageType::Outcome => {
                 // Outcomes require MeasurementOutcomes mode
                 assert!(
-                    !(self.mode == BuilderMode::QuantumOperations),
-                    "Cannot mix quantum operations and measurement outcomes in the same message"
+                    !(self.mode == BuilderMode::QuantumOperations
+                        || self.mode == BuilderMode::ReturnValue),
+                    "Cannot mix measurement outcomes with other message types"
                 );
 
                 // Always set the mode (even if already in Empty state)
                 self.mode = BuilderMode::MeasurementOutcomes;
+            }
+            MessageType::ReturnValue => {
+                // Return values should be sent separately
+                assert!(
+                    self.mode == BuilderMode::Empty || self.mode == BuilderMode::ReturnValue,
+                    "Cannot mix return values with other message types"
+                );
+                self.mode = BuilderMode::ReturnValue;
             }
         }
 
@@ -263,6 +274,21 @@ impl ByteMessageBuilder {
                 MessageFlags::NONE,
             );
         }
+        self
+    }
+
+    /// Add a return value from program execution
+    ///
+    /// This is typically used to send the return value from `teardown()`
+    /// back to PECOS through the IPC channel.
+    pub fn add_return_value(&mut self, value: i64) -> &mut Self {
+        let return_header = ReturnValueHeader { value };
+
+        self.add_message(
+            MessageType::ReturnValue,
+            bytes_of(&return_header),
+            MessageFlags::NONE,
+        );
         self
     }
 

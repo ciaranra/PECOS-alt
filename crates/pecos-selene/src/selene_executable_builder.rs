@@ -50,6 +50,7 @@ impl SeleneExecutableEngineBuilder {
     }
 
     /// Set the program to execute
+    #[must_use]
     pub fn program(mut self, program: impl Into<Program>) -> Self {
         match program.into() {
             Program::SeleneInterface(selene_prog) => {
@@ -81,6 +82,7 @@ impl SeleneExecutableEngineBuilder {
     }
 
     /// Set a HUGR program directly
+    #[must_use]
     pub fn hugr(mut self, hugr: impl Into<HugrProgram>) -> Self {
         self.hugr_program = Some(hugr.into());
         self
@@ -123,6 +125,7 @@ impl SeleneExecutableEngineBuilder {
     }
 
     /// Set the plugin path explicitly (for testing or custom plugins)
+    #[must_use]
     pub fn plugin(mut self, path: impl Into<PathBuf>) -> Self {
         self.plugin_path = Some(path.into());
         self
@@ -147,9 +150,7 @@ impl ClassicalControlEngineBuilder for SeleneExecutableEngineBuilder {
         }
 
         let num_qubits = self.num_qubits.unwrap_or(10);
-        println!(
-            "*** BUILDER: SeleneExecutableEngineBuilder.build() called with {num_qubits} qubits ***"
-        );
+        log::debug!("SeleneExecutableEngineBuilder.build() called with {num_qubits} qubits");
 
         let mut engine = SeleneExecutableEngine::new(num_qubits)?.with_verbose(self.verbose);
 

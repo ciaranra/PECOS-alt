@@ -4,6 +4,7 @@
 //! with different shot counts or seeds.
 
 use pecos::prelude::*;
+use std::time::Instant;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 1: Build once, run multiple times with sim_builder()
@@ -85,7 +86,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Direct run (builds each time)
-    use std::time::Instant;
     let start = Instant::now();
     for _ in 0..5 {
         let _ = sim(qasm3.clone()).run(100)?;

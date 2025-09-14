@@ -5,15 +5,20 @@ the PECOS Bridge plugin when running quantum simulations.
 """
 
 import logging
-from typing import Any
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    pass
 
 logger = logging.getLogger(__name__)
 
 
 def build_selene_with_bridge(
-    hugr_package, build_dir: Path, name: str = "pecos_program"
-) -> Any:
+    hugr_package: dict,
+    build_dir: Path,
+    name: str = "pecos_program",
+) -> object:
     """Build a Selene instance configured to use the PECOS Bridge plugin.
 
     Args:
@@ -30,24 +35,24 @@ def build_selene_with_bridge(
     """
     try:
         # Import Selene and PECOS Bridge plugin
-        from selene_sim import build
         from pecos.selene_plugins.simulators import PecosBridgePlugin
+        from selene_sim import build
 
         # Create Bridge plugin instance
         bridge_plugin = PecosBridgePlugin()
-        logger.info(f"Using PECOS Bridge plugin: {bridge_plugin.library_file}")
+        logger.info("Using PECOS Bridge plugin: %s", bridge_plugin.library_file)
 
         # Build Selene instance with default configuration
         # The key insight: We'll run this instance with Bridge plugin explicitly
         instance = build(hugr_package, name=name, build_dir=build_dir, verbose=False)
 
-        logger.info(f"Built Selene instance: {instance.executable}")
-        return instance
-
     except ImportError as e:
-        raise ImportError(f"Required dependencies not available: {e}")
+        raise ImportError(f"Required dependencies not available: {e}") from e
     except Exception as e:
-        raise RuntimeError(f"Failed to build Selene with Bridge: {e}")
+        raise RuntimeError(f"Failed to build Selene with Bridge: {e}") from e
+    else:
+        logger.info("Built Selene instance: %s", instance.executable)
+        return instance
 
 
 def create_bridge_simulator():
@@ -65,11 +70,11 @@ def create_bridge_simulator():
         return PecosBridgePlugin()
     except ImportError:
         raise ImportError(
-            "PECOS Bridge plugin not available - install quantum-pecos with Selene support"
-        )
+            "PECOS Bridge plugin not available - install quantum-pecos with Selene support",
+        ) from None
 
 
-def configure_selene_for_pecos():
+def configure_selene_for_pecos() -> bool | None:
     """Configure Selene to use PECOS Bridge plugin automatically.
 
     This function integrates the PECOS Bridge plugin into the selene_sim
@@ -81,14 +86,15 @@ def configure_selene_for_pecos():
 
         # Add Bridge plugin to selene_sim namespace
         selene_sim.PecosBridge = PecosBridgePlugin
-        logger.info("PECOS Bridge plugin registered with selene_sim")
 
-        return True
     except ImportError:
         logger.warning(
-            "Could not configure Selene for PECOS - Bridge plugin not available"
+            "Could not configure Selene for PECOS - Bridge plugin not available",
         )
         return False
+    else:
+        logger.info("PECOS Bridge plugin registered with selene_sim")
+        return True
 
 
 # Automatically configure Selene when this module is imported

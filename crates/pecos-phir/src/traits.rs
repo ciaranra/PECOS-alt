@@ -43,177 +43,175 @@ pub enum OpTrait {
 /// Get traits for an operation
 #[must_use]
 pub fn get_operation_traits(op: &Operation) -> HashSet<OpTrait> {
-    use crate::ops::{ClassicalOp, MemoryOp};
-    use OpTrait::{
-        AllocatesResources, Associative, Commutative, ConstantLike, Idempotent, IsolatedFromAbove,
-        Measurement, NoSideEffect, PureQuantum, RecursiveSideEffects, Speculatable, SymbolTable,
-        Terminator,
-    };
+    match op {
+        Operation::Quantum(q_op) => get_quantum_traits(q_op),
+        Operation::Classical(c_op) => get_classical_traits(c_op),
+        Operation::ControlFlow(cf_op) => get_control_flow_traits(cf_op),
+        Operation::Memory(m_op) => get_memory_traits(m_op),
+        Operation::Custom(_) => HashSet::new(), // Custom ops specify their own traits
+        Operation::Builtin(_) => {
+            let mut traits = HashSet::new();
+            traits.insert(OpTrait::NoSideEffect);
+            traits.insert(OpTrait::SymbolTable);
+            traits
+        }
+        Operation::Parsing(_) => {
+            let mut traits = HashSet::new();
+            traits.insert(OpTrait::NoSideEffect);
+            traits
+        }
+    }
+}
 
+/// Get traits for quantum operations
+#[allow(clippy::match_same_arms)] // Known and unknown ops intentionally have same empty trait set
+fn get_quantum_traits(q_op: &QuantumOp) -> HashSet<OpTrait> {
+    use OpTrait::{AllocatesResources, Measurement, NoSideEffect, PureQuantum};
     let mut traits = HashSet::new();
 
-    match op {
-        Operation::Quantum(q_op) => {
-            match q_op {
-                // Pure quantum gates
-                QuantumOp::H
-                | QuantumOp::X
-                | QuantumOp::Y
-                | QuantumOp::Z
-                | QuantumOp::S
-                | QuantumOp::Sdg
-                | QuantumOp::T
-                | QuantumOp::Tdg
-                | QuantumOp::RX(_)
-                | QuantumOp::RY(_)
-                | QuantumOp::RZ(_)
-                | QuantumOp::U3(_, _, _)
-                | QuantumOp::CX
-                | QuantumOp::CZ
-                | QuantumOp::SWAP
-                | QuantumOp::CPhase(_)
-                | QuantumOp::RZZ(_) => {
-                    traits.insert(PureQuantum);
-                    traits.insert(NoSideEffect);
-                }
-
-                // Measurement operations
-                QuantumOp::Measure
-                | QuantumOp::MeasurePauli(_)
-                | QuantumOp::MeasureExpectation(_) => {
-                    traits.insert(Measurement);
-                    // Measurements have side effects
-                }
-
-                // Resource management
-                QuantumOp::Alloc => {
-                    traits.insert(AllocatesResources);
-                }
-                QuantumOp::Dealloc | QuantumOp::Reset => {
-                    // Has side effects
-                }
-
-                // State preparation
-                QuantumOp::InitZero
-                | QuantumOp::InitOne
-                | QuantumOp::InitPlus
-                | QuantumOp::InitMinus
-                | QuantumOp::InitState(_) => {
-                    // Has side effects (modifies qubit state)
-                }
-
-                _ => {}
-            }
-        }
-
-        Operation::Classical(c_op) => {
-            match c_op {
-                // Arithmetic operations
-                ClassicalOp::Add | ClassicalOp::Mul | ClassicalOp::FAdd | ClassicalOp::FMul => {
-                    traits.insert(NoSideEffect);
-                    traits.insert(Commutative);
-                    traits.insert(Associative);
-                }
-
-                ClassicalOp::Sub
-                | ClassicalOp::Div
-                | ClassicalOp::Mod
-                | ClassicalOp::FSub
-                | ClassicalOp::FDiv => {
-                    traits.insert(NoSideEffect);
-                    // Not commutative or associative
-                }
-
-                ClassicalOp::Neg
-                | ClassicalOp::FNeg
-                | ClassicalOp::Sqrt
-                | ClassicalOp::Sin
-                | ClassicalOp::Cos
-                | ClassicalOp::Tan => {
-                    traits.insert(NoSideEffect);
-                    traits.insert(Speculatable);
-                }
-
-                // Bitwise operations
-                ClassicalOp::And | ClassicalOp::Or | ClassicalOp::Xor => {
-                    traits.insert(NoSideEffect);
-                    traits.insert(Commutative);
-                    traits.insert(Associative);
-                }
-
-                ClassicalOp::Not => {
-                    traits.insert(NoSideEffect);
-                    traits.insert(Idempotent);
-                }
-
-                // Constants
-                ClassicalOp::ConstInt(_)
-                | ClassicalOp::ConstFloat(_)
-                | ClassicalOp::ConstBool(_)
-                | ClassicalOp::ConstString(_) => {
-                    traits.insert(NoSideEffect);
-                    traits.insert(ConstantLike);
-                    traits.insert(Speculatable);
-                }
-
-                _ => {
-                    traits.insert(NoSideEffect);
-                }
-            }
-        }
-
-        Operation::ControlFlow(cf_op) => {
-            match cf_op {
-                ControlFlowOp::Return => {
-                    traits.insert(Terminator);
-                }
-                ControlFlowOp::Branch(_) | ControlFlowOp::Jump(_) => {
-                    traits.insert(Terminator);
-                }
-                ControlFlowOp::Loop(_) => {
-                    traits.insert(RecursiveSideEffects);
-                    traits.insert(IsolatedFromAbove);
-                }
-                ControlFlowOp::Call(_) => {
-                    // Function calls may have side effects
-                }
-                ControlFlowOp::Parallel | ControlFlowOp::Barrier => {
-                    // Synchronization has side effects
-                }
-            }
-        }
-
-        Operation::Memory(m_op) => {
-            match m_op {
-                MemoryOp::Alloc(_) => {
-                    traits.insert(AllocatesResources);
-                }
-                MemoryOp::Load => {
-                    traits.insert(Speculatable);
-                }
-                MemoryOp::Store => {
-                    // Has side effects
-                }
-                _ => {}
-            }
-        }
-
-        Operation::Custom(_) => {
-            // Custom operations must specify their own traits
-        }
-
-        Operation::Builtin(_) => {
-            // Builtin structural operations (module, func, etc.)
+    match q_op {
+        // Pure quantum gates
+        QuantumOp::H
+        | QuantumOp::X
+        | QuantumOp::Y
+        | QuantumOp::Z
+        | QuantumOp::S
+        | QuantumOp::Sdg
+        | QuantumOp::T
+        | QuantumOp::Tdg
+        | QuantumOp::RX(_)
+        | QuantumOp::RY(_)
+        | QuantumOp::RZ(_)
+        | QuantumOp::U3(_, _, _)
+        | QuantumOp::CX
+        | QuantumOp::CZ
+        | QuantumOp::SWAP
+        | QuantumOp::CPhase(_)
+        | QuantumOp::RZZ(_) => {
+            traits.insert(PureQuantum);
             traits.insert(NoSideEffect);
-            traits.insert(SymbolTable);
         }
+        // Measurement operations
+        QuantumOp::Measure | QuantumOp::MeasurePauli(_) | QuantumOp::MeasureExpectation(_) => {
+            traits.insert(Measurement);
+        }
+        // Resource management
+        QuantumOp::Alloc => {
+            traits.insert(AllocatesResources);
+        }
+        // State preparation and resource operations - no special traits
+        QuantumOp::Dealloc
+        | QuantumOp::Reset
+        | QuantumOp::InitZero
+        | QuantumOp::InitOne
+        | QuantumOp::InitPlus
+        | QuantumOp::InitMinus
+        | QuantumOp::InitState(_) => {
+            // Known operations with side effects but no special traits
+        }
+        _ => {
+            // Unknown operations - no traits assigned
+        }
+    }
+    traits
+}
 
-        Operation::Parsing(_) => {
-            // Parsing operations are temporary and have no side effects
+/// Get traits for classical operations
+fn get_classical_traits(c_op: &crate::ops::ClassicalOp) -> HashSet<OpTrait> {
+    use crate::ops::ClassicalOp;
+    use OpTrait::{Associative, Commutative, ConstantLike, Idempotent, NoSideEffect, Speculatable};
+    let mut traits = HashSet::new();
+
+    match c_op {
+        // Commutative and associative operations
+        ClassicalOp::Add
+        | ClassicalOp::Mul
+        | ClassicalOp::FAdd
+        | ClassicalOp::FMul
+        | ClassicalOp::And
+        | ClassicalOp::Or
+        | ClassicalOp::Xor => {
+            traits.insert(NoSideEffect);
+            traits.insert(Commutative);
+            traits.insert(Associative);
+        }
+        // Non-commutative arithmetic
+        ClassicalOp::Sub
+        | ClassicalOp::Div
+        | ClassicalOp::Mod
+        | ClassicalOp::FSub
+        | ClassicalOp::FDiv => {
+            traits.insert(NoSideEffect);
+        }
+        // Unary operations
+        ClassicalOp::Neg
+        | ClassicalOp::FNeg
+        | ClassicalOp::Sqrt
+        | ClassicalOp::Sin
+        | ClassicalOp::Cos
+        | ClassicalOp::Tan => {
+            traits.insert(NoSideEffect);
+            traits.insert(Speculatable);
+        }
+        ClassicalOp::Not => {
+            traits.insert(NoSideEffect);
+            traits.insert(Idempotent);
+        }
+        // Constants
+        ClassicalOp::ConstInt(_)
+        | ClassicalOp::ConstFloat(_)
+        | ClassicalOp::ConstBool(_)
+        | ClassicalOp::ConstString(_) => {
+            traits.insert(NoSideEffect);
+            traits.insert(ConstantLike);
+            traits.insert(Speculatable);
+        }
+        _ => {
+            // Other classical ops are side-effect free
             traits.insert(NoSideEffect);
         }
     }
+    traits
+}
 
+/// Get traits for control flow operations
+fn get_control_flow_traits(cf_op: &crate::ops::ControlFlowOp) -> HashSet<OpTrait> {
+    use crate::ops::ControlFlowOp;
+    use OpTrait::{IsolatedFromAbove, RecursiveSideEffects, Terminator};
+    let mut traits = HashSet::new();
+
+    match cf_op {
+        ControlFlowOp::Return | ControlFlowOp::Branch(_) | ControlFlowOp::Jump(_) => {
+            traits.insert(Terminator);
+        }
+        ControlFlowOp::Loop(_) => {
+            traits.insert(RecursiveSideEffects);
+            traits.insert(IsolatedFromAbove);
+        }
+        ControlFlowOp::Call(_) | ControlFlowOp::Parallel | ControlFlowOp::Barrier => {
+            // Function calls and synchronization have side effects
+        }
+    }
+    traits
+}
+
+/// Get traits for memory operations
+fn get_memory_traits(m_op: &crate::ops::MemoryOp) -> HashSet<OpTrait> {
+    use crate::ops::MemoryOp;
+    use OpTrait::{AllocatesResources, Speculatable};
+    let mut traits = HashSet::new();
+
+    match m_op {
+        MemoryOp::Alloc(_) => {
+            traits.insert(AllocatesResources);
+        }
+        MemoryOp::Load | MemoryOp::ArrayGet | MemoryOp::ArrayLen => {
+            traits.insert(Speculatable);
+        }
+        MemoryOp::Store | MemoryOp::Copy | MemoryOp::ArraySet | MemoryOp::ArrayCreate => {
+            // Memory operations have side effects
+        }
+    }
     traits
 }
 
@@ -235,6 +233,10 @@ pub trait OperationInterface {
     fn regions(&self) -> &[Region];
 
     /// Verify operation invariants
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the operation violates any invariants
     fn verify(&self) -> Result<(), String>;
 }
 

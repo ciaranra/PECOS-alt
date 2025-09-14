@@ -209,7 +209,7 @@ impl ControlEngine for SeleneCallbackEngine {
     type EngineOutput = ByteMessage;
 
     fn start(&mut self, _input: ()) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
-        println!("[Engine] Starting Selene execution");
+        log::debug!("[Engine] Starting Selene execution");
 
         // Start the Selene process if not already running
         if self.selene_process.is_none() {
@@ -221,7 +221,7 @@ impl ControlEngine for SeleneCallbackEngine {
 
         // Check if there are operations ready
         if let Some(operations) = self.get_next_operations() {
-            println!("[Engine] Got initial operations from Bridge");
+            log::debug!("[Engine] Got initial operations from Bridge");
             Ok(EngineStage::NeedsProcessing(operations))
         } else {
             // Wait for operations or check if complete
@@ -234,7 +234,7 @@ impl ControlEngine for SeleneCallbackEngine {
                 let state = self.state.lock().unwrap().clone();
                 match state {
                     EngineState::Complete => {
-                        println!("[Engine] Execution complete immediately");
+                        log::debug!("[Engine] Execution complete immediately");
                         return Ok(EngineStage::Complete(self.get_final_results()?));
                     }
                     EngineState::Error(e) => {
@@ -245,7 +245,7 @@ impl ControlEngine for SeleneCallbackEngine {
 
                 // Check for operations
                 if let Some(operations) = self.get_next_operations() {
-                    println!("[Engine] Got operations after waiting");
+                    log::debug!("[Engine] Got operations after waiting");
                     return Ok(EngineStage::NeedsProcessing(operations));
                 }
 
@@ -261,7 +261,7 @@ impl ControlEngine for SeleneCallbackEngine {
         &mut self,
         measurements: ByteMessage
     ) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
-        println!("[Engine] Providing measurements to Bridge");
+        log::debug!("[Engine] Providing measurements to Bridge");
 
         // Send measurements to the Bridge
         self.provide_measurements(measurements)?;
@@ -271,14 +271,14 @@ impl ControlEngine for SeleneCallbackEngine {
 
         // Check if there are more operations
         if let Some(operations) = self.get_next_operations() {
-            println!("[Engine] Got more operations after measurements");
+            log::debug!("[Engine] Got more operations after measurements");
             Ok(EngineStage::NeedsProcessing(operations))
         } else {
             // Check if execution is complete
             let state = self.state.lock().unwrap().clone();
             match state {
                 EngineState::Complete => {
-                    println!("[Engine] Execution complete");
+                    log::debug!("[Engine] Execution complete");
                     Ok(EngineStage::Complete(self.get_final_results()?))
                 }
                 EngineState::WaitingForMeasurements => {

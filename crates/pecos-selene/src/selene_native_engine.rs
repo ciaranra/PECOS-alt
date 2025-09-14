@@ -37,6 +37,7 @@ pub struct SeleneNativeEngine {
 }
 
 impl SeleneNativeEngine {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             config: None,

@@ -13,9 +13,9 @@
 
 """Example of running a Bell state experiment using the StateVecEngineRs."""
 
-import sys
-import os
 import collections
+import os
+import sys
 
 # Add the parent directory to the path to import pecos_rslib
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -89,23 +89,23 @@ def run_bell_state_experiment() -> None:
 
     print("\nCorrelation analysis:")
     print(
-        f"  Correlated outcomes (00 or 11): {correlated_outcomes} ({correlated_outcomes / num_shots * 100:.1f}%)"
+        f"  Correlated outcomes (00 or 11): {correlated_outcomes} ({correlated_outcomes / num_shots * 100:.1f}%)",
     )
     print(
-        f"  Anti-correlated outcomes (01 or 10): {anticorrelated_outcomes} ({anticorrelated_outcomes / num_shots * 100:.1f}%)"
+        f"  Anti-correlated outcomes (01 or 10): {anticorrelated_outcomes} ({anticorrelated_outcomes / num_shots * 100:.1f}%)",
     )
 
     if correlated_outcomes > 0.95 * num_shots:
         print(
-            "\nSuccess! The qubits are highly correlated, as expected in a Bell state."
+            "\nSuccess! The qubits are highly correlated, as expected in a Bell state.",
         )
     elif anticorrelated_outcomes > 0.95 * num_shots:
         print(
-            "\nInteresting! The qubits are anti-correlated, which is another valid Bell state."
+            "\nInteresting! The qubits are anti-correlated, which is another valid Bell state.",
         )
     else:
         print(
-            "\nUnexpected result: The qubits don't show the strong correlation expected in a Bell state."
+            "\nUnexpected result: The qubits don't show the strong correlation expected in a Bell state.",
         )
 
     print("\n==== End of Bell State Experiment ====")
@@ -164,10 +164,10 @@ def run_custom_experiment() -> None:
 
     print("\nGHZ state analysis:")
     print(
-        f"  Expected outcomes (000 or 111): {expected_outcomes} ({expected_outcomes / num_shots * 100:.1f}%)"
+        f"  Expected outcomes (000 or 111): {expected_outcomes} ({expected_outcomes / num_shots * 100:.1f}%)",
     )
     print(
-        f"  Unexpected outcomes: {unexpected_outcomes} ({unexpected_outcomes / num_shots * 100:.1f}%)"
+        f"  Unexpected outcomes: {unexpected_outcomes} ({unexpected_outcomes / num_shots * 100:.1f}%)",
     )
 
     print("\n==== End of Custom Experiment ====")

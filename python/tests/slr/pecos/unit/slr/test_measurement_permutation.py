@@ -18,8 +18,8 @@ def test_individual_measurement_permutation_qasm(
     qasm = SlrConverter(prog).qasm()
 
     # Print the QASM for debugging
-    print("\nQASM output:")
-    print(qasm)
+    # print("\nQASM output:")
+    # print(qasm)
 
     # Verify that the QASM contains the correct permuted measurements
     # After permutation: a[0] -> b[0], m[0] -> n[0]
@@ -50,8 +50,8 @@ def test_register_measurement_permutation_qasm(
     qasm = SlrConverter(prog).qasm()
 
     # Print the QASM for debugging
-    print("\nQASM output:")
-    print(qasm)
+    # print("\nQASM output:")
+    # print(qasm)
 
     # Register-wide measurements are now unrolled correctly with permutations
     # The expected behavior is:
@@ -82,8 +82,8 @@ def test_individual_measurement_permutation_qir(
     qir = SlrConverter(prog).qir()
 
     # Print the QIR for debugging
-    print("\nQIR output:")
-    print(qir)
+    # print("\nQIR output:")
+    # print(qir)
 
     # Verify that the QIR contains comments about the permutations
     assert (
@@ -164,8 +164,8 @@ def test_register_measurement_permutation_qir(
     qir = SlrConverter(prog).qir()
 
     # Print the QIR for debugging
-    print("\nQIR output:")
-    print(qir)
+    # print("\nQIR output:")
+    # print(qir)
 
     # Verify that the QIR contains comments about the permutations
     assert (

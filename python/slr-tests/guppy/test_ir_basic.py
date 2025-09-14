@@ -41,9 +41,6 @@ def test_ir_generates_valid_guppy() -> None:
     # Check result
     assert 'result("c", c)' in code
 
-    print("Generated code:")
-    print(code)
-
 
 def test_ir_handles_quantum_gates() -> None:
     """Test that IR generator handles quantum gates."""
@@ -65,9 +62,6 @@ def test_ir_handles_quantum_gates() -> None:
     # Check full array measurement
     assert "quantum.measure_array(q)" in code
 
-    print("\nGenerated code with gates:")
-    print(code)
-
 
 def test_ir_handles_conditionals() -> None:
     """Test that IR generator handles conditional statements."""
@@ -87,13 +81,3 @@ def test_ir_handles_conditionals() -> None:
     # Check conditional structure
     assert "if flag[0]:" in code
     assert "quantum.x(q_1)" in code
-
-    print("\nGenerated code with conditional:")
-    print(code)
-
-
-if __name__ == "__main__":
-    test_ir_generates_valid_guppy()
-    test_ir_handles_quantum_gates()
-    test_ir_handles_conditionals()
-    print("\nAll basic IR tests passed!")

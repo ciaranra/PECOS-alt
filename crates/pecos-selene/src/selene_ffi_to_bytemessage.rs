@@ -9,6 +9,7 @@
 
 use once_cell::sync::OnceCell;
 use pecos_engines::{ByteMessage, ByteMessageBuilder};
+use std::convert::TryFrom;
 use std::sync::{Arc, Mutex};
 
 // Global engine interface for communication with SeleneExecutableEngine
@@ -80,7 +81,7 @@ pub extern "C" fn selene_qalloc(_instance: *mut SeleneInstance) -> SeleneU64Resu
     // Prepare qubit in |0⟩ state
     let mut builder = ByteMessageBuilder::new();
     let _ = builder.for_quantum_operations();
-    builder.add_prep(&[qubit as usize]);
+    builder.add_prep(&[usize::try_from(qubit).unwrap_or(usize::MAX)]);
     queue_operation(builder.build());
 
     SeleneU64Result {
@@ -103,7 +104,7 @@ pub extern "C" fn selene_qubit_reset(
     // Prepare qubit in |0⟩ state
     let mut builder = ByteMessageBuilder::new();
     let _ = builder.for_quantum_operations();
-    builder.add_prep(&[qubit as usize]);
+    builder.add_prep(&[usize::try_from(qubit).unwrap_or(usize::MAX)]);
     queue_operation(builder.build());
 
     SeleneVoidResult { error_code: 0 }
@@ -118,7 +119,7 @@ pub extern "C" fn selene_rxy(
 ) -> SeleneVoidResult {
     let mut builder = ByteMessageBuilder::new();
     let _ = builder.for_quantum_operations();
-    builder.add_r1xy(theta, phi, &[qubit as usize]);
+    builder.add_r1xy(theta, phi, &[usize::try_from(qubit).unwrap_or(usize::MAX)]);
     queue_operation(builder.build());
 
     SeleneVoidResult { error_code: 0 }
@@ -132,7 +133,7 @@ pub extern "C" fn selene_rz(
 ) -> SeleneVoidResult {
     let mut builder = ByteMessageBuilder::new();
     let _ = builder.for_quantum_operations();
-    builder.add_rz(theta, &[qubit as usize]);
+    builder.add_rz(theta, &[usize::try_from(qubit).unwrap_or(usize::MAX)]);
     queue_operation(builder.build());
 
     SeleneVoidResult { error_code: 0 }
@@ -147,7 +148,11 @@ pub extern "C" fn selene_rzz(
 ) -> SeleneVoidResult {
     let mut builder = ByteMessageBuilder::new();
     let _ = builder.for_quantum_operations();
-    builder.add_rzz(theta, &[q1 as usize], &[q2 as usize]);
+    builder.add_rzz(
+        theta,
+        &[usize::try_from(q1).unwrap_or(usize::MAX)],
+        &[usize::try_from(q2).unwrap_or(usize::MAX)],
+    );
     queue_operation(builder.build());
 
     SeleneVoidResult { error_code: 0 }
@@ -161,13 +166,13 @@ pub extern "C" fn selene_qubit_measure(
     // Queue measurement
     let mut builder = ByteMessageBuilder::new();
     let _ = builder.for_quantum_operations();
-    builder.add_measurements(&[qubit as usize]);
+    builder.add_measurements(&[usize::try_from(qubit).unwrap_or(usize::MAX)]);
     queue_operation(builder.build());
 
     // Get result from engine
     let result = if let Some(engine) = ENGINE_INTERFACE.get() {
         if let Ok(mut engine) = engine.lock() {
-            engine.get_measurement(qubit as usize)
+            engine.get_measurement(usize::try_from(qubit).unwrap_or(usize::MAX))
         } else {
             false
         }
@@ -190,7 +195,7 @@ pub extern "C" fn selene_qubit_lazy_measure(
     // Queue measurement
     let mut builder = ByteMessageBuilder::new();
     let _ = builder.for_quantum_operations();
-    builder.add_measurements(&[qubit as usize]);
+    builder.add_measurements(&[usize::try_from(qubit).unwrap_or(usize::MAX)]);
     queue_operation(builder.build());
 
     // Return the qubit ID as the reference (simple mapping)
@@ -215,17 +220,28 @@ pub extern "C" fn selene_set_tc(_instance: *mut SeleneInstance, _tc: u64) -> Sel
 }
 
 // Configuration and lifecycle functions
+/// Load a configuration file for Selene
+///
+/// # Safety
+///
+/// - `instance` must be a valid pointer to a mutable pointer
+/// - The caller must ensure the instance pointer remains valid for the lifetime of the Selene instance
 #[unsafe(no_mangle)]
-pub extern "C" fn selene_load_config(
+pub unsafe extern "C" fn selene_load_config(
     instance: *mut *mut SeleneInstance,
     _config_file: *const std::ffi::c_char,
 ) -> SeleneVoidResult {
     unsafe {
         *instance = std::ptr::dangling_mut::<SeleneInstance>(); // Non-null dummy pointer
+        SeleneVoidResult { error_code: 0 }
     }
-    SeleneVoidResult { error_code: 0 }
 }
 
+/// Signal the start of a new shot
+///
+/// # Panics
+///
+/// Panics if the measurement counter lock is poisoned
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_on_shot_start(
     _instance: *mut SeleneInstance,

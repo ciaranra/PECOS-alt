@@ -1,37 +1,54 @@
-#!/usr/bin/env python3
 """Test the complete working Guppy→HUGR→LLVM→PECOS pipeline."""
 
-import sys
-from pathlib import Path
+import pytest
+
+# Check for required dependencies
+try:
+    from guppylang import guppy
+    from guppylang.std.quantum import cx, h, measure, qubit, x
+
+    GUPPY_AVAILABLE = True
+except ImportError:
+    GUPPY_AVAILABLE = False
+
+try:
+    from pecos.frontends.guppy_api import sim
+    from pecos_rslib import state_vector
+
+    PECOS_API_AVAILABLE = True
+except ImportError:
+    PECOS_API_AVAILABLE = False
+
+try:
+    from pecos_rslib import compile_hugr_to_llvm
+
+    HUGR_LLVM_AVAILABLE = True
+except ImportError:
+    HUGR_LLVM_AVAILABLE = False
+
+try:
+    from pecos.frontends.guppy_selene_compiler import GuppySeleneCompiler
+
+    SELENE_COMPILER_AVAILABLE = True
+except ImportError:
+    SELENE_COMPILER_AVAILABLE = False
 
 
 def decode_integer_results(results: list[int], n_bits: int) -> list[tuple[bool, ...]]:
     """Decode integer-encoded results back to tuples of booleans."""
     decoded = []
     for val in results:
-        bits = []
-        for i in range(n_bits):
-            bits.append(bool(val & (1 << i)))
+        bits = [bool(val & (1 << i)) for i in range(n_bits)]
         decoded.append(tuple(bits))
     return decoded
 
 
-# Add paths to ensure imports work
-sys.path.insert(0, str(Path(__file__).parent / "guppylang"))
-sys.path.insert(0, str(Path(__file__).parent / "python/quantum-pecos/src"))
+@pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
+class TestGuppyCompilation:
+    """Test Guppy compilation capabilities."""
 
-
-def test_complete_pipeline() -> None:
-    """Test the complete pipeline with working components."""
-    print("Testing Complete Guppy→HUGR→LLVM→PECOS Pipeline")
-    print("=" * 60)
-
-    # Test 1: Check if guppylang works
-    print("\n1. Testing Guppy compilation...")
-    simple_quantum = None
-    try:
-        from guppylang import guppy
-        from guppylang.std.quantum import h, measure, qubit
+    def test_simple_quantum_function_creation(self) -> None:
+        """Test creating a simple quantum function with Guppy."""
 
         @guppy
         def simple_quantum() -> bool:
@@ -39,185 +56,13 @@ def test_complete_pipeline() -> None:
             h(q)
             return measure(q)
 
-        # Test the simple function first without compilation
-        print(f"[PASS] Guppy function created: {simple_quantum}")
+        # Verify function was created
+        assert simple_quantum is not None, "Function should be created"
+        assert callable(simple_quantum), "Function should be callable"
+        assert hasattr(simple_quantum, "compile"), "Function should have compile method"
 
-        # For now, create dummy HUGR bytes to test the pipeline
-        # In a full test, this would use actual Guppy compilation
-        hugr_bytes = b"dummy_hugr_for_testing"
-        print(f"[OK] Using test HUGR data: {len(hugr_bytes)} bytes")
-
-    except ImportError as e:
-        if "quantum" in str(e).lower():
-            print(f"[WARNING] Quantum imports not available: {e}")
-            print(
-                "[INFO] This is expected - guppylang quantum support may not be installed",
-            )
-            # Create a simple classical function instead
-            from guppylang import guppy
-
-            @guppy
-            def simple_quantum() -> int:
-                return 42
-
-            print(f"[PASS] Using classical function as fallback: {simple_quantum}")
-            hugr_bytes = b"dummy_hugr_for_testing"
-        else:
-            print(f"[ERROR] Guppy setup failed: {e}")
-            import pytest
-
-            pytest.skip(f"Guppy not available: {e}")
-
-    # Test 2: Check quantum HUGR→LLVM compiler
-    print("\n2. Testing quantum HUGR→LLVM compiler...")
-    try:
-        from pecos.frontends.hugr_llvm_compiler import HugrLlvmCompiler
-
-        compiler = HugrLlvmCompiler()
-
-        if compiler.is_available():
-            print(
-                f"[PASS] Quantum HUGR compiler available: {compiler.hugr_llvm_binary}",
-            )
-
-            # Test with a real HUGR file if available
-            hugr_file = (
-                "../quantum-compilation-examples/hugr_quantum_llvm/bell_state_final.ll"
-            )
-            if Path(hugr_file).exists():
-                print(f"[OK] Found existing LLVM IR example: {hugr_file}")
-                with Path(hugr_file).open() as f:
-                    llvm_ir = f.read()
-                print(f"[OK] Example LLVM IR: {len(llvm_ir)} characters")
-
-                # Check for quantum operations
-                quantum_ops = [
-                    op
-                    for op in [
-                        "__quantum__qis__h__body",
-                        "__quantum__qis__m__body",
-                        "__quantum__rt__qubit_allocate",
-                    ]
-                    if op in llvm_ir
-                ]
-                if quantum_ops:
-                    print(
-                        f"[PASS] Contains quantum operations: {len(quantum_ops)} found",
-                    )
-
-                # Save for inspection
-                with Path("working_pipeline_output.ll").open("w") as f:
-                    f.write(llvm_ir)
-                print("[OK] LLVM IR saved to working_pipeline_output.ll")
-
-            else:
-                print(
-                    "[WARNING] No HUGR test file available, compiler exists but cannot test with dummy data",
-                )
-
-        else:
-            print("[ERROR] Quantum HUGR compiler not available")
-            print(
-                "   Build it with: cd quantum-compilation-examples/hugr_quantum_llvm && cargo build --release",
-            )
-            print("   Note: This is expected - the external compiler is optional")
-
-    except (RuntimeError, ImportError, FileNotFoundError) as e:
-        print(f"[ERROR] HUGR->LLVM compilation failed: {e}")
-        # Don't return False here - this is not critical
-
-    # Test 3: Test GuppySeleneCompiler integration (HUGR 0.13 compatible)
-    print("\n3. Testing GuppySeleneCompiler integration...")
-    try:
-        from pecos.frontends.guppy_selene_compiler import GuppySeleneCompiler
-        from pecos_rslib import compile_hugr_to_llvm
-
-        compiler = GuppySeleneCompiler()
-        print("[PASS] GuppySeleneCompiler created")
-
-        # First test HUGR to LLVM compilation directly
-        # Use to_str() if available, otherwise to_json() for compatibility
-        compiled = simple_quantum.compile()
-        hugr_json = (
-            compiled.to_str() if hasattr(compiled, "to_str") else compiled.to_json()
-        )
-        hugr_bytes = hugr_json.encode("utf-8")
-        try:
-            llvm_ir = compile_hugr_to_llvm(hugr_bytes)
-            print("[PASS] HUGR to LLVM compilation succeeded")
-            print(f"  Generated {len(llvm_ir)} characters of LLVM IR")
-
-            # Check for quantum operations
-            if any(op in llvm_ir for op in ["__quantum__", "EntryPoint"]):
-                print("[PASS] Generated IR contains quantum operations")
-            else:
-                print("[WARNING] Generated IR may not contain quantum operations")
-
-        except Exception as e:
-            print(f"[WARNING] Direct HUGR to LLVM compilation failed: {e}")
-            print("[INFO] This is expected with the placeholder implementation")
-
-    except (RuntimeError, ImportError) as e:
-        print(f"[WARNING] GuppySeleneCompiler integration failed: {e}")
-        # This is now expected to work with HUGR 0.13
-
-    # Test 3b: Test legacy GuppyFrontend (optional, expected to fail with HUGR incompatibility)
-    print("\n3b. Testing legacy GuppyFrontend (expected to fail)...")
-    try:
-        from pecos.frontends.guppy_frontend import GuppyFrontend
-
-        frontend = GuppyFrontend(use_rust_backend=False)
-        print("[INFO] GuppyFrontend created")
-
-        # This is expected to fail due to HUGR version mismatch
-        try:
-            qir_file = frontend.compile_function(simple_quantum)
-            print(f"[WARNING] Function compiled to: {qir_file} (unexpected success)")
-        except Exception as e:
-            if "HUGR version incompatibility" in str(e):
-                print("[PASS] Expected HUGR version incompatibility detected")
-                print(f"  Error: {e}")
-            else:
-                raise
-
-    except (RuntimeError, ImportError) as e:
-        print(f"[INFO] GuppyFrontend not available or failed as expected: {e}")
-
-    # Test 4: Test sim() API
-    print("\n4. Testing sim() API...")
-    try:
-        from pecos.frontends import sim
-        from pecos_rslib import state_vector
-
-        # Test compilation (execution may fail but compilation should work)
-        try:
-            results = sim(simple_quantum).qubits(10).quantum(state_vector()).run(5)
-            measurements = results.get("measurements", results.get("result", []))
-            print(f"[PASS] sim() succeeded: {len(measurements)} results")
-            print("  Backend: Unified sim() API with state_vector")
-
-        except RuntimeError as e:
-            if "PECOS" in str(e):
-                print(f"[WARNING] PECOS execution failed (expected): {e}")
-                print("  [PASS] But compilation pipeline worked!")
-            else:
-                raise
-
-    except (RuntimeError, ImportError) as e:
-        print(f"[ERROR] run_guppy API failed: {e}")
-        if "VarNotDefinedError" in str(e) and "qubit" in str(e):
-            print("[INFO] This is a known issue with guppylang quantum imports")
-            print(
-                "[INFO] The infrastructure is working, but limited to classical functions",
-            )
-        else:
-            msg = f"run_guppy API failed: {e}"
-            raise AssertionError(msg) from e
-
-    # Test 5: Test Bell state with GuppySeleneCompiler
-    print("\n5. Testing Bell state example with GuppySeleneCompiler...")
-    try:
-        from guppylang.std.quantum import cx
+    def test_bell_state_function_creation(self) -> None:
+        """Test creating a Bell state function."""
 
         @guppy
         def bell_state() -> tuple[bool, bool]:
@@ -227,63 +72,413 @@ def test_complete_pipeline() -> None:
             cx(q0, q1)
             return measure(q0), measure(q1)
 
-        # Compile using GuppySeleneCompiler for HUGR 0.13 compatibility
-        compiler = GuppySeleneCompiler()
+        assert bell_state is not None, "Bell state function should be created"
+        assert callable(bell_state), "Bell state should be callable"
 
-        # First try direct HUGR to LLVM compilation
-        # Use to_str() if available, otherwise to_json() for compatibility
-        compiled = bell_state.compile()
-        hugr_json = (
-            compiled.to_str() if hasattr(compiled, "to_str") else compiled.to_json()
-        )
+    def test_parametric_quantum_function(self) -> None:
+        """Test creating a parametric quantum function."""
+
+        @guppy
+        def parametric_circuit(n: int) -> int:
+            count = 0
+            for _i in range(n):
+                q = qubit()
+                h(q)
+                if measure(q):
+                    count += 1
+            return count
+
+        assert parametric_circuit is not None, "Parametric circuit should be created"
+        assert callable(parametric_circuit), "Parametric circuit should be callable"
+
+
+@pytest.mark.skipif(
+    not all([GUPPY_AVAILABLE, HUGR_LLVM_AVAILABLE]),
+    reason="Guppy or HUGR→LLVM not available",
+)
+class TestHUGRToLLVMCompilation:
+    """Test HUGR to LLVM compilation."""
+
+    def test_hugr_to_llvm_simple_circuit(self) -> None:
+        """Test compiling simple circuit from HUGR to LLVM."""
+
+        @guppy
+        def simple_circuit() -> bool:
+            q = qubit()
+            h(q)
+            return measure(q)
+
+        # Compile to HUGR - the compile() method returns the Package directly
+        package = simple_circuit.compile()
+
+        # Get HUGR JSON representation (not envelope format)
+        # Note: to_json() is deprecated but works with compile_hugr_to_llvm
+        if hasattr(package, "to_json"):
+            hugr_json = package.to_json()
+        else:
+            pytest.skip("Cannot get HUGR JSON representation")
+
         hugr_bytes = hugr_json.encode("utf-8")
+        assert len(hugr_bytes) > 0, "HUGR bytes should not be empty"
+
+        # Try to compile to LLVM
         try:
             llvm_ir = compile_hugr_to_llvm(hugr_bytes)
-            print("[PASS] Bell state HUGR to LLVM compilation succeeded")
-            print(f"  Generated {len(llvm_ir)} characters of LLVM IR")
+            assert llvm_ir is not None, "Should produce LLVM IR"
+            assert isinstance(llvm_ir, str), "LLVM IR should be a string"
+            assert len(llvm_ir) > 0, "LLVM IR should not be empty"
 
             # Check for quantum operations
-            if "__quantum__qis__cx__body" in llvm_ir or "__quantum__" in llvm_ir:
-                print("[PASS] Bell state contains quantum operations")
-            else:
-                print(
-                    "[WARNING] Bell state may not contain expected quantum operations",
-                )
+            quantum_indicators = ["__quantum__", "@main", "EntryPoint", "define"]
+            found_indicators = [ind for ind in quantum_indicators if ind in llvm_ir]
+            assert (
+                len(found_indicators) > 0
+            ), f"LLVM should contain quantum operations: {found_indicators}"
 
-        except Exception as e:
-            print(f"[WARNING] Bell state HUGR to LLVM failed: {e}")
-            print("[INFO] This is expected with the placeholder implementation")
+        except (RuntimeError, ValueError) as e:
+            if "not supported" in str(e).lower() or "not available" in str(e).lower():
+                pytest.skip(f"HUGR to LLVM not fully supported: {e}")
+            pytest.fail(f"HUGR to LLVM compilation failed: {e}")
 
-    except ImportError as e:
-        print(f"[WARNING] Quantum imports not available for Bell state: {e}")
-        print(
-            "[INFO] Skipping Bell state test - this is expected without quantum support",
-        )
-    except RuntimeError as e:
-        print(f"[WARNING] Bell state compilation failed: {e}")
-        if "VarNotDefinedError" in str(e) and ("qubit" in str(e) or "cx" in str(e)):
-            print("[INFO] This is a known issue with guppylang quantum imports")
-            print(
-                "[INFO] The infrastructure is working, but quantum functions need proper setup",
-            )
+    def test_hugr_to_llvm_bell_state(self) -> None:
+        """Test compiling Bell state from HUGR to LLVM."""
+
+        @guppy
+        def bell_state() -> tuple[bool, bool]:
+            q0 = qubit()
+            q1 = qubit()
+            h(q0)
+            cx(q0, q1)
+            return measure(q0), measure(q1)
+
+        # Compile to HUGR - the compile() method returns the Package directly
+        package = bell_state.compile()
+
+        # Get HUGR JSON representation (not envelope format)
+        # Note: to_json() is deprecated but works with compile_hugr_to_llvm
+        if hasattr(package, "to_json"):
+            hugr_json = package.to_json()
         else:
-            msg = f"Bell state compilation failed: {e}"
-            raise AssertionError(msg) from e
+            pytest.skip("Cannot get HUGR JSON representation")
 
-    print("\n" + "=" * 60)
-    print("[SUCCESS] Complete Guppy->HUGR->LLVM->PECOS pipeline is working!")
-    print("\nComponents verified:")
-    print("[PASS] Guppy quantum programming language")
-    print("[PASS] HUGR intermediate representation")
-    print("[PASS] Quantum HUGR->LLVM compiler with proper quantum operations")
-    print("[PASS] GuppyFrontend integration")
-    print("[PASS] run_guppy() simple API")
-    print("[PASS] Bell state and single-qubit circuits")
-    print("\nThe pipeline is now ready for quantum program execution!")
-    print("Build the PECOS binary to complete end-to-end execution.")
+        hugr_bytes = hugr_json.encode("utf-8")
 
-    # All tests passed
+        try:
+            llvm_ir = compile_hugr_to_llvm(hugr_bytes)
+            assert llvm_ir is not None, "Should produce LLVM IR for Bell state"
+
+            # Check for specific Bell state operations
+            bell_ops = [
+                "__quantum__qis__h",
+                "__quantum__qis__cx",
+                "__quantum__qis__cnot",
+                "measure",
+            ]
+            found_ops = [op for op in bell_ops if op.lower() in llvm_ir.lower()]
+
+            # Should have at least H and measurement
+            assert (
+                len(found_ops) >= 1
+            ), f"Bell state should have quantum ops, found: {found_ops}"
+
+        except (RuntimeError, ValueError) as e:
+            if "not supported" in str(e).lower():
+                pytest.skip(f"Bell state HUGR to LLVM not supported: {e}")
+            pytest.fail(f"Bell state compilation failed: {e}")
 
 
-if __name__ == "__main__":
-    test_complete_pipeline()
+@pytest.mark.skipif(
+    not SELENE_COMPILER_AVAILABLE,
+    reason="GuppySeleneCompiler not available",
+)
+class TestGuppySeleneCompiler:
+    """Test GuppySeleneCompiler integration."""
+
+    def test_compiler_creation(self) -> None:
+        """Test creating GuppySeleneCompiler instance."""
+        compiler = GuppySeleneCompiler()
+        assert compiler is not None, "Should create compiler"
+
+        # Check compiler methods
+        compiler_methods = [m for m in dir(compiler) if not m.startswith("_")]
+        assert len(compiler_methods) > 0, "Compiler should have public methods"
+
+    def test_compiler_availability_check(self) -> None:
+        """Test checking compiler availability."""
+        compiler = GuppySeleneCompiler()
+
+        # Check if compiler has availability check
+        if hasattr(compiler, "is_available"):
+            available = compiler.is_available()
+            assert isinstance(available, bool), "Availability should be boolean"
+
+    @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
+    def test_compiler_with_quantum_circuit(self) -> None:
+        """Test compiler with quantum circuit."""
+
+        @guppy
+        def quantum_circuit() -> int:
+            count = 0
+            for _i in range(3):
+                q = qubit()
+                h(q)
+                if measure(q):
+                    count += 1
+            return count
+
+        GuppySeleneCompiler()
+
+        # Try to compile the circuit
+        compiled = quantum_circuit.compile()
+        assert compiled is not None, "Should compile quantum circuit"
+
+
+@pytest.mark.skipif(not PECOS_API_AVAILABLE, reason="PECOS API not available")
+class TestSimAPI:
+    """Test the sim() API."""
+
+    @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
+    def test_sim_api_simple_circuit(self) -> None:
+        """Test sim() API with simple circuit."""
+
+        @guppy
+        def simple_circuit() -> bool:
+            q = qubit()
+            h(q)
+            return measure(q)
+
+        try:
+            results = (
+                sim(simple_circuit).qubits(1).quantum(state_vector()).seed(42).run(10)
+            )
+
+            # Verify results structure
+            assert isinstance(results, dict), "Results should be a dictionary"
+
+            # Check for measurements
+            if "measurement_1" in results:
+                measurements = results["measurement_1"]
+                assert len(measurements) == 10, "Should have 10 measurements"
+                assert all(
+                    m in [0, 1, True, False] for m in measurements
+                ), "Measurements should be binary"
+            elif "measurements" in results:
+                measurements = results["measurements"]
+                assert len(measurements) == 10, "Should have 10 measurements"
+            else:
+                assert len(results) > 0, "Should have some results"
+
+        except (RuntimeError, ValueError) as e:
+            if "not supported" in str(e).lower() or "PECOS" in str(e):
+                pytest.skip(f"sim() API execution not fully supported: {e}")
+            pytest.fail(f"sim() API failed: {e}")
+
+    @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
+    def test_sim_api_bell_state(self) -> None:
+        """Test sim() API with Bell state."""
+
+        @guppy
+        def bell_state() -> tuple[bool, bool]:
+            q0 = qubit()
+            q1 = qubit()
+            h(q0)
+            cx(q0, q1)
+            return measure(q0), measure(q1)
+
+        try:
+            results = (
+                sim(bell_state).qubits(2).quantum(state_vector()).seed(42).run(100)
+            )
+
+            assert isinstance(results, dict), "Results should be a dictionary"
+
+            # Check for Bell state correlation
+            if "measurement_1" in results and "measurement_2" in results:
+                m1 = results["measurement_1"]
+                m2 = results["measurement_2"]
+
+                assert len(m1) == 100, "Should have 100 measurements for qubit 1"
+                assert len(m2) == 100, "Should have 100 measurements for qubit 2"
+
+                # Bell state should be correlated
+                correlated = sum(1 for i in range(100) if m1[i] == m2[i])
+                correlation_rate = correlated / 100
+                assert (
+                    correlation_rate > 0.95
+                ), f"Bell state should be correlated, got {correlation_rate:.2%}"
+
+        except (RuntimeError, ValueError) as e:
+            if "not supported" in str(e).lower():
+                pytest.skip(f"Bell state simulation not supported: {e}")
+            pytest.fail(f"Bell state simulation failed: {e}")
+
+    def test_sim_api_with_noise(self) -> None:
+        """Test sim() API with noise model."""
+        if not GUPPY_AVAILABLE:
+            pytest.skip("Guppy not available")
+
+        @guppy
+        def noisy_circuit() -> bool:
+            q = qubit()
+            x(q)  # Put in |1⟩ state
+            return measure(q)
+
+        try:
+            from pecos_rslib import depolarizing_noise
+
+            # Create depolarizing noise model with 10% error probability
+            noise_model = depolarizing_noise().with_uniform_probability(0.1)
+
+            # Run with depolarizing noise
+            results = (
+                sim(noisy_circuit)
+                .qubits(1)
+                .quantum(state_vector())
+                .noise(
+                    noise_model,
+                )
+                .seed(42)
+                .run(100)
+            )
+
+            assert isinstance(results, dict), "Results should be a dictionary"
+
+            # With X gate and no noise, should always measure 1
+            # With 10% depolarizing noise, should sometimes measure 0
+            if "measurement_1" in results:
+                measurements = results["measurement_1"]
+                ones = sum(measurements)
+
+                # Should be mostly 1s but not all due to noise
+                assert (
+                    70 < ones < 100
+                ), f"With noise, should have some errors, got {ones}/100"
+
+        except ImportError:
+            pytest.skip("Noise models not available")
+        except (RuntimeError, ValueError) as e:
+            if "not supported" in str(e).lower():
+                pytest.skip(f"Noise simulation not supported: {e}")
+
+
+class TestCompletePipeline:
+    """Test the complete Guppy→HUGR→LLVM→PECOS pipeline."""
+
+    @pytest.mark.skipif(
+        not all([GUPPY_AVAILABLE, PECOS_API_AVAILABLE]),
+        reason="Full pipeline not available",
+    )
+    def test_complete_pipeline_integration(self) -> None:
+        """Test complete pipeline from Guppy to execution."""
+
+        # Create quantum circuit
+        @guppy
+        def quantum_algorithm() -> tuple[bool, bool, bool]:
+            """Three-qubit quantum algorithm."""
+            q0 = qubit()
+            q1 = qubit()
+            q2 = qubit()
+
+            # Create superposition
+            h(q0)
+            h(q1)
+
+            # Entangle
+            cx(q0, q2)
+            cx(q1, q2)
+
+            # Measure
+            return measure(q0), measure(q1), measure(q2)
+
+        # Test compilation
+        compiled = quantum_algorithm.compile()
+        assert compiled is not None, "Should compile algorithm"
+
+        # Test execution through sim API
+        try:
+            results = (
+                sim(quantum_algorithm)
+                .qubits(3)
+                .quantum(state_vector())
+                .seed(42)
+                .run(50)
+            )
+
+            assert isinstance(results, dict), "Should get results dictionary"
+
+            # Verify we got measurements
+            has_measurements = (
+                "measurement_1" in results
+                or "measurements" in results
+                or len(results) > 0
+            )
+            assert has_measurements, "Should have measurement results"
+
+            # If we have individual measurements, check structure
+            if "measurement_1" in results:
+                for i in range(1, 4):
+                    key = f"measurement_{i}"
+                    if key in results:
+                        assert (
+                            len(results[key]) == 50
+                        ), f"Should have 50 measurements for {key}"
+
+        except (RuntimeError, ValueError) as e:
+            if "PECOS" in str(e) or "not supported" in str(e).lower():
+                # Pipeline compiled but execution failed - this is partial success
+                pass
+            else:
+                pytest.fail(f"Pipeline failed unexpectedly: {e}")
+
+    def test_pipeline_error_handling(self) -> None:
+        """Test error handling in the pipeline."""
+        if not GUPPY_AVAILABLE:
+            pytest.skip("Guppy not available")
+
+        @guppy
+        def invalid_circuit() -> bool:
+            # This might cause issues in some backends
+            q = qubit()
+            # Missing any gates
+            return measure(q)
+
+        # Should still compile
+        compiled = invalid_circuit.compile()
+        assert compiled is not None, "Should compile even simple circuit"
+
+        if PECOS_API_AVAILABLE:
+            # Should handle execution gracefully
+            try:
+                results = sim(invalid_circuit).qubits(1).quantum(state_vector()).run(10)
+                # If it works, verify results
+                assert isinstance(results, dict), "Should get results"
+            except (RuntimeError, ValueError):
+                # Expected - some backends might reject this
+                pass
+
+    def test_integer_result_decoding(self) -> None:
+        """Test the integer result decoding utility."""
+        # Test decoding 2-bit integers
+        results = [0, 1, 2, 3]  # All possible 2-bit values
+        decoded = decode_integer_results(results, 2)
+
+        expected = [
+            (False, False),  # 0 = 00
+            (True, False),  # 1 = 01
+            (False, True),  # 2 = 10
+            (True, True),  # 3 = 11
+        ]
+
+        assert decoded == expected, f"Decoding mismatch: {decoded} != {expected}"
+
+        # Test decoding 3-bit integers
+        results = [0, 5, 7]  # 000, 101, 111
+        decoded = decode_integer_results(results, 3)
+
+        expected = [
+            (False, False, False),  # 0 = 000
+            (True, False, True),  # 5 = 101
+            (True, True, True),  # 7 = 111
+        ]
+
+        assert decoded == expected, f"3-bit decoding mismatch: {decoded} != {expected}"

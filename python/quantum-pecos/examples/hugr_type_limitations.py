@@ -24,9 +24,9 @@ def test_unsupported_types() -> None:
     try:
         hugr = compile_guppy_to_hugr(return_int)
         compile_hugr_to_llvm(hugr)
-        print("✗ This should have failed!")
+        print("This should have failed!")
     except HugrTypeError as e:
-        print("✓ Expected error caught:")
+        print("Expected error caught:")
         print(f"  {e}")
         print()
 
@@ -38,9 +38,9 @@ def test_unsupported_types() -> None:
     try:
         hugr = compile_guppy_to_hugr(add_numbers)
         compile_hugr_to_llvm(hugr)
-        print("✗ This should have failed!")
+        print("This should have failed!")
     except HugrTypeError as e:
-        print("✓ Expected error caught:")
+        print("Expected error caught:")
         print(f"  Type: {e.unsupported_type}")
         print()
 
@@ -59,16 +59,16 @@ def test_supported_quantum_operations() -> None:
 
     try:
         hugr = compile_guppy_to_hugr(quantum_coin)
-        print("✓ Quantum coin compiled to HUGR")
+        print("Quantum coin compiled to HUGR")
         print(f"  HUGR size: {len(hugr)} bytes")
 
         # This might still fail due to bool type issues, but let's try
         compile_hugr_to_llvm(hugr)
-        print("✓ HUGR compiled to LLVM!")
+        print("HUGR compiled to LLVM!")
     except HugrTypeError as e:
-        print(f"✗ Type limitation: {e.unsupported_type}")
+        print(f"Type limitation: {e.unsupported_type}")
     except RuntimeError as e:
-        print(f"✗ Other error: {e}")
+        print(f"Other error: {e}")
 
 
 def show_workarounds() -> None:

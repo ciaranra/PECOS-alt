@@ -22,6 +22,10 @@ impl ExpressionEvaluator {
     }
 
     /// Evaluate a simple variable reference
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the variable is not found or not initialized
     pub fn evaluate_variable(&self, var_name: &str) -> Result<TypedValue> {
         match self.environment.get_variable(var_name)? {
             Some(value) => Ok(value.clone()),
@@ -39,6 +43,13 @@ impl ExpressionEvaluator {
     }
 
     /// Evaluate binary arithmetic operation
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The operation is not supported
+    /// - Type mismatch between operands
+    /// - The specific operation implementation fails
     pub fn evaluate_binary_op(
         &self,
         left: &TypedValue,
@@ -46,22 +57,22 @@ impl ExpressionEvaluator {
         op: &str,
     ) -> Result<TypedValue> {
         match op {
-            "+" => self.add(left, right),
-            "-" => self.subtract(left, right),
-            "*" => self.multiply(left, right),
-            "/" => self.divide(left, right),
-            "%" => self.modulo(left, right),
-            "==" => Ok(TypedValue::Bool(self.equals(left, right))),
-            "!=" => Ok(TypedValue::Bool(!self.equals(left, right))),
-            "<" => Ok(TypedValue::Bool(self.less_than(left, right)?)),
-            ">" => Ok(TypedValue::Bool(self.greater_than(left, right)?)),
-            "<=" => Ok(TypedValue::Bool(!self.greater_than(left, right)?)),
-            ">=" => Ok(TypedValue::Bool(!self.less_than(left, right)?)),
-            "&&" => self.logical_and(left, right),
-            "||" => self.logical_or(left, right),
-            "&" => self.bitwise_and(left, right),
-            "|" => self.bitwise_or(left, right),
-            "^" => self.bitwise_xor(left, right),
+            "+" => Self::add(left, right),
+            "-" => Self::subtract(left, right),
+            "*" => Self::multiply(left, right),
+            "/" => Self::divide(left, right),
+            "%" => Self::modulo(left, right),
+            "==" => Ok(TypedValue::Bool(Self::equals(left, right))),
+            "!=" => Ok(TypedValue::Bool(!Self::equals(left, right))),
+            "<" => Ok(TypedValue::Bool(Self::less_than(left, right)?)),
+            ">" => Ok(TypedValue::Bool(Self::greater_than(left, right)?)),
+            "<=" => Ok(TypedValue::Bool(!Self::greater_than(left, right)?)),
+            ">=" => Ok(TypedValue::Bool(!Self::less_than(left, right)?)),
+            "&&" => Self::logical_and(left, right),
+            "||" => Self::logical_or(left, right),
+            "&" => Self::bitwise_and(left, right),
+            "|" => Self::bitwise_or(left, right),
+            "^" => Self::bitwise_xor(left, right),
             _ => Err(PhirError::internal(format!(
                 "Unsupported binary operator: {op}"
             ))),
@@ -69,7 +80,7 @@ impl ExpressionEvaluator {
     }
 
     /// Add two values
-    fn add(&self, left: &TypedValue, right: &TypedValue) -> Result<TypedValue> {
+    fn add(left: &TypedValue, right: &TypedValue) -> Result<TypedValue> {
         match (left, right) {
             (TypedValue::I32(a), TypedValue::I32(b)) => Ok(TypedValue::I32(a + b)),
             (TypedValue::I64(a), TypedValue::I64(b)) => Ok(TypedValue::I64(a + b)),
@@ -80,7 +91,7 @@ impl ExpressionEvaluator {
     }
 
     /// Subtract two values
-    fn subtract(&self, left: &TypedValue, right: &TypedValue) -> Result<TypedValue> {
+    fn subtract(left: &TypedValue, right: &TypedValue) -> Result<TypedValue> {
         match (left, right) {
             (TypedValue::I32(a), TypedValue::I32(b)) => Ok(TypedValue::I32(a - b)),
             (TypedValue::I64(a), TypedValue::I64(b)) => Ok(TypedValue::I64(a - b)),
@@ -91,7 +102,7 @@ impl ExpressionEvaluator {
     }
 
     /// Multiply two values
-    fn multiply(&self, left: &TypedValue, right: &TypedValue) -> Result<TypedValue> {
+    fn multiply(left: &TypedValue, right: &TypedValue) -> Result<TypedValue> {
         match (left, right) {
             (TypedValue::I32(a), TypedValue::I32(b)) => Ok(TypedValue::I32(a * b)),
             (TypedValue::I64(a), TypedValue::I64(b)) => Ok(TypedValue::I64(a * b)),
@@ -102,7 +113,7 @@ impl ExpressionEvaluator {
     }
 
     /// Divide two values
-    fn divide(&self, left: &TypedValue, right: &TypedValue) -> Result<TypedValue> {
+    fn divide(left: &TypedValue, right: &TypedValue) -> Result<TypedValue> {
         match (left, right) {
             (TypedValue::I32(a), TypedValue::I32(b)) => {
                 if *b == 0 {
@@ -137,7 +148,7 @@ impl ExpressionEvaluator {
     }
 
     /// Modulo operation
-    fn modulo(&self, left: &TypedValue, right: &TypedValue) -> Result<TypedValue> {
+    fn modulo(left: &TypedValue, right: &TypedValue) -> Result<TypedValue> {
         match (left, right) {
             (TypedValue::I32(a), TypedValue::I32(b)) => {
                 if *b == 0 {
@@ -172,12 +183,12 @@ impl ExpressionEvaluator {
     }
 
     /// Check equality
-    fn equals(&self, left: &TypedValue, right: &TypedValue) -> bool {
+    fn equals(left: &TypedValue, right: &TypedValue) -> bool {
         left == right
     }
 
     /// Check less than
-    fn less_than(&self, left: &TypedValue, right: &TypedValue) -> Result<bool> {
+    fn less_than(left: &TypedValue, right: &TypedValue) -> Result<bool> {
         match (left, right) {
             (TypedValue::I32(a), TypedValue::I32(b)) => Ok(a < b),
             (TypedValue::I64(a), TypedValue::I64(b)) => Ok(a < b),
@@ -188,7 +199,7 @@ impl ExpressionEvaluator {
     }
 
     /// Check greater than
-    fn greater_than(&self, left: &TypedValue, right: &TypedValue) -> Result<bool> {
+    fn greater_than(left: &TypedValue, right: &TypedValue) -> Result<bool> {
         match (left, right) {
             (TypedValue::I32(a), TypedValue::I32(b)) => Ok(a > b),
             (TypedValue::I64(a), TypedValue::I64(b)) => Ok(a > b),
@@ -199,7 +210,7 @@ impl ExpressionEvaluator {
     }
 
     /// Logical AND
-    fn logical_and(&self, left: &TypedValue, right: &TypedValue) -> Result<TypedValue> {
+    fn logical_and(left: &TypedValue, right: &TypedValue) -> Result<TypedValue> {
         match (left, right) {
             (TypedValue::Bool(a), TypedValue::Bool(b)) => Ok(TypedValue::Bool(*a && *b)),
             _ => Err(PhirError::internal("Logical AND requires boolean operands")),
@@ -207,7 +218,7 @@ impl ExpressionEvaluator {
     }
 
     /// Logical OR
-    fn logical_or(&self, left: &TypedValue, right: &TypedValue) -> Result<TypedValue> {
+    fn logical_or(left: &TypedValue, right: &TypedValue) -> Result<TypedValue> {
         match (left, right) {
             (TypedValue::Bool(a), TypedValue::Bool(b)) => Ok(TypedValue::Bool(*a || *b)),
             _ => Err(PhirError::internal("Logical OR requires boolean operands")),
@@ -215,7 +226,7 @@ impl ExpressionEvaluator {
     }
 
     /// Bitwise AND
-    fn bitwise_and(&self, left: &TypedValue, right: &TypedValue) -> Result<TypedValue> {
+    fn bitwise_and(left: &TypedValue, right: &TypedValue) -> Result<TypedValue> {
         match (left, right) {
             (TypedValue::U32(a), TypedValue::U32(b)) => Ok(TypedValue::U32(a & b)),
             (TypedValue::U64(a), TypedValue::U64(b)) => Ok(TypedValue::U64(a & b)),
@@ -226,7 +237,7 @@ impl ExpressionEvaluator {
     }
 
     /// Bitwise OR
-    fn bitwise_or(&self, left: &TypedValue, right: &TypedValue) -> Result<TypedValue> {
+    fn bitwise_or(left: &TypedValue, right: &TypedValue) -> Result<TypedValue> {
         match (left, right) {
             (TypedValue::U32(a), TypedValue::U32(b)) => Ok(TypedValue::U32(a | b)),
             (TypedValue::U64(a), TypedValue::U64(b)) => Ok(TypedValue::U64(a | b)),
@@ -237,7 +248,7 @@ impl ExpressionEvaluator {
     }
 
     /// Bitwise XOR
-    fn bitwise_xor(&self, left: &TypedValue, right: &TypedValue) -> Result<TypedValue> {
+    fn bitwise_xor(left: &TypedValue, right: &TypedValue) -> Result<TypedValue> {
         match (left, right) {
             (TypedValue::U32(a), TypedValue::U32(b)) => Ok(TypedValue::U32(a ^ b)),
             (TypedValue::U64(a), TypedValue::U64(b)) => Ok(TypedValue::U64(a ^ b)),

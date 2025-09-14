@@ -24,8 +24,8 @@ fn test_hugr_020_in_pecos_hugr() {
 
     // The key test is that we can use HUGR 0.20 APIs
     // including the Array type (not List)
-    println!("✓ HUGR 0.20 APIs are available");
-    println!("✓ Uses Array types, not List types");
+    println!("HUGR 0.20 APIs are available");
+    println!("Uses Array types, not List types");
 }
 
 #[test]
@@ -34,5 +34,5 @@ fn test_hugr_version_info() {
     println!("This uses Array types instead of List types");
 
     // Verify we're using HUGR 0.20
-    println!("✓ HUGR 0.20 support is available");
+    println!("HUGR 0.20 support is available");
 }

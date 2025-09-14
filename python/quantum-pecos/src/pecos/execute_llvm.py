@@ -4,6 +4,7 @@ This module provides the same interface as the external execute_llvm module
 but uses PECOS's own HUGR compilation infrastructure.
 """
 
+import importlib.util
 from pathlib import Path
 
 
@@ -41,8 +42,6 @@ def compile_module_to_string(hugr_bytes: bytes) -> str:
     # Fall back to external HUGR compiler
     try:
         # Check if hugr_llvm_compiler module is available
-        import importlib.util
-
         spec = importlib.util.find_spec("pecos.frontends.hugr_llvm_compiler")
         if spec is None:
             msg = "PECOS HUGR compiler module not available"
@@ -110,12 +109,9 @@ def is_available() -> bool:
     Returns:
         True if at least one HUGR->LLVM backend is available, False otherwise
     """
-    try:
-        # Check Rust backend
-        from pecos_rslib import compile_hugr_to_llvm_rust  # noqa: F401
-    except ImportError:
-        pass
-    else:
+    # Check Rust backend
+    spec = importlib.util.find_spec("pecos_rslib.compile_hugr_to_llvm_rust")
+    if spec is not None:
         return True
 
     try:

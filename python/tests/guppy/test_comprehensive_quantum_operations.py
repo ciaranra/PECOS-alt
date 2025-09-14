@@ -1,63 +1,17 @@
-#!/usr/bin/env python3
-"""Comprehensive tests for quantum operations based on guppylang patterns.
+"""Comprehensive tests for quantum operations based on guppylang patterns."""
 
-This test file systematically tests quantum operations that should work
-in the PECOS-alt implementation, based on patterns from the guppylang
-integration test suite.
-
-KNOWN ISSUES:
-- Conditional control flow compilation bug: The HUGR to LLVM compiler fails to
-  properly compile programs with conditional control flow (if/else statements).
-  The generated LLVM IR is incomplete, missing quantum operations and measurements.
-  This affects any test using conditional logic with quantum operations.
-
-- Measurement-based conditional quantum operations have a fundamental bug in the
-  Guppy/HUGR/LLVM compilation pipeline. When quantum operations (gates) are placed
-  inside conditional blocks based on measurement results, they are not applied to
-  the target qubits. Classical operations in the same conditionals work correctly.
-
-- Selene/HUGR compilation deterministic measurement bug: The current sim() API
-  implementation using the SeleneEngine for HUGR programs produces deterministic
-  measurement results instead of proper quantum simulation results. This is because
-  the SeleneEngine.process() method generates fake alternating measurement outcomes
-  (based on shot_count % 2) instead of delegating to the actual quantum simulator.
-  As a result, all tests using H gates produce incorrect deterministic results
-  (all 0s or all 1s) instead of the expected probabilistic distribution.
-
-  This affects any test using Hadamard gates or other superposition-creating
-  operations. The direct LLVM execution path (execute_llvm) works correctly and
-  produces proper probabilistic results.
-
-  Example of the bug:
-    if measure(q1):
-        x(q2)  # This X gate is NOT applied to q2
-
-  Affected tests:
-  - test_measurement_operations: Demonstrates the core issue
-  - test_parity_accumulation: Would fail if quantum ops were used in conditionals
-  - test_repeat_until_success: Has additional logic errors
-
-  Workaround: Use entangling gates (CX) instead of measurement-based conditionals
-  for quantum correlations.
-"""
-
-import sys
 from typing import Any
 
 import pytest
 
-sys.path.append("python/quantum-pecos/src")
-
 # Check dependencies
 try:
     from guppylang import guppy
-    from guppylang.std.angles import angle, pi
-    from guppylang.std.builtins import nat, owned
+    from guppylang.std.angles import pi
+    from guppylang.std.builtins import owned
     from guppylang.std.quantum import (
         ch,
-        crz,
         cx,
-        cy,
         cz,
         discard,
         h,
@@ -98,9 +52,7 @@ def decode_integer_results(results: list[int], n_bits: int) -> list[tuple[bool, 
     """
     decoded = []
     for val in results:
-        bits = []
-        for i in range(n_bits):
-            bits.append(bool(val & (1 << i)))
+        bits = [bool(val & (1 << i)) for i in range(n_bits)]
         decoded.append(tuple(bits))
     return decoded
 
@@ -218,18 +170,12 @@ class TestBasicQuantumGates:
         for i, val in enumerate(decoded_results):
             # val is now a tuple like (True, False, False, True)
             r1, r2, r3, r4 = val
-            if i == 0:  # Only print first shot for debugging
-                print(f"DEBUG Shot {i}: Tuple value = {val}")
-                print(f"  r1 (H then X on |0⟩) = {r1} (superposition, can vary)")
-                print(f"  r2 (Y on |0⟩) = {r2} (should be True)")
-                print(f"  r3 (Z on |0⟩) = {r3} (should be False)")
-                print(f"  r4 (X then Z) = {r4} (should be True)")
-
+            if i == 0 and not r1 and r2 and r3 and not r4:
+                # Only print first shot for debugging
                 # Check if it's a shifted pattern
-                if not r1 and r2 and r3 and not r4:
-                    print("  => Looks like values are shifted by one position!")
+                pass
 
-            # H then X still gives superposition, not deterministic
+                # H then X still gives superposition, not deterministic
             # Y on |0⟩ gives |1⟩
             assert r2
             # Z on |0⟩ doesn't change measurement
@@ -391,10 +337,6 @@ class TestQuantumStateManagement:
 
         results = sim(allocation_test).qubits(10).quantum(state_vector()).run(10)
 
-        # Debug: print what results we actually get
-        print(f"DEBUG: Actual results keys: {list(results.keys())}")
-        print(f"DEBUG: Results content: {results}")
-
         # New qubits should be in |0⟩
         decoded_results = get_decoded_results(results, n_bits=1)
         assert all(not r for r in decoded_results)
@@ -498,9 +440,15 @@ class TestLinearTypeSystem:
         """Test basic ownership passing."""
 
         @guppy
+        def apply_hadamard(q: qubit @ owned) -> qubit:
+            """Apply Hadamard gate to a qubit."""
+            h(q)
+            return q
+
+        @guppy
         def ownership_test() -> bool:
             q = qubit()
-            h(q)  # Apply H directly instead of through function call
+            q = apply_hadamard(q)  # Now we can use function calls with @owned
             return measure(q)
 
         # Run without seed to get true randomness
@@ -513,8 +461,9 @@ class TestLinearTypeSystem:
 
         # H gate now produces proper randomness
         assert (
-            zeros > 0 and ones > 0
-        ), f"Should see mix of 0s and 1s, got {zeros} zeros and {ones} ones"
+            zeros > 0
+        ), f"Should see at least one 0, got {zeros} zeros and {ones} ones"
+        assert ones > 0, f"Should see at least one 1, got {zeros} zeros and {ones} ones"
 
     def test_linear_rebinding(self) -> None:
         """Test linear rebinding patterns."""
@@ -536,17 +485,25 @@ class TestLinearTypeSystem:
     def test_conditional_linear_flow(self) -> None:
         """Test qubits in conditional control flow."""
 
-        # Simplified version without function calls to avoid HUGR compilation issues
+        @guppy
+        def apply_gate_conditionally(q: qubit @ owned, use_x: bool) -> qubit:
+            """Apply X or H gate based on condition."""
+            if use_x:
+                x(q)
+            else:
+                h(q)
+            return q
+
         @guppy
         def test_with_x() -> bool:
             q = qubit()
-            x(q)
+            q = apply_gate_conditionally(q, True)  # Apply X gate
             return measure(q)
 
         @guppy
         def test_with_h() -> bool:
             q = qubit()
-            h(q)
+            q = apply_gate_conditionally(q, False)  # Apply H gate
             return measure(q)
 
         # Test X gate - should always return True
@@ -562,8 +519,11 @@ class TestLinearTypeSystem:
         ones = sum(1 for r in decoded_h if r)
         # Allow for statistical variation - at least 20% of each
         assert (
-            zeros > 20 and ones > 20
-        ), f"H gate should produce mixed results, got {zeros} zeros and {ones} ones"
+            zeros > 20
+        ), f"H gate should produce at least 20 zeros, got {zeros} zeros and {ones} ones"
+        assert (
+            ones > 20
+        ), f"H gate should produce at least 20 ones, got {zeros} zeros and {ones} ones"
 
 
 # ============================================================================
@@ -612,17 +572,63 @@ class TestQuantumClassicalHybrid:
             "measurements",
             results.get("measurement_1", results.get("result", [])),
         )
-        # The pattern will be deterministic based on shot count
         # Just check that we got results
         assert len(measurements) == 10
 
     def test_conditional_quantum_ops(self) -> None:
         """Test conditional quantum operations based on classical values."""
-        # Skip this test due to function call compilation issues
-        pytest.skip(
-            "Function calls with parameters not yet supported in HUGR to LLVM compilation",
-        )
-        assert len(results2["result"]) == 10
+        # Fixed: Using @owned annotation for qubit parameters
+
+        @guppy
+        def apply_conditional_gate(q: qubit @ owned, condition: int) -> qubit:
+            """Apply gate based on condition."""
+            if condition == 0:
+                # Do nothing (identity)
+                pass
+            elif condition == 1:
+                x(q)
+            elif condition == 2:
+                h(q)
+                x(q)
+            else:
+                h(q)
+            return q
+
+        @guppy
+        def test_condition_0() -> bool:
+            q = qubit()
+            q = apply_conditional_gate(q, 0)
+            return measure(q)
+
+        @guppy
+        def test_condition_1() -> bool:
+            q = qubit()
+            q = apply_conditional_gate(q, 1)
+            return measure(q)
+
+        @guppy
+        def test_condition_2() -> bool:
+            q = qubit()
+            q = apply_conditional_gate(q, 2)
+            return measure(q)
+
+        # Test each condition
+        results0 = sim(test_condition_0).qubits(10).quantum(state_vector()).run(10)
+        results1 = sim(test_condition_1).qubits(10).quantum(state_vector()).run(10)
+        results2 = sim(test_condition_2).qubits(10).quantum(state_vector()).run(10)
+
+        # Condition 0: no gate, should measure |0⟩
+        decoded0 = get_decoded_results(results0, n_bits=1)
+        assert all(not r for r in decoded0), "Condition 0 should always measure False"
+
+        # Condition 1: X gate, should measure |1⟩
+        decoded1 = get_decoded_results(results1, n_bits=1)
+        assert all(r for r in decoded1), "Condition 1 should always measure True"
+
+        # Condition 2: H then X, should give mixed results
+        decoded2 = get_decoded_results(results2, n_bits=1)
+        # H followed by X should produce variation
+        assert len(decoded2) == 10
 
     def test_parity_accumulation(self) -> None:
         """Test accumulating measurement results (parity).
@@ -794,10 +800,32 @@ class TestStructuredQuantumData:
 
     def test_multiple_qubit_return(self) -> None:
         """Test returning multiple qubits from function."""
-        # Skip this test due to function call compilation issues
-        pytest.skip("Function calls not yet supported in HUGR to LLVM compilation")
+        # Fixed: Using @owned annotation allows returning qubits from functions
 
+        @guppy
+        def prepare_bell_pair(
+            q1: qubit @ owned,
+            q2: qubit @ owned,
+        ) -> tuple[qubit, qubit]:
+            """Prepare a Bell pair from two qubits."""
+            h(q1)
+            cx(q1, q2)
+            return q1, q2
 
-if __name__ == "__main__":
-    print("Running comprehensive quantum operation tests...")
-    pytest.main([__file__, "-v"])
+        @guppy
+        def create_and_measure_bell() -> tuple[bool, bool]:
+            """Create Bell pair and measure."""
+            q1 = qubit()
+            q2 = qubit()
+            q1, q2 = prepare_bell_pair(q1, q2)
+            return measure(q1), measure(q2)
+
+        results = (
+            sim(create_and_measure_bell).qubits(10).quantum(state_vector()).run(20)
+        )
+        decoded_results = get_decoded_results(results, n_bits=2)
+        for r in decoded_results:
+            assert r == (False, False) or r == (
+                True,
+                True,
+            ), f"Bell state should be correlated, got {r}"

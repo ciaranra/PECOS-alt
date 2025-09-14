@@ -3,7 +3,9 @@
 use pecos::prelude::*;
 use pecos::{sim, sim_builder};
 use pecos_engines::{DepolarizingNoise, sparse_stab, state_vector};
+use pecos_llvm_sim::llvm_engine;
 use pecos_programs::{LlvmProgram, QasmProgram};
+use pecos_qasm::qasm_engine;
 
 fn main() -> Result<(), PecosError> {
     println!("PECOS Simplified Simulation API Examples\n");
@@ -65,8 +67,6 @@ fn main() -> Result<(), PecosError> {
     // Manual configuration with sim_builder()
     println!("\n3. Manual configuration with sim_builder():");
 
-    use pecos_qasm::qasm_engine;
-
     let results = sim_builder()
         .classical(qasm_engine().qasm(
             r#"
@@ -98,7 +98,6 @@ fn main() -> Result<(), PecosError> {
     );
 
     // QASM program but use LLVM engine
-    use pecos_llvm_sim::llvm_engine;
     let results = sim(qasm_prog)
         .classical(llvm_engine().program(llvm_prog))
         .qubits(1)

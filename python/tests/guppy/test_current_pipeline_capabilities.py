@@ -1,30 +1,23 @@
-#!/usr/bin/env python3
 """Test current capabilities of both HUGR-LLVM and PHIR pipelines.
 
 This is a simplified version that won't hang.
 """
 
-import sys
+import pytest
 
 
 def decode_integer_results(results: list[int], n_bits: int) -> list[tuple[bool, ...]]:
     """Decode integer-encoded results back to tuples of booleans."""
     decoded = []
     for val in results:
-        bits = []
-        for i in range(n_bits):
-            bits.append(bool(val & (1 << i)))
+        bits = [bool(val & (1 << i)) for i in range(n_bits)]
         decoded.append(tuple(bits))
     return decoded
 
 
-import pytest
-
-sys.path.append("python/quantum-pecos/src")
-
 try:
     from guppylang import guppy
-    from guppylang.std.quantum import cx, h, measure, qubit, x, y, z
+    from guppylang.std.quantum import cx, h, measure, qubit, x
 
     GUPPY_AVAILABLE = True
 except ImportError:
@@ -45,12 +38,7 @@ except ImportError:
 )
 def test_pipeline_capabilities() -> None:
     """Test what both pipelines can currently handle - simplified version."""
-    print("\n" + "=" * 80)
-    print("CURRENT GUPPY PIPELINE CAPABILITIES TEST (SIMPLIFIED)")
-    print("=" * 80)
-
     backends = get_guppy_backends()
-    print(f"Available backends: {backends}")
 
     # Test cases - just a few simple ones with 1 shot each
     test_cases = []
@@ -87,7 +75,6 @@ def test_pipeline_capabilities() -> None:
     results = {}
 
     for test_name, test_func in test_cases:
-        print(f"\n📋 Testing: {test_name}")
         results[test_name] = {}
 
         # Test with Rust backend (the only backend)
@@ -112,13 +99,11 @@ def test_pipeline_capabilities() -> None:
                     "success": True,
                     "result": result_val,
                 }
-                print(f"  ✅ HUGR-LLVM: {results[test_name]['hugr_llvm']['result']}")
             except Exception as e:
                 results[test_name]["hugr_llvm"] = {
                     "success": False,
                     "error": str(e)[:80],
                 }
-                print(f"  ❌ HUGR-LLVM: {str(e)[:80]}")
 
         # PHIR pipeline no longer exists - using same sim() backend
         try:
@@ -141,34 +126,11 @@ def test_pipeline_capabilities() -> None:
                 "success": True,
                 "result": result_val,
             }
-            print(f"  ✅ PHIR (via sim): {results[test_name]['phir']['result']}")
         except Exception as e:
             results[test_name]["phir"] = {
                 "success": False,
                 "error": str(e)[:80],
             }
-            print(f"  ❌ PHIR: {str(e)[:80]}")
-
-    # Generate summary
-    print("\n" + "=" * 80)
-    print("PIPELINE CAPABILITY SUMMARY")
-    print("=" * 80)
-
-    print(f"{'Test Case':<25} {'HUGR-LLVM':<15} {'PHIR':<15}")
-    print("-" * 80)
-
-    for test_name, test_results in results.items():
-        hugr_status = (
-            "✅ PASS"
-            if test_results.get("hugr_llvm", {}).get("success", False)
-            else "❌ FAIL"
-        )
-        phir_status = (
-            "✅ PASS"
-            if test_results.get("phir", {}).get("success", False)
-            else "❌ FAIL"
-        )
-        print(f"{test_name:<25} {hugr_status:<15} {phir_status:<15}")
 
     # Basic assertions for pytest
     # At least one backend should work for each test
@@ -176,7 +138,3 @@ def test_pipeline_capabilities() -> None:
         hugr_success = test_results.get("hugr_llvm", {}).get("success", False)
         phir_success = test_results.get("phir", {}).get("success", False)
         assert hugr_success or phir_success, f"Both backends failed for {test_name}"
-
-
-if __name__ == "__main__":
-    test_pipeline_capabilities()

@@ -1,12 +1,11 @@
 //! Test that HUGR programs can be passed to `SeleneExecutableEngine`
 
-use pecos_core::prelude::PecosError;
 use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine};
 use pecos_programs::HugrProgram;
 use pecos_selene::selene_executable;
 
 #[test]
-fn test_hugr_program_api() -> Result<(), PecosError> {
+fn test_hugr_program_api() {
     println!("Testing HUGR program support in SeleneExecutableEngineBuilder");
 
     // Create a simple HUGR JSON (guppylang format)
@@ -23,20 +22,18 @@ fn test_hugr_program_api() -> Result<(), PecosError> {
 
     match result {
         Ok(engine) => {
-            println!("✓ Successfully created engine with HUGR program");
+            println!("Successfully created engine with HUGR program");
             assert_eq!(engine.num_qubits(), 2);
         }
         Err(e) => {
             // It's OK if compilation fails for empty HUGR
-            println!("✓ HUGR program accepted by API (compilation error expected): {e}");
+            println!("HUGR program accepted by API (compilation error expected): {e}");
         }
     }
-
-    Ok(())
 }
 
 #[test]
-fn test_hugr_via_program_enum() -> Result<(), PecosError> {
+fn test_hugr_via_program_enum() {
     println!("Testing HUGR via Program enum");
 
     let hugr_json = r#"{
@@ -51,9 +48,7 @@ fn test_hugr_via_program_enum() -> Result<(), PecosError> {
     let result = selene_executable().program(program).qubits(1).build();
 
     match result {
-        Ok(_) => println!("✓ Program::Hugr accepted by builder"),
-        Err(e) => println!("✓ Program::Hugr accepted (compilation error expected): {e}"),
+        Ok(_) => println!("Program::Hugr accepted by builder"),
+        Err(e) => println!("Program::Hugr accepted (compilation error expected): {e}"),
     }
-
-    Ok(())
 }

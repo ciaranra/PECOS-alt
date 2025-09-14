@@ -24,8 +24,8 @@ def test_init_zero() -> None:
 
     :return:
     """
-    for state in states:
-        state = state(1)  # noqa: PLW2901 - instantiate class
+    for state_class in states:
+        state = state_class(1)
         state.run_gate("init |0>", {0})
 
         # Test stabilizers
@@ -46,8 +46,8 @@ def test_init_one() -> None:
 
     :return:
     """
-    for state in states:
-        state = state(1)  # noqa: PLW2901 - instantiate class
+    for state_class in states:
+        state = state_class(1)
         state.run_gate("init |1>", {0})
 
         # Test stabilizers
@@ -68,8 +68,8 @@ def test_init_plus() -> None:
 
     :return:
     """
-    for state in states:
-        state = state(1)  # noqa: PLW2901 - instantiate class
+    for state_class in states:
+        state = state_class(1)
         state.run_gate("init |+>", {0})
 
         # Test stabilizers
@@ -89,8 +89,8 @@ def test_init_minus() -> None:
 
     :return:
     """
-    for state in states:
-        state = state(1)  # noqa: PLW2901 - instantiate class
+    for state_class in states:
+        state = state_class(1)
         state.run_gate("init |->", {0})
 
         # Test stabilizers
@@ -110,8 +110,8 @@ def test_init_plus_i() -> None:
 
     :return:
     """
-    for state in states:
-        state = state(1)  # noqa: PLW2901 - instantiate class
+    for state_class in states:
+        state = state_class(1)
         state.run_gate("init |+i>", {0})
 
         # Test stabilizers
@@ -131,8 +131,8 @@ def test_init_minus_i() -> None:
 
     :return:
     """
-    for state in states:
-        state = state(1)  # noqa: PLW2901 - instantiate class
+    for state_class in states:
+        state = state_class(1)
         state.run_gate("init |-i>", {0})
 
         # Test stabilizers

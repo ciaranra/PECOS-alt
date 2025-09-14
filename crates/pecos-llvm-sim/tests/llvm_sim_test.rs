@@ -325,7 +325,7 @@ fn test_llvm_sim_quantum_engines() {
     }
 
     // Test with state vector engine (default)
-    let shot_vec_sv = llvm_engine()
+    let state_vector_shots = llvm_engine()
         .program(LlvmProgram::from_string(SIMPLE_HADAMARD_IR))
         .to_sim()
         .seed(42)
@@ -335,7 +335,7 @@ fn test_llvm_sim_quantum_engines() {
         .expect("State vector simulation should succeed");
 
     // Test with sparse stabilizer engine
-    let shot_vec_ss = llvm_engine()
+    let stabilizer_shots = llvm_engine()
         .program(LlvmProgram::from_string(SIMPLE_HADAMARD_IR))
         .to_sim()
         .seed(42)
@@ -345,8 +345,8 @@ fn test_llvm_sim_quantum_engines() {
         .expect("Sparse stabilizer simulation should succeed");
 
     // Both should give valid results
-    assert_eq!(shot_vec_sv.len(), 100);
-    assert_eq!(shot_vec_ss.len(), 100);
+    assert_eq!(state_vector_shots.len(), 100);
+    assert_eq!(stabilizer_shots.len(), 100);
 }
 
 #[test]

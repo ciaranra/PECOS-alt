@@ -159,14 +159,3 @@ def test_pauli_fault_prop_invalid_operations() -> None:
 
     with pytest.raises(Exception, match="Can only handle Pauli errors"):
         state.add_faults(qc)
-
-
-if __name__ == "__main__":
-    test_pauli_fault_prop_basic()
-    test_pauli_fault_prop_composition()
-    test_pauli_fault_prop_sign_tracking()
-    test_pauli_fault_prop_setters()
-    test_pauli_fault_prop_string_methods()
-    test_pauli_fault_prop_with_minus()
-    test_pauli_fault_prop_invalid_operations()
-    print("All tests passed!")

@@ -8,6 +8,7 @@ This is adapted from the pecos-phir-json environment but works with PHIR types.
 use crate::error::{PhirError, Result};
 use std::collections::HashMap;
 use std::fmt;
+use std::str::FromStr;
 
 /// Represents the data type of a variable in PHIR execution
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,9 +35,10 @@ pub enum DataType {
     Qubits,
 }
 
-impl DataType {
-    /// Creates a `DataType` from a string representation
-    pub fn from_str(s: &str) -> Result<Self> {
+impl FromStr for DataType {
+    type Err = PhirError;
+
+    fn from_str(s: &str) -> Result<Self> {
         match s {
             "i8" => Ok(DataType::I8),
             "i16" => Ok(DataType::I16),
@@ -51,7 +53,9 @@ impl DataType {
             _ => Err(PhirError::internal(format!("Unsupported data type: {s}"))),
         }
     }
+}
 
+impl DataType {
     /// Returns the bit width of the data type
     #[must_use]
     pub fn bit_width(&self) -> usize {
@@ -92,6 +96,10 @@ pub enum TypedValue {
 
 impl TypedValue {
     /// Convert to u64 for measurement results
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the value is a `BitVec` which cannot be converted to u64
     pub fn to_u64(&self) -> Result<u64> {
         match self {
             TypedValue::I8(v) => Ok(u64::try_from(*v).unwrap_or(0)),
@@ -173,6 +181,10 @@ impl Environment {
     }
 
     /// Add a variable definition to the environment
+    ///
+    /// # Errors
+    ///
+    /// Currently always returns Ok, but may return errors in future for duplicate variables
     pub fn add_variable(&mut self, name: &str, data_type: DataType, size: usize) -> Result<()> {
         let var_def = VariableDefinition {
             data_type,
@@ -185,6 +197,10 @@ impl Environment {
     }
 
     /// Set the value of a variable
+    ///
+    /// # Errors
+    ///
+    /// Currently always returns Ok, but may return errors in future for type mismatches
     pub fn set_variable(&mut self, name: &str, value: TypedValue) -> Result<()> {
         if let Some(var_def) = self.variables.get_mut(name) {
             // TODO: Add type checking here
@@ -196,6 +212,10 @@ impl Environment {
     }
 
     /// Get the value of a variable
+    ///
+    /// # Errors
+    ///
+    /// Currently always returns Ok with None if variable not found
     pub fn get_variable(&self, name: &str) -> Result<Option<&TypedValue>> {
         if let Some(var_def) = self.variables.get(name) {
             Ok(var_def.value.as_ref())

@@ -64,5 +64,5 @@ def main() -> None:
     print("to execute in parallel, followed by all CX gates in parallel.")
 
 
-if __name__ == "__main__":
-    main()
+# Demo code:
+main()

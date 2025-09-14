@@ -1,21 +1,4 @@
-#!/usr/bin/env python3
 """Test different tuple sizes with static functions."""
-
-import sys
-
-
-def decode_integer_results(results: list[int], n_bits: int) -> list[tuple[bool, ...]]:
-    """Decode integer-encoded results back to tuples of booleans."""
-    decoded = []
-    for val in results:
-        bits = []
-        for i in range(n_bits):
-            bits.append(bool(val & (1 << i)))
-        decoded.append(tuple(bits))
-    return decoded
-
-
-sys.path.append("python/quantum-pecos/src")
 
 from guppylang import guppy
 from guppylang.std.quantum import measure, qubit, x
@@ -25,6 +8,7 @@ from pecos_rslib import state_vector
 
 @guppy
 def circuit_1_tuple() -> bool:
+    """Test circuit returning a single boolean."""
     q = qubit()
     x(q)
     return measure(q)
@@ -32,6 +16,7 @@ def circuit_1_tuple() -> bool:
 
 @guppy
 def circuit_2_tuple() -> tuple[bool, bool]:
+    """Test circuit returning a 2-tuple."""
     q1 = qubit()
     x(q1)
     r1 = measure(q1)
@@ -44,6 +29,7 @@ def circuit_2_tuple() -> tuple[bool, bool]:
 
 @guppy
 def circuit_3_tuple() -> tuple[bool, bool, bool]:
+    """Test circuit returning a 3-tuple."""
     q1 = qubit()
     x(q1)
     r1 = measure(q1)
@@ -60,6 +46,7 @@ def circuit_3_tuple() -> tuple[bool, bool, bool]:
 
 @guppy
 def circuit_4_tuple() -> tuple[bool, bool, bool, bool]:
+    """Test circuit returning a 4-tuple."""
     q1 = qubit()
     x(q1)
     r1 = measure(q1)
@@ -79,6 +66,7 @@ def circuit_4_tuple() -> tuple[bool, bool, bool, bool]:
 
 @guppy
 def circuit_5_tuple() -> tuple[bool, bool, bool, bool, bool]:
+    """Test circuit returning a 5-tuple."""
     q1 = qubit()
     x(q1)
     r1 = measure(q1)
@@ -100,60 +88,62 @@ def circuit_5_tuple() -> tuple[bool, bool, bool, bool, bool]:
     return r1, r2, r3, r4, r5
 
 
-def run_function_test(name: str, func) -> bool | None:
-    """Helper to test a function and report results."""
-    print(f"\nTesting {name}...")
-    try:
-        results = sim(func).qubits(10).quantum(state_vector()).run(5)
-        print(
-            f"  Success! Results: {results.get("measurements", results.get("measurement_1", []))}",
-        )
-        return True
-    except Exception as e:
-        print(f"  Failed with error: {e}")
-        return False
-
-
 def test_1_tuple_return() -> None:
     """Test that 1-tuple (bool) returns work correctly."""
-    assert run_function_test("1-tuple (bool)", circuit_1_tuple)
+    results = sim(circuit_1_tuple).qubits(1).quantum(state_vector()).run(5)
+    assert "measurement_1" in results
+    measurements = results["measurement_1"]
+    assert len(measurements) == 5
+    assert all(m == 1 for m in measurements)  # X gate applied
 
 
 def test_2_tuple_return() -> None:
     """Test that 2-tuple returns work correctly."""
-    assert run_function_test("2-tuple", circuit_2_tuple)
+    results = sim(circuit_2_tuple).qubits(2).quantum(state_vector()).run(5)
+    assert "measurement_1" in results
+    assert "measurement_2" in results
+    # First qubit has X, second doesn't
+    assert all(results["measurement_1"][i] == 1 for i in range(5))
+    assert all(results["measurement_2"][i] == 0 for i in range(5))
 
 
 def test_3_tuple_return() -> None:
     """Test that 3-tuple returns work correctly."""
-    assert run_function_test("3-tuple", circuit_3_tuple)
+    results = sim(circuit_3_tuple).qubits(3).quantum(state_vector()).run(5)
+    assert "measurement_1" in results
+    assert "measurement_2" in results
+    assert "measurement_3" in results
+    # Pattern: X, no X, X
+    assert all(results["measurement_1"][i] == 1 for i in range(5))
+    assert all(results["measurement_2"][i] == 0 for i in range(5))
+    assert all(results["measurement_3"][i] == 1 for i in range(5))
 
 
 def test_4_tuple_return() -> None:
     """Test that 4-tuple returns work correctly."""
-    assert run_function_test("4-tuple", circuit_4_tuple)
+    results = sim(circuit_4_tuple).qubits(4).quantum(state_vector()).run(5)
+    assert "measurement_1" in results
+    assert "measurement_2" in results
+    assert "measurement_3" in results
+    assert "measurement_4" in results
+    # Pattern: X, no X, X, no X
+    assert all(results["measurement_1"][i] == 1 for i in range(5))
+    assert all(results["measurement_2"][i] == 0 for i in range(5))
+    assert all(results["measurement_3"][i] == 1 for i in range(5))
+    assert all(results["measurement_4"][i] == 0 for i in range(5))
 
 
 def test_5_tuple_return() -> None:
     """Test that 5-tuple returns work correctly."""
-    assert run_function_test("5-tuple", circuit_5_tuple)
-
-
-if __name__ == "__main__":
-    print("Testing different tuple sizes with static functions...")
-
-    tests = [
-        ("1-tuple (bool)", circuit_1_tuple),
-        ("2-tuple", circuit_2_tuple),
-        ("3-tuple", circuit_3_tuple),
-        ("4-tuple", circuit_4_tuple),
-        ("5-tuple", circuit_5_tuple),
-    ]
-
-    for name, func in tests:
-        success = run_function_test(name, func)
-        if not success:
-            print(f"\nFailed at {name}")
-            break
-    else:
-        print("\nAll sizes tested successfully!")
+    results = sim(circuit_5_tuple).qubits(5).quantum(state_vector()).run(5)
+    assert "measurement_1" in results
+    assert "measurement_2" in results
+    assert "measurement_3" in results
+    assert "measurement_4" in results
+    assert "measurement_5" in results
+    # Pattern: X, no X, X, no X, X
+    assert all(results["measurement_1"][i] == 1 for i in range(5))
+    assert all(results["measurement_2"][i] == 0 for i in range(5))
+    assert all(results["measurement_3"][i] == 1 for i in range(5))
+    assert all(results["measurement_4"][i] == 0 for i in range(5))
+    assert all(results["measurement_5"][i] == 1 for i in range(5))

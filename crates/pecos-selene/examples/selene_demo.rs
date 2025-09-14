@@ -46,7 +46,7 @@ attributes #0 = { "EntryPoint" }
         .qubits(2)
         .build()?;
 
-    println!("✓ Successfully created SeleneEngine");
+    println!("Successfully created SeleneEngine");
     println!("  Qubits: {}", engine.num_qubits());
     println!();
 
@@ -55,14 +55,14 @@ attributes #0 = { "EntryPoint" }
 
     // Clone the engine (demonstrating it's Send + Sync + Clone)
     let mut engine_clone = engine.clone();
-    println!("✓ Engine cloned successfully (ready for parallel execution)");
+    println!("Engine cloned successfully (ready for parallel execution)");
     println!();
 
     // Run a shot
     println!("3. Running quantum program...");
     let shot = engine_clone.process(())?;
 
-    println!("✓ Execution completed!");
+    println!("Execution completed!");
     println!("  Shot data: {:?}", shot.data);
     println!();
 
@@ -78,7 +78,7 @@ attributes #0 = { "EntryPoint" }
         .workers(2)
         .run(10)?;
 
-    println!("✓ Completed {} shots", results.len());
+    println!("Completed {} shots", results.len());
 
     // Convert to ShotMap for display
     let shot_map = results.try_as_shot_map()?;
@@ -92,7 +92,7 @@ attributes #0 = { "EntryPoint" }
 
     let _direct_engine = SeleneExecutableEngine::new(2)?;
 
-    println!("✓ Created engine directly");
+    println!("Created engine directly");
     println!("  Engine type: SeleneExecutable");
     println!("  Classical control: Yes");
     println!("  LLVM IR support: Yes");

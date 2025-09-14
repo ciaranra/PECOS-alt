@@ -5,7 +5,7 @@
 
 #[cfg(feature = "hugr-013")]
 mod hugr_tests {
-    use pecos_core::prelude::PecosError;
+
     use pecos_engines::ClassicalEngine;
 
     /* Disabled: These functions require HUGR builder APIs which aren't properly imported
@@ -57,13 +57,14 @@ mod hugr_tests {
     */
 
     #[test]
-    fn test_hugr_program_support() -> Result<(), PecosError> {
-        println!("=== Testing HUGR Program Support in SeleneExecutableEngine ===");
-
-        // Test the new HUGR support in SeleneExecutableEngine
+    fn test_hugr_program_support() {
         use pecos_engines::ClassicalControlEngineBuilder;
         use pecos_programs::HugrProgram;
         use pecos_selene::selene_executable;
+
+        println!("=== Testing HUGR Program Support in SeleneExecutableEngine ===");
+
+        // Test the new HUGR support in SeleneExecutableEngine
 
         // Create a simple HUGR JSON that would come from guppylang
         // This is a minimal valid HUGR JSON structure
@@ -86,11 +87,11 @@ mod hugr_tests {
             Ok(engine) => {
                 println!("Created SeleneExecutableEngine with HUGR program");
                 assert_eq!(engine.num_qubits(), 2);
-                println!("✓ HUGR compilation to LLVM IR works via SeleneExecutableEngine!");
+                println!("HUGR compilation to LLVM IR works via SeleneExecutableEngine!");
             }
             Err(e) => {
                 println!("HUGR compilation returned error (expected for empty HUGR): {e}");
-                println!("✓ HUGR program support is available in the API!");
+                println!("HUGR program support is available in the API!");
             }
         }
 
@@ -122,13 +123,11 @@ mod hugr_tests {
         assert!(shot.data.contains_key("has_runtime"));
         println!("Successfully processed quantum shot with HUGR engine");
         */
-
-        Ok(())
     }
 
     #[test]
     #[ignore = "Requires HUGR builder APIs"]
-    fn test_hugr_ghz_state_compilation() -> Result<(), PecosError> {
+    fn test_hugr_ghz_state_compilation() {
         println!("=== Testing HUGR GHZ State Compilation ===");
 
         // This test requires HUGR builder APIs which are commented out above
@@ -139,7 +138,6 @@ mod hugr_tests {
         println!("HUGR GHZ state compilation test - currently not supported");
 
         // Skip the rest of the test
-        Ok(())
 
         // The rest of the test would work with HUGR support:
         // - Generate quantum operations from HUGR
@@ -149,7 +147,7 @@ mod hugr_tests {
 
     #[test]
     #[ignore = "Requires HUGR builder APIs"]
-    fn test_hugr_single_hadamard_compilation() -> Result<(), PecosError> {
+    fn test_hugr_single_hadamard_compilation() {
         println!("=== Testing HUGR Single Hadamard Compilation ===");
 
         // This test requires HUGR builder APIs which are commented out above
@@ -160,7 +158,6 @@ mod hugr_tests {
         println!("HUGR single Hadamard compilation test - currently not supported");
 
         // Skip the rest of the test
-        Ok(())
 
         // The rest of the test would require HUGR builder APIs and SeleneEngine:
         // - Test compilation: engine.compile()?
@@ -171,7 +168,7 @@ mod hugr_tests {
 
     #[test]
     #[ignore = "Requires SeleneEngine API that's not available"]
-    fn test_hugr_from_file_compilation() -> Result<(), PecosError> {
+    fn test_hugr_from_file_compilation() {
         println!("=== Testing HUGR File Compilation ===");
 
         // Use existing bell state HUGR file
@@ -179,13 +176,12 @@ mod hugr_tests {
 
         if !hugr_path.exists() {
             println!("Skipping test - bell_state.hugr file not found");
-            return Ok(());
+            return;
         }
 
         // Note: The old SeleneEngine API is not available
         // Would need to use SeleneExecutableEngine with HUGR support
         println!("Test skipped - old SeleneEngine API not available");
-        Ok(())
 
         // The rest would:
         // - Create SeleneEngine with HUGR file
@@ -196,14 +192,13 @@ mod hugr_tests {
 
     #[test]
     #[ignore = "Direct HUGR to LLVM conversion not available in current architecture"]
-    fn test_hugr_to_llvm_ir_conversion() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_hugr_to_llvm_ir_conversion() {
         // This test is disabled because the direct HUGR to LLVM conversion
         // is not available in the current architecture.
         // The proper path is: Guppy -> HUGR -> Selene plugin
 
         println!("=== Testing Direct HUGR to LLVM IR Conversion ===");
         println!("Test skipped - direct HUGR to LLVM conversion not available");
-        Ok(())
 
         /*
         // This code would require LLVM compilation infrastructure that's not available:
@@ -261,12 +256,11 @@ mod hugr_tests {
 
     #[test]
     #[ignore = "Requires HUGR builder APIs and tket2"]
-    fn test_hugr_measurement_integration() -> Result<(), PecosError> {
+    fn test_hugr_measurement_integration() {
         println!("=== Testing HUGR with Measurements ===");
 
         // This test requires HUGR builder APIs and tket2 which are not available
         println!("Test skipped - requires HUGR builder APIs and tket2");
-        Ok(())
 
         /*
         // Build a circuit with explicit measurements
@@ -292,7 +286,7 @@ mod hugr_tests {
             .map_err(|e| PecosError::with_context(e, "Failed to finish HUGR"))?;
 
         // Create engine
-        let mut engine = SeleneEngine::new(SeleneProgram::Hugr(hugr), 2, false);
+        let mut engine = SeleneEngine::new(SeleneProgram::Hugr(Box::new(hugr)), 2, false);
 
         // Test compilation and execution
         engine.compile()?;

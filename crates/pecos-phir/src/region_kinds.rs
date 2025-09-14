@@ -64,14 +64,24 @@ pub trait RegionKindInterface {
     fn num_regions(&self) -> usize;
 
     /// Verify that regions have correct structure for their kind
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any region does not conform to its kind's constraints
     fn verify_regions(&self) -> Result<()>;
 }
 
 /// Verify a region conforms to its kind's constraints
-pub fn verify_region(region: &Region, kind: RegionKind) -> Result<()> {
+///
+/// # Errors
+///
+/// Returns an error if the region does not conform to the specified kind's constraints:
+/// - `SSACFG` regions: blocks must have terminators
+/// - `Graph` regions: must have exactly one block
+pub fn verify_region(region: &Region, kind: &RegionKind) -> Result<()> {
     use crate::error::{PhirError, ValidationError};
 
-    match kind {
+    match *kind {
         RegionKind::SSACFG => {
             // All blocks except entry must have predecessors
             // (checked via dominance analysis)

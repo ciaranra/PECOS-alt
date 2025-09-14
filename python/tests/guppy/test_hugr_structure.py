@@ -40,25 +40,14 @@ def test_hugr_json_structure() -> None:
 
     hugr_dict = json.loads(hugr_str)
 
-    print("\n=== HUGR JSON Structure ===")
-    print(f"Keys: {list(hugr_dict.keys())}")
-
     if "modules" in hugr_dict:
-        print(f"\nNumber of modules: {len(hugr_dict['modules'])}")
-        for i, module in enumerate(hugr_dict["modules"]):
-            print(f"\nModule {i}:")
-            print(f"  Keys: {list(module.keys())}")
+        for _i, module in enumerate(hugr_dict["modules"]):
             if "nodes" in module:
-                print(f"  Number of nodes: {len(module['nodes'])}")
                 # Print first few nodes
-                for j, node in enumerate(module["nodes"][:5]):
-                    print(f"  Node {j}: {node}")
+                for _j, _node in enumerate(module["nodes"][:5]):
 
-    # Save to file for inspection
+                    pass
+
+                    # Save to file for inspection
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump(hugr_dict, f, indent=2)
-        print(f"\nSaved HUGR JSON to: {f.name}")
-
-
-if __name__ == "__main__":
-    test_hugr_json_structure()

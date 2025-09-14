@@ -2,9 +2,13 @@
 
 import sys
 import warnings
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import pytest
 
 
-def pytest_configure(config):
+def pytest_configure(config: "pytest.Config") -> None:
     """Configure pytest with Python version-specific handling."""
     if sys.version_info >= (3, 13):
         # Suppress guppylang deprecation warning on Python 3.13+

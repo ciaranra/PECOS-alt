@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""
-Example demonstrating the PHIR (PECOS High-level IR) compilation pipeline.
+"""Example demonstrating the PHIR (PECOS High-level IR) compilation pipeline.
 
 This shows how to use the alternative compilation path from HUGR to LLVM IR
 via MLIR infrastructure.
 """
 
 import json
+
 from pecos_rslib import (
-    hugr_to_phir_mlir,
-    compile_hugr_via_phir,
-    compile_and_execute_via_phir,
     PhirCompiler,
+    compile_and_execute_via_phir,
+    compile_hugr_via_phir,
+    hugr_to_phir_mlir,
 )
 
 
-def create_bell_state_hugr():
+def create_bell_state_hugr() -> dict:
     """Create a simple Bell state circuit in HUGR format."""
     return {
         "version": "0.1.0",
@@ -42,7 +42,7 @@ def create_bell_state_hugr():
     }
 
 
-def main():
+def main() -> None:
     print("PHIR (PECOS High-level IR) Compilation Pipeline Example")
     print("=" * 60)
 
@@ -63,14 +63,17 @@ def main():
     print("\n3. Attempting to compile to LLVM IR via MLIR tools...")
     try:
         llvm_ir = compile_hugr_via_phir(
-            hugr_json, debug_output=True, optimization_level=2, target_triple=None
+            hugr_json,
+            debug_output=True,
+            optimization_level=2,
+            target_triple=None,
         )
         print("Success! Generated LLVM IR (first 1000 chars):")
         print(llvm_ir[:1000] + "..." if len(llvm_ir) > 1000 else llvm_ir)
     except RuntimeError as e:
         print(f"Note: Compilation failed - {e}")
         print(
-            "This is expected if MLIR tools (mlir-opt, mlir-translate) are not installed."
+            "This is expected if MLIR tools (mlir-opt, mlir-translate) are not installed.",
         )
         print("The PHIR generation still works and produces valid MLIR text.")
 
@@ -96,7 +99,7 @@ def main():
 
     print("\n" + "=" * 60)
     print("Summary:")
-    print("- HUGR → PHIR (MLIR) generation: ✓ Working")
+    print("- HUGR → PHIR (MLIR) generation: Working")
     print("- PHIR → LLVM IR compilation: Requires MLIR tools")
     print("- The PHIR pipeline provides an alternative compilation path")
     print("- It leverages MLIR infrastructure for optimization and lowering")

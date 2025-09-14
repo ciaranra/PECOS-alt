@@ -2,37 +2,37 @@
 
 import pytest
 from pecos_rslib import (
-    state_vector,
-    sparse_stabilizer,
-    sparse_stab,
-    StateVectorEngineBuilder,
     SparseStabilizerEngineBuilder,
+    StateVectorEngineBuilder,
+    sparse_stab,
+    sparse_stabilizer,
+    state_vector,
 )
+from pecos_rslib.programs import LlvmProgram, QasmProgram
 from pecos_rslib.sim import (
-    qasm_engine,
-    llvm_engine,
     depolarizing_noise,
+    llvm_engine,
+    qasm_engine,
 )
-from pecos_rslib.programs import QasmProgram, LlvmProgram
 
 
 class TestQuantumEngineBuilders:
     """Test quantum engine builders and factory functions."""
 
-    def test_factory_functions_exist(self):
+    def test_factory_functions_exist(self) -> None:
         """Test that factory functions are available."""
         # These should all be callable
         assert callable(state_vector)
         assert callable(sparse_stabilizer)
         assert callable(sparse_stab)
 
-    def test_builder_classes_exist(self):
+    def test_builder_classes_exist(self) -> None:
         """Test that builder classes are available."""
         # These should be classes
         assert hasattr(StateVectorEngineBuilder, "__name__")
         assert hasattr(SparseStabilizerEngineBuilder, "__name__")
 
-    def test_state_vector_builder(self):
+    def test_state_vector_builder(self) -> None:
         """Test creating state vector engine builder."""
         # Using factory function
         builder1 = state_vector()
@@ -46,7 +46,7 @@ class TestQuantumEngineBuilders:
         builder3 = state_vector().qubits(10)
         assert builder3 is not None
 
-    def test_sparse_stabilizer_builder(self):
+    def test_sparse_stabilizer_builder(self) -> None:
         """Test creating sparse stabilizer engine builder."""
         # Using factory function
         builder1 = sparse_stabilizer()
@@ -60,14 +60,14 @@ class TestQuantumEngineBuilders:
         builder3 = sparse_stabilizer().qubits(5)
         assert builder3 is not None
 
-    def test_sparse_stab_alias(self):
+    def test_sparse_stab_alias(self) -> None:
         """Test that sparse_stab is an alias for sparse_stabilizer."""
         builder1 = sparse_stab()
         builder2 = sparse_stabilizer()
         # Both should create the same type of builder
-        assert type(builder1) == type(builder2)
+        assert type(builder1) is type(builder2)
 
-    def test_unified_api_with_quantum_engine(self):
+    def test_unified_api_with_quantum_engine(self) -> None:
         """Test using quantum engine builders in the unified API."""
         qasm = """
         OPENQASM 2.0;
@@ -105,7 +105,7 @@ class TestQuantumEngineBuilders:
         assert "c" in results2_dict
         assert len(results2_dict["c"]) == 100
 
-    def test_quantum_engine_with_noise(self):
+    def test_quantum_engine_with_noise(self) -> None:
         """Test using quantum engines with noise models."""
         qasm = """
         OPENQASM 2.0;
@@ -133,7 +133,7 @@ class TestQuantumEngineBuilders:
         assert "c" in results_dict
         assert len(results_dict["c"]) == 1000
 
-    def test_llvm_with_quantum_engine(self):
+    def test_llvm_with_quantum_engine(self) -> None:
         """Test LLVM engine with quantum engine builders."""
         # Minimal LLVM IR - single qubit H gate and measurement
         llvm_ir = """; ModuleID = 'test_module'

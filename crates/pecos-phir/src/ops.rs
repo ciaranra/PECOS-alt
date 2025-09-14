@@ -429,7 +429,7 @@ impl Operation {
     #[must_use]
     pub fn has_side_effects(&self) -> bool {
         match self {
-            Operation::Builtin(_) => false, // Structural ops have no side effects
+            Operation::Builtin(_) | Operation::Classical(_) | Operation::Parsing(_) => false, // Structural, classical, and parsing ops have no side effects
             Operation::Quantum(op) => match op {
                 QuantumOp::Measure
                 | QuantumOp::MeasurePauli(_)
@@ -439,11 +439,7 @@ impl Operation {
                 | QuantumOp::Reset => true,
                 _ => false, // Most quantum operations are unitary
             },
-            Operation::Memory(_) => true,
-            Operation::ControlFlow(_) => true,
-            Operation::Classical(_) => false,
-            Operation::Custom(_) => true,   // Conservative assumption
-            Operation::Parsing(_) => false, // Parsing ops have no runtime side effects
+            Operation::Memory(_) | Operation::ControlFlow(_) | Operation::Custom(_) => true, // Memory, control flow, and custom ops have side effects (conservative for custom)
         }
     }
 

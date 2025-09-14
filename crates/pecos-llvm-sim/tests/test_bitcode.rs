@@ -161,7 +161,8 @@ fn test_auto_detection() {
         .program(LlvmProgram::from_file(&ll_file).unwrap())
         .to_sim()
         .build();
-    assert!(sim_ll.is_ok() || true); // Allow failure for missing runtime
+    // Allow failure for missing runtime
+    let _ = sim_ll;
 
     // Test auto-detection with .bc file
     let sim_bc = llvm_engine()

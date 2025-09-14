@@ -25,9 +25,6 @@ def test_ir_simple_permute() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("IR-generated code with Permute:")
-    print(code)
-
     # Check that swap comment is added
     assert "# Swap a and b" in code
 
@@ -63,9 +60,6 @@ def test_ir_permute_with_operations() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("\nIR-generated code with Permute and operations:")
-    print(code)
-
     # Check operations are generated
     assert "quantum.h" in code
     assert "quantum.cx" in code
@@ -95,9 +89,6 @@ def test_ir_complex_permute_cycle() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("\nIR-generated code with cyclic permutation:")
-    print(code)
-
     # Should have permutation comment
     assert "# Permute 3 elements" in code
     # Should use temporary variable for cycle
@@ -117,16 +108,5 @@ def test_ir_complex_permute_multiple_swaps() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("\nIR-generated code with multiple swaps:")
-    print(code)
-
     # Should generate swap operations
     assert "_temp_swap" in code
-
-
-if __name__ == "__main__":
-    test_ir_simple_permute()
-    test_ir_permute_with_operations()
-    test_ir_complex_permute_cycle()
-    test_ir_complex_permute_multiple_swaps()
-    print("\nAll Permute tests completed!")

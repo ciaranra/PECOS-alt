@@ -29,7 +29,7 @@ def get_seq(program: dict[str, Any]) -> list[list[tuple[Any, ...]]]:
         # Create a simple identifier for operations
         for op in buffered_ops:
             op_ident = [op.name]
-            print("angles", op.angles)
+            # print("angles", op.angles)
             if op.angles is not None:
                 op_ident.append(op.angles)
             if hasattr(op, "args") and op.args is not None:

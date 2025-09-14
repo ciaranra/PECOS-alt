@@ -11,6 +11,9 @@ use serde_json;
 use std::collections::HashMap;
 use std::fmt::Write;
 
+/// Type alias for edge maps used in dataflow analysis
+type EdgeMap = HashMap<usize, Vec<(usize, u64)>>;
+
 #[cfg(feature = "hugr-013")]
 use hugr_core_013::{
     Node,
@@ -20,6 +23,13 @@ use hugr_core_013::{
 };
 
 /// Compile HUGR 0.13 bytes to LLVM IR
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - HUGR 0.13 support is not enabled
+/// - The HUGR bytes cannot be parsed
+/// - Compilation to LLVM IR fails
 pub fn compile_hugr_to_llvm(hugr_bytes: &[u8]) -> Result<String, SeleneError> {
     #[cfg(not(feature = "hugr-013"))]
     {
@@ -188,6 +198,8 @@ impl HugrCompiler {
         Ok(())
     }
 
+    // Complex function handling various quantum gate types - length is justified
+    #[allow(clippy::too_many_lines)]
     fn compile_extension_op(
         &mut self,
         _hugr: &Hugr,
@@ -364,6 +376,8 @@ impl HugrCompiler {
         Ok(())
     }
 
+    // Generates complete LLVM IR module with all declarations and entry point
+    #[allow(clippy::too_many_lines)]
     fn generate_llvm_ir(&mut self) -> Result<String, SeleneError> {
         let mut full_ir = String::new();
 
@@ -509,6 +523,13 @@ impl HugrCompiler {
 }
 
 /// Compile guppylang JSON format directly to LLVM IR
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The JSON structure is invalid
+/// - No modules are found in the JSON
+/// - Compilation to LLVM IR fails
 #[cfg(feature = "hugr-013")]
 pub fn compile_guppylang_json_to_llvm(json: &serde_json::Value) -> Result<String, SeleneError> {
     log::info!("Compiling guppylang JSON to LLVM IR");
@@ -604,6 +625,14 @@ impl GuppylangCompiler {
     }
 
     /// Compile HUGR JSON bytes to LLVM IR
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The bytes are in an unsupported format (e.g., capnproto)
+    /// - JSON parsing fails
+    /// - No modules are found in the HUGR
+    /// - Compilation to LLVM IR fails
     pub fn compile_hugr_json(&mut self, hugr_bytes: &[u8]) -> Result<String, SeleneError> {
         // Check if this is a HUGR envelope format
         let json_value: serde_json::Value = if hugr_bytes.len() >= 10
@@ -665,6 +694,8 @@ impl GuppylangCompiler {
         self.generate_llvm_ir()
     }
 
+    // Processes HUGR nodes and generates quantum operations - complex due to edge tracking
+    #[allow(clippy::too_many_lines)]
     fn process_nodes(
         &mut self,
         nodes: &[serde_json::Value],
@@ -673,7 +704,7 @@ impl GuppylangCompiler {
         log::info!("Processing {} nodes and {} edges", nodes.len(), edges.len());
 
         // Build the qubit dataflow map first
-        self.build_qubit_dataflow(nodes, edges)?;
+        self.build_qubit_dataflow(nodes, edges);
 
         // Build edge map for dataflow tracking
         let mut edge_map: HashMap<usize, Vec<usize>> = HashMap::new();
@@ -690,14 +721,14 @@ impl GuppylangCompiler {
                 )
             {
                 log::debug!("Edge: {src_node} -> {tgt_node}");
-                edge_map
-                    .entry(src_node as usize)
-                    .or_default()
-                    .push(tgt_node as usize);
-                reverse_edge_map
-                    .entry(tgt_node as usize)
-                    .or_default()
-                    .push(src_node as usize);
+                let src_idx = usize::try_from(src_node).map_err(|_| {
+                    SeleneError::HugrError(format!("Node index too large: {src_node}"))
+                })?;
+                let tgt_idx = usize::try_from(tgt_node).map_err(|_| {
+                    SeleneError::HugrError(format!("Node index too large: {tgt_node}"))
+                })?;
+                edge_map.entry(src_idx).or_default().push(tgt_idx);
+                reverse_edge_map.entry(tgt_idx).or_default().push(src_idx);
             }
         }
 
@@ -969,7 +1000,7 @@ impl GuppylangCompiler {
                                         (edge_array[0].as_array(), edge_array[1].as_array())
                                     && let Some(tgt_node) =
                                         tgt_arr.first().and_then(serde_json::Value::as_u64)
-                                    && tgt_node as usize == node_id
+                                    && usize::try_from(tgt_node).is_ok_and(|idx| idx == node_id)
                                 {
                                     // This edge targets our MeasureFree node
                                     if let Some(tgt_port) =
@@ -985,8 +1016,8 @@ impl GuppylangCompiler {
                                             );
 
                                             // Check if the source node is a measurement (to skip it)
-                                            if let Some(src_node_info) =
-                                                nodes.get(src_node as usize)
+                                            if let Ok(src_idx) = usize::try_from(src_node)
+                                                && let Some(src_node_info) = nodes.get(src_idx)
                                                 && let Some(src_name) = src_node_info
                                                     .get("name")
                                                     .and_then(|n| n.as_str())
@@ -996,11 +1027,10 @@ impl GuppylangCompiler {
                                                 continue;
                                             }
 
-                                            if let Some(qubit) = self.find_input_qubit(
-                                                src_node as usize,
-                                                &edge_map,
-                                                nodes,
-                                            ) {
+                                            if let Ok(src_idx) = usize::try_from(src_node)
+                                                && let Some(qubit) =
+                                                    self.find_input_qubit(src_idx, &edge_map, nodes)
+                                            {
                                                 log::debug!(
                                                     "Found qubit {qubit} for MeasureFree node {node_id}"
                                                 );
@@ -1133,7 +1163,7 @@ impl GuppylangCompiler {
 
         // Fallback to direct angle extraction for other HUGR formats
         if let Some(node) = nodes.get(node_id) {
-            return self.extract_angle_from_node(node);
+            return Ok(Self::extract_angle_from_node(node));
         }
 
         Err(SeleneError::HugrError(
@@ -1141,6 +1171,7 @@ impl GuppylangCompiler {
         ))
     }
 
+    #[allow(clippy::only_used_in_recursion)] // from_halfturns_node_id is used in line 1183, not just recursion
     fn find_halfturns_value(
         &self,
         from_halfturns_node_id: usize,
@@ -1158,7 +1189,7 @@ impl GuppylangCompiler {
                         if op == "Const" || op == "LoadConstant" {
                             // Extract the float value
                             if let Some(v) = const_node.get("v")
-                                && let Some(half_turns) = self.extract_float_from_const_value(v)
+                                && let Some(half_turns) = Self::extract_float_from_const_value(v)
                             {
                                 // Convert from half-turns to radians: radians = half_turns * π
                                 let radians = half_turns * std::f64::consts::PI;
@@ -1180,7 +1211,7 @@ impl GuppylangCompiler {
         Ok(format!("{:.16}", std::f64::consts::PI))
     }
 
-    fn extract_float_from_const_value(&self, value: &serde_json::Value) -> Option<f64> {
+    fn extract_float_from_const_value(value: &serde_json::Value) -> Option<f64> {
         // Handle various constant value formats
         if let Some(vs) = value.get("vs").and_then(|v| v.as_array())
             && let Some(first) = vs.first()
@@ -1205,7 +1236,7 @@ impl GuppylangCompiler {
         None
     }
 
-    fn extract_angle_from_node(&self, node: &serde_json::Value) -> Result<String, SeleneError> {
+    fn extract_angle_from_node(node: &serde_json::Value) -> String {
         log::debug!(
             "Extracting angle from node: {}",
             serde_json::to_string_pretty(node).unwrap_or_default()
@@ -1227,27 +1258,27 @@ impl GuppylangCompiler {
                         && let Some(float_val) = val.as_f64()
                     {
                         log::info!("Found angle in ConstF64: {float_val}");
-                        return Ok(format!("{float_val:.16}"));
+                        return format!("{float_val:.16}");
                     }
                     // Also check for nested value structure
                     if let Some(value) = arg_obj.get("value")
                         && let Some(float_val) = value.as_f64()
                     {
                         log::info!("Found angle in value field: {float_val}");
-                        return Ok(format!("{float_val:.16}"));
+                        return format!("{float_val:.16}");
                     }
                 }
                 // Direct float value
                 if let Some(float_val) = arg.as_f64() {
                     log::info!("Found direct float angle: {float_val}");
-                    return Ok(format!("{float_val:.16}"));
+                    return format!("{float_val:.16}");
                 }
             }
         }
 
         // Default to pi/2 if no angle found (common test case)
         log::warn!("No angle found in rotation gate, defaulting to pi/2");
-        Ok("1.5707963267948966".to_string()) // pi/2
+        "1.5707963267948966".to_string() // pi/2
     }
 
     fn find_two_input_qubits_with_ports(
@@ -1261,10 +1292,10 @@ impl GuppylangCompiler {
         let mut input_qubits = Vec::new();
 
         log::debug!("=== find_two_input_qubits_with_ports for CX node {node_id} ===");
-        eprintln!("DEBUG: === find_two_input_qubits_with_ports for CX node {node_id} ===");
-        eprintln!("DEBUG: Current dataflow map: {:?}", self.qubit_dataflow);
-        eprintln!(
-            "DEBUG: Current unpack_tuple_outputs: {:?}",
+        log::debug!("=== find_two_input_qubits_with_ports for CX node {node_id} ===");
+        log::debug!("Current dataflow map: {:?}", self.qubit_dataflow);
+        log::debug!(
+            "Current unpack_tuple_outputs: {:?}",
             self.unpack_tuple_outputs
         );
 
@@ -1274,7 +1305,7 @@ impl GuppylangCompiler {
                 && let (Some(src_arr), Some(tgt_arr)) =
                     (edge_array[0].as_array(), edge_array[1].as_array())
                 && let Some(tgt_node) = tgt_arr.first().and_then(serde_json::Value::as_u64)
-                && tgt_node as usize == node_id
+                && usize::try_from(tgt_node).is_ok_and(|idx| idx == node_id)
             {
                 // This edge targets our two-qubit gate node
                 if let Some(src_node) = src_arr.first().and_then(serde_json::Value::as_u64) {
@@ -1290,12 +1321,12 @@ impl GuppylangCompiler {
                     log::debug!(
                         "  Edge {edge_idx}: src_node={src_node}, src_port={src_port}, tgt_port={tgt_port}"
                     );
-                    eprintln!(
-                        "DEBUG:   Edge {edge_idx}: src_node={src_node}, src_port={src_port}, tgt_port={tgt_port}"
+                    log::debug!(
+                        "Edge {edge_idx}: src_node={src_node}, src_port={src_port}, tgt_port={tgt_port}"
                     );
 
                     // Use the dataflow map to find the qubit
-                    let src_idx = src_node as usize;
+                    let src_idx = usize::try_from(src_node).ok()?;
 
                     // First check if this is an UnpackTuple node with multiple outputs
                     // If it is, we MUST use the port-specific lookup
@@ -1306,8 +1337,8 @@ impl GuppylangCompiler {
                             unpack_qubits.len(),
                             unpack_qubits
                         );
-                        eprintln!(
-                            "DEBUG:     Node {} is UnpackTuple with {} qubits: {:?}",
+                        log::debug!(
+                            "Node {} is UnpackTuple with {} qubits: {:?}",
                             src_node,
                             unpack_qubits.len(),
                             unpack_qubits
@@ -1318,24 +1349,22 @@ impl GuppylangCompiler {
                             unpack_qubits.iter().find(|(port, _)| *port == src_port)
                         {
                             log::debug!("    Found qubit {qubit} for UnpackTuple port {src_port}");
-                            eprintln!(
-                                "DEBUG:     Found qubit {qubit} from UnpackTuple node {src_node} port {src_port}"
+                            log::debug!(
+                                "Found qubit {qubit} from UnpackTuple node {src_node} port {src_port}"
                             );
                             input_qubits.push((tgt_port, qubit.clone()));
                         } else {
                             log::debug!("    No qubit found for UnpackTuple port {src_port}");
-                            eprintln!("DEBUG:     No qubit found for UnpackTuple port {src_port}");
+                            log::debug!("    No qubit found for UnpackTuple port {src_port}");
                         }
                     } else if let Some(qubit) = self.qubit_dataflow.get(&src_idx) {
                         // Not an UnpackTuple, use regular dataflow lookup
                         log::debug!("    Found qubit from dataflow: {qubit}");
-                        eprintln!(
-                            "DEBUG:     Found qubit {qubit} from node {src_node} (port {src_port})"
-                        );
+                        log::debug!("Found qubit {qubit} from node {src_node} (port {src_port})");
                         input_qubits.push((tgt_port, qubit.clone()));
                     } else {
                         log::debug!("    No qubit found in dataflow for node {src_node}");
-                        eprintln!("DEBUG:     No qubit found in dataflow for node {src_node}");
+                        log::debug!("    No qubit found in dataflow for node {src_node}");
                     }
                 }
             }
@@ -1345,20 +1374,20 @@ impl GuppylangCompiler {
         input_qubits.sort_by_key(|(port, _)| *port);
 
         log::debug!("  Final input_qubits (sorted): {input_qubits:?}");
-        eprintln!("DEBUG:   Final input_qubits (sorted): {input_qubits:?}");
+        log::debug!("  Final input_qubits (sorted): {input_qubits:?}");
 
         if input_qubits.len() >= 2 {
             let result = (input_qubits[0].1.clone(), input_qubits[1].1.clone());
             log::debug!("  Returning qubits: {} and {}", result.0, result.1);
-            eprintln!("DEBUG:   Returning qubits: {} and {}", result.0, result.1);
+            log::debug!("  Returning qubits: {} and {}", result.0, result.1);
             Some(result)
         } else {
             log::warn!(
                 "  Only found {} qubits, need 2 for CX gate",
                 input_qubits.len()
             );
-            eprintln!(
-                "DEBUG:   Only found {} qubits, need 2 for CX gate",
+            log::debug!(
+                "Only found {} qubits, need 2 for CX gate",
                 input_qubits.len()
             );
             None
@@ -1381,7 +1410,7 @@ impl GuppylangCompiler {
                 && let (Some(src_arr), Some(tgt_arr)) =
                     (edge_array[0].as_array(), edge_array[1].as_array())
                 && let Some(tgt_node) = tgt_arr.first().and_then(serde_json::Value::as_u64)
-                && tgt_node as usize == node_id
+                && usize::try_from(tgt_node).is_ok_and(|idx| idx == node_id)
             {
                 // This edge targets our three-qubit gate node
                 if let Some(src_node) = src_arr.first().and_then(serde_json::Value::as_u64) {
@@ -1391,7 +1420,7 @@ impl GuppylangCompiler {
                         .unwrap_or(0);
 
                     // Use the dataflow map to find the qubit
-                    let src_idx = src_node as usize;
+                    let src_idx = usize::try_from(src_node).ok()?;
                     let src_port = src_arr
                         .get(1)
                         .and_then(serde_json::Value::as_u64)
@@ -1442,21 +1471,8 @@ impl GuppylangCompiler {
         }
     }
 
-    fn build_qubit_dataflow(
-        &mut self,
-        nodes: &[serde_json::Value],
-        edges: &[serde_json::Value],
-    ) -> Result<(), SeleneError> {
-        // Build a map of qubit dataflow by tracing from QAlloc nodes through quantum operations
-        log::debug!("=== STARTING QUBIT DATAFLOW BUILD ===");
-        eprintln!("DEBUG: === STARTING QUBIT DATAFLOW BUILD ===");
-        log::debug!(
-            "Building qubit dataflow map with {} nodes and {} edges",
-            nodes.len(),
-            edges.len()
-        );
-
-        // First, create both forward and reverse edge maps
+    /// Build forward and reverse edge maps from edge data
+    fn build_edge_maps(edges: &[serde_json::Value]) -> (EdgeMap, EdgeMap) {
         let mut reverse_edges: HashMap<usize, Vec<(usize, u64)>> = HashMap::new(); // target -> (source, port)
         let mut forward_edges: HashMap<usize, Vec<(usize, u64)>> = HashMap::new(); // source -> (target, port)
 
@@ -1479,17 +1495,194 @@ impl GuppylangCompiler {
                     .and_then(serde_json::Value::as_u64)
                     .unwrap_or(0);
 
-                reverse_edges
-                    .entry(tgt_node as usize)
-                    .or_default()
-                    .push((src_node as usize, tgt_port));
+                if let (Ok(tgt_idx), Ok(src_idx)) =
+                    (usize::try_from(tgt_node), usize::try_from(src_node))
+                {
+                    reverse_edges
+                        .entry(tgt_idx)
+                        .or_default()
+                        .push((src_idx, tgt_port));
 
-                forward_edges
-                    .entry(src_node as usize)
-                    .or_default()
-                    .push((tgt_node as usize, src_port));
+                    forward_edges
+                        .entry(src_idx)
+                        .or_default()
+                        .push((tgt_idx, src_port));
+                }
             }
         }
+
+        (reverse_edges, forward_edges)
+    }
+
+    /// Process two-qubit gate node for dataflow
+    fn process_two_qubit_gate(
+        &mut self,
+        node_id: usize,
+        name: &str,
+        reverse_edges: &EdgeMap,
+        forward_edges: &EdgeMap,
+    ) {
+        log::debug!("=== Processing two-qubit gate {name} at node {node_id} ===");
+
+        // Collect the input qubits with their ports
+        let mut input_qubits = Vec::new();
+        if let Some(inputs) = reverse_edges.get(&node_id) {
+            log::debug!("  {} inputs to node {}", inputs.len(), node_id);
+            for (src_node, port) in inputs {
+                log::debug!("    Input from node {src_node} at port {port}");
+                if let Some(qubit_var) = self.qubit_dataflow.get(src_node).cloned() {
+                    log::debug!("      Found qubit {qubit_var} from node {src_node}");
+                    input_qubits.push((*port, qubit_var));
+                } else {
+                    log::debug!("      No qubit found in dataflow for node {src_node}");
+                }
+            }
+        }
+
+        // Sort by input port to ensure correct ordering
+        input_qubits.sort_by_key(|(port, _)| *port);
+        log::debug!("  Sorted input qubits: {input_qubits:?}");
+
+        // Store the gate node itself with the first qubit for find operations
+        if !input_qubits.is_empty() {
+            self.qubit_dataflow
+                .insert(node_id, input_qubits[0].1.clone());
+        }
+
+        // Now propagate the appropriate qubit to each output
+        if let Some(outputs) = forward_edges.get(&node_id) {
+            log::debug!("  {} outputs from node {}", outputs.len(), node_id);
+            for (target_node, output_port) in outputs {
+                log::debug!("    Output to node {target_node} from port {output_port}");
+                // The output port from a two-qubit gate indicates which qubit is being output
+                // Port 0 outputs the control qubit, port 1 outputs the target qubit
+                let qubit_idx = usize::try_from(*output_port).unwrap_or(0);
+                if qubit_idx < input_qubits.len() {
+                    let qubit_var = input_qubits[qubit_idx].1.clone();
+                    self.qubit_dataflow.insert(*target_node, qubit_var.clone());
+                    log::debug!(
+                        "Two-qubit gate {name} (node {node_id}) -> node {target_node} gets qubit {qubit_var}"
+                    );
+                    log::debug!(
+                        "Two-qubit gate {name} output port {output_port} -> node {target_node} gets qubit {qubit_var}"
+                    );
+                } else {
+                    log::debug!(
+                        "ERROR: Output port {} exceeds input qubits ({})",
+                        output_port,
+                        input_qubits.len()
+                    );
+                }
+            }
+        }
+        log::debug!("=== End two-qubit gate {name} ===");
+    }
+
+    /// Process three-qubit gate node for dataflow
+    fn process_three_qubit_gate(
+        &mut self,
+        node_id: usize,
+        name: &str,
+        reverse_edges: &EdgeMap,
+        forward_edges: &EdgeMap,
+    ) {
+        // Collect the input qubits
+        let mut input_qubits = Vec::new();
+        if let Some(inputs) = reverse_edges.get(&node_id) {
+            for (src_node, port) in inputs {
+                if let Some(qubit_var) = self.qubit_dataflow.get(src_node).cloned() {
+                    input_qubits.push((*port, qubit_var));
+                }
+            }
+        }
+        input_qubits.sort_by_key(|(port, _)| *port);
+
+        // Now propagate the appropriate qubit to each output
+        if let Some(outputs) = forward_edges.get(&node_id) {
+            for (target_node, output_port) in outputs {
+                let qubit_idx = usize::try_from(*output_port).unwrap_or(0);
+                if qubit_idx < input_qubits.len() {
+                    let qubit_var = input_qubits[qubit_idx].1.clone();
+                    self.qubit_dataflow.insert(*target_node, qubit_var.clone());
+                    log::debug!(
+                        "Three-qubit gate {name} (node {node_id}) -> node {target_node} gets qubit {qubit_var}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Process single-qubit gate node for dataflow
+    fn process_single_qubit_gate(
+        &mut self,
+        node_id: usize,
+        name: &str,
+        reverse_edges: &EdgeMap,
+        forward_edges: &EdgeMap,
+    ) {
+        // Check if this node already has a qubit assigned (e.g., from a two-qubit gate output)
+        if let Some(existing_qubit) = self.qubit_dataflow.get(&node_id).cloned() {
+            log::debug!(
+                "Single-qubit gate {name} (node {node_id}) already has qubit {existing_qubit}"
+            );
+            log::debug!(
+                "Single-qubit gate {name} (node {node_id}) already has qubit {existing_qubit} - propagating to outputs"
+            );
+
+            // Propagate existing qubit to outputs
+            if let Some(outputs) = forward_edges.get(&node_id) {
+                for (target_node, _) in outputs {
+                    self.qubit_dataflow
+                        .insert(*target_node, existing_qubit.clone());
+                    log::debug!(
+                        "{name} -> node {target_node} gets existing qubit {existing_qubit}"
+                    );
+                }
+            }
+        } else {
+            // Node doesn't have a qubit yet, find it from inputs
+            if let Some(inputs) = reverse_edges.get(&node_id) {
+                for (src_node, _port) in inputs {
+                    if let Some(qubit_var) = self.qubit_dataflow.get(src_node).cloned() {
+                        log::debug!(
+                            "Single-qubit gate {name} (node {node_id}): getting qubit {qubit_var} from node {src_node}"
+                        );
+                        log::debug!(
+                            "Single-qubit gate {name} (node {node_id}) gets qubit {qubit_var} from input node {src_node}"
+                        );
+                        self.qubit_dataflow.insert(node_id, qubit_var.clone());
+
+                        // Also propagate to all outputs of this gate
+                        if let Some(outputs) = forward_edges.get(&node_id) {
+                            for (target_node, _) in outputs {
+                                log::debug!(
+                                    "Single-qubit gate {name} (node {node_id}) -> node {target_node} gets qubit {qubit_var}"
+                                );
+                                self.qubit_dataflow.insert(*target_node, qubit_var.clone());
+                                log::debug!("{name} -> node {target_node} gets qubit {qubit_var}");
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // Builds comprehensive qubit dataflow map for tracking qubit variables through the circuit
+    #[allow(clippy::too_many_lines)]
+    fn build_qubit_dataflow(&mut self, nodes: &[serde_json::Value], edges: &[serde_json::Value]) {
+        // Build a map of qubit dataflow by tracing from QAlloc nodes through quantum operations
+        log::debug!("=== STARTING QUBIT DATAFLOW BUILD ===");
+        log::debug!("=== STARTING QUBIT DATAFLOW BUILD ===");
+        log::debug!(
+            "Building qubit dataflow map with {} nodes and {} edges",
+            nodes.len(),
+            edges.len()
+        );
+
+        // First, create both forward and reverse edge maps
+        let (reverse_edges, forward_edges) = Self::build_edge_maps(edges);
 
         // Process nodes in order, propagating qubit variables
         for (node_id, node) in nodes.iter().enumerate() {
@@ -1500,7 +1693,7 @@ impl GuppylangCompiler {
                     node.get("extension").and_then(|e| e.as_str()),
                     node.get("name").and_then(|n| n.as_str()),
                 ) {
-                    eprintln!("DEBUG: Processing node {node_id} - {ext}::{name}");
+                    log::debug!("Processing node {node_id} - {ext}::{name}");
                 }
                 if let (Some(extension), Some(name)) = (
                     node.get("extension").and_then(|e| e.as_str()),
@@ -1519,173 +1712,28 @@ impl GuppylangCompiler {
                             }
                             "H" | "X" | "Y" | "Z" | "S" | "T" | "Sdg" | "Tdg" | "Rx" | "Ry"
                             | "Rz" => {
-                                // Single qubit gate - find its input and propagate the same qubit
-                                // Check if this node already has a qubit assigned (e.g., from a two-qubit gate output)
-                                if let Some(existing_qubit) =
-                                    self.qubit_dataflow.get(&node_id).cloned()
-                                {
-                                    log::debug!(
-                                        "Single-qubit gate {name} (node {node_id}) already has qubit {existing_qubit}"
-                                    );
-                                    eprintln!(
-                                        "DEBUG: Single-qubit gate {name} (node {node_id}) already has qubit {existing_qubit} - propagating to outputs"
-                                    );
-
-                                    // Propagate existing qubit to outputs
-                                    if let Some(outputs) = forward_edges.get(&node_id) {
-                                        for (target_node, _) in outputs {
-                                            self.qubit_dataflow
-                                                .insert(*target_node, existing_qubit.clone());
-                                            eprintln!(
-                                                "DEBUG:   {name} -> node {target_node} gets existing qubit {existing_qubit}"
-                                            );
-                                        }
-                                    }
-                                } else {
-                                    // Node doesn't have a qubit yet, find it from inputs
-                                    if let Some(inputs) = reverse_edges.get(&node_id) {
-                                        for (src_node, _port) in inputs {
-                                            if let Some(qubit_var) =
-                                                self.qubit_dataflow.get(src_node).cloned()
-                                            {
-                                                log::debug!(
-                                                    "Single-qubit gate {name} (node {node_id}): getting qubit {qubit_var} from node {src_node}"
-                                                );
-                                                eprintln!(
-                                                    "DEBUG: Single-qubit gate {name} (node {node_id}) gets qubit {qubit_var} from input node {src_node}"
-                                                );
-                                                self.qubit_dataflow
-                                                    .insert(node_id, qubit_var.clone());
-
-                                                // Also propagate to all outputs of this gate
-                                                if let Some(outputs) = forward_edges.get(&node_id) {
-                                                    for (target_node, _) in outputs {
-                                                        log::debug!(
-                                                            "Single-qubit gate {name} (node {node_id}) -> node {target_node} gets qubit {qubit_var}"
-                                                        );
-                                                        self.qubit_dataflow.insert(
-                                                            *target_node,
-                                                            qubit_var.clone(),
-                                                        );
-                                                        eprintln!(
-                                                            "DEBUG:   {name} -> node {target_node} gets qubit {qubit_var}"
-                                                        );
-                                                    }
-                                                }
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
+                                self.process_single_qubit_gate(
+                                    node_id,
+                                    name,
+                                    &reverse_edges,
+                                    &forward_edges,
+                                );
                             }
                             "CX" | "CNOT" | "CY" | "CZ" | "CH" | "CRz" => {
-                                // Two-qubit gates need special handling
-                                // They receive two input qubits and output both to different targets
-                                eprintln!(
-                                    "DEBUG: === Processing two-qubit gate {name} at node {node_id} ==="
+                                self.process_two_qubit_gate(
+                                    node_id,
+                                    name,
+                                    &reverse_edges,
+                                    &forward_edges,
                                 );
-
-                                // Collect the input qubits with their ports
-                                let mut input_qubits = Vec::new();
-                                if let Some(inputs) = reverse_edges.get(&node_id) {
-                                    eprintln!(
-                                        "DEBUG:   {} inputs to node {}",
-                                        inputs.len(),
-                                        node_id
-                                    );
-                                    for (src_node, port) in inputs {
-                                        eprintln!(
-                                            "DEBUG:     Input from node {src_node} at port {port}"
-                                        );
-                                        if let Some(qubit_var) =
-                                            self.qubit_dataflow.get(src_node).cloned()
-                                        {
-                                            eprintln!(
-                                                "DEBUG:       Found qubit {qubit_var} from node {src_node}"
-                                            );
-                                            input_qubits.push((*port, qubit_var));
-                                        } else {
-                                            eprintln!(
-                                                "DEBUG:       No qubit found in dataflow for node {src_node}"
-                                            );
-                                        }
-                                    }
-                                }
-
-                                // Sort by input port to ensure correct ordering
-                                input_qubits.sort_by_key(|(port, _)| *port);
-                                eprintln!("DEBUG:   Sorted input qubits: {input_qubits:?}");
-
-                                // Store the gate node itself with the first qubit for find operations
-                                if !input_qubits.is_empty() {
-                                    self.qubit_dataflow
-                                        .insert(node_id, input_qubits[0].1.clone());
-                                }
-
-                                // Now propagate the appropriate qubit to each output
-                                if let Some(outputs) = forward_edges.get(&node_id) {
-                                    eprintln!(
-                                        "DEBUG:   {} outputs from node {}",
-                                        outputs.len(),
-                                        node_id
-                                    );
-                                    for (target_node, output_port) in outputs {
-                                        eprintln!(
-                                            "DEBUG:     Output to node {target_node} from port {output_port}"
-                                        );
-                                        // The output port from a two-qubit gate indicates which qubit is being output
-                                        // Port 0 outputs the control qubit, port 1 outputs the target qubit
-                                        let qubit_idx = *output_port as usize;
-                                        if qubit_idx < input_qubits.len() {
-                                            let qubit_var = input_qubits[qubit_idx].1.clone();
-                                            self.qubit_dataflow
-                                                .insert(*target_node, qubit_var.clone());
-                                            log::debug!(
-                                                "Two-qubit gate {name} (node {node_id}) -> node {target_node} gets qubit {qubit_var}"
-                                            );
-                                            eprintln!(
-                                                "DEBUG:       Two-qubit gate {name} output port {output_port} -> node {target_node} gets qubit {qubit_var}"
-                                            );
-                                        } else {
-                                            eprintln!(
-                                                "DEBUG:       ERROR: Output port {} exceeds input qubits ({})",
-                                                output_port,
-                                                input_qubits.len()
-                                            );
-                                        }
-                                    }
-                                }
-                                eprintln!("DEBUG: === End two-qubit gate {name} ===");
                             }
                             "CCX" | "Toffoli" => {
-                                // Three-qubit gates need special handling similar to two-qubit gates
-                                // Collect the input qubits
-                                let mut input_qubits = Vec::new();
-                                if let Some(inputs) = reverse_edges.get(&node_id) {
-                                    for (src_node, port) in inputs {
-                                        if let Some(qubit_var) =
-                                            self.qubit_dataflow.get(src_node).cloned()
-                                        {
-                                            input_qubits.push((*port, qubit_var));
-                                        }
-                                    }
-                                }
-                                input_qubits.sort_by_key(|(port, _)| *port);
-
-                                // Now propagate the appropriate qubit to each output
-                                if let Some(outputs) = forward_edges.get(&node_id) {
-                                    for (target_node, output_port) in outputs {
-                                        let qubit_idx = *output_port as usize;
-                                        if qubit_idx < input_qubits.len() {
-                                            let qubit_var = input_qubits[qubit_idx].1.clone();
-                                            self.qubit_dataflow
-                                                .insert(*target_node, qubit_var.clone());
-                                            log::debug!(
-                                                "Three-qubit gate {name} (node {node_id}) -> node {target_node} gets qubit {qubit_var}"
-                                            );
-                                        }
-                                    }
-                                }
+                                self.process_three_qubit_gate(
+                                    node_id,
+                                    name,
+                                    &reverse_edges,
+                                    &forward_edges,
+                                );
                             }
                             _ => {}
                         }
@@ -1695,7 +1743,7 @@ impl GuppylangCompiler {
                                 // MakeTuple combines multiple qubits into a tuple
                                 // We need to propagate each input qubit to the appropriate output
                                 log::debug!("=== Processing MakeTuple node {node_id} ===");
-                                eprintln!("DEBUG: === Processing MakeTuple node {node_id} ===");
+                                log::debug!("=== Processing MakeTuple node {node_id} ===");
 
                                 if let Some(inputs) = reverse_edges.get(&node_id) {
                                     let mut input_qubits = Vec::new();
@@ -1704,30 +1752,28 @@ impl GuppylangCompiler {
                                         node_id,
                                         inputs.len()
                                     );
-                                    eprintln!(
-                                        "DEBUG: MakeTuple node {} has {} input edges",
+                                    log::debug!(
+                                        "MakeTuple node {} has {} input edges",
                                         node_id,
                                         inputs.len()
                                     );
 
                                     for (src_node, port) in inputs {
                                         log::debug!("  Input: src_node={src_node}, port={port}");
-                                        eprintln!(
-                                            "DEBUG:   Input: src_node={src_node}, port={port}"
-                                        );
+                                        log::debug!("Input: src_node={src_node}, port={port}");
 
                                         if let Some(qubit_var) =
                                             self.qubit_dataflow.get(src_node).cloned()
                                         {
                                             log::debug!("    Found qubit: {qubit_var}");
-                                            eprintln!("DEBUG:     Found qubit: {qubit_var}");
+                                            log::debug!("    Found qubit: {qubit_var}");
                                             input_qubits.push((*port, qubit_var.clone()));
                                         } else {
                                             log::debug!(
                                                 "    No qubit found in dataflow for node {src_node}"
                                             );
-                                            eprintln!(
-                                                "DEBUG:     No qubit found in dataflow for node {src_node}"
+                                            log::debug!(
+                                                "No qubit found in dataflow for node {src_node}"
                                             );
                                         }
                                     }
@@ -1737,8 +1783,8 @@ impl GuppylangCompiler {
                                     log::debug!(
                                         "MakeTuple node {node_id} sorted input qubits: {input_qubits:?}"
                                     );
-                                    eprintln!(
-                                        "DEBUG: MakeTuple node {node_id} sorted input qubits: {input_qubits:?}"
+                                    log::debug!(
+                                        "MakeTuple node {node_id} sorted input qubits: {input_qubits:?}"
                                     );
 
                                     // For MakeTuple, we store all input qubits
@@ -1752,23 +1798,24 @@ impl GuppylangCompiler {
                                             node_id,
                                             input_qubits[0].1
                                         );
-                                        eprintln!(
-                                            "DEBUG: MakeTuple node {}: stored qubit {} in dataflow",
-                                            node_id, input_qubits[0].1
+                                        log::debug!(
+                                            "MakeTuple node {}: stored qubit {} in dataflow",
+                                            node_id,
+                                            input_qubits[0].1
                                         );
                                     }
                                 } else {
                                     log::debug!("MakeTuple node {node_id} has no input edges");
-                                    eprintln!("DEBUG: MakeTuple node {node_id} has no input edges");
+                                    log::debug!("MakeTuple node {node_id} has no input edges");
                                 }
                                 log::debug!("=== End MakeTuple node {node_id} ===");
-                                eprintln!("DEBUG: === End MakeTuple node {node_id} ===");
+                                log::debug!("=== End MakeTuple node {node_id} ===");
                             }
                             "UnpackTuple" => {
                                 // UnpackTuple extracts qubits from a tuple
                                 // We need to propagate the appropriate qubit to each output
                                 log::debug!("=== Processing UnpackTuple node {node_id} ===");
-                                eprintln!("DEBUG: === Processing UnpackTuple node {node_id} ===");
+                                log::debug!("=== Processing UnpackTuple node {node_id} ===");
 
                                 if let Some(inputs) = reverse_edges.get(&node_id) {
                                     log::debug!(
@@ -1776,8 +1823,8 @@ impl GuppylangCompiler {
                                         node_id,
                                         inputs.len()
                                     );
-                                    eprintln!(
-                                        "DEBUG: UnpackTuple node {} has {} input edges",
+                                    log::debug!(
+                                        "UnpackTuple node {} has {} input edges",
                                         node_id,
                                         inputs.len()
                                     );
@@ -1787,8 +1834,8 @@ impl GuppylangCompiler {
                                         log::debug!(
                                             "  Checking input: src_node={src_node}, port={input_port}"
                                         );
-                                        eprintln!(
-                                            "DEBUG:   Checking input: src_node={src_node}, port={input_port}"
+                                        log::debug!(
+                                            "Checking input: src_node={src_node}, port={input_port}"
                                         );
 
                                         // Check if the source is a MakeTuple
@@ -1802,16 +1849,16 @@ impl GuppylangCompiler {
                                                 log::debug!(
                                                     "    Source node {src_node} is {src_ext}.{src_name}"
                                                 );
-                                                eprintln!(
-                                                    "DEBUG:     Source node {src_node} is {src_ext}.{src_name}"
+                                                log::debug!(
+                                                    "Source node {src_node} is {src_ext}.{src_name}"
                                                 );
 
                                                 if src_ext == "prelude" && src_name == "MakeTuple" {
                                                     log::debug!(
                                                         "    Found MakeTuple source at node {src_node}"
                                                     );
-                                                    eprintln!(
-                                                        "DEBUG:     Found MakeTuple source at node {src_node}"
+                                                    log::debug!(
+                                                        "Found MakeTuple source at node {src_node}"
                                                     );
 
                                                     // Get the original qubits that went into the tuple
@@ -1824,8 +1871,8 @@ impl GuppylangCompiler {
                                                             src_node,
                                                             tuple_inputs.len()
                                                         );
-                                                        eprintln!(
-                                                            "DEBUG:     MakeTuple node {} has {} inputs",
+                                                        log::debug!(
+                                                            "MakeTuple node {} has {} inputs",
                                                             src_node,
                                                             tuple_inputs.len()
                                                         );
@@ -1834,8 +1881,8 @@ impl GuppylangCompiler {
                                                             log::debug!(
                                                                 "      MakeTuple input: src_node={orig_src}, port={orig_port}"
                                                             );
-                                                            eprintln!(
-                                                                "DEBUG:       MakeTuple input: src_node={orig_src}, port={orig_port}"
+                                                            log::debug!(
+                                                                "MakeTuple input: src_node={orig_src}, port={orig_port}"
                                                             );
 
                                                             if let Some(qubit_var) = self
@@ -1846,8 +1893,8 @@ impl GuppylangCompiler {
                                                                 log::debug!(
                                                                     "        Found qubit: {qubit_var}"
                                                                 );
-                                                                eprintln!(
-                                                                    "DEBUG:         Found qubit: {qubit_var}"
+                                                                log::debug!(
+                                                                    "Found qubit: {qubit_var}"
                                                                 );
                                                                 original_qubits.push((
                                                                     *orig_port,
@@ -1857,8 +1904,8 @@ impl GuppylangCompiler {
                                                                 log::debug!(
                                                                     "        No qubit found for node {orig_src}"
                                                                 );
-                                                                eprintln!(
-                                                                    "DEBUG:         No qubit found for node {orig_src}"
+                                                                log::debug!(
+                                                                    "No qubit found for node {orig_src}"
                                                                 );
                                                             }
                                                         }
@@ -1867,8 +1914,8 @@ impl GuppylangCompiler {
                                                         log::debug!(
                                                             "    Original qubits from MakeTuple (sorted): {original_qubits:?}"
                                                         );
-                                                        eprintln!(
-                                                            "DEBUG:     Original qubits from MakeTuple (sorted): {original_qubits:?}"
+                                                        log::debug!(
+                                                            "Original qubits from MakeTuple (sorted): {original_qubits:?}"
                                                         );
 
                                                         // Store the qubits for this UnpackTuple node
@@ -1885,9 +1932,10 @@ impl GuppylangCompiler {
                                                                 original_qubits[0].1,
                                                                 node_id
                                                             );
-                                                            eprintln!(
-                                                                "DEBUG:     Stored qubit {} for UnpackTuple node {}",
-                                                                original_qubits[0].1, node_id
+                                                            log::debug!(
+                                                                "Stored qubit {} for UnpackTuple node {}",
+                                                                original_qubits[0].1,
+                                                                node_id
                                                             );
 
                                                             // Store metadata about all qubits from the tuple
@@ -1900,8 +1948,8 @@ impl GuppylangCompiler {
                                                                 node_id,
                                                                 original_qubits.len()
                                                             );
-                                                            eprintln!(
-                                                                "DEBUG:     UnpackTuple node {} has {} qubits available in unpack_tuple_outputs",
+                                                            log::debug!(
+                                                                "UnpackTuple node {} has {} qubits available in unpack_tuple_outputs",
                                                                 node_id,
                                                                 original_qubits.len()
                                                             );
@@ -1916,8 +1964,8 @@ impl GuppylangCompiler {
                                                                 node_id,
                                                                 outputs.len()
                                                             );
-                                                            eprintln!(
-                                                                "DEBUG:     UnpackTuple node {} has {} output edges",
+                                                            log::debug!(
+                                                                "UnpackTuple node {} has {} output edges",
                                                                 node_id,
                                                                 outputs.len()
                                                             );
@@ -1925,12 +1973,14 @@ impl GuppylangCompiler {
                                                             for (target_node, output_port) in
                                                                 outputs
                                                             {
-                                                                let idx = *output_port as usize;
+                                                                let idx =
+                                                                    usize::try_from(*output_port)
+                                                                        .unwrap_or(0);
                                                                 log::debug!(
                                                                     "      Output: target_node={target_node}, port={output_port} (idx={idx})"
                                                                 );
-                                                                eprintln!(
-                                                                    "DEBUG:       Output: target_node={target_node}, port={output_port} (idx={idx})"
+                                                                log::debug!(
+                                                                    "Output: target_node={target_node}, port={output_port} (idx={idx})"
                                                                 );
 
                                                                 if idx < original_qubits.len() {
@@ -1945,8 +1995,8 @@ impl GuppylangCompiler {
                                                                     log::debug!(
                                                                         "        UnpackTuple node {node_id} -> node {target_node} gets qubit {qubit_var} (from port {output_port})"
                                                                     );
-                                                                    eprintln!(
-                                                                        "DEBUG:         UnpackTuple node {node_id} -> node {target_node} gets qubit {qubit_var} (from port {output_port})"
+                                                                    log::debug!(
+                                                                        "UnpackTuple node {node_id} -> node {target_node} gets qubit {qubit_var} (from port {output_port})"
                                                                     );
                                                                 } else {
                                                                     log::warn!(
@@ -1954,8 +2004,8 @@ impl GuppylangCompiler {
                                                                         output_port,
                                                                         original_qubits.len()
                                                                     );
-                                                                    eprintln!(
-                                                                        "DEBUG:         WARNING: Output port {} exceeds available qubits ({})",
+                                                                    log::debug!(
+                                                                        "WARNING: Output port {} exceeds available qubits ({})",
                                                                         output_port,
                                                                         original_qubits.len()
                                                                     );
@@ -1965,16 +2015,16 @@ impl GuppylangCompiler {
                                                             log::debug!(
                                                                 "    UnpackTuple node {node_id} has no output edges"
                                                             );
-                                                            eprintln!(
-                                                                "DEBUG:     UnpackTuple node {node_id} has no output edges"
+                                                            log::debug!(
+                                                                "UnpackTuple node {node_id} has no output edges"
                                                             );
                                                         }
                                                     } else {
                                                         log::debug!(
                                                             "    MakeTuple node {src_node} has no inputs"
                                                         );
-                                                        eprintln!(
-                                                            "DEBUG:     MakeTuple node {src_node} has no inputs"
+                                                        log::debug!(
+                                                            "MakeTuple node {src_node} has no inputs"
                                                         );
                                                     }
                                                 }
@@ -1982,27 +2032,23 @@ impl GuppylangCompiler {
                                                 log::debug!(
                                                     "    Source node {src_node} is not a MakeTuple"
                                                 );
-                                                eprintln!(
-                                                    "DEBUG:     Source node {src_node} is not a MakeTuple"
+                                                log::debug!(
+                                                    "Source node {src_node} is not a MakeTuple"
                                                 );
                                             }
                                         } else {
                                             log::debug!(
                                                 "    No data found for source node {src_node}"
                                             );
-                                            eprintln!(
-                                                "DEBUG:     No data found for source node {src_node}"
-                                            );
+                                            log::debug!("No data found for source node {src_node}");
                                         }
                                     }
                                 } else {
                                     log::debug!("UnpackTuple node {node_id} has no input edges");
-                                    eprintln!(
-                                        "DEBUG: UnpackTuple node {node_id} has no input edges"
-                                    );
+                                    log::debug!("UnpackTuple node {node_id} has no input edges");
                                 }
                                 log::debug!("=== End UnpackTuple node {node_id} ===");
-                                eprintln!("DEBUG: === End UnpackTuple node {node_id} ===");
+                                log::debug!("=== End UnpackTuple node {node_id} ===");
                             }
                             _ => {}
                         }
@@ -2014,13 +2060,12 @@ impl GuppylangCompiler {
         log::debug!("=== FINAL DATAFLOW STATE ===");
         log::debug!("Qubit dataflow map: {:?}", self.qubit_dataflow);
         log::debug!("UnpackTuple outputs: {:?}", self.unpack_tuple_outputs);
-        eprintln!("DEBUG: === FINAL DATAFLOW STATE ===");
-        eprintln!("DEBUG: Final qubit dataflow map: {:?}", self.qubit_dataflow);
-        eprintln!(
-            "DEBUG: Final unpack_tuple_outputs: {:?}",
+        log::debug!("=== FINAL DATAFLOW STATE ===");
+        log::debug!("Final qubit dataflow map: {:?}", self.qubit_dataflow);
+        log::debug!(
+            "Final unpack_tuple_outputs: {:?}",
             self.unpack_tuple_outputs
         );
-        Ok(())
     }
 
     fn generate_llvm_ir(&self) -> Result<String, SeleneError> {

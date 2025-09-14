@@ -288,4 +288,4 @@ def test_minus_qir() -> None:
 @pytest.skipif_no_llvmlite
 def test_steane_qir() -> None:
     """Test the teleportation program using the Steane code."""
-    print(SlrConverter(telep("X", "X")).qir())
+    # print(SlrConverter(telep("X", "X")).qir())

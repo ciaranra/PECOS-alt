@@ -4,12 +4,14 @@ This module provides frontends for various quantum programming languages
 that compile to QIR for execution on PECOS.
 """
 
+from typing import Any
+
 from pecos.frontends.guppy_api import sim
 from pecos.frontends.guppy_frontend import GuppyFrontend
 
 
 # Helper function for backend checking
-def get_guppy_backends():
+def get_guppy_backends() -> dict[str, Any]:
     """Get available Guppy backends."""
     result = {"guppy_available": False, "rust_backend": False}
     try:

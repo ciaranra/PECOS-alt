@@ -19,8 +19,8 @@ selene-core = { git = "https://github.com/CQCL/selene.git", rev = "f9e14c4c218fe
 # For error handling
 anyhow.workspace = true
 
-# For logging (optional)
-log = { workspace = true, optional = true }
+# For logging
+log.workspace = true
 
 # For plugin building
 tempfile.workspace = true
@@ -30,7 +30,6 @@ pecos-engines = { path = "../pecos-engines", optional = true }
 
 [features]
 default = []
-logging = ["log"]
 pecos-integration = ["pecos-engines"]
 
 [lints]

@@ -188,6 +188,16 @@ impl QasmEngineBuilder {
 impl ClassicalControlEngineBuilder for QasmEngineBuilder {
     type Engine = QASMEngine;
 
+    /// Build the QASM engine
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - No QASM source was specified
+    /// - Failed to read QASM file from disk
+    /// - Failed to parse QASM content
+    /// - WASM module initialization failed
+    /// - WASM module is missing required exports
     fn build(self) -> Result<Self::Engine, PecosError> {
         // Get the QASM content
         let qasm_content = match self.source {

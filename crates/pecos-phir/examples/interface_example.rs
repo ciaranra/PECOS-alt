@@ -17,6 +17,7 @@ mod tags {
     pub const SYNDROME_EXTRACTION: &str = "syndrome_extraction";
 }
 
+#[allow(clippy::too_many_lines)] // Example demonstrating comprehensive interface usage
 fn main() {
     // Example 1: QFT circuit implementing the QFT interface
     println!("=== Interface Example: QFT Circuit ===\n");
@@ -102,16 +103,16 @@ fn main() {
 
         // Check interface tags
         if helpers::has_tag(&region.attributes, tags::QFT) {
-            println!("  ✓ Found QFT interface - can apply QFT-specific optimizations");
+            println!("  Found QFT interface - can apply QFT-specific optimizations");
             if helpers::is_parallelizable(&region.attributes) {
-                println!("  ✓ Marked as parallelizable - can distribute phase rotations");
+                println!("  Marked as parallelizable - can distribute phase rotations");
             }
         }
 
         if helpers::has_tag(&region.attributes, tags::SYNDROME_EXTRACTION) {
-            println!("  ✓ Found syndrome extraction interface - can optimize for fault tolerance");
+            println!("  Found syndrome extraction interface - can optimize for fault tolerance");
             if let Some(stab_type) = region.attributes.get("stabilizer_type") {
-                println!("  ✓ Stabilizer type: {stab_type:?}");
+                println!("  Stabilizer type: {stab_type:?}");
             }
         }
 

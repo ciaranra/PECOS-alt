@@ -26,11 +26,13 @@ Examples:
     ... )
 """
 
+from dataclasses import dataclass
+
 # Import from the unified sim module
 from pecos_rslib.sim import (
-    GeneralNoiseModelBuilder,
-    DepolarizingNoiseModelBuilder,
     BiasedDepolarizingNoiseModelBuilder,
+    DepolarizingNoiseModelBuilder,
+    GeneralNoiseModelBuilder,
 )
 
 # Import from engine builders module (once noise free functions are exposed)
@@ -42,7 +44,7 @@ from pecos_rslib.sim import (
 
 
 # For now, create factory functions until free functions are exposed from Rust
-def general():
+def general() -> GeneralNoiseModelBuilder:
     """Create a general noise model builder.
 
     Returns:
@@ -51,7 +53,7 @@ def general():
     return GeneralNoiseModelBuilder()
 
 
-def depolarizing():
+def depolarizing() -> DepolarizingNoiseModelBuilder:
     """Create a depolarizing noise model builder.
 
     Returns:
@@ -60,7 +62,7 @@ def depolarizing():
     return DepolarizingNoiseModelBuilder()
 
 
-def biased_depolarizing():
+def biased_depolarizing() -> BiasedDepolarizingNoiseModelBuilder:
     """Create a biased depolarizing noise model builder.
 
     Returns:
@@ -69,9 +71,6 @@ def biased_depolarizing():
     return BiasedDepolarizingNoiseModelBuilder()
 
 
-from dataclasses import dataclass
-from typing import Optional
-
 # Simple noise model dataclasses for backward compatibility
 # These are being replaced by the builder pattern but kept for existing code
 
@@ -79,8 +78,6 @@ from typing import Optional
 @dataclass
 class PassThroughNoise:
     """No noise - ideal quantum simulation."""
-
-    pass
 
 
 @dataclass
@@ -110,13 +107,13 @@ class GeneralNoise:
     """General noise model with full parameter configuration."""
 
     # Global parameters
-    seed: Optional[int] = None
-    scale: Optional[float] = None
+    seed: int | None = None
+    scale: float | None = None
     # Gate error probabilities
-    p1: Optional[float] = None
-    p2: Optional[float] = None
-    p_meas: Optional[float] = None
-    p_prep: Optional[float] = None
+    p1: float | None = None
+    p2: float | None = None
+    p_meas: float | None = None
+    p_prep: float | None = None
 
 
 __all__ = [

@@ -5,6 +5,21 @@ target-version = "py310"
 line-length = 120
 # preview = true
 
+[lint.pycodestyle]
+max-doc-length = 120
+
+[lint.pydocstyle]
+convention = "google"
+
+[lint.isort]
+split-on-trailing-comma = true
+
+[lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[lint.flake8-type-checking]
+strict = true
+
 [lint]
 select = [
     "A",        # flake8-builtins
@@ -86,25 +101,51 @@ ignore = [
 
 [lint.per-file-ignores]
 "**/__init__.py" = ["F401"]  # imported but unused - Expected for __init__.py re-exports
+
+
+# Test files
 "python/tests/**/*.py" = [
-    "INP001",                       # File is part of an implicit namespace package - OK for test directories
-    "S101",                         # Use of `assert` detected - Assert is standard practice in test files
-    "N802",                         # Function name should be lowercase - Test functions often match gate names
-    "PLC0415",                      # Import inside try/except for optional dependencies - OK in tests
+    "INP001",   # File is part of an implicit namespace package - OK for test directories
+    "S101",     # Use of `assert` detected - Assert is standard practice in test files
+    "N802",     # Function name should be lowercase - Test functions often match gate names
+    "PLC0415",  # Import inside try/except for optional dependencies - OK in tests
+    "S311",     # Standard pseudo-random generators - OK for tests
+    "S301",     # Pickle - OK for test data
+    "BLE001",   # Blind except - OK in tests for checking error conditions
+    "PT017",    # Assertions in except blocks - testing error conditions
 ]
 "python/slr-tests/**/*.py" = [
-    "INP001",                       # File is part of an implicit namespace package - OK for test directories
-    "S101",                         # Use of `assert` detected - Assert is standard practice in test files
-    "N802",                         # Function name should be lowercase - Test functions often match gate names
-    "PLC0415",                      # Import inside try/except for optional dependencies - OK in tests
+    "INP001",   # File is part of an implicit namespace package - OK for test directories
+    "S101",     # Use of `assert` detected - Assert is standard practice in test files
+    "N802",     # Function name should be lowercase - Test functions often match gate names
+    "PLC0415",  # Import inside try/except for optional dependencies - OK in tests
+    "S311",     # Standard pseudo-random generators - OK for tests
+    "S301",     # Pickle - OK for test data
 ]
+"python/*/tests/**/*.py" = [
+    "INP001",   # File is part of an implicit namespace package - OK for test directories
+    "S101",     # Use of `assert` detected - Assert is standard practice in test files
+    "S311",     # Standard pseudo-random generators - OK for tests
+    "S301",     # Pickle - OK for test data
+]
+"python/pecos-rslib/tests/*.py" = ["INP001"]  # Test files don't need __init__.py
+
+# Scripts and examples - not packages
+"scripts/**/*.py" = ["INP001", "S603"]  # Script files don't need __init__.py and may run subprocess calls for testing
+"examples/**/*.py" = ["INP001", "BLE001"]  # Example files don't need __init__.py and can use broad exception handling
+
+
+# Jupyter notebooks
 "**/*.ipynb" = [
-    "S101",                         # Use of `assert` detected - Assert is appropriate for Jupyter notebook demonstrations
+    "S101",  # Use of `assert` detected - Assert is appropriate for Jupyter notebook demonstrations
 ]
+
+# Simulator files
 "python/quantum-pecos/src/pecos/simulators/*.py" = [
     "N802",
 ]
 
+# SLR (Simple Logical Representation) DSL
 "python/quantum-pecos/src/pecos/slr/*.py" = [
     "ANN",
     "D",
@@ -112,20 +153,87 @@ ignore = [
     "PLW",
     "B",
 ]
+# Specific SLR files with DSL methods
+"python/quantum-pecos/src/pecos/slr/cond_block.py" = ["N802"]  # Then(), Else() methods
+"python/quantum-pecos/src/pecos/slr/loop_block.py" = ["N802"]  # Do() method
+"python/quantum-pecos/src/pecos/slr/__init__.py" = ["N814"]  # Main as SLR
 
+# Gate bindings - need consistent interfaces even if params unused
+"python/quantum-pecos/src/pecos/simulators/quest_statevec/bindings.py" = ["ARG005"]
+"python/quantum-pecos/src/pecos/simulators/quest_densitymatrix/bindings.py" = ["ARG005"]
+"python/quantum-pecos/src/pecos/simulators/statevec/bindings.py" = ["ARG005", "SLF001"]  # Private _sim access
+"python/quantum-pecos/src/pecos/simulators/pauliprop/state.py" = ["ARG005"]  # Gate bindings in _setup_bindings()
+"python/pecos-rslib/src/pecos_rslib/cppsparse_sim.py" = ["ARG005", "SLF001"]  # gate_dict lambdas, private _sim
+"python/pecos-rslib/src/pecos_rslib/rssparse_sim.py" = ["ARG005", "SLF001"]  # gate_dict lambdas, private _sim
+"python/pecos-rslib/src/pecos_rslib/rsstate_vec.py" = ["ARG005", "SLF001"]  # gate_dict lambdas, private _sim
 
+# Documentation
+"python/docs/conf.py" = ["A001", "INP001"]  # Sphinx expects 'copyright' variable
 
-[lint.pycodestyle]
-max-doc-length = 120
+# Build/compilation tools - subprocess calls to trusted tools
+"python/pecos-rslib/src/pecos_rslib/selene_compilation.py" = ["S603", "S607", "TRY301"]  # llc, gcc for compilation, error handling
+"python/pecos-rslib/src/pecos_rslib/selene_simple_runtime.py" = ["S603", "S607"]  # Build tools
+"python/tests/guppy/test_hugr_compilation.py" = ["S603", "S607"]  # cargo, llvm-as for testing
+"python/tests/guppy/test_guppy_llvm_pipeline.py" = ["S603", "S607"]  # cargo check
+"python/quantum-pecos/src/pecos/frontends/hugr_llvm_compiler.py" = ["S603", "S607"]  # cargo build
+"python/quantum-pecos/src/pecos/engines/selene_engine_builder.py" = ["S603", "S607", "FBT002", "TRY301"]  # file command, builder pattern, error handling
 
-[lint.pydocstyle]
-convention = "google"
+# Re-export modules
+"python/quantum-pecos/src/pecos/rslib.py" = ["F403", "F401"]  # Re-exporting all symbols
 
-[lint.isort]
-split-on-trailing-comma = true
+# Stub files (.pyi) - type stubs need flexibility
+"**/*.pyi" = ["ANN401", "PYI021", "PYI048"]  # Any types and stub-specific issues allowed
 
-[lint.flake8-tidy-imports]
-ban-relative-imports = "all"
+# Files with lazy imports for performance (PLC0415)
+"python/pecos-rslib/src/pecos_rslib/bridge_*.py" = ["PLC0415", "ANN401", "SLF001"]  # Bridge modules use lazy loading, Any types, and private member access
+"python/pecos-rslib/src/pecos_rslib/selene_*.py" = ["PLC0415"]  # Selene modules use lazy loading
+"python/pecos-rslib/src/pecos_rslib/guppy_conversion.py" = ["PLC0415"]  # Optional guppy import
+"python/pecos-rslib/examples/*.py" = ["PLC0415", "INP001"]  # Examples can use lazy imports
+"python/quantum-pecos/src/pecos/compilation_pipeline.py" = ["PLC0415"]  # Optional dependency imports
+"python/quantum-pecos/src/pecos/execute_llvm.py" = ["PLC0415"]  # Optional dependency imports
+"python/quantum-pecos/src/pecos/frontends/__init__.py" = ["PLC0415"]  # Optional dependency imports
+"python/quantum-pecos/src/pecos/frontends/guppy_frontend.py" = ["PLC0415", "FBT002", "S603", "S607"]  # Optional imports, backend selection, python subprocess
+"python/quantum-pecos/src/pecos/frontends/guppy_selene_compiler.py" = ["PLC0415", "ARG002"]  # Optional imports, interface method
+"examples/*.py" = ["PLC0415", "INP001", "BLE001"]  # Examples can use lazy imports, don't need __init__.py, and can use broad exception handling
 
-[lint.flake8-type-checking]
-strict = true
+# Interface methods with unused arguments
+"python/quantum-pecos/src/pecos/error_models/*.py" = ["ARG002"]  # Callback interfaces
+"python/quantum-pecos/src/pecos/decoders/**/*.py" = ["ARG002"]  # Decoder interfaces
+"python/quantum-pecos/src/pecos/slr/vars.py" = ["ARG002"]  # Interface compatibility
+
+# Placeholder/stub functions
+"python/pecos-rslib/src/pecos_rslib/__init__.py" = ["N802", "ARG001"]  # Stub class names and functions
+"python/pecos-rslib/src/pecos_rslib/hugr_llvm.py" = ["ARG001"]  # Stub functions
+
+# Files with specific security patterns
+"python/quantum-pecos/src/pecos/engines/cvm/wasm.py" = ["S301"]  # Pickle for trusted circuit metadata
+"python/quantum-pecos/src/pecos/frontends/selene_native_backend.py" = ["S311", "FBT002"]  # Random for test placeholders, verbose flag
+"python/tests/pecos/unit/test_rng.py" = ["S311"]  # Testing RNG bounds
+
+# Multiprocessing worker - must catch all exceptions
+"python/quantum-pecos/src/pecos/engines/hybrid_engine_multiprocessing.py" = ["BLE001"]  # Must catch all in worker
+
+# QEC conventions - specific files with special naming
+"python/quantum-pecos/src/pecos/qeclib/steane/meas/destructive_meas.py" = ["N802"]  # MeasDecode() function
+
+# Files with private member access for internal simulator APIs
+"python/quantum-pecos/src/pecos/simulators/mps_pytket/state.py" = ["SLF001"]  # MPS internal APIs
+"python/tests/guppy/test_helpers.py" = ["SLF001"]  # Test metadata marking
+"python/tests/guppy/test_selene_library_integration.py" = ["SLF001"]  # Testing internal builder methods
+
+# Files with try-except patterns
+"python/pecos-rslib/src/pecos_rslib/selene_bridge_integration.py" = ["TRY300"]  # Bridge integration patterns
+"python/pecos-rslib/src/pecos_rslib/sim_wrapper.py" = ["TRY300"]  # Wrapper patterns
+"python/tests/guppy/test_extended_guppy_features.py" = ["TRY300"]  # Test patterns
+"python/tests/guppy/test_selene_build_process.py" = ["TRY300"]  # Test patterns
+
+# Files with boolean argument patterns (FBT002, FBT003)
+"python/pecos-rslib/src/pecos_rslib/general_noise_factory.py" = ["FBT002"]  # Factory pattern with boolean configs
+"python/pecos-rslib/src/pecos_rslib/phir.py" = ["FBT002"]  # Debug flags
+"python/pecos-rslib/src/pecos_rslib/rspauli_prop.py" = ["FBT002"]  # Track sign option
+"python/quantum-pecos/src/pecos/selene_subprocess_engine.py" = ["FBT002", "S603", "S607"]  # Verbose flag, Selene subprocess
+"python/tests/guppy/test_guppy_sim_builder.py" = ["FBT003"]  # Test builder patterns
+"python/tests/guppy/test_core_quantum_ops.py" = ["FBT003"]  # Test conditionals
+"python/tests/guppy/test_comprehensive_quantum_operations.py" = ["FBT003"]  # Test conditionals
+"python/tests/guppy/test_guppy_result_mechanisms.py" = ["FBT003"]  # Test values
+"python/pecos-rslib/examples/phir_example.py" = ["FBT003"]  # Example code

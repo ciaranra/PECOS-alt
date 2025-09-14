@@ -197,7 +197,10 @@ fn is_guppy_function(py: Python, program: &PyObject) -> PyResult<bool> {
 ///     results = sim(QasmProgram.from_string("H q[0];")).classical(qasm_engine().wasm("custom.wasm")).run(1000)
 #[pyfunction]
 #[pyo3(signature = (program))]
+#[allow(clippy::needless_pass_by_value)] // PyObject must be passed by value for PyO3
 pub fn sim(py: Python, program: PyObject) -> PyResult<PySimBuilder> {
+    use pecos_selene::selene_executable_builder::SeleneExecutableEngineBuilder;
+
     log::debug!(" Rust sim() function called");
     // Try Guppy detection and conversion first
     match detect_and_convert_guppy(py, &program) {
@@ -276,8 +279,6 @@ pub fn sim(py: Python, program: PyObject) -> PyResult<PySimBuilder> {
         log::debug!("Creating PySeleneExecutableSimBuilder for SeleneInterfaceProgram");
         // SeleneInterfaceProgram now uses SeleneExecutableEngine with bridge approach
 
-        use pecos_selene::selene_executable_builder::SeleneExecutableEngineBuilder;
-
         // Create the engine builder with the program (using new bridge approach)
         let engine_builder = SeleneExecutableEngineBuilder::new()
             .selene_interface_program(selene_interface_prog.inner);
@@ -321,6 +322,7 @@ pub(crate) enum SimBuilderInner {
 }
 
 #[pymethods]
+#[allow(clippy::unnecessary_wraps)] // PyO3 convention to return PyResult
 impl PySimBuilder {
     /// Override the auto-selected classical engine
     ///
@@ -328,6 +330,8 @@ impl PySimBuilder {
     ///     # Use custom WASM with QASM
     ///     `sim(qasm).classical(qasm_engine().wasm("custom.wasm")).run(1000)`
     #[pyo3(signature = (engine_builder))]
+    #[allow(clippy::too_many_lines)] // Complex engine builder dispatch logic
+    #[allow(clippy::needless_pass_by_value)] // PyObject must be passed by value for PyO3
     fn classical(&mut self, py: Python, engine_builder: PyObject) -> PyResult<Self> {
         // Extract the engine builder and update our inner builder
         match &mut self.inner {
@@ -552,8 +556,8 @@ impl PySimBuilder {
     }
 
     /// Run the simulation
+    #[allow(clippy::too_many_lines)] // Complex simulation dispatch with multiple engine types
     fn run(&self, shots: usize) -> PyResult<crate::shot_results_bindings::PyShotVec> {
-        log::debug!(" PySimBuilder::run() called with {shots} shots");
         use crate::engine_builders::{
             PyBiasedDepolarizingNoiseModelBuilder, PyDepolarizingNoiseModelBuilder,
             PyGeneralNoiseModelBuilder,
@@ -561,6 +565,8 @@ impl PySimBuilder {
         use crate::engine_builders::{PySparseStabilizerEngineBuilder, PyStateVectorEngineBuilder};
         use crate::shot_results_bindings::PyShotVec;
         use pyo3::exceptions::PyRuntimeError;
+
+        log::debug!(" PySimBuilder::run() called with {shots} shots");
 
         match &self.inner {
             SimBuilderInner::Qasm(builder) => {
@@ -875,76 +881,127 @@ impl PySimBuilder {
                         program.clone_ref(py)
                     };
 
-                    // Build the Selene executable
-                    let selene_sim = py.import("selene_sim")?;
-                    let build_func = selene_sim.getattr("build")?;
-
-                    let tempfile = py.import("tempfile")?;
-                    let tempdir = tempfile.call_method0("mkdtemp")?;
-                    let build_dir = tempdir.extract::<String>()?;
-                    log::debug!(" Building Selene executable in {build_dir}");
-
                     // Get the number of qubits - use explicit value if set, otherwise default to 10
                     let num_qubits = builder.explicit_num_qubits.unwrap_or(10);
                     log::debug!(" Using num_qubits = {num_qubits}");
 
-                    // Create artifacts directory and pecos_config.json BEFORE building
-                    // This ensures the Bridge plugin reads the correct qubit count when initialized
-                    let artifacts_dir = format!("{build_dir}/artifacts");
-                    std::fs::create_dir_all(&artifacts_dir).map_err(|e| {
-                        PyRuntimeError::new_err(format!("Failed to create artifacts dir: {e}"))
-                    })?;
+                    // Try to get cached executable first
+                    let selene_cache = py.import("pecos_rslib.selene_cache")?;
 
-                    // Write the PECOS config file with the correct qubit count
-                    let config_path = format!("{artifacts_dir}/pecos_config.json");
-                    let config_json = serde_json::json!({
-                        "n_qubits": num_qubits,
-                        "ipc_mode": true,
-                    });
-                    std::fs::write(&config_path, config_json.to_string()).map_err(|e| {
-                        PyRuntimeError::new_err(format!("Failed to write pecos_config.json: {e}"))
-                    })?;
-                    log::debug!(
-                        "Created pecos_config.json with n_qubits={num_qubits} at {config_path}"
-                    );
-
-                    // Verify the file was created
-                    if std::path::Path::new(&config_path).exists() {
-                        log::debug!(" Verified pecos_config.json exists at {config_path}");
-                        if let Ok(contents) = std::fs::read_to_string(&config_path) {
-                            log::debug!(" Config contents: {contents}");
-                        }
+                    // Get HUGR bytes for cache key
+                    let hugr_bytes = if hugr_package.bind_borrowed(py).hasattr("to_str")? {
+                        hugr_package
+                            .bind_borrowed(py)
+                            .call_method0("to_str")?
+                            .extract::<String>()?
+                            .into_bytes()
+                    } else if hugr_package.bind_borrowed(py).hasattr("to_json")? {
+                        hugr_package
+                            .bind_borrowed(py)
+                            .call_method0("to_json")?
+                            .extract::<String>()?
+                            .into_bytes()
                     } else {
-                        log::debug!(" ERROR - Config file not found after creation!");
-                    }
+                        // Fallback: serialize to string representation
+                        hugr_package
+                            .bind_borrowed(py)
+                            .str()?
+                            .to_string()
+                            .into_bytes()
+                    };
 
-                    // Set the SELENE_ARTIFACTS_DIR environment variable so Bridge can find the config
-                    unsafe {
-                        std::env::set_var("SELENE_ARTIFACTS_DIR", &artifacts_dir);
-                    }
-                    log::debug!(" Set SELENE_ARTIFACTS_DIR={artifacts_dir}");
+                    // Check cache
+                    let get_cached = selene_cache.getattr("get_cached_executable")?;
+                    let cached_result = get_cached
+                        .call1((pyo3::types::PyBytes::new(py, &hugr_bytes), num_qubits))?;
 
-                    let kwargs = pyo3::types::PyDict::new(py);
-                    kwargs.set_item("build_dir", &build_dir)?;
-                    kwargs.set_item("verbose", false)?;
-                    kwargs.set_item("name", "guppy_prog")?;
+                    let (exec_path, artifacts_path) = if cached_result.is_none() {
+                        log::debug!(" Cache miss - building Selene executable");
 
-                    let _instance = build_func.call((hugr_package,), Some(&kwargs))?;
-                    log::debug!(" Built Selene instance successfully");
+                        // Build the Selene executable
+                        let selene_sim = py.import("selene_sim")?;
+                        let build_func = selene_sim.getattr("build")?;
 
-                    // Get executable and artifacts paths
-                    let pathlib = py.import("pathlib")?;
-                    let path_cls = pathlib.getattr("Path")?;
-                    let build_path = path_cls.call1((build_dir.clone(),))?;
+                        let tempfile = py.import("tempfile")?;
+                        let tempdir = tempfile.call_method0("mkdtemp")?;
+                        let build_dir = tempdir.extract::<String>()?;
+                        log::debug!(" Building Selene executable in {build_dir}");
 
-                    let exec_path =
-                        build_path.call_method1("__truediv__", ("artifacts/program.selene.x",))?;
-                    let artifacts_path = build_path.call_method1("__truediv__", ("artifacts",))?;
+                        // Create artifacts directory and pecos_config.json BEFORE building
+                        // This ensures the Bridge plugin reads the correct qubit count when initialized
+                        let artifacts_dir = format!("{build_dir}/artifacts");
+                        std::fs::create_dir_all(&artifacts_dir).map_err(|e| {
+                            PyRuntimeError::new_err(format!("Failed to create artifacts dir: {e}"))
+                        })?;
 
-                    let exec_path_str = exec_path.call_method0("__str__")?.extract::<String>()?;
-                    let artifacts_path_str = artifacts_path
-                        .call_method0("__str__")?
-                        .extract::<String>()?;
+                        // Write the PECOS config file with the correct qubit count
+                        let config_path = format!("{artifacts_dir}/pecos_config.json");
+                        let config_json = serde_json::json!({
+                            "n_qubits": num_qubits,
+                            "ipc_mode": true,
+                        });
+                        std::fs::write(&config_path, config_json.to_string()).map_err(|e| {
+                            PyRuntimeError::new_err(format!(
+                                "Failed to write pecos_config.json: {e}"
+                            ))
+                        })?;
+                        log::debug!(
+                            "Created pecos_config.json with n_qubits={num_qubits} at {config_path}"
+                        );
+
+                        // Set the SELENE_ARTIFACTS_DIR environment variable so Bridge can find the config
+                        unsafe {
+                            std::env::set_var("SELENE_ARTIFACTS_DIR", &artifacts_dir);
+                        }
+                        log::debug!(" Set SELENE_ARTIFACTS_DIR={artifacts_dir}");
+
+                        let kwargs = pyo3::types::PyDict::new(py);
+                        kwargs.set_item("build_dir", &build_dir)?;
+                        kwargs.set_item("verbose", false)?;
+                        kwargs.set_item("name", "guppy_prog")?;
+
+                        let _instance = build_func.call((hugr_package,), Some(&kwargs))?;
+                        log::debug!(" Built Selene instance successfully");
+
+                        // Get executable and artifacts paths
+                        let pathlib = py.import("pathlib")?;
+                        let path_cls = pathlib.getattr("Path")?;
+                        let build_path = path_cls.call1((build_dir.clone(),))?;
+
+                        let exec_path = build_path
+                            .call_method1("__truediv__", ("artifacts/program.selene.x",))?;
+                        let artifacts_path =
+                            build_path.call_method1("__truediv__", ("artifacts",))?;
+
+                        // Cache the executable for future use
+                        let cache_executable = selene_cache.getattr("cache_executable")?;
+                        let (cached_exec, cached_artifacts) = cache_executable
+                            .call1((
+                                pyo3::types::PyBytes::new(py, &hugr_bytes),
+                                num_qubits,
+                                &exec_path,
+                                &artifacts_path,
+                            ))?
+                            .extract::<(PyObject, PyObject)>()?;
+
+                        (cached_exec, cached_artifacts)
+                    } else {
+                        log::debug!(" Cache hit - using cached Selene executable");
+                        let (cached_exec, cached_artifacts) =
+                            cached_result.extract::<(PyObject, PyObject)>()?;
+
+                        // Set SELENE_ARTIFACTS_DIR for the cached artifacts
+                        let artifacts_str = cached_artifacts.bind_borrowed(py).str()?.to_string();
+                        unsafe {
+                            std::env::set_var("SELENE_ARTIFACTS_DIR", &artifacts_str);
+                        }
+                        log::debug!(" Set SELENE_ARTIFACTS_DIR={artifacts_str}");
+
+                        (cached_exec, cached_artifacts)
+                    };
+
+                    let exec_path_str = exec_path.bind_borrowed(py).str()?.to_string();
+                    let artifacts_path_str = artifacts_path.bind_borrowed(py).str()?.to_string();
 
                     log::debug!(" Selene executable at: {exec_path_str}");
                     log::debug!(" Artifacts at: {artifacts_path_str}");
@@ -1006,6 +1063,10 @@ impl PySimBuilder {
                 // during the transition from PySimBuilder to SimBuilder.
                 // For now, we'll build and run here as a temporary solution.
                 Python::with_gil(|py| -> PyResult<PyShotVec> {
+                    use pecos_engines::{Data, Shot, ShotVec};
+                    use std::collections::BTreeMap;
+                    use std::io::Write;
+
                     let program = builder
                         .program
                         .as_ref()
@@ -1152,12 +1213,9 @@ impl PySimBuilder {
                     // It causes a hang, likely due to IPC issues
 
                     // Force flush stderr to ensure debug messages appear
-                    use std::io::Write;
                     let _ = std::io::stderr().flush();
 
                     // Convert Selene results to PECOS ShotVec format
-                    use pecos_engines::{Data, Shot, ShotVec};
-                    use std::collections::BTreeMap;
                     let mut shot_vec = ShotVec { shots: Vec::new() };
 
                     log::debug!(" Created shot_vec");
@@ -1373,6 +1431,7 @@ impl PySimBuilder {
     }
 
     /// Build the simulation (for multiple runs)
+    #[allow(clippy::too_many_lines)] // Complex builder pattern with multiple engine types
     fn build(&self) -> PyResult<PyObject> {
         use crate::engine_builders::{
             PyBiasedDepolarizingNoiseModelBuilder, PyDepolarizingNoiseModelBuilder,

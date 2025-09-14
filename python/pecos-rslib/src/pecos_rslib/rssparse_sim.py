@@ -18,13 +18,17 @@ performance compared to dense state vector representations.
 
 from __future__ import annotations
 
-# ruff: noqa: SLF001
-
+import logging
 from typing import TYPE_CHECKING, NoReturn
 
 from pecos_rslib._pecos_rslib import SparseSim as RustSparseSim
 
+# Gate bindings require consistent interfaces even if not all parameters are used.
+
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
+    from pecos.circuits import QuantumCircuit
     from pecos.typing import SimulatorGateParams
 
 
@@ -35,7 +39,7 @@ class SparseSimRs:
     circuits that can be represented using the stabilizer formalism with reduced memory requirements.
     """
 
-    def __init__(self, num_qubits: int):
+    def __init__(self, num_qubits: int) -> None:
         """Initialize the Rust-based sparse simulator.
 
         Args:
@@ -92,7 +96,7 @@ class SparseSimRs:
 
     def run_circuit(
         self,
-        circuit,
+        circuit: "QuantumCircuit",
         removed_locations: set[int] | None = None,
     ) -> dict[int, int]:
         """Execute a quantum circuit.
@@ -118,7 +122,11 @@ class SparseSimRs:
 
         return results
 
-    def add_faults(self, circuit, removed_locations: set[int] | None = None) -> None:
+    def add_faults(
+        self,
+        circuit: "QuantumCircuit",
+        removed_locations: set[int] | None = None,
+    ) -> None:
         """Add faults to the simulator by running a circuit.
 
         Args:
@@ -152,14 +160,14 @@ class SparseSimRs:
         self,
         *,
         verbose: bool = True,
-        print_y: bool = True,  # noqa: ARG002
+        _print_y: bool = True,
         print_destabs: bool = False,
     ) -> str | tuple[str, str]:
         """Print stabilizer tableau(s).
 
         Args:
             verbose: Whether to print to stdout.
-            print_y: Whether to print Y operators (unused).
+            _print_y: Whether to print Y operators (unused - kept for API compatibility).
             print_destabs: Whether to also print destabilizers.
 
         Returns:
@@ -174,13 +182,12 @@ class SparseSimRs:
                 print("Destabilizers:")
                 print(destabs)
             return stabs, destabs
-        else:
-            if verbose:
-                print("Stabilizers:")
-                print(stabs)
-            return stabs
+        if verbose:
+            print("Stabilizers:")
+            print(stabs)
+        return stabs
 
-    def logical_sign(self, logical_op) -> NoReturn:  # noqa: ARG002
+    def logical_sign(self, logical_op: object) -> NoReturn:
         """Calculate logical sign (not implemented).
 
         Args:
@@ -195,8 +202,13 @@ class SparseSimRs:
         raise NotImplementedError(msg)
 
     def refactor(
-        self, xs, zs, choose=None, prefer=None, protected=None
-    ) -> NoReturn:  # noqa: ARG002
+        self,
+        xs: object,
+        zs: object,
+        choose: object | None = None,
+        prefer: object | None = None,
+        protected: object | None = None,
+    ) -> NoReturn:
         """Refactor stabilizer tableau (not implemented).
 
         Args:
@@ -214,7 +226,7 @@ class SparseSimRs:
         msg = "refactor method not implemented yet"
         raise NotImplementedError(msg)
 
-    def find_stab(self, xs, zs) -> NoReturn:  # noqa: ARG002
+    def find_stab(self, xs: object, zs: object) -> NoReturn:
         """Find stabilizer (not implemented).
 
         Args:
@@ -242,7 +254,7 @@ class SparseSimRs:
 
 
 class TableauWrapper:
-    def __init__(self, sim, *, is_stab: bool):
+    def __init__(self, sim: SparseSimRs, *, is_stab: bool) -> None:
         self._sim = sim
         self._is_stab = is_stab
 
@@ -265,8 +277,7 @@ class TableauWrapper:
 
 
 def adjust_tableau_string(line: str, *, is_stab: bool) -> str:
-    """
-    Adjust the tableau string to ensure the sign part always takes up two spaces
+    """Adjust the tableau string to ensure the sign part always takes up two spaces
     and convert 'Y' to 'W'. For destabilizers, always use two spaces for the sign.
 
     Args:
@@ -296,7 +307,7 @@ def adjust_tableau_string(line: str, *, is_stab: bool) -> str:
 
 # Define the gate dictionary
 gate_dict = {
-    "I": lambda sim, q, **params: None,  # noqa: ARG005
+    "I": lambda sim, q, **params: None,
     "X": lambda sim, q, **params: sim._sim.run_1q_gate("X", q, params),
     "Y": lambda sim, q, **params: sim._sim.run_1q_gate("Y", q, params),
     "Z": lambda sim, q, **params: sim._sim.run_1q_gate("Z", q, params),
@@ -320,7 +331,7 @@ gate_dict = {
     "F3dg": lambda sim, q, **params: sim._sim.run_1q_gate("F3dg", q, params),
     "F4": lambda sim, q, **params: sim._sim.run_1q_gate("F4", q, params),
     "F4dg": lambda sim, q, **params: sim._sim.run_1q_gate("F4dg", q, params),
-    "II": lambda sim, qs, **params: None,  # noqa: ARG005
+    "II": lambda sim, qs, **params: None,
     "CX": lambda sim, qs, **params: sim._sim.run_2q_gate("CX", qs, params),
     "CNOT": lambda sim, qs, **params: sim._sim.run_2q_gate("CX", qs, params),
     "CY": lambda sim, qs, **params: sim._sim.run_2q_gate("CY", qs, params),

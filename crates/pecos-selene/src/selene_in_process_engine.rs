@@ -47,6 +47,11 @@ pub struct SeleneInProcessEngine {
 }
 
 impl SeleneInProcessEngine {
+    /// Create a new `SeleneInProcessEngine`
+    ///
+    /// # Errors
+    ///
+    /// Currently always returns Ok, but may return errors in future
     pub fn new(num_qubits: usize) -> Result<Self, PecosError> {
         Ok(Self {
             config: SeleneInProcessConfig {
@@ -129,7 +134,7 @@ impl SeleneInProcessEngine {
             )));
         }
 
-        log::info!("Created shared library at {plugin_so_path:?}");
+        log::info!("Created shared library at {}", plugin_so_path.display());
 
         // Initialize the engine interface so the bridge can communicate with us
         initialize_engine_interface(Arc::new(Mutex::new(self.clone())));
@@ -182,7 +187,7 @@ impl SeleneInProcessEngine {
     }
 
     /// Execute the Interface Plugin
-    fn execute_plugin(&mut self) -> Result<(), PecosError> {
+    fn execute_plugin(&mut self) {
         log::info!("Executing Interface Plugin for shot {}", self.shot_count);
 
         if let Some(entry) = &self.entry_point {
@@ -200,7 +205,6 @@ impl SeleneInProcessEngine {
         }
 
         self.shot_count += 1;
-        Ok(())
     }
 }
 
@@ -243,9 +247,9 @@ impl ClassicalEngine for SeleneInProcessEngine {
     }
 
     fn get_results(&self) -> Result<Shot, PecosError> {
-        let mut shot = Shot::default();
-        shot.data = self.measurement_results.clone();
-        Ok(shot)
+        Ok(Shot {
+            data: self.measurement_results.clone(),
+        })
     }
 
     fn compile(&self) -> Result<(), PecosError> {
@@ -273,7 +277,7 @@ impl ControlEngine for SeleneInProcessEngine {
         self.load_interface_plugin()?;
 
         // Execute it
-        self.execute_plugin()?;
+        self.execute_plugin();
 
         // Get initial commands
         let commands = self.generate_commands()?;
@@ -312,7 +316,7 @@ impl Engine for SeleneInProcessEngine {
 
     fn process(&mut self, _input: Self::Input) -> Result<Self::Output, PecosError> {
         self.load_interface_plugin()?;
-        self.execute_plugin()?;
+        self.execute_plugin();
 
         // Process all operations
         while !self.operation_queue.is_empty() {

@@ -82,9 +82,9 @@ fn test_hugr_llvm_compilation_availability() {
 
     #[cfg(feature = "hugr-013")]
     {
-        println!("✓ HUGR 0.13 support is enabled");
-        println!("✓ Basic HUGR to LLVM IR generation is available");
-        println!("✓ QIS (Quantum Instruction Set) lowering is implemented");
+        println!("HUGR 0.13 support is enabled");
+        println!("Basic HUGR to LLVM IR generation is available");
+        println!("QIS (Quantum Instruction Set) lowering is implemented");
         println!();
         println!("Current implementation:");
         println!("- Generates QIS-compatible LLVM IR");
@@ -96,7 +96,7 @@ fn test_hugr_llvm_compilation_availability() {
 
     #[cfg(not(feature = "hugr-013"))]
     {
-        println!("✗ HUGR 0.13 support is not enabled");
+        println!("HUGR 0.13 support is not enabled");
         println!("  Enable with: cargo build --features hugr-013");
     }
 }

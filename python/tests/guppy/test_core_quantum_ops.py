@@ -1,18 +1,15 @@
-#!/usr/bin/env python3
 """Core quantum operations tests - simplified version."""
 
-import sys
-
 import pytest
+from pecos.frontends.guppy_api import sim
+from pecos_rslib import state_vector
 
 
 def decode_integer_results(results: list[int], n_bits: int) -> list[tuple[bool, ...]]:
     """Decode integer-encoded results back to tuples of booleans."""
     decoded = []
     for val in results:
-        bits = []
-        for i in range(n_bits):
-            bits.append(bool(val & (1 << i)))
+        bits = [bool(val & (1 << i)) for i in range(n_bits)]
         decoded.append(tuple(bits))
     return decoded
 
@@ -45,15 +42,11 @@ def get_measurement_tuples(results: dict, n_bits: int) -> list[tuple[bool, ...]]
     return decode_integer_results(measurements, n_bits)
 
 
-sys.path.append("python/quantum-pecos/src")
-
 try:
     from guppylang import guppy
-    from guppylang.std.angles import angle, pi
+    from guppylang.std.angles import pi
     from guppylang.std.builtins import owned
     from guppylang.std.quantum import (
-        ch,
-        crz,
         cx,
         cy,
         cz,
@@ -66,10 +59,7 @@ try:
         ry,
         rz,
         s,
-        sdg,
         t,
-        tdg,
-        toffoli,
         x,
         y,
         z,
@@ -78,9 +68,6 @@ try:
     GUPPY_AVAILABLE = True
 except ImportError:
     GUPPY_AVAILABLE = False
-
-from pecos.frontends.guppy_api import sim
-from pecos_rslib import state_vector
 
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
@@ -390,10 +377,53 @@ class TestControlFlow:
 
     def test_conditional_ops(self) -> None:
         """Test conditional quantum operations with boolean constants."""
-        # Skip this test due to function call compilation issues
-        pytest.skip(
-            "Function calls with parameters not yet supported in HUGR to LLVM compilation",
+        # Fixed: Using @owned annotation for qubit parameters
+
+        @guppy
+        def apply_conditional_gate(q: qubit @ owned, condition: bool) -> qubit:
+            """Apply X gate conditionally based on boolean parameter."""
+            if condition:
+                x(q)
+            # else: do nothing (identity)
+            return q
+
+        @guppy
+        def test_true_condition() -> bool:
+            """Test with condition=True."""
+            q = qubit()
+            q = apply_conditional_gate(q, True)
+            return measure(q)
+
+        @guppy
+        def test_false_condition() -> bool:
+            """Test with condition=False."""
+            q = qubit()
+            q = apply_conditional_gate(q, False)
+            return measure(q)
+
+        # Test with True condition - should apply X gate
+        results_true = (
+            sim(test_true_condition).qubits(5).quantum(state_vector()).run(10)
         )
+        measurements_true = results_true.get(
+            "measurements",
+            results_true.get("measurement_1", results_true.get("result", [])),
+        )
+        assert all(
+            r == 1 for r in measurements_true
+        ), "True condition should apply X gate"
+
+        # Test with False condition - should not apply X gate
+        results_false = (
+            sim(test_false_condition).qubits(5).quantum(state_vector()).run(10)
+        )
+        measurements_false = results_false.get(
+            "measurements",
+            results_false.get("measurement_1", results_false.get("result", [])),
+        )
+        assert all(
+            r == 0 for r in measurements_false
+        ), "False condition should not apply X gate"
 
     def test_loop_with_quantum(self) -> None:
         """Test loop with quantum operations."""
@@ -416,8 +446,3 @@ class TestControlFlow:
         )
         values = set(measurements)
         assert len(values) >= 2  # At least some variation
-
-
-if __name__ == "__main__":
-    print("Running core quantum operations tests...")
-    pytest.main([__file__, "-v"])

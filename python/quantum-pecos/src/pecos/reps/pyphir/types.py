@@ -15,7 +15,6 @@ This module provides convenient imports for all PyPHIR (Python PECOS Medium-leve
 including blocks, data types, instructions, and operations.
 """
 
-
 # ruff: noqa: F401
 
 from pecos.reps.pyphir import block_types as block

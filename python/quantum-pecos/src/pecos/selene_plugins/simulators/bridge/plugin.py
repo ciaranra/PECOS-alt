@@ -13,15 +13,14 @@ from selene_core import Simulator
 
 @dataclass
 class PecosBridgePlugin(Simulator):
-    """A plugin for using PECOS quantum simulation infrastructure
-    as the backend for Selene quantum circuit execution.
+    """A plugin for using PECOS quantum simulation infrastructure as the backend for Selene quantum circuit execution.
 
     This plugin bridges Selene's execution model with PECOS's
     ByteMessage-based quantum simulation system.
     """
 
-    def __post_init__(self):
-        pass
+    def __post_init__(self) -> None:
+        """Post-initialization hook."""
 
     @property
     def library_file(self) -> Path:

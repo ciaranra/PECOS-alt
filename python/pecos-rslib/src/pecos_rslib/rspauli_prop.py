@@ -18,12 +18,7 @@ Clifford operations.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from pecos_rslib._pecos_rslib import PauliProp as RustPauliProp
-
-if TYPE_CHECKING:
-    pass
 
 
 class PauliPropRs:
@@ -33,7 +28,7 @@ class PauliPropRs:
     Clifford circuits. Useful for fault propagation and stabilizer simulations.
     """
 
-    def __init__(self, num_qubits: int | None = None, track_sign: bool = False):
+    def __init__(self, num_qubits: int | None = None, track_sign: bool = False) -> None:
         """Initialize the Rust-backed Pauli propagation simulator.
 
         Args:

@@ -394,8 +394,10 @@ def test_hybrid_engine_no_noise(simulator: str) -> None:
     phir_folder = Path(__file__).parent.parent / "phir"
 
     sim = HybridEngine(qsim=simulator)
+    with (phir_folder / "bell_qparallel.phir.json").open() as f:
+        program = json.load(f)
     results = sim.run(
-        program=json.load(open(phir_folder / "bell_qparallel.phir.json")),
+        program=program,
         shots=n_shots,
     )
 
@@ -484,7 +486,9 @@ def test_hybrid_engine_noisy(simulator: str) -> None:
         },
     )
     sim = HybridEngine(qsim=simulator, error_model=generic_errors)
+    with (phir_folder / "example1_no_wasm.phir.json").open() as f:
+        program = json.load(f)
     sim.run(
-        program=json.load(open(phir_folder / "example1_no_wasm.phir.json")),
+        program=program,
         shots=n_shots,
     )

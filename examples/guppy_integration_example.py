@@ -99,7 +99,7 @@ def example_bell_state() -> None:
     except RuntimeError as e:
         print(f"[ERROR] Runtime error: {e}")
         print("This is expected if compilation tools are not set up")
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         print(f"[ERROR] Unexpected error: {e}")
         print("This is expected if compilation tools are not set up")
 

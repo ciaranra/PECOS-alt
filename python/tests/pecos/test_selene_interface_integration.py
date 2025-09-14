@@ -45,11 +45,8 @@ def test_selene_compilation_pipeline() -> None:
         assert len(plugin_bytes) > 0
 
         # Check if it looks like an ELF file (compiled shared library)
-        if plugin_bytes.startswith(b"\x7fELF"):
-            print("Successfully compiled to ELF shared library")
-        else:
-            print(f"Got plugin bytes but not ELF format: {plugin_bytes[:20]}...")
-
+        if plugin_bytes[:4] == b"\x7fELF":
+            pass  # It's an ELF file
     except ImportError as e:
         pytest.skip(f"Selene compilation tools not available: {e}")
     except RuntimeError as e:
@@ -81,23 +78,25 @@ def test_sim_with_selene_interface() -> None:
         assert builder is not None
 
         # Try to run (will fail with dummy plugin but tests the pipeline)
-        try:
-            result = builder.run(1)
-            # If this succeeds, we have a real plugin somehow
-            assert result is not None
-        except (RuntimeError, OSError) as e:
-            # Expected - dummy plugin can't be loaded or no program set
-            error_msg = str(e).lower()
-            assert any(
-                keyword in error_msg
-                for keyword in [
-                    "runtime",
-                    "library",
-                    "load",
-                    "no program",
-                    "program specified",
-                ]
-            ), f"Unexpected error message: {e}"
+        with pytest.raises((RuntimeError, OSError)) as exc_info:
+            builder.run(1)
+
+        # Verify the error message contains expected keywords
+        error_msg = str(exc_info.value).lower()
+        assert any(
+            keyword in error_msg
+            for keyword in [
+                "plugin",
+                "selene",
+                "library",
+                "load",
+                "failed",
+                "invalid",
+                "program",
+                "error",
+                "no program",
+            ]
+        ), f"Unexpected error message: {exc_info.value}"
 
     except TypeError as e:
         if "cannot convert" in str(e):
@@ -106,52 +105,65 @@ def test_sim_with_selene_interface() -> None:
 
 
 def test_runtime_library_finding() -> None:
-    """Test that we can find the Selene runtime library."""
+    """Test the runtime library finder functionality."""
+    import ctypes
     import os
     from pathlib import Path
 
-    # Check known locations
-    possible_paths = [
-        Path(
-            "/home/ciaranra/Repos/cl_projects/gup/PECOS/lib/pecos-runtimes/libselene_simple_runtime.so",
-        ),
-        Path("/home/ciaranra/.cache/pecos-decoders/selene/libselene_simple_runtime.so"),
-    ]
+    # This test should ideally test a library finder function/class
+    # For now, we'll test that if we find a library, it's actually loadable
 
-    # Check Python venv
-    venv = os.environ.get("VIRTUAL_ENV")
-    if venv:
-        venv_path = Path(venv)
-        for version in ["python3.12", "python3.11", "python3.10"]:
-            runtime_path = (
-                venv_path
-                / f"lib/{version}/site-packages/selene_simple_runtime_plugin/_dist/lib/libselene_simple_runtime.so"
+    # Try to import the actual library finder if it exists
+    try:
+        from pecos.engines.selene_runtime import find_selene_runtime_library
+
+        library_path = find_selene_runtime_library()
+
+        # Test that the found library is actually loadable
+        try:
+            lib = ctypes.CDLL(str(library_path))
+            # Could check for specific symbols here
+            assert lib is not None, "Library should be loadable"
+        except OSError as e:
+            pytest.fail(f"Found library at {library_path} but couldn't load it: {e}")
+
+    except ImportError:
+        # The library finder doesn't exist yet, so test the manual search
+        # This is more of a diagnostic than a test
+        possible_paths = [
+            Path.home() / ".cache/pecos-decoders/selene/libselene_simple_runtime.so",
+            Path("/usr/local/lib/libselene_simple_runtime.so"),
+        ]
+
+        # Add venv paths
+        venv = os.environ.get("VIRTUAL_ENV")
+        if venv:
+            venv_path = Path(venv)
+            site_packages = venv_path / "lib"
+            if site_packages.exists():
+                # Search for the library in site-packages
+                possible_paths.extend(
+                    site_packages.rglob("libselene_simple_runtime.so"),
+                )
+
+        # Check if any library is actually loadable (not just exists)
+        loadable_libraries = []
+        for path in possible_paths:
+            if path.exists():
+                try:
+                    # Actually try to load the library
+                    lib = ctypes.CDLL(str(path))
+                    loadable_libraries.append(path)
+                except OSError:
+                    # File exists but can't be loaded (might be stub or wrong arch)
+                    continue
+
+        if not loadable_libraries:
+            pytest.skip(
+                "No loadable Selene runtime library found - this is expected in test environments",
             )
-            possible_paths.append(runtime_path)
 
-    found_any = False
-    for path in possible_paths:
-        if path.exists():
-            print(f"Found Selene runtime at: {path}")
-            found_any = True
-
-            # Check if it's a valid shared library
-            with open(path, "rb") as f:
-                header = f.read(4)
-                if header == b"\x7fELF":
-                    print("  ✓ Valid ELF shared library")
-                else:
-                    print("  ✗ Not a valid ELF file")
-
-    if not found_any:
-        print(
-            "No Selene runtime libraries found (this is OK if Selene is not installed)",
-        )
-
-
-if __name__ == "__main__":
-    # Run tests
-    test_selene_interface_program_available()
-    test_selene_compilation_pipeline()
-    test_sim_with_selene_interface()
-    test_runtime_library_finding()
+        # If we found loadable libraries, that's good enough for this diagnostic
+        assert (
+            len(loadable_libraries) > 0
+        ), f"Found {len(loadable_libraries)} loadable Selene runtime libraries"

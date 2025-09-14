@@ -34,6 +34,7 @@ class SeleneSubprocessEngine:
     """
 
     def __init__(self, config: SeleneSubprocessConfig) -> None:
+        """Initialize engine with configuration."""
         self.config = config
         self.results = []
 
@@ -79,11 +80,11 @@ class SeleneSubprocessEngine:
             }
 
         # Write configuration
-        with open(config_path, "w") as f:
+        with config_path.open("w") as f:
             yaml.dump(selene_config, f)
 
-        logger.info(f"Running Selene executable: {self.config.executable_path}")
-        logger.debug(f"Configuration: {selene_config}")
+        logger.info("Running Selene executable: %s", self.config.executable_path)
+        logger.debug("Configuration: %s", selene_config)
 
         # Run Selene executable
         try:
@@ -96,11 +97,19 @@ class SeleneSubprocessEngine:
                 cwd=str(self.config.working_dir),
                 timeout=30,  # 30 second timeout
             )
-
+        except subprocess.TimeoutExpired as e:
+            logger.exception("Selene execution timed out")
+            msg = "Selene execution timed out after 30 seconds"
+            raise RuntimeError(msg) from e
+        except Exception:
+            logger.exception("Error running Selene")
+            raise
+        else:
+            # Process result if no exceptions occurred
             if result.returncode != 0:
-                logger.error(f"Selene returned error code {result.returncode}")
+                logger.error("Selene returned error code %s", result.returncode)
                 stderr_text = result.stderr.decode("utf-8", errors="replace")
-                logger.error(f"Stderr: {stderr_text}")
+                logger.error("Stderr: %s", stderr_text)
                 msg = f"Selene execution failed: {stderr_text}"
                 raise RuntimeError(msg)
 
@@ -109,19 +118,11 @@ class SeleneSubprocessEngine:
             results = self._parse_results(stdout_text)
 
             if self.config.verbose:
-                logger.info(f"Stdout: {stdout_text}")
+                logger.info("Stdout: %s", stdout_text)
                 stderr_text = result.stderr.decode("utf-8", errors="replace")
-                logger.info(f"Stderr: {stderr_text}")
+                logger.info("Stderr: %s", stderr_text)
 
             return results
-
-        except subprocess.TimeoutExpired:
-            logger.exception("Selene execution timed out")
-            msg = "Selene execution timed out after 30 seconds"
-            raise RuntimeError(msg)
-        except Exception as e:
-            logger.exception(f"Error running Selene: {e}")
-            raise
 
     def _parse_results(self, output: str) -> list[dict[str, Any]]:
         """Parse Selene output for results."""
@@ -129,23 +130,23 @@ class SeleneSubprocessEngine:
         current_shot = {}
 
         for line in output.split("\n"):
-            line = line.strip()
-            if not line:
+            stripped_line = line.strip()
+            if not stripped_line:
                 continue
 
             # Look for result tags
-            if line.startswith("USER:INT:"):
+            if stripped_line.startswith("USER:INT:"):
                 # Parse user output: USER:INT:name:value
-                parts = line.split(":")
+                parts = stripped_line.split(":")
                 if len(parts) >= 4:
                     name = parts[2]
                     try:
                         value = int(parts[3])
                         current_shot[name] = value
                     except ValueError:
-                        logger.warning(f"Could not parse value: {parts[3]}")
+                        logger.warning("Could not parse value: %s", parts[3])
 
-            elif line.startswith("SHOT:END"):
+            elif stripped_line.startswith("SHOT:END"):
                 # End of shot, save results
                 if current_shot:
                     results.append(current_shot)

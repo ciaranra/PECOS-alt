@@ -12,7 +12,7 @@ use std::path::PathBuf;
 pub enum SeleneProgram {
     /// HUGR 0.13 (for guppylang compatibility)
     #[cfg(feature = "hugr-013")]
-    Hugr(crate::hugr_013_support::Hugr),
+    Hugr(Box<crate::hugr_013_support::Hugr>),
     /// HUGR serialized bytes (to be deserialized during build)
     #[cfg(feature = "hugr-013")]
     HugrBytes(Vec<u8>),

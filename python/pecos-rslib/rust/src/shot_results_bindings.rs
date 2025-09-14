@@ -115,7 +115,11 @@ impl PyShotMap {
     fn get_integers(&self, register: &str) -> PyResult<Vec<i64>> {
         // Try different integer types in order
         if let Ok(u64_values) = self.inner.try_bits_as_u64(register) {
-            Ok(u64_values.into_iter().map(|v| v as i64).collect())
+            // Convert u64 to i64, saturating at i64::MAX if the value is too large
+            Ok(u64_values
+                .into_iter()
+                .map(|v| i64::try_from(v).unwrap_or(i64::MAX))
+                .collect())
         } else if let Ok(i64_values) = self.inner.try_i64s(register) {
             Ok(i64_values)
         } else if let Ok(u32_values) = self.inner.try_u32s(register) {
@@ -133,7 +137,7 @@ impl PyShotMap {
     ///     register: Name of the register
     ///
     /// Returns:
-    ///     list[str]: List of binary string values (e.g., ["0101", "1010"])
+    ///     list[str]: List of binary string values (e.g., `["0101", "1010"]`)
     ///
     /// Raises:
     ///     `RuntimeError`: If register doesn't exist or contains non-bit data

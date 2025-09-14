@@ -1,20 +1,22 @@
 """Tests for the modern sim() API."""
 
 import pytest
-from pecos_rslib.sim import sim
-from pecos_rslib import qasm_engine, state_vector, sparse_stabilizer
-from pecos_rslib._pecos_rslib import (
-    QasmProgram,
-    DepolarizingNoiseModelBuilder,
-    BiasedDepolarizingNoiseModelBuilder,
-    GeneralNoiseModelBuilder,
+from pecos_rslib import (
+    biased_depolarizing_noise,
+    depolarizing_noise,
+    general_noise,
+    qasm_engine,
+    sparse_stabilizer,
+    state_vector,
 )
+from pecos_rslib._pecos_rslib import QasmProgram
+from pecos_rslib.sim import sim
 
 
 class TestSimAPI:
     """Test the modern sim() API for QASM simulations."""
 
-    def test_basic_simulation(self):
+    def test_basic_simulation(self) -> None:
         """Test basic QASM simulation with sim() API."""
         qasm = """
         OPENQASM 2.0;
@@ -34,7 +36,7 @@ class TestSimAPI:
         assert "c" in results
         assert all(val == 3 for val in results["c"])
 
-    def test_deterministic_simulation(self):
+    def test_deterministic_simulation(self) -> None:
         """Test deterministic QASM simulation using seed parameter."""
         qasm = """
         OPENQASM 2.0;
@@ -59,7 +61,7 @@ class TestSimAPI:
         # This might fail with very low probability
         assert results1["c"] != results3["c"]
 
-    def test_quantum_engines(self):
+    def test_quantum_engines(self) -> None:
         """Test different quantum engines."""
         qasm = """
         OPENQASM 2.0;
@@ -90,7 +92,7 @@ class TestSimAPI:
         )
         assert all(val == 3 for val in results_stab["c"])  # Both qubits should be 1
 
-    def test_noise_models(self):
+    def test_noise_models(self) -> None:
         """Test different noise models."""
         qasm = """
         OPENQASM 2.0;
@@ -109,7 +111,7 @@ class TestSimAPI:
         assert all(val == 1 for val in results_no_noise["c"])
 
         # Test with depolarizing noise
-        noise = DepolarizingNoiseModelBuilder().with_uniform_probability(0.1)
+        noise = depolarizing_noise().with_uniform_probability(0.1)
         results_with_noise = (
             sim(program).classical(engine).noise(noise).seed(42).run(1000).to_dict()
         )
@@ -120,7 +122,7 @@ class TestSimAPI:
         assert zeros > 0  # Should have some errors
         assert ones > zeros  # But most should still be correct
 
-    def test_biased_depolarizing_noise(self):
+    def test_biased_depolarizing_noise(self) -> None:
         """Test biased depolarizing noise model."""
         qasm = """
         OPENQASM 2.0;
@@ -135,7 +137,7 @@ class TestSimAPI:
         engine = qasm_engine().program(program)
 
         # Test with biased depolarizing noise
-        noise = BiasedDepolarizingNoiseModelBuilder().with_uniform_probability(0.05)
+        noise = biased_depolarizing_noise().with_uniform_probability(0.05)
         results = (
             sim(program).classical(engine).noise(noise).seed(42).run(1000).to_dict()
         )
@@ -145,7 +147,7 @@ class TestSimAPI:
         assert ones > 900  # Most should be correct
         assert ones < 1000  # But some errors
 
-    def test_general_noise_model(self):
+    def test_general_noise_model(self) -> None:
         """Test general noise model."""
         qasm = """
         OPENQASM 2.0;
@@ -160,7 +162,7 @@ class TestSimAPI:
         engine = qasm_engine().program(program)
 
         # Test with general noise model
-        noise = GeneralNoiseModelBuilder()
+        noise = general_noise()
         results = sim(program).classical(engine).noise(noise).run(100).to_dict()
 
         # General noise model may introduce errors even without explicit configuration
@@ -168,15 +170,15 @@ class TestSimAPI:
         assert "c" in results
         assert len(results["c"]) == 100
 
-    def test_error_handling(self):
+    def test_error_handling(self) -> None:
         """Test error handling for invalid inputs."""
         # Invalid QASM should raise an error
-        with pytest.raises(Exception):  # Could be RuntimeError or ValueError
-            program = QasmProgram.from_string("invalid qasm")
-            engine = qasm_engine().program(program)
+        program = QasmProgram.from_string("invalid qasm")
+        engine = qasm_engine().program(program)
+        with pytest.raises((RuntimeError, ValueError)):
             sim(program).classical(engine).run(10).to_dict()
 
-    def test_multiple_registers(self):
+    def test_multiple_registers(self) -> None:
         """Test simulation with multiple classical registers."""
         qasm = """
         OPENQASM 2.0;
@@ -200,7 +202,7 @@ class TestSimAPI:
         assert all(val == 1 for val in results["c1"])
         assert all(val == 1 for val in results["c2"])
 
-    def test_large_circuit(self):
+    def test_large_circuit(self) -> None:
         """Test simulation of a larger circuit."""
         qasm = """
         OPENQASM 2.0;

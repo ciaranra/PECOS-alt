@@ -96,7 +96,7 @@ fn test_arbitrary_register_names() {
                 value == &0 || value == &3,
                 "Invalid Bell state outcome {value} for register '{register_name}'. Expected 0 or 3."
             );
-            println!("  ✓ Register '{register_name}' correctly contains value {value}");
+            println!("  Register '{register_name}' correctly contains value {value}");
         } else {
             panic!("Register '{register_name}' has unexpected data type");
         }
@@ -153,7 +153,7 @@ fn test_fuzzed_register_names() {
                 value == &0 || value == &3,
                 "Invalid Bell state outcome {value} for register '{register_name}'. Expected 0 or 3."
             );
-            println!("  ✓ Register '{register_name}' correctly contains value {value}");
+            println!("  Register '{register_name}' correctly contains value {value}");
         }
     }
 }
@@ -226,5 +226,5 @@ attributes #0 = { "EntryPoint" }
         }
     }
 
-    println!("✓ All registers correctly preserved with their names");
+    println!("All registers correctly preserved with their names");
 }

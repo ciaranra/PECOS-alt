@@ -41,6 +41,11 @@ pub struct CompilationResult {
 /// Process a HUGR for quantum compilation
 ///
 /// This applies quantum-specific optimization passes similar to Selene's `QSystemPass`
+///
+/// # Errors
+///
+/// Currently always succeeds, but may return errors in the future when
+/// quantum-specific passes are implemented
 #[cfg(feature = "hugr-013")]
 pub fn process_hugr(_hugr: &mut Hugr) -> Result<()> {
     // TODO: Apply quantum-specific passes
@@ -58,6 +63,10 @@ pub fn process_hugr(_hugr: &mut Hugr) -> Result<()> {
 ///
 /// This is the main entry point for HUGR to LLVM compilation.
 /// Currently returns a placeholder as we need to implement the actual compilation.
+///
+/// # Errors
+///
+/// Returns an error because HUGR to LLVM compilation is not yet implemented
 #[cfg(feature = "hugr-013")]
 pub fn compile_hugr_to_llvm(hugr: &mut Hugr, _config: &CompileConfig) -> Result<CompilationResult> {
     // Process the HUGR

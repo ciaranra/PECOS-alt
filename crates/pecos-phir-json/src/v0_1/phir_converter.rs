@@ -28,6 +28,10 @@ struct BitIndexedWrite {
 }
 
 /// Convert PHIR-JSON string to PHIR Module with explicit bit operations
+///
+/// # Errors
+///
+/// Returns an error if JSON parsing fails or the structure is invalid
 pub fn phir_json_to_module(json_str: &str) -> Result<Module, PecosError> {
     // Parse JSON
     let json_value: Value = serde_json::from_str(json_str)
@@ -169,7 +173,7 @@ impl ImprovedConverter {
                     var_name,
                     writes,
                     &mut combining_instructions,
-                )?;
+                );
 
                 // Add the combining instructions
                 instructions.extend(combining_instructions);
@@ -194,7 +198,7 @@ impl ImprovedConverter {
         _var_name: &str,
         writes: &[BitIndexedWrite],
         instructions: &mut Vec<Instruction>,
-    ) -> Result<SSAValue, PecosError> {
+    ) -> SSAValue {
         // Sort writes by bit index
         let mut sorted_writes = writes.to_vec();
         sorted_writes.sort_by_key(|w| w.bit_index);
@@ -288,7 +292,7 @@ impl ImprovedConverter {
             }
         }
 
-        Ok(current_value)
+        current_value
     }
 
     fn convert_operation(&mut self, op: &Value) -> Result<Option<Instruction>, PecosError> {
@@ -298,7 +302,7 @@ impl ImprovedConverter {
 
         // Variable definition
         if let Some(data) = obj.get("data").and_then(|v| v.as_str()) {
-            return self.convert_variable_definition(obj, data);
+            return Ok(self.convert_variable_definition(obj, data));
         }
 
         // Quantum operation
@@ -308,7 +312,7 @@ impl ImprovedConverter {
 
         // Classical operation
         if let Some(cop) = obj.get("cop").and_then(|v| v.as_str()) {
-            return self.convert_classical_operation(obj, cop);
+            return Ok(self.convert_classical_operation(obj, cop));
         }
 
         // Skip unknown operations
@@ -319,13 +323,14 @@ impl ImprovedConverter {
         &mut self,
         obj: &serde_json::Map<String, Value>,
         data: &str,
-    ) -> Result<Option<Instruction>, PecosError> {
+    ) -> Option<Instruction> {
         let data_type = obj.get("data_type").and_then(|v| v.as_str()).unwrap_or("");
         let variable = obj.get("variable").and_then(|v| v.as_str()).unwrap_or("");
         let size = obj
             .get("size")
             .and_then(serde_json::Value::as_u64)
-            .unwrap_or(0) as usize;
+            .and_then(|v| usize::try_from(v).ok())
+            .unwrap_or(0);
 
         match data {
             "qvar_define" | "cvar_define" => {
@@ -340,13 +345,12 @@ impl ImprovedConverter {
                         "i8" => Type::Int(IntWidth::I8),
                         "i16" => Type::Int(IntWidth::I16),
                         "i32" => Type::Int(IntWidth::I32),
-                        "i64" => Type::Int(IntWidth::I64),
                         "u8" => Type::UInt(IntWidth::I8),
                         "u16" => Type::UInt(IntWidth::I16),
                         "u32" => Type::UInt(IntWidth::I32),
                         "u64" => Type::UInt(IntWidth::I64),
                         "bool" => Type::Bool,
-                        _ => Type::Int(IntWidth::I64), // Default fallback
+                        _ => Type::Int(IntWidth::I64), // Default fallback (includes "i64")
                     },
                     _ => Type::Unknown,
                 };
@@ -368,9 +372,9 @@ impl ImprovedConverter {
                     location: None,
                 };
 
-                Ok(Some(instruction))
+                Some(instruction)
             }
-            _ => Ok(None), // Skip unknown variable definitions
+            _ => None, // Skip unknown variable definitions
         }
     }
 
@@ -406,7 +410,7 @@ impl ImprovedConverter {
                 {
                     // For quantum operations, the operand is the qubit index directly
                     operands.push(SSAValue {
-                        id: idx as u32,
+                        id: u32::try_from(idx).unwrap_or(0),
                         version: 0,
                     });
                 }
@@ -434,7 +438,7 @@ impl ImprovedConverter {
 
                             // Track this bit-indexed write
                             let write = BitIndexedWrite {
-                                bit_index: idx as u32,
+                                bit_index: u32::try_from(idx).unwrap_or(0),
                                 ssa_value: result_ssa,
                             };
                             self.bit_indexed_writes
@@ -445,7 +449,7 @@ impl ImprovedConverter {
                             // Non-measurement operations
                             let ssa_id = self.get_ssa_id(var);
                             results.push(SSAValue {
-                                id: ssa_id + idx as u32,
+                                id: ssa_id + u32::try_from(idx).unwrap_or(0),
                                 version: 0,
                             });
                             result_types.push(Type::Qubit);
@@ -492,7 +496,7 @@ impl ImprovedConverter {
         &mut self,
         obj: &serde_json::Map<String, Value>,
         cop: &str,
-    ) -> Result<Option<Instruction>, PecosError> {
+    ) -> Option<Instruction> {
         match cop {
             "Result" => {
                 let classical_op = ClassicalOp::Result;
@@ -548,9 +552,9 @@ impl ImprovedConverter {
                     location: None,
                 };
 
-                Ok(Some(instruction))
+                Some(instruction)
             }
-            _ => Ok(None), // Skip unknown classical operations
+            _ => None, // Skip unknown classical operations
         }
     }
 }

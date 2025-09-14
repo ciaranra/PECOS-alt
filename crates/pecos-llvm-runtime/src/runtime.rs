@@ -1198,7 +1198,7 @@ pub unsafe extern "C" fn __quantum__rt__result_get_one(result: i64) -> i32 {
 
     if should_print_commands() {
         let elapsed = start_time.elapsed();
-        println!(
+        debug!(
             "[Thread {}] EXIT __quantum__rt__result_get_one(result_id={result_id}) = {result} in {elapsed:?}",
             get_thread_id()
         );

@@ -1,27 +1,21 @@
-#!/usr/bin/env python3
 """Test the sim builder pattern API.
 
-This test demonstrates that sim follows the same builder pattern as qasm_sim.
+This test demonstrates the sim() API builder pattern for quantum simulations.
 """
 
-import sys
 from pathlib import Path
+
+import pytest
 
 
 def decode_integer_results(results: list[int], n_bits: int) -> list[tuple[bool, ...]]:
     """Decode integer-encoded results back to tuples of booleans."""
     decoded = []
     for val in results:
-        bits = []
-        for i in range(n_bits):
-            bits.append(bool(val & (1 << i)))
+        bits = [bool(val & (1 << i)) for i in range(n_bits)]
         decoded.append(tuple(bits))
     return decoded
 
-
-import pytest
-
-sys.path.append("python/quantum-pecos/src")
 
 # Check dependencies
 try:
@@ -94,11 +88,10 @@ class TestGuppySimBuilder:
         assert all(r in [0, 1] for r in results["measurement_1"])
 
     def test_builder_methods(self) -> None:
-        """Test various builder configuration methods."""
-        # Test method chaining
+        """Test the builder pattern methods of the sim API."""
         builder = (
             sim(self.bell_state)
-            .qubits(10)
+            .qubits(2)
             .quantum(state_vector())
             .seed(42)
             .workers(2)
@@ -106,8 +99,6 @@ class TestGuppySimBuilder:
             .debug(False)
             .optimize(True)
         )
-
-        # Build and run
         sim_obj = builder.build()
         results = sim_obj.run(100)
 
@@ -136,8 +127,6 @@ class TestGuppySimBuilder:
             .seed(12345)
             .run(100)
         )
-
-        # Results should be identical
         measurements1 = results1.get(
             "measurements",
             results1.get("measurement_1", results1.get("result", [])),
@@ -154,8 +143,6 @@ class TestGuppySimBuilder:
         results = (
             sim(self.bell_state).qubits(10).quantum(state_vector()).seed(42).run(50)
         )
-
-        # Check results format (Bell state returns tuple, so measurement_1 and measurement_2)
         if "measurement_1" in results:
             assert len(results["measurement_1"]) == 50
             assert len(results["measurement_2"]) == 50
@@ -168,8 +155,6 @@ class TestGuppySimBuilder:
         results = (
             sim(self.bell_state).qubits(10).quantum(state_vector()).seed(42).run(1000)
         )
-
-        # Bell state returns tuple[bool, bool], so we have measurement_1 and measurement_2
         assert "measurement_1" in results
         assert "measurement_2" in results
 
@@ -177,8 +162,6 @@ class TestGuppySimBuilder:
         measurements = list(
             zip(results["measurement_1"], results["measurement_2"], strict=False),
         )
-
-        # Check all results are correlated (both qubits same)
         correlated = sum(1 for (a, b) in measurements if a == b)
         assert correlated == len(measurements), "Bell state should be 100% correlated"
 
@@ -193,8 +176,6 @@ class TestGuppySimBuilder:
             .keep_intermediate_files(True)
             .build()
         )
-
-        # Check that temp_dir was created
         assert sim_obj.temp_dir is not None
         assert Path(sim_obj.temp_dir).exists()
 
@@ -223,73 +204,46 @@ class TestGuppySimBuilder:
         shutil.rmtree(sim_obj.temp_dir, ignore_errors=True)
 
 
-def test_api_comparison() -> None:
-    """Compare sim and qasm_sim APIs to ensure consistency."""
-    # This test documents the parallel APIs
+def test_api_demonstration() -> None:
+    """Demonstrate the builder pattern API."""
+    try:
+        from guppylang import guppy
+        from guppylang.std.quantum import h, measure, qubit
+    except ImportError:
+        pytest.skip("Guppy not available")
+        return
 
-    # qasm_sim API (for reference):
-    # sim = qasm_sim(qasm_string).seed(42).noise(DepolarizingNoise(0.01)).build()
-    # results = sim.run(1000)
+    @guppy
+    def demo_circuit() -> bool:
+        """Demo circuit that creates superposition and measures."""
+        q = qubit()
+        h(q)
+        return measure(q)
 
-    # sim API (our implementation):
-    # sim = sim(guppy_function).qubits(10).quantum(state_vector()).seed(42).noise(DepolarizingNoise(0.01)).build()
-    # results = sim.run(1000)
+    # Show builder pattern
+    sim_obj = (
+        sim(demo_circuit)
+        .qubits(10)
+        .quantum(state_vector())
+        .seed(42)
+        .verbose(True)
+        .build()
+    )
+    results = sim_obj.run(100)
+    results.get(
+        "measurements",
+        results.get("measurement_1", results.get("result", [])),
+    )
 
-    # Both return columnar format:
-    # qasm_sim: {"c": [0, 3, 0, 3, ...]}  # register name from QASM
-    # sim: {"_result": [0, 3, 0, 3, ...]}  # default register name
-
-    print("API comparison test - APIs are parallel")
-    assert True  # This is a documentation test
-
-
-if __name__ == "__main__":
-    # Run basic demonstration
-    if GUPPY_AVAILABLE and BUILDER_AVAILABLE:
-        print("=== Guppy Sim Builder Demo ===")
-
-        @guppy
-        def demo_circuit() -> bool:
-            q = qubit()
-            h(q)
-            return measure(q)
-
-        # Show builder pattern
-        print("\n1. Building simulation...")
-        sim_obj = (
-            sim(demo_circuit)
-            .qubits(10)
-            .quantum(state_vector())
-            .seed(42)
-            .verbose(True)
-            .build()
-        )
-
-        print("\n2. Running 100 shots...")
-        results = sim_obj.run(100)
-        measurements = results.get(
-            "measurements",
-            results.get("measurement_1", results.get("result", [])),
-        )
-        print(f"   Results: {measurements[:10]}... (first 10)")
-        print(f"   Ones: {sum(measurements)}/100")
-
-        print("\n3. Running 1000 shots...")
-        results = sim_obj.run(1000)
-        measurements = results.get(
-            "measurements",
-            results.get("measurement_1", results.get("result", [])),
-        )
-        print(f"   Ones: {sum(measurements)}/1000")
-
-        print("\n4. Direct run without explicit build...")
-        results = sim(demo_circuit).qubits(10).quantum(state_vector()).seed(123).run(50)
-        measurements = results.get(
-            "measurements",
-            results.get("measurement_1", results.get("result", [])),
-        )
-        print(f"   Got {len(measurements)} results")
-
-        print("\n=== Demo Complete ===")
-    else:
-        print("Dependencies not available for demo")
+    # print("\n3. Running 1000 shots with a new builder...")
+    # Need to create a new builder since the previous one is consumed
+    results = sim(demo_circuit).qubits(10).quantum(state_vector()).seed(42).run(1000)
+    results.get(
+        "measurements",
+        results.get("measurement_1", results.get("result", [])),
+    )
+    results = sim(demo_circuit).qubits(10).quantum(state_vector()).seed(123).run(50)
+    results.get(
+        "measurements",
+        results.get("measurement_1", results.get("result", [])),
+    )

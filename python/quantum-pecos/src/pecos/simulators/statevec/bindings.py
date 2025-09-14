@@ -15,7 +15,8 @@ This module provides the gate bindings that map gate symbols to their correspond
 in the Rust backend for the state vector simulator.
 """
 
-# ruff: noqa: ARG005
+# Gate bindings require consistent interfaces even if not all parameters are used.
+# This is a design pattern where all gates must have the same signature for polymorphic dispatch.
 
 from __future__ import annotations
 
@@ -35,7 +36,7 @@ def get_bindings(state: StateVec) -> dict:
         Dictionary mapping gate symbols to their implementations.
     """
     # Get reference to backend's internal simulator for efficiency
-    sim = state.backend._sim  # noqa: SLF001
+    sim = state.backend._sim
 
     return {
         # Single-qubit gates

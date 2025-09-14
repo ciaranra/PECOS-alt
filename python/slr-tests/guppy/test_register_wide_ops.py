@@ -16,8 +16,6 @@ def test_hadamard_on_register() -> None:
     )
 
     guppy_code = SlrConverter(prog).guppy()
-    print("\nGenerated code for H(q):")
-    print(guppy_code)
 
     # Should generate a loop to apply H to each qubit
     assert "for" in guppy_code or "quantum.h(q[0])" in guppy_code
@@ -45,8 +43,6 @@ def test_multiple_gates_on_register() -> None:
     )
 
     guppy_code = SlrConverter(prog).guppy()
-    print("\nGenerated code for multiple gates on register:")
-    print(guppy_code)
 
     # Check that all gates are applied (either in loops or expanded)
     if "for" in guppy_code:
@@ -76,8 +72,6 @@ def test_mixed_register_and_element_ops() -> None:
     )
 
     guppy_code = SlrConverter(prog).guppy()
-    print("\nGenerated code for mixed operations:")
-    print(guppy_code)
 
     # Should have H and Z applied to all qubits (either in loops or expanded)
     if "for" in guppy_code:
@@ -92,10 +86,3 @@ def test_mixed_register_and_element_ops() -> None:
     # Should have X applied to specific qubits (always individual)
     assert "quantum.x(q[0])" in guppy_code
     assert "quantum.x(q[2])" in guppy_code
-
-
-if __name__ == "__main__":
-    test_hadamard_on_register()
-    test_multiple_gates_on_register()
-    test_mixed_register_and_element_ops()
-    print("\nAll register-wide operation tests completed!")

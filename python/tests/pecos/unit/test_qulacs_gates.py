@@ -277,7 +277,3 @@ class TestQulacsErrorHandling:
         # RX gate requires angle parameter
         with pytest.raises(TypeError):
             sim.bindings["RX"](sim, 0)  # Missing angle parameter
-
-
-if __name__ == "__main__":
-    pytest.main([__file__])

@@ -20,11 +20,6 @@ fn main() {
 
 /// Basic SSA construction
 fn example_basic_ssa() {
-    println!("1. Basic SSA Construction");
-    println!("------------------------");
-
-    // Parsing: x = 5; y = x + 10; return y
-
     struct SSABuilder {
         next_id: u32,
         current_block: Block,
@@ -58,6 +53,10 @@ fn example_basic_ssa() {
         }
     }
 
+    println!("1. Basic SSA Construction");
+    println!("------------------------");
+
+    // Parsing: x = 5; y = x + 10; return y
     let mut builder = SSABuilder::new();
 
     // Parse: x = 5
@@ -99,7 +98,13 @@ fn example_basic_ssa() {
     });
     println!("  Returned {y_use}");
 
-    println!("\n  ✓ SSA form constructed during parsing!\n");
+    println!("\n  SSA form constructed during parsing!\n");
+}
+
+#[derive(Debug)]
+struct BranchDefs {
+    then_defs: HashMap<String, SSAValue>,
+    else_defs: HashMap<String, SSAValue>,
 }
 
 /// Handling control flow with phi nodes
@@ -108,6 +113,8 @@ fn example_phi_nodes() {
     println!("-----------------------------");
 
     // Parsing:
+    // During parsing, we track which variables are defined in each branch
+
     // ```
     // if (cond) {
     //   x = 1
@@ -118,13 +125,6 @@ fn example_phi_nodes() {
     // ```
 
     println!("  Parsing if-else with variable definitions:");
-
-    // During parsing, we track which variables are defined in each branch
-    #[derive(Debug)]
-    struct BranchDefs {
-        then_defs: HashMap<String, SSAValue>,
-        else_defs: HashMap<String, SSAValue>,
-    }
 
     let mut branch_defs = BranchDefs {
         then_defs: HashMap::new(),
@@ -159,7 +159,14 @@ fn example_phi_nodes() {
     // Now 'return x' uses the phi node
     println!("    return {x_phi} (the phi node)");
 
-    println!("\n  ✓ Phi nodes created at control flow merge points!\n");
+    println!("\n  Phi nodes created at control flow merge points!\n");
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+struct DefSite {
+    block: String,
+    ssa_value: SSAValue,
 }
 
 /// Example with dominance frontiers
@@ -168,6 +175,8 @@ fn example_dominance_frontier() {
     println!("----------------------------------------");
 
     // More complex example:
+    // Track variable definitions and their dominance frontiers
+
     // ```
     // x = 0
     // while (cond) {
@@ -177,14 +186,6 @@ fn example_dominance_frontier() {
     // ```
 
     println!("  Parsing while loop with mutations:");
-
-    // Track variable definitions and their dominance frontiers
-    #[derive(Debug)]
-    #[allow(dead_code)]
-    struct DefSite {
-        block: String,
-        ssa_value: SSAValue,
-    }
 
     let mut var_defs: HashMap<String, Vec<DefSite>> = HashMap::new();
 
@@ -217,5 +218,5 @@ fn example_dominance_frontier() {
     println!("  3. Place phi nodes at frontiers");
     println!("  4. Rename variables in SSA form");
 
-    println!("\n  ✓ SSA construction complete with minimal phi nodes!\n");
+    println!("\n  SSA construction complete with minimal phi nodes!\n");
 }

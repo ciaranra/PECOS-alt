@@ -1,4 +1,4 @@
-"""Test qasm_sim structured configuration functionality."""
+"""Test QASM simulation structured configuration functionality."""
 
 from collections import Counter
 
@@ -175,7 +175,7 @@ class TestQasmSimStructuredConfig:
     def test_missing_qasm_raises_error(self) -> None:
         """Test that missing QASM code raises error."""
         # This test is no longer relevant since QASM is now a required parameter
-        # to qasm_sim(), not part of the config
+        # QASM is now a required parameter to sim(), not part of the config
 
     def test_invalid_noise_type_raises_error(self) -> None:
         """Test that invalid noise type raises error."""
@@ -220,7 +220,7 @@ class TestQasmSimStructuredConfig:
 
     def test_structured_config(self) -> None:
         """Test new structured configuration approach."""
-        from pecos_rslib import GeneralNoiseModelBuilder, qasm_engine, state_vector
+        from pecos_rslib import general_noise, qasm_engine, state_vector
         from pecos_rslib.programs import QasmProgram
 
         qasm = """
@@ -233,9 +233,9 @@ class TestQasmSimStructuredConfig:
             measure q -> c;
             """
 
-        # Create noise using builder - pass it directly to noise() method
+        # Create noise using functional API - pass it directly to noise() method
         noise_builder = (
-            GeneralNoiseModelBuilder()
+            general_noise()
             .with_seed(42)
             .with_p1_probability(0.001)
             .with_p2_probability(0.01)
@@ -264,8 +264,8 @@ class TestQasmSimStructuredConfig:
         assert all(len(val) == 2 for val in results_dict["c"])
 
     def test_general_noise_config(self) -> None:
-        """Test GeneralNoise configuration with builder."""
-        from pecos_rslib import GeneralNoiseModelBuilder, qasm_engine
+        """Test GeneralNoise configuration with functional API."""
+        from pecos_rslib import general_noise, qasm_engine
         from pecos_rslib.programs import QasmProgram
 
         qasm = """
@@ -278,9 +278,9 @@ class TestQasmSimStructuredConfig:
             measure q -> c;
             """
 
-        # Use builder pattern for GeneralNoise
+        # Use functional API for GeneralNoise
         noise_builder = (
-            GeneralNoiseModelBuilder()
+            general_noise()
             .with_seed(42)
             .with_p1_probability(0.001)
             .with_p2_probability(0.01)

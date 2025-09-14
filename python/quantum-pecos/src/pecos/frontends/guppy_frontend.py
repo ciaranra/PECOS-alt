@@ -4,6 +4,8 @@ This module provides integration between Guppy quantum programming language
 and PECOS execution infrastructure through the HUGR intermediate representation.
 """
 
+import contextlib
+import shutil
 import subprocess
 import tempfile
 import warnings
@@ -161,12 +163,9 @@ class GuppyFrontend:
         # Step 1: Compile Guppy to HUGR
         try:
             # Try both new and old API
-            if hasattr(func, "compile"):
-                # New API: function.compile()
-                compiled = func.compile()
-            else:
-                # Old API: guppy.compile(function)
-                compiled = guppy.compile(func)
+            compiled = (
+                func.compile() if hasattr(func, "compile") else guppy.compile(func)
+            )
 
             # Handle the return value - it might be a FuncDefnPointer or similar
             if hasattr(compiled, "package"):
@@ -234,8 +233,8 @@ class GuppyFrontend:
         if self.format_converter:
             converted_hugr = temp_path / f"{func_name}_converted.hugr"
             try:
-                subprocess.run(  # noqa: S603
-                    [  # noqa: S607
+                subprocess.run(
+                    [
                         "python",
                         str(self.format_converter),
                         str(hugr_file),
@@ -255,7 +254,7 @@ class GuppyFrontend:
 
         if self.hugr_to_llvm_binary:
             try:
-                subprocess.run(  # noqa: S603
+                subprocess.run(
                     [
                         str(self.hugr_to_llvm_binary),
                         str(hugr_file),
@@ -322,7 +321,7 @@ class GuppyFrontend:
                 with Path(qir_file).open("w") as f:
                     f.write(llvm_ir)
 
-            except ImportError:
+            except ImportError as e:
                 # No fallback - we only support proper HUGR->LLVM compilation
                 msg = (
                     "HUGR to LLVM compilation failed: No working HUGR compiler available. "
@@ -330,7 +329,7 @@ class GuppyFrontend:
                     "compiler is available. We only support proper HUGR convention LLVM-IR "
                     "generated via hugr-llvm, not fallback QIR."
                 )
-                raise RuntimeError(msg)
+                raise RuntimeError(msg) from e
             else:
                 return qir_file
 
@@ -341,15 +340,12 @@ class GuppyFrontend:
             and self._temp_dir
             and Path(self._temp_dir).exists()
         ):
-            import shutil
 
             shutil.rmtree(self._temp_dir)
             self._temp_dir = None
 
     def __del__(self) -> None:
         """Cleanup on destruction."""
-        import contextlib
-
         with contextlib.suppress(Exception):
             self.cleanup()
 

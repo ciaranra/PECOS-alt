@@ -45,8 +45,8 @@ impl PrototypeSeleneEngine {
     /// Load the Selene library and set up callbacks
     fn setup_bridge_callbacks(&mut self) -> Result<(), PecosError> {
         println!(
-            "[Engine] Loading Selene library from {:?}",
-            self.executable_path
+            "[Engine] Loading Selene library from {}",
+            self.executable_path.display()
         );
 
         // Load the library (in reality, this would be the compiled HUGR program)
@@ -141,7 +141,7 @@ impl PrototypeSeleneEngine {
             }
 
             println!("[Callback] Returned measurements ({len} bytes)");
-            len as i32
+            i32::try_from(len).unwrap_or(i32::MAX)
         } else {
             println!("[Callback] No measurements available");
             0 // No measurements available
@@ -177,10 +177,7 @@ impl PrototypeSeleneEngine {
         }
     }
 
-    fn continue_processing(
-        &mut self,
-        measurements: ByteMessage,
-    ) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
+    fn continue_processing(&mut self, measurements: ByteMessage) -> EngineStage<ByteMessage, Shot> {
         println!("\n[Engine] ControlEngine::continue_processing()");
 
         // 1. Provide measurements to Bridge
@@ -196,20 +193,20 @@ impl PrototypeSeleneEngine {
         // 3. Check for more operations
         if let Some(ops) = self.operation_queue.lock().unwrap().pop_front() {
             println!("[Engine] Returning more operations");
-            Ok(EngineStage::NeedsProcessing(ops))
+            EngineStage::NeedsProcessing(ops)
         } else if *self.is_complete.lock().unwrap() {
             println!("[Engine] Execution complete");
-            Ok(EngineStage::Complete(Shot::default()))
+            EngineStage::Complete(Shot::default())
         } else {
             // Assume complete if no more operations
             println!("[Engine] No more operations, assuming complete");
-            Ok(EngineStage::Complete(Shot::default()))
+            EngineStage::Complete(Shot::default())
         }
     }
 }
 
 #[test]
-#[ignore] // Ignore by default since it needs a real shared library
+#[ignore = "needs a real shared library"]
 fn test_library_loading_mechanism() {
     println!("\n=== LIBRARY LOADING PROTOTYPE TEST ===\n");
 
@@ -236,13 +233,12 @@ fn test_library_loading_mechanism() {
 
             // Continue processing
             match engine.continue_processing(measurements) {
-                Ok(EngineStage::Complete(shot)) => {
+                EngineStage::Complete(shot) => {
                     println!("Complete! Shot: {shot:?}");
                 }
-                Ok(EngineStage::NeedsProcessing(_)) => {
+                EngineStage::NeedsProcessing(_) => {
                     println!("Would continue processing...");
                 }
-                Err(e) => panic!("Error: {e}"),
             }
         }
         Ok(EngineStage::Complete(shot)) => {

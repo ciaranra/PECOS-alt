@@ -29,7 +29,7 @@ def test_permute1() -> None:
 
     qasm = SlrConverter(prog).qasm()
 
-    print(qasm)
+    # print(qasm)
 
     # Check that permutation was applied correctly
     assert "ry(-pi/2) b_d[0];" in qasm.lower()
@@ -58,7 +58,7 @@ def test_permute2() -> None:
 
     qasm = SlrConverter(prog).qasm()
 
-    print(qasm)
+    # print(qasm)
 
     # Check that permutation was applied correctly
     assert "ry(-pi/2) b_d[0];" in qasm.lower()
@@ -89,7 +89,7 @@ def test_permute3() -> None:
     )
     qasm = SlrConverter(prog).qasm()
 
-    print(qasm)
+    # print(qasm)
 
     assert "h b_d[4];" in qasm.lower()
     assert "x b_d[4];" in qasm.lower()
@@ -121,7 +121,7 @@ def test_permute4() -> None:
 
     qasm = SlrConverter(prog).qasm()
 
-    print(qasm)
+    # print(qasm)
 
     assert "h b_d[4];" in qasm.lower()
     assert "x b_d[4];" in qasm.lower()

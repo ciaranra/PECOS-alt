@@ -13,7 +13,9 @@ from pecos.slr.block import Block
 from pecos.slr.cond_block import If, Repeat
 from pecos.slr.loop_block import For, While
 from pecos.slr.main import Main
-from pecos.slr.main import Main as SLR  # noqa: N814
+from pecos.slr.main import (
+    Main as SLR,
+)
 from pecos.slr.misc import Barrier, Comment, Parallel, Permute
 from pecos.slr.slr_converter import SlrConverter
 from pecos.slr.vars import Bit, CReg, QReg, Qubit, Vars

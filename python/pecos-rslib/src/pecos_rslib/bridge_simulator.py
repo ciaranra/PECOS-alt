@@ -5,7 +5,7 @@ that can be used with Selene's build() and run() APIs.
 """
 
 from pathlib import Path
-from typing import Optional, List
+
 from selene_core.simulator import Simulator
 
 
@@ -16,7 +16,7 @@ class PecosSeleneBridgeSimulator(Simulator):
     and PECOS's ByteMessage system.
     """
 
-    def __init__(self, plugin_path: Optional[Path] = None):
+    def __init__(self, plugin_path: Path | None = None) -> None:
         """Initialize the bridge simulator.
 
         Args:
@@ -54,7 +54,7 @@ class PecosSeleneBridgeSimulator(Simulator):
 
         raise FileNotFoundError(
             "Could not find PecosSeleneBridgeSimulator plugin library. "
-            "Make sure to build it with: cargo build --package pecos-selene-bridge"
+            "Make sure to build it with: cargo build --package pecos-selene-bridge",
         )
 
     @property
@@ -63,12 +63,12 @@ class PecosSeleneBridgeSimulator(Simulator):
         return self._plugin_path
 
     @property
-    def library_search_dirs(self) -> List[Path]:
+    def library_search_dirs(self) -> list[Path]:
         """Return additional library search directories."""
         # Include the directory containing the plugin
         return [self._plugin_path.parent]
 
-    def get_init_args(self) -> List:
+    def get_init_args(self) -> list:
         """Return initialization arguments for the simulator.
 
         The bridge simulator doesn't need special init args.

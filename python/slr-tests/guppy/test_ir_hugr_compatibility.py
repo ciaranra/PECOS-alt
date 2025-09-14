@@ -22,9 +22,6 @@ def test_ir_handles_array_measurement_patterns() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("IR-generated code for array measurements:")
-    print(code)
-
     # Should use measure_array for the full array
     assert "c = quantum.measure_array(q)" in code
 
@@ -68,9 +65,6 @@ def test_ir_handles_mixed_measurements() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("\nIR-generated code for mixed measurements:")
-    print(code)
-
     # Should handle individual measurements correctly
     assert "quantum.measure(q" in code
 
@@ -99,9 +93,6 @@ def test_ir_with_conditional_measurements() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("\nIR-generated code for conditional measurements:")
-    print(code)
-
     # Check structure - after unpacking, it should use flag_0
     assert "if flag_0:" in code or "if flag[0]:" in code
     assert "else:" in code
@@ -126,9 +117,6 @@ def test_ir_avoids_subscript_after_consume() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("\nIR-generated code avoiding subscript after consume:")
-    print(code)
-
     # Should use measure_array
     assert "quantum.measure_array(q)" in code
 
@@ -140,14 +128,3 @@ def test_ir_avoids_subscript_after_consume() -> None:
     for i in range(measure_line + 1, len(lines)):
         assert "q[0]" not in lines[i], "Should not access q[0] after measure_array"
         assert "q[1]" not in lines[i], "Should not access q[1] after measure_array"
-
-    # The code structure should be HUGR-compatible
-    print("\nCode structure verified for HUGR compatibility")
-
-
-if __name__ == "__main__":
-    test_ir_handles_array_measurement_patterns()
-    test_ir_handles_mixed_measurements()
-    test_ir_with_conditional_measurements()
-    test_ir_avoids_subscript_after_consume()
-    print("\nAll IR HUGR compatibility tests completed!")

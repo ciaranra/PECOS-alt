@@ -6,6 +6,10 @@ configure Selene instances to use the Bridge plugin at runtime.
 
 import logging
 import os
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +17,7 @@ logger = logging.getLogger(__name__)
 class BridgeEnabledSeleneInstance:
     """Wrapper for Selene instances that automatically uses Bridge plugin."""
 
-    def __init__(self, original_instance):
+    def __init__(self, original_instance: object) -> None:
         self.original_instance = original_instance
         self.bridge_plugin = None
 
@@ -26,11 +30,11 @@ class BridgeEnabledSeleneInstance:
         except ImportError:
             logger.warning("BridgeEnabledSeleneInstance: Bridge plugin not available")
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> object:
         """Delegate all other attributes to original instance."""
         return getattr(self.original_instance, name)
 
-    def run(self, *args, **kwargs):
+    def run(self, *args: object, **kwargs: object) -> object:
         """Enhanced run method that uses Bridge plugin automatically."""
         # Set SELENE_IPC for Bridge plugin
         os.environ["SELENE_IPC"] = "1"
@@ -39,7 +43,7 @@ class BridgeEnabledSeleneInstance:
             # If no simulator specified, use Bridge plugin
             if len(args) == 0 or not hasattr(args[0], "library_file"):
                 logger.info(
-                    "PECOS: Automatically using Bridge plugin for Selene execution"
+                    "PECOS: Automatically using Bridge plugin for Selene execution",
                 )
                 return self.original_instance.run(self.bridge_plugin, *args, **kwargs)
 
@@ -47,7 +51,7 @@ class BridgeEnabledSeleneInstance:
         return self.original_instance.run(*args, **kwargs)
 
 
-def patch_selene_build_for_pecos():
+def patch_selene_build_for_pecos() -> bool:
     """Patch selene_sim.build to return Bridge-enabled instances."""
     try:
         import selene_sim
@@ -56,7 +60,7 @@ def patch_selene_build_for_pecos():
         if not hasattr(selene_sim, "_pecos_original_build"):
             selene_sim._pecos_original_build = selene_sim.build
 
-            def bridge_enabled_build(*args, **kwargs):
+            def bridge_enabled_build(*args: object, **kwargs: object) -> object:
                 """Build function that returns Bridge-enabled instances."""
                 # Call original build
                 instance = selene_sim._pecos_original_build(*args, **kwargs)
@@ -70,17 +74,16 @@ def patch_selene_build_for_pecos():
             # Replace build function
             selene_sim.build = bridge_enabled_build
             logger.info(
-                "PECOS: Patched selene_sim.build for automatic Bridge plugin usage"
+                "PECOS: Patched selene_sim.build for automatic Bridge plugin usage",
             )
-
+    except ImportError as e:
+        logger.warning("Could not patch selene_sim.build for Bridge plugin: %s", e)
+        return False
+    else:
         return True
 
-    except ImportError as e:
-        logger.warning(f"Could not patch selene_sim.build for Bridge plugin: {e}")
-        return False
 
-
-def ensure_bridge_runtime_integration():
+def ensure_bridge_runtime_integration() -> bool:
     """Ensure Bridge plugin runtime integration is active."""
     return patch_selene_build_for_pecos()
 

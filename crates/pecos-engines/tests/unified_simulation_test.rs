@@ -12,6 +12,7 @@ use pecos_engines::{BiasedDepolarizingNoise, DepolarizingNoise, PassThroughNoise
 #[test]
 fn test_sim_builder_api() {
     use pecos_engines::SimConfig;
+    use pecos_engines::noise::IntoNoiseModel;
 
     // Test that SimConfig has expected defaults
     let config = SimConfig::default();
@@ -20,7 +21,6 @@ fn test_sim_builder_api() {
     assert!(!config.verbose);
 
     // Test noise conversions work with IntoNoiseModel trait
-    use pecos_engines::noise::IntoNoiseModel;
     let _: Box<dyn pecos_engines::noise::NoiseModel> = PassThroughNoise.into_noise_model();
     let _: Box<dyn pecos_engines::noise::NoiseModel> =
         DepolarizingNoise { p: 0.01 }.into_noise_model();

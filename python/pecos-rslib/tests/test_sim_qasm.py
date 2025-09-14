@@ -1,24 +1,25 @@
 """Tests for the unified sim() API with QASM programs."""
 
-import pytest
 from collections import Counter
+
+import pytest
 from pecos_rslib import (
     sim,
 )
 from pecos_rslib._pecos_rslib import (
     QasmProgram,
-    depolarizing_noise,
     biased_depolarizing_noise,
+    depolarizing_noise,
     general_noise,
-    state_vector,
     sparse_stabilizer,
+    state_vector,
 )
 
 
 class TestUnifiedSimApi:
     """Test the unified sim() API with QASM programs."""
 
-    def test_simple_run(self):
+    def test_simple_run(self) -> None:
         """Test simple run without building."""
         qasm = """
         OPENQASM 2.0;
@@ -39,7 +40,7 @@ class TestUnifiedSimApi:
         counts = Counter(results["c"])
         assert set(counts.keys()) <= {0, 3}  # Only |00> and |11>
 
-    def test_build_once_run_multiple(self):
+    def test_build_once_run_multiple(self) -> None:
         """Test building once and running multiple times."""
         qasm = """
         OPENQASM 2.0;
@@ -70,7 +71,7 @@ class TestUnifiedSimApi:
         results4 = shot_vec4.to_dict()
         assert results1["c"] == results4["c"]
 
-    def test_method_chaining(self):
+    def test_method_chaining(self) -> None:
         """Test method chaining with all configuration options."""
         qasm = """
         OPENQASM 2.0;
@@ -95,7 +96,7 @@ class TestUnifiedSimApi:
         assert "c" in results
         assert len(results["c"]) == 100
 
-    def test_auto_workers(self):
+    def test_auto_workers(self) -> None:
         """Test auto_workers configuration."""
         qasm = """
         OPENQASM 2.0;
@@ -116,7 +117,7 @@ class TestUnifiedSimApi:
         counts = Counter(results["c"])
         assert len(counts) == 8
 
-    def test_noise_models(self):
+    def test_noise_models(self) -> None:
         """Test different noise model configurations."""
         qasm = """
         OPENQASM 2.0;
@@ -162,7 +163,7 @@ class TestUnifiedSimApi:
                 .with_prep_probability(0.01)
                 .with_meas_probability(0.01)
                 .with_p1_probability(0.001)
-                .with_p2_probability(0.1)
+                .with_p2_probability(0.1),
             )
             .run(1000)
         )
@@ -199,7 +200,7 @@ class TestUnifiedSimApi:
         results = shot_vec.to_dict()
         assert len(results["c"]) == 10
 
-    def test_quantum_engines(self):
+    def test_quantum_engines(self) -> None:
         """Test different quantum engine configurations."""
         # Clifford circuit
         qasm_clifford = """
@@ -248,13 +249,13 @@ class TestUnifiedSimApi:
         # Just verify it runs without checking for failure
         try:
             sim(QasmProgram.from_string(qasm_non_clifford)).quantum(
-                sparse_stabilizer()
+                sparse_stabilizer(),
             ).run(10)
         except RuntimeError:
             # Expected if the engine detects non-Clifford operations
             pass
 
-    def test_deterministic_behavior(self):
+    def test_deterministic_behavior(self) -> None:
         """Test deterministic behavior with seeds."""
         qasm = """
         OPENQASM 2.0;
@@ -291,7 +292,7 @@ class TestUnifiedSimApi:
         counts2 = Counter(results2["c"])
         assert set(counts1.keys()) == set(counts2.keys())
 
-    def test_large_register(self):
+    def test_large_register(self) -> None:
         """Test handling of large quantum registers."""
         qasm = """
         OPENQASM 2.0;
@@ -322,7 +323,7 @@ class TestUnifiedSimApi:
             set_bits = [i for i, bit in enumerate(reversed(binary)) if bit == "1"]
             assert set_bits == [0, 10, 20, 30, 40, 50, 60, 69]
 
-    def test_error_handling(self):
+    def test_error_handling(self) -> None:
         """Test error handling in builder pattern."""
         # Invalid QASM
         with pytest.raises(RuntimeError):
@@ -332,7 +333,7 @@ class TestUnifiedSimApi:
         with pytest.raises(RuntimeError):
             sim(QasmProgram.from_string("invalid qasm")).build()
 
-    def test_builder_vs_direct_api(self):
+    def test_builder_vs_direct_api(self) -> None:
         """Test that builder and direct API give same results."""
         qasm = """
         OPENQASM 2.0;
@@ -369,7 +370,7 @@ class TestUnifiedSimApi:
         # Results should be identical
         assert builder_results["c"] == direct_results["c"]
 
-    def test_binary_string_format(self):
+    def test_binary_string_format(self) -> None:
         """Test binary string format output."""
         qasm = """
         OPENQASM 2.0;
@@ -415,7 +416,7 @@ class TestUnifiedSimApi:
         valid_states = {"0000", "0011", "1100", "1111"}
         assert all(v in valid_states for v in results_binary["c"])
 
-    def test_binary_string_format_large_register(self):
+    def test_binary_string_format_large_register(self) -> None:
         """Test binary string format with registers larger than 64 bits."""
         qasm = """
         OPENQASM 2.0;
@@ -458,7 +459,7 @@ class TestUnifiedSimApi:
             # Count total number of 1s
             assert binary_str.count("1") == 10
 
-    def test_binary_string_format_build_once(self):
+    def test_binary_string_format_build_once(self) -> None:
         """Test binary string format with build once, run multiple."""
         qasm = """
         OPENQASM 2.0;

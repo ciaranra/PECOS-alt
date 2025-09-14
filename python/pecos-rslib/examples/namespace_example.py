@@ -7,7 +7,7 @@ and cleaner code organization.
 import pecos_rslib
 
 
-def main():
+def main() -> None:
     print("PECOS Namespace API Example")
     print("=" * 40)
 

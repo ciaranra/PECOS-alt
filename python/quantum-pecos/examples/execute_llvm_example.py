@@ -16,9 +16,9 @@ def main() -> None:
 
     # Check if execute_llvm functionality is available
     if execute_llvm.is_available():
-        print("✓ execute_llvm functionality is available")
+        print("execute_llvm functionality is available")
     else:
-        print("✗ No HUGR->LLVM backend available")
+        print("No HUGR->LLVM backend available")
         print("  Build PECOS with HUGR support or install external compiler")
         return
 
@@ -30,10 +30,10 @@ def main() -> None:
     try:
         # This would normally work with real HUGR data
         llvm_ir = execute_llvm.compile_module_to_string(dummy_hugr_bytes)
-        print(f"✓ Generated {len(llvm_ir)} characters of LLVM IR")
+        print(f"Generated {len(llvm_ir)} characters of LLVM IR")
 
     except RuntimeError as e:
-        print(f"✗ Compilation failed (expected with dummy data): {e}")
+        print(f"Compilation failed (expected with dummy data): {e}")
 
     print("\nThe execute_llvm module provides:")
     print("  - compile_module_to_string(hugr_bytes) -> str")

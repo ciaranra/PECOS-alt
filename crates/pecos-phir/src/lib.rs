@@ -100,6 +100,10 @@ impl Pipeline {
     }
 
     /// Compile and execute from any supported input format
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if compilation or execution fails
     pub fn compile_and_execute<T>(&self, _input: &str, _format: InputFormat) -> Result<T> {
         // TODO: Implement the full pipeline:
         // 1. Parse input to PHIR
@@ -122,12 +126,20 @@ pub mod prelude {
     pub use crate::{InputFormat, Module, Operation, PhirConfig, Pipeline, Type};
 
     /// Quick execution from HUGR
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if HUGR parsing or execution fails
     pub fn execute_hugr(hugr_json: &str) -> crate::Result<()> {
         let pipeline = Pipeline::new(PhirConfig::default());
         pipeline.compile_and_execute(hugr_json, InputFormat::HUGR)
     }
 
     /// Quick execution from Guppy
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if Guppy parsing or execution fails
     pub fn execute_guppy(guppy_hugr: &str) -> crate::Result<()> {
         let pipeline = Pipeline::new(PhirConfig::default());
         pipeline.compile_and_execute(guppy_hugr, InputFormat::Guppy)
@@ -140,7 +152,7 @@ pub mod prelude {
 }
 
 /// Helper function to compile a PHIR module to LLVM IR or MLIR text
-fn compile_module_to_output(module: Module, config: &PhirConfig) -> Result<String> {
+fn compile_module_to_output(module: &Module, config: &PhirConfig) -> Result<String> {
     // Debug: print PHIR structure if debug mode is enabled
     if config.debug {
         eprintln!("PHIR Module: {}", module.name);
@@ -168,7 +180,7 @@ fn compile_module_to_output(module: Module, config: &PhirConfig) -> Result<Strin
     }
 
     // Convert PHIR to MLIR text
-    let mlir_text = mlir_lowering::phir_to_mlir(&module, config)?;
+    let mlir_text = mlir_lowering::phir_to_mlir(module, config)?;
 
     // Debug: print MLIR if debug mode is enabled
     if config.debug {
@@ -200,24 +212,36 @@ fn compile_module_to_output(module: Module, config: &PhirConfig) -> Result<Strin
 /// Compile HUGR JSON directly to LLVM IR via PHIR pipeline
 ///
 /// This function provides a direct path from HUGR JSON to LLVM IR for Python bindings
+///
+/// # Errors
+///
+/// Returns an error if HUGR parsing or LLVM IR generation fails
 pub fn compile_hugr_via_phir(hugr_json: &str, config: &PhirConfig) -> Result<String> {
     // Parse HUGR to PHIR (handles both actual HUGR and simplified test format)
     let module = hugr_parser::parse_hugr_to_phir(hugr_json)?;
-    compile_module_to_output(module, config)
+    compile_module_to_output(&module, config)
 }
 
 /// Compile HUGR bytes (JSON or binary) to LLVM IR via PHIR pipeline
 ///
 /// This function handles both JSON and binary HUGR formats
+///
+/// # Errors
+///
+/// Returns an error if HUGR parsing or LLVM IR generation fails
 pub fn compile_hugr_bytes_via_phir(hugr_bytes: &[u8], config: &PhirConfig) -> Result<String> {
     // Parse HUGR to PHIR
     let module = hugr_parser::parse_hugr_bytes_to_phir(hugr_bytes)?;
-    compile_module_to_output(module, config)
+    compile_module_to_output(&module, config)
 }
 
 /// Convert HUGR to PHIR and then to MLIR text representation
 ///
 /// This function provides a path from HUGR to MLIR text format for debugging and analysis
+///
+/// # Errors
+///
+/// Returns an error if HUGR parsing or MLIR conversion fails
 pub fn hugr_to_phir_mlir(hugr_json: &str, config: &PhirConfig) -> Result<String> {
     // Parse HUGR to PHIR
     let module = hugr_parser::parse_hugr_to_phir(hugr_json)?;

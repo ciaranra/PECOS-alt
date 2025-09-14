@@ -15,92 +15,113 @@ This package provides Python bindings for high-performance Rust implementations 
 components within the PECOS framework, enabling efficient quantum circuit simulation and error correction computations.
 """
 
-# ruff: noqa: TID252
-from importlib.metadata import PackageNotFoundError, version
-import os
 import ctypes
+import logging
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from typing import Any, NoReturn
 
-# Load the actual Selene runtime library
-try:
-    selene_paths = [
-        # Use the real libselene.so from Selene repo
-        "../selene/target/debug/libselene.so",
-        "../selene/target/release/libselene.so",
-        # Fallback paths
-        "target/debug/libselene.so",
-        "target/release/libselene.so",
-    ]
-    selene_loaded = False
-    for path in selene_paths:
-        if os.path.exists(path):
-            ctypes.CDLL(path, mode=ctypes.RTLD_GLOBAL)
-            print(f"Loaded Selene runtime from: {path}")
-            selene_loaded = True
-            break
-
-    if not selene_loaded:
-        print("Warning: Could not load Selene runtime library")
-except Exception as e:
-    print(f"Warning: Could not load Selene runtime: {e}")
-
-from pecos_rslib.rssparse_sim import SparseSimRs
+# Import all modules at the top to avoid E402 errors
+from pecos_rslib._pecos_rslib import (
+    ByteMessage,
+    ByteMessageBuilder,
+    QuestDensityMatrix,
+    QuestStateVec,
+    SeleneLibraryEngine,
+    ShotMap,
+    ShotVec,
+    SparseStabEngineRs,
+    StateVecEngineRs,
+)
 from pecos_rslib.cppsparse_sim import CppSparseSimRs
-from pecos_rslib.rsstate_vec import StateVecRs
 from pecos_rslib.rscoin_toss import CoinToss
 from pecos_rslib.rspauli_prop import PauliPropRs
-from pecos_rslib._pecos_rslib import ByteMessage
-from pecos_rslib._pecos_rslib import ByteMessageBuilder
+from pecos_rslib.rssparse_sim import SparseSimRs
+from pecos_rslib.rsstate_vec import StateVecRs
 
-# Note: Bridge plugin is now in quantum-pecos (pecos.engines.selene_bridge_plugin)
-from pecos_rslib._pecos_rslib import StateVecEngineRs
-from pecos_rslib._pecos_rslib import SparseStabEngineRs
-from pecos_rslib._pecos_rslib import QuestStateVec
-from pecos_rslib._pecos_rslib import QuestDensityMatrix
+# Try to import optional components
+try:
+    from pecos_rslib._pecos_rslib import compile_hugr_to_llvm
+except ImportError:
+    # Fallback if not available
+    def compile_hugr_to_llvm(*_args, **_kwargs) -> NoReturn:
+        raise ImportError(
+            "compile_hugr_to_llvm requires pecos-rslib to be compiled with hugr-013 feature",
+        )
 
-# Shot result types
-from pecos_rslib._pecos_rslib import ShotVec
-from pecos_rslib._pecos_rslib import ShotMap
 
-# QASM simulation removed - use sim() API instead
-# The old qasm_sim module has been removed in favor of the modern sim() API
+try:
+    from pecos_rslib._pecos_rslib import compile_llvm_to_plugin
+except ImportError:
+    # Fallback if not available
+    def compile_llvm_to_plugin(*_args, **_kwargs) -> NoReturn:
+        raise ImportError("compile_llvm_to_plugin is not available in this build")
 
-# LLVM execution exports
-# from pecos_rslib._pecos_rslib import execute_llvm  # Not currently registered
-# from pecos_rslib._pecos_rslib import reset_llvm_runtime  # Not currently registered
 
-# HUGR to LLVM compilation
-# Note: compile_llvm_to_plugin has been removed - Selene uses native executables, not plugins
+try:
+    from pecos_rslib.phir import PhirJsonEngine, PhirJsonSimulation
 
-# HUGR to LLVM compilation - currently not registered
-# try:
-#     from pecos_rslib._pecos_rslib import compile_hugr_to_llvm
-# except ImportError:
-#     # Not available if compiled without hugr-013 feature
-#     def compile_hugr_to_llvm(*args, **kwargs):
-#         raise ImportError("compile_hugr_to_llvm requires pecos-rslib to be compiled with hugr-013 feature")
+    _phir_imports_available = True
+except ImportError:
+    _phir_imports_available = False
 
-# LLVM and Selene are now part of the unified API
+    # Provide stubs
+    class PhirJsonEngine:
+        def __init__(self, *args, **kwargs):
+            raise ImportError("PhirJsonEngine not available")
 
-# Selene library engine
-from pecos_rslib._pecos_rslib import SeleneLibraryEngine
+    class PhirJsonSimulation:
+        def __init__(self, *args, **kwargs):
+            raise ImportError("PhirJsonSimulation not available")
+
+
+logger = logging.getLogger(__name__)
+
+
+def _load_selene_runtime():
+    """Load the Selene runtime library if available."""
+    try:
+        selene_paths = [
+            # Use the real libselene.so from Selene repo
+            "../selene/target/debug/libselene.so",
+            "../selene/target/release/libselene.so",
+            # Fallback paths
+            "target/debug/libselene.so",
+            "target/release/libselene.so",
+        ]
+        for path_str in selene_paths:
+            if Path(path_str).exists():
+                ctypes.CDLL(path_str, mode=ctypes.RTLD_GLOBAL)
+                logger.info(f"Loaded Selene runtime from: {path_str}")
+                return True
+
+        logger.warning("Could not load Selene runtime library")
+        return False
+    except (OSError, ImportError, AttributeError) as e:
+        logger.warning(f"Could not load Selene runtime: {e}")
+        return False
+
+
+# Load the Selene runtime library
+_selene_loaded = _load_selene_runtime()
 
 # Guppy conversion utilities - try importing but don't fail
 try:
     from pecos_rslib.guppy_conversion import guppy_to_hugr
 except ImportError:
 
-    def guppy_to_hugr(*args, **kwargs):
-        raise ImportError("guppy_to_hugr not available")
+    def guppy_to_hugr(*_args, **_kwargs):
+        msg = "guppy_to_hugr not available"
+        raise ImportError(msg)
 
 
 # Program types - try importing but don't fail
 try:
     from pecos_rslib.programs import (
-        QasmProgram,
-        LlvmProgram,
         HugrProgram,
+        LlvmProgram,
         PhirJsonProgram,
+        QasmProgram,
         WasmProgram,
         WatProgram,
     )
@@ -108,33 +129,39 @@ except ImportError:
     # Provide stubs if not available
     class QasmProgram:
         @staticmethod
-        def from_string(qasm):
-            raise ImportError("QasmProgram not available")
+        def from_string(_qasm: str) -> "QasmProgram":
+            msg = "QasmProgram not available"
+            raise ImportError(msg)
 
     class LlvmProgram:
         @staticmethod
-        def from_string(llvm):
-            raise ImportError("LlvmProgram not available")
+        def from_string(_llvm: str) -> "LlvmProgram":
+            msg = "LlvmProgram not available"
+            raise ImportError(msg)
 
     class HugrProgram:
         @staticmethod
-        def from_bytes(bytes):
-            raise ImportError("HugrProgram not available")
+        def from_bytes(_bytes: bytes) -> "HugrProgram":
+            msg = "HugrProgram not available"
+            raise ImportError(msg)
 
     class PhirJsonProgram:
         @staticmethod
-        def from_json(json):
-            raise ImportError("PhirJsonProgram not available")
+        def from_json(_json: str) -> "PhirJsonProgram":
+            msg = "PhirJsonProgram not available"
+            raise ImportError(msg)
 
     class WasmProgram:
         @staticmethod
-        def from_bytes(bytes):
-            raise ImportError("WasmProgram not available")
+        def from_bytes(_bytes: bytes) -> "WasmProgram":
+            msg = "WasmProgram not available"
+            raise ImportError(msg)
 
     class WatProgram:
         @staticmethod
-        def from_string(wat):
-            raise ImportError("WatProgram not available")
+        def from_string(_wat: str) -> "WatProgram":
+            msg = "WatProgram not available"
+            raise ImportError(msg)
 
 
 # Import the new sim API - use Python wrapper that handles Guppy
@@ -158,114 +185,114 @@ except ImportError:
             sim = _sim_func  # Override any module import with the function
         except ImportError:
 
-            def sim(*args, **kwargs):
+            def sim(*_args, **_kwargs) -> None:
                 raise ImportError(
-                    "sim() function not available - ensure pecos-rslib is built with sim support"
+                    "sim() function not available - ensure pecos-rslib is built with sim support",
                 )
 
 
 # Try to import other sim-related functions but don't fail if unavailable
 try:
     from pecos_rslib.sim import (
-        qasm_engine,
-        llvm_engine,
-        selene_engine,
-        phir_json_engine,
-        QasmEngineBuilder,
-        LlvmEngineBuilder,
-        SeleneEngineBuilder,
-        PhirJsonEngineBuilder,
-        SimBuilder,
-        GeneralNoiseModelBuilder,
-        DepolarizingNoiseModelBuilder,
         BiasedDepolarizingNoiseModelBuilder,
+        DepolarizingNoiseModelBuilder,
+        GeneralNoiseModelBuilder,
+        LlvmEngineBuilder,
+        PhirJsonEngineBuilder,
+        QasmEngineBuilder,
+        SeleneEngineBuilder,
+        SimBuilder,
+        llvm_engine,
+        phir_json_engine,
+        qasm_engine,
+        selene_engine,
     )
 except ImportError:
     # Provide stubs if not available
-    def qasm_engine(*args, **kwargs):
+    def qasm_engine(*_args, **_kwargs) -> NoReturn:
         raise ImportError("qasm_engine not available")
 
-    def llvm_engine(*args, **kwargs):
+    def llvm_engine(*_args, **_kwargs) -> NoReturn:
         raise ImportError("llvm_engine not available")
 
-    def selene_engine(*args, **kwargs):
+    def selene_engine(*_args, **_kwargs) -> NoReturn:
         raise ImportError("selene_engine not available")
 
-    def phir_json_engine(*args, **kwargs):
+    def phir_json_engine(*_args, **_kwargs) -> NoReturn:
         raise ImportError("phir_json_engine not available")
 
     # Builder classes
     class QasmEngineBuilder:
-        def __init__(self):
+        def __init__(self) -> None:
             raise ImportError("QasmEngineBuilder not available")
 
     class LlvmEngineBuilder:
-        def __init__(self):
+        def __init__(self) -> None:
             raise ImportError("LlvmEngineBuilder not available")
 
     class SeleneEngineBuilder:
-        def __init__(self):
+        def __init__(self) -> None:
             raise ImportError("SeleneEngineBuilder not available")
 
     class PhirJsonEngineBuilder:
-        def __init__(self):
+        def __init__(self) -> None:
             raise ImportError("PhirJsonEngineBuilder not available")
 
     class SimBuilder:
-        def __init__(self):
+        def __init__(self) -> None:
             raise ImportError("SimBuilder not available")
 
     class GeneralNoiseModelBuilder:
-        def __init__(self):
+        def __init__(self) -> None:
             raise ImportError("GeneralNoiseModelBuilder not available")
 
     class DepolarizingNoiseModelBuilder:
-        def __init__(self):
+        def __init__(self) -> None:
             raise ImportError("DepolarizingNoiseModelBuilder not available")
 
     class BiasedDepolarizingNoiseModelBuilder:
-        def __init__(self):
+        def __init__(self) -> None:
             raise ImportError("BiasedDepolarizingNoiseModelBuilder not available")
 
 
 # Import quantum engine builders from sim module - try but don't fail
 try:
     from pecos_rslib.sim import (
-        StateVectorEngineBuilder,
         SparseStabilizerEngineBuilder,
-        state_vector,
-        sparse_stabilizer,
-        sparse_stab,
-        general_noise,
-        depolarizing_noise,
+        StateVectorEngineBuilder,
         biased_depolarizing_noise,
+        depolarizing_noise,
+        general_noise,
+        sparse_stab,
+        sparse_stabilizer,
+        state_vector,
     )
 except ImportError:
     # Provide stubs
     class StateVectorEngineBuilder:
-        def __init__(self):
+        def __init__(self) -> None:
             raise ImportError("StateVectorEngineBuilder not available")
 
     class SparseStabilizerEngineBuilder:
-        def __init__(self):
+        def __init__(self) -> None:
             raise ImportError("SparseStabilizerEngineBuilder not available")
 
-    def state_vector(*args, **kwargs):
+    def state_vector(*_args, **_kwargs) -> NoReturn:
         raise ImportError("state_vector not available")
 
-    def sparse_stabilizer(*args, **kwargs):
+    def sparse_stabilizer(*_args, **_kwargs) -> NoReturn:
         raise ImportError("sparse_stabilizer not available")
 
-    def sparse_stab(*args, **kwargs):
+    def sparse_stab(*_args, **_kwargs) -> NoReturn:
         raise ImportError("sparse_stab not available")
 
-    def general_noise(*args, **kwargs):
+    def general_noise(*_args, **_kwargs) -> NoReturn:
         raise ImportError("general_noise not available")
 
-    def depolarizing_noise(*args, **kwargs):
+    def depolarizing_noise(*_args, **_kwargs) -> NoReturn:
         raise ImportError("depolarizing_noise not available")
 
-    def biased_depolarizing_noise(*args, **kwargs):
+    def biased_depolarizing_noise(*_args, **_kwargs) -> NoReturn:
         raise ImportError("biased_depolarizing_noise not available")
 
 
@@ -273,30 +300,30 @@ except ImportError:
 try:
     from pecos_rslib.general_noise_factory import (
         GeneralNoiseFactory,
+        IonTrapNoiseFactory,
         create_noise_from_dict,
         create_noise_from_json,
-        IonTrapNoiseFactory,
     )
 except ImportError:
     # Provide stubs
     class GeneralNoiseFactory:
-        def __init__(self):
+        def __init__(self) -> None:
             raise ImportError("GeneralNoiseFactory not available")
 
-    def create_noise_from_dict(*args, **kwargs):
+    def create_noise_from_dict(*_args, **_kwargs) -> NoReturn:
         raise ImportError("create_noise_from_dict not available")
 
-    def create_noise_from_json(*args, **kwargs):
+    def create_noise_from_json(*_args, **_kwargs) -> NoReturn:
         raise ImportError("create_noise_from_json not available")
 
     class IonTrapNoiseFactory:
-        def __init__(self):
+        def __init__(self) -> None:
             raise ImportError("IonTrapNoiseFactory not available")
 
 
 # Import namespace modules for better discoverability - try but don't fail
 try:
-    from pecos_rslib import noise, quantum, programs
+    from pecos_rslib import noise, programs, quantum
 except ImportError:
     # Create empty namespace objects
     import types
@@ -310,24 +337,28 @@ RUST_HUGR_AVAILABLE = True  # Available via sim() API
 HUGR_LLVM_PIPELINE_AVAILABLE = True  # Available via sim() API
 
 
-def check_rust_hugr_availability():
+def check_rust_hugr_availability() -> tuple[bool, str]:
     """Check if Rust HUGR backend is available."""
     # The sim() API handles HUGR internally, so we report it as available
     return True, "HUGR support available via sim() API"
 
 
-def RustHugrCompiler(*args, **kwargs):
+def RustHugrCompiler(*_args, **_kwargs) -> NoReturn:
     raise ImportError("HUGR-LLVM pipeline not available")
 
 
-def RustHugrLlvmEngine(*args, **kwargs):
+def RustHugrLlvmEngine(*_args, **_kwargs) -> NoReturn:
     raise ImportError("HUGR-LLVM pipeline not available")
 
 
-def compile_hugr_to_llvm_rust(hugr_bytes, output_path=None):
+def compile_hugr_to_llvm_rust(
+    hugr_bytes: bytes,
+    output_path: str | None = None,
+) -> str:
     """Compile HUGR to LLVM using Python fallback."""
     # HUGR is a binary format, not JSON
     # For now, return a stub LLVM IR that matches what would be generated
+    _ = hugr_bytes  # Will be used when actual compilation is implemented
     llvm_ir = """; ModuleID = 'hugr_module'
 source_filename = "hugr.ll"
 
@@ -366,57 +397,14 @@ entry:
     return llvm_ir
 
 
-def create_llvm_engine_from_hugr_rust(*args, **kwargs):
+def create_llvm_engine_from_hugr_rust(*_args, **_kwargs) -> NoReturn:
     raise ImportError("HUGR-LLVM pipeline not available")
 
 
-# Try to import compile_hugr_to_llvm from Rust
-try:
-    from pecos_rslib._pecos_rslib import compile_hugr_to_llvm
-except ImportError:
-    # Fallback if not available
-    def compile_hugr_to_llvm(*args, **kwargs):
-        raise ImportError(
-            "compile_hugr_to_llvm requires pecos-rslib to be compiled with hugr-013 feature"
-        )
+# All conditional imports are now at the top of the file
 
 
-# Try to import compile_llvm_to_plugin from Rust
-try:
-    from pecos_rslib._pecos_rslib import compile_llvm_to_plugin
-except ImportError:
-    # Fallback if not available
-    def compile_llvm_to_plugin(*args, **kwargs):
-        raise ImportError("compile_llvm_to_plugin is not available in this build")
-
-
-# Import PHIR pipeline functionality (core part of PECOS) - try but don't fail
-try:
-    from pecos_rslib.phir import (
-        hugr_to_phir_mlir,
-        compile_hugr_via_phir,
-        compile_and_execute_via_phir,
-        PhirCompiler,
-    )
-except ImportError:
-    # Provide stubs
-    def hugr_to_phir_mlir(*args, **kwargs):
-        raise ImportError(
-            "PHIR pipeline has been deprecated. Use the unified sim() API instead."
-        )
-
-    def compile_hugr_via_phir(*args, **kwargs):
-        raise ImportError("compile_hugr_via_phir not available")
-
-    def compile_and_execute_via_phir(*args, **kwargs):
-        raise ImportError("compile_and_execute_via_phir not available")
-
-    class PhirCompiler:
-        def __init__(self):
-            raise ImportError("PhirCompiler not available")
-
-
-def get_compilation_backends():
+def get_compilation_backends() -> dict[str, Any]:
     """Get information about available compilation backends.
 
     Returns:
@@ -460,6 +448,9 @@ __all__ = [
     # QuEST simulators
     "QuestStateVec",
     "QuestDensityMatrix",
+    # Selene engine
+    "SeleneLibraryEngine",
+    "selene_engine",
     # QASM simulation - DEPRECATED: Use sim() instead
     # "NoiseModel",  # Deprecated
     # "QuantumEngine",  # Deprecated
@@ -502,10 +493,12 @@ __all__ = [
     "RUST_HUGR_AVAILABLE",
     "HUGR_LLVM_PIPELINE_AVAILABLE",
     # PHIR pipeline functionality
-    "hugr_to_phir_mlir",
-    "compile_hugr_via_phir",
-    "compile_and_execute_via_phir",
-    "PhirCompiler",
+    "PhirJsonEngine",
+    "PhirJsonEngineBuilder",
+    "PhirJsonProgram",
+    "PhirJsonSimulation",
+    "compile_hugr_to_llvm",
+    "phir_json_engine",
     # Backend information
     "get_compilation_backends",
     # New sim API

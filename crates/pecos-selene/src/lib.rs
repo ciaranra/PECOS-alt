@@ -55,7 +55,6 @@ pub mod prelude;
 pub mod program;
 pub mod selene_executable_builder;
 pub mod selene_executable_engine;
-pub mod selene_fast_engine;
 pub mod selene_in_process_engine;
 pub mod selene_library_engine;
 pub mod selene_runtime_init;

@@ -242,6 +242,11 @@ attributes #0 = { "EntryPoint" }
 #[test]
 #[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_selene_engine_in_hybrid_setup() -> Result<(), PecosError> {
+    // Helper functions to verify trait implementations
+    fn assert_is_classical_engine<T: ClassicalEngine>(_: &T) {}
+    fn assert_is_control_engine<T: ControlEngine>(_: &T) {}
+    fn assert_is_send_sync_clone<T: Send + Sync + Clone>(_: &T) {}
+
     println!("=== Testing SeleneEngine for HybridEngine Compatibility ===");
 
     let simple_llvm = r#"
@@ -259,11 +264,6 @@ attributes #0 = { "EntryPoint" }
 
     let engine =
         SeleneExecutableEngine::new(1)?.with_llvm_program(LlvmProgram::from_ir(simple_llvm));
-
-    // Verify it implements all required traits for HybridEngine
-    fn assert_is_classical_engine<T: ClassicalEngine>(_: &T) {}
-    fn assert_is_control_engine<T: ControlEngine>(_: &T) {}
-    fn assert_is_send_sync_clone<T: Send + Sync + Clone>(_: &T) {}
 
     assert_is_classical_engine(&engine);
     assert_is_control_engine(&engine);

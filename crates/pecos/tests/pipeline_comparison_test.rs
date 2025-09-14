@@ -127,7 +127,7 @@ impl CircuitValidator for BellStateValidator {
                                     break;
                                 }
                                 let bit_value = (encoded >> bit_idx) & 1;
-                                values.push(bit_value as u32);
+                                values.push(u32::try_from(bit_value).unwrap_or(0));
                             }
                             if !values.is_empty() {
                                 return values;
@@ -267,7 +267,7 @@ impl CircuitValidator for HadamardValidator {
                     match data {
                         pecos_engines::shot_results::Data::I64(n) => {
                             // For single qubit, just take the least significant bit
-                            let bit_value = (*n & 1) as u32;
+                            let bit_value = u32::try_from(*n & 1).unwrap_or(0);
                             return vec![bit_value];
                         }
                         pecos_engines::shot_results::Data::U32(n) => {
@@ -378,7 +378,7 @@ impl CircuitValidator for GhzStateValidator {
                             // Extract exactly 3 bits for GHZ state
                             for bit_idx in 0..3 {
                                 let bit_value = (encoded >> bit_idx) & 1;
-                                values.push(bit_value as u32);
+                                values.push(u32::try_from(bit_value).unwrap_or(0));
                             }
                             return values;
                         }
@@ -597,18 +597,18 @@ fn compare_pipelines<V: CircuitValidator>(
             // Validate quantum behavior for both
             print!("Validating HUGR-LLVM quantum behavior... ");
             match validator.validate_quantum_behavior(hugr_results) {
-                Ok(()) => println!("✓ PASS"),
+                Ok(()) => println!("PASS"),
                 Err(e) => {
-                    println!("✗ FAIL: {e}");
+                    println!("FAIL: {e}");
                     comparison_failed = true;
                 }
             }
 
             print!("Validating PHIR quantum behavior... ");
             match validator.validate_quantum_behavior(phir_results) {
-                Ok(()) => println!("✓ PASS"),
+                Ok(()) => println!("PASS"),
                 Err(e) => {
-                    println!("✗ FAIL: {e}");
+                    println!("FAIL: {e}");
                     comparison_failed = true;
                 }
             }
@@ -619,9 +619,9 @@ fn compare_pipelines<V: CircuitValidator>(
 
             print!("Comparing statistical distributions... ");
             if compare_outcome_distributions(&hugr_outcomes, &phir_outcomes) {
-                println!("✓ EQUIVALENT");
+                println!("EQUIVALENT");
             } else {
-                println!("✗ DIFFERENT");
+                println!("DIFFERENT");
                 comparison_failed = true;
 
                 // Detailed distribution analysis
@@ -654,7 +654,7 @@ fn compare_pipelines<V: CircuitValidator>(
             validator.name()
         )))
     } else {
-        println!("✓ Pipeline comparison successful for {}", validator.name());
+        println!("Pipeline comparison successful for {}", validator.name());
         Ok(())
     }
 }
@@ -773,18 +773,18 @@ fn test_debug_llvm_ir_comparison() {
     println!("\n1. Testing HUGR-LLVM pipeline...");
     let hugr_llvm_ir = match generate_hugr_llvm_ir(&hugr_path) {
         Ok(ir) => {
-            println!("   ✓ HUGR-LLVM IR generated ({} chars)", ir.len());
+            println!("   HUGR-LLVM IR generated ({} chars)", ir.len());
             Some(ir)
         }
         Err(e) => {
-            println!("   ✗ HUGR-LLVM IR generation failed: {e}");
+            println!("   HUGR-LLVM IR generation failed: {e}");
             None
         }
     };
 
     match pecos::hugr::run_hugr_llvm(&hugr_path, Some(10)) {
         Ok(engine) => {
-            println!("   ✓ HUGR-LLVM compilation successful");
+            println!("   HUGR-LLVM compilation successful");
             let num_qubits = engine.num_qubits();
             match MonteCarloEngine::run_with_engines(
                 engine,
@@ -794,24 +794,23 @@ fn test_debug_llvm_ir_comparison() {
                 1,
                 Some(42),
             ) {
-                Ok(results) => println!(
-                    "   ✓ HUGR-LLVM execution successful: {} shots",
-                    results.len()
-                ),
-                Err(e) => println!("   ✗ HUGR-LLVM execution failed: {e}"),
+                Ok(results) => {
+                    println!("   HUGR-LLVM execution successful: {} shots", results.len());
+                }
+                Err(e) => println!("   HUGR-LLVM execution failed: {e}"),
             }
         }
-        Err(e) => println!("   ✗ HUGR-LLVM compilation failed: {e}"),
+        Err(e) => println!("   HUGR-LLVM compilation failed: {e}"),
     }
 
     // Generate PHIR IR (failing) - skip execution for now
     println!("\n2. Testing PHIR compilation only...");
     match pecos::phir::run_phir_llvm(&hugr_path, Some(10), None) {
         Ok(_engine) => {
-            println!("   ✓ PHIR compilation successful");
+            println!("   PHIR compilation successful");
             println!("   (Skipping execution to avoid crash)");
         }
-        Err(e) => println!("   ✗ PHIR compilation failed: {e}"),
+        Err(e) => println!("   PHIR compilation failed: {e}"),
     }
 
     // Generate raw LLVM IR to examine differences
@@ -824,7 +823,7 @@ fn test_debug_llvm_ir_comparison() {
 
     match pecos::phir::compile_hugr_file_via_phir(&hugr_path, Some(config)) {
         Ok(phir_ir) => {
-            println!("   ✓ PHIR LLVM IR generated ({} chars)", phir_ir.len());
+            println!("   PHIR LLVM IR generated ({} chars)", phir_ir.len());
 
             // Save to files for manual inspection
             let phir_path = temp_dir.path().join("phir_output.ll");
@@ -847,7 +846,7 @@ fn test_debug_llvm_ir_comparison() {
                 analyze_qubit_usage(&phir_ir);
             }
         }
-        Err(e) => println!("   ✗ PHIR LLVM IR generation failed: {e}"),
+        Err(e) => println!("   PHIR LLVM IR generation failed: {e}"),
     }
 
     println!("\n=== Debug files saved to: {:?} ===", temp_dir.path());
@@ -898,9 +897,9 @@ fn compare_llvm_ir_detailed(hugr_ir: &str, phir_ir: &str) {
             println!("PHIR:      {phir_sig}");
 
             if hugr_sig == phir_sig {
-                println!("✓ Function signatures match");
+                println!("Function signatures match");
             } else {
-                println!("⚠️  Function signatures differ!");
+                println!(" Function signatures differ!");
             }
         }
         _ => println!("Could not extract main functions for comparison"),
@@ -1017,7 +1016,7 @@ fn compare_function_declarations(hugr_ir: &str, phir_ir: &str) {
     }
 
     if only_in_hugr.is_empty() && only_in_phir.is_empty() {
-        println!("✓ All function declarations match");
+        println!("All function declarations match");
     }
 }
 
@@ -1080,16 +1079,16 @@ fn analyze_qubit_usage(llvm_ir: &str) {
         // - 2 measurements (q0 and q1)
 
         if alloc_count != 2 {
-            println!("  ⚠️  Expected 2 qubit allocations for Bell state, found {alloc_count}");
+            println!("   Expected 2 qubit allocations for Bell state, found {alloc_count}");
         }
         if h_gates != 1 {
-            println!("  ⚠️  Expected 1 H gate for Bell state, found {h_gates}");
+            println!("   Expected 1 H gate for Bell state, found {h_gates}");
         }
         if cnot_gates != 1 {
-            println!("  ⚠️  Expected 1 CNOT gate for Bell state, found {cnot_gates}");
+            println!("   Expected 1 CNOT gate for Bell state, found {cnot_gates}");
         }
         if measurements != 2 {
-            println!("  ⚠️  Expected 2 measurements for Bell state, found {measurements}");
+            println!("   Expected 2 measurements for Bell state, found {measurements}");
         }
     }
 }
@@ -1121,10 +1120,10 @@ fn test_all_pipeline_comparisons() -> Result<(), PecosError> {
     }
 
     if failed_tests.is_empty() {
-        println!("\n🎉 All pipeline comparisons passed!");
+        println!("\nAll pipeline comparisons passed!");
         Ok(())
     } else {
-        println!("\n❌ Some pipeline comparisons failed:");
+        println!("\nSome pipeline comparisons failed:");
         for failure in &failed_tests {
             println!("  - {failure}");
         }

@@ -41,6 +41,10 @@ impl CFGAwareCompiler {
     }
 
     /// Process a CFG node and all its children blocks
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if LLVM IR generation fails
     pub fn process_cfg(
         &mut self,
         nodes: &[Value],
@@ -56,7 +60,7 @@ impl CFGAwareCompiler {
 
         for (node_id, node) in nodes.iter().enumerate() {
             if let Some(parent) = node.get("parent").and_then(serde_json::Value::as_u64)
-                && parent as usize == cfg_node_id
+                && usize::try_from(parent).is_ok_and(|p| p == cfg_node_id)
                 && let Some(op) = node.get("op").and_then(|o| o.as_str())
             {
                 match op {
@@ -91,15 +95,15 @@ impl CFGAwareCompiler {
                     tgt_arr.get(1).and_then(serde_json::Value::as_u64),
                 )
             {
-                let src_id = src_node as usize;
-                let tgt_id = tgt_node as usize;
+                let src_id = usize::try_from(src_node).unwrap_or(0);
+                let tgt_id = usize::try_from(tgt_node).unwrap_or(0);
 
                 // Check if this is a control flow edge between blocks
                 if dataflow_blocks.contains(&src_id) && dataflow_blocks.contains(&tgt_id) {
                     block_successors
                         .entry(src_id)
                         .or_default()
-                        .push((tgt_id, src_port as usize));
+                        .push((tgt_id, usize::try_from(src_port).unwrap_or(0)));
                 }
             }
         }
@@ -108,7 +112,7 @@ impl CFGAwareCompiler {
         if !dataflow_blocks.is_empty() {
             // Start with the first block (or entry block if identified)
             let start_block = entry_block
-                .and_then(|e| self.find_entry_successor(nodes, edges, e))
+                .and_then(|e| Self::find_entry_successor(nodes, edges, e))
                 .unwrap_or(dataflow_blocks[0]);
 
             self.process_dataflow_block(nodes, edges, start_block)?;
@@ -129,28 +133,27 @@ impl CFGAwareCompiler {
     }
 
     /// Find the successor of an Entry node
-    fn find_entry_successor(
-        &self,
-        _nodes: &[Value],
-        edges: &[Value],
-        entry_id: usize,
-    ) -> Option<usize> {
+    fn find_entry_successor(_nodes: &[Value], edges: &[Value], entry_id: usize) -> Option<usize> {
         for edge in edges {
             if let Some(edge_array) = edge.as_array()
                 && edge_array.len() >= 2
                 && let Some(src_arr) = edge_array[0].as_array()
                 && let Some(src_node) = src_arr.first().and_then(serde_json::Value::as_u64)
-                && src_node as usize == entry_id
+                && usize::try_from(src_node).is_ok_and(|s| s == entry_id)
                 && let Some(tgt_arr) = edge_array[1].as_array()
                 && let Some(tgt_node) = tgt_arr.first().and_then(serde_json::Value::as_u64)
             {
-                return Some(tgt_node as usize);
+                return usize::try_from(tgt_node).ok();
             }
         }
         None
     }
 
     /// Process a single `DataflowBlock`
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if LLVM IR generation fails
     pub fn process_dataflow_block(
         &mut self,
         nodes: &[Value],
@@ -165,7 +168,7 @@ impl CFGAwareCompiler {
 
         for (node_id, node) in nodes.iter().enumerate() {
             if let Some(parent) = node.get("parent").and_then(serde_json::Value::as_u64)
-                && parent as usize == block_id
+                && usize::try_from(parent).is_ok_and(|p| p == block_id)
                 && let Some(op) = node.get("op").and_then(|o| o.as_str())
             {
                 match op {
@@ -278,11 +281,12 @@ impl CFGAwareCompiler {
                     && edge_array.len() >= 2
                     && let Some(src_arr) = edge_array[0].as_array()
                     && let Some(src_node) = src_arr.first().and_then(serde_json::Value::as_u64)
-                    && src_node as usize == branch_id
+                    && usize::try_from(src_node).is_ok_and(|s| s == branch_id)
                     && let Some(tgt_arr) = edge_array[1].as_array()
                     && let Some(tgt_node) = tgt_arr.first().and_then(serde_json::Value::as_u64)
+                    && let Ok(tgt_idx) = usize::try_from(tgt_node)
                 {
-                    branch_targets.push(tgt_node as usize);
+                    branch_targets.push(tgt_idx);
                 }
             }
 
@@ -321,11 +325,13 @@ impl CFGAwareCompiler {
                 && edge_array.len() >= 2
                 && let Some(tgt_arr) = edge_array[1].as_array()
                 && let Some(tgt_node) = tgt_arr.first().and_then(serde_json::Value::as_u64)
-                && tgt_node as usize == target_id
+                && usize::try_from(tgt_node).is_ok_and(|t| t == target_id)
                 && let Some(src_arr) = edge_array[0].as_array()
                 && let Some(src_node) = src_arr.first().and_then(serde_json::Value::as_u64)
             {
-                let src_id = src_node as usize;
+                let Ok(src_id) = usize::try_from(src_node) else {
+                    continue;
+                };
                 if let Some(qubit) = self.qubit_vars.get(&src_id) {
                     return Some(qubit.clone());
                 }
@@ -346,11 +352,13 @@ impl CFGAwareCompiler {
                 && edge_array.len() >= 2
                 && let Some(tgt_arr) = edge_array[1].as_array()
                 && let Some(tgt_node) = tgt_arr.first().and_then(serde_json::Value::as_u64)
-                && tgt_node as usize == target_id
+                && usize::try_from(tgt_node).is_ok_and(|t| t == target_id)
                 && let Some(src_arr) = edge_array[0].as_array()
                 && let Some(src_node) = src_arr.first().and_then(serde_json::Value::as_u64)
             {
-                let src_id = src_node as usize;
+                let Ok(src_id) = usize::try_from(src_node) else {
+                    continue;
+                };
                 if let Some(result) = self.result_vars.get(&src_id) {
                     return Some(result.clone());
                 }
@@ -360,6 +368,10 @@ impl CFGAwareCompiler {
     }
 
     /// Generate the final LLVM IR
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if writing to the string buffer fails
     pub fn generate_llvm_ir(self) -> Result<String, SeleneError> {
         let mut ir = String::new();
 
@@ -386,6 +398,13 @@ impl CFGAwareCompiler {
 }
 
 /// Enhanced compile function that handles CFG properly
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - No modules are found in the JSON
+/// - The HUGR structure is invalid
+/// - LLVM IR generation fails
 pub fn compile_guppylang_json_with_cfg_support(json: &Value) -> Result<String, SeleneError> {
     log::warn!(
         "ENTERING CFG-AWARE COMPILER - This message should appear if CFG support is working"

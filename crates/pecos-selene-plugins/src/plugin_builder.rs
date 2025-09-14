@@ -120,7 +120,7 @@ impl PluginBuilder {
         let object_file = temp_dir.join("program.o");
 
         if self.config.verbose {
-            println!("Compiling LLVM to object file: {}", object_file.display());
+            log::info!("Compiling LLVM to object file: {}", object_file.display());
         }
 
         let mut cmd = Command::new("clang");
@@ -141,6 +141,7 @@ impl PluginBuilder {
     }
 
     /// Create the plugin wrapper that implements `RuntimeInterface`
+    #[allow(clippy::too_many_lines)]
     fn create_plugin_wrapper(&self) -> Result<PathBuf> {
         let temp_dir = self.temp_dir.as_ref().unwrap().path();
         let wrapper_path = temp_dir.join("plugin_wrapper.rs");
@@ -348,7 +349,7 @@ export_runtime_plugin!(crate::{type_name}PluginFactory);
         let wrapper_object = temp_dir.join("wrapper.o");
 
         if self.config.verbose {
-            println!("Compiling plugin wrapper: {}", wrapper_object.display());
+            log::info!("Compiling plugin wrapper: {}", wrapper_object.display());
         }
 
         // Create a temporary Cargo project
@@ -407,7 +408,7 @@ anyhow = "1.0"
         let plugin_path = self.config.output_dir.join(&plugin_name);
 
         if self.config.verbose {
-            println!("Linking plugin: {}", plugin_path.display());
+            log::info!("Linking plugin: {}", plugin_path.display());
         }
 
         // For now, just copy the wrapper library as it already includes everything

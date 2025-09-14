@@ -11,15 +11,12 @@
 
 """Test configuration and shared fixtures."""
 
+# Check if llvmlite is available
+import importlib.util
+
 import pytest
 
-# Check if llvmlite is available
-try:
-    import llvmlite  # noqa: F401
-
-    HAS_LLVMLITE = True
-except ImportError:
-    HAS_LLVMLITE = False
+HAS_LLVMLITE = importlib.util.find_spec("llvmlite") is not None
 
 # Decorator to skip tests that require llvmlite
 skipif_no_llvmlite = pytest.mark.skipif(

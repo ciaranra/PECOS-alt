@@ -16,14 +16,6 @@ use pecos_engines::ClassicalEngine;
 fn test_metrics_enabled_by_default() -> Result<(), PecosError> {
     println!("=== Testing Metrics Enabled by Default ===");
 
-    let _llvm_ir = r"
-define i32 @main() {
-entry:
-    ; Simple program that does nothing
-    ret i32 0
-}
-";
-
     let _engine = SeleneExecutableEngine::new(2)?;
 
     // TODO: Check metrics when API is available
@@ -37,13 +29,6 @@ entry:
 #[ignore = "Metrics API not yet implemented in SeleneExecutableEngine"]
 fn test_metrics_configuration() -> Result<(), PecosError> {
     println!("=== Testing Metrics Configuration ===");
-
-    let _llvm_ir = r"
-define i32 @main() {
-entry:
-    ret i32 0
-}
-";
 
     // Test with metrics disabled
     // Metrics API not available in SeleneExecutableEngine yet
@@ -79,14 +64,15 @@ fn test_metrics_collection_with_operations() -> Result<(), PecosError> {
     println!("=== Testing Metrics Collection with Operations ===");
 
     // Create a simple LLVM IR program (without calls to undefined functions)
-    let _llvm_ir = r"
-define i32 @main() {
-entry:
-    ; Simple program that doesn't call undefined functions
-    ; This tests the metrics infrastructure without execution
-    ret i32 0
-}
-";
+    // Note: The LLVM IR functionality is currently commented out
+    // let llvm_ir = r"
+    // define i32 @main() {
+    // entry:
+    //     ; Simple program that doesn't call undefined functions
+    //     ; This tests the metrics infrastructure without execution
+    //     ret i32 0
+    // }
+    // ";
 
     // let mut engine = SeleneExecutableEngine::new_with_metrics_todo(
     //     SeleneProgram::LlvmIr(llvm_ir.to_string()),
@@ -148,12 +134,13 @@ entry:
 fn test_metrics_disabled_returns_empty() -> Result<(), PecosError> {
     println!("=== Testing Metrics Disabled Returns Empty ===");
 
-    let _llvm_ir = r"
-define i32 @main() {
-entry:
-    ret i32 0
-}
-";
+    // Note: The LLVM IR functionality is currently commented out
+    // let llvm_ir = r"
+    // define i32 @main() {
+    // entry:
+    //     ret i32 0
+    // }
+    // ";
 
     // let mut engine = SeleneExecutableEngine::new_with_metrics_todo(
     //     SeleneProgram::LlvmIr(llvm_ir.to_string()),

@@ -26,8 +26,8 @@ def main() -> None:
     handler = HugrErrorHandler(bad_code)
     error_msg = handler.analyze_error(mock_error)
 
-    print("\nImproved error message:")
-    print(error_msg)
+    # print("\nImproved error message:")
+    # print(error_msg)
 
     # Check that the error message is helpful
     assert "PlaceNotUsedError" in error_msg
@@ -62,9 +62,6 @@ def main() -> None:
     handler = HugrErrorHandler(bad_code)
     error_msg = handler.analyze_error(mock_error)
 
-    print("\nError message for subscript error:")
-    print(error_msg)
-
     # Check the error message has helpful content
     assert "MoveOutOfSubscriptError" in error_msg
     assert "Cannot move out of array subscript" in error_msg
@@ -89,9 +86,6 @@ def test_name_conflict_error() -> None:
     handler = HugrErrorHandler("")
     error_msg = handler.analyze_error(mock_error)
 
-    print("\nError message for name conflict:")
-    print(error_msg)
-
     assert "NotCallableError" in error_msg
     assert "not callable" in error_msg
     assert "conflicts with a function name" in error_msg
@@ -114,26 +108,9 @@ def main() -> None:
     handler = HugrErrorHandler(code_with_double_use)
     error_msg = handler.analyze_error(mock_error)
 
-    print("\nError message for already used:")
-    print(error_msg)
+    # print("\nError message for already used:")
+    # print(error_msg)
 
     assert "AlreadyUsedError" in error_msg
     assert "already been consumed" in error_msg
     assert "can only be used once" in error_msg
-
-
-if __name__ == "__main__":
-    print("Testing improved HUGR error messages...\n")
-
-    test_place_not_used_error()
-    print("\n" + "=" * 60 + "\n")
-
-    test_move_out_of_subscript_error()
-    print("\n" + "=" * 60 + "\n")
-
-    test_name_conflict_error()
-    print("\n" + "=" * 60 + "\n")
-
-    test_already_used_error()
-
-    print("\nAll error message tests completed!")

@@ -128,8 +128,8 @@ impl HugrCompiler {
         hugr_bytes: &[u8],
         output_path: &Path,
     ) -> Result<PathBuf, PecosError> {
-        eprintln!("HUGR: Compiling HUGR bytes to {}", output_path.display());
-        eprintln!(
+        debug!("HUGR: Compiling HUGR bytes to {}", output_path.display());
+        debug!(
             "HUGR: First 8 bytes: {:?}",
             &hugr_bytes[..8.min(hugr_bytes.len())]
         );

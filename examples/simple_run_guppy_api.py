@@ -142,7 +142,7 @@ def demo_simple_api() -> None:
             print(f"  Rust backend: {rust_result['compilation_time']:.4f}s compilation")
         except RuntimeError as e:
             print(f"  Rust backend: Not available ({e})")
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             print(f"  Rust backend: Not available (unexpected error: {e})")
 
         try:
@@ -158,7 +158,7 @@ def demo_simple_api() -> None:
             )
         except RuntimeError as e:
             print(f"  External backend: Not available ({e})")
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             print(f"  External backend: Not available (unexpected error: {e})")
 
     except ImportError as e:
@@ -249,7 +249,7 @@ def demo_error_handling() -> None:
         run_guppy(simple, shots=10, backend="invalid_backend")
     except ValueError as e:
         print(f"[OK] Backend validation works: {type(e).__name__}")
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         print(f"[OK] Backend validation caught unexpected error: {type(e).__name__}")
     except ImportError:
         print("[WARNING] API not available for backend test")

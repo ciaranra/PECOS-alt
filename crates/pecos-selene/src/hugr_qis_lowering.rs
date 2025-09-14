@@ -12,6 +12,10 @@ use std::fmt::Write;
 ///
 /// This is a simplified version that demonstrates the approach.
 /// A full implementation would parse the HUGR and generate appropriate IR.
+///
+/// # Errors
+///
+/// Returns an error if writing to the string buffer fails
 pub fn generate_quantum_llvm_ir(module_name: &str, entry_point: &str) -> Result<String> {
     let mut llvm_ir = String::new();
 
@@ -191,6 +195,10 @@ pub fn get_qis_op_mapping() -> HashMap<&'static str, &'static str> {
 }
 
 /// Generate a simple Bell state circuit in LLVM IR
+///
+/// # Errors
+///
+/// Returns an error if writing to the string buffer fails
 pub fn generate_bell_state_llvm() -> Result<String> {
     let mut llvm_ir = String::new();
 

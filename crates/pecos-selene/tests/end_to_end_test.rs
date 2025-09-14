@@ -260,7 +260,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
-fn test_end_to_end_error_recovery() -> Result<(), PecosError> {
+fn test_end_to_end_error_recovery() {
     println!("=== End-to-End: Error Recovery ===");
 
     // Test 1: Empty program
@@ -304,8 +304,6 @@ attributes #0 = { "EntryPoint" }
     } else {
         println!("Engine created with 0 qubits (may be valid)");
     }
-
-    Ok(())
 }
 
 #[test]

@@ -1,23 +1,24 @@
 """Test structured configuration for sim() with direct method chaining."""
 
-import pytest
 from collections import Counter
-from pecos_rslib.sim import sim
-from pecos_rslib._pecos_rslib import (
-    QasmProgram,
-    GeneralNoiseModelBuilder,
-    DepolarizingNoiseModelBuilder,
-    BiasedDepolarizingNoiseModelBuilder,
+
+import pytest
+from pecos_rslib import (
+    biased_depolarizing_noise,
+    depolarizing_noise,
+    general_noise,
 )
+from pecos_rslib._pecos_rslib import QasmProgram
+from pecos_rslib.sim import sim
 
 
 class TestDirectMethodChaining:
     """Test the direct method chaining configuration approach."""
 
-    def test_general_noise_model_builder_basic(self):
-        """Test basic GeneralNoiseModelBuilder usage."""
+    def test_general_noise_model_builder_basic(self) -> None:
+        """Test basic general_noise() usage."""
         noise = (
-            GeneralNoiseModelBuilder()
+            general_noise()
             .with_seed(42)
             .with_p1_probability(0.001)
             .with_p2_probability(0.01)
@@ -30,20 +31,20 @@ class TestDirectMethodChaining:
         assert hasattr(noise, "with_seed")
         assert hasattr(noise, "with_p1_probability")
 
-    def test_general_noise_model_builder_validation(self):
-        """Test GeneralNoiseModelBuilder parameter validation."""
-        builder = GeneralNoiseModelBuilder()
+    def test_general_noise_model_builder_validation(self) -> None:
+        """Test general_noise() parameter validation."""
+        builder = general_noise()
 
         # Test invalid probability values
         # Rust panics raise BaseException
-        with pytest.raises(BaseException):
+        with pytest.raises(BaseException, match=".*"):  # Rust panic - any error message
             builder.with_p1_probability(-0.1)  # Negative probability
 
-        with pytest.raises(BaseException):
-            builder = GeneralNoiseModelBuilder()
+        builder = general_noise()
+        with pytest.raises(BaseException, match=".*"):  # Rust panic - any error message
             builder.with_p2_probability(1.5)  # > 1 probability
 
-    def test_direct_noise_builder_with_sim(self):
+    def test_direct_noise_builder_with_sim(self) -> None:
         """Test using builders directly with sim()."""
         qasm = """
         OPENQASM 2.0;
@@ -59,7 +60,7 @@ class TestDirectMethodChaining:
 
         # Create a configured noise builder
         noise = (
-            GeneralNoiseModelBuilder()
+            general_noise()
             .with_seed(42)
             .with_p1_probability(0.001)
             .with_p2_probability(0.01)
@@ -76,8 +77,8 @@ class TestDirectMethodChaining:
         assert 0 in counts  # 00
         assert 3 in counts  # 11
 
-    def test_depolarizing_noise_builder(self):
-        """Test DepolarizingNoiseModelBuilder."""
+    def test_depolarizing_noise_builder(self) -> None:
+        """Test depolarizing_noise() function."""
         qasm = """
         OPENQASM 2.0;
         include "qelib1.inc";
@@ -90,9 +91,7 @@ class TestDirectMethodChaining:
         prog = QasmProgram.from_string(qasm)
 
         # Create builder with specific config
-        noise = (
-            DepolarizingNoiseModelBuilder().with_seed(42).with_uniform_probability(0.1)
-        )
+        noise = depolarizing_noise().with_seed(42).with_uniform_probability(0.1)
 
         results = sim(prog).noise(noise).run(1000).to_dict()
 
@@ -100,8 +99,8 @@ class TestDirectMethodChaining:
         zeros = sum(1 for val in results["c"] if val == 0)
         assert 50 < zeros < 200
 
-    def test_biased_depolarizing_builder(self):
-        """Test BiasedDepolarizingNoiseModelBuilder."""
+    def test_biased_depolarizing_builder(self) -> None:
+        """Test biased_depolarizing_noise() function."""
         qasm = """
         OPENQASM 2.0;
         include "qelib1.inc";
@@ -114,18 +113,14 @@ class TestDirectMethodChaining:
         prog = QasmProgram.from_string(qasm)
 
         # Create builder with uniform probability
-        noise = (
-            BiasedDepolarizingNoiseModelBuilder()
-            .with_seed(42)
-            .with_uniform_probability(0.05)
-        )
+        noise = biased_depolarizing_noise().with_seed(42).with_uniform_probability(0.05)
 
         results = sim(prog).noise(noise).run(1000).to_dict()
 
         assert "c" in results
         assert len(results["c"]) == 1000
 
-    def test_complex_circuit_with_noise(self):
+    def test_complex_circuit_with_noise(self) -> None:
         """Test more complex circuit with noise."""
         qasm = """
         OPENQASM 2.0;
@@ -144,7 +139,7 @@ class TestDirectMethodChaining:
 
         # Configure general noise with specific parameters
         noise = (
-            GeneralNoiseModelBuilder()
+            general_noise()
             .with_seed(123)
             .with_p1_probability(0.005)
             .with_p2_probability(0.02)

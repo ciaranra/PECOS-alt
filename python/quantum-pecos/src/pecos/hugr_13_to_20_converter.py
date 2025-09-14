@@ -5,10 +5,27 @@ This module provides functions to convert HUGR packages from version 0.13
 """
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING
+
+from pecos.protocols import GuppyCallable
+
+if TYPE_CHECKING:
+    from hugr.package import Package
+
+try:
+    from hugr.package import Package as RuntimePackage
+except ImportError:
+    RuntimePackage = None
+
+try:
+    from guppylang import guppy as guppy_module
+except ImportError:
+    guppy_module = None
 
 
-def convert_list_to_array(value: Any) -> None:
+def convert_list_to_array(
+    value: dict | list | str | float | bool | None,
+) -> None:  # value: arbitrary JSON structure (dict/list/primitive)
     """Recursively convert List types to Array types in a JSON structure.
 
     This modifies the structure in-place.
@@ -47,7 +64,7 @@ def convert_list_to_array(value: Any) -> None:
             convert_list_to_array(item)
 
 
-def fix_hugr_13_to_20(package) -> None:
+def fix_hugr_13_to_20(package: "Package") -> None:
     """Fix HUGR 0.13 to 0.20 compatibility issues in a Package object.
 
     This modifies the package in-place.
@@ -66,9 +83,11 @@ def fix_hugr_13_to_20(package) -> None:
     fixed_json = json.dumps(json_obj)
 
     # Update the package in-place by replacing its modules
-    from hugr.package import Package
+    if RuntimePackage is None:
+        msg = "hugr package not available - install hugr"
+        raise ImportError(msg)
 
-    fixed_package = Package.from_json(fixed_json)
+    fixed_package = RuntimePackage.from_json(fixed_json)
 
     # Replace the modules
     package.modules.clear()
@@ -80,7 +99,7 @@ def fix_hugr_13_to_20(package) -> None:
         package.extensions.extend(fixed_package.extensions)
 
 
-def compile_guppy_to_hugr_fixed(guppy_function) -> bytes:
+def compile_guppy_to_hugr_fixed(guppy_function: GuppyCallable) -> bytes:
     """Compile a Guppy function to HUGR bytes with type fixes.
 
     This is a wrapper around the standard compilation that fixes
@@ -92,7 +111,9 @@ def compile_guppy_to_hugr_fixed(guppy_function) -> bytes:
     Returns:
         HUGR package as bytes (compatible with HUGR 0.20)
     """
-    from guppylang import guppy as guppy_module
+    if guppy_module is None:
+        msg = "guppylang not available - install with: pip install guppylang"
+        raise ImportError(msg)
 
     # Check if this is a Guppy function
     is_guppy = (

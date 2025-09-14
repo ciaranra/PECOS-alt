@@ -82,7 +82,7 @@ def run_circuit_test(
         circuit = generate_circuit(gates, num_qubits, circuit_depth)
 
         measurements = []
-        for i, state_sim in enumerate(state_sims):
+        for _i, state_sim in enumerate(state_sims):
             np.random.seed(seed)
             verbose = (
                 seed == 32 and state_sim.__name__ == "CppSparseSimRs"
@@ -95,19 +95,20 @@ def run_circuit_test(
                 verbose=verbose,
             )
             if seed == 32:
-                print(
-                    f"Simulator {i} ({state_sim.__name__}): {meas[:20]}...",
-                )  # Show first 20 measurements
+                # print(
+                #     f"Simulator {i} ({state_sim.__name__}): {meas[:20]}...",
+                # )  # Show first 20 measurements
+                pass
             measurements.append(meas)
 
         meas0 = measurements[0]
-        for i, meas in enumerate(measurements[1:], 1):
+        for _i, meas in enumerate(measurements[1:], 1):
             if meas0 != meas:
-                print("seed=", seed)
-                print("Simulator 0 measurements:", meas0)
-                print(f"Simulator {i} measurements:", meas)
-                print(f"Simulator types: {[type(s).__name__ for s in state_sims]}")
-                print(circuit)
+                # print("seed=", seed)
+                # print("Simulator 0 measurements:", meas0)
+                # print(f"Simulator {i} measurements:", meas)
+                # print(f"Simulator types: {[type(s).__name__ for s in state_sims]}")
+                # print(circuit)
                 return False
 
     return True
@@ -169,37 +170,39 @@ def run_a_circuit(
             if (
                 verbose and isinstance(state, CppSparseSimRs) and i == 26
             ):  # Debug the 27th operation
-                print(f"\n[DEBUG] Op {i}: {element} on qubit {q}, forcing outcome to 0")
+                pass
+                # print(f"\n[DEBUG] Op {i}: {element} on qubit {q}, forcing outcome to 0")
             m = state.run_gate(element, {q}, forced_outcome=0)
             m = m.get(q, 0)
             if verbose and isinstance(state, CppSparseSimRs) and i == 26:
-                print(f"[DEBUG] Result: {m}\n")
+                pass
+                # print(f"[DEBUG] Result: {m}\n")
             measurements.append(m)
 
         elif element == "init |0>":
-            if isinstance(q, np.ndarray):
-                q = tuple(q)  # noqa: PLW2901 - convert array to tuple
+            q_tuple = tuple(q) if isinstance(q, np.ndarray) else q
 
-            state.run_gate(element, {q}, forced_outcome=0)
+            state.run_gate(element, {q_tuple}, forced_outcome=0)
 
         else:
-            if isinstance(q, np.ndarray):
-                q = tuple(q)  # noqa: PLW2901 - convert array to tuple
+            q_tuple = tuple(q) if isinstance(q, np.ndarray) else q
 
-            state.run_gate(element, {q})
+            state.run_gate(element, {q_tuple})
 
         if verbose:
-            print("\ngate", element, q, "->")
+            # print("\ngate", element, q, "->")
             if m > -1:
-                print("result:", m)
+                pass
+                # print("result:", m)
 
             try:
                 state.print_tableau(state.stabs)
-                print("..")
+                # print("..")
                 state.print_tableau(state.destabs)
             except AttributeError:
                 pass
     if verbose:
-        print("\n!!! DONE\n\n")
+        pass
+        # print("\n!!! DONE\n\n")
 
     return measurements

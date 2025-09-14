@@ -37,7 +37,7 @@ pub fn pecos_bridge_init() {
         waiting_for_measurements: false,
         execution_complete: false,
     });
-    eprintln!("[Bridge] Callback interface initialized");
+    log::debug!("[Bridge] Callback interface initialized");
 }
 
 /// Bridge simulator calls this to send quantum operations to PECOS
@@ -61,10 +61,10 @@ pub unsafe fn pecos_bridge_send_operations(data: *const u8, len: usize) -> i32 {
     let mut state = CALLBACK_STATE.lock().unwrap();
     if let Some(ref mut state) = *state {
         state.outgoing_operations.push_back(message);
-        eprintln!("[Bridge] Queued operations ByteMessage ({len} bytes)");
+        log::trace!("[Bridge] Queued operations ByteMessage ({len} bytes)");
         0
     } else {
-        eprintln!("[Bridge] ERROR: Callback state not initialized");
+        log::error!("[Bridge] Callback state not initialized");
         -1
     }
 }
@@ -86,7 +86,7 @@ pub unsafe fn pecos_bridge_receive_measurements(data_out: *mut u8, max_len: usiz
         if let Some(message) = state.incoming_measurements.pop_front() {
             let bytes = message.as_bytes();
             if bytes.len() > max_len {
-                eprintln!("[Bridge] ERROR: Buffer too small for measurements");
+                log::error!("[Bridge] Buffer too small for measurements");
                 // Put it back
                 state.incoming_measurements.push_front(message);
                 return -1;
@@ -95,17 +95,17 @@ pub unsafe fn pecos_bridge_receive_measurements(data_out: *mut u8, max_len: usiz
             // Copy to output buffer
             unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), data_out, bytes.len()) };
 
-            eprintln!("[Bridge] Returned measurements ({} bytes)", bytes.len());
+            log::trace!("[Bridge] Returned measurements ({} bytes)", bytes.len());
             state.waiting_for_measurements = false;
-            bytes.len() as i32
+            i32::try_from(bytes.len()).unwrap_or(i32::MAX)
         } else {
             // No measurements available yet - Bridge should wait
             state.waiting_for_measurements = true;
-            eprintln!("[Bridge] No measurements available, waiting...");
+            log::debug!("[Bridge] No measurements available, waiting...");
             0
         }
     } else {
-        eprintln!("[Bridge] ERROR: Callback state not initialized");
+        log::error!("[Bridge] Callback state not initialized");
         -1
     }
 }
@@ -119,7 +119,7 @@ pub fn pecos_bridge_wait_for_measurements() {
     let mut state = CALLBACK_STATE.lock().unwrap();
     if let Some(ref mut state) = *state {
         state.waiting_for_measurements = true;
-        eprintln!("[Bridge] Signaled waiting for measurements");
+        log::debug!("[Bridge] Signaled waiting for measurements");
     }
 }
 
@@ -132,7 +132,7 @@ pub fn pecos_bridge_signal_complete() {
     let mut state = CALLBACK_STATE.lock().unwrap();
     if let Some(ref mut state) = *state {
         state.execution_complete = true;
-        eprintln!("[Bridge] Signaled execution complete");
+        log::debug!("[Bridge] Signaled execution complete");
     }
 }
 
@@ -164,7 +164,7 @@ pub fn pecos_provide_measurements(message: ByteMessage) {
     let mut state = CALLBACK_STATE.lock().unwrap();
     if let Some(ref mut state) = *state {
         state.incoming_measurements.push_back(message);
-        eprintln!("[PECOS] Provided measurements to Bridge");
+        log::trace!("[PECOS] Provided measurements to Bridge");
     }
 }
 
@@ -208,6 +208,6 @@ pub fn pecos_reset_callback_state() {
         state.incoming_measurements.clear();
         state.waiting_for_measurements = false;
         state.execution_complete = false;
-        eprintln!("[PECOS] Reset callback state for new shot");
+        log::debug!("[PECOS] Reset callback state for new shot");
     }
 }

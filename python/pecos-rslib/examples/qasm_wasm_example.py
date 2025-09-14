@@ -4,13 +4,14 @@ This example demonstrates how to call WebAssembly functions from QASM code,
 enabling custom classical computations within quantum circuits.
 """
 
-import tempfile
 import os
-from pecos_rslib import qasm_engine
+import tempfile
+
+from pecos_rslib import qasm_engine, sim
 from pecos_rslib.programs import QasmProgram
 
 
-def create_math_wat():
+def create_math_wat() -> str:
     """Create a WAT file with various mathematical functions."""
     return """
     (module
@@ -44,7 +45,7 @@ def create_math_wat():
     """
 
 
-def example_basic_wasm():
+def example_basic_wasm() -> None:
     """Basic example of calling WASM functions from QASM."""
     print("=== Basic WASM Function Calls ===")
 
@@ -94,7 +95,7 @@ def example_basic_wasm():
         os.unlink(wat_path)
 
 
-def example_quantum_with_wasm():
+def example_quantum_with_wasm() -> None:
     """Example combining quantum operations with WASM computations."""
     print("\n=== Quantum Circuit with WASM Processing ===")
 
@@ -136,7 +137,7 @@ def example_quantum_with_wasm():
 
     try:
         # Run simulation with WASM
-        results = qasm_sim(qasm).seed(42).wasm(wat_path).run(20)
+        results = sim(qasm).seed(42).wasm(wat_path).run(20)
 
         # Count occurrences of each weighted sum
         weighted_counts = {}
@@ -164,7 +165,7 @@ def example_quantum_with_wasm():
         os.unlink(wat_path)
 
 
-def example_error_handling():
+def example_error_handling() -> None:
     """Example showing error handling for WASM integration."""
     print("\n=== Error Handling Examples ===")
 
@@ -182,7 +183,7 @@ def example_error_handling():
     try:
         print("\n1. Trying to call non-existent function 'divide'...")
         try:
-            qasm_sim(qasm_missing_func).wasm(wat_path).build()
+            sim(qasm_missing_func).wasm(wat_path).build()
         except RuntimeError as e:
             print(f"   Expected error: {e}")
 
@@ -213,7 +214,7 @@ def example_error_handling():
     try:
         print("\n2. Trying to use WASM module without init function...")
         try:
-            qasm_sim(qasm_simple).wasm(wat_path).build()
+            sim(qasm_simple).wasm(wat_path).build()
         except RuntimeError as e:
             print(f"   Expected error: {e}")
 

@@ -20,8 +20,6 @@ def test_consecutive_gate_applications() -> None:
     )
 
     guppy_code = SlrConverter(prog).guppy()
-    print("\nGenerated code for consecutive individual gates:")
-    print(guppy_code)
 
     # Individual applications remain individual (not merged into loops)
     assert "quantum.h(q[0])" in guppy_code
@@ -42,8 +40,6 @@ def test_register_wide_generates_loop() -> None:
     )
 
     guppy_code = SlrConverter(prog).guppy()
-    print("\nGenerated code for register-wide gate:")
-    print(guppy_code)
 
     # Should generate a loop for register-wide operation
     assert "for i in range(0, 5):" in guppy_code
@@ -64,8 +60,6 @@ def test_mixed_individual_and_register_wide() -> None:
     )
 
     guppy_code = SlrConverter(prog).guppy()
-    print("\nGenerated code for mixed operations:")
-    print(guppy_code)
 
     # Should have loops for H and Z
     assert "for i in range(0, 4):" in guppy_code
@@ -96,8 +90,6 @@ def test_loop_in_function() -> None:
     )
 
     guppy_code = SlrConverter(prog).guppy()
-    print("\nGenerated code with function containing register-wide op:")
-    print(guppy_code)
 
     # Function should contain a loop
     assert (
@@ -122,8 +114,6 @@ def test_different_gates_separate_loops() -> None:
     )
 
     guppy_code = SlrConverter(prog).guppy()
-    print("\nGenerated code for different gates:")
-    print(guppy_code)
 
     # Should have separate loops for each gate type
     loop_count = guppy_code.count("for i in range(0, 3):")
@@ -150,25 +140,8 @@ def test_multiple_registers() -> None:
     )
 
     guppy_code = SlrConverter(prog).guppy()
-    print("\nGenerated code for multiple registers:")
-    print(guppy_code)
 
     # Should generate loops for both operations
     assert "for i in range(0, 3):" in guppy_code
     assert "quantum.h(q1[i])" in guppy_code
     assert "quantum.x(q2[i])" in guppy_code
-
-
-if __name__ == "__main__":
-    print("Testing loop generation for register-wide operations...")
-    print("=" * 60)
-
-    test_consecutive_gate_applications()
-    test_register_wide_generates_loop()
-    test_mixed_individual_and_register_wide()
-    test_loop_in_function()
-    test_different_gates_separate_loops()
-    test_multiple_registers()
-
-    print("\n" + "=" * 60)
-    print("SUCCESS: All loop generation tests passed!")

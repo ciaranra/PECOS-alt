@@ -47,7 +47,7 @@ def test_multiple_bounded_rand() -> None:
     rng.set_seed(42)
 
     for _ in range(100):
-        random_bound = random.randint(1, 2**32 - 1)  # noqa: S311
+        random_bound = random.randint(1, 2**32 - 1)
         rng.set_bound(random_bound)
         random_number = rng.rng_random()
         assert 0 <= random_number < random_bound

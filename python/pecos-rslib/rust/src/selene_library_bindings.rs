@@ -18,7 +18,7 @@ impl PySeleneLibraryEngine {
         let path = PathBuf::from(library_path);
         if !path.exists() {
             return Err(PyErr::new::<pyo3::exceptions::PyFileNotFoundError, _>(
-                format!("Library file not found: {path:?}"),
+                format!("Library file not found: {}", path.display()),
             ));
         }
 
@@ -40,6 +40,7 @@ impl PySeleneLibraryEngine {
     }
 
     /// Get the library path as a string
+    #[allow(clippy::unused_self)] // TODO: Implement properly when library_path field is accessible
     pub fn library_path(&self) -> String {
         // Access the library_path field (need to make it pub in the Rust side)
         // For now, return a placeholder

@@ -6,6 +6,7 @@ This module provides a structured interface for the compilation pipeline:
 3. LLVM/QIR -> Execution (PECOS)
 """
 
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
@@ -93,9 +94,12 @@ def compile_guppy_to_hugr(guppy_function: Callable) -> bytes:
 def compile_hugr_to_llvm(
     hugr_bytes: bytes,
     *,
-    debug_info: bool = False,
+    _debug_info: bool = False,
 ) -> str:
     """Compile HUGR bytes to LLVM IR string.
+
+    This function now prioritizes Selene's HUGR to LLVM compiler which
+    correctly handles both quantum and non-quantum functions.
 
     Args:
         hugr_bytes: HUGR package as bytes
@@ -105,9 +109,28 @@ def compile_hugr_to_llvm(
         LLVM IR as string (HUGR convention)
 
     Raises:
-        ImportError: If Rust HUGR backend is not available
+        ImportError: If no HUGR backend is available
         RuntimeError: If compilation fails
     """
+    # First, try to use Selene's compiler which handles non-quantum functions correctly
+    try:
+        from selene_helios_qis_plugin.build import compile_to_llvm_ir
+
+        # Selene's compiler expects HUGR envelope bytes
+        # If we receive JSON bytes, they should work as-is
+        return compile_to_llvm_ir(hugr_bytes)
+    except ImportError:
+        pass  # Selene not available, try other backends
+    except (RuntimeError, ValueError, TypeError) as e:
+        # Log the error but try other backends
+        import warnings
+
+        warnings.warn(
+            f"Selene compiler failed: {e}, trying PECOS backend",
+            stacklevel=2,
+        )
+
+    # Fall back to PECOS's compiler (which has the bug of adding quantum ops to non-quantum functions)
     try:
         from pecos_rslib import compile_hugr_to_llvm_rust
 
@@ -156,7 +179,7 @@ def compile_hugr_to_llvm(
 def execute_llvm(
     llvm_ir: str | Path,
     shots: int = 1000,
-    config: dict | None = None,  # noqa: ARG001
+    config: dict | None = None,
 ) -> dict:
     """Execute LLVM IR/QIR code.
 
@@ -180,21 +203,18 @@ def execute_llvm(
 
     # If llvm_ir is a string content, write to temporary file
     if isinstance(llvm_ir, str) and not Path(llvm_ir).exists():
-        import tempfile
-
         with tempfile.NamedTemporaryFile(mode="w", suffix=".ll", delete=False) as f:
             f.write(llvm_ir)
             temp_path = f.name
         try:
-            result = execute_llvm(temp_path, shots)
+            result = execute_llvm(temp_path, shots, config)
         finally:
-            import os
-
-            if os.path.exists(temp_path):
-                os.unlink(temp_path)
+            temp_file = Path(temp_path)
+            if temp_file.exists():
+                temp_file.unlink()
     else:
         # It's a path
-        result = execute_llvm(str(llvm_ir), shots)
+        result = execute_llvm(str(llvm_ir), shots, config)
 
     return {
         "results": result.get("results", []),

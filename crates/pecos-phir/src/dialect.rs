@@ -8,7 +8,7 @@ allowing for extensible operations and types.
 use crate::error::Result;
 use crate::ops::CustomOp;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, LazyLock, RwLock};
 
 /// Dialect definition
 pub trait Dialect: Send + Sync {
@@ -213,12 +213,18 @@ impl DialectRegistry {
 }
 
 // Global dialect registry
-lazy_static::lazy_static! {
-    static ref GLOBAL_REGISTRY: Arc<RwLock<DialectRegistry>> =
-        Arc::new(RwLock::new(DialectRegistry::new()));
-}
+static GLOBAL_REGISTRY: LazyLock<Arc<RwLock<DialectRegistry>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(DialectRegistry::new())));
 
 /// Register a dialect globally
+///
+/// # Errors
+///
+/// Returns an error if the dialect is already registered or if dialect initialization fails
+///
+/// # Panics
+///
+/// Panics if the global registry lock is poisoned
 pub fn register_dialect<D: Dialect + 'static>(dialect: D) -> Result<()> {
     GLOBAL_REGISTRY.write().unwrap().register_dialect(dialect)
 }
@@ -352,6 +358,10 @@ impl Dialect for PulseDialect {
 }
 
 /// Initialize standard dialects
+///
+/// # Errors
+///
+/// Returns an error if any dialect registration fails
 pub fn init_standard_dialects() -> Result<()> {
     register_dialect(QECDialect)?;
     register_dialect(PulseDialect)?;

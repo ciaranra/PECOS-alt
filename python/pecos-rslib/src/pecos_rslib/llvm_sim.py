@@ -15,18 +15,23 @@ Or for Guppy programs:
     results = selene_engine().program(guppy_func).to_sim().run(shots)
 """
 
-from typing import Dict, List, Optional
 from pecos_rslib import selene_engine
+from pecos_rslib.noise import (
+    BiasedDepolarizingNoise,
+    DepolarizingNoise,
+    GeneralNoise,
+    PassThroughNoise,
+)
 from pecos_rslib.programs import LlvmProgram
 
 
 def llvm_sim(
     llvm_ir: str,
     shots: int,
-    noise_model: Optional[object] = None,
-    seed: Optional[int] = None,
-    workers: Optional[int] = None,
-) -> Dict[str, List[int]]:
+    noise_model: object | None = None,
+    seed: int | None = None,
+    workers: int | None = None,
+) -> dict[str, list[int]]:
     """Run an LLVM IR quantum program simulation.
 
     NOTE: This function is provided for backward compatibility.
@@ -76,20 +81,11 @@ def llvm_sim(
     return result
 
 
-# Import noise models from the noise module
-from pecos_rslib.noise import (
-    DepolarizingNoise,
-    BiasedDepolarizingNoise,
-    PassThroughNoise,
-    GeneralNoise,
-)
-
 # Re-export for compatibility
 __all__ = [
-    "llvm_sim",
-    "DepolarizingNoise",
     "BiasedDepolarizingNoise",
-    "DepolarizingCustomNoise",
-    "PassThroughNoise",
+    "DepolarizingNoise",
     "GeneralNoise",
+    "PassThroughNoise",
+    "llvm_sim",
 ]

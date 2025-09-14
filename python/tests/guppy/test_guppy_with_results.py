@@ -4,63 +4,82 @@ This shows how Guppy programs should use result() to tag final outputs
 that Selene can extract from the result stream.
 """
 
+import json
 import tempfile
 from pathlib import Path
 
-try:
-    from guppylang import guppy
-    from guppylang.std.quantum import cx, h, measure, qubit
-
-    GUPPY_AVAILABLE = True
-except ImportError:
-    GUPPY_AVAILABLE = False
-
-# Check if Guppy has result function
-try:
-    from guppylang.std.io import result
-
-    GUPPY_RESULT_AVAILABLE = True
-except ImportError:
-    GUPPY_RESULT_AVAILABLE = False
-    # Try alternative import
-    try:
-        from guppylang.std import result
-
-        GUPPY_RESULT_AVAILABLE = True
-    except ImportError:
-        pass
+import pytest
 
 
-def test_guppy_with_explicit_results() -> None:
-    """Create Guppy programs that properly output tagged results."""
-    if not GUPPY_AVAILABLE:
-        print("Guppy not available")
-        return
+class TestGuppyWithResults:
+    """Test suite for Guppy programs using result() function for tagged outputs."""
 
-    print("=" * 60)
-    print("GUPPY PROGRAMS WITH RESULT TAGGING")
-    print("=" * 60)
+    @pytest.fixture
+    def check_guppy_imports(self) -> dict:
+        """Check and provide Guppy imports."""
+        try:
+            from guppylang import guppy
+            from guppylang.std.quantum import cx, h, measure, qubit
+        except ImportError:
+            pytest.skip("Guppy not available")
 
-    # Check what I/O functions are available
-    print("\nChecking Guppy I/O capabilities...")
-    try:
-        import guppylang.std.io as io
+        # Check for result function in various locations
+        result_func = None
+        result_location = None
 
-        print(f"guppylang.std.io available with: {dir(io)}")
-    except ImportError:
-        print("guppylang.std.io not found")
+        # Try different import locations for result()
+        try:
+            from guppylang.std.builtins import result
 
-    try:
-        import guppylang.std as std
+            result_func = result
+            result_location = "guppylang.std.builtins"
+        except ImportError:
+            try:
+                from guppylang.std.io import result
 
-        print(
-            f"guppylang.std available with: {[x for x in dir(std) if not x.startswith('_')]}",
-        )
-    except ImportError:
-        print("guppylang.std not found")
+                result_func = result
+                result_location = "guppylang.std.io"
+            except ImportError:
+                try:
+                    from guppylang.std import result
 
-    # Test 1: Simple measurement with result tagging
-    if GUPPY_RESULT_AVAILABLE:
+                    result_func = result
+                    result_location = "guppylang.std"
+                except ImportError:
+                    pass
+
+        return {
+            "guppy": guppy,
+            "quantum": {"h": h, "cx": cx, "measure": measure, "qubit": qubit},
+            "result": result_func,
+            "result_location": result_location,
+        }
+
+    def test_result_function_availability(self, check_guppy_imports: dict) -> None:
+        """Test that result() function is available and document its location."""
+        if check_guppy_imports["result"] is None:
+            pytest.skip("result() function not available in this Guppy version")
+
+        assert callable(
+            check_guppy_imports["result"],
+        ), "result should be a callable function"
+        assert (
+            check_guppy_imports["result_location"] is not None
+        ), "result function should have a known import location"
+
+    def test_simple_measurement_with_result(self, check_guppy_imports: dict) -> None:
+        """Test simple measurement with result tagging."""
+        if check_guppy_imports["result"] is None:
+            pytest.skip("result() function not available")
+
+        guppy = check_guppy_imports["guppy"]
+        q_ops = check_guppy_imports["quantum"]
+        result = check_guppy_imports["result"]
+
+        # Extract functions for use in guppy function
+        qubit = q_ops["qubit"]
+        h = q_ops["h"]
+        measure = q_ops["measure"]
 
         @guppy
         def measure_with_result() -> None:
@@ -71,11 +90,30 @@ def test_guppy_with_explicit_results() -> None:
             # Tag the measurement with a name for Selene to capture
             result("measurement_outcome", measurement)
 
-        print("\nProgram 1: measure_with_result defined")
-    else:
-        print("\nNote: result() function not available in this Guppy version")
+        # Test compilation
+        try:
+            from pecos.compilation_pipeline import compile_guppy_to_hugr
+        except ImportError:
+            pytest.skip("Compilation pipeline not available")
 
-        # Alternative: Return values become results
+        try:
+            hugr_bytes = compile_guppy_to_hugr(measure_with_result)
+        except Exception as e:
+            pytest.fail(f"Failed to compile measure_with_result: {e}")
+
+        assert hugr_bytes is not None, "Compilation should produce HUGR bytes"
+        assert len(hugr_bytes) > 0, "HUGR bytes should not be empty"
+
+    def test_measurement_with_return_fallback(self, check_guppy_imports: dict) -> None:
+        """Test measurement using return statement when result() is not available."""
+        guppy = check_guppy_imports["guppy"]
+        q_ops = check_guppy_imports["quantum"]
+
+        # Extract functions for use in guppy function
+        qubit = q_ops["qubit"]
+        h = q_ops["h"]
+        measure = q_ops["measure"]
+
         @guppy
         def measure_with_return() -> bool:
             """Return measurement - this should appear in results."""
@@ -83,42 +121,98 @@ def test_guppy_with_explicit_results() -> None:
             h(q)
             return measure(q)
 
-        print("\nProgram 1 (alternative): measure_with_return defined")
+        # Test compilation
+        try:
+            from pecos.compilation_pipeline import compile_guppy_to_hugr
+        except ImportError:
+            pytest.skip("Compilation pipeline not available")
 
-    # Test 2: Bell state with named results
-    if GUPPY_RESULT_AVAILABLE:
+        try:
+            hugr_bytes = compile_guppy_to_hugr(measure_with_return)
+        except Exception as e:
+            pytest.fail(f"Failed to compile measure_with_return: {e}")
 
-        @guppy
-        def bell_state_with_results() -> None:
-            """Create Bell state and output named results."""
-            q0, q1 = qubit(), qubit()
-            h(q0)
-            cx(q0, q1)
+        assert hugr_bytes is not None, "Compilation should produce HUGR bytes"
+        assert len(hugr_bytes) > 0, "HUGR bytes should not be empty"
 
-            # Measure and tag results
-            m0 = measure(q0)
-            m1 = measure(q1)
+    def test_bell_state_with_named_results(self, check_guppy_imports: dict) -> None:
+        """Test Bell state creation with named result outputs."""
+        if check_guppy_imports["result"] is None:
+            # Test fallback with return statement
+            guppy = check_guppy_imports["guppy"]
+            q_ops = check_guppy_imports["quantum"]
 
-            result("qubit_0", m0)
-            result("qubit_1", m1)
-            # Could also output a combined result
-            result("both_same", m0 == m1)  # Should always be True for Bell state
+            # Extract functions for use in guppy function
+            qubit = q_ops["qubit"]
+            h = q_ops["h"]
+            cx = q_ops["cx"]
+            measure = q_ops["measure"]
 
-        print("Program 2: bell_state_with_results defined")
-    else:
+            @guppy
+            def bell_state_with_return() -> tuple[bool, bool]:
+                """Return Bell state measurements."""
+                q0, q1 = qubit(), qubit()
+                h(q0)
+                cx(q0, q1)
+                return measure(q0), measure(q1)
 
-        @guppy
-        def bell_state_with_return() -> tuple[bool, bool]:
-            """Return Bell state measurements."""
-            q0, q1 = qubit(), qubit()
-            h(q0)
-            cx(q0, q1)
-            return measure(q0), measure(q1)
+            test_func = bell_state_with_return
+        else:
+            # Test with result() function
+            guppy = check_guppy_imports["guppy"]
+            q_ops = check_guppy_imports["quantum"]
+            result = check_guppy_imports["result"]
 
-        print("Program 2 (alternative): bell_state_with_return defined")
+            # Extract functions for use in guppy function
+            qubit = q_ops["qubit"]
+            h = q_ops["h"]
+            cx = q_ops["cx"]
+            measure = q_ops["measure"]
 
-    # Test 3: Multiple measurements with statistics
-    if GUPPY_RESULT_AVAILABLE:
+            @guppy
+            def bell_state_with_results() -> None:
+                """Create Bell state and output named results."""
+                q0, q1 = qubit(), qubit()
+                h(q0)
+                cx(q0, q1)
+
+                # Measure and tag results
+                m0 = measure(q0)
+                m1 = measure(q1)
+
+                result("qubit_0", m0)
+                result("qubit_1", m1)
+                result("both_same", m0 == m1)  # Should always be True for Bell state
+
+            test_func = bell_state_with_results
+
+        # Test compilation
+        try:
+            from pecos.compilation_pipeline import compile_guppy_to_hugr
+        except ImportError:
+            pytest.skip("Compilation pipeline not available")
+
+        try:
+            hugr_bytes = compile_guppy_to_hugr(test_func)
+        except Exception as e:
+            pytest.fail(f"Failed to compile Bell state function: {e}")
+
+        assert hugr_bytes is not None, "Compilation should produce HUGR bytes"
+        assert len(hugr_bytes) > 0, "HUGR bytes should not be empty"
+
+    def test_quantum_statistics_output(self, check_guppy_imports: dict) -> None:
+        """Test multiple measurements with statistical outputs."""
+        if check_guppy_imports["result"] is None:
+            pytest.skip("result() function not available for this test")
+
+        guppy = check_guppy_imports["guppy"]
+        q_ops = check_guppy_imports["quantum"]
+        result = check_guppy_imports["result"]
+
+        # Extract functions for use in guppy function
+        qubit = q_ops["qubit"]
+        h = q_ops["h"]
+        measure = q_ops["measure"]
 
         @guppy
         def quantum_stats() -> None:
@@ -144,119 +238,200 @@ def test_guppy_with_explicit_results() -> None:
             result("total_ones", count)
             result("all_same", (m0 == m1) and (m1 == m2))
 
-        print("Program 3: quantum_stats defined")
+        # Test compilation
+        try:
+            from pecos.compilation_pipeline import compile_guppy_to_hugr
+        except ImportError:
+            pytest.skip("Compilation pipeline not available")
 
-    # Now compile these to HUGR and show structure
-    print("\n" + "=" * 60)
-    print("COMPILING TO HUGR")
-    print("=" * 60)
+        try:
+            hugr_bytes = compile_guppy_to_hugr(quantum_stats)
+        except Exception as e:
+            pytest.fail(f"Failed to compile quantum_stats: {e}")
 
-    try:
-        import json
+        assert hugr_bytes is not None, "Compilation should produce HUGR bytes"
+        assert len(hugr_bytes) > 0, "HUGR bytes should not be empty"
 
-        from pecos.compilation_pipeline import compile_guppy_to_hugr
+    def test_hugr_output_operations(self, check_guppy_imports: dict) -> None:
+        """Test that HUGR contains output/result operations."""
+        if check_guppy_imports["result"] is None:
+            pytest.skip("result() function not available")
 
-        # Compile the appropriate program based on what's available
-        if GUPPY_RESULT_AVAILABLE:
-            if "measure_with_result" in locals():
-                hugr_bytes = compile_guppy_to_hugr(measure_with_result)
-                prog_name = "measure_with_result"
-            elif "bell_state_with_results" in locals():
-                hugr_bytes = compile_guppy_to_hugr(bell_state_with_results)
-                prog_name = "bell_state_with_results"
-            else:
-                print("No programs with result() compiled")
-                return
-        else:
-            hugr_bytes = compile_guppy_to_hugr(measure_with_return)
-            prog_name = "measure_with_return"
+        guppy = check_guppy_imports["guppy"]
+        q_ops = check_guppy_imports["quantum"]
+        result = check_guppy_imports["result"]
 
-        print(f"\nCompiled {prog_name} to HUGR: {len(hugr_bytes)} bytes")
+        # Extract functions for use in guppy function
+        qubit = q_ops["qubit"]
+        h = q_ops["h"]
+        measure = q_ops["measure"]
 
-        # Parse and examine HUGR structure
-        hugr_json = json.loads(hugr_bytes.decode("utf-8"))
+        @guppy
+        def test_with_outputs() -> None:
+            """Simple function with result outputs."""
+            q = qubit()
+            h(q)
+            m = measure(q)
+            result("test_output", m)
+            result("constant_output", 42)
 
-        # Look for result/output operations in the HUGR
-        print("\nSearching HUGR for output operations...")
+        try:
+            from pecos.compilation_pipeline import compile_guppy_to_hugr
+        except ImportError:
+            pytest.skip("Compilation pipeline not available")
 
-        def search_for_outputs(obj, path="") -> None:
-            """Recursively search for output-related operations."""
-            if isinstance(obj, dict):
-                # Check for output/result operations
-                if "op" in obj:
-                    op = obj["op"]
-                    if any(
-                        term in str(op).lower()
-                        for term in ["output", "result", "return", "io"]
-                    ):
-                        print(f"  Found at {path}: {op}")
+        hugr_bytes = compile_guppy_to_hugr(test_with_outputs)
 
-                # Recurse
-                for key, value in obj.items():
-                    search_for_outputs(value, f"{path}.{key}" if path else key)
-            elif isinstance(obj, list):
-                for i, item in enumerate(obj):
-                    search_for_outputs(item, f"{path}[{i}]")
+        # Parse HUGR to check for output operations
+        hugr_str = hugr_bytes.decode("utf-8")
 
-        search_for_outputs(hugr_json)
+        # Handle HUGR envelope format if present
+        if hugr_str.startswith("HUGRiHJv"):
+            json_start = hugr_str.find("{", 9)
+            if json_start != -1:
+                hugr_str = hugr_str[json_start:]
 
-        # Save HUGR for inspection
+        try:
+            hugr_json = json.loads(hugr_str)
+        except json.JSONDecodeError as e:
+            pytest.fail(f"HUGR is not valid JSON: {e}")
+
+        # Count output-related operations
+        output_ops = self._count_output_operations(hugr_json)
+
+        # Should have some output/result/io operations
+        assert output_ops > 0, "HUGR should contain output/result operations"
+
+    def test_save_hugr_artifacts(self, check_guppy_imports: dict) -> None:
+        """Test saving HUGR compilation artifacts for inspection."""
+        guppy = check_guppy_imports["guppy"]
+        q_ops = check_guppy_imports["quantum"]
+
+        # Extract functions for use in guppy function
+        qubit = q_ops["qubit"]
+        h = q_ops["h"]
+        measure = q_ops["measure"]
+
+        @guppy
+        def simple_quantum() -> bool:
+            """Simple quantum function."""
+            q = qubit()
+            h(q)
+            return measure(q)
+
+        try:
+            from pecos.compilation_pipeline import compile_guppy_to_hugr
+        except ImportError:
+            pytest.skip("Compilation pipeline not available")
+
+        hugr_bytes = compile_guppy_to_hugr(simple_quantum)
+
+        # Save HUGR artifacts
         with tempfile.TemporaryDirectory() as tmpdir:
-            hugr_file = Path(tmpdir) / f"{prog_name}.hugr"
+            tmpdir_path = Path(tmpdir)
+
+            # Save raw HUGR bytes
+            hugr_file = tmpdir_path / "simple_quantum.hugr"
             hugr_file.write_bytes(hugr_bytes)
-            print(f"\nSaved HUGR to: {hugr_file}")
+            assert hugr_file.exists(), "HUGR file should be created"
+            assert hugr_file.stat().st_size > 0, "HUGR file should not be empty"
 
-            # Also save a formatted version for readability
-            hugr_pretty = Path(tmpdir) / f"{prog_name}_formatted.json"
-            hugr_pretty.write_text(json.dumps(hugr_json, indent=2))
-            print(f"Saved formatted HUGR to: {hugr_pretty}")
+            # Parse and save formatted JSON
+            hugr_str = hugr_bytes.decode("utf-8")
+            if hugr_str.startswith("HUGRiHJv"):
+                json_start = hugr_str.find("{", 9)
+                if json_start != -1:
+                    hugr_str = hugr_str[json_start:]
 
-            # Show a snippet of the HUGR structure
-            if hugr_json.get("modules"):
-                module = hugr_json["modules"][0]
-                if module.get("nodes"):
-                    print(f"\nHUGR has {len(module['nodes'])} nodes")
-                    print("First few node types:")
-                    for i, node in enumerate(module["nodes"][:5]):
-                        if "op" in node:
-                            print(f"  Node {i}: {node['op']}")
+            try:
+                hugr_json = json.loads(hugr_str)
+                formatted_file = tmpdir_path / "simple_quantum_formatted.json"
+                formatted_file.write_text(json.dumps(hugr_json, indent=2))
 
-    except ImportError:
-        print("Compilation pipeline not available")
-    except Exception as e:
-        print(f"Compilation error: {e}")
+                assert formatted_file.exists(), "Formatted JSON should be created"
+                assert (
+                    formatted_file.stat().st_size > 0
+                ), "Formatted JSON should not be empty"
 
+                # Verify JSON structure
+                assert isinstance(hugr_json, dict), "HUGR should be a JSON object"
 
-def test_guppy_result_in_selene_context() -> None:
-    """Show how Guppy results would be captured by Selene."""
-    print("\n" + "=" * 60)
-    print("HOW SELENE CAPTURES GUPPY RESULTS")
-    print("=" * 60)
+            except json.JSONDecodeError:
+                # If not JSON, that's okay - just test raw bytes were saved
+                pass
 
-    print(
-        """
-When a Guppy program uses result(tag, value), Selene captures it as:
-1. During compilation: Guppy -> HUGR includes I/O operations
-2. HUGR -> LLVM: Generates calls to __quantum__rt__result_record(tag, value)
-3. During execution: Selene runtime intercepts these calls
-4. Result stream: Tagged as ("USER:TYPE:tag", value)
-5. Python receives: After parsing, just (tag, value)
+    def _count_output_operations(self, hugr_json: dict) -> int:
+        """Count output-related operations in HUGR JSON."""
+        count = 0
 
-Example flow:
-    Guppy:  result("outcome", True)
-    LLVM:   call void @__quantum__rt__result_record("outcome", i1 1)
-    Stream: ("USER:BOOL:outcome", True)
-    Python: ("outcome", True)
+        def search(obj: object) -> None:
+            nonlocal count
+            if isinstance(obj, dict):
+                if "op" in obj:
+                    op_str = str(obj["op"]).lower()
+                    if any(
+                        term in op_str for term in ["output", "result", "return", "io"]
+                    ):
+                        count += 1
 
-For programs that return values instead:
-    Guppy:  return (m0, m1)
-    LLVM:   Returns struct/tuple
-    Stream: ("result", (True, False))  # Default tagging
-    Python: ("result", (True, False))
-    """,
-    )
+                for value in obj.values():
+                    search(value)
+            elif isinstance(obj, list):
+                for item in obj:
+                    search(item)
+
+        search(hugr_json)
+        return count
 
 
-if __name__ == "__main__":
-    test_guppy_with_explicit_results()
-    test_guppy_result_in_selene_context()
+class TestResultFormats:
+    """Test expected result formats and documentation."""
+
+    def test_document_expected_formats(self) -> None:
+        """Document and validate expected result formats for different patterns."""
+        expected_formats = {
+            "result_tagged": {
+                "description": "Using result() function to tag outputs",
+                "example_keys": ["measurement_outcome", "qubit_0", "qubit_1"],
+                "format": "Named key-value pairs in result stream",
+                "selene_output": "USER:TYPE:name -> value",
+            },
+            "return_value": {
+                "description": "Using return statement",
+                "example_keys": ["result", "measurement_1", "measurement_2"],
+                "format": "Return values become default-named results",
+                "selene_output": "USER:TYPE:result -> value or result_N for tuples",
+            },
+            "mixed_output": {
+                "description": "Mix of result() and return",
+                "example_keys": ["named_result", "result"],
+                "format": "Both named and default results",
+                "selene_output": "Combination of both formats",
+            },
+        }
+
+        # Validate documentation structure
+        for pattern_name, format_info in expected_formats.items():
+            assert (
+                "description" in format_info
+            ), f"{pattern_name} should have description"
+            assert (
+                "example_keys" in format_info
+            ), f"{pattern_name} should have example_keys"
+            assert (
+                "format" in format_info
+            ), f"{pattern_name} should have format description"
+            assert (
+                "selene_output" in format_info
+            ), f"{pattern_name} should have selene_output"
+
+            # Example keys should be non-empty
+            assert (
+                len(format_info["example_keys"]) > 0
+            ), f"{pattern_name} should have at least one example key"
+
+            # All fields should be strings except example_keys
+            assert isinstance(format_info["description"], str)
+            assert isinstance(format_info["format"], str)
+            assert isinstance(format_info["selene_output"], str)
+            assert isinstance(format_info["example_keys"], list)

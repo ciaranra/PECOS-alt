@@ -1,20 +1,22 @@
 """Tests for the QASM simulation interface using sim()."""
 
 from collections import Counter
-from pecos_rslib.sim import sim
-from pecos_rslib._pecos_rslib import (
-    QasmProgram,
-    GeneralNoiseModelBuilder,
-    DepolarizingNoiseModelBuilder,
-    BiasedDepolarizingNoiseModelBuilder,
+
+from pecos_rslib import (
+    biased_depolarizing_noise,
+    depolarizing_noise,
+    general_noise,
+    sparse_stabilizer,
+    state_vector,
 )
-from pecos_rslib import state_vector, sparse_stabilizer
+from pecos_rslib._pecos_rslib import QasmProgram
+from pecos_rslib.sim import sim
 
 
 class TestPythonicInterface:
     """Test the QASM simulation interface with sim()."""
 
-    def test_simple_sim_qasm(self):
+    def test_simple_sim_qasm(self) -> None:
         """Test basic sim() functionality with QASM."""
         qasm = """
         OPENQASM 2.0;
@@ -35,7 +37,7 @@ class TestPythonicInterface:
         # All shots should measure 11 (both qubits in |1>)
         assert all(val == 3 for val in results["c"])  # 0b11 = 3
 
-    def test_sim_qasm_with_engine(self):
+    def test_sim_qasm_with_engine(self) -> None:
         """Test sim() with different quantum engines."""
         qasm = """
         OPENQASM 2.0;
@@ -60,7 +62,7 @@ class TestPythonicInterface:
         assert "c" in results_stab
         assert len(results_stab["c"]) == 100
 
-    def test_sim_qasm_with_noise_models(self):
+    def test_sim_qasm_with_noise_models(self) -> None:
         """Test sim() with noise models."""
         qasm = """
         OPENQASM 2.0;
@@ -78,26 +80,20 @@ class TestPythonicInterface:
         assert all(val == 1 for val in results["c"])
 
         # Test with DepolarizingNoise (using builder for control)
-        noise = (
-            DepolarizingNoiseModelBuilder().with_seed(42).with_uniform_probability(0.3)
-        )
+        noise = depolarizing_noise().with_seed(42).with_uniform_probability(0.3)
         results = sim(prog).noise(noise).run(1000).to_dict()
         # With strong noise, should see some errors
         zeros = sum(1 for val in results["c"] if val == 0)
         assert 100 < zeros < 500  # Should see some bit flips
 
         # Test with BiasedDepolarizingNoise (using builder for control)
-        noise = (
-            BiasedDepolarizingNoiseModelBuilder()
-            .with_seed(42)
-            .with_uniform_probability(0.2)
-        )
+        noise = biased_depolarizing_noise().with_seed(42).with_uniform_probability(0.2)
         results = sim(prog).noise(noise).run(1000).to_dict()
         # With seed=42 and p=0.2, we should see errors
         zeros = sum(1 for val in results["c"] if val == 0)
         assert zeros > 0  # Should see some errors
 
-    def test_sim_qasm_with_custom_noise_builder(self):
+    def test_sim_qasm_with_custom_noise_builder(self) -> None:
         """Test sim() with custom noise builder."""
         qasm = """
         OPENQASM 2.0;
@@ -113,7 +109,7 @@ class TestPythonicInterface:
 
         # Custom depolarizing with different error rates
         noise_builder = (
-            GeneralNoiseModelBuilder()
+            general_noise()
             .with_seed(42)
             .with_p1_probability(0.001)  # Low single-qubit error
             .with_p2_probability(0.1)  # High two-qubit error
@@ -131,7 +127,7 @@ class TestPythonicInterface:
         # Should see some errors due to high CX error rate
         assert 1 in counts or 2 in counts  # 01 or 10 states
 
-    def test_sim_qasm_deterministic(self):
+    def test_sim_qasm_deterministic(self) -> None:
         """Test deterministic behavior with seed."""
         qasm = """
         OPENQASM 2.0;
@@ -155,7 +151,7 @@ class TestPythonicInterface:
         results3 = sim(prog).seed(456).run(100).to_dict()
         assert results1["c"] != results3["c"]  # With high probability
 
-    def test_sim_qasm_multi_register(self):
+    def test_sim_qasm_multi_register(self) -> None:
         """Test sim() with multiple classical registers."""
         qasm = """
         OPENQASM 2.0;

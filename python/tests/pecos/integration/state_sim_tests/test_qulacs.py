@@ -354,7 +354,3 @@ class TestQulacsAdvanced:
         # Should be back to initial state
         final_state = sim.vector
         assert np.allclose(initial_state, final_state, atol=1e-10)
-
-
-if __name__ == "__main__":
-    pytest.main([__file__])

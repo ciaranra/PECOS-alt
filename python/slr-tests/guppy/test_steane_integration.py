@@ -38,8 +38,8 @@ def test_steane_guppy_generation() -> None:
         or "_struct" in guppy_code
     )
 
-    print("PASS: Guppy code generation successful")
-    print(f"PASS: Generated {len(guppy_code.splitlines())} lines of code")
+    # print("PASS: Guppy code generation successful")
+    # print(f"PASS: Generated {len(guppy_code.splitlines())} lines of code")
 
 
 def test_steane_array_boundary_pattern() -> None:
@@ -84,7 +84,7 @@ def test_steane_array_boundary_pattern() -> None:
         len(temp_lines) == 0
     ), "Should not use temporary variables - maintains natural SLR semantics"
 
-    print("PASS: Struct-based boundary pattern correctly implemented")
+    # print("PASS: Struct-based boundary pattern correctly implemented")
 
 
 def test_steane_hugr_compilation() -> None:
@@ -96,7 +96,6 @@ def test_steane_hugr_compilation() -> None:
 
     try:
         hugr = SlrConverter(prog).hugr()
-        print("SUCCESS: HUGR compilation successful!")
         assert hugr is not None
 
     except ImportError as e:
@@ -113,7 +112,6 @@ def test_steane_hugr_compilation() -> None:
 
         # The test passes if the code shows the correct patterns
         # even if HUGR compilation isn't perfect yet
-        print("PASS: Guppy generation follows correct patterns for HUGR compatibility")
 
 
 def test_natural_slr_usage() -> None:
@@ -137,35 +135,3 @@ def test_natural_slr_usage() -> None:
         "c_a = array(quantum.qubit() for _ in range(3))" in guppy_code
         or "c_a_0 = quantum.qubit()" in guppy_code
     )
-
-    print("PASS: SLR can be written naturally without Guppy constraints")
-
-
-if __name__ == "__main__":
-    print("Running Steane integration tests...")
-    print("=" * 60)
-
-    try:
-        test_steane_guppy_generation()
-        print()
-
-        test_steane_array_boundary_pattern()
-        print()
-
-        test_steane_hugr_compilation()
-        print()
-
-        test_natural_slr_usage()
-        print()
-
-        print("=" * 60)
-        print("SUCCESS: All tests completed successfully!")
-        print("\nThis demonstrates that:")
-        print("1. SLR can be written completely naturally")
-        print("2. Array boundary patterns work correctly")
-        print("3. Guppy code generation is robust")
-        print("4. The approach is compatible with real quantum error correction code")
-
-    except ImportError as e:
-        print(f"FAIL: Test failed: {e}")
-        raise

@@ -72,8 +72,8 @@ def test_multiple_permutations_qasm() -> None:
     qasm = SlrConverter(prog).qasm()
 
     # Print the QASM for debugging
-    print("\nQASM Output:")
-    print(qasm)
+    # print("\nQASM Output:")
+    # print(qasm)
 
     # Verify that the QASM contains the correct permuted operations
     assert "h a[1];" in qasm  # First H gate
@@ -108,8 +108,8 @@ def test_permutation_with_conditional_qasm() -> None:
     qasm = SlrConverter(prog).qasm()
 
     # Print the QASM for debugging
-    print("\nQASM Output:")
-    print(qasm)
+    # print("\nQASM Output:")
+    # print(qasm)
 
     # Verify that the QASM contains the correct permuted operations
     assert (

@@ -4,13 +4,52 @@ This module provides functions to compile Guppy programs through HUGR
 to Selene Interface plugins that can be executed by SeleneSimpleRuntimeEngine.
 """
 
-import tempfile
-import subprocess
-from pathlib import Path
-from typing import Callable, Union
 import logging
+import shutil
+import subprocess
+import tempfile
+from collections.abc import Callable
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+def _run_trusted_build_tool(
+    tool_name: str, args: list[str], **kwargs
+) -> subprocess.CompletedProcess:
+    """Run a trusted build tool with validated path.
+
+    This function explicitly validates that the tool exists in PATH before execution,
+    making it clear that the subprocess call is safe and intentional.
+
+    Args:
+        tool_name: Name of the build tool (llc, gcc, etc.)
+        args: Complete argument list including tool path as first element
+        **kwargs: Additional arguments to subprocess.run
+
+    Returns:
+        CompletedProcess result
+
+    Raises:
+        FileNotFoundError: If tool is not found in PATH
+        subprocess.CalledProcessError: If tool execution fails
+    """
+    # Validate that the tool exists and is in PATH
+    tool_path = shutil.which(tool_name)
+    if not tool_path:
+        raise FileNotFoundError(f"{tool_name} not found in PATH")
+
+    # Ensure first argument matches the validated tool path
+    if not args or Path(args[0]).name != tool_name:
+        raise ValueError(
+            f"Tool path mismatch: expected {tool_name}, got {args[0] if args else 'empty'}"
+        )
+
+    # Execute with explicit security settings
+    kwargs.setdefault("shell", False)
+    kwargs.setdefault("capture_output", True)
+
+    return subprocess.run(args, **kwargs)  # noqa: S603
 
 
 def compile_guppy_to_selene_plugin(guppy_func: Callable) -> bytes:
@@ -104,8 +143,8 @@ def compile_bitcode_to_shared_library(bitcode: bytes) -> bytes:
     Raises:
         RuntimeError: If compilation fails
     """
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
+    with tempfile.TemporaryDirectory() as tmpdir_str:
+        tmpdir = Path(tmpdir_str)
 
         # Write bitcode to file
         bc_file = tmpdir / "program.bc"
@@ -115,30 +154,44 @@ def compile_bitcode_to_shared_library(bitcode: bytes) -> bytes:
         so_file = tmpdir / "plugin.so"
 
         try:
-            subprocess.run(
-                ["llc", "-filetype=obj", "-o", str(tmpdir / "program.o"), str(bc_file)],
-                capture_output=True,
+            llc_path = shutil.which("llc")
+            if not llc_path:
+                raise FileNotFoundError("llc not found in PATH")
+
+            _run_trusted_build_tool(
+                "llc",
+                [
+                    llc_path,
+                    "-filetype=obj",
+                    "-o",
+                    str(tmpdir / "program.o"),
+                    str(bc_file),
+                ],
                 text=True,
                 check=True,
             )
 
-            subprocess.run(
+            gcc_path = shutil.which("gcc")
+            if not gcc_path:
+                raise FileNotFoundError("gcc not found in PATH")
+
+            _run_trusted_build_tool(
+                "gcc",
                 [
-                    "gcc",
+                    gcc_path,
                     "-shared",
                     "-fPIC",
                     "-o",
                     str(so_file),
                     str(tmpdir / "program.o"),
                 ],
-                capture_output=True,
                 text=True,
                 check=True,
             )
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Failed to compile bitcode: {e.stderr}")
-        except FileNotFoundError:
-            raise RuntimeError("llc or gcc not found. Install LLVM tools.")
+            raise RuntimeError(f"Failed to compile bitcode: {e.stderr}") from e
+        except FileNotFoundError as e:
+            raise RuntimeError("llc or gcc not found. Install LLVM tools.") from e
 
         return so_file.read_bytes()
 
@@ -158,8 +211,8 @@ def compile_llvm_to_selene_plugin(llvm_ir: str) -> bytes:
     Raises:
         RuntimeError: If compilation fails
     """
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
+    with tempfile.TemporaryDirectory() as tmpdir_str:
+        tmpdir = Path(tmpdir_str)
 
         # Write LLVM IR to file
         llvm_file = tmpdir / "program.ll"
@@ -167,17 +220,22 @@ def compile_llvm_to_selene_plugin(llvm_ir: str) -> bytes:
 
         # Compile to object file
         obj_file = tmpdir / "program.o"
+
         try:
-            subprocess.run(
-                ["llc", "-filetype=obj", "-o", str(obj_file), str(llvm_file)],
-                capture_output=True,
+            llc_path = shutil.which("llc")
+            if not llc_path:
+                raise FileNotFoundError("llc not found in PATH")
+
+            _run_trusted_build_tool(
+                "llc",
+                [llc_path, "-filetype=obj", "-o", str(obj_file), str(llvm_file)],
                 text=True,
                 check=True,
             )
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Failed to compile LLVM to object: {e.stderr}")
-        except FileNotFoundError:
-            raise RuntimeError("llc not found. Install LLVM tools.")
+            raise RuntimeError(f"Failed to compile LLVM to object: {e.stderr}") from e
+        except FileNotFoundError as e:
+            raise RuntimeError("llc not found. Install LLVM tools.") from e
 
         # Link to shared library with Selene runtime interface
         plugin_file = tmpdir / "plugin.so"
@@ -198,9 +256,14 @@ def compile_llvm_to_selene_plugin(llvm_ir: str) -> bytes:
 
             # Link the object file to create a plugin
             # Note: This is simplified - real linking would need proper flags
-            subprocess.run(
+            gcc_path = shutil.which("gcc")
+            if not gcc_path:
+                raise FileNotFoundError("gcc not found in PATH")
+
+            _run_trusted_build_tool(
+                "gcc",
                 [
-                    "gcc",
+                    gcc_path,
                     "-shared",
                     "-fPIC",
                     "-o",
@@ -210,27 +273,30 @@ def compile_llvm_to_selene_plugin(llvm_ir: str) -> bytes:
                     "-lselene_simple_runtime",
                     "-Wl,-rpath," + str(runtime_dir),
                 ],
-                capture_output=True,
                 text=True,
                 check=True,
             )
         except (ImportError, FileNotFoundError):
             # Fallback: Create a simple shared library without runtime linking
             logger.warning("Selene runtime not found, creating standalone plugin")
-            subprocess.run(
-                ["gcc", "-shared", "-fPIC", "-o", str(plugin_file), str(obj_file)],
-                capture_output=True,
+            gcc_path = shutil.which("gcc")
+            if not gcc_path:
+                raise FileNotFoundError("gcc not found in PATH") from None
+
+            _run_trusted_build_tool(
+                "gcc",
+                [gcc_path, "-shared", "-fPIC", "-o", str(plugin_file), str(obj_file)],
                 text=True,
                 check=True,
             )
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Failed to link plugin: {e.stderr}")
+            raise RuntimeError(f"Failed to link plugin: {e.stderr}") from e
 
         # Read the compiled plugin
         return plugin_file.read_bytes()
 
 
-def create_selene_interface_program(program: Union[Callable, bytes, str]):
+def create_selene_interface_program(program: Callable | bytes | str):
     """Create a SeleneInterfaceProgram from various input types.
 
     Args:
@@ -256,8 +322,10 @@ def create_selene_interface_program(program: Union[Callable, bytes, str]):
             from pecos_rslib._pecos_rslib import (
                 PySeleneInterfaceProgram as SeleneInterfaceProgram,
             )
-        except ImportError:
-            raise ImportError("SeleneInterfaceProgram not available in pecos_rslib")
+        except ImportError as e:
+            raise ImportError(
+                "SeleneInterfaceProgram not available in pecos_rslib",
+            ) from e
 
     # Determine input type and compile as needed
     if callable(program):

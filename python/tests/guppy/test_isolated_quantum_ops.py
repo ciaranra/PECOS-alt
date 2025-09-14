@@ -1,24 +1,17 @@
-#!/usr/bin/env python3
 """Isolated tests to debug segmentation fault.
 
 This file contains minimal test cases extracted from test_comprehensive_quantum_operations.py
 to identify which specific operation causes the segfault.
 """
 
-import sys
-
 import pytest
-
-sys.path.append("python/quantum-pecos/src")
 
 # Check dependencies
 try:
     from guppylang import guppy
-    from guppylang.std.angles import angle, pi
-    from guppylang.std.builtins import nat, owned
+    from guppylang.std.angles import pi
     from guppylang.std.quantum import (
         ch,
-        crz,
         cx,
         cy,
         cz,
@@ -53,9 +46,7 @@ def decode_integer_results(results: list[int], n_bits: int) -> list[tuple[bool, 
     """Decode integer-encoded results back to tuples of booleans."""
     decoded = []
     for val in results:
-        bits = []
-        for i in range(n_bits):
-            bits.append(bool(val & (1 << i)))
+        bits = [bool(val & (1 << i)) for i in range(n_bits)]
         decoded.append(tuple(bits))
     return decoded
 
@@ -159,9 +150,7 @@ class TestIsolatedOps:
             return measure(q)
 
         results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
-        print(
-            f"RX test results: {results.get("measurements", results.get("measurement_1", []))}",
-        )
+
         assert all(
             r for r in results.get("measurements", results.get("measurement_1", []))
         )
@@ -366,14 +355,10 @@ class TestIsolatedOps:
         measurements = list(
             zip(*[results[f"measurement_{i}"] for i in range(1, 5)], strict=False),
         )
+
         for r in measurements:
             # r is now a tuple like (r1, r2, r3, r4)
             _, r2, r3, r4 = r
             assert r2 == 1  # Y on |0⟩ gives |1⟩
             assert r3 == 0  # Z on |0⟩ doesn't change
             assert r4 == 1  # X on |0⟩ gives |1⟩
-
-
-if __name__ == "__main__":
-    print("Running isolated quantum operation tests...")
-    pytest.main([__file__, "-v"])

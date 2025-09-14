@@ -238,7 +238,6 @@ fn parse_general_noise_probabilities(noise_str_opt: Option<&String>) -> (f64, f6
 }
 
 /// Create quantum engine based on user arguments
-
 fn run_program(args: &RunArgs) -> Result<(), PecosError> {
     // get_program_path now includes proper context in its errors
     let program_path = get_program_path(&args.program)?;

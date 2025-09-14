@@ -204,7 +204,7 @@ class Generator:
         """
         for symbol in self.gate_groups[group_symbol]:
             if symbol in self.error_func_dict:
-                logger.warning(f"Overriding gate error for gate: {symbol}.")
+                logger.warning("Overriding gate error for gate: %s.", symbol)
 
             self.set_gate_error(symbol, error_func, error_param, after)
 
@@ -232,7 +232,7 @@ class Generator:
         after: dict[str, set[int]],
         before: dict[str, set[int]],
         replace: set[int],
-        **kwargs: Any,  # noqa: ANN401 - Error functions have varying signatures
+        **kwargs: object,
     ) -> set | list | None:
         """Used to determine if an error occurs, and if so, calls the error function to determine errors.
 

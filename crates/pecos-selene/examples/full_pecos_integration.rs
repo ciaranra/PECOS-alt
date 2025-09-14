@@ -73,9 +73,9 @@ attributes #0 = { "EntryPoint" }
         )
         .run(10)?;
 
-    println!("✓ Created and ran SeleneEngine for Bell state");
+    println!("Created and ran SeleneEngine for Bell state");
     println!(
-        "✓ Completed {} shots showing Bell state correlations",
+        "Completed {} shots showing Bell state correlations",
         results.len()
     );
 
@@ -133,11 +133,11 @@ attributes #0 = { "EntryPoint" }
         )
         .run(5)?;
 
-    println!("✓ Created and ran adaptive circuit engine");
+    println!("Created and ran adaptive circuit engine");
 
     // Show results
     for (i, shot) in results.shots.iter().enumerate() {
-        println!("✓ Adaptive circuit result {}: {:?}", i, shot.data);
+        println!("Adaptive circuit result {}: {:?}", i, shot.data);
     }
 
     Ok(())
@@ -174,7 +174,7 @@ attributes #0 = { "EntryPoint" }
         .workers(4) // workers for parallel execution
         .run(1000)?; // shots
 
-    println!("✓ Created engine with LLVM IR format");
+    println!("Created engine with LLVM IR format");
 
     // Test HUGR format (if available)
     #[cfg(feature = "hugr-013")]
@@ -192,10 +192,10 @@ attributes #0 = { "EntryPoint" }
                     .qubits(1),
             )
             .run(10)?;
-        println!("✓ Created and ran engine with HUGR format");
+        println!("Created and ran engine with HUGR format");
     }
 
-    println!("✓ Completed {} shots in parallel", results.shots.len());
+    println!("Completed {} shots in parallel", results.shots.len());
 
     // Analyze results
     let mut outcome_counts: HashMap<String, usize> = HashMap::new();

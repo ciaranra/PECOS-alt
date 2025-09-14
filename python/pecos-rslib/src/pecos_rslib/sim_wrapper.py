@@ -6,13 +6,22 @@ This module provides a Python-side sim() function that:
 3. Passes other programs to the Rust sim() for normal processing
 """
 
-from typing import Any
 import logging
+from typing import TYPE_CHECKING, Protocol, Union
+
+if TYPE_CHECKING:
+    from pecos_rslib.programs import HugrProgram, LlvmProgram, QasmProgram
 
 logger = logging.getLogger(__name__)
 
 
-def compile_guppy_to_hugr(guppy_func) -> dict:
+class GuppyFunction(Protocol):
+    """Protocol for Guppy-decorated functions."""
+
+    def compile(self) -> dict: ...
+
+
+def compile_guppy_to_hugr(guppy_func: GuppyFunction) -> dict:
     """Compile a Guppy function to HUGR.
 
     Args:
@@ -27,13 +36,14 @@ def compile_guppy_to_hugr(guppy_func) -> dict:
     try:
         # Compile Guppy to HUGR
         hugr_package = guppy_func.compile()
+    except (AttributeError, RuntimeError, ValueError) as e:
+        raise RuntimeError(f"Failed to compile Guppy to HUGR: {e}") from e
+    else:
         logger.info("Compiled Guppy function to HUGR package")
         return hugr_package
-    except Exception as e:
-        raise RuntimeError(f"Failed to compile Guppy to HUGR: {e}")
 
 
-def create_selene_runner(hugr_package, config: dict):
+def create_selene_runner(hugr_package: dict, config: dict) -> object:
     """Create a Selene runner from HUGR package.
 
     Uses Selene's natural build process to create a runner that can
@@ -52,9 +62,10 @@ def create_selene_runner(hugr_package, config: dict):
         RuntimeError: If compilation fails
     """
     try:
-        from selene_sim.build import build
         import tempfile
         from pathlib import Path
+
+        from selene_sim.build import build
 
         # Create or use working directory
         if "working_dir" in config:
@@ -74,7 +85,7 @@ def create_selene_runner(hugr_package, config: dict):
             from pecos.selene_plugins.simulators import PecosBridgePlugin
 
             bridge_plugin = PecosBridgePlugin()
-            logger.info(f"Using PECOS Bridge plugin: {bridge_plugin.library_file}")
+            logger.info("Using PECOS Bridge plugin: %s", bridge_plugin.library_file)
 
             # Build with Bridge plugin as default simulator
             # This ensures the Selene executable uses our Bridge instead of Quest
@@ -88,7 +99,7 @@ def create_selene_runner(hugr_package, config: dict):
         except ImportError:
             # Fall back to standard build if Bridge plugin not available
             logger.warning(
-                "PECOS Bridge plugin not available, using standard Selene build"
+                "PECOS Bridge plugin not available, using standard Selene build",
             )
             runner = build(
                 hugr_package,
@@ -97,25 +108,30 @@ def create_selene_runner(hugr_package, config: dict):
                 verbose=False,
             )
 
+    except (ImportError, RuntimeError, ValueError) as e:
+        raise RuntimeError(f"Failed to build Selene runner from HUGR: {e}") from e
+    else:
         logger.info("Selene runner built successfully")
-        logger.info(f"  Executable: {runner.executable}")
-        logger.info(f"  Artifacts: {runner.artifacts}")
+        logger.info("  Executable: %s", runner.executable)
+        logger.info("  Artifacts: %s", runner.artifacts)
 
         # Return the runner - it will be executed with our PecosSeleneBridgeSimulator
         return runner
-
-    except Exception as e:
-        raise RuntimeError(f"Failed to build Selene runner from HUGR: {e}")
 
 
 class GuppyHugrProgram:
     """Wrapper for Guppy HUGR programs to be handled by PECOS SimBuilder."""
 
-    def __init__(self, hugr_package):
+    def __init__(self, hugr_package: dict) -> None:
         self.hugr_package = hugr_package
 
 
-def sim(program: Any):
+ProgramType = Union[
+    GuppyFunction, "QasmProgram", "LlvmProgram", "HugrProgram", bytes, str
+]
+
+
+def sim(program: ProgramType) -> object:
     """Enhanced sim() function that handles Guppy programs.
 
     This Python wrapper follows the Rust sim() pattern:
@@ -132,7 +148,7 @@ def sim(program: Any):
     from . import _pecos_rslib
 
     # Check if this is a Guppy function
-    def is_guppy_function(obj):
+    def is_guppy_function(obj: object) -> bool:
         """Check if an object is a Guppy-decorated function."""
         return (
             hasattr(obj, "_guppy_compiled")
@@ -142,13 +158,12 @@ def sim(program: Any):
 
     if is_guppy_function(program):
         logger.info(
-            "Detected Guppy function, passing to Rust sim() for SeleneLibrary handling"
+            "Detected Guppy function, passing to Rust sim() for SeleneLibrary handling",
         )
         # Pass directly to Rust sim() which will detect it's a Guppy function
         # and use PySeleneLibrarySimBuilder to handle the compilation on Python side
         return _pecos_rslib.sim(program)
 
-    else:
-        # Pass through to Rust sim() for non-Guppy programs
-        logger.info(f"Using Rust sim() for program type: {type(program)}")
-        return _pecos_rslib.sim(program)
+    # Pass through to Rust sim() for non-Guppy programs
+    logger.info("Using Rust sim() for program type: %s", type(program))
+    return _pecos_rslib.sim(program)

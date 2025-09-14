@@ -7,31 +7,37 @@ This module handles:
 4. Passing library path to SeleneLibraryEngine
 """
 
+import importlib.util
 import logging
+import platform
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
+
+from pecos.protocols import GuppyCallable
+
+if TYPE_CHECKING:
+    from pecos.programs import HugrProgram
+
 
 logger = logging.getLogger(__name__)
 
 # Check for required dependencies
-try:
-    from guppylang import GuppyModule
-
-    GUPPY_AVAILABLE = True
-except ImportError:
-    GUPPY_AVAILABLE = False
+GUPPY_AVAILABLE = importlib.util.find_spec("guppylang") is not None
+if not GUPPY_AVAILABLE:
     logger.warning("guppylang not available - Guppy support disabled")
 
-try:
-    import selene_sim
-    from selene_sim import SeleneInstance, build
-    from selene_sim.backends import IdealErrorModel, SimpleRuntime
-
-    SELENE_AVAILABLE = True
-except ImportError:
-    SELENE_AVAILABLE = False
+SELENE_AVAILABLE = importlib.util.find_spec("selene_sim") is not None
+if SELENE_AVAILABLE:
+    try:
+        import selene_sim
+        from selene_sim import build
+    except ImportError:
+        SELENE_AVAILABLE = False
+        logger.warning("selene_sim import failed - Selene compilation disabled")
+else:
     logger.warning("selene_sim not available - Selene compilation disabled")
 
 try:
@@ -48,7 +54,10 @@ try:
 except ImportError:
     # Provide a stub if not available
     class RustSeleneEngine:
-        def __init__(self, *args, **kwargs) -> None:
+        """Stub class for when SeleneLibraryEngine is not available."""
+
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            """Raise ImportError as the real engine is not available."""
             msg = "SeleneLibraryEngine not available in pecos_rslib"
             raise ImportError(msg)
 
@@ -69,7 +78,7 @@ class SeleneEngineBuilder:
         self.build_dir = None
         self.verbose = False
 
-    def with_guppy_program(self, program: Any) -> "SeleneEngineBuilder":
+    def with_guppy_program(self, program: GuppyCallable) -> "SeleneEngineBuilder":
         """Set the Guppy program to compile.
 
         Args:
@@ -85,7 +94,7 @@ class SeleneEngineBuilder:
         self.guppy_program = program
         return self
 
-    def with_hugr_program(self, program: Any) -> "SeleneEngineBuilder":
+    def with_hugr_program(self, program: "HugrProgram") -> "SeleneEngineBuilder":
         """Set HUGR program directly.
 
         Args:
@@ -120,7 +129,7 @@ class SeleneEngineBuilder:
         self.verbose = verbose
         return self
 
-    def _compile_to_hugr(self):
+    def _compile_to_hugr(self) -> dict | bytes:
         """Compile Guppy program to HUGR.
 
         Returns:
@@ -139,22 +148,22 @@ class SeleneEngineBuilder:
             # Compile directly to Package for Selene
             if hasattr(self.guppy_program, "compile"):
                 package = self.guppy_program.compile()
-                logger.info(f"Compiled to HUGR Package: {package}")
+                logger.info("Compiled to HUGR Package: %s", package)
                 return package
 
             # Fallback to bytes if needed
             if COMPILATION_AVAILABLE:
                 hugr_bytes = compile_guppy_to_hugr(self.guppy_program)
-                logger.info(f"Compiled to HUGR: {len(hugr_bytes)} bytes")
+                logger.info("Compiled to HUGR: %s bytes", len(hugr_bytes))
                 return hugr_bytes
 
             msg = "Could not compile Guppy program"
             raise RuntimeError(msg)
-        except Exception as e:
+        except (ImportError, AttributeError, ValueError, TypeError) as e:
             msg = f"Failed to compile Guppy to HUGR: {e}"
-            raise RuntimeError(msg)
+            raise RuntimeError(msg) from e
 
-    def _build_shared_library(self, hugr_input) -> Path:
+    def _build_shared_library(self, hugr_input: dict | bytes) -> Path:
         """Use Selene to build a shared library from HUGR.
 
         Args:
@@ -174,7 +183,7 @@ class SeleneEngineBuilder:
         if self.build_dir is None:
             self.build_dir = Path(tempfile.mkdtemp(prefix="selene_build_"))
 
-        logger.info(f"Building Selene library in {self.build_dir}")
+        logger.info("Building Selene library in %s", self.build_dir)
 
         try:
             # Build with Selene - it accepts Package objects directly
@@ -209,7 +218,7 @@ class SeleneEngineBuilder:
                 libs = list(self.build_dir.glob(pattern))
                 if libs:
                     library_path = libs[0]
-                    logger.info(f"Built shared library: {library_path}")
+                    logger.info("Built shared library: %s", library_path)
                     return library_path
 
             # If Selene created an executable instead, we need to modify it
@@ -224,9 +233,9 @@ class SeleneEngineBuilder:
             msg = "No library found after build"
             raise RuntimeError(msg)
 
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             msg = f"Failed to build Selene library: {e}"
-            raise RuntimeError(msg)
+            raise RuntimeError(msg) from e
 
     def _convert_executable_to_library(self, executable: Path) -> Path:
         """Convert a Selene executable to a shared library.
@@ -248,12 +257,9 @@ class SeleneEngineBuilder:
 
         # Make sure it's marked as a shared library
         # This might require platform-specific handling
-        import platform
-
         if platform.system() == "Linux":
             # On Linux, ensure it has the right ELF type
             # This is a simplified approach - might need more work
-            import subprocess
 
             try:
                 # Check if it's already a shared object
@@ -265,7 +271,7 @@ class SeleneEngineBuilder:
                 )
                 if "shared object" not in result.stdout:
                     logger.warning("File is not a shared object, may not load properly")
-            except:
+            except (OSError, subprocess.SubprocessError):
                 pass
 
         return library_path
@@ -295,7 +301,10 @@ class SeleneEngineBuilder:
             raise RuntimeError(msg)
 
         # Create the Rust engine
-        logger.info(f"Creating SeleneLibraryEngine with library at {self.library_path}")
+        logger.info(
+            "Creating SeleneLibraryEngine with library at %s",
+            self.library_path,
+        )
 
         return RustSeleneEngine(
             library_path=str(self.library_path),
@@ -307,12 +316,15 @@ class SeleneEngineBuilder:
         if self.build_dir and self.build_dir.exists():
             try:
                 shutil.rmtree(self.build_dir)
-                logger.info(f"Cleaned up build directory: {self.build_dir}")
-            except Exception as e:
-                logger.warning(f"Failed to clean up build directory: {e}")
+                logger.info("Cleaned up build directory: %s", self.build_dir)
+            except (OSError, PermissionError) as e:
+                logger.warning("Failed to clean up build directory: %s", e)
 
 
-def selene_engine_from_guppy(program: Any, num_qubits: int) -> RustSeleneEngine:
+def selene_engine_from_guppy(
+    program: GuppyCallable,
+    num_qubits: int,
+) -> RustSeleneEngine:
     """Convenience function to create a Selene engine from a Guppy program.
 
     Args:

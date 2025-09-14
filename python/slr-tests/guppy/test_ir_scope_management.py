@@ -31,8 +31,8 @@ def test_conditional_resource_balancing() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("Generated code with conditional resource balancing:")
-    print(code)
+    # print("Generated code with conditional resource balancing:")
+    # print(code)
 
     # Both branches should exist
     assert "if flag[0]:" in code
@@ -82,9 +82,6 @@ def test_nested_conditional_scopes() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("\nGenerated code with nested conditionals:")
-    print(code)
-
     # Should have nested if statements
     assert code.count("if flags") >= 2
 
@@ -110,18 +107,8 @@ def test_function_scope_returns() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("\nGenerated code with partial consumption:")
-    print(code)
-
     # With dynamic allocation, only q_0 is allocated and measured, no cleanup needed for q_1
     # Check that the measurement happened correctly
     assert "c[0] = quantum.measure(q_0)" in code or "c_0 = quantum.measure(q_0)" in code
     # Check that result is generated
     assert 'result("c", c)' in code
-
-
-if __name__ == "__main__":
-    test_conditional_resource_balancing()
-    test_nested_conditional_scopes()
-    test_function_scope_returns()
-    print("\nAll scope management tests passed!")

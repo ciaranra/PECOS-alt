@@ -1,6 +1,27 @@
 """Unified API for Guppy programs following the sim(program) pattern."""
 
-from typing import Any
+import tempfile
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from pecos_rslib import SimBuilder
+    from pecos_rslib.noise import (
+        BiasedDepolarizingNoise,
+        DepolarizingNoise,
+        GeneralNoise,
+        PassThroughNoise,
+    )
+    from pecos_rslib.quantum import (
+        SparseStabilizerEngineBuilder,
+        StateVectorEngineBuilder,
+    )
+    from pecos_rslib.sim_wrapper import ProgramType
+
+    NoiseModelType = (
+        PassThroughNoise | DepolarizingNoise | BiasedDepolarizingNoise | GeneralNoise
+    )
+    QuantumEngineType = StateVectorEngineBuilder | SparseStabilizerEngineBuilder
 
 from pecos_rslib.sim_wrapper import sim as sim_wrapper
 
@@ -14,60 +35,60 @@ class GuppySimBuilderWrapper:
     with results["result"] containing the measurement values.
     """
 
-    def __init__(self, builder) -> None:
+    def __init__(self, builder: "SimBuilder") -> None:
+        """Initialize wrapper with a Rust sim builder."""
         self._builder = builder
 
-    def qubits(self, n: int):
+    def qubits(self, n: int) -> "GuppySimBuilderWrapper":
         """Set number of qubits."""
         # The Rust builder returns a new instance, so we need to return a new wrapper
         new_builder = self._builder.qubits(n)
         return GuppySimBuilderWrapper(new_builder)
 
-    def seed(self, seed: int):
+    def seed(self, seed: int) -> "GuppySimBuilderWrapper":
         """Set random seed."""
         new_builder = self._builder.seed(seed)
         return GuppySimBuilderWrapper(new_builder)
 
-    def quantum(self, engine):
+    def quantum(
+        self,
+        engine: "QuantumEngineType",
+    ) -> "GuppySimBuilderWrapper":
         """Set quantum engine."""
         new_builder = self._builder.quantum(engine)
         return GuppySimBuilderWrapper(new_builder)
 
-    def noise(self, noise_model):
+    def noise(self, noise_model: "NoiseModelType") -> "GuppySimBuilderWrapper":
         """Set noise model."""
         new_builder = self._builder.noise(noise_model)
         return GuppySimBuilderWrapper(new_builder)
 
-    def workers(self, n: int):
+    def workers(self, n: int) -> "GuppySimBuilderWrapper":
         """Set number of workers."""
         new_builder = self._builder.workers(n)
         return GuppySimBuilderWrapper(new_builder)
 
-    def verbose(self, enable: bool):
+    def verbose(self, _enable: bool) -> "GuppySimBuilderWrapper":
         """Set verbose mode (no-op for compatibility)."""
         # The Rust builder doesn't have a verbose method, so we just return self
         return self
 
-    def debug(self, enable: bool):
+    def debug(self, _enable: bool) -> "GuppySimBuilderWrapper":
         """Set debug mode (no-op for compatibility)."""
         # The Rust builder doesn't have a debug method, so we just return self
         return self
 
-    def optimize(self, enable: bool):
+    def optimize(self, _enable: bool) -> "GuppySimBuilderWrapper":
         """Set optimization mode (no-op for compatibility)."""
         # The Rust builder doesn't have an optimize method, so we just return self
         return self
 
-    def keep_intermediate_files(self, enable: bool):
+    def keep_intermediate_files(self, enable: bool) -> "GuppySimBuilderWrapper":
         """Set whether to keep intermediate files (no-op for compatibility)."""
         # Create a temp directory for compatibility with tests
         if enable:
-            import tempfile
-
             self.temp_dir = tempfile.mkdtemp(prefix="guppy_sim_")
             # Create dummy files that tests might expect
-            from pathlib import Path
-
             temp_path = Path(self.temp_dir)
             (temp_path / "program.ll").write_text("; Dummy LLVM IR file\n")
             (temp_path / "program.hugr").write_text("// Dummy HUGR file\n")
@@ -75,12 +96,12 @@ class GuppySimBuilderWrapper:
             self.temp_dir = None
         return self
 
-    def build(self):
+    def build(self) -> "GuppySimBuilderWrapper":
         """Build the simulation (returns self for compatibility)."""
         # The Rust builder doesn't need explicit building, so we just return self
         return self
 
-    def run(self, shots: int):
+    def run(self, shots: int) -> dict[str, Any]:
         """Run simulation and convert results to expected format."""
         # Call the underlying run method which returns PyShotVec
         shot_vec = self._builder.run(shots)
@@ -88,7 +109,7 @@ class GuppySimBuilderWrapper:
         return shot_vec.to_dict()
 
 
-def sim(program: Any):
+def sim(program: "ProgramType") -> GuppySimBuilderWrapper:
     """Create a simulation builder for a program.
 
     This function detects the program type and creates the appropriate builder.

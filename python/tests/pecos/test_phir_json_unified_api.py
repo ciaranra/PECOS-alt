@@ -1,6 +1,5 @@
 """Test the PHIR JSON unified API Python bindings."""
 
-import pytest
 from pecos_rslib import PhirJsonProgram, phir_json_engine
 
 
@@ -97,7 +96,3 @@ def test_phir_json_unified_api_full() -> None:
     for val in result_dict["m"]:
         assert isinstance(val, int)
         assert 0 <= val <= 3  # 2 bits, so values 0-3
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

@@ -54,6 +54,7 @@ pub struct SelenePythonEngine {
 }
 
 impl SelenePythonEngine {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             config: None,

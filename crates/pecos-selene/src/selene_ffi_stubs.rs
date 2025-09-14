@@ -57,9 +57,9 @@ pub struct SeleneString {
 // Core quantum operations - matching exact Selene signatures
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_qalloc(_instance: *mut c_void) -> SeleneU64Result {
-    println!("=== SELENE STUB: selene_qalloc called with instance={:?} ===", _instance);
+    log::trace!("SELENE STUB: selene_qalloc called with instance={:?} ===", _instance);
     let qubit_id = NEXT_QUBIT_ID.fetch_add(1, Ordering::SeqCst);
-    println!("=== SELENE STUB: selene_qalloc returning qubit_id={} ===", qubit_id);
+    log::trace!("SELENE STUB: selene_qalloc returning qubit_id={} ===", qubit_id);
     SeleneU64Result {
         error_code: 0,
         value: qubit_id
@@ -68,18 +68,18 @@ pub extern "C" fn selene_qalloc(_instance: *mut c_void) -> SeleneU64Result {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_qfree(_instance: *mut c_void, q: u64) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_qfree called with instance={:?}, qubit={} ===", _instance, q);
+    log::trace!("SELENE STUB: selene_qfree called with instance={:?}, qubit={} ===", _instance, q);
     SeleneVoidResult { error_code: 0 }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_qubit_measure(_instance: *mut c_void, q: u64) -> SeleneBoolResult {
-    println!("=== SELENE STUB: selene_qubit_measure called with instance={:?}, qubit={} ===", _instance, q);
+    log::trace!("SELENE STUB: selene_qubit_measure called with instance={:?}, qubit={} ===", _instance, q);
     // Return alternating values for testing
     static COUNTER: AtomicBool = AtomicBool::new(false);
     let result = !COUNTER.load(Ordering::SeqCst);
     COUNTER.store(result, Ordering::SeqCst);
-    println!("=== SELENE STUB: selene_qubit_measure returning {} ===", result);
+    log::trace!("SELENE STUB: selene_qubit_measure returning {} ===", result);
     SeleneBoolResult {
         error_code: 0,
         value: result
@@ -88,9 +88,9 @@ pub extern "C" fn selene_qubit_measure(_instance: *mut c_void, q: u64) -> Selene
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_qubit_lazy_measure(_instance: *mut c_void, q: u64) -> SeleneFutureResult {
-    println!("=== SELENE STUB: selene_qubit_lazy_measure called with instance={:?}, qubit={} ===", _instance, q);
+    log::trace!("SELENE STUB: selene_qubit_lazy_measure called with instance={:?}, qubit={} ===", _instance, q);
     let reference = NEXT_RESULT_ID.fetch_add(1, Ordering::SeqCst);
-    println!("=== SELENE STUB: selene_qubit_lazy_measure returning reference={} ===", reference);
+    log::trace!("SELENE STUB: selene_qubit_lazy_measure returning reference={} ===", reference);
     SeleneFutureResult {
         error_code: 0,
         reference
@@ -99,7 +99,7 @@ pub extern "C" fn selene_qubit_lazy_measure(_instance: *mut c_void, q: u64) -> S
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_qubit_lazy_measure_leaked(_instance: *mut c_void, q: u64) -> SeleneFutureResult {
-    println!("=== SELENE STUB: selene_qubit_lazy_measure_leaked called with instance={:?}, qubit={} ===", _instance, q);
+    log::trace!("SELENE STUB: selene_qubit_lazy_measure_leaked called with instance={:?}, qubit={} ===", _instance, q);
     let reference = NEXT_RESULT_ID.fetch_add(1, Ordering::SeqCst);
     SeleneFutureResult {
         error_code: 0,
@@ -109,19 +109,19 @@ pub extern "C" fn selene_qubit_lazy_measure_leaked(_instance: *mut c_void, q: u6
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_qubit_reset(_instance: *mut c_void, q: u64) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_qubit_reset called with instance={:?}, qubit={} ===", _instance, q);
+    log::trace!("SELENE STUB: selene_qubit_reset called with instance={:?}, qubit={} ===", _instance, q);
     SeleneVoidResult { error_code: 0 }
 }
 
 // Future reading functions
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_future_read_bool(_instance: *mut c_void, r: u64) -> SeleneBoolResult {
-    println!("=== SELENE STUB: selene_future_read_bool called with instance={:?}, reference={} ===", _instance, r);
+    log::trace!("SELENE STUB: selene_future_read_bool called with instance={:?}, reference={} ===", _instance, r);
     // Return alternating values for testing
     static COUNTER: AtomicBool = AtomicBool::new(false);
     let result = !COUNTER.load(Ordering::SeqCst);
     COUNTER.store(result, Ordering::SeqCst);
-    println!("=== SELENE STUB: selene_future_read_bool returning {} ===", result);
+    log::trace!("SELENE STUB: selene_future_read_bool returning {} ===", result);
     SeleneBoolResult {
         error_code: 0,
         value: result
@@ -130,7 +130,7 @@ pub extern "C" fn selene_future_read_bool(_instance: *mut c_void, r: u64) -> Sel
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_future_read_u64(_instance: *mut c_void, r: u64) -> SeleneU64Result {
-    println!("=== SELENE STUB: selene_future_read_u64 called with instance={:?}, reference={} ===", _instance, r);
+    log::trace!("SELENE STUB: selene_future_read_u64 called with instance={:?}, reference={} ===", _instance, r);
     SeleneU64Result {
         error_code: 0,
         value: 42
@@ -140,21 +140,21 @@ pub extern "C" fn selene_future_read_u64(_instance: *mut c_void, r: u64) -> Sele
 // Gate operations
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_rxy(_instance: *mut c_void, qubit_id: u64, theta: f64, phi: f64) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_rxy called with instance={:?}, qubit={}, theta={}, phi={} ===",
+    log::trace!("SELENE STUB: selene_rxy called with instance={:?}, qubit={}, theta={}, phi={} ===",
              _instance, qubit_id, theta, phi);
     SeleneVoidResult { error_code: 0 }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_rz(_instance: *mut c_void, qubit_id: u64, theta: f64) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_rz called with instance={:?}, qubit={}, theta={} ===",
+    log::trace!("SELENE STUB: selene_rz called with instance={:?}, qubit={}, theta={} ===",
              _instance, qubit_id, theta);
     SeleneVoidResult { error_code: 0 }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_rzz(_instance: *mut c_void, qubit_id: u64, qubit_id2: u64, theta: f64) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_rzz called with instance={:?}, qubit1={}, qubit2={}, theta={} ===",
+    log::trace!("SELENE STUB: selene_rzz called with instance={:?}, qubit1={}, qubit2={}, theta={} ===",
              _instance, qubit_id, qubit_id2, theta);
     SeleneVoidResult { error_code: 0 }
 }
@@ -162,7 +162,7 @@ pub extern "C" fn selene_rzz(_instance: *mut c_void, qubit_id: u64, qubit_id2: u
 // Shot management
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_on_shot_start(_instance: *mut c_void, shot_index: u64) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_on_shot_start called with instance={:?}, shot_index={} ===",
+    log::trace!("SELENE STUB: selene_on_shot_start called with instance={:?}, shot_index={} ===",
              _instance, shot_index);
     CURRENT_SHOT.store(shot_index, Ordering::SeqCst);
     SeleneVoidResult { error_code: 0 }
@@ -170,13 +170,13 @@ pub extern "C" fn selene_on_shot_start(_instance: *mut c_void, shot_index: u64) 
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_on_shot_end(_instance: *mut c_void) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_on_shot_end called with instance={:?} ===", _instance);
+    log::trace!("SELENE STUB: selene_on_shot_end called with instance={:?} ===", _instance);
     SeleneVoidResult { error_code: 0 }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_get_current_shot(_instance: *mut c_void) -> SeleneU64Result {
-    println!("=== SELENE STUB: selene_get_current_shot called with instance={:?} ===", _instance);
+    log::trace!("SELENE STUB: selene_get_current_shot called with instance={:?} ===", _instance);
     let shot = CURRENT_SHOT.load(Ordering::SeqCst);
     SeleneU64Result {
         error_code: 0,
@@ -187,14 +187,14 @@ pub extern "C" fn selene_get_current_shot(_instance: *mut c_void) -> SeleneU64Re
 // Exit/cleanup
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_exit(_instance: *mut c_void) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_exit called with instance={:?} ===", _instance);
+    log::trace!("SELENE STUB: selene_exit called with instance={:?} ===", _instance);
     SeleneVoidResult { error_code: 0 }
 }
 
 // Time cursor
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_get_tc(_instance: *mut c_void) -> SeleneU64Result {
-    println!("=== SELENE STUB: selene_get_tc called with instance={:?} ===", _instance);
+    log::trace!("SELENE STUB: selene_get_tc called with instance={:?} ===", _instance);
     let tc = TIME_CURSOR.load(Ordering::SeqCst);
     SeleneU64Result {
         error_code: 0,
@@ -204,7 +204,7 @@ pub extern "C" fn selene_get_tc(_instance: *mut c_void) -> SeleneU64Result {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_set_tc(_instance: *mut c_void, tc: u64) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_set_tc called with instance={:?}, tc={} ===", _instance, tc);
+    log::trace!("SELENE STUB: selene_set_tc called with instance={:?}, tc={} ===", _instance, tc);
     TIME_CURSOR.store(tc, Ordering::SeqCst);
     SeleneVoidResult { error_code: 0 }
 }
@@ -212,14 +212,14 @@ pub extern "C" fn selene_set_tc(_instance: *mut c_void, tc: u64) -> SeleneVoidRe
 // Barrier operations
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_local_barrier(_instance: *mut c_void, qubit_ids: *const u64, qubit_ids_length: u64, sleep_time: u64) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_local_barrier called with instance={:?}, num_qubits={}, sleep_time={} ===",
+    log::trace!("SELENE STUB: selene_local_barrier called with instance={:?}, num_qubits={}, sleep_time={} ===",
              _instance, qubit_ids_length, sleep_time);
     SeleneVoidResult { error_code: 0 }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_global_barrier(_instance: *mut c_void, sleep_time: u64) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_global_barrier called with instance={:?}, sleep_time={} ===",
+    log::trace!("SELENE STUB: selene_global_barrier called with instance={:?}, sleep_time={} ===",
              _instance, sleep_time);
     SeleneVoidResult { error_code: 0 }
 }
@@ -227,71 +227,71 @@ pub extern "C" fn selene_global_barrier(_instance: *mut c_void, sleep_time: u64)
 // Print functions
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_print_bool(_instance: *mut c_void, tag: SeleneString, value: bool) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_print_bool called with instance={:?}, value={} ===",
+    log::trace!("SELENE STUB: selene_print_bool called with instance={:?}, value={} ===",
              _instance, value);
     SeleneVoidResult { error_code: 0 }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_print_f64(_instance: *mut c_void, tag: SeleneString, value: f64) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_print_f64 called with instance={:?}, value={} ===", _instance, value);
+    log::trace!("SELENE STUB: selene_print_f64 called with instance={:?}, value={} ===", _instance, value);
     SeleneVoidResult { error_code: 0 }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_print_u64(_instance: *mut c_void, tag: SeleneString, value: u64) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_print_u64 called with instance={:?}, value={} ===", _instance, value);
+    log::trace!("SELENE STUB: selene_print_u64 called with instance={:?}, value={} ===", _instance, value);
     SeleneVoidResult { error_code: 0 }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_print_i64(_instance: *mut c_void, tag: SeleneString, value: i64) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_print_i64 called with instance={:?}, value={} ===", _instance, value);
+    log::trace!("SELENE STUB: selene_print_i64 called with instance={:?}, value={} ===", _instance, value);
     SeleneVoidResult { error_code: 0 }
 }
 
 // Array print functions
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_print_bool_array(_instance: *mut c_void, tag: SeleneString, ptr: *const bool, length: u64) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_print_bool_array called with instance={:?}, length={} ===", _instance, length);
+    log::trace!("SELENE STUB: selene_print_bool_array called with instance={:?}, length={} ===", _instance, length);
     SeleneVoidResult { error_code: 0 }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_print_f64_array(_instance: *mut c_void, tag: SeleneString, ptr: *const f64, length: u64) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_print_f64_array called with instance={:?}, length={} ===", _instance, length);
+    log::trace!("SELENE STUB: selene_print_f64_array called with instance={:?}, length={} ===", _instance, length);
     SeleneVoidResult { error_code: 0 }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_print_u64_array(_instance: *mut c_void, tag: SeleneString, ptr: *const u64, length: u64) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_print_u64_array called with instance={:?}, length={} ===", _instance, length);
+    log::trace!("SELENE STUB: selene_print_u64_array called with instance={:?}, length={} ===", _instance, length);
     SeleneVoidResult { error_code: 0 }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_print_i64_array(_instance: *mut c_void, tag: SeleneString, ptr: *const i64, length: u64) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_print_i64_array called with instance={:?}, length={} ===", _instance, length);
+    log::trace!("SELENE STUB: selene_print_i64_array called with instance={:?}, length={} ===", _instance, length);
     SeleneVoidResult { error_code: 0 }
 }
 
 // State dump
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_dump_state(_instance: *mut c_void, message: SeleneString, qubits: *const u64, qubits_length: u64) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_dump_state called with instance={:?}, num_qubits={} ===", _instance, qubits_length);
+    log::trace!("SELENE STUB: selene_dump_state called with instance={:?}, num_qubits={} ===", _instance, qubits_length);
     SeleneVoidResult { error_code: 0 }
 }
 
 // Random number generation
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_random_seed(_instance: *mut c_void, seed: u64) -> SeleneVoidResult {
-    println!("=== SELENE STUB: selene_random_seed called with instance={:?}, seed={} ===", _instance, seed);
+    log::trace!("SELENE STUB: selene_random_seed called with instance={:?}, seed={} ===", _instance, seed);
     SeleneVoidResult { error_code: 0 }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_random_u32(_instance: *mut c_void) -> SeleneU32Result {
-    println!("=== SELENE STUB: selene_random_u32 called with instance={:?} ===", _instance);
+    log::trace!("SELENE STUB: selene_random_u32 called with instance={:?} ===", _instance);
     SeleneU32Result {
         error_code: 0,
         value: 12345
@@ -300,7 +300,7 @@ pub extern "C" fn selene_random_u32(_instance: *mut c_void) -> SeleneU32Result {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_random_f64(_instance: *mut c_void) -> SeleneF64Result {
-    println!("=== SELENE STUB: selene_random_f64 called with instance={:?} ===", _instance);
+    log::trace!("SELENE STUB: selene_random_f64 called with instance={:?} ===", _instance);
     SeleneF64Result {
         error_code: 0,
         value: 0.5

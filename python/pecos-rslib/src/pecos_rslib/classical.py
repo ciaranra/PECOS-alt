@@ -19,12 +19,12 @@ Examples:
 
 # Import from the unified sim module
 from pecos_rslib.sim import (
-    qasm_engine,
-    llvm_engine,
-    selene_engine,
-    QasmEngineBuilder,
     LlvmEngineBuilder,
+    QasmEngineBuilder,
     SeleneEngineBuilder,
+    llvm_engine,
+    qasm_engine,
+    selene_engine,
 )
 
 # Create namespace-friendly aliases

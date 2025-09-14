@@ -27,8 +27,8 @@ def gate_test(gate_symbol: str, stab_dict: dict[str, list[str]]) -> None:
     :param stab_dict:
     :return:
     """
-    for state in states:
-        state = state(1)  # noqa: PLW2901 - instantiate class
+    for state_class in states:
+        state = state_class(1)
 
         # X stabilizer
         state.run_gate("init |+>", {0})

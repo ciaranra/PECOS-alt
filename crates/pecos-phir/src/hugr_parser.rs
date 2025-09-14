@@ -24,6 +24,13 @@ use hugr_core::{
 /// Parse HUGR bytes directly into PHIR representation
 ///
 /// This handles both JSON and binary HUGR formats
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Failed to parse HUGR format
+/// - HUGR package contains no modules
+/// - HUGR to PHIR conversion fails
 pub fn parse_hugr_bytes_to_phir(hugr_bytes: &[u8]) -> Result<ModuleOp> {
     // Load HUGR using hugr_core
     let reader = std::io::Cursor::new(hugr_bytes);
@@ -38,10 +45,17 @@ pub fn parse_hugr_bytes_to_phir(hugr_bytes: &[u8]) -> Result<ModuleOp> {
     let hugr = std::mem::take(&mut hugr_package.modules[0]);
 
     // Convert HUGR to PHIR using flat approach
-    convert_hugr_to_phir_flat(&hugr)
+    Ok(convert_hugr_to_phir_flat(&hugr))
 }
 
 /// Parse HUGR JSON directly into PHIR representation
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - JSON parsing fails
+/// - HUGR format is invalid
+/// - Conversion to PHIR fails
 pub fn parse_hugr_to_phir(hugr_json: &str) -> Result<ModuleOp> {
     // First, try to parse as actual HUGR format
     match parse_hugr_bytes_to_phir(hugr_json.as_bytes()) {
@@ -54,7 +68,7 @@ pub fn parse_hugr_to_phir(hugr_json: &str) -> Result<ModuleOp> {
 }
 
 /// Convert HUGR to PHIR using flat iteration
-fn convert_hugr_to_phir_flat(hugr: &Hugr) -> Result<ModuleOp> {
+fn convert_hugr_to_phir_flat(hugr: &Hugr) -> ModuleOp {
     let mut phir_module = ModuleOp::new("main");
 
     // First pass: Find all function nodes
@@ -67,11 +81,11 @@ fn convert_hugr_to_phir_flat(hugr: &Hugr) -> Result<ModuleOp> {
 
     // Second pass: Convert each function
     for (func_node, func_defn) in function_nodes {
-        let func = convert_function_flat(hugr, func_node, func_defn)?;
+        let func = convert_function_flat(hugr, func_node, func_defn);
         phir_module.add_function(func);
     }
 
-    Ok(phir_module)
+    phir_module
 }
 
 /// Convert a function using flat iteration
@@ -79,14 +93,14 @@ fn convert_function_flat(
     hugr: &Hugr,
     func_node: Node,
     func_defn: &hugr_core::ops::FuncDefn,
-) -> Result<FuncOp> {
+) -> FuncOp {
     // Name the first function "main" for PECOS compatibility
     let func_name = if func_node.index() == 1 {
         "main".to_string()
     } else {
         format!("func_{}", func_node.index())
     };
-    let func_type = convert_function_type(func_defn.signature().clone())?;
+    let func_type = convert_function_type(func_defn.signature());
 
     let mut func = FuncOp::new(func_name, func_type);
 
@@ -101,7 +115,7 @@ fn convert_function_flat(
     // Process nodes in topological order (HUGR should maintain this)
     for node in function_nodes {
         if let Some(instr) =
-            convert_node_to_instruction_flat(hugr, node, &node_values, &mut next_ssa_id)?
+            convert_node_to_instruction_flat(hugr, node, &node_values, &mut next_ssa_id)
         {
             // Store output values
             let outputs = instr.results.clone();
@@ -157,7 +171,7 @@ fn convert_function_flat(
         }
     }
 
-    Ok(func)
+    func
 }
 
 /// Find all nodes belonging to a function using BFS
@@ -178,18 +192,10 @@ fn find_function_nodes(hugr: &Hugr, func_node: Node) -> Vec<Node> {
 
                 // Only add operation nodes to results
                 let op = hugr.get_optype(child);
-                match op {
-                    OpType::Input(_)
-                    | OpType::Output(_)
-                    | OpType::CFG(_)
-                    | OpType::DataflowBlock(_) => {
-                        // Skip structural nodes
-                    }
-                    OpType::ExtensionOp(_) => {
-                        nodes.push(child);
-                    }
-                    _ => {}
+                if matches!(op, OpType::ExtensionOp(_)) {
+                    nodes.push(child);
                 }
+                // Skip structural nodes and other types
             }
         }
     }
@@ -203,7 +209,7 @@ fn convert_node_to_instruction_flat(
     node: Node,
     node_values: &HashMap<Node, Vec<SSAValue>>,
     next_ssa_id: &mut u32,
-) -> Result<Option<Instruction>> {
+) -> Option<Instruction> {
     let op = hugr.get_optype(node);
 
     let operation = match op {
@@ -212,14 +218,12 @@ fn convert_node_to_instruction_flat(
             "H" => Some(Operation::Quantum(QuantumOp::H)),
             "CX" => Some(Operation::Quantum(QuantumOp::CX)),
             "MeasureFree" => Some(Operation::Quantum(QuantumOp::Measure)),
-            _ => return Ok(None),
+            _ => return None,
         },
-        _ => return Ok(None),
+        _ => return None,
     };
 
-    let Some(operation) = operation else {
-        return Ok(None);
-    };
+    let operation = operation?;
 
     // Get input values by tracing edges
     let mut operands = vec![];
@@ -248,19 +252,13 @@ fn convert_node_to_instruction_flat(
         })
         .collect();
 
-    Ok(Some(Instruction::new(
-        operation,
-        operands,
-        results,
-        result_types,
-    )))
+    Some(Instruction::new(operation, operands, results, result_types))
 }
 
 /// Get result types for an operation
 fn get_operation_result_types(operation: &Operation) -> Vec<Type> {
     match operation {
-        Operation::Quantum(QuantumOp::Alloc) => vec![Type::Qubit],
-        Operation::Quantum(QuantumOp::H) => vec![Type::Qubit],
+        Operation::Quantum(QuantumOp::Alloc | QuantumOp::H) => vec![Type::Qubit],
         Operation::Quantum(QuantumOp::CX) => vec![Type::Qubit, Type::Qubit],
         Operation::Quantum(QuantumOp::Measure) => vec![Type::Bool],
         _ => vec![],
@@ -268,53 +266,53 @@ fn get_operation_result_types(operation: &Operation) -> Vec<Type> {
 }
 
 /// Convert HUGR function type to PHIR function type
-fn convert_function_type(sig: hugr_core::types::PolyFuncType) -> Result<FunctionType> {
+fn convert_function_type(sig: &hugr_core::types::PolyFuncType) -> FunctionType {
     let func_type = sig.body();
 
     let inputs = func_type
         .input()
         .iter()
         .map(convert_hugr_type_to_phir)
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<Vec<_>>();
 
     let outputs = func_type
         .output()
         .iter()
         .map(convert_hugr_type_to_phir)
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<Vec<_>>();
 
-    Ok(FunctionType {
+    FunctionType {
         inputs,
         outputs,
         variadic: false,
-    })
+    }
 }
 
 /// Convert HUGR type to PHIR type
-fn convert_hugr_type_to_phir(hugr_type: &hugr_core::types::Type) -> Result<Type> {
+fn convert_hugr_type_to_phir(hugr_type: &hugr_core::types::Type) -> Type {
     use hugr_core::extension::prelude::{bool_t, qb_t};
 
     match hugr_type {
-        t if t == &qb_t() => Ok(Type::Qubit),
-        t if t == &bool_t() => Ok(Type::Bool),
+        t if t == &qb_t() => Type::Qubit,
+        t if t == &bool_t() => Type::Bool,
         t => {
             if let Some(ext_type) = t.as_extension() {
                 let name = ext_type.name();
                 match name.as_ref() {
-                    "bool" => Ok(Type::Bool),
-                    "float64" => Ok(Type::Float(crate::types::FloatPrecision::F64)),
-                    _ => Ok(Type::Custom(crate::types::CustomType {
+                    "bool" => Type::Bool,
+                    "float64" => Type::Float(crate::types::FloatPrecision::F64),
+                    _ => Type::Custom(crate::types::CustomType {
                         dialect: "hugr".to_string(),
                         name: name.to_string(),
                         parameters: vec![],
-                    })),
+                    }),
                 }
             } else {
-                Ok(Type::Custom(crate::types::CustomType {
+                Type::Custom(crate::types::CustomType {
                     dialect: "hugr".to_string(),
                     name: format!("{hugr_type:?}"),
                     parameters: vec![],
-                }))
+                })
             }
         }
     }
@@ -355,7 +353,7 @@ fn parse_simplified_hugr_json(json_str: &str) -> Result<ModuleOp> {
         if let Some(op) = node.get("op").and_then(|o| o.as_str())
             && op == "FuncDefn"
         {
-            let func = parse_simplified_function(nodes, idx, module)?;
+            let func = parse_simplified_function(nodes, idx, module);
             phir_module.add_function(func);
         }
     }
@@ -364,7 +362,7 @@ fn parse_simplified_hugr_json(json_str: &str) -> Result<ModuleOp> {
 }
 
 /// Parse a function from simplified JSON format
-fn parse_simplified_function(nodes: &[Value], func_idx: usize, module: &Value) -> Result<FuncOp> {
+fn parse_simplified_function(nodes: &[Value], func_idx: usize, module: &Value) -> FuncOp {
     let func_node = &nodes[func_idx];
     let func_name = func_node
         .get("name")
@@ -381,29 +379,18 @@ fn parse_simplified_function(nodes: &[Value], func_idx: usize, module: &Value) -
         if let Some(parent) = node.get("parent").and_then(serde_json::Value::as_u64)
             && usize::try_from(parent).ok() == Some(func_idx)
             && let Some(op) = node.get("op").and_then(|o| o.as_str())
+            && op == "Extension"
+            && let Some(name) = node.get("name").and_then(|n| n.as_str())
+            && let Some(instr) =
+                create_quantum_instruction(name, idx, &mut ssa_counter, &node_to_ssa, nodes, module)
         {
-            match op {
-                "Extension" => {
-                    if let Some(name) = node.get("name").and_then(|n| n.as_str())
-                        && let Some(instr) = create_quantum_instruction(
-                            name,
-                            idx,
-                            &mut ssa_counter,
-                            &node_to_ssa,
-                            nodes,
-                            module,
-                        )?
-                    {
-                        // Store the output SSA value for edge resolution
-                        if !instr.results.is_empty() {
-                            node_to_ssa.insert(idx, instr.results[0]);
-                        }
-                        operations.push(instr);
-                    }
-                }
-                _ => {} // Ignore Input/Output nodes for now
+            // Store the output SSA value for edge resolution
+            if !instr.results.is_empty() {
+                node_to_ssa.insert(idx, instr.results[0]);
             }
+            operations.push(instr);
         }
+        // Ignore Input/Output nodes for now
     }
 
     // Determine function type based on operations
@@ -431,7 +418,7 @@ fn parse_simplified_function(nodes: &[Value], func_idx: usize, module: &Value) -
         });
     }
 
-    Ok(func)
+    func
 }
 
 /// Create quantum instruction from simplified format
@@ -442,7 +429,7 @@ fn create_quantum_instruction(
     node_to_ssa: &HashMap<usize, SSAValue>,
     _nodes: &[Value],
     module: &Value,
-) -> Result<Option<Instruction>> {
+) -> Option<Instruction> {
     let operation = match op_name {
         "QAlloc" => Some(Operation::Quantum(QuantumOp::Alloc)),
         "H" => Some(Operation::Quantum(QuantumOp::H)),
@@ -451,9 +438,7 @@ fn create_quantum_instruction(
         _ => None,
     };
 
-    let Some(operation) = operation else {
-        return Ok(None);
-    };
+    let operation = operation?;
 
     // Find operands from edges
     let mut operands = Vec::new();
@@ -492,12 +477,7 @@ fn create_quantum_instruction(
         })
         .collect();
 
-    Ok(Some(Instruction::new(
-        operation,
-        operands,
-        results,
-        result_types,
-    )))
+    Some(Instruction::new(operation, operands, results, result_types))
 }
 
 /// Infer function type from operations

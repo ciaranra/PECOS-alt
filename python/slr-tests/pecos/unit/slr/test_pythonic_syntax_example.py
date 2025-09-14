@@ -34,9 +34,5 @@ def test_pythonic_syntax_example() -> None:
     # Complex expression - exact parentheses may vary due to precedence
     assert "c[6] = " in guppy_code
 
-    print("Pythonic SLR syntax example:")
-    print(guppy_code)
-
-
-if __name__ == "__main__":
-    test_pythonic_syntax_example()
+    # print("Pythonic SLR syntax example:")
+    # print(guppy_code)

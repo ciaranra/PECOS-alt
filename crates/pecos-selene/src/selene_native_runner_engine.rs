@@ -171,7 +171,7 @@ impl SeleneNativeRunnerEngine {
                 if let Ok(val) = value.extract::<u32>() {
                     results.insert(key_str, Data::U32(val));
                 } else if let Ok(val) = value.extract::<i32>() {
-                    results.insert(key_str, Data::U32(val as u32));
+                    results.insert(key_str, Data::U32(u32::try_from(val).unwrap_or(0)));
                 } else if let Ok(val) = value.extract::<bool>() {
                     results.insert(key_str, Data::U32(if val { 1 } else { 0 }));
                 }

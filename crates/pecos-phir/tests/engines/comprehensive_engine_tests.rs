@@ -348,7 +348,7 @@ fn test_bell_state_distribution_comparison() -> Result<(), PecosError> {
         }
     }
 
-    println!("✓ Both engines produce valid Bell state distributions!");
+    println!("Both engines produce valid Bell state distributions!");
 
     Ok(())
 }

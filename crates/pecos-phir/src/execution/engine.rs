@@ -35,6 +35,10 @@ pub struct PhirEngine {
 
 impl PhirEngine {
     /// Create a new `PhirEngine` from a PHIR module
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if variable definitions cannot be extracted from the module
     pub fn new(module: Module) -> Result<Self> {
         let mut processor = PhirProcessor::new();
 

@@ -5,10 +5,10 @@ This module provides the Rust program types for the unified simulation API.
 
 # Import the Rust program types
 from pecos_rslib._pecos_rslib import (
-    QasmProgram,
-    LlvmProgram,
     HugrProgram,
+    LlvmProgram,
     PhirJsonProgram,
+    QasmProgram,
 )
 
 
@@ -17,7 +17,7 @@ from pecos_rslib._pecos_rslib import (
 class WasmProgram:
     """A WebAssembly program wrapper."""
 
-    def __init__(self, wasm_bytes: bytes):
+    def __init__(self, wasm_bytes: bytes) -> None:
         """Initialize with WASM bytes."""
         self.wasm = wasm_bytes
 
@@ -34,7 +34,7 @@ class WasmProgram:
 class WatProgram:
     """A WebAssembly Text program wrapper."""
 
-    def __init__(self, source: str):
+    def __init__(self, source: str) -> None:
         """Initialize with WAT source code."""
         self.source = source
 
@@ -48,10 +48,10 @@ class WatProgram:
 
 
 __all__ = [
-    "QasmProgram",
-    "LlvmProgram",
     "HugrProgram",
+    "LlvmProgram",
     "PhirJsonProgram",
+    "QasmProgram",
     "WasmProgram",
     "WatProgram",
 ]

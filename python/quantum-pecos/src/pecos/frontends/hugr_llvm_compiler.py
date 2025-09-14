@@ -4,7 +4,9 @@ This module provides a Python interface to compile HUGR files to LLVM IR using
 the working quantum compilation pipeline from quantum-compilation-examples.
 """
 
+import contextlib
 import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -98,7 +100,7 @@ class HugrLlvmCompiler:
                 "hugr",  # Always use HUGR convention
             ]
 
-            subprocess.run(  # noqa: S603
+            subprocess.run(
                 cmd,
                 check=True,
                 capture_output=True,
@@ -127,15 +129,12 @@ class HugrLlvmCompiler:
             and self._temp_dir
             and Path(self._temp_dir).exists()
         ):
-            import shutil
 
             shutil.rmtree(self._temp_dir)
             self._temp_dir = None
 
     def __del__(self) -> None:
         """Cleanup on destruction."""
-        import contextlib
-
         with contextlib.suppress(Exception):
             self.cleanup()
 
@@ -175,7 +174,7 @@ def build_hugr_llvm_compiler() -> bool:
     try:
         # Build in release mode
         subprocess.run(
-            ["cargo", "build", "--release"],  # noqa: S607
+            ["cargo", "build", "--release"],
             cwd=source_dir,
             check=True,
             capture_output=True,

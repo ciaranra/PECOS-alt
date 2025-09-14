@@ -35,7 +35,7 @@ fn test_hugr_version_info() {
     // Verify the feature is enabled by default
     #[cfg(feature = "hugr-013")]
     {
-        println!("✓ HUGR 0.13 support is enabled");
+        println!("HUGR 0.13 support is enabled");
     }
 
     #[cfg(not(feature = "hugr-013"))]

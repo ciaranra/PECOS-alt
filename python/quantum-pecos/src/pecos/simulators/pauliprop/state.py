@@ -15,6 +15,8 @@ This module provides the quantum state representation for the Pauli fault propag
 efficient Pauli frame tracking and stabilizer tableau management for fast stabilizer circuit simulation.
 """
 
+# Gate bindings require consistent interfaces even if not all parameters are used.
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -82,25 +84,25 @@ class PauliProp(PauliPropagation):
         backend = self._backend  # Local reference to avoid attribute lookup
 
         # Single-qubit gates - location is always an int
-        self.bindings["H"] = lambda s, q, **p: backend.h(q)  # noqa: ARG005
-        self.bindings["SX"] = lambda s, q, **p: backend.sx(q)  # noqa: ARG005
-        self.bindings["SY"] = lambda s, q, **p: backend.sy(q)  # noqa: ARG005
-        self.bindings["SZ"] = lambda s, q, **p: backend.sz(q)  # noqa: ARG005
+        self.bindings["H"] = lambda s, q, **p: backend.h(q)
+        self.bindings["SX"] = lambda s, q, **p: backend.sx(q)
+        self.bindings["SY"] = lambda s, q, **p: backend.sy(q)
+        self.bindings["SZ"] = lambda s, q, **p: backend.sz(q)
 
         # Two-qubit gates - location is always a tuple
-        self.bindings["CX"] = lambda s, qs, **p: backend.cx(  # noqa: ARG005
+        self.bindings["CX"] = lambda s, qs, **p: backend.cx(
             qs[0],
             qs[1],
         )
-        self.bindings["CY"] = lambda s, qs, **p: backend.cy(  # noqa: ARG005
+        self.bindings["CY"] = lambda s, qs, **p: backend.cy(
             qs[0],
             qs[1],
         )
-        self.bindings["CZ"] = lambda s, qs, **p: backend.cz(  # noqa: ARG005
+        self.bindings["CZ"] = lambda s, qs, **p: backend.cz(
             qs[0],
             qs[1],
         )
-        self.bindings["SWAP"] = lambda s, qs, **p: backend.swap(  # noqa: ARG005
+        self.bindings["SWAP"] = lambda s, qs, **p: backend.swap(
             qs[0],
             qs[1],
         )

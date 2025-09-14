@@ -68,12 +68,12 @@ attributes #0 = { "EntryPoint" }
         .verbose(true)
         .build()?;
 
-    println!("✓ Created SeleneEngine with feedback circuit");
+    println!("Created SeleneEngine with feedback circuit");
 
     // Demonstrate ControlEngine interface
     match engine.start(())? {
         EngineStage::NeedsProcessing(cmd) => {
-            println!("✓ Initial stage - quantum operations needed");
+            println!("Initial stage - quantum operations needed");
 
             let ops = cmd.quantum_ops()?;
             println!("  Operations to execute: {} ops", ops.len());
@@ -89,17 +89,17 @@ attributes #0 = { "EntryPoint" }
             // Continue with classical control
             match engine.continue_processing(response.build())? {
                 EngineStage::NeedsProcessing(cmd2) => {
-                    println!("✓ After measurement - more operations needed");
+                    println!("After measurement - more operations needed");
                     let ops2 = cmd2.quantum_ops()?;
                     println!("  Additional operations: {} ops", ops2.len());
                 }
                 EngineStage::Complete(shot) => {
-                    println!("✓ Completed: {:?}", shot.data);
+                    println!("Completed: {:?}", shot.data);
                 }
             }
         }
         EngineStage::Complete(shot) => {
-            println!("✓ Completed immediately: {:?}", shot.data);
+            println!("Completed immediately: {:?}", shot.data);
         }
     }
 
@@ -158,7 +158,7 @@ attributes #0 = { "EntryPoint" }
         )
         .run(10)?;
 
-    println!("✓ Ran adaptive algorithm: {} shots", results.len());
+    println!("Ran adaptive algorithm: {} shots", results.len());
 
     // Show key features
     println!("\nKey Features of SeleneEngine:");

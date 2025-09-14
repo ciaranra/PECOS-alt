@@ -57,9 +57,13 @@ def read_pickle(picklefile: str | bytes) -> CCOPObject:
     """
     if isinstance(picklefile, str):  # filename
         with Path.open(picklefile, "rb") as f:
-            return pickle.load(f)  # noqa: S301 - Loading trusted circuit metadata
+            return pickle.load(
+                f,
+            )
     else:
-        return pickle.loads(picklefile)  # noqa: S301 - Loading trusted circuit metadata
+        return pickle.loads(
+            picklefile,
+        )
 
 
 def get_ccop(circuit: QuantumCircuit) -> CCOPObject | None:

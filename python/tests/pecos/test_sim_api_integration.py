@@ -1,92 +1,637 @@
-#!/usr/bin/env python3
 """Test the unified sim API with different program types."""
 
+import json
+
 import pytest
-from pecos.frontends.guppy_api import sim
-from pecos_rslib import HugrProgram, QasmProgram
+
+# Check for required dependencies
+try:
+    from pecos.frontends.guppy_api import sim
+
+    SIM_API_AVAILABLE = True
+except ImportError:
+    SIM_API_AVAILABLE = False
+
+try:
+    from pecos_rslib import sparse_stabilizer, state_vector
+    from pecos_rslib.programs import (
+        HugrProgram,
+        LlvmProgram,
+        PhirJsonProgram,
+        QasmProgram,
+    )
+
+    PECOS_RSLIB_AVAILABLE = True
+except ImportError:
+    PECOS_RSLIB_AVAILABLE = False
+
+try:
+    from guppylang import guppy
+    from guppylang.std.quantum import h, measure, qubit
+
+    GUPPY_AVAILABLE = True
+except ImportError:
+    GUPPY_AVAILABLE = False
 
 
-def test_sim_api_with_qasm() -> None:
-    """Test sim API with QASM program."""
-    qasm_str = """
-    OPENQASM 2.0;
-    include "qelib1.inc";
-    qreg q[1];
-    creg c[1];
-    h q[0];
-    measure q[0] -> c[0];
-    """
+@pytest.mark.skipif(
+    not all([SIM_API_AVAILABLE, PECOS_RSLIB_AVAILABLE]),
+    reason="sim API or pecos_rslib not available",
+)
+class TestQASMSimulation:
+    """Test sim API with QASM programs."""
 
-    program = QasmProgram.from_string(qasm_str)
-    results = sim(program).run(1000)
+    def test_sim_api_with_simple_qasm(self) -> None:
+        """Test sim API with simple QASM program."""
+        qasm_str = """
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[1];
+        creg c[1];
+        h q[0];
+        measure q[0] -> c[0];
+        """
 
-    # Results is a dict with register names as keys, values are shot arrays
-    assert "c" in results
-    assert len(results["c"]) == 1000
-    print(f"QASM sim results: got {len(results['c'])} shots for register 'c'")
+        program = QasmProgram.from_string(qasm_str)
+        results = sim(program).seed(42).run(1000)
+
+        # Results is a dict with register names as keys, values are shot arrays
+        assert isinstance(results, dict), "Results should be a dictionary"
+        assert "c" in results, "Results should contain register 'c'"
+        assert len(results["c"]) == 1000, "Should have 1000 shots"
+
+        # Check measurement distribution (should be roughly 50/50)
+        measurements = results["c"]
+        ones = sum(measurements)
+        zeros = 1000 - ones
+
+        # With seed, results should be deterministic but still mixed
+        assert (
+            300 < ones < 700
+        ), f"Should be roughly 50/50 distribution, got {ones} ones"
+        assert (
+            300 < zeros < 700
+        ), f"Should be roughly 50/50 distribution, got {zeros} zeros"
+
+    def test_sim_api_with_bell_state_qasm(self) -> None:
+        """Test sim API with Bell state in QASM."""
+        qasm_str = """
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[2];
+        creg c[2];
+        h q[0];
+        cx q[0], q[1];
+        measure q[0] -> c[0];
+        measure q[1] -> c[1];
+        """
+
+        program = QasmProgram.from_string(qasm_str)
+        results = sim(program).seed(42).run(100)
+
+        assert "c" in results, "Results should contain register 'c'"
+        assert len(results["c"]) == 100, "Should have 100 shots"
+
+        # Each shot should be a 2-bit value (0, 1, 2, or 3)
+        # For Bell state, should only see 00 (0) and 11 (3)
+        measurements = results["c"]
+        unique_values = set(measurements)
+
+        # Bell state should only produce correlated results
+        assert unique_values.issubset(
+            {0, 3},
+        ), f"Bell state should only give 00 or 11, got {unique_values}"
+
+        # Should see both values with reasonable probability
+        count_00 = measurements.count(0)
+        count_11 = measurements.count(3)
+        assert count_00 > 20, f"Should see |00⟩ state, got {count_00} times"
+        assert count_11 > 20, f"Should see |11⟩ state, got {count_11} times"
+
+    def test_sim_builder_chaining(self) -> None:
+        """Test builder pattern chaining."""
+        qasm_str = """
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[1];
+        creg c[1];
+        x q[0];
+        measure q[0] -> c[0];
+        """
+
+        program = QasmProgram.from_string(qasm_str)
+
+        # Test chaining various configurations
+        results = sim(program).seed(42).workers(2).quantum(state_vector()).run(500)
+
+        assert "c" in results, "Results should contain register 'c'"
+        assert len(results["c"]) == 500, "Should have 500 shots"
+
+        # X gate should always give |1⟩
+        measurements = results["c"]
+        assert all(m == 1 for m in measurements), "X gate should always measure 1"
 
 
-def test_sim_api_with_llvm() -> None:
-    """Test sim API with LLVM IR program."""
-    # Skip LLVM test for now - entry point detection is finicky
-    # TODO: Fix LLVM entry point detection
-    print("LLVM test skipped - entry point detection needs work")
-    return
+@pytest.mark.skipif(
+    not all([SIM_API_AVAILABLE, PECOS_RSLIB_AVAILABLE]),
+    reason="sim API or pecos_rslib not available",
+)
+class TestLLVMSimulation:
+    """Test sim API with LLVM IR programs."""
+
+    def test_sim_api_with_llvm_simple(self) -> None:
+        """Test sim API with simple LLVM IR program."""
+        # Proper QIR-compliant LLVM IR
+        llvm_ir = """
+        ; ModuleID = 'quantum_test'
+
+        %Qubit = type opaque
+        %Result = type opaque
+
+        declare void @__quantum__qis__h__body(%Qubit*)
+        declare %Result* @__quantum__qis__mz__body(%Qubit*)
+        declare %Qubit* @__quantum__rt__qubit_allocate()
+        declare void @__quantum__rt__qubit_release(%Qubit*)
+        declare void @__quantum__rt__result_record_output(%Result*, i8*)
+
+        @0 = internal constant [2 x i8] c"c\\00"
+
+        define void @main() #0 {
+        entry:
+            %qubit = call %Qubit* @__quantum__rt__qubit_allocate()
+            call void @__quantum__qis__h__body(%Qubit* %qubit)
+            %result = call %Result* @__quantum__qis__mz__body(%Qubit* %qubit)
+            call void @__quantum__rt__result_record_output(%Result* %result,
+                i8* getelementptr inbounds ([2 x i8], [2 x i8]* @0, i32 0, i32 0))
+            call void @__quantum__rt__qubit_release(%Qubit* %qubit)
+            ret void
+        }
+
+        attributes #0 = { "EntryPoint" "requiredQubits"="1" }
+        """
+
+        try:
+            program = LlvmProgram.from_string(llvm_ir)
+
+            # Try to run - this might work now with proper QIR format
+            results = sim(program).qubits(1).seed(42).run(10)
+
+            # If it works, verify results
+            assert isinstance(results, dict), "Results should be a dictionary"
+            assert len(results) > 0, "Should have some results"
+
+            # Check for measurements
+            if "c" in results:
+                measurements = results["c"]
+                assert len(measurements) == 10, "Should have 10 shots"
+                assert all(
+                    m in [0, 1] for m in measurements
+                ), "Measurements should be binary"
+
+        except (RuntimeError, ValueError, NotImplementedError) as e:
+            # Known LLVM runtime issues
+            error_msg = str(e).lower()
+            if any(
+                x in error_msg
+                for x in [
+                    "entry",
+                    "not implemented",
+                    "undefined symbol",
+                    "failed to load",
+                ]
+            ):
+                pytest.skip(f"LLVM runtime not fully working yet: {e}")
+            else:
+                # Truly unexpected error
+                pytest.fail(f"Unexpected LLVM simulation error: {e}")
+
+    def test_sim_api_with_llvm_bell_state(self) -> None:
+        """Test sim API with Bell state in LLVM IR."""
+        # Bell state in QIR format
+        llvm_ir = """
+        %Qubit = type opaque
+        %Result = type opaque
+
+        declare void @__quantum__qis__h__body(%Qubit*)
+        declare void @__quantum__qis__cnot__body(%Qubit*, %Qubit*)
+        declare %Result* @__quantum__qis__mz__body(%Qubit*)
+        declare %Qubit* @__quantum__rt__qubit_allocate_array(i64)
+        declare void @__quantum__rt__qubit_release_array(%Qubit*)
+        declare void @__quantum__rt__result_record_output(%Result*, i8*)
+
+        @0 = internal constant [3 x i8] c"c0\\00"
+        @1 = internal constant [3 x i8] c"c1\\00"
+
+        define void @bell_state() #0 {
+        entry:
+            %qubits = call %Qubit* @__quantum__rt__qubit_allocate_array(i64 2)
+            %q0 = getelementptr %Qubit, %Qubit* %qubits, i64 0
+            %q1 = getelementptr %Qubit, %Qubit* %qubits, i64 1
+
+            call void @__quantum__qis__h__body(%Qubit* %q0)
+            call void @__quantum__qis__cnot__body(%Qubit* %q0, %Qubit* %q1)
+
+            %r0 = alloca %Result
+            %r1 = alloca %Result
+            call void @__quantum__qis__mz__body(%Qubit* %q0, %Result* %r0)
+            call void @__quantum__qis__mz__body(%Qubit* %q1, %Result* %r1)
+
+            call void @__quantum__rt__result_record_output(%Result* %r0,
+                i8* getelementptr inbounds ([3 x i8], [3 x i8]* @0, i32 0, i32 0))
+            call void @__quantum__rt__result_record_output(%Result* %r1,
+                i8* getelementptr inbounds ([3 x i8], [3 x i8]* @1, i32 0, i32 0))
+
+            call void @__quantum__rt__qubit_release_array(%Qubit* %qubits)
+            ret void
+        }
+
+        attributes #0 = { "EntryPoint" "requiredQubits"="2" }
+        """
+
+        try:
+            program = LlvmProgram.from_string(llvm_ir)
+            results = sim(program).qubits(2).seed(42).run(50)
+
+            assert isinstance(results, dict), "Results should be a dictionary"
+
+            # Check if we have correlated measurements
+            if "c0" in results and "c1" in results:
+                m0 = results["c0"]
+                m1 = results["c1"]
+
+                assert len(m0) == 50, "Should have 50 shots for qubit 0"
+                assert len(m1) == 50, "Should have 50 shots for qubit 1"
+
+                # Bell state should be correlated
+                correlated = sum(1 for i in range(50) if m0[i] == m1[i])
+                assert (
+                    correlated == 50
+                ), f"Bell state should be perfectly correlated, got {correlated}/50"
+
+        except (RuntimeError, ValueError, NotImplementedError) as e:
+            error_msg = str(e).lower()
+            if any(
+                x in error_msg
+                for x in [
+                    "not implemented",
+                    "not supported",
+                    "undefined symbol",
+                    "failed to load",
+                    "getelementptr",
+                    "unsized type",
+                ]
+            ):
+                pytest.skip(f"LLVM Bell state not fully working yet: {e}")
+            else:
+                pytest.fail(f"Unexpected error: {e}")
 
 
 @pytest.mark.optional_dependency
-def test_sim_api_with_hugr() -> None:
-    """Test sim API with HUGR program (uses Selene with HUGR 0.13)."""
-    # For now, test that HugrProgram routes through Selene
-    try:
-        # Create a dummy HUGR program
-        hugr_bytes = b"HUGR" + b"\x00" * 100  # Dummy bytes
-        program = HugrProgram.from_bytes(hugr_bytes)
+@pytest.mark.skipif(
+    not all([SIM_API_AVAILABLE, PECOS_RSLIB_AVAILABLE, GUPPY_AVAILABLE]),
+    reason="Dependencies not available",
+)
+class TestHUGRSimulation:
+    """Test sim API with HUGR programs."""
 
-        # This should create a Selene engine internally
-        builder = sim(program)
-        print(f"Created sim builder for HUGR program: {type(builder)}")
+    def test_sim_api_with_real_hugr(self) -> None:
+        """Test sim API with real HUGR from Guppy compilation."""
 
-        # Actual execution would fail without proper HUGR parsing
-        # but the routing should work
+        # Create a real HUGR program from Guppy
+        @guppy
+        def simple_circuit() -> bool:
+            q = qubit()
+            h(q)
+            return measure(q)
 
-    except Exception as e:
-        print(f"Expected error (HUGR parsing not implemented): {e}")
+        # Compile to HUGR
+        compiled = simple_circuit.compile()
+
+        # Get HUGR bytes
+        if hasattr(compiled, "to_bytes"):
+            hugr_bytes = compiled.to_bytes()
+        elif hasattr(compiled, "to_json"):
+            hugr_json = compiled.to_json()
+            hugr_bytes = hugr_json.encode("utf-8")
+        else:
+            pytest.skip("Cannot get HUGR bytes from compiled function")
+
+        try:
+            program = HugrProgram.from_bytes(hugr_bytes)
+
+            # This should route through Selene with HUGR 0.13
+            results = sim(program).qubits(1).quantum(state_vector()).seed(42).run(100)
+
+            # If it works, verify results
+            assert isinstance(results, dict), "Results should be a dictionary"
+
+            # Check for measurements
+            has_measurements = (
+                "measurement_1" in results
+                or "measurements" in results
+                or len(results) > 0
+            )
+            assert has_measurements, "Should have measurement results"
+
+            if "measurement_1" in results:
+                measurements = results["measurement_1"]
+                assert len(measurements) == 100, "Should have 100 measurements"
+
+                # Should be roughly 50/50 for H gate
+                ones = sum(measurements)
+                assert (
+                    30 < ones < 70
+                ), f"H gate should give roughly 50/50, got {ones}/100"
+
+        except (
+            ImportError,
+            RuntimeError,
+            ValueError,
+            NotImplementedError,
+            TypeError,
+        ) as e:
+            error_msg = str(e).lower()
+            if "hugr" in error_msg and "not implemented" in error_msg:
+                pytest.skip(f"HUGR parsing not fully implemented: {e}")
+            elif "not supported" in error_msg:
+                pytest.skip(f"HUGR not fully supported: {e}")
+            elif "unknown resource type" in error_msg and "hugrprogram" in error_msg:
+                pytest.skip(f"HugrProgram type not properly recognized by sim API: {e}")
+            else:
+                # This might be a real error worth investigating
+                pytest.fail(f"Unexpected HUGR simulation error: {e}")
+
+    def test_sim_api_hugr_routing(self) -> None:
+        """Test that HUGR programs route to Selene engine."""
+        # Even with dummy bytes, we should see proper routing
+        dummy_hugr = b"HUGRiHJv" + b"\x00" * 100  # Dummy HUGR envelope format
+
+        try:
+            program = HugrProgram.from_bytes(dummy_hugr)
+
+            # Create builder - this should work even if execution fails
+            builder = sim(program)
+            assert builder is not None, "Should create sim builder for HUGR"
+
+            # Builder should have the right methods
+            assert hasattr(builder, "qubits"), "Builder should have qubits method"
+            assert hasattr(builder, "run"), "Builder should have run method"
+            assert hasattr(builder, "quantum"), "Builder should have quantum method"
+
+            # Trying to run would fail, but builder creation should succeed
+            configured = builder.qubits(2).quantum(state_vector())
+            assert configured is not None, "Should configure builder"
+
+        except (ImportError, RuntimeError) as e:
+            if "selene" in str(e).lower():
+                pytest.skip("Selene not available for HUGR routing")
+            else:
+                pytest.fail(f"Unexpected error in HUGR routing: {e}")
 
 
-def test_sim_api_with_phir() -> None:
-    """Test sim API with PHIR JSON program."""
-    # Skip PHIR test for now - format needs updating
-    # TODO: Update PHIR format to match expected structure
-    print("PHIR test skipped - format needs updating")
-    return
+@pytest.mark.skipif(
+    not all([SIM_API_AVAILABLE, PECOS_RSLIB_AVAILABLE]),
+    reason="sim API or pecos_rslib not available",
+)
+class TestPHIRSimulation:
+    """Test sim API with PHIR JSON programs."""
+
+    def test_sim_api_with_phir_basic(self) -> None:
+        """Test sim API with basic PHIR JSON program."""
+        # PHIR format for simple H gate and measurement
+        phir_json = {
+            "format": "PHIR/JSON",
+            "version": "0.1.0",
+            "metadata": {
+                "description": "Simple H gate test",
+            },
+            "ops": [
+                {
+                    "op": "qalloc",
+                    "returns": ["q0"],
+                    "args": {"size": 1},
+                },
+                {
+                    "op": "h",
+                    "args": {"qubit": "q0"},
+                },
+                {
+                    "op": "measure",
+                    "returns": ["m0"],
+                    "args": {"qubit": "q0"},
+                },
+                {
+                    "op": "qfree",
+                    "args": {"qubit": "q0"},
+                },
+            ],
+        }
+
+        phir_str = json.dumps(phir_json)
+
+        try:
+            program = PhirJsonProgram.from_string(phir_str)
+            results = sim(program).qubits(1).seed(42).run(50)
+
+            assert isinstance(results, dict), "Results should be a dictionary"
+
+            # Check for measurements in various possible keys
+            measurement_keys = ["m0", "measurements", "results"]
+            found_measurements = False
+
+            for key in measurement_keys:
+                if key in results:
+                    measurements = results[key]
+                    assert (
+                        len(measurements) == 50
+                    ), f"Should have 50 measurements in {key}"
+                    found_measurements = True
+
+                    # Should be binary values
+                    assert all(
+                        m in [0, 1, True, False] for m in measurements
+                    ), "Measurements should be binary"
+                    break
+
+            if not found_measurements and len(results) == 0:
+                # PHIR might not be fully supported yet
+                pytest.skip("PHIR execution not producing results yet")
+
+        except (RuntimeError, ValueError, NotImplementedError) as e:
+            error_msg = str(e).lower()
+            if (
+                "phir" in error_msg
+                or "not implemented" in error_msg
+                or "format" in error_msg
+            ):
+                pytest.skip(f"PHIR format not fully supported: {e}")
+            else:
+                pytest.fail(f"Unexpected PHIR error: {e}")
+
+    def test_sim_api_with_phir_bell_state(self) -> None:
+        """Test sim API with Bell state in PHIR format."""
+        phir_json = {
+            "format": "PHIR/JSON",
+            "version": "0.1.0",
+            "metadata": {
+                "description": "Bell state",
+            },
+            "ops": [
+                {
+                    "op": "qalloc",
+                    "returns": ["q0", "q1"],
+                    "args": {"size": 2},
+                },
+                {
+                    "op": "h",
+                    "args": {"qubit": "q0"},
+                },
+                {
+                    "op": "cnot",
+                    "args": {"control": "q0", "target": "q1"},
+                },
+                {
+                    "op": "measure",
+                    "returns": ["m0"],
+                    "args": {"qubit": "q0"},
+                },
+                {
+                    "op": "measure",
+                    "returns": ["m1"],
+                    "args": {"qubit": "q1"},
+                },
+                {
+                    "op": "qfree",
+                    "args": {"qubits": ["q0", "q1"]},
+                },
+            ],
+        }
+
+        phir_str = json.dumps(phir_json)
+
+        try:
+            program = PhirJsonProgram.from_string(phir_str)
+            results = sim(program).qubits(2).seed(42).run(100)
+
+            assert isinstance(results, dict), "Results should be a dictionary"
+
+            # Check for correlated measurements
+            if "m0" in results and "m1" in results:
+                m0 = results["m0"]
+                m1 = results["m1"]
+
+                assert len(m0) == 100, "Should have 100 measurements for qubit 0"
+                assert len(m1) == 100, "Should have 100 measurements for qubit 1"
+
+                # Bell state should be correlated
+                correlated = sum(1 for i in range(100) if m0[i] == m1[i])
+                assert (
+                    correlated > 95
+                ), f"Bell state should be highly correlated, got {correlated}/100"
+
+        except (RuntimeError, ValueError, NotImplementedError) as e:
+            error_msg = str(e).lower()
+            if "phir" in error_msg or "not implemented" in error_msg:
+                pytest.skip(f"PHIR Bell state not fully supported: {e}")
+            else:
+                pytest.fail(f"Unexpected error: {e}")
 
 
-def test_sim_builder_chaining() -> None:
-    """Test builder pattern chaining."""
-    qasm_str = """
-    OPENQASM 2.0;
-    include "qelib1.inc";
-    qreg q[1];
-    creg c[1];
-    h q[0];
-    measure q[0] -> c[0];
-    """
+class TestSimAPIFeatures:
+    """Test various features of the sim API."""
 
-    program = QasmProgram.from_string(qasm_str)
+    @pytest.mark.skipif(
+        not all([SIM_API_AVAILABLE, PECOS_RSLIB_AVAILABLE]),
+        reason="Dependencies not available",
+    )
+    def test_sim_with_different_backends(self) -> None:
+        """Test sim API with different quantum backends."""
+        qasm_str = """
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[1];
+        creg c[1];
+        h q[0];
+        measure q[0] -> c[0];
+        """
 
-    # Test chaining
-    results = sim(program).seed(42).workers(4).run(1000)
+        program = QasmProgram.from_string(qasm_str)
 
-    # Results is a dict with register names as keys, values are shot arrays
-    assert "c" in results
-    assert len(results["c"]) == 1000
-    print(f"Chained sim results: got {len(results['c'])} shots for register 'c'")
+        # Test with state vector backend
+        results_sv = sim(program).quantum(state_vector()).seed(42).run(100)
+        assert "c" in results_sv, "State vector backend should produce results"
 
+        # Test with sparse stabilizer backend
+        try:
+            results_ss = sim(program).quantum(sparse_stabilizer()).seed(42).run(100)
+            assert "c" in results_ss, "Sparse stabilizer backend should produce results"
 
-if __name__ == "__main__":
-    test_sim_api_with_qasm()
-    test_sim_api_with_llvm()
-    test_sim_api_with_hugr()
-    test_sim_api_with_phir()
-    test_sim_builder_chaining()
+            # Results might differ between backends but both should be valid
+            assert len(results_sv["c"]) == 100, "State vector should give 100 shots"
+            assert (
+                len(results_ss["c"]) == 100
+            ), "Sparse stabilizer should give 100 shots"
+
+        except (RuntimeError, ValueError) as e:
+            if "not supported" in str(e).lower():
+                pytest.skip(f"Sparse stabilizer not supported for this program: {e}")
+
+    @pytest.mark.skipif(
+        not all([SIM_API_AVAILABLE, PECOS_RSLIB_AVAILABLE]),
+        reason="Dependencies not available",
+    )
+    def test_sim_error_handling(self) -> None:
+        """Test error handling in sim API."""
+        # Invalid QASM
+        invalid_qasm = """
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[1];
+        invalid_gate q[0];
+        """
+
+        program = QasmProgram.from_string(invalid_qasm)
+        with pytest.raises((RuntimeError, ValueError)) as exc_info:
+            sim(program).run(10)
+
+        assert (
+            "invalid" in str(exc_info.value).lower()
+            or "error" in str(exc_info.value).lower()
+        ), "Should raise error for invalid QASM"
+
+    @pytest.mark.skipif(
+        not all([SIM_API_AVAILABLE, PECOS_RSLIB_AVAILABLE]),
+        reason="Dependencies not available",
+    )
+    def test_sim_deterministic_seeding(self) -> None:
+        """Test that seeding produces deterministic results."""
+        qasm_str = """
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[2];
+        creg c[2];
+        h q[0];
+        h q[1];
+        measure q[0] -> c[0];
+        measure q[1] -> c[1];
+        """
+
+        program = QasmProgram.from_string(qasm_str)
+
+        # Run twice with same seed
+        results1 = sim(program).seed(12345).run(50)
+        results2 = sim(program).seed(12345).run(50)
+
+        assert "c" in results1, "First run should produce results"
+        assert "c" in results2, "Second run should produce results"
+
+        # Results should be identical with same seed
+        assert results1["c"] == results2["c"], "Same seed should give identical results"
+
+        # Run with different seed
+        results3 = sim(program).seed(54321).run(50)
+
+        # Results should differ with different seed (statistically)
+        assert (
+            results1["c"] != results3["c"]
+        ), "Different seeds should give different results"

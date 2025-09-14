@@ -12,6 +12,7 @@ use hugr_core::ops::ExtensionOp;
 use hugr_core::{HugrView, Node};
 use hugr_llvm::custom::{CodegenExtension, CodegenExtsBuilder};
 use hugr_llvm::emit::{EmitOpArgs, func::EmitFuncContext};
+use log::debug;
 use pecos_core::errors::PecosError;
 use std::collections::HashMap;
 
@@ -315,10 +316,10 @@ fn emit_rotation_gate_standard<'c, H: HugrView<Node = Node>>(
     args: EmitOpArgs<'c, '_, ExtensionOp, H>,
     func_name: &str,
 ) -> Result<(), PecosError> {
-    eprintln!("DEBUG: emit_rotation_gate_standard called for {func_name}");
-    eprintln!("DEBUG: Number of inputs: {}", args.inputs.len());
+    debug!("emit_rotation_gate_standard called for {func_name}");
+    debug!("Number of inputs: {}", args.inputs.len());
     for (i, input) in args.inputs.iter().enumerate() {
-        eprintln!("DEBUG: Input {}: {:?}", i, input.get_type());
+        debug!("Input {}: {:?}", i, input.get_type());
     }
 
     let llvm_context = context.iw_context();

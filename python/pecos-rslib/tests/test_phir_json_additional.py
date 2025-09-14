@@ -1,10 +1,11 @@
 """Additional PHIR-JSON tests that work with current constraints."""
 
 import json
+
 import pytest
 
 
-def test_phir_json_result_instruction_documentation():
+def test_phir_json_result_instruction_documentation() -> None:
     """Document the current state of Result instruction support.
 
     This test documents why test_register_mapping_simulation is skipped
@@ -25,7 +26,7 @@ def test_phir_json_result_instruction_documentation():
     assert "Result instruction needs validator support" != ""
 
 
-def test_phir_json_measurement_only():
+def test_phir_json_measurement_only() -> None:
     """Test PHIR-JSON with only measurements (no Result instruction needed)."""
     # Import here to avoid module-level skip
     try:
@@ -59,7 +60,7 @@ def test_phir_json_measurement_only():
                     "returns": [["m", 0]],
                 },
             ],
-        }
+        },
     )
 
     # This might still fail if Rust engine requires Result instruction
@@ -74,14 +75,14 @@ def test_phir_json_measurement_only():
         if "Result command" in str(e):
             # This is the expected error - document it
             pytest.skip(
-                "PhirJsonEngine requires Result instruction which isn't supported by validator yet"
+                "PhirJsonEngine requires Result instruction which isn't supported by validator yet",
             )
         else:
             # Some other error - re-raise it
             raise
 
 
-def test_phir_json_validation_requirements():
+def test_phir_json_validation_requirements() -> None:
     """Test to understand PHIR-JSON validation requirements."""
     # Import here to avoid module-level skip
     try:
@@ -148,17 +149,8 @@ def test_phir_json_validation_requirements():
         try:
             PhirJsonEngine(json.dumps(case["phir"]))
             results[case["name"]] = "success"
-        except Exception as e:
+        except (ValueError, RuntimeError, TypeError) as e:
             results[case["name"]] = str(e)
-
-    # Document the results
-    print("\nPHIR-JSON validation results:")
-    for name, result in results.items():
-        print(f"  {name}: {result}")
 
     # The test passes as long as we collected the results
     assert len(results) == len(test_cases)
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v", "-s"])

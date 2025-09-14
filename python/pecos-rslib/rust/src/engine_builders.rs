@@ -3,6 +3,9 @@
 //! This module provides thin wrappers around the Rust engine builders,
 //! maintaining the same API pattern: `engine().program(...).to_sim()`
 
+// PyO3 convention is to return PyResult even for infallible operations
+#![allow(clippy::unnecessary_wraps)]
+
 use pecos_engines::quantum_engine_builder::{
     SparseStabilizerEngineBuilder as RustSparseStabilizerEngineBuilder,
     StateVectorEngineBuilder as RustStateVectorEngineBuilder,
@@ -104,6 +107,7 @@ impl PyLlvmEngineBuilder {
 
     /// Set the program for this engine
     #[pyo3(signature = (program))]
+    #[allow(clippy::needless_pass_by_value)] // PyObject must be passed by value for PyO3
     fn program(&mut self, program: PyObject, py: Python) -> PyResult<Self> {
         // Check if it's an LlvmProgram
         if let Ok(llvm_prog) = program.extract::<PyLlvmProgram>(py) {
@@ -159,6 +163,7 @@ impl PySeleneEngineBuilder {
 
     /// Set the program for this engine
     #[pyo3(signature = (program))]
+    #[allow(clippy::needless_pass_by_value)] // PyObject must be passed by value for PyO3
     fn program(&mut self, program: PyObject, py: Python) -> PyResult<Self> {
         // Check if it's an LlvmProgram
         if let Ok(llvm_prog) = program.extract::<PyLlvmProgram>(py) {
@@ -688,10 +693,8 @@ impl PyGeneralNoiseModelBuilder {
             "X" => GateType::X,
             "Y" => GateType::Y,
             "Z" => GateType::Z,
-            "S" => GateType::SZ, // S gate is SZ in GateType
-            "SZ" => GateType::SZ,
-            "SDG" => GateType::SZdg, // S dagger
-            "SZDG" => GateType::SZdg,
+            "S" | "SZ" => GateType::SZ,       // S gate is SZ in GateType
+            "SDG" | "SZDG" => GateType::SZdg, // S dagger
             "H" => GateType::H,
             "RX" => GateType::RX,
             "RY" => GateType::RY,

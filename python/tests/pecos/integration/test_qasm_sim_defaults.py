@@ -1,8 +1,8 @@
-"""Test and document default values for qasm_sim."""
+"""Test and document default values for QASM simulations using sim() API."""
 
 
 class TestQasmSimDefaults:
-    """Test and document default values for all qasm_sim settings."""
+    """Test and document default values for all QASM simulation settings."""
 
     def test_builder_defaults(self) -> None:
         """Test and document defaults when using qasm_engine builder."""

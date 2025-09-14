@@ -26,9 +26,6 @@ def test_for_loop_range_basic() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("IR-generated code with For loop (range):")
-    print(code)
-
     # Check that for loop is generated
     assert "for i in range(0, 5):" in code
     assert "# Apply H to qubit i" in code
@@ -50,9 +47,6 @@ def test_for_loop_range_with_step() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("\nIR-generated code with For loop (step):")
-    print(code)
-
     # Check step parameter
     assert "for i in range(0, 10, 2):" in code
 
@@ -73,9 +67,6 @@ def test_for_loop_iterable() -> None:
     gen = IRGuppyGenerator()
     gen.generate_block(prog)
     code = gen.get_output()
-
-    print("\nIR-generated code with For loop (iterable):")
-    print(code)
 
     # Check iterable pattern
     assert "for idx in indices:" in code
@@ -100,9 +91,6 @@ def test_nested_for_loops() -> None:
     gen = IRGuppyGenerator()
     gen.generate_block(prog)
     code = gen.get_output()
-
-    print("\nIR-generated code with nested For loops:")
-    print(code)
 
     # Check nested structure
     assert "for i in range(0, 3):" in code
@@ -134,9 +122,6 @@ def test_for_loop_with_quantum_operations() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("\nIR-generated code with For loops and quantum ops:")
-    print(code)
-
     # Check multiple for loops
     assert code.count("for i in range(0, 4):") >= 2
     assert "quantum.h" in code
@@ -160,9 +145,6 @@ def test_for_loop_limitations() -> None:
     gen = IRGuppyGenerator()
     gen.generate_block(prog)
     code = gen.get_output()
-
-    print("\nFor loop limitations:")
-    print(code)
 
     # Document the limitation
     assert "for i in range(0, 5):" in code
@@ -188,43 +170,3 @@ def test_for_error_in_qasm() -> None:
         gen.generate_block(prog)
 
     assert "For loops are not supported in QASM" in str(exc_info.value)
-
-
-def test_for_loop_syntax_examples() -> None:
-    """Document For loop syntax and patterns."""
-    print("\n=== For Loop Syntax Examples ===")
-
-    print("\nSLR Syntax:")
-    print("  For('i', 0, 5).Do(...)           # range(0, 5)")
-    print("  For('i', 0, 10, 2).Do(...)       # range(0, 10, 2)")
-    print("  For('item', collection).Do(...)   # for item in collection")
-
-    print("\nGenerated Guppy:")
-    print("  for i in range(0, 5):")
-    print("      # loop body")
-    print("")
-    print("  for i in range(0, 10, 2):")
-    print("      # loop body")
-    print("")
-    print("  for item in collection:")
-    print("      # loop body")
-
-    print("\nFuture enhancement - indexed access:")
-    print("  For('i', 0, n).Do(")
-    print("      qubit.H(q[i]),  # Would need special handling")
-    print("  )")
-
-    # Always passes
-    assert True
-
-
-if __name__ == "__main__":
-    test_for_loop_range_basic()
-    test_for_loop_range_with_step()
-    test_for_loop_iterable()
-    test_nested_for_loops()
-    test_for_loop_with_quantum_operations()
-    test_for_loop_limitations()
-    test_for_error_in_qasm()
-    test_for_loop_syntax_examples()
-    print("\nAll For loop tests completed!")

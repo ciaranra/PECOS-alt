@@ -221,7 +221,7 @@ def test_record_random_bit() -> None:
         shots=100,
     )
 
-    print(results)
+    # print(results)
     results_dict = results
     c = results_dict["c"]
     assert c.count("01") + c.count("00") == len(c)

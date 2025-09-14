@@ -103,7 +103,7 @@ def example_rust_backend_usage() -> None:
         print(f"[ERROR] Rust backend runtime error: {e}")
     except ValueError as e:
         print(f"[ERROR] Rust backend value error: {e}")
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         print(f"[ERROR] Rust backend unexpected error: {e}")
 
 
@@ -140,7 +140,7 @@ def example_frontend_comparison() -> None:
 
         except RuntimeError as e:
             print(f"[ERROR] Rust backend compilation failed: {e}")
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             print(f"[ERROR] Rust backend compilation failed with unexpected error: {e}")
 
     # Test with external tools (fallback)
@@ -154,7 +154,7 @@ def example_frontend_comparison() -> None:
 
     except ImportError as e:
         print(f"External backend import error: {e}")
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         print(f"External backend setup error: {e}")
 
 

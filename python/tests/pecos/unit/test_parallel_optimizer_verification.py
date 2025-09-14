@@ -20,8 +20,7 @@ def test_exact_bell_state_transformation() -> None:
     """Test the exact transformation described in the documentation."""
     optimizer = ParallelOptimizer()
 
-    # Before optimization:
-    # Parallel(
+    # Documentation of the transformation logic
     #     Block(H(q[0]), CX(q[0], q[1])),
     #     Block(H(q[2]), CX(q[2], q[3])),
     #     Block(H(q[4]), CX(q[4], q[5]))
@@ -82,9 +81,10 @@ def test_exact_bell_state_transformation() -> None:
 
 
 def test_visual_transformation_output() -> None:
-    """Test that shows the transformation visually."""
+    """Test the structure of the optimized output for three Bell pairs."""
     optimizer = ParallelOptimizer()
 
+    # Create three independent Bell pairs
     prog = Main(
         q := QReg("q", 6),
         Parallel(
@@ -94,47 +94,62 @@ def test_visual_transformation_output() -> None:
         ),
     )
 
-    def print_structure(block: object, indent: int = 0) -> None:
-        """Helper to visualize block structure."""
-        prefix = "  " * indent
-        if isinstance(block, Main):
-            print(f"{prefix}Main(")
-            for op in block.ops:
-                print_structure(op, indent + 1)
-            print(f"{prefix})")
-        elif isinstance(block, Parallel):
-            print(f"{prefix}Parallel(")
-            for op in block.ops:
-                print_structure(op, indent + 1)
-            print(f"{prefix})")
-        elif isinstance(block, Block):
-            print(f"{prefix}Block(")
-            for op in block.ops:
-                print_structure(op, indent + 1)
-            print(f"{prefix})")
-        elif hasattr(block, "qargs"):
-            # Gate operation
-            gate_name = type(block).__name__
-            if len(block.qargs) == 1:
-                print(f"{prefix}{gate_name}(q[{block.qargs[0].index}])")
-            elif len(block.qargs) == 2:
-                print(
-                    f"{prefix}{gate_name}(q[{block.qargs[0].index}], q[{block.qargs[1].index}])",
-                )
-            else:
-                print(f"{prefix}{gate_name}({block.qargs})")
-        else:
-            print(f"{prefix}{type(block).__name__}")
-
-    print("=== Before optimization ===")
-    print_structure(prog)
-
     optimized = optimizer.transform(prog)
 
-    print("\n=== After optimization ===")
-    print_structure(optimized)
+    # Verify the optimized structure
+    assert len(optimized.ops) == 1
+    outer_block = optimized.ops[0]
+    assert isinstance(outer_block, Block)
 
-    # The output should show the transformation from nested blocks to grouped operations
+    # Should have exactly 2 Parallel groups (one for H gates, one for CX gates)
+    assert (
+        len(outer_block.ops) == 2
+    ), f"Expected 2 parallel groups, got {len(outer_block.ops)}"
+
+    # First group should be Parallel with 3 H gates
+    first_group = outer_block.ops[0]
+    assert isinstance(first_group, Parallel), "First group should be Parallel"
+    assert len(first_group.ops) == 3, "First group should have 3 H gates"
+
+    # Check all operations in first group are H gates on even qubits
+    for i, op in enumerate(first_group.ops):
+        assert (
+            type(op).__name__ == "H"
+        ), f"Operation {i} in first group should be H gate"
+        assert op.qargs[0].index == i * 2, f"H gate {i} should be on qubit {i * 2}"
+
+    # Second group should be Parallel with 3 CX gates
+    second_group = outer_block.ops[1]
+    assert isinstance(second_group, Parallel), "Second group should be Parallel"
+    assert len(second_group.ops) == 3, "Second group should have 3 CX gates"
+
+    # Check all operations in second group are CX gates with correct qubit pairs
+    for i, op in enumerate(second_group.ops):
+        assert (
+            type(op).__name__ == "CX"
+        ), f"Operation {i} in second group should be CX gate"
+        assert (
+            op.qargs[0].index == i * 2
+        ), f"CX gate {i} control should be on qubit {i * 2}"
+        assert (
+            op.qargs[1].index == i * 2 + 1
+        ), f"CX gate {i} target should be on qubit {i * 2 + 1}"
+
+    # The transformation successfully converts:
+    # Main(
+    #   Parallel(
+    #     Block(H(q[0]), CX(q[0], q[1])),
+    #     Block(H(q[2]), CX(q[2], q[3])),
+    #     Block(H(q[4]), CX(q[4], q[5]))
+    #   )
+    # )
+    # Into:
+    # Main(
+    #   Block(
+    #     Parallel(H(q[0]), H(q[2]), H(q[4])),
+    #     Parallel(CX(q[0], q[1]), CX(q[2], q[3]), CX(q[4], q[5]))
+    #   )
+    # )
 
 
 def test_mixed_gates_transformation() -> None:
@@ -223,8 +238,3 @@ def test_dependent_operations_not_reordered() -> None:
     assert isinstance(outer_block.ops[2], qb.CX)
     assert outer_block.ops[2].qargs[0].index == 1
     assert outer_block.ops[2].qargs[1].index == 2
-
-
-if __name__ == "__main__":
-    # Run the visual test to see the transformation
-    test_visual_transformation_output()

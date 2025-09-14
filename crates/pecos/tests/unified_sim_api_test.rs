@@ -13,7 +13,7 @@ mod tests {
         let _ = || {
             use pecos_engines::{DepolarizingNoise, sim_builder, sparse_stabilizer, state_vector};
             use pecos_llvm_sim::llvm_engine;
-            use pecos_programs::QasmProgram;
+            use pecos_programs::{LlvmProgram, QasmProgram};
             use pecos_qasm::qasm_engine;
             use pecos_selene::selene_executable;
 
@@ -30,7 +30,6 @@ mod tests {
                 .run(1000);
 
             // LLVM engine with unified API
-            use pecos_programs::LlvmProgram;
             let _results = sim_builder()
                 .classical(
                     llvm_engine()
@@ -62,18 +61,18 @@ mod tests {
     fn test_consistent_method_names() {
         // Verify all builders have consistent input methods
         let _ = || {
+            use pecos_engines::{BiasedDepolarizingNoise, PassThroughNoise, sim_builder};
             use pecos_llvm_sim::llvm_engine;
+            use pecos_programs::{LlvmProgram, QasmProgram};
             use pecos_qasm::qasm_engine;
             use pecos_selene::selene_executable;
 
             // QASM-specific inputs
-            use pecos_programs::QasmProgram;
             let _q1 = qasm_engine().program(QasmProgram::from_string("..."));
             // Note: from_file returns Result, so in real code you'd handle the error
             // let _q2 = qasm_engine().program(QasmProgram::from_file("circuit.qasm")?);
 
             // LLVM-specific inputs
-            use pecos_programs::LlvmProgram;
             let _l1 = llvm_engine().program(LlvmProgram::from_string("..."));
             let _l2 = llvm_engine().program(LlvmProgram::from_bitcode(vec![]));
             // Note: from_file returns Result, so in real code you'd handle the error
@@ -90,7 +89,6 @@ mod tests {
             // let _s3 = selene_executable().program(LlvmProgram::from_file("circuit.ll")?).qubits(1);
 
             // Common simulation methods
-            use pecos_engines::{BiasedDepolarizingNoise, PassThroughNoise, sim_builder};
 
             let _sim1 = sim_builder()
                 .classical(qasm_engine().program(QasmProgram::from_string("...")))
@@ -112,8 +110,8 @@ mod tests {
         // Test the new unified simulation API patterns
         let _ = || {
             use pecos::sim;
-            use pecos_engines::DepolarizingNoise;
-            use pecos_engines::{sim_builder, sparse_stabilizer, state_vector};
+            use pecos_engines::{DepolarizingNoise, sim_builder, sparse_stabilizer, state_vector};
+            use pecos_llvm_sim::llvm_engine;
             use pecos_programs::{LlvmProgram, QasmProgram};
             use pecos_qasm::qasm_engine;
 
@@ -133,7 +131,6 @@ mod tests {
                 .run(100);
 
             // Pattern 3: Override auto-selection with explicit .classical()
-            use pecos_llvm_sim::llvm_engine;
             let _results3 = sim(LlvmProgram::from_string("define void @main() { ret void }"))
                 .classical(
                     llvm_engine()

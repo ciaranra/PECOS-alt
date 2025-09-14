@@ -40,10 +40,10 @@ def test_parallel_optimization_example() -> None:
     )
 
     # Generate QASM without optimization
-    qasm_unoptimized = SlrConverter(prog).qasm()
-    print("=== QASM without optimization ===")
-    print(qasm_unoptimized)
-    print()
+    # qasm_unoptimized = SlrConverter(prog).qasm()
+    # print("=== QASM without optimization ===")
+    # print(qasm_unoptimized)
+    # print()
 
     # Apply the ParallelOptimizer transformation
     optimizer = ParallelOptimizer()
@@ -51,8 +51,8 @@ def test_parallel_optimization_example() -> None:
 
     # Generate QASM with optimization
     qasm_optimized = SlrConverter(optimized_prog).qasm()
-    print("=== QASM with optimization ===")
-    print(qasm_optimized)
+    # print("=== QASM with optimization ===")
+    # print(qasm_optimized)
 
     # The optimizer has transformed the structure to:
     # Block(
@@ -76,7 +76,3 @@ def test_parallel_optimization_example() -> None:
         qasm_optimized.index("cx q[4]"),
     ]
     assert all(h < cx for h in h_positions for cx in cx_positions)
-
-
-if __name__ == "__main__":
-    test_parallel_optimization_example()

@@ -67,8 +67,8 @@ def test_quantum_permutation_qir(quantum_permutation_program: tuple) -> None:
     qir = SlrConverter(prog).qir()
 
     # Print the QIR for analysis
-    print("\nQIR Output for quantum_permutation_qir:")
-    print(qir)
+    # print("\nQIR Output for quantum_permutation_qir:")
+    # print(qir)
 
     # Verify that the QIR contains a comment about the permutation
     assert "Permutation: a[0] -> b[0], b[0] -> a[0]" in qir
@@ -85,8 +85,8 @@ def test_quantum_permutation_qir(quantum_permutation_program: tuple) -> None:
         qir,
     )
 
-    print(f"H calls found: {h_calls}")
-    print(f"CNOT calls found: {cnot_calls}")
+    # print(f"H calls found: {h_calls}")
+    # print(f"CNOT calls found: {cnot_calls}")
 
     # We should have at least one H call and one CNOT call
     assert len(h_calls) >= 1, "No H gate call found"
@@ -147,8 +147,8 @@ def test_permutation_with_bell_circuit_qir() -> None:
     qir = SlrConverter(prog).qir()
 
     # Print the QIR for analysis
-    print("\nQIR Output for bell_circuit_qir:")
-    print(qir)
+    # print("\nQIR Output for bell_circuit_qir:")
+    # print(qir)
 
     # Verify that the QIR contains comments about the permutations
     assert "Permutation: a[0] -> b[1], b[1] -> a[0]" in qir
@@ -166,8 +166,8 @@ def test_permutation_with_bell_circuit_qir() -> None:
         qir,
     )
 
-    print(f"H calls found: {h_calls}")
-    print(f"CX calls found: {cx_calls}")
+    # print(f"H calls found: {h_calls}")
+    # print(f"CX calls found: {cx_calls}")
 
     # We should have at least one H call and one CX call
     assert len(h_calls) >= 1, "No H gate call found"
@@ -183,8 +183,8 @@ def test_permutation_with_bell_circuit_qir() -> None:
         qir,
     )
 
-    print(f"MZ calls found: {mz_calls}")
-    print(f"MZ to creg calls found: {mz_to_creg_calls}")
+    # print(f"MZ calls found: {mz_calls}")
+    # print(f"MZ to creg calls found: {mz_to_creg_calls}")
 
     # We should have at least two measurement calls (one for each qubit)
     assert len(mz_calls) + len(mz_to_creg_calls) >= 2, (
@@ -242,8 +242,8 @@ def test_comprehensive_qir_verification() -> None:
     qir = SlrConverter(prog).qir()
 
     # Print the QIR for analysis
-    print("\nQIR Output for comprehensive_qir_verification:")
-    print(qir)
+    # print("\nQIR Output for comprehensive_qir_verification:")
+    # print(qir)
 
     # Extract all gate operations to track qubit allocation
     h_calls = re.findall(
@@ -273,12 +273,12 @@ def test_comprehensive_qir_verification() -> None:
         qir,
     )
 
-    print(f"H calls: {h_calls}")
-    print(f"X calls: {x_calls}")
-    print(f"Y calls: {y_calls}")
-    print(f"Z calls: {z_calls}")
-    print(f"CX calls: {cx_calls}")
-    print(f"MZ to creg calls: {mz_to_creg_calls}")
+    # print(f"H calls: {h_calls}")
+    # print(f"X calls: {x_calls}")
+    # print(f"Y calls: {y_calls}")
+    # print(f"Z calls: {z_calls}")
+    # print(f"CX calls: {cx_calls}")
+    # print(f"MZ to creg calls: {mz_to_creg_calls}")
 
     # Based on the initial gates, we can infer the qubit allocation:
     # The first H call should be for "original a[0]"
@@ -296,11 +296,11 @@ def test_comprehensive_qir_verification() -> None:
         original_b0 = int(y_calls[0])
         original_b1 = int(z_calls[0])
 
-        print("Inferred qubit allocation:")
-        print(f"  original a[0] -> physical qubit {original_a0}")
-        print(f"  original a[1] -> physical qubit {original_a1}")
-        print(f"  original b[0] -> physical qubit {original_b0}")
-        print(f"  original b[1] -> physical qubit {original_b1}")
+        # print("Inferred qubit allocation:")
+        # print(f"  original a[0] -> physical qubit {original_a0}")
+        # print(f"  original a[1] -> physical qubit {original_a1}")
+        # print(f"  original b[0] -> physical qubit {original_b0}")
+        # print(f"  original b[1] -> physical qubit {original_b1}")
 
         # Now we can verify that the gates after permutations are applied to the correct qubits
         # The second H call should be for "original b[0]"
@@ -396,8 +396,8 @@ def test_rotation_gates_with_permutation() -> None:
     qir = SlrConverter(prog).qir()
 
     # Print the QIR for analysis
-    print("\nQIR Output for rotation_gates_with_permutation:")
-    print(qir)
+    # print("\nQIR Output for rotation_gates_with_permutation:")
+    # print(qir)
 
     # Extract all gate operations to track qubit allocation
     rx_calls = re.findall(
@@ -425,12 +425,12 @@ def test_rotation_gates_with_permutation() -> None:
         qir,
     )
 
-    print(f"Rx calls: {rx_calls}")
-    print(f"Ry calls: {ry_calls}")
-    print(f"Rz calls: {rz_calls}")
-    print(f"S calls: {s_calls}")
-    print(f"T calls: {t_calls}")
-    print(f"Tdg calls: {tdg_calls}")
+    # print(f"Rx calls: {rx_calls}")
+    # print(f"Ry calls: {ry_calls}")
+    # print(f"Rz calls: {rz_calls}")
+    # print(f"S calls: {s_calls}")
+    # print(f"T calls: {t_calls}")
+    # print(f"Tdg calls: {tdg_calls}")
 
     # Based on the initial gates, we can infer the qubit allocation:
     if (
@@ -445,11 +445,11 @@ def test_rotation_gates_with_permutation() -> None:
         original_b0 = int(rz_calls[0][1])
         original_b1 = int(s_calls[0])
 
-        print("Inferred qubit allocation:")
-        print(f"  original a[0] -> physical qubit {original_a0}")
-        print(f"  original a[1] -> physical qubit {original_a1}")
-        print(f"  original b[0] -> physical qubit {original_b0}")
-        print(f"  original b[1] -> physical qubit {original_b1}")
+        # print("Inferred qubit allocation:")
+        # print(f"  original a[0] -> physical qubit {original_a0}")
+        # print(f"  original a[1] -> physical qubit {original_a1}")
+        # print(f"  original b[0] -> physical qubit {original_b0}")
+        # print(f"  original b[1] -> physical qubit {original_b1}")
 
         # Now we can verify that the gates after permutations are applied to the correct qubits
         if len(rx_calls) >= 2 and len(ry_calls) >= 2:

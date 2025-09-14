@@ -203,8 +203,8 @@ impl Type {
             Type::Bit | Type::Bool => Some(1),
             Type::Int(width) | Type::UInt(width) => Some(width.bytes()),
             Type::Float(precision) => Some(precision.bytes()),
-            Type::Qubit => Some(8), // Assume 64-bit complex amplitudes for 2 states
-            Type::QuantumReg(n) => Some(8 * (1 << n)), // Exponential state space
+            Type::Qubit | Type::Ref(_) | Type::MutRef(_) => Some(8), // 64-bit pointers/quantum state
+            Type::QuantumReg(n) => Some(8 * (1 << n)),               // Exponential state space
             Type::Array(elem_type, ArraySize::Fixed(n)) => {
                 elem_type.size_bytes().map(|elem_size| elem_size * n)
             }
@@ -213,7 +213,6 @@ impl Type {
                 .map(Type::size_bytes)
                 .collect::<Option<Vec<_>>>()
                 .map(|sizes| sizes.iter().sum()),
-            Type::Ref(_) | Type::MutRef(_) => Some(8), // Pointer size
             Type::Unit => Some(0),
             _ => None, // Unknown or dynamic size
         }
@@ -226,8 +225,7 @@ impl Type {
             Type::Qubit | Type::QuantumReg(_) => true,
             Type::Array(elem_type, _) => elem_type.is_quantum(),
             Type::Tuple(types) => types.iter().any(Type::is_quantum),
-            Type::Optional(inner) => inner.is_quantum(),
-            Type::Ref(inner) | Type::MutRef(inner) => inner.is_quantum(),
+            Type::Optional(inner) | Type::Ref(inner) | Type::MutRef(inner) => inner.is_quantum(),
             _ => false,
         }
     }
@@ -243,27 +241,24 @@ impl Type {
     pub fn is_copyable(&self) -> bool {
         match self {
             // Quantum types are not copyable (no-cloning theorem)
-            Type::Qubit | Type::QuantumReg(_) => false,
-            // Classical primitive types are copyable
+            Type::Qubit | Type::QuantumReg(_) | Type::Never | Type::Unknown | Type::Custom(_) => {
+                false
+            }
+            // Classical primitive types, references, and function pointers are copyable
             Type::Bit
             | Type::Bool
             | Type::Int(_)
             | Type::UInt(_)
             | Type::Float(_)
-            | Type::String => true,
+            | Type::String
+            | Type::Ref(_)
+            | Type::MutRef(_)
+            | Type::Unit
+            | Type::Function(_) => true,
             // Composite types are copyable if all elements are
             Type::Array(elem_type, _) => elem_type.is_copyable(),
             Type::Tuple(types) => types.iter().all(Type::is_copyable),
             Type::Optional(inner) => inner.is_copyable(),
-            // References are copyable, but not what they point to
-            Type::Ref(_) | Type::MutRef(_) => true,
-            // Special types
-            Type::Unit => true,
-            Type::Never => false,
-            Type::Unknown => false,
-            // Custom types depend on definition
-            Type::Custom(_) => false,  // Conservative default
-            Type::Function(_) => true, // Function pointers are copyable
         }
     }
 
@@ -296,10 +291,11 @@ impl Type {
             // Exact match
             (a, b) if a == b => true,
 
-            // Integer promotions
-            (Type::Int(w1), Type::Int(w2)) => w1.can_promote_to(w2),
-            (Type::UInt(w1), Type::UInt(w2)) => w1.can_promote_to(w2),
-            (Type::Int(_), Type::UInt(_)) | (Type::UInt(_), Type::Int(_)) => false,
+            // Integer promotions (same signedness only)
+            (Type::Int(w1), Type::Int(w2)) | (Type::UInt(w1), Type::UInt(w2)) => {
+                w1.can_promote_to(w2)
+            }
+            // Note: Mixed signed/unsigned (Int and UInt) are incompatible - handled by default case
 
             // Float promotions
             (Type::Float(p1), Type::Float(p2)) => p1.can_promote_to(p2),
@@ -307,13 +303,10 @@ impl Type {
             // Array compatibility
             (Type::Array(t1, s1), Type::Array(t2, s2)) => t1.is_compatible_with(t2) && s1 == s2,
 
-            // Reference compatibility
-            (Type::Ref(t1), Type::Ref(t2)) => t1.is_compatible_with(t2),
-            (Type::MutRef(t1), Type::MutRef(t2)) => t1.is_compatible_with(t2),
-            (Type::Ref(t1), Type::MutRef(t2)) => t1.is_compatible_with(t2),
-
-            // Optional compatibility
-            (Type::Optional(t1), Type::Optional(t2)) => t1.is_compatible_with(t2),
+            // Reference and optional compatibility
+            (Type::Ref(t1), Type::Ref(t2) | Type::MutRef(t2))
+            | (Type::MutRef(t1), Type::MutRef(t2))
+            | (Type::Optional(t1), Type::Optional(t2)) => t1.is_compatible_with(t2),
             (t1, Type::Optional(t2)) => t1.is_compatible_with(t2),
 
             _ => false,
@@ -328,9 +321,8 @@ impl IntWidth {
             IntWidth::I8 => 1,
             IntWidth::I16 => 2,
             IntWidth::I32 => 4,
-            IntWidth::I64 => 8,
+            IntWidth::I64 | IntWidth::ISize => 8, // Assume 64-bit platform
             IntWidth::I128 => 16,
-            IntWidth::ISize => 8, // Assume 64-bit platform
             IntWidth::Custom(bits) => (*bits as usize).div_ceil(8), // Round up to bytes
         }
     }
@@ -341,9 +333,8 @@ impl IntWidth {
             IntWidth::I8 => 8,
             IntWidth::I16 => 16,
             IntWidth::I32 => 32,
-            IntWidth::I64 => 64,
+            IntWidth::I64 | IntWidth::ISize => 64, // Assume 64-bit platform
             IntWidth::I128 => 128,
-            IntWidth::ISize => 64, // Assume 64-bit platform
             IntWidth::Custom(bits) => *bits,
         }
     }

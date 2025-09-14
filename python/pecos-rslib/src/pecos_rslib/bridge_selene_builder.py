@@ -4,17 +4,31 @@ This module provides a modified Selene build process that automatically
 configures the built executable to use the PECOS Bridge plugin for simulation.
 """
 
-import tempfile
-import yaml
-from pathlib import Path
-from typing import Any, Dict, Optional
 import logging
+import tempfile
+from pathlib import Path
+from typing import Any
+
+import yaml
 
 logger = logging.getLogger(__name__)
 
+# Optional dependencies - imported at top level with fallbacks
+try:
+    from selene_sim import build
+except ImportError:
+    build = None
+
+try:
+    from pecos.selene_plugins.simulators import PecosBridgePlugin
+except ImportError:
+    PecosBridgePlugin = None
+
 
 def build_selene_with_bridge_config(
-    hugr_package, name: str = "pecos_program", build_dir: Optional[Path] = None
+    hugr_package: Any,
+    name: str = "pecos_program",
+    build_dir: Path | None = None,
 ) -> Any:
     """Build a Selene executable configured to use PECOS Bridge plugin.
 
@@ -29,7 +43,8 @@ def build_selene_with_bridge_config(
     Returns:
         SeleneInstance configured with Bridge plugin
     """
-    from selene_sim import build
+    if build is None:
+        raise ImportError("selene_sim not available - install selene")
 
     # Create build directory if not provided
     if build_dir is None:
@@ -37,12 +52,13 @@ def build_selene_with_bridge_config(
 
     try:
         # Get Bridge plugin path
-        from pecos.selene_plugins.simulators import PecosBridgePlugin
+        if PecosBridgePlugin is None:
+            raise ImportError("PecosBridgePlugin not available")
 
         bridge_plugin = PecosBridgePlugin()
         bridge_lib_path = bridge_plugin.library_file
 
-        logger.info(f"Building Selene with Bridge plugin: {bridge_lib_path}")
+        logger.info("Building Selene with Bridge plugin: %s", bridge_lib_path)
 
         # Create a custom configuration that uses Bridge plugin
         config = create_bridge_config(bridge_lib_path, name)
@@ -52,7 +68,7 @@ def build_selene_with_bridge_config(
         with open(config_file, "w") as f:
             yaml.dump(config, f)
 
-        logger.info(f"Created Bridge configuration: {config_file}")
+        logger.info("Created Bridge configuration: %s", config_file)
 
         # Build with custom configuration
         # Note: This approach may need modification based on Selene's actual config API
@@ -68,15 +84,15 @@ def build_selene_with_bridge_config(
         instance._pecos_bridge_plugin = bridge_plugin
 
         logger.info("Built Selene executable with Bridge plugin configuration")
-        return instance
-
     except ImportError:
         # Fall back to standard build if Bridge plugin not available
         logger.warning("Bridge plugin not available, using standard Selene build")
         return build(hugr_package, name=name, build_dir=build_dir, verbose=False)
+    else:
+        return instance
 
 
-def create_bridge_config(bridge_lib_path: Path, program_name: str) -> Dict[str, Any]:
+def create_bridge_config(bridge_lib_path: Path, _program_name: str) -> dict[str, Any]:
     """Create a Selene configuration that uses the Bridge plugin.
 
     Args:
@@ -89,7 +105,7 @@ def create_bridge_config(bridge_lib_path: Path, program_name: str) -> Dict[str, 
     return {
         "n_qubits": 10,  # Default, will be overridden at runtime
         "output_stream": "stdout",
-        "artifact_dir": "/tmp",  # Will be overridden
+        "artifact_dir": tempfile.gettempdir(),  # Will be overridden
         "simulator": {
             "name": "pecos_selene_bridge",
             "file": str(bridge_lib_path),
@@ -110,7 +126,7 @@ def create_bridge_config(bridge_lib_path: Path, program_name: str) -> Dict[str, 
     }
 
 
-def get_bridge_simulator_for_instance(instance) -> Any:
+def get_bridge_simulator_for_instance(instance: Any) -> Any:
     """Get the Bridge simulator associated with a Selene instance.
 
     Args:
@@ -121,8 +137,8 @@ def get_bridge_simulator_for_instance(instance) -> Any:
     """
     if hasattr(instance, "_pecos_bridge_plugin"):
         return instance._pecos_bridge_plugin
-    else:
-        # Create new Bridge plugin instance
-        from pecos.selene_plugins.simulators import PecosBridgePlugin
+    # Create new Bridge plugin instance
+    if PecosBridgePlugin is None:
+        raise ImportError("PecosBridgePlugin not available")
 
-        return PecosBridgePlugin()
+    return PecosBridgePlugin()

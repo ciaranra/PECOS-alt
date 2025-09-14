@@ -2,12 +2,13 @@
 
 import os
 import tempfile
-from pecos_rslib.sim import sim
+
 from pecos_rslib import qasm_engine
 from pecos_rslib._pecos_rslib import QasmProgram
+from pecos_rslib.sim import sim
 
 
-def test_qasm_wasm_basic_classical():
+def test_qasm_wasm_basic_classical() -> None:
     """Test basic WASM function call from QASM for classical computation."""
     # Create a simple WAT module with add function
     wat_content = """
@@ -65,9 +66,8 @@ def test_qasm_wasm_basic_classical():
             os.remove(wasm_path)
 
 
-def test_qasm_wasm_with_quantum():
+def test_qasm_wasm_with_quantum() -> None:
     """Test WASM function controlling quantum operations."""
-
     wat_content = """
     (module
       (func $init (export "init"))
@@ -127,9 +127,8 @@ def test_qasm_wasm_with_quantum():
             os.remove(wasm_path)
 
 
-def test_wasm_fibonacci():
+def test_wasm_fibonacci() -> None:
     """Test WASM with Fibonacci calculation."""
-
     wat_content = """
     (module
       (func $init (export "init"))
@@ -234,9 +233,8 @@ def test_wasm_fibonacci():
             os.remove(wasm_path)
 
 
-def test_wasm_with_multiple_functions():
+def test_wasm_with_multiple_functions() -> None:
     """Test WASM module with multiple functions of different signatures."""
-
     wat_content = """
     (module
       (func $init (export "init"))

@@ -8,16 +8,16 @@ import logging
 
 import pytest
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 # Skip entire module if dependencies aren't available
 pytest.importorskip("guppylang")
 pytest.importorskip("selene_sim")
 
 from guppylang import guppy
 from guppylang.std.quantum import h, measure, qubit
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 @pytest.mark.optional_dependency
@@ -39,7 +39,7 @@ def test_guppy_to_hugr_compilation() -> None:
         assert hugr_bytes is not None
         assert len(hugr_bytes) > 0
 
-        logger.info(f"✓ Compiled Guppy to HUGR: {len(hugr_bytes)} bytes")
+        logger.info("Compiled Guppy to HUGR: %s bytes", len(hugr_bytes))
 
     except ImportError as e:
         pytest.skip(f"Compilation pipeline not available: {e}")
@@ -56,7 +56,7 @@ def test_selene_builder_import() -> None:
         assert builder is not None
         assert builder.num_qubits == 2
 
-        logger.info("✓ SeleneEngineBuilder imported and initialized")
+        logger.info("SeleneEngineBuilder imported and initialized")
 
     except ImportError as e:
         pytest.skip(f"SeleneEngineBuilder not available: {e}")
@@ -72,7 +72,7 @@ def test_selene_library_engine_import() -> None:
         assert hasattr(SeleneLibraryEngine, "num_qubits")
         assert hasattr(SeleneLibraryEngine, "reset")
 
-        logger.info(f"✓ SeleneLibraryEngine imported: {SeleneLibraryEngine}")
+        logger.info("SeleneLibraryEngine imported: %s", SeleneLibraryEngine)
 
     except ImportError as e:
         pytest.skip(f"SeleneLibraryEngine not available: {e}")
@@ -85,60 +85,53 @@ def test_complete_import_chain() -> None:
     imports_failed = []
 
     # Test each import
-    try:
-        from guppylang import guppy
+    import importlib.util
 
+    if importlib.util.find_spec("guppylang") is not None:
         imports_ok.append("guppylang")
-    except ImportError as e:
-        imports_failed.append(f"guppylang: {e}")
+    else:
+        imports_failed.append("guppylang: not found")
 
-    try:
-        from selene_sim import SeleneInstance, build
+    import importlib.util
 
+    if importlib.util.find_spec("selene_sim") is not None:
         imports_ok.append("selene_sim")
-    except ImportError as e:
-        imports_failed.append(f"selene_sim: {e}")
+    else:
+        imports_failed.append("selene_sim: not found")
 
-    try:
-        from pecos.compilation_pipeline import compile_guppy_to_hugr
+    import importlib.util
 
+    if importlib.util.find_spec("pecos.compilation_pipeline") is not None:
         imports_ok.append("compilation_pipeline")
-    except ImportError as e:
-        imports_failed.append(f"compilation_pipeline: {e}")
+    else:
+        imports_failed.append("compilation_pipeline: not found")
 
-    try:
-        from pecos.engines.selene_engine_builder import SeleneEngineBuilder
-
+    if importlib.util.find_spec("pecos.engines.selene_engine_builder") is not None:
         imports_ok.append("SeleneEngineBuilder")
-    except ImportError as e:
-        imports_failed.append(f"SeleneEngineBuilder: {e}")
+    else:
+        imports_failed.append("SeleneEngineBuilder: not found")
 
-    try:
-        from pecos_rslib import SeleneLibraryEngine
+    import importlib.util
 
-        imports_ok.append("SeleneLibraryEngine")
-    except ImportError as e:
-        imports_failed.append(f"SeleneLibraryEngine: {e}")
+    if importlib.util.find_spec("pecos_rslib") is not None:
+        try:
+            # Check if SeleneLibraryEngine exists in module
+            import pecos_rslib
+
+            if hasattr(pecos_rslib, "SeleneLibraryEngine"):
+                imports_ok.append("SeleneLibraryEngine")
+            else:
+                imports_failed.append("SeleneLibraryEngine: not found in pecos_rslib")
+        except ImportError:
+            imports_failed.append("SeleneLibraryEngine: not in pecos_rslib")
+    else:
+        imports_failed.append("pecos_rslib: not found")
 
     # Report results
-    logger.info(f"✓ Successful imports: {', '.join(imports_ok)}")
+    logger.info("Successful imports: %s", ", ".join(imports_ok))
     if imports_failed:
-        logger.warning(f"✗ Failed imports: {'; '.join(imports_failed)}")
+        logger.warning("Failed imports: %s", "; ".join(imports_failed))
 
     # At minimum we need guppylang and selene_sim
     assert "guppylang" in imports_ok
     assert "selene_sim" in imports_ok
-
-
-if __name__ == "__main__":
-    # Run tests for debugging
-    print("=" * 60)
-    print("SELENE COMPILATION BASIC TESTS")
-    print("=" * 60)
-
-    test_guppy_to_hugr_compilation()
-    test_selene_builder_import()
-    test_selene_library_engine_import()
-    test_complete_import_chain()
-
-    print("\nAll tests completed!")

@@ -28,11 +28,11 @@ Examples:
 
 # Import from the unified sim module (Rust-backed)
 from pecos_rslib.sim import (
-    StateVectorEngineBuilder,
     SparseStabilizerEngineBuilder,
-    state_vector,
-    sparse_stabilizer,
+    StateVectorEngineBuilder,
     sparse_stab,
+    sparse_stabilizer,
+    state_vector,
 )
 
 __all__ = [

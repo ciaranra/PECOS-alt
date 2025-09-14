@@ -62,7 +62,6 @@ def test_guppy_frontend_creation() -> None:
 def test_guppy_import_if_available() -> None:
     """Test Guppy import if available (may be skipped)."""
     try:
-        import guppylang  # noqa: F401
         from guppylang import guppy
 
         # If we get here, guppylang is available

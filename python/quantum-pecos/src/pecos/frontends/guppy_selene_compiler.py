@@ -6,6 +6,7 @@ before passing the compiled artifacts to Rust for execution.
 """
 
 import contextlib
+import shutil
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -110,25 +111,17 @@ class GuppySeleneCompiler:
             # which we now provide directly from _compile_to_hugr
             llvm_ir = compile_to_llvm_ir(hugr_bytes)
             print(f"Selene HUGR compiler produced {len(llvm_ir)} chars of LLVM IR")
-            return llvm_ir
-        except ImportError as e:
-            print(f"Warning: Selene HUGR compiler not available: {e}")
-            # Fall back to trying our internal compiler
-            try:
-                from pecos_rslib import compile_hugr_to_llvm
-
-                return compile_hugr_to_llvm(hugr_bytes)
-            except (ImportError, Exception) as e2:
-                print(f"Warning: Internal HUGR compiler also failed: {e2}")
-        except Exception as e:
+        except (ImportError, RuntimeError, ValueError) as e:
             print(f"Warning: Selene HUGR compiler failed: {e}")
             # Fall back to trying our internal compiler
             try:
                 from pecos_rslib import compile_hugr_to_llvm
 
                 return compile_hugr_to_llvm(hugr_bytes)
-            except (ImportError, Exception) as e2:
+            except (ImportError, RuntimeError, ValueError) as e2:
                 print(f"Warning: Internal HUGR compiler also failed: {e2}")
+        else:
+            return llvm_ir
 
         # No fallback - if we can't compile HUGR, fail properly
         msg = (
@@ -145,7 +138,6 @@ class GuppySeleneCompiler:
     def __del__(self) -> None:
         """Clean up temporary directory if created."""
         if self._temp_dir:
-            import shutil
 
             with contextlib.suppress(Exception):
                 shutil.rmtree(self._temp_dir)

@@ -11,10 +11,6 @@ categories.workspace = true
 description = "Selene integration for PECOS quantum simulation"
 readme = "README.md"
 
-[[bin]]
-name = "pecos-hugr-013-cli"
-path = "src/bin/pecos-hugr-013-cli.rs"
-required-features = ["hugr-013", "binary"]
 
 [dependencies]
 pecos-core.workspace = true
@@ -53,7 +49,6 @@ hugr-core-013 = { workspace = true, optional = true }
 
 # Standard library extensions
 log.workspace = true
-env_logger = { workspace = true, optional = true }
 
 # For dynamic library loading
 tempfile.workspace = true
@@ -83,7 +78,6 @@ env_logger.workspace = true
 default = ["hugr-013"]
 hugr-013 = ["dep:hugr-core-013", "dep:zstd"]
 async = ["tokio"]
-binary = ["dep:env_logger"]
 
 [lints]
 workspace = true

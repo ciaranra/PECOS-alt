@@ -4,7 +4,7 @@ This module provides functions for converting Guppy quantum programs to HUGR for
 which can be used with Selene and other HUGR-compatible engines.
 """
 
-from typing import Callable
+from collections.abc import Callable
 
 
 def guppy_to_hugr(guppy_func: Callable) -> bytes:
@@ -48,7 +48,7 @@ def guppy_to_hugr(guppy_func: Callable) -> bytes:
     except ImportError as e:
         raise ImportError(
             "Guppy compilation tools not available. "
-            "Install with: pip install quantum-pecos[guppy]"
+            "Install with: pip install quantum-pecos[guppy]",
         ) from e
 
     # Delegate to the actual compilation function

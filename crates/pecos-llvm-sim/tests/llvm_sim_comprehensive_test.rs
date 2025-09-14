@@ -259,7 +259,12 @@ fn test_llvm_sim_with_uniform_depolarizing_noise() {
 
     println!("Bell state with 20% depolarizing noise:");
     for (result, count) in &counts {
-        println!("  {}: {} ({:.1}%)", result, count, (*count as f64 / 10.0));
+        println!(
+            "  {}: {} ({:.1}%)",
+            result,
+            count,
+            (f64::from(u32::try_from(*count).unwrap_or(0)) / 10.0)
+        );
     }
 
     // With 20% noise, we should see error states (1 and 2)
@@ -303,7 +308,7 @@ fn test_llvm_sim_with_custom_depolarizing_noise() {
     println!(
         "  Error states: {} ({:.1}%)",
         error_count,
-        error_count as f64 / 10.0
+        f64::from(u32::try_from(error_count).unwrap_or(0)) / 10.0
     );
 
     assert!(error_count > 0, "Expected errors with custom noise model");

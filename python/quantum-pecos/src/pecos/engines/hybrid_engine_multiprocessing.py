@@ -174,7 +174,7 @@ def worker_wrapper(
     except (ValueError, TypeError, RuntimeError, KeyError, AttributeError) as e:
         queue.put((pid, "error", f"{type(e).__name__}: {e}"))
     # Must catch all exceptions in worker process to prevent silent failures
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         queue.put((pid, "error", f"Unexpected error: {type(e).__name__}: {e}"))
 
     return results, run_info

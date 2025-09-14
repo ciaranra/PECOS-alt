@@ -16,6 +16,10 @@ use std::fs;
 use std::path::Path;
 
 /// Serialize a PHIR module to RON string
+///
+/// # Errors
+///
+/// Returns an error if serialization fails
 pub fn to_ron(module: &Module) -> Result<String> {
     let pretty = PrettyConfig::new()
         .depth_limit(4)
@@ -27,6 +31,10 @@ pub fn to_ron(module: &Module) -> Result<String> {
 }
 
 /// Serialize a PHIR module to a RON file
+///
+/// # Errors
+///
+/// Returns an error if serialization or file writing fails
 pub fn to_ron_file(module: &Module, path: impl AsRef<Path>) -> Result<()> {
     let ron_string = to_ron(module)?;
     fs::write(path, ron_string)
@@ -34,12 +42,20 @@ pub fn to_ron_file(module: &Module, path: impl AsRef<Path>) -> Result<()> {
 }
 
 /// Deserialize a PHIR module from RON string
+///
+/// # Errors
+///
+/// Returns an error if deserialization fails
 pub fn from_ron(ron_str: &str) -> Result<Module> {
     ron::from_str(ron_str)
         .map_err(|e| PhirError::internal(format!("Failed to deserialize from RON: {e}")))
 }
 
 /// Deserialize a PHIR module from a RON file
+///
+/// # Errors
+///
+/// Returns an error if file reading or deserialization fails
 pub fn from_ron_file(path: impl AsRef<Path>) -> Result<Module> {
     let ron_string = fs::read_to_string(path)
         .map_err(|e| PhirError::internal(format!("Failed to read RON file: {e}")))?;
@@ -49,9 +65,17 @@ pub fn from_ron_file(path: impl AsRef<Path>) -> Result<Module> {
 /// Extension trait for Module to add RON convenience methods
 pub trait ModuleRonExt {
     /// Convert this module to RON string
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if serialization fails
     fn to_ron(&self) -> Result<String>;
 
     /// Save this module to a RON file
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if serialization or file writing fails
     fn save_ron(&self, path: impl AsRef<Path>) -> Result<()>;
 }
 

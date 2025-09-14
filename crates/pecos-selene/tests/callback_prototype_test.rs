@@ -120,7 +120,7 @@ fn simulate_selene_process() {
 struct PrototypeEngine;
 
 impl PrototypeEngine {
-    fn start(&mut self) -> EngineStage<ByteMessage, String> {
+    fn start() -> EngineStage<ByteMessage, String> {
         println!("[Engine] Starting");
 
         // Wait for first operations
@@ -142,10 +142,7 @@ impl PrototypeEngine {
         }
     }
 
-    fn continue_processing(
-        &mut self,
-        measurements: ByteMessage,
-    ) -> EngineStage<ByteMessage, String> {
+    fn continue_processing(measurements: ByteMessage) -> EngineStage<ByteMessage, String> {
         println!("[Engine] Continue processing");
 
         // Provide measurements
@@ -177,8 +174,7 @@ fn test_callback_prototype() {
     thread::sleep(Duration::from_millis(100));
 
     // Run engine with EngineStage flow
-    let mut engine = PrototypeEngine;
-    let mut stage = engine.start();
+    let mut stage = PrototypeEngine::start();
 
     loop {
         match stage {
@@ -195,7 +191,7 @@ fn test_callback_prototype() {
                 let measurements = builder.build();
 
                 // Continue
-                stage = engine.continue_processing(measurements);
+                stage = PrototypeEngine::continue_processing(measurements);
             }
             EngineStage::Complete(result) => {
                 println!("[Test] Complete: {result}");
@@ -210,10 +206,6 @@ fn test_callback_prototype() {
 
 #[test]
 fn test_ffi_callback_mechanism() {
-    println!("\n=== FFI CALLBACK TEST ===\n");
-
-    // Test that we can call functions through FFI-style interface
-
     // Simulate C-style callback functions
     extern "C" fn send_op_callback(data: *const u8, len: usize) -> i32 {
         unsafe {
@@ -231,7 +223,7 @@ fn test_ffi_callback_mechanism() {
                 unsafe {
                     std::ptr::copy_nonoverlapping(bytes.as_ptr(), data_out, bytes.len());
                 }
-                bytes.len() as i32
+                i32::try_from(bytes.len()).unwrap_or(i32::MAX)
             } else {
                 -1 // Buffer too small
             }
@@ -239,6 +231,10 @@ fn test_ffi_callback_mechanism() {
             0 // No data
         }
     }
+
+    println!("\n=== FFI CALLBACK TEST ===\n");
+
+    // Test that we can call functions through FFI-style interface
 
     // Test sending operations via callback
     let mut builder = ByteMessageBuilder::new();

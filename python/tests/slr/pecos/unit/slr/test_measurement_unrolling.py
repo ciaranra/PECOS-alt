@@ -43,21 +43,21 @@ def test_measurement_unrolling_qasm() -> None:
     prog = create_measurement_unrolling_program()
 
     # Print the program structure for debugging
-    print("\nProgram structure:")
-    print(f"Operations: {[type(op).__name__ for op in prog.ops]}")
+    # print("\nProgram structure:")
+    # print(f"Operations: {[type(op).__name__ for op in prog.ops]}")
 
     # Get the last operation (should be the Measure operation)
-    measure_op = prog.ops[-1]
-    print(f"\nMeasure operation: {type(measure_op).__name__}")
-    print(f"qargs: {measure_op.qargs}")
-    print(f"cout: {measure_op.cout}")
+    prog.ops[-1]
+    # print(f"\nMeasure operation: {type(measure_op).__name__}")
+    # print(f"qargs: {measure_op.qargs}")
+    # print(f"cout: {measure_op.cout}")
 
     # Generate QASM using SlrConverter
     qasm = SlrConverter(prog).qasm()
 
     # Print the QASM for debugging
-    print("\nQASM output:")
-    print(qasm)
+    # print("\nQASM output:")
+    # print(qasm)
 
     # Verify that the register-wide measurement is unrolled correctly
     # After permutations:
@@ -87,8 +87,8 @@ def test_measurement_unrolling_qir() -> None:
     qir = SlrConverter(prog).qir()
 
     # Print the QIR for debugging
-    print("\nQIR output:")
-    print(qir)
+    # print("\nQIR output:")
+    # print(qir)
 
     # Verify that the QIR contains comments about the permutations
     assert (

@@ -4,14 +4,20 @@ This module extends the Rust selene_engine implementation with Python-side
 support for Guppy programs.
 """
 
-from typing import Union, Callable
+from collections.abc import Callable
 from pathlib import Path
+from typing import Union
+
+from pecos_rslib._pecos_rslib import (
+    HugrProgram as _RustHugrProgram,
+)
+from pecos_rslib._pecos_rslib import (
+    LlvmProgram as _RustLlvmProgram,
+)
 
 # Import the Rust bindings
 from pecos_rslib._pecos_rslib import (
     selene_engine as _rust_selene_engine,
-    LlvmProgram as _RustLlvmProgram,
-    HugrProgram as _RustHugrProgram,
 )
 
 # Import Guppy conversion utility
@@ -21,7 +27,7 @@ from .guppy_conversion import guppy_to_hugr
 class SeleneEngineBuilder:
     """Python wrapper for Selene engine builder with Guppy support."""
 
-    def __init__(self, rust_builder=None):
+    def __init__(self, rust_builder: object = None) -> None:
         """Initialize with an optional Rust builder instance."""
         self._rust_builder = rust_builder if rust_builder else _rust_selene_engine()
         self._pending_program = None
@@ -30,7 +36,12 @@ class SeleneEngineBuilder:
     def program(
         self,
         program: Union[
-            str, Path, Callable, bytes, "_RustLlvmProgram", "_RustHugrProgram"
+            str,
+            Path,
+            Callable,
+            bytes,
+            "_RustLlvmProgram",
+            "_RustHugrProgram",
         ],
     ) -> "SeleneEngineBuilder":
         """Set the program to execute.
@@ -69,21 +80,21 @@ class SeleneEngineBuilder:
             else:
                 # Legacy: raw LLVM IR string
                 self._rust_builder = self._rust_builder.program(
-                    _RustLlvmProgram.from_string(program)
+                    _RustLlvmProgram.from_string(program),
                 )
         elif isinstance(program, bytes):
             # Legacy: raw HUGR bytes
             self._rust_builder = self._rust_builder.program(
-                _RustHugrProgram.from_bytes(program)
+                _RustHugrProgram.from_bytes(program),
             )
         else:
             raise TypeError(
                 f"Program must be LlvmProgram, HugrProgram, Guppy function, "
-                f"plugin Path, LLVM IR string, or HUGR bytes, got {type(program)}"
+                f"plugin Path, LLVM IR string, or HUGR bytes, got {type(program)}",
             )
         return self
 
-    def plugin(self, path: Union[str, Path]) -> "SeleneEngineBuilder":
+    def plugin(self, path: str | Path) -> "SeleneEngineBuilder":
         """Set a plugin file path directly.
 
         Args:
@@ -95,7 +106,7 @@ class SeleneEngineBuilder:
         self._rust_builder = self._rust_builder.plugin(str(path))
         return self
 
-    def llvm_file(self, path: Union[str, Path]) -> "SeleneEngineBuilder":
+    def llvm_file(self, path: str | Path) -> "SeleneEngineBuilder":
         """Load LLVM IR from a file.
 
         Args:
@@ -112,11 +123,11 @@ class SeleneEngineBuilder:
         llvm_ir = path.read_text()
         # Create LlvmProgram from string
         self._rust_builder = self._rust_builder.program(
-            _RustLlvmProgram.from_string(llvm_ir)
+            _RustLlvmProgram.from_string(llvm_ir),
         )
         return self
 
-    def hugr_file(self, path: Union[str, Path]) -> "SeleneEngineBuilder":
+    def hugr_file(self, path: str | Path) -> "SeleneEngineBuilder":
         """Load HUGR from a file.
 
         Args:
@@ -133,7 +144,7 @@ class SeleneEngineBuilder:
         hugr_bytes = path.read_bytes()
         # Create HugrProgram from bytes
         self._rust_builder = self._rust_builder.program(
-            _RustHugrProgram.from_bytes(hugr_bytes)
+            _RustHugrProgram.from_bytes(hugr_bytes),
         )
         return self
 
@@ -149,7 +160,7 @@ class SeleneEngineBuilder:
         self._rust_builder = self._rust_builder.qubits(n)
         return self
 
-    def to_sim(self):
+    def to_sim(self) -> object:
         """Convert to a simulation builder.
 
         This handles Guppy conversion if needed.
@@ -165,12 +176,12 @@ class SeleneEngineBuilder:
 
                 llvm_ir = compile_to_llvm_ir(hugr_bytes)
                 self._rust_builder = self._rust_builder.program(
-                    _RustLlvmProgram.from_string(llvm_ir)
+                    _RustLlvmProgram.from_string(llvm_ir),
                 )
             except ImportError:
                 # Fall back to using HUGR directly if Selene supports it
                 self._rust_builder = self._rust_builder.program(
-                    _RustHugrProgram.from_bytes(hugr_bytes)
+                    _RustHugrProgram.from_bytes(hugr_bytes),
                 )
 
         # Return the simulation builder from Rust
@@ -217,7 +228,7 @@ def selene_engine() -> SeleneEngineBuilder:
 
 # Export the main function and classes
 __all__ = [
-    "selene_engine",
     "SeleneEngineBuilder",
     "guppy_to_hugr",  # Re-export for convenience
+    "selene_engine",
 ]

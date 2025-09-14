@@ -47,6 +47,12 @@ impl ProgrammedSimBuilder {
     ///
     /// This selects an engine based on the program type and builds the simulation,
     /// unless a classical engine was already explicitly set.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The program type is not yet supported (WASM, WAT, PHIR JSON, `SeleneInterface`)
+    /// - Engine building fails
     pub fn build(self) -> Result<MonteCarloEngine, PecosError> {
         if self.override_classical {
             // Classical engine was already set, just build
@@ -89,6 +95,12 @@ impl ProgrammedSimBuilder {
     ///
     /// This selects an engine based on the program type and runs the simulation,
     /// unless a classical engine was already explicitly set.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The program type is not yet supported (WASM, WAT, PHIR JSON, `SeleneInterface`)
+    /// - Engine building or running fails
     pub fn run(self, shots: usize) -> Result<pecos_engines::shot_results::ShotVec, PecosError> {
         if self.override_classical {
             // Classical engine was already set, just run
@@ -130,6 +142,7 @@ impl ProgrammedSimBuilder {
     /// Override the classical engine selection
     ///
     /// This allows you to specify a different engine than the auto-selected one.
+    #[must_use]
     pub fn classical<B: ClassicalControlEngineBuilder + Send + 'static>(
         mut self,
         engine_builder: B,
@@ -171,6 +184,7 @@ impl ProgrammedSimBuilder {
     }
 
     /// Set the noise model (delegates to base builder)
+    #[must_use]
     pub fn noise<N>(mut self, noise_builder: N) -> Self
     where
         N: pecos_engines::noise::IntoNoiseModel + Send + 'static,
@@ -180,6 +194,7 @@ impl ProgrammedSimBuilder {
     }
 
     /// Set the quantum engine (delegates to base builder)
+    #[must_use]
     pub fn quantum<Q>(mut self, quantum_builder: Q) -> Self
     where
         Q: pecos_engines::quantum_engine_builder::IntoQuantumEngineBuilder + 'static,

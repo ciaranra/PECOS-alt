@@ -1,78 +1,84 @@
-#!/usr/bin/env python3
 """Test the complete Guppy → HUGR → Standard QIR → PECOS pipeline.
 
 This tests the new Standard QIR+ architecture implementation.
 """
 
-import sys
+import subprocess
 from pathlib import Path
+
+import pytest
 
 
 def decode_integer_results(results: list[int], n_bits: int) -> list[tuple[bool, ...]]:
     """Decode integer-encoded results back to tuples of booleans."""
     decoded = []
     for val in results:
-        bits = []
-        for i in range(n_bits):
-            bits.append(bool(val & (1 << i)))
+        bits = [bool(val & (1 << i)) for i in range(n_bits)]
         decoded.append(tuple(bits))
     return decoded
 
 
-sys.path.append("python/quantum-pecos/src")
+class TestGuppyLLVMPipeline:
+    """Test suite for the Guppy to LLVM compilation pipeline."""
 
-from pecos.frontends import get_guppy_backends, sim
-from pecos.frontends.guppy_frontend import GuppyFrontend
-from pecos_rslib import state_vector
+    def test_backend_availability(self) -> None:
+        """Test that backends are properly detected."""
+        try:
+            from pecos.frontends import get_guppy_backends
+        except ImportError:
+            pytest.skip("get_guppy_backends not available")
 
+        backends = get_guppy_backends()
 
-def test_backend_availability() -> None:
-    """Test that backends are properly detected."""
-    print("=== Testing Backend Availability ===")
-    backends = get_guppy_backends()
-    print(f"Available backends: {backends}")
+        # Check that we get a dictionary with expected keys
+        assert isinstance(
+            backends,
+            dict,
+        ), "get_guppy_backends should return a dictionary"
+        assert "guppy_available" in backends, "Should have 'guppy_available' key"
+        assert "rust_backend" in backends, "Should have 'rust_backend' key"
 
-    if backends["guppy_available"]:
-        print("[PASS] Guppy is available")
-    else:
-        print("[FAIL] Guppy is not available - install with: pip install guppylang")
+        # These should be boolean values
+        assert isinstance(
+            backends["guppy_available"],
+            bool,
+        ), "guppy_available should be boolean"
+        assert isinstance(
+            backends["rust_backend"],
+            bool,
+        ), "rust_backend should be boolean"
 
-    if backends["rust_backend"]:
-        print("[PASS] Rust HUGR backend is available")
-    else:
-        print(
-            f"[FAIL] Rust HUGR backend is not available: {backends.get('rust_message', 'Unknown')}",
-        )
+        # If guppy is available, rust backend should also be available in most cases
+        if backends["guppy_available"] and not backends["rust_backend"]:
+            pytest.skip("Guppy available but Rust backend not available")
 
-    # External tools are no longer tracked - only Rust backend is used
-    print("[OK] Using Rust backend for compilation")
-    print()
+    def test_guppy_frontend_initialization(self) -> None:
+        """Test the GuppyFrontend class initialization."""
+        try:
+            from pecos.frontends.guppy_frontend import GuppyFrontend
+        except ImportError:
+            pytest.skip("GuppyFrontend not available")
 
+        try:
+            frontend = GuppyFrontend()
+            info = frontend.get_backend_info()
+        except (ImportError, RuntimeError) as e:
+            if "guppylang" in str(e) or "not available" in str(e):
+                pytest.skip(f"Guppy not available: {e}")
+            pytest.fail(f"Failed to create GuppyFrontend: {e}")
 
-def test_guppy_frontend() -> None:
-    """Test the GuppyFrontend class directly."""
-    print("=== Testing GuppyFrontend ===")
+        # Verify backend info structure
+        assert isinstance(info, dict), "Backend info should be a dictionary"
+        assert len(info) > 0, "Backend info should not be empty"
 
-    try:
-        frontend = GuppyFrontend()
-        info = frontend.get_backend_info()
-        print(f"Frontend backend info: {info}")
-        print(f"[OK] Using backend: {info['backend']}")
-        print()
-        # Test passed
-    except (ImportError, RuntimeError) as e:
-        print(f"[FAIL] Failed to create GuppyFrontend: {e}")
-        msg = f"Failed to create GuppyFrontend: {e}"
-        raise AssertionError(msg) from e
-
-
-def test_simple_guppy_function() -> None:
-    """Test with a simple Guppy function (if available)."""
-    print("=== Testing Simple Guppy Function ===")
-
-    try:
-        from guppylang import guppy
-        from guppylang.std.quantum import h, measure, qubit
+    def test_simple_quantum_function_compilation(self) -> None:
+        """Test compiling a simple quantum function."""
+        try:
+            from guppylang import guppy
+            from guppylang.std.quantum import h, measure, qubit
+            from pecos.frontends.guppy_frontend import GuppyFrontend
+        except ImportError as e:
+            pytest.skip(f"Required modules not available: {e}")
 
         @guppy
         def random_bit() -> bool:
@@ -81,38 +87,37 @@ def test_simple_guppy_function() -> None:
             h(q)
             return measure(q)
 
-        print("[PASS] Guppy function defined successfully")
-
-        # Test compilation only (not execution)
+        # Test compilation
         try:
             frontend = GuppyFrontend()
             qir_file = frontend.compile_function(random_bit)
-            print(f"[PASS] Compiled to QIR: {qir_file}")
+        except (ImportError, RuntimeError) as e:
+            if "HUGR version" in str(e) or "not available" in str(e):
+                pytest.skip(f"Known compatibility issue: {e}")
+            pytest.fail(f"Compilation failed: {e}")
 
-            # Read and display part of the QIR
-            with Path(qir_file).open() as f:
-                qir_content = f.read()
-                print("\nGenerated QIR (first 500 chars):")
-                print(qir_content[:500])
-                print("...")
+        # Verify QIR file was created
+        assert qir_file is not None, "Compilation should return a file path"
+        qir_path = Path(qir_file)
+        assert qir_path.exists(), f"QIR file should exist at {qir_file}"
 
-        except (RuntimeError, FileNotFoundError) as e:
-            print(f"[FAIL] Compilation failed: {e}")
+        # Verify QIR file has content
+        with qir_path.open() as f:
+            qir_content = f.read()
+        assert len(qir_content) > 0, "QIR file should not be empty"
+        assert (
+            "@__quantum__" in qir_content or "define" in qir_content
+        ), "QIR should contain quantum operations or function definitions"
 
-    except ImportError:
-        print("[SKIP] Guppy not available - skipping function test")
-        print("  Install with: pip install guppylang")
-    except RuntimeError as e:
-        print(f"[FAIL] Test failed: {e}")
-
-
-def test_bell_state_function() -> None:
-    """Test with a Bell state function (if Guppy available)."""
-    print("\n=== Testing Bell State Function ===")
-
-    try:
-        from guppylang import guppy
-        from guppylang.std.quantum import cx, h, measure, qubit
+    def test_bell_state_execution(self) -> None:
+        """Test Bell state creation and measurement correlation."""
+        try:
+            from guppylang import guppy
+            from guppylang.std.quantum import cx, h, measure, qubit
+            from pecos.frontends import sim
+            from pecos_rslib import state_vector
+        except ImportError as e:
+            pytest.skip(f"Required modules not available: {e}")
 
         @guppy
         def bell_state() -> tuple[bool, bool]:
@@ -122,102 +127,182 @@ def test_bell_state_function() -> None:
             cx(q0, q1)
             return measure(q0), measure(q1)
 
-        print("[PASS] Bell state function defined")
-
+        # Execute the Bell state circuit
         try:
-            # Test using sim() API
-            result = sim(bell_state).qubits(10).quantum(state_vector()).run(10)
-            print("\n[PASS] Execution completed!")
-            print("  Function: bell_state")
-            print("  Backend: Unified sim() API with state_vector")
-            measurements = result.get(
-                "measurements",
-                result.get("measurement_1", result.get("result", [])),
+            result = (
+                sim(bell_state).qubits(10).quantum(state_vector()).seed(42).run(100)
             )
-            print(f"  Results (first 10): {measurements[:10]}")
-
-            # Check correlation
-            if measurements:
-                # For Bell state, check if measurements are correlated
-                if "measurement_1" in result and "measurement_2" in result:
-                    # Tuple returns
-                    correlated = sum(
-                        1
-                        for i in range(len(result["measurement_1"]))
-                        if result["measurement_1"][i] == result["measurement_2"][i]
-                    )
-                    total = len(result["measurement_1"])
-                    print(
-                        f"  Correlation: {correlated}/{total} = {correlated/total:.2%}",
-                    )
-                elif isinstance(measurements[0], tuple):
-                    # Tuple format
-                    correlated = sum(1 for m in measurements if m[0] == m[1])
-                    print(
-                        f"  Correlation: {correlated}/{len(measurements)} = {correlated/len(measurements):.2%}",
-                    )
-
         except (RuntimeError, ImportError) as e:
-            print(f"[FAIL] Execution failed: {e}")
-            import traceback
+            if "PECOS" in str(e) or "compilation" in str(e):
+                pytest.skip(f"Execution environment issue: {e}")
+            pytest.fail(f"Bell state execution failed: {e}")
 
-            traceback.print_exc()
+        # Verify we got results
+        assert result is not None, "Should get execution results"
 
-    except ImportError:
-        print("[SKIP] Guppy not available - skipping Bell state test")
-    except RuntimeError as e:
-        print(f"[FAIL] Test failed: {e}")
+        # Check for measurement results in various formats
+        if "measurement_1" in result and "measurement_2" in result:
+            # Tuple return format - individual measurement keys
+            measurements1 = result["measurement_1"]
+            measurements2 = result["measurement_2"]
+            assert len(measurements1) == 100, "Should have 100 measurements for qubit 1"
+            assert len(measurements2) == 100, "Should have 100 measurements for qubit 2"
 
+            # Check correlation (Bell state should be perfectly correlated)
+            correlated = sum(
+                1 for i in range(100) if measurements1[i] == measurements2[i]
+            )
+            correlation_rate = correlated / 100
+            assert (
+                correlation_rate > 0.95
+            ), f"Bell state measurements should be highly correlated, got {correlation_rate:.2%}"
+        elif "measurements" in result:
+            # Check if measurements are tuples
+            measurements = result["measurements"]
+            assert len(measurements) == 100, "Should have 100 measurements"
 
-def test_rust_compilation() -> None:
-    """Test Rust compilation status."""
-    print("\n=== Testing Rust Compilation ===")
+            if measurements and isinstance(measurements[0], tuple):
+                # Direct tuple format
+                correlated = sum(1 for (a, b) in measurements if a == b)
+            else:
+                # Integer-encoded format
+                decoded = decode_integer_results(measurements, 2)
+                correlated = sum(1 for (a, b) in decoded if a == b)
 
-    import subprocess
+            correlation_rate = correlated / 100
+            assert (
+                correlation_rate > 0.95
+            ), f"Bell state measurements should be highly correlated, got {correlation_rate:.2%}"
+        else:
+            pytest.fail(f"Unexpected result format: {result.keys()}")
 
-    try:
-        # Check if pecos-llvm-runtime compiled with hugr
+    def test_rust_compilation_check(self) -> None:
+        """Test that Rust components compile properly."""
+        # Check if cargo is available
+        try:
+            result = subprocess.run(
+                ["cargo", "--version"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                pytest.skip("Cargo not available")
+        except FileNotFoundError:
+            pytest.skip("Cargo not found in PATH")
+
+        # Check if we're in a Rust project
+        project_root = Path(__file__).resolve().parent.parent.parent.parent
+        cargo_toml = project_root / "Cargo.toml"
+
+        if not cargo_toml.exists():
+            pytest.skip("Not in a Rust project directory")
+
+        # Check metadata to verify the project structure
         result = subprocess.run(
-            [
-                "cargo",
-                "check",
-                "-p",
-                "pecos-llvm-runtime",
-                "--features",
-                "hugr",
-            ],
+            ["cargo", "metadata", "--no-deps", "--format-version=1"],
             capture_output=True,
             text=True,
-            cwd=Path(__file__).resolve().parent,
+            cwd=project_root,
             check=False,
         )
 
-        if result.returncode == 0:
-            print("[PASS] pecos-llvm-runtime compiles with hugr feature")
-        else:
-            print("[FAIL] pecos-llvm-runtime compilation failed:")
-            print(result.stderr[:500])
+        assert (
+            result.returncode == 0
+        ), f"Cargo metadata should succeed, got error: {result.stderr[:500]}"
 
-    except (subprocess.SubprocessError, FileNotFoundError) as e:
-        print(f"[FAIL] Could not check Rust compilation: {e}")
-
-
-def main() -> None:
-    """Run all tests."""
-    print("Testing Guppy → HUGR → Standard QIR → PECOS Pipeline")
-    print("=" * 60)
-
-    test_backend_availability()
-
-    test_guppy_frontend()
-    test_simple_guppy_function()
-    test_bell_state_function()
-
-    test_rust_compilation()
-
-    print("\n" + "=" * 60)
-    print("Testing complete!")
+        # Verify output is valid JSON (basic check)
+        assert result.stdout.startswith("{"), "Cargo metadata should return JSON"
+        assert '"packages"' in result.stdout, "Metadata should contain packages info"
 
 
-if __name__ == "__main__":
-    main()
+@pytest.mark.parametrize(
+    ("n_qubits", "expected_avg"),
+    [
+        (1, 0.5),  # Single qubit in superposition
+        (2, 1.0),  # Two qubits in superposition
+        (3, 1.5),  # Three qubits in superposition
+    ],
+)
+def test_superposition_statistics(n_qubits: int, expected_avg: float) -> None:
+    """Test that qubits in superposition give expected statistics."""
+    try:
+        from guppylang import guppy
+        from guppylang.std.quantum import h, measure, qubit
+        from pecos.frontends import sim
+        from pecos_rslib import state_vector
+    except ImportError as e:
+        pytest.skip(f"Required modules not available: {e}")
+
+    # Create a function that measures n qubits in superposition
+    if n_qubits == 1:
+
+        @guppy
+        def superposition_test() -> bool:
+            q = qubit()
+            h(q)
+            return measure(q)
+
+    elif n_qubits == 2:
+
+        @guppy
+        def superposition_test() -> tuple[bool, bool]:
+            q1, q2 = qubit(), qubit()
+            h(q1)
+            h(q2)
+            return measure(q1), measure(q2)
+
+    else:  # n_qubits == 3
+
+        @guppy
+        def superposition_test() -> tuple[bool, bool, bool]:
+            q1, q2, q3 = qubit(), qubit(), qubit()
+            h(q1)
+            h(q2)
+            h(q3)
+            return measure(q1), measure(q2), measure(q3)
+
+    # Run the test
+    try:
+        result = (
+            sim(superposition_test)
+            .qubits(10)
+            .quantum(state_vector())
+            .seed(42)
+            .run(1000)
+        )
+    except (RuntimeError, ImportError) as e:
+        pytest.skip(f"Execution issue: {e}")
+
+    # Calculate average number of 1s
+    if n_qubits == 1:
+        ones_count = (
+            sum(result["measurement_1"])
+            if "measurement_1" in result
+            else sum(result.get("measurements", []))
+        )
+        avg_ones = ones_count / 1000
+    else:
+        # For multiple qubits, sum up all the 1s
+        total_ones = 0
+        if "measurement_1" in result:
+            # Separate measurement keys
+            for i in range(1, n_qubits + 1):
+                total_ones += sum(result[f"measurement_{i}"])
+        elif "measurements" in result:
+            measurements = result["measurements"]
+            if measurements and isinstance(measurements[0], tuple):
+                # Direct tuple format
+                for meas in measurements:
+                    total_ones += sum(meas)
+            else:
+                # Integer-encoded format
+                decoded = decode_integer_results(measurements, n_qubits)
+                for meas in decoded:
+                    total_ones += sum(meas)
+        avg_ones = total_ones / 1000
+
+    # Check that average is close to expected (allowing for statistical variation)
+    assert (
+        abs(avg_ones - expected_avg) < 0.1
+    ), f"Average should be close to {expected_avg} for {n_qubits} qubits, got {avg_ones:.3f}"

@@ -27,8 +27,8 @@ def test_creg_permutation_qasm() -> None:
     qasm = SlrConverter(prog).qasm()
 
     # Print the QASM for debugging
-    print("\nQASM output:")
-    print(qasm)
+    # print("\nQASM output:")
+    # print(qasm)
 
     # Verify the XOR swap operations are generated
     assert "a = a ^ b;" in qasm, f"Expected 'a = a ^ b;' not found in QASM:\n{qasm}"
@@ -65,8 +65,8 @@ def test_creg_permutation_qir() -> None:
     qir = SlrConverter(prog).qir()
 
     # Print the QIR for debugging
-    print("\nQIR output:")
-    print(qir)
+    # print("\nQIR output:")
+    # print(qir)
 
     # Verify that the QIR contains a comment about the permutation
     assert (

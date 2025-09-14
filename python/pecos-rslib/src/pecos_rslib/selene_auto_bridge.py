@@ -10,7 +10,7 @@ import os
 logger = logging.getLogger(__name__)
 
 
-def auto_patch_selene_build():
+def auto_patch_selene_build() -> bool:
     """Automatically patch selene_sim.build to create Bridge-compatible executables.
 
     The key insight: We need the Selene executable to be configured to use
@@ -30,14 +30,14 @@ def auto_patch_selene_build():
         # modifying the Selene configuration to specify Bridge as default simulator
 
         logger.info("PECOS: Bridge plugin registered with selene_sim namespace")
+    except ImportError as e:
+        logger.warning("Could not register Bridge plugin with Selene: %s", e)
+        return False
+    else:
         return True
 
-    except ImportError as e:
-        logger.warning(f"Could not register Bridge plugin with Selene: {e}")
-        return False
 
-
-def setup_bridge_environment():
+def setup_bridge_environment() -> None:
     """Set up environment variables for Bridge plugin operation."""
     # Ensure SELENE_IPC is set for Bridge plugin
     os.environ["SELENE_IPC"] = "1"

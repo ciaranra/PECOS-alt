@@ -1,117 +1,89 @@
-"""Tests for PHIR (PECOS High-level IR) - mostly deprecated functionality."""
+"""Tests for PHIR (PECOS High-level IR) JSON pipeline."""
 
 import pytest
 
 
-def test_phir_compiler_class():
-    """Test that PhirCompiler class is deprecated."""
-    # PhirCompiler has been deprecated in favor of phir_json_engine
-    with pytest.raises(ImportError) as exc_info:
-        from pecos_rslib import PhirCompiler
+def test_phir_json_engine_import() -> None:
+    """Test that PhirJsonEngine can be imported."""
+    from pecos_rslib import PhirJsonEngine
 
-        PhirCompiler()
-
-    assert (
-        "not available" in str(exc_info.value)
-        or "deprecated" in str(exc_info.value).lower()
-    )
+    assert PhirJsonEngine is not None
 
 
-def test_hugr_to_phir_mlir():
-    """Test that HUGR to PHIR MLIR conversion is deprecated."""
-    # This function has been deprecated
-    with pytest.raises(ImportError) as exc_info:
-        from pecos_rslib import hugr_to_phir_mlir
+def test_phir_json_engine_builder_import() -> None:
+    """Test that PhirJsonEngineBuilder can be imported."""
+    from pecos_rslib import PhirJsonEngineBuilder
 
-        hugr_to_phir_mlir("{}")
-
-    assert "deprecated" in str(exc_info.value).lower() or "not available" in str(
-        exc_info.value
-    )
+    assert PhirJsonEngineBuilder is not None
 
 
-def test_compile_hugr_via_phir_fallback():
-    """Test that HUGR compilation via PHIR is deprecated."""
-    # This function has been deprecated
-    with pytest.raises(ImportError) as exc_info:
-        from pecos_rslib import compile_hugr_via_phir
+def test_phir_json_program_import() -> None:
+    """Test that PhirJsonProgram can be imported."""
+    from pecos_rslib import PhirJsonProgram
 
-        compile_hugr_via_phir("{}")
-
-    assert (
-        "not available" in str(exc_info.value)
-        or "deprecated" in str(exc_info.value).lower()
-    )
+    assert PhirJsonProgram is not None
 
 
-def test_invalid_hugr():
-    """Test handling of invalid HUGR (deprecated functionality)."""
-    # HUGR to PHIR pipeline has been deprecated
-    with pytest.raises(ImportError):
-        from pecos_rslib import hugr_to_phir_mlir
+def test_phir_json_simulation_import() -> None:
+    """Test that PhirJsonSimulation can be imported."""
+    from pecos_rslib import PhirJsonSimulation
 
-        # This would have tested invalid HUGR handling
-        hugr_to_phir_mlir("invalid")
+    assert PhirJsonSimulation is not None
 
 
-def test_malformed_hugr_json():
-    """Test handling of malformed HUGR JSON (deprecated functionality)."""
-    # HUGR to PHIR pipeline has been deprecated
-    with pytest.raises(ImportError):
-        from pecos_rslib import hugr_to_phir_mlir
+def test_compile_hugr_to_llvm_import() -> None:
+    """Test that compile_hugr_to_llvm can be imported."""
+    from pecos_rslib import compile_hugr_to_llvm
 
-        # This would have tested malformed JSON handling
-        hugr_to_phir_mlir('{"malformed": json}')
+    assert compile_hugr_to_llvm is not None
 
 
-def test_phir_json_engine_available():
-    """Test that PhirJsonEngine is available for use."""
-    try:
-        from pecos_rslib import phir_json_engine
-        from pecos_rslib._pecos_rslib import PhirJsonProgram
+def test_phir_json_engine_function() -> None:
+    """Test that phir_json_engine function is available."""
+    from pecos_rslib import phir_json_engine
 
-        # These imports should work
-        assert phir_json_engine is not None
-        assert PhirJsonProgram is not None
-
-        # Should be able to create an engine builder
-        engine_builder = phir_json_engine()
-        assert engine_builder is not None
-
-    except ImportError:
-        pytest.skip("PhirJsonEngine not available")
+    # Should be able to create an engine builder
+    engine_builder = phir_json_engine()
+    assert engine_builder is not None
 
 
-def test_phir_json_program_creation():
+def test_phir_json_program_creation() -> None:
     """Test creating PhirJsonProgram from JSON."""
+    from pecos_rslib import PhirJsonProgram
+
+    # PhirJsonProgram.from_json may accept strings and parse them later
+    # or may validate immediately. Test what actually happens:
     try:
-        from pecos_rslib._pecos_rslib import PhirJsonProgram
+        # This might not raise immediately
+        PhirJsonProgram.from_json("not json")
+        # If it doesn't raise during creation, that's OK - it might fail during use
+    except (ValueError, RuntimeError, TypeError):
+        # If it does raise, that's also fine
+        pass
 
-        # PhirJsonProgram.from_json may accept strings and parse them later
-        # or may validate immediately. Test what actually happens:
-        try:
-            # This might not raise immediately
-            PhirJsonProgram.from_json("not json")
-            # If it doesn't raise during creation, that's OK - it might fail during use
-        except Exception:
-            # If it does raise, that's also fine
-            pass
-
-        # Test creating from valid-looking JSON string
-        try:
-            PhirJsonProgram.from_json("{}")
-            # Empty object might be accepted
-        except Exception:
-            # Or it might be rejected
-            pass
-
-    except ImportError:
-        pytest.skip("PhirJsonProgram not available")
+    # Test creating from valid-looking JSON string
+    try:
+        PhirJsonProgram.from_json("{}")
+        # Empty object might be accepted
+    except (ValueError, RuntimeError, TypeError):
+        # Or it might be rejected
+        pass
 
 
-# Note: Full PhirJsonEngine testing would require knowledge of the exact
-# PHIR JSON format expected by the engine. The format has evolved and
-# the exact structure depends on the Rust implementation.
-#
-# For production use, PhirJsonEngine should be tested with actual valid
-# PHIR JSON generated by a compiler that targets this specific format.
+def test_compile_hugr_to_llvm_with_invalid_input() -> None:
+    """Test compile_hugr_to_llvm with invalid input."""
+    from pecos_rslib import compile_hugr_to_llvm
+
+    # compile_hugr_to_llvm expects bytes
+    with pytest.raises((RuntimeError, ValueError, TypeError)):
+        # Pass invalid HUGR bytes
+        compile_hugr_to_llvm(b"not valid hugr")
+
+
+def test_compile_hugr_to_llvm_with_wrong_type() -> None:
+    """Test compile_hugr_to_llvm with wrong input type."""
+    from pecos_rslib import compile_hugr_to_llvm
+
+    # Should raise TypeError for string instead of bytes
+    with pytest.raises(TypeError):
+        compile_hugr_to_llvm("{}")  # String instead of bytes

@@ -43,7 +43,7 @@ pub struct SeleneLibraryEngine {
     callback_state: Arc<Mutex<CallbackState>>,
 
     /// Thread handle for quantum program execution
-    execution_thread: Option<thread::JoinHandle<Result<(), PecosError>>>,
+    execution_thread: Option<thread::JoinHandle<Result<i32, PecosError>>>,
 
     /// Final results collected from execution
     final_results: BTreeMap<String, Data>,
@@ -168,7 +168,10 @@ impl SeleneLibraryEngine {
 
     /// Load the library and set up callbacks
     fn load_and_setup(&mut self) -> Result<(), PecosError> {
-        log::info!("Loading Selene library from {:?}", self.library_path);
+        log::info!(
+            "Loading Selene library from {}",
+            self.library_path.display()
+        );
 
         // Create TCP result stream first
         let mut result_stream = ResultStreamCapture::new()?;
@@ -252,14 +255,8 @@ impl SeleneLibraryEngine {
             // Mark as complete
             state.lock().unwrap().is_complete = true;
 
-            if result == 0 {
-                log::info!("Quantum program completed successfully");
-                Ok(())
-            } else {
-                Err(PecosError::Processing(format!(
-                    "Program exited with code {result}"
-                )))
-            }
+            log::info!("Quantum program completed with return value: {result}");
+            Ok(result)
         }));
 
         Ok(())
@@ -300,7 +297,7 @@ impl SeleneLibraryEngine {
 
             state_lock.is_waiting = false;
             log::debug!("Provided measurements to Bridge ({len} bytes)");
-            len as i32
+            i32::try_from(len).unwrap_or(i32::MAX)
         } else {
             state_lock.is_waiting = true;
             log::debug!("No measurements available, Bridge waiting");
@@ -452,11 +449,18 @@ impl ControlEngine for SeleneLibraryEngine {
             log::debug!("Got more operations");
             Ok(EngineStage::NeedsProcessing(ops))
         } else if self.is_execution_complete() {
-            // Wait for thread to finish
+            // Wait for thread to finish and capture return value
             if let Some(thread) = self.execution_thread.take() {
-                thread.join().map_err(|_| {
+                let return_value = thread.join().map_err(|_| {
                     PecosError::Processing("Execution thread panicked".to_string())
                 })??;
+
+                // Add the teardown return value to results
+                self.final_results.insert(
+                    "return_value".to_string(),
+                    Data::I64(i64::from(return_value)),
+                );
+                log::info!("Captured teardown return value: {return_value}");
             }
 
             // Collect results from TCP stream

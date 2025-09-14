@@ -11,7 +11,7 @@ use anyhow::{Result, anyhow};
 use selene_core::{
     export_runtime_plugin,
     runtime::{BatchOperation, Operation, RuntimeInterface, interface::RuntimeInterfaceFactory},
-    time::Instant,
+    time::{Duration, Instant},
     utils::MetricValue,
 };
 use std::collections::{HashMap, VecDeque};
@@ -37,7 +37,6 @@ pub struct ByteMessageSimulator {
 impl ByteMessageSimulator {
     #[must_use]
     pub fn new(start: Instant) -> Self {
-        #[cfg(feature = "logging")]
         log::debug!("Creating new ByteMessageSimulator");
 
         Self {
@@ -57,7 +56,7 @@ impl ByteMessageSimulator {
             let batch = BatchOperation::new(
                 std::mem::take(&mut self.current_batch),
                 self.start_time,
-                Default::default(),
+                Duration::default(),
             );
             self.operation_queue.push_back(batch);
         }
@@ -66,7 +65,6 @@ impl ByteMessageSimulator {
 
 impl RuntimeInterface for ByteMessageSimulator {
     fn exit(&mut self) -> Result<()> {
-        #[cfg(feature = "logging")]
         log::debug!("ByteMessageSimulator: Exiting");
         Ok(())
     }
@@ -79,9 +77,9 @@ impl RuntimeInterface for ByteMessageSimulator {
         Ok(self.operation_queue.pop_front())
     }
 
-    fn shot_start(&mut self, _shot_id: u64, _seed: u64) -> Result<()> {
-        #[cfg(feature = "logging")]
-        log::debug!("ByteMessageSimulator: Starting shot {_shot_id}");
+    #[allow(unused_variables)]
+    fn shot_start(&mut self, shot_id: u64, _seed: u64) -> Result<()> {
+        log::debug!("ByteMessageSimulator: Starting shot {shot_id}");
 
         // Clear state for new shot
         self.operation_queue.clear();
@@ -94,7 +92,6 @@ impl RuntimeInterface for ByteMessageSimulator {
     }
 
     fn shot_end(&mut self) -> Result<()> {
-        #[cfg(feature = "logging")]
         log::debug!("ByteMessageSimulator: Ending shot");
 
         // Flush any remaining operations
@@ -117,7 +114,6 @@ impl RuntimeInterface for ByteMessageSimulator {
         self.next_qubit_id += 1;
         self.allocated_qubits.push(qubit_id);
 
-        #[cfg(feature = "logging")]
         log::debug!("ByteMessageSimulator: Allocated qubit {qubit_id}");
 
         Ok(qubit_id)
@@ -126,7 +122,6 @@ impl RuntimeInterface for ByteMessageSimulator {
     fn qfree(&mut self, qubit_id: u64) -> Result<()> {
         if let Some(pos) = self.allocated_qubits.iter().position(|&q| q == qubit_id) {
             self.allocated_qubits.remove(pos);
-            #[cfg(feature = "logging")]
             log::debug!("ByteMessageSimulator: Freed qubit {qubit_id}");
             Ok(())
         } else {
@@ -135,7 +130,6 @@ impl RuntimeInterface for ByteMessageSimulator {
     }
 
     fn rxy_gate(&mut self, qubit_id: u64, theta: f64, phi: f64) -> Result<()> {
-        #[cfg(feature = "logging")]
         log::debug!(
             "ByteMessageSimulator: RXY gate on qubit {qubit_id} with theta={theta}, phi={phi}"
         );
@@ -149,7 +143,6 @@ impl RuntimeInterface for ByteMessageSimulator {
     }
 
     fn rzz_gate(&mut self, qubit_id_1: u64, qubit_id_2: u64, theta: f64) -> Result<()> {
-        #[cfg(feature = "logging")]
         log::debug!(
             "ByteMessageSimulator: RZZ gate on qubits {qubit_id_1} and {qubit_id_2} with theta={theta}"
         );
@@ -163,7 +156,6 @@ impl RuntimeInterface for ByteMessageSimulator {
     }
 
     fn rz_gate(&mut self, qubit_id: u64, theta: f64) -> Result<()> {
-        #[cfg(feature = "logging")]
         log::debug!("ByteMessageSimulator: RZ gate on qubit {qubit_id} with theta={theta}");
 
         self.current_batch
@@ -175,7 +167,6 @@ impl RuntimeInterface for ByteMessageSimulator {
         let result_id = self.next_result_id;
         self.next_result_id += 1;
 
-        #[cfg(feature = "logging")]
         log::debug!("ByteMessageSimulator: Measure qubit {qubit_id} -> result {result_id}");
 
         self.current_batch.push(Operation::Measure {
@@ -186,16 +177,15 @@ impl RuntimeInterface for ByteMessageSimulator {
     }
 
     fn reset(&mut self, qubit_id: u64) -> Result<()> {
-        #[cfg(feature = "logging")]
         log::debug!("ByteMessageSimulator: Reset qubit {qubit_id}");
 
         self.current_batch.push(Operation::Reset { qubit_id });
         Ok(())
     }
 
-    fn force_result(&mut self, _result_id: u64) -> Result<()> {
-        #[cfg(feature = "logging")]
-        log::debug!("ByteMessageSimulator: Force result {_result_id}");
+    #[allow(unused_variables)]
+    fn force_result(&mut self, result_id: u64) -> Result<()> {
+        log::debug!("ByteMessageSimulator: Force result {result_id}");
 
         // Flush operations to ensure measurement is processed
         self.flush_batch();
@@ -232,7 +222,6 @@ impl RuntimeInterface for ByteMessageSimulator {
     }
 
     fn set_bool_result(&mut self, result_id: u64, result: bool) -> Result<()> {
-        #[cfg(feature = "logging")]
         log::debug!("ByteMessageSimulator: Set result {result_id} = {result}");
 
         self.measurement_results.insert(result_id, result);

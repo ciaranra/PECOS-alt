@@ -26,7 +26,6 @@ else:
 if backends["guppy_available"]:
     print("\n Testing Guppy compilation...")
     try:
-        from guppylang import guppy as guppy_compiler
         from guppylang.decorator import guppy
 
         @guppy

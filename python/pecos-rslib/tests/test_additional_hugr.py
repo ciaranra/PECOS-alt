@@ -33,8 +33,9 @@ def test_hugr_compilation_with_support() -> None:
 def test_hugr_version_compatibility() -> None:
     """Test HUGR version compatibility handling."""
     try:
-        from pecos_rslib import RustHugrCompiler, check_rust_hugr_availability
         import json
+
+        from pecos_rslib import RustHugrCompiler, check_rust_hugr_availability
 
         available, message = check_rust_hugr_availability()
         if not available:
@@ -60,9 +61,9 @@ def test_hugr_version_compatibility() -> None:
                                     "output": [{"t": "I", "width": 64}],
                                 },
                             },
-                        }
+                        },
                     ],
-                }
+                },
             ],
         }
 
@@ -93,8 +94,9 @@ def test_hugr_version_compatibility() -> None:
 def test_hugr_arithmetic_extension_handling() -> None:
     """Test handling of arithmetic extensions that cause version conflicts."""
     try:
-        from pecos_rslib import RustHugrCompiler, check_rust_hugr_availability
         import json
+
+        from pecos_rslib import RustHugrCompiler, check_rust_hugr_availability
 
         available, message = check_rust_hugr_availability()
         if not available:
@@ -139,13 +141,13 @@ def test_hugr_arithmetic_extension_handling() -> None:
                                             "extension": "arithmetic.int",
                                             "name": "int",
                                             "args": [{"t": "BoundedUSize", "size": 7}],
-                                        }
+                                        },
                                     ],
                                 },
                             },
-                        }
+                        },
                     ],
-                }
+                },
             ],
         }
 
@@ -169,7 +171,3 @@ def test_hugr_arithmetic_extension_handling() -> None:
 
     except ImportError:
         pytest.skip("Rust HUGR backend not available")
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

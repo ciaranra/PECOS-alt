@@ -17,6 +17,7 @@ use crate::{
     phir::Module,
 };
 use std::fmt;
+use std::fmt::Write;
 
 /// MLIR Module representation for text generation
 pub struct MlirModule {
@@ -33,11 +34,15 @@ impl fmt::Display for MlirModule {
 }
 
 /// Convert PHIR Module to MLIR text
+///
+/// # Errors
+///
+/// Returns an error if the conversion fails
 pub fn lower_phir_to_mlir(module: &Module, _config: &PhirConfig) -> Result<MlirModule> {
     let mut content = String::new();
 
     // Always use standard dialect - it will be converted to LLVM by mlir-opt
-    content.push_str(&format!("module @{} {{\n", module.name));
+    writeln!(&mut content, "module @{} {{", module.name).unwrap();
 
     // Convert module body
     if let Some(block) = module.body.blocks.first() {
@@ -73,7 +78,7 @@ fn convert_function_to_mlir(func: &crate::builtin_ops::FuncOp) -> Result<String>
     output.push('\n');
 
     // Function signature (using older MLIR syntax for compatibility)
-    output.push_str(&format!("  func @{}(", func.name));
+    write!(&mut output, "  func @{}(", func.name).unwrap();
 
     // Input types - convert qubit types to i64 for PECOS compatibility
     let input_types: Vec<String> = func
@@ -122,7 +127,7 @@ fn convert_function_to_mlir(func: &crate::builtin_ops::FuncOp) -> Result<String>
 
         // Convert terminator
         if let Some(terminator) = &block.terminator {
-            output.push_str(&convert_terminator_to_mlir(terminator)?);
+            output.push_str(&convert_terminator_to_mlir(terminator));
             output.push('\n');
         }
     }
@@ -164,9 +169,11 @@ fn convert_instruction_to_mlir_with_mapping(
                     // Allocate a new qubit
                     if !instruction.results.is_empty() {
                         let result_id = instruction.results[0].id;
-                        output.push_str(&format!(
+                        write!(
+                            &mut output,
                             "    %{result_id} = call @__quantum__rt__qubit_allocate() : () -> i64"
-                        ));
+                        )
+                        .unwrap();
                         // This SSA value represents an actual qubit
                         ssa_to_qubit.insert(result_id, result_id);
                     }
@@ -178,9 +185,11 @@ fn convert_instruction_to_mlir_with_mapping(
                         .first()
                         .ok_or_else(|| PhirError::internal("H gate missing operand"))?;
                     let qubit_id = resolve_ssa(operand.id);
-                    output.push_str(&format!(
+                    write!(
+                        &mut output,
                         "    call @__quantum__qis__h__body(%{qubit_id}) : (i64) -> ()"
-                    ));
+                    )
+                    .unwrap();
 
                     // Map output SSA values to the same qubit
                     if !instruction.results.is_empty() {
@@ -195,9 +204,9 @@ fn convert_instruction_to_mlir_with_mapping(
                     let control_qubit = resolve_ssa(instruction.operands[0].id);
                     let target_qubit = resolve_ssa(instruction.operands[1].id);
 
-                    output.push_str(&format!(
+                    write!(&mut output,
                         "    call @__quantum__qis__cx__body(%{control_qubit}, %{target_qubit}) : (i64, i64) -> ()"
-                    ));
+                    ).unwrap();
 
                     // Map output SSA values to the same qubits
                     if !instruction.results.is_empty() {
@@ -218,27 +227,31 @@ fn convert_instruction_to_mlir_with_mapping(
                     if !instruction.results.is_empty() {
                         // Allocate a result register
                         let result_reg_id = 900 + instruction.results[0].id; // Use high numbers to avoid conflicts
-                        output.push_str(&format!(
-                            "    %{result_reg_id} = call @__quantum__rt__result_allocate() : () -> i64\n"
-                        ));
+                        writeln!(&mut output,
+                            "    %{result_reg_id} = call @__quantum__rt__result_allocate() : () -> i64"
+                        ).unwrap();
 
                         // Perform measurement
-                        output.push_str(&format!(
+                        write!(
+                            &mut output,
                             "    %{} = call @__quantum__qis__m__body(%{}, %{}) : (i64, i64) -> i32",
                             instruction.results[0].id, qubit_id, result_reg_id
-                        ));
+                        )
+                        .unwrap();
                     }
                 }
                 _ => {
-                    output.push_str(&format!("    // TODO: quantum op {quantum_op:?}"));
+                    write!(&mut output, "    // TODO: quantum op {quantum_op:?}").unwrap();
                 }
             }
         }
         _ => {
-            output.push_str(&format!(
+            write!(
+                &mut output,
                 "    // TODO: operation {:?}",
                 instruction.operation
-            ));
+            )
+            .unwrap();
         }
     }
 
@@ -246,32 +259,36 @@ fn convert_instruction_to_mlir_with_mapping(
 }
 
 /// Convert PHIR terminator to MLIR text
-fn convert_terminator_to_mlir(terminator: &crate::phir::Terminator) -> Result<String> {
+fn convert_terminator_to_mlir(terminator: &crate::phir::Terminator) -> String {
     use crate::phir::Terminator;
 
     match terminator {
         Terminator::Return { values } => {
             if values.is_empty() {
-                Ok("    return".to_string())
+                "    return".to_string()
             } else {
                 let values_str: Vec<String> = values.iter().map(|v| format!("%{}", v.id)).collect();
                 // Build the type list based on actual number of values
                 // Use i32 for measurement results since that's what QIR returns
                 let types: Vec<&str> = values.iter().map(|_| "i32").collect();
-                Ok(format!(
+                format!(
                     "    return {} : {}",
                     values_str.join(", "),
                     types.join(", ")
-                ))
+                )
             }
         }
-        _ => Ok(format!("    // TODO: terminator {terminator:?}")),
+        _ => format!("    // TODO: terminator {terminator:?}"),
     }
 }
 
 /// Convert PHIR Module to MLIR text string
 ///
 /// This is a convenience wrapper around `lower_phir_to_mlir` that returns the MLIR text directly
+///
+/// # Errors
+///
+/// Returns an error if the MLIR lowering fails
 pub fn phir_to_mlir(module: &Module, config: &PhirConfig) -> Result<String> {
     let mlir_module = lower_phir_to_mlir(module, config)?;
     Ok(mlir_module.content)
@@ -283,6 +300,6 @@ mod tests {
     #[test]
     fn test_mlir_lowering_placeholder() {
         // TODO: Add real tests when implementation is ready
-        assert!(true);
+        // Placeholder test to ensure the module compiles
     }
 }

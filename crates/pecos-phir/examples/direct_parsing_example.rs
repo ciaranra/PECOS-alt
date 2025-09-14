@@ -80,7 +80,18 @@ fn example_forward_references() {
     module.add_function(main_func);
     module.add_function(helper_func);
 
-    println!("  ✓ Successfully parsed with forward references\n");
+    println!("  Successfully parsed with forward references\n");
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+struct TypeVar(u32);
+
+#[derive(Debug)]
+#[allow(dead_code)]
+enum InferredType {
+    Known(Type),
+    Unknown(TypeVar),
 }
 
 /// Example 2: Type inference during parsing
@@ -96,17 +107,6 @@ fn example_type_inference() {
     //   return %z : ?                  // Infer return type i32
     // }
     // ```
-
-    #[derive(Debug)]
-    #[allow(dead_code)]
-    struct TypeVar(u32);
-
-    #[derive(Debug)]
-    #[allow(dead_code)]
-    enum InferredType {
-        Known(Type),
-        Unknown(TypeVar),
-    }
 
     // During parsing, we create type variables
     let mut type_var_counter = 0;
@@ -125,7 +125,8 @@ fn example_type_inference() {
     let mut constraints = vec![];
 
     // From: %y = arith.constant 42
-    let _y_type = InferredType::Known(Type::Int(IntWidth::I32));
+    // y_type is implicitly i32 from the constant
+    let _ = InferredType::Known(Type::Int(IntWidth::I32));
 
     // From: %z = arith.addi %x, %y
     constraints.push("x_type must equal i32 (from addi operation)");
@@ -141,7 +142,7 @@ fn example_type_inference() {
 
     // Type inference solver would run here
     println!("  - Running type inference...");
-    println!("  ✓ Inferred: %x : i32, return type: i32\n");
+    println!("  Inferred: %x : i32, return type: i32\n");
 }
 
 /// Example 3: High-level control flow
@@ -196,5 +197,5 @@ fn example_control_flow() {
     // ```
 
     println!("  - Will be lowered to CFG during optimization");
-    println!("  ✓ Successfully represented high-level control flow\n");
+    println!("  Successfully represented high-level control flow\n");
 }

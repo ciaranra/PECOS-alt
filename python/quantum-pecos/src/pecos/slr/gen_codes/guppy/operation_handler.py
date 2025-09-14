@@ -613,7 +613,7 @@ class OperationHandler:
             in_main
             and hasattr(q, "reg")
             and hasattr(q.reg, "sym")
-            and (qreg_name := q.reg.sym) in self.generator.unpacked_arrays  # noqa: F841
+            and q.reg.sym in self.generator.unpacked_arrays
             and hasattr(c, "reg")
             and hasattr(c.reg, "sym")
             and hasattr(c, "index")

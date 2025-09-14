@@ -1,18 +1,19 @@
 """Test direct GeneralNoiseModelBuilder usage."""
 
-import pytest
 from collections import Counter
-from pecos_rslib.sim import sim
+
+import pytest
 from pecos_rslib._pecos_rslib import (
-    QasmProgram,
     GeneralNoiseModelBuilder,
+    QasmProgram,
 )
+from pecos_rslib.sim import sim
 
 
 class TestDirectBuilder:
     """Test using GeneralNoiseModelBuilder directly."""
 
-    def test_direct_builder_noise(self):
+    def test_direct_builder_noise(self) -> None:
         """Test setting noise with GeneralNoiseModelBuilder directly using .noise() method."""
         qasm = """
         OPENQASM 2.0;
@@ -44,7 +45,7 @@ class TestDirectBuilder:
         assert 0 in counts
         assert 3 in counts
 
-    def test_builder_with_pauli_model(self):
+    def test_builder_with_pauli_model(self) -> None:
         """Test builder with Pauli error models."""
         qasm = """
         OPENQASM 2.0;
@@ -74,7 +75,7 @@ class TestDirectBuilder:
         # Allow for statistical variation: expect between 30 and 150 zeros
         assert 30 <= zeros <= 150, f"Expected between 30 and 150 zeros, got {zeros}"
 
-    def test_builder_with_method_chaining(self):
+    def test_builder_with_method_chaining(self) -> None:
         """Test using builder with direct method chaining."""
         qasm = """
         OPENQASM 2.0;
@@ -98,7 +99,7 @@ class TestDirectBuilder:
         # Results are integers, not binary strings in the new API
         assert all(isinstance(val, int) for val in results["c"])
 
-    def test_builder_chaining_validation(self):
+    def test_builder_chaining_validation(self) -> None:
         """Test that builder methods validate parameters."""
         # Test validation - Rust panics raise BaseException with "PanicException" in the name
         with pytest.raises(BaseException, match="Probability must be between 0 and 1"):
@@ -115,7 +116,7 @@ class TestDirectBuilder:
         # with pytest.raises(ValueError, match="leakage_scale must be between 0 and 1"):
         #     GeneralNoiseModelBuilder().with_leakage_scale(1.5)
 
-    def test_rust_vs_native_noise_models(self):
+    def test_rust_vs_native_noise_models(self) -> None:
         """Test using Rust noise models in the .noise() method directly."""
         qasm = """
         OPENQASM 2.0;

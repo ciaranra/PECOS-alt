@@ -33,11 +33,11 @@ static mut NEXT_RESULT_ID: u64 = 0;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_qalloc(_instance: *mut c_void) -> U64Result {
-    println!("STUB: selene_qalloc called");
+    log::trace!("STUB: selene_qalloc called");
     unsafe {
         let qubit_id = NEXT_QUBIT_ID;
         NEXT_QUBIT_ID += 1;
-        println!("STUB: selene_qalloc returning qubit_id {}", qubit_id);
+        log::trace!("STUB: selene_qalloc returning qubit_id {}", qubit_id);
         U64Result { error_code: 0, value: qubit_id }
     }
 }
@@ -49,11 +49,11 @@ pub extern "C" fn selene_qfree(_instance: *mut c_void, _qubit_id: u64) -> VoidRe
 
 #[unsafe(no_mangle)]
 pub extern "C" fn selene_qubit_measure(_instance: *mut c_void, qubit_id: u64) -> FutureResult {
-    println!("STUB: selene_qubit_measure called with qubit_id {}", qubit_id);
+    log::trace!("STUB: selene_qubit_measure called with qubit_id {}", qubit_id);
     unsafe {
         let result_id = NEXT_RESULT_ID;
         NEXT_RESULT_ID += 1;
-        println!("STUB: selene_qubit_measure returning result_id {}", result_id);
+        log::trace!("STUB: selene_qubit_measure returning result_id {}", result_id);
         FutureResult { error_code: 0, reference: result_id }
     }
 }

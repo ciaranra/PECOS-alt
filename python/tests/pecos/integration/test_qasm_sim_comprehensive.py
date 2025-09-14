@@ -1,4 +1,4 @@
-"""Comprehensive tests for qasm_sim covering all features and edge cases."""
+"""Comprehensive tests for QASM simulations covering all features and edge cases."""
 
 from collections import Counter
 
@@ -32,7 +32,7 @@ class TestQasmSimComprehensive:
 
     def test_general_noise(self) -> None:
         """Test GeneralNoise model."""
-        from pecos_rslib import GeneralNoiseModelBuilder, qasm_engine
+        from pecos_rslib import general_noise, qasm_engine
         from pecos_rslib.programs import QasmProgram
 
         qasm = """
@@ -51,7 +51,7 @@ class TestQasmSimComprehensive:
             .program(QasmProgram.from_string(qasm))
             .to_sim()
             .seed(42)
-            .noise(GeneralNoiseModelBuilder())
+            .noise(general_noise())
             .run(1000)
         )
 

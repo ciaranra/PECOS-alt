@@ -7,8 +7,11 @@ and organized.
 
 import pecos_rslib
 
+# Import namespace modules for Example 3 demonstration
+from pecos_rslib import engines, noise, quantum
 
-def explore_namespaces():
+
+def explore_namespaces() -> None:
     """Show what's available in each namespace."""
     print("PECOS Namespace Organization")
     print("=" * 50)
@@ -42,7 +45,7 @@ def explore_namespaces():
             print(f"     - programs.{item}")
 
 
-def namespace_usage_examples():
+def namespace_usage_examples() -> None:
     """Show practical usage of namespaces."""
     print("\n\nPractical Namespace Usage")
     print("=" * 50)
@@ -85,11 +88,11 @@ def namespace_usage_examples():
                .with_prep_probability(0.001)
                .with_p1_probability(0.01))\\
         .run(1000)
-    """
+    """,
     )
 
 
-def run_example_simulations():
+def run_example_simulations() -> None:
     """Run actual simulations using namespaces."""
     print("\n\nRunning Example Simulations")
     print("=" * 50)
@@ -105,7 +108,7 @@ def run_example_simulations():
     cx q[0], q[1];
     measure q[0] -> c[0];
     measure q[1] -> c[1];
-    """
+    """,
     )
 
     # Example 1: State vector simulation
@@ -131,7 +134,7 @@ def run_example_simulations():
             .with_prep_probability(0.001)
             .with_meas_probability(0.001)
             .with_p1_probability(0.002)
-            .with_p2_probability(0.01)
+            .with_p2_probability(0.01),
         )
         .run(1000)
     )
@@ -139,7 +142,7 @@ def run_example_simulations():
 
     # Example 3: Using namespace imports for cleaner code
     print("\n3. Using namespace imports:")
-    from pecos_rslib import engines, quantum, noise
+    # (imports were moved to top of file)
 
     # Much cleaner!
     sim = engines.qasm().program(bell_state).to_sim()
@@ -150,14 +153,14 @@ def run_example_simulations():
     print("   Ran 500 shots with imported namespaces")
 
 
-def compare_with_direct_imports():
+def compare_with_direct_imports() -> None:
     """Compare namespace usage with direct imports."""
     print("\n\nNamespace vs Direct Import Comparison")
     print("=" * 50)
 
     print("\nOld style (direct imports):")
     print(
-        "  from pecos_rslib import qasm_engine, sparse_stabilizer, depolarizing_noise"
+        "  from pecos_rslib import qasm_engine, sparse_stabilizer, depolarizing_noise",
     )
     print("  # Less organized, harder to discover related functions")
 

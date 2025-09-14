@@ -65,7 +65,7 @@ class NoErrorModel:
     def process(
         self,
         ops: list,
-        call_back: Callable | None = None,  # noqa: ARG002
+        call_back: Callable | None = None,
     ) -> list | None:
         """Process operations without applying any errors.
 

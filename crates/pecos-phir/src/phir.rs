@@ -463,118 +463,117 @@ impl Terminator {
         let indent_str = "  ".repeat(indent);
 
         match self {
-            Terminator::Return { values } => {
-                let mut output = format!("{indent_str}return");
-                if !values.is_empty() {
-                    output.push(' ');
-                    for (i, value) in values.iter().enumerate() {
-                        if i > 0 {
-                            output.push_str(", ");
-                        }
-                        write!(output, "{value}").unwrap();
-                    }
-                }
-                output.push('\n');
-                output
-            }
-
-            Terminator::Branch { target, args } => {
-                let mut output = format!("{indent_str}br ");
-                output.push_str(&target.to_string());
-                if !args.is_empty() {
-                    output.push('(');
-                    for (i, arg) in args.iter().enumerate() {
-                        if i > 0 {
-                            output.push_str(", ");
-                        }
-                        write!(output, "{arg}").unwrap();
-                    }
-                    output.push(')');
-                }
-                output.push('\n');
-                output
-            }
-
+            Terminator::Return { values } => format_return(&indent_str, values),
+            Terminator::Branch { target, args } => format_branch(&indent_str, target, args),
             Terminator::ConditionalBranch {
                 condition,
                 true_target,
                 true_args,
                 false_target,
                 false_args,
-            } => {
-                let mut output = format!("{indent_str}cond_br {condition}, ");
-                output.push_str(&true_target.to_string());
-                if !true_args.is_empty() {
-                    output.push('(');
-                    for (i, arg) in true_args.iter().enumerate() {
-                        if i > 0 {
-                            output.push_str(", ");
-                        }
-                        write!(output, "{arg}").unwrap();
-                    }
-                    output.push(')');
-                }
-                output.push_str(", ");
-                output.push_str(&false_target.to_string());
-                if !false_args.is_empty() {
-                    output.push('(');
-                    for (i, arg) in false_args.iter().enumerate() {
-                        if i > 0 {
-                            output.push_str(", ");
-                        }
-                        write!(output, "{arg}").unwrap();
-                    }
-                    output.push(')');
-                }
-                output.push('\n');
-                output
-            }
-
+            } => format_conditional_branch(
+                &indent_str,
+                *condition,
+                true_target,
+                true_args,
+                false_target,
+                false_args,
+            ),
             Terminator::Switch {
                 value,
                 default_target,
                 default_args,
                 cases,
-            } => {
-                let mut output = format!("{indent_str}switch {value} : i32, ");
-                output.push_str(&default_target.to_string());
-                if !default_args.is_empty() {
-                    output.push('(');
-                    for (i, arg) in default_args.iter().enumerate() {
-                        if i > 0 {
-                            output.push_str(", ");
-                        }
-                        write!(output, "{arg}").unwrap();
-                    }
-                    output.push(')');
-                }
-                output.push_str(" [\n");
-
-                for case in cases {
-                    write!(output, "{}  {}: ", indent_str, case.value).unwrap();
-                    output.push_str(&case.target.to_string());
-                    if !case.args.is_empty() {
-                        output.push('(');
-                        for (i, arg) in case.args.iter().enumerate() {
-                            if i > 0 {
-                                output.push_str(", ");
-                            }
-                            write!(output, "{arg}").unwrap();
-                        }
-                        output.push(')');
-                    }
-                    output.push('\n');
-                }
-
-                writeln!(output, "{indent_str}]").unwrap();
-                output
-            }
-
+            } => format_switch(&indent_str, *value, default_target, default_args, cases),
             Terminator::Unreachable => {
                 format!("{indent_str}unreachable\n")
             }
         }
     }
+}
+
+/// Helper function to format arguments list
+fn format_args<T: std::fmt::Display>(args: &[T]) -> String {
+    let mut output = String::new();
+    if !args.is_empty() {
+        output.push('(');
+        for (i, arg) in args.iter().enumerate() {
+            if i > 0 {
+                output.push_str(", ");
+            }
+            write!(output, "{arg}").unwrap();
+        }
+        output.push(')');
+    }
+    output
+}
+
+/// Format return terminator
+fn format_return(indent_str: &str, values: &[SSAValue]) -> String {
+    let mut output = format!("{indent_str}return");
+    if !values.is_empty() {
+        output.push(' ');
+        for (i, value) in values.iter().enumerate() {
+            if i > 0 {
+                output.push_str(", ");
+            }
+            write!(output, "{value}").unwrap();
+        }
+    }
+    output.push('\n');
+    output
+}
+
+/// Format branch terminator
+fn format_branch(indent_str: &str, target: &BlockRef, args: &[SSAValue]) -> String {
+    let mut output = format!("{indent_str}br ");
+    output.push_str(&target.to_string());
+    output.push_str(&format_args(args));
+    output.push('\n');
+    output
+}
+
+/// Format conditional branch terminator
+fn format_conditional_branch(
+    indent_str: &str,
+    condition: SSAValue,
+    true_target: &BlockRef,
+    true_args: &[SSAValue],
+    false_target: &BlockRef,
+    false_args: &[SSAValue],
+) -> String {
+    let mut output = format!("{indent_str}cond_br {condition}, ");
+    output.push_str(&true_target.to_string());
+    output.push_str(&format_args(true_args));
+    output.push_str(", ");
+    output.push_str(&false_target.to_string());
+    output.push_str(&format_args(false_args));
+    output.push('\n');
+    output
+}
+
+/// Format switch terminator
+fn format_switch(
+    indent_str: &str,
+    value: SSAValue,
+    default_target: &BlockRef,
+    default_args: &[SSAValue],
+    cases: &[SwitchCase],
+) -> String {
+    let mut output = format!("{indent_str}switch {value} : i32, ");
+    output.push_str(&default_target.to_string());
+    output.push_str(&format_args(default_args));
+    output.push_str(" [\n");
+
+    for case in cases {
+        write!(output, "{}  {}: ", indent_str, case.value).unwrap();
+        output.push_str(&case.target.to_string());
+        output.push_str(&format_args(&case.args));
+        output.push('\n');
+    }
+
+    writeln!(output, "{indent_str}]").unwrap();
+    output
 }
 
 impl BlockRef {

@@ -16,13 +16,15 @@ The simulator ignores all quantum gates and returns random measurement results b
 making it useful for debugging classical logic paths and testing error correction protocols with random noise.
 """
 
-# ruff: noqa: SLF001
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 from pecos_rslib._pecos_rslib import CoinToss as RustCoinToss
+
+if TYPE_CHECKING:
+    from pecos.circuits import QuantumCircuit
 
 if TYPE_CHECKING:
     from pecos.typing import SimulatorGateParams
@@ -36,9 +38,10 @@ class CoinToss:
     and testing error correction protocols with random noise.
     """
 
-    def __init__(self, num_qubits: int, prob: float = 0.5, seed: int | None = None):
-        """
-        Initializes the Rust-backed coin toss simulator.
+    def __init__(
+        self, num_qubits: int, prob: float = 0.5, seed: int | None = None
+    ) -> None:
+        """Initializes the Rust-backed coin toss simulator.
 
         Args:
             num_qubits (int): The number of qubits in the quantum system.
@@ -60,8 +63,7 @@ class CoinToss:
         self._sim.prob = value
 
     def reset(self) -> CoinToss:
-        """
-        Reset the simulator (no-op for coin toss, but maintains interface compatibility).
+        """Reset the simulator (no-op for coin toss, but maintains interface compatibility).
 
         Returns:
             CoinToss: Returns self for method chaining.
@@ -70,8 +72,7 @@ class CoinToss:
         return self
 
     def set_seed(self, seed: int) -> None:
-        """
-        Set the seed for reproducible randomness.
+        """Set the seed for reproducible randomness.
 
         Args:
             seed (int): Seed value for the random number generator.
@@ -79,10 +80,12 @@ class CoinToss:
         self._sim.set_seed(seed)
 
     def run_gate(
-        self, symbol: str, location: int | set[int], **params: SimulatorGateParams
+        self,
+        _symbol: str,
+        _location: int | set[int],
+        **_params: SimulatorGateParams,
     ) -> dict:
-        """
-        Execute a quantum gate (all gates are no-ops in coin toss simulator).
+        """Execute a quantum gate (all gates are no-ops in coin toss simulator).
 
         Args:
             symbol (str): The gate symbol (ignored).
@@ -95,9 +98,8 @@ class CoinToss:
         # All gates are no-ops - return empty dict
         return {}
 
-    def run_circuit(self, circuit) -> dict[int, int]:
-        """
-        Execute a complete quantum circuit (all gates are no-ops).
+    def run_circuit(self, circuit: "QuantumCircuit") -> dict[int, int]:
+        """Execute a complete quantum circuit (all gates are no-ops).
 
         Args:
             circuit: The quantum circuit to execute (gates are ignored).
@@ -133,9 +135,8 @@ class CoinToss:
 
 # Gate dictionary mapping gate symbols to no-op functions
 # This maintains compatibility with the expected gate bindings interface
-def _noop_gate(*args, **kwargs) -> None:
+def _noop_gate(*args: object, **kwargs: object) -> None:
     """No-operation function for all gates."""
-    pass
 
 
 def _measure_gate(state: CoinToss, qubit: int, **_params: SimulatorGateParams) -> int:

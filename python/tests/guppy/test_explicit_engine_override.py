@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Test explicit engine override using .classical() method with sim() API."""
 
 import pytest
@@ -88,39 +87,6 @@ measure q[1] -> c[1];"""
             ], f"Bell state bits should be correlated, got {bits}"
 
 
-def test_llvm_with_explicit_override() -> None:
-    """Test LLVM program with explicit llvm_engine() or selene_engine() override."""
-    from pecos_rslib import LlvmProgram
-
-    # Skip LLVM test for now - LLVM compilation requires proper setup
-    # This would need a properly formatted LLVM IR with all required types
-    pytest.skip("LLVM compilation requires proper environment setup")
-    return
-
-    program = LlvmProgram.from_string(llvm_code)
-
-    # Test 1: Default auto-detection (should use llvm_engine)
-    results_auto = sim(program).run(100)
-    assert "bell" in results_auto
-
-    # Test 2: Explicit llvm_engine() override (redundant but should work)
-    results_llvm = sim(program).classical(llvm_engine()).run(100)
-    assert "bell" in results_llvm
-
-    # Test 3: Explicit selene_engine() override (alternative engine)
-    results_selene = sim(program).classical(selene_engine().qubits(2)).run(100)
-    assert "bell" in results_selene
-
-    # Check correlation in all cases
-    for results in [results_auto, results_llvm, results_selene]:
-        bell_values = results["bell"]
-        for bits in bell_values:
-            # Bell state should have correlated bits
-            assert (
-                bits[0] == bits[1]
-            ), f"Bell state bits should be correlated, got {bits}"
-
-
 def test_invalid_engine_override_rejected() -> None:
     """Test that invalid engine overrides are properly rejected."""
     from pecos_rslib import LlvmProgram, QasmProgram
@@ -128,18 +94,14 @@ def test_invalid_engine_override_rejected() -> None:
     # QASM program should reject non-QASM engines
     qasm_program = QasmProgram.from_string("OPENQASM 3.0; qubit q;")
 
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(Exception, match="QasmEngineBuilder"):
         sim(qasm_program).classical(llvm_engine()).run(1)
-    assert "QasmEngineBuilder" in str(exc_info.value)
 
     # LLVM program should reject QASM engine
     llvm_program = LlvmProgram.from_string("define void @main() { ret void }")
 
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(Exception, match="(LlvmEngineBuilder|SeleneEngineBuilder)"):
         sim(llvm_program).classical(qasm_engine()).run(1)
-    assert "LlvmEngineBuilder" in str(exc_info.value) or "SeleneEngineBuilder" in str(
-        exc_info.value,
-    )
 
 
 def test_engine_override_with_noise() -> None:
@@ -175,23 +137,5 @@ def test_engine_override_with_noise() -> None:
         zeros = sum(1 for v in values if v == "0")
         ones = sum(1 for v in values if v == "1")
         # With noise, both outcomes should occur
-        assert zeros > 0 and ones > 0, "Noise should cause mixed outcomes"
-
-
-if __name__ == "__main__":
-    test_guppy_with_explicit_selene_override()
-    print("✓ Guppy with explicit selene_engine() override")
-
-    test_qasm_with_explicit_override()
-    print("✓ QASM with explicit engine override")
-
-    test_llvm_with_explicit_override()
-    print("✓ LLVM with explicit engine override")
-
-    test_invalid_engine_override_rejected()
-    print("✓ Invalid engine overrides properly rejected")
-
-    test_engine_override_with_noise()
-    print("✓ Engine override with noise models")
-
-    print("\nAll tests passed!")
+        assert zeros > 0, f"Noise should cause at least one 0, got {zeros} zeros"
+        assert ones > 0, f"Noise should cause at least one 1, got {ones} ones"

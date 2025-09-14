@@ -5,17 +5,20 @@ This example demonstrates the PECOS QASM simulation API with various
 noise models and quantum engines.
 """
 
+import time
 from collections import Counter
+
 from pecos_rslib import (
+    biased_depolarizing_noise,
+    depolarizing_noise,
     qasm_engine,
-    DepolarizingNoiseModelBuilder,
-    BiasedDepolarizingNoiseModelBuilder,
+    sparse_stabilizer,
+    state_vector,
 )
-from pecos_rslib import state_vector, sparse_stabilizer
 from pecos_rslib.programs import QasmProgram
 
 
-def example_bell_state():
+def example_bell_state() -> None:
     """Example: Create and measure a Bell state."""
     print("\n=== Bell State Example ===")
 
@@ -40,7 +43,7 @@ def example_bell_state():
 
     # Run with depolarizing noise
     noise = (
-        DepolarizingNoiseModelBuilder()
+        depolarizing_noise()
         .with_prep_probability(0.001)
         .with_meas_probability(0.002)
         .with_p1_probability(0.02)
@@ -62,7 +65,7 @@ def example_bell_state():
         print(f"  |{outcome:02b}⟩: {count} times")
 
 
-def example_ghz_state():
+def example_ghz_state() -> None:
     """Example: Create and measure a 3-qubit GHZ state."""
     print("\n=== GHZ State Example ===")
 
@@ -79,7 +82,7 @@ def example_ghz_state():
 
     # Run with custom depolarizing noise
     noise = (
-        DepolarizingNoiseModelBuilder()
+        depolarizing_noise()
         .with_prep_probability(0.001)  # Low preparation error
         .with_meas_probability(0.005)  # Moderate measurement error
         .with_p1_probability(0.001)  # Low single-qubit gate error
@@ -111,7 +114,7 @@ def example_ghz_state():
         print(f"  |{outcome:03b}⟩: {count} times")
 
 
-def example_biased_depolarizing():
+def example_biased_depolarizing() -> None:
     """Example: Demonstrate biased depolarizing noise."""
     print("\n=== Biased Depolarizing Example ===")
 
@@ -134,7 +137,7 @@ def example_biased_depolarizing():
 
     # Biased depolarizing noise
     noise = (
-        BiasedDepolarizingNoiseModelBuilder()
+        biased_depolarizing_noise()
         .with_prep_probability(0.1)
         .with_meas_0_probability(0.1)
         .with_meas_1_probability(0.1)
@@ -159,7 +162,7 @@ def example_biased_depolarizing():
     print("  (Notice the errors introduced by biased depolarizing noise)")
 
 
-def example_quantum_engines():
+def example_quantum_engines() -> None:
     """Example: Compare different quantum engines."""
     print("\n=== Quantum Engine Comparison ===")
 
@@ -188,7 +191,7 @@ def example_quantum_engines():
         sv_dict = results_sv.to_dict()
         sv_counts = Counter(sv_dict["c"])
         print(f"StateVector engine: {dict(sv_counts)}")
-    except Exception as e:
+    except (ValueError, RuntimeError, KeyError) as e:
         print(f"StateVector engine error: {e}")
 
     # Sparse stabilizer engine (efficient for Clifford circuits)
@@ -205,13 +208,13 @@ def example_quantum_engines():
         stab_dict = results_stab.to_dict()
         stab_counts = Counter(stab_dict["c"])
         print(f"SparseStabilizer engine: {dict(stab_counts)}")
-    except Exception:
+    except (ValueError, RuntimeError):
         print(
-            "SparseStabilizer engine error: Expected - cannot handle non-Clifford gates"
+            "SparseStabilizer engine error: Expected - cannot handle non-Clifford gates",
         )
 
 
-def example_builder_pattern():
+def example_builder_pattern() -> None:
     """Example: Using the builder pattern for reusable simulations."""
     print("\n=== Builder Pattern Example ===")
 
@@ -227,7 +230,7 @@ def example_builder_pattern():
 
     # Build once, run multiple times with different shot counts
     noise = (
-        DepolarizingNoiseModelBuilder()
+        depolarizing_noise()
         .with_prep_probability(0.01)
         .with_meas_probability(0.01)
         .with_p1_probability(0.01)
@@ -254,7 +257,7 @@ def example_builder_pattern():
 
     # Or run directly without building
     noise_biased = (
-        BiasedDepolarizingNoiseModelBuilder()
+        biased_depolarizing_noise()
         .with_prep_probability(0.005)
         .with_meas_0_probability(0.005)
         .with_meas_1_probability(0.005)
@@ -275,7 +278,7 @@ def example_builder_pattern():
     print(f"\nDirect run with biased depolarizing noise: {dict(counts)}")
 
 
-def example_large_register():
+def example_large_register() -> None:
     """Example: Handling large quantum registers (>64 qubits)."""
     print("\n=== Large Register Example ===")
 
@@ -311,7 +314,7 @@ def example_large_register():
     print(f"  ... ({len(results_dict['c'])} total shots)")
 
 
-def example_parallel_execution():
+def example_parallel_execution() -> None:
     """Example: Parallel execution with multiple workers."""
     print("\n=== Parallel Execution Example ===")
 
@@ -334,10 +337,8 @@ def example_parallel_execution():
     measure q -> c;
     """
 
-    import time
-
     noise = (
-        DepolarizingNoiseModelBuilder()
+        depolarizing_noise()
         .with_prep_probability(0.001)
         .with_meas_probability(0.001)
         .with_p1_probability(0.001)

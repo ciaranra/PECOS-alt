@@ -63,8 +63,8 @@ def test_permutation_consistency_for_bits_in_qasm() -> None:
     qasm2 = SlrConverter(prog).qasm()
 
     # Print the QASM for debugging
-    print("\nQASM output:")
-    print(qasm1)
+    # print("\nQASM output:")
+    # print(qasm1)
 
     assert qasm1 == qasm2
     assert "a[0] = 1;" in qasm1
@@ -85,8 +85,8 @@ def test_basic_permutation_qasm(basic_permutation_program: tuple) -> None:
     qasm = SlrConverter(prog).qasm()
 
     # Print the QASM for debugging
-    print("\nQASM output:")
-    print(qasm)
+    # print("\nQASM output:")
+    # print(qasm)
 
     # Verify that the QASM contains the correct permuted operation
     # For classical bit permutations, operations still refer to the original bit names
@@ -113,8 +113,8 @@ def test_same_register_permutation_qasm(
     qasm = SlrConverter(prog).qasm()
 
     # Print the QASM for debugging
-    print("\nQASM output:")
-    print(qasm)
+    # print("\nQASM output:")
+    # print(qasm)
 
     # For classical bit permutations, operations still refer to the original bit names
     assert "a[0] = 1;" in qasm
@@ -143,8 +143,8 @@ def test_basic_permutation_qir(basic_permutation_program: tuple) -> None:
     qir = SlrConverter(prog).qir()
 
     # Print the QIR for debugging
-    print("\nQIR output:")
-    print(qir)
+    # print("\nQIR output:")
+    # print(qir)
 
     # Verify that the QIR contains a comment about the permutation
     assert "Permutation: a[0] -> b[1], b[1] -> a[0]" in qir
@@ -184,8 +184,8 @@ def test_same_register_permutation_qir(
     qir = SlrConverter(prog).qir()
 
     # Print the QIR for debugging
-    print("\nQIR output:")
-    print(qir)
+    # print("\nQIR output:")
+    # print(qir)
 
     # Verify that the QIR contains a comment about the permutation
     assert "Permutation: a[0] -> a[2], a[1] -> a[0], a[2] -> a[1]" in qir

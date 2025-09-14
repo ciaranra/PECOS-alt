@@ -1,16 +1,13 @@
-#!/usr/bin/env python3
 """Test real quantum circuits through the Guppy->HUGR->Selene->ByteMessage pipeline."""
 
 import pytest
 from guppylang import guppy
 from guppylang.std.angles import angle
 from guppylang.std.quantum import cx, h, measure, qubit, ry, rz, x, z
-
-pytestmark = pytest.mark.optional_dependency
-
-# Import sim and state_vector backend
 from pecos.frontends.guppy_api import sim
 from pecos_rslib import state_vector
+
+pytestmark = pytest.mark.optional_dependency
 
 
 def test_bell_state_preparation() -> None:
@@ -33,13 +30,8 @@ def test_bell_state_preparation() -> None:
         return (m1, m2)
 
     # Run simulation with state_vector backend
-    results = (
-        sim(prepare_bell_state).qubits(2).quantum(state_vector()).seed(42).run(1000)
-    )
-
-    # Bell state should give correlated results: either (0,0) or (1,1)
+    results = sim(prepare_bell_state).qubits(2).quantum(state_vector()).run(1000)
     assert results is not None, "Should get results"
-
     # Count outcomes
     both_zero = 0
     both_one = 0
@@ -72,8 +64,6 @@ def test_bell_state_preparation() -> None:
     ), f"Should be ~50% |00⟩, got {both_zero / total}"
     assert 0.4 < both_one / total < 0.6, f"Should be ~50% |11⟩, got {both_one / total}"
 
-    print(f"Bell state test passed: |00⟩={both_zero}, |11⟩={both_one}")
-
 
 def test_ghz_state() -> None:
     """Test 3-qubit GHZ state preparation."""
@@ -101,7 +91,6 @@ def test_ghz_state() -> None:
     results = (
         sim(prepare_ghz_state).qubits(3).quantum(state_vector()).seed(42).run(1000)
     )
-
     assert results is not None, "Should get results"
 
     # GHZ state should give either all 0s or all 1s
@@ -126,8 +115,6 @@ def test_ghz_state() -> None:
     assert other == 0, f"GHZ state should not produce mixed outcomes, got {other}"
     assert all_zero > 0, "Should see |000⟩ outcomes"
     assert all_one > 0, "Should see |111⟩ outcomes"
-
-    print(f"GHZ state test passed: |000⟩={all_zero}, |111⟩={all_one}")
 
 
 def test_quantum_phase_kickback() -> None:
@@ -164,7 +151,6 @@ def test_quantum_phase_kickback() -> None:
     results = (
         sim(phase_kickback_circuit).qubits(2).quantum(state_vector()).seed(42).run(1000)
     )
-
     assert results is not None, "Should get results"
 
     # The control qubit should measure |1⟩ in X basis (due to phase kickback)
@@ -193,10 +179,6 @@ def test_quantum_phase_kickback() -> None:
         target_one_count / total > 0.9
     ), f"Target should remain |1⟩, got {target_one_count / total}"
 
-    print(
-        f"Phase kickback test passed: control |1⟩={control_one_count}/{total}, target |1⟩={target_one_count}/{total}",
-    )
-
 
 def test_quantum_interference() -> None:
     """Test quantum interference in a simple interferometer."""
@@ -222,7 +204,6 @@ def test_quantum_interference() -> None:
     results = (
         sim(quantum_interferometer).qubits(1).quantum(state_vector()).seed(42).run(1000)
     )
-
     assert results is not None, "Should get results"
 
     # Due to interference, should measure |1⟩ ~100% of the time
@@ -239,8 +220,6 @@ def test_quantum_interference() -> None:
     assert (
         one_count / total > 0.95
     ), f"Should measure |1⟩ due to interference, got {one_count / total}"
-
-    print(f"Interference test passed: |1⟩={one_count}/{total}")
 
 
 def test_rotation_gates() -> None:
@@ -288,17 +267,3 @@ def test_rotation_gates() -> None:
     assert (
         0.4 < one_count / total < 0.6
     ), f"Should be ~50% |1⟩ after Ry(π/2), got {one_count / total}"
-
-    print(f"Rotation test passed: |0⟩={zero_count}, |1⟩={one_count}")
-
-
-if __name__ == "__main__":
-    print("Testing real quantum circuits through Selene bridge...")
-
-    test_bell_state_preparation()
-    test_ghz_state()
-    test_quantum_phase_kickback()
-    test_quantum_interference()
-    test_rotation_gates()
-
-    print("\nAll real quantum circuit tests passed!")

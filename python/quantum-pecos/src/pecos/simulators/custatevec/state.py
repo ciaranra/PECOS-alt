@@ -18,7 +18,7 @@ including CUDA-based state vector storage and manipulation for high-performance 
 from __future__ import annotations
 
 import random
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import cupy as cp
 from cuquantum import ComputeType, cudaDataType
@@ -104,10 +104,17 @@ class CuStateVec(StateVector):
         cusv.set_stream(self.libhandle, self.stream.ptr)
 
         # Device memory handler
-        def malloc(size: int, stream: Any) -> int:  # noqa: ANN401
+        def malloc(
+            size: int,
+            stream: object,
+        ) -> int:  # stream: CUDA stream object (opaque type)
             return cp.cuda.runtime.mallocAsync(size, stream)
 
-        def free(ptr: int, _size: int, stream: Any) -> None:  # noqa: ANN401
+        def free(
+            ptr: int,
+            _size: int,
+            stream: object,
+        ) -> None:  # stream: CUDA stream object (opaque type)
             cp.cuda.runtime.freeAsync(ptr, stream)
 
         mem_handler = (malloc, free, "GPU memory handler")

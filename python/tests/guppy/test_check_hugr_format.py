@@ -23,10 +23,7 @@ def test_check_hugr_format() -> None:
     hugr = simple.compile()
 
     # Check binary format
-    hugr_bytes = hugr.to_bytes()
-    print(f"\nBinary format: {hugr_bytes[:20]}...")
-    print(f"Header: {hugr_bytes[:8]}")
-    print(f"Format byte: {hugr_bytes[8] if len(hugr_bytes) > 8 else 'N/A'}")
+    hugr.to_bytes()
 
     # Check JSON/string format
     # Note: to_str() returns HUGR envelope format with header, while to_json() returns pure JSON
@@ -34,7 +31,6 @@ def test_check_hugr_format() -> None:
         hugr_str = hugr.to_str()
         # Check if it's the envelope format with header
         if hugr_str.startswith("HUGRiHJv"):
-            print("Format: HUGR envelope (header + JSON)")
             # Skip header (8 bytes), format byte (1 byte), and extra byte (1 byte)
             json_start = hugr_str.find("{", 9)  # Find the start of JSON after header
             if json_start != -1:
@@ -47,23 +43,12 @@ def test_check_hugr_format() -> None:
 
     hugr_dict = json.loads(hugr_str)
 
-    print(f"\nJSON keys: {list(hugr_dict.keys())}")
-
     # Check if it's a single HUGR or a Package
-    if "modules" in hugr_dict:
-        print("Format: HUGR Package")
-        print(f"Number of modules: {len(hugr_dict['modules'])}")
-    elif "nodes" in hugr_dict:
-        print("Format: Single HUGR")
-        print(f"Number of nodes: {len(hugr_dict['nodes'])}")
+    if "modules" in hugr_dict or "nodes" in hugr_dict:
+        pass
 
     # Save JSON for inspection
     import tempfile
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         json.dump(hugr_dict, f, indent=2)
-        print(f"\nSaved full JSON to: {f.name}")
-
-
-if __name__ == "__main__":
-    test_check_hugr_format()

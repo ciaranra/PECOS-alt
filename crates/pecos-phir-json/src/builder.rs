@@ -28,6 +28,10 @@ pub struct PhirJsonEngineProgram {
 
 impl PhirJsonEngineProgram {
     /// Create from a JSON string, detecting and validating the version
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if version detection fails
     pub fn from_json(json: &str) -> Result<Self, PecosError> {
         let version = detect_version(json)?;
         Ok(Self {
@@ -81,18 +85,27 @@ impl PhirJsonEngineBuilder {
     }
 
     /// Set the program for this engine (accepts either `PhirJsonProgram` or `PhirJsonEngineProgram`)
+    #[must_use]
     pub fn program(mut self, program: impl Into<PhirJsonEngineProgram>) -> Self {
         self.program = Some(program.into());
         self
     }
 
     /// Set the program from a JSON string
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if JSON parsing or version detection fails
     pub fn json(mut self, json: &str) -> Result<Self, PecosError> {
         self.program = Some(PhirJsonEngineProgram::from_json(json)?);
         Ok(self)
     }
 
     /// Set the program from a file path
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if file reading or JSON parsing fails
     pub fn file(self, path: impl AsRef<Path>) -> Result<Self, PecosError> {
         let content = std::fs::read_to_string(path).map_err(PecosError::IO)?;
         self.json(&content)

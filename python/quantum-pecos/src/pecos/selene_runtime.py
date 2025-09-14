@@ -1,14 +1,14 @@
 """PECOS ByteMessage Runtime for Selene integration."""
 
 import os
+import platform
 from pathlib import Path
 
 from selene_core import Runtime
 
 
 class ByteMessageRuntime(Runtime):
-    """A Selene runtime plugin that collects quantum operations as ByteMessages
-    for communication with PECOS.
+    """A Selene runtime plugin that collects quantum operations as ByteMessages for communication with PECOS.
 
     This runtime is used when running Guppy programs through PECOS's sim() API.
     It collects quantum operations from the Interface Plugin and converts them
@@ -34,8 +34,6 @@ class ByteMessageRuntime(Runtime):
                 return path
 
         # Determine library name based on OS
-        import platform
-
         if platform.system() == "Windows":
             lib_name = "pecos_selene_plugins.dll"
         elif platform.system() == "Darwin":

@@ -351,11 +351,12 @@ attributes #0 = { "EntryPoint" }
 #[test]
 #[cfg(feature = "hugr-013")]
 fn test_selene_with_hugr_format() -> Result<(), PecosError> {
-    println!("=== Testing SeleneEngine with HUGR Format ===");
-
     use hugr_core_013::builder::{Dataflow, DataflowHugr, FunctionBuilder};
     use hugr_core_013::extension::prelude::QB_T;
+    use hugr_core_013::extension::{ExtensionRegistry, prelude};
     use hugr_core_013::types::Signature;
+
+    println!("=== Testing SeleneEngine with HUGR Format ===");
 
     // Create a proper HUGR program with a single Hadamard
     let qb_row = vec![QB_T; 1];
@@ -369,7 +370,6 @@ fn test_selene_with_hugr_format() -> Result<(), PecosError> {
     let qbs = circ.finish();
 
     // Create an extension registry with the prelude for HUGR 0.13
-    use hugr_core_013::extension::{ExtensionRegistry, prelude};
     let registry = ExtensionRegistry::try_new([prelude::PRELUDE.to_owned()]).unwrap();
 
     let hugr = dfg
@@ -397,7 +397,7 @@ fn test_selene_with_hugr_format() -> Result<(), PecosError> {
         }
         Err(e) => {
             println!("HUGR compilation returned expected error: {e}");
-            println!("✓ HUGR program support is available in the API!");
+            println!("HUGR program support is available in the API!");
         }
     }
 

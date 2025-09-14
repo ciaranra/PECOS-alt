@@ -27,26 +27,34 @@ fn main() {
     example_multi_pass_resolution();
 }
 
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+enum DeclKind {
+    Global { ty: String },
+    Function { signature: String },
+}
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+struct DeclInfo {
+    name: String,
+    kind: DeclKind,
+    location: usize, // line number
+}
+
+#[derive(Debug)]
+struct UnresolvedRef {
+    name: String,
+    location: usize,
+    context: String,
+}
+
+#[allow(clippy::too_many_lines)] // Example code demonstrating multiple resolution passes
 fn example_multi_pass_resolution() {
     // Simulated parsing passes
 
     println!("Pass 1: Collect Declarations");
     println!("----------------------------");
-
-    #[derive(Debug, Clone)]
-    #[allow(dead_code)]
-    struct DeclInfo {
-        name: String,
-        kind: DeclKind,
-        location: usize, // line number
-    }
-
-    #[derive(Debug, Clone)]
-    #[allow(dead_code)]
-    enum DeclKind {
-        Global { ty: String },
-        Function { signature: String },
-    }
 
     let mut declarations = HashMap::new();
 
@@ -91,13 +99,6 @@ fn example_multi_pass_resolution() {
     println!("\nPass 2: Parse Function Bodies with Unresolved Refs");
     println!("--------------------------------------------------");
 
-    #[derive(Debug)]
-    struct UnresolvedRef {
-        name: String,
-        location: usize,
-        context: String,
-    }
-
     let mut unresolved_refs = vec![];
 
     // Parsing @prepare_state
@@ -124,7 +125,7 @@ fn example_multi_pass_resolution() {
     for unresolved in &unresolved_refs {
         if let Some(decl) = declarations.get(unresolved.name.as_str()) {
             println!(
-                "  ✓ Resolved {} at line {} -> {:?}",
+                "  Resolved {} at line {} -> {:?}",
                 unresolved.name, unresolved.location, decl.kind
             );
 
@@ -144,7 +145,7 @@ fn example_multi_pass_resolution() {
                 }
             }
         } else {
-            println!("  ✗ Error: {} not found in scope", unresolved.name);
+            println!("  Error: {} not found in scope", unresolved.name);
         }
     }
 
@@ -251,5 +252,5 @@ fn example_scoped_resolution() {
         }
     }
 
-    println!("\n  ✓ Scoped resolution working correctly!");
+    println!("\n  Scoped resolution working correctly!");
 }

@@ -131,12 +131,3 @@ def test_rust_pauli_prop_weight() -> None:
     sim.add_x(1)
     assert sim.weight() == 3
     assert sim.contains_y(1)
-
-
-if __name__ == "__main__":
-    test_rust_pauli_prop_basic()
-    test_rust_pauli_prop_composition()
-    test_rust_pauli_prop_gates()
-    test_rust_vs_python_consistency()
-    test_rust_pauli_prop_weight()
-    print("All tests passed!")

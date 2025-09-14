@@ -1,10 +1,9 @@
 /// Example of building a Selene plugin from LLVM IR
-// NOTE: plugin_builder module is not yet implemented
+/// NOTE: `plugin_builder` module is not yet implemented
 // use pecos_selene_plugins::plugin_builder::{PluginBuilder, PluginBuildConfig, LLVMSource};
 // use std::path::PathBuf;
 // use anyhow::Result;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     // Example LLVM IR for a simple quantum program
     let llvm_ir = r#"
 ; ModuleID = 'quantum_program'
@@ -73,6 +72,4 @@ entry:
         }
     }
     */
-
-    Ok(())
 }

@@ -15,13 +15,15 @@ This module provides the gate bindings that map gate symbols to their correspond
 in the QuEST backend for the state vector simulator.
 """
 
-# ruff: noqa: ANN401 ARG005  # backend is PyO3 object; unused params are part of gate interface
+# Gate bindings require consistent interfaces even if not all parameters are used.
+# This is a design pattern where all gates must have the same signature for polymorphic dispatch.
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from pecos.protocols import QuantumBackend
     from pecos.simulators.quest_statevec.state import QuestStateVec
 
 
@@ -68,7 +70,7 @@ def _init_minusi(sim: QuestStateVec, q: int, _p: dict[str, Any]) -> None:
 
 
 def _rxx_decomposition(
-    backend: Any,
+    backend: QuantumBackend,
     qs: int | list[int] | tuple[int, ...],
     p: dict[str, Any],
 ) -> None:
@@ -89,7 +91,7 @@ def _rxx_decomposition(
 
 
 def _ryy_decomposition(
-    backend: Any,
+    backend: QuantumBackend,
     qs: int | list[int] | tuple[int, ...],
     p: dict[str, Any],
 ) -> None:
@@ -108,7 +110,7 @@ def _ryy_decomposition(
 
 
 def _rzz_decomposition(
-    backend: Any,
+    backend: QuantumBackend,
     qs: int | list[int] | tuple[int, ...],
     p: dict[str, Any],
 ) -> None:
@@ -126,7 +128,10 @@ def _rzz_decomposition(
     backend.run_1q_gate("H", q2, None)
 
 
-def _cy_decomposition(backend: Any, qs: int | list[int] | tuple[int, ...]) -> None:
+def _cy_decomposition(
+    backend: QuantumBackend,
+    qs: int | list[int] | tuple[int, ...],
+) -> None:
     """CY = SZdg(q2); CX(q1,q2); SZ(q2) - Note: reversed from trait due to sign convention."""
     q1, q2 = (qs[0], qs[1]) if isinstance(qs, list | tuple) else (qs, qs)
 
@@ -139,7 +144,7 @@ def _cy_decomposition(backend: Any, qs: int | list[int] | tuple[int, ...]) -> No
 
 
 def _r2xxyyzz_decomposition(
-    backend: Any,
+    backend: QuantumBackend,
     qs: int | list[int] | tuple[int, ...],
     p: dict[str, Any],
 ) -> None:

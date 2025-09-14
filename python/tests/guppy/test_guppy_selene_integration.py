@@ -84,7 +84,9 @@ def test_guppy_hugr_to_selene() -> None:
         # Would need .qubits(1) to actually run
     except Exception as e:
         # Check it's not a version error
-        assert "HUGR version incompatibility" not in str(e)
+        error_msg = str(e)
+        if "HUGR version incompatibility" in error_msg:
+            pytest.fail(f"Unexpected HUGR version error: {error_msg}")
 
 
 def test_selene_llvm_program() -> None:
@@ -129,4 +131,6 @@ def test_selene_llvm_program() -> None:
         # Would need quantum engine to actually run
     except Exception as e:
         # Check it's not a program rejection
-        assert "Invalid program" not in str(e)
+        error_msg = str(e)
+        if "Invalid program" in error_msg:
+            pytest.fail(f"Unexpected program rejection: {error_msg}")

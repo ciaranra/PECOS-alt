@@ -7,8 +7,9 @@ the appropriate quantum gates and classical computations.
 */
 
 use super::environment::{DataType, Environment, TypedValue};
+use crate::builtin_ops::BuiltinOp;
 use crate::error::{PhirError, Result};
-use crate::ops::Operation;
+use crate::ops::{ClassicalOp, Operation, QuantumOp};
 use crate::phir::{Block, Module};
 use pecos_engines::byte_message::builder::ByteMessageBuilder;
 use std::collections::HashMap;
@@ -89,6 +90,10 @@ impl PhirProcessor {
     }
 
     /// Process a PHIR module and generate quantum operations
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if processing fails
     pub fn process_module(
         &mut self,
         module: &Module,
@@ -103,6 +108,10 @@ impl PhirProcessor {
     }
 
     /// Process a single block
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if block processing fails
     pub fn process_block(
         &mut self,
         block: &Block,
@@ -124,6 +133,10 @@ impl PhirProcessor {
     }
 
     /// Process a single instruction
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if instruction processing fails
     pub fn process_instruction(
         &mut self,
         instruction: &crate::phir::Instruction,
@@ -161,14 +174,19 @@ impl PhirProcessor {
     }
 
     /// Process a quantum operation
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Required operands are missing
+    /// - Operand indices are invalid
+    /// - SSA values cannot be resolved
     pub fn process_quantum_operation(
         &mut self,
         quantum_op: &crate::ops::QuantumOp,
         instruction: &crate::phir::Instruction,
         message_builder: &mut ByteMessageBuilder,
     ) -> Result<bool> {
-        use crate::ops::QuantumOp;
-
         match quantum_op {
             QuantumOp::H => self.process_single_qubit_gate("H", instruction, message_builder),
             QuantumOp::X => self.process_single_qubit_gate("X", instruction, message_builder),
@@ -203,7 +221,7 @@ impl PhirProcessor {
             )));
         }
 
-        let qubit_id = instruction.operands[0].id as usize;
+        let qubit_id = usize::try_from(instruction.operands[0].id).unwrap_or(usize::MAX);
 
         // Track maximum qubit index
         self.qubit_count = self.qubit_count.max(qubit_id + 1);
@@ -252,8 +270,8 @@ impl PhirProcessor {
             )));
         }
 
-        let control_qubit = instruction.operands[0].id as usize;
-        let target_qubit = instruction.operands[1].id as usize;
+        let control_qubit = usize::try_from(instruction.operands[0].id).unwrap_or(usize::MAX);
+        let target_qubit = usize::try_from(instruction.operands[1].id).unwrap_or(usize::MAX);
 
         // Track maximum qubit index
         self.qubit_count = self.qubit_count.max(control_qubit + 1);
@@ -290,7 +308,7 @@ impl PhirProcessor {
 
         // For now, process single-qubit measurements
         // TODO: Support multi-qubit measurements
-        let qubit_id = instruction.operands[0].id as usize;
+        let qubit_id = usize::try_from(instruction.operands[0].id).unwrap_or(usize::MAX);
 
         // Track maximum qubit index
         self.qubit_count = self.qubit_count.max(qubit_id + 1);
@@ -311,38 +329,50 @@ impl PhirProcessor {
     }
 
     /// Process a classical operation
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if type conversion fails
+    ///
+    /// # Panics
+    ///
+    /// Panics if a shift amount or constant value doesn't fit in the expected type
     pub fn process_classical_operation(
         &mut self,
         classical_op: &crate::ops::ClassicalOp,
         instruction: &crate::phir::Instruction,
     ) -> Result<()> {
-        use crate::ops::ClassicalOp;
-
         match classical_op {
             ClassicalOp::Result => {
                 // Handle Result operation - map source variables to destination variables
-                self.process_result_operation(instruction)
+                self.process_result_operation(instruction);
+                Ok(())
             }
             ClassicalOp::Assign => {
                 // Handle assignment operation
-                self.process_assign_operation(instruction)
+                Self::process_assign_operation(instruction);
+                Ok(())
             }
             ClassicalOp::ConstInt(value) => {
                 // Handle integer constant
-                self.process_const_int_operation(*value, instruction)
+                self.process_const_int_operation(*value, instruction);
+                Ok(())
             }
             ClassicalOp::Bitcast => {
                 // Handle bitcast (bool to int conversion)
-                self.process_bitcast_operation(instruction)
+                self.process_bitcast_operation(instruction);
+                Ok(())
             }
             ClassicalOp::Shl(shift_amount) => {
                 // Handle shift left operation
                 let shift_u8 = u8::try_from(*shift_amount).expect("Shift amount should fit in u8");
-                self.process_shl_operation(shift_u8, instruction)
+                self.process_shl_operation(shift_u8, instruction);
+                Ok(())
             }
             ClassicalOp::Or => {
                 // Handle bitwise OR operation
-                self.process_or_operation(instruction)
+                self.process_or_operation(instruction);
+                Ok(())
             }
             _ => {
                 // TODO: Implement other classical operations
@@ -352,14 +382,16 @@ impl PhirProcessor {
     }
 
     /// Process a builtin operation
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if builtin operation processing fails
     pub fn process_builtin_operation(
         &mut self,
         builtin_op: &crate::builtin_ops::BuiltinOp,
         instruction: &crate::phir::Instruction,
         _message_builder: &mut ByteMessageBuilder,
     ) -> Result<bool> {
-        use crate::builtin_ops::BuiltinOp;
-
         match builtin_op {
             BuiltinOp::VarDefine(var_def) => {
                 // Handle variable definition
@@ -375,6 +407,10 @@ impl PhirProcessor {
 
     /// Handle measurement results by updating SSA values
     /// For measurements into bit-indexed variables, combine results into single integer
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if measurement result handling fails
     pub fn handle_measurement_results(&mut self, outcomes: &[u8]) -> Result<()> {
         // Process measurement outcomes
 
@@ -386,7 +422,7 @@ impl PhirProcessor {
             for &meas_ssa_id in &self.measurement_mappings {
                 // Check if this measurement SSA ID is base_ssa_id + offset (0-9)
                 if meas_ssa_id >= base_ssa_id && meas_ssa_id < base_ssa_id + 10 {
-                    let offset = (meas_ssa_id - base_ssa_id) as usize;
+                    let offset = usize::try_from(meas_ssa_id - base_ssa_id).unwrap_or(0);
                     measurement_to_base
                         .insert(meas_ssa_id, (var_name.clone(), base_ssa_id, offset));
                     // Map measurement SSA to variable bit offset
@@ -427,21 +463,16 @@ impl PhirProcessor {
                     // Measurement contributes to variable bit
 
                     // Only process if it's an integer variable
-                    if let Ok(Some(env_value)) = self.environment.get_variable(var_name) {
-                        match env_value {
-                            TypedValue::I64(_)
-                            | TypedValue::U32(_)
-                            | TypedValue::U64(_)
-                            | TypedValue::I32(_) => {
-                                let current_value =
-                                    combined_values.entry(*base_ssa_id).or_insert(0);
-                                if outcome != 0 {
-                                    *current_value |= 1 << bit_offset;
-                                }
-                            }
-                            _ => {
-                                // Skip non-integer variable
-                            }
+                    if let Ok(Some(
+                        TypedValue::I64(_)
+                        | TypedValue::U32(_)
+                        | TypedValue::U64(_)
+                        | TypedValue::I32(_),
+                    )) = self.environment.get_variable(var_name)
+                    {
+                        let current_value = combined_values.entry(*base_ssa_id).or_insert(0);
+                        if outcome != 0 {
+                            *current_value |= 1 << bit_offset;
                         }
                     }
                 }
@@ -458,23 +489,18 @@ impl PhirProcessor {
                 .find(|(_, id)| **id == base_ssa_id)
             {
                 // Check if it's an integer type
-                if let Ok(Some(env_value)) = self.environment.get_variable(var_name) {
-                    // Variable has correct type
-                    match env_value {
-                        TypedValue::I64(_)
-                        | TypedValue::U32(_)
-                        | TypedValue::U64(_)
-                        | TypedValue::I32(_) => {
-                            let new_value = TypedValue::U32(combined_value);
-                            // Set variable to combined value
-                            self.ssa_values.insert(base_ssa_id, new_value.clone());
-                            // Also update environment
-                            let _ = self.environment.set_variable(var_name, new_value);
-                        }
-                        _ => {
-                            // Variable is not an integer type, skip combination
-                        }
-                    }
+                if let Ok(Some(
+                    TypedValue::I64(_)
+                    | TypedValue::U32(_)
+                    | TypedValue::U64(_)
+                    | TypedValue::I32(_),
+                )) = self.environment.get_variable(var_name)
+                {
+                    let new_value = TypedValue::U32(combined_value);
+                    // Set variable to combined value
+                    self.ssa_values.insert(base_ssa_id, new_value.clone());
+                    // Also update environment
+                    let _ = self.environment.set_variable(var_name, new_value);
                 } else {
                     // Could not get variable from environment
                 }
@@ -513,7 +539,7 @@ impl PhirProcessor {
                 for &meas_ssa_id in &self.measurement_mappings {
                     if meas_ssa_id >= *src_ssa_id && meas_ssa_id < *src_ssa_id + 10 {
                         found_bits = true;
-                        let bit_offset = (meas_ssa_id - src_ssa_id) as usize;
+                        let bit_offset = usize::try_from(meas_ssa_id - src_ssa_id).unwrap_or(0);
 
                         // Get the Bool value from the measurement SSA ID
                         if let Some(TypedValue::Bool(bit_value)) = self.ssa_values.get(&meas_ssa_id)
@@ -553,12 +579,20 @@ impl PhirProcessor {
     }
 
     /// Add a variable definition
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the variable cannot be added
     pub fn add_variable(&mut self, name: &str, data_type: DataType, size: usize) -> Result<()> {
         self.environment.add_variable(name, data_type, size)
     }
 
     /// Extract variable definitions from PHIR module during initialization
     /// This follows `PhirJsonEngine` pattern of processing variables upfront
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if variable extraction fails
     pub fn extract_variable_definitions(&mut self, module: &crate::phir::Module) -> Result<()> {
         // First look for VarDefine operations in the top-level blocks
         self.extract_variable_definitions_from_region(&module.body)?;
@@ -598,13 +632,12 @@ impl PhirProcessor {
                         "i8" => DataType::I8,
                         "i16" => DataType::I16,
                         "i32" => DataType::I32,
-                        "i64" => DataType::I64,
                         "u8" => DataType::U8,
                         "u16" => DataType::U16,
                         "u32" => DataType::U32,
                         "u64" => DataType::U64,
                         "bool" => DataType::Bool,
-                        _ => DataType::I64, // Default fallback
+                        _ => DataType::I64, // Default to I64 (includes "i64")
                     };
 
                     // Add the variable to the environment
@@ -706,7 +739,7 @@ impl PhirProcessor {
     }
 
     /// Process a Result operation - immediately export the value
-    fn process_result_operation(&mut self, instruction: &crate::phir::Instruction) -> Result<()> {
+    fn process_result_operation(&mut self, instruction: &crate::phir::Instruction) {
         // Result operations export values immediately
         // {"cop": "Result", "args": ["m"], "returns": ["bell_result"]}
 
@@ -731,35 +764,29 @@ impl PhirProcessor {
                 }
             }
         }
-
-        Ok(())
     }
 
     /// Process an assignment operation
-    fn process_assign_operation(&mut self, _instruction: &crate::phir::Instruction) -> Result<()> {
+    fn process_assign_operation(_instruction: &crate::phir::Instruction) {
         // TODO: Implement assignment processing
         // This would handle copying values between variables
-        Ok(())
     }
 
     /// Process a `ConstInt` operation - creates an integer constant
-    fn process_const_int_operation(
-        &mut self,
-        value: i64,
-        instruction: &crate::phir::Instruction,
-    ) -> Result<()> {
+    fn process_const_int_operation(&mut self, value: i64, instruction: &crate::phir::Instruction) {
         if !instruction.results.is_empty() {
             let result_ssa_id = instruction.results[0].id;
             // Store the constant value as U32 for bit operations
-            let value_u32 = u32::try_from(value).expect("Constant value should fit in u32");
+            // Quantum operations typically use small constants, wrapping is intentional
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let value_u32 = value as u32;
             self.ssa_values
                 .insert(result_ssa_id, TypedValue::U32(value_u32));
         }
-        Ok(())
     }
 
     /// Process a Bitcast operation - converts bool to int
-    fn process_bitcast_operation(&mut self, instruction: &crate::phir::Instruction) -> Result<()> {
+    fn process_bitcast_operation(&mut self, instruction: &crate::phir::Instruction) {
         if !instruction.operands.is_empty() && !instruction.results.is_empty() {
             let operand_ssa_id = instruction.operands[0].id;
             let result_ssa_id = instruction.results[0].id;
@@ -771,15 +798,10 @@ impl PhirProcessor {
                     .insert(result_ssa_id, TypedValue::U32(int_val));
             }
         }
-        Ok(())
     }
 
     /// Process a Shl (shift left) operation
-    fn process_shl_operation(
-        &mut self,
-        shift_amount: u8,
-        instruction: &crate::phir::Instruction,
-    ) -> Result<()> {
+    fn process_shl_operation(&mut self, shift_amount: u8, instruction: &crate::phir::Instruction) {
         if !instruction.operands.is_empty() && !instruction.results.is_empty() {
             let operand_ssa_id = instruction.operands[0].id;
             let result_ssa_id = instruction.results[0].id;
@@ -791,11 +813,10 @@ impl PhirProcessor {
                     .insert(result_ssa_id, TypedValue::U32(shifted_val));
             }
         }
-        Ok(())
     }
 
     /// Process an Or operation - bitwise OR
-    fn process_or_operation(&mut self, instruction: &crate::phir::Instruction) -> Result<()> {
+    fn process_or_operation(&mut self, instruction: &crate::phir::Instruction) {
         if instruction.operands.len() >= 2 && !instruction.results.is_empty() {
             let left_ssa_id = instruction.operands[0].id;
             let right_ssa_id = instruction.operands[1].id;
@@ -811,7 +832,6 @@ impl PhirProcessor {
                     .insert(result_ssa_id, TypedValue::U32(or_result));
             }
         }
-        Ok(())
     }
 }
 

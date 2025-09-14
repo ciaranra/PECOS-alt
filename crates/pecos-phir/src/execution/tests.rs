@@ -10,6 +10,7 @@ use crate::phir::{Block, Instruction, Module, Region, SSAValue};
 use crate::region_kinds::RegionKind;
 use crate::types::Type;
 use pecos_engines::ClassicalEngine;
+use pecos_engines::byte_message::builder::ByteMessageBuilder;
 use std::collections::HashMap;
 
 /// Create a simple PHIR module for testing
@@ -235,7 +236,6 @@ fn test_measurement_handling() -> Result<(), Box<dyn std::error::Error>> {
     let _commands = engine.generate_commands()?;
 
     // Create a mock measurement message
-    use pecos_engines::byte_message::builder::ByteMessageBuilder;
     let mut builder = ByteMessageBuilder::new();
     let _ = builder.for_outcomes();
     builder.add_outcomes(&[1, 0]); // Mock measurement results

@@ -116,7 +116,7 @@ attributes #0 = { "EntryPoint" }
 
     // Check distribution
     let ones = r_values.iter().filter(|&&v| v == 1).count();
-    let ratio = ones as f64 / 10000.0;
+    let ratio = f64::from(u32::try_from(ones).unwrap_or(u32::MAX)) / 10000.0;
     println!("Distribution: {:.2}% ones", ratio * 100.0);
     assert!(ratio > 0.45 && ratio < 0.55, "Should be roughly 50/50");
 }
@@ -362,7 +362,7 @@ attributes #0 = { "EntryPoint" }
     // Count outcomes
     let mut counts = [0; 4];
     for &val in &n_values {
-        counts[val as usize] += 1;
+        counts[usize::try_from(val).unwrap_or(0)] += 1;
     }
 
     println!("Bell state with 50% depolarizing noise:");

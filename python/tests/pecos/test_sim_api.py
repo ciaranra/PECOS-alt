@@ -130,12 +130,3 @@ def test_sim_builder_chaining() -> None:
     )
 
     assert len(results) == 100
-
-
-if __name__ == "__main__":
-    test_sim_with_qasm_program()
-    test_sim_with_llvm_program()
-    test_sim_with_explicit_engine_override()
-    test_sim_with_different_quantum_engines()
-    test_sim_builder_chaining()
-    print("All tests passed!")

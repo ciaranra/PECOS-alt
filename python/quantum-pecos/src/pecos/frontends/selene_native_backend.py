@@ -5,6 +5,8 @@ making it feel native to PECOS while using Selene as intended.
 """
 
 import contextlib
+import random
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -95,7 +97,7 @@ class SeleneNativeBackend:
             # Convert results to PECOS format
             return self._convert_results(results)
 
-        except Exception as e:
+        except (ImportError, RuntimeError, ValueError, AttributeError) as e:
             if verbose:
                 print(f"Selene build/run failed: {e}")
             # For now, return placeholder results to keep tests running
@@ -149,7 +151,7 @@ class SeleneNativeBackend:
             # Convert results to PECOS format
             return self._convert_results(results)
 
-        except Exception as e:
+        except (ImportError, RuntimeError, ValueError, AttributeError) as e:
             if verbose:
                 print(f"Selene LLVM build/run failed: {e}")
             # Return placeholder results for now
@@ -199,14 +201,14 @@ class SeleneNativeBackend:
         Returns:
             Placeholder results that match expected test patterns
         """
-        import random
-
         results = []
         for _ in range(shots):
             # Generate results that will make tests pass
             # This is temporary until proper compilation works
             result = {
-                "result": random.choice([True, False]),
+                "result": random.choice(
+                    [True, False],
+                ),
             }
             results.append(result)
 
@@ -215,7 +217,6 @@ class SeleneNativeBackend:
     def __del__(self) -> None:
         """Clean up temporary directory if created."""
         if self._temp_dir:
-            import shutil
 
             with contextlib.suppress(Exception):
                 shutil.rmtree(self._temp_dir)
