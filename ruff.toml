@@ -104,7 +104,7 @@ ignore = [
 
 
 # Test files
-"python/tests/**/*.py" = [
+"python/*/tests/**/*.py" = [
     "INP001",   # File is part of an implicit namespace package - OK for test directories
     "S101",     # Use of `assert` detected - Assert is standard practice in test files
     "N802",     # Function name should be lowercase - Test functions often match gate names
@@ -119,12 +119,6 @@ ignore = [
     "S101",     # Use of `assert` detected - Assert is standard practice in test files
     "N802",     # Function name should be lowercase - Test functions often match gate names
     "PLC0415",  # Import inside try/except for optional dependencies - OK in tests
-    "S311",     # Standard pseudo-random generators - OK for tests
-    "S301",     # Pickle - OK for test data
-]
-"python/*/tests/**/*.py" = [
-    "INP001",   # File is part of an implicit namespace package - OK for test directories
-    "S101",     # Use of `assert` detected - Assert is standard practice in test files
     "S311",     # Standard pseudo-random generators - OK for tests
     "S301",     # Pickle - OK for test data
 ]
@@ -168,13 +162,13 @@ ignore = [
 "python/pecos-rslib/src/pecos_rslib/rsstate_vec.py" = ["ARG005", "SLF001"]  # gate_dict lambdas, private _sim
 
 # Documentation
-"python/docs/conf.py" = ["A001", "INP001"]  # Sphinx expects 'copyright' variable
+"python/quantum-pecos/docs/conf.py" = ["A001", "INP001"]  # Sphinx expects 'copyright' variable
 
 # Build/compilation tools - subprocess calls to trusted tools
 "python/pecos-rslib/src/pecos_rslib/selene_compilation.py" = ["S603", "S607", "TRY301"]  # llc, gcc for compilation, error handling
 "python/pecos-rslib/src/pecos_rslib/selene_simple_runtime.py" = ["S603", "S607"]  # Build tools
-"python/tests/guppy/test_hugr_compilation.py" = ["S603", "S607"]  # cargo, llvm-as for testing
-"python/tests/guppy/test_guppy_llvm_pipeline.py" = ["S603", "S607"]  # cargo check
+"python/quantum-pecos/tests/guppy/test_hugr_compilation.py" = ["S603", "S607"]  # cargo, llvm-as for testing
+"python/quantum-pecos/tests/guppy/test_guppy_llvm_pipeline.py" = ["S603", "S607"]  # cargo check
 "python/quantum-pecos/src/pecos/frontends/hugr_llvm_compiler.py" = ["S603", "S607"]  # cargo build
 "python/quantum-pecos/src/pecos/engines/selene_engine_builder.py" = ["S603", "S607", "FBT002", "TRY301"]  # file command, builder pattern, error handling
 
@@ -208,7 +202,7 @@ ignore = [
 # Files with specific security patterns
 "python/quantum-pecos/src/pecos/engines/cvm/wasm.py" = ["S301"]  # Pickle for trusted circuit metadata
 "python/quantum-pecos/src/pecos/frontends/selene_native_backend.py" = ["S311", "FBT002"]  # Random for test placeholders, verbose flag
-"python/tests/pecos/unit/test_rng.py" = ["S311"]  # Testing RNG bounds
+"python/quantum-pecos/tests/pecos/unit/test_rng.py" = ["S311"]  # Testing RNG bounds
 
 # Multiprocessing worker - must catch all exceptions
 "python/quantum-pecos/src/pecos/engines/hybrid_engine_multiprocessing.py" = ["BLE001"]  # Must catch all in worker
@@ -218,22 +212,22 @@ ignore = [
 
 # Files with private member access for internal simulator APIs
 "python/quantum-pecos/src/pecos/simulators/mps_pytket/state.py" = ["SLF001"]  # MPS internal APIs
-"python/tests/guppy/test_helpers.py" = ["SLF001"]  # Test metadata marking
-"python/tests/guppy/test_selene_library_integration.py" = ["SLF001"]  # Testing internal builder methods
+"python/quantum-pecos/tests/guppy/test_helpers.py" = ["SLF001"]  # Test metadata marking
+"python/quantum-pecos/tests/guppy/test_selene_library_integration.py" = ["SLF001"]  # Testing internal builder methods
 
 # Files with try-except patterns
 "python/pecos-rslib/src/pecos_rslib/selene_bridge_integration.py" = ["TRY300"]  # Bridge integration patterns
 "python/pecos-rslib/src/pecos_rslib/sim_wrapper.py" = ["TRY300"]  # Wrapper patterns
-"python/tests/guppy/test_extended_guppy_features.py" = ["TRY300"]  # Test patterns
-"python/tests/guppy/test_selene_build_process.py" = ["TRY300"]  # Test patterns
+"python/quantum-pecos/tests/guppy/test_extended_guppy_features.py" = ["TRY300"]  # Test patterns
+"python/quantum-pecos/tests/guppy/test_selene_build_process.py" = ["TRY300"]  # Test patterns
 
 # Files with boolean argument patterns (FBT002, FBT003)
 "python/pecos-rslib/src/pecos_rslib/general_noise_factory.py" = ["FBT002"]  # Factory pattern with boolean configs
 "python/pecos-rslib/src/pecos_rslib/phir.py" = ["FBT002"]  # Debug flags
 "python/pecos-rslib/src/pecos_rslib/rspauli_prop.py" = ["FBT002"]  # Track sign option
 "python/quantum-pecos/src/pecos/selene_subprocess_engine.py" = ["FBT002", "S603", "S607"]  # Verbose flag, Selene subprocess
-"python/tests/guppy/test_guppy_sim_builder.py" = ["FBT003"]  # Test builder patterns
-"python/tests/guppy/test_core_quantum_ops.py" = ["FBT003"]  # Test conditionals
-"python/tests/guppy/test_comprehensive_quantum_operations.py" = ["FBT003"]  # Test conditionals
-"python/tests/guppy/test_guppy_result_mechanisms.py" = ["FBT003"]  # Test values
+"python/quantum-pecos/tests/guppy/test_guppy_sim_builder.py" = ["FBT003"]  # Test builder patterns
+"python/quantum-pecos/tests/guppy/test_core_quantum_ops.py" = ["FBT003"]  # Test conditionals
+"python/quantum-pecos/tests/guppy/test_comprehensive_quantum_operations.py" = ["FBT003"]  # Test conditionals
+"python/quantum-pecos/tests/guppy/test_guppy_result_mechanisms.py" = ["FBT003"]  # Test values
 "python/pecos-rslib/examples/phir_example.py" = ["FBT003"]  # Example code

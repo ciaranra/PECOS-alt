@@ -222,17 +222,17 @@ decoder-cache-clean: ## Clean decoder download cache
 
 .PHONY: pytest
 pytest:  ## Run tests on the Python package (not including optional dependencies). ASSUMES: previous build command
-	uv run pytest ./python/tests/ --doctest-modules -m "not optional_dependency"
+	uv run pytest ./python/quantum-pecos/tests/ --doctest-modules -m "not optional_dependency"
 	uv run pytest ./python/pecos-rslib/tests/
 	uv run pytest ./python/slr-tests/ -m "not optional_dependency"
 
 .PHONY: pytest-dep
 pytest-dep: ## Run tests on the Python package only for optional dependencies. ASSUMES: previous build command
-	uv run pytest ./python/tests/ --doctest-modules -m optional_dependency
+	uv run pytest ./python/quantum-pecos/tests/ --doctest-modules -m optional_dependency
 
 .PHONY: pytest-all
 pytest-all: ## Run all tests on the Python package ASSUMES: previous build command
-	uv run pytest ./python/tests/ -m ""
+	uv run pytest ./python/quantum-pecos/tests/ -m ""
 	uv run pytest ./python/pecos-rslib/tests/
 
 # .PHONY: pytest-doc

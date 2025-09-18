@@ -3,11 +3,11 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^python/docs/reference/_autosummary/
+        exclude: ^python/quantum-pecos/docs/reference/_autosummary/
       - id: end-of-file-fixer
         exclude: |
           (?x)^(
-            python/docs/reference/_autosummary/|
+            python/quantum-pecos/docs/reference/_autosummary/|
             .*\.rs$
           )
       - id: check-toml
