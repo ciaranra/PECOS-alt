@@ -143,7 +143,7 @@ class GenericErrorModel:
     def process(
         self,
         qops: list[QOp],
-        call_back: Callable | None = None,
+        _call_back: Callable | None = None,
     ) -> list[QOp | SeqBlock]:
         """Process quantum operations and apply generic errors.
 

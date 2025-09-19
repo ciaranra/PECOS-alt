@@ -307,7 +307,7 @@ def adjust_tableau_string(line: str, *, is_stab: bool) -> str:
 
 # Define the gate dictionary
 gate_dict = {
-    "I": lambda sim, q, **params: None,
+    "I": lambda _sim, _q, **_params: None,
     "X": lambda sim, q, **params: sim._sim.run_1q_gate("X", q, params),
     "Y": lambda sim, q, **params: sim._sim.run_1q_gate("Y", q, params),
     "Z": lambda sim, q, **params: sim._sim.run_1q_gate("Z", q, params),
@@ -331,7 +331,7 @@ gate_dict = {
     "F3dg": lambda sim, q, **params: sim._sim.run_1q_gate("F3dg", q, params),
     "F4": lambda sim, q, **params: sim._sim.run_1q_gate("F4", q, params),
     "F4dg": lambda sim, q, **params: sim._sim.run_1q_gate("F4dg", q, params),
-    "II": lambda sim, qs, **params: None,
+    "II": lambda _sim, _qs, **_params: None,
     "CX": lambda sim, qs, **params: sim._sim.run_2q_gate("CX", qs, params),
     "CNOT": lambda sim, qs, **params: sim._sim.run_2q_gate("CX", qs, params),
     "CY": lambda sim, qs, **params: sim._sim.run_2q_gate("CY", qs, params),

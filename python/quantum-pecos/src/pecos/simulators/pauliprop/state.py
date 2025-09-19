@@ -63,7 +63,7 @@ class PauliProp(PauliPropagation):
         self.track_sign = track_sign
 
         # Use Rust backend
-        self._backend = PauliPropRs(num_qubits, track_sign)
+        self._backend = PauliPropRs(num_qubits, track_sign=track_sign)
 
         # Set up optimized bindings for gates available in Rust backend
         self._setup_optimized_bindings()
@@ -84,25 +84,25 @@ class PauliProp(PauliPropagation):
         backend = self._backend  # Local reference to avoid attribute lookup
 
         # Single-qubit gates - location is always an int
-        self.bindings["H"] = lambda s, q, **p: backend.h(q)
-        self.bindings["SX"] = lambda s, q, **p: backend.sx(q)
-        self.bindings["SY"] = lambda s, q, **p: backend.sy(q)
-        self.bindings["SZ"] = lambda s, q, **p: backend.sz(q)
+        self.bindings["H"] = lambda _s, q, **_p: backend.h(q)
+        self.bindings["SX"] = lambda _s, q, **_p: backend.sx(q)
+        self.bindings["SY"] = lambda _s, q, **_p: backend.sy(q)
+        self.bindings["SZ"] = lambda _s, q, **_p: backend.sz(q)
 
         # Two-qubit gates - location is always a tuple
-        self.bindings["CX"] = lambda s, qs, **p: backend.cx(
+        self.bindings["CX"] = lambda _s, qs, **_p: backend.cx(
             qs[0],
             qs[1],
         )
-        self.bindings["CY"] = lambda s, qs, **p: backend.cy(
+        self.bindings["CY"] = lambda _s, qs, **_p: backend.cy(
             qs[0],
             qs[1],
         )
-        self.bindings["CZ"] = lambda s, qs, **p: backend.cz(
+        self.bindings["CZ"] = lambda _s, qs, **_p: backend.cz(
             qs[0],
             qs[1],
         )
-        self.bindings["SWAP"] = lambda s, qs, **p: backend.swap(
+        self.bindings["SWAP"] = lambda _s, qs, **_p: backend.swap(
             qs[0],
             qs[1],
         )

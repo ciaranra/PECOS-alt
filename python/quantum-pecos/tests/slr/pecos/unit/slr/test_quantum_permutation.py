@@ -94,7 +94,7 @@ def test_quantum_permutation_qir(quantum_permutation_program: tuple) -> None:
 
     # Get the qubit indices
     h_qubit = int(h_calls[0])
-    cnot_control, cnot_target = map(int, cnot_calls[0])
+    cnot_control, _cnot_target = map(int, cnot_calls[0])
 
     # Verify that the H and CNOT operations are applied to the correct qubits after permutation
     # The exact indices will depend on how qubits are allocated in the QIR generator

@@ -224,7 +224,7 @@ def main() -> None:
     print(f"Rust HUGR backend available: {RUST_HUGR_AVAILABLE}")
 
     if RUST_HUGR_AVAILABLE:
-        available, message = check_rust_hugr_availability()
+        _available, message = check_rust_hugr_availability()
         print(f"Backend status: {message}")
 
     # Run examples

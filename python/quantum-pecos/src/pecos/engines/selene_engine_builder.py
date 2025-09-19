@@ -117,7 +117,7 @@ class SeleneEngineBuilder:
 
         return self
 
-    def with_verbose(self, verbose: bool = True) -> "SeleneEngineBuilder":
+    def with_verbose(self, *, verbose: bool = True) -> "SeleneEngineBuilder":
         """Enable verbose output during compilation.
 
         Args:

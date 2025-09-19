@@ -55,6 +55,7 @@ class SeleneNativeBackend:
         shots: int,
         seed: int | None = None,
         n_qubits: int = 10,
+        *,
         verbose: bool = False,
     ) -> list[dict[str, Any]]:
         """Compile HUGR and run using Selene's natural workflow.
@@ -109,6 +110,7 @@ class SeleneNativeBackend:
         shots: int,
         seed: int | None = None,
         n_qubits: int = 10,
+        *,
         verbose: bool = False,
     ) -> list[dict[str, Any]]:
         """Compile LLVM IR and run using Selene's natural workflow.

@@ -91,6 +91,10 @@ def cache_executable(
     # Create cache directory
     cache_path.mkdir(parents=True, exist_ok=True)
 
+    # Copy executable
+    cached_exec = cache_path / "executable"
+    shutil.copy2(source_exec_path, cached_exec)
+
     # Copy artifacts directory
     cached_artifacts = cache_path / "artifacts"
     if cached_artifacts.exists():
@@ -107,7 +111,6 @@ def cache_executable(
 
     logger.debug(f"Cached executable with key {cache_key}")
 
-    cached_exec = cached_artifacts / "program.selene.x"
     return (cached_exec, cached_artifacts)
 
 

@@ -167,14 +167,13 @@ class MeasurementAnalyzer:
                             if info.first_measurement_pos == -1:
                                 info.first_measurement_pos = position
                             info.last_operation_pos = position
-        else:
-            # Track any operation on quantum registers
-            if hasattr(op, "qargs") and op.qargs:
-                for qarg in op.qargs:
-                    if hasattr(qarg, "reg") and hasattr(qarg.reg, "sym"):
-                        qreg_name = qarg.reg.sym
-                        if qreg_name in self.qreg_info:
-                            self.qreg_info[qreg_name].last_operation_pos = position
+        # Track any operation on quantum registers
+        elif hasattr(op, "qargs") and op.qargs:
+            for qarg in op.qargs:
+                if hasattr(qarg, "reg") and hasattr(qarg.reg, "sym"):
+                    qreg_name = qarg.reg.sym
+                    if qreg_name in self.qreg_info:
+                        self.qreg_info[qreg_name].last_operation_pos = position
 
         # Recurse into nested blocks
         if hasattr(op, "ops"):

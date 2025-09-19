@@ -100,7 +100,7 @@ def test_invalid_engine_override_rejected() -> None:
     # LLVM program should reject QASM engine
     llvm_program = LlvmProgram.from_string("define void @main() { ret void }")
 
-    with pytest.raises(Exception, match="(LlvmEngineBuilder|SeleneEngineBuilder)"):
+    with pytest.raises(Exception, match=r"(LlvmEngineBuilder|SeleneEngineBuilder)"):
         sim(llvm_program).classical(qasm_engine()).run(1)
 
 

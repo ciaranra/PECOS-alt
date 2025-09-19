@@ -115,7 +115,7 @@ impl Gate {
     #[must_use]
     pub fn cx_vec(qubits: &[impl Into<QubitId> + Copy]) -> Self {
         assert!(
-            qubits.len() % 2 == 0,
+            qubits.len().is_multiple_of(2),
             "CX gate requires an even number of qubits"
         );
         Self::new(
@@ -140,7 +140,7 @@ impl Gate {
     #[must_use]
     pub fn szz_vec(qubits: &[impl Into<QubitId> + Copy]) -> Self {
         assert!(
-            qubits.len() % 2 == 0,
+            qubits.len().is_multiple_of(2),
             "SZZ gate requires an even number of qubits"
         );
         Self::new(
@@ -165,7 +165,7 @@ impl Gate {
     #[must_use]
     pub fn szzdg_vec(qubits: &[impl Into<QubitId> + Copy]) -> Self {
         assert!(
-            qubits.len() % 2 == 0,
+            qubits.len().is_multiple_of(2),
             "SZZdg gate requires an even number of qubits"
         );
         Self::new(
@@ -190,7 +190,7 @@ impl Gate {
     #[must_use]
     pub fn rzz_vec(theta: f64, qubits: &[impl Into<QubitId> + Copy]) -> Self {
         assert!(
-            qubits.len() % 2 == 0,
+            qubits.len().is_multiple_of(2),
             "RZZ gate requires an even number of qubits"
         );
         Self::new(
@@ -358,7 +358,7 @@ impl Gate {
                 self.params.len()
             ));
         }
-        if self.qubits.len() % self.quantum_arity() != 0 {
+        if !self.qubits.len().is_multiple_of(self.quantum_arity()) {
             return Err(format!(
                 "Gate {:?} requires a multiple of {} qubits, got {}",
                 self.gate_type,

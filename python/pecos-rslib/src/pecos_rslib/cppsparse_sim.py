@@ -435,7 +435,7 @@ def adjust_tableau_string(line: str, *, is_stab: bool, print_y: bool = True) -> 
 # Define the gate dictionary - reuse the same mappings as SparseSim
 
 gate_dict = {
-    "I": lambda sim, q, **params: None,
+    "I": lambda _sim, _q, **_params: None,  # Identity gate - no operation needed
     "X": lambda sim, q, **params: sim._sim.run_1q_gate("X", q, params),
     "Y": lambda sim, q, **params: sim._sim.run_1q_gate("Y", q, params),
     "Z": lambda sim, q, **params: sim._sim.run_1q_gate("Z", q, params),
@@ -499,7 +499,7 @@ gate_dict = {
         q,
         params,
     ),  # Alternative name for F4dg
-    "II": lambda sim, qs, **params: None,
+    "II": lambda _sim, _qs, **_params: None,  # Two-qubit identity - no operation
     "CX": lambda sim, qs, **params: sim._sim.run_2q_gate("CX", qs, params),
     "CNOT": lambda sim, qs, **params: sim._sim.run_2q_gate("CX", qs, params),
     "CY": lambda sim, qs, **params: sim._sim.run_2q_gate("CY", qs, params),
@@ -539,17 +539,17 @@ gate_dict = {
     ),
     # Init gates - always initialize to the specified state, ignore forced_outcome
     # CppSparseStab doesn't have PZ/PX/PY projection gates, so we measure and correct
-    "Init": lambda sim, q, **params: _init_to_zero(sim._sim, q),  # Init to |0>
+    "Init": lambda sim, q, **_params: _init_to_zero(sim._sim, q),  # Init to |0>
     "init |0>": lambda sim, q, **params: _init_to_zero(
         sim._sim,
         q,
         forced_outcome=params.get("forced_outcome", -1),
     ),
-    "init |1>": lambda sim, q, **params: _init_to_one(sim._sim, q),
-    "init |+>": lambda sim, q, **params: _init_to_plus(sim._sim, q),
-    "init |->": lambda sim, q, **params: _init_to_minus(sim._sim, q),
-    "init |+i>": lambda sim, q, **params: _init_to_plus_i(sim._sim, q),
-    "init |-i>": lambda sim, q, **params: _init_to_minus_i(sim._sim, q),
+    "init |1>": lambda sim, q, **_params: _init_to_one(sim._sim, q),
+    "init |+>": lambda sim, q, **_params: _init_to_plus(sim._sim, q),
+    "init |->": lambda sim, q, **_params: _init_to_minus(sim._sim, q),
+    "init |+i>": lambda sim, q, **_params: _init_to_plus_i(sim._sim, q),
+    "init |-i>": lambda sim, q, **_params: _init_to_minus_i(sim._sim, q),
 }
 
 __all__ = ["CppSparseSimRs", "gate_dict"]

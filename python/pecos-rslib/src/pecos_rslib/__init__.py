@@ -94,11 +94,11 @@ def _load_selene_runtime():
                 ctypes.CDLL(path_str, mode=ctypes.RTLD_GLOBAL)
                 logger.info(f"Loaded Selene runtime from: {path_str}")
                 return True
-
-        logger.warning("Could not load Selene runtime library")
-        return False
     except (OSError, ImportError, AttributeError) as e:
         logger.warning(f"Could not load Selene runtime: {e}")
+        return False
+    else:
+        logger.warning("Could not load Selene runtime library")
         return False
 
 

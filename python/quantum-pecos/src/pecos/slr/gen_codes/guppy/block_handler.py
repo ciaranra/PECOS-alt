@@ -261,20 +261,19 @@ class BlockHandler:
             self.generator.write(
                 f"{var_name} = array(False for _ in range({var.size}))",
             )
+        # For any other variable types, check if they have standard attributes
+        elif hasattr(var, "vars"):
+            # This is a complex type with sub-variables (like Steane)
+            # Generate declarations for all sub-variables
+            for sub_var in var.vars:
+                self._generate_var_declaration(sub_var)
         else:
-            # For any other variable types, check if they have standard attributes
-            if hasattr(var, "vars"):
-                # This is a complex type with sub-variables (like Steane)
-                # Generate declarations for all sub-variables
-                for sub_var in var.vars:
-                    self._generate_var_declaration(sub_var)
-            else:
-                # Unknown variable type
-                var_name = var.sym if hasattr(var, "sym") else str(var)
-                self.generator.write(
-                    f"# TODO: Initialize {var_type} instance '{var_name}'",
-                )
-                self.generator.write(f"# Unknown variable type: {var_type}")
+            # Unknown variable type
+            var_name = var.sym if hasattr(var, "sym") else str(var)
+            self.generator.write(
+                f"# TODO: Initialize {var_type} instance '{var_name}'",
+            )
+            self.generator.write(f"# Unknown variable type: {var_type}")
 
     def _get_or_create_function_name(self, block_type: type) -> str:
         """Get or create a function name for a block type."""

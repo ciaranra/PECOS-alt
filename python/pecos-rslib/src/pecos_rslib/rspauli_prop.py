@@ -28,7 +28,9 @@ class PauliPropRs:
     Clifford circuits. Useful for fault propagation and stabilizer simulations.
     """
 
-    def __init__(self, num_qubits: int | None = None, track_sign: bool = False) -> None:
+    def __init__(
+        self, num_qubits: int | None = None, *, track_sign: bool = False
+    ) -> None:
         """Initialize the Rust-backed Pauli propagation simulator.
 
         Args:

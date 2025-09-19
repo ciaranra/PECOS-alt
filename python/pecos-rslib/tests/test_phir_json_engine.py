@@ -244,9 +244,12 @@ def test_register_mapping_simulation() -> None:
     more_commands = engine.process_program()
 
     # If we get another measurement, handle it
-    if len(more_commands) > 0 and more_commands[0]["gate_type"] == "Measure":
-        if more_commands[0]["qubits"] == [1]:
-            engine.handle_measurement(0)  # Second qubit measures 0
+    if (
+        len(more_commands) > 0
+        and more_commands[0]["gate_type"] == "Measure"
+        and more_commands[0]["qubits"] == [1]
+    ):
+        engine.handle_measurement(0)  # Second qubit measures 0
 
     # Get results
     results = engine.get_results()

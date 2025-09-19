@@ -247,13 +247,13 @@ class TestUnifiedSimApi:
         # SparseStabilizer might fail on non-Clifford gates
         # The RZ gate is approximated in QASM, so it might not fail immediately
         # Just verify it runs without checking for failure
-        try:
+        from contextlib import suppress
+
+        with suppress(RuntimeError):
+            # Expected to fail if the engine detects non-Clifford operations
             sim(QasmProgram.from_string(qasm_non_clifford)).quantum(
                 sparse_stabilizer(),
             ).run(10)
-        except RuntimeError:
-            # Expected if the engine detects non-Clifford operations
-            pass
 
     def test_deterministic_behavior(self) -> None:
         """Test deterministic behavior with seeds."""

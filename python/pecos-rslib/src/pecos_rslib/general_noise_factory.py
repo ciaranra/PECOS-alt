@@ -295,7 +295,7 @@ class GeneralNoiseFactory:
         ),
     }
 
-    def __init__(self, use_defaults: bool = True) -> None:
+    def __init__(self, *, use_defaults: bool = True) -> None:
         """Initialize the factory with optional default mappings.
 
         Args:
@@ -372,6 +372,7 @@ class GeneralNoiseFactory:
     def create_from_dict(
         self,
         config: dict[str, Any],
+        *,
         strict: bool = True,
         apply_defaults: bool = True,
     ) -> GeneralNoiseModelBuilder:
@@ -410,9 +411,8 @@ class GeneralNoiseFactory:
 
         # Apply user configuration
         for key, value in config.items():
-            if key not in self.mappings:
-                if not strict:
-                    continue  # Skip unknown keys in non-strict mode
+            if key not in self.mappings and not strict:
+                continue  # Skip unknown keys in non-strict mode
 
             mapping = self.mappings[key]
 
@@ -494,7 +494,7 @@ class GeneralNoiseFactory:
 
         return errors
 
-    def show_mappings(self, show_descriptions: bool = True) -> None:
+    def show_mappings(self, *, show_descriptions: bool = True) -> None:
         """Display the current parameter mappings in a readable format.
 
         Args:

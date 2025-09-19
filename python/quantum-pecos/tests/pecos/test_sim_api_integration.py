@@ -307,14 +307,13 @@ class TestHUGRSimulation:
         # Compile to HUGR
         compiled = simple_circuit.compile()
 
-        # Get HUGR bytes
+        # Get HUGR bytes - preferring to_bytes() which gives the correct format
         if hasattr(compiled, "to_bytes"):
             hugr_bytes = compiled.to_bytes()
-        elif hasattr(compiled, "to_json"):
-            hugr_json = compiled.to_json()
-            hugr_bytes = hugr_json.encode("utf-8")
         else:
-            pytest.skip("Cannot get HUGR bytes from compiled function")
+            # Use to_str() for HUGR envelope format (includes header)
+            hugr_str = compiled.to_str()
+            hugr_bytes = hugr_str.encode("utf-8")
 
         try:
             program = HugrProgram.from_bytes(hugr_bytes)

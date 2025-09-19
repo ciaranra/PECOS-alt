@@ -105,7 +105,7 @@ class SimpleDepolarizingErrorModel:
     def process(
         self,
         qops: list[QOp],
-        call_back: Callable[..., None] | None = None,
+        _call_back: Callable[..., None] | None = None,
     ) -> list[QOp | SeqBlock]:
         """Process quantum operations and apply simple depolarizing errors.
 

@@ -69,7 +69,7 @@ class MWPM2D:
     def decode(
         self,
         measurements: StdOutput,
-        error_params: dict[str, Any] | None = None,
+        _error_params: dict[str, Any] | None = None,
     ) -> QuantumCircuit:
         """Takes measurement results and outputs a result.
 

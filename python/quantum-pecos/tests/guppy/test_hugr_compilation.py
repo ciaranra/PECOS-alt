@@ -1,5 +1,6 @@
 """Test HUGR compilation and LLVM IR generation."""
 
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -13,9 +14,13 @@ class TestHUGRCompilation:
     def test_rust_hugr_crate_compilation(self) -> None:
         """Test that the Rust HUGR support compiles."""
         # Check if cargo is available
+        cargo_path = shutil.which("cargo")
+        if not cargo_path:
+            pytest.skip("Cargo not available")
+
         try:
             result = subprocess.run(
-                ["cargo", "--version"],
+                [cargo_path, "--version"],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -34,7 +39,7 @@ class TestHUGRCompilation:
 
         # Test compilation of pecos-hugr crate
         result = subprocess.run(
-            ["cargo", "check", "-p", "pecos-hugr"],
+            [cargo_path, "check", "-p", "pecos-hugr"],
             capture_output=True,
             text=True,
             cwd=project_root,
@@ -49,9 +54,13 @@ class TestHUGRCompilation:
     def test_rust_hugr_unit_tests(self) -> None:
         """Test that HUGR unit tests pass."""
         # Check cargo availability
+        cargo_path = shutil.which("cargo")
+        if not cargo_path:
+            pytest.skip("Cargo not available")
+
         try:
             subprocess.run(
-                ["cargo", "--version"],
+                [cargo_path, "--version"],
                 capture_output=True,
                 check=False,
             )
@@ -66,7 +75,7 @@ class TestHUGRCompilation:
 
         # Run HUGR-specific unit tests
         result = subprocess.run(
-            ["cargo", "test", "-p", "pecos-hugr", "--", "--nocapture"],
+            [cargo_path, "test", "-p", "pecos-hugr", "--", "--nocapture"],
             capture_output=True,
             text=True,
             cwd=project_root,
@@ -116,9 +125,10 @@ attributes #0 = { "EntryPoint" }
 
         try:
             # Try to validate with llvm-as if available
-            try:
+            llvm_as_path = shutil.which("llvm-as")
+            if llvm_as_path:
                 result = subprocess.run(
-                    ["llvm-as", str(llvm_file), "-o", "/dev/null"],
+                    [llvm_as_path, str(llvm_file), "-o", "/dev/null"],
                     capture_output=True,
                     text=True,
                     check=False,
@@ -130,8 +140,7 @@ attributes #0 = { "EntryPoint" }
                 else:
                     # Validation failed
                     pytest.skip(f"LLVM IR validation failed: {result.stderr}")
-
-            except FileNotFoundError:
+            else:
                 # llvm-as not available, just check file was created
                 assert llvm_file.exists(), "LLVM IR file should be created"
                 content = llvm_file.read_text()

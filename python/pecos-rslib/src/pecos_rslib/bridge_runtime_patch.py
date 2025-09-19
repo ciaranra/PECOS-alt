@@ -39,13 +39,14 @@ class BridgeEnabledSeleneInstance:
         # Set SELENE_IPC for Bridge plugin
         os.environ["SELENE_IPC"] = "1"
 
-        if self.bridge_plugin is not None:
-            # If no simulator specified, use Bridge plugin
-            if len(args) == 0 or not hasattr(args[0], "library_file"):
-                logger.info(
-                    "PECOS: Automatically using Bridge plugin for Selene execution",
-                )
-                return self.original_instance.run(self.bridge_plugin, *args, **kwargs)
+        # If no simulator specified and Bridge plugin available, use it
+        if self.bridge_plugin is not None and (
+            len(args) == 0 or not hasattr(args[0], "library_file")
+        ):
+            logger.info(
+                "PECOS: Automatically using Bridge plugin for Selene execution",
+            )
+            return self.original_instance.run(self.bridge_plugin, *args, **kwargs)
 
         # Fall back to original behavior
         return self.original_instance.run(*args, **kwargs)

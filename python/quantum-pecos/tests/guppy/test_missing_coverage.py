@@ -272,7 +272,7 @@ class TestArrayOperations:
         for result in get_measurements(results):
             # Result is a tuple of 5 booleans
             # Extract individual measurements
-            b0, b1, b2, b3, b4 = result
+            _b0, b1, _b2, b3, b4 = result
 
             # Check known deterministic bits (measurements are 0 or 1, not bool)
             assert b1 == 1, "Bit 1 should be 1 (from x gate)"
@@ -347,7 +347,7 @@ class TestArrayOperations:
             # Result is a tuple of 4 measurements
             if isinstance(result, tuple):
                 assert len(result) == 4, f"Expected 4 measurements, got {len(result)}"
-                b0, b1, b2, b3 = result
+                _b0, b1, _b2, b3 = result
             else:
                 # Try to extract as integer
                 result & 1

@@ -91,6 +91,60 @@ def compile_guppy_to_hugr(guppy_function: Callable) -> bytes:
 
 
 # Step 2: HUGR -> LLVM/QIR
+def _update_tket_wasm_version(hugr_bytes: bytes) -> bytes:
+    """Update tket.wasm version from 0.3.0 to 0.4.1 for Selene compatibility.
+
+    Args:
+        hugr_bytes: HUGR package bytes
+
+    Returns:
+        Updated HUGR bytes with tket.wasm 0.4.1
+    """
+    import json
+
+    hugr_str = hugr_bytes.decode("utf-8")
+
+    # Check if it starts with the envelope header
+    if hugr_str.startswith("HUGRiHJv"):
+        # Find where the JSON starts
+        json_start = hugr_str.find("{", 8)
+        if json_start != -1:
+            header = hugr_str[:json_start]
+            json_part = hugr_str[json_start:]
+
+            # Parse the JSON
+            hugr_data = json.loads(json_part)
+
+            # Update version in extensions
+            if "extensions" in hugr_data:
+                for ext in hugr_data["extensions"]:
+                    if ext.get("name") == "tket.wasm" and ext.get("version") == "0.3.0":
+                        ext["version"] = "0.4.1"
+
+            # Update version in module metadata
+            if hugr_data.get("modules"):
+                module = hugr_data["modules"][0]
+                if "metadata" in module:
+                    for meta_item in module["metadata"]:
+                        if (
+                            isinstance(meta_item, dict)
+                            and "core.used_extensions" in meta_item
+                        ):
+                            for ext in meta_item["core.used_extensions"]:
+                                if (
+                                    ext.get("name") == "tket.wasm"
+                                    and ext.get("version") == "0.3.0"
+                                ):
+                                    ext["version"] = "0.4.1"
+
+            # Reconstruct the HUGR envelope
+            modified_json = json.dumps(hugr_data, separators=(",", ":"))
+            modified_hugr = header + modified_json
+            return modified_hugr.encode("utf-8")
+
+    return hugr_bytes
+
+
 def compile_hugr_to_llvm(
     hugr_bytes: bytes,
     *,
@@ -115,6 +169,9 @@ def compile_hugr_to_llvm(
     # First, try to use Selene's compiler which handles non-quantum functions correctly
     try:
         from selene_helios_qis_plugin.build import compile_to_llvm_ir
+
+        # Update tket.wasm version for compatibility between guppylang 0.21.3 and Selene
+        hugr_bytes = _update_tket_wasm_version(hugr_bytes)
 
         # Selene's compiler expects HUGR envelope bytes
         # If we receive JSON bytes, they should work as-is

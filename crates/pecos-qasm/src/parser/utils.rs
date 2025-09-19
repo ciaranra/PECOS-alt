@@ -263,7 +263,7 @@ fn expand_gate_call(
         Ok(expanded)
     } else if gate_def.qargs.len() == 2 && qubits.len() > 2 {
         // Two-qubit gate applied to multiple qubits - apply pairwise
-        if qubits.len() % 2 != 0 {
+        if !qubits.len().is_multiple_of(2) {
             return Err(PecosError::CompileInvalidOperation {
                 operation: format!("gate '{}'", gate_def.name),
                 reason: format!(

@@ -164,6 +164,7 @@ def run_selene_subprocess(
     num_qubits: int = 10,
     shots: int = 1,
     runtime_plugin: Path | None = None,
+    *,
     verbose: bool = False,
 ) -> list[dict[str, Any]]:
     """Convenience function to run Selene as a subprocess.

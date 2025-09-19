@@ -53,21 +53,17 @@ def test_phir_json_program_creation() -> None:
 
     # PhirJsonProgram.from_json may accept strings and parse them later
     # or may validate immediately. Test what actually happens:
-    try:
+    from contextlib import suppress
+
+    with suppress(ValueError, RuntimeError, TypeError):
         # This might not raise immediately
         PhirJsonProgram.from_json("not json")
         # If it doesn't raise during creation, that's OK - it might fail during use
-    except (ValueError, RuntimeError, TypeError):
-        # If it does raise, that's also fine
-        pass
 
     # Test creating from valid-looking JSON string
-    try:
+    with suppress(ValueError, RuntimeError, TypeError):
         PhirJsonProgram.from_json("{}")
-        # Empty object might be accepted
-    except (ValueError, RuntimeError, TypeError):
-        # Or it might be rejected
-        pass
+        # Empty object might be accepted or rejected
 
 
 def test_compile_hugr_to_llvm_with_invalid_input() -> None:

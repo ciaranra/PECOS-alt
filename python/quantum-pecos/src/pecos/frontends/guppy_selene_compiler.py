@@ -96,7 +96,7 @@ class GuppySeleneCompiler:
     def _generate_llvm_ir_from_hugr_bytes(
         self,
         hugr_bytes: bytes,
-        func_name: str,
+        _func_name: str,
     ) -> str:
         """Generate LLVM IR from HUGR.
 

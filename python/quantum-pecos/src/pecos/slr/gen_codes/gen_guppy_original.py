@@ -174,18 +174,17 @@ class GuppyGenerator(Generator):
         elif var_type == "CReg":
             self.var_types[var.sym] = "classical"
             self.write(f"{var.sym} = array(False for _ in range({var.size}))")
+        # For any other variable types, check if they have standard attributes
+        elif hasattr(var, "vars"):
+            # This is a complex type with sub-variables (like Steane)
+            # Generate declarations for all sub-variables
+            for sub_var in var.vars:
+                self._generate_var_declaration(sub_var)
         else:
-            # For any other variable types, check if they have standard attributes
-            if hasattr(var, "vars"):
-                # This is a complex type with sub-variables (like Steane)
-                # Generate declarations for all sub-variables
-                for sub_var in var.vars:
-                    self._generate_var_declaration(sub_var)
-            else:
-                # Unknown variable type
-                var_name = var.sym if hasattr(var, "sym") else str(var)
-                self.write(f"# TODO: Initialize {var_type} instance '{var_name}'")
-                self.write(f"# Unknown variable type: {var_type}")
+            # Unknown variable type
+            var_name = var.sym if hasattr(var, "sym") else str(var)
+            self.write(f"# TODO: Initialize {var_type} instance '{var_name}'")
+            self.write(f"# Unknown variable type: {var_type}")
 
     def _generate_condition(self, cond) -> str:
         """Generate a condition expression."""
@@ -327,30 +326,29 @@ class GuppyGenerator(Generator):
                         f"# ERROR: Two-qubit gate {gate_name} requires exactly 2 qubits, got {len(gate.qargs)}",
                     )
                     self.write(f"# Gate arguments: {gate.qargs}")
-            else:
-                # Single-qubit gates
-                if gate.qargs:
-                    # Check if this is a full register operation
-                    if (
-                        len(gate.qargs) == 1
-                        and hasattr(gate.qargs[0], "size")
-                        and gate.qargs[0].size > 1
-                    ):
-                        # Apply gate to all qubits in register
-                        reg = gate.qargs[0]
-                        self.write(f"for i in range({reg.size}):")
-                        self.indent()
-                        self.write(f"{guppy_gate}({reg.sym}[i])")
-                        self.dedent()
-                    else:
-                        # Single qubit operation(s)
-                        for q in gate.qargs:
-                            qubit = self._get_qubit_ref(q)
-                            self.write(f"{guppy_gate}({qubit})")
+            # Single-qubit gates
+            elif gate.qargs:
+                # Check if this is a full register operation
+                if (
+                    len(gate.qargs) == 1
+                    and hasattr(gate.qargs[0], "size")
+                    and gate.qargs[0].size > 1
+                ):
+                    # Apply gate to all qubits in register
+                    reg = gate.qargs[0]
+                    self.write(f"for i in range({reg.size}):")
+                    self.indent()
+                    self.write(f"{guppy_gate}({reg.sym}[i])")
+                    self.dedent()
                 else:
-                    self.write(
-                        f"# ERROR: Single-qubit gate {gate_name} called with no qubit arguments",
-                    )
+                    # Single qubit operation(s)
+                    for q in gate.qargs:
+                        qubit = self._get_qubit_ref(q)
+                        self.write(f"{guppy_gate}({qubit})")
+            else:
+                self.write(
+                    f"# ERROR: Single-qubit gate {gate_name} called with no qubit arguments",
+                )
         else:
             self.write(f"# WARNING: Unknown quantum gate: {gate_name}")
             self.write("# Add mapping for this gate in gate_map dictionary")
@@ -401,32 +399,31 @@ class GuppyGenerator(Generator):
                 for i, q in enumerate(meas.qargs):
                     qubit_ref = self._get_qubit_ref(q)
                     self.write(f"{creg.sym}[{i}] = quantum.measure({qubit_ref})")
+            # Individual measurements
+            # Check if cout contains a single list for multiple qubits
+            elif (
+                len(meas.cout) == 1
+                and isinstance(meas.cout[0], list)
+                and len(meas.cout[0]) == len(meas.qargs)
+            ):
+                # Multiple qubits to list of bits: Measure(q0, q1) > [c0, c1]
+                for q, c in zip(meas.qargs, meas.cout[0]):
+                    qubit_ref = self._get_qubit_ref(q)
+                    bit_ref = self._get_qubit_ref(c)
+                    self.write(f"{bit_ref} = quantum.measure({qubit_ref})")
             else:
-                # Individual measurements
-                # Check if cout contains a single list for multiple qubits
-                if (
-                    len(meas.cout) == 1
-                    and isinstance(meas.cout[0], list)
-                    and len(meas.cout[0]) == len(meas.qargs)
-                ):
-                    # Multiple qubits to list of bits: Measure(q0, q1) > [c0, c1]
-                    for q, c in zip(meas.qargs, meas.cout[0]):
-                        qubit_ref = self._get_qubit_ref(q)
+                # Standard case: pair each qubit with each output
+                for i, (q, c) in enumerate(zip(meas.qargs, meas.cout)):
+                    qubit_ref = self._get_qubit_ref(q)
+                    # Check if c is a list (multiple bits)
+                    if isinstance(c, list):
+                        # Generate list of bit references
+                        bit_refs = [self._get_qubit_ref(bit) for bit in c]
+                        bit_ref_str = "[" + ", ".join(bit_refs) + "]"
+                        self.write(f"{bit_ref_str} = quantum.measure({qubit_ref})")
+                    else:
                         bit_ref = self._get_qubit_ref(c)
                         self.write(f"{bit_ref} = quantum.measure({qubit_ref})")
-                else:
-                    # Standard case: pair each qubit with each output
-                    for i, (q, c) in enumerate(zip(meas.qargs, meas.cout)):
-                        qubit_ref = self._get_qubit_ref(q)
-                        # Check if c is a list (multiple bits)
-                        if isinstance(c, list):
-                            # Generate list of bit references
-                            bit_refs = [self._get_qubit_ref(bit) for bit in c]
-                            bit_ref_str = "[" + ", ".join(bit_refs) + "]"
-                            self.write(f"{bit_ref_str} = quantum.measure({qubit_ref})")
-                        else:
-                            bit_ref = self._get_qubit_ref(c)
-                            self.write(f"{bit_ref} = quantum.measure({qubit_ref})")
         elif hasattr(meas, "qargs"):
             # Array measurement without explicit output
             if len(meas.qargs) == 1 and hasattr(meas.qargs[0], "size"):

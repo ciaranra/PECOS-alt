@@ -61,6 +61,7 @@ class GuppyFrontend:
         hugr_to_llvm_binary: Path | None = None,
         format_converter: Path | None = None,
         use_rust_backend: bool | None = None,
+        *,
         use_selene_backend: bool = False,
     ) -> None:
         """Initialize the Guppy frontend.

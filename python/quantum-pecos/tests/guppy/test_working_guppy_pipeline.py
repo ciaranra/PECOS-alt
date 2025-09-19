@@ -1,5 +1,7 @@
 """Test the complete working Guppy→HUGR→LLVM→PECOS pipeline."""
 
+import warnings
+
 import pytest
 
 # Check for required dependencies
@@ -111,13 +113,12 @@ class TestHUGRToLLVMCompilation:
         # Compile to HUGR - the compile() method returns the Package directly
         package = simple_circuit.compile()
 
-        # Get HUGR JSON representation (not envelope format)
-        # Note: to_json() is deprecated but works with compile_hugr_to_llvm
-        if hasattr(package, "to_json"):
+        # Get HUGR JSON format - compile_hugr_to_llvm currently requires JSON, not envelope format
+        # We suppress the deprecation warning since we need to use to_json() until
+        # compile_hugr_to_llvm is updated to handle the new envelope format from to_str()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
             hugr_json = package.to_json()
-        else:
-            pytest.skip("Cannot get HUGR JSON representation")
-
         hugr_bytes = hugr_json.encode("utf-8")
         assert len(hugr_bytes) > 0, "HUGR bytes should not be empty"
 
@@ -154,13 +155,12 @@ class TestHUGRToLLVMCompilation:
         # Compile to HUGR - the compile() method returns the Package directly
         package = bell_state.compile()
 
-        # Get HUGR JSON representation (not envelope format)
-        # Note: to_json() is deprecated but works with compile_hugr_to_llvm
-        if hasattr(package, "to_json"):
+        # Get HUGR JSON format - compile_hugr_to_llvm currently requires JSON, not envelope format
+        # We suppress the deprecation warning since we need to use to_json() until
+        # compile_hugr_to_llvm is updated to handle the new envelope format from to_str()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
             hugr_json = package.to_json()
-        else:
-            pytest.skip("Cannot get HUGR JSON representation")
-
         hugr_bytes = hugr_json.encode("utf-8")
 
         try:
