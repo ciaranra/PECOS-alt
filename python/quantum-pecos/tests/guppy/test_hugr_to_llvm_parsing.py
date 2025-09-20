@@ -1,4 +1,4 @@
-"""Test HUGR 0.13 to LLVM parsing in pecos-selene."""
+"""Test HUGR 0.13 to LLVM parsing in pecos-selene-engine."""
 
 import pytest
 
@@ -37,7 +37,7 @@ def test_hugr_to_llvm_compilation() -> None:
         hugr_str = hugr.to_json()
     hugr_bytes = hugr_str.encode("utf-8")
 
-    # Compile HUGR to LLVM using pecos-selene
+    # Compile HUGR to LLVM using pecos-selene-engine
     llvm_ir = compile_hugr_to_llvm(hugr_bytes)
 
     # Verify basic structure - updated for new LLVM format

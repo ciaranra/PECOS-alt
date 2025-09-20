@@ -1,5 +1,5 @@
 use pecos_engines::ClassicalEngine;
-use pecos_selene::selene_library_engine::SeleneLibraryEngine;
+use pecos_selene_engine::selene_library_engine::SeleneLibraryEngine;
 /// Python bindings for `SeleneLibraryEngine`
 use pyo3::prelude::*;
 use std::path::PathBuf;

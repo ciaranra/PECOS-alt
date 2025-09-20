@@ -10,7 +10,7 @@ use std::time::Instant;
 // In real usage, you would use actual engine builders:
 // - pecos_qasm::unified_engine_builder::qasm_engine()
 // - pecos_llvm_sim::engine_builder::llvm_engine()
-// - pecos_selene::selene_executable()
+// - pecos_selene_engine::selene_executable()
 
 fn main() {
     println!("This example demonstrates the reusable simulation pattern.\n");

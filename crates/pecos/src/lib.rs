@@ -108,7 +108,7 @@ pub use pecos_qasm::qasm_engine;
 pub use pecos_llvm_sim::llvm_engine;
 
 #[cfg(feature = "selene")]
-pub use pecos_selene::selene_executable;
+pub use pecos_selene_engine::selene_executable;
 
 #[cfg(feature = "phir")]
 pub use pecos_phir_json::phir_json_engine;

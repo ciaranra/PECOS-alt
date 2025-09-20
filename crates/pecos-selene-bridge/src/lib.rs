@@ -832,7 +832,7 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
             // Read length prefix
             let mut len_bytes = [0u8; 4];
             reader.read_exact(&mut len_bytes).map_err(|e| {
-                anyhow::anyhow!("Failed to read measurement result from PECOS: {}. This indicates a communication problem between Bridge and SeleneExecutableEngine.", e)
+                anyhow::anyhow!("Failed to read measurement result from PECOS: {e}. This indicates a communication problem between Bridge and SeleneExecutableEngine.")
             })?;
 
             let msg_len = u32::from_le_bytes(len_bytes) as usize;
@@ -841,9 +841,7 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
             let mut msg_bytes = vec![0u8; msg_len];
             reader.read_exact(&mut msg_bytes).map_err(|e| {
                 anyhow::anyhow!(
-                    "Failed to read measurement data from PECOS: {}. Expected {} bytes.",
-                    e,
-                    msg_len
+                    "Failed to read measurement data from PECOS: {e}. Expected {msg_len} bytes."
                 )
             })?;
 
@@ -909,7 +907,7 @@ impl SimulatorInterface for PecosSeleneBridgeSimulator {
             let result_message = Self::receive_from_pecos()?;
             let outcomes = result_message
                 .outcomes()
-                .map_err(|e| anyhow::anyhow!("Failed to extract outcomes: {}", e))?;
+                .map_err(|e| anyhow::anyhow!("Failed to extract outcomes: {e}"))?;
 
             if outcomes.is_empty() {
                 return Err(anyhow::anyhow!("No measurement result received"));

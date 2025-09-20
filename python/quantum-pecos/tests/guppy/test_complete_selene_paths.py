@@ -115,28 +115,12 @@ def test_python_llvm_to_selene() -> None:
 
 
 def test_rust_llvm_to_plugin() -> None:
-    """Test: Rust LLVM → Selene Plugin."""
-    try:
-        from pecos_rslib import compile_llvm_to_plugin
-    except ImportError as e:
-        pytest.skip(f"Required imports not available: {e}")
+    """Test: Rust LLVM → Selene Plugin.
 
-    llvm_ir = """
-    %Qubit = type opaque
-    declare void @__quantum__qis__h__body(%Qubit*)
-    define void @test_func() #0 { ret void }
-    attributes #0 = { "EntryPoint" }
+    Note: Plugin compilation feature was removed as it was incomplete and unused.
+    Selene uses its own runtime plugins (selene_simple_runtime_plugin).
     """
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        llvm_file = Path(tmpdir) / "test.ll"
-        llvm_file.write_text(llvm_ir)
-
-        plugin_path = compile_llvm_to_plugin(str(llvm_file))
-        plugin_path = Path(plugin_path)
-
-        assert plugin_path.exists(), "Plugin not created"
-        assert plugin_path.suffix == ".so", "Wrong plugin extension"
+    pytest.skip("Plugin compilation feature removed - Selene uses its own runtime")
 
 
 def test_full_guppy_to_selene_execution() -> None:

@@ -24,9 +24,9 @@ mod engine_builders;
 mod noise_helpers;
 mod pauli_prop_bindings;
 // mod pcg_bindings;
+mod hugr_compilation_bindings;
 mod pecos_rng_bindings;
 mod phir_json_bridge;
-mod plugin_bindings;
 mod quest_bindings;
 mod qulacs_bindings;
 mod selene_library_bindings;
@@ -46,7 +46,7 @@ use coin_toss_bindings::RsCoinToss;
 use cpp_sparse_sim_bindings::CppSparseSim;
 use engine_builders::{
     PyHugrProgram, PyLlvmProgram, PyPhirJsonProgram, PyQasmProgram, PySeleneExecutableConfig,
-    PySeleneExecutableEngine, PySeleneInProcessEngine, PySeleneInterfaceProgram,
+    PySeleneExecutableEngine, PySeleneInterfaceProgram,
 };
 use pauli_prop_bindings::PyPauliProp;
 use pecos_rng_bindings::RngPcg;
@@ -86,8 +86,8 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Register engine builders (QasmEngineBuilder, etc.)
     engine_builders::register_engine_builders(m)?;
 
-    // Register plugin compilation functions
-    plugin_bindings::register_plugin_functions(m)?;
+    // Register HUGR compilation functions
+    hugr_compilation_bindings::register_hugr_compilation_functions(m)?;
 
     // Register program types
     m.add_class::<PyQasmProgram>()?;
@@ -99,7 +99,6 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Register Selene Executable Engine types
     m.add_class::<PySeleneExecutableConfig>()?;
     m.add_class::<PySeleneExecutableEngine>()?;
-    m.add_class::<PySeleneInProcessEngine>()?;
     m.add_class::<PySeleneLibraryEngine>()?;
 
     // Register engine builder functions

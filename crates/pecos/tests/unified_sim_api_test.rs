@@ -15,7 +15,7 @@ mod tests {
             use pecos_llvm_sim::llvm_engine;
             use pecos_programs::{LlvmProgram, QasmProgram};
             use pecos_qasm::qasm_engine;
-            use pecos_selene::selene_executable;
+            use pecos_selene_engine::selene_executable;
 
             // QASM engine with unified API
             let _results = sim_builder()
@@ -65,7 +65,7 @@ mod tests {
             use pecos_llvm_sim::llvm_engine;
             use pecos_programs::{LlvmProgram, QasmProgram};
             use pecos_qasm::qasm_engine;
-            use pecos_selene::selene_executable;
+            use pecos_selene_engine::selene_executable;
 
             // QASM-specific inputs
             let _q1 = qasm_engine().program(QasmProgram::from_string("..."));

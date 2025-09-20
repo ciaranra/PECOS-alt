@@ -39,7 +39,7 @@ fn detect_and_convert_guppy(py: Python, program: &PyObject) -> PyResult<PySimBui
 
         // Create default SeleneExecutableEngineBuilder
         let engine_builder =
-            pecos_selene::selene_executable_builder::SeleneExecutableEngineBuilder::new();
+            pecos_selene_engine::selene_executable_builder::SeleneExecutableEngineBuilder::new();
 
         let builder = PySimBuilder {
             inner: SimBuilderInner::SeleneExecutable(PySeleneExecutableSimBuilder {
@@ -199,7 +199,7 @@ fn is_guppy_function(py: Python, program: &PyObject) -> PyResult<bool> {
 #[pyo3(signature = (program))]
 #[allow(clippy::needless_pass_by_value)] // PyObject must be passed by value for PyO3
 pub fn sim(py: Python, program: PyObject) -> PyResult<PySimBuilder> {
-    use pecos_selene::selene_executable_builder::SeleneExecutableEngineBuilder;
+    use pecos_selene_engine::selene_executable_builder::SeleneExecutableEngineBuilder;
 
     log::debug!(" Rust sim() function called");
     // Try Guppy detection and conversion first
@@ -885,38 +885,9 @@ impl PySimBuilder {
                     let num_qubits = builder.explicit_num_qubits.unwrap_or(10);
                     log::debug!(" Using num_qubits = {num_qubits}");
 
-                    // Try to get cached executable first
-                    let selene_cache = py.import("pecos_rslib.selene_cache")?;
-
-                    // Get HUGR bytes for cache key
-                    let hugr_bytes = if hugr_package.bind_borrowed(py).hasattr("to_str")? {
-                        hugr_package
-                            .bind_borrowed(py)
-                            .call_method0("to_str")?
-                            .extract::<String>()?
-                            .into_bytes()
-                    } else if hugr_package.bind_borrowed(py).hasattr("to_json")? {
-                        hugr_package
-                            .bind_borrowed(py)
-                            .call_method0("to_json")?
-                            .extract::<String>()?
-                            .into_bytes()
-                    } else {
-                        // Fallback: serialize to string representation
-                        hugr_package
-                            .bind_borrowed(py)
-                            .str()?
-                            .to_string()
-                            .into_bytes()
-                    };
-
-                    // Check cache
-                    let get_cached = selene_cache.getattr("get_cached_executable")?;
-                    let cached_result = get_cached
-                        .call1((pyo3::types::PyBytes::new(py, &hugr_bytes), num_qubits))?;
-
-                    let (exec_path, artifacts_path) = if cached_result.is_none() {
-                        log::debug!(" Cache miss - building Selene executable");
+                    // Always build fresh (no caching)
+                    let (exec_path, artifacts_path) = {
+                        log::debug!(" Building Selene executable");
 
                         // Build the Selene executable
                         let selene_sim = py.import("selene_sim")?;
@@ -973,35 +944,11 @@ impl PySimBuilder {
                         let artifacts_path =
                             build_path.call_method1("__truediv__", ("artifacts",))?;
 
-                        // Cache the executable for future use
-                        let cache_executable = selene_cache.getattr("cache_executable")?;
-                        let (cached_exec, cached_artifacts) = cache_executable
-                            .call1((
-                                pyo3::types::PyBytes::new(py, &hugr_bytes),
-                                num_qubits,
-                                &exec_path,
-                                &artifacts_path,
-                            ))?
-                            .extract::<(PyObject, PyObject)>()?;
-
-                        (cached_exec, cached_artifacts)
-                    } else {
-                        log::debug!(" Cache hit - using cached Selene executable");
-                        let (cached_exec, cached_artifacts) =
-                            cached_result.extract::<(PyObject, PyObject)>()?;
-
-                        // Set SELENE_ARTIFACTS_DIR for the cached artifacts
-                        let artifacts_str = cached_artifacts.bind_borrowed(py).str()?.to_string();
-                        unsafe {
-                            std::env::set_var("SELENE_ARTIFACTS_DIR", &artifacts_str);
-                        }
-                        log::debug!(" Set SELENE_ARTIFACTS_DIR={artifacts_str}");
-
-                        (cached_exec, cached_artifacts)
+                        (exec_path, artifacts_path)
                     };
 
-                    let exec_path_str = exec_path.bind_borrowed(py).str()?.to_string();
-                    let artifacts_path_str = artifacts_path.bind_borrowed(py).str()?.to_string();
+                    let exec_path_str = exec_path.str()?.to_string();
+                    let artifacts_path_str = artifacts_path.str()?.to_string();
 
                     log::debug!(" Selene executable at: {exec_path_str}");
                     log::debug!(" Artifacts at: {artifacts_path_str}");

@@ -9,7 +9,7 @@ mod tests {
     use pecos_llvm_sim::llvm_engine;
     use pecos_programs::{HugrProgram, LlvmProgram, QasmProgram};
     use pecos_qasm::qasm_engine;
-    use pecos_selene::selene_executable;
+    use pecos_selene_engine::selene_executable;
 
     #[test]
     fn test_qasm_engine_accepts_shared_program() {

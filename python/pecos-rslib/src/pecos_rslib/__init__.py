@@ -51,14 +51,6 @@ except ImportError:
 
 
 try:
-    from pecos_rslib._pecos_rslib import compile_llvm_to_plugin
-except ImportError:
-    # Fallback if not available
-    def compile_llvm_to_plugin(*_args, **_kwargs) -> NoReturn:
-        raise ImportError("compile_llvm_to_plugin is not available in this build")
-
-
-try:
     from pecos_rslib.phir import PhirJsonEngine, PhirJsonSimulation
 
     _phir_imports_available = True
@@ -469,7 +461,6 @@ __all__ = [
     # "reset_llvm_runtime",
     # HUGR/LLVM compilation
     "compile_hugr_to_llvm",
-    "compile_llvm_to_plugin",
     # Guppy conversion - may not be available
     # "guppy_to_hugr",
     # Program types

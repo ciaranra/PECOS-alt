@@ -8,7 +8,7 @@ use pecos_engines::{ClassicalControlEngineBuilder, MonteCarloEngine, SimBuilder,
 use pecos_llvm_sim::llvm_engine;
 use pecos_programs::Program;
 use pecos_qasm::qasm_engine;
-use pecos_selene::selene_executable;
+use pecos_selene_engine::selene_executable;
 
 /// Extension trait for `SimBuilder` to add program-based methods
 pub trait SimBuilderExt {

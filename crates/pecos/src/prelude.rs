@@ -51,7 +51,7 @@ pub use pecos_phir_json::prelude::*;
 pub use pecos_qasm::prelude::*;
 pub use pecos_qsim::prelude::*;
 #[cfg(feature = "selene")]
-pub use pecos_selene::prelude::*;
+pub use pecos_selene_engine::prelude::*;
 
 // Re-export ShotVec directly from pecos_engines for easier access
 pub use pecos_engines::shot_results::ShotVec;

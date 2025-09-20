@@ -211,7 +211,7 @@ def compile_hugr_to_llvm(
                 try:
                     from pecos_rslib import compile_hugr_to_llvm
 
-                    # Try the updated compiler that uses pecos-selene backend
+                    # Try the updated compiler that uses pecos-selene-engine backend
                     return compile_hugr_to_llvm(hugr_bytes)
                 except Exception as selene_error:
                     msg = f"Both PECOS and updated HUGR compilers failed. PECOS: {e}, Updated: {selene_error}"

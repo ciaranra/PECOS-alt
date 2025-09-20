@@ -117,7 +117,7 @@ def compile_hugr_via_llvm(hugr_bytes: bytes) -> bytes:
     """
     # Step 1: HUGR → LLVM IR
     try:
-        # Try pecos-selene's HUGR to LLVM compiler
+        # Try pecos-selene-engine's HUGR to LLVM compiler
         from pecos_rslib import compile_hugr_to_llvm
 
         llvm_ir = compile_hugr_to_llvm(hugr_bytes)

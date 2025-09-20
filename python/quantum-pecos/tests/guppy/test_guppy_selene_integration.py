@@ -1,4 +1,4 @@
-"""Test Guppy integration with pecos-selene (HUGR 0.13)."""
+"""Test Guppy integration with pecos-selene-engine (HUGR 0.13)."""
 
 import tempfile
 from pathlib import Path

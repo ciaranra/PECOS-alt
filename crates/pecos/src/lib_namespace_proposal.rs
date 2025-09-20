@@ -10,7 +10,7 @@ pub mod engines {
     // Re-export engine builders
     pub use pecos_qasm::{qasm_engine, QasmEngine, QasmEngineBuilder};
     pub use pecos_llvm_sim::{llvm_engine, LlvmEngine, LlvmEngineBuilder};
-    pub use pecos_selene::{selene_engine, SeleneEngine, SeleneEngineBuilder};
+    pub use pecos_selene_engine::{selene_engine, SeleneEngine, SeleneEngineBuilder};
 
     // Re-export the trait
     pub use pecos_engines::ClassicalControlEngine;

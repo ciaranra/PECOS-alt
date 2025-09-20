@@ -10,8 +10,8 @@ pub fn compile_hugr_to_llvm_rust(
     hugr_bytes: &[u8],
     output_path: Option<String>
 ) -> PyResult<String> {
-    // Use the pecos-selene HUGR 0.13 compiler instead of pecos-hugr
-    use pecos_selene::hugr_to_llvm::GuppylangCompiler;
+    // Use the pecos-selene-engine HUGR 0.13 compiler instead of pecos-hugr
+    use pecos_selene_engine::hugr_to_llvm::GuppylangCompiler;
 
     let mut compiler = GuppylangCompiler::new();
 

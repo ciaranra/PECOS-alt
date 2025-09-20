@@ -19,8 +19,8 @@ use pecos_programs::{
     HugrProgram, LlvmProgram, PhirJsonProgram, QasmProgram, SeleneInterfaceProgram,
 };
 use pecos_qasm::{QasmEngineBuilder as RustQasmEngineBuilder, qasm_engine as rust_qasm_engine};
-use pecos_selene::{
-    SeleneExecutableEngineBuilder as RustSeleneEngineBuilder, SeleneInProcessEngine,
+use pecos_selene_engine::{
+    SeleneExecutableEngineBuilder as RustSeleneEngineBuilder,
     selene_executable as rust_selene_executable,
 };
 use pyo3::exceptions::PyRuntimeError;
@@ -353,8 +353,11 @@ pub struct PyPhirJsonSimBuilder {
 /// Builder for Selene executable engine with bridge approach
 pub struct PySeleneExecutableSimBuilder {
     pub(crate) program: Option<PyObject>, // Guppy function or HUGR to compile to executable
-    pub(crate) engine_builder:
-        Arc<Mutex<Option<pecos_selene::selene_executable_builder::SeleneExecutableEngineBuilder>>>,
+    pub(crate) engine_builder: Arc<
+        Mutex<
+            Option<pecos_selene_engine::selene_executable_builder::SeleneExecutableEngineBuilder>,
+        >,
+    >,
     pub(crate) seed: Option<u64>,
     pub(crate) workers: Option<usize>,
     pub(crate) quantum_engine_builder: Option<PyObject>,
@@ -1197,53 +1200,6 @@ impl PySeleneExecutableEngine {
     }
 }
 
-/// Python wrapper for `SeleneInProcessEngine`
-#[pyclass(name = "SeleneInProcessEngine")]
-pub struct PySeleneInProcessEngine {
-    inner: SeleneInProcessEngine,
-}
-
-#[pymethods]
-impl PySeleneInProcessEngine {
-    #[new]
-    fn new(num_qubits: usize) -> PyResult<Self> {
-        let engine = SeleneInProcessEngine::new(num_qubits)
-            .map_err(|e| PyRuntimeError::new_err(format!("Failed to create engine: {e}")))?;
-        Ok(PySeleneInProcessEngine { inner: engine })
-    }
-
-    /// Set the Selene Interface Program
-    fn with_program(&mut self, program: &PySeleneInterfaceProgram) -> PyResult<()> {
-        let num_qubits = 1; // We'll use 1 for now
-        let new_engine = SeleneInProcessEngine::new(num_qubits)
-            .map_err(|e| PyRuntimeError::new_err(format!("Failed to create engine: {e}")))?
-            .with_program(program.inner.clone());
-        self.inner = new_engine;
-        Ok(())
-    }
-
-    /// Process a single shot
-    fn process(&mut self, _input: &Bound<'_, PyAny>) -> PyResult<PyObject> {
-        use pecos_engines::Engine;
-        let shot = self
-            .inner
-            .process(())
-            .map_err(|e| PyRuntimeError::new_err(format!("Processing failed: {e}")))?;
-
-        Python::with_gil(|py| {
-            let dict = pyo3::types::PyDict::new(py);
-            for (key, value) in &shot.data {
-                if let pecos_engines::shot_results::Data::U32(v) = value {
-                    dict.set_item(key, v)?;
-                } else {
-                    // Handle other data types if needed
-                }
-            }
-            Ok(dict.into())
-        })
-    }
-}
-
 /// Create a `SimBuilder` from scratch without a program
 #[pyfunction]
 pub fn sim_builder() -> PySimBuilder {
@@ -1263,7 +1219,6 @@ pub fn register_engine_builders(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Selene Executable Engine
     m.add_class::<PySeleneExecutableConfig>()?;
     m.add_class::<PySeleneExecutableEngine>()?;
-    m.add_class::<PySeleneInProcessEngine>()?;
 
     // Simulation builders are now handled by the unified PySimBuilder in sim.rs
 

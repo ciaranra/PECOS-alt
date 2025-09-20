@@ -35,7 +35,7 @@ hugr-llvm-pipeline = ["pecos-hugr", "dep:hugr"]
 hugr = ["hugr-llvm-pipeline"]
 
 # HUGR 0.13 support for guppylang compatibility
-hugr-013 = ["pecos-selene/hugr-013"]
+hugr-013 = ["pecos-selene-engine/hugr-013"]
 
 [dependencies]
 pecos.workspace = true
@@ -50,8 +50,7 @@ pecos-quest = { path = "../../../crates/pecos-quest", features = ["cpu"] }
 pecos-qulacs = { path = "../../../crates/pecos-qulacs" }
 pecos-llvm-runtime.workspace = true
 pecos-llvm-sim.workspace = true
-pecos-selene = { path = "../../../crates/pecos-selene" }
-pecos-selene-plugins = { path = "../../../crates/pecos-selene-plugins" }
+pecos-selene-engine = { path = "../../../crates/pecos-selene-engine" }
 pecos-phir = { path = "../../../crates/pecos-phir" }
 pecos-phir-json = { path = "../../../crates/pecos-phir-json" }
 pecos-hugr = { path = "../../../crates/pecos-hugr", optional = true }

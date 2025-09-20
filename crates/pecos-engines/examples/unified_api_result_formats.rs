@@ -13,7 +13,7 @@ fn main() {
     // Note: In real usage, you would use actual engine builders from the crates:
     // - pecos_qasm::unified_engine_builder::qasm_engine()
     // - pecos_llvm_sim::engine_builder::llvm_engine()
-    // - pecos_selene::selene_executable()
+    // - pecos_selene_engine::selene_executable()
     //
     // This example focuses on the result format conversions rather than
     // the engine implementation details.

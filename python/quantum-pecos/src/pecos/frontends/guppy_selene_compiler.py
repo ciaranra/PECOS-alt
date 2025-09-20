@@ -21,16 +21,13 @@ except ImportError:
     GuppyModule = None
     guppy = None
 
-# We don't compile to plugins - Selene uses native executables
-# from pecos_rslib import compile_llvm_to_plugin
-
 
 class GuppySeleneCompiler:
     """Compiles Guppy quantum programs for Selene execution.
 
     This compiler handles the compilation pipeline in Python:
     1. Guppy function → HUGR (using guppylang)
-    2. HUGR → LLVM IR (using pecos-selene with HUGR 0.13)
+    2. HUGR → LLVM IR (using pecos-selene-engine with HUGR 0.13)
 
     The LLVM IR can then be executed by Selene's runtime.
     """
@@ -132,8 +129,6 @@ class GuppySeleneCompiler:
         raise RuntimeError(
             msg,
         )
-
-    # Removed _compile_llvm_to_plugin - we don't compile to plugins
 
     def __del__(self) -> None:
         """Clean up temporary directory if created."""
