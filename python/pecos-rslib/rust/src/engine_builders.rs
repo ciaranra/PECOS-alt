@@ -16,7 +16,7 @@ use pecos_phir_json::{
     PhirJsonEngineBuilder as RustPhirJsonEngineBuilder, phir_json_engine as rust_phir_json_engine,
 };
 use pecos_programs::{
-    HugrProgram, LlvmProgram, PhirJsonProgram, QasmProgram, SeleneInterfaceProgram,
+    HugrProgram, LlvmProgram, PhirJsonProgram, QasmProgram, QisProgram, SeleneInterfaceProgram,
 };
 use pecos_qasm::{QasmEngineBuilder as RustQasmEngineBuilder, qasm_engine as rust_qasm_engine};
 use pecos_selene_engine::{
@@ -412,6 +412,33 @@ impl PyLlvmProgram {
         PyLlvmProgram {
             inner: LlvmProgram::from_ir(source),
         }
+    }
+}
+
+#[pyclass(name = "QisProgram")]
+#[derive(Clone)]
+pub struct PyQisProgram {
+    pub(crate) inner: QisProgram,
+}
+
+#[pymethods]
+impl PyQisProgram {
+    #[new]
+    fn new(source: String) -> Self {
+        PyQisProgram {
+            inner: QisProgram::from_string(source),
+        }
+    }
+
+    #[staticmethod]
+    fn from_string(source: String) -> Self {
+        PyQisProgram {
+            inner: QisProgram::from_string(source),
+        }
+    }
+
+    fn source(&self) -> String {
+        self.inner.source().to_string()
     }
 }
 

@@ -16,21 +16,14 @@ description = "PECOS High-level Intermediate Representation (PHIR) pipeline for 
 pecos-core = { workspace = true, features = ["anyhow"] }
 pecos-engines.workspace = true
 
-# HUGR dependencies
-hugr-core.workspace = true
-
 # JSON serialization (keeping for HUGR parsing)
 serde = { workspace = true, features = ["derive"] }
-serde_json.workspace = true
 
 # Error handling
 thiserror.workspace = true
 
 # Regular expressions for text processing
 regex.workspace = true
-
-# Lazy static for global dialect registry
-lazy_static.workspace = true
 
 # Temporary file handling for MLIR pipeline
 tempfile.workspace = true
@@ -43,7 +36,6 @@ pyo3 = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile.workspace = true
-pecos-phir-json.workspace = true
 
 [features]
 default = []

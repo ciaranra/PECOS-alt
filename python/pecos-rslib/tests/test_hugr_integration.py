@@ -148,31 +148,66 @@ def test_convenience_functions() -> None:
         if not available:
             pytest.skip(f"HUGR support not available: {message}")
 
-        # compile_hugr_to_llvm_rust now returns a default LLVM string
-        # instead of raising errors for invalid HUGR
+        # Test that invalid HUGR raises an error
         dummy_hugr = b"dummy hugr data"
-        result = compile_hugr_to_llvm_rust(dummy_hugr)
-        # Should return a default LLVM IR string
-        assert isinstance(result, str)
-        assert "ModuleID" in result or "source_filename" in result
+        with pytest.raises(RuntimeError, match="Failed to read HUGR"):
+            compile_hugr_to_llvm_rust(dummy_hugr)
 
-        # Test with file path
-        with tempfile.NamedTemporaryFile(suffix=".hugr", delete=False) as f:
-            f.write(dummy_hugr)
-            temp_hugr_path = f.name
-
-        with tempfile.NamedTemporaryFile(suffix=".ll", delete=False) as f:
-            temp_qir_path = f.name
+        # Test with output path - should still raise error for invalid HUGR
+        import os
+        temp_dir = tempfile.mkdtemp()
+        temp_qir_path = os.path.join(temp_dir, "output.ll")
 
         try:
-            # This should also return default LLVM
-            result = compile_hugr_to_llvm_rust(temp_hugr_path, temp_qir_path)
-            assert result is not None
-            # Check that output file was created
-            assert Path(temp_qir_path).exists()
+            # Should raise error for invalid HUGR even with output path
+            with pytest.raises(RuntimeError, match="Failed to read HUGR"):
+                compile_hugr_to_llvm_rust(dummy_hugr, temp_qir_path)
+            # Output file should not be created for invalid HUGR
+            assert not Path(temp_qir_path).exists()
         finally:
-            Path(temp_hugr_path).unlink()
-            Path(temp_qir_path).unlink(missing_ok=True)
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+        # Test with valid HUGR (if Guppy is available)
+        try:
+            from guppylang import guppy
+            from guppylang.std.quantum import qubit, h, measure
+
+            @guppy
+            def simple_circuit() -> bool:
+                q = qubit()
+                h(q)
+                return measure(q)
+
+            # Compile to HUGR
+            package = simple_circuit.compile()
+            hugr_json = package.to_json()
+            valid_hugr = hugr_json.encode('utf-8')
+
+            # Should successfully compile valid HUGR
+            result = compile_hugr_to_llvm_rust(valid_hugr)
+            assert isinstance(result, str)
+            assert len(result) > 0
+            # Check for LLVM IR markers (Selene QIS patterns)
+            assert "@qmain" in result or "@___qalloc" in result or "define" in result
+
+            # Test with output path
+            with tempfile.NamedTemporaryFile(suffix=".ll", delete=False) as f:
+                temp_qir_path = f.name
+
+            try:
+                result = compile_hugr_to_llvm_rust(valid_hugr, temp_qir_path)
+                assert isinstance(result, str)
+                # Check that output file was created
+                assert Path(temp_qir_path).exists()
+                # Verify file contents match returned string
+                assert Path(temp_qir_path).read_text() == result
+            finally:
+                Path(temp_qir_path).unlink(missing_ok=True)
+
+        except ImportError:
+            # Guppy not available, skip the valid HUGR test
+            pass
 
     except ImportError:
         pytest.skip("Rust HUGR backend not available")

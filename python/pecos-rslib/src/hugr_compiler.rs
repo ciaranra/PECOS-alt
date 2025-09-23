@@ -10,12 +10,10 @@ pub fn compile_hugr_to_llvm_rust(
     hugr_bytes: &[u8],
     output_path: Option<String>
 ) -> PyResult<String> {
-    // Use the pecos-selene-engine HUGR 0.13 compiler instead of pecos-hugr
-    use pecos_selene_engine::hugr_to_llvm::GuppylangCompiler;
+    // Use the unified pecos-hugr-qis compiler
+    use pecos_hugr_qis::compile_hugr_bytes_to_string;
 
-    let mut compiler = GuppylangCompiler::new();
-
-    match compiler.compile_hugr_json(hugr_bytes) {
+    match compile_hugr_bytes_to_string(hugr_bytes) {
         Ok(llvm_ir) => {
             // If output path is provided, also write to file
             if let Some(path) = output_path {

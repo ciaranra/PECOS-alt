@@ -59,20 +59,7 @@ pub mod selene_library_engine;
 pub mod selene_runtime_init;
 // Simple runtime removed - use selene_executable instead
 
-#[cfg(feature = "hugr-013")]
-pub mod hugr_013_support;
-
-#[cfg(feature = "hugr-013")]
-pub mod hugr_llvm_compiler;
-
-#[cfg(feature = "hugr-013")]
-pub mod hugr_qis_lowering;
-
-#[cfg(feature = "hugr-013")]
-pub mod hugr_to_llvm;
-
-#[cfg(feature = "hugr-013")]
-pub mod hugr_to_llvm_cfg_support;
+// HUGR 0.13 support has been removed - using tket's HUGR 0.22 instead
 
 // Use Selene's SeleneInstance directly - this is the natural way to use Selene
 // SeleneInstance provides all FFI functions and manages the execution context

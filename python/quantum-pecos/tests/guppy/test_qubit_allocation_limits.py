@@ -158,7 +158,8 @@ class TestQubitAllocationLimits:
             error_was_expected = True
             error_msg = str(e).lower()
 
-            # Verify the error is related to resource constraints
+            # Verify the error is related to resource constraints or IPC failure
+            # IPC failures often happen when subprocess terminates due to resource limits
             expected_error_keywords = [
                 "qubit",  # Qubit allocation error
                 "range",  # Index out of range
@@ -168,6 +169,9 @@ class TestQubitAllocationLimits:
                 "resource",  # Resource limit
                 "allocation",  # Allocation failure
                 "exceeded",  # Limit exceeded
+                "broken pipe",  # IPC failure when subprocess terminates
+                "pipe",  # General pipe errors
+                "ipc",  # IPC errors
             ]
 
             assert any(

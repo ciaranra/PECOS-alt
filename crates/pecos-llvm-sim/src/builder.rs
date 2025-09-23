@@ -1,7 +1,7 @@
 use crate::config::{LlvmSimConfig, NoiseModelConfig, QuantumEngineType};
 use crate::simulation::LlvmSimulation;
 use crate::source::LlvmSource;
-use hugr_core::Hugr;
+use tket::hugr::Hugr;
 use pecos_core::errors::PecosError;
 use std::path::Path;
 

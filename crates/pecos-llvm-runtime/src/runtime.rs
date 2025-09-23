@@ -1,12 +1,12 @@
-/// Instance-based LLVM Runtime Implementation for HUGR Convention
+/// Instance-based LLVM Runtime Implementation for QIS (Quantum Instruction Set)
 ///
 /// This runtime eliminates global state by using `RuntimeRegistry` to map
 /// threads to their own isolated runtime states. Each worker/thread operates
 /// independently without sharing state until results are combined.
 ///
-/// The runtime is organized into two layers:
-/// 1. Core runtime implementation (convention-agnostic)
-/// 2. HUGR convention adapter (integer-based)
+/// The runtime implements the QIS standard used by HUGR, tket2, guppylang, and
+/// other modern quantum compilers, with hardware-native gate sets (RXY/RZ/RZZ)
+/// and triple underscore calling conventions.
 // Submodule declarations
 pub mod builder;
 pub mod cleanup;
@@ -610,7 +610,7 @@ pub mod core_runtime {
 }
 
 // =============================================================================
-// LLVM Runtime Functions
+// QIS Runtime Functions
 // =============================================================================
 
 /// Reset the LLVM runtime state
@@ -633,16 +633,33 @@ pub unsafe extern "C" fn llvm_runtime_reset() {
     // Each thread should only reset its own runtime state.
 }
 
-/// Initialize the quantum runtime
+/// Setup function for QIS runtime
+///
+/// Called at the beginning of program execution with a seed/time cursor
 ///
 /// # Safety
 ///
 /// This function is marked unsafe as it's called from C/FFI context.
-/// The config parameter is currently unused but must be a valid pointer or null.
-/// Multiple calls are safe due to internal initialization guards.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __quantum__rt__initialize(_config: *const u8) {
+pub unsafe extern "C" fn setup(seed: i64) {
+    debug!("QIS: Setup with seed {}", seed);
     core_runtime::initialize();
+    // TODO: Use seed for random number generation if needed
+}
+
+/// Teardown function for QIS runtime
+///
+/// Called at the end of program execution
+///
+/// # Safety
+///
+/// This function is marked unsafe as it's called from C/FFI context.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn teardown() -> i64 {
+    debug!("QIS: Teardown");
+    // Shot finalization is handled by the runtime automatically
+    // Return success status
+    0
 }
 
 // Note: Standard LLVM runtime functions (with usize parameters) have been removed.
@@ -1614,6 +1631,201 @@ pub unsafe extern "C" fn llvm_runtime_get_measurement_result_ids() -> *mut FFIRe
     });
 
     Box::into_raw(ffi_data)
+}
+
+// =============================================================================
+// QIS (Quantum Instruction Set) Functions
+// =============================================================================
+// These functions implement the QIS standard used by HUGR, tket2, guppylang,
+// and other modern quantum compilers. QIS uses hardware-native gate sets
+// (RXY/RZ/RZZ) and triple underscore calling conventions.
+
+// -----------------------------------------------------------------------------
+// QIS Memory Management
+// -----------------------------------------------------------------------------
+
+/// Allocate a new qubit in |0⟩ state
+///
+/// Returns a unique qubit identifier
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ___qalloc() -> i64 {
+    unsafe { __quantum__rt__qubit_allocate() }
+}
+
+/// Free a qubit
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ___qfree(qubit: i64) {
+    unsafe { __quantum__rt__qubit_release(qubit) }
+}
+
+/// Reset a qubit to |0⟩ state
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ___reset(qubit: i64) {
+    unsafe { __quantum__qis__reset__body(qubit) }
+}
+
+// -----------------------------------------------------------------------------
+// QIS Measurement Functions
+// -----------------------------------------------------------------------------
+
+/// Perform immediate measurement on a qubit
+///
+/// Returns the measurement result as a boolean
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ___measure(qubit: i64) -> bool {
+    debug!("QIS: Immediate measure qubit {}", qubit);
+
+    let result = unsafe { __quantum__rt__result_allocate() };
+    unsafe { __quantum__qis__m__body(qubit, result) };
+    let int_result = unsafe { __quantum__rt__result_get_one(result) };
+
+    int_result != 0
+}
+
+/// Perform lazy measurement on a qubit
+///
+/// Returns a future reference to the measurement result
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ___lazy_measure(qubit: i64) -> i64 {
+    debug!("QIS: Lazy measure qubit {}", qubit);
+
+    let result = unsafe { __quantum__rt__result_allocate() };
+    unsafe { __quantum__qis__m__body(qubit, result) };
+    result
+}
+
+/// Perform lazy measurement with leakage detection
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ___lazy_measure_leaked(qubit: i64) -> i64 {
+    debug!("QIS: Lazy measure with leakage detection on qubit {}", qubit);
+    // TODO: Add leakage detection when backend supports it
+    unsafe { ___lazy_measure(qubit) }
+}
+
+/// Perform lazy measurement and reset
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ___lazy_measure_reset(qubit: i64) -> i64 {
+    debug!("QIS: Lazy measure and reset qubit {}", qubit);
+
+    let result = unsafe { ___lazy_measure(qubit) };
+    unsafe { ___reset(qubit) };
+    result
+}
+
+// -----------------------------------------------------------------------------
+// QIS Gate Functions
+// -----------------------------------------------------------------------------
+
+/// Apply an XY rotation (PhasedX gate)
+///
+/// RXY(theta, phi) = RZ(phi) RX(theta) RZ(-phi)
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ___rxy(qubit: i64, theta: f64, phi: f64) {
+    debug!("QIS: RXY on qubit {} with theta={}, phi={}", qubit, theta, phi);
+
+    // Check if this is a Hadamard gate (specific angles)
+    const PI_2: f64 = std::f64::consts::PI / 2.0;
+    const EPSILON: f64 = 1e-10;
+
+    if (theta - PI_2).abs() < EPSILON && (phi + PI_2).abs() < EPSILON {
+        debug!("QIS: Recognized as Hadamard gate");
+        unsafe { __quantum__qis__h__body(qubit) };
+    } else {
+        // General rotation: RXY(theta, phi) = RZ(-phi) RY(theta) RZ(phi)
+        unsafe {
+            __quantum__qis__rz__body(-phi, qubit);
+            __quantum__qis__ry__body(theta, qubit);
+            __quantum__qis__rz__body(phi, qubit);
+        }
+    }
+}
+
+/// Apply a Z rotation
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ___rz(qubit: i64, theta: f64) {
+    debug!("QIS: RZ on qubit {} with theta={}", qubit, theta);
+    unsafe { __quantum__qis__rz__body(theta, qubit) };
+}
+
+/// Apply a ZZ rotation (two-qubit gate)
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ___rzz(qubit1: i64, qubit2: i64, theta: f64) {
+    debug!("QIS: RZZ on qubits {} and {} with theta={}", qubit1, qubit2, theta);
+    // RZZ(theta) = CNOT(q1,q2) RZ(theta)(q2) CNOT(q1,q2)
+    unsafe {
+        __quantum__qis__cnot__body(qubit1, qubit2);
+        __quantum__qis__rz__body(theta, qubit2);
+        __quantum__qis__cnot__body(qubit1, qubit2);
+    }
+}
+
+// -----------------------------------------------------------------------------
+// QIS Future Reference Management
+// -----------------------------------------------------------------------------
+
+/// Increment reference count for a future
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ___inc_future_refcount(reference: i64) {
+    debug!("QIS: Increment refcount for future {}", reference);
+    // Future references in PECOS are managed automatically
+    // This is a no-op for now but could be used for reference tracking
+}
+
+/// Decrement reference count for a future
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ___dec_future_refcount(reference: i64) {
+    debug!("QIS: Decrement refcount for future {}", reference);
+    // Future references in PECOS are managed automatically
+    // This is a no-op for now but could be used for cleanup
+}
+
+/// Read a boolean value from a future reference
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ___read_future_bool(reference: i64) -> bool {
+    debug!("QIS: Read boolean from future {}", reference);
+    let result = unsafe { __quantum__rt__result_get_one(reference) };
+    result != 0
+}
+
+/// Read an unsigned integer value from a future reference
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ___read_future_uint(reference: i64) -> u64 {
+    debug!("QIS: Read uint from future {}", reference);
+    let result = unsafe { __quantum__rt__result_get_one(reference) };
+    result as u64
+}
+
+// -----------------------------------------------------------------------------
+// QIS Error Handling
+// -----------------------------------------------------------------------------
+
+/// Panic function for error handling
+///
+/// Error codes < 1000 end the current shot, >= 1000 terminate the program
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn panic(code: i32, message: *const i8) -> ! {
+    use std::ffi::CStr;
+
+    let msg = if message.is_null() {
+        "Unknown error".to_string()
+    } else {
+        unsafe { CStr::from_ptr(message) }
+            .to_str()
+            .unwrap_or("Invalid error message")
+            .to_string()
+    };
+
+    eprintln!("QIS PANIC: Code {}: {}", code, msg);
+
+    // Error codes >= 1000 are fatal and terminate the program
+    // Error codes < 1000 should just end the current shot
+    if code >= 1000 {
+        std::process::exit(code - 1000);
+    } else {
+        // For now, still exit, but this should eventually just end the shot
+        // TODO: Implement proper shot termination
+        std::process::exit(code);
+    }
 }
 
 /// Free result IDs data

@@ -1,65 +1,69 @@
-//! Tests for HUGR input support
+//! Tests for LLVM program input
 //!
-//! These tests demonstrate the API for HUGR inputs.
-//! Full integration tests would require a working HUGR → LLVM compilation pipeline.
+//! Note: Direct HUGR support has been removed. HUGR compilation now uses
+//! tket's HUGR 0.22 through the pecos-hugr-qis crate.
 
 use pecos_engines::{DepolarizingNoise, sim_builder, sparse_stabilizer, state_vector};
 use pecos_llvm_sim::llvm_engine;
-use pecos_programs::HugrProgram;
+use pecos_programs::LlvmProgram;
 
 #[test]
-fn test_hugr_sim_api() {
-    // This test demonstrates the API without requiring actual HUGR
-    use hugr_core::builder::{DFGBuilder, Dataflow, DataflowHugr};
-    use hugr_core::extension::prelude::qb_t;
-    use hugr_core::types::Signature;
+fn test_llvm_sim_api() {
+    // Test with LLVM IR input
+    let llvm_ir = r"
+        ; ModuleID = 'test'
+        declare i8* @__pecos__new_array(i64)
+        declare void @__pecos__end_array(i8*)
 
-    // Create a simple HUGR (this is just for API demonstration)
-    let _hugr = {
-        let builder = DFGBuilder::new(Signature::new(vec![qb_t()], vec![qb_t()])).unwrap();
-        let [q] = builder.input_wires_arr();
-        builder.finish_hugr_with_outputs([q]).unwrap()
-    };
+        define void @main() {
+            %q = call i8* @__pecos__new_array(i64 1)
+            call void @__pecos__end_array(i8* %q)
+            ret void
+        }
+    ";
 
-    // Test builder method with HUGR program
-    let hugr_bytes = vec![0x42; 100]; // Dummy serialized HUGR
+    // Test builder method with LLVM program
     let builder = sim_builder()
-        .classical(llvm_engine().program(HugrProgram::from_bytes(hugr_bytes)))
+        .classical(llvm_engine().program(LlvmProgram::from_ir(llvm_ir)))
         .seed(42)
         .noise(DepolarizingNoise { p: 0.01 });
     assert!(matches!(builder, _));
 }
 
 #[test]
-fn test_hugr_bytes_input() {
-    // Test with dummy HUGR bytes
-    let hugr_bytes = vec![0x42; 100]; // Dummy bytes
+fn test_llvm_bytes_input() {
+    // Test with LLVM bitcode bytes
+    let llvm_bytes = vec![0x42; 100]; // Dummy bytes for API testing
 
     let builder = sim_builder()
-        .classical(llvm_engine().program(HugrProgram::from_bytes(hugr_bytes)))
+        .classical(llvm_engine().program(LlvmProgram::from_bitcode(llvm_bytes)))
         .workers(4)
-        .qubits(2)
         .quantum(state_vector());
-
     assert!(matches!(builder, _));
 }
 
 #[test]
-fn test_hugr_file_input() {
-    use std::fs;
-    use tempfile::NamedTempFile;
+fn test_hugr_compilation_note() {
+    println!("Note: HUGR compilation has moved to the pecos-hugr-qis crate");
+    println!("To compile HUGR to LLVM:");
+    println!("1. Use pecos_hugr_qis::compile_hugr_bytes_to_string() in Rust");
+    println!("2. Use pecos_rslib.compile_hugr_to_llvm_rust() in Python");
+    println!("3. Feed the resulting LLVM IR to LlvmProgram::from_ir()");
+}
 
-    // Create a temporary file with dummy HUGR content
-    let temp_file = NamedTempFile::new().expect("Failed to create temp file");
-    let hugr_bytes = vec![0x42; 100]; // Dummy HUGR data
-    fs::write(temp_file.path(), &hugr_bytes).expect("Failed to write temp file");
+#[test]
+fn test_program_with_different_quantum_backends() {
+    let llvm_ir = r"
+        define void @main() { ret void }
+    ";
 
-    // Test with file path
-    let builder = sim_builder()
-        .classical(llvm_engine().program(HugrProgram::from_file(temp_file.path()).unwrap()))
-        .seed(12345)
-        .qubits(2)
+    // Test with state vector backend
+    let _sv_builder = sim_builder()
+        .classical(llvm_engine().program(LlvmProgram::from_ir(llvm_ir)))
+        .quantum(state_vector());
+
+    // Test with sparse stabilizer backend
+    let _stab_builder = sim_builder()
+        .classical(llvm_engine().program(LlvmProgram::from_ir(llvm_ir)))
         .quantum(sparse_stabilizer());
-
-    assert!(matches!(builder, _));
 }

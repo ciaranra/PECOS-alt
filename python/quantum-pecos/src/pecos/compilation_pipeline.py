@@ -51,13 +51,26 @@ def compile_guppy_to_hugr(guppy_function: Callable) -> bytes:
         raise ValueError(msg)
 
     try:
-        # Compile the function - try both new and old API
-        if hasattr(guppy_function, "compile"):
-            # New API: function.compile()
-            compiled = guppy_function.compile()
+        # Check if this is a parametric function (has arguments)
+        import inspect
+        sig = inspect.signature(guppy_function.__wrapped__ if hasattr(guppy_function, '__wrapped__') else guppy_function)
+        has_params = len(sig.parameters) > 0
+
+        if has_params:
+            # For parametric functions, use compile_function() which allows parameters
+            if hasattr(guppy_function, "compile_function"):
+                compiled = guppy_function.compile_function()
+            else:
+                # Fall back to regular compile and let it handle the error
+                compiled = guppy_function.compile()
         else:
-            # Old API: guppy.compile(function)
-            compiled = guppy_module.compile(guppy_function)
+            # For non-parametric functions, use compile() for entrypoint
+            if hasattr(guppy_function, "compile"):
+                # New API: function.compile()
+                compiled = guppy_function.compile()
+            else:
+                # Old API: guppy.compile(function)
+                compiled = guppy_module.compile(guppy_function)
 
         # Handle the return value - it might be a FuncDefnPointer or similar
         # Use the new HUGR envelope methods (to_str/to_bytes) instead of deprecated to_json

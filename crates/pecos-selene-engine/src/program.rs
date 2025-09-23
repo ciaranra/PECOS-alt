@@ -10,12 +10,7 @@ use std::path::PathBuf;
 /// should be handled in Python via `guppy_selene_sim()`, not here.
 #[derive(Debug, Clone)]
 pub enum SeleneProgram {
-    /// HUGR 0.13 (for guppylang compatibility)
-    #[cfg(feature = "hugr-013")]
-    Hugr(Box<crate::hugr_013_support::Hugr>),
-    /// HUGR serialized bytes (to be deserialized during build)
-    #[cfg(feature = "hugr-013")]
-    HugrBytes(Vec<u8>),
+    // HUGR 0.13 support removed - use pecos-hugr-qis for HUGR compilation
     /// LLVM IR text format
     LlvmIr(String),
     /// LLVM bitcode binary format

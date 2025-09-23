@@ -377,6 +377,10 @@ clean-unix:
 	@find . -type d -name "junit" -exec rm -rf {} +
 	@find python -name "*.so" -delete
 	@find python -name "*.pyd" -delete
+	@# Clean shared libraries generated in pecos-selene-engine
+	@find crates/pecos-selene-engine -name "*.so" -delete
+	@find crates/pecos-selene-engine -name "*.dylib" -delete
+	@find crates/pecos-selene-engine -name "*.dll" -delete
 	@# Clean all target directories in crates (in case they were built independently)
 	@find crates -type d -name "target" -exec rm -rf {} +
 	@find python -type d -name "target" -exec rm -rf {} +
@@ -405,6 +409,8 @@ clean-windows-ps:
 	@powershell -Command "Get-ChildItem -Path . -Recurse -Directory -Filter '.hypothesis' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 	@powershell -Command "Get-ChildItem -Path . -Recurse -Directory -Filter 'junit' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 	@powershell -Command "Get-ChildItem -Path python -Recurse -File -Include '*.so','*.pyd' | Remove-Item -Force -ErrorAction SilentlyContinue"
+	@# Clean shared libraries generated in pecos-selene-engine
+	@powershell -Command "Get-ChildItem -Path crates\pecos-selene-engine -Recurse -File -Include '*.so','*.dylib','*.dll' | Remove-Item -Force -ErrorAction SilentlyContinue"
 	@# Clean all target directories in crates
 	@powershell -Command "Get-ChildItem -Path crates -Recurse -Directory -Filter 'target' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 	@powershell -Command "Get-ChildItem -Path python -Recurse -Directory -Filter 'target' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
@@ -425,6 +431,8 @@ clean-windows-cmd:
 	-@for /f "delims=" %%d in ('dir /s /b /ad .hypothesis 2^>nul') do @rd /s /q "%%d" 2>nul
 	-@for /f "delims=" %%d in ('dir /s /b /ad junit 2^>nul') do @rd /s /q "%%d" 2>nul
 	-@for /f "delims=" %%f in ('dir /s /b python\*.so python\*.pyd 2^>nul') do @del "%%f" 2>nul
+	-@REM Clean shared libraries generated in pecos-selene-engine
+	-@for /f "delims=" %%f in ('dir /s /b crates\pecos-selene-engine\*.so crates\pecos-selene-engine\*.dylib crates\pecos-selene-engine\*.dll 2^>nul') do @del "%%f" 2>nul
 	-@REM Clean all target directories in crates
 	-@for /f "delims=" %%d in ('dir /s /b /ad crates\target 2^>nul') do @rd /s /q "%%d" 2>nul
 	-@for /f "delims=" %%d in ('dir /s /b /ad python\target 2^>nul') do @rd /s /q "%%d" 2>nul

@@ -39,15 +39,82 @@ from pecos_rslib.rspauli_prop import PauliPropRs
 from pecos_rslib.rssparse_sim import SparseSimRs
 from pecos_rslib.rsstate_vec import StateVecRs
 
-# Try to import optional components
+# HUGR compilation functions - explicit, no automatic fallback
 try:
-    from pecos_rslib._pecos_rslib import compile_hugr_to_llvm
+    from pecos_rslib._pecos_rslib import compile_hugr_to_llvm as _compile_hugr_to_llvm_rust_impl
+
+    def compile_hugr_to_llvm_rust(hugr_bytes: bytes, output_path=None) -> str:
+        """PECOS's Rust HUGR to LLVM compiler.
+
+        Args:
+            hugr_bytes: HUGR program as bytes
+            output_path: Optional path to write LLVM IR to file
+
+        Returns:
+            LLVM IR as string
+        """
+        # Call the Rust function (which only takes hugr_bytes)
+        llvm_ir = _compile_hugr_to_llvm_rust_impl(hugr_bytes)
+
+        # If output_path is provided, write to file
+        if output_path is not None:
+            from pathlib import Path
+            Path(output_path).write_text(llvm_ir)
+
+        return llvm_ir
+
 except ImportError:
-    # Fallback if not available
-    def compile_hugr_to_llvm(*_args, **_kwargs) -> NoReturn:
+    def compile_hugr_to_llvm_rust(hugr_bytes: bytes, output_path=None) -> str:
+        """PECOS's Rust HUGR to LLVM compiler."""
         raise ImportError(
-            "compile_hugr_to_llvm requires pecos-rslib to be compiled with hugr-013 feature",
+            "PECOS's Rust HUGR compiler is not available. "
+            "Build pecos-rslib with hugr-llvm-pipeline feature to enable it."
         )
+
+def compile_hugr_to_llvm_selene(hugr_bytes: bytes, output_path=None) -> str:
+    """Compile HUGR to LLVM IR using Selene's hugr-qis compiler.
+
+    Args:
+        hugr_bytes: HUGR program as bytes (JSON or envelope format)
+        output_path: Optional path to write LLVM IR to file
+
+    Returns:
+        LLVM IR as string
+
+    Raises:
+        ImportError: If Selene's compiler is not available
+        RuntimeError: If compilation fails
+    """
+    try:
+        from selene_hugr_qis_compiler import compile_to_llvm_ir
+    except ImportError:
+        raise ImportError(
+            "Selene's hugr-qis compiler is not available. "
+            "Install it with: pip install selene-hugr-qis-compiler"
+        )
+
+    # Check if this is JSON (starts with '{') and needs to be converted to envelope format
+    if hugr_bytes.startswith(b'{'):
+        # This is JSON, but Selene expects the envelope format
+        # For now, we'll raise an informative error
+        raise RuntimeError(
+            "Selene's compiler expects HUGR envelope format (to_bytes()), not JSON format (to_json()). "
+            "Please use package.to_bytes() instead of package.to_json() when compiling with Selene."
+        )
+
+    # Selene's compiler returns LLVM IR string directly
+    llvm_ir = compile_to_llvm_ir(hugr_bytes)
+
+    # If output_path is provided, write to file
+    if output_path is not None:
+        from pathlib import Path
+        Path(output_path).write_text(llvm_ir)
+
+    return llvm_ir
+
+# Default to PECOS's Rust compiler which handles JSON format
+# Users can explicitly choose by importing compile_hugr_to_llvm_rust or compile_hugr_to_llvm_selene
+compile_hugr_to_llvm = compile_hugr_to_llvm_rust
 
 
 try:
@@ -343,50 +410,8 @@ def RustHugrLlvmEngine(*_args, **_kwargs) -> NoReturn:
     raise ImportError("HUGR-LLVM pipeline not available")
 
 
-def compile_hugr_to_llvm_rust(
-    hugr_bytes: bytes,
-    output_path: str | None = None,
-) -> str:
-    """Compile HUGR to LLVM using Python fallback."""
-    # HUGR is a binary format, not JSON
-    # For now, return a stub LLVM IR that matches what would be generated
-    _ = hugr_bytes  # Will be used when actual compilation is implemented
-    llvm_ir = """; ModuleID = 'hugr_module'
-source_filename = "hugr.ll"
-
-declare i64 @__quantum__rt__qubit_allocate()
-declare void @__quantum__rt__qubit_release(i64)
-declare void @__quantum__qis__h__body(i64)
-declare void @__quantum__qis__x__body(i64)
-declare void @__quantum__qis__cnot__body(i64, i64)
-declare i64 @__quantum__qis__m__body(i64, i64)
-declare i64 @__quantum__rt__initialize(i8*)
-
-define i32 @main() {
-entry:
-  ; Allocate qubits
-  %q0 = call i64 @__quantum__rt__qubit_allocate()
-
-  ; Apply H gate
-  call void @__quantum__qis__h__body(i64 %q0)
-
-  ; Measure
-  %result = call i64 @__quantum__qis__m__body(i64 %q0, i64 0)
-
-  ; Release qubit
-  call void @__quantum__rt__qubit_release(i64 %q0)
-
-  ; Return result
-  %result_i32 = trunc i64 %result to i32
-  ret i32 %result_i32
-}
-"""
-
-    if output_path:
-        with open(output_path, "w") as f:
-            f.write(llvm_ir)
-
-    return llvm_ir
+# The compile_hugr_to_llvm_rust function is imported from the Rust module above
+# at line 44. We don't redefine it here to avoid overriding the real implementation.
 
 
 def create_llvm_engine_from_hugr_rust(*_args, **_kwargs) -> NoReturn:

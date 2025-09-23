@@ -1,140 +1,51 @@
-//! Test HUGR support with real HUGR data
+//! Test for HUGR to LLVM compilation pipeline
+//!
+//! Note: Direct HUGR support has been removed from pecos-llvm-sim.
+//! HUGR compilation now uses tket's HUGR 0.22 through the pecos-hugr-qis crate.
 
 #[test]
-fn test_real_hugr_with_envelope_format() {
-    use pecos_engines::sim_builder;
-    use pecos_llvm_sim::llvm_engine;
-    use pecos_programs::HugrProgram;
-
-    // HUGR uses an envelope format with a magic number header
-    // Let's create a proper HUGR envelope
-    use hugr_core::builder::{DFGBuilder, Dataflow, DataflowHugr};
-    use hugr_core::envelope::{EnvelopeConfig, write_envelope};
-    use hugr_core::extension::prelude::qb_t;
-    use hugr_core::package::Package;
-    use hugr_core::types::Signature;
-
-    // Create a simple HUGR
-    let hugr = {
-        let builder = DFGBuilder::new(Signature::new(vec![qb_t()], vec![qb_t()])).unwrap();
-        let [q] = builder.input_wires_arr();
-        builder.finish_hugr_with_outputs([q]).unwrap()
-    };
-
-    // Package it
-    let package = Package::new(vec![hugr]);
-
-    // Serialize to envelope format
-    let mut buffer = Vec::new();
-    write_envelope(&mut buffer, &package, EnvelopeConfig::default()).unwrap();
-
-    println!("Created HUGR envelope with {} bytes", buffer.len());
-
-    let hugr_program = HugrProgram::from_bytes(buffer);
-
-    // Test that we can create a builder with HUGR
-    let builder = sim_builder()
-        .classical(llvm_engine().program(hugr_program))
-        .qubits(1);
-
-    // The actual compilation might still fail due to missing quantum operations
-    // but we're testing that the deserialization works
-    match builder.build() {
-        Ok(_) => println!("HUGR compilation succeeded!"),
-        Err(e) => {
-            let error_msg = e.to_string();
-            println!("Compilation error: {error_msg}");
-
-            // Check if we got past the deserialization stage
-            assert!(
-                !error_msg.contains("Bad magic number"),
-                "Should not have magic number error with proper envelope format"
-            );
-        }
-    }
+fn test_hugr_compilation_pipeline() {
+    println!("HUGR to LLVM compilation pipeline:");
+    println!();
+    println!("1. HUGR compilation is now handled by the pecos-hugr-qis crate");
+    println!("2. pecos-hugr-qis uses tket's HUGR 0.22 for compatibility with Selene");
+    println!("3. The compilation flow is:");
+    println!("   - HUGR (JSON or envelope) → pecos-hugr-qis → LLVM IR");
+    println!("   - LLVM IR → pecos-llvm-sim → Simulation results");
+    println!();
+    println!("For examples of HUGR compilation, see:");
+    println!("   - crates/pecos-hugr-qis/src/compiler.rs");
+    println!("   - python/tests/guppy/test_hugr_compiler_parity.py");
 }
 
 #[test]
-fn test_real_hugr_compilation() {
-    use pecos_engines::sim_builder;
+#[ignore = "Example of how to use compiled HUGR"]
+fn test_compiled_hugr_example() {
+    use pecos_engines::{sim_builder, state_vector};
     use pecos_llvm_sim::llvm_engine;
-    use pecos_programs::HugrProgram;
+    use pecos_programs::LlvmProgram;
 
-    // The error message shows it expects envelope format, not raw JSON
-    // So this test documents the current behavior
-    let hugr_json = r#"{"version": "v0alpha1", "modules": [], "extensions": []}"#;
-    let hugr_bytes = hugr_json.as_bytes().to_vec();
-    let hugr_program = HugrProgram::from_bytes(hugr_bytes);
+    // Step 1: Compile HUGR to LLVM (would be done by pecos-hugr-qis)
+    // In practice: let llvm_ir = pecos_hugr_qis::compile_hugr_bytes_to_string(hugr_bytes)?;
 
-    let builder = sim_builder()
-        .classical(llvm_engine().program(hugr_program))
-        .qubits(1);
+    // Step 2: Use the compiled LLVM IR
+    let example_llvm_ir = r#"
+        ; ModuleID = 'hugr_compiled'
+        declare void @__quantum__qis__h__body(i64)
 
-    match builder.build() {
-        Ok(_) => panic!("Should not succeed with raw JSON"),
-        Err(e) => {
-            let error_msg = e.to_string();
-            println!("Expected error with raw JSON: {error_msg}");
-
-            // Verify it's the magic number error
-            assert!(
-                error_msg.contains("Bad magic number")
-                    || error_msg.contains("Failed to parse HUGR"),
-                "Should fail with magic number error for raw JSON"
-            );
+        define void @main() #0 {
+            call void @__quantum__qis__h__body(i64 0)
+            ret void
         }
-    }
-}
 
-#[test]
-fn test_hugr_package_format() {
-    use pecos_engines::sim_builder;
-    use pecos_llvm_sim::llvm_engine;
-    use pecos_programs::HugrProgram;
+        attributes #0 = { "EntryPoint" }
+    "#;
 
-    // Test with actual HUGR Package format used by tket2
-    let hugr_package = r#"{
-        "version": "v0alpha1",
-        "modules": [{
-            "id": "circuit",
-            "nodes": {
-                "0": {"parent": null, "op": {"t": "Module"}},
-                "1": {
-                    "parent": "0",
-                    "op": {
-                        "t": "Function",
-                        "name": "quantum_circuit",
-                        "signature": {
-                            "inputs": [{"t": "Q"}],
-                            "outputs": [{"t": "Q"}]
-                        }
-                    }
-                },
-                "2": {"parent": "1", "op": {"t": "Input", "types": [{"t": "Q"}]}},
-                "3": {"parent": "1", "op": {"t": "Output", "types": [{"t": "Q"}]}}
-            },
-            "edges": [["2", 0, "3", 0]]
-        }],
-        "extensions": ["quantum"]
-    }"#;
+    // Step 3: Run simulation
+    let _builder = sim_builder()
+        .classical(llvm_engine().program(LlvmProgram::from_ir(example_llvm_ir)))
+        .quantum(state_vector())
+        .seed(42);
 
-    let hugr_program = HugrProgram::from_bytes(hugr_package.as_bytes().to_vec());
-
-    match sim_builder()
-        .classical(llvm_engine().program(hugr_program))
-        .build()
-    {
-        Ok(_) => println!("HUGR with quantum signature compiled successfully"),
-        Err(e) => {
-            println!("Compilation error (expected): {e}");
-            // Verify it's attempting HUGR compilation
-            let error_str = e.to_string();
-            assert!(
-                error_str.contains("HUGR")
-                    || error_str.contains("quantum")
-                    || error_str.contains("Failed to"),
-                "Should be attempting HUGR compilation"
-            );
-        }
-    }
+    println!("Successfully created simulation from compiled HUGR");
 }

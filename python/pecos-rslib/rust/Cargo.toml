@@ -21,21 +21,20 @@ doctest = false
 test = false
 
 [features]
-default = ["wasm", "hugr-llvm-pipeline", "hugr-013"]
+default = ["wasm", "hugr-llvm-pipeline"]
 wasm = ["pecos-qasm/wasm"]
 
 # LLVM JIT execution: QIR file execution via LLVM JIT compilation
 # TEMPORARILY DISABLED due to pytest environment conflicts and segfaults
 llvm-jit = ["pecos-llvm-runtime/llvm-jit"]
 
-# HUGR-LLVM pipeline: HUGR → LLVM IR (via pecos-hugr)
-hugr-llvm-pipeline = ["pecos-hugr", "dep:hugr"]
+# HUGR-LLVM pipeline: HUGR → LLVM IR (via pecos-hugr-qis)
+hugr-llvm-pipeline = ["pecos-hugr-qis"]
 
 # Legacy feature for backward compatibility
 hugr = ["hugr-llvm-pipeline"]
 
-# HUGR 0.13 support for guppylang compatibility
-hugr-013 = ["pecos-selene-engine/hugr-013"]
+# HUGR 0.13 support removed - using tket's HUGR 0.22
 
 [dependencies]
 pecos.workspace = true
@@ -53,10 +52,9 @@ pecos-llvm-sim.workspace = true
 pecos-selene-engine = { path = "../../../crates/pecos-selene-engine" }
 pecos-phir = { path = "../../../crates/pecos-phir" }
 pecos-phir-json = { path = "../../../crates/pecos-phir-json" }
-pecos-hugr = { path = "../../../crates/pecos-hugr", optional = true }
+pecos-hugr-qis = { path = "../../../crates/pecos-hugr-qis", optional = true }
 
 pyo3 = { workspace=true, features = ["extension-module", "abi3-py310", "generate-import-lib"] }
-hugr = { workspace = true, optional = true }
 parking_lot.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true

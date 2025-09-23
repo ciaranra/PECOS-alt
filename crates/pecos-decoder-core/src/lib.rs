@@ -240,7 +240,7 @@ pub mod testing {
                                 .push((thread_id, iteration, result));
                         }
                         Err(e) => {
-                            eprintln!("Thread {thread_id} iteration {iteration} failed: {e:?}");
+                            log::error!("Thread {thread_id} iteration {iteration} failed: {e:?}");
                             return Err(e);
                         }
                     }

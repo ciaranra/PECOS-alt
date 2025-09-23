@@ -104,7 +104,11 @@ class TestGuppyToHUGRCompilation:
             logger.info("Compiled Bell state to HUGR: %s bytes", len(hugr_result))
 
     def test_parametric_circuit_compilation(self) -> None:
-        """Test compiling parametric quantum circuit."""
+        """Test compiling parametric quantum circuit following Selene's pattern.
+
+        Selene's hugr-qis requires entry points to have no parameters.
+        Parametric functions must be called from a parameter-less main function.
+        """
 
         @guppy
         def parametric_circuit(n: int) -> int:
@@ -117,11 +121,40 @@ class TestGuppyToHUGRCompilation:
                     count += 1
             return count
 
+        @guppy
+        def main() -> int:
+            """Main entry point that calls the parametric function."""
+            # Call the parametric circuit with a fixed value
+            return parametric_circuit(3)
+
         builder = SeleneEngineBuilder(num_qubits=5)
-        builder.with_guppy_program(parametric_circuit)
+        builder.with_guppy_program(main)
 
         hugr_result = builder._compile_to_hugr()
-        assert hugr_result is not None, "Should compile parametric circuit"
+        assert hugr_result is not None, "Should compile main function with parametric call"
+
+        # Clean up
+        builder.cleanup()
+
+    def test_reject_parametric_entry_point(self) -> None:
+        """Test that parametric functions are rejected as entry points (Selene pattern)."""
+
+        @guppy
+        def parametric_func(n: int) -> bool:
+            """A parametric function that cannot be an entry point."""
+            q = qubit()
+            h(q)
+            return measure(q)
+
+        builder = SeleneEngineBuilder(num_qubits=1)
+        builder.with_guppy_program(parametric_func)
+
+        # Should raise ValueError matching Selene's behavior
+        with pytest.raises(ValueError) as exc_info:
+            builder._compile_to_hugr()
+
+        assert "Entry point function must have no input parameters" in str(exc_info.value)
+        assert "found 1" in str(exc_info.value)
 
         # Clean up
         builder.cleanup()

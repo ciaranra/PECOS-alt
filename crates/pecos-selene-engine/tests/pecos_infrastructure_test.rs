@@ -349,57 +349,8 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
-#[cfg(feature = "hugr-013")]
-fn test_selene_with_hugr_format() -> Result<(), PecosError> {
-    use hugr_core_013::builder::{Dataflow, DataflowHugr, FunctionBuilder};
-    use hugr_core_013::extension::prelude::QB_T;
-    use hugr_core_013::extension::{ExtensionRegistry, prelude};
-    use hugr_core_013::types::Signature;
-
-    println!("=== Testing SeleneEngine with HUGR Format ===");
-
-    // Create a proper HUGR program with a single Hadamard
-    let qb_row = vec![QB_T; 1];
-    let circ_signature = Signature::new(qb_row.clone(), qb_row);
-    let mut dfg = FunctionBuilder::new("main", circ_signature)
-        .map_err(|e| PecosError::with_context(e, "Failed to build function"))?;
-    let circ = dfg.as_circuit(dfg.input_wires());
-
-    // Skip adding gates since Tk2Op is not available
-    // Just finish the circuit with identity
-    let qbs = circ.finish();
-
-    // Create an extension registry with the prelude for HUGR 0.13
-    let registry = ExtensionRegistry::try_new([prelude::PRELUDE.to_owned()]).unwrap();
-
-    let hugr = dfg
-        .finish_hugr_with_outputs(qbs, &registry)
-        .map_err(|e| PecosError::with_context(e, "Failed to finish HUGR"))?;
-
-    // Convert HUGR to bytes for HugrProgram
-    let hugr_bytes = serde_json::to_vec(&hugr)
-        .map_err(|e| PecosError::with_context(e, "Failed to serialize HUGR"))?;
-
-    // Try to build the engine with HUGR program
-    let result = selene_executable()
-        .hugr(HugrProgram::from_bytes(hugr_bytes))
-        .qubits(1)
-        .build();
-
-    // The build will fail because the simple HUGR doesn't have a proper CFG,
-    // but that's OK - we're testing that the API accepts HUGR programs
-    match result {
-        Ok(mut engine) => {
-            println!("Created SeleneEngine with HUGR program");
-            // Test execution
-            let result = engine.process(())?;
-            println!("HUGR execution completed: {:?}", result.data);
-        }
-        Err(e) => {
-            println!("HUGR compilation returned expected error: {e}");
-            println!("HUGR program support is available in the API!");
-        }
-    }
-
-    Ok(())
+fn test_hugr_format_removed() {
+    // HUGR 0.13 support has been removed
+    // HUGR compilation now uses tket's HUGR 0.22 through pecos-hugr-qis crate
+    println!("HUGR 0.13 format test removed - use pecos-hugr-qis for HUGR compilation");
 }

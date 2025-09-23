@@ -4,28 +4,28 @@ use pyo3::prelude::*;
 
 /// Compile HUGR to LLVM IR
 ///
-/// This function takes HUGR bytes (JSON format) and compiles them to LLVM IR
-/// using the pecos-selene-engine compiler.
+/// This function takes HUGR bytes (envelope format) and compiles them to LLVM IR
+/// using the PECOS HUGR compiler that generates Selene QIS-compatible output.
 ///
 /// Args:
-///     `hugr_bytes`: HUGR program as JSON bytes
+///     `hugr_bytes`: HUGR program as envelope bytes
 ///
 /// Returns:
 ///     LLVM IR as a string
 #[pyfunction]
 pub fn compile_hugr_to_llvm(hugr_bytes: &[u8]) -> PyResult<String> {
-    #[cfg(feature = "hugr-013")]
+    #[cfg(feature = "hugr-llvm-pipeline")]
     {
-        use pecos_selene_engine::hugr_to_llvm::compile_hugr_to_llvm as rust_compile_hugr_to_llvm;
+        use pecos_hugr_qis::compile_hugr_bytes_to_string;
 
-        rust_compile_hugr_to_llvm(hugr_bytes)
+        compile_hugr_bytes_to_string(hugr_bytes)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 
-    #[cfg(not(feature = "hugr-013"))]
+    #[cfg(not(feature = "hugr-llvm-pipeline"))]
     {
         Err(PyErr::new::<pyo3::exceptions::PyImportError, _>(
-            "compile_hugr_to_llvm requires pecos-rslib to be compiled with hugr-013 feature",
+            "compile_hugr_to_llvm requires pecos-rslib to be compiled with hugr-llvm-pipeline feature",
         ))
     }
 }

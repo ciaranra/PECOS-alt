@@ -32,7 +32,7 @@ cxx-build.workspace = true
 cc.workspace = true
 
 [dev-dependencies]
-approx = "0.5"
+approx.workspace = true
 
 [lib]
 name = "pecos_quest"

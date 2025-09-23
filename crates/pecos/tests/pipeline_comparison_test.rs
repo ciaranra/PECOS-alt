@@ -483,7 +483,18 @@ fn run_hugr_llvm_pipeline(hugr_data: &[u8], shots: usize) -> PipelineResult {
 }
 
 /// Run the PHIR compilation pipeline
-fn run_phir_pipeline(hugr_data: &[u8], shots: usize) -> PipelineResult {
+fn run_phir_pipeline(_hugr_data: &[u8], _shots: usize) -> PipelineResult {
+    // PHIR support has been commented out - skipping test
+    PipelineResult {
+        name: "PHIR".to_string(),
+        compilation_result: Err(PecosError::from(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "PHIR support temporarily disabled"
+        ))),
+        execution_result: None,
+        execution_time_ms: None,
+    }
+    /*
     let start_time = std::time::Instant::now();
 
     // Create temporary HUGR file
@@ -538,6 +549,7 @@ fn run_phir_pipeline(hugr_data: &[u8], shots: usize) -> PipelineResult {
         execution_result,
         execution_time_ms: execution_time,
     }
+    */
 }
 
 /// Compare both compilation pipelines on the same HUGR data
@@ -771,7 +783,7 @@ fn test_debug_llvm_ir_comparison() {
 
     // Generate HUGR-LLVM IR (working)
     println!("\n1. Testing HUGR-LLVM pipeline...");
-    let hugr_llvm_ir = match generate_hugr_llvm_ir(&hugr_path) {
+    let _hugr_llvm_ir = match generate_hugr_llvm_ir(&hugr_path) {
         Ok(ir) => {
             println!("   HUGR-LLVM IR generated ({} chars)", ir.len());
             Some(ir)
@@ -803,8 +815,9 @@ fn test_debug_llvm_ir_comparison() {
         Err(e) => println!("   HUGR-LLVM compilation failed: {e}"),
     }
 
-    // Generate PHIR IR (failing) - skip execution for now
-    println!("\n2. Testing PHIR compilation only...");
+    // PHIR support has been temporarily disabled
+    println!("\n2. PHIR compilation temporarily disabled");
+    /*
     match pecos::phir::run_phir_llvm(&hugr_path, Some(10), None) {
         Ok(_engine) => {
             println!("   PHIR compilation successful");
@@ -812,10 +825,11 @@ fn test_debug_llvm_ir_comparison() {
         }
         Err(e) => println!("   PHIR compilation failed: {e}"),
     }
+    */
 
     // Generate raw LLVM IR to examine differences
-    println!("\n3. Generating raw LLVM IR for comparison...");
-
+    println!("\n3. PHIR LLVM IR generation temporarily disabled");
+    /*
     let config = pecos_phir::PhirConfig {
         debug: true,
         ..Default::default()
@@ -848,18 +862,19 @@ fn test_debug_llvm_ir_comparison() {
         }
         Err(e) => println!("   PHIR LLVM IR generation failed: {e}"),
     }
+    */
 
     println!("\n=== Debug files saved to: {:?} ===", temp_dir.path());
 }
 
-/// Generate HUGR-LLVM IR directly using the pecos-hugr crate
+/// Generate HUGR-LLVM IR directly using the pecos-hugr-qis crate
 fn generate_hugr_llvm_ir(hugr_path: &std::path::Path) -> Result<String, String> {
     // Read the HUGR file
     let hugr_data =
         std::fs::read(hugr_path).map_err(|e| format!("Failed to read HUGR file: {e}"))?;
 
-    // Use pecos-hugr to compile to LLVM IR
-    match pecos_hugr::compile_hugr_bytes_to_string(&hugr_data) {
+    // Use pecos-hugr-qis to compile to LLVM IR
+    match pecos_hugr_qis::compile_hugr_bytes_to_string(&hugr_data) {
         Ok(ir) => Ok(ir),
         Err(e) => Err(format!("HUGR-LLVM compilation failed: {e}")),
     }

@@ -40,16 +40,13 @@ def test_hugr_to_llvm_compilation() -> None:
     # Compile HUGR to LLVM using pecos-selene-engine
     llvm_ir = compile_hugr_to_llvm(hugr_bytes)
 
-    # Verify basic structure - updated for new LLVM format
-    # The new implementation uses i64 for qubits instead of opaque types
-    assert (
-        "@__quantum__rt__qubit_allocate()" in llvm_ir
-        or "@__quantum__qis__qalloc()" in llvm_ir
-    )
-    assert "@__quantum__qis__h__body" in llvm_ir
+    # Verify basic structure - check for Selene QIS patterns
+    assert "@___qalloc()" in llvm_ir, "Should have Selene qubit allocation"
+    assert "@___rxy" in llvm_ir or "@___rz" in llvm_ir, "Should have Selene rotation gates"
+    assert "@___lazy_measure" in llvm_ir, "Should have Selene measurement"
 
-    # Check if we found the main function (entry point)
-    assert "define void @main()" in llvm_ir or "bell_state" in llvm_ir
+    # Check if we found the main function (entry point) - Selene uses @qmain
+    assert "@qmain" in llvm_ir, "Should have Selene qmain entry point"
 
 
 def test_simple_hadamard_circuit() -> None:
@@ -88,10 +85,7 @@ def test_simple_hadamard_circuit() -> None:
     # Compile HUGR to LLVM
     llvm_ir = compile_hugr_to_llvm(hugr_bytes)
 
-    # Verify operations - updated for new LLVM format
-    assert (
-        "@__quantum__rt__qubit_allocate()" in llvm_ir
-        or "@__quantum__qis__qalloc()" in llvm_ir
-    )
-    assert "@__quantum__qis__h__body" in llvm_ir
-    assert "@__quantum__qis__mz__body" in llvm_ir
+    # Verify operations - check for Selene QIS patterns
+    assert "@___qalloc()" in llvm_ir, "Should have Selene qubit allocation"
+    assert "@___rxy" in llvm_ir or "@___rz" in llvm_ir, "Should have Selene rotation gates for H"
+    assert "@___lazy_measure" in llvm_ir, "Should have Selene measurement"

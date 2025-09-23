@@ -707,6 +707,18 @@ impl LlvmEngine {
             );
         }
 
+        // Pattern 1b: Selene-style qubit allocations like "call i64 @___qalloc()"
+        // Count the number of allocations since Selene uses dynamic allocation
+        let selene_alloc_pattern = Regex::new(r"call\s+i64\s+@___qalloc\(\)")
+            .expect("Invalid regex pattern for Selene qubit allocations");
+        let selene_alloc_count = selene_alloc_pattern.find_iter(content).count();
+        if selene_alloc_count > 0 {
+            debug!("Pattern 1b (Selene): Found {selene_alloc_count} qubit allocations");
+            // For Selene with dynamic allocation, we need at least as many qubits as allocations
+            max_qubit_index = max_qubit_index.max(selene_alloc_count - 1);
+            found_allocation = true;
+        }
+
         // Pattern 2: Integer-based qubit references in LLVM IR calls
         // We need to be more careful here to avoid matching result IDs in measurement calls
 
@@ -768,6 +780,66 @@ impl LlvmEngine {
                 && let Ok(qubit) = qubit_match.as_str().parse::<usize>()
             {
                 debug!("Pattern 2d: Found rotation gate on qubit {qubit}");
+                max_qubit_index = max_qubit_index.max(qubit);
+                found_allocation = true;
+            }
+        }
+
+        // Pattern 3: Selene-style gate operations
+        // Pattern 3a: Single-qubit gates (___h, ___x, ___y, ___z, etc.)
+        let selene_single_pattern = Regex::new(r"call\s+void\s+@___(?:h|x|y|z|s|t)\s*\(i64\s+%?(\d+)\)")
+            .expect("Invalid regex for Selene single-qubit gates");
+        for cap in selene_single_pattern.captures_iter(content) {
+            if let Some(qubit_match) = cap.get(1)
+                && let Ok(qubit) = qubit_match.as_str().parse::<usize>()
+            {
+                debug!("Pattern 3a (Selene): Found single-qubit gate on qubit {qubit}");
+                max_qubit_index = max_qubit_index.max(qubit);
+                found_allocation = true;
+            }
+        }
+
+        // Pattern 3b: Selene rotation gates (___rx, ___ry, ___rz, ___rxy)
+        let selene_rotation_pattern = Regex::new(r"call\s+void\s+@___r(?:x|y|z|xy)\s*\(i64\s+%?(\d+),")
+            .expect("Invalid regex for Selene rotation gates");
+        for cap in selene_rotation_pattern.captures_iter(content) {
+            if let Some(qubit_match) = cap.get(1)
+                && let Ok(qubit) = qubit_match.as_str().parse::<usize>()
+            {
+                debug!("Pattern 3b (Selene): Found rotation gate on qubit {qubit}");
+                max_qubit_index = max_qubit_index.max(qubit);
+                found_allocation = true;
+            }
+        }
+
+        // Pattern 3c: Selene two-qubit gates (___cx, ___cz, etc.)
+        let selene_two_qubit_pattern = Regex::new(r"call\s+void\s+@___c[xz]\s*\(i64\s+%?(\d+),\s*i64\s+%?(\d+)\)")
+            .expect("Invalid regex for Selene two-qubit gates");
+        for cap in selene_two_qubit_pattern.captures_iter(content) {
+            if let Some(control_match) = cap.get(1)
+                && let Ok(control) = control_match.as_str().parse::<usize>()
+            {
+                debug!("Pattern 3c (Selene): Found two-qubit gate control qubit {control}");
+                max_qubit_index = max_qubit_index.max(control);
+                found_allocation = true;
+            }
+            if let Some(target_match) = cap.get(2)
+                && let Ok(target) = target_match.as_str().parse::<usize>()
+            {
+                debug!("Pattern 3c (Selene): Found two-qubit gate target qubit {target}");
+                max_qubit_index = max_qubit_index.max(target);
+                found_allocation = true;
+            }
+        }
+
+        // Pattern 3d: Selene measurements (___m, ___lazy_measure)
+        let selene_measure_pattern = Regex::new(r"call\s+i64\s+@___(?:lazy_)?measure\s*\(i64\s+%?(\d+)")
+            .expect("Invalid regex for Selene measurements");
+        for cap in selene_measure_pattern.captures_iter(content) {
+            if let Some(qubit_match) = cap.get(1)
+                && let Ok(qubit) = qubit_match.as_str().parse::<usize>()
+            {
+                debug!("Pattern 3d (Selene): Found measurement on qubit {qubit}");
                 max_qubit_index = max_qubit_index.max(qubit);
                 found_allocation = true;
             }

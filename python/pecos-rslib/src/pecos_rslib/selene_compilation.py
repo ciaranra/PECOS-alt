@@ -101,31 +101,29 @@ def compile_hugr_to_selene_plugin(hugr_bytes: bytes) -> bytes:
     return compile_hugr_via_llvm(hugr_bytes)
 
 
-def compile_hugr_via_llvm(hugr_bytes: bytes) -> bytes:
+def compile_hugr_via_llvm(hugr_bytes: bytes, compiler: str = "selene") -> bytes:
     """Compile HUGR to Selene plugin via LLVM IR.
-
-    This is the fallback path when Selene's direct HUGR compiler is not available.
 
     Args:
         hugr_bytes: HUGR program as bytes
+        compiler: Which HUGR compiler to use ("selene" or "rust")
 
     Returns:
         The compiled plugin as bytes
 
     Raises:
         RuntimeError: If compilation fails
+        ValueError: If invalid compiler specified
     """
     # Step 1: HUGR → LLVM IR
-    try:
-        # Try pecos-selene-engine's HUGR to LLVM compiler
-        from pecos_rslib import compile_hugr_to_llvm
-
-        llvm_ir = compile_hugr_to_llvm(hugr_bytes)
-    except ImportError:
-        # Fallback to compilation_pipeline
-        from pecos.compilation_pipeline import compile_hugr_to_llvm
-
-        llvm_ir = compile_hugr_to_llvm(hugr_bytes)
+    if compiler == "selene":
+        from pecos_rslib import compile_hugr_to_llvm_selene
+        llvm_ir = compile_hugr_to_llvm_selene(hugr_bytes)
+    elif compiler == "rust":
+        from pecos_rslib import compile_hugr_to_llvm_rust
+        llvm_ir = compile_hugr_to_llvm_rust(hugr_bytes)
+    else:
+        raise ValueError(f"Invalid compiler '{compiler}'. Choose 'selene' or 'rust'.")
 
     # Step 2: LLVM IR → Selene plugin
     return compile_llvm_to_selene_plugin(llvm_ir)

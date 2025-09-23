@@ -43,6 +43,45 @@ impl fmt::Display for QasmProgram {
     }
 }
 
+/// A QIS (Quantum Instruction Set) program
+///
+/// This represents LLVM IR that uses Selene QIS functions (___qalloc, ___lazy_measure, etc.)
+/// as opposed to QIR functions. This is the output of HUGR compilation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QisProgram {
+    /// The QIS LLVM IR source code
+    pub source: String,
+}
+
+impl QisProgram {
+    /// Create a QIS program from a string
+    pub fn from_string(s: impl Into<String>) -> Self {
+        Self { source: s.into() }
+    }
+
+    /// Create a QIS program by reading from a file
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
+        let source = std::fs::read_to_string(path)?;
+        Ok(Self { source })
+    }
+
+    /// Get the source code
+    #[must_use]
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+}
+
+impl fmt::Display for QisProgram {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.source)
+    }
+}
+
 /// An LLVM program (can be IR text or bitcode)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LlvmProgram {
@@ -400,8 +439,10 @@ impl fmt::Display for SeleneInterfaceProgram {
 pub enum Program {
     /// A QASM program
     Qasm(QasmProgram),
-    /// An LLVM IR program
+    /// An LLVM IR program (QIR format)
     Llvm(LlvmProgram),
+    /// A QIS program (Selene QIS format LLVM IR)
+    Qis(QisProgram),
     /// A HUGR program
     Hugr(HugrProgram),
     /// A WebAssembly program
@@ -421,6 +462,7 @@ impl Program {
         match self {
             Program::Qasm(_) => "QASM",
             Program::Llvm(_) => "LLVM",
+            Program::Qis(_) => "QIS",
             Program::Hugr(_) => "HUGR",
             Program::Wasm(_) => "WASM",
             Program::Wat(_) => "WAT",
@@ -439,6 +481,12 @@ impl From<QasmProgram> for Program {
 impl From<LlvmProgram> for Program {
     fn from(program: LlvmProgram) -> Self {
         Program::Llvm(program)
+    }
+}
+
+impl From<QisProgram> for Program {
+    fn from(program: QisProgram) -> Self {
+        Program::Qis(program)
     }
 }
 
@@ -477,6 +525,7 @@ impl fmt::Display for Program {
         match self {
             Program::Qasm(p) => write!(f, "QASM: {p}"),
             Program::Llvm(p) => write!(f, "LLVM: {p}"),
+            Program::Qis(p) => write!(f, "QIS: {p}"),
             Program::Hugr(p) => write!(f, "{p}"),
             Program::Wasm(p) => write!(f, "{p}"),
             Program::Wat(p) => write!(f, "WAT: {p}"),

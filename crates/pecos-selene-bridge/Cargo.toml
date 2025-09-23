@@ -14,16 +14,13 @@ name = "pecos_selene_bridge"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-selene-core = { git = "https://github.com/CQCL/selene.git", rev = "f9e14c4c218feea85ba7c23048eb5118d6a4ed8c" }
+selene-core = { git = "https://github.com/CQCL/selene.git", rev = "c5533b8" }
 pecos-engines.workspace = true
 anyhow.workspace = true
-crossbeam-channel.workspace = true
-once_cell.workspace = true
 log.workspace = true
 chrono.workspace = true
 backtrace.workspace = true
 rand.workspace = true
-atty.workspace = true
 
 [dev-dependencies]
 

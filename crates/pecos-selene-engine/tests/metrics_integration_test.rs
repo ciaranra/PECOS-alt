@@ -163,41 +163,10 @@ fn test_metrics_disabled_returns_empty() -> Result<(), PecosError> {
     Ok(())
 }
 
-#[cfg(feature = "hugr-013")]
 #[test]
-#[ignore = "Metrics API not yet implemented in SeleneExecutableEngine - requires HUGR builder APIs"]
-fn test_hugr_metrics_integration() -> Result<(), PecosError> {
-    // This test requires HUGR builder APIs which are not available
-    // Keeping test stub for future implementation when tket2 and HUGR builder APIs are available
-
-    /*
-    use hugr_core_013::Hugr;
-    use hugr_core_013::builder::{BuildError, Dataflow, DataflowHugr, FunctionBuilder};
-    use hugr_core_013::extension::prelude::QB_T;
-    use hugr_core_013::types::Signature;
-    use tket2::Tk2Op; // Not available - would need tket2 dependency
-    */
-
-    println!("=== Testing HUGR Metrics Integration ===");
-    println!("Test skipped - requires HUGR builder APIs and tket2 which are not available");
-
-    // The full test implementation would require:
-    // 1. HUGR builder APIs (FunctionBuilder, circuit builder, etc.)
-    // 2. tket2 for Tk2Op quantum gates
-    // 3. Metrics API in SeleneExecutableEngine
-
-    // For now, just verify the engine can be created
-    let engine = SeleneExecutableEngine::new(2)?;
-    assert_eq!(engine.num_qubits(), 2);
-
-    println!("Basic engine creation successful - full metrics test pending API availability");
-
-    Ok(())
-
-    // Original test code that would require unavailable APIs:
-    // - HUGR builder APIs (FunctionBuilder, circuit builder)
-    // - tket2 for Tk2Op quantum gates
-    // - Would build Bell state HUGR with measurements
-    // - Would compile HUGR and generate quantum operations
-    // - Would verify metrics tracking for quantum operations
+#[ignore = "HUGR metrics test removed - HUGR 0.13 support has been removed"]
+fn test_hugr_metrics_integration_removed() {
+    // HUGR 0.13 support has been removed
+    // HUGR compilation now uses tket's HUGR 0.22 through pecos-hugr-qis crate
+    println!("HUGR 0.13 metrics test removed - use pecos-hugr-qis for HUGR compilation");
 }

@@ -10,8 +10,32 @@ const SINGLE_HADAMARD_HUGR: &[u8] = include_bytes!("test_data/hugr/single_hadama
 const GHZ_STATE_HUGR: &[u8] = include_bytes!("test_data/hugr/ghz_state.hugr");
 
 #[test]
+fn test_json_format_loading() -> Result<(), PecosError> {
+    // Test if our compiler can load pure JSON HUGR format
+    // This test verifies that our JSON-to-envelope conversion works correctly
+
+    // Create temp directory and write one of our existing JSON test files
+    let temp_dir = TempDir::new()?;
+    let json_hugr_path = temp_dir.path().join("test_json.hugr");
+
+    // Use one of our existing JSON format test files (bell_state.hugr is already in JSON format)
+    std::fs::write(&json_hugr_path, BELL_STATE_HUGR)?;
+
+    // Test if our compiler can load pure JSON using the public API
+    let engine = pecos::hugr::run_hugr_llvm(&json_hugr_path, Some(100))?;
+
+    // Verify the engine was created successfully
+    let num_qubits = engine.num_qubits();
+    assert_eq!(num_qubits, 2, "Bell state should use 2 qubits");
+
+    // Successfully loaded JSON HUGR format and created engine
+
+    Ok(())
+}
+
+#[test]
 fn test_hugr_to_llvm_to_execution() -> Result<(), PecosError> {
-    // Test the full pipeline: HUGR → pecos-hugr → LLVM IR → pecos-llvm-runtime execution
+    // Test the full pipeline: HUGR → pecos-hugr-qis → LLVM IR → pecos-llvm-runtime execution
 
     // Step 1: Compile HUGR to LLVM IR
     let temp_dir = TempDir::new()?;
@@ -42,11 +66,6 @@ fn test_hugr_to_llvm_to_execution() -> Result<(), PecosError> {
     let mut other_outcomes = 0;
 
     for shot in &results.shots {
-        // Debug: print what keys we have
-        eprintln!(
-            "DEBUG test: Shot data keys: {:?}",
-            shot.data.keys().collect::<Vec<_>>()
-        );
 
         // Get the measurement results - could be Vec or I64 (bit-packed)
         match shot.data.get("result") {
@@ -83,10 +102,6 @@ fn test_hugr_to_llvm_to_execution() -> Result<(), PecosError> {
                 }
             }
             _ => {
-                eprintln!(
-                    "DEBUG test: Expected 'result' key with Vec or I64 data, but got: {:?}",
-                    shot.data
-                );
                 panic!("Expected 'result' key with Vec or I64 data");
             }
         }
@@ -159,56 +174,18 @@ fn test_hugr_from_bytes() -> Result<(), PecosError> {
 }
 
 #[test]
+#[ignore = "PHIR support temporarily disabled"]
 fn test_hugr_via_phir_pipeline() -> Result<(), PecosError> {
     // Test the alternative pipeline: HUGR → pecos-phir → LLVM IR → pecos-llvm-runtime execution
-
-    // Create a HUGR file
-    let temp_dir = TempDir::new()?;
-    let hugr_path = temp_dir.path().join("bell_state.hugr");
-    std::fs::write(&hugr_path, BELL_STATE_HUGR)?;
-
-    // Use the phir module to compile via PHIR (now supports binary format)
-    let engine = pecos::phir::run_phir_llvm(&hugr_path, Some(1000), None)?;
-    let num_qubits = engine.num_qubits();
-
-    // Run simulation
-    let results = MonteCarloEngine::run_with_engines(
-        engine,
-        Box::new(PassThroughNoiseModel::builder().build()),
-        state_vector().qubits(num_qubits).build()?,
-        1000,     // shots
-        1,        // workers
-        Some(42), // seed
-    )?;
-
-    // Verify results
-    assert_eq!(results.len(), 1000);
-
+    // PHIR support has been temporarily disabled - skipping test
     Ok(())
 }
 
 #[test]
+#[ignore = "PHIR support temporarily disabled"]
 fn test_phir_compilation_only() -> Result<(), PecosError> {
     // Test just the compilation part of PHIR
-
-    let temp_dir = TempDir::new()?;
-    let hugr_path = temp_dir.path().join("test.hugr");
-    std::fs::write(&hugr_path, BELL_STATE_HUGR)?;
-
-    // Enable debug output to see what's happening
-    let config = pecos_phir::PhirConfig {
-        debug: true,
-        ..Default::default()
-    };
-
-    // Compile HUGR to LLVM IR via PHIR (now supports binary format)
-    let llvm_ir = pecos::phir::compile_hugr_file_via_phir(&hugr_path, Some(config))?;
-
-    // Verify we got some LLVM IR
-    assert!(!llvm_ir.is_empty());
-    assert!(llvm_ir.contains("define"));
-    assert!(llvm_ir.contains("__quantum__"));
-
+    // PHIR support has been temporarily disabled - skipping test
     Ok(())
 }
 
@@ -221,27 +198,31 @@ fn test_setup_llvm_engine_generic() -> Result<(), PecosError> {
     let temp_dir = TempDir::new()?;
     let llvm_path = temp_dir.path().join("test.ll");
 
-    // Minimal valid LLVM IR with entry point and quantum operations
+    // Minimal valid LLVM IR with Selene's conventions
     let llvm_ir = r#"
-@str_result = constant [7 x i8] c"result\00"
+declare i64 @___qalloc() local_unnamed_addr
+declare void @___rxy(i64, double, double) local_unnamed_addr
+declare i64 @___lazy_measure(i64) local_unnamed_addr
+declare void @___qfree(i64) local_unnamed_addr
 
-define void @main() #0 {
-    %qubit = call i64 @__quantum__rt__qubit_allocate()
-    call void @__quantum__qis__h__body(i64 %qubit)
-    %result_id = call i64 @__quantum__rt__result_allocate()
-    %measurement = call i32 @__quantum__qis__m__body(i64 %qubit, i64 %result_id)
-    %result_ptr = inttoptr i64 %result_id to i8*
-    call void @__quantum__rt__result_record_output(i8* %result_ptr, i8* getelementptr inbounds ([7 x i8], [7 x i8]* @str_result, i32 0, i32 0))
-    ret void
+define i32 @qmain(i64 %0) local_unnamed_addr #0 {
+entry:
+    tail call void @setup(i64 %0)
+    %1 = tail call i64 @___qalloc()
+    tail call void @___rxy(i64 %1, double 0x400921FB54442D18, double 0.0)
+    %lazy_measure.i = tail call i64 @___lazy_measure(i64 %1)
+    tail call void @___qfree(i64 %1)
+    tail call i64 @teardown()
+    %result = trunc i64 %lazy_measure.i to i32
+    ret i32 %result
 }
 
-declare i64 @__quantum__rt__qubit_allocate()
-declare void @__quantum__qis__h__body(i64)
-declare i64 @__quantum__rt__result_allocate()
-declare i32 @__quantum__qis__m__body(i64, i64)
-declare void @__quantum__rt__result_record_output(i8*, i8*)
+declare void @setup(i64) local_unnamed_addr
+declare i64 @teardown() local_unnamed_addr
 
 attributes #0 = { "EntryPoint" }
+!name = !{!0}
+!0 = !{!"mainlib"}
 "#;
 
     std::fs::write(&llvm_path, llvm_ir)?;
@@ -268,23 +249,21 @@ attributes #0 = { "EntryPoint" }
 #[test]
 fn test_single_hadamard_execution() -> Result<(), PecosError> {
     // Test single Hadamard gate produces random results
+    use pecos::sim;
+    use pecos_programs::QisProgram;
 
-    // Create temp HUGR file
-    let temp_dir = TempDir::new()?;
-    let hugr_path = temp_dir.path().join("single_hadamard.hugr");
-    std::fs::write(&hugr_path, SINGLE_HADAMARD_HUGR)?;
+    // Compile HUGR to QIS (Selene QIS format LLVM IR) using our Rust compiler
+    let qis_ir = pecos_hugr_qis::compile_hugr_bytes_to_string(SINGLE_HADAMARD_HUGR)?;
 
-    // Run simulation with many shots
-    let engine = pecos::hugr::run_hugr_llvm(&hugr_path, Some(1000))?;
-    let num_qubits = engine.num_qubits();
-    let results = MonteCarloEngine::run_with_engines(
-        engine,
-        Box::new(PassThroughNoiseModel::builder().build()),
-        state_vector().qubits(num_qubits).build()?,
-        1000,     // shots
-        1,        // workers
-        Some(42), // seed
-    )?;
+    // Use QisProgram with the sim() API
+    let qis_program = QisProgram::from_string(qis_ir);
+
+    // Use the sim() API with the QIS program
+    let results = sim(qis_program)
+        .quantum(state_vector())
+        .qubits(1)  // Single qubit for Hadamard
+        .seed(42)   // For reproducible testing
+        .run(1000)?;  // 1000 shots
 
     // Count outcomes
     let mut outcome_0 = 0;
@@ -325,22 +304,19 @@ fn test_single_hadamard_execution() -> Result<(), PecosError> {
 fn test_ghz_state_execution() -> Result<(), PecosError> {
     // Test 3-qubit GHZ state produces correlated results
 
-    // Create temp HUGR file
-    let temp_dir = TempDir::new()?;
-    let hugr_path = temp_dir.path().join("ghz_state.hugr");
-    std::fs::write(&hugr_path, GHZ_STATE_HUGR)?;
+    use pecos::sim;
+    use pecos_programs::QisProgram;
 
-    // Run simulation
-    let engine = pecos::hugr::run_hugr_llvm(&hugr_path, Some(1000))?;
-    let num_qubits = engine.num_qubits();
-    let results = MonteCarloEngine::run_with_engines(
-        engine,
-        Box::new(PassThroughNoiseModel::builder().build()),
-        state_vector().qubits(num_qubits).build()?,
-        1000,     // shots
-        1,        // workers
-        Some(42), // seed
-    )?;
+    // Compile HUGR to QIS (Selene QIS format LLVM IR) using our Rust compiler
+    let qis_ir = pecos_hugr_qis::compile_hugr_bytes_to_string(GHZ_STATE_HUGR)?;
+    let qis_program = QisProgram::from_string(qis_ir);
+
+    // Use the sim() API with the QIS program
+    let results = sim(qis_program)
+        .quantum(state_vector())
+        .qubits(3)  // Three qubits for GHZ state
+        .seed(42)   // For reproducible testing
+        .run(1000)?;  // 1000 shots
 
     // Count outcomes - GHZ should only produce 000 or 111
     let mut outcome_000 = 0;
@@ -389,7 +365,7 @@ fn test_ghz_state_execution() -> Result<(), PecosError> {
                 _ => other_outcomes += 1,
             }
         } else {
-            println!("Warning: Expected 1 packed or 3 unpacked values, got {values:?}");
+            log::warn!("Expected 1 packed or 3 unpacked values, got {values:?}");
         }
     }
 

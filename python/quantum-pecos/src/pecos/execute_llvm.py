@@ -1,65 +1,53 @@
-"""Execute LLVM module - PECOS's implementation of HUGR to LLVM compilation.
+"""Execute LLVM module - HUGR to LLVM compilation interface.
 
-This module provides the same interface as the external execute_llvm module
-but uses PECOS's own HUGR compilation infrastructure.
+This module provides HUGR to LLVM compilation with explicit compiler selection:
+- 'selene': Selene's hugr-qis compiler (default)
+- 'rust': PECOS's Rust HUGR compiler
+
+No automatic fallback - the specified compiler must be available.
 """
 
 import importlib.util
 from pathlib import Path
 
 
-def compile_module_to_string(hugr_bytes: bytes) -> str:
-    """Compile HUGR bytes to LLVM IR string using PECOS infrastructure.
-
-    This function provides compatibility with code expecting the execute_llvm
-    interface while using PECOS's own HUGR compilation backends.
+def compile_module_to_string(hugr_bytes: bytes, compiler: str = "selene") -> str:
+    """Compile HUGR bytes to LLVM IR string.
 
     Args:
         hugr_bytes: HUGR module serialized as bytes
+        compiler: Which compiler to use ("selene" or "rust")
+                  Default is "selene" for Selene's hugr-qis compiler
 
     Returns:
         LLVM IR as a string
 
     Raises:
         RuntimeError: If compilation fails
+        ValueError: If invalid compiler specified
     """
-    # Try to use PECOS's Rust backend first (fastest)
-    try:
-        from pecos_rslib import compile_hugr_to_llvm_rust
-
-        return compile_hugr_to_llvm_rust(
-            hugr_bytes,
-            None,  # output_path
+    if compiler == "selene":
+        try:
+            from pecos_rslib import compile_hugr_to_llvm_selene
+            return compile_hugr_to_llvm_selene(hugr_bytes)
+        except ImportError as e:
+            raise RuntimeError(
+                "Selene's HUGR compiler is not available. "
+                "Install it with: pip install selene-hugr-qis-compiler"
+            ) from e
+    elif compiler == "rust":
+        try:
+            from pecos_rslib import compile_hugr_to_llvm_rust
+            return compile_hugr_to_llvm_rust(hugr_bytes)
+        except ImportError as e:
+            raise RuntimeError(
+                "PECOS's Rust HUGR compiler is not available. "
+                "Build pecos-rslib with hugr-llvm-pipeline feature to enable it."
+            ) from e
+    else:
+        raise ValueError(
+            f"Invalid compiler '{compiler}'. Choose 'selene' or 'rust'."
         )
-
-    except ImportError:
-        # If Rust backend isn't available, try external compiler
-        pass
-    except RuntimeError:
-        # Re-raise runtime errors
-        raise
-
-    # Fall back to external HUGR compiler
-    try:
-        # Check if hugr_llvm_compiler module is available
-        spec = importlib.util.find_spec("pecos.frontends.hugr_llvm_compiler")
-        if spec is None:
-            msg = "PECOS HUGR compiler module not available"
-            raise RuntimeError(msg) from None
-
-        # Module is available but we won't actually use it here
-        # For now, just raise a clear error
-        msg = (
-            "Rust backend failed. External HUGR compiler would be tried next, "
-            "but it requires the hugr_quantum_llvm binary to be built."
-        )
-        raise RuntimeError(
-            msg,
-        )
-
-    except ImportError as err:
-        msg = "PECOS HUGR compiler module not available"
-        raise RuntimeError(msg) from err
 
 
 def compile_module_to_file(hugr_bytes: bytes, output_path: str | Path) -> None:
@@ -109,6 +97,11 @@ def is_available() -> bool:
     Returns:
         True if at least one HUGR->LLVM backend is available, False otherwise
     """
+    # Check Selene's hugr-qis compiler
+    spec = importlib.util.find_spec("selene_hugr_qis_compiler")
+    if spec is not None:
+        return True
+
     # Check Rust backend
     spec = importlib.util.find_spec("pecos_rslib.compile_hugr_to_llvm_rust")
     if spec is not None:

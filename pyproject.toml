@@ -47,9 +47,7 @@ test = [ # pinning testing environment
 default-groups = ["dev", "test"]
 
 # Override dependencies to ensure correct versions
-override-dependencies = [
-    "hugr==0.13.0",
-]
+# override-dependencies = []  # No overrides needed - use versions from guppylang/selene-sim
 
 [tool.pytest.ini_options]
 markers = [

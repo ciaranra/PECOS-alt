@@ -7,7 +7,8 @@ This module provides Python-accessible functions for the PHIR pipeline.
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
-use crate::{PhirConfig, compile_hugr_via_phir};
+use crate::PhirConfig;
+// use crate::compile_hugr_via_phir; // Disabled - needs HUGR 0.22 update
 
 /// Python-accessible PHIR configuration
 #[pyclass]
@@ -44,6 +45,8 @@ impl From<PyPmirConfig> for PhirConfig {
     }
 }
 
+// HUGR support temporarily disabled - needs update for HUGR 0.22
+/*
 /// Compile HUGR JSON to LLVM IR using the PHIR pipeline
 #[pyfunction]
 #[pyo3(name = "compile_hugr_via_phir")]
@@ -53,6 +56,7 @@ pub fn py_compile_hugr_via_phir(hugr_json: &str, config: Option<PyPmirConfig>) -
     compile_hugr_via_phir(hugr_json, &config)
         .map_err(|e| PyRuntimeError::new_err(format!("PHIR compilation failed: {:?}", e)))
 }
+*/
 
 /// Register PHIR Python module
 /// This would be used if pecos-pmir was exposed as a standalone Python module
@@ -62,7 +66,7 @@ pub fn register_pmir_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let pmir_module = PyModule::new(parent.py(), "pmir")?;
 
     pmir_module.add_class::<PyPmirConfig>()?;
-    pmir_module.add_function(wrap_pyfunction!(py_compile_hugr_via_phir, &pmir_module)?)?;
+    // pmir_module.add_function(wrap_pyfunction!(py_compile_hugr_via_phir, &pmir_module)?)?; // Disabled
 
     parent.add_submodule(&pmir_module)?;
     Ok(())

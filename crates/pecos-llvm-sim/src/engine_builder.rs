@@ -4,7 +4,7 @@
 //! trait from pecos-engines, enabling the unified simulation API.
 
 use crate::source::LlvmSource;
-use hugr_core::Hugr;
+use tket::hugr::Hugr;
 use pecos_core::errors::PecosError;
 use pecos_engines::ClassicalControlEngineBuilder;
 use pecos_llvm_runtime::{LlvmEngine, LlvmEngineConfig};

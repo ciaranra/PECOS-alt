@@ -176,24 +176,9 @@ attributes #0 = { "EntryPoint" }
 
     println!("Created engine with LLVM IR format");
 
-    // Test HUGR format (if available)
-    #[cfg(feature = "hugr-013")]
-    {
-        use hugr_core_013::Hugr;
-        use pecos_programs::HugrProgram;
-        let hugr = Hugr::default();
-        // Convert HUGR to bytes first
-        let hugr_bytes = serde_json::to_vec(&hugr)
-            .map_err(|e| PecosError::with_context(e, "Failed to serialize HUGR"))?;
-        let _results = sim_builder()
-            .classical(
-                selene_executable()
-                    .hugr(HugrProgram::from_bytes(hugr_bytes))
-                    .qubits(1),
-            )
-            .run(10)?;
-        println!("Created and ran engine with HUGR format");
-    }
+    // HUGR 0.13 support has been removed
+    // HUGR compilation now uses tket's HUGR 0.22 through pecos-hugr-qis crate
+    // To compile HUGR programs, use pecos-hugr-qis directly or the Python bindings
 
     println!("Completed {} shots in parallel", results.shots.len());
 

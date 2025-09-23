@@ -82,19 +82,13 @@ wat = "1"
 zstd = "0.13"
 serial_test = "3"
 cc = "1"
-hugr = "0.20"
-# HUGR dependencies - version 0.20 for pecos-hugr
-hugr-core = "0.20"
-hugr-llvm = "0.20"
-# HUGR 0.13 for pecos-selene (guppylang compatibility)
-hugr-core-013 = { package = "hugr-core", version = "=0.13.3" }
 ureq = { version = "3" }
 typetag = "0.2"
 lazy_static = "1"
 ron = "0.11"
-inkwell = "0.6"
-tket2 = "0.12"
-tket2-hseries = "0.16"
+# tket dependencies - same as Selene's approach
+tket = "0.15"
+tket-qsystem = { version = "0.21", features = ["llvm"] }
 tokio = "1"
 ndarray = "0.16"
 anyhow = "1"
@@ -111,6 +105,8 @@ once_cell = "1"
 chrono = "0.4"
 backtrace = "0.3"
 atty = "0.2"
+approx = "0.5"
+itertools = "0.14"
 
 pecos-core = { version = "0.1.1", path = "crates/pecos-core" }
 pecos-programs = { version = "0.1.1", path = "crates/pecos-programs" }
@@ -125,7 +121,8 @@ pecos-rng = { version = "0.1.0", path = "crates/pecos-rng" }
 pecos = { version = "0.1.1", path = "crates/pecos" }
 pecos-cli = { version = "0.1.1", path = "crates/pecos-cli" }
 pecos-llvm-sim = { version = "0.1.1", path = "crates/pecos-llvm-sim" }
-pecos-hugr = { version = "0.1.1", path = "crates/pecos-hugr" }
+pecos-hugr-qis = { version = "0.1.1", path = "crates/pecos-hugr-qis" }
+pecos-selene-bridge = { version = "0.1.1", path = "crates/pecos-selene-bridge" }
 pecos-selene-engine = { version = "0.1.1", path = "crates/pecos-selene-engine" }
 pecos-rslib = { version = "0.1.1", path = "python/pecos-rslib/rust" }
 pecos-build-utils = { version = "0.1.1", path = "crates/pecos-build-utils" }

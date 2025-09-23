@@ -114,15 +114,6 @@ def test_python_llvm_to_selene() -> None:
     engine.to_sim()
 
 
-def test_rust_llvm_to_plugin() -> None:
-    """Test: Rust LLVM → Selene Plugin.
-
-    Note: Plugin compilation feature was removed as it was incomplete and unused.
-    Selene uses its own runtime plugins (selene_simple_runtime_plugin).
-    """
-    pytest.skip("Plugin compilation feature removed - Selene uses its own runtime")
-
-
 def test_full_guppy_to_selene_execution() -> None:
     """Test: Full Guppy → Selene → Execution (setup only)."""
     try:

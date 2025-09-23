@@ -16,7 +16,7 @@ use pecos_qasm::qasm_engine as rust_qasm_engine;
 use crate::engine_builders::{
     PyHugrProgram, PyLlvmEngineBuilder, PyLlvmProgram, PyLlvmSimBuilder, PyPhirJsonEngineBuilder,
     PyPhirJsonProgram, PyPhirJsonSimBuilder, PyQasmEngineBuilder, PyQasmProgram, PyQasmSimBuilder,
-    PySeleneEngineBuilder, PySeleneExecutableSimBuilder, PySeleneInterfaceProgram,
+    PyQisProgram, PySeleneEngineBuilder, PySeleneExecutableSimBuilder, PySeleneInterfaceProgram,
     PySeleneLibrarySimBuilder, PySeleneSimBuilder,
 };
 
@@ -237,6 +237,21 @@ pub fn sim(py: Python, program: PyObject) -> PyResult<PySimBuilder> {
     } else if let Ok(llvm_prog) = program.extract::<PyLlvmProgram>(py) {
         // Create LLVM engine builder with program
         let engine_builder = rust_llvm_engine().program(llvm_prog.inner);
+        Ok(PySimBuilder {
+            inner: SimBuilderInner::Llvm(PyLlvmSimBuilder {
+                engine_builder: Arc::new(Mutex::new(Some(engine_builder))),
+                seed: None,
+                workers: None,
+                quantum_engine_builder: None,
+                noise_builder: None,
+                explicit_num_qubits: None,
+            }),
+        })
+    } else if let Ok(qis_prog) = program.extract::<PyQisProgram>(py) {
+        // QIS is Selene QIS format LLVM IR - use LLVM engine
+        use pecos_programs::LlvmProgram;
+        let llvm_prog = LlvmProgram::from_string(qis_prog.inner.source().to_string());
+        let engine_builder = rust_llvm_engine().program(llvm_prog);
         Ok(PySimBuilder {
             inner: SimBuilderInner::Llvm(PyLlvmSimBuilder {
                 engine_builder: Arc::new(Mutex::new(Some(engine_builder))),

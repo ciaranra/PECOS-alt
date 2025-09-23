@@ -32,6 +32,9 @@ pub struct SeleneExecutableEngineBuilder {
 
     /// Path to the bridge simulator plugin (auto-detected if not specified)
     plugin_path: Option<PathBuf>,
+
+    /// HUGR compiler to use ("selene" or "pecos", defaults to "selene")
+    hugr_compiler: String,
 }
 
 impl SeleneExecutableEngineBuilder {
@@ -46,7 +49,21 @@ impl SeleneExecutableEngineBuilder {
             working_dir: None,
             verbose: false,
             plugin_path: None,
+            hugr_compiler: "selene".to_string(),
         }
+    }
+
+    /// Set the HUGR compiler to use
+    ///
+    /// Options:
+    /// - "selene": Use Selene's hugr-qis compiler (requires Python environment)
+    /// - "pecos": Use PECOS's Rust HUGR compiler
+    ///
+    /// Default is "selene"
+    #[must_use]
+    pub fn hugr_compiler(mut self, compiler: impl Into<String>) -> Self {
+        self.hugr_compiler = compiler.into();
+        self
     }
 
     /// Set the program to execute
@@ -60,6 +77,11 @@ impl SeleneExecutableEngineBuilder {
                 // Store LLVM program for later processing
                 self.llvm_program = Some(llvm_prog);
             }
+            Program::Qis(qis_prog) => {
+                // QIS is Selene QIS format LLVM IR, treat it as LLVM
+                log::info!("QIS program provided, treating as LLVM IR");
+                self.llvm_program = Some(LlvmProgram::from_string(qis_prog.source().to_string()));
+            }
             Program::Hugr(hugr_prog) => {
                 // Store HUGR program for compilation during build
                 log::info!("HUGR program will be compiled to LLVM IR during build");
@@ -67,7 +89,7 @@ impl SeleneExecutableEngineBuilder {
             }
             _ => {
                 log::warn!(
-                    "SeleneExecutableEngine only supports SeleneInterfaceProgram, LlvmProgram, and HugrProgram"
+                    "SeleneExecutableEngine only supports SeleneInterfaceProgram, LlvmProgram, QisProgram, and HugrProgram"
                 );
             }
         }
@@ -165,12 +187,29 @@ impl ClassicalControlEngineBuilder for SeleneExecutableEngineBuilder {
         if let Some(program) = self.program {
             engine = engine.with_program(program);
         } else if let Some(hugr_prog) = self.hugr_program {
-            // Compile HUGR to LLVM IR
-            use crate::hugr_to_llvm::compile_hugr_to_llvm;
-            let llvm_ir = compile_hugr_to_llvm(hugr_prog.bytes())
-                .map_err(|e| PecosError::Input(format!("Failed to compile HUGR to LLVM: {e}")))?;
+            // Compile HUGR to LLVM IR using selected compiler
+            let llvm_ir = match self.hugr_compiler.as_str() {
+                "selene" => {
+                    // Try to use Selene's compiler through Python
+                    // This would require Python interop, so for pure Rust usage, we error
+                    return Err(PecosError::Input(
+                        "Selene's HUGR compiler requires Python environment. \
+                         Use .hugr_compiler(\"pecos\") for pure Rust compilation, \
+                         or compile HUGR to LLVM in Python before passing to Rust.".to_string()
+                    ));
+                }
+                "pecos" => {
+                    pecos_hugr_qis::compile_hugr_bytes_to_string(hugr_prog.bytes())
+                        .map_err(|e| PecosError::Input(format!("Failed to compile HUGR with PECOS compiler: {e}")))?
+                }
+                other => {
+                    return Err(PecosError::Input(
+                        format!("Invalid HUGR compiler '{}'. Use 'selene' or 'pecos'.", other)
+                    ));
+                }
+            };
 
-            log::info!("Successfully compiled HUGR to LLVM IR");
+            log::info!("Successfully compiled HUGR to LLVM IR using {} compiler", self.hugr_compiler);
             engine = engine.with_llvm_program(LlvmProgram::from_ir(llvm_ir));
         } else if let Some(llvm_prog) = self.llvm_program {
             // Regular LLVM program

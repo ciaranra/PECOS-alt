@@ -24,7 +24,7 @@ pub mod builtin_ops; // Builtin operations (Module, Function, etc.)
 pub mod dialect; // Dialect registration and management
 pub mod error; // Error handling
 pub mod execution; // PHIR execution engine
-pub mod hugr_parser; // HUGR parser (direct to PHIR)
+// pub mod hugr_parser; // HUGR parser disabled - needs update for HUGR 0.22
 pub mod mlir_lowering; // PHIR to MLIR lowering
 pub mod mlir_toolchain;
 pub mod ops; // Core operations
@@ -152,6 +152,7 @@ pub mod prelude {
 }
 
 /// Helper function to compile a PHIR module to LLVM IR or MLIR text
+#[allow(dead_code)] // Used when HUGR support is re-enabled
 fn compile_module_to_output(module: &Module, config: &PhirConfig) -> Result<String> {
     // Debug: print PHIR structure if debug mode is enabled
     if config.debug {
@@ -209,6 +210,8 @@ fn compile_module_to_output(module: &Module, config: &PhirConfig) -> Result<Stri
     }
 }
 
+// HUGR support temporarily disabled - needs update for HUGR 0.22
+/*
 /// Compile HUGR JSON directly to LLVM IR via PHIR pipeline
 ///
 /// This function provides a direct path from HUGR JSON to LLVM IR for Python bindings
@@ -221,7 +224,9 @@ pub fn compile_hugr_via_phir(hugr_json: &str, config: &PhirConfig) -> Result<Str
     let module = hugr_parser::parse_hugr_to_phir(hugr_json)?;
     compile_module_to_output(&module, config)
 }
+*/
 
+/*
 /// Compile HUGR bytes (JSON or binary) to LLVM IR via PHIR pipeline
 ///
 /// This function handles both JSON and binary HUGR formats
@@ -234,7 +239,9 @@ pub fn compile_hugr_bytes_via_phir(hugr_bytes: &[u8], config: &PhirConfig) -> Re
     let module = hugr_parser::parse_hugr_bytes_to_phir(hugr_bytes)?;
     compile_module_to_output(&module, config)
 }
+*/
 
+/*
 /// Convert HUGR to PHIR and then to MLIR text representation
 ///
 /// This function provides a path from HUGR to MLIR text format for debugging and analysis
@@ -249,6 +256,7 @@ pub fn hugr_to_phir_mlir(hugr_json: &str, config: &PhirConfig) -> Result<String>
     // Convert PHIR to MLIR text
     mlir_lowering::phir_to_mlir(&module, config)
 }
+*/
 
 #[cfg(test)]
 mod tests {

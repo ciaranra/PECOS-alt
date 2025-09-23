@@ -149,10 +149,3 @@ impl From<anyhow::Error> for PecosError {
     }
 }
 
-// For compatibility with HUGR-LLVM which uses inkwell BuilderError
-#[cfg(feature = "hugr-llvm")]
-impl From<hugr_llvm::inkwell::builder::BuilderError> for PecosError {
-    fn from(error: hugr_llvm::inkwell::builder::BuilderError) -> Self {
-        Self::External(Box::new(error))
-    }
-}

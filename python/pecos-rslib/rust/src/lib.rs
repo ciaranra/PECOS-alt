@@ -45,8 +45,8 @@ use byte_message_bindings::{PyByteMessage, PyByteMessageBuilder};
 use coin_toss_bindings::RsCoinToss;
 use cpp_sparse_sim_bindings::CppSparseSim;
 use engine_builders::{
-    PyHugrProgram, PyLlvmProgram, PyPhirJsonProgram, PyQasmProgram, PySeleneExecutableConfig,
-    PySeleneExecutableEngine, PySeleneInterfaceProgram,
+    PyHugrProgram, PyLlvmProgram, PyPhirJsonProgram, PyQasmProgram, PyQisProgram,
+    PySeleneExecutableConfig, PySeleneExecutableEngine, PySeleneInterfaceProgram,
 };
 use pauli_prop_bindings::PyPauliProp;
 use pecos_rng_bindings::RngPcg;
@@ -92,6 +92,7 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Register program types
     m.add_class::<PyQasmProgram>()?;
     m.add_class::<PyLlvmProgram>()?;
+    m.add_class::<PyQisProgram>()?;
     m.add_class::<PyHugrProgram>()?;
     m.add_class::<PyPhirJsonProgram>()?;
     m.add_class::<PySeleneInterfaceProgram>()?;

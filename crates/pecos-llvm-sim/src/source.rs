@@ -1,4 +1,4 @@
-use hugr_core::Hugr;
+use tket::hugr::Hugr;
 use pecos_core::errors::PecosError;
 use std::path::PathBuf;
 
@@ -128,8 +128,8 @@ impl LlvmSource {
 
             Self::Hugr(hugr) => {
                 // Create a Package from the HUGR and serialize it
-                use hugr_core::envelope::{EnvelopeConfig, write_envelope};
-                use hugr_core::package::Package;
+                use tket::hugr::envelope::{EnvelopeConfig, write_envelope};
+                use tket::hugr::package::Package;
 
                 let package = Package::new(vec![*hugr]);
 
@@ -144,8 +144,8 @@ impl LlvmSource {
             Self::HugrBytes(bytes) => compile_hugr_bytes(&bytes),
 
             Self::HugrFile(path) => {
-                // Use pecos-hugr to compile file directly
-                use pecos_hugr::compile_hugr_to_llvm;
+                // Use pecos-hugr-qis to compile file directly
+                use pecos_hugr_qis::compile_hugr_to_llvm;
                 let temp_output = tempfile::NamedTempFile::new()
                     .map_err(|e| PecosError::with_context(e, "Failed to create temp file"))?;
 
@@ -165,6 +165,6 @@ impl LlvmSource {
 
 /// Compile HUGR bytes to LLVM IR string
 fn compile_hugr_bytes(hugr_bytes: &[u8]) -> Result<String, PecosError> {
-    use pecos_hugr::compile_hugr_bytes_to_string;
+    use pecos_hugr_qis::compile_hugr_bytes_to_string;
     compile_hugr_bytes_to_string(hugr_bytes)
 }

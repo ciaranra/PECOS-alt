@@ -11,19 +11,13 @@ categories.workspace = true
 description = "Selene integration for PECOS quantum simulation"
 readme = "README.md"
 
-
 [dependencies]
 pecos-core.workspace = true
 pecos-engines.workspace = true
 pecos-programs.workspace = true
 pecos-llvm-runtime.workspace = true
-pecos-selene-bridge = { path = "../pecos-selene-bridge" }
-
-# Selene dependencies - using latest main branch version
-selene-core = { git = "https://github.com/CQCL/selene.git", rev = "f9e14c4c218feea85ba7c23048eb5118d6a4ed8c" }
-selene-sim = { git = "https://github.com/CQCL/selene.git", rev = "f9e14c4c218feea85ba7c23048eb5118d6a4ed8c" }
-# TODO: Add hugr-qis-compiler when PyO3 version conflicts are resolved
-# selene-hugr-qis-compiler = { path = "../../../selene/selene-compilers/hugr_qis" }
+pecos-selene-bridge.workspace = true
+pecos-hugr-qis.workspace = true
 
 # For error handling
 thiserror.workspace = true
@@ -32,44 +26,21 @@ anyhow.workspace = true
 # For global state in stubs
 once_cell.workspace = true
 
-# For HUGR support - using HUGR 0.13 for guppylang compatibility
-hugr-core-013 = { workspace = true, optional = true }
-
-# For HUGR to LLVM compilation (optional)
-# Note: These versions need to be compatible with HUGR 0.13
-# tket2 = { version = "0.13", optional = true }
-# tket2-hseries = { version = "0.18", optional = true, features = ["llvm"] }
-
 # Standard library extensions
 log.workspace = true
 
 # For dynamic library loading
 tempfile.workspace = true
 libloading.workspace = true
-libc.workspace = true
-
-# For HUGR decompression
-zstd = { workspace = true, optional = true }
 
 # For JSON parsing
 serde_json = { workspace = true }
-
-# For trait object cloning
-dyn-clone = { workspace = true }
-
-# For random number generation
-rand = { workspace = true }
-
-[build-dependencies]
-# Build script doesn't need the plugins crate, just tracks its changes
-
 
 [dev-dependencies]
 env_logger.workspace = true
 
 [features]
-default = ["hugr-013"]
-hugr-013 = ["dep:hugr-core-013", "dep:zstd"]
+default = []
 
 [lints]
 workspace = true

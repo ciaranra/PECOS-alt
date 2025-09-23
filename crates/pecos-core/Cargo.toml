@@ -19,12 +19,10 @@ num-complex.workspace = true
 thiserror.workspace = true
 # Optional dependencies for error conversions
 anyhow = { workspace = true, optional = true }
-hugr-llvm = { workspace = true, optional = true }
 
 [features]
 default = []
 anyhow = ["dep:anyhow"]
-hugr-llvm = ["dep:hugr-llvm", "anyhow"]
 
 [lints]
 workspace = true

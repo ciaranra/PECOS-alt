@@ -8,7 +8,7 @@ use pecos_engines::{ClassicalControlEngineBuilder, MonteCarloEngine, SimBuilder,
 use pecos_llvm_sim::llvm_engine;
 use pecos_programs::Program;
 use pecos_qasm::qasm_engine;
-use pecos_selene_engine::selene_executable;
+use pecos_selene_engine::selene_executable_builder::selene_executable;
 
 /// Extension trait for `SimBuilder` to add program-based methods
 pub trait SimBuilderExt {
@@ -68,6 +68,15 @@ impl ProgrammedSimBuilder {
                     .base_builder
                     .classical(llvm_engine().program(llvm))
                     .build(),
+                Program::Qis(qis) => {
+                    // QIS is Selene QIS format LLVM IR
+                    // Use LLVM engine directly for QIS programs
+                    use pecos_programs::LlvmProgram;
+                    let llvm_program = LlvmProgram::from_string(qis.source().to_string());
+                    self.base_builder
+                        .classical(llvm_engine().program(llvm_program))
+                        .build()
+                }
                 Program::Hugr(hugr) => {
                     // Selene can handle HUGR via LLVM compilation
                     self.base_builder
@@ -116,6 +125,15 @@ impl ProgrammedSimBuilder {
                     .base_builder
                     .classical(llvm_engine().program(llvm))
                     .run(shots),
+                Program::Qis(qis) => {
+                    // QIS is Selene QIS format LLVM IR
+                    // Use LLVM engine directly for QIS programs
+                    use pecos_programs::LlvmProgram;
+                    let llvm_program = LlvmProgram::from_string(qis.source().to_string());
+                    self.base_builder
+                        .classical(llvm_engine().program(llvm_program))
+                        .run(shots)
+                }
                 Program::Hugr(hugr) => {
                     // Selene can handle HUGR via LLVM compilation
                     self.base_builder

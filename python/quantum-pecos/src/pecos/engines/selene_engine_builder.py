@@ -145,7 +145,12 @@ class SeleneEngineBuilder:
         logger.info("Compiling Guppy program to HUGR...")
 
         try:
-            # Compile directly to Package for Selene
+            # Following Selene's approach: Entry points must have no parameters.
+            # Guppy's compile() method will raise an error if the function has parameters,
+            # matching Selene's behavior. We just need to pass through that error with
+            # a clear message.
+
+            # Try to compile - this will fail for parametric functions
             if hasattr(self.guppy_program, "compile"):
                 package = self.guppy_program.compile()
                 logger.info("Compiled to HUGR Package: %s", package)
@@ -159,7 +164,31 @@ class SeleneEngineBuilder:
 
             msg = "Could not compile Guppy program"
             raise RuntimeError(msg)
-        except (ImportError, AttributeError, ValueError, TypeError) as e:
+        except Exception as e:
+            # Check if this is a parametric function error from Guppy
+            error_str = str(e)
+            error_type = type(e).__name__
+            if "EntrypointArgsError" in error_str or "EntrypointArgsError" in error_type:
+                # Re-raise with a message matching Selene's approach
+                # Extract the number of args if possible
+                import re
+                args_match = re.search(r"args=\[([^\]]*)\]", error_str)
+                if args_match:
+                    args = args_match.group(1).replace("'", "").split(", ")
+                    num_args = len([a for a in args if a])  # Count non-empty args
+                    msg = (
+                        f"Entry point function must have no input parameters (found {num_args}). "
+                        "Following Selene's approach, parametric functions should be called from a "
+                        "parameter-less main() function."
+                    )
+                else:
+                    msg = (
+                        "Entry point function must have no input parameters. "
+                        "Following Selene's approach, parametric functions should be called from a "
+                        "parameter-less main() function."
+                    )
+                raise ValueError(msg) from e
+            # For other errors, preserve the original
             msg = f"Failed to compile Guppy to HUGR: {e}"
             raise RuntimeError(msg) from e
 

@@ -32,7 +32,6 @@ pecos-programs.workspace = true
 pecos-engines.workspace = true
 
 # Serialization (for result formatting)
-serde.workspace = true
 serde_json.workspace = true
 
 # BitVec for storing register results

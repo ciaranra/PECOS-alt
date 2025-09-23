@@ -4,7 +4,7 @@ HUGR Parser - Direct to PHIR
 This module parses HUGR format directly into PHIR structures using `hugr_core`,
 leveraging PHIR's hierarchical structure to serve as both AST and IR.
 
-Uses flat iteration approach inspired by pecos-hugr to avoid stack overflow
+Uses flat iteration approach inspired by pecos-hugr-qis to avoid stack overflow
 issues with deeply nested structures.
 */
 
@@ -17,8 +17,8 @@ use crate::types::{FunctionType, Type};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use hugr_core::{
-    Hugr, HugrView, Node, NodeIndex, PortIndex, ops::OpType, package::Package, std_extensions,
+use tket::hugr::{
+    Hugr, HugrView, Node, NodeIndex, PortIndex, ops::OpType, package::Package,
 };
 
 /// Parse HUGR bytes directly into PHIR representation
@@ -32,9 +32,13 @@ use hugr_core::{
 /// - HUGR package contains no modules
 /// - HUGR to PHIR conversion fails
 pub fn parse_hugr_bytes_to_phir(hugr_bytes: &[u8]) -> Result<ModuleOp> {
-    // Load HUGR using hugr_core
-    let reader = std::io::Cursor::new(hugr_bytes);
-    let mut hugr_package = Package::load(reader, Some(&std_extensions::std_reg()))
+    // For HUGR 0.13, the Package struct expects 'modules' and 'extensions' fields only
+    // No need to add extension_reqs - that's not a Package field
+    let json_bytes = hugr_bytes.to_vec();
+
+    // Load HUGR using hugr_core_013
+    let reader = std::io::Cursor::new(json_bytes);
+    let mut hugr_package = Package::from_json_reader(reader)
         .map_err(|e| PhirError::internal(format!("Failed to parse HUGR: {e}")))?;
 
     if hugr_package.modules.is_empty() {
@@ -92,7 +96,7 @@ fn convert_hugr_to_phir_flat(hugr: &Hugr) -> ModuleOp {
 fn convert_function_flat(
     hugr: &Hugr,
     func_node: Node,
-    func_defn: &hugr_core::ops::FuncDefn,
+    func_defn: &hugr_core_013::ops::FuncDefn,
 ) -> FuncOp {
     // Name the first function "main" for PECOS compatibility
     let func_name = if func_node.index() == 1 {
@@ -100,7 +104,7 @@ fn convert_function_flat(
     } else {
         format!("func_{}", func_node.index())
     };
-    let func_type = convert_function_type(func_defn.signature());
+    let func_type = convert_function_type(&func_defn.signature);
 
     let mut func = FuncOp::new(func_name, func_type);
 
@@ -266,7 +270,7 @@ fn get_operation_result_types(operation: &Operation) -> Vec<Type> {
 }
 
 /// Convert HUGR function type to PHIR function type
-fn convert_function_type(sig: &hugr_core::types::PolyFuncType) -> FunctionType {
+fn convert_function_type(sig: &hugr_core_013::types::PolyFuncType) -> FunctionType {
     let func_type = sig.body();
 
     let inputs = func_type
@@ -289,31 +293,20 @@ fn convert_function_type(sig: &hugr_core::types::PolyFuncType) -> FunctionType {
 }
 
 /// Convert HUGR type to PHIR type
-fn convert_hugr_type_to_phir(hugr_type: &hugr_core::types::Type) -> Type {
-    use hugr_core::extension::prelude::{bool_t, qb_t};
+fn convert_hugr_type_to_phir(hugr_type: &hugr_core_013::types::Type) -> Type {
+    use tket::hugr::extension::prelude::{BOOL_T, QB_T};
 
     match hugr_type {
-        t if t == &qb_t() => Type::Qubit,
-        t if t == &bool_t() => Type::Bool,
-        t => {
-            if let Some(ext_type) = t.as_extension() {
-                let name = ext_type.name();
-                match name.as_ref() {
-                    "bool" => Type::Bool,
-                    "float64" => Type::Float(crate::types::FloatPrecision::F64),
-                    _ => Type::Custom(crate::types::CustomType {
-                        dialect: "hugr".to_string(),
-                        name: name.to_string(),
-                        parameters: vec![],
-                    }),
-                }
-            } else {
-                Type::Custom(crate::types::CustomType {
-                    dialect: "hugr".to_string(),
-                    name: format!("{hugr_type:?}"),
-                    parameters: vec![],
-                })
-            }
+        t if t == &QB_T => Type::Qubit,
+        t if t == &BOOL_T => Type::Bool,
+        _ => {
+            // For now, convert unknown types to custom types
+            // TODO: Add proper extension type handling for HUGR 0.13
+            Type::Custom(crate::types::CustomType {
+                dialect: "hugr".to_string(),
+                name: format!("{hugr_type:?}"),
+                parameters: vec![],
+            })
         }
     }
 }

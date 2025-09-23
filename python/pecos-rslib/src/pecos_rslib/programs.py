@@ -9,6 +9,7 @@ from pecos_rslib._pecos_rslib import (
     LlvmProgram,
     PhirJsonProgram,
     QasmProgram,
+    QisProgram,
 )
 
 
@@ -52,6 +53,7 @@ __all__ = [
     "LlvmProgram",
     "PhirJsonProgram",
     "QasmProgram",
+    "QisProgram",
     "WasmProgram",
     "WatProgram",
 ]

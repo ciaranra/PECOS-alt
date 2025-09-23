@@ -169,13 +169,17 @@ class GuppyFrontend:
             )
 
             # Handle the return value - it might be a FuncDefnPointer or similar
-            if hasattr(compiled, "package"):
+            # Both Rust backend and Selene now use binary envelope format
+            if hasattr(compiled, "to_bytes"):
+                hugr_bytes = compiled.to_bytes()
+            elif hasattr(compiled, "package"):
                 hugr_bytes = compiled.package.to_bytes()
             elif hasattr(compiled, "to_package"):
-                hugr_bytes = compiled.to_package().to_bytes()
+                package = compiled.to_package()
+                hugr_bytes = package.to_bytes()
             else:
-                # Try to serialize directly
-                hugr_bytes = compiled.to_bytes()
+                msg = "Cannot serialize HUGR to binary envelope format"
+                raise RuntimeError(msg)
         except Exception as e:
             msg = f"Failed to compile Guppy to HUGR: {e}"
             raise RuntimeError(msg) from e

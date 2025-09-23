@@ -170,45 +170,9 @@ attributes #0 = { "EntryPoint" }
 fn test_end_to_end_hugr_program() -> Result<(), PecosError> {
     println!("=== End-to-End: HUGR Program Format ===");
 
-    // Test with HUGR program format (when available)
-    #[cfg(feature = "hugr-013")]
-    {
-        use hugr_core_013::Hugr;
-        use pecos_programs::HugrProgram;
-
-        // Create a simple HUGR program
-        let hugr = Hugr::default(); // Simplified for test
-
-        println!("Creating SeleneEngine with HUGR program");
-
-        // Convert HUGR to bytes first
-        let hugr_bytes = serde_json::to_vec(&hugr)
-            .map_err(|e| PecosError::with_context(e, "Failed to serialize HUGR"))?;
-
-        // Try to run - expect HUGR compilation to fail due to missing main function
-        let results = sim_builder()
-            .classical(
-                selene_executable()
-                    .hugr(HugrProgram::from_bytes(hugr_bytes))
-                    .qubits(1),
-            )
-            .seed(456)
-            .workers(2)
-            .run(100);
-
-        // Default HUGR lacks a main function, so compilation should fail
-        if results.is_err() {
-            println!("HUGR compilation correctly failed (no main function)");
-        } else {
-            println!("HUGR program executed (unexpected success)");
-            assert_eq!(results.unwrap().shots.len(), 100);
-        }
-    }
-
-    #[cfg(not(feature = "hugr-013"))]
-    {
-        println!("HUGR feature not enabled, skipping HUGR test");
-    }
+    // HUGR 0.13 support has been removed
+    // HUGR compilation now uses tket's HUGR 0.22 through pecos-hugr-qis crate
+    println!("HUGR support note: Use pecos-hugr-qis crate for HUGR compilation");
 
     Ok(())
 }

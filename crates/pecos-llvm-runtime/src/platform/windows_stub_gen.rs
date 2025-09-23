@@ -23,8 +23,10 @@ impl ExportedFunction {
 
         let body = match self.return_type {
             "int" | "usize" | "u32" | "i32" | "i1" => "{ return 0; }",
+            "u64" => "{ return 0ULL; }",
             "i64" => "{ return 0LL; }",
-            "void*" | "const unsigned char*" => "{ return &empty_commands; }",
+            "void*" | "const unsigned char*" | "i8*" => "{ return &empty_commands; }",
+            "void" if self.name == "panic" => "{ exit(0); }",
             _ => "{}",
         };
 
@@ -51,7 +53,98 @@ impl ExportedFunction {
 /// Get the list of exported functions
 /// This list must be kept in sync with runtime.rs
 pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
-    // QIR runtime API
+    // QIS Setup/Teardown
+    ExportedFunction {
+        name: "setup",
+        return_type: "void",
+        params: &[("i64", "seed")],
+    },
+    ExportedFunction {
+        name: "teardown",
+        return_type: "i64",
+        params: &[],
+    },
+    // QIS Memory Management
+    ExportedFunction {
+        name: "___qalloc",
+        return_type: "i64",
+        params: &[],
+    },
+    ExportedFunction {
+        name: "___qfree",
+        return_type: "void",
+        params: &[("i64", "qubit")],
+    },
+    ExportedFunction {
+        name: "___reset",
+        return_type: "void",
+        params: &[("i64", "qubit")],
+    },
+    // QIS Measurement Functions
+    ExportedFunction {
+        name: "___measure",
+        return_type: "i1",
+        params: &[("i64", "qubit")],
+    },
+    ExportedFunction {
+        name: "___lazy_measure",
+        return_type: "i64",
+        params: &[("i64", "qubit")],
+    },
+    ExportedFunction {
+        name: "___lazy_measure_leaked",
+        return_type: "i64",
+        params: &[("i64", "qubit")],
+    },
+    ExportedFunction {
+        name: "___lazy_measure_reset",
+        return_type: "i64",
+        params: &[("i64", "qubit")],
+    },
+    // QIS Gate Functions
+    ExportedFunction {
+        name: "___rxy",
+        return_type: "void",
+        params: &[("i64", "qubit"), ("double", "theta"), ("double", "phi")],
+    },
+    ExportedFunction {
+        name: "___rz",
+        return_type: "void",
+        params: &[("i64", "qubit"), ("double", "theta")],
+    },
+    ExportedFunction {
+        name: "___rzz",
+        return_type: "void",
+        params: &[("i64", "qubit1"), ("i64", "qubit2"), ("double", "theta")],
+    },
+    // QIS Future Reference Management
+    ExportedFunction {
+        name: "___inc_future_refcount",
+        return_type: "void",
+        params: &[("i64", "reference")],
+    },
+    ExportedFunction {
+        name: "___dec_future_refcount",
+        return_type: "void",
+        params: &[("i64", "reference")],
+    },
+    ExportedFunction {
+        name: "___read_future_bool",
+        return_type: "i1",
+        params: &[("i64", "reference")],
+    },
+    ExportedFunction {
+        name: "___read_future_uint",
+        return_type: "u64",
+        params: &[("i64", "reference")],
+    },
+    // QIS Error Handling
+    ExportedFunction {
+        name: "panic",
+        return_type: "void",
+        params: &[("i32", "code"), ("i8*", "message")],
+    },
+    // QIR runtime API (kept for internal use)
     ExportedFunction {
         name: "llvm_runtime_reset",
         return_type: "void",
@@ -175,11 +268,6 @@ pub const EXPORTED_FUNCTIONS: &[ExportedFunction] = &[
     },
     // Runtime management
     ExportedFunction {
-        name: "__quantum__rt__initialize",
-        return_type: "void",
-        params: &[("void*", "config")],
-    },
-    ExportedFunction {
         name: "__quantum__rt__result_allocate",
         return_type: "i64",
         params: &[],
@@ -285,13 +373,16 @@ pub fn generate_c_stub() -> String {
     format!(
         r"#include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 // Define type aliases
 typedef uint32_t u32;
+typedef uint64_t u64;
 typedef size_t usize;
 typedef int32_t i32;
 typedef int64_t i64;
 typedef unsigned char i1;
+typedef char i8;
 
 // Define a minimal binary command structure
 typedef struct {{
