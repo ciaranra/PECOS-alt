@@ -10,11 +10,13 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
+
 use pecos_core::{Set, VecSet};
 use pecos_qsim::{CliffordGateable, QuantumSimulator, StdPauliProp};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PySet};
 use std::collections::BTreeMap;
+
 
 /// Python wrapper for the Rust `PauliProp` simulator
 ///
@@ -221,7 +223,7 @@ impl PyPauliProp {
     }
 
     /// Get all faults as a dictionary (compatible with Python `PauliFaultProp`)
-    pub fn get_faults(&self, py: Python<'_>) -> PyResult<PyObject> {
+    pub fn get_faults(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let dict = PyDict::new(py);
 
         // Get X-only qubits

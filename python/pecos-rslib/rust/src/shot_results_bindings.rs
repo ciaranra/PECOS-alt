@@ -3,10 +3,12 @@
 //! This module provides Python-friendly wrappers around the Rust shot result types,
 //! allowing direct access to the data and providing convenient conversion methods.
 
+
 use pecos_engines::shot_results::{ShotMap, ShotVec};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList};
+
 
 /// Python wrapper for `ShotVec`
 #[pyclass(name = "ShotVec", module = "pecos_rslib._pecos_rslib")]
@@ -55,7 +57,7 @@ impl PyShotVec {
     ///
     /// Returns:
     ///     dict[str, list[int]]: Register names mapped to lists of integer values
-    fn to_dict(&self, py: Python<'_>) -> PyResult<PyObject> {
+    fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         shot_vec_to_dict_integers(py, &self.inner)
     }
 
@@ -65,7 +67,7 @@ impl PyShotVec {
     ///
     /// Returns:
     ///     dict[str, list[str]]: Register names mapped to lists of binary strings
-    fn to_binary_dict(&self, py: Python<'_>) -> PyResult<PyObject> {
+    fn to_binary_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         shot_vec_to_dict_binary(py, &self.inner)
     }
 
@@ -183,7 +185,7 @@ impl PyShotMap {
     ///
     /// Returns:
     ///     dict[str, list[int]]: Register names mapped to lists of integer values
-    fn to_dict(&self, py: Python<'_>) -> PyResult<PyObject> {
+    fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         shot_map_to_dict_integers(py, &self.inner)
     }
 
@@ -191,7 +193,7 @@ impl PyShotMap {
     ///
     /// Returns:
     ///     dict[str, list[str]]: Register names mapped to lists of binary strings
-    fn to_binary_dict(&self, py: Python<'_>) -> PyResult<PyObject> {
+    fn to_binary_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         shot_map_to_dict_binary(py, &self.inner)
     }
 
@@ -208,7 +210,7 @@ impl PyShotMap {
 // Helper functions for conversion
 
 /// Convert `ShotVec` to Python dict with integer values
-pub(crate) fn shot_vec_to_dict_integers(py: Python<'_>, shot_vec: &ShotVec) -> PyResult<PyObject> {
+pub(crate) fn shot_vec_to_dict_integers(py: Python<'_>, shot_vec: &ShotVec) -> PyResult<Py<PyAny>> {
     let shot_map = shot_vec
         .try_as_shot_map()
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
@@ -216,7 +218,7 @@ pub(crate) fn shot_vec_to_dict_integers(py: Python<'_>, shot_vec: &ShotVec) -> P
 }
 
 /// Convert `ShotVec` to Python dict with binary string values
-pub(crate) fn shot_vec_to_dict_binary(py: Python<'_>, shot_vec: &ShotVec) -> PyResult<PyObject> {
+pub(crate) fn shot_vec_to_dict_binary(py: Python<'_>, shot_vec: &ShotVec) -> PyResult<Py<PyAny>> {
     let shot_map = shot_vec
         .try_as_shot_map()
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
@@ -224,7 +226,7 @@ pub(crate) fn shot_vec_to_dict_binary(py: Python<'_>, shot_vec: &ShotVec) -> PyR
 }
 
 /// Convert `ShotMap` to Python dict with integer values
-pub(crate) fn shot_map_to_dict_integers(py: Python<'_>, shot_map: &ShotMap) -> PyResult<PyObject> {
+pub(crate) fn shot_map_to_dict_integers(py: Python<'_>, shot_map: &ShotMap) -> PyResult<Py<PyAny>> {
     let py_dict = PyDict::new(py);
 
     for reg_name in shot_map.register_names() {
@@ -235,7 +237,7 @@ pub(crate) fn shot_map_to_dict_integers(py: Python<'_>, shot_map: &ShotMap) -> P
             // Convert BigUint to Python integers
             for val in biguint_values {
                 let bytes = val.to_bytes_le();
-                let py_int: PyObject = if bytes.is_empty() {
+                let py_int: Py<PyAny> = if bytes.is_empty() {
                     0u32.into_pyobject(py)?.into()
                 } else {
                     let py_bytes = PyBytes::new(py, &bytes);
@@ -275,7 +277,7 @@ pub(crate) fn shot_map_to_dict_integers(py: Python<'_>, shot_map: &ShotMap) -> P
 }
 
 /// Convert `ShotMap` to Python dict with binary string values
-pub(crate) fn shot_map_to_dict_binary(py: Python<'_>, shot_map: &ShotMap) -> PyResult<PyObject> {
+pub(crate) fn shot_map_to_dict_binary(py: Python<'_>, shot_map: &ShotMap) -> PyResult<Py<PyAny>> {
     let py_dict = PyDict::new(py);
 
     for reg_name in shot_map.register_names() {

@@ -12,6 +12,7 @@
 
 //! Python bindings for LLVM execution
 
+
 use pecos::setup_llvm_engine;
 use pecos_core::rng::RngManageable;
 use pecos_engines::NoiseModel;
@@ -22,6 +23,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use std::fs;
 use std::path::PathBuf;
+
 
 /// Python wrapper for LLVM execution
 #[pyclass(name = "LlvmEngine")]
@@ -51,7 +53,7 @@ impl PyLlvmEngine {
         seed: Option<u64>,
         noise_probability: Option<f64>,
         workers: Option<usize>,
-    ) -> PyResult<PyObject> {
+    ) -> PyResult<Py<PyAny>> {
         // Execute LLVM with proper serialization (LLVM best practice)
         let results =
             execute_llvm_safe(&self.llvm_path, shots, seed, noise_probability, workers, None)
@@ -67,7 +69,7 @@ fn convert_results_to_python(
     py: Python<'_>,
     results: shot_results::ShotVec,
     shots: usize,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let result_list = PyList::empty(py);
     for shot in results.shots {
         // Handle different result formats
@@ -220,7 +222,7 @@ pub fn py_execute_llvm(
     noise_probability: Option<f64>,
     workers: Option<usize>,
     max_qubits: Option<usize>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     // Enhanced error handling removed - not needed for simplification
 
     // Validate LLVM file path
@@ -259,7 +261,7 @@ pub fn py_execute_llvm(
 /// Validate LLVM format and get detailed diagnostics
 #[pyfunction]
 #[pyo3(name = "validate_llvm_format_detailed")]
-pub fn py_validate_llvm_format(llvm_path: &str) -> PyResult<PyObject> {
+pub fn py_validate_llvm_format(llvm_path: &str) -> PyResult<Py<PyAny>> {
     use pyo3::types::PyDict;
 
     let path = std::path::PathBuf::from(llvm_path);
@@ -272,7 +274,7 @@ pub fn py_validate_llvm_format(llvm_path: &str) -> PyResult<PyObject> {
     let llvm_content = fs::read_to_string(&path)
         .map_err(|e| PyRuntimeError::new_err(format!("Failed to read LLVM file: {e}")))?;
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let result = PyDict::new(py);
 
         // Basic format validation

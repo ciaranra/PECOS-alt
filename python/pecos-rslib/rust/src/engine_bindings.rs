@@ -15,11 +15,13 @@
 //! This module provides common functionality for binding Rust engines to Python.
 //! It defines traits that both concrete engines should implement.
 
+
 use crate::byte_message_bindings::PyByteMessage;
 use pecos::prelude::{Engine, QuantumEngine};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
+
 
 /// Trait for engine wrappers to implement
 ///
@@ -86,7 +88,7 @@ pub trait PyEngineCommon: PyEngineWrapper {
         message: &PyByteMessage,
         shots: Option<usize>,
         py: Python<'_>,
-    ) -> PyResult<PyObject> {
+    ) -> PyResult<Py<PyAny>> {
         let num_shots = shots.unwrap_or(1000);
         let result_list = PyList::empty(py);
 

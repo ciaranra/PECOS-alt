@@ -6,6 +6,7 @@
 // PyO3 convention is to return PyResult even for infallible operations
 #![allow(clippy::unnecessary_wraps)]
 
+
 use pecos_engines::quantum_engine_builder::{
     SparseStabilizerEngineBuilder as RustSparseStabilizerEngineBuilder,
     StateVectorEngineBuilder as RustStateVectorEngineBuilder,
@@ -35,6 +36,7 @@ use crate::sim::{PySimBuilder, SimBuilderInner};
 
 // Noise builder wrappers
 use pecos_engines::noise::{
+
     BiasedDepolarizingNoiseModelBuilder, DepolarizingNoiseModelBuilder, GeneralNoiseModelBuilder,
 };
 
@@ -107,8 +109,8 @@ impl PyLlvmEngineBuilder {
 
     /// Set the program for this engine
     #[pyo3(signature = (program))]
-    #[allow(clippy::needless_pass_by_value)] // PyObject must be passed by value for PyO3
-    fn program(&mut self, program: PyObject, py: Python) -> PyResult<Self> {
+    #[allow(clippy::needless_pass_by_value)] // Py<PyAny> must be passed by value for PyO3
+    fn program(&mut self, program: Py<PyAny>, py: Python) -> PyResult<Self> {
         // Check if it's an LlvmProgram
         if let Ok(llvm_prog) = program.extract::<PyLlvmProgram>(py) {
             self.inner = self.inner.clone().program(llvm_prog.inner);
@@ -163,8 +165,8 @@ impl PySeleneEngineBuilder {
 
     /// Set the program for this engine
     #[pyo3(signature = (program))]
-    #[allow(clippy::needless_pass_by_value)] // PyObject must be passed by value for PyO3
-    fn program(&mut self, program: PyObject, py: Python) -> PyResult<Self> {
+    #[allow(clippy::needless_pass_by_value)] // Py<PyAny> must be passed by value for PyO3
+    fn program(&mut self, program: Py<PyAny>, py: Python) -> PyResult<Self> {
         // Check if it's an LlvmProgram
         if let Ok(llvm_prog) = program.extract::<PyLlvmProgram>(py) {
             self.inner = self.inner.clone().program(llvm_prog.inner);
@@ -259,8 +261,8 @@ pub struct PyQasmSimBuilder {
     pub(crate) engine_builder: Arc<Mutex<Option<RustQasmEngineBuilder>>>,
     pub(crate) seed: Option<u64>,
     pub(crate) workers: Option<usize>,
-    pub(crate) quantum_engine_builder: Option<PyObject>,
-    pub(crate) noise_builder: Option<PyObject>,
+    pub(crate) quantum_engine_builder: Option<Py<PyAny>>,
+    pub(crate) noise_builder: Option<Py<PyAny>>,
     pub(crate) explicit_num_qubits: Option<usize>,
 }
 
@@ -325,8 +327,8 @@ pub struct PyLlvmSimBuilder {
     pub(crate) engine_builder: Arc<Mutex<Option<RustLlvmEngineBuilder>>>,
     pub(crate) seed: Option<u64>,
     pub(crate) workers: Option<usize>,
-    pub(crate) quantum_engine_builder: Option<PyObject>,
-    pub(crate) noise_builder: Option<PyObject>,
+    pub(crate) quantum_engine_builder: Option<Py<PyAny>>,
+    pub(crate) noise_builder: Option<Py<PyAny>>,
     pub(crate) explicit_num_qubits: Option<usize>,
 }
 
@@ -335,8 +337,8 @@ pub struct PySeleneSimBuilder {
     pub(crate) engine_builder: Arc<Mutex<Option<RustSeleneEngineBuilder>>>,
     pub(crate) seed: Option<u64>,
     pub(crate) workers: Option<usize>,
-    pub(crate) quantum_engine_builder: Option<PyObject>,
-    pub(crate) noise_builder: Option<PyObject>,
+    pub(crate) quantum_engine_builder: Option<Py<PyAny>>,
+    pub(crate) noise_builder: Option<Py<PyAny>>,
     pub(crate) explicit_num_qubits: Option<usize>,
 }
 
@@ -345,14 +347,14 @@ pub struct PyPhirJsonSimBuilder {
     pub(crate) engine_builder: Arc<Mutex<Option<RustPhirJsonEngineBuilder>>>,
     pub(crate) seed: Option<u64>,
     pub(crate) workers: Option<usize>,
-    pub(crate) quantum_engine_builder: Option<PyObject>,
-    pub(crate) noise_builder: Option<PyObject>,
+    pub(crate) quantum_engine_builder: Option<Py<PyAny>>,
+    pub(crate) noise_builder: Option<Py<PyAny>>,
     pub(crate) explicit_num_qubits: Option<usize>,
 }
 
 /// Builder for Selene executable engine with bridge approach
 pub struct PySeleneExecutableSimBuilder {
-    pub(crate) program: Option<PyObject>, // Guppy function or HUGR to compile to executable
+    pub(crate) program: Option<Py<PyAny>>, // Guppy function or HUGR to compile to executable
     pub(crate) engine_builder: Arc<
         Mutex<
             Option<pecos_selene_engine::selene_executable_builder::SeleneExecutableEngineBuilder>,
@@ -360,18 +362,18 @@ pub struct PySeleneExecutableSimBuilder {
     >,
     pub(crate) seed: Option<u64>,
     pub(crate) workers: Option<usize>,
-    pub(crate) quantum_engine_builder: Option<PyObject>,
-    pub(crate) noise_builder: Option<PyObject>,
+    pub(crate) quantum_engine_builder: Option<Py<PyAny>>,
+    pub(crate) noise_builder: Option<Py<PyAny>>,
     pub(crate) explicit_num_qubits: Option<usize>,
 }
 
 /// Builder for Selene library engine (newest approach for HUGR/Guppy)
 pub struct PySeleneLibrarySimBuilder {
-    pub(crate) program: Option<PyObject>, // Store the Python program (Guppy or HUGR)
+    pub(crate) program: Option<Py<PyAny>>, // Store the Python program (Guppy or HUGR)
     pub(crate) seed: Option<u64>,
     pub(crate) workers: Option<usize>,
-    pub(crate) quantum_engine_builder: Option<PyObject>,
-    pub(crate) noise_builder: Option<PyObject>,
+    pub(crate) quantum_engine_builder: Option<Py<PyAny>>,
+    pub(crate) noise_builder: Option<Py<PyAny>>,
     pub(crate) explicit_num_qubits: Option<usize>,
 }
 

@@ -10,10 +10,12 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
+
 use crate::byte_message_bindings::PyByteMessage;
 use crate::engine_bindings::{PyEngineCommon, PyEngineWrapper, PyQuantumEngineWrapper};
 use pecos::prelude::SparseStabEngine;
 use pyo3::prelude::*;
+
 
 /// Python wrapper for Rust `SparseStabEngine` to execute `ByteMessage` circuits with Clifford gates
 #[pyclass(name = "SparseStabEngineRs")]
@@ -69,7 +71,7 @@ impl PySparseStabEngine {
         message: &PyByteMessage,
         shots: Option<usize>,
         py: Python<'_>,
-    ) -> PyResult<PyObject> {
+    ) -> PyResult<Py<PyAny>> {
         self.py_run_circuit_with_shots(message, shots, py)
     }
 

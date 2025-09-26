@@ -10,10 +10,12 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
+
 use pecos::prelude::{ByteMessage, ByteMessageBuilder, dump_batch};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList, PyType};
+
 
 /// Python wrapper for Rust `ByteMessageBuilder`
 #[pyclass(name = "ByteMessageBuilder", module = "pecos_rslib._pecos_rslib")]
@@ -178,7 +180,7 @@ impl PyByteMessage {
 
     /// Get the `ByteMessage` as bytes
     #[pyo3(text_signature = "($self)")]
-    fn as_bytes(&self, py: Python<'_>) -> PyObject {
+    fn as_bytes(&self, py: Python<'_>) -> Py<PyAny> {
         PyBytes::new(py, self.inner.as_bytes()).into()
     }
 
@@ -190,7 +192,7 @@ impl PyByteMessage {
 
     /// Parse quantum operations from the message
     #[pyo3(text_signature = "($self)")]
-    fn parse_quantum_operations(&self, py: Python<'_>) -> PyResult<Vec<PyObject>> {
+    fn parse_quantum_operations(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
         let mut results = Vec::new();
 
         for op in self.inner.quantum_ops().map_err(|e| {
@@ -226,7 +228,7 @@ impl PyByteMessage {
 
     /// Get measurement results as a list of (`result_id`, outcome) tuples
     #[pyo3(text_signature = "($self)")]
-    pub fn measurement_results(&self, py: Python<'_>) -> PyResult<PyObject> {
+    pub fn measurement_results(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         // Get raw outcomes
         let outcomes = self.inner.outcomes().map_err(|e| {
             PyRuntimeError::new_err(format!(

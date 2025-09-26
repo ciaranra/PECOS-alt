@@ -1,3 +1,4 @@
+
 use parking_lot::Mutex;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
@@ -5,11 +6,12 @@ use std::collections::{BTreeMap, HashMap};
 
 use pecos::prelude::{ByteMessage, ClassicalEngine, ControlEngine, Engine, PecosError, Shot};
 
+
 #[pyclass(module = "_pecos_rslib")]
 #[derive(Debug)]
 pub struct PhirJsonEngine {
     // Python interpreter for test compatibility
-    interpreter: Mutex<PyObject>,
+    interpreter: Mutex<Py<PyAny>>,
     // Lightweight cache for test results
     results: Mutex<HashMap<String, u32>>,
     // Map from result_id to (register_name, index)
@@ -22,12 +24,12 @@ impl Clone for PhirJsonEngine {
     fn clone(&self) -> Self {
         // Create a new instance with cloned data
         Self {
-            interpreter: Mutex::new(Python::with_gil(|py| self.interpreter.lock().clone_ref(py))),
+            interpreter: Mutex::new(Python::attach(|py| self.interpreter.lock().clone_ref(py))),
             results: Mutex::new(self.results.lock().clone()),
             result_to_register: Mutex::new(self.result_to_register.lock().clone()),
             engine: self.engine.as_ref().map(|engine| {
                 // Clone the Rust engine if it exists
-                Mutex::new(Python::with_gil(|_| engine.lock().clone()))
+                Mutex::new(Python::attach(|_| engine.lock().clone()))
             }),
         }
     }
@@ -47,7 +49,7 @@ impl PhirJsonEngine {
     /// - The PHIR JSON is invalid
     #[new]
     pub fn py_new(phir_json: &str) -> PyResult<Self> {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             // Create Python interpreter for testing
             let pecos = py.import("pecos.classical_interpreters")?;
             let interpreter_cls = pecos.getattr("PhirClassicalInterpreter")?;
@@ -107,7 +109,7 @@ impl PhirJsonEngine {
     /// Returns an error if the engine cannot be created or Python imports fail.
     #[staticmethod]
     pub fn create_with_validation_disabled(phir_json: &str) -> PyResult<Self> {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             // Create Python interpreter
             let pecos = py.import("pecos.classical_interpreters")?;
             let interpreter_cls = pecos.getattr("PhirClassicalInterpreter")?;
@@ -162,12 +164,11 @@ impl PhirJsonEngine {
     #[getter]
     fn results_dict(&self, py: Python<'_>) -> Py<PyAny> {
         let results = self.results.lock();
-        PyObject::from(
-            results
-                .clone()
-                .into_pyobject(py)
-                .expect("Failed to convert results"),
-        )
+        results
+            .clone()
+            .into_pyobject(py)
+            .expect("Failed to convert results")
+            .into()
     }
 
     /// Processes the quantum program and returns commands as Python objects
@@ -175,8 +176,8 @@ impl PhirJsonEngine {
     ///
     /// # Errors
     /// Returns an error if command generation or conversion fails.
-    pub fn process_program(&mut self) -> PyResult<Vec<PyObject>> {
-        Python::with_gil(|py| {
+    pub fn process_program(&mut self) -> PyResult<Vec<Py<PyAny>>> {
+        Python::attach(|py| {
             // If we don't have a Rust engine, this is a test program
             if self.engine.is_none() {
                 // For test mode, use the original Python implementation
@@ -245,8 +246,8 @@ impl PhirJsonEngine {
                                     }
                                     py_dict.set_item("qubits", qubits_list)?;
 
-                                    // Convert to PyObject and add to the list
-                                    let py_obj: PyObject = py_dict.into_any().into();
+                                    // Convert to Py<PyAny> and add to the list
+                                    let py_obj: Py<PyAny> = py_dict.into_any().into();
                                     py_commands.push(py_obj);
                                 }
 
@@ -292,8 +293,8 @@ impl PhirJsonEngine {
         // For compatibility with existing code, always use result_id 0
         let result_id = 0;
 
-        // We need to use Python::with_gil to get a Python instance
-        Python::with_gil(|py| {
+        // We need to use Python::attach to get a Python instance
+        Python::attach(|py| {
             // First try to use the Rust engine if available
             if let Some(engine) = &self.engine {
                 // Create a ByteMessage with the measurement result and use the Rust engine
@@ -389,7 +390,7 @@ impl PhirJsonEngine {
     /// # Errors
     /// Returns an error if results cannot be retrieved.
     pub fn get_results(&self) -> PyResult<HashMap<String, u32>> {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             // First try to use the Rust engine if available
             if let Some(engine) = &self.engine {
                 // Try to get results from the Rust engine
@@ -502,7 +503,7 @@ impl PhirJsonEngine {
     }
 
     // Helper method to get raw Python commands from the interpreter
-    fn get_raw_commands_from_python(&mut self, py: Python<'_>) -> PyResult<PyObject> {
+    fn get_raw_commands_from_python(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let interpreter = self.interpreter.lock();
         let program = interpreter.getattr(py, "program")?;
         let ops = program.getattr(py, "ops")?;
@@ -569,7 +570,7 @@ impl PhirJsonEngine {
         };
 
         // Iterate through the ops to process both Measure operations and Result operations
-        let Ok(ops_list) = ops.extract::<Vec<PyObject>>(py) else {
+        let Ok(ops_list) = ops.extract::<Vec<Py<PyAny>>>(py) else {
             return; // If we can't extract the ops list, just return
         };
 
@@ -580,7 +581,7 @@ impl PhirJsonEngine {
         // First pass: extract all Measure operations to get result_id mappings
         for op in &ops_list {
             // Check if this is a Measure operation
-            let Ok(op_dict) = op.extract::<HashMap<String, PyObject>>(py) else {
+            let Ok(op_dict) = op.extract::<HashMap<String, Py<PyAny>>>(py) else {
                 continue; // If we can't extract the op as a dict, skip it
             };
 
@@ -621,7 +622,7 @@ impl PhirJsonEngine {
         // Second pass: extract all Result operations to get register mappings
         for op in &ops_list {
             // Check if this is a Result operation
-            let Ok(op_dict) = op.extract::<HashMap<String, PyObject>>(py) else {
+            let Ok(op_dict) = op.extract::<HashMap<String, Py<PyAny>>>(py) else {
                 continue; // If we can't extract the op as a dict, skip it
             };
 
@@ -665,7 +666,7 @@ impl PhirJsonEngine {
 
 // Helper to convert Python objects to Python command dicts
 // Made into a standalone function to avoid the unused self warning
-fn convert_to_py_commands(py: Python<'_>, commands: &PyObject) -> PyResult<Vec<PyObject>> {
+fn convert_to_py_commands(py: Python<'_>, commands: &Py<PyAny>) -> PyResult<Vec<Py<PyAny>>> {
     if commands.is_none(py) {
         return Ok(Vec::new());
     }
@@ -776,8 +777,8 @@ fn convert_to_py_commands(py: Python<'_>, commands: &PyObject) -> PyResult<Vec<P
         }
         py_dict.set_item("qubits", qubits_list)?;
 
-        // Convert to PyObject
-        let py_obj: PyObject = py_dict.into_any().into();
+        // Convert to Py<PyAny>
+        let py_obj: Py<PyAny> = py_dict.into_any().into();
         result.push(py_obj);
     }
 
@@ -890,7 +891,7 @@ fn process_py_command(py_cmd: &Bound<PyAny>) -> Result<(String, Vec<usize>, Vec<
 
 impl ClassicalEngine for PhirJsonEngine {
     fn num_qubits(&self) -> usize {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let interpreter = self.interpreter.lock();
             match interpreter.call_method0(py, "num_qubits") {
                 Ok(result) => result.extract(py).unwrap_or(0),
@@ -917,7 +918,7 @@ impl ClassicalEngine for PhirJsonEngine {
         let mut builder = ByteMessage::quantum_operations_builder();
 
         // Fill it with commands from Python
-        Python::with_gil(|py| -> Result<(), PecosError> {
+        Python::attach(|py| -> Result<(), PecosError> {
             // Get Python commands
             let raw_commands = match self.get_raw_commands_from_python(py) {
                 Ok(cmds) => cmds,
@@ -1017,7 +1018,7 @@ impl ClassicalEngine for PhirJsonEngine {
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), PecosError> {
         let measurements = message.outcomes()?;
 
-        Python::with_gil(|py| -> Result<(), PecosError> {
+        Python::attach(|py| -> Result<(), PecosError> {
             // Measurements are now just outcomes in order, with implicit result_ids
             for (result_id, outcome) in measurements.into_iter().enumerate() {
                 let result_id = u32::try_from(result_id).unwrap_or(u32::MAX);
@@ -1095,7 +1096,7 @@ impl ClassicalEngine for PhirJsonEngine {
     }
 
     fn get_results(&self) -> Result<Shot, PecosError> {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let interpreter = self.interpreter.lock();
 
             // Get the results from the Python interpreter
@@ -1154,7 +1155,7 @@ impl ClassicalEngine for PhirJsonEngine {
     }
 
     fn reset(&mut self) -> Result<(), PecosError> {
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let interpreter = self.interpreter.lock();
             match interpreter.call_method0(py, "reset") {
                 Ok(_) => {

@@ -12,9 +12,11 @@
 
 //! Python bindings for PHIR (PECOS High-level IR) compilation pipeline
 
+
 use pecos_phir::{self as phir, PhirConfig};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
+
 
 /// Find PECOS binary in various possible locations
 fn find_pecos_binary() -> Option<std::path::PathBuf> {
@@ -104,7 +106,7 @@ impl PyPhirLlvmEngine {
     }
 
     /// Execute the QIR and return results
-    pub fn run(&mut self) -> PyResult<PyObject> {
+    pub fn run(&mut self) -> PyResult<Py<PyAny>> {
         use pyo3::types::PyDict;
         use std::process::Command;
         use tempfile::NamedTempFile;
@@ -122,7 +124,7 @@ impl PyPhirLlvmEngine {
 
         let qir_file_path = temp_file.path();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             // Try to find PECOS binary in various locations
             let pecos_binary =
                 find_pecos_binary().unwrap_or_else(|| std::path::PathBuf::from("pecos"));
@@ -196,7 +198,7 @@ pub fn py_compile_and_execute_via_phir(
     seed: Option<u64>,
     debug_output: bool,
     optimization_level: u8,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     // Step 1: Compile HUGR to LLVM IR via PHIR
     let config = PhirConfig {
         debug: debug_output,

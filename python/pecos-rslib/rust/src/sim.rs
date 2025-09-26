@@ -4,6 +4,7 @@
 //! and creates the appropriate simulation builder, following the same pattern as the
 //! Rust `pecos::sim()` function.
 
+
 use pecos_engines::ClassicalControlEngineBuilder;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
@@ -14,6 +15,7 @@ use pecos_phir_json::phir_json_engine as rust_phir_json_engine;
 use pecos_qasm::qasm_engine as rust_qasm_engine;
 
 use crate::engine_builders::{
+
     PyHugrProgram, PyLlvmEngineBuilder, PyLlvmProgram, PyLlvmSimBuilder, PyPhirJsonEngineBuilder,
     PyPhirJsonProgram, PyPhirJsonSimBuilder, PyQasmEngineBuilder, PyQasmProgram, PyQasmSimBuilder,
     PyQisProgram, PySeleneEngineBuilder, PySeleneExecutableSimBuilder, PySeleneInterfaceProgram,
@@ -25,7 +27,7 @@ use crate::engine_builders::{
 /// This function attempts to:
 /// 1. Detect if the input is a Guppy function
 /// 2. Return a `PySeleneLibrarySimBuilder` that will handle compilation on the Python side
-fn detect_and_convert_guppy(py: Python, program: &PyObject) -> PyResult<PySimBuilder> {
+fn detect_and_convert_guppy(py: Python, program: &Py<PyAny>) -> PyResult<PySimBuilder> {
     log::trace!("In detect_and_convert_guppy");
     // Try to detect Guppy function
     let is_guppy = is_guppy_function(py, program)?;
@@ -66,7 +68,7 @@ fn detect_and_convert_guppy(py: Python, program: &PyObject) -> PyResult<PySimBui
 fn apply_quantum_engine(
     py: Python,
     sim_builder: pecos_engines::SimBuilder,
-    qe_py: &PyObject,
+    qe_py: &Py<PyAny>,
 ) -> PyResult<pecos_engines::SimBuilder> {
     use crate::engine_builders::{PySparseStabilizerEngineBuilder, PyStateVectorEngineBuilder};
     use pyo3::exceptions::PyRuntimeError;
@@ -96,7 +98,7 @@ fn apply_quantum_engine(
 fn apply_noise_model(
     py: Python,
     sim_builder: pecos_engines::SimBuilder,
-    noise_py: &PyObject,
+    noise_py: &Py<PyAny>,
 ) -> PyResult<pecos_engines::SimBuilder> {
     use crate::engine_builders::{
         PyBiasedDepolarizingNoiseModelBuilder, PyDepolarizingNoiseModelBuilder,
@@ -144,7 +146,7 @@ fn apply_noise_model(
 }
 
 /// Check if a Python object is a Guppy function
-fn is_guppy_function(py: Python, program: &PyObject) -> PyResult<bool> {
+fn is_guppy_function(py: Python, program: &Py<PyAny>) -> PyResult<bool> {
     // Check for Guppy function attributes
     let obj = program.bind(py);
     let has_guppy_compiled = obj.hasattr("_guppy_compiled").unwrap_or(false);
@@ -197,8 +199,8 @@ fn is_guppy_function(py: Python, program: &PyObject) -> PyResult<bool> {
 ///     results = sim(QasmProgram.from_string("H q[0];")).classical(qasm_engine().wasm("custom.wasm")).run(1000)
 #[pyfunction]
 #[pyo3(signature = (program))]
-#[allow(clippy::needless_pass_by_value)] // PyObject must be passed by value for PyO3
-pub fn sim(py: Python, program: PyObject) -> PyResult<PySimBuilder> {
+#[allow(clippy::needless_pass_by_value)] // Py<PyAny> must be passed by value for PyO3
+pub fn sim(py: Python, program: Py<PyAny>) -> PyResult<PySimBuilder> {
     use pecos_selene_engine::selene_executable_builder::SeleneExecutableEngineBuilder;
 
     log::debug!(" Rust sim() function called");
@@ -346,8 +348,8 @@ impl PySimBuilder {
     ///     `sim(qasm).classical(qasm_engine().wasm("custom.wasm")).run(1000)`
     #[pyo3(signature = (engine_builder))]
     #[allow(clippy::too_many_lines)] // Complex engine builder dispatch logic
-    #[allow(clippy::needless_pass_by_value)] // PyObject must be passed by value for PyO3
-    fn classical(&mut self, py: Python, engine_builder: PyObject) -> PyResult<Self> {
+    #[allow(clippy::needless_pass_by_value)] // Py<PyAny> must be passed by value for PyO3
+    fn classical(&mut self, py: Python, engine_builder: Py<PyAny>) -> PyResult<Self> {
         // Extract the engine builder and update our inner builder
         match &mut self.inner {
             SimBuilderInner::Qasm(sim_builder) => {
@@ -513,7 +515,7 @@ impl PySimBuilder {
     }
 
     /// Set quantum simulator/engine
-    fn quantum(&mut self, engine: PyObject) -> PyResult<Self> {
+    fn quantum(&mut self, engine: Py<PyAny>) -> PyResult<Self> {
         match &mut self.inner {
             SimBuilderInner::Qasm(builder) => builder.quantum_engine_builder = Some(engine),
             SimBuilderInner::Llvm(builder) => builder.quantum_engine_builder = Some(engine),
@@ -553,7 +555,7 @@ impl PySimBuilder {
     }
 
     /// Set noise model builder
-    fn noise(&mut self, noise_builder: PyObject) -> PyResult<Self> {
+    fn noise(&mut self, noise_builder: Py<PyAny>) -> PyResult<Self> {
         match &mut self.inner {
             SimBuilderInner::Qasm(builder) => builder.noise_builder = Some(noise_builder),
             SimBuilderInner::Llvm(builder) => builder.noise_builder = Some(noise_builder),
@@ -606,7 +608,7 @@ impl PySimBuilder {
 
                 // Apply quantum engine builder if present
                 if let Some(ref qe_py) = builder.quantum_engine_builder {
-                    sim_builder = Python::with_gil(|py| -> PyResult<_> {
+                    sim_builder = Python::attach(|py| -> PyResult<_> {
                         if let Ok(mut state_vec) = qe_py.extract::<PyStateVectorEngineBuilder>(py) {
                             if let Some(inner) = state_vec.inner.take() {
                                 Ok(sim_builder.quantum(inner))
@@ -633,7 +635,7 @@ impl PySimBuilder {
 
                 // Apply noise builder if present
                 if let Some(ref noise_py) = builder.noise_builder {
-                    sim_builder = Python::with_gil(|py| -> PyResult<_> {
+                    sim_builder = Python::attach(|py| -> PyResult<_> {
                         if let Ok(general) = noise_py.extract::<PyGeneralNoiseModelBuilder>(py) {
                             Ok(sim_builder.noise(general.inner.clone()))
                         } else if let Ok(depolarizing) =
@@ -677,7 +679,7 @@ impl PySimBuilder {
 
                 // Apply quantum engine if present
                 if let Some(ref qe_py) = builder.quantum_engine_builder {
-                    sim_builder = Python::with_gil(|py| -> PyResult<_> {
+                    sim_builder = Python::attach(|py| -> PyResult<_> {
                         if let Ok(mut state_vec) = qe_py.extract::<PyStateVectorEngineBuilder>(py) {
                             if let Some(inner) = state_vec.inner.take() {
                                 Ok(sim_builder.quantum(inner))
@@ -704,7 +706,7 @@ impl PySimBuilder {
 
                 // Apply noise builder if present
                 if let Some(ref noise_py) = builder.noise_builder {
-                    sim_builder = Python::with_gil(|py| -> PyResult<_> {
+                    sim_builder = Python::attach(|py| -> PyResult<_> {
                         if let Ok(general) = noise_py.extract::<PyGeneralNoiseModelBuilder>(py) {
                             Ok(sim_builder.noise(general.inner.clone()))
                         } else if let Ok(depolarizing) =
@@ -750,7 +752,7 @@ impl PySimBuilder {
 
                 // Apply quantum engine if present
                 if let Some(ref qe_py) = builder.quantum_engine_builder {
-                    sim_builder = Python::with_gil(|py| -> PyResult<_> {
+                    sim_builder = Python::attach(|py| -> PyResult<_> {
                         if let Ok(mut state_vec) = qe_py.extract::<PyStateVectorEngineBuilder>(py) {
                             if let Some(inner) = state_vec.inner.take() {
                                 Ok(sim_builder.quantum(inner))
@@ -777,7 +779,7 @@ impl PySimBuilder {
 
                 // Apply noise builder if present
                 if let Some(ref noise_py) = builder.noise_builder {
-                    sim_builder = Python::with_gil(|py| -> PyResult<_> {
+                    sim_builder = Python::attach(|py| -> PyResult<_> {
                         if let Ok(general) = noise_py.extract::<PyGeneralNoiseModelBuilder>(py) {
                             Ok(sim_builder.noise(general.inner.clone()))
                         } else if let Ok(depolarizing) =
@@ -820,7 +822,7 @@ impl PySimBuilder {
 
                 // Apply quantum engine if present
                 if let Some(ref qe_py) = builder.quantum_engine_builder {
-                    sim_builder = Python::with_gil(|py| -> PyResult<_> {
+                    sim_builder = Python::attach(|py| -> PyResult<_> {
                         if let Ok(mut state_vec) = qe_py.extract::<PyStateVectorEngineBuilder>(py) {
                             if let Some(inner) = state_vec.inner.take() {
                                 Ok(sim_builder.quantum(inner))
@@ -847,7 +849,7 @@ impl PySimBuilder {
 
                 // Apply noise builder if present
                 if let Some(ref noise_py) = builder.noise_builder {
-                    sim_builder = Python::with_gil(|py| -> PyResult<_> {
+                    sim_builder = Python::attach(|py| -> PyResult<_> {
                         if let Ok(general) = noise_py.extract::<PyGeneralNoiseModelBuilder>(py) {
                             Ok(sim_builder.noise(general.inner.clone()))
                         } else if let Ok(depolarizing) =
@@ -880,8 +882,8 @@ impl PySimBuilder {
                 );
 
                 // We need to build Selene executable from the Guppy program
-                Python::with_gil(|py| -> PyResult<PyShotVec> {
-                    log::debug!(" Inside Python::with_gil block");
+                Python::attach(|py| -> PyResult<PyShotVec> {
+                    log::debug!(" Inside Python::attach block");
                     let program = builder
                         .program
                         .as_ref()
@@ -1024,7 +1026,7 @@ impl PySimBuilder {
                 // The SeleneLibrary case should have already built the engine
                 // during the transition from PySimBuilder to SimBuilder.
                 // For now, we'll build and run here as a temporary solution.
-                Python::with_gil(|py| -> PyResult<PyShotVec> {
+                Python::attach(|py| -> PyResult<PyShotVec> {
                     use pecos_engines::{Data, Shot, ShotVec};
                     use std::collections::BTreeMap;
                     use std::io::Write;
@@ -1394,7 +1396,7 @@ impl PySimBuilder {
 
     /// Build the simulation (for multiple runs)
     #[allow(clippy::too_many_lines)] // Complex builder pattern with multiple engine types
-    fn build(&self) -> PyResult<PyObject> {
+    fn build(&self) -> PyResult<Py<PyAny>> {
         use crate::engine_builders::{
             PyBiasedDepolarizingNoiseModelBuilder, PyDepolarizingNoiseModelBuilder,
             PyGeneralNoiseModelBuilder,
@@ -1403,7 +1405,7 @@ impl PySimBuilder {
         use crate::engine_builders::{PySparseStabilizerEngineBuilder, PyStateVectorEngineBuilder};
         use pyo3::exceptions::PyRuntimeError;
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             match &self.inner {
                 SimBuilderInner::Qasm(builder) => {
                     let mut builder_lock = builder.engine_builder.lock().unwrap();
@@ -1427,7 +1429,7 @@ impl PySimBuilder {
 
                     // Apply quantum engine builder if present
                     if let Some(ref qe_py) = builder.quantum_engine_builder {
-                        sim_builder = Python::with_gil(|py| -> PyResult<_> {
+                        sim_builder = Python::attach(|py| -> PyResult<_> {
                             if let Ok(mut state_vec) =
                                 qe_py.extract::<PyStateVectorEngineBuilder>(py)
                             {
@@ -1458,7 +1460,7 @@ impl PySimBuilder {
 
                     // Apply noise builder if present
                     if let Some(ref noise_py) = builder.noise_builder {
-                        sim_builder = Python::with_gil(|py| -> PyResult<_> {
+                        sim_builder = Python::attach(|py| -> PyResult<_> {
                             if let Ok(general) = noise_py.extract::<PyGeneralNoiseModelBuilder>(py)
                             {
                                 Ok(sim_builder.noise(general.inner.clone()))
@@ -1548,7 +1550,7 @@ impl PySimBuilder {
 // Clone implementations for the inner types
 impl Clone for SimBuilderInner {
     fn clone(&self) -> Self {
-        Python::with_gil(|py| match self {
+        Python::attach(|py| match self {
             SimBuilderInner::Qasm(builder) => SimBuilderInner::Qasm(PyQasmSimBuilder {
                 engine_builder: builder.engine_builder.clone(),
                 seed: builder.seed,

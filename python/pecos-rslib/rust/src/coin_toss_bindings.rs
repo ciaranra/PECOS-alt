@@ -10,10 +10,12 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
+
 use pecos::prelude::*;
 use pecos_qsim::CoinToss;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+
 
 /// The struct represents the coin toss simulator exposed to Python
 ///
@@ -108,10 +110,10 @@ impl RsCoinToss {
         &mut self,
         _symbol: &str,
         _location: usize,
-        _params: Option<PyObject>,
-    ) -> PyResult<PyObject> {
+        _params: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
         // All gates are no-ops in coin toss simulator
-        Python::with_gil(|py| Ok(PyDict::new(py).into()))
+        Python::attach(|py| Ok(PyDict::new(py).into()))
     }
 
     /// Executes a two-qubit gate based on the provided symbol and locations
@@ -132,10 +134,10 @@ impl RsCoinToss {
         _symbol: &str,
         _location_1: usize,
         _location_2: usize,
-        _params: Option<PyObject>,
-    ) -> PyResult<PyObject> {
+        _params: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
         // All gates are no-ops in coin toss simulator
-        Python::with_gil(|py| Ok(PyDict::new(py).into()))
+        Python::attach(|py| Ok(PyDict::new(py).into()))
     }
 
     /// Performs a measurement in the Z basis
@@ -148,11 +150,11 @@ impl RsCoinToss {
     /// # Returns
     /// Dictionary containing the measurement result: {location: outcome}
     /// where outcome is 0 or 1 based on the probability
-    fn run_measure(&mut self, location: usize) -> PyResult<PyObject> {
+    fn run_measure(&mut self, location: usize) -> PyResult<Py<PyAny>> {
         let result = self.inner.mz(location);
         let outcome = i32::from(result.outcome);
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let dict = PyDict::new(py);
             dict.set_item(location, outcome)?;
             Ok(dict.into())
