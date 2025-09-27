@@ -22,8 +22,8 @@ fn test_hugr_compilation_pipeline() {
 #[ignore = "Example of how to use compiled HUGR"]
 fn test_compiled_hugr_example() {
     use pecos_engines::{sim_builder, state_vector};
-    use pecos_qis_sim::qis_engine;
     use pecos_programs::QisProgram;
+    use pecos_qis_sim::qis_engine;
 
     // Step 1: Compile HUGR to LLVM (would be done by pecos-hugr-qis)
     // In practice: let llvm_ir = pecos_hugr_qis::compile_hugr_bytes_to_string(hugr_bytes)?;

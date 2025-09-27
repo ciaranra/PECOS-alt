@@ -328,15 +328,23 @@ class TestQubitAllocationLimits:
         # Results format depends on return type
         if "measurement_1" in results:
             # If results are split by measurement index
-            assert len(results["measurement_1"]) == 50, "Should have 50 measurements for qubit 1"
-            assert len(results["measurement_2"]) == 50, "Should have 50 measurements for qubit 2"
-            assert len(results["measurement_3"]) == 50, "Should have 50 measurements for qubit 3"
+            assert (
+                len(results["measurement_1"]) == 50
+            ), "Should have 50 measurements for qubit 1"
+            assert (
+                len(results["measurement_2"]) == 50
+            ), "Should have 50 measurements for qubit 2"
+            assert (
+                len(results["measurement_3"]) == 50
+            ), "Should have 50 measurements for qubit 3"
 
             # Each qubit should have roughly 50/50 distribution due to H gate
             for i in range(1, 4):
                 key = f"measurement_{i}"
                 ones = sum(results[key])
-                assert 15 < ones < 35, f"Qubit {i} should have ~50/50 distribution, got {ones}/50"
+                assert (
+                    15 < ones < 35
+                ), f"Qubit {i} should have ~50/50 distribution, got {ones}/50"
         else:
             # Results might be arrays or tuples
             measurements = results.get("measurements", results.get("result", []))
@@ -344,12 +352,16 @@ class TestQubitAllocationLimits:
 
             # Each measurement should be an array/tuple of 3 booleans
             for m in measurements[:5]:  # Check first few
-                assert len(m) == 3, f"Each result should have 3 measurements, got {len(m)}"
+                assert (
+                    len(m) == 3
+                ), f"Each result should have 3 measurements, got {len(m)}"
 
             # Check distribution for each qubit position
             for i in range(3):
                 ones = sum(1 for m in measurements if m[i])
-                assert 15 < ones < 35, f"Qubit {i} should have ~50/50 distribution, got {ones}/50"
+                assert (
+                    15 < ones < 35
+                ), f"Qubit {i} should have ~50/50 distribution, got {ones}/50"
 
     def test_parallel_qubit_operations(self) -> None:
         """Test parallel operations on multiple qubits."""

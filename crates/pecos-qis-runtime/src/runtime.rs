@@ -642,7 +642,7 @@ pub unsafe extern "C" fn llvm_runtime_reset() {
 /// This function is marked unsafe as it's called from C/FFI context.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn setup(seed: i64) {
-    debug!("QIS: Setup with seed {}", seed);
+    debug!("QIS: Setup with seed {seed}");
     core_runtime::initialize();
     // TODO: Use seed for random number generation if needed
 }
@@ -1673,7 +1673,7 @@ pub unsafe extern "C" fn ___reset(qubit: i64) {
 /// Returns the measurement result as a boolean
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ___measure(qubit: i64) -> bool {
-    debug!("QIS: Immediate measure qubit {}", qubit);
+    debug!("QIS: Immediate measure qubit {qubit}");
 
     let result = unsafe { __quantum__rt__result_allocate() };
     unsafe { __quantum__qis__m__body(qubit, result) };
@@ -1687,7 +1687,7 @@ pub unsafe extern "C" fn ___measure(qubit: i64) -> bool {
 /// Returns a future reference to the measurement result
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ___lazy_measure(qubit: i64) -> i64 {
-    debug!("QIS: Lazy measure qubit {}", qubit);
+    debug!("QIS: Lazy measure qubit {qubit}");
 
     let result = unsafe { __quantum__rt__result_allocate() };
     unsafe { __quantum__qis__m__body(qubit, result) };
@@ -1697,7 +1697,7 @@ pub unsafe extern "C" fn ___lazy_measure(qubit: i64) -> i64 {
 /// Perform lazy measurement with leakage detection
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ___lazy_measure_leaked(qubit: i64) -> i64 {
-    debug!("QIS: Lazy measure with leakage detection on qubit {}", qubit);
+    debug!("QIS: Lazy measure with leakage detection on qubit {qubit}");
     // TODO: Add leakage detection when backend supports it
     unsafe { ___lazy_measure(qubit) }
 }
@@ -1705,7 +1705,7 @@ pub unsafe extern "C" fn ___lazy_measure_leaked(qubit: i64) -> i64 {
 /// Perform lazy measurement and reset
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ___lazy_measure_reset(qubit: i64) -> i64 {
-    debug!("QIS: Lazy measure and reset qubit {}", qubit);
+    debug!("QIS: Lazy measure and reset qubit {qubit}");
 
     let result = unsafe { ___lazy_measure(qubit) };
     unsafe { ___reset(qubit) };
@@ -1716,12 +1716,12 @@ pub unsafe extern "C" fn ___lazy_measure_reset(qubit: i64) -> i64 {
 // QIS Gate Functions
 // -----------------------------------------------------------------------------
 
-/// Apply an XY rotation (PhasedX gate)
+/// Apply an XY rotation (`PhasedX` gate)
 ///
 /// RXY(theta, phi) = RZ(phi) RX(theta) RZ(-phi)
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ___rxy(qubit: i64, theta: f64, phi: f64) {
-    debug!("QIS: RXY on qubit {} with theta={}, phi={}", qubit, theta, phi);
+    debug!("QIS: RXY on qubit {qubit} with theta={theta}, phi={phi}");
 
     // Check if this is a Hadamard gate (specific angles)
     const PI_2: f64 = std::f64::consts::PI / 2.0;
@@ -1743,14 +1743,14 @@ pub unsafe extern "C" fn ___rxy(qubit: i64, theta: f64, phi: f64) {
 /// Apply a Z rotation
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ___rz(qubit: i64, theta: f64) {
-    debug!("QIS: RZ on qubit {} with theta={}", qubit, theta);
+    debug!("QIS: RZ on qubit {qubit} with theta={theta}");
     unsafe { __quantum__qis__rz__body(theta, qubit) };
 }
 
 /// Apply a ZZ rotation (two-qubit gate)
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ___rzz(qubit1: i64, qubit2: i64, theta: f64) {
-    debug!("QIS: RZZ on qubits {} and {} with theta={}", qubit1, qubit2, theta);
+    debug!("QIS: RZZ on qubits {qubit1} and {qubit2} with theta={theta}");
     // RZZ(theta) = CNOT(q1,q2) RZ(theta)(q2) CNOT(q1,q2)
     unsafe {
         __quantum__qis__cnot__body(qubit1, qubit2);
@@ -1766,7 +1766,7 @@ pub unsafe extern "C" fn ___rzz(qubit1: i64, qubit2: i64, theta: f64) {
 /// Increment reference count for a future
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ___inc_future_refcount(reference: i64) {
-    debug!("QIS: Increment refcount for future {}", reference);
+    debug!("QIS: Increment refcount for future {reference}");
     // Future references in PECOS are managed automatically
     // This is a no-op for now but could be used for reference tracking
 }
@@ -1774,7 +1774,7 @@ pub unsafe extern "C" fn ___inc_future_refcount(reference: i64) {
 /// Decrement reference count for a future
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ___dec_future_refcount(reference: i64) {
-    debug!("QIS: Decrement refcount for future {}", reference);
+    debug!("QIS: Decrement refcount for future {reference}");
     // Future references in PECOS are managed automatically
     // This is a no-op for now but could be used for cleanup
 }
@@ -1782,7 +1782,7 @@ pub unsafe extern "C" fn ___dec_future_refcount(reference: i64) {
 /// Read a boolean value from a future reference
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ___read_future_bool(reference: i64) -> bool {
-    debug!("QIS: Read boolean from future {}", reference);
+    debug!("QIS: Read boolean from future {reference}");
     let result = unsafe { __quantum__rt__result_get_one(reference) };
     result != 0
 }
@@ -1790,7 +1790,7 @@ pub unsafe extern "C" fn ___read_future_bool(reference: i64) -> bool {
 /// Read an unsigned integer value from a future reference
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ___read_future_uint(reference: i64) -> u64 {
-    debug!("QIS: Read uint from future {}", reference);
+    debug!("QIS: Read uint from future {reference}");
     let result = unsafe { __quantum__rt__result_get_one(reference) };
     result as u64
 }
@@ -1815,7 +1815,7 @@ pub unsafe extern "C" fn panic(code: i32, message: *const i8) -> ! {
             .to_string()
     };
 
-    eprintln!("QIS PANIC: Code {}: {}", code, msg);
+    eprintln!("QIS PANIC: Code {code}: {msg}");
 
     // Error codes >= 1000 are fatal and terminate the program
     // Error codes < 1000 should just end the current shot

@@ -6,8 +6,8 @@
 //! This example demonstrates LLVM IR simulation.
 
 use pecos_engines::{DepolarizingNoise, sim_builder, state_vector};
-use pecos_qis_sim::qis_engine;
 use pecos_programs::QisProgram;
+use pecos_qis_sim::qis_engine;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== LLVM-based Quantum Simulation ===");
@@ -59,7 +59,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .run(100)?;
 
     println!("\nRan 100 shots with noise");
-    println!("Results: {} unique outcomes", results_with_noise.shots.len());
+    println!(
+        "Results: {} unique outcomes",
+        results_with_noise.shots.len()
+    );
 
     println!("\n=== HUGR Compilation ===");
     println!("To compile HUGR to LLVM IR:");

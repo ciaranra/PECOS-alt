@@ -1,16 +1,16 @@
 """Test suite for Reset operation."""
 
-import pytest
-from guppylang import guppy
-from guppylang.std.quantum import qubit, h, x, reset, measure
 import pecos_rslib
+from guppylang import guppy
+from guppylang.std.quantum import h, measure, qubit, reset, x
 
 
 class TestResetOperation:
     """Test reset operation."""
 
-    def test_reset_basic(self):
+    def test_reset_basic(self) -> None:
         """Test basic reset operation."""
+
         @guppy
         def test_reset() -> bool:
             q = qubit()
@@ -25,8 +25,9 @@ class TestResetOperation:
         assert "___reset" in output
         assert "tail call void @___reset" in output
 
-    def test_reset_after_x(self):
+    def test_reset_after_x(self) -> None:
         """Test reset after X gate."""
+
         @guppy
         def test_reset_x() -> bool:
             q = qubit()
@@ -41,8 +42,9 @@ class TestResetOperation:
         assert "___rxy" in output  # X gate uses RXY
         assert "___reset" in output
 
-    def test_multiple_resets(self):
+    def test_multiple_resets(self) -> None:
         """Test multiple reset operations."""
+
         @guppy
         def test_multi_reset() -> bool:
             q = qubit()
@@ -59,8 +61,9 @@ class TestResetOperation:
         reset_calls = output.count("tail call void @___reset")
         assert reset_calls >= 2, f"Expected at least 2 reset calls, got {reset_calls}"
 
-    def test_reset_two_qubits(self):
+    def test_reset_two_qubits(self) -> None:
         """Test reset on two qubits."""
+
         @guppy
         def test_reset_two() -> tuple[bool, bool]:
             q1 = qubit()
@@ -81,8 +84,9 @@ class TestResetOperation:
         reset_calls = output.count("tail call void @___reset")
         assert reset_calls >= 4, f"Expected at least 4 reset calls, got {reset_calls}"
 
-    def test_reset_compiler_compatibility(self):
+    def test_reset_compiler_compatibility(self) -> None:
         """Verify reset operation compiles correctly."""
+
         @guppy
         def simple_reset() -> bool:
             q = qubit()
@@ -104,7 +108,7 @@ class TestResetOperation:
         # Both should have reset operations
         assert "___reset" in selene_out
 
-    def test_reset_in_circuit(self):
+    def test_reset_in_circuit(self) -> None:
         """Test reset in a more complex circuit."""
         from guppylang.std.quantum import cx
 
@@ -114,7 +118,7 @@ class TestResetOperation:
             q2 = qubit()
             h(q1)
             cx(q1, q2)  # Entangle
-            reset(q1)   # Reset control qubit
+            reset(q1)  # Reset control qubit
             # q2 should still be in a mixed state
             return measure(q1), measure(q2)
 

@@ -787,8 +787,9 @@ impl QisEngine {
 
         // Pattern 3: Selene-style gate operations
         // Pattern 3a: Single-qubit gates (___h, ___x, ___y, ___z, etc.)
-        let selene_single_pattern = Regex::new(r"call\s+void\s+@___(?:h|x|y|z|s|t)\s*\(i64\s+%?(\d+)\)")
-            .expect("Invalid regex for Selene single-qubit gates");
+        let selene_single_pattern =
+            Regex::new(r"call\s+void\s+@___(?:h|x|y|z|s|t)\s*\(i64\s+%?(\d+)\)")
+                .expect("Invalid regex for Selene single-qubit gates");
         for cap in selene_single_pattern.captures_iter(content) {
             if let Some(qubit_match) = cap.get(1)
                 && let Ok(qubit) = qubit_match.as_str().parse::<usize>()
@@ -800,8 +801,9 @@ impl QisEngine {
         }
 
         // Pattern 3b: Selene rotation gates (___rx, ___ry, ___rz, ___rxy)
-        let selene_rotation_pattern = Regex::new(r"call\s+void\s+@___r(?:x|y|z|xy)\s*\(i64\s+%?(\d+),")
-            .expect("Invalid regex for Selene rotation gates");
+        let selene_rotation_pattern =
+            Regex::new(r"call\s+void\s+@___r(?:x|y|z|xy)\s*\(i64\s+%?(\d+),")
+                .expect("Invalid regex for Selene rotation gates");
         for cap in selene_rotation_pattern.captures_iter(content) {
             if let Some(qubit_match) = cap.get(1)
                 && let Ok(qubit) = qubit_match.as_str().parse::<usize>()
@@ -813,8 +815,9 @@ impl QisEngine {
         }
 
         // Pattern 3c: Selene two-qubit gates (___cx, ___cz, etc.)
-        let selene_two_qubit_pattern = Regex::new(r"call\s+void\s+@___c[xz]\s*\(i64\s+%?(\d+),\s*i64\s+%?(\d+)\)")
-            .expect("Invalid regex for Selene two-qubit gates");
+        let selene_two_qubit_pattern =
+            Regex::new(r"call\s+void\s+@___c[xz]\s*\(i64\s+%?(\d+),\s*i64\s+%?(\d+)\)")
+                .expect("Invalid regex for Selene two-qubit gates");
         for cap in selene_two_qubit_pattern.captures_iter(content) {
             if let Some(control_match) = cap.get(1)
                 && let Ok(control) = control_match.as_str().parse::<usize>()
@@ -833,8 +836,9 @@ impl QisEngine {
         }
 
         // Pattern 3d: Selene measurements (___m, ___lazy_measure)
-        let selene_measure_pattern = Regex::new(r"call\s+i64\s+@___(?:lazy_)?measure\s*\(i64\s+%?(\d+)")
-            .expect("Invalid regex for Selene measurements");
+        let selene_measure_pattern =
+            Regex::new(r"call\s+i64\s+@___(?:lazy_)?measure\s*\(i64\s+%?(\d+)")
+                .expect("Invalid regex for Selene measurements");
         for cap in selene_measure_pattern.captures_iter(content) {
             if let Some(qubit_match) = cap.get(1)
                 && let Ok(qubit) = qubit_match.as_str().parse::<usize>()

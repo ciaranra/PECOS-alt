@@ -45,10 +45,10 @@
 // Re-export preludes from component crates
 pub use pecos_core::prelude::*;
 pub use pecos_engines::prelude::*;
-pub use pecos_qis_runtime::prelude::*;
-pub use pecos_qis_sim::prelude::*;
 pub use pecos_phir_json::prelude::*;
 pub use pecos_qasm::prelude::*;
+pub use pecos_qis_runtime::prelude::*;
+pub use pecos_qis_sim::prelude::*;
 pub use pecos_qsim::prelude::*;
 #[cfg(feature = "selene")]
 pub use pecos_selene_engine::prelude::*;
@@ -62,7 +62,7 @@ pub use crate::program::{
 };
 
 // Re-export program types from pecos-programs
-pub use pecos_programs::{HugrProgram, QisProgram, Program, QasmProgram};
+pub use pecos_programs::{HugrProgram, Program, QasmProgram, QisProgram};
 
 // Re-export setup functions from format-specific crates
 pub use crate::setup_llvm_engine;

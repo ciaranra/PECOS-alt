@@ -1,16 +1,16 @@
 """Test suite for CRz angle arithmetic improvements."""
 
-import pytest
-from guppylang import guppy
-from guppylang.std.quantum import qubit, h, crz, measure, pi
 import pecos_rslib
+from guppylang import guppy
+from guppylang.std.quantum import crz, h, measure, pi, qubit
 
 
 class TestCRzAngleArithmetic:
     """Test CRz gate with proper angle arithmetic."""
 
-    def test_crz_angle_halving(self):
+    def test_crz_angle_halving(self) -> None:
         """Test that CRz properly halves angles in RZZ decomposition."""
+
         @guppy
         def test_crz_pi() -> tuple[bool, bool]:
             q0 = qubit()
@@ -27,15 +27,20 @@ class TestCRzAngleArithmetic:
         assert "___rz" in output
 
         # Check that we have different angle values (indicating proper arithmetic)
-        lines = output.split('\n')
-        rzz_calls = [line for line in lines if 'tail call void @___rzz' in line]
-        rz_calls = [line for line in lines if 'tail call void @___rz' in line and 'rzz' not in line]
+        lines = output.split("\n")
+        rzz_calls = [line for line in lines if "tail call void @___rzz" in line]
+        rz_calls = [
+            line
+            for line in lines
+            if "tail call void @___rz" in line and "rzz" not in line
+        ]
 
         assert len(rzz_calls) >= 1, "Should have RZZ call"
         assert len(rz_calls) >= 2, "Should have RZ correction calls"
 
-    def test_crz_different_angles(self):
+    def test_crz_different_angles(self) -> None:
         """Test CRz with different angle values."""
+
         @guppy
         def test_crz_pi_half() -> tuple[bool, bool]:
             q0 = qubit()
@@ -51,8 +56,9 @@ class TestCRzAngleArithmetic:
         assert "___rzz" in output
         assert "___rz" in output
 
-    def test_crz_angle_consistency(self):
+    def test_crz_angle_consistency(self) -> None:
         """Test that CRz angles are properly calculated."""
+
         @guppy
         def test_crz_pi_fourth() -> tuple[bool, bool]:
             q0 = qubit()
@@ -69,8 +75,9 @@ class TestCRzAngleArithmetic:
         rz_corrections = output.count("tail call void @___rz")
         assert rz_corrections >= 2, "Should have at least 2 RZ corrections"
 
-    def test_crz_selene_compatibility(self):
+    def test_crz_selene_compatibility(self) -> None:
         """Test CRz gate compatibility with Selene."""
+
         @guppy
         def simple_crz() -> tuple[bool, bool]:
             q0 = qubit()
@@ -89,8 +96,9 @@ class TestCRzAngleArithmetic:
         assert "___rzz" in selene_out
         assert "___rz" in selene_out
 
-    def test_crz_zero_angle(self):
+    def test_crz_zero_angle(self) -> None:
         """Test CRz with zero angle (should be identity)."""
+
         @guppy
         def test_crz_zero() -> tuple[bool, bool]:
             q0 = qubit()

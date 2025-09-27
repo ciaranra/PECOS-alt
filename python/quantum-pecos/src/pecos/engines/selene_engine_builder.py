@@ -168,10 +168,14 @@ class SeleneEngineBuilder:
             # Check if this is a parametric function error from Guppy
             error_str = str(e)
             error_type = type(e).__name__
-            if "EntrypointArgsError" in error_str or "EntrypointArgsError" in error_type:
+            if (
+                "EntrypointArgsError" in error_str
+                or "EntrypointArgsError" in error_type
+            ):
                 # Re-raise with a message matching Selene's approach
                 # Extract the number of args if possible
                 import re
+
                 args_match = re.search(r"args=\[([^\]]*)\]", error_str)
                 if args_match:
                     args = args_match.group(1).replace("'", "").split(", ")

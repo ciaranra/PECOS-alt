@@ -118,9 +118,11 @@ def compile_hugr_via_llvm(hugr_bytes: bytes, compiler: str = "selene") -> bytes:
     # Step 1: HUGR → LLVM IR
     if compiler == "selene":
         from pecos_rslib import compile_hugr_to_llvm_selene
+
         llvm_ir = compile_hugr_to_llvm_selene(hugr_bytes)
     elif compiler == "rust":
         from pecos_rslib import compile_hugr_to_llvm_rust
+
         llvm_ir = compile_hugr_to_llvm_rust(hugr_bytes)
     else:
         raise ValueError(f"Invalid compiler '{compiler}'. Choose 'selene' or 'rust'.")

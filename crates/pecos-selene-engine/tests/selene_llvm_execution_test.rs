@@ -262,8 +262,7 @@ define void @simple_test() #0 {
 attributes #0 = { "EntryPoint" }
 "#;
 
-    let engine =
-        SeleneExecutableEngine::new(1)?.with_qis_program(QisProgram::from_ir(simple_llvm));
+    let engine = SeleneExecutableEngine::new(1)?.with_qis_program(QisProgram::from_ir(simple_llvm));
 
     assert_is_classical_engine(&engine);
     assert_is_control_engine(&engine);

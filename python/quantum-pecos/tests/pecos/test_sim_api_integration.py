@@ -16,9 +16,9 @@ try:
     from pecos_rslib import sparse_stabilizer, state_vector
     from pecos_rslib.programs import (
         HugrProgram,
-        QisProgram,
         PhirJsonProgram,
         QasmProgram,
+        QisProgram,
     )
 
     PECOS_RSLIB_AVAILABLE = True

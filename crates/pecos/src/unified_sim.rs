@@ -5,9 +5,9 @@
 
 use pecos_core::errors::PecosError;
 use pecos_engines::{ClassicalControlEngineBuilder, MonteCarloEngine, SimBuilder, sim_builder};
-use pecos_qis_sim::qis_engine;
 use pecos_programs::Program;
 use pecos_qasm::qasm_engine;
+use pecos_qis_sim::qis_engine;
 use pecos_selene_engine::selene_executable_builder::selene_executable;
 
 /// Extension trait for `SimBuilder` to add program-based methods

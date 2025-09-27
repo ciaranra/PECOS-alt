@@ -1,16 +1,16 @@
 """Test suite for project_z operation."""
 
-import pytest
-from guppylang import guppy
-from guppylang.std.quantum import qubit, h, x, project_z
 import pecos_rslib
+from guppylang import guppy
+from guppylang.std.quantum import h, project_z, qubit, x
 
 
 class TestProjectZOperation:
     """Test project_z operation."""
 
-    def test_project_z_basic(self):
+    def test_project_z_basic(self) -> None:
         """Test basic project_z operation."""
+
         @guppy
         def test_project_z() -> tuple[qubit, bool]:
             q = qubit()
@@ -25,8 +25,9 @@ class TestProjectZOperation:
         # Since it doesn't consume the qubit, it should work like measure
         assert "___lazy_measure" in output or "measure" in output.lower()
 
-    def test_project_z_after_x(self):
+    def test_project_z_after_x(self) -> None:
         """Test project_z after X gate."""
+
         @guppy
         def test_project_z_x() -> tuple[qubit, bool]:
             q = qubit()
@@ -41,8 +42,9 @@ class TestProjectZOperation:
         assert "___rxy" in output  # X gate uses RXY
         assert "___lazy_measure" in output or "measure" in output.lower()
 
-    def test_project_z_compilation(self):
+    def test_project_z_compilation(self) -> None:
         """Test that project_z compiles correctly."""
+
         @guppy
         def simple_project_z() -> tuple[qubit, bool]:
             q = qubit()
@@ -57,8 +59,9 @@ class TestProjectZOperation:
         assert "qmain" in pecos_out
         assert "___qalloc" in pecos_out
 
-    def test_project_z_selene_compatibility(self):
+    def test_project_z_selene_compatibility(self) -> None:
         """Test project_z compatibility with Selene."""
+
         @guppy
         def test_project_z_compat() -> tuple[qubit, bool]:
             q = qubit()
@@ -79,8 +82,9 @@ class TestProjectZOperation:
             print(f"project_z compilation failed: {e}")
             assert True  # Don't fail the test
 
-    def test_project_z_with_other_gates(self):
+    def test_project_z_with_other_gates(self) -> None:
         """Test project_z in combination with other gates."""
+
         @guppy
         def project_z_circuit() -> tuple[qubit, qubit, bool, bool]:
             q1 = qubit()

@@ -4,8 +4,8 @@
 //! tket's HUGR 0.22 through the pecos-hugr-qis crate.
 
 use pecos_engines::{DepolarizingNoise, sim_builder, sparse_stabilizer, state_vector};
-use pecos_qis_sim::qis_engine;
 use pecos_programs::QisProgram;
+use pecos_qis_sim::qis_engine;
 
 #[test]
 fn test_qis_sim_api() {

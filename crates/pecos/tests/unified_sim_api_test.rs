@@ -12,9 +12,9 @@ mod tests {
         // The fact that this compiles proves the API is consistent
         let _ = || {
             use pecos_engines::{DepolarizingNoise, sim_builder, sparse_stabilizer, state_vector};
-            use pecos_qis_sim::qis_engine;
             use pecos_programs::{QasmProgram, QisProgram};
             use pecos_qasm::qasm_engine;
+            use pecos_qis_sim::qis_engine;
             use pecos_selene_engine::selene_executable;
 
             // QASM engine with unified API
@@ -62,9 +62,9 @@ mod tests {
         // Verify all builders have consistent input methods
         let _ = || {
             use pecos_engines::{BiasedDepolarizingNoise, PassThroughNoise, sim_builder};
-            use pecos_qis_sim::qis_engine;
             use pecos_programs::{QasmProgram, QisProgram};
             use pecos_qasm::qasm_engine;
+            use pecos_qis_sim::qis_engine;
             use pecos_selene_engine::selene_executable;
 
             // QASM-specific inputs
@@ -111,9 +111,9 @@ mod tests {
         let _ = || {
             use pecos::sim;
             use pecos_engines::{DepolarizingNoise, sim_builder, sparse_stabilizer, state_vector};
-            use pecos_qis_sim::qis_engine;
             use pecos_programs::{QasmProgram, QisProgram};
             use pecos_qasm::qasm_engine;
+            use pecos_qis_sim::qis_engine;
 
             // Pattern 1: Base sim_builder from pecos-engines with explicit .classical()
             let _results1 = sim_builder()

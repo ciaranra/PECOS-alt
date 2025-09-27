@@ -60,8 +60,7 @@ def generate_single_hadamard_hugr():
         """Apply Hadamard gate to a single qubit."""
         q = qubit()
         h(q)
-        m = measure(q)
-        return m
+        return measure(q)
 
     # Compile to HUGR Package
     compiled = single_hadamard.compile()
@@ -99,9 +98,8 @@ def generate_ghz_state_hugr():
     return compiled.to_str()
 
 
-def main():
+def main() -> int:
     """Generate all test data files."""
-
     # Determine output directory
     script_dir = Path(__file__).parent
     project_root = script_dir.parent
@@ -130,7 +128,7 @@ def main():
         print(f"  Created: {output_file} ({len(hugr_str)} chars)")
 
         # Verify format
-        if hugr_str.startswith('HUGR') or hugr_str.startswith('{'):
+        if hugr_str.startswith(("HUGR", "{")):
             print("  Valid HUGR format")
         else:
             print(f"  Warning: Unexpected format (starts with: {hugr_str[:20]}...)")
@@ -147,7 +145,7 @@ def main():
         print(f"  Created: {output_file} ({len(hugr_str)} chars)")
 
         # Verify format
-        if hugr_str.startswith('HUGR') or hugr_str.startswith('{'):
+        if hugr_str.startswith(("HUGR", "{")):
             print("  Valid HUGR format")
         else:
             print(f"  Warning: Unexpected format (starts with: {hugr_str[:20]}...)")
@@ -164,7 +162,7 @@ def main():
         print(f"  Created: {output_file} ({len(hugr_str)} chars)")
 
         # Verify format
-        if hugr_str.startswith('HUGR') or hugr_str.startswith('{'):
+        if hugr_str.startswith(("HUGR", "{")):
             print("  Valid HUGR format")
         else:
             print(f"  Warning: Unexpected format (starts with: {hugr_str[:20]}...)")

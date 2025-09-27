@@ -1,8 +1,8 @@
 """Test the new sim(program) API."""
 
 from pecos_rslib import (
-    QisProgram,
     QasmProgram,
+    QisProgram,
     depolarizing_noise,
     qasm_engine,
     sparse_stabilizer,

@@ -17,15 +17,23 @@
 //!
 //! ## Usage
 //!
-//! ```
+//! ```rust
 //! use pecos_selene_engine::prelude::*;
 //!
-//! // Now you can use all Selene types and functions
+//! // Now you have access to common types
+//! let _program = QisProgram::from_string("define void @main() { ret void }".to_string());
+//!
+//! // Error types are available
+//! fn example() -> Result<(), PecosError> {
+//!     Ok(())
+//! }
+//!
+//! # example().unwrap();
 //! ```
 
 // Main entry points for Selene engines
-pub use crate::selene_executable_engine::SeleneExecutableEngine;
 pub use crate::selene_executable_builder::{SeleneExecutableEngineBuilder, selene_executable};
+pub use crate::selene_executable_engine::SeleneExecutableEngine;
 
 // Program types
 pub use crate::program::SeleneProgram;

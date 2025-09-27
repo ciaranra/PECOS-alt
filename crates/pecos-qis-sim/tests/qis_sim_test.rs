@@ -4,8 +4,8 @@ use pecos_engines::{
     BiasedDepolarizingNoise, ClassicalControlEngineBuilder, DepolarizingNoise, sim_builder,
     sparse_stabilizer, state_vector,
 };
-use pecos_qis_sim::qis_engine;
 use pecos_programs::QisProgram;
+use pecos_qis_sim::qis_engine;
 use tempfile::NamedTempFile;
 
 mod common;

@@ -4,14 +4,14 @@
 //! trait from pecos-engines, enabling the unified simulation API.
 
 use crate::source::QisSource;
-use tket::hugr::Hugr;
 use pecos_core::errors::PecosError;
 use pecos_engines::ClassicalControlEngineBuilder;
-use pecos_qis_runtime::{QisEngine, QisEngineConfig};
 use pecos_programs::{HugrProgram, QisProgram};
+use pecos_qis_runtime::{QisEngine, QisEngineConfig};
 use std::io::Write;
 use std::path::Path;
 use tempfile::NamedTempFile;
+use tket::hugr::Hugr;
 
 /// Program source types that can be converted to LLVM engine source
 pub enum ProgramSource {

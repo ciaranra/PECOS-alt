@@ -66,7 +66,6 @@ fn test_hugr_to_llvm_to_execution() -> Result<(), PecosError> {
     let mut other_outcomes = 0;
 
     for shot in &results.shots {
-
         // Get the measurement results - could be Vec or I64 (bit-packed)
         match shot.data.get("result") {
             Some(pecos_engines::shot_results::Data::Vec(vec)) => {
@@ -279,26 +278,39 @@ fn test_phir_compilation_only() -> Result<(), PecosError> {
             let config = PhirConfig::with_debug_output(false);
 
             // Compile HUGR bytes to LLVM IR via PHIR
-            let llvm_ir = pecos_phir::compile_hugr_bytes_via_phir(hugr_bytes, &config)
-                .map_err(|e| PecosError::with_context(e, format!("PHIR compilation failed for {}", name)))?;
+            let llvm_ir =
+                pecos_phir::compile_hugr_bytes_via_phir(hugr_bytes, &config).map_err(|e| {
+                    PecosError::with_context(e, format!("PHIR compilation failed for {name}"))
+                })?;
 
             // Verify we got valid LLVM IR output
-            assert!(!llvm_ir.is_empty(), "LLVM IR should not be empty for {}", name);
+            assert!(
+                !llvm_ir.is_empty(),
+                "LLVM IR should not be empty for {name}"
+            );
 
             // Check for key LLVM IR elements that should be present
-            assert!(llvm_ir.contains("@qmain") || llvm_ir.contains("@main"),
-                    "LLVM IR should contain main function for {}", name);
-            assert!(llvm_ir.contains("___qalloc") || llvm_ir.contains("@__quantum__qis__qalloc") ||
-                    llvm_ir.contains("@__quantum__rt__qubit_allocate"),
-                    "LLVM IR should contain quantum allocation for {}", name);
+            assert!(
+                llvm_ir.contains("@qmain") || llvm_ir.contains("@main"),
+                "LLVM IR should contain main function for {name}"
+            );
+            assert!(
+                llvm_ir.contains("___qalloc")
+                    || llvm_ir.contains("@__quantum__qis__qalloc")
+                    || llvm_ir.contains("@__quantum__rt__qubit_allocate"),
+                "LLVM IR should contain quantum allocation for {name}"
+            );
 
             // Verify it contains quantum operations or at least quantum runtime calls
-            let has_quantum_ops = llvm_ir.contains("___rxy") ||
-                                   llvm_ir.contains("___rz") ||
-                                   llvm_ir.contains("___rzz") ||
-                                   llvm_ir.contains("@__quantum__qis") ||
-                                   llvm_ir.contains("@__quantum__rt");  // Accept runtime calls as placeholder
-            assert!(has_quantum_ops, "LLVM IR should contain quantum operations for {}", name);
+            let has_quantum_ops = llvm_ir.contains("___rxy")
+                || llvm_ir.contains("___rz")
+                || llvm_ir.contains("___rzz")
+                || llvm_ir.contains("@__quantum__qis")
+                || llvm_ir.contains("@__quantum__rt"); // Accept runtime calls as placeholder
+            assert!(
+                has_quantum_ops,
+                "LLVM IR should contain quantum operations for {name}"
+            );
         }
     }
 
@@ -382,9 +394,9 @@ fn test_single_hadamard_execution() -> Result<(), PecosError> {
     // Use the sim() API with the QIS program
     let results = sim(qis_program)
         .quantum(state_vector())
-        .qubits(1)  // Single qubit for Hadamard
-        .seed(42)   // For reproducible testing
-        .run(1000)?;  // 1000 shots
+        .qubits(1) // Single qubit for Hadamard
+        .seed(42) // For reproducible testing
+        .run(1000)?; // 1000 shots
 
     // Count outcomes
     let mut outcome_0 = 0;
@@ -435,9 +447,9 @@ fn test_ghz_state_execution() -> Result<(), PecosError> {
     // Use the sim() API with the QIS program
     let results = sim(qis_program)
         .quantum(state_vector())
-        .qubits(3)  // Three qubits for GHZ state
-        .seed(42)   // For reproducible testing
-        .run(1000)?;  // 1000 shots
+        .qubits(3) // Three qubits for GHZ state
+        .seed(42) // For reproducible testing
+        .run(1000)?; // 1000 shots
 
     // Count outcomes - GHZ should only produce 000 or 111
     let mut outcome_000 = 0;

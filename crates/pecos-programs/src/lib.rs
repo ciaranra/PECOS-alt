@@ -54,7 +54,7 @@ pub enum QisContent {
 
 /// A QIS (Quantum Instruction Set) program
 ///
-/// This represents LLVM IR that uses Selene QIS functions (___qalloc, ___lazy_measure, etc.)
+/// This represents LLVM IR that uses Selene QIS functions (___qalloc, ___`lazy_measure`, etc.)
 /// as opposed to QIR functions. This is the output of HUGR compilation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QisProgram {
@@ -166,8 +166,6 @@ impl fmt::Display for QisProgram {
         }
     }
 }
-
-
 
 /// A HUGR program
 #[derive(Debug, Clone, PartialEq, Eq)]

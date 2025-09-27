@@ -1,23 +1,22 @@
 """Test suite for advanced type support (futures, collections, etc)."""
 
-import pytest
-from guppylang import guppy
-from guppylang.std.quantum import qubit, h, measure
 import pecos_rslib
+from guppylang import guppy
+from guppylang.std.quantum import h, measure, qubit
 
 
 class TestAdvancedTypes:
     """Test advanced type support."""
 
-    def test_basic_measurement_future(self):
+    def test_basic_measurement_future(self) -> None:
         """Test that measurement operations work (which use futures internally)."""
+
         @guppy
         def test_measure_future() -> bool:
             q = qubit()
             h(q)
             # Measurement returns a future internally in the HUGR
-            result = measure(q)
-            return result
+            return measure(q)
 
         hugr = test_measure_future.compile()
         output = pecos_rslib.compile_hugr_to_llvm_rust(hugr.to_bytes())
@@ -26,8 +25,9 @@ class TestAdvancedTypes:
         assert "___lazy_measure" in output
         assert "qmain" in output
 
-    def test_multiple_measurements(self):
+    def test_multiple_measurements(self) -> None:
         """Test multiple measurements (multiple futures)."""
+
         @guppy
         def test_multi_measure() -> tuple[bool, bool]:
             q1 = qubit()
@@ -43,10 +43,13 @@ class TestAdvancedTypes:
 
         # Should handle multiple futures correctly
         measure_calls = output.count("___lazy_measure")
-        assert measure_calls >= 2, f"Expected at least 2 measurements, got {measure_calls}"
+        assert (
+            measure_calls >= 2
+        ), f"Expected at least 2 measurements, got {measure_calls}"
 
-    def test_advanced_types_compilation(self):
+    def test_advanced_types_compilation(self) -> None:
         """Test that advanced types don't break compilation."""
+
         @guppy
         def test_advanced() -> bool:
             q = qubit()
@@ -62,13 +65,13 @@ class TestAdvancedTypes:
         # The return type could be i32 (for bool) or i64 depending on compiler version
         assert "define i32 @qmain" in pecos_out or "define i64 @qmain" in pecos_out
 
-    def test_advanced_types_selene_compatibility(self):
+    def test_advanced_types_selene_compatibility(self) -> None:
         """Test advanced types work with both compilers."""
+
         @guppy
         def test_compat() -> bool:
             q = qubit()
-            result = measure(q)
-            return result
+            return measure(q)
 
         hugr = test_compat.compile()
         try:
@@ -83,8 +86,9 @@ class TestAdvancedTypes:
             print(f"Advanced types compatibility test info: {e}")
             assert True  # Don't fail
 
-    def test_complex_quantum_program(self):
+    def test_complex_quantum_program(self) -> None:
         """Test complex program that might use advanced types."""
+
         @guppy
         def test_complex() -> tuple[bool, bool, bool]:
             # Create a more complex program that might use advanced types

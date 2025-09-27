@@ -1,8 +1,8 @@
 //! Test the unified API `sim_builder().classical(qis_engine())`
 
 use pecos_engines::{DepolarizingNoise, sim_builder};
-use pecos_qis_sim::qis_engine;
 use pecos_programs::QisProgram;
+use pecos_qis_sim::qis_engine;
 
 const SIMPLE_IR: &str = r#"
 @str_c = constant [2 x i8] c"c\00"

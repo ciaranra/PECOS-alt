@@ -3,8 +3,8 @@
 use pecos_engines::{
     BiasedDepolarizingNoise, ClassicalControlEngineBuilder, DepolarizingNoise, sim_builder,
 };
-use pecos_qis_sim::qis_engine;
 use pecos_programs::QisProgram;
+use pecos_qis_sim::qis_engine;
 use std::io::Write;
 use tempfile::NamedTempFile;
 

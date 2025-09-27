@@ -550,6 +550,7 @@ class TestQuantumEngines:
         Note: While these are Clifford gates at the source level, the
         compilation pipeline decomposes them into RXY and RZ rotations.
         """
+
         @guppy
         def clifford_circuit() -> bool:
             # Clifford circuit: H-X-H = Z gate
@@ -562,11 +563,7 @@ class TestQuantumEngines:
 
         # Test with state vector engine (compatible with all gate decompositions)
         results = (
-            sim(clifford_circuit)
-            .qubits(1)
-            .quantum(state_vector())
-            .seed(42)
-            .run(100)
+            sim(clifford_circuit).qubits(1).quantum(state_vector()).seed(42).run(100)
         )
         measurements = get_measurements(results)
 
@@ -605,11 +602,7 @@ class TestQuantumEngines:
         # Test with sparse stabilizer - should work with QASM Clifford circuits
         try:
             results = (
-                sim(program)
-                .qubits(2)
-                .quantum(sparse_stabilizer())
-                .seed(42)
-                .run(100)
+                sim(program).qubits(2).quantum(sparse_stabilizer()).seed(42).run(100)
             )
 
             # QASM returns dict with register names as keys
@@ -619,7 +612,9 @@ class TestQuantumEngines:
             # Bell state: values should be 0 (00) or 3 (11) for correlated qubits
             # Never 1 (01) or 2 (10) for anti-correlated qubits
             correlated = sum(1 for m in measurements if m in [0, 3])
-            assert correlated == 100, f"Bell state should be 100% correlated (0 or 3), got {correlated}/100"
+            assert (
+                correlated == 100
+            ), f"Bell state should be 100% correlated (0 or 3), got {correlated}/100"
 
         except Exception as e:
             if "not supported" in str(e) or "not available" in str(e):

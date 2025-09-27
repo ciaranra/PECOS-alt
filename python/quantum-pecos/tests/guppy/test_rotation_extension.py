@@ -1,16 +1,16 @@
 """Test suite for rotation extension support."""
 
-import pytest
-from guppylang import guppy
-from guppylang.std.quantum import qubit, rz, measure, pi
 import pecos_rslib
+from guppylang import guppy
+from guppylang.std.quantum import measure, pi, qubit, rz
 
 
 class TestRotationExtension:
     """Test rotation extension operations."""
 
-    def test_rotation_with_angle_arithmetic(self):
+    def test_rotation_with_angle_arithmetic(self) -> None:
         """Test rotation gates with angle arithmetic."""
+
         @guppy
         def test_angle_ops() -> bool:
             q = qubit()
@@ -25,8 +25,9 @@ class TestRotationExtension:
         assert "___rz" in output
         assert len(output) > 100
 
-    def test_multiple_angle_operations(self):
+    def test_multiple_angle_operations(self) -> None:
         """Test multiple angle operations in sequence."""
+
         @guppy
         def test_multi_angles() -> bool:
             q = qubit()
@@ -41,8 +42,9 @@ class TestRotationExtension:
         rz_calls = output.count("tail call void @___rz")
         assert rz_calls >= 2, f"Expected at least 2 RZ calls, got {rz_calls}"
 
-    def test_rotation_extension_compatibility(self):
+    def test_rotation_extension_compatibility(self) -> None:
         """Test that rotation extensions are handled correctly."""
+
         @guppy
         def test_rotation_compat() -> bool:
             q = qubit()
@@ -56,8 +58,9 @@ class TestRotationExtension:
         assert "___rz" in pecos_out
         assert "qmain" in pecos_out
 
-    def test_complex_angle_expressions(self):
+    def test_complex_angle_expressions(self) -> None:
         """Test complex angle expressions."""
+
         @guppy
         def test_complex_angles() -> bool:
             q = qubit()
@@ -73,8 +76,9 @@ class TestRotationExtension:
         assert "___rz" in output
         assert "double" in output
 
-    def test_rotation_selene_compatibility(self):
+    def test_rotation_selene_compatibility(self) -> None:
         """Test rotation compatibility with Selene."""
+
         @guppy
         def simple_rotation() -> bool:
             q = qubit()

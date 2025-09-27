@@ -347,6 +347,6 @@ mod tests {
         assert_eq!(result.len(), 3);
 
         // Test GF4 decoding
-        let gf4_result = decoder.decode_gf4(&syndrome.view()).unwrap();
+        decoder.decode_gf4(&syndrome.view()).unwrap();
     }
 }

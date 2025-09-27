@@ -10,12 +10,10 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-
 use pecos::prelude::{ByteMessage, ByteMessageBuilder, dump_batch};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList, PyType};
-
 
 /// Python wrapper for Rust `ByteMessageBuilder`
 #[pyclass(name = "ByteMessageBuilder", module = "pecos_rslib._pecos_rslib")]

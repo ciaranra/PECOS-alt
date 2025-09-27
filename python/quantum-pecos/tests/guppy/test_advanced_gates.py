@@ -1,27 +1,33 @@
 """Test suite for advanced quantum gates (Toffoli, CRz, etc.)."""
 
+import pecos_rslib
 import pytest
 from guppylang import guppy
-from guppylang.std.quantum import qubit, h, measure, pi
-import pecos_rslib
+from guppylang.std.quantum import h, measure, pi, qubit
 
 # Check if gates are available
 try:
-    from guppylang.std.quantum import toffoli, crz
+    from guppylang.std.quantum import crz, toffoli
+
     HAVE_ADVANCED_GATES = True
 except ImportError:
     HAVE_ADVANCED_GATES = False
+
     # Define dummy functions for testing
-    def toffoli(q0, q1, q2): pass
-    def crz(q0, q1, angle): pass
+    def toffoli(q0, q1, q2) -> None:
+        pass
+
+    def crz(q0, q1, angle) -> None:
+        pass
 
 
 class TestThreeQubitGates:
     """Test three-qubit gates."""
 
     @pytest.mark.skipif(not HAVE_ADVANCED_GATES, reason="Advanced gates not available")
-    def test_toffoli_gate(self):
+    def test_toffoli_gate(self) -> None:
         """Test Toffoli (CCX) gate."""
+
         @guppy
         def test_toffoli() -> tuple[bool, bool, bool]:
             q0 = qubit()
@@ -49,8 +55,9 @@ class TestControlledRotations:
     """Test controlled rotation gates."""
 
     @pytest.mark.skipif(not HAVE_ADVANCED_GATES, reason="Advanced gates not available")
-    def test_crz_gate(self):
+    def test_crz_gate(self) -> None:
         """Test CRz gate with angle."""
+
         @guppy
         def test_crz() -> tuple[bool, bool]:
             q0 = qubit()
@@ -70,8 +77,9 @@ class TestControlledRotations:
 class TestCompilerFeatures:
     """Test compiler features and optimizations."""
 
-    def test_transformation_passes_applied(self):
+    def test_transformation_passes_applied(self) -> None:
         """Test that transformation passes are applied (at least nominally)."""
+
         @guppy
         def simple() -> bool:
             q = qubit()
@@ -85,7 +93,7 @@ class TestCompilerFeatures:
         assert "qmain" in output
         assert "___qalloc" in output
 
-    def test_complex_circuit_compilation(self):
+    def test_complex_circuit_compilation(self) -> None:
         """Test compilation of complex circuit with many gate types."""
         from guppylang.std.quantum import cx, cy, cz
 
@@ -114,7 +122,7 @@ class TestCompilerFeatures:
         assert "___lazy_measure" in output
         assert "___qfree" in output
 
-    def test_gate_count_optimization(self):
+    def test_gate_count_optimization(self) -> None:
         """Verify that only used operations are declared."""
         from guppylang.std.quantum import cx
 
@@ -132,8 +140,8 @@ class TestCompilerFeatures:
         # Should declare the operations we use
         assert "declare" in output
         assert "___rxy" in output  # For H and CX
-        assert "___rz" in output    # For H and CX
-        assert "___rzz" in output   # For CX
+        assert "___rz" in output  # For H and CX
+        assert "___rzz" in output  # For CX
 
         # Count declarations vs actual usage
         declare_count = output.count("declare")
@@ -142,10 +150,11 @@ class TestCompilerFeatures:
 
 
 # Test fallback for when advanced gates are not available
-def test_advanced_gates_availability():
+def test_advanced_gates_availability() -> None:
     """Check if advanced gates are available in guppylang."""
     try:
         from guppylang.std.quantum import toffoli
+
         assert True, "Toffoli gate is available"
     except ImportError:
         # It's okay if not available, we handle it
@@ -153,6 +162,7 @@ def test_advanced_gates_availability():
 
     try:
         from guppylang.std.quantum import crz
+
         assert True, "CRz gate is available"
     except ImportError:
         # It's okay if not available, we handle it

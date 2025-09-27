@@ -3,9 +3,9 @@
 use pecos::prelude::*;
 use pecos::{sim, sim_builder};
 use pecos_engines::{DepolarizingNoise, sim as sim_from, sparse_stab, state_vector};
-use pecos_qis_sim::qis_engine;
 use pecos_programs::{QasmProgram, QisProgram};
 use pecos_qasm::qasm_engine;
+use pecos_qis_sim::qis_engine;
 
 fn main() -> Result<(), PecosError> {
     // Example 1: Using sim(program) for automatic engine selection

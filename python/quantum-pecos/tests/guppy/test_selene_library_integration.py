@@ -44,6 +44,7 @@ except ImportError:
 
 try:
     from pecos_rslib import SeleneLibraryEngine
+
     LIBRARY_ENGINE_AVAILABLE = True
 except ImportError:
     LIBRARY_ENGINE_AVAILABLE = False
@@ -135,7 +136,9 @@ class TestGuppyToHUGRCompilation:
         builder.with_guppy_program(main)
 
         hugr_result = builder._compile_to_hugr()
-        assert hugr_result is not None, "Should compile main function with parametric call"
+        assert (
+            hugr_result is not None
+        ), "Should compile main function with parametric call"
 
         # Clean up
         builder.cleanup()
@@ -157,7 +160,9 @@ class TestGuppyToHUGRCompilation:
         with pytest.raises(ValueError) as exc_info:
             builder._compile_to_hugr()
 
-        assert "Entry point function must have no input parameters" in str(exc_info.value)
+        assert "Entry point function must have no input parameters" in str(
+            exc_info.value,
+        )
         assert "found 1" in str(exc_info.value)
 
         # Clean up

@@ -4,12 +4,14 @@ This test ensures that both compilers produce functionally equivalent LLVM IR
 for the same HUGR input.
 """
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 # Check if we have the required dependencies
 try:
     from guppylang import GuppyModule, guppy
+
     GUPPY_AVAILABLE = True
 except ImportError:
     GUPPY_AVAILABLE = False
@@ -19,13 +21,14 @@ except ImportError:
 # Import quantum operations separately to avoid import error when guppylang isn't available
 if GUPPY_AVAILABLE:
     try:
-        from guppylang.stdlib.quantum import qubit, h, cx, measure
+        from guppylang.stdlib.quantum import cx, h, measure, qubit
     except ImportError:
         # Fallback for different guppylang versions
-        from guppylang.std.quantum import qubit, h, cx, measure
+        from guppylang.std.quantum import cx, h, measure, qubit
 
 try:
     from selene_hugr_qis_compiler import compile_to_llvm_ir as selene_compile
+
     SELENE_AVAILABLE = True
 except ImportError:
     SELENE_AVAILABLE = False
@@ -40,13 +43,13 @@ def normalize_llvm_ir(llvm_ir: str) -> list[str]:
     Returns a list of non-comment, non-blank lines.
     """
     lines = []
-    for line in llvm_ir.split('\n'):
+    for line in llvm_ir.split("\n"):
         # Skip comments and blank lines
         line = line.strip()
-        if not line or line.startswith(';'):
+        if not line or line.startswith(";"):
             continue
         # Normalize whitespace
-        line = ' '.join(line.split())
+        line = " ".join(line.split())
         lines.append(line)
     return lines
 
@@ -58,21 +61,33 @@ def extract_qis_calls(llvm_ir: str) -> list[str]:
     between the two compilers.
     """
     import re
+
     qis_calls = []
-    for line in llvm_ir.split('\n'):
+    for line in llvm_ir.split("\n"):
         line = line.strip()
         # Look for QIS function calls
-        if 'call' in line and ('___q' in line or '___h' in line or '___cx' in line or
-                               '___rzz' in line or '___rxy' in line or '___m' in line or
-                               '___rz' in line or '___reset' in line or '___lazy_measure' in line):
+        if "call" in line and (
+            "___q" in line
+            or "___h" in line
+            or "___cx" in line
+            or "___rzz" in line
+            or "___rxy" in line
+            or "___m" in line
+            or "___rz" in line
+            or "___reset" in line
+            or "___lazy_measure" in line
+        ):
             # Normalize variable names to allow comparison
             # Replace all %variable.names with %VAR
-            normalized = re.sub(r'%[a-zA-Z0-9._-]+', '%VAR', line)
+            normalized = re.sub(r"%[a-zA-Z0-9._-]+", "%VAR", line)
             qis_calls.append(normalized)
     return sorted(qis_calls)
 
 
-def compare_compilers(hugr_binary_selene: bytes, hugr_binary_rust: bytes) -> tuple[bool, str]:
+def compare_compilers(
+    hugr_binary_selene: bytes,
+    hugr_binary_rust: bytes,
+) -> tuple[bool, str]:
     """Compare outputs from both compilers.
 
     Args:
@@ -122,8 +137,11 @@ def compare_compilers(hugr_binary_selene: bytes, hugr_binary_rust: bytes) -> tup
 
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="guppylang not available")
-@pytest.mark.skipif(not SELENE_AVAILABLE, reason="selene_hugr_qis_compiler not available")
-def test_bell_state_compilation_parity():
+@pytest.mark.skipif(
+    not SELENE_AVAILABLE,
+    reason="selene_hugr_qis_compiler not available",
+)
+def test_bell_state_compilation_parity() -> None:
     """Test that both compilers produce equivalent LLVM IR for Bell state."""
 
     @guppy
@@ -149,8 +167,11 @@ def test_bell_state_compilation_parity():
 
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="guppylang not available")
-@pytest.mark.skipif(not SELENE_AVAILABLE, reason="selene_hugr_qis_compiler not available")
-def test_single_hadamard_compilation_parity():
+@pytest.mark.skipif(
+    not SELENE_AVAILABLE,
+    reason="selene_hugr_qis_compiler not available",
+)
+def test_single_hadamard_compilation_parity() -> None:
     """Test that both compilers produce equivalent LLVM IR for single Hadamard."""
 
     @guppy
@@ -172,8 +193,11 @@ def test_single_hadamard_compilation_parity():
 
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="guppylang not available")
-@pytest.mark.skipif(not SELENE_AVAILABLE, reason="selene_hugr_qis_compiler not available")
-def test_ghz_state_compilation_parity():
+@pytest.mark.skipif(
+    not SELENE_AVAILABLE,
+    reason="selene_hugr_qis_compiler not available",
+)
+def test_ghz_state_compilation_parity() -> None:
     """Test that both compilers produce equivalent LLVM IR for GHZ state."""
 
     @guppy
@@ -201,12 +225,17 @@ def test_ghz_state_compilation_parity():
     assert equivalent, f"GHZ state compilation differs: {msg}"
 
 
-@pytest.mark.skipif(not SELENE_AVAILABLE, reason="selene_hugr_qis_compiler not available")
-def test_existing_hugr_files_parity():
+@pytest.mark.skipif(
+    not SELENE_AVAILABLE,
+    reason="selene_hugr_qis_compiler not available",
+)
+def test_existing_hugr_files_parity() -> None:
     """Test parity using existing HUGR test data files."""
-
     # Path to test data
-    test_data_dir = Path(__file__).parent.parent.parent.parent.parent / "crates/pecos/tests/test_data/hugr"
+    test_data_dir = (
+        Path(__file__).parent.parent.parent.parent.parent
+        / "crates/pecos/tests/test_data/hugr"
+    )
 
     if not test_data_dir.exists():
         pytest.skip("Test data directory not found")
@@ -227,9 +256,11 @@ def test_existing_hugr_files_parity():
         else:
             # Try to decode as JSON/text
             try:
-                hugr_text = hugr_bytes.decode('utf-8')
+                hugr_bytes.decode("utf-8")
                 # For text format, skip since we need binary for Selene
-                pytest.skip(f"Skipping {hugr_file.name} - text format, need binary for Selene")
+                pytest.skip(
+                    f"Skipping {hugr_file.name} - text format, need binary for Selene",
+                )
             except UnicodeDecodeError:
                 pytest.skip(f"Skipping {hugr_file.name} - unknown binary format")
 
@@ -237,6 +268,7 @@ def test_existing_hugr_files_parity():
 if __name__ == "__main__":
     # Quick manual test
     if GUPPY_AVAILABLE and SELENE_AVAILABLE:
+
         @guppy
         def test_circuit() -> bool:
             q = qubit()
@@ -251,7 +283,7 @@ if __name__ == "__main__":
             hugr_json = hugr.to_json()  # JSON format for Rust compiler
         except AttributeError:
             # If to_json not available, use to_str
-            hugr_json = hugr.to_str() if hasattr(hugr, 'to_str') else str(hugr)
+            hugr_json = hugr.to_str() if hasattr(hugr, "to_str") else str(hugr)
 
         print("Comparing compilers for test circuit...")
         equivalent, msg = compare_compilers(hugr_binary, hugr_json)
@@ -263,7 +295,7 @@ if __name__ == "__main__":
             print("\n=== Selene LLVM IR ===")
             print(selene_compile(hugr_binary))
             print("\n=== Rust LLVM IR ===")
-            print(rust_compile(hugr_json.encode('utf-8'), None))
+            print(rust_compile(hugr_json.encode("utf-8"), None))
     else:
         print("Missing dependencies:")
         print(f"  Guppy: {GUPPY_AVAILABLE}")

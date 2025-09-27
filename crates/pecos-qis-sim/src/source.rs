@@ -1,6 +1,6 @@
-use tket::hugr::Hugr;
 use pecos_core::errors::PecosError;
 use std::path::PathBuf;
+use tket::hugr::Hugr;
 
 /// Represents different input sources for LLVM simulation.
 #[derive(Debug, Clone)]

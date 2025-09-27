@@ -13,7 +13,7 @@ The conversion maps high-level quantum gates to hardware-native gates:
 */
 
 use crate::error::Result;
-use crate::ops::{Operation, CustomOp};
+use crate::ops::{CustomOp, Operation};
 use crate::phir::{Block, Instruction, Module, Region, SSAValue};
 use std::collections::HashMap;
 use std::f64::consts::PI;
@@ -66,7 +66,11 @@ impl HugrToQisConverter {
             match &instruction.operation {
                 Operation::Custom(custom_op) if custom_op.dialect() == "hugr" => {
                     // Convert HUGR operations to QIS
-                    let qis_ops = self.convert_hugr_op(custom_op, &instruction.operands, &instruction.results)?;
+                    let qis_ops = self.convert_hugr_op(
+                        custom_op,
+                        &instruction.operands,
+                        &instruction.results,
+                    )?;
                     new_instructions.extend(qis_ops);
                 }
                 _ => {
@@ -80,7 +84,12 @@ impl HugrToQisConverter {
         Ok(())
     }
 
-    fn convert_hugr_op(&mut self, op: &CustomOp, operands: &[SSAValue], results: &[SSAValue]) -> Result<Vec<Instruction>> {
+    fn convert_hugr_op(
+        &mut self,
+        op: &CustomOp,
+        operands: &[SSAValue],
+        results: &[SSAValue],
+    ) -> Result<Vec<Instruction>> {
         let mut instructions = Vec::new();
 
         match op.name() {
@@ -117,16 +126,11 @@ impl HugrToQisConverter {
                 let qubit = &operands[0];
 
                 // RZ(-π/2)
-                let rz1 = CustomOp::new(
-                    "qis",
-                    "rz",
-                    vec![],
-                    HashMap::new()
-                );
+                let rz1 = CustomOp::new("qis", "rz", vec![], HashMap::new());
                 instructions.push(Instruction {
                     results: vec![],
                     operation: Operation::Custom(rz1),
-                    operands: vec![qubit.clone(), self.make_float_constant(-PI / 2.0)],
+                    operands: vec![*qubit, self.make_float_constant(-PI / 2.0)],
                     result_types: vec![],
                     regions: vec![],
                     attributes: HashMap::new(),
@@ -134,17 +138,12 @@ impl HugrToQisConverter {
                 });
 
                 // RXY(π/2, 0)
-                let rxy = CustomOp::new(
-                    "qis",
-                    "rxy",
-                    vec![],
-                    HashMap::new()
-                );
+                let rxy = CustomOp::new("qis", "rxy", vec![], HashMap::new());
                 instructions.push(Instruction {
                     results: vec![],
                     operation: Operation::Custom(rxy),
                     operands: vec![
-                        qubit.clone(),
+                        *qubit,
                         self.make_float_constant(PI / 2.0),
                         self.make_float_constant(0.0),
                     ],
@@ -155,16 +154,11 @@ impl HugrToQisConverter {
                 });
 
                 // RZ(-π/2)
-                let rz2 = CustomOp::new(
-                    "qis",
-                    "rz",
-                    vec![],
-                    HashMap::new()
-                );
+                let rz2 = CustomOp::new("qis", "rz", vec![], HashMap::new());
                 instructions.push(Instruction {
                     results: vec![],
                     operation: Operation::Custom(rz2),
-                    operands: vec![qubit.clone(), self.make_float_constant(-PI / 2.0)],
+                    operands: vec![*qubit, self.make_float_constant(-PI / 2.0)],
                     result_types: vec![],
                     regions: vec![],
                     attributes: HashMap::new(),
@@ -178,17 +172,12 @@ impl HugrToQisConverter {
                 let target = &operands[1];
 
                 // RXY(π/2, 0) on target
-                let rxy1 = CustomOp::new(
-                    "qis",
-                    "rxy",
-                    vec![],
-                    HashMap::new()
-                );
+                let rxy1 = CustomOp::new("qis", "rxy", vec![], HashMap::new());
                 instructions.push(Instruction {
                     results: vec![],
                     operation: Operation::Custom(rxy1),
                     operands: vec![
-                        target.clone(),
+                        *target,
                         self.make_float_constant(PI / 2.0),
                         self.make_float_constant(0.0),
                     ],
@@ -199,20 +188,11 @@ impl HugrToQisConverter {
                 });
 
                 // RZZ(π/2) on control and target
-                let rzz = CustomOp::new(
-                    "qis",
-                    "rzz",
-                    vec![],
-                    HashMap::new()
-                );
+                let rzz = CustomOp::new("qis", "rzz", vec![], HashMap::new());
                 instructions.push(Instruction {
                     results: vec![],
                     operation: Operation::Custom(rzz),
-                    operands: vec![
-                        control.clone(),
-                        target.clone(),
-                        self.make_float_constant(PI / 2.0),
-                    ],
+                    operands: vec![*control, *target, self.make_float_constant(PI / 2.0)],
                     result_types: vec![],
                     regions: vec![],
                     attributes: HashMap::new(),
@@ -220,16 +200,11 @@ impl HugrToQisConverter {
                 });
 
                 // RZ(-π/2) on control
-                let rz = CustomOp::new(
-                    "qis",
-                    "rz",
-                    vec![],
-                    HashMap::new()
-                );
+                let rz = CustomOp::new("qis", "rz", vec![], HashMap::new());
                 instructions.push(Instruction {
                     results: vec![],
                     operation: Operation::Custom(rz),
-                    operands: vec![control.clone(), self.make_float_constant(-PI / 2.0)],
+                    operands: vec![*control, self.make_float_constant(-PI / 2.0)],
                     result_types: vec![],
                     regions: vec![],
                     attributes: HashMap::new(),
@@ -237,17 +212,12 @@ impl HugrToQisConverter {
                 });
 
                 // RXY(-π/2, 0) on target
-                let rxy2 = CustomOp::new(
-                    "qis",
-                    "rxy",
-                    vec![],
-                    HashMap::new()
-                );
+                let rxy2 = CustomOp::new("qis", "rxy", vec![], HashMap::new());
                 instructions.push(Instruction {
                     results: vec![],
                     operation: Operation::Custom(rxy2),
                     operands: vec![
-                        target.clone(),
+                        *target,
                         self.make_float_constant(-PI / 2.0),
                         self.make_float_constant(0.0),
                     ],
@@ -263,16 +233,11 @@ impl HugrToQisConverter {
                 let qubit = &operands[0];
                 let angle = &operands[1];
 
-                let rxy = CustomOp::new(
-                    "qis",
-                    "rxy",
-                    vec![],
-                    HashMap::new()
-                );
+                let rxy = CustomOp::new("qis", "rxy", vec![], HashMap::new());
                 instructions.push(Instruction {
                     results: vec![],
                     operation: Operation::Custom(rxy),
-                    operands: vec![qubit.clone(), angle.clone(), self.make_float_constant(0.0)],
+                    operands: vec![*qubit, *angle, self.make_float_constant(0.0)],
                     result_types: vec![],
                     regions: vec![],
                     attributes: HashMap::new(),
@@ -285,20 +250,11 @@ impl HugrToQisConverter {
                 let qubit = &operands[0];
                 let angle = &operands[1];
 
-                let rxy = CustomOp::new(
-                    "qis",
-                    "rxy",
-                    vec![],
-                    HashMap::new()
-                );
+                let rxy = CustomOp::new("qis", "rxy", vec![], HashMap::new());
                 instructions.push(Instruction {
                     results: vec![],
                     operation: Operation::Custom(rxy),
-                    operands: vec![
-                        qubit.clone(),
-                        angle.clone(),
-                        self.make_float_constant(PI / 2.0),
-                    ],
+                    operands: vec![*qubit, *angle, self.make_float_constant(PI / 2.0)],
                     result_types: vec![],
                     regions: vec![],
                     attributes: HashMap::new(),
@@ -311,16 +267,11 @@ impl HugrToQisConverter {
                 let qubit = &operands[0];
                 let angle = &operands[1];
 
-                let qis_rz = CustomOp::new(
-                    "qis",
-                    "rz",
-                    vec![],
-                    HashMap::new()
-                );
+                let qis_rz = CustomOp::new("qis", "rz", vec![], HashMap::new());
                 instructions.push(Instruction {
                     results: vec![],
                     operation: Operation::Custom(qis_rz),
-                    operands: vec![qubit.clone(), angle.clone()],
+                    operands: vec![*qubit, *angle],
                     result_types: vec![],
                     regions: vec![],
                     attributes: HashMap::new(),
@@ -334,16 +285,11 @@ impl HugrToQisConverter {
 
                 // Create a future for the measurement
                 let future = self.fresh_value();
-                let lazy_measure = CustomOp::new(
-                    "qis",
-                    "lazy_measure",
-                    vec![],
-                    HashMap::new()
-                );
+                let lazy_measure = CustomOp::new("qis", "lazy_measure", vec![], HashMap::new());
                 instructions.push(Instruction {
-                    results: vec![future.clone()],
+                    results: vec![future],
                     operation: Operation::Custom(lazy_measure),
-                    operands: vec![qubit.clone()],
+                    operands: vec![*qubit],
                     result_types: vec![crate::types::Type::Future],
                     regions: vec![],
                     attributes: HashMap::new(),
@@ -351,12 +297,7 @@ impl HugrToQisConverter {
                 });
 
                 // Read the future to get the result
-                let read_future = CustomOp::new(
-                    "qis",
-                    "read_future",
-                    vec![],
-                    HashMap::new()
-                );
+                let read_future = CustomOp::new("qis", "read_future", vec![], HashMap::new());
                 instructions.push(Instruction {
                     results: results.to_vec(),
                     operation: Operation::Custom(read_future),
@@ -389,9 +330,9 @@ impl HugrToQisConverter {
     fn make_float_constant(&mut self, _value: f64) -> SSAValue {
         // In a real implementation, this would create a proper constant
         // For now, we just create a placeholder SSA value
-        let const_value = self.fresh_value();
+
         // This would normally emit a constant operation
-        const_value
+        self.fresh_value()
     }
 }
 
@@ -421,7 +362,7 @@ mod tests {
                             vec![],
                             HashMap::new(),
                         )),
-                        operands: vec![SSAValue::new(0)],  // q0
+                        operands: vec![SSAValue::new(0)], // q0
                         result_types: vec![],
                         regions: vec![],
                         attributes: HashMap::new(),
@@ -469,7 +410,7 @@ mod tests {
                             vec![],
                             HashMap::new(),
                         )),
-                        operands: vec![SSAValue::new(0), SSAValue::new(1)],  // q0, q1
+                        operands: vec![SSAValue::new(0), SSAValue::new(1)], // q0, q1
                         result_types: vec![],
                         regions: vec![],
                         attributes: HashMap::new(),
@@ -488,7 +429,9 @@ mod tests {
         assert_eq!(module.body.blocks[0].operations.len(), 4);
 
         // Verify the sequence of operations
-        let ops: Vec<_> = module.body.blocks[0].operations.iter()
+        let ops: Vec<_> = module.body.blocks[0]
+            .operations
+            .iter()
             .filter_map(|instr| {
                 if let Operation::Custom(custom_op) = &instr.operation {
                     Some(custom_op.name())

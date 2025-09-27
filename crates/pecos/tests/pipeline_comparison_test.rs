@@ -1,4 +1,4 @@
-//! Comprehensive comparison tests between HUGR-LLVM and PHIR compilation pipelines
+//! Comprehensive comparison tests between HUGR-QIS and PHIR compilation pipelines
 //!
 //! This module verifies that both compilation paths produce functionally equivalent
 //! quantum programs by testing:
@@ -113,7 +113,7 @@ impl CircuitValidator for BellStateValidator {
                         .collect();
                 }
 
-                // Check if there's an encoded result from HUGR-LLVM (bit pattern in a single integer)
+                // Check if there's an encoded result from HUGR-QIS (bit pattern in a single integer)
                 if let Some(data) = shot.data.get("result") {
                     match data {
                         pecos_engines::shot_results::Data::I64(n) => {
@@ -262,7 +262,7 @@ impl CircuitValidator for HadamardValidator {
                         .collect();
                 }
 
-                // Check if there's an encoded result from HUGR-LLVM (bit pattern in a single integer)
+                // Check if there's an encoded result from HUGR-QIS (bit pattern in a single integer)
                 if let Some(data) = shot.data.get("result") {
                     match data {
                         pecos_engines::shot_results::Data::I64(n) => {
@@ -368,7 +368,7 @@ impl CircuitValidator for GhzStateValidator {
                         .collect();
                 }
 
-                // Check if there's an encoded result from HUGR-LLVM (bit pattern in a single integer)
+                // Check if there's an encoded result from HUGR-QIS (bit pattern in a single integer)
                 if let Some(data) = shot.data.get("result") {
                     match data {
                         pecos_engines::shot_results::Data::I64(n) => {
@@ -425,8 +425,8 @@ impl CircuitValidator for GhzStateValidator {
     }
 }
 
-/// Run the HUGR-LLVM compilation pipeline
-fn run_hugr_llvm_pipeline(hugr_data: &[u8], shots: usize) -> PipelineResult {
+/// Run the HUGR-QIS compilation pipeline
+fn run_hugr_qis_pipeline(hugr_data: &[u8], shots: usize) -> PipelineResult {
     let start_time = std::time::Instant::now();
 
     // Create temporary HUGR file
@@ -434,7 +434,7 @@ fn run_hugr_llvm_pipeline(hugr_data: &[u8], shots: usize) -> PipelineResult {
         Ok(dir) => dir,
         Err(e) => {
             return PipelineResult {
-                name: "HUGR-LLVM".to_string(),
+                name: "HUGR-QIS".to_string(),
                 compilation_result: Err(PecosError::from(e)),
                 execution_result: None,
                 execution_time_ms: None,
@@ -483,18 +483,7 @@ fn run_hugr_llvm_pipeline(hugr_data: &[u8], shots: usize) -> PipelineResult {
 }
 
 /// Run the PHIR compilation pipeline
-fn run_phir_pipeline(_hugr_data: &[u8], _shots: usize) -> PipelineResult {
-    // PHIR support has been commented out - skipping test
-    PipelineResult {
-        name: "PHIR".to_string(),
-        compilation_result: Err(PecosError::from(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "PHIR support temporarily disabled"
-        ))),
-        execution_result: None,
-        execution_time_ms: None,
-    }
-    /*
+fn run_phir_pipeline(hugr_data: &[u8], shots: usize) -> PipelineResult {
     let start_time = std::time::Instant::now();
 
     // Create temporary HUGR file
@@ -549,7 +538,6 @@ fn run_phir_pipeline(_hugr_data: &[u8], _shots: usize) -> PipelineResult {
         execution_result,
         execution_time_ms: execution_time,
     }
-    */
 }
 
 /// Compare both compilation pipelines on the same HUGR data
@@ -561,25 +549,25 @@ fn compare_pipelines<V: CircuitValidator>(
     println!("=== Comparing Pipelines for {} ===", validator.name());
 
     // Run both pipelines
-    let hugr_llvm_result = run_hugr_llvm_pipeline(hugr_data, shots);
+    let hugr_qis_result = run_hugr_qis_pipeline(hugr_data, shots);
     let phir_result = run_phir_pipeline(hugr_data, shots);
 
     let mut comparison_failed = false;
 
     // Report compilation results
     println!("Compilation Results:");
-    println!("  HUGR-LLVM: {:?}", hugr_llvm_result.compilation_result);
+    println!("  HUGR-QIS: {:?}", hugr_qis_result.compilation_result);
     println!("  PHIR:      {:?}", phir_result.compilation_result);
 
     // Check if both compiled successfully
-    if hugr_llvm_result.compilation_result.is_err() && phir_result.compilation_result.is_err() {
+    if hugr_qis_result.compilation_result.is_err() && phir_result.compilation_result.is_err() {
         return Err(PecosError::Processing(
             "Both pipelines failed to compile".to_string(),
         ));
     }
 
-    if hugr_llvm_result.compilation_result.is_err() {
-        println!("WARNING: HUGR-LLVM compilation failed, skipping comparison");
+    if hugr_qis_result.compilation_result.is_err() {
+        println!("WARNING: HUGR-QIS compilation failed, skipping comparison");
         return Ok(());
     }
 
@@ -590,15 +578,15 @@ fn compare_pipelines<V: CircuitValidator>(
 
     // Compare execution results
     match (
-        &hugr_llvm_result.execution_result,
+        &hugr_qis_result.execution_result,
         &phir_result.execution_result,
     ) {
         (Some(Ok(hugr_results)), Some(Ok(phir_results))) => {
             println!("Execution Results:");
             println!(
-                "  HUGR-LLVM: {} shots in {:?}ms",
+                "  HUGR-QIS: {} shots in {:?}ms",
                 hugr_results.len(),
-                hugr_llvm_result.execution_time_ms
+                hugr_qis_result.execution_time_ms
             );
             println!(
                 "  PHIR:      {} shots in {:?}ms",
@@ -607,7 +595,7 @@ fn compare_pipelines<V: CircuitValidator>(
             );
 
             // Validate quantum behavior for both
-            print!("Validating HUGR-LLVM quantum behavior... ");
+            print!("Validating HUGR-QIS quantum behavior... ");
             match validator.validate_quantum_behavior(hugr_results) {
                 Ok(()) => println!("PASS"),
                 Err(e) => {
@@ -642,7 +630,7 @@ fn compare_pipelines<V: CircuitValidator>(
         }
         (Some(Err(hugr_err)), Some(Err(phir_err))) => {
             println!("Both pipelines failed execution:");
-            println!("  HUGR-LLVM: {hugr_err}");
+            println!("  HUGR-QIS: {hugr_err}");
             println!("  PHIR:      {phir_err}");
             comparison_failed = true;
         }
@@ -651,7 +639,7 @@ fn compare_pipelines<V: CircuitValidator>(
             comparison_failed = true;
         }
         (Some(Err(hugr_err)), Some(Ok(_))) => {
-            println!("HUGR-LLVM execution failed: {hugr_err}");
+            println!("HUGR-QIS execution failed: {hugr_err}");
             comparison_failed = true;
         }
         _ => {
@@ -742,7 +730,7 @@ fn analyze_distribution_differences(outcomes1: &[Vec<u32>], outcomes2: &[Vec<u32
     #[allow(clippy::cast_precision_loss)]
     let total2 = outcomes2.len() as f64;
 
-    println!("  HUGR-LLVM outcomes:");
+    println!("  HUGR-QIS outcomes:");
     for (outcome, count) in &counts1 {
         let percentage = (f64::from(*count) / total1) * 100.0;
         println!("    {outcome:?}: {count} ({percentage:.1}%)");
@@ -770,342 +758,6 @@ fn test_pipeline_comparison_single_hadamard() -> Result<(), PecosError> {
 #[test]
 fn test_pipeline_comparison_ghz_state() -> Result<(), PecosError> {
     compare_pipelines(GHZ_STATE_HUGR, &GhzStateValidator, 1000)
-}
-
-// Debug test to analyze LLVM IR differences
-#[test]
-fn test_debug_llvm_ir_comparison() {
-    println!("=== Debugging LLVM IR Generation ===");
-
-    let temp_dir = TempDir::new().unwrap();
-    let hugr_path = temp_dir.path().join("bell_state.hugr");
-    std::fs::write(&hugr_path, BELL_STATE_HUGR).unwrap();
-
-    // Generate HUGR-LLVM IR (working)
-    println!("\n1. Testing HUGR-LLVM pipeline...");
-    let _hugr_llvm_ir = match generate_hugr_llvm_ir(&hugr_path) {
-        Ok(ir) => {
-            println!("   HUGR-LLVM IR generated ({} chars)", ir.len());
-            Some(ir)
-        }
-        Err(e) => {
-            println!("   HUGR-LLVM IR generation failed: {e}");
-            None
-        }
-    };
-
-    match pecos::hugr::run_hugr_llvm(&hugr_path, Some(10)) {
-        Ok(engine) => {
-            println!("   HUGR-LLVM compilation successful");
-            let num_qubits = engine.num_qubits();
-            match MonteCarloEngine::run_with_engines(
-                engine,
-                Box::new(PassThroughNoiseModel::builder().build()),
-                state_vector().qubits(num_qubits).build().unwrap(),
-                10,
-                1,
-                Some(42),
-            ) {
-                Ok(results) => {
-                    println!("   HUGR-LLVM execution successful: {} shots", results.len());
-                }
-                Err(e) => println!("   HUGR-LLVM execution failed: {e}"),
-            }
-        }
-        Err(e) => println!("   HUGR-LLVM compilation failed: {e}"),
-    }
-
-    // PHIR support has been temporarily disabled
-    println!("\n2. PHIR compilation temporarily disabled");
-    /*
-    match pecos::phir::run_phir_llvm(&hugr_path, Some(10), None) {
-        Ok(_engine) => {
-            println!("   PHIR compilation successful");
-            println!("   (Skipping execution to avoid crash)");
-        }
-        Err(e) => println!("   PHIR compilation failed: {e}"),
-    }
-    */
-
-    // Generate raw LLVM IR to examine differences
-    println!("\n3. PHIR LLVM IR generation temporarily disabled");
-    /*
-    let config = pecos_phir::PhirConfig {
-        debug: true,
-        ..Default::default()
-    };
-
-    match pecos::phir::compile_hugr_file_via_phir(&hugr_path, Some(config)) {
-        Ok(phir_ir) => {
-            println!("   PHIR LLVM IR generated ({} chars)", phir_ir.len());
-
-            // Save to files for manual inspection
-            let phir_path = temp_dir.path().join("phir_output.ll");
-            std::fs::write(&phir_path, &phir_ir).unwrap();
-            println!("   PHIR IR saved to: {phir_path:?}");
-
-            // Also save HUGR-LLVM IR if we have it
-            if let Some(ref hugr_ir) = hugr_llvm_ir {
-                let hugr_path = temp_dir.path().join("hugr_llvm_output.ll");
-                std::fs::write(&hugr_path, hugr_ir).unwrap();
-                println!("   HUGR-LLVM IR saved to: {hugr_path:?}");
-            }
-
-            // Perform detailed comparison
-            if let Some(ref hugr_ir) = hugr_llvm_ir {
-                println!("\n=== DETAILED LLVM IR COMPARISON ===");
-                compare_llvm_ir_detailed(hugr_ir, &phir_ir);
-            } else {
-                // Analyze the PHIR IR alone
-                analyze_qubit_usage(&phir_ir);
-            }
-        }
-        Err(e) => println!("   PHIR LLVM IR generation failed: {e}"),
-    }
-    */
-
-    println!("\n=== Debug files saved to: {:?} ===", temp_dir.path());
-}
-
-/// Generate HUGR-LLVM IR directly using the pecos-hugr-qis crate
-fn generate_hugr_llvm_ir(hugr_path: &std::path::Path) -> Result<String, String> {
-    // Read the HUGR file
-    let hugr_data =
-        std::fs::read(hugr_path).map_err(|e| format!("Failed to read HUGR file: {e}"))?;
-
-    // Use pecos-hugr-qis to compile to LLVM IR
-    match pecos_hugr_qis::compile_hugr_bytes_to_string(&hugr_data) {
-        Ok(ir) => Ok(ir),
-        Err(e) => Err(format!("HUGR-LLVM compilation failed: {e}")),
-    }
-}
-
-/// Perform detailed comparison between HUGR-LLVM and PHIR LLVM IR
-fn compare_llvm_ir_detailed(hugr_ir: &str, phir_ir: &str) {
-    println!("HUGR-LLVM IR: {} chars", hugr_ir.len());
-    println!("PHIR IR: {} chars", phir_ir.len());
-
-    // Extract main functions for comparison
-    let hugr_main = extract_main_function(hugr_ir);
-    let phir_main = extract_main_function(phir_ir);
-
-    println!("\n=== MAIN FUNCTION COMPARISON ===");
-
-    match (hugr_main, phir_main) {
-        (Some(hugr), Some(phir)) => {
-            println!("\nHUGR-LLVM main function:");
-            for (i, line) in hugr.lines().enumerate().take(20) {
-                println!("  {:2}: {}", i + 1, line);
-            }
-
-            println!("\nPHIR main function:");
-            for (i, line) in phir.lines().enumerate().take(20) {
-                println!("  {:2}: {}", i + 1, line);
-            }
-
-            // Compare signatures
-            let hugr_sig = hugr.lines().next().unwrap_or("");
-            let phir_sig = phir.lines().next().unwrap_or("");
-
-            println!("\n=== SIGNATURE COMPARISON ===");
-            println!("HUGR-LLVM: {hugr_sig}");
-            println!("PHIR:      {phir_sig}");
-
-            if hugr_sig == phir_sig {
-                println!("Function signatures match");
-            } else {
-                println!(" Function signatures differ!");
-            }
-        }
-        _ => println!("Could not extract main functions for comparison"),
-    }
-
-    // Compare qubit operations
-    println!("\n=== QUBIT OPERATIONS COMPARISON ===");
-    compare_qubit_operations(hugr_ir, phir_ir);
-
-    // Compare function declarations
-    println!("\n=== FUNCTION DECLARATIONS COMPARISON ===");
-    compare_function_declarations(hugr_ir, phir_ir);
-}
-
-/// Extract main function from LLVM IR
-fn extract_main_function(llvm_ir: &str) -> Option<String> {
-    // Find the start of the main function
-    let start_marker = "define";
-    let lines: Vec<&str> = llvm_ir.lines().collect();
-
-    for (i, line) in lines.iter().enumerate() {
-        if line.contains(start_marker) && line.contains("@main") {
-            // Find the end of the function (closing brace)
-            for (j, end_line) in lines[i..].iter().enumerate() {
-                if end_line.trim() == "}" {
-                    let function_lines = &lines[i..=i + j];
-                    return Some(function_lines.join("\n"));
-                }
-            }
-        }
-    }
-    None
-}
-
-/// Compare qubit-related operations between both IRs
-fn compare_qubit_operations(hugr_ir: &str, phir_ir: &str) {
-    let hugr_ops = extract_quantum_operations(hugr_ir);
-    let phir_ops = extract_quantum_operations(phir_ir);
-
-    println!("HUGR-LLVM quantum operations: {}", hugr_ops.len());
-    for (i, op) in hugr_ops.iter().enumerate() {
-        println!("  {}: {}", i + 1, op);
-    }
-
-    println!("\nPHIR quantum operations: {}", phir_ops.len());
-    for (i, op) in phir_ops.iter().enumerate() {
-        println!("  {}: {}", i + 1, op);
-    }
-
-    // Look for key differences
-    println!("\n=== KEY DIFFERENCES ===");
-
-    let hugr_allocations = hugr_ops
-        .iter()
-        .filter(|op| op.contains("__quantum__rt__qubit_allocate"))
-        .count();
-    let phir_allocations = phir_ops
-        .iter()
-        .filter(|op| op.contains("__quantum__rt__qubit_allocate"))
-        .count();
-
-    println!("Qubit allocations - HUGR: {hugr_allocations}, PHIR: {phir_allocations}");
-
-    let hugr_gates = hugr_ops
-        .iter()
-        .filter(|op| op.contains("__quantum__qis__"))
-        .count();
-    let phir_gates = phir_ops
-        .iter()
-        .filter(|op| op.contains("__quantum__qis__"))
-        .count();
-
-    println!("Quantum gates - HUGR: {hugr_gates}, PHIR: {phir_gates}");
-}
-
-/// Extract quantum-related operations from LLVM IR
-fn extract_quantum_operations(llvm_ir: &str) -> Vec<String> {
-    llvm_ir
-        .lines()
-        .filter(|line| {
-            line.contains("__quantum__") && (line.contains("call") || line.contains("invoke"))
-        })
-        .map(|line| line.trim().to_string())
-        .collect()
-}
-
-/// Compare function declarations between both IRs
-fn compare_function_declarations(hugr_ir: &str, phir_ir: &str) {
-    let hugr_decls = extract_function_declarations(hugr_ir);
-    let phir_decls = extract_function_declarations(phir_ir);
-
-    println!("HUGR-LLVM function declarations: {}", hugr_decls.len());
-    println!("PHIR function declarations: {}", phir_decls.len());
-
-    // Find declarations that differ
-    let hugr_set: std::collections::HashSet<_> = hugr_decls.iter().collect();
-    let phir_set: std::collections::HashSet<_> = phir_decls.iter().collect();
-
-    let only_in_hugr: Vec<_> = hugr_set.difference(&phir_set).collect();
-    let only_in_phir: Vec<_> = phir_set.difference(&hugr_set).collect();
-
-    if !only_in_hugr.is_empty() {
-        println!("\nDeclarations only in HUGR-LLVM:");
-        for decl in &only_in_hugr {
-            println!("  {decl}");
-        }
-    }
-
-    if !only_in_phir.is_empty() {
-        println!("\nDeclarations only in PHIR:");
-        for decl in &only_in_phir {
-            println!("  {decl}");
-        }
-    }
-
-    if only_in_hugr.is_empty() && only_in_phir.is_empty() {
-        println!("All function declarations match");
-    }
-}
-
-/// Extract function declarations from LLVM IR
-fn extract_function_declarations(llvm_ir: &str) -> Vec<String> {
-    llvm_ir
-        .lines()
-        .filter(|line| line.trim().starts_with("declare"))
-        .map(|line| line.trim().to_string())
-        .collect()
-}
-
-fn analyze_qubit_usage(llvm_ir: &str) {
-    println!("\n=== Analyzing Qubit Usage in PHIR IR ===");
-
-    // Count qubit allocations and find actual calls
-    let alloc_count = llvm_ir.matches("__quantum__rt__qubit_allocate").count();
-    println!("Qubit allocations found: {alloc_count}");
-
-    // Show actual allocation calls in main function
-    println!("Actual qubit allocation calls:");
-    for (i, line) in llvm_ir.lines().enumerate() {
-        if line.contains("call i64 @__quantum__rt__qubit_allocate") {
-            println!("  Line {}: {}", i + 1, line.trim());
-        }
-    }
-
-    // Find all qubit-related operations
-    let mut qubit_ops = Vec::new();
-    for (i, line) in llvm_ir.lines().enumerate() {
-        if line.contains("__quantum__qis__") || line.contains("__quantum__rt__qubit") {
-            qubit_ops.push((i + 1, line.trim()));
-        }
-    }
-
-    println!("Quantum operations found: {}", qubit_ops.len());
-    for (line_num, line) in &qubit_ops {
-        println!("  Line {line_num}: {line}");
-    }
-
-    // Look for the main function definition
-    if let Some(main_start) = llvm_ir.find("define")
-        && let Some(main_section) = llvm_ir[main_start..].split("\n}").next()
-    {
-        println!("\nMain function analysis:");
-
-        // Count how many qubits are used in operations
-        let h_gates = main_section.matches("__quantum__qis__h__body").count();
-        let cnot_gates = main_section.matches("__quantum__qis__cnot__body").count();
-        let measurements = main_section.matches("__quantum__qis__m__body").count();
-
-        println!("  H gates: {h_gates}");
-        println!("  CNOT gates: {cnot_gates}");
-        println!("  Measurements: {measurements}");
-
-        // For Bell state, we expect:
-        // - 2 qubit allocations (for q0 and q1)
-        // - 1 H gate on q0
-        // - 1 CNOT gate (q0 -> q1)
-        // - 2 measurements (q0 and q1)
-
-        if alloc_count != 2 {
-            println!("   Expected 2 qubit allocations for Bell state, found {alloc_count}");
-        }
-        if h_gates != 1 {
-            println!("   Expected 1 H gate for Bell state, found {h_gates}");
-        }
-        if cnot_gates != 1 {
-            println!("   Expected 1 CNOT gate for Bell state, found {cnot_gates}");
-        }
-        if measurements != 2 {
-            println!("   Expected 2 measurements for Bell state, found {measurements}");
-        }
-    }
 }
 
 // Comprehensive test that runs all comparisons

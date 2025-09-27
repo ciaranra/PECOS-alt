@@ -141,7 +141,9 @@ def test_arithmetic_with_measurements() -> None:
 
         return measure(q3)
 
-    results = sim(quantum_measure_math).qubits(3).quantum(state_vector()).seed(42).run(20)
+    results = (
+        sim(quantum_measure_math).qubits(3).quantum(state_vector()).seed(42).run(20)
+    )
 
     assert "measurement_1" in results
     measurements = results["measurement_1"]

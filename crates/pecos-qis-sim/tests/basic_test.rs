@@ -2,8 +2,8 @@ use pecos_engines::{
     BiasedDepolarizingNoise, DepolarizingNoise, PassThroughNoise, sim_builder, sparse_stabilizer,
     state_vector,
 };
-use pecos_qis_sim::qis_engine;
 use pecos_programs::{HugrProgram, QisProgram};
+use pecos_qis_sim::qis_engine;
 
 #[test]
 fn test_qis_sim_builder_creation() {

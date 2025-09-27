@@ -45,8 +45,8 @@ use byte_message_bindings::{PyByteMessage, PyByteMessageBuilder};
 use coin_toss_bindings::RsCoinToss;
 use cpp_sparse_sim_bindings::CppSparseSim;
 use engine_builders::{
-    PyHugrProgram, PyPhirJsonProgram, PyQasmProgram, PyQisProgram,
-    PySeleneExecutableConfig, PySeleneExecutableEngine, PySeleneInterfaceProgram,
+    PyHugrProgram, PyPhirJsonProgram, PyQasmProgram, PyQisProgram, PySeleneExecutableConfig,
+    PySeleneExecutableEngine, PySeleneInterfaceProgram,
 };
 use pauli_prop_bindings::PyPauliProp;
 use pecos_rng_bindings::RngPcg;

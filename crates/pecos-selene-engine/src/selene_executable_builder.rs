@@ -6,7 +6,7 @@
 use crate::selene_executable_engine::SeleneExecutableEngine;
 use pecos_core::prelude::PecosError;
 use pecos_engines::ClassicalControlEngineBuilder;
-use pecos_programs::{HugrProgram, QisProgram, Program, SeleneInterfaceProgram};
+use pecos_programs::{HugrProgram, Program, QisProgram, SeleneInterfaceProgram};
 use std::path::PathBuf;
 
 /// Builder for creating `SeleneExecutableEngine` instances
@@ -191,21 +191,27 @@ impl ClassicalControlEngineBuilder for SeleneExecutableEngineBuilder {
                     return Err(PecosError::Input(
                         "Selene's HUGR compiler requires Python environment. \
                          Use .hugr_compiler(\"pecos\") for pure Rust compilation, \
-                         or compile HUGR to LLVM in Python before passing to Rust.".to_string()
+                         or compile HUGR to LLVM in Python before passing to Rust."
+                            .to_string(),
                     ));
                 }
-                "pecos" => {
-                    pecos_hugr_qis::compile_hugr_bytes_to_string(hugr_prog.bytes())
-                        .map_err(|e| PecosError::Input(format!("Failed to compile HUGR with PECOS compiler: {e}")))?
-                }
+                "pecos" => pecos_hugr_qis::compile_hugr_bytes_to_string(hugr_prog.bytes())
+                    .map_err(|e| {
+                        PecosError::Input(format!(
+                            "Failed to compile HUGR with PECOS compiler: {e}"
+                        ))
+                    })?,
                 other => {
-                    return Err(PecosError::Input(
-                        format!("Invalid HUGR compiler '{}'. Use 'selene' or 'pecos'.", other)
-                    ));
+                    return Err(PecosError::Input(format!(
+                        "Invalid HUGR compiler '{other}'. Use 'selene' or 'pecos'."
+                    )));
                 }
             };
 
-            log::info!("Successfully compiled HUGR to LLVM IR using {} compiler", self.hugr_compiler);
+            log::info!(
+                "Successfully compiled HUGR to LLVM IR using {} compiler",
+                self.hugr_compiler
+            );
             engine = engine.with_qis_program(QisProgram::from_ir(llvm_ir));
         } else if let Some(qis_prog) = self.qis_program {
             // QIS program

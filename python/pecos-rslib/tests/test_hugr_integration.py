@@ -150,6 +150,7 @@ def test_convenience_functions() -> None:
 
         # Test with output path - should still raise error for invalid HUGR
         import os
+
         temp_dir = tempfile.mkdtemp()
         temp_qir_path = os.path.join(temp_dir, "output.ll")
 
@@ -161,6 +162,7 @@ def test_convenience_functions() -> None:
             assert not Path(temp_qir_path).exists()
         finally:
             import shutil
+
             shutil.rmtree(temp_dir, ignore_errors=True)
 
         # Test with valid HUGR (if Guppy is available)
@@ -177,7 +179,7 @@ def test_convenience_functions() -> None:
             # Compile to HUGR
             package = simple_circuit.compile()
             hugr_json = package.to_json()
-            valid_hugr = hugr_json.encode('utf-8')
+            valid_hugr = hugr_json.encode("utf-8")
 
             # Should successfully compile valid HUGR
             result = compile_hugr_to_llvm_rust(valid_hugr)

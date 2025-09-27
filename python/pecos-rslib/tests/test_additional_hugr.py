@@ -18,8 +18,9 @@ def test_hugr_compilation_with_support() -> None:
 
         # The error should mention HUGR parsing
         error_msg = str(exc_info.value).lower()
-        assert "failed to read hugr" in error_msg or "empty hugr" in error_msg, \
-            f"Expected error about HUGR parsing, got: {exc_info.value}"
+        assert (
+            "failed to read hugr" in error_msg or "empty hugr" in error_msg
+        ), f"Expected error about HUGR parsing, got: {exc_info.value}"
 
     except ImportError:
         pytest.skip("Rust HUGR backend not available")
@@ -69,8 +70,9 @@ def test_hugr_version_compatibility() -> None:
 
         error_msg = str(exc_info.value).lower()
         # Check that we got a reasonable error
-        assert "failed to read hugr" in error_msg or "empty hugr" in error_msg, \
-            f"Expected HUGR parsing error, got: {exc_info.value}"
+        assert (
+            "failed to read hugr" in error_msg or "empty hugr" in error_msg
+        ), f"Expected HUGR parsing error, got: {exc_info.value}"
 
     except ImportError:
         pytest.skip("Rust HUGR backend not available")
@@ -142,8 +144,9 @@ def test_hugr_arithmetic_extension_handling() -> None:
 
         error_msg = str(exc_info.value).lower()
         # Just check we get a HUGR-related error
-        assert "failed to read hugr" in error_msg or "empty hugr" in error_msg, \
-            f"Expected HUGR-related error, got: {exc_info.value}"
+        assert (
+            "failed to read hugr" in error_msg or "empty hugr" in error_msg
+        ), f"Expected HUGR-related error, got: {exc_info.value}"
 
     except ImportError:
         pytest.skip("Rust HUGR backend not available")

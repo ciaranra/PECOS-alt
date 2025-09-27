@@ -3,8 +3,8 @@
 // use pecos_engines::engine_system::MonteCarloEngine;
 // use pecos_engines::noise::DepolarizingNoiseModel;
 use pecos_engines::{DepolarizingNoise, sim_builder};
-use pecos_qis_sim::qis_engine;
 use pecos_programs::QisProgram;
+use pecos_qis_sim::qis_engine;
 use std::collections::HashMap;
 use std::path::PathBuf;
 

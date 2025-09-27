@@ -19,9 +19,7 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 #[cfg(feature = "hugr")]
-use tket::hugr::{
-    Hugr, HugrView, Node, NodeIndex, ops::OpType, PortIndex,
-};
+use tket::hugr::{Hugr, HugrView, Node, NodeIndex, ops::OpType};
 
 /// Parse HUGR bytes directly into PHIR representation
 ///
@@ -34,14 +32,12 @@ use tket::hugr::{
 /// - HUGR to PHIR conversion fails
 pub fn parse_hugr_bytes_to_phir(hugr_bytes: &[u8]) -> Result<ModuleOp> {
     use tket::hugr::extension::{ExtensionRegistry, prelude};
-    use tket::hugr::std_extensions::{
-        arithmetic::{float_ops, float_types, int_ops, int_types, conversions},
-        collections,
-        logic,
-        ptr,
-    };
     use tket::hugr::package::Package;
-    use tket_qsystem::extension::{futures, qsystem, result, gpu, wasm};
+    use tket::hugr::std_extensions::{
+        arithmetic::{conversions, float_ops, float_types, int_ops, int_types},
+        collections, logic, ptr,
+    };
+    use tket_qsystem::extension::{futures, gpu, qsystem, result, wasm};
 
     // Create extension registry with all required extensions including tket-specific ones
     // This matches what pecos-hugr-qis's REGISTRY contains
@@ -83,23 +79,26 @@ pub fn parse_hugr_bytes_to_phir(hugr_bytes: &[u8]) -> Result<ModuleOp> {
 
         // Load using the envelope
         let mut cursor = std::io::Cursor::new(&envelope);
-        match Hugr::load(&mut cursor, Some(&extensions)) {
-            Ok(h) => h,
-            Err(_) => {
-                // If direct HUGR loading fails, try Package loading
-                let mut cursor = std::io::Cursor::new(&envelope);
-                match Package::load(&mut cursor, Some(&extensions)) {
-                    Ok(package) => {
-                        // Extract the first HUGR from the package
-                        if let Some(hugr) = package.modules.iter().next() {
-                            hugr.clone()
-                        } else {
-                            return Err(PhirError::internal("Package contains no HUGR modules".to_string()));
-                        }
+        if let Ok(h) = Hugr::load(&mut cursor, Some(&extensions)) {
+            h
+        } else {
+            // If direct HUGR loading fails, try Package loading
+            let mut cursor = std::io::Cursor::new(&envelope);
+            match Package::load(&mut cursor, Some(&extensions)) {
+                Ok(package) => {
+                    // Extract the first HUGR from the package
+                    if let Some(hugr) = package.modules.first() {
+                        hugr.clone()
+                    } else {
+                        return Err(PhirError::internal(
+                            "Package contains no HUGR modules".to_string(),
+                        ));
                     }
-                    Err(e) => {
-                        return Err(PhirError::internal(format!("Failed to load JSON HUGR as envelope: {}", e)));
-                    }
+                }
+                Err(e) => {
+                    return Err(PhirError::internal(format!(
+                        "Failed to load JSON HUGR as envelope: {e}"
+                    )));
                 }
             }
         }
@@ -108,7 +107,7 @@ pub fn parse_hugr_bytes_to_phir(hugr_bytes: &[u8]) -> Result<ModuleOp> {
         // pecos-hugr-qis only uses Hugr::load for binary envelopes, not Package::load
         let mut cursor = std::io::Cursor::new(hugr_bytes);
         Hugr::load(&mut cursor, Some(&extensions))
-            .map_err(|e| PhirError::internal(format!("Failed to load HUGR envelope: {}", e)))?
+            .map_err(|e| PhirError::internal(format!("Failed to load HUGR envelope: {e}")))?
     };
 
     // Convert HUGR to PHIR using flat approach
@@ -214,7 +213,9 @@ fn convert_function_flat(
     // Replace the default entry block with our populated one
     // FuncOp::new() creates a function with one region containing one empty entry block
     if func.body.is_empty() {
-        func.body.push(crate::phir::Region::new(crate::region_kinds::RegionKind::SSACFG));
+        func.body.push(crate::phir::Region::new(
+            crate::region_kinds::RegionKind::SSACFG,
+        ));
         func.body[0].blocks.push(entry_block);
     } else if func.body[0].blocks.is_empty() {
         func.body[0].blocks.push(entry_block);
@@ -348,7 +349,7 @@ fn convert_extension_op(
 ) -> Option<Instruction> {
     // Use debug format to extract operation info
     // This is a workaround since the ExtensionOp API isn't clear
-    let op_string = format!("{:?}", ext_op);
+    let op_string = format!("{ext_op:?}");
 
     // Generate operations based on patterns in the debug string
     if op_string.contains("QAlloc") {
@@ -362,7 +363,7 @@ fn convert_extension_op(
             vec![result],
             vec![Type::Qubit],
         ))
-    } else if op_string.contains("H") && op_string.contains("quantum") {
+    } else if op_string.contains('H') && op_string.contains("quantum") {
         // Hadamard gate
         let qubit = SSAValue::new(0); // Placeholder input
         let result = SSAValue::new(*next_ssa_id);
@@ -493,7 +494,9 @@ fn parse_simplified_hugr_json(json: &str) -> Result<ModuleOp> {
         block.terminator = Some(Terminator::Return { values: vec![] });
         // Add the block to the function's body region
         if func.body.is_empty() {
-            func.body.push(crate::phir::Region::new(crate::region_kinds::RegionKind::SSACFG));
+            func.body.push(crate::phir::Region::new(
+                crate::region_kinds::RegionKind::SSACFG,
+            ));
         }
         func.body[0].blocks.push(block);
         module.add_function(func);

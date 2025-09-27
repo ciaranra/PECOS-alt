@@ -3,12 +3,10 @@
 //! This module provides Python-friendly wrappers around the Rust shot result types,
 //! allowing direct access to the data and providing convenient conversion methods.
 
-
 use pecos_engines::shot_results::{ShotMap, ShotVec};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList};
-
 
 /// Python wrapper for `ShotVec`
 #[pyclass(name = "ShotVec", module = "pecos_rslib._pecos_rslib")]

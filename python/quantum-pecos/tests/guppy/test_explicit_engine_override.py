@@ -3,7 +3,7 @@
 import pytest
 from guppylang import guppy
 from guppylang.std.quantum import cx, h, measure, qubit
-from pecos_rslib import qis_engine, qasm_engine, selene_engine
+from pecos_rslib import qasm_engine, qis_engine, selene_engine
 from pecos_rslib.sim_wrapper import sim
 
 
@@ -89,7 +89,7 @@ measure q[1] -> c[1];"""
 
 def test_invalid_engine_override_rejected() -> None:
     """Test that invalid engine overrides are properly rejected."""
-    from pecos_rslib import QisProgram, QasmProgram
+    from pecos_rslib import QasmProgram, QisProgram
 
     # QASM program should reject non-QASM engines
     qasm_program = QasmProgram.from_string("OPENQASM 3.0; qubit q;")

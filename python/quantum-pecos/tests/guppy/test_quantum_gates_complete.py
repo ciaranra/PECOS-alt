@@ -1,17 +1,35 @@
 """Test suite for complete quantum gate coverage in PECOS compiler."""
 
-import pytest
-from guppylang import guppy
-from guppylang.std.quantum import qubit, h, x, y, z, s, t, sdg, tdg
-from guppylang.std.quantum import rx, ry, rz, cx, cy, cz, ch, measure, pi
 import pecos_rslib
+from guppylang import guppy
+from guppylang.std.quantum import (
+    ch,
+    cx,
+    cy,
+    cz,
+    h,
+    measure,
+    pi,
+    qubit,
+    rx,
+    ry,
+    rz,
+    s,
+    sdg,
+    t,
+    tdg,
+    x,
+    y,
+    z,
+)
 
 
 class TestBasicGates:
     """Test basic single-qubit gates."""
 
-    def test_pauli_gates(self):
+    def test_pauli_gates(self) -> None:
         """Test Pauli gates X, Y, Z."""
+
         @guppy
         def test_x() -> bool:
             q = qubit()
@@ -36,8 +54,9 @@ class TestBasicGates:
             assert "tail call" in output
             assert "@___r" in output  # Should have rotation calls
 
-    def test_phase_gates(self):
+    def test_phase_gates(self) -> None:
         """Test phase gates S and T."""
+
         @guppy
         def test_s() -> bool:
             q = qubit()
@@ -56,8 +75,9 @@ class TestBasicGates:
             assert "___rz" in output
             assert "tail call" in output
 
-    def test_hadamard(self):
+    def test_hadamard(self) -> None:
         """Test Hadamard gate."""
+
         @guppy
         def test_h() -> bool:
             q = qubit()
@@ -73,8 +93,9 @@ class TestBasicGates:
 class TestAdjointGates:
     """Test adjoint gates."""
 
-    def test_adjoint_gates(self):
+    def test_adjoint_gates(self) -> None:
         """Test S† and T† gates."""
+
         @guppy
         def test_sdg_gate() -> bool:
             q = qubit()
@@ -100,8 +121,9 @@ class TestAdjointGates:
 class TestRotationGates:
     """Test parameterized rotation gates."""
 
-    def test_rx_gate(self):
+    def test_rx_gate(self) -> None:
         """Test Rx gate with angle."""
+
         @guppy
         def test_rx_pi4() -> bool:
             q = qubit()
@@ -113,8 +135,9 @@ class TestRotationGates:
         assert "___rxy" in output
         assert "double 0.0" in output  # First angle should be 0 for Rx
 
-    def test_ry_gate(self):
+    def test_ry_gate(self) -> None:
         """Test Ry gate with angle."""
+
         @guppy
         def test_ry_pi2() -> bool:
             q = qubit()
@@ -126,8 +149,9 @@ class TestRotationGates:
         assert "___rxy" in output
         # For Ry, second angle should be 0
 
-    def test_rz_gate(self):
+    def test_rz_gate(self) -> None:
         """Test Rz gate with angle."""
+
         @guppy
         def test_rz_pi() -> bool:
             q = qubit()
@@ -144,8 +168,9 @@ class TestRotationGates:
 class TestControlGates:
     """Test two-qubit control gates."""
 
-    def test_cx_gate(self):
+    def test_cx_gate(self) -> None:
         """Test CNOT/CX gate."""
+
         @guppy
         def test_cx() -> tuple[bool, bool]:
             q0 = qubit()
@@ -160,8 +185,9 @@ class TestControlGates:
         assert "___rzz" in output
         assert "___rz" in output
 
-    def test_cy_gate(self):
+    def test_cy_gate(self) -> None:
         """Test CY gate."""
+
         @guppy
         def test_cy() -> tuple[bool, bool]:
             q0 = qubit()
@@ -178,8 +204,9 @@ class TestControlGates:
         # Should have multiple operations for CY decomposition
         assert output.count("tail call void @___") >= 7
 
-    def test_cz_gate(self):
+    def test_cz_gate(self) -> None:
         """Test CZ gate."""
+
         @guppy
         def test_cz() -> tuple[bool, bool]:
             q0 = qubit()
@@ -193,8 +220,9 @@ class TestControlGates:
         assert "___rzz" in output
         assert "___rz" in output
 
-    def test_ch_gate(self):
+    def test_ch_gate(self) -> None:
         """Test CH gate."""
+
         @guppy
         def test_ch() -> tuple[bool, bool]:
             q0 = qubit()
@@ -213,8 +241,9 @@ class TestControlGates:
 class TestComplexCircuits:
     """Test more complex quantum circuits."""
 
-    def test_bell_state(self):
+    def test_bell_state(self) -> None:
         """Test Bell state preparation."""
+
         @guppy
         def bell() -> tuple[bool, bool]:
             q0 = qubit()
@@ -230,8 +259,9 @@ class TestComplexCircuits:
         assert "___lazy_measure" in output
         assert "___qfree" in output
 
-    def test_ghz_state(self):
+    def test_ghz_state(self) -> None:
         """Test GHZ state preparation."""
+
         @guppy
         def ghz() -> tuple[bool, bool, bool]:
             q0 = qubit()
@@ -247,8 +277,9 @@ class TestComplexCircuits:
         assert "___rzz" in output  # Has CX gates
         assert "___lazy_measure" in output  # Has measurements
 
-    def test_mixed_gates(self):
+    def test_mixed_gates(self) -> None:
         """Test circuit with mixed gate types."""
+
         @guppy
         def mixed() -> tuple[bool, bool]:
             q0 = qubit()
@@ -270,8 +301,9 @@ class TestComplexCircuits:
 class TestCompilerCompatibility:
     """Test compatibility with Selene compiler."""
 
-    def test_basic_gates_match_selene(self):
+    def test_basic_gates_match_selene(self) -> None:
         """Verify basic gates produce same number of operations as Selene."""
+
         @guppy
         def simple() -> bool:
             q = qubit()
@@ -289,8 +321,9 @@ class TestCompilerCompatibility:
         # Should have same number of quantum operations
         assert abs(pecos_ops - selene_ops) <= 1  # Allow for minor differences
 
-    def test_declarations_optimized(self):
+    def test_declarations_optimized(self) -> None:
         """Verify only used operations are declared."""
+
         @guppy
         def only_h() -> bool:
             q = qubit()

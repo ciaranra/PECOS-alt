@@ -59,11 +59,13 @@ pub struct HugrCompiler {
 
 impl HugrCompiler {
     /// Create a new compiler with default configuration
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Create a new compiler with specified configuration
+    #[must_use]
     pub fn with_config(config: HugrCompilerConfig) -> Self {
         Self { config }
     }
@@ -74,10 +76,14 @@ impl HugrCompiler {
     }
 
     /// Compile HUGR bytes to file
-    pub fn compile_hugr_bytes(&self, hugr_bytes: &[u8], output_path: &Path) -> Result<(), PecosError> {
+    pub fn compile_hugr_bytes(
+        &self,
+        hugr_bytes: &[u8],
+        output_path: &Path,
+    ) -> Result<(), PecosError> {
         let llvm_ir = compile_hugr_bytes_to_string(hugr_bytes)?;
         std::fs::write(output_path, llvm_ir)
-            .map_err(|e| PecosError::Generic(format!("Failed to write LLVM IR: {}", e)))?;
+            .map_err(|e| PecosError::Generic(format!("Failed to write LLVM IR: {e}")))?;
         Ok(())
     }
 
@@ -104,7 +110,7 @@ pub fn compile_hugr_to_llvm<P: AsRef<Path>>(
 ) -> Result<PathBuf, PecosError> {
     // Read the HUGR file
     let hugr_bytes = std::fs::read(&hugr_path)
-        .map_err(|e| PecosError::Generic(format!("Failed to read HUGR file: {}", e)))?;
+        .map_err(|e| PecosError::Generic(format!("Failed to read HUGR file: {e}")))?;
 
     // Compile to LLVM IR
     let llvm_ir = compile_hugr_bytes_to_string(&hugr_bytes)?;
@@ -118,7 +124,7 @@ pub fn compile_hugr_to_llvm<P: AsRef<Path>>(
 
     // Write to file
     std::fs::write(&output, llvm_ir)
-        .map_err(|e| PecosError::Generic(format!("Failed to write LLVM IR: {}", e)))?;
+        .map_err(|e| PecosError::Generic(format!("Failed to write LLVM IR: {e}")))?;
 
     Ok(output)
 }

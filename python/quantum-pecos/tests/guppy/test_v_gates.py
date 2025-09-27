@@ -1,16 +1,16 @@
 """Test suite for V and Vdg gates."""
 
-import pytest
-from guppylang import guppy
-from guppylang.std.quantum import qubit, h, v, vdg, measure
 import pecos_rslib
+from guppylang import guppy
+from guppylang.std.quantum import h, measure, qubit, v, vdg
 
 
 class TestVGates:
     """Test V and Vdg gates."""
 
-    def test_v_gate(self):
+    def test_v_gate(self) -> None:
         """Test V gate (sqrt(X))."""
+
         @guppy
         def test_v() -> bool:
             q = qubit()
@@ -26,8 +26,9 @@ class TestVGates:
         assert "double 0.0" in output  # First angle should be 0
         assert "0x3FF921FB54442D18" in output  # π/2 in hex
 
-    def test_vdg_gate(self):
+    def test_vdg_gate(self) -> None:
         """Test Vdg gate (V†, sqrt(X)†)."""
+
         @guppy
         def test_vdg() -> bool:
             q = qubit()
@@ -43,8 +44,9 @@ class TestVGates:
         assert "double 0.0" in output  # First angle should be 0
         assert "0xBFF921FB54442D18" in output  # -π/2 in hex
 
-    def test_v_vdg_sequence(self):
+    def test_v_vdg_sequence(self) -> None:
         """Test V followed by Vdg (should cancel)."""
+
         @guppy
         def test_v_vdg() -> bool:
             q = qubit()
@@ -59,8 +61,9 @@ class TestVGates:
         # Should have two RXY calls (V and Vdg)
         assert output.count("___rxy") >= 2
 
-    def test_double_v(self):
+    def test_double_v(self) -> None:
         """Test V applied twice (equals X)."""
+
         @guppy
         def test_double_v() -> bool:
             q = qubit()
@@ -76,8 +79,9 @@ class TestVGates:
         assert rxy_calls == 2, f"Expected 2 RXY calls, got {rxy_calls}"
         assert output.count("double 0.0") >= 2
 
-    def test_compiler_compatibility_v_gates(self):
+    def test_compiler_compatibility_v_gates(self) -> None:
         """Verify V gates compile correctly."""
+
         @guppy
         def simple_v() -> bool:
             q = qubit()

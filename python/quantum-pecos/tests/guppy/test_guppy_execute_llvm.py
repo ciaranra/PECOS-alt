@@ -69,19 +69,25 @@ class TestGuppyExecuteLLVM:
 
         # Check for Selene-specific patterns (default compiler)
         # Selene uses: @qmain, ___qalloc, ___lazy_measure, ___qfree
-        has_selene_patterns = any(pattern in llvm_ir for pattern in [
-            "___qalloc",      # Selene qubit allocation
-            "___lazy_measure", # Selene measurement
-            "___qfree",       # Selene qubit deallocation
-            "@qmain"          # Selene's main function
-        ])
+        has_selene_patterns = any(
+            pattern in llvm_ir
+            for pattern in [
+                "___qalloc",  # Selene qubit allocation
+                "___lazy_measure",  # Selene measurement
+                "___qfree",  # Selene qubit deallocation
+                "@qmain",  # Selene's main function
+            ]
+        )
 
         assert has_selene_patterns, (
             "LLVM IR should contain Selene QIS patterns (___qalloc, ___lazy_measure, @qmain). "
             "Default compiler should be Selene."
         )
 
-    def test_compile_hugr_with_explicit_compiler(self, simple_quantum_function: object) -> None:
+    def test_compile_hugr_with_explicit_compiler(
+        self,
+        simple_quantum_function: object,
+    ) -> None:
         """Test explicit compiler selection for HUGR to LLVM compilation."""
         try:
             from pecos import execute_llvm
@@ -94,10 +100,13 @@ class TestGuppyExecuteLLVM:
         # Test with explicit Selene compiler (expects binary format)
         try:
             selene_bytes = compiled.to_bytes()
-            selene_ir = execute_llvm.compile_module_to_string(selene_bytes, compiler="selene")
-            assert "___qalloc" in selene_ir or "@qmain" in selene_ir, (
-                "Selene compiler should produce QIS patterns"
+            selene_ir = execute_llvm.compile_module_to_string(
+                selene_bytes,
+                compiler="selene",
             )
+            assert (
+                "___qalloc" in selene_ir or "@qmain" in selene_ir
+            ), "Selene compiler should produce QIS patterns"
         except RuntimeError as e:
             if "not available" in str(e) or "envelope format" in str(e):
                 pytest.skip(f"Selene compiler issue: {e}")
@@ -109,9 +118,9 @@ class TestGuppyExecuteLLVM:
             rust_bytes = compiled.to_bytes()
             rust_ir = execute_llvm.compile_module_to_string(rust_bytes, compiler="rust")
             # PECOS compiler now also produces Selene QIS patterns
-            assert "___qalloc" in rust_ir or "@qmain" in rust_ir, (
-                "PECOS compiler should produce Selene QIS patterns"
-            )
+            assert (
+                "___qalloc" in rust_ir or "@qmain" in rust_ir
+            ), "PECOS compiler should produce Selene QIS patterns"
         except RuntimeError as e:
             if "not available" in str(e):
                 pytest.skip(f"PECOS compiler not available: {e}")
@@ -139,8 +148,12 @@ class TestGuppyExecuteLLVM:
             assert qir_file is not None, "Compilation should produce a QIR file path"
         except Exception as e:
             # This is expected to fail in some environments
-            if ("HUGR version" in str(e) or "not available" in str(e) or
-                "envelope format" in str(e) or "Selene's compiler expects" in str(e)):
+            if (
+                "HUGR version" in str(e)
+                or "not available" in str(e)
+                or "envelope format" in str(e)
+                or "Selene's compiler expects" in str(e)
+            ):
                 pytest.skip(f"Known compatibility issue: {e}")
             pytest.fail(f"Function compilation failed unexpectedly: {e}")
 

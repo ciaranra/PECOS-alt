@@ -136,6 +136,7 @@ class TestSeleneBuildProcess:
 
         This test verifies the HUGR → QIS transformation happens correctly.
         """
+
         # Create a Guppy program and compile to HUGR
         @guppy
         def test_qis_generation() -> bool:
@@ -163,15 +164,17 @@ class TestSeleneBuildProcess:
 
                 # Check if LLVM/QIS files were generated during build
                 # Selene may create intermediate .ll or .bc files
-                llvm_files = list(build_dir.glob("**/*.ll"))
-                bc_files = list(build_dir.glob("**/*.bc"))
+                list(build_dir.glob("**/*.ll"))
+                list(build_dir.glob("**/*.bc"))
 
                 # Log what was created (for debugging)
                 all_files = list(build_dir.rglob("*"))
                 file_types = {f.suffix for f in all_files if f.is_file()}
 
                 # The build process should create some artifacts
-                assert len(all_files) > 1, f"Build created files with extensions: {file_types}"
+                assert (
+                    len(all_files) > 1
+                ), f"Build created files with extensions: {file_types}"
 
                 # Note: The exact intermediate files depend on Selene's implementation
                 # The key point is that HUGR → QIS/LLVM happens internally
@@ -200,7 +203,8 @@ class TestSeleneBuildProcess:
             pytest.skip(f"QisProgram or sim API not available: {e}")
 
         # Create Selene QIS format LLVM IR - use textwrap to avoid indentation issues
-        llvm_ir = textwrap.dedent("""
+        llvm_ir = textwrap.dedent(
+            """
         ; ModuleID = 'quantum_test'
         source_filename = "quantum_test"
 
@@ -235,34 +239,35 @@ class TestSeleneBuildProcess:
         }
 
         attributes #0 = { "EntryPoint" }
-        """).strip()
+        """,
+        ).strip()
 
         try:
             # Create QisProgram from the QIS LLVM IR string
             program = QisProgram.from_string(llvm_ir)
 
             # Run using sim() API
-            results = (
-                sim(program)
-                .qubits(1)
-                .quantum(state_vector())
-                .seed(42)
-                .run(100)
-            )
+            results = sim(program).qubits(1).quantum(state_vector()).seed(42).run(100)
 
             # Verify results
             assert isinstance(results, dict), "Results should be a dictionary"
 
             # QIS returns results with key 'result'
-            assert "result" in results, f"Results should contain 'result' key, got keys: {results.keys()}"
+            assert (
+                "result" in results
+            ), f"Results should contain 'result' key, got keys: {results.keys()}"
             measurements = results["result"]
             assert len(measurements) == 100, "Should have 100 shots"
 
             # H gate should give roughly 50/50 distribution
             ones = sum(measurements)
             zeros = 100 - ones
-            assert 30 < ones < 70, f"Should be roughly 50/50 distribution, got {ones} ones"
-            assert 30 < zeros < 70, f"Should be roughly 50/50 distribution, got {zeros} zeros"
+            assert (
+                30 < ones < 70
+            ), f"Should be roughly 50/50 distribution, got {ones} ones"
+            assert (
+                30 < zeros < 70
+            ), f"Should be roughly 50/50 distribution, got {zeros} zeros"
 
         except (RuntimeError, ValueError, NotImplementedError) as e:
             # Known LLVM runtime issues
@@ -293,7 +298,8 @@ class TestSeleneBuildProcess:
             pytest.skip(f"QisProgram or sim API not available: {e}")
 
         # Create QIS with extensive comments
-        llvm_ir_with_comments = textwrap.dedent("""
+        llvm_ir_with_comments = textwrap.dedent(
+            """
         ; ModuleID = 'test_with_comments'
         ; This test verifies that comments don't break QIS parsing
         source_filename = "test_comments"
@@ -327,26 +333,23 @@ class TestSeleneBuildProcess:
 
         ; Attributes section
         attributes #0 = { "EntryPoint" } ; Mark as entry point
-        """).strip()
+        """,
+        ).strip()
 
         # Create and run program
         program = QisProgram.from_string(llvm_ir_with_comments)
-        results = (
-            sim(program)
-            .qubits(1)
-            .quantum(state_vector())
-            .seed(42)
-            .run(100)
-        )
+        results = sim(program).qubits(1).quantum(state_vector()).seed(42).run(100)
 
         # Verify results
         assert isinstance(results, dict), "Results should be a dictionary"
-        assert "result" in results, f"Results should contain 'result' key"
+        assert "result" in results, "Results should contain 'result' key"
         measurements = results["result"]
         assert len(measurements) == 100, "Should have 100 shots"
 
         # Since we're measuring |0⟩ directly, all results should be 0
-        assert all(m == 0 for m in measurements), "Direct measurement of |0⟩ should always give 0"
+        assert all(
+            m == 0 for m in measurements
+        ), "Direct measurement of |0⟩ should always give 0"
 
     def test_qis_edge_cases(self) -> None:
         """Test QIS programs with edge cases like empty lines, multiple spaces, etc."""
@@ -358,7 +361,8 @@ class TestSeleneBuildProcess:
             pytest.skip(f"QisProgram or sim API not available: {e}")
 
         # QIS with various formatting edge cases
-        llvm_ir_edge_cases = textwrap.dedent("""
+        llvm_ir_edge_cases = textwrap.dedent(
+            """
         ; ModuleID = 'edge_cases'
 
 
@@ -388,17 +392,12 @@ class TestSeleneBuildProcess:
         attributes #0 = { "EntryPoint" }
 
         ; Trailing comment
-        """).strip()
+        """,
+        ).strip()
 
         # Should handle edge cases gracefully
         program = QisProgram.from_string(llvm_ir_edge_cases)
-        results = (
-            sim(program)
-            .qubits(1)
-            .quantum(state_vector())
-            .seed(42)
-            .run(50)
-        )
+        results = sim(program).qubits(1).quantum(state_vector()).seed(42).run(50)
 
         assert "result" in results, "Should have results even with edge case formatting"
         assert len(results["result"]) == 50, "Should complete all shots"
@@ -418,7 +417,8 @@ class TestSeleneBuildProcess:
             pytest.skip(f"Required imports not available: {e}")
 
         # Same QIS program for both
-        qis_ir = textwrap.dedent("""
+        qis_ir = textwrap.dedent(
+            """
         ; Test equivalence
         declare i64 @___qalloc() local_unnamed_addr
         declare void @___qfree(i64) local_unnamed_addr
@@ -440,25 +440,18 @@ class TestSeleneBuildProcess:
         }
 
         attributes #0 = { "EntryPoint" }
-        """).strip()
+        """,
+        ).strip()
 
         # Test with QisProgram - first run
         qis_prog = QisProgram.from_string(qis_ir)
         qis_results_1 = (
-            sim(qis_prog)
-            .qubits(1)
-            .quantum(state_vector())
-            .seed(42)
-            .run(100)
+            sim(qis_prog).qubits(1).quantum(state_vector()).seed(42).run(100)
         )
 
         # Test with QisProgram - second run with same seed
         qis_results_2 = (
-            sim(qis_prog)
-            .qubits(1)
-            .quantum(state_vector())
-            .seed(42)
-            .run(100)
+            sim(qis_prog).qubits(1).quantum(state_vector()).seed(42).run(100)
         )
 
         # Both runs should produce identical results
@@ -466,12 +459,17 @@ class TestSeleneBuildProcess:
         assert "result" in qis_results_2, "QisProgram should produce results"
 
         # With same seed, results should be identical
-        assert qis_results_1["result"] == qis_results_2["result"], \
-            "QisProgram should produce identical results with same seed"
+        assert (
+            qis_results_1["result"] == qis_results_2["result"]
+        ), "QisProgram should produce identical results with same seed"
 
         # X gate should give |1⟩
-        assert all(m == 1 for m in qis_results_1["result"]), "X gate should always measure 1"
-        assert all(m == 1 for m in qis_results_2["result"]), "X gate should always measure 1"
+        assert all(
+            m == 1 for m in qis_results_1["result"]
+        ), "X gate should always measure 1"
+        assert all(
+            m == 1 for m in qis_results_2["result"]
+        ), "X gate should always measure 1"
 
     def test_selene_instance_api(self) -> None:
         """Test the SeleneInstance API and available methods."""

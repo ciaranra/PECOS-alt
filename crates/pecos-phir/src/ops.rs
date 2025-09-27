@@ -260,6 +260,7 @@ pub struct CustomOp {
 
 impl CustomOp {
     /// Create a new custom operation
+    #[must_use]
     pub fn new(
         dialect: &str,
         name: &str,
@@ -275,16 +276,19 @@ impl CustomOp {
     }
 
     /// Get the dialect namespace
+    #[must_use]
     pub fn dialect(&self) -> &str {
         &self.dialect
     }
 
     /// Get the operation name
+    #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
 
     /// Get the operands
+    #[must_use]
     pub fn operands(&self) -> &[crate::phir::SSAValue] {
         &self.operands
     }

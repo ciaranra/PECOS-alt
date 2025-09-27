@@ -6,13 +6,11 @@
 // PyO3 convention is to return PyResult even for infallible operations
 #![allow(clippy::unnecessary_wraps)]
 
-
 use pecos_engines::quantum_engine_builder::{
     SparseStabilizerEngineBuilder as RustSparseStabilizerEngineBuilder,
     StateVectorEngineBuilder as RustStateVectorEngineBuilder,
     sparse_stabilizer as rust_sparse_stabilizer, state_vector as rust_state_vector,
 };
-use pecos_qis_sim::{QisEngineBuilder as RustQisEngineBuilder, qis_engine as rust_qis_engine};
 use pecos_phir_json::{
     PhirJsonEngineBuilder as RustPhirJsonEngineBuilder, phir_json_engine as rust_phir_json_engine,
 };
@@ -20,6 +18,7 @@ use pecos_programs::{
     HugrProgram, PhirJsonProgram, QasmProgram, QisProgram, SeleneInterfaceProgram,
 };
 use pecos_qasm::{QasmEngineBuilder as RustQasmEngineBuilder, qasm_engine as rust_qasm_engine};
+use pecos_qis_sim::{QisEngineBuilder as RustQisEngineBuilder, qis_engine as rust_qis_engine};
 use pecos_selene_engine::{
     SeleneExecutableEngineBuilder as RustSeleneEngineBuilder,
     selene_executable as rust_selene_executable,
@@ -36,7 +35,6 @@ use crate::sim::{PySimBuilder, SimBuilderInner};
 
 // Noise builder wrappers
 use pecos_engines::noise::{
-
     BiasedDepolarizingNoiseModelBuilder, DepolarizingNoiseModelBuilder, GeneralNoiseModelBuilder,
 };
 
@@ -393,7 +391,6 @@ impl PyQasmProgram {
         }
     }
 }
-
 
 #[pyclass(name = "QisProgram")]
 #[derive(Clone)]

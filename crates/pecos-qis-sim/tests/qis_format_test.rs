@@ -1,8 +1,8 @@
 //! Test the new consistent LLVM format support
 
 use pecos_engines::{PassThroughNoise, sim_builder};
-use pecos_qis_sim::qis_engine;
 use pecos_programs::QisProgram;
+use pecos_qis_sim::qis_engine;
 use std::fs;
 use tempfile::TempDir;
 

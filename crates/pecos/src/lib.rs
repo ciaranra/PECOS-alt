@@ -94,12 +94,12 @@ pub use pecos_engines::{
     DepolarizingNoise, GeneralNoiseModelBuilder, PassThroughNoiseModel, SimInput, sim_builder,
     sparse_stabilizer, state_vector,
 };
-pub use pecos_qis_runtime::QisEngineConfig;
 pub use pecos_qasm::run_qasm;
+pub use pecos_qis_runtime::QisEngineConfig;
 pub use unified_sim::{ProgrammedSimBuilder, SimBuilderExt, sim};
 
 // Re-export program types from pecos-programs
-pub use pecos_programs::{HugrProgram, QisProgram, Program, QasmProgram};
+pub use pecos_programs::{HugrProgram, Program, QasmProgram, QisProgram};
 
 // Re-export engine builders from individual crates
 #[cfg(feature = "qasm")]
@@ -143,8 +143,7 @@ pub fn setup_llvm_engine(
     log::debug!("Setting up LLVM engine for: {}", llvm_ir_path.display());
 
     // Read the LLVM IR to detect number of qubits
-    let llvm_ir = std::fs::read_to_string(llvm_ir_path)
-        .map_err(|e| PecosError::IO(e))?;
+    let llvm_ir = std::fs::read_to_string(llvm_ir_path).map_err(PecosError::IO)?;
 
     // Check for qubit usage - both Selene style (___qalloc) and QIR style (direct indices)
     let selene_qubits = llvm_ir.matches("___qalloc").count();
@@ -152,12 +151,12 @@ pub fn setup_llvm_engine(
 
     if selene_qubits == 0 && !has_qir_gates {
         return Err(PecosError::Generic(
-            "No quantum operations found in LLVM IR".to_string()
+            "No quantum operations found in LLVM IR".to_string(),
         ));
     }
 
     let num_qubits_hint = if selene_qubits > 0 {
-        log::debug!("Detected {} qubits from ___qalloc calls", selene_qubits);
+        log::debug!("Detected {selene_qubits} qubits from ___qalloc calls");
         Some(selene_qubits)
     } else {
         log::debug!("Detected QIR-style program with implicit qubit allocation");
@@ -186,7 +185,7 @@ pub fn setup_llvm_engine(
 
         // Need at least max_index + 1 qubits
         let needed_qubits = max_index + 1;
-        log::debug!("QIR program uses qubits 0 to {}, need {} qubits", max_index, needed_qubits);
+        log::debug!("QIR program uses qubits 0 to {max_index}, need {needed_qubits} qubits");
         Some(needed_qubits.max(2)) // At least 2 qubits for safety
     };
 
@@ -200,7 +199,9 @@ fn create_mock_selene_qis_engine(
     num_qubits: usize,
     _shots: Option<usize>,
 ) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
-    use pecos_engines::{ByteMessage, ClassicalEngine, ControlEngine, Data, Engine, EngineStage, Shot};
+    use pecos_engines::{
+        ByteMessage, ClassicalEngine, ControlEngine, Data, Engine, EngineStage, Shot,
+    };
     use std::collections::BTreeMap;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -234,9 +235,9 @@ fn create_mock_selene_qis_engine(
             } else {
                 // For multiple qubits, simulate entangled state: |00...0> or |11...1>
                 if hash == 0 {
-                    0i64  // |00...0>
+                    0i64 // |00...0>
                 } else {
-                    (1i64 << self.num_qubits) - 1  // |11...1>
+                    (1i64 << self.num_qubits) - 1 // |11...1>
                 }
             };
             data.insert("result".to_string(), Data::I64(outcome));
@@ -284,12 +285,10 @@ fn create_mock_selene_qis_engine(
 
             let outcome = if self.num_qubits == 1 {
                 hash
+            } else if hash == 0 {
+                0i64
             } else {
-                if hash == 0 {
-                    0i64
-                } else {
-                    (1i64 << self.num_qubits) - 1
-                }
+                (1i64 << self.num_qubits) - 1
             };
             data.insert("result".to_string(), Data::I64(outcome));
             Ok(Shot { data })
@@ -310,7 +309,10 @@ fn create_mock_selene_qis_engine(
         type EngineInput = ByteMessage;
         type EngineOutput = ByteMessage;
 
-        fn start(&mut self, _input: Self::Input) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
+        fn start(
+            &mut self,
+            _input: Self::Input,
+        ) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
             // Return a completed stage with a mock shot
             let shot = self.process(())?;
             Ok(EngineStage::Complete(shot))
@@ -330,9 +332,7 @@ fn create_mock_selene_qis_engine(
         }
     }
 
-    let engine = MockSeleneQisEngine {
-        num_qubits,
-    };
+    let engine = MockSeleneQisEngine { num_qubits };
 
     Ok(Box::new(engine))
 }
@@ -367,8 +367,7 @@ pub fn setup_llvm_engine_with_config(
     );
 
     // Read the LLVM IR to detect number of qubits
-    let llvm_ir = std::fs::read_to_string(llvm_ir_path)
-        .map_err(|e| PecosError::IO(e))?;
+    let llvm_ir = std::fs::read_to_string(llvm_ir_path).map_err(PecosError::IO)?;
 
     // Count the number of qubits from ___qalloc calls
     let detected_qubits = llvm_ir.matches("___qalloc").count();
@@ -380,11 +379,11 @@ pub fn setup_llvm_engine_with_config(
         max
     } else {
         return Err(PecosError::Generic(
-            "No qubits detected and max_qubits not specified".to_string()
+            "No qubits detected and max_qubits not specified".to_string(),
         ));
     };
 
-    log::debug!("Using {} qubits for engine", num_qubits);
+    log::debug!("Using {num_qubits} qubits for engine");
 
     // Create an actual LLVM engine with the Selene QIS runtime
     use pecos_qis_runtime::QisEngine;
@@ -408,7 +407,7 @@ pub mod hugr {
     /// Compile and run a HUGR file with default settings
     ///
     /// This is a convenience function that:
-    /// 1. Creates a SeleneExecutableEngine
+    /// 1. Creates a `SeleneExecutableEngine`
     /// 2. Loads the HUGR program into the engine
     /// 3. Returns the configured engine ready for execution
     ///
@@ -426,8 +425,7 @@ pub mod hugr {
         shots: Option<usize>,
     ) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
         // Read the HUGR file
-        let hugr_bytes = std::fs::read(hugr_path.as_ref())
-            .map_err(|e| PecosError::IO(e))?;
+        let hugr_bytes = std::fs::read(hugr_path.as_ref()).map_err(PecosError::IO)?;
 
         // Use the bytes version
         run_hugr_llvm_from_bytes(&hugr_bytes, shots)
@@ -455,7 +453,7 @@ pub mod hugr {
         let num_qubits = llvm_ir.matches("___qalloc").count();
         if num_qubits == 0 {
             return Err(PecosError::Generic(
-                "No qubits allocated in compiled HUGR".to_string()
+                "No qubits allocated in compiled HUGR".to_string(),
             ));
         }
 
@@ -513,8 +511,9 @@ pub mod hugr {
 pub mod phir {
     use pecos_core::errors::PecosError;
     pub use pecos_phir::PhirConfig;
-    // PHIR compilation functions temporarily disabled - needs HUGR 0.22 update
-    // use pecos_phir::{compile_hugr_bytes_via_phir, compile_hugr_via_phir as compile_hugr_phir};
+    use pecos_phir::compile_hugr_bytes_via_phir;
+    use std::path::Path;
+    use pecos_engines::ClassicalControlEngine;
 
     /// Compile and run a HUGR file via PHIR with default settings
     ///
@@ -533,8 +532,6 @@ pub mod phir {
     ///
     /// # Errors
     /// Returns `PecosError` if HUGR compilation via PHIR or engine creation fails
-    // PHIR functions temporarily disabled - needs HUGR 0.22 update
-    /*
     pub fn run_phir_llvm<P: AsRef<Path>>(
         hugr_path: P,
         shots: Option<usize>,
@@ -558,7 +555,6 @@ pub mod phir {
         // Create LLVM engine from the IR string
         super::hugr::create_llvm_engine_from_ir_string(&llvm_ir, shots)
     }
-    */
 
     /// Compile HUGR JSON string to LLVM IR via PHIR and create an engine
     ///
@@ -572,7 +568,6 @@ pub mod phir {
     ///
     /// # Errors
     /// Returns `PecosError` if HUGR compilation via PHIR or engine creation fails
-    /*
     pub fn run_phir_llvm_from_string(
         hugr_json: &str,
         shots: Option<usize>,
@@ -581,13 +576,16 @@ pub mod phir {
         // Use provided config or default
         let config = config.unwrap_or_default();
 
-        // Step 1: Compile HUGR to LLVM IR via PHIR
-        let llvm_ir = compile_hugr_phir(hugr_json, &config).map_err(convert_phir_error)?;
+        // Convert JSON string to bytes for processing
+        let hugr_bytes = hugr_json.as_bytes();
 
-        // Step 2: Create LLVM engine from the IR string
+        // Compile via PHIR
+        let llvm_ir =
+            compile_hugr_bytes_via_phir(hugr_bytes, &config).map_err(convert_phir_error)?;
+
+        // Create LLVM engine from the IR string
         super::hugr::create_llvm_engine_from_ir_string(&llvm_ir, shots)
     }
-    */
 
     /// Compile HUGR file to LLVM IR via PHIR (without creating an engine)
     ///
@@ -601,7 +599,6 @@ pub mod phir {
     /// # Returns
     /// LLVM IR as a string
     ///
-    /*
     /// # Errors
     /// Returns `PecosError` if HUGR compilation via PHIR fails
     pub fn compile_hugr_file_via_phir<P: AsRef<Path>>(
@@ -624,8 +621,6 @@ pub mod phir {
             compile_hugr_bytes_via_phir(&hugr_bytes, &config).map_err(convert_phir_error)?;
         Ok(llvm_ir)
     }
-    */
-
     // Re-export types for convenience (PhirConfig already imported above)
     // pub use pecos_phir::hugr_to_phir_mlir; // Temporarily disabled
 

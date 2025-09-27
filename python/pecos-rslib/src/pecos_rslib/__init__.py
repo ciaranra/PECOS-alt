@@ -41,7 +41,9 @@ from pecos_rslib.rsstate_vec import StateVecRs
 
 # HUGR compilation functions - explicit, no automatic fallback
 try:
-    from pecos_rslib._pecos_rslib import compile_hugr_to_llvm as _compile_hugr_to_llvm_rust_impl
+    from pecos_rslib._pecos_rslib import (
+        compile_hugr_to_llvm as _compile_hugr_to_llvm_rust_impl,
+    )
 
     def compile_hugr_to_llvm_rust(hugr_bytes: bytes, output_path=None) -> str:
         """PECOS's Rust HUGR to LLVM compiler.
@@ -59,17 +61,20 @@ try:
         # If output_path is provided, write to file
         if output_path is not None:
             from pathlib import Path
+
             Path(output_path).write_text(llvm_ir)
 
         return llvm_ir
 
 except ImportError:
+
     def compile_hugr_to_llvm_rust(hugr_bytes: bytes, output_path=None) -> str:
         """PECOS's Rust HUGR to LLVM compiler."""
         raise ImportError(
             "PECOS's Rust HUGR compiler is not available. "
             "Build pecos-rslib with hugr-llvm-pipeline feature to enable it."
         )
+
 
 def compile_hugr_to_llvm_selene(hugr_bytes: bytes, output_path=None) -> str:
     """Compile HUGR to LLVM IR using Selene's hugr-qis compiler.
@@ -94,7 +99,7 @@ def compile_hugr_to_llvm_selene(hugr_bytes: bytes, output_path=None) -> str:
         )
 
     # Check if this is JSON (starts with '{') and needs to be converted to envelope format
-    if hugr_bytes.startswith(b'{'):
+    if hugr_bytes.startswith(b"{"):
         # This is JSON, but Selene expects the envelope format
         # For now, we'll raise an informative error
         raise RuntimeError(
@@ -108,9 +113,11 @@ def compile_hugr_to_llvm_selene(hugr_bytes: bytes, output_path=None) -> str:
     # If output_path is provided, write to file
     if output_path is not None:
         from pathlib import Path
+
         Path(output_path).write_text(llvm_ir)
 
     return llvm_ir
+
 
 # Default to PECOS's Rust compiler which handles JSON format
 # Users can explicitly choose by importing compile_hugr_to_llvm_rust or compile_hugr_to_llvm_selene

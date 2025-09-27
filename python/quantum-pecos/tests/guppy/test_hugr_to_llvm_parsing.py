@@ -42,7 +42,9 @@ def test_hugr_to_llvm_compilation() -> None:
 
     # Verify basic structure - check for Selene QIS patterns
     assert "@___qalloc()" in llvm_ir, "Should have Selene qubit allocation"
-    assert "@___rxy" in llvm_ir or "@___rz" in llvm_ir, "Should have Selene rotation gates"
+    assert (
+        "@___rxy" in llvm_ir or "@___rz" in llvm_ir
+    ), "Should have Selene rotation gates"
     assert "@___lazy_measure" in llvm_ir, "Should have Selene measurement"
 
     # Check if we found the main function (entry point) - Selene uses @qmain
@@ -87,5 +89,7 @@ def test_simple_hadamard_circuit() -> None:
 
     # Verify operations - check for Selene QIS patterns
     assert "@___qalloc()" in llvm_ir, "Should have Selene qubit allocation"
-    assert "@___rxy" in llvm_ir or "@___rz" in llvm_ir, "Should have Selene rotation gates for H"
+    assert (
+        "@___rxy" in llvm_ir or "@___rz" in llvm_ir
+    ), "Should have Selene rotation gates for H"
     assert "@___lazy_measure" in llvm_ir, "Should have Selene measurement"

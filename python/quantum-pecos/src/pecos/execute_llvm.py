@@ -29,24 +29,33 @@ def compile_module_to_string(hugr_bytes: bytes, compiler: str = "selene") -> str
     if compiler == "selene":
         try:
             from pecos_rslib import compile_hugr_to_llvm_selene
+
             return compile_hugr_to_llvm_selene(hugr_bytes)
         except ImportError as e:
-            raise RuntimeError(
+            msg = (
                 "Selene's HUGR compiler is not available. "
                 "Install it with: pip install selene-hugr-qis-compiler"
+            )
+            raise RuntimeError(
+                msg,
             ) from e
     elif compiler == "rust":
         try:
             from pecos_rslib import compile_hugr_to_llvm_rust
+
             return compile_hugr_to_llvm_rust(hugr_bytes)
         except ImportError as e:
-            raise RuntimeError(
+            msg = (
                 "PECOS's Rust HUGR compiler is not available. "
                 "Build pecos-rslib with hugr-llvm-pipeline feature to enable it."
+            )
+            raise RuntimeError(
+                msg,
             ) from e
     else:
+        msg = f"Invalid compiler '{compiler}'. Choose 'selene' or 'rust'."
         raise ValueError(
-            f"Invalid compiler '{compiler}'. Choose 'selene' or 'rust'."
+            msg,
         )
 
 

@@ -51,6 +51,6 @@ impl ArrayCodegen for SeleneHeapArrayCodegen {
 }
 
 impl SeleneHeapArrayCodegen {
-    /// [HeapArrayLowering] using the selene heap.
+    /// [`HeapArrayLowering`] using the selene heap.
     pub const LOWERING: HeapArrayLowering<Self> = HeapArrayLowering::new(SeleneHeapArrayCodegen);
 }

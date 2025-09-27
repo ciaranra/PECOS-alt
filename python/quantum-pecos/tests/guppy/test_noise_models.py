@@ -229,7 +229,12 @@ def test_noise_model_builder_pattern() -> None:
     )
 
     results1 = (
-        sim(simple_x_circuit).qubits(10).quantum(state_vector()).noise(noise1).seed(42).run(10)
+        sim(simple_x_circuit)
+        .qubits(10)
+        .quantum(state_vector())
+        .noise(noise1)
+        .seed(42)
+        .run(10)
     )
 
     # Different seed should give different results
@@ -243,7 +248,12 @@ def test_noise_model_builder_pattern() -> None:
     )
 
     results2 = (
-        sim(simple_x_circuit).qubits(10).quantum(state_vector()).noise(noise2).seed(43).run(10)
+        sim(simple_x_circuit)
+        .qubits(10)
+        .quantum(state_vector())
+        .noise(noise2)
+        .seed(43)
+        .run(10)
     )
 
     measurements1 = results1.get("measurements", results1.get("measurement_1", []))

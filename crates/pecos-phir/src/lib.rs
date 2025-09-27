@@ -25,9 +25,9 @@ pub mod dialect; // Dialect registration and management
 pub mod error; // Error handling
 pub mod execution; // PHIR execution engine
 pub mod hugr_dialect; // HUGR dialect operations
-pub mod hugr_to_qis; // HUGR to QIS conversion pass
 #[cfg(feature = "hugr")]
 pub mod hugr_parser; // HUGR parsing support
+pub mod hugr_to_qis; // HUGR to QIS conversion pass
 pub mod mlir_lowering; // PHIR to MLIR lowering
 pub mod mlir_toolchain;
 pub mod ops; // Core operations

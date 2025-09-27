@@ -53,7 +53,14 @@ def compile_guppy_to_hugr(guppy_function: Callable) -> bytes:
     try:
         # Check if this is a parametric function (has arguments)
         import inspect
-        sig = inspect.signature(guppy_function.__wrapped__ if hasattr(guppy_function, '__wrapped__') else guppy_function)
+
+        sig = inspect.signature(
+            (
+                guppy_function.__wrapped__
+                if hasattr(guppy_function, "__wrapped__")
+                else guppy_function
+            ),
+        )
         has_params = len(sig.parameters) > 0
 
         if has_params:

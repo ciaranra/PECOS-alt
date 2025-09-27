@@ -6,9 +6,9 @@
 #[cfg(test)]
 mod tests {
     use pecos_engines::sim;
-    use pecos_qis_sim::qis_engine;
     use pecos_programs::{HugrProgram, QasmProgram, QisProgram};
     use pecos_qasm::qasm_engine;
+    use pecos_qis_sim::qis_engine;
     use pecos_selene_engine::selene_executable;
 
     #[test]

@@ -73,7 +73,7 @@ impl Dialect for QisDialect {
                 name: "rxy".to_string(),
                 description: "RXY rotation gate (___rxy)".to_string(),
                 num_operands: 3, // qubit, theta, phi
-                num_results: 0, // in-place operation
+                num_results: 0,  // in-place operation
                 num_regions: 0,
                 traits: vec![OpTrait::NoSideEffect],
             },
@@ -85,7 +85,7 @@ impl Dialect for QisDialect {
                 name: "rz".to_string(),
                 description: "RZ rotation gate (___rz)".to_string(),
                 num_operands: 2, // qubit, angle
-                num_results: 0, // in-place operation
+                num_results: 0,  // in-place operation
                 num_regions: 0,
                 traits: vec![OpTrait::NoSideEffect],
             },
@@ -97,7 +97,7 @@ impl Dialect for QisDialect {
                 name: "rzz".to_string(),
                 description: "RZZ two-qubit rotation gate (___rzz)".to_string(),
                 num_operands: 3, // qubit1, qubit2, angle
-                num_results: 0, // in-place operation
+                num_results: 0,  // in-place operation
                 num_regions: 0,
                 traits: vec![OpTrait::NoSideEffect],
             },
@@ -110,7 +110,7 @@ impl Dialect for QisDialect {
                 name: "measure".to_string(),
                 description: "Immediate measurement (___measure)".to_string(),
                 num_operands: 1, // qubit
-                num_results: 1, // measurement result (bool)
+                num_results: 1,  // measurement result (bool)
                 num_regions: 0,
                 traits: vec![],
             },
@@ -122,7 +122,7 @@ impl Dialect for QisDialect {
                 name: "lazy_measure".to_string(),
                 description: "Lazy measurement returning future (___lazy_measure)".to_string(),
                 num_operands: 1, // qubit
-                num_results: 1, // future handle
+                num_results: 1,  // future handle
                 num_regions: 0,
                 traits: vec![],
             },
@@ -135,7 +135,7 @@ impl Dialect for QisDialect {
                 name: "read_future".to_string(),
                 description: "Read result from measurement future (___read_future)".to_string(),
                 num_operands: 1, // future handle
-                num_results: 1, // bool result
+                num_results: 1,  // bool result
                 num_regions: 0,
                 traits: vec![],
             },

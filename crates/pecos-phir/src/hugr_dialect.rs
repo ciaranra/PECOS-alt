@@ -132,7 +132,7 @@ impl Dialect for HugrDialect {
                 description: "Conditional branching".to_string(),
                 num_operands: 1, // condition
                 num_results: -1, // variadic
-                num_regions: 2, // then and else regions
+                num_regions: 2,  // then and else regions
                 traits: vec![OpTrait::RegionBranch],
             },
         )?;
@@ -156,7 +156,7 @@ impl Dialect for HugrDialect {
                 name: "call".to_string(),
                 description: "Function call".to_string(),
                 num_operands: -1, // variadic arguments
-                num_results: -1, // variadic results
+                num_results: -1,  // variadic results
                 num_regions: 0,
                 traits: vec![],
             },

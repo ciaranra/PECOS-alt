@@ -4,21 +4,19 @@
 //! and creates the appropriate simulation builder, following the same pattern as the
 //! Rust `pecos::sim()` function.
 
-
 use pecos_engines::ClassicalControlEngineBuilder;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use std::sync::{Arc, Mutex};
 
-use pecos_qis_sim::qis_engine as rust_qis_engine;
 use pecos_phir_json::phir_json_engine as rust_phir_json_engine;
 use pecos_qasm::qasm_engine as rust_qasm_engine;
+use pecos_qis_sim::qis_engine as rust_qis_engine;
 
 use crate::engine_builders::{
-
-    PyHugrProgram, PyQisEngineBuilder, PyQisSimBuilder, PyPhirJsonEngineBuilder,
-    PyPhirJsonProgram, PyPhirJsonSimBuilder, PyQasmEngineBuilder, PyQasmProgram, PyQasmSimBuilder,
-    PyQisProgram, PySeleneEngineBuilder, PySeleneExecutableSimBuilder, PySeleneInterfaceProgram,
+    PyHugrProgram, PyPhirJsonEngineBuilder, PyPhirJsonProgram, PyPhirJsonSimBuilder,
+    PyQasmEngineBuilder, PyQasmProgram, PyQasmSimBuilder, PyQisEngineBuilder, PyQisProgram,
+    PyQisSimBuilder, PySeleneEngineBuilder, PySeleneExecutableSimBuilder, PySeleneInterfaceProgram,
     PySeleneLibrarySimBuilder, PySeleneSimBuilder,
 };
 

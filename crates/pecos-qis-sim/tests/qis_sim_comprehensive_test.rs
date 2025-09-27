@@ -6,8 +6,8 @@
 use pecos_engines::{
     ClassicalControlEngineBuilder, DepolarizingNoise, sim_builder, sparse_stabilizer, state_vector,
 };
-use pecos_qis_sim::qis_engine;
 use pecos_programs::QisProgram;
+use pecos_qis_sim::qis_engine;
 use std::collections::HashMap;
 use std::path::PathBuf;
 

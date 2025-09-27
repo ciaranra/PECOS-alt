@@ -22,7 +22,8 @@ except ImportError:
 
 try:
     from selene_sim import build
-    from selene_sim.backends import Coinflip, IdealErrorModel as IdealNoiseModel, SimpleRuntime
+    from selene_sim.backends import Coinflip, SimpleRuntime
+    from selene_sim.backends import IdealErrorModel as IdealNoiseModel
 
     SELENE_AVAILABLE = True
 except ImportError:

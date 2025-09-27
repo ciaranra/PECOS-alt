@@ -11,39 +11,21 @@
 //!
 //! # Example
 //!
-//! ```rust,no_run
-//! # use pecos_selene_engine::prelude::*;
-//! # use pecos_selene_engine::{selene_executable, SeleneExecutableEngine};
-//! # use pecos_engines::Engine;
-//! # fn main() -> Result<(), PecosError> {
-//! // Simple LLVM IR for a Hadamard gate and measurement
-//! let simple_llvm = r#"
-//! declare void @__quantum__qis__h__body(i64)
-//! declare i32 @__quantum__qis__m__body(i64, i64)
+//! ```rust
+//! use pecos_programs::QisProgram;
 //!
-//! define void @test() #0 {
-//!     call void @__quantum__qis__h__body(i64 0)
-//!     %r = call i32 @__quantum__qis__m__body(i64 0, i64 0)
+//! // Simple QIS IR for a basic quantum circuit
+//! let simple_qis = r#"
+//! define void @main() {
 //!     ret void
 //! }
-//!
-//! attributes #0 = { "EntryPoint" }
 //! "#;
 //!
-//! // Method 1: Using the builder pattern with LLVM IR
-//! let engine = selene_executable()
-//!     .program(QisProgram::from_ir(simple_llvm))
-//!     .qubits(1)
-//!     .build()?;
+//! // Create a QisProgram from the IR string
+//! let program = QisProgram::from_string(simple_qis.to_string());
 //!
-//! // Method 2: Direct construction
-//! let mut engine2 = SeleneExecutableEngine::new(1)?
-//!     .with_qis_program(QisProgram::from_ir(simple_llvm));
-//!
-//! // Use with PECOS quantum engines
-//! let shot = engine2.process(())?;
-//! # Ok(())
-//! # }
+//! // The program is created and ready to use
+//! // It can be used with selene_executable() or other engine builders
 //! ```
 
 // Selene FFI to ByteMessage bridge - provides the FFI functions that plugins expect

@@ -3,8 +3,6 @@
 //! Note: HUGR 0.13 support has been removed. HUGR compilation now uses
 //! tket's HUGR 0.22 through the pecos-hugr-qis crate.
 
-use pecos_engines::ClassicalControlEngineBuilder;
-
 #[test]
 fn test_hugr_llvm_compilation_availability() {
     println!("HUGR to LLVM compilation status in pecos-selene-engine:");
