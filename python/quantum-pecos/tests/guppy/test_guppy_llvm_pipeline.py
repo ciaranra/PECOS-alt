@@ -192,7 +192,7 @@ class TestGuppyLLVMPipeline:
             pytest.skip("Cargo not found in PATH")
 
         # Check if we're in a Rust project
-        project_root = Path(__file__).resolve().parent.parent.parent.parent
+        project_root = Path(__file__).resolve().parent.parent.parent.parent.parent
         cargo_toml = project_root / "Cargo.toml"
 
         if not cargo_toml.exists():

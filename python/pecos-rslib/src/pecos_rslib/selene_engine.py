@@ -12,7 +12,7 @@ from pecos_rslib._pecos_rslib import (
     HugrProgram as _RustHugrProgram,
 )
 from pecos_rslib._pecos_rslib import (
-    LlvmProgram as _RustLlvmProgram,
+    QisProgram as _RustQisProgram,
 )
 
 # Import the Rust bindings
@@ -40,7 +40,7 @@ class SeleneEngineBuilder:
             Path,
             Callable,
             bytes,
-            "_RustLlvmProgram",
+            "_RustQisProgram",
             "_RustHugrProgram",
         ],
     ) -> "SeleneEngineBuilder":
@@ -48,7 +48,7 @@ class SeleneEngineBuilder:
 
         Args:
             program: Can be:
-                - LlvmProgram instance
+                - QisProgram instance
                 - HugrProgram instance
                 - Guppy function (will be converted to HUGR)
                 - Path to compiled plugin (.so file)
@@ -58,7 +58,7 @@ class SeleneEngineBuilder:
         Returns:
             Self for method chaining
         """
-        if isinstance(program, (_RustLlvmProgram, _RustHugrProgram)):
+        if isinstance(program, (_RustQisProgram, _RustHugrProgram)):
             # Already a program object, pass to Rust
             self._rust_builder = self._rust_builder.program(program)
         elif isinstance(program, Path):
@@ -80,7 +80,7 @@ class SeleneEngineBuilder:
             else:
                 # Legacy: raw LLVM IR string
                 self._rust_builder = self._rust_builder.program(
-                    _RustLlvmProgram.from_string(program),
+                    _RustQisProgram.from_string(program),
                 )
         elif isinstance(program, bytes):
             # Legacy: raw HUGR bytes
@@ -89,7 +89,7 @@ class SeleneEngineBuilder:
             )
         else:
             raise TypeError(
-                f"Program must be LlvmProgram, HugrProgram, Guppy function, "
+                f"Program must be QisProgram, HugrProgram, Guppy function, "
                 f"plugin Path, LLVM IR string, or HUGR bytes, got {type(program)}",
             )
         return self
@@ -121,9 +121,9 @@ class SeleneEngineBuilder:
 
         # Read LLVM IR from file
         llvm_ir = path.read_text()
-        # Create LlvmProgram from string
+        # Create QisProgram from string
         self._rust_builder = self._rust_builder.program(
-            _RustLlvmProgram.from_string(llvm_ir),
+            _RustQisProgram.from_string(llvm_ir),
         )
         return self
 
@@ -176,7 +176,7 @@ class SeleneEngineBuilder:
 
                 llvm_ir = compile_to_llvm_ir(hugr_bytes)
                 self._rust_builder = self._rust_builder.program(
-                    _RustLlvmProgram.from_string(llvm_ir),
+                    _RustQisProgram.from_string(llvm_ir),
                 )
             except ImportError:
                 # Fall back to using HUGR directly if Selene supports it
@@ -196,10 +196,10 @@ def selene_engine() -> SeleneEngineBuilder:
 
     Examples:
         >>> # With LLVM program
-        >>> from pecos_rslib.programs import LlvmProgram
+        >>> from pecos_rslib.programs import QisProgram
         >>> results = (
         ...     selene_engine()
-        ...     .program(LlvmProgram.from_string(llvm_ir))
+        ...     .program(QisProgram.from_string(llvm_ir))
         ...     .to_sim()
         ...     .run(1000)
         ... )

@@ -6,6 +6,7 @@ HUGR from Guppy and create an executable that can be wrapped by SeleneExecutable
 
 import json
 import tempfile
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -125,74 +126,352 @@ class TestSeleneBuildProcess:
                     pytest.skip(f"HUGR build not fully supported: {e}")
                 pytest.fail(f"Build failed unexpectedly: {e}")
 
-    def test_selene_build_from_llvm(self) -> None:
-        """Test building from LLVM IR as a comparison."""
-        # Create simple LLVM IR following QIR conventions
-        llvm_ir = """
-        ; ModuleID = 'simple_measure'
+    def test_hugr_to_qis_compilation(self) -> None:
+        """Test that HUGR gets compiled to QIS (LLVM IR) during the build process.
 
-        declare i1 @__quantum__qis__mz__body(i64)
-        declare void @__quantum__qis__h__body(i64)
-        declare void @__quantum__rt__result_record_output(i64, i8*)
+        The Selene build pipeline works as:
+        1. HUGR (input) → QIS/LLVM IR (intermediate) → Executable
+        2. Only HUGR is accepted as input to build()
+        3. QIS/LLVM IR is generated internally but not exposed for direct input
 
-        @.str.result = constant [7 x i8] c"result\\00"
-
-        define void @main() #0 {
-        entry:
-            call void @__quantum__qis__h__body(i64 0)
-            %result = call i1 @__quantum__qis__mz__body(i64 0)
-            %result.i64 = zext i1 %result to i64
-            call void @__quantum__rt__result_record_output(i64 %result.i64,
-                i8* getelementptr inbounds ([7 x i8], [7 x i8]* @.str.result, i32 0, i32 0))
-            ret void
-        }
-
-        attributes #0 = { "entry_point" }
+        This test verifies the HUGR → QIS transformation happens correctly.
         """
+        # Create a Guppy program and compile to HUGR
+        @guppy
+        def test_qis_generation() -> bool:
+            """Simple test function for QIS generation."""
+            q = qubit()
+            h(q)
+            return measure(q)
+
+        # Compile to HUGR
+        hugr_bytes = compile_guppy_to_hugr(test_qis_generation)
+        assert hugr_bytes is not None, "HUGR compilation should succeed"
 
         with tempfile.TemporaryDirectory() as tmpdir:
             build_dir = Path(tmpdir)
 
-            # Save LLVM IR
-            llvm_file = build_dir / "program.ll"
-            llvm_file.write_text(llvm_ir)
-            assert llvm_file.exists(), "LLVM file should be created"
-            assert llvm_file.stat().st_size > 0, "LLVM file should not be empty"
-
+            # Build with Selene (HUGR → QIS → Executable)
             try:
-                # Build with Selene - need to use BitcodeString for LLVM IR
-                from selene_sim import BitcodeString
-
-                # Wrap LLVM IR in BitcodeString to indicate the source type
-                llvm_src = BitcodeString(llvm_ir)
-
                 instance = build(
-                    src=llvm_src,  # Use BitcodeString wrapper
-                    name="test_llvm_program",
+                    src=hugr_bytes,
+                    name="test_qis_pipeline",
                     build_dir=build_dir,
                     verbose=False,
                 )
                 assert instance is not None, "Build should create an instance"
 
-                # Check created files
-                created_files = list(build_dir.rglob("*"))
-                {f.suffix for f in created_files if f.is_file()}
+                # Check if LLVM/QIS files were generated during build
+                # Selene may create intermediate .ll or .bc files
+                llvm_files = list(build_dir.glob("**/*.ll"))
+                bc_files = list(build_dir.glob("**/*.bc"))
 
-                # Should have created some compiled artifacts
-                assert len(created_files) > 1, "Build should create additional files"
+                # Log what was created (for debugging)
+                all_files = list(build_dir.rglob("*"))
+                file_types = {f.suffix for f in all_files if f.is_file()}
 
-                # Verify instance has expected methods
-                assert hasattr(instance, "run"), "Instance should have run method"
+                # The build process should create some artifacts
+                assert len(all_files) > 1, f"Build created files with extensions: {file_types}"
 
-            except (ImportError, RuntimeError, ValueError, TypeError) as e:
-                # Skip if LLVM builds are not supported
-                error_msg = str(e).lower()
-                if any(
-                    term in error_msg
-                    for term in ["llvm", "not supported", "unknown resource", "bitcode"]
-                ):
-                    pytest.skip(f"LLVM build not fully supported: {e}")
-                pytest.fail(f"LLVM build failed unexpectedly: {e}")
+                # Note: The exact intermediate files depend on Selene's implementation
+                # The key point is that HUGR → QIS/LLVM happens internally
+
+            except (ImportError, RuntimeError, ValueError) as e:
+                if "hugr" in str(e).lower() or "not supported" in str(e).lower():
+                    pytest.skip(f"HUGR build not fully supported: {e}")
+                pytest.fail(f"Build failed unexpectedly: {e}")
+
+    def test_qis_program_with_sim_api(self) -> None:
+        """Test QIS programs using the sim() API.
+
+        While Selene's build() function only accepts HUGR input,
+        QIS (Quantum Instruction Set) programs can be executed using
+        PECOS's sim() API with QisProgram.
+
+        The two paths are:
+        1. build(HUGR) → Selene executable (for building executables)
+        2. sim(QisProgram) → PECOS execution (for direct simulation)
+        """
+        try:
+            from pecos.frontends.guppy_api import sim
+            from pecos_rslib import state_vector
+            from pecos_rslib.programs import QisProgram
+        except ImportError as e:
+            pytest.skip(f"QisProgram or sim API not available: {e}")
+
+        # Create Selene QIS format LLVM IR - use textwrap to avoid indentation issues
+        llvm_ir = textwrap.dedent("""
+        ; ModuleID = 'quantum_test'
+        source_filename = "quantum_test"
+
+        declare i64 @___qalloc() local_unnamed_addr
+        declare void @___qfree(i64) local_unnamed_addr
+        declare i64 @___lazy_measure(i64) local_unnamed_addr
+        declare void @___reset(i64) local_unnamed_addr
+        declare void @___rxy(i64, double, double) local_unnamed_addr
+        declare void @___rz(i64, double) local_unnamed_addr
+        declare void @setup(i64) local_unnamed_addr
+        declare i64 @teardown() local_unnamed_addr
+
+        define void @main() #0 {
+        entry:
+          tail call void @setup(i64 0)
+          %qubit = tail call i64 @___qalloc()
+          %not_max = icmp eq i64 %qubit, -1
+          br i1 %not_max, label %skip_reset, label %do_reset
+
+        do_reset:
+          tail call void @___reset(i64 %qubit)
+          br label %skip_reset
+
+        skip_reset:
+          tail call void @___rxy(i64 %qubit, double 0x3FF921FB54442D18, double 0xBFF921FB54442D18)
+          tail call void @___rz(i64 %qubit, double 0x400921FB54442D18)
+          tail call void @___rxy(i64 %qubit, double 0x400921FB54442D18, double 0.000000e+00)
+          %result = tail call i64 @___lazy_measure(i64 %qubit)
+          tail call void @___qfree(i64 %qubit)
+          %final = tail call i64 @teardown()
+          ret void
+        }
+
+        attributes #0 = { "EntryPoint" }
+        """).strip()
+
+        try:
+            # Create QisProgram from the QIS LLVM IR string
+            program = QisProgram.from_string(llvm_ir)
+
+            # Run using sim() API
+            results = (
+                sim(program)
+                .qubits(1)
+                .quantum(state_vector())
+                .seed(42)
+                .run(100)
+            )
+
+            # Verify results
+            assert isinstance(results, dict), "Results should be a dictionary"
+
+            # QIS returns results with key 'result'
+            assert "result" in results, f"Results should contain 'result' key, got keys: {results.keys()}"
+            measurements = results["result"]
+            assert len(measurements) == 100, "Should have 100 shots"
+
+            # H gate should give roughly 50/50 distribution
+            ones = sum(measurements)
+            zeros = 100 - ones
+            assert 30 < ones < 70, f"Should be roughly 50/50 distribution, got {ones} ones"
+            assert 30 < zeros < 70, f"Should be roughly 50/50 distribution, got {zeros} zeros"
+
+        except (RuntimeError, ValueError, NotImplementedError) as e:
+            # Known LLVM runtime issues
+            error_msg = str(e).lower()
+            if any(
+                x in error_msg
+                for x in [
+                    "entry",
+                    "not implemented",
+                    "undefined symbol",
+                    "failed to load",
+                    "llvm",
+                    "qir",
+                ]
+            ):
+                pytest.skip(f"LLVM/QIS simulation not fully working yet: {e}")
+            else:
+                # Truly unexpected error
+                pytest.fail(f"Unexpected LLVM simulation error: {e}")
+
+    def test_qis_program_with_comments(self) -> None:
+        """Test that QIS programs with comments are properly handled."""
+        try:
+            from pecos.frontends.guppy_api import sim
+            from pecos_rslib import state_vector
+            from pecos_rslib.programs import QisProgram
+        except ImportError as e:
+            pytest.skip(f"QisProgram or sim API not available: {e}")
+
+        # Create QIS with extensive comments
+        llvm_ir_with_comments = textwrap.dedent("""
+        ; ModuleID = 'test_with_comments'
+        ; This test verifies that comments don't break QIS parsing
+        source_filename = "test_comments"
+
+        ; === Function Declarations ===
+        declare i64 @___qalloc() local_unnamed_addr     ; Allocate a qubit
+        declare void @___qfree(i64) local_unnamed_addr  ; Free a qubit
+        declare i64 @___lazy_measure(i64) local_unnamed_addr ; Measure qubit
+        declare void @setup(i64) local_unnamed_addr
+        declare i64 @teardown() local_unnamed_addr
+
+        ; === Main Entry Point ===
+        ; This function allocates a qubit, puts it in superposition,
+        ; measures it, and returns the result
+        define void @main() #0 {
+        entry:
+          ; Setup quantum system
+          tail call void @setup(i64 0)
+
+          ; Allocate qubit
+          %q = tail call i64 @___qalloc()
+
+          ; Measure qubit (starts in |0⟩)
+          %result = tail call i64 @___lazy_measure(i64 %q)
+
+          ; Cleanup
+          tail call void @___qfree(i64 %q)
+          %final = tail call i64 @teardown() ; Get final state
+          ret void ; Return
+        }
+
+        ; Attributes section
+        attributes #0 = { "EntryPoint" } ; Mark as entry point
+        """).strip()
+
+        # Create and run program
+        program = QisProgram.from_string(llvm_ir_with_comments)
+        results = (
+            sim(program)
+            .qubits(1)
+            .quantum(state_vector())
+            .seed(42)
+            .run(100)
+        )
+
+        # Verify results
+        assert isinstance(results, dict), "Results should be a dictionary"
+        assert "result" in results, f"Results should contain 'result' key"
+        measurements = results["result"]
+        assert len(measurements) == 100, "Should have 100 shots"
+
+        # Since we're measuring |0⟩ directly, all results should be 0
+        assert all(m == 0 for m in measurements), "Direct measurement of |0⟩ should always give 0"
+
+    def test_qis_edge_cases(self) -> None:
+        """Test QIS programs with edge cases like empty lines, multiple spaces, etc."""
+        try:
+            from pecos.frontends.guppy_api import sim
+            from pecos_rslib import state_vector
+            from pecos_rslib.programs import QisProgram
+        except ImportError as e:
+            pytest.skip(f"QisProgram or sim API not available: {e}")
+
+        # QIS with various formatting edge cases
+        llvm_ir_edge_cases = textwrap.dedent("""
+        ; ModuleID = 'edge_cases'
+
+
+        ; Empty lines above and below
+
+
+        source_filename = "edge_cases"
+
+        declare i64 @___qalloc()    local_unnamed_addr
+        declare void   @___qfree(i64)   local_unnamed_addr
+        declare i64    @___lazy_measure(i64)    local_unnamed_addr
+        declare void @setup(i64) local_unnamed_addr
+        declare i64 @teardown() local_unnamed_addr
+
+
+        define void @main() #0 {
+        entry:
+          tail call void @setup(i64 0)
+          %q = tail call i64 @___qalloc()
+          %r = tail call i64 @___lazy_measure(i64 %q)
+          tail call void @___qfree(i64 %q)
+          %f = tail call i64 @teardown()
+          ret void
+        }
+
+
+        attributes #0 = { "EntryPoint" }
+
+        ; Trailing comment
+        """).strip()
+
+        # Should handle edge cases gracefully
+        program = QisProgram.from_string(llvm_ir_edge_cases)
+        results = (
+            sim(program)
+            .qubits(1)
+            .quantum(state_vector())
+            .seed(42)
+            .run(50)
+        )
+
+        assert "result" in results, "Should have results even with edge case formatting"
+        assert len(results["result"]) == 50, "Should complete all shots"
+        assert all(m == 0 for m in results["result"]), "Should measure |0⟩ as 0"
+
+    def test_qis_program_consistency(self) -> None:
+        """Test that QisProgram produces consistent results for QIS format.
+
+        Test that the same QIS LLVM IR produces consistent results when run
+        multiple times with the same seed.
+        """
+        try:
+            from pecos.frontends.guppy_api import sim
+            from pecos_rslib import state_vector
+            from pecos_rslib.programs import QisProgram
+        except ImportError as e:
+            pytest.skip(f"Required imports not available: {e}")
+
+        # Same QIS program for both
+        qis_ir = textwrap.dedent("""
+        ; Test equivalence
+        declare i64 @___qalloc() local_unnamed_addr
+        declare void @___qfree(i64) local_unnamed_addr
+        declare i64 @___lazy_measure(i64) local_unnamed_addr
+        declare void @___rxy(i64, double, double) local_unnamed_addr
+        declare void @setup(i64) local_unnamed_addr
+        declare i64 @teardown() local_unnamed_addr
+
+        define void @main() #0 {
+        entry:
+          tail call void @setup(i64 0)
+          %q = tail call i64 @___qalloc()
+          ; Apply X gate using rotations to get |1⟩
+          tail call void @___rxy(i64 %q, double 0x400921FB54442D18, double 0.0)
+          %r = tail call i64 @___lazy_measure(i64 %q)
+          tail call void @___qfree(i64 %q)
+          %f = tail call i64 @teardown()
+          ret void
+        }
+
+        attributes #0 = { "EntryPoint" }
+        """).strip()
+
+        # Test with QisProgram - first run
+        qis_prog = QisProgram.from_string(qis_ir)
+        qis_results_1 = (
+            sim(qis_prog)
+            .qubits(1)
+            .quantum(state_vector())
+            .seed(42)
+            .run(100)
+        )
+
+        # Test with QisProgram - second run with same seed
+        qis_results_2 = (
+            sim(qis_prog)
+            .qubits(1)
+            .quantum(state_vector())
+            .seed(42)
+            .run(100)
+        )
+
+        # Both runs should produce identical results
+        assert "result" in qis_results_1, "QisProgram should produce results"
+        assert "result" in qis_results_2, "QisProgram should produce results"
+
+        # With same seed, results should be identical
+        assert qis_results_1["result"] == qis_results_2["result"], \
+            "QisProgram should produce identical results with same seed"
+
+        # X gate should give |1⟩
+        assert all(m == 1 for m in qis_results_1["result"]), "X gate should always measure 1"
+        assert all(m == 1 for m in qis_results_2["result"]), "X gate should always measure 1"
 
     def test_selene_instance_api(self) -> None:
         """Test the SeleneInstance API and available methods."""

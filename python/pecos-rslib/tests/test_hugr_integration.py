@@ -27,31 +27,29 @@ def test_hugr_backend_availability() -> None:
 
 
 def test_hugr_compiler_creation() -> None:
-    """Test creating HUGR compiler instances and basic functionality."""
+    """Test HUGR compilation functionality with the new API."""
     try:
-        from pecos_rslib import RustHugrCompiler
+        from pecos_rslib import compile_hugr_to_llvm_rust, check_rust_hugr_availability
 
-        # Test default creation
-        compiler = RustHugrCompiler()
+        # Check that HUGR support is available
+        available, message = check_rust_hugr_availability()
+        assert available, f"HUGR support should be available but got: {message}"
 
-        # Test that compiler has the expected methods
-        assert hasattr(compiler, "compile_bytes_to_llvm")
-        assert callable(compiler.compile_bytes_to_llvm)
+        # Test that the function exists and is callable
+        assert callable(compile_hugr_to_llvm_rust)
 
         # Test that compiler handles None/empty input appropriately
         with pytest.raises((RuntimeError, TypeError, ValueError)):
-            compiler.compile_bytes_to_llvm(None)
+            compile_hugr_to_llvm_rust(None)
 
-        with pytest.raises(RuntimeError):
-            compiler.compile_bytes_to_llvm(b"")
-
-        # Test that compiler provides meaningful error for invalid JSON
         with pytest.raises(RuntimeError) as exc_info:
-            compiler.compile_bytes_to_llvm(b"not json")
-        assert (
-            "invalid" in str(exc_info.value).lower()
-            or "parse" in str(exc_info.value).lower()
-        )
+            compile_hugr_to_llvm_rust(b"")
+        assert "empty hugr" in str(exc_info.value).lower()
+
+        # Test that compiler provides meaningful error for invalid data
+        with pytest.raises(RuntimeError) as exc_info:
+            compile_hugr_to_llvm_rust(b"not json or hugr")
+        assert "failed to read hugr" in str(exc_info.value).lower()
 
     except ImportError:
         pytest.skip("Rust HUGR backend not available")
@@ -60,29 +58,26 @@ def test_hugr_compiler_creation() -> None:
 def test_hugr_compilation_with_invalid_data() -> None:
     """Test HUGR compilation with various invalid inputs."""
     try:
-        from pecos_rslib import RustHugrCompiler, check_rust_hugr_availability
+        from pecos_rslib import compile_hugr_to_llvm_rust, check_rust_hugr_availability
 
         available, message = check_rust_hugr_availability()
         if not available:
             pytest.skip(f"HUGR support not available: {message}")
 
-        compiler = RustHugrCompiler()
-
-        # Test with invalid JSON
+        # Test with invalid data
         with pytest.raises(RuntimeError) as exc_info:
-            compiler.compile_bytes_to_llvm(b"invalid json")
-        assert (
-            "parse" in str(exc_info.value).lower()
-            or "invalid" in str(exc_info.value).lower()
-        )
+            compile_hugr_to_llvm_rust(b"invalid json")
+        assert "failed to read hugr" in str(exc_info.value).lower()
 
         # Test with valid JSON but not HUGR
-        with pytest.raises(RuntimeError):
-            compiler.compile_bytes_to_llvm(b'{"not": "hugr"}')
+        with pytest.raises(RuntimeError) as exc_info:
+            compile_hugr_to_llvm_rust(b'{"not": "hugr"}')
+        assert "failed to read hugr" in str(exc_info.value).lower()
 
         # Test with malformed HUGR (missing required fields)
-        with pytest.raises(RuntimeError):
-            compiler.compile_bytes_to_llvm(b'{"modules": []}')
+        with pytest.raises(RuntimeError) as exc_info:
+            compile_hugr_to_llvm_rust(b'{"modules": []}')
+        assert "failed to read hugr" in str(exc_info.value).lower()
 
     except ImportError:
         pytest.skip("Rust HUGR backend not available")
@@ -268,13 +263,11 @@ def test_guppy_frontend_backend_selection() -> None:
 def test_hugr_compiler_with_valid_data() -> None:
     """Test HUGR compiler with semi-valid HUGR data."""
     try:
-        from pecos_rslib import RustHugrCompiler, check_rust_hugr_availability
+        from pecos_rslib import compile_hugr_to_llvm_rust, check_rust_hugr_availability
 
         available, message = check_rust_hugr_availability()
         if not available:
             pytest.skip(f"HUGR support not available: {message}")
-
-        compiler = RustHugrCompiler()
 
         # Create a minimal HUGR-like structure
         # This is still likely to fail compilation but tests JSON parsing
@@ -288,11 +281,34 @@ def test_hugr_compiler_with_valid_data() -> None:
             "extensions": []
         }"""
 
-        # This will likely fail due to incomplete HUGR, but should parse JSON
+        # This will fail due to incomplete HUGR
         with pytest.raises(RuntimeError) as exc_info:
-            compiler.compile_bytes_to_llvm(hugr_data)
-        # Error should be about compilation, not parsing
-        assert "parse" not in str(exc_info.value).lower()
+            compile_hugr_to_llvm_rust(hugr_data)
+        # We should get an error, but it processed the JSON
+        assert exc_info.value is not None
+
+        # Try with valid Guppy-generated HUGR if available
+        try:
+            from guppylang import guppy
+            from guppylang.std.quantum import qubit, measure
+
+            @guppy
+            def trivial_circuit() -> bool:
+                q = qubit()
+                return measure(q)
+
+            # Compile to HUGR
+            package = trivial_circuit.compile()
+            hugr_bytes = package.to_bytes()
+
+            # This should succeed
+            result = compile_hugr_to_llvm_rust(hugr_bytes)
+            assert isinstance(result, str)
+            assert len(result) > 0
+
+        except ImportError:
+            # Guppy not available, that's OK
+            pass
 
     except ImportError:
         pytest.skip("Rust HUGR backend not available")

@@ -42,7 +42,11 @@ try:
 except ImportError:
     PECOS_API_AVAILABLE = False
 
-LIBRARY_ENGINE_AVAILABLE = False
+try:
+    from pecos_rslib import SeleneLibraryEngine
+    LIBRARY_ENGINE_AVAILABLE = True
+except ImportError:
+    LIBRARY_ENGINE_AVAILABLE = False
 
 
 def selene_engine_from_guppy(

@@ -10,7 +10,7 @@ use pecos_engines::{
 };
 // MessageType is not exported, we'll match on the actual values
 use crate::SeleneError;
-use pecos_programs::{LlvmProgram, SeleneInterfaceProgram};
+use pecos_programs::{QisProgram, SeleneInterfaceProgram};
 use std::{any::Any, collections::BTreeMap};
 
 // Import the bridge interface from our bridge simulator
@@ -561,8 +561,8 @@ pub struct SeleneExecutableEngine {
     /// The loaded program (compiled from HUGR)
     program: Option<SeleneInterfaceProgram>,
 
-    /// LLVM program (for backward compatibility)
-    llvm_program: Option<LlvmProgram>,
+    /// QIS program (Selene QIS format LLVM IR)
+    qis_program: Option<QisProgram>,
 
     /// Built Selene instance (created from HUGR via `build()` API)
     selene_instance: Option<SeleneInstance>,
@@ -663,7 +663,7 @@ impl SeleneExecutableEngine {
         Ok(Self {
             config,
             program: None,
-            llvm_program: None,
+            qis_program: None,
             selene_instance: None,
             selene_runtime: None,
             operation_queue: Vec::new(),
@@ -691,10 +691,10 @@ impl SeleneExecutableEngine {
         self
     }
 
-    /// Set an LLVM program (for backward compatibility)
+    /// Set a QIS program
     #[must_use]
-    pub fn with_llvm_program(mut self, program: LlvmProgram) -> Self {
-        self.llvm_program = Some(program);
+    pub fn with_qis_program(mut self, program: QisProgram) -> Self {
+        self.qis_program = Some(program);
         self
     }
 
@@ -733,15 +733,15 @@ impl SeleneExecutableEngine {
             return Ok(());
         }
 
-        // Check if we have either a SeleneInterfaceProgram or an LlvmProgram
-        if self.program.is_none() && self.llvm_program.is_none() {
+        // Check if we have either a SeleneInterfaceProgram or a QisProgram
+        if self.program.is_none() && self.qis_program.is_none() {
             return Err(SeleneError::NoProgramSpecified.into());
         }
 
-        // If we have an LLVM program, we're in test mode - just return OK
+        // If we have an QIS program, we're in test mode - just return OK
         // The actual execution will be handled differently
-        if self.llvm_program.is_some() {
-            log::info!("LLVM program provided - using test mode execution path");
+        if self.qis_program.is_some() {
+            log::info!("QIS program provided - using test mode execution path");
             return Ok(());
         }
 
@@ -841,11 +841,11 @@ impl SeleneExecutableEngine {
         // Clone the program to avoid borrowing issues
         if let Some(program) = self.program.clone() {
             self.execute_program_plugin(&program)?;
-        } else if let Some(_llvm_program) = &self.llvm_program {
-            // For LLVM programs, we need a different execution path
-            // For now, just log that we have an LLVM program
-            log::info!("LLVM program execution requested - returning empty shot");
-            // In the future, this would compile and execute the LLVM program
+        } else if let Some(_qis_program) = &self.qis_program {
+            // For QIS programs, we need a different execution path
+            // For now, just log that we have an QIS program
+            log::info!("QIS program execution requested - returning empty shot");
+            // In the future, this would compile and execute the QIS program
         }
 
         Ok(())
@@ -1252,10 +1252,10 @@ impl Engine for SeleneExecutableEngine {
         // Build the Selene instance (direct approach - no subprocess)
         self.build_selene_instance()?;
 
-        // LLVM programs are not supported directly - must use HUGR
-        if self.llvm_program.is_some() {
+        // QIS programs are not supported directly - must use HUGR
+        if self.qis_program.is_some() {
             return Err(PecosError::Processing(
-                "Direct LLVM execution not supported. Please compile from HUGR using Selene."
+                "Direct QIS execution not supported. Please compile from HUGR using Selene."
                     .to_string(),
             ));
         }
@@ -1323,23 +1323,23 @@ impl ClassicalEngine for SeleneExecutableEngine {
 
     fn compile(&self) -> Result<(), PecosError> {
         // Check if we have a valid program
-        if self.program.is_none() && self.llvm_program.is_none() {
+        if self.program.is_none() && self.qis_program.is_none() {
             return Err(PecosError::Processing(
                 "No program specified for compilation".to_string(),
             ));
         }
 
-        // For LLVM programs, validate that they're not empty
-        if let Some(llvm_program) = &self.llvm_program {
+        // For QIS programs, validate that they're not empty
+        if let Some(llvm_program) = &self.qis_program {
             match &llvm_program.content {
-                pecos_programs::LlvmContent::Ir(ir) => {
+                pecos_programs::QisContent::Ir(ir) => {
                     if ir.trim().is_empty() {
                         return Err(PecosError::Processing(
                             "Empty LLVM IR cannot be compiled".to_string(),
                         ));
                     }
                 }
-                pecos_programs::LlvmContent::Bitcode(bc) => {
+                pecos_programs::QisContent::Bitcode(bc) => {
                     if bc.is_empty() {
                         return Err(PecosError::Processing(
                             "Empty LLVM bitcode cannot be compiled".to_string(),
@@ -1375,9 +1375,9 @@ impl ClassicalEngine for SeleneExecutableEngine {
                     log::debug!("Operations queued by bridge, returning them");
                     return self.receive_operations();
                 }
-            } else if self.llvm_program.is_some() {
+            } else if self.qis_program.is_some() {
                 return Err(PecosError::Processing(
-                    "Direct LLVM execution not supported. Please use HUGR compilation with Selene."
+                    "Direct QIS execution not supported. Please use HUGR compilation with Selene."
                         .to_string(),
                 ));
             }
@@ -1412,16 +1412,16 @@ impl ClassicalEngine for SeleneExecutableEngine {
     }
 
     fn get_results(&self) -> Result<Shot, PecosError> {
-        use pecos_llvm_runtime::runtime::registry::RuntimeRegistry;
+        use pecos_qis_runtime::runtime::registry::RuntimeRegistry;
         log::debug!(
             "*** ENGINE: get_results() called, have {} stored measurements ***",
             self.measurement_results.len()
         );
 
-        // LLVM programs are not supported
-        if self.llvm_program.is_some() {
+        // QIS programs are not supported
+        if self.qis_program.is_some() {
             return Err(PecosError::Processing(
-                "Cannot get results for LLVM program. Use HUGR compilation.".to_string(),
+                "Cannot get results for QIS program. Use HUGR compilation.".to_string(),
             ));
         }
 
@@ -1831,7 +1831,7 @@ impl Clone for SeleneExecutableEngine {
         Self {
             config: self.config.clone(),
             program: self.program.clone(),
-            llvm_program: self.llvm_program.clone(),
+            qis_program: self.qis_program.clone(),
             selene_instance: None,       // Each clone builds its own instance
             selene_runtime: None,        // Each clone gets its own runtime
             operation_queue: Vec::new(), // Each clone gets its own queue

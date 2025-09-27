@@ -106,13 +106,13 @@ pecos-qsim = { version = "0.1.1", path = "crates/pecos-qsim" }
 pecos-qasm = { version = "0.1.1", path = "crates/pecos-qasm" }
 pecos-phir-json = { version = "0.1.1", path = "crates/pecos-phir-json" }
 pecos-engines = { version = "0.1.1", path = "crates/pecos-engines" }
-pecos-llvm-runtime = { version = "0.1.1", path = "crates/pecos-llvm-runtime", default-features = false }
+pecos-qis-runtime = { version = "0.1.1", path = "crates/pecos-qis-runtime", default-features = false }
 pecos-phir = { version = "0.1.1", path = "crates/pecos-phir" }
 pecos-qec = { version = "0.1.1", path = "crates/pecos-qec" }
 pecos-rng = { version = "0.1.0", path = "crates/pecos-rng" }
 pecos = { version = "0.1.1", path = "crates/pecos" }
 pecos-cli = { version = "0.1.1", path = "crates/pecos-cli" }
-pecos-llvm-sim = { version = "0.1.1", path = "crates/pecos-llvm-sim" }
+pecos-qis-sim = { version = "0.1.1", path = "crates/pecos-qis-sim" }
 pecos-hugr-qis = { version = "0.1.1", path = "crates/pecos-hugr-qis" }
 pecos-selene-bridge = { version = "0.1.1", path = "crates/pecos-selene-bridge" }
 pecos-selene-engine = { version = "0.1.1", path = "crates/pecos-selene-engine" }

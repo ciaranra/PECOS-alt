@@ -22,10 +22,10 @@ pecos-engines.workspace = true
 pecos-programs.workspace = true
 pecos-qasm.workspace = true
 pecos-phir-json.workspace = true
-pecos-llvm-runtime.workspace = true
-pecos-llvm-sim.workspace = true
+pecos-qis-runtime.workspace = true
+pecos-qis-sim.workspace = true
 pecos-hugr-qis.workspace = true
-pecos-phir.workspace = true
+pecos-phir = { workspace = true, features = ["hugr"] }
 pecos-selene-engine.workspace = true
 pecos-rng.workspace = true
 log.workspace = true
@@ -46,7 +46,7 @@ pecos-core.workspace = true
 pecos-qsim.workspace = true
 pecos-engines.workspace = true
 pecos-qasm.workspace = true
-pecos-phir.workspace = true
+pecos-phir = { workspace = true, features = ["hugr"] }
 pecos-rng.workspace = true
 log.workspace = true
 serde_json.workspace = true

@@ -69,15 +69,15 @@ pub fn py_hugr_to_phir_mlir(
 
 /// PHIR QIR Engine for executing PHIR-generated LLVM IR (in-memory)
 #[pyclass]
-#[pyo3(name = "PhirLlvmEngine")]
-pub struct PyPhirLlvmEngine {
+#[pyo3(name = "PhirQisEngine")]
+pub struct PyPhirQisEngine {
     llvm_ir_content: String,
     shots: Option<usize>,
     seed: Option<u64>,
 }
 
 #[pymethods]
-impl PyPhirLlvmEngine {
+impl PyPhirQisEngine {
     /// Create a new PHIR QIR engine from LLVM IR content (in-memory)
     #[new]
     pub fn new(llvm_ir: &str) -> Self {
@@ -211,7 +211,7 @@ pub fn py_compile_and_execute_via_phir(
         .map_err(|e| PyRuntimeError::new_err(format!("PHIR compilation failed: {e:?}")))?;
 
     // Step 2: Create PHIR QIR engine and execute
-    let mut engine = PyPhirLlvmEngine::new(&llvm_ir);
+    let mut engine = PyPhirQisEngine::new(&llvm_ir);
     engine.set_shots(shots as usize);
     if let Some(s) = seed {
         engine.set_seed(s);
@@ -247,7 +247,7 @@ pub fn register_phir_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_compile_and_execute_via_phir, m)?)?;
 
     // Add PHIR QIR Engine class
-    m.add_class::<PyPhirLlvmEngine>()?;
+    m.add_class::<PyPhirQisEngine>()?;
 
     Ok(())
 }

@@ -74,10 +74,10 @@ def test_python_guppy_hugr_to_selene() -> None:
     # Note: Would need quantum engine to run
 
 
-def test_python_llvm_to_selene() -> None:
-    """Test: Python LLVM → Rust Selene."""
+def test_python_qis_to_selene() -> None:
+    """Test: Python QIS → Rust Selene."""
     try:
-        from pecos_rslib.programs import LlvmProgram
+        from pecos_rslib.programs import QisProgram
         from pecos_rslib.sim import selene_engine
     except ImportError as e:
         pytest.skip(f"Required imports not available: {e}")
@@ -109,8 +109,8 @@ def test_python_llvm_to_selene() -> None:
     attributes #0 = { "EntryPoint" }
     """
 
-    llvm_program = LlvmProgram.from_string(llvm_ir)
-    engine = selene_engine().program(llvm_program)
+    qis_program = QisProgram.from_string(llvm_ir)
+    engine = selene_engine().program(qis_program)
     engine.to_sim()
 
 

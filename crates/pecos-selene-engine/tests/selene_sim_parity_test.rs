@@ -1,6 +1,6 @@
-//! Test that `selene_executable()` with `to_sim()` is on par with `llvm_sim()`
+//! Test that `selene_executable()` with `to_sim()` is on par with `qis_sim()`
 //!
-//! This test verifies that `sim_builder().classical(selene_executable())` supports the same features as `llvm_sim()`,
+//! This test verifies that `sim_builder().classical(selene_executable())` supports the same features as `qis_sim()`,
 //! including noise models, quantum engines, and full simulation capabilities.
 
 use pecos_engines::noise::GeneralNoiseModelBuilder;
@@ -8,7 +8,7 @@ use pecos_engines::{
     BiasedDepolarizingNoise, DepolarizingNoise, PassThroughNoise, sim_builder, sparse_stabilizer,
     state_vector,
 };
-use pecos_programs::LlvmProgram;
+use pecos_programs::QisProgram;
 use pecos_selene_engine::selene_executable;
 
 mod common;
@@ -36,7 +36,7 @@ fn test_selene_sim_with_noise_models() {
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_ir))
+                .program(QisProgram::from_ir(llvm_ir))
                 .qubits(2),
         )
         .noise(PassThroughNoise)
@@ -48,7 +48,7 @@ fn test_selene_sim_with_noise_models() {
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_ir))
+                .program(QisProgram::from_ir(llvm_ir))
                 .qubits(2),
         )
         .noise(DepolarizingNoise { p: 0.01 })
@@ -60,7 +60,7 @@ fn test_selene_sim_with_noise_models() {
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_ir))
+                .program(QisProgram::from_ir(llvm_ir))
                 .qubits(2),
         )
         .noise(DepolarizingNoise { p: 0.002 })
@@ -72,7 +72,7 @@ fn test_selene_sim_with_noise_models() {
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_ir))
+                .program(QisProgram::from_ir(llvm_ir))
                 .qubits(2),
         )
         .noise(BiasedDepolarizingNoise { p: 0.01 })
@@ -87,7 +87,7 @@ fn test_selene_sim_with_noise_models() {
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_ir))
+                .program(QisProgram::from_ir(llvm_ir))
                 .qubits(2),
         )
         .noise(general_noise)
@@ -119,7 +119,7 @@ fn test_selene_executable_with_quantum_engines() {
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_ir))
+                .program(QisProgram::from_ir(llvm_ir))
                 .qubits(2),
         )
         .quantum(state_vector().qubits(2))
@@ -131,7 +131,7 @@ fn test_selene_executable_with_quantum_engines() {
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_ir))
+                .program(QisProgram::from_ir(llvm_ir))
                 .qubits(2),
         )
         .quantum(sparse_stabilizer().qubits(2))
@@ -156,11 +156,11 @@ fn test_selene_executable_full_configuration() {
     attributes #0 = { "EntryPoint" }
     "#;
 
-    // Test full configuration like llvm_sim()
+    // Test full configuration like qis_sim()
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_ir))
+                .program(QisProgram::from_ir(llvm_ir))
                 .qubits(1)
                 .verbose(true),
         )
@@ -177,7 +177,7 @@ fn test_selene_executable_full_configuration() {
     let results2 = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_ir))
+                .program(QisProgram::from_ir(llvm_ir))
                 .qubits(1),
         )
         .workers(2)
@@ -217,7 +217,7 @@ fn test_selene_executable_build_once_run_multiple() {
     let sim = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_ir))
+                .program(QisProgram::from_ir(llvm_ir))
                 .qubits(1),
         )
         .seed(123)
@@ -238,8 +238,8 @@ fn test_selene_executable_build_once_run_multiple() {
 
 #[test]
 #[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
-fn test_selene_executable_api_matches_llvm_sim() {
-    // This test demonstrates that sim_builder().classical(selene_executable()) has the same API as llvm_sim()
+fn test_selene_executable_api_matches_qis_sim() {
+    // This test demonstrates that sim_builder().classical(selene_executable()) has the same API as qis_sim()
     let llvm_ir = r#"
     declare void @__quantum__qis__h__body(i64)
 
@@ -251,11 +251,11 @@ fn test_selene_executable_api_matches_llvm_sim() {
     attributes #0 = { "EntryPoint" }
     "#;
 
-    // All the methods that should be available for parity with llvm_sim()
+    // All the methods that should be available for parity with qis_sim()
     let _sim = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_ir))
+                .program(QisProgram::from_ir(llvm_ir))
                 .qubits(1)
                 .verbose(false),
         )

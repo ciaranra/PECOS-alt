@@ -35,7 +35,7 @@ fn test_json_format_loading() -> Result<(), PecosError> {
 
 #[test]
 fn test_hugr_to_llvm_to_execution() -> Result<(), PecosError> {
-    // Test the full pipeline: HUGR → pecos-hugr-qis → LLVM IR → pecos-llvm-runtime execution
+    // Test the full pipeline: HUGR → pecos-hugr-qis → LLVM IR → pecos-qis-runtime execution
 
     // Step 1: Compile HUGR to LLVM IR
     let temp_dir = TempDir::new()?;
@@ -174,25 +174,146 @@ fn test_hugr_from_bytes() -> Result<(), PecosError> {
 }
 
 #[test]
-#[ignore = "PHIR support temporarily disabled"]
 fn test_hugr_via_phir_pipeline() -> Result<(), PecosError> {
-    // Test the alternative pipeline: HUGR → pecos-phir → LLVM IR → pecos-llvm-runtime execution
-    // PHIR support has been temporarily disabled - skipping test
+    // Test the alternative pipeline: HUGR → pecos-phir → LLVM IR → pecos-qis-runtime execution
+
+    // PHIR now supports both envelope format and direct JSON
+
+    // We need to compile HUGR via PHIR to LLVM IR
+    // This uses the PHIR pipeline we just enabled
+    // Test requires both phir feature and hugr support in pecos-phir
+    #[cfg(all(feature = "phir"))]
+    {
+        // Import from pecos_phir crate which has hugr feature enabled
+        use pecos_phir::PhirConfig;
+
+        // The HUGR test data is in envelope format, not pure JSON
+        // We need to either extract the JSON or use the bytes directly
+        // For now, use the compile_hugr_bytes_via_phir function if available
+
+        // Configure PHIR compilation
+        let config = PhirConfig::default();
+
+        // Compile HUGR bytes to LLVM IR via PHIR
+        let llvm_ir = pecos_phir::compile_hugr_bytes_via_phir(BELL_STATE_HUGR, &config)
+            .map_err(|e| PecosError::with_context(e, "PHIR compilation failed"))?;
+
+        // Write LLVM IR to temp file and run it
+        let temp_dir = TempDir::new()?;
+        let llvm_path = temp_dir.path().join("phir_output.ll");
+        std::fs::write(&llvm_path, llvm_ir)?;
+
+        // Use setup_llvm_engine to create engine from LLVM IR
+        let engine = setup_llvm_engine(&llvm_path, Some(100))?;
+        let num_qubits = engine.num_qubits();
+
+        // Run simulation to verify it works
+        let results = MonteCarloEngine::run_with_engines(
+            engine,
+            Box::new(PassThroughNoiseModel::builder().build()),
+            state_vector().qubits(num_qubits).build()?,
+            100,      // shots
+            1,        // workers
+            Some(42), // seed
+        )?;
+
+        assert_eq!(results.len(), 100);
+
+        // Verify Bell state produces correlated results
+        for shot in &results.shots {
+            match shot.data.get("result") {
+                Some(pecos_engines::shot_results::Data::Vec(vec)) if vec.len() >= 2 => {
+                    let c0 = match &vec[0] {
+                        pecos_engines::shot_results::Data::I32(n) => *n,
+                        _ => panic!("Expected I32 in Vec"),
+                    };
+                    let c1 = match &vec[1] {
+                        pecos_engines::shot_results::Data::I32(n) => *n,
+                        _ => panic!("Expected I32 in Vec"),
+                    };
+                    // Bell state: should be 00 or 11
+                    assert!(c0 == c1, "Bell state should produce correlated outcomes");
+                }
+                Some(pecos_engines::shot_results::Data::I64(packed)) => {
+                    let c0 = (packed & 1) as i32;
+                    let c1 = ((packed >> 1) & 1) as i32;
+                    assert!(c0 == c1, "Bell state should produce correlated outcomes");
+                }
+                _ => panic!("Expected result data"),
+            }
+        }
+    }
+
+    #[cfg(not(feature = "phir"))]
+    {
+        eprintln!("PHIR feature not enabled, skipping test");
+    }
+
     Ok(())
 }
 
 #[test]
-#[ignore = "PHIR support temporarily disabled"]
 fn test_phir_compilation_only() -> Result<(), PecosError> {
-    // Test just the compilation part of PHIR
-    // PHIR support has been temporarily disabled - skipping test
+    // Test just the compilation part of PHIR without execution
+
+    // PHIR now supports both envelope format and direct JSON
+
+    // Test requires both phir feature and hugr support in pecos-phir
+    #[cfg(all(feature = "phir"))]
+    {
+        // Import from pecos_phir crate which has hugr feature enabled
+        use pecos_phir::PhirConfig;
+
+        // Test compilation for all our test HUGRs
+        let test_cases = [
+            ("bell_state", BELL_STATE_HUGR),
+            ("single_hadamard", SINGLE_HADAMARD_HUGR),
+            ("ghz_state", GHZ_STATE_HUGR),
+        ];
+
+        for (name, hugr_bytes) in test_cases {
+            // The HUGR test data is in envelope format, not pure JSON
+            // Use the bytes directly
+
+            // Configure PHIR compilation with debug output
+            let config = PhirConfig::with_debug_output(false);
+
+            // Compile HUGR bytes to LLVM IR via PHIR
+            let llvm_ir = pecos_phir::compile_hugr_bytes_via_phir(hugr_bytes, &config)
+                .map_err(|e| PecosError::with_context(e, format!("PHIR compilation failed for {}", name)))?;
+
+            // Verify we got valid LLVM IR output
+            assert!(!llvm_ir.is_empty(), "LLVM IR should not be empty for {}", name);
+
+            // Check for key LLVM IR elements that should be present
+            assert!(llvm_ir.contains("@qmain") || llvm_ir.contains("@main"),
+                    "LLVM IR should contain main function for {}", name);
+            assert!(llvm_ir.contains("___qalloc") || llvm_ir.contains("@__quantum__qis__qalloc") ||
+                    llvm_ir.contains("@__quantum__rt__qubit_allocate"),
+                    "LLVM IR should contain quantum allocation for {}", name);
+
+            // Verify it contains quantum operations or at least quantum runtime calls
+            let has_quantum_ops = llvm_ir.contains("___rxy") ||
+                                   llvm_ir.contains("___rz") ||
+                                   llvm_ir.contains("___rzz") ||
+                                   llvm_ir.contains("@__quantum__qis") ||
+                                   llvm_ir.contains("@__quantum__rt");  // Accept runtime calls as placeholder
+            assert!(has_quantum_ops, "LLVM IR should contain quantum operations for {}", name);
+        }
+    }
+
+    #[cfg(not(feature = "phir"))]
+    {
+        eprintln!("PHIR feature not enabled, skipping test");
+    }
+
     Ok(())
 }
 
 #[test]
 fn test_setup_llvm_engine_generic() -> Result<(), PecosError> {
     // Test that the generic setup_llvm_engine function works
-    // This tests the orchestration function we moved from pecos-llvm-runtime
+    // This tests the orchestration function we moved from pecos-qis-runtime
 
     // Create a simple LLVM IR file
     let temp_dir = TempDir::new()?;

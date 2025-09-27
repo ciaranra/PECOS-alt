@@ -12,12 +12,12 @@ use pecos_engines::quantum_engine_builder::{
     StateVectorEngineBuilder as RustStateVectorEngineBuilder,
     sparse_stabilizer as rust_sparse_stabilizer, state_vector as rust_state_vector,
 };
-use pecos_llvm_sim::{LlvmEngineBuilder as RustLlvmEngineBuilder, llvm_engine as rust_llvm_engine};
+use pecos_qis_sim::{QisEngineBuilder as RustQisEngineBuilder, qis_engine as rust_qis_engine};
 use pecos_phir_json::{
     PhirJsonEngineBuilder as RustPhirJsonEngineBuilder, phir_json_engine as rust_phir_json_engine,
 };
 use pecos_programs::{
-    HugrProgram, LlvmProgram, PhirJsonProgram, QasmProgram, QisProgram, SeleneInterfaceProgram,
+    HugrProgram, PhirJsonProgram, QasmProgram, QisProgram, SeleneInterfaceProgram,
 };
 use pecos_qasm::{QasmEngineBuilder as RustQasmEngineBuilder, qasm_engine as rust_qasm_engine};
 use pecos_selene_engine::{
@@ -92,18 +92,18 @@ impl PyQasmEngineBuilder {
 }
 
 /// Python wrapper for LLVM engine builder
-#[pyclass(name = "LlvmEngineBuilder")]
+#[pyclass(name = "QisEngineBuilder")]
 #[derive(Clone)]
-pub struct PyLlvmEngineBuilder {
-    pub(crate) inner: RustLlvmEngineBuilder,
+pub struct PyQisEngineBuilder {
+    pub(crate) inner: RustQisEngineBuilder,
 }
 
 #[pymethods]
-impl PyLlvmEngineBuilder {
+impl PyQisEngineBuilder {
     #[new]
     fn new() -> Self {
         Self {
-            inner: rust_llvm_engine(),
+            inner: rust_qis_engine(),
         }
     }
 
@@ -111,16 +111,16 @@ impl PyLlvmEngineBuilder {
     #[pyo3(signature = (program))]
     #[allow(clippy::needless_pass_by_value)] // Py<PyAny> must be passed by value for PyO3
     fn program(&mut self, program: Py<PyAny>, py: Python) -> PyResult<Self> {
-        // Check if it's an LlvmProgram
-        if let Ok(llvm_prog) = program.extract::<PyLlvmProgram>(py) {
-            self.inner = self.inner.clone().program(llvm_prog.inner);
+        // Check if it's a QisProgram
+        if let Ok(qis_prog) = program.extract::<PyQisProgram>(py) {
+            self.inner = self.inner.clone().program(qis_prog.inner);
         }
         // Check if it's a HugrProgram
         else if let Ok(hugr_prog) = program.extract::<PyHugrProgram>(py) {
             self.inner = self.inner.clone().program(hugr_prog.inner);
         } else {
             return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                "program must be either an LlvmProgram or HugrProgram instance",
+                "program must be either a QisProgram or HugrProgram instance",
             ));
         }
         Ok(self.clone())
@@ -135,7 +135,7 @@ impl PyLlvmEngineBuilder {
     /// Convert to simulation builder
     fn to_sim(&self) -> PyResult<PySimBuilder> {
         Ok(PySimBuilder {
-            inner: SimBuilderInner::Llvm(PyLlvmSimBuilder {
+            inner: SimBuilderInner::Llvm(PyQisSimBuilder {
                 engine_builder: Arc::new(Mutex::new(Some(self.inner.clone()))),
                 seed: None,
                 workers: None,
@@ -167,16 +167,16 @@ impl PySeleneEngineBuilder {
     #[pyo3(signature = (program))]
     #[allow(clippy::needless_pass_by_value)] // Py<PyAny> must be passed by value for PyO3
     fn program(&mut self, program: Py<PyAny>, py: Python) -> PyResult<Self> {
-        // Check if it's an LlvmProgram
-        if let Ok(llvm_prog) = program.extract::<PyLlvmProgram>(py) {
-            self.inner = self.inner.clone().program(llvm_prog.inner);
+        // Check if it's a QisProgram
+        if let Ok(qis_prog) = program.extract::<PyQisProgram>(py) {
+            self.inner = self.inner.clone().program(qis_prog.inner);
         }
         // Check if it's a HugrProgram
         else if let Ok(hugr_prog) = program.extract::<PyHugrProgram>(py) {
             self.inner = self.inner.clone().program(hugr_prog.inner);
         } else {
             return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                "program must be either an LlvmProgram or HugrProgram instance",
+                "program must be either a QisProgram or HugrProgram instance",
             ));
         }
         Ok(self.clone())
@@ -323,8 +323,8 @@ impl PyPhirJsonSimulation {
 }
 
 /// Internal LLVM simulation builder state
-pub struct PyLlvmSimBuilder {
-    pub(crate) engine_builder: Arc<Mutex<Option<RustLlvmEngineBuilder>>>,
+pub struct PyQisSimBuilder {
+    pub(crate) engine_builder: Arc<Mutex<Option<RustQisEngineBuilder>>>,
     pub(crate) seed: Option<u64>,
     pub(crate) workers: Option<usize>,
     pub(crate) quantum_engine_builder: Option<Py<PyAny>>,
@@ -394,28 +394,6 @@ impl PyQasmProgram {
     }
 }
 
-#[pyclass(name = "LlvmProgram")]
-#[derive(Clone)]
-pub struct PyLlvmProgram {
-    pub(crate) inner: LlvmProgram,
-}
-
-#[pymethods]
-impl PyLlvmProgram {
-    #[staticmethod]
-    fn from_string(source: String) -> Self {
-        PyLlvmProgram {
-            inner: LlvmProgram::from_string(source),
-        }
-    }
-
-    #[staticmethod]
-    fn from_ir(source: String) -> Self {
-        PyLlvmProgram {
-            inner: LlvmProgram::from_ir(source),
-        }
-    }
-}
 
 #[pyclass(name = "QisProgram")]
 #[derive(Clone)]
@@ -539,9 +517,9 @@ pub fn qasm_engine() -> PyQasmEngineBuilder {
 
 /// Create an LLVM engine builder
 #[pyfunction]
-pub fn llvm_engine() -> PyLlvmEngineBuilder {
-    PyLlvmEngineBuilder {
-        inner: rust_llvm_engine(),
+pub fn qis_engine() -> PyQisEngineBuilder {
+    PyQisEngineBuilder {
+        inner: rust_qis_engine(),
     }
 }
 
@@ -1177,7 +1155,7 @@ pub fn sparse_stab() -> PySparseStabilizerEngineBuilder {
 pub struct PySeleneExecutableConfig {
     pub executable_path: String,
     pub runtime_plugin_path: String,
-    pub error_model_plugin_path: String,
+    pub noise_model_plugin_path: String,
     pub bridge_simulator_plugin_path: String,
     pub working_dir: String,
     pub num_qubits: usize,
@@ -1189,7 +1167,7 @@ impl PySeleneExecutableConfig {
     fn new(
         executable_path: String,
         runtime_plugin_path: String,
-        error_model_plugin_path: String,
+        noise_model_plugin_path: String,
         bridge_simulator_plugin_path: String,
         working_dir: String,
         num_qubits: usize,
@@ -1197,7 +1175,7 @@ impl PySeleneExecutableConfig {
         Self {
             executable_path,
             runtime_plugin_path,
-            error_model_plugin_path,
+            noise_model_plugin_path,
             bridge_simulator_plugin_path,
             working_dir,
             num_qubits,
@@ -1241,7 +1219,7 @@ pub fn sim_builder() -> PySimBuilder {
 pub fn register_engine_builders(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Engine builders
     m.add_class::<PyQasmEngineBuilder>()?;
-    m.add_class::<PyLlvmEngineBuilder>()?;
+    m.add_class::<PyQisEngineBuilder>()?;
     m.add_class::<PySeleneEngineBuilder>()?;
     m.add_class::<PyPhirJsonEngineBuilder>()?;
 
@@ -1257,7 +1235,6 @@ pub fn register_engine_builders(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Program types
     m.add_class::<PyQasmProgram>()?;
-    m.add_class::<PyLlvmProgram>()?;
     m.add_class::<PyHugrProgram>()?;
     m.add_class::<PyPhirJsonProgram>()?;
 
@@ -1272,7 +1249,7 @@ pub fn register_engine_builders(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Engine functions
     m.add_function(wrap_pyfunction!(qasm_engine, m)?)?;
-    m.add_function(wrap_pyfunction!(llvm_engine, m)?)?;
+    m.add_function(wrap_pyfunction!(qis_engine, m)?)?;
     m.add_function(wrap_pyfunction!(selene_engine, m)?)?;
     m.add_function(wrap_pyfunction!(phir_json_engine, m)?)?;
 

@@ -89,10 +89,10 @@ def test_guppy_hugr_to_selene() -> None:
             pytest.fail(f"Unexpected HUGR version error: {error_msg}")
 
 
-def test_selene_llvm_program() -> None:
-    """Test Selene with LLVM program."""
+def test_selene_qis_program() -> None:
+    """Test Selene with QIS program."""
     try:
-        from pecos_rslib.programs import LlvmProgram
+        from pecos_rslib.programs import QisProgram
         from pecos_rslib.sim import selene_engine
     except ImportError:
         pytest.skip("pecos_rslib not available")
@@ -119,13 +119,13 @@ def test_selene_llvm_program() -> None:
     attributes #0 = { "EntryPoint" }
     """
 
-    # Create LLVM program
-    llvm_program = LlvmProgram.from_string(llvm_ir)
+    # Create QIS program
+    qis_program = QisProgram.from_string(llvm_ir)
 
     # Use with Selene
-    engine = selene_engine().program(llvm_program)
+    engine = selene_engine().program(qis_program)
 
-    # Should accept LLVM program
+    # Should accept QIS program
     try:
         engine.to_sim()
         # Would need quantum engine to actually run

@@ -1,13 +1,13 @@
 //! Integration tests for pecos-selene-engine-eng
 //!
-//! NOTE: These tests originally used LLVM IR directly with `LlvmProgram::from_ir()`.
+//! NOTE: These tests originally used LLVM IR directly with `QisProgram::from_ir()`.
 //! We've removed direct LLVM execution support in favor of HUGR compilation through Selene.
 //! The proper execution path is now: Guppy -> HUGR -> Selene Plugin -> Execution
 //! These tests are kept as documentation of the old architecture but marked as ignored.
 //! For working examples, see the Python tests that use the Guppy API.
 
 use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine, ControlEngine, sim_builder};
-use pecos_programs::LlvmProgram;
+use pecos_programs::QisProgram;
 use pecos_selene_engine::selene_executable;
 
 mod common;
@@ -34,7 +34,7 @@ attributes #0 = { "EntryPoint" }
     let result = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_ir))
+                .program(QisProgram::from_ir(llvm_ir))
                 .qubits(1),
         )
         .run(1);
@@ -68,7 +68,7 @@ attributes #0 = { "EntryPoint" }
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(bell_llvm))
+                .program(QisProgram::from_ir(bell_llvm))
                 .qubits(2),
         )
         .run(2); // Reduced from 100 to 2 for debugging
@@ -105,7 +105,7 @@ attributes #0 = { "EntryPoint" }
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(simple_llvm))
+                .program(QisProgram::from_ir(simple_llvm))
                 .qubits(1),
         )
         .run(1);
@@ -116,7 +116,7 @@ attributes #0 = { "EntryPoint" }
 #[test]
 #[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_with_seed() {
-    let test_llvm = r#"
+    let test_qis = r#"
 declare void @__quantum__qis__h__body(i64)
 declare i32 @__quantum__qis__m__body(i64, i64)
 
@@ -132,7 +132,7 @@ attributes #0 = { "EntryPoint" }
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(test_llvm))
+                .program(QisProgram::from_ir(test_qis))
                 .qubits(1),
         )
         .seed(12345)
@@ -160,7 +160,7 @@ attributes #0 = { "EntryPoint" }
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(parallel_llvm))
+                .program(QisProgram::from_ir(parallel_llvm))
                 .qubits(1),
         )
         .workers(4)
@@ -184,7 +184,7 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     let engine = selene_executable()
-        .program(LlvmProgram::from_ir(trait_llvm))
+        .program(QisProgram::from_ir(trait_llvm))
         .qubits(1)
         .build();
 
@@ -199,7 +199,7 @@ attributes #0 = { "EntryPoint" }
 #[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
 fn test_invalid_program() {
     let engine = selene_executable()
-        .program(LlvmProgram::from_ir("")) // Empty IR
+        .program(QisProgram::from_ir("")) // Empty IR
         .qubits(1)
         .build();
 
@@ -213,7 +213,7 @@ fn test_invalid_program() {
 fn test_missing_qubits() {
     // Builder defaults to 10 qubits if not specified
     let result = sim_builder()
-        .classical(selene_executable().program(LlvmProgram::from_ir("test")))
+        .classical(selene_executable().program(QisProgram::from_ir("test")))
         .build();
 
     // This should succeed with the default 10 qubits
@@ -244,7 +244,7 @@ attributes #0 = { "EntryPoint" }
     let result = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(control_llvm))
+                .program(QisProgram::from_ir(control_llvm))
                 .qubits(2)
                 .verbose(true),
         )
@@ -272,7 +272,7 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     let mut engine = selene_executable()
-        .program(LlvmProgram::from_ir(adaptive_llvm))
+        .program(QisProgram::from_ir(adaptive_llvm))
         .qubits(1)
         .build()
         .unwrap();

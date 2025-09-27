@@ -12,7 +12,7 @@ QIS-compatible LLVM IR for execution on PECOS quantum simulators.
 HUGR JSON/Bytes → [pecos-hugr-qis] → QIS LLVM IR String/File
 ```
 
-The generated LLVM IR can then be executed by any compatible execution engine (e.g., pecos-llvm-runtime).
+The generated LLVM IR can then be executed by any compatible execution engine (e.g., pecos-qis-runtime).
 
 # Example
 

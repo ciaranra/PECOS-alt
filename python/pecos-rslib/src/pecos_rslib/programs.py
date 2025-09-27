@@ -6,7 +6,6 @@ This module provides the Rust program types for the unified simulation API.
 # Import the Rust program types
 from pecos_rslib._pecos_rslib import (
     HugrProgram,
-    LlvmProgram,
     PhirJsonProgram,
     QasmProgram,
     QisProgram,
@@ -50,7 +49,6 @@ class WatProgram:
 
 __all__ = [
     "HugrProgram",
-    "LlvmProgram",
     "PhirJsonProgram",
     "QasmProgram",
     "QisProgram",

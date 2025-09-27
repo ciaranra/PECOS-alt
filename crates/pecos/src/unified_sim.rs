@@ -5,7 +5,7 @@
 
 use pecos_core::errors::PecosError;
 use pecos_engines::{ClassicalControlEngineBuilder, MonteCarloEngine, SimBuilder, sim_builder};
-use pecos_llvm_sim::llvm_engine;
+use pecos_qis_sim::qis_engine;
 use pecos_programs::Program;
 use pecos_qasm::qasm_engine;
 use pecos_selene_engine::selene_executable_builder::selene_executable;
@@ -64,17 +64,11 @@ impl ProgrammedSimBuilder {
                     .base_builder
                     .classical(qasm_engine().program(qasm))
                     .build(),
-                Program::Llvm(llvm) => self
-                    .base_builder
-                    .classical(llvm_engine().program(llvm))
-                    .build(),
                 Program::Qis(qis) => {
                     // QIS is Selene QIS format LLVM IR
                     // Use LLVM engine directly for QIS programs
-                    use pecos_programs::LlvmProgram;
-                    let llvm_program = LlvmProgram::from_string(qis.source().to_string());
                     self.base_builder
-                        .classical(llvm_engine().program(llvm_program))
+                        .classical(qis_engine().program(qis))
                         .build()
                 }
                 Program::Hugr(hugr) => {
@@ -121,17 +115,11 @@ impl ProgrammedSimBuilder {
                     .base_builder
                     .classical(qasm_engine().program(qasm))
                     .run(shots),
-                Program::Llvm(llvm) => self
-                    .base_builder
-                    .classical(llvm_engine().program(llvm))
-                    .run(shots),
                 Program::Qis(qis) => {
                     // QIS is Selene QIS format LLVM IR
                     // Use LLVM engine directly for QIS programs
-                    use pecos_programs::LlvmProgram;
-                    let llvm_program = LlvmProgram::from_string(qis.source().to_string());
                     self.base_builder
-                        .classical(llvm_engine().program(llvm_program))
+                        .classical(qis_engine().program(qis))
                         .run(shots)
                 }
                 Program::Hugr(hugr) => {
@@ -260,7 +248,7 @@ impl ProgrammedSimBuilder {
 /// // Override automatic engine selection if needed
 /// let qasm_prog = QasmProgram::from_string("OPENQASM 2.0; qreg q[1]; h q[0];");
 /// let results = sim(qasm_prog)
-///     .classical(pecos_llvm_sim::llvm_engine().program(pecos_programs::LlvmProgram::from_string("...")))
+///     .classical(pecos_qis_sim::qis_engine().program(pecos_programs::QisProgram::from_string("...")))
 ///     .run(100)?;
 /// # Ok::<(), pecos_core::errors::PecosError>(())
 /// ```

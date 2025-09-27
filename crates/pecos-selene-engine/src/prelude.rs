@@ -29,7 +29,7 @@ pub use crate::selene_executable_builder::{SeleneExecutableEngineBuilder, selene
 
 // Program types
 pub use crate::program::SeleneProgram;
-pub use pecos_programs::{HugrProgram, LlvmProgram};
+pub use pecos_programs::{HugrProgram, QisProgram};
 
 // Engine traits - especially ClassicalControlEngineBuilder for .to_sim() (sim_builder() preferred)
 pub use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine, ControlEngine, Engine};

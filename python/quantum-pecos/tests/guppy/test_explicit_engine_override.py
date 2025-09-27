@@ -3,7 +3,7 @@
 import pytest
 from guppylang import guppy
 from guppylang.std.quantum import cx, h, measure, qubit
-from pecos_rslib import llvm_engine, qasm_engine, selene_engine
+from pecos_rslib import qis_engine, qasm_engine, selene_engine
 from pecos_rslib.sim_wrapper import sim
 
 
@@ -89,19 +89,19 @@ measure q[1] -> c[1];"""
 
 def test_invalid_engine_override_rejected() -> None:
     """Test that invalid engine overrides are properly rejected."""
-    from pecos_rslib import LlvmProgram, QasmProgram
+    from pecos_rslib import QisProgram, QasmProgram
 
     # QASM program should reject non-QASM engines
     qasm_program = QasmProgram.from_string("OPENQASM 3.0; qubit q;")
 
     with pytest.raises(Exception, match="QasmEngineBuilder"):
-        sim(qasm_program).classical(llvm_engine()).run(1)
+        sim(qasm_program).classical(qis_engine()).run(1)
 
     # LLVM program should reject QASM engine
-    llvm_program = LlvmProgram.from_string("define void @main() { ret void }")
+    qis_program = QisProgram.from_string("define void @main() { ret void }")
 
-    with pytest.raises(Exception, match=r"(LlvmEngineBuilder|SeleneEngineBuilder)"):
-        sim(llvm_program).classical(qasm_engine()).run(1)
+    with pytest.raises(Exception, match=r"(QisEngineBuilder|SeleneEngineBuilder)"):
+        sim(qis_program).classical(qasm_engine()).run(1)
 
 
 def test_engine_override_with_noise() -> None:

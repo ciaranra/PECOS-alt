@@ -252,8 +252,42 @@ pub struct CustomOp {
     pub dialect: String,
     /// Operation name within dialect
     pub name: String,
+    /// Operands (for parsing compatibility)
+    pub operands: Vec<crate::phir::SSAValue>,
     /// Operation-specific attributes
     pub attributes: HashMap<String, crate::phir::AttributeValue>,
+}
+
+impl CustomOp {
+    /// Create a new custom operation
+    pub fn new(
+        dialect: &str,
+        name: &str,
+        operands: Vec<crate::phir::SSAValue>,
+        attributes: HashMap<String, crate::phir::AttributeValue>,
+    ) -> Self {
+        Self {
+            dialect: dialect.to_string(),
+            name: name.to_string(),
+            operands,
+            attributes,
+        }
+    }
+
+    /// Get the dialect namespace
+    pub fn dialect(&self) -> &str {
+        &self.dialect
+    }
+
+    /// Get the operation name
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Get the operands
+    pub fn operands(&self) -> &[crate::phir::SSAValue] {
+        &self.operands
+    }
 }
 
 // Supporting types

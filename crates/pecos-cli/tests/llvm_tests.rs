@@ -19,7 +19,7 @@ use std::process::Command;
 use std::sync::Once;
 use std::time::Duration;
 
-// File-based lock is only needed for test_llvm_compile_and_run which modifies build directories
+// File-based lock is only needed for test_qis_compile_and_run which modifies build directories
 // All other tests use thread-local runtime contexts and can run in parallel
 #[path = "llvm_test_lock.rs"]
 mod llvm_test_lock;
@@ -155,7 +155,7 @@ fn get_values(json_output: &str) -> Vec<String> {
 
 /// Test that LLVM Bell state produces correct 50/50 distribution
 #[test]
-fn test_llvm_bell_state_distribution() -> Result<(), Box<dyn std::error::Error>> {
+fn test_qis_bell_state_distribution() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize test environment (one-time cleanup of old temp directories)
     setup();
     // No lock needed: This test only executes a quantum program without modifying shared state
@@ -249,7 +249,7 @@ fn test_llvm_bell_state_distribution() -> Result<(), Box<dyn std::error::Error>>
 
 /// Test that LLVM produces deterministic results with the same seed
 #[test]
-fn test_llvm_determinism() -> Result<(), Box<dyn std::error::Error>> {
+fn test_qis_determinism() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize test environment (one-time cleanup of old temp directories)
     setup();
     // No lock needed: This test only verifies determinism by executing programs
@@ -289,7 +289,7 @@ fn test_llvm_determinism() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Test LLVM compilation and execution
 #[test]
-fn test_llvm_compile_and_run() -> Result<(), Box<dyn std::error::Error>> {
+fn test_qis_compile_and_run() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize test environment
     setup();
     // Keep lock: This test modifies the build directory which could cause conflicts
@@ -356,7 +356,7 @@ fn test_llvm_compile_and_run() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Test LLVM with various shot counts
 #[test]
-fn test_llvm_shot_counts() -> Result<(), Box<dyn std::error::Error>> {
+fn test_qis_shot_counts() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize test environment (one-time cleanup of old temp directories)
     setup();
     // No lock needed: This test only executes programs with different shot counts
@@ -404,7 +404,7 @@ fn test_llvm_shot_counts() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Test LLVM with multiple workers
 #[test]
-fn test_llvm_multiple_workers() -> Result<(), Box<dyn std::error::Error>> {
+fn test_qis_multiple_workers() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize test environment (one-time cleanup of old temp directories)
     setup();
     // No lock needed: This test verifies parallel execution with multiple workers

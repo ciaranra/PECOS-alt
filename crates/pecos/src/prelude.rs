@@ -25,7 +25,7 @@
 //! * `pecos_engines`: Simulation engines for quantum and classical processing
 //! * `pecos_phir_json`: PECOS High-level Intermediate Representation
 //! * `pecos_qasm`: `OpenQASM` language support
-//! * `pecos_llvm_runtime`: LLVM IR execution support
+//! * `pecos_qis_runtime`: LLVM IR execution support
 //! * `pecos_qsim`: Quantum simulation implementations
 //!
 //! It also includes key functionality from the top-level PECOS crate:
@@ -45,8 +45,8 @@
 // Re-export preludes from component crates
 pub use pecos_core::prelude::*;
 pub use pecos_engines::prelude::*;
-pub use pecos_llvm_runtime::prelude::*;
-pub use pecos_llvm_sim::prelude::*;
+pub use pecos_qis_runtime::prelude::*;
+pub use pecos_qis_sim::prelude::*;
 pub use pecos_phir_json::prelude::*;
 pub use pecos_qasm::prelude::*;
 pub use pecos_qsim::prelude::*;
@@ -62,7 +62,7 @@ pub use crate::program::{
 };
 
 // Re-export program types from pecos-programs
-pub use pecos_programs::{HugrProgram, LlvmProgram, Program, QasmProgram};
+pub use pecos_programs::{HugrProgram, QisProgram, Program, QasmProgram};
 
 // Re-export setup functions from format-specific crates
 pub use crate::setup_llvm_engine;

@@ -10,7 +10,7 @@ use pecos_core::prelude::PecosError;
 use pecos_engines::{
     ClassicalControlEngineBuilder, ClassicalEngine, ControlEngine, Engine, EngineStage, sim_builder,
 };
-use pecos_programs::{HugrProgram, LlvmProgram};
+use pecos_programs::QisProgram;
 use pecos_selene_engine::selene_executable;
 use std::collections::HashMap;
 
@@ -46,7 +46,7 @@ attributes #0 = { "EntryPoint" }
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(bell_llvm))
+                .program(QisProgram::from_ir(bell_llvm))
                 .qubits(2),
         )
         .seed(42) // seed for reproducibility
@@ -112,7 +112,7 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     let mut engine = selene_executable()
-        .program(LlvmProgram::from_ir(adaptive_llvm))
+        .program(QisProgram::from_ir(adaptive_llvm))
         .qubits(2)
         .verbose(true)
         .build()?;
@@ -160,7 +160,7 @@ fn test_selene_executable_compilation() -> Result<(), PecosError> {
     println!("=== Testing SeleneEngine Compilation ===");
 
     // Test various program formats
-    let test_llvm = r#"
+    let test_qis = r#"
 declare void @__quantum__qis__h__body(i64)
 declare void @__quantum__qis__x__body(i64)
 declare void @__quantum__qis__y__body(i64)
@@ -187,7 +187,7 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     let mut engine = selene_executable()
-        .program(LlvmProgram::from_ir(test_llvm))
+        .program(QisProgram::from_ir(test_qis))
         .qubits(4)
         .build()?;
 
@@ -243,7 +243,7 @@ attributes #0 = { "EntryPoint" }
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(parallel_llvm))
+                .program(QisProgram::from_ir(parallel_llvm))
                 .qubits(2),
         )
         .workers(4)
@@ -292,7 +292,7 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     let mut engine = selene_executable()
-        .program(LlvmProgram::from_ir(reset_llvm))
+        .program(QisProgram::from_ir(reset_llvm))
         .qubits(1)
         .build()?;
 
@@ -332,7 +332,7 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     let base_engine = selene_executable()
-        .program(LlvmProgram::from_ir(clone_llvm))
+        .program(QisProgram::from_ir(clone_llvm))
         .qubits(1)
         .build()?;
 

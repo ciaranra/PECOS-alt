@@ -15,7 +15,7 @@ readme = "README.md"
 pecos-core.workspace = true
 pecos-engines.workspace = true
 pecos-programs.workspace = true
-pecos-llvm-runtime.workspace = true
+pecos-qis-runtime.workspace = true
 pecos-selene-bridge.workspace = true
 pecos-hugr-qis.workspace = true
 

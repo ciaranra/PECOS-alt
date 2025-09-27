@@ -9,7 +9,7 @@ use std::time::Instant;
 // For demonstration, we'll use conceptual examples.
 // In real usage, you would use actual engine builders:
 // - pecos_qasm::unified_engine_builder::qasm_engine()
-// - pecos_llvm_sim::engine_builder::llvm_engine()
+// - pecos_qis_sim::engine_builder::qis_engine()
 // - pecos_selene_engine::selene_executable()
 
 fn main() {

@@ -61,6 +61,8 @@ pub enum Type {
     Never,
     /// Unknown/inferred type
     Unknown,
+    /// Future type (for lazy measurements)
+    Future,
 }
 
 /// Integer bit widths
@@ -259,6 +261,7 @@ impl Type {
             Type::Array(elem_type, _) => elem_type.is_copyable(),
             Type::Tuple(types) => types.iter().all(Type::is_copyable),
             Type::Optional(inner) => inner.is_copyable(),
+            Type::Future => false, // Futures are not copyable
         }
     }
 
@@ -551,6 +554,7 @@ impl std::fmt::Display for Type {
             Type::Unit => write!(f, "!unit"),
             Type::Never => write!(f, "!never"),
             Type::Unknown => write!(f, "!unknown"),
+            Type::Future => write!(f, "!future"),
         }
     }
 }

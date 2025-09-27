@@ -142,11 +142,11 @@ lint-fix:  ## Fix all auto-fixable linting issues (Rust, Python, Julia)
 
 .PHONY: qir-staticlib
 qir-staticlib:  ## Build the QIR static library (needed for QIR compilation)
-	cargo rustc -p pecos-llvm-runtime --lib --crate-type=staticlib
+	cargo rustc -p pecos-qis-runtime --lib --crate-type=staticlib
 
 .PHONY: qir-staticlib-if-needed
 qir-staticlib-if-needed:  ## Build QIR static library only if it doesn't exist in persistent location
-	@if [ ! -f ~/.cargo/pecos-llvm-runtime/libpecos_llvm_runtime.a ] && [ ! -f ~/.cargo/pecos-llvm-runtime/pecos_llvm_runtime.lib ]; then \
+	@if [ ! -f ~/.cargo/pecos-qis-runtime/libpecos_qis_runtime.a ] && [ ! -f ~/.cargo/pecos-qis-runtime/pecos_qis_runtime.lib ]; then \
 		echo "Building QIR static library..."; \
 		$(MAKE) qir-staticlib; \
 	fi
@@ -394,7 +394,7 @@ clean-unix:
 	@# Clean the root workspace target directory
 	@cargo clean
 	@# Clean the persistent QIR library directory
-	@rm -rf ~/.cargo/pecos-llvm-runtime/
+	@rm -rf ~/.cargo/pecos-qis-runtime/
 
 .PHONY: clean-windows-ps
 clean-windows-ps:
@@ -416,7 +416,7 @@ clean-windows-ps:
 	@powershell -Command "Get-ChildItem -Path python -Recurse -Directory -Filter 'target' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 	@cargo clean
 	@# Clean the persistent QIR library directory
-	@powershell -Command "if (Test-Path '$env:USERPROFILE\.cargo\pecos-llvm-runtime') { Remove-Item -Recurse -Force $env:USERPROFILE\.cargo\pecos-llvm-runtime }"
+	@powershell -Command "if (Test-Path '$env:USERPROFILE\.cargo\pecos-qis-runtime') { Remove-Item -Recurse -Force $env:USERPROFILE\.cargo\pecos-qis-runtime }"
 
 .PHONY: clean-windows-cmd
 clean-windows-cmd:
@@ -438,7 +438,7 @@ clean-windows-cmd:
 	-@for /f "delims=" %%d in ('dir /s /b /ad python\target 2^>nul') do @rd /s /q "%%d" 2>nul
 	-@cargo clean
 	-@REM Clean the persistent QIR library directory
-	-@if exist %USERPROFILE%\.cargo\pecos-llvm-runtime rd /s /q %USERPROFILE%\.cargo\pecos-llvm-runtime
+	-@if exist %USERPROFILE%\.cargo\pecos-qis-runtime rd /s /q %USERPROFILE%\.cargo\pecos-qis-runtime
 
 .PHONY: pip-install-uv
 pip-install-uv:  ## Install uv using pip and create a venv. (Recommended to instead follow: https://docs.astral.sh/uv/getting-started/installation/

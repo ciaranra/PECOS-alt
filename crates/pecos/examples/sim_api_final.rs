@@ -3,8 +3,8 @@
 use pecos::prelude::*;
 use pecos::{sim, sim_builder};
 use pecos_engines::{DepolarizingNoise, sparse_stab, state_vector};
-use pecos_llvm_sim::llvm_engine;
-use pecos_programs::{LlvmProgram, QasmProgram};
+use pecos_qis_sim::qis_engine;
+use pecos_programs::{QasmProgram, QisProgram};
 use pecos_qasm::qasm_engine;
 
 fn main() -> Result<(), PecosError> {
@@ -90,7 +90,7 @@ fn main() -> Result<(), PecosError> {
     println!("\n4. Override automatic engine selection:");
 
     let qasm_prog = QasmProgram::from_string("OPENQASM 2.0; qreg q[1];");
-    let llvm_prog = LlvmProgram::from_string(
+    let llvm_prog = QisProgram::from_string(
         r#"
         define void @main() #0 { ret void }
         attributes #0 = { "EntryPoint" }
@@ -99,7 +99,7 @@ fn main() -> Result<(), PecosError> {
 
     // QASM program but use LLVM engine
     let results = sim(qasm_prog)
-        .classical(llvm_engine().program(llvm_prog))
+        .classical(qis_engine().program(llvm_prog))
         .qubits(1)
         .run(10)?;
 

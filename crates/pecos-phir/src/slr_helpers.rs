@@ -18,6 +18,7 @@ pub fn comment(text: &str) -> Instruction {
         Operation::Custom(crate::ops::CustomOp {
             dialect: "slr".to_string(),
             name: "comment".to_string(),
+            operands: vec![],
             attributes: vec![("text".to_string(), AttributeValue::String(text.to_string()))]
                 .into_iter()
                 .collect(),

@@ -579,7 +579,7 @@ fn test_noise_model_determinism() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Test LLVM implementation with depolarizing noise model
 #[test]
-fn test_llvm_with_depolarizing_noise() -> Result<(), Box<dyn std::error::Error>> {
+fn test_qis_with_depolarizing_noise() -> Result<(), Box<dyn std::error::Error>> {
     // No lock needed: This test only executes quantum programs without modifying shared state
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -603,7 +603,7 @@ fn test_llvm_with_depolarizing_noise() -> Result<(), Box<dyn std::error::Error>>
 
 /// Test LLVM implementation with general noise model
 #[test]
-fn test_llvm_with_general_noise() -> Result<(), Box<dyn std::error::Error>> {
+fn test_qis_with_general_noise() -> Result<(), Box<dyn std::error::Error>> {
     // No lock needed: This test only executes quantum programs without modifying shared state
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

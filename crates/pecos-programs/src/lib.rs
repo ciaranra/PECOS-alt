@@ -43,82 +43,46 @@ impl fmt::Display for QasmProgram {
     }
 }
 
+/// Content types for QIS programs
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QisContent {
+    /// LLVM IR text format
+    Ir(String),
+    /// LLVM bitcode binary format
+    Bitcode(Vec<u8>),
+}
+
 /// A QIS (Quantum Instruction Set) program
 ///
 /// This represents LLVM IR that uses Selene QIS functions (___qalloc, ___lazy_measure, etc.)
 /// as opposed to QIR functions. This is the output of HUGR compilation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QisProgram {
-    /// The QIS LLVM IR source code
-    pub source: String,
+    /// The QIS content (IR text or bitcode)
+    pub content: QisContent,
 }
 
 impl QisProgram {
-    /// Create a QIS program from a string
-    pub fn from_string(s: impl Into<String>) -> Self {
-        Self { source: s.into() }
-    }
-
-    /// Create a QIS program by reading from a file
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the file cannot be read
-    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, io::Error> {
-        let source = std::fs::read_to_string(path)?;
-        Ok(Self { source })
-    }
-
-    /// Get the source code
-    #[must_use]
-    pub fn source(&self) -> &str {
-        &self.source
-    }
-}
-
-impl fmt::Display for QisProgram {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.source)
-    }
-}
-
-/// An LLVM program (can be IR text or bitcode)
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LlvmProgram {
-    /// The program content
-    pub content: LlvmContent,
-}
-
-/// The content of an LLVM program
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum LlvmContent {
-    /// LLVM IR text (human-readable .ll format)
-    Ir(String),
-    /// LLVM bitcode (binary .bc format)
-    Bitcode(Vec<u8>),
-}
-
-impl LlvmProgram {
-    /// Create an LLVM program from IR text
+    /// Create a QIS program from IR text
     pub fn from_string(s: impl Into<String>) -> Self {
         Self {
-            content: LlvmContent::Ir(s.into()),
+            content: QisContent::Ir(s.into()),
         }
     }
 
-    /// Create an LLVM program from IR text (alias for `from_string`)
+    /// Create a QIS program from IR text (alias for `from_string`)
     pub fn from_ir(s: impl Into<String>) -> Self {
         Self::from_string(s)
     }
 
-    /// Create an LLVM program from bitcode
+    /// Create a QIS program from bitcode
     pub fn from_bitcode(bitcode: impl Into<Vec<u8>>) -> Self {
         Self {
-            content: LlvmContent::Bitcode(bitcode.into()),
+            content: QisContent::Bitcode(bitcode.into()),
         }
     }
 
-    /// Create an LLVM program by reading from a file
+    /// Create a QIS program by reading from a file
     /// Auto-detects format based on extension (.ll for IR, .bc for bitcode)
     ///
     /// # Errors
@@ -137,7 +101,7 @@ impl LlvmProgram {
         }
     }
 
-    /// Create an LLVM program from an IR text file
+    /// Create a QIS program from an IR text file
     ///
     /// # Errors
     ///
@@ -147,7 +111,7 @@ impl LlvmProgram {
         Ok(Self::from_ir(ir))
     }
 
-    /// Create an LLVM program from a bitcode file
+    /// Create a QIS program from a bitcode file
     ///
     /// # Errors
     ///
@@ -161,41 +125,49 @@ impl LlvmProgram {
     #[must_use]
     pub fn ir(&self) -> Option<&str> {
         match &self.content {
-            LlvmContent::Ir(ir) => Some(ir),
-            LlvmContent::Bitcode(_) => None,
+            QisContent::Ir(ir) => Some(ir),
+            QisContent::Bitcode(_) => None,
         }
+    }
+
+    /// Get the source code (backward compatibility - returns IR if available)
+    #[must_use]
+    pub fn source(&self) -> &str {
+        self.ir().unwrap_or("")
     }
 
     /// Get the bitcode (if this is bitcode)
     #[must_use]
     pub fn bitcode(&self) -> Option<&[u8]> {
         match &self.content {
-            LlvmContent::Ir(_) => None,
-            LlvmContent::Bitcode(bc) => Some(bc),
+            QisContent::Ir(_) => None,
+            QisContent::Bitcode(bc) => Some(bc),
         }
     }
 
     /// Check if this is IR text
     #[must_use]
     pub fn is_ir(&self) -> bool {
-        matches!(self.content, LlvmContent::Ir(_))
+        matches!(self.content, QisContent::Ir(_))
     }
 
     /// Check if this is bitcode
     #[must_use]
     pub fn is_bitcode(&self) -> bool {
-        matches!(self.content, LlvmContent::Bitcode(_))
+        matches!(self.content, QisContent::Bitcode(_))
     }
 }
 
-impl fmt::Display for LlvmProgram {
+impl fmt::Display for QisProgram {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.content {
-            LlvmContent::Ir(ir) => write!(f, "{ir}"),
-            LlvmContent::Bitcode(bc) => write!(f, "LlvmProgram(bitcode, {} bytes)", bc.len()),
+            QisContent::Ir(ir) => write!(f, "{ir}"),
+            QisContent::Bitcode(bc) => write!(f, "QisProgram(bitcode, {} bytes)", bc.len()),
         }
     }
 }
+
+
 
 /// A HUGR program
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -439,9 +411,7 @@ impl fmt::Display for SeleneInterfaceProgram {
 pub enum Program {
     /// A QASM program
     Qasm(QasmProgram),
-    /// An LLVM IR program (QIR format)
-    Llvm(LlvmProgram),
-    /// A QIS program (Selene QIS format LLVM IR)
+    /// A QIS program (Quantum Instruction Set - LLVM IR format)
     Qis(QisProgram),
     /// A HUGR program
     Hugr(HugrProgram),
@@ -461,7 +431,6 @@ impl Program {
     pub fn program_type(&self) -> &'static str {
         match self {
             Program::Qasm(_) => "QASM",
-            Program::Llvm(_) => "LLVM",
             Program::Qis(_) => "QIS",
             Program::Hugr(_) => "HUGR",
             Program::Wasm(_) => "WASM",
@@ -478,14 +447,10 @@ impl From<QasmProgram> for Program {
     }
 }
 
-impl From<LlvmProgram> for Program {
-    fn from(program: LlvmProgram) -> Self {
-        Program::Llvm(program)
-    }
-}
-
 impl From<QisProgram> for Program {
     fn from(program: QisProgram) -> Self {
+        // Since LlvmProgram is now a type alias for QisProgram,
+        // this handles both QisProgram and LlvmProgram
         Program::Qis(program)
     }
 }
@@ -524,7 +489,6 @@ impl fmt::Display for Program {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Program::Qasm(p) => write!(f, "QASM: {p}"),
-            Program::Llvm(p) => write!(f, "LLVM: {p}"),
             Program::Qis(p) => write!(f, "QIS: {p}"),
             Program::Hugr(p) => write!(f, "{p}"),
             Program::Wasm(p) => write!(f, "{p}"),
@@ -549,18 +513,18 @@ mod tests {
     }
 
     #[test]
-    fn test_llvm_program() {
+    fn test_qis_program() {
         let ir = "define void @main() { ret void }";
-        let program = LlvmProgram::from_string(ir);
+        let program = QisProgram::from_string(ir);
         assert_eq!(program.ir(), Some(ir));
         assert_eq!(program.to_string(), ir);
 
         // Test bitcode
         let bitcode = vec![0xDE, 0xC0, 0xDE, 0xCA, 0xFE];
-        let program = LlvmProgram::from_bitcode(bitcode.clone());
+        let program = QisProgram::from_bitcode(bitcode.clone());
         assert_eq!(program.bitcode(), Some(&bitcode[..]));
         assert_eq!(program.ir(), None);
-        assert_eq!(program.to_string(), "LlvmProgram(bitcode, 5 bytes)");
+        assert_eq!(program.to_string(), "QisProgram(bitcode, 5 bytes)");
     }
 
     #[test]
@@ -596,9 +560,9 @@ mod tests {
         let program: Program = qasm.into();
         assert_eq!(program.program_type(), "QASM");
 
-        let llvm = LlvmProgram::from_string("define void @main() {}");
-        let program: Program = llvm.into();
-        assert_eq!(program.program_type(), "LLVM");
+        let qis = QisProgram::from_string("define void @main() {}");
+        let program: Program = qis.into();
+        assert_eq!(program.program_type(), "QIS");
 
         let hugr = HugrProgram::from_bytes(vec![1, 2, 3]);
         let program: Program = hugr.into();
@@ -627,23 +591,23 @@ mod tests {
         let qasm_program = QasmProgram::from_file(&qasm_path)?;
         assert_eq!(qasm_program.source().trim(), "OPENQASM 2.0;\nqreg q[2];");
 
-        // Test LLVM from file
-        let llvm_path = temp_dir.path().join("test.ll");
-        let mut file = std::fs::File::create(&llvm_path)?;
+        // Test QIS from file
+        let qis_path = temp_dir.path().join("test.ll");
+        let mut file = std::fs::File::create(&qis_path)?;
         writeln!(file, "define void @main() {{")?;
         writeln!(file, "  ret void")?;
         writeln!(file, "}}")?;
         drop(file);
 
-        let llvm_program = LlvmProgram::from_file(&llvm_path)?;
-        assert!(llvm_program.ir().unwrap().contains("define void @main()"));
+        let qis_program = QisProgram::from_file(&qis_path)?;
+        assert!(qis_program.ir().unwrap().contains("define void @main()"));
 
-        // Test LLVM bitcode from file
+        // Test QIS bitcode from file
         let bc_path = temp_dir.path().join("test.bc");
         let bitcode_data = vec![0xDE, 0xC0, 0xDE, 0x42, 0x01, 0x0C];
         std::fs::write(&bc_path, &bitcode_data)?;
 
-        let bc_program = LlvmProgram::from_file(&bc_path)?;
+        let bc_program = QisProgram::from_file(&bc_path)?;
         assert!(bc_program.is_bitcode());
         assert_eq!(bc_program.bitcode(), Some(&bitcode_data[..]));
 

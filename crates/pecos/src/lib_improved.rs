@@ -9,7 +9,7 @@
 //! - `pecos-core`: Core types and traits
 //! - `pecos-engines`: Engine traits and quantum backends
 //! - `pecos-qasm`: QASM parser and engine
-//! - `pecos-llvm-sim`: LLVM-based simulation engine
+//! - `pecos-qis-sim`: LLVM-based simulation engine
 //! - `pecos-selene-engine`: Selene integration
 //! - `pecos-programs`: Program types
 //! - `pecos`: This meta-crate providing unified API
@@ -42,11 +42,11 @@ pub mod engines {
     //! # Available Engines
     //!
     //! - **QASM**: OpenQASM 2.0 support via [`qasm_engine()`]
-    //! - **LLVM**: LLVM IR quantum programs via [`llvm_engine()`]
+    //! - **LLVM**: LLVM IR quantum programs via [`qis_engine()`]
     //! - **Selene**: High-performance engine via [`selene_executable()`]
 
     pub use pecos_qasm::{qasm_engine, QasmEngine, QasmEngineBuilder};
-    pub use pecos_llvm_sim::{llvm_engine, LlvmEngine, LlvmEngineBuilder};
+    pub use pecos_qis_sim::{qis_engine, QisEngine, QisEngineBuilder};
     pub use pecos_selene_engine::{selene_executable, SeleneExecutableEngine, SeleneExecutableEngineBuilder};
 
     // Export the main trait

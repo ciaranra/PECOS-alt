@@ -6,8 +6,8 @@
 #[cfg(test)]
 mod tests {
     use pecos_engines::sim;
-    use pecos_llvm_sim::llvm_engine;
-    use pecos_programs::{HugrProgram, LlvmProgram, QasmProgram};
+    use pecos_qis_sim::qis_engine;
+    use pecos_programs::{HugrProgram, QasmProgram, QisProgram};
     use pecos_qasm::qasm_engine;
     use pecos_selene_engine::selene_executable;
 
@@ -22,20 +22,20 @@ mod tests {
     }
 
     #[test]
-    fn test_llvm_engine_accepts_shared_programs() {
+    fn test_qis_engine_accepts_shared_programs() {
         // Test with LlvmProgram
-        let llvm_program = LlvmProgram::from_string("define void @main() { ret void }");
-        let _ = llvm_engine().program(llvm_program);
+        let llvm_program = QisProgram::from_string("define void @main() { ret void }");
+        let _ = qis_engine().program(llvm_program);
 
         // Test with HugrProgram
         let hugr_program = HugrProgram::from_bytes(vec![1, 2, 3, 4]);
-        let _ = llvm_engine().program(hugr_program);
+        let _ = qis_engine().program(hugr_program);
     }
 
     #[test]
     fn test_selene_engine_accepts_shared_programs() {
         // Test with LlvmProgram
-        let llvm_program = LlvmProgram::from_string("define void @main() { ret void }");
+        let llvm_program = QisProgram::from_string("define void @main() { ret void }");
         let _ = selene_executable().program(llvm_program).qubits(1);
 
         // Test with HugrProgram
@@ -59,12 +59,12 @@ mod tests {
         let builder: pecos_qasm::QasmEngineBuilder = qasm_program.into();
         let _ = builder;
 
-        let llvm_program = LlvmProgram::from_string("define void @main() {}");
-        let builder: pecos_llvm_sim::LlvmEngineBuilder = llvm_program.into();
+        let llvm_program = QisProgram::from_string("define void @main() {}");
+        let builder: pecos_qis_sim::QisEngineBuilder = llvm_program.into();
         let _ = builder;
 
         let hugr_program = HugrProgram::from_bytes(vec![1, 2, 3]);
-        let builder: pecos_llvm_sim::LlvmEngineBuilder = hugr_program.into();
+        let builder: pecos_qis_sim::QisEngineBuilder = hugr_program.into();
         let _ = builder;
     }
 
@@ -93,7 +93,7 @@ mod tests {
         let qasm = QasmProgram::from_string("OPENQASM 2.0;");
         assert_eq!(format!("{qasm}"), "OPENQASM 2.0;");
 
-        let llvm = LlvmProgram::from_string("define void @main() {}");
+        let llvm = QisProgram::from_string("define void @main() {}");
         assert_eq!(format!("{llvm}"), "define void @main() {}");
 
         let hugr = HugrProgram::from_bytes(vec![1, 2, 3]);
@@ -108,9 +108,9 @@ mod tests {
         let program: Program = qasm.into();
         assert_eq!(program.program_type(), "QASM");
 
-        let llvm = LlvmProgram::from_string("define void @main() {}");
-        let program: Program = llvm.into();
-        assert_eq!(program.program_type(), "LLVM");
+        let qis = QisProgram::from_string("define void @main() {}");
+        let program: Program = qis.into();
+        assert_eq!(program.program_type(), "QIS");
 
         let hugr = HugrProgram::from_bytes(vec![1, 2, 3]);
         let program: Program = hugr.into();

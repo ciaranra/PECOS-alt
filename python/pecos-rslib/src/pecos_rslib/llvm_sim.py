@@ -4,9 +4,9 @@ This module provides backward compatibility for the old llvm_sim API.
 For new code, use the unified API with selene_engine() instead:
 
     from pecos_rslib import selene_engine
-    from pecos_rslib.programs import LlvmProgram
+    from pecos_rslib.programs import QisProgram
 
-    results = selene_engine().program(LlvmProgram.from_string(llvm_ir)).to_sim().run(shots)
+    results = selene_engine().program(QisProgram.from_string(llvm_ir)).to_sim().run(shots)
 
 Or for Guppy programs:
 
@@ -22,7 +22,7 @@ from pecos_rslib.noise import (
     GeneralNoise,
     PassThroughNoise,
 )
-from pecos_rslib.programs import LlvmProgram
+from pecos_rslib.programs import QisProgram
 
 
 def llvm_sim(
@@ -38,9 +38,9 @@ def llvm_sim(
     Consider using the new unified API instead:
 
         from pecos_rslib import selene_engine
-        from pecos_rslib.programs import LlvmProgram
+        from pecos_rslib.programs import QisProgram
 
-        results = selene_engine().program(LlvmProgram.from_string(llvm_ir)).to_sim().noise(noise_model).seed(42).run(shots)
+        results = selene_engine().program(QisProgram.from_string(llvm_ir)).to_sim().noise(noise_model).seed(42).run(shots)
 
     Args:
         llvm_ir: LLVM IR string
@@ -53,7 +53,7 @@ def llvm_sim(
         Dictionary mapping register names to measurement results
     """
     # Use the new unified API with selene_engine
-    sim_builder = selene_engine().program(LlvmProgram.from_string(llvm_ir)).to_sim()
+    sim_builder = selene_engine().program(QisProgram.from_string(llvm_ir)).to_sim()
 
     if noise_model is not None:
         sim_builder = sim_builder.noise(noise_model)

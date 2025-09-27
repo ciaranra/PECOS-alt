@@ -45,7 +45,7 @@ use byte_message_bindings::{PyByteMessage, PyByteMessageBuilder};
 use coin_toss_bindings::RsCoinToss;
 use cpp_sparse_sim_bindings::CppSparseSim;
 use engine_builders::{
-    PyHugrProgram, PyLlvmProgram, PyPhirJsonProgram, PyQasmProgram, PyQisProgram,
+    PyHugrProgram, PyPhirJsonProgram, PyQasmProgram, PyQisProgram,
     PySeleneExecutableConfig, PySeleneExecutableEngine, PySeleneInterfaceProgram,
 };
 use pauli_prop_bindings::PyPauliProp;
@@ -91,7 +91,6 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Register program types
     m.add_class::<PyQasmProgram>()?;
-    m.add_class::<PyLlvmProgram>()?;
     m.add_class::<PyQisProgram>()?;
     m.add_class::<PyHugrProgram>()?;
     m.add_class::<PyPhirJsonProgram>()?;
@@ -104,7 +103,7 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Register engine builder functions
     m.add_function(wrap_pyfunction!(engine_builders::qasm_engine, m)?)?;
-    m.add_function(wrap_pyfunction!(engine_builders::llvm_engine, m)?)?;
+    m.add_function(wrap_pyfunction!(engine_builders::qis_engine, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::selene_engine, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::phir_json_engine, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::sim_builder, m)?)?;

@@ -1,7 +1,7 @@
 """Test the new sim(program) API."""
 
 from pecos_rslib import (
-    LlvmProgram,
+    QisProgram,
     QasmProgram,
     depolarizing_noise,
     qasm_engine,
@@ -56,7 +56,7 @@ declare i32 @__quantum__qis__m__body(i64, i64)
 attributes #0 = { "EntryPoint" }"""
 
     # Test auto-detection
-    results = sim(LlvmProgram.from_string(llvm_ir)).qubits(1).run(100)
+    results = sim(QisProgram.from_string(llvm_ir)).qubits(1).run(100)
     assert len(results) == 100
 
 

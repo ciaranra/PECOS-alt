@@ -26,13 +26,13 @@ use std::path::PathBuf;
 
 
 /// Python wrapper for LLVM execution
-#[pyclass(name = "LlvmEngine")]
-pub struct PyLlvmEngine {
+#[pyclass(name = "QisEngine")]
+pub struct PyQisEngine {
     llvm_path: PathBuf,
 }
 
 #[pymethods]
-impl PyLlvmEngine {
+impl PyQisEngine {
     /// Create a new LLVM engine from an LLVM file path
     #[new]
     pub fn new(llvm_path: &str) -> PyResult<Self> {
@@ -136,7 +136,7 @@ fn execute_llvm_safe(
 
     // Simple reset - no complex context system
     unsafe {
-        pecos_llvm_runtime::runtime::llvm_runtime_reset();
+        pecos_qis_runtime::runtime::llvm_runtime_reset();
     }
 
     // Set up LLVM engine with max_qubits if specified
@@ -190,7 +190,7 @@ fn execute_llvm_safe(
 
     // Force another reset after execution
     unsafe {
-        pecos_llvm_runtime::runtime::llvm_runtime_reset();
+        pecos_qis_runtime::runtime::llvm_runtime_reset();
     }
 
     // Clear any stored engines from HUGR bindings
@@ -201,7 +201,7 @@ fn execute_llvm_safe(
     }
 
     // Clean up runtime registry
-    pecos_llvm_runtime::runtime::registry::cleanup_all_runtimes();
+    pecos_qis_runtime::runtime::registry::cleanup_all_runtimes();
 
     // Give the runtime a moment to clean up thread-local storage
     // This prevents segfaults when running in pytest environments
@@ -242,10 +242,10 @@ pub fn py_execute_llvm(
 
         // Force clear any lingering runtime state from previous tests
         unsafe {
-            pecos_llvm_runtime::runtime::llvm_runtime_reset();
+            pecos_qis_runtime::runtime::llvm_runtime_reset();
         }
         // Clear any interactive callbacks
-        pecos_llvm_runtime::runtime::core_runtime::clear_interactive_callback();
+        pecos_qis_runtime::runtime::core_runtime::clear_interactive_callback();
     }
 
     // LLVM execution context initialization removed (was stub)
@@ -342,11 +342,11 @@ pub fn py_reset_llvm_runtime() {
 
     // Simple reset - no aggressive cleanup
     unsafe {
-        pecos_llvm_runtime::runtime::llvm_runtime_reset();
+        pecos_qis_runtime::runtime::llvm_runtime_reset();
     }
 
     // Clean up all runtime registry states
-    pecos_llvm_runtime::runtime::registry::cleanup_all_runtimes();
+    pecos_qis_runtime::runtime::registry::cleanup_all_runtimes();
 
     // Give the runtime a moment to clean up
     // This helps prevent segfaults in pytest environments
@@ -355,7 +355,7 @@ pub fn py_reset_llvm_runtime() {
 
 /// Register LLVM Python module
 pub fn register_llvm_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<PyLlvmEngine>()?;
+    m.add_class::<PyQisEngine>()?;
     m.add_function(wrap_pyfunction!(py_execute_llvm, m)?)?;
     m.add_function(wrap_pyfunction!(py_validate_llvm_format, m)?)?;
     m.add_function(wrap_pyfunction!(py_get_llvm_diagnostic_report, m)?)?;

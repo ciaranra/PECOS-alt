@@ -1,7 +1,7 @@
 // Proposal for namespace organization in the pecos crate
 
 // Current flat exports (harder to discover):
-// use pecos::{qasm_engine, llvm_engine, sparse_stabilizer, depolarizing_noise};
+// use pecos::{qasm_engine, qis_engine, sparse_stabilizer, depolarizing_noise};
 
 // Proposed namespace organization:
 pub mod engines {
@@ -9,7 +9,7 @@ pub mod engines {
 
     // Re-export engine builders
     pub use pecos_qasm::{qasm_engine, QasmEngine, QasmEngineBuilder};
-    pub use pecos_llvm_sim::{llvm_engine, LlvmEngine, LlvmEngineBuilder};
+    pub use pecos_qis_sim::{qis_engine, QisEngine, QisEngineBuilder};
     pub use pecos_selene_engine::{selene_engine, SeleneEngine, SeleneEngineBuilder};
 
     // Re-export the trait

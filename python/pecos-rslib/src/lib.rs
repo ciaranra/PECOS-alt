@@ -30,7 +30,7 @@ use engines::{PySparseStabEngineRs, PyStateVecEngineRs};
 use qasm::{
     get_noise_models, get_quantum_engines, qasm_sim_builder, run_qasm, NoiseModel, QuantumEngine,
 };
-use llvm::{llvm_sim_builder, LlvmNoiseModel, LlvmQuantumEngine};
+use llvm::{qis_sim_builder, LlvmNoiseModel, LlvmQuantumEngine};
 use sparse_sim::PySparseSimRs;
 use state_vec::PyStateVecRs;
 use selene_engine::PySeleneLibraryEngine;
@@ -70,7 +70,7 @@ fn _pecos_rslib(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // LLVM simulation
     m.add_class::<LlvmNoiseModel>()?;
     m.add_class::<LlvmQuantumEngine>()?;
-    m.add_function(wrap_pyfunction!(llvm_sim_builder, m)?)?;
+    m.add_function(wrap_pyfunction!(qis_sim_builder, m)?)?;
 
     // Add PHIR compilation submodule
     let phir_module = PyModule::new(m.py(), "phir")?;

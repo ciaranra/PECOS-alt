@@ -10,7 +10,7 @@ use pecos_engines::{
     ClassicalControlEngineBuilder, ClassicalEngine, Engine, ShotVec, hybrid::HybridEngineBuilder,
     quantum::StateVecEngine,
 };
-use pecos_programs::LlvmProgram;
+use pecos_programs::QisProgram;
 use pecos_selene_engine::selene_executable;
 
 #[test]
@@ -40,7 +40,7 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     let selene_executable = selene_executable()
-        .program(LlvmProgram::from_ir(bell_llvm))
+        .program(QisProgram::from_ir(bell_llvm))
         .qubits(2)
         .verbose(true)
         .build()?;
@@ -120,7 +120,7 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     let selene_executable = selene_executable()
-        .program(LlvmProgram::from_ir(adaptive_llvm))
+        .program(QisProgram::from_ir(adaptive_llvm))
         .qubits(2)
         .verbose(true)
         .build()?;
@@ -190,7 +190,7 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     let selene_executable = selene_executable()
-        .program(LlvmProgram::from_ir(multi_qubit_llvm))
+        .program(QisProgram::from_ir(multi_qubit_llvm))
         .qubits(3)
         .build()?;
 
@@ -239,7 +239,7 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     let selene_executable = selene_executable()
-        .program(LlvmProgram::from_ir(reset_llvm))
+        .program(QisProgram::from_ir(reset_llvm))
         .qubits(1)
         .build()?;
 
@@ -277,7 +277,7 @@ fn test_selene_error_handling() -> Result<(), PecosError> {
 
     // Try to create engine with invalid configuration
     let mut engine = selene_executable()
-        .program(LlvmProgram::from_ir("")) // Empty IR should cause error
+        .program(QisProgram::from_ir("")) // Empty IR should cause error
         .qubits(1) // Valid qubit count (0 qubits would be rejected by builder)
         .build()?;
 
@@ -289,7 +289,7 @@ fn test_selene_error_handling() -> Result<(), PecosError> {
 
     // Also test zero qubits case
     let result = selene_executable()
-        .program(LlvmProgram::from_ir("define void @main() { ret void }"))
+        .program(QisProgram::from_ir("define void @main() { ret void }"))
         .qubits(0)
         .build();
 

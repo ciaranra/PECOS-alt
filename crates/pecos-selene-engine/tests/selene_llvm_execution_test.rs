@@ -1,6 +1,6 @@
 //! Tests for Selene LLVM execution capabilities
 //!
-//! NOTE: These tests originally used LLVM IR directly with `LlvmProgram::from_ir()`.
+//! NOTE: These tests originally used LLVM IR directly with `QisProgram::from_ir()`.
 //! We've removed direct LLVM execution support in favor of HUGR compilation through Selene.
 //! The proper execution path is now: Guppy -> HUGR -> Selene Plugin -> Execution
 //! These tests are kept as documentation of the old architecture but marked as ignored.
@@ -8,7 +8,7 @@
 
 use pecos_core::prelude::PecosError;
 use pecos_engines::{ClassicalEngine, ControlEngine, EngineStage};
-use pecos_programs::LlvmProgram;
+use pecos_programs::QisProgram;
 use pecos_selene_engine::SeleneExecutableEngine;
 
 #[test]
@@ -45,7 +45,7 @@ attributes #0 = { "EntryPoint" }
 
     // Create SeleneExecutableEngine with LLVM IR
     let mut engine =
-        SeleneExecutableEngine::new(2)?.with_llvm_program(LlvmProgram::from_ir(bell_state_llvm));
+        SeleneExecutableEngine::new(2)?.with_qis_program(QisProgram::from_ir(bell_state_llvm));
 
     println!("Created SeleneExecutableEngine with Bell state LLVM IR");
 
@@ -111,7 +111,7 @@ attributes #0 = { "EntryPoint" }
 
     // Create engine as ControlEngine
     let mut engine =
-        SeleneExecutableEngine::new(2)?.with_llvm_program(LlvmProgram::from_ir(adaptive_llvm));
+        SeleneExecutableEngine::new(2)?.with_qis_program(QisProgram::from_ir(adaptive_llvm));
 
     // Start the control flow
     match engine.start(())? {
@@ -188,7 +188,7 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     let mut engine =
-        SeleneExecutableEngine::new(2)?.with_llvm_program(LlvmProgram::from_ir(mixed_llvm));
+        SeleneExecutableEngine::new(2)?.with_qis_program(QisProgram::from_ir(mixed_llvm));
 
     // Generate commands
     let commands = engine.generate_commands()?;
@@ -263,7 +263,7 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     let engine =
-        SeleneExecutableEngine::new(1)?.with_llvm_program(LlvmProgram::from_ir(simple_llvm));
+        SeleneExecutableEngine::new(1)?.with_qis_program(QisProgram::from_ir(simple_llvm));
 
     assert_is_classical_engine(&engine);
     assert_is_control_engine(&engine);

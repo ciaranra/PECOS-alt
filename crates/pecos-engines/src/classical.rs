@@ -280,7 +280,7 @@ dyn_clone::clone_trait_object!(ClassicalEngine);
 /// assert!(commands.is_empty().unwrap());
 /// ```
 ///
-/// See `PhirEngine`, `QasmEngine`, and `LlvmEngine` for concrete examples.
+/// See `PhirEngine`, `QasmEngine`, and `QisEngine` for concrete examples.
 pub trait ClassicalControlEngine: ClassicalEngine
     + ControlEngine<Input = (), Output = Shot, EngineInput = ByteMessage, EngineOutput = ByteMessage>
 {

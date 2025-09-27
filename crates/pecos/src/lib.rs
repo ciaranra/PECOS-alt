@@ -24,7 +24,7 @@
 //! - `pecos_qasm`: Support for `OpenQASM` language for quantum circuit description
 //! - `pecos_qsim`: Quantum simulation implementations
 //! - `pecos_phir_json`: PECOS High-level Intermediate Representation
-//! - `pecos_llvm_runtime`: Support for Quantum Intermediate Representation
+//! - `pecos_qis_runtime`: Support for Quantum Intermediate Representation
 //!
 //! This meta-crate unifies the API and re-exports the most commonly used types and
 //! functions from the component crates to provide a simplified interface.
@@ -94,19 +94,19 @@ pub use pecos_engines::{
     DepolarizingNoise, GeneralNoiseModelBuilder, PassThroughNoiseModel, SimInput, sim_builder,
     sparse_stabilizer, state_vector,
 };
-pub use pecos_llvm_runtime::LlvmEngineConfig;
+pub use pecos_qis_runtime::QisEngineConfig;
 pub use pecos_qasm::run_qasm;
 pub use unified_sim::{ProgrammedSimBuilder, SimBuilderExt, sim};
 
 // Re-export program types from pecos-programs
-pub use pecos_programs::{HugrProgram, LlvmProgram, Program, QasmProgram};
+pub use pecos_programs::{HugrProgram, QisProgram, Program, QasmProgram};
 
 // Re-export engine builders from individual crates
 #[cfg(feature = "qasm")]
 pub use pecos_qasm::qasm_engine;
 
 #[cfg(feature = "llvm")]
-pub use pecos_llvm_sim::llvm_engine;
+pub use pecos_qis_sim::qis_engine;
 
 #[cfg(feature = "selene")]
 pub use pecos_selene_engine::selene_executable_builder::selene_executable;
@@ -387,8 +387,8 @@ pub fn setup_llvm_engine_with_config(
     log::debug!("Using {} qubits for engine", num_qubits);
 
     // Create an actual LLVM engine with the Selene QIS runtime
-    use pecos_llvm_runtime::LlvmEngine;
-    let engine = LlvmEngine::new(llvm_ir_path.to_path_buf());
+    use pecos_qis_runtime::QisEngine;
+    let engine = QisEngine::new(llvm_ir_path.to_path_buf());
     Ok(Box::new(engine) as Box<dyn ClassicalControlEngine>)
 }
 
@@ -398,7 +398,7 @@ pub fn setup_llvm_engine_with_config(
 /// with LLVM execution. The architecture is:
 ///
 /// 1. `pecos-hugr-qis` compiles HUGR → LLVM IR (pure compilation, no engine dependencies)
-/// 2. `pecos-llvm-runtime` executes LLVM IR (pure execution, no HUGR dependencies)
+/// 2. `pecos-qis-runtime` executes LLVM IR (pure execution, no HUGR dependencies)
 /// 3. `pecos` orchestrates: HUGR → LLVM IR → Execution
 pub mod hugr {
     use pecos_core::errors::PecosError;
@@ -489,7 +489,7 @@ pub mod hugr {
         })?;
 
         // Persist the file to keep it around after this function returns
-        // This is necessary because the LlvmEngine needs to access the file in worker threads
+        // This is necessary because the QisEngine needs to access the file in worker threads
         let (_, path) = temp_file
             .keep()
             .map_err(|e| PecosError::with_context(e, "Failed to persist temporary LLVM IR file"))?;
@@ -505,7 +505,7 @@ pub mod hugr {
 /// through the PHIR pipeline with LLVM execution. The architecture is:
 ///
 /// 1. `pecos-phir` compiles HUGR → PHIR → LLVM IR (direct parsing to PHIR, no separate AST)
-/// 2. `pecos-llvm-runtime` executes LLVM IR (pure execution, no HUGR/PHIR dependencies)
+/// 2. `pecos-qis-runtime` executes LLVM IR (pure execution, no HUGR/PHIR dependencies)
 /// 3. `pecos` orchestrates: HUGR → PHIR → LLVM IR → Execution
 ///
 /// PHIR provides an alternative compilation path to HUGR-LLVM that goes through
@@ -520,7 +520,7 @@ pub mod phir {
     ///
     /// This is a convenience function that:
     /// 1. Compiles HUGR to LLVM IR via PHIR using `pecos-phir`
-    /// 2. Creates an LLVM engine from the IR using `pecos-llvm-runtime`
+    /// 2. Creates an LLVM engine from the IR using `pecos-qis-runtime`
     /// 3. Returns the configured engine ready for execution
     ///
     /// # Arguments

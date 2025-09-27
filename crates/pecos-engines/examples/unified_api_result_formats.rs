@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 fn main() {
     // Note: In real usage, you would use actual engine builders from the crates:
     // - pecos_qasm::unified_engine_builder::qasm_engine()
-    // - pecos_llvm_sim::engine_builder::llvm_engine()
+    // - pecos_qis_sim::engine_builder::qis_engine()
     // - pecos_selene_engine::selene_executable()
     //
     // This example focuses on the result format conversions rather than
@@ -49,7 +49,7 @@ fn main() {
     }
 
     // Convert to columnar format (HashMap<String, Vec<i64>>)
-    // This format is used by llvm_sim() for compatibility
+    // This format is used by qis_sim() for compatibility
     let columnar = shots_to_columnar(&shot_vec);
     println!("Columnar format: {columnar:?}");
     // Each register name maps to a vector of values across all shots

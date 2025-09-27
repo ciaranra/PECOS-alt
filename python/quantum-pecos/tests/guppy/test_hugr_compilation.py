@@ -30,16 +30,16 @@ class TestHUGRCompilation:
         except FileNotFoundError:
             pytest.skip("Cargo not found in PATH")
 
-        # Check if pecos-hugr crate exists
-        project_root = Path(__file__).resolve().parent.parent.parent.parent
-        hugr_crate = project_root / "crates" / "pecos-hugr"
+        # Check if pecos-hugr-qis crate exists
+        project_root = Path(__file__).resolve().parent.parent.parent.parent.parent
+        hugr_crate = project_root / "crates" / "pecos-hugr-qis"
 
         if not hugr_crate.exists():
-            pytest.skip("pecos-hugr crate not found")
+            pytest.skip("pecos-hugr-qis crate not found")
 
-        # Test compilation of pecos-hugr crate
+        # Test compilation of pecos-hugr-qis crate
         result = subprocess.run(
-            [cargo_path, "check", "-p", "pecos-hugr"],
+            [cargo_path, "check", "-p", "pecos-hugr-qis"],
             capture_output=True,
             text=True,
             cwd=project_root,
@@ -67,15 +67,15 @@ class TestHUGRCompilation:
         except FileNotFoundError:
             pytest.skip("Cargo not available")
 
-        project_root = Path(__file__).resolve().parent.parent.parent.parent
-        hugr_crate = project_root / "crates" / "pecos-hugr"
+        project_root = Path(__file__).resolve().parent.parent.parent.parent.parent
+        hugr_crate = project_root / "crates" / "pecos-hugr-qis"
 
         if not hugr_crate.exists():
-            pytest.skip("pecos-hugr crate not found")
+            pytest.skip("pecos-hugr-qis crate not found")
 
         # Run HUGR-specific unit tests
         result = subprocess.run(
-            [cargo_path, "test", "-p", "pecos-hugr", "--", "--nocapture"],
+            [cargo_path, "test", "-p", "pecos-hugr-qis", "--", "--nocapture"],
             capture_output=True,
             text=True,
             cwd=project_root,
@@ -158,7 +158,7 @@ attributes #0 = { "EntryPoint" }
 
     def test_llvm_ir_examples_structure(self) -> None:
         """Test LLVM IR examples follow HUGR conventions."""
-        project_root = Path(__file__).resolve().parent.parent.parent.parent
+        project_root = Path(__file__).resolve().parent.parent.parent.parent.parent
 
         # Look for LLVM IR examples
         llvm_examples = project_root / "examples" / "llvm"

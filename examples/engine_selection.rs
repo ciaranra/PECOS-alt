@@ -9,7 +9,7 @@ use pecos::prelude::*;
 use pecos::{EngineType, DynamicEngineBuilder, sim_dynamic};
 use pecos_engines::{sim, SimBuilder, DepolarizingNoise};
 use pecos_qasm::qasm_engine;
-use pecos_llvm_sim::llvm_engine;
+use pecos_qis_sim::llvm_engine;
 use pecos_selene_engine::selene_executable;
 use pecos_programs::QasmProgram;
 
@@ -75,8 +75,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "llvm" => {
             println!("   User selected LLVM engine");
             // In real code, you'd have LLVM IR here
-            use pecos_programs::LlvmProgram;
-            DynamicEngineBuilder::new(llvm_engine().program(LlvmProgram::from_string("define void @main() { ret void }")))
+            use pecos_programs::QisProgram;
+            DynamicEngineBuilder::new(qis_engine().program(QisProgram::from_string("define void @main() { ret void }")))
         }
         "selene" => {
             println!("   User selected Selene engine");
@@ -143,8 +143,8 @@ fn create_engine_from_file(path: &str) -> Result<DynamicEngineBuilder, Box<dyn s
     let builder = if path.ends_with(".qasm") {
         DynamicEngineBuilder::new(qasm_engine().program(QasmProgram::from_string(&content)))
     } else if path.ends_with(".ll") {
-        use pecos_programs::LlvmProgram;
-        DynamicEngineBuilder::new(llvm_engine().program(LlvmProgram::from_string(&content)))
+        use pecos_programs::QisProgram;
+        DynamicEngineBuilder::new(qis_engine().program(QisProgram::from_string(&content)))
     } else if path.ends_with(".hugr") {
         // In real code, you'd parse HUGR here
         use pecos_programs::HugrProgram;
@@ -166,8 +166,8 @@ fn create_engine_from_type(
     match engine_type {
         EngineType::Qasm => DynamicEngineBuilder::new(qasm_engine().program(QasmProgram::from_string(source))),
         EngineType::Llvm => {
-            use pecos_programs::LlvmProgram;
-            DynamicEngineBuilder::new(llvm_engine().program(LlvmProgram::from_string(source)))
+            use pecos_programs::QisProgram;
+            DynamicEngineBuilder::new(qis_engine().program(QisProgram::from_string(source)))
         },
         EngineType::Selene => {
             // In real code, you'd parse HUGR from source

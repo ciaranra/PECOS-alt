@@ -8,10 +8,10 @@ from pecos_rslib import (
     sparse_stabilizer,
     state_vector,
 )
-from pecos_rslib.programs import LlvmProgram, QasmProgram
+from pecos_rslib.programs import QisProgram, QasmProgram
 from pecos_rslib.sim import (
     depolarizing_noise,
-    llvm_engine,
+    qis_engine,
     qasm_engine,
 )
 
@@ -159,8 +159,8 @@ attributes #0 = { "EntryPoint" }
         try:
             # Try to create LLVM engine
             sim = (
-                llvm_engine()
-                .program(LlvmProgram.from_ir(llvm_ir))
+                qis_engine()
+                .program(QisProgram.from_ir(llvm_ir))
                 .to_sim()
                 .quantum(state_vector())
                 .seed(42)

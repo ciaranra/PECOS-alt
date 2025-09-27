@@ -134,7 +134,7 @@ impl fmt::Display for EngineType {
 /// # Why Use `DynamicEngineBuilder`?
 ///
 /// In Rust, each engine builder has its own concrete type (`QasmEngineBuilder`,
-/// `LlvmEngineBuilder`, etc.). This is great for performance and type safety,
+/// `QisEngineBuilder`, etc.). This is great for performance and type safety,
 /// but it means you can't easily store different builders in the same variable
 /// or collection. `DynamicEngineBuilder` solves this by wrapping any engine
 /// builder in a type-erased container.
@@ -237,7 +237,7 @@ impl DynamicEngineBuilder {
     pub fn from_type(engine_type: EngineType) -> Self {
         match engine_type {
             EngineType::Qasm => Self::new(pecos_qasm::qasm_engine()),
-            EngineType::Llvm => Self::new(pecos_llvm_sim::llvm_engine()),
+            EngineType::Llvm => Self::new(pecos_qis_sim::qis_engine()),
             EngineType::Selene => Self::new(pecos_selene_engine::selene_executable()),
         }
     }
@@ -325,7 +325,7 @@ macro_rules! create_engine_builder {
             $crate::EngineType::Llvm => {
                 #[cfg(feature = "llvm")]
                 {
-                    $crate::DynamicEngineBuilder::new(pecos_llvm_sim::llvm_engine())
+                    $crate::DynamicEngineBuilder::new(pecos_qis_sim::qis_engine())
                 }
                 #[cfg(not(feature = "llvm"))]
                 {

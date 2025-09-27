@@ -4,7 +4,7 @@ use pecos_engines::noise::GeneralNoiseModelBuilder;
 use pecos_engines::{
     BiasedDepolarizingNoise, DepolarizingNoise, PassThroughNoise, sim_builder, sparse_stabilizer,
 };
-use pecos_programs::LlvmProgram;
+use pecos_programs::QisProgram;
 use pecos_selene_engine::selene_executable;
 
 mod common;
@@ -28,7 +28,7 @@ fn test_noise_method_with_structs() {
     let _sim = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_ir))
+                .program(QisProgram::from_ir(llvm_ir))
                 .qubits(1),
         )
         .noise(PassThroughNoise)
@@ -39,7 +39,7 @@ fn test_noise_method_with_structs() {
     let _sim = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_ir))
+                .program(QisProgram::from_ir(llvm_ir))
                 .qubits(1),
         )
         .noise(DepolarizingNoise { p: 0.01 })
@@ -50,7 +50,7 @@ fn test_noise_method_with_structs() {
     let _sim = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_ir))
+                .program(QisProgram::from_ir(llvm_ir))
                 .qubits(1),
         )
         .noise(DepolarizingNoise { p: 0.002 })
@@ -61,7 +61,7 @@ fn test_noise_method_with_structs() {
     let _sim = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_ir))
+                .program(QisProgram::from_ir(llvm_ir))
                 .qubits(1),
         )
         .noise(BiasedDepolarizingNoise { p: 0.01 })
@@ -75,7 +75,7 @@ fn test_noise_method_with_structs() {
     let _sim = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_ir))
+                .program(QisProgram::from_ir(llvm_ir))
                 .qubits(1),
         )
         .noise(general)
@@ -100,7 +100,7 @@ fn test_noise_method_with_enum() {
     let _sim = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_ir))
+                .program(QisProgram::from_ir(llvm_ir))
                 .qubits(1),
         )
         .noise(DepolarizingNoise { p: 0.01 })
@@ -110,7 +110,7 @@ fn test_noise_method_with_enum() {
     let _sim = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_ir))
+                .program(QisProgram::from_ir(llvm_ir))
                 .qubits(1),
         )
         .noise(DepolarizingNoise { p: 0.002 })
@@ -137,7 +137,7 @@ fn test_noise_api_matches_qasm_sim() {
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_ir))
+                .program(QisProgram::from_ir(llvm_ir))
                 .qubits(1),
         )
         .seed(42)
@@ -151,7 +151,7 @@ fn test_noise_api_matches_qasm_sim() {
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_ir))
+                .program(QisProgram::from_ir(llvm_ir))
                 .qubits(1),
         )
         .workers(2)

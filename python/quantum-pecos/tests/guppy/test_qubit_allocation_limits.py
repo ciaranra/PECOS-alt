@@ -6,18 +6,18 @@ try:
     from guppylang import guppy
     from guppylang.std.quantum import h, measure, qubit
 
-    # Try to import qubit arrays
+    # Try to import array from builtins
     try:
-        from guppylang.std.quantum import array as qubit_array
+        from guppylang.std.builtins import array
 
-        QUBIT_ARRAY_AVAILABLE = True
+        ARRAY_AVAILABLE = True
     except ImportError:
-        QUBIT_ARRAY_AVAILABLE = False
-        qubit_array = None  # type: ignore
+        ARRAY_AVAILABLE = False
+        array = None  # type: ignore
     GUPPY_AVAILABLE = True
 except ImportError:
     GUPPY_AVAILABLE = False
-    QUBIT_ARRAY_AVAILABLE = False
+    ARRAY_AVAILABLE = False
 
 try:
     from pecos.frontends.guppy_api import sim
@@ -285,51 +285,71 @@ class TestQubitAllocationLimits:
             ), "Measurements should be bool/int"
 
     def test_qubit_array_allocation(self) -> None:
-        """Test allocation of qubit arrays if supported."""
-        pytest.skip(
-            "Qubit arrays require special Guppy module setup not available in standalone tests",
-        )
+        """Test allocation of qubit arrays using Guppy's array type with proper ownership."""
+        if not ARRAY_AVAILABLE:
+            pytest.skip("Array type not available from guppylang.std.builtins")
 
-        # Note: qubit_array works in test_extended_guppy_features.py but requires
-        # proper Guppy module registration that isn't easily replicated in standalone tests.
-        # The array functionality is tested there. This test is preserved for when
-        # the setup can be properly replicated.
+        # Import owned annotation
+        try:
+            from guppylang.std.builtins import owned
+        except ImportError:
+            pytest.skip("owned annotation not available")
 
-        if not QUBIT_ARRAY_AVAILABLE:
-            pytest.skip("Qubit arrays not available")
+        # Import measure_array for proper array handling
+        try:
+            from guppylang.std.quantum import measure_array
+        except ImportError:
+            pytest.skip("measure_array not available")
 
         @guppy
-        def array_test() -> int:
-            # Allocate array of 3 qubits
-            qubits = qubit_array(3)
-            count = 0
+        def apply_h_to_array(qubits: array[qubit, 3] @ owned) -> array[qubit, 3]:
+            """Apply H gates to array elements using @owned annotation for borrowing."""
+            # With @owned, we can borrow elements from the array
+            h(qubits[0])
+            h(qubits[1])
+            h(qubits[2])
+            return qubits
 
-            # Apply H to all and measure
-            # Note: Due to integer accumulation limitation, only last result is kept
-            for i in range(3):
-                h(qubits[i])
-                if measure(qubits[i]):
-                    count = 1  # Will only keep last measurement result
+        @guppy
+        def array_test() -> array[bool, 3]:
+            # Allocate array of 3 qubits using generator expression
+            qubits = array(qubit() for _ in range(3))
 
-            return count
+            # Pass array to function that can borrow elements
+            qubits = apply_h_to_array(qubits)
+
+            # Measure all qubits at once using measure_array
+            return measure_array(qubits)
 
         # Need at least 3 qubits for the array
-        try:
-            results = sim(array_test).qubits(5).quantum(state_vector()).seed(42).run(50)
-            measurements = results.get("measurement_1", results.get("measurements", []))
+        results = sim(array_test).qubits(3).quantum(state_vector()).seed(42).run(50)
 
-            assert len(measurements) == 50, "Should have 50 measurements"
-            # Due to Guppy limitation with integer accumulation in loops,
-            # only the last measurement result is returned
-            assert all(
-                0 <= v <= 1 for v in measurements
-            ), "Count should be 0-1 (last measurement only)"
+        # The result should be an array of 3 booleans for each shot
+        # Results format depends on return type
+        if "measurement_1" in results:
+            # If results are split by measurement index
+            assert len(results["measurement_1"]) == 50, "Should have 50 measurements for qubit 1"
+            assert len(results["measurement_2"]) == 50, "Should have 50 measurements for qubit 2"
+            assert len(results["measurement_3"]) == 50, "Should have 50 measurements for qubit 3"
 
-        except (ImportError, AttributeError, RuntimeError) as e:
-            # If arrays still cause issues, skip the test
-            if "array" in str(e).lower() or "not supported" in str(e).lower():
-                pytest.skip(f"Qubit arrays not fully supported: {e}")
-            raise
+            # Each qubit should have roughly 50/50 distribution due to H gate
+            for i in range(1, 4):
+                key = f"measurement_{i}"
+                ones = sum(results[key])
+                assert 15 < ones < 35, f"Qubit {i} should have ~50/50 distribution, got {ones}/50"
+        else:
+            # Results might be arrays or tuples
+            measurements = results.get("measurements", results.get("result", []))
+            assert len(measurements) == 50, "Should have 50 measurement sets"
+
+            # Each measurement should be an array/tuple of 3 booleans
+            for m in measurements[:5]:  # Check first few
+                assert len(m) == 3, f"Each result should have 3 measurements, got {len(m)}"
+
+            # Check distribution for each qubit position
+            for i in range(3):
+                ones = sum(1 for m in measurements if m[i])
+                assert 15 < ones < 35, f"Qubit {i} should have ~50/50 distribution, got {ones}/50"
 
     def test_parallel_qubit_operations(self) -> None:
         """Test parallel operations on multiple qubits."""

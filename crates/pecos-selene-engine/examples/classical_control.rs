@@ -8,7 +8,7 @@ use pecos_core::prelude::PecosError;
 use pecos_engines::{
     ByteMessageBuilder, ClassicalControlEngineBuilder, ControlEngine, EngineStage, sim_builder,
 };
-use pecos_programs::LlvmProgram;
+use pecos_programs::QisProgram;
 use pecos_selene_engine::selene_executable;
 
 fn main() -> Result<(), PecosError> {
@@ -63,7 +63,7 @@ attributes #0 = { "EntryPoint" }
 
     // Create a Selene classical control engine
     let mut engine = selene_executable()
-        .program(LlvmProgram::from_ir(feedback_llvm))
+        .program(QisProgram::from_ir(feedback_llvm))
         .qubits(2)
         .verbose(true)
         .build()?;
@@ -153,7 +153,7 @@ attributes #0 = { "EntryPoint" }
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(adaptive_llvm))
+                .program(QisProgram::from_ir(adaptive_llvm))
                 .qubits(3),
         )
         .run(10)?;

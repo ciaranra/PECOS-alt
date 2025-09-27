@@ -540,45 +540,91 @@ class TestQuantumEngines:
             r in [(0, 0), (1, 1)] for r in get_measurements(results)
         ), "Bell state should be |00⟩ or |11⟩"
 
-    def test_sparse_stabilizer_engine(self) -> None:
-        """Test sparse stabilizer engine for Clifford circuits."""
-        # Import sparse_stabilizer engine
-        try:
-            from pecos_rslib import sparse_stabilizer
-        except ImportError:
-            pytest.skip("sparse_stabilizer not available")
+    def test_clifford_circuit_simulation(self) -> None:
+        """Test simulation of Clifford-like circuits.
 
+        Tests a circuit that uses Clifford gates at the Guppy level.
+        The sequence H-X-H is equivalent to a Z gate, so starting from |0⟩
+        should give us |0⟩ after measurement (Z|0⟩ = |0⟩).
+
+        Note: While these are Clifford gates at the source level, the
+        compilation pipeline decomposes them into RXY and RZ rotations.
+        """
         @guppy
         def clifford_circuit() -> bool:
-            # Clifford-only circuit (H-X-H = Z gate)
+            # Clifford circuit: H-X-H = Z gate
             q = qubit()
-            h(q)
-            x(q)
-            h(q)
+            h(q)  # Hadamard
+            x(q)  # Pauli X
+            h(q)  # Hadamard
+            # The sequence H-X-H = Z, so Z|0⟩ = |0⟩
             return measure(q)
 
-        # Test with sparse stabilizer engine for Clifford circuits
+        # Test with state vector engine (compatible with all gate decompositions)
+        results = (
+            sim(clifford_circuit)
+            .qubits(1)
+            .quantum(state_vector())
+            .seed(42)
+            .run(100)
+        )
+        measurements = get_measurements(results)
+
+        # H-X-H sequence on |0⟩ should always give |0⟩ (since H-X-H = Z)
+        assert all(
+            r == 0 for r in measurements
+        ), f"Clifford circuit H-X-H on |0⟩ should always measure 0, got {set(measurements)}"
+
+    def test_sparse_stabilizer_with_qasm(self) -> None:
+        """Test sparse stabilizer engine with QASM input (which preserves Clifford gates).
+
+        The sparse stabilizer simulator works with QASM programs that use
+        true Clifford gates, unlike Guppy programs which get decomposed.
+        """
+        try:
+            from pecos_rslib import sparse_stabilizer
+            from pecos_rslib.programs import QasmProgram
+        except ImportError:
+            pytest.skip("sparse_stabilizer or QasmProgram not available")
+
+        # Create a QASM program with pure Clifford gates
+        qasm_str = """
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[2];
+        creg c[2];
+        h q[0];
+        cx q[0], q[1];
+        measure q[0] -> c[0];
+        measure q[1] -> c[1];
+        """
+
+        # Create QASM program using from_string method
+        program = QasmProgram.from_string(qasm_str)
+
+        # Test with sparse stabilizer - should work with QASM Clifford circuits
         try:
             results = (
-                sim(clifford_circuit)
-                .qubits(1)  # Only need 1 qubit
-                .quantum(
-                    sparse_stabilizer(),
-                )
+                sim(program)
+                .qubits(2)
+                .quantum(sparse_stabilizer())
                 .seed(42)
                 .run(100)
             )
-            measurements = get_measurements(results)
-            assert all(
-                r == 0 for r in measurements
-            ), f"Clifford circuit H-X-H on |0⟩ should always measure 0, got {set(measurements)}"
+
+            # QASM returns dict with register names as keys
+            assert "c" in results, "Results should contain register 'c'"
+            measurements = results["c"]
+
+            # Bell state: values should be 0 (00) or 3 (11) for correlated qubits
+            # Never 1 (01) or 2 (10) for anti-correlated qubits
+            correlated = sum(1 for m in measurements if m in [0, 3])
+            assert correlated == 100, f"Bell state should be 100% correlated (0 or 3), got {correlated}/100"
 
         except Exception as e:
-            # If sparse stabilizer doesn't work with Guppy/Selene, that's expected
             if "not supported" in str(e) or "not available" in str(e):
-                pytest.skip(f"Sparse stabilizer engine not supported for Guppy: {e}")
+                pytest.skip(f"Sparse stabilizer with QASM not fully supported: {e}")
             else:
-                # Re-raise unexpected errors
                 raise
 
 

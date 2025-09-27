@@ -10,13 +10,13 @@ use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use std::sync::{Arc, Mutex};
 
-use pecos_llvm_sim::llvm_engine as rust_llvm_engine;
+use pecos_qis_sim::qis_engine as rust_qis_engine;
 use pecos_phir_json::phir_json_engine as rust_phir_json_engine;
 use pecos_qasm::qasm_engine as rust_qasm_engine;
 
 use crate::engine_builders::{
 
-    PyHugrProgram, PyLlvmEngineBuilder, PyLlvmProgram, PyLlvmSimBuilder, PyPhirJsonEngineBuilder,
+    PyHugrProgram, PyQisEngineBuilder, PyQisSimBuilder, PyPhirJsonEngineBuilder,
     PyPhirJsonProgram, PyPhirJsonSimBuilder, PyQasmEngineBuilder, PyQasmProgram, PyQasmSimBuilder,
     PyQisProgram, PySeleneEngineBuilder, PySeleneExecutableSimBuilder, PySeleneInterfaceProgram,
     PySeleneLibrarySimBuilder, PySeleneSimBuilder,
@@ -183,7 +183,7 @@ fn is_guppy_function(py: Python, program: &Py<PyAny>) -> PyResult<bool> {
 ///     results = sim(QasmProgram.from_string("H q[0];")).run(1000)
 ///
 ///     # LLVM simulation
-///     results = sim(LlvmProgram.from_string(llvm_ir)).run(1000)
+///     results = sim(QisProgram.from_string(llvm_ir)).run(1000)
 ///
 ///     # HUGR simulation (via Selene)
 ///     results = sim(HugrProgram.from_bytes(hugr_bytes)).qubits(2).run(1000)
@@ -236,26 +236,11 @@ pub fn sim(py: Python, program: Py<PyAny>) -> PyResult<PySimBuilder> {
                 explicit_num_qubits: None,
             }),
         })
-    } else if let Ok(llvm_prog) = program.extract::<PyLlvmProgram>(py) {
-        // Create LLVM engine builder with program
-        let engine_builder = rust_llvm_engine().program(llvm_prog.inner);
-        Ok(PySimBuilder {
-            inner: SimBuilderInner::Llvm(PyLlvmSimBuilder {
-                engine_builder: Arc::new(Mutex::new(Some(engine_builder))),
-                seed: None,
-                workers: None,
-                quantum_engine_builder: None,
-                noise_builder: None,
-                explicit_num_qubits: None,
-            }),
-        })
     } else if let Ok(qis_prog) = program.extract::<PyQisProgram>(py) {
         // QIS is Selene QIS format LLVM IR - use LLVM engine
-        use pecos_programs::LlvmProgram;
-        let llvm_prog = LlvmProgram::from_string(qis_prog.inner.source().to_string());
-        let engine_builder = rust_llvm_engine().program(llvm_prog);
+        let engine_builder = rust_qis_engine().program(qis_prog.inner);
         Ok(PySimBuilder {
-            inner: SimBuilderInner::Llvm(PyLlvmSimBuilder {
+            inner: SimBuilderInner::Llvm(PyQisSimBuilder {
                 engine_builder: Arc::new(Mutex::new(Some(engine_builder))),
                 seed: None,
                 workers: None,
@@ -314,7 +299,7 @@ pub fn sim(py: Python, program: Py<PyAny>) -> PyResult<PySimBuilder> {
         })
     } else {
         Err(PyTypeError::new_err(
-            "program must be a QasmProgram, LlvmProgram, HugrProgram, PhirJsonProgram, or SeleneInterfaceProgram instance",
+            "program must be a QasmProgram, QisProgram, HugrProgram, PhirJsonProgram, or SeleneInterfaceProgram instance",
         ))
     }
 }
@@ -330,7 +315,7 @@ pub struct PySimBuilder {
 
 pub(crate) enum SimBuilderInner {
     Qasm(PyQasmSimBuilder),
-    Llvm(PyLlvmSimBuilder),
+    Llvm(PyQisSimBuilder),
     Selene(PySeleneSimBuilder),
     PhirJson(PyPhirJsonSimBuilder),
     SeleneExecutable(PySeleneExecutableSimBuilder), // New bridge-based approach
@@ -385,14 +370,14 @@ impl PySimBuilder {
                 }
             }
             SimBuilderInner::Llvm(sim_builder) => {
-                if let Ok(llvm_engine) = engine_builder.extract::<PyLlvmEngineBuilder>(py) {
+                if let Ok(llvm_engine) = engine_builder.extract::<PyQisEngineBuilder>(py) {
                     sim_builder.engine_builder = Arc::new(Mutex::new(Some(llvm_engine.inner)));
                     Ok(PySimBuilder {
                         inner: self.inner.clone(),
                     })
                 } else {
                     Err(PyTypeError::new_err(
-                        "For LLVM programs, classical() requires an LlvmEngineBuilder",
+                        "For LLVM programs, classical() requires an QisEngineBuilder",
                     ))
                 }
             }
@@ -1562,7 +1547,7 @@ impl Clone for SimBuilderInner {
                 noise_builder: builder.noise_builder.as_ref().map(|obj| obj.clone_ref(py)),
                 explicit_num_qubits: builder.explicit_num_qubits,
             }),
-            SimBuilderInner::Llvm(builder) => SimBuilderInner::Llvm(PyLlvmSimBuilder {
+            SimBuilderInner::Llvm(builder) => SimBuilderInner::Llvm(PyQisSimBuilder {
                 engine_builder: builder.engine_builder.clone(),
                 seed: builder.seed,
                 workers: builder.workers,

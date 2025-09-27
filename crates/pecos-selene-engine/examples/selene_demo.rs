@@ -4,7 +4,7 @@
 //! Classical/Control Engine that implements PECOS traits.
 
 use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine, Engine, sim_builder};
-use pecos_programs::LlvmProgram;
+use pecos_programs::QisProgram;
 use pecos_selene_engine::{SeleneExecutableEngine, selene_executable};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -42,7 +42,7 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     let engine = selene_executable()
-        .program(LlvmProgram::from_ir(bell_state_llvm))
+        .program(QisProgram::from_ir(bell_state_llvm))
         .qubits(2)
         .build()?;
 
@@ -71,7 +71,7 @@ attributes #0 = { "EntryPoint" }
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(bell_state_llvm))
+                .program(QisProgram::from_ir(bell_state_llvm))
                 .qubits(2),
         )
         .seed(42)

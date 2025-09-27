@@ -11,10 +11,10 @@ Examples:
     results = qasm_engine().program(QasmProgram.from_string("H q[0];")).to_sim().run(1000)
 
     # LLVM simulation
-    from pecos_rslib import llvm_engine
-    from pecos_rslib.programs import LlvmProgram
+    from pecos_rslib import qis_engine
+    from pecos_rslib.programs import QisProgram
 
-    results = llvm_engine().program(LlvmProgram.from_string(llvm_ir)).to_sim().run(1000)
+    results = qis_engine().program(QisProgram.from_string(llvm_ir)).to_sim().run(1000)
 
     # Selene simulation with Guppy
     from pecos_rslib import selene_engine
@@ -32,8 +32,8 @@ from pecos_rslib._pecos_rslib import (
     DepolarizingNoiseModelBuilder,
     GeneralNoiseModelBuilder,
     HugrProgram,
-    LlvmEngineBuilder,
-    LlvmProgram,
+    QisEngineBuilder,
+    QisProgram,
     PhirJsonEngineBuilder,
     PhirJsonProgram,
     QasmEngineBuilder,
@@ -44,7 +44,7 @@ from pecos_rslib._pecos_rslib import (
     biased_depolarizing_noise,
     depolarizing_noise,
     general_noise,
-    llvm_engine,
+    qis_engine,
     phir_json_engine,
     qasm_engine,
     sparse_stab,
@@ -72,8 +72,8 @@ __all__ = [
     "DepolarizingNoiseModelBuilder",
     "GeneralNoiseModelBuilder",
     "HugrProgram",
-    "LlvmEngineBuilder",
-    "LlvmProgram",
+    "QisEngineBuilder",
+    "QisProgram",
     "PhirJsonEngineBuilder",
     "PhirJsonProgram",
     "QasmEngineBuilder",
@@ -85,7 +85,7 @@ __all__ = [
     "biased_depolarizing_noise",
     "depolarizing_noise",
     "general_noise",
-    "llvm_engine",
+    "qis_engine",
     "phir_json_engine",
     "qasm_engine",
     "selene_engine",

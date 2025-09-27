@@ -1,14 +1,14 @@
 //! Test LLVM bitcode support in `selene_sim`
 
 use pecos_engines::{PassThroughNoise, sim_builder};
-use pecos_programs::LlvmProgram;
+use pecos_programs::QisProgram;
 use pecos_selene_engine::selene_executable;
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
 
 /// Helper function to create a simple LLVM IR program
-fn get_test_llvm_ir() -> &'static str {
+fn get_test_qis_ir() -> &'static str {
     r#"
     declare void @__quantum__qis__h__body(i64)
     declare void @__quantum__qis__cx__body(i64, i64)
@@ -46,7 +46,7 @@ fn test_selene_bitcode_in_memory() {
     let bc_file = temp_dir.path().join("test.bc");
 
     // Write LLVM IR to file
-    fs::write(&ll_file, get_test_llvm_ir()).unwrap();
+    fs::write(&ll_file, get_test_qis_ir()).unwrap();
 
     // Convert to bitcode using llvm-as
     let output = Command::new("llvm-as")
@@ -69,7 +69,7 @@ fn test_selene_bitcode_in_memory() {
     let builder = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_bitcode(bitcode))
+                .program(QisProgram::from_bitcode(bitcode))
                 .qubits(2),
         )
         .noise(PassThroughNoise);
@@ -102,7 +102,7 @@ fn test_selene_bitcode_file() {
     let bc_file = temp_dir.path().join("test.bc");
 
     // Write LLVM IR to file
-    fs::write(&ll_file, get_test_llvm_ir()).unwrap();
+    fs::write(&ll_file, get_test_qis_ir()).unwrap();
 
     // Convert to bitcode using llvm-as
     let output = Command::new("llvm-as")
@@ -121,7 +121,7 @@ fn test_selene_bitcode_file() {
     // Test with bitcode file path
     let builder = sim_builder().classical(
         selene_executable()
-            .program(LlvmProgram::from_bitcode_file(&bc_file).unwrap())
+            .program(QisProgram::from_bitcode_file(&bc_file).unwrap())
             .qubits(2),
     );
 
@@ -151,7 +151,7 @@ fn test_selene_auto_detection() {
     let bc_file = temp_dir.path().join("test.bc");
 
     // Write LLVM IR to file
-    fs::write(&ll_file, get_test_llvm_ir()).unwrap();
+    fs::write(&ll_file, get_test_qis_ir()).unwrap();
 
     // Convert to bitcode
     Command::new("llvm-as")
@@ -164,7 +164,7 @@ fn test_selene_auto_detection() {
     // Test auto-detection with .ll file
     let builder_ll = sim_builder().classical(
         selene_executable()
-            .program(LlvmProgram::from_file(&ll_file).unwrap())
+            .program(QisProgram::from_file(&ll_file).unwrap())
             .qubits(2),
     );
     // Allow failure for missing runtime
@@ -173,7 +173,7 @@ fn test_selene_auto_detection() {
     // Test auto-detection with .bc file
     let builder_bc = sim_builder().classical(
         selene_executable()
-            .program(LlvmProgram::from_file(&bc_file).unwrap())
+            .program(QisProgram::from_file(&bc_file).unwrap())
             .qubits(2),
     );
     match builder_bc.build() {
@@ -195,7 +195,7 @@ fn test_selene_llvm_dis_error() {
 
     let builder = sim_builder().classical(
         selene_executable()
-            .program(LlvmProgram::from_bitcode(fake_bitcode))
+            .program(QisProgram::from_bitcode(fake_bitcode))
             .qubits(1),
     );
 

@@ -10,7 +10,7 @@ import logging
 from typing import TYPE_CHECKING, Protocol, Union
 
 if TYPE_CHECKING:
-    from pecos_rslib.programs import HugrProgram, LlvmProgram, QasmProgram
+    from pecos_rslib.programs import HugrProgram, QisProgram, QasmProgram
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +127,7 @@ class GuppyHugrProgram:
 
 
 ProgramType = Union[
-    GuppyFunction, "QasmProgram", "LlvmProgram", "HugrProgram", bytes, str
+    GuppyFunction, "QasmProgram", "QisProgram", "HugrProgram", bytes, str
 ]
 
 

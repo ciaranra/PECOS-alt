@@ -3,8 +3,8 @@
 use pecos::prelude::*;
 use pecos::{sim, sim_builder};
 use pecos_engines::{DepolarizingNoise, sim as sim_from, sparse_stab, state_vector};
-use pecos_llvm_sim::llvm_engine;
-use pecos_programs::{LlvmProgram, QasmProgram};
+use pecos_qis_sim::qis_engine;
+use pecos_programs::{QasmProgram, QisProgram};
 use pecos_qasm::qasm_engine;
 
 fn main() -> Result<(), PecosError> {
@@ -28,7 +28,7 @@ fn main() -> Result<(), PecosError> {
     println!("  QASM: {} shots", results.len());
 
     // LLVM program
-    let llvm_prog = LlvmProgram::from_string(
+    let llvm_prog = QisProgram::from_string(
         r#"
         declare void @__quantum__qis__h__body(i64)
 
@@ -55,7 +55,7 @@ fn main() -> Result<(), PecosError> {
     // Example 4: Override automatic engine selection
     println!("\nExample 4: Override engine selection");
     let qasm_prog = QasmProgram::from_string("OPENQASM 2.0; qreg q[1]; h q[0];");
-    let llvm_prog = LlvmProgram::from_string(
+    let llvm_prog = QisProgram::from_string(
         r#"
         declare void @__quantum__qis__h__body(i64)
         declare i32 @__quantum__qis__m__body(i64, i64)
@@ -76,13 +76,13 @@ fn main() -> Result<(), PecosError> {
 
     // QASM program but use LLVM engine
     let results = sim(qasm_prog)
-        .classical(llvm_engine().program(llvm_prog))
+        .classical(qis_engine().program(llvm_prog))
         .run(20)?;
     println!("  Results: {} shots", results.len());
 
     // Example 5: Build once, run multiple times
     println!("\nExample 5: Build once, run multiple");
-    let llvm_prog = LlvmProgram::from_string(
+    let llvm_prog = QisProgram::from_string(
         r#"
         declare void @__quantum__qis__h__body(i64)
 

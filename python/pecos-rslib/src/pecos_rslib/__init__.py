@@ -178,7 +178,7 @@ except ImportError:
 try:
     from pecos_rslib.programs import (
         HugrProgram,
-        LlvmProgram,
+        QisProgram,
         PhirJsonProgram,
         QasmProgram,
         WasmProgram,
@@ -192,10 +192,10 @@ except ImportError:
             msg = "QasmProgram not available"
             raise ImportError(msg)
 
-    class LlvmProgram:
+    class QisProgram:
         @staticmethod
-        def from_string(_llvm: str) -> "LlvmProgram":
-            msg = "LlvmProgram not available"
+        def from_string(_llvm: str) -> "QisProgram":
+            msg = "QisProgram not available"
             raise ImportError(msg)
 
     class HugrProgram:
@@ -256,12 +256,12 @@ try:
         BiasedDepolarizingNoiseModelBuilder,
         DepolarizingNoiseModelBuilder,
         GeneralNoiseModelBuilder,
-        LlvmEngineBuilder,
+        QisEngineBuilder,
         PhirJsonEngineBuilder,
         QasmEngineBuilder,
         SeleneEngineBuilder,
         SimBuilder,
-        llvm_engine,
+        qis_engine,
         phir_json_engine,
         qasm_engine,
         selene_engine,
@@ -271,8 +271,8 @@ except ImportError:
     def qasm_engine(*_args, **_kwargs) -> NoReturn:
         raise ImportError("qasm_engine not available")
 
-    def llvm_engine(*_args, **_kwargs) -> NoReturn:
-        raise ImportError("llvm_engine not available")
+    def qis_engine(*_args, **_kwargs) -> NoReturn:
+        raise ImportError("qis_engine not available")
 
     def selene_engine(*_args, **_kwargs) -> NoReturn:
         raise ImportError("selene_engine not available")
@@ -285,9 +285,9 @@ except ImportError:
         def __init__(self) -> None:
             raise ImportError("QasmEngineBuilder not available")
 
-    class LlvmEngineBuilder:
+    class QisEngineBuilder:
         def __init__(self) -> None:
-            raise ImportError("LlvmEngineBuilder not available")
+            raise ImportError("QisEngineBuilder not available")
 
     class SeleneEngineBuilder:
         def __init__(self) -> None:
@@ -414,7 +414,7 @@ def RustHugrLlvmEngine(*_args, **_kwargs) -> NoReturn:
 # at line 44. We don't redefine it here to avoid overriding the real implementation.
 
 
-def create_llvm_engine_from_hugr_rust(*_args, **_kwargs) -> NoReturn:
+def create_qis_engine_from_hugr_rust(*_args, **_kwargs) -> NoReturn:
     raise ImportError("HUGR-LLVM pipeline not available")
 
 
@@ -490,7 +490,7 @@ __all__ = [
     # "guppy_to_hugr",
     # Program types
     "QasmProgram",
-    "LlvmProgram",
+    "QisProgram",
     "HugrProgram",
     "PhirJsonProgram",
     "WasmProgram",
@@ -504,7 +504,7 @@ __all__ = [
     "RustHugrCompiler",
     "RustHugrLlvmEngine",
     "compile_hugr_to_llvm_rust",
-    "create_llvm_engine_from_hugr_rust",
+    "create_qis_engine_from_hugr_rust",
     "check_rust_hugr_availability",
     "RUST_HUGR_AVAILABLE",
     "HUGR_LLVM_PIPELINE_AVAILABLE",
@@ -520,11 +520,11 @@ __all__ = [
     # New sim API
     "sim",
     "qasm_engine",
-    "llvm_engine",
+    "qis_engine",
     "selene_engine",
     "phir_json_engine",
     "QasmEngineBuilder",
-    "LlvmEngineBuilder",
+    "QisEngineBuilder",
     "SeleneEngineBuilder",
     "PhirJsonEngineBuilder",
     "SimBuilder",

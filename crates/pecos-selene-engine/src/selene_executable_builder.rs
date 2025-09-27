@@ -6,7 +6,7 @@
 use crate::selene_executable_engine::SeleneExecutableEngine;
 use pecos_core::prelude::PecosError;
 use pecos_engines::ClassicalControlEngineBuilder;
-use pecos_programs::{HugrProgram, LlvmProgram, Program, SeleneInterfaceProgram};
+use pecos_programs::{HugrProgram, QisProgram, Program, SeleneInterfaceProgram};
 use std::path::PathBuf;
 
 /// Builder for creating `SeleneExecutableEngine` instances
@@ -15,8 +15,8 @@ pub struct SeleneExecutableEngineBuilder {
     /// The program to execute
     program: Option<SeleneInterfaceProgram>,
 
-    /// LLVM program (for backwards compatibility)
-    llvm_program: Option<LlvmProgram>,
+    /// QIS program (Selene QIS format LLVM IR)
+    qis_program: Option<QisProgram>,
 
     /// HUGR program (will be compiled to LLVM IR)
     hugr_program: Option<HugrProgram>,
@@ -43,7 +43,7 @@ impl SeleneExecutableEngineBuilder {
     pub fn new() -> Self {
         Self {
             program: None,
-            llvm_program: None,
+            qis_program: None,
             hugr_program: None,
             num_qubits: None,
             working_dir: None,
@@ -73,14 +73,10 @@ impl SeleneExecutableEngineBuilder {
             Program::SeleneInterface(selene_prog) => {
                 self.program = Some(selene_prog);
             }
-            Program::Llvm(llvm_prog) => {
-                // Store LLVM program for later processing
-                self.llvm_program = Some(llvm_prog);
-            }
             Program::Qis(qis_prog) => {
-                // QIS is Selene QIS format LLVM IR, treat it as LLVM
-                log::info!("QIS program provided, treating as LLVM IR");
-                self.llvm_program = Some(LlvmProgram::from_string(qis_prog.source().to_string()));
+                // QIS is Selene QIS format LLVM IR
+                log::info!("QIS program provided");
+                self.qis_program = Some(qis_prog);
             }
             Program::Hugr(hugr_prog) => {
                 // Store HUGR program for compilation during build
@@ -165,7 +161,7 @@ impl ClassicalControlEngineBuilder for SeleneExecutableEngineBuilder {
 
     fn build(self) -> Result<Self::Engine, PecosError> {
         // Check if we have a program - this is required
-        if self.program.is_none() && self.llvm_program.is_none() && self.hugr_program.is_none() {
+        if self.program.is_none() && self.qis_program.is_none() && self.hugr_program.is_none() {
             return Err(PecosError::Input(
                 "No program specified. Use .program() to set a SeleneInterface, LLVM, or HUGR program.".to_string()
             ));
@@ -210,10 +206,10 @@ impl ClassicalControlEngineBuilder for SeleneExecutableEngineBuilder {
             };
 
             log::info!("Successfully compiled HUGR to LLVM IR using {} compiler", self.hugr_compiler);
-            engine = engine.with_llvm_program(LlvmProgram::from_ir(llvm_ir));
-        } else if let Some(llvm_prog) = self.llvm_program {
-            // Regular LLVM program
-            engine = engine.with_llvm_program(llvm_prog);
+            engine = engine.with_qis_program(QisProgram::from_ir(llvm_ir));
+        } else if let Some(qis_prog) = self.qis_program {
+            // QIS program
+            engine = engine.with_qis_program(qis_prog);
         }
 
         Ok(engine)

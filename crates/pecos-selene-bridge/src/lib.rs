@@ -1047,8 +1047,8 @@ pub fn clear_engine_interface() {
     // the interface will remain active for the lifetime of the process
 }
 
-// NOTE: Global result storage functions removed to avoid conflicts with pecos-llvm-runtime.
+// NOTE: Global result storage functions removed to avoid conflicts with pecos-qis-runtime.
 // Results are now handled through the proper LLVM runtime registry system.
 
-// NOTE: C FFI functions (__quantum__rt__*) are provided by pecos-llvm-runtime
+// NOTE: C FFI functions (__quantum__rt__*) are provided by pecos-qis-runtime
 // to avoid symbol collisions. The Interface Plugin will link against those functions.

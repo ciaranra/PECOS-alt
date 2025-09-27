@@ -32,13 +32,13 @@
 //!
 //! // Method 1: Using the builder pattern with LLVM IR
 //! let engine = selene_executable()
-//!     .program(LlvmProgram::from_ir(simple_llvm))
+//!     .program(QisProgram::from_ir(simple_llvm))
 //!     .qubits(1)
 //!     .build()?;
 //!
 //! // Method 2: Direct construction
 //! let mut engine2 = SeleneExecutableEngine::new(1)?
-//!     .with_llvm_program(LlvmProgram::from_ir(simple_llvm));
+//!     .with_qis_program(QisProgram::from_ir(simple_llvm));
 //!
 //! // Use with PECOS quantum engines
 //! let shot = engine2.process(())?;
@@ -98,11 +98,11 @@ mod tests {
 
     #[test]
     fn test_selene_executable_builder_with_program() {
-        use pecos_programs::LlvmProgram;
+        use pecos_programs::QisProgram;
 
         // Test that builder succeeds with a program
         let builder = selene_executable()
-            .program(LlvmProgram::from_string("define void @main() { ret void }"))
+            .program(QisProgram::from_string("define void @main() { ret void }"))
             .qubits(5);
 
         let result = builder.build();

@@ -16,7 +16,7 @@ try:
     from pecos_rslib import sparse_stabilizer, state_vector
     from pecos_rslib.programs import (
         HugrProgram,
-        LlvmProgram,
+        QisProgram,
         PhirJsonProgram,
         QasmProgram,
     )
@@ -171,7 +171,7 @@ class TestLLVMSimulation:
         """
 
         try:
-            program = LlvmProgram.from_string(llvm_ir)
+            program = QisProgram.from_string(llvm_ir)
 
             # Try to run - this might work now with proper QIR format
             results = sim(program).qubits(1).seed(42).run(10)
@@ -249,7 +249,7 @@ class TestLLVMSimulation:
         """
 
         try:
-            program = LlvmProgram.from_string(llvm_ir)
+            program = QisProgram.from_string(llvm_ir)
             results = sim(program).qubits(2).seed(42).run(50)
 
             assert isinstance(results, dict), "Results should be a dictionary"

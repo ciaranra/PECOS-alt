@@ -5,7 +5,7 @@
 
 use pecos::sim;
 use pecos_engines::{sparse_stabilizer, state_vector};
-use pecos_programs::{HugrProgram, LlvmProgram, QasmProgram};
+use pecos_programs::{HugrProgram, QasmProgram, QisProgram};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 1: QASM program automatically uses QASM engine
@@ -30,7 +30,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\nExample 2: LLVM program -> LLVM engine (automatic)");
     // Note: LLVM programs require specific format with EntryPoint attribute
     // For this demo, we'll use bitcode instead
-    let _llvm_prog = LlvmProgram::from_bitcode(vec![0x42, 0x43]); // BC magic number
+    let _llvm_prog = QisProgram::from_bitcode(vec![0x42, 0x43]); // BC magic number
 
     // Note: Since this is not valid bitcode, this would fail at runtime.
     // In a real scenario, you'd use proper LLVM bitcode.

@@ -9,10 +9,10 @@
 
 use pecos_core::prelude::PecosError;
 use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine, Engine, sim_builder};
-use pecos_programs::LlvmProgram;
+use pecos_programs::QisProgram;
 use pecos_selene_engine::{SeleneExecutableEngine, selene_executable};
 
-// NOTE: These tests originally used LLVM IR directly with LlvmProgram::from_ir().
+// NOTE: These tests originally used LLVM IR directly with QisProgram::from_ir().
 // We've removed direct LLVM execution support in favor of HUGR compilation through Selene.
 // The proper execution path is now: Guppy -> HUGR -> Selene Plugin -> Execution
 // These tests are kept as documentation of the old architecture but marked as ignored.
@@ -45,7 +45,7 @@ attributes #0 = { "EntryPoint" }
     // First test: Direct engine usage (bypassing full simulation infrastructure)
     println!("Testing direct engine usage...");
     let mut engine = selene_executable()
-        .program(LlvmProgram::from_ir(bell_llvm))
+        .program(QisProgram::from_ir(bell_llvm))
         .qubits(2)
         .build()?;
 
@@ -67,7 +67,7 @@ attributes #0 = { "EntryPoint" }
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(bell_llvm))
+                .program(QisProgram::from_ir(bell_llvm))
                 .qubits(2),
         )
         .seed(42)
@@ -134,7 +134,7 @@ attributes #0 = { "EntryPoint" }
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(adaptive_llvm))
+                .program(QisProgram::from_ir(adaptive_llvm))
                 .qubits(2),
         )
         .seed(123)
@@ -203,7 +203,7 @@ attributes #0 = { "EntryPoint" }
     let llvm_results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(simple_llvm))
+                .program(QisProgram::from_ir(simple_llvm))
                 .qubits(1),
         )
         .seed(789)
@@ -229,7 +229,7 @@ fn test_end_to_end_error_recovery() {
 
     // Test 1: Empty program
     let empty_engine = selene_executable()
-        .program(LlvmProgram::from_ir(""))
+        .program(QisProgram::from_ir(""))
         .qubits(1)
         .build();
 
@@ -258,7 +258,7 @@ attributes #0 = { "EntryPoint" }
 "#;
 
     let invalid_result = selene_executable()
-        .program(LlvmProgram::from_ir(invalid_llvm))
+        .program(QisProgram::from_ir(invalid_llvm))
         .qubits(0) // Invalid: 0 qubits
         .build();
 
@@ -325,7 +325,7 @@ attributes #0 = { "EntryPoint" }
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(large_llvm))
+                .program(QisProgram::from_ir(large_llvm))
                 .qubits(4),
         )
         .seed(999)
@@ -380,7 +380,7 @@ attributes #0 = { "EntryPoint" }
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(direct_llvm))
+                .program(QisProgram::from_ir(direct_llvm))
                 .qubits(1),
         )
         .seed(555)

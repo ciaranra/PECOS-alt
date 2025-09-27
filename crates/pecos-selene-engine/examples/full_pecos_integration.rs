@@ -6,9 +6,8 @@
 //! - `StateVecEngine` for quantum simulation
 //! - Real Bell state creation and analysis
 
-use pecos_core::prelude::PecosError;
 use pecos_engines::sim_builder;
-use pecos_programs::LlvmProgram;
+use pecos_programs::QisProgram;
 use pecos_selene_engine::selene_executable;
 use std::collections::HashMap;
 
@@ -67,7 +66,7 @@ attributes #0 = { "EntryPoint" }
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(bell_llvm))
+                .program(QisProgram::from_ir(bell_llvm))
                 .qubits(2)
                 .optimize(true),
         )
@@ -128,7 +127,7 @@ attributes #0 = { "EntryPoint" }
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(adaptive_llvm))
+                .program(QisProgram::from_ir(adaptive_llvm))
                 .qubits(3),
         )
         .run(5)?;
@@ -167,7 +166,7 @@ attributes #0 = { "EntryPoint" }
     let results = sim_builder()
         .classical(
             selene_executable()
-                .program(LlvmProgram::from_ir(llvm_llvm))
+                .program(QisProgram::from_ir(llvm_llvm))
                 .qubits(1),
         )
         .seed(42) // seed

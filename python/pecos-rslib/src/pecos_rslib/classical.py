@@ -13,23 +13,23 @@ Examples:
     >>>
     >>> # Direct class instantiation also available
     >>> qasm_builder = classical.QasmEngineBuilder()
-    >>> llvm_builder = classical.LlvmEngineBuilder()
+    >>> llvm_builder = classical.QisEngineBuilder()
     >>> selene_builder = classical.SeleneEngineBuilder()
 """
 
 # Import from the unified sim module
 from pecos_rslib.sim import (
-    LlvmEngineBuilder,
+    QisEngineBuilder,
     QasmEngineBuilder,
     SeleneEngineBuilder,
-    llvm_engine,
+    qis_engine,
     qasm_engine,
     selene_engine,
 )
 
 # Create namespace-friendly aliases
 qasm = qasm_engine
-llvm = llvm_engine
+llvm = qis_engine
 selene = selene_engine
 
 __all__ = [
@@ -39,6 +39,6 @@ __all__ = [
     "selene",
     # Builder classes
     "QasmEngineBuilder",
-    "LlvmEngineBuilder",
+    "QisEngineBuilder",
     "SeleneEngineBuilder",
 ]

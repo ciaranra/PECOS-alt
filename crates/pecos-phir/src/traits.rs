@@ -38,6 +38,10 @@ pub enum OpTrait {
     Measurement,
     /// Operation defines a symbol table scope
     SymbolTable,
+    /// Operation is function-like (has a signature)
+    FunctionLike,
+    /// Operation branches between regions
+    RegionBranch,
 }
 
 /// Get traits for an operation

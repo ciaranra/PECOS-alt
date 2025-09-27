@@ -5,7 +5,7 @@ This module exposes HUGR compilation and LLVM engine functionality to Python.
 */
 
 use pecos_hugr_qis::{HugrCompiler, HugrCompilerConfig};
-use pecos_llvm_runtime::LlvmEngine;
+use pecos_qis_runtime::QisEngine;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyType};
 use std::collections::HashMap;
@@ -16,13 +16,13 @@ use tempfile::TempDir;
 static mut NEXT_ENGINE_ID: usize = 1;
 
 /// Storage entry for LLVM engines - stores both the engine and the temporary directory
-pub struct LlvmEngineEntry {
-    pub engine: LlvmEngine,
+pub struct QisEngineEntry {
+    pub engine: QisEngine,
     _temp_dir: Option<TempDir>, // Keep the temp dir alive
 }
 
 /// Global storage for LLVM engines when called from Python bindings
-pub static PYTHON_LLVM_ENGINES: LazyLock<Mutex<HashMap<usize, LlvmEngineEntry>>> =
+pub static PYTHON_LLVM_ENGINES: LazyLock<Mutex<HashMap<usize, QisEngineEntry>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Get the next available engine ID
@@ -122,14 +122,14 @@ impl PyHugrCompiler {
 }
 
 /// Python wrapper for HUGR LLVM engine
-#[pyclass(name = "HugrLlvmEngine")]
-pub struct PyHugrLlvmEngine {
+#[pyclass(name = "HugrQisEngine")]
+pub struct PyHugrQisEngine {
     engine_id: usize,
     shots: usize,
 }
 
 #[pymethods]
-impl PyHugrLlvmEngine {
+impl PyHugrQisEngine {
     /// Create LLVM engine from HUGR bytes
     ///
     /// # Arguments
@@ -156,7 +156,7 @@ impl PyHugrLlvmEngine {
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string()))?;
 
         // Step 3: Create LLVM engine
-        let mut engine = LlvmEngine::new(llvm_path);
+        let mut engine = QisEngine::new(llvm_path);
         engine.set_assigned_shots(shots);
 
         // Pre-compile the engine
@@ -166,7 +166,7 @@ impl PyHugrLlvmEngine {
 
         // Store the engine
         let engine_id = get_next_engine_id();
-        let entry = LlvmEngineEntry {
+        let entry = QisEngineEntry {
             engine,
             _temp_dir: Some(temp_dir),
         };
@@ -204,7 +204,7 @@ impl PyHugrLlvmEngine {
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
 
         // Step 2: Create LLVM engine
-        let mut engine = LlvmEngine::new(llvm_path);
+        let mut engine = QisEngine::new(llvm_path);
         engine.set_assigned_shots(shots);
 
         // Pre-compile the engine
@@ -214,7 +214,7 @@ impl PyHugrLlvmEngine {
 
         // Store the engine
         let engine_id = get_next_engine_id();
-        let entry = LlvmEngineEntry {
+        let entry = QisEngineEntry {
             engine,
             _temp_dir: Some(temp_dir),
         };
@@ -292,7 +292,7 @@ impl PyHugrLlvmEngine {
 
         // Reset by creating a new engine with the same configuration
         let llvm_path = entry.engine.get_llvm_file().to_path_buf();
-        let mut new_engine = LlvmEngine::new(llvm_path);
+        let mut new_engine = QisEngine::new(llvm_path);
         new_engine.set_assigned_shots(self.shots);
         new_engine
             .pre_compile()
@@ -332,7 +332,7 @@ impl PyHugrLlvmEngine {
     }
 }
 
-impl Drop for PyHugrLlvmEngine {
+impl Drop for PyHugrQisEngine {
     fn drop(&mut self) {
         // Remove from storage when dropped
         let _ = PYTHON_LLVM_ENGINES.lock().unwrap().remove(&self.engine_id);

@@ -18,6 +18,7 @@ pecos-engines.workspace = true
 
 # JSON serialization (keeping for HUGR parsing)
 serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 
 # Error handling
 thiserror.workspace = true
@@ -31,8 +32,9 @@ tempfile.workspace = true
 # RON (Rusty Object Notation) for debugging
 ron.workspace = true
 
-# Python bindings (optional)
-pyo3 = { workspace = true, optional = true }
+# HUGR support via tket (formerly tket2, which re-exports hugr)
+tket = { workspace = true, optional = true }
+tket-qsystem = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile.workspace = true
@@ -40,8 +42,8 @@ tempfile.workspace = true
 [features]
 default = []
 
-# Python bindings
-python-bindings = ["pyo3"]
+# HUGR parsing support
+hugr = ["tket", "tket-qsystem"]
 
 [lints]
 workspace = true

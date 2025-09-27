@@ -60,9 +60,9 @@ pub fn setup_cli_engine_builder(program_path: &Path) -> Result<DynamicEngineBuil
             debug!("Setting up QIR engine builder");
             #[cfg(feature = "llvm")]
             {
-                use pecos::llvm_engine;
+                use pecos::qis_engine;
                 Ok(DynamicEngineBuilder::new(
-                    llvm_engine().llvm_file(program_path),
+                    qis_engine().llvm_file(program_path),
                 ))
             }
             #[cfg(not(feature = "llvm"))]

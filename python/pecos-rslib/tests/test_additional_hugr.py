@@ -1,4 +1,4 @@
-"""Additional HUGR tests that can run without skipping."""
+"""Additional HUGR tests using the current API."""
 
 import pytest
 
@@ -6,25 +6,20 @@ import pytest
 def test_hugr_compilation_with_support() -> None:
     """Test that compilation works when HUGR support IS available."""
     try:
-        from pecos_rslib import RustHugrCompiler, check_rust_hugr_availability
+        from pecos_rslib import compile_hugr_to_llvm_rust, check_rust_hugr_availability
 
         available, message = check_rust_hugr_availability()
         assert available, f"HUGR support should be available but got: {message}"
 
-        # Test that we can create a compiler
-        compiler = RustHugrCompiler()
-        assert compiler is not None
-
         # Test that invalid HUGR data raises an error
         dummy_hugr = b"invalid hugr data"
         with pytest.raises(RuntimeError) as exc_info:
-            compiler.compile_bytes_to_llvm(dummy_hugr)
+            compile_hugr_to_llvm_rust(dummy_hugr)
 
-        # The error should mention JSON parsing or HUGR format
+        # The error should mention HUGR parsing
         error_msg = str(exc_info.value).lower()
-        assert any(
-            keyword in error_msg for keyword in ["json", "hugr", "parse", "invalid"]
-        ), f"Expected error about JSON/HUGR parsing, got: {exc_info.value}"
+        assert "failed to read hugr" in error_msg or "empty hugr" in error_msg, \
+            f"Expected error about HUGR parsing, got: {exc_info.value}"
 
     except ImportError:
         pytest.skip("Rust HUGR backend not available")
@@ -35,15 +30,13 @@ def test_hugr_version_compatibility() -> None:
     try:
         import json
 
-        from pecos_rslib import RustHugrCompiler, check_rust_hugr_availability
+        from pecos_rslib import compile_hugr_to_llvm_rust, check_rust_hugr_availability
 
         available, message = check_rust_hugr_availability()
         if not available:
             pytest.skip(f"HUGR support not available: {message}")
 
-        compiler = RustHugrCompiler()
-
-        # Create HUGR with old version format (simulating Guppy's output)
+        # Create HUGR with old version format (simulating old Guppy output)
         old_hugr = {
             "format": "hugr",
             "version": "0.1.0",  # Old version
@@ -70,41 +63,31 @@ def test_hugr_version_compatibility() -> None:
         # Try to compile with old version
         hugr_bytes = json.dumps(old_hugr).encode("utf-8")
 
-        # We expect this to either:
-        # 1. Fail with version mismatch error
-        # 2. Be handled by our version translator
-        try:
-            result = compiler.compile_bytes_to_llvm(hugr_bytes)
-            # If it succeeds, our version translator worked!
-            print(f"Version translation successful: {result}")
-        except RuntimeError as e:
-            # If it fails, check that it's a reasonable error
-            error_msg = str(e)
-            # Just check that we got a reasonable error
-            if not any(
-                keyword in error_msg.lower()
-                for keyword in ["version", "format", "parse", "hugr"]
-            ):
-                raise AssertionError(f"Expected version-related error, got: {e}") from e
+        # We expect this to fail with parsing error
+        with pytest.raises(RuntimeError) as exc_info:
+            compile_hugr_to_llvm_rust(hugr_bytes)
+
+        error_msg = str(exc_info.value).lower()
+        # Check that we got a reasonable error
+        assert "failed to read hugr" in error_msg or "empty hugr" in error_msg, \
+            f"Expected HUGR parsing error, got: {exc_info.value}"
 
     except ImportError:
         pytest.skip("Rust HUGR backend not available")
 
 
 def test_hugr_arithmetic_extension_handling() -> None:
-    """Test handling of arithmetic extensions that cause version conflicts."""
+    """Test handling of arithmetic extensions."""
     try:
         import json
 
-        from pecos_rslib import RustHugrCompiler, check_rust_hugr_availability
+        from pecos_rslib import compile_hugr_to_llvm_rust, check_rust_hugr_availability
 
         available, message = check_rust_hugr_availability()
         if not available:
             pytest.skip(f"HUGR support not available: {message}")
 
-        compiler = RustHugrCompiler()
-
-        # Create HUGR with arithmetic.int extension (known to cause conflicts)
+        # Create HUGR with arithmetic.int extension
         hugr_with_arithmetic = {
             "format": "hugr",
             "version": "0.20.1",
@@ -153,21 +136,14 @@ def test_hugr_arithmetic_extension_handling() -> None:
 
         hugr_bytes = json.dumps(hugr_with_arithmetic).encode("utf-8")
 
-        # We expect this to fail with signature conflict
+        # We expect this to fail
         with pytest.raises(RuntimeError) as exc_info:
-            compiler.compile_bytes_to_llvm(hugr_bytes)
+            compile_hugr_to_llvm_rust(hugr_bytes)
 
-        error_msg = str(exc_info.value)
-        # This is the known issue - arithmetic extension conflicts
-        if "conflicting signature" in error_msg.lower() and "iadd" in error_msg.lower():
-            # This confirms the version mismatch issue we've been dealing with
-            pass  # Expected error
-        else:
-            # Some other error - still OK as long as it's HUGR-related
-            assert any(
-                keyword in error_msg.lower()
-                for keyword in ["hugr", "parse", "extension", "arithmetic"]
-            ), f"Expected HUGR-related error, got: {exc_info.value}"
+        error_msg = str(exc_info.value).lower()
+        # Just check we get a HUGR-related error
+        assert "failed to read hugr" in error_msg or "empty hugr" in error_msg, \
+            f"Expected HUGR-related error, got: {exc_info.value}"
 
     except ImportError:
         pytest.skip("Rust HUGR backend not available")
