@@ -142,6 +142,23 @@ pub mod core_runtime {
     /// Allocate a qubit
     #[must_use]
     pub fn allocate_qubit() -> usize {
+        #[cfg(feature = "selene-integration")]
+        {
+            match crate::selene_integration::allocate_qubit() {
+                Ok(id) => {
+                    if should_print_commands() {
+                        let thread_id = get_thread_id();
+                        debug!("[Thread {thread_id}] Allocated qubit {id} via Selene");
+                    }
+                    return id;
+                }
+                Err(e) => {
+                    log::warn!("Selene allocation failed: {}, falling back to default", e);
+                }
+            }
+        }
+
+        // Default behavior (or fallback when Selene fails)
         RuntimeRegistry::with_current_runtime(|state| {
             let id = state.allocate_qubit();
 
@@ -296,12 +313,32 @@ pub mod core_runtime {
     }
 
     pub fn rz_gate(theta: f64, qubit_id: usize) {
+        #[cfg(feature = "selene-integration")]
+        {
+            if let Err(e) = crate::selene_integration::rz_gate(qubit_id, theta) {
+                log::warn!("Selene RZ gate failed: {}, falling back to default", e);
+            } else {
+                return;
+            }
+        }
+
+        // Default behavior (or fallback when Selene fails)
         RuntimeRegistry::with_current_runtime(|state| {
             let _ = state.message_builder_mut().add_rz(theta, &[qubit_id]);
         });
     }
 
     pub fn r1xy_gate(theta: f64, phi: f64, qubit_id: usize) {
+        #[cfg(feature = "selene-integration")]
+        {
+            if let Err(e) = crate::selene_integration::rxy_gate(qubit_id, theta, phi) {
+                log::warn!("Selene RXY gate failed: {}, falling back to default", e);
+            } else {
+                return;
+            }
+        }
+
+        // Default behavior (or fallback when Selene fails)
         RuntimeRegistry::with_current_runtime(|state| {
             let _ = state
                 .message_builder_mut()
@@ -398,6 +435,16 @@ pub mod core_runtime {
             debug!("[Thread {thread_id}] Measuring qubit {qubit_id} with result_id {result_id}");
         }
 
+        #[cfg(feature = "selene-integration")]
+        {
+            if let Err(e) = crate::selene_integration::measure_qubit(qubit_id) {
+                log::warn!("Selene measure failed: {}, falling back to default", e);
+            } else {
+                return;
+            }
+        }
+
+        // Default behavior (or fallback when Selene fails)
         RuntimeRegistry::with_current_runtime(|state| {
             state.add_measurement(qubit_id, result_id);
         });

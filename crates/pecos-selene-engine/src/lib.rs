@@ -39,6 +39,7 @@ pub mod selene_executable_builder;
 pub mod selene_executable_engine;
 pub mod selene_library_engine;
 pub mod selene_runtime_init;
+// QIS bridge removed - we transform QIS to Helios interface instead
 // Simple runtime removed - use selene_executable instead
 
 // HUGR 0.13 support has been removed - using tket's HUGR 0.22 instead

@@ -1,0 +1,34 @@
+[package]
+name = "pecos-selene-ccengine"
+version.workspace = true
+edition.workspace = true
+readme = "README.md"
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Classical control engine using Selene runtime plugins for PECOS quantum simulation."
+
+[dependencies]
+# Core dependencies
+pecos-core = { workspace = true, features = ["anyhow"] }
+pecos-engines.workspace = true
+pecos-qis-runtime.workspace = true
+
+# For loading Selene plugins
+libloading.workspace = true
+tempfile.workspace = true
+
+# Standard dependencies
+log.workspace = true
+anyhow.workspace = true
+libc.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+serial_test.workspace = true
+
+[lints]
+workspace = true

@@ -1,4 +1,4 @@
-//! Tests for the `qis_sim()` API with full feature parity with `qasm_sim()`
+//! Tests for the `qis_engine()` API and unified simulation
 
 use pecos_engines::{
     BiasedDepolarizingNoise, ClassicalControlEngineBuilder, DepolarizingNoise, sim_builder,
@@ -89,7 +89,7 @@ fn is_llvm_available() -> bool {
 }
 
 #[test]
-fn test_basic_qis_sim() {
+fn test_basic_qis_engine() {
     if !is_llvm_available() {
         println!("Skipping test: LLVM tools not available");
         return;
@@ -120,7 +120,7 @@ fn test_basic_qis_sim() {
 }
 
 #[test]
-fn test_qis_sim_with_noise() {
+fn test_qis_engine_with_noise() {
     if !is_llvm_available() {
         println!("Skipping test: LLVM tools not available");
         return;
@@ -181,7 +181,7 @@ fn test_qis_sim_with_noise() {
 }
 
 #[test]
-fn test_qis_sim_parallelization() {
+fn test_qis_engine_parallelization() {
     if !is_llvm_available() {
         println!("Skipping test: LLVM tools not available");
         return;
@@ -208,7 +208,7 @@ fn test_qis_sim_parallelization() {
 }
 
 #[test]
-fn test_qis_sim_auto_workers() {
+fn test_qis_engine_auto_workers() {
     if !is_llvm_available() {
         println!("Skipping test: LLVM tools not available");
         return;
@@ -228,7 +228,7 @@ fn test_qis_sim_auto_workers() {
 }
 
 #[test]
-fn test_qis_sim_build_once_run_many() {
+fn test_qis_engine_build_once_run_many() {
     if !is_llvm_available() {
         println!("Skipping test: LLVM tools not available");
         return;
@@ -281,7 +281,7 @@ attributes #0 = { "EntryPoint" }
 "#;
 
 #[test]
-fn test_qis_sim_qubits_exceeded() {
+fn test_qis_engine_qubits_exceeded() {
     if !is_llvm_available() {
         println!("Skipping test: LLVM tools not available");
         return;
@@ -318,7 +318,7 @@ fn test_qis_sim_qubits_exceeded() {
 }
 
 #[test]
-fn test_qis_sim_quantum_engines() {
+fn test_qis_engine_quantum_engines() {
     if !is_llvm_available() {
         println!("Skipping test: LLVM tools not available");
         return;
@@ -350,7 +350,7 @@ fn test_qis_sim_quantum_engines() {
 }
 
 #[test]
-fn test_qis_sim_custom_noise_models() {
+fn test_qis_engine_custom_noise_models() {
     if !is_llvm_available() {
         println!("Skipping test: LLVM tools not available");
         return;
@@ -380,7 +380,7 @@ fn test_qis_sim_custom_noise_models() {
 }
 
 #[test]
-fn test_qis_sim_from_file() {
+fn test_qis_engine_from_file() {
     if !is_llvm_available() {
         println!("Skipping test: LLVM tools not available");
         return;
@@ -405,7 +405,7 @@ fn test_qis_sim_from_file() {
 // This test is commented out until/unless this feature is re-added
 /*
 #[test]
-fn test_qis_sim_keep_temp_files() {
+fn test_qis_engine_keep_temp_files() {
     if !is_llvm_available() {
         println!("Skipping test: LLVM tools not available");
         return;
@@ -423,7 +423,7 @@ fn test_qis_sim_keep_temp_files() {
 */
 
 #[test]
-fn test_qis_sim_error_handling() {
+fn test_qis_engine_error_handling() {
     if !is_llvm_available() {
         println!("Skipping test: LLVM tools not available");
         return;

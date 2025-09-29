@@ -1,6 +1,6 @@
-//! Test that `selene_executable()` with `to_sim()` is on par with `qis_sim()`
+//! Test that `selene_executable()` with `to_sim()` works with the unified simulation API
 //!
-//! This test verifies that `sim_builder().classical(selene_executable())` supports the same features as `qis_sim()`,
+//! This test verifies that `sim_builder().classical(selene_executable())` supports the same features as `qis_engine()`,
 //! including noise models, quantum engines, and full simulation capabilities.
 
 use pecos_engines::noise::GeneralNoiseModelBuilder;
@@ -156,7 +156,7 @@ fn test_selene_executable_full_configuration() {
     attributes #0 = { "EntryPoint" }
     "#;
 
-    // Test full configuration like qis_sim()
+    // Test full configuration like qis_engine().to_sim()
     let results = sim_builder()
         .classical(
             selene_executable()
@@ -238,8 +238,8 @@ fn test_selene_executable_build_once_run_multiple() {
 
 #[test]
 #[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path"]
-fn test_selene_executable_api_matches_qis_sim() {
-    // This test demonstrates that sim_builder().classical(selene_executable()) has the same API as qis_sim()
+fn test_selene_executable_api_matches_qis_engine() {
+    // This test demonstrates that sim_builder().classical(selene_executable()) has the same API as qis_engine().to_sim()
     let llvm_ir = r#"
     declare void @__quantum__qis__h__body(i64)
 
@@ -251,7 +251,7 @@ fn test_selene_executable_api_matches_qis_sim() {
     attributes #0 = { "EntryPoint" }
     "#;
 
-    // All the methods that should be available for parity with qis_sim()
+    // All the methods that should be available for parity with qis_engine().to_sim()
     let _sim = sim_builder()
         .classical(
             selene_executable()

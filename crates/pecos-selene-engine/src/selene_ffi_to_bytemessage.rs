@@ -22,12 +22,24 @@ pub trait EngineInterface {
 
     /// Get measurement results
     fn get_measurement(&mut self, qubit: usize) -> bool;
+
+    /// Store a measurement result for automatic QIS capture
+    fn store_measurement(&mut self, qubit: usize, result: bool);
 }
 
 /// Initialize the engine interface
 pub fn initialize_engine_interface(engine: Arc<Mutex<dyn EngineInterface + Send + Sync>>) {
     let _ = ENGINE_INTERFACE.set(engine);
 }
+
+/// Get the engine interface if available
+pub fn get_engine_interface() -> Option<&'static Arc<Mutex<dyn EngineInterface + Send + Sync>>> {
+    ENGINE_INTERFACE.get()
+}
+
+// NOTE: The Helios interface functions (___measure, ___rxy, etc.) are provided
+// by pecos-qis-runtime when that crate is linked. The libhelios_selene_interface.a
+// library expects these symbols to be available at runtime.
 
 // FFI types matching Selene's interface
 #[repr(C)]
@@ -69,6 +81,8 @@ fn queue_operation(message: ByteMessage) {
         && let Ok(mut engine) = engine.lock()
     {
         engine.queue_operation(message);
+    } else {
+        log::warn!("Failed to queue operation - no engine interface available");
     }
 }
 
@@ -202,6 +216,19 @@ pub extern "C" fn selene_qubit_lazy_measure(
     SeleneU64Result {
         error_code: 0,
         value: qubit,
+    }
+}
+
+// QIS measurement recording function for automatic result capture
+#[unsafe(no_mangle)]
+pub extern "C" fn __quantum__qis__record_measurement(qubit: i64, result: bool) {
+    log::debug!("Recording QIS measurement: qubit {} = {}", qubit, result);
+
+    // Store the measurement in the engine's measurement_results
+    if let Some(engine) = ENGINE_INTERFACE.get() {
+        if let Ok(mut engine) = engine.lock() {
+            engine.store_measurement(usize::try_from(qubit).unwrap_or(usize::MAX), result);
+        }
     }
 }
 

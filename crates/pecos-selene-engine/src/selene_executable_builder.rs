@@ -183,36 +183,9 @@ impl ClassicalControlEngineBuilder for SeleneExecutableEngineBuilder {
         if let Some(program) = self.program {
             engine = engine.with_program(program);
         } else if let Some(hugr_prog) = self.hugr_program {
-            // Compile HUGR to LLVM IR using selected compiler
-            let llvm_ir = match self.hugr_compiler.as_str() {
-                "selene" => {
-                    // Try to use Selene's compiler through Python
-                    // This would require Python interop, so for pure Rust usage, we error
-                    return Err(PecosError::Input(
-                        "Selene's HUGR compiler requires Python environment. \
-                         Use .hugr_compiler(\"pecos\") for pure Rust compilation, \
-                         or compile HUGR to LLVM in Python before passing to Rust."
-                            .to_string(),
-                    ));
-                }
-                "pecos" => pecos_hugr_qis::compile_hugr_bytes_to_string(hugr_prog.bytes())
-                    .map_err(|e| {
-                        PecosError::Input(format!(
-                            "Failed to compile HUGR with PECOS compiler: {e}"
-                        ))
-                    })?,
-                other => {
-                    return Err(PecosError::Input(format!(
-                        "Invalid HUGR compiler '{other}'. Use 'selene' or 'pecos'."
-                    )));
-                }
-            };
-
-            log::info!(
-                "Successfully compiled HUGR to LLVM IR using {} compiler",
-                self.hugr_compiler
-            );
-            engine = engine.with_qis_program(QisProgram::from_ir(llvm_ir));
+            // Pass HUGR directly to the engine - it will handle compilation
+            log::info!("Passing HUGR program directly to SeleneExecutableEngine");
+            engine = engine.with_hugr_program(hugr_prog);
         } else if let Some(qis_prog) = self.qis_program {
             // QIS program
             engine = engine.with_qis_program(qis_prog);

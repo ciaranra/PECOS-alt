@@ -27,3 +27,7 @@ pub mod runtime;
 pub(crate) mod utils; // Common utilities for error handling, logging, etc.
 
 pub use engine::{QisEngine, QisEngineConfig};
+
+// Selene integration when feature is enabled
+#[cfg(feature = "selene-integration")]
+pub mod selene_integration;

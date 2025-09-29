@@ -35,7 +35,11 @@ default = []
 # TODO: Re-implement with proper isolation or alternative execution strategy
 llvm-jit = []
 
+# Selene runtime integration: Forward QIS calls to Selene runtime plugins
+selene-integration = []
+
 # All features including LLVM JIT (for advanced users)
+# Note: selene-integration excluded from all-features to avoid symbol conflicts
 all-features = ["llvm-jit"]
 
 [lints]

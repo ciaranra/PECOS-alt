@@ -157,8 +157,12 @@ rstest: qir-staticlib-if-needed  ## Run Rust tests
 	cargo test --workspace --release
 
 .PHONY: rstest-all
-rstest-all: qir-staticlib-if-needed  ## Run Rust tests with all features except GPU
-	cargo test --workspace --all-features --exclude pecos-quest && cargo test -p pecos-quest
+rstest-all: qir-staticlib-if-needed  ## Run Rust tests with all features except GPU and selene-integration
+	cargo test --workspace --exclude pecos-quest --exclude pecos-selene-ccengine --exclude pecos-selene-engine --exclude pecos-decoders
+	cargo test -p pecos-quest
+	cargo test -p pecos-selene-ccengine
+	cargo test -p pecos-selene-engine
+	cargo test -p pecos-decoders --all-features
 
 # Decoder-specific commands
 # -------------------------

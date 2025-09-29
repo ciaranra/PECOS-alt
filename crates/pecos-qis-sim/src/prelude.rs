@@ -24,7 +24,7 @@
 //! ```
 
 // Main entry points for LLVM simulation
-pub use crate::{QisEngineBuilder, qis_engine, qis_sim};
+pub use crate::{QisEngineBuilder, qis_engine};
 
 // Re-export QisEngine from pecos-qis-runtime
 pub use pecos_qis_runtime::QisEngine;

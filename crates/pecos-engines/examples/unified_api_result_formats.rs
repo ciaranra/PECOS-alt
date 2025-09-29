@@ -49,7 +49,7 @@ fn main() {
     }
 
     // Convert to columnar format (HashMap<String, Vec<i64>>)
-    // This format is used by qis_sim() for compatibility
+    // This format provides columnar data access for analysis
     let columnar = shots_to_columnar(&shot_vec);
     println!("Columnar format: {columnar:?}");
     // Each register name maps to a vector of values across all shots

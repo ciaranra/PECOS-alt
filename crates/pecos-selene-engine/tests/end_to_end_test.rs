@@ -12,20 +12,29 @@ use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine, Engine, sim_
 use pecos_programs::QisProgram;
 use pecos_selene_engine::{SeleneExecutableEngine, selene_executable};
 
-// NOTE: These tests originally used LLVM IR directly with QisProgram::from_ir().
-// We've removed direct LLVM execution support in favor of HUGR compilation through Selene.
-// The proper execution path is now: Guppy -> HUGR -> Selene Plugin -> Execution
-// These tests are kept as documentation of the old architecture but marked as ignored.
-// For working examples, see the Python tests that use the Guppy API.
+// NOTE: QIS/LLVM IR execution through Selene has limitations.
+//
+// Architecture clarification:
+// - selene_executable(): Primarily for HUGR → Selene plugin execution
+// - qis_engine() in pecos-qis-sim: Native QIS/LLVM IR execution
+//
+// While we've implemented QIS compilation support in selene_executable(),
+// QIS programs use __quantum__qis__* functions that aren't natively supported
+// by Selene's runtime. For full QIS execution, use the qis_engine() instead.
+//
+// These tests demonstrate the current state and limitations.
 
 #[test]
-#[ignore = "Legacy test - LLVM execution removed. Use Guppy->HUGR->Selene path instead"]
 fn test_end_to_end_bell_state_pecos() -> Result<(), PecosError> {
+    // Initialize logger with appropriate level
+    // Only use debug level if RUST_LOG is explicitly set
+    let _ = env_logger::try_init();
+
     println!("=== End-to-End: Bell State with PECOS Infrastructure ===");
 
-    // Create Bell state program using LLVM IR
+    // Create Bell state program using simple QIS (not QIR)
     let bell_llvm = r#"
-; Bell state quantum program
+; Bell state quantum program in QIS
 declare void @__quantum__qis__h__body(i64)
 declare void @__quantum__qis__cx__body(i64, i64)
 declare i32 @__quantum__qis__m__body(i64, i64)
@@ -95,7 +104,6 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
-#[ignore = "Known measurement-based conditional bug"]
 fn test_end_to_end_quantum_classical_feedback() -> Result<(), PecosError> {
     println!("=== End-to-End: Quantum-Classical Feedback Loop ===");
 
@@ -178,7 +186,6 @@ fn test_end_to_end_hugr_program() -> Result<(), PecosError> {
 }
 
 #[test]
-#[ignore = "Direct LLVM execution removed - use HUGR compilation instead"]
 fn test_end_to_end_multi_format_consistency() -> Result<(), PecosError> {
     println!("=== End-to-End: Multi-Format Consistency ===");
 
@@ -271,7 +278,6 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
-#[ignore = "Direct LLVM execution removed - use HUGR compilation instead"]
 fn test_end_to_end_large_circuit() -> Result<(), PecosError> {
     println!("=== End-to-End: Large Circuit Performance ===");
 
@@ -351,7 +357,6 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
-#[ignore = "Direct LLVM execution removed - use HUGR compilation instead"]
 fn test_end_to_end_direct_engine_construction() -> Result<(), PecosError> {
     println!("=== End-to-End: Direct Engine Construction ===");
 

@@ -8,7 +8,7 @@ use pecos_programs::QisProgram;
 use pecos_qis_sim::qis_engine;
 
 #[test]
-fn test_qis_sim_api() {
+fn test_qis_engine_api() {
     // Test with LLVM IR input
     let llvm_ir = r"
         ; ModuleID = 'test'

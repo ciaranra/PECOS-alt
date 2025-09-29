@@ -2867,6 +2867,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "pecos-selene-ccengine"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "libc",
+ "libloading",
+ "log",
+ "pecos-core",
+ "pecos-engines",
+ "pecos-qis-runtime",
+ "serial_test",
+ "tempfile",
+]
+
+[[package]]
 name = "pecos-selene-engine"
 version = "0.1.1"
 dependencies = [

@@ -40,7 +40,7 @@ fn skip_if_no_llvm() -> bool {
 }
 
 #[test]
-fn test_qis_sim_empty_circuit() {
+fn test_qis_engine_empty_circuit() {
     if skip_if_no_llvm() {
         return;
     }
@@ -71,7 +71,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
-fn test_qis_sim_large_shot_count() {
+fn test_qis_engine_large_shot_count() {
     if skip_if_no_llvm() {
         return;
     }
@@ -122,7 +122,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
-fn test_qis_sim_multiple_registers() {
+fn test_qis_engine_multiple_registers() {
     if skip_if_no_llvm() {
         return;
     }
@@ -180,7 +180,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
-fn test_qis_sim_biased_depolarizing_noise() {
+fn test_qis_engine_biased_depolarizing_noise() {
     if skip_if_no_llvm() {
         return;
     }
@@ -254,7 +254,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
-fn test_qis_sim_file_vs_string_equivalence() {
+fn test_qis_engine_file_vs_string_equivalence() {
     if skip_if_no_llvm() {
         return;
     }
@@ -318,7 +318,7 @@ attributes #0 = { "EntryPoint" }
 }
 
 #[test]
-fn test_qis_sim_extreme_noise() {
+fn test_qis_engine_extreme_noise() {
     if skip_if_no_llvm() {
         return;
     }
