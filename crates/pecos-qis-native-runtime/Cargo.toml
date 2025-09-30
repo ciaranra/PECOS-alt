@@ -1,0 +1,22 @@
+[package]
+name = "pecos-qis-native-runtime"
+version.workspace = true
+edition.workspace = true
+readme.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+pecos-qis-interface = { path = "../pecos-qis-interface" }
+pecos-qis-runtime-trait = { path = "../pecos-qis-runtime-trait" }
+log = { workspace = true }
+
+[dev-dependencies]
+env_logger = { workspace = true }
+
+[lints]
+workspace = true

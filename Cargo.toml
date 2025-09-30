@@ -113,6 +113,9 @@ pecos-rng = { version = "0.1.0", path = "crates/pecos-rng" }
 pecos = { version = "0.1.1", path = "crates/pecos" }
 pecos-cli = { version = "0.1.1", path = "crates/pecos-cli" }
 pecos-qis-sim = { version = "0.1.1", path = "crates/pecos-qis-sim" }
+pecos-qis-interface = { version = "0.1.1", path = "crates/pecos-qis-interface" }
+pecos-qis-runtime-trait = { version = "0.1.1", path = "crates/pecos-qis-runtime-trait" }
+pecos-qis-ccengine = { version = "0.1.1", path = "crates/pecos-qis-ccengine" }
 pecos-hugr-qis = { version = "0.1.1", path = "crates/pecos-hugr-qis" }
 pecos-selene-bridge = { version = "0.1.1", path = "crates/pecos-selene-bridge" }
 pecos-selene-engine = { version = "0.1.1", path = "crates/pecos-selene-engine" }

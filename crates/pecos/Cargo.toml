@@ -24,6 +24,8 @@ pecos-qasm.workspace = true
 pecos-phir-json.workspace = true
 pecos-qis-runtime.workspace = true
 pecos-qis-sim.workspace = true
+pecos-qis-interface.workspace = true
+pecos-qis-ccengine.workspace = true
 pecos-hugr-qis.workspace = true
 pecos-phir = { workspace = true, features = ["hugr"] }
 pecos-selene-engine.workspace = true

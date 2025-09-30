@@ -1,0 +1,37 @@
+[package]
+name = "pecos-qis-interface"
+version.workspace = true
+edition.workspace = true
+readme.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[lib]
+# Generate both rlib (for Rust) and staticlib (for linking with LLVM IR)
+crate-type = ["rlib", "staticlib"]
+
+[dependencies]
+# Minimal dependencies for fast compilation
+log = { workspace = true }
+dirs = "5.0"
+
+[dev-dependencies]
+env_logger = { workspace = true }
+pecos-qis-interface = { path = "." }
+libloading = "0.8"
+
+[build-dependencies]
+# For detecting when to rebuild
+walkdir = "2"
+
+[features]
+default = []
+# Feature for generating the static library
+static-lib = []
+
+[lints]
+workspace = true

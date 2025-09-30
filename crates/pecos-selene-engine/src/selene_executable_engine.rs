@@ -1781,6 +1781,39 @@ impl ClassicalEngine for SeleneExecutableEngine {
 }
 
 impl SeleneExecutableEngine {
+    /// Build a Selene instance from HUGR via unified QIS compilation path
+    ///
+    /// This uses the unified compilation path:
+    /// 1. HUGR → QIS (using Selene's compiler if available, otherwise PECOS)
+    /// 2. QIS → Helios transformation
+    /// 3. Compile to plugin
+    fn build_selene_from_hugr(&mut self, hugr_prog: &HugrProgram) -> Result<(), PecosError> {
+        log::info!("Building Selene instance from HUGR via unified QIS path");
+
+        // Convert HUGR to QIS (will try Selene's compiler first, then fall back to PECOS)
+        let qis_ir = self.compile_hugr_to_qis(hugr_prog)?;
+
+        // Now use the same QIS compilation path
+        let qis_program = QisProgram::from_ir(qis_ir);
+        self.build_selene_from_qis(&qis_program)?;
+
+        Ok(())
+    }
+
+    /// Compile HUGR to QIS using available compilers
+    fn compile_hugr_to_qis(&self, hugr_prog: &HugrProgram) -> Result<String, PecosError> {
+        // For now, just use PECOS compiler
+        // TODO: Add support for Selene's hugr_qis_compiler when available
+        log::info!("Compiling HUGR to QIS using PECOS compiler");
+
+        let llvm_ir = pecos_hugr_qis::compile_hugr_bytes_to_string(hugr_prog.bytes())
+            .map_err(|e| {
+                PecosError::Processing(format!("Failed to compile HUGR to QIS: {e}"))
+            })?;
+
+        Ok(llvm_ir)
+    }
+
     /// Convert R1XY and RZ gates to Clifford equivalents when possible
     /// This allows programs with Y gate (compiled to R1XY) to run on stabilizer simulators
     fn convert_to_clifford_if_possible(operations: ByteMessage) -> Result<ByteMessage, PecosError> {
@@ -2029,289 +2062,8 @@ impl ControlEngine for SeleneExecutableEngine {
     }
 }
 
-/// Transform QIS calls to use Helios interface functions
-///
-/// This is the key transformation that makes QIS programs work with Selene.
-/// Standard QIS uses functions like `__quantum__qis__h__body` while Selene
-/// provides the Helios interface with functions like `___rxy`, `___measure`.
-///
-/// The transformation:
-/// - Adds Helios function declarations
-/// - Implements QIS functions as wrappers around Helios calls
-/// - Preserves the original QIS interface for compatibility
-///
-/// This allows QIS programs to run on Selene without modification.
-fn transform_qis_to_helios(llvm_ir: &str) -> Result<String, PecosError> {
-    log::debug!("Transforming QIS to use Helios interface");
-
-    let mut result = String::new();
-
-    // Add Helios function declarations
-    result.push_str("; Helios interface function declarations\n");
-    result.push_str("declare i64 @___qalloc()\n");
-    result.push_str("declare void @___qfree(i64)\n");
-    result.push_str("declare void @___rxy(i64, double, double)\n");
-    result.push_str("declare void @___rz(i64, double)\n");
-    result.push_str("declare i1 @___measure(i64)\n");
-    result.push_str("declare void @___reset(i64)\n");
-    result.push_str("\n");
-
-    // Process each line and transform QIS calls
-    for line in llvm_ir.lines() {
-        if line.starts_with("declare") && line.contains("__quantum__qis__") {
-            // Skip QIS declarations, we'll implement them
-            continue;
-        }
-        result.push_str(line);
-        result.push('\n');
-    }
-
-    // Add QIS function implementations that call Helios functions
-    result.push_str("\n; QIS functions implemented using Helios interface\n");
-
-    // H gate: can be implemented as Rxy(pi/2, pi/2)
-    if llvm_ir.contains("__quantum__qis__h__body") {
-        result.push_str("define void @__quantum__qis__h__body(i64 %q) {\n");
-        result.push_str("  call void @___rxy(i64 %q, double 1.5707963267948966, double 1.5707963267948966)\n");
-        result.push_str("  ret void\n");
-        result.push_str("}\n\n");
-    }
-
-    // X gate: Rxy(pi, 0)
-    if llvm_ir.contains("__quantum__qis__x__body") {
-        result.push_str("define void @__quantum__qis__x__body(i64 %q) {\n");
-        result.push_str("  call void @___rxy(i64 %q, double 3.141592653589793, double 0.0)\n");
-        result.push_str("  ret void\n");
-        result.push_str("}\n\n");
-    }
-
-    // CX gate: more complex, needs decomposition
-    if llvm_ir.contains("__quantum__qis__cx__body") {
-        // For now, simplified implementation
-        result.push_str("define void @__quantum__qis__cx__body(i64 %c, i64 %t) {\n");
-        result.push_str("  ; CX decomposition would go here\n");
-        result.push_str("  ; For now, just a placeholder\n");
-        result.push_str("  ret void\n");
-        result.push_str("}\n\n");
-    }
-
-    // RZ gate: direct mapping
-    if llvm_ir.contains("__quantum__qis__rz__body") {
-        result.push_str("define void @__quantum__qis__rz__body(double %angle, i64 %q) {\n");
-        result.push_str("  call void @___rz(i64 %q, double %angle)\n");
-        result.push_str("  ret void\n");
-        result.push_str("}\n\n");
-    }
-
-    // Measurement - check what signature is used
-    // For simple QIS support, we need to store measurements automatically
-    if llvm_ir.contains("declare i1 @__quantum__qis__m__body(i64)") {
-        // Single-argument version that returns bool
-        result.push_str("define i1 @__quantum__qis__m__body(i64 %q) {\n");
-        result.push_str("  %result = call i1 @___measure(i64 %q)\n");
-        result.push_str("  ; Store result for automatic capture\n");
-        result.push_str("  call void @__quantum__qis__record_measurement(i64 %q, i1 %result)\n");
-        result.push_str("  ret i1 %result\n");
-        result.push_str("}\n\n");
-    } else if llvm_ir.contains("declare i32 @__quantum__qis__m__body(i64, i64)") ||
-               llvm_ir.contains("declare void @__quantum__qis__m__body(i64, i64)") {
-        // Two-argument version (qubit, result_id)
-        // For simple QIS, the result_id parameter is just a placeholder
-        // We store by qubit index for simplicity
-        result.push_str("define i32 @__quantum__qis__m__body(i64 %q, i64 %r) {\n");
-        result.push_str("  %meas_bool = call i1 @___measure(i64 %q)\n");
-        result.push_str("  %meas_i32 = zext i1 %meas_bool to i32\n");
-        result.push_str("  ; Store result for automatic capture\n");
-        result.push_str("  call void @__quantum__qis__record_measurement(i64 %q, i1 %meas_bool)\n");
-        result.push_str("  ret i32 %meas_i32\n");
-        result.push_str("}\n\n");
-    }
-
-    // Add the measurement recording function declaration
-    result.push_str("declare void @__quantum__qis__record_measurement(i64, i1)\n\n");
-
-    Ok(result)
-}
-
 
 impl SeleneExecutableEngine {
-    /// Find the Helios-Selene interface library in various locations
-    fn find_helios_library(&self) -> Option<std::path::PathBuf> {
-        // Try different Python versions and locations
-        let possible_paths = vec![
-            // Try with Python 3.12
-            "lib/python3.12/site-packages/selene_helios_qis_plugin/_dist/lib/libhelios_selene_interface.a",
-            // Try with Python 3.11
-            "lib/python3.11/site-packages/selene_helios_qis_plugin/_dist/lib/libhelios_selene_interface.a",
-            // Try with Python 3.10
-            "lib/python3.10/site-packages/selene_helios_qis_plugin/_dist/lib/libhelios_selene_interface.a",
-            // Try generic site-packages (some systems)
-            "lib/site-packages/selene_helios_qis_plugin/_dist/lib/libhelios_selene_interface.a",
-        ];
-
-        // Also check the PECOS .venv directly if VIRTUAL_ENV is not set
-        let pecos_venv = std::path::PathBuf::from("/home/ciaranra/Repos/cl_projects/gup/PECOS/.venv");
-        if pecos_venv.exists() {
-            for rel_path in &possible_paths {
-                let full_path = pecos_venv.join(rel_path);
-                if full_path.exists() {
-                    log::info!("Found Helios library at PECOS venv: {}", full_path.display());
-                    return Some(full_path);
-                }
-            }
-        }
-
-        // Check virtual environment first
-        if let Ok(venv) = std::env::var("VIRTUAL_ENV") {
-            let venv_path = std::path::PathBuf::from(venv);
-            for rel_path in &possible_paths {
-                let full_path = venv_path.join(rel_path);
-                if full_path.exists() {
-                    log::debug!("Found Helios library at: {}", full_path.display());
-                    return Some(full_path);
-                }
-            }
-        }
-
-        // Check conda environment
-        if let Ok(conda) = std::env::var("CONDA_PREFIX") {
-            let conda_path = std::path::PathBuf::from(conda);
-            for rel_path in &possible_paths {
-                let full_path = conda_path.join(rel_path);
-                if full_path.exists() {
-                    log::debug!("Found Helios library at: {}", full_path.display());
-                    return Some(full_path);
-                }
-            }
-        }
-
-        // Try to find it using Python directly
-        if let Ok(output) = std::process::Command::new("python3")
-            .args(&["-c", "import selene_helios_qis_plugin; import os; print(os.path.join(os.path.dirname(selene_helios_qis_plugin.__file__), '_dist/lib/libhelios_selene_interface.a'))"])
-            .output()
-        {
-            if output.status.success() {
-                let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                let path = std::path::PathBuf::from(path_str);
-                if path.exists() {
-                    log::debug!("Found Helios library via Python import: {}", path.display());
-                    return Some(path);
-                }
-            }
-        }
-
-        log::warn!("Could not find Helios-Selene interface library in any expected location");
-        None
-    }
-
-    /// Build a Selene instance from a HUGR program using unified QIS path
-    ///
-    /// This uses the unified compilation path:
-    /// 1. HUGR → QIS (using Selene's compiler if available, otherwise PECOS)
-    /// 2. QIS → Helios transformation
-    /// 3. Compile to plugin
-    fn build_selene_from_hugr(&mut self, hugr_prog: &HugrProgram) -> Result<(), PecosError> {
-        log::info!("Building Selene instance from HUGR via unified QIS path");
-
-        // Convert HUGR to QIS (will try Selene's compiler first, then fall back to PECOS)
-        let qis_ir = self.compile_hugr_to_qis(hugr_prog)?;
-
-        // Now use the same QIS compilation path
-        let qis_program = QisProgram::from_ir(qis_ir);
-        self.build_selene_from_qis(&qis_program)?;
-
-        Ok(())
-    }
-
-    /// Compile HUGR to QIS using Selene's hugr_qis_compiler
-    fn compile_hugr_to_qis(&self, hugr_prog: &HugrProgram) -> Result<String, PecosError> {
-        use std::process::Command;
-        use std::fs;
-
-        log::debug!("Attempting to compile HUGR to QIS using Selene's compiler");
-
-        // Create a temporary directory
-        let temp_dir = tempfile::Builder::new()
-            .prefix("hugr-to-qis-")
-            .tempdir()
-            .map_err(|e| PecosError::Processing(format!("Failed to create temp dir: {e}")))?;
-
-        let hugr_path = temp_dir.path().join("input.hugr");
-        let qis_path = temp_dir.path().join("output.ll");
-
-        // Write HUGR bytes
-        fs::write(&hugr_path, hugr_prog.bytes())
-            .map_err(|e| PecosError::Processing(format!("Failed to write HUGR: {e}")))?;
-
-        // Use Python to call selene_hugr_qis_compiler
-        // This could be optimized by using PyO3 bindings directly
-        let python_script = r#"
-import sys
-try:
-    import selene_hugr_qis_compiler as compiler
-except ImportError:
-    print("selene_hugr_qis_compiler module not available", file=sys.stderr)
-    sys.exit(1)
-
-try:
-    with open(sys.argv[1], 'rb') as f:
-        hugr_bytes = f.read()
-
-    llvm_ir = compiler.compile_to_llvm_ir(hugr_bytes)
-
-    with open(sys.argv[2], 'w') as f:
-        f.write(llvm_ir)
-except Exception as e:
-    print(f"Compilation error: {e}", file=sys.stderr)
-    sys.exit(1)
-"#;
-
-        let script_path = temp_dir.path().join("compile.py");
-        fs::write(&script_path, python_script)
-            .map_err(|e| PecosError::Processing(format!("Failed to write script: {e}")))?;
-
-        // Run the Python script
-        let output = Command::new("python3")
-            .args(&[
-                script_path.to_str().unwrap(),
-                hugr_path.to_str().unwrap(),
-                qis_path.to_str().unwrap(),
-            ])
-            .output()
-            .map_err(|e| PecosError::Processing(format!("Failed to run Python: {e}")))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-
-            // Check if it's just that Selene's compiler isn't available
-            if stderr.contains("selene_hugr_qis_compiler module not available") {
-                log::info!("Selene's HUGR compiler not available, will fall back to PECOS");
-            } else {
-                log::warn!("Selene's HUGR compiler failed: {stderr}");
-            }
-
-            // Fall back to PECOS compiler
-            let llvm_ir = pecos_hugr_qis::compile_hugr_bytes_to_string(hugr_prog.bytes())
-                .map_err(|e| {
-                    PecosError::Processing(format!(
-                        "Both Selene and PECOS HUGR compilers failed. PECOS error: {e}"
-                    ))
-                })?;
-
-            log::info!("Successfully compiled HUGR to QIS using PECOS compiler");
-            return Ok(llvm_ir);
-        }
-
-        // Read the generated QIS
-        let qis_ir = fs::read_to_string(&qis_path)
-            .map_err(|e| PecosError::Processing(format!("Failed to read QIS: {e}")))?;
-
-        log::info!("Successfully compiled HUGR to QIS using Selene's compiler ({} bytes)", qis_ir.len());
-
-        Ok(qis_ir)
-    }
-
-
     /// Build a Selene instance from a QIS (LLVM IR) program
     ///
     /// NOTE: QIS support is experimental. While Selene natively supports QIS
@@ -2344,7 +2096,6 @@ except Exception as e:
 
         // Don't transform QIS - we'll use the native QIS runtime functions
         // These are already available in the process from pecos-qis-runtime
-        // llvm_ir = transform_qis_to_helios(&llvm_ir)?;
 
         // Add qmain entry point wrapper if it doesn't exist
         log::debug!("Checking for qmain in LLVM IR");
@@ -2693,45 +2444,5 @@ attributes #0 = { "entry_point" }
                         error_str.contains("llc") || error_str.contains("gcc"));
             }
         }
-    }
-
-    #[test]
-    fn test_transform_qis_to_helios() {
-        let qis_ir = r#"
-define void @main() #0 {
-entry:
-  call void @__quantum__qis__h__body(i64 0)
-  call void @__quantum__qis__cx__body(i64 0, i64 1)
-  %0 = call i1 @__quantum__qis__m__body(i64 0)
-  %1 = call i1 @__quantum__qis__m__body(i64 1)
-  ret void
-}
-
-declare void @__quantum__qis__h__body(i64)
-declare void @__quantum__qis__cx__body(i64, i64)
-declare i1 @__quantum__qis__m__body(i64)
-
-attributes #0 = { "entry_point" }
-"#;
-
-        // Transform the QIS to use Helios interface
-        let result = transform_qis_to_helios(qis_ir);
-        assert!(result.is_ok());
-
-        let transformed = result.unwrap();
-
-        // Check that Helios functions are declared
-        assert!(transformed.contains("declare void @___rxy"));
-        assert!(transformed.contains("declare void @___rz"));
-        assert!(transformed.contains("declare i1 @___measure"));
-
-        // Check that QIS functions are implemented
-        assert!(transformed.contains("define void @__quantum__qis__h__body"));
-        assert!(transformed.contains("define void @__quantum__qis__cx__body"));
-        assert!(transformed.contains("define i1 @__quantum__qis__m__body"));
-
-        // Check that implementations call Helios functions
-        assert!(transformed.contains("call void @___rxy"));
-        assert!(transformed.contains("call i1 @___measure"));
     }
 }
